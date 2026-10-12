@@ -67,6 +67,16 @@ static uint32_t phys_for(uint32_t logical)
     return p > 0xFFFFFFF0u ? 0 : (uint32_t)p;
 }
 
+/* The zone's allocPtr is the rover: allocation searches from it (next
+ * fit), as the Memory Manager did, rather than from the zone's start.  It
+ * must always be a block start, so whatever merges blocks moves it back. */
+static void rover_merged(gaddr z, gaddr b, uint32_t ps)
+{
+    gaddr r = Zone_allocPtr(z);
+    if (r > b && r < b + ps)
+        Zone_set_allocPtr(z, b);
+}
+
 /* Merge b with any free blocks that follow it (b must be free). */
 static void coalesce(gaddr z, gaddr b)
 {
@@ -78,6 +88,7 @@ static void coalesce(gaddr z, gaddr b)
         n = b + ps;
     }
     wr32(b + 4, ps);
+    rover_merged(z, b, ps);
 }
 
 /* Which zone owns this address? */
@@ -184,13 +195,26 @@ static bool grow_zone(gaddr z, uint32_t need)
 
 static gaddr find_free(gaddr z, uint32_t psize)
 {
-    gaddr lim = z_lim(z);
-    for (gaddr b = z_first(z); b < lim; b = b_next(b)) {
-        if (b_use(b) != USE_FREE)
-            continue;
-        coalesce(z, b);
-        if (b_psize(b) >= psize)
-            return b;
+    gaddr lim = z_lim(z), first = z_first(z);
+    gaddr start = Zone_allocPtr(z);
+    if (start < first || start >= lim)
+        start = first;
+    /* From the rover to the end, then from the start up to the rover. */
+    for (int pass = 0; pass < 2; pass++) {
+        gaddr end = pass ? Zone_allocPtr(z) : lim;
+        if (pass && (end < first || end >= lim))
+            end = lim;
+        for (gaddr b = pass ? first : start; b < end; b = b_next(b)) {
+            if (b_use(b) != USE_FREE)
+                continue;
+            coalesce(z, b);
+            if (b_psize(b) >= psize) {
+                Zone_set_allocPtr(z, b);
+                return b;
+            }
+        }
+        if (start == first)
+            break;
     }
     return 0;
 }
@@ -199,6 +223,7 @@ static gaddr find_free(gaddr z, uint32_t psize)
  * largest free block afterwards. */
 static uint32_t compact(gaddr z)
 {
+    Zone_set_allocPtr(z, 0); /* blocks move */
     gaddr lim = z_lim(z);
     gaddr dst = 0; /* start of the free run being filled, or 0 */
     uint32_t largest = 0;
@@ -418,6 +443,7 @@ static bool resize_in_place(gaddr z, gaddr b, uint32_t newsize)
             return false;
         uint32_t total = ps + b_psize(n);
         wr32(b + 4, total);
+        rover_merged(z, b, total);
         ps = total;
     }
     /* Shrink to fit, returning any tail of MIN_BLOCK or more. */

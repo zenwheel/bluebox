@@ -7,7 +7,8 @@
  * for the sound's length, and later commands (callbacks included) run at
  * the next safe point after that — the Event Manager calls, TickCount and
  * SystemTask — much as interrupt-time completion did.  Without a host the
- * timing is the same and nothing is heard.
+ * timing is the same and nothing is heard, except that waiting for a sound
+ * to finish (synchronous play, disposing of a channel) doesn't wait.
  *
  * Supported: 'snd ' formats 1 and 2; standard and extended sound headers
  * (8-bit unsigned and 16-bit signed, mono and stereo); compressed headers
@@ -444,6 +445,8 @@ static sndcmd read_cmd(gaddr p)
 static void drain(channel *c)
 {
     for (;;) {
+        if (!sound_fn)
+            c->busy_until = 0; /* no host to hear it: no need to wait */
         pump(c);
         if (c->head == c->tail && now_ns() >= c->busy_until)
             return;
