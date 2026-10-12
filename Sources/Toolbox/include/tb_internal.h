@@ -115,8 +115,14 @@ void raw_Elems68K(cpu68k *c, uint16_t tw);
 void sane_reset(void);
 /* Time Manager and VBL tasks due now (interrupt time). */
 void time_pump(void);
+/* Let the application see and change a host file (and its neighbours) or,
+ * with tree, a folder and its contents (filemgr.c). */
+void fm_grant(const char *path, bool tree);
 /* Mouse button and location into low memory (events.c). */
 void events_sync_lowmem(void);
+/* Scripted input (events.c): apply the steps due by `now`; the next one's time. */
+void events_script_pump(uint64_t now);
+uint64_t events_script_next_at(void);
 /* Bring Ticks up to host time. */
 void machine_advance_ticks(void);
 /* The machine's clock (ns): wall clock with a host, instructions without. */

@@ -426,6 +426,12 @@ void machine_idle(void)
         return;
     last_idle = c->icount;
     c->icount += 1000;
+    /* Waiting: scripted input comes now, or the clock moves on to it. */
+    uint64_t next = events_script_next_at();
+    if (next > c->icount && (!icount_cap || next < icount_cap))
+        c->icount = next;
+    events_script_pump(c->icount);
+    events_sync_lowmem();
     if (icount_cap && c->icount >= icount_cap)
         cpu_halt(c, "instruction limit reached waiting for input");
 }

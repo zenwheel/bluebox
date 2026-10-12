@@ -6,6 +6,7 @@
  * then queued input, then update events, then null events.
  */
 #include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -51,6 +52,46 @@ static void enqueue(int16_t what, uint32_t message)
 }
 
 void machine_attach_host(bool attached) { host_attached = attached; }
+
+/* ---- Scripted input (headless runs) ----
+ * Each step is due at an instruction count and is applied between
+ * emulation slices or while the application waits for input, even inside
+ * a Toolbox loop such as ModalDialog that runs no guest code. */
+
+typedef struct {
+    uint64_t at;
+    int kind; /* 0 key, 1 mouse, 2 menu */
+    int a, b, c;
+} script_step;
+
+static script_step *script;
+static int nscript, script_next;
+
+void machine_script_add(uint64_t at, int kind, int a, int b, int c)
+{
+    script = realloc(script, (size_t)(nscript + 1) * sizeof *script);
+    script[nscript++] = (script_step){ at, kind, a, b, c };
+}
+
+/* The next step not yet applied: its instruction count, or 0. */
+uint64_t events_script_next_at(void) { return script_next < nscript ? script[script_next].at : 0; }
+
+void machine_choose_menu(int16_t menu_id, int16_t item);
+
+void events_script_pump(uint64_t now)
+{
+    while (script_next < nscript && script[script_next].at <= now) {
+        script_step s = script[script_next++];
+        switch (s.kind) {
+        case 0:
+            machine_post_key(s.a, 0, (unsigned)s.b, 1, 0);
+            machine_post_key(s.a, 0, (unsigned)s.b, 0, 0);
+            break;
+        case 1: machine_post_mouse(s.a, s.b, s.c); break;
+        case 2: machine_choose_menu((int16_t)s.a, (int16_t)s.b); break;
+        }
+    }
+}
 
 /* The low-memory copies of the mouse that applications read directly:
  * MBState (bit 7 set while the button is up), and the mouse location as

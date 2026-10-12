@@ -53,6 +53,11 @@ void machine_set_log(unsigned mask);
  * button: 1 down, 0 up, -1 unchanged. */
 void machine_post_mouse(int x, int y, int button);
 void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, int repeat);
+/* Scripted input for headless runs: kind 0 a key (a = character, b =
+ * modifiers), 1 the mouse (a, b = position, c = button: 1 down, 0 up,
+ * -1 unchanged), 2 a menu choice (a = menu ID, b = item), applied once the
+ * instruction count reaches at. */
+void machine_script_add(uint64_t at, int kind, int a, int b, int c);
 /* Tell the Event Manager a host is attached (it may then sleep for input). */
 void machine_attach_host(bool attached);
 
@@ -301,6 +306,9 @@ void machine_set_launch_documents(const char *const *paths, int n);
  * ~/Library/Application Support/Classic/System Folder on macOS and
  * $XDG_DATA_HOME/classic/System Folder elsewhere. */
 void machine_set_system_folder(const char *path);
+/* The folder that is the Mac's volume ("Macintosh HD"); by default
+ * Application Support/Classic/Macintosh HD.  Before machine_launch. */
+void machine_set_disk(const char *path);
 
 /* A hard cap on instructions executed, also inside routines the Toolbox
  * calls back (filters, hooks); 0 for none.  For headless runs. */

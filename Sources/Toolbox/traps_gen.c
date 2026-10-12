@@ -8165,6 +8165,15 @@ static void glue_PBSetFPos(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBSetVInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBSetVInfo(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBSetVol(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12964,7 +12973,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x8u, "PBGetFCBInfo", CONV_REG, 0, 0, glue_PBGetFCBInfo},
     {0xA060, (int32_t)0x9u, "PBGetCatInfo", CONV_REG, 0, 0, glue_PBGetCatInfo},
     {0xA060, (int32_t)0xAu, "PBSetCatInfo", CONV_REG, 0, 0, glue_PBSetCatInfo},
-    {0xA060, (int32_t)0xBu, "PBSetVInfo", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0xBu, "PBSetVInfo", CONV_REG, 0, 0, glue_PBSetVInfo},
     {0xA060, (int32_t)0x10u, "PBLockRange", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x11u, "PBUnlockRange", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x14u, "PBCreateFileIDRef", CONV_REG, 0, 0, 0},

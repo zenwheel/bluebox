@@ -256,6 +256,7 @@ static void build_app_parms(void)
     wr16(rd32(h) + 2, (uint16_t)n);
     gaddr name = tb_NewPtr(256, false, true);
     for (int i = 0; i < n; i++) {
+        fm_grant(launch_docs[i], false);
         int16_t vref = fm_wd_for_path(launch_docs[i], name);
         uint32_t nl = rd8(name);
         uint32_t rec = 8 + ((nl + 2) & ~1u);
@@ -353,6 +354,7 @@ run_status machine_run(uint64_t max)
         uint64_t n = max - done < slice ? max - done : slice;
         done += cpu_run(&cpu, n);
         machine_advance_ticks();
+        events_script_pump(cpu.icount);
         events_sync_lowmem();
         time_pump();
         if (cpu.stopped)

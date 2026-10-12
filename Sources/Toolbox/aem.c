@@ -497,6 +497,7 @@ static void build_event(const pending_ae *e, gaddr desc)
         gaddr list = tb_NewHandle(4, false, true);
         gaddr spec = tb_NewPtr(FSSpec_SIZEOF, false, true);
         for (int i = 0; i < e->nfiles; i++) {
+            fm_grant(e->files[i], false); /* documents the user opened */
             fm_spec_for_path(e->files[i], spec);
             append_entry(list, T("list"), false, 0, T("fss "), spec, FSSpec_SIZEOF, NULL);
         }

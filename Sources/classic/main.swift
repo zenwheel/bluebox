@@ -141,34 +141,33 @@ func menuStep(_ step: String) -> (Int16, Int16)? {
     return parts.count == 2 ? (parts[0], parts[1]) : nil
 }
 
-/// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item.
-func runScript(_ script: [String], budget: inout UInt64) -> run_status {
-    var status = RUN_LIMIT
+/// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item,
+/// and the mouse.  Each step is queued at an instruction count (the waits
+/// add up; other steps are spaced a little apart) and applied by the
+/// emulator when due, even while the application waits in the Toolbox.
+func queueScript(_ script: [String], start: UInt64) {
+    var at = start
+    func add(_ kind: Int32, _ a: Int32, _ b: Int32, _ c: Int32 = 0, after gap: UInt64) {
+        machine_script_add(at, kind, a, b, c)
+        at += gap
+    }
     for step in script {
         if step.hasPrefix("wait:"), let n = UInt64(step.dropFirst(5)) {
-            let slice = min(n, budget)
-            status = machine_run(slice)
-            budget -= slice
-            if status == RUN_HALTED { break }
+            at += n
             continue
         }
         if let (menu, item) = menuStep(step) {
-            machine_choose_menu(menu, item)
-            status = machine_run(min(200_000, budget))
-            budget -= min(200_000, budget)
+            add(2, Int32(menu), Int32(item), after: 200_000)
             continue
         }
-        // Mouse: down:x/y, move:x/y, up:x/y (button held from down to up),
-        // click:x/y (both), drag:x1/y1/x2/y2 (press, move and release at
-        // once, for the Toolbox's own tracking loops), in global coordinates.
+        // Mouse: down:x/y, move:x/y, up:x/y, click:x/y (press and release),
+        // drag:x1/y1/x2/y2 (press, move and release), in global coordinates.
         if step.hasPrefix("drag:") {
             let v = step.dropFirst(5).split(separator: "/").compactMap { Int32($0) }
             guard v.count == 4 else { fail("drag takes x1/y1/x2/y2: \(step)") }
-            machine_post_mouse(v[0], v[1], 1)
-            machine_post_mouse(v[2], v[3], -1)
-            machine_post_mouse(v[2], v[3], 0)
-            status = machine_run(min(400_000, budget))
-            budget -= min(400_000, budget)
+            add(1, v[0], v[1], 1, after: 0)
+            add(1, v[2], v[3], -1, after: 0)
+            add(1, v[2], v[3], 0, after: 400_000)
             continue
         }
         if let colon = step.firstIndex(of: ":"),
@@ -176,15 +175,12 @@ func runScript(_ script: [String], budget: inout UInt64) -> run_status {
             let xy = step[step.index(after: colon)...].split(separator: "/").compactMap { Int32($0) }
             guard xy.count == 2 else { fail("mouse steps take x/y: \(step)") }
             let kind = String(step[..<colon])
-            // A click is pressed and released before the application runs on:
-            // the Toolbox's tracking loops wait for the release.
             let presses: [Int32] = kind == "click" ? [1, 0] : kind == "down" ? [1] : kind == "up" ? [0] : [-1]
-            for b in presses { machine_post_mouse(xy[0], xy[1], b) }
-            status = machine_run(min(200_000, budget))
-            budget -= min(200_000, budget)
+            for b in presses { add(1, xy[0], xy[1], b, after: 0) }
+            at += 200_000
             continue
         }
-        var mods: UInt32 = 0
+        var mods: Int32 = 0
         var chars: [UInt8] = []
         if step.hasPrefix("cmd-") {
             mods = 0x100
@@ -196,14 +192,8 @@ func runScript(_ script: [String], budget: inout UInt64) -> run_status {
         } else if step == "tab" {
             chars = [9]
         }
-        for ch in chars {
-            machine_post_key(Int32(ch), 0, mods, 1, 0)
-            machine_post_key(Int32(ch), 0, mods, 0, 0)
-            status = machine_run(min(50_000, budget))
-            budget -= min(50_000, budget)
-        }
+        for ch in chars { add(0, Int32(ch), mods, after: 50_000) }
     }
-    return status
 }
 
 // MARK: - Commands
@@ -394,10 +384,8 @@ func runCommand(_ args: [String]) {
 
     var budget = maxInstructions
     machine_set_instruction_limit(machine_instruction_count() + maxInstructions)
-    var status = runScript(keyScript, budget: &budget)
-    if status != RUN_HALTED && budget > 0 {
-        status = machine_run(budget)
-    }
+    queueScript(keyScript, start: machine_instruction_count())
+    let status = machine_run(budget)
 
     let count = machine_instruction_count()
     if status == RUN_HALTED {

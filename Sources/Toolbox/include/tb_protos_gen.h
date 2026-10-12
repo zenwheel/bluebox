@@ -718,6 +718,7 @@ int16_t tb_PBSetEOF(gaddr pb, bool async);
 int16_t tb_PBSetFInfo(gaddr pb, bool async);
 int16_t tb_PBSetFLock(gaddr pb, bool async);
 int16_t tb_PBSetFPos(gaddr pb, bool async);
+int16_t tb_PBSetVInfo(gaddr pb, bool async);
 int16_t tb_PBSetVol(gaddr pb, bool async);
 int16_t tb_PBStatus(gaddr pbp, bool a);
 int16_t tb_PBUnmountVol(gaddr pb);

@@ -214,9 +214,10 @@ static void fill_reply(gaddr reply, bool good, const char *path, bool save)
     if (!good)
         return;
     gaddr spec = reply + StandardFileReply_sfFile_off;
-    fm_spec_for_path(path, spec);
     struct stat st;
     bool exists = stat(path, &st) == 0;
+    fm_grant(path, exists && S_ISDIR(st.st_mode)); /* the user chose it */
+    fm_spec_for_path(path, spec);
     wr8(reply + StandardFileReply_sfGood_off, 1);
     wr8(reply + StandardFileReply_sfReplacing_off, save && exists ? 1 : 0);
     wr32(reply + StandardFileReply_sfType_off, exists ? fm_type_of_path(path) : 0);
@@ -232,6 +233,7 @@ static void fill_old_reply(gaddr reply, bool good, const char *path, bool save)
     if (!good)
         return;
     gaddr name = tb_NewPtr(256, false, true);
+    fm_grant(path, false);
     int16_t wd = fm_wd_for_path(path, name);
     uint32_t n = rd8(name) > 63 ? 63 : rd8(name);
     wr8(reply + SFReply_fName_off, (uint8_t)n);

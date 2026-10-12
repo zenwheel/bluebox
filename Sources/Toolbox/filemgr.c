@@ -1,8 +1,15 @@
 /*
  * File Manager over host folders.
  *
- * One volume (vRefNum -1, drive 1) maps to a host directory.  Directory
- * IDs are assigned on first use (the root is 2).  Working directories
+ * One volume, "Macintosh HD" (vRefNum -1, drive 1), is a folder of its own
+ * under the user's Library (Application Support/Classic/Macintosh HD, or
+ * the XDG data directory elsewhere): installers and applications write
+ * there freely, and the System Folder lives in it.  The host's files appear
+ * in a folder at its root, "Host", but only where access was granted: the
+ * application's own folder, the documents it was opened with, and the
+ * files chosen in the Open and Save panels (with their folders, so saving
+ * through a temporary file works).  Elsewhere the host is invisible and
+ * read-only.  Directory IDs are assigned on first use (the root is 2).  Working directories
  * give old-style vRefNums.  Files are AppleDouble: the data fork is the host
  * file, the resource fork and Finder info live in the "._" sidecar.  An open
  * fork is held in host memory and written back atomically on close/flush.
@@ -42,8 +49,20 @@ enum { fsCurPerm = 0, fsRdPerm, fsWrPerm, fsRdWrPerm, fsRdWrShPerm };
 
 uint32_t mac_now(void);
 
-static char root_path[PATH_MAX];
+static char root_path[PATH_MAX]; /* the volume's folder */
 static char vol_name[32]; /* MacRoman */
+
+/* The folder at the volume's root standing for the host's "/". */
+static const char host_folder[] = "Host";
+
+/* Where host paths may be seen and changed. */
+typedef enum { GRANT_TREE, GRANT_FILE } grant_kind;
+#define MAX_GRANTS 128
+static struct {
+    char *path;
+    grant_kind kind;
+} grants[MAX_GRANTS];
+static int ngrants;
 
 /* Directory IDs: index i holds the host path of directory ID i (relative). */
 static char *dirs[MAX_DIRS];
@@ -174,24 +193,111 @@ static int32_t dir_id_for(const char *rel)
     return ndirs++;
 }
 
+/* Directories are recorded relative to the volume's folder ("" for its
+ * root), or as \1 and the absolute path for the host's ("\1" alone for
+ * "/", the Host folder). */
+#define HOST_MARK '\1'
+
 static bool host_of_dir(int32_t id, char *out, size_t outsize)
 {
     if (id < ROOT_ID || id >= ndirs || !dirs[id])
         return false;
-    if (dirs[id][0])
+    if (dirs[id][0] == HOST_MARK)
+        snprintf(out, outsize, "%s", dirs[id][1] ? dirs[id] + 1 : "/");
+    else if (dirs[id][0])
         snprintf(out, outsize, "%s/%s", root_path, dirs[id]);
     else
-        snprintf(out, outsize, "%s", root_path[0] ? root_path : "/");
+        snprintf(out, outsize, "%s", root_path);
     return true;
 }
 
-/* Relative path (from the volume root) of a host path. */
-static const char *rel_of(const char *host)
+/* Whether a host path is inside the volume's own folder. */
+static bool on_volume(const char *host)
 {
     size_t n = strlen(root_path);
-    if (!strncmp(host, root_path, n))
+    return !strncmp(host, root_path, n) && (host[n] == '/' || host[n] == 0);
+}
+
+/* The recorded form of a host path (see host_of_dir). */
+static const char *rel_of(const char *host)
+{
+    static char buf[PATH_MAX + 2];
+    if (on_volume(host)) {
+        size_t n = strlen(root_path);
         return host[n] == '/' ? host + n + 1 : host + n;
-    return host;
+    }
+    snprintf(buf, sizeof buf, "%c%s", HOST_MARK, strcmp(host, "/") ? host : "");
+    return buf;
+}
+
+/* ---- Access to the host's files ---- */
+
+static bool under(const char *path, const char *dir)
+{
+    size_t n = strlen(dir);
+    if (n == 1 && dir[0] == '/')
+        return path[0] == '/';
+    return !strncmp(path, dir, n) && (path[n] == '/' || path[n] == 0);
+}
+
+static void parent_of(const char *path, char *out, size_t outsize)
+{
+    snprintf(out, outsize, "%s", path);
+    char *slash = strrchr(out, '/');
+    if (slash && slash != out)
+        *slash = 0;
+    else if (slash)
+        slash[1] = 0;
+}
+
+static void canonical_path(const char *path, char *full, size_t size);
+
+/* Let the application see and change a host path: a folder and all inside
+ * it, or a file and the other files in its folder. */
+void fm_grant(const char *path, bool tree)
+{
+    char full[PATH_MAX];
+    canonical_path(path, full, sizeof full); /* a file still to be saved need not exist */
+    for (int i = 0; i < ngrants; i++)
+        if (!strcmp(grants[i].path, full) && grants[i].kind == (tree ? GRANT_TREE : GRANT_FILE))
+            return;
+    if (ngrants < MAX_GRANTS) {
+        grants[ngrants].path = strdup(full);
+        grants[ngrants].kind = tree ? GRANT_TREE : GRANT_FILE;
+        ngrants++;
+    }
+}
+
+/* Changes are allowed on the volume, inside granted folders, and to
+ * granted files and their neighbours. */
+static bool writable(const char *path)
+{
+    if (on_volume(path))
+        return true;
+    char dir[PATH_MAX];
+    parent_of(path, dir, sizeof dir);
+    for (int i = 0; i < ngrants; i++) {
+        if (grants[i].kind == GRANT_TREE && under(path, grants[i].path))
+            return true;
+        if (grants[i].kind == GRANT_FILE) {
+            char gdir[PATH_MAX];
+            parent_of(grants[i].path, gdir, sizeof gdir);
+            if (!strcmp(path, grants[i].path) || !strcmp(dir, gdir))
+                return true;
+        }
+    }
+    return false;
+}
+
+/* Visible: what can be changed, and the folders leading to it. */
+static bool visible(const char *path)
+{
+    if (writable(path))
+        return true;
+    for (int i = 0; i < ngrants; i++)
+        if (under(grants[i].path, path))
+            return true;
+    return false;
 }
 
 static void put_name(gaddr namep, const char *host);
@@ -199,8 +305,10 @@ static void put_name_fwd(gaddr namep, const char *host) { put_name(namep, host);
 
 static int32_t parent_id_of(const char *host)
 {
-    char tmp[PATH_MAX];
+    char tmp[PATH_MAX + 2];
     snprintf(tmp, sizeof tmp, "%s", rel_of(host));
+    if (tmp[0] == HOST_MARK && !tmp[1])
+        return ROOT_ID; /* the Host folder sits at the root */
     char *slash = strrchr(tmp, '/');
     if (!slash)
         return ROOT_ID;
@@ -247,7 +355,7 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
     if (has_colon && name[0] != ':') {
         while (i < n && name[i] != ':')
             i++;
-        snprintf(path, sizeof path, "%s", root_path[0] ? root_path : "");
+        snprintf(path, sizeof path, "%s", root_path);
         i++;
     } else if (name[0] == ':') {
         i = 1;
@@ -257,12 +365,19 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
         while (i < n && name[i] != ':')
             i++;
         int len = i - start;
-        if (len == 0) { /* "::" goes up */
-            char *slash = strrchr(path, '/');
-            if (slash && slash != path)
-                *slash = 0;
-            else if (slash)
-                slash[1] = 0;
+        if (len == 0) { /* "::" goes up, no further than the volume's root */
+            if (!strcmp(path, "/")) {
+                snprintf(path, sizeof path, "%s", root_path);
+            } else if (strcmp(path, root_path)) {
+                char *slash = strrchr(path, '/');
+                if (slash && slash != path)
+                    *slash = 0;
+                else if (slash)
+                    slash[1] = 0;
+            }
+        } else if (!strcmp(path, root_path) && len == (int)strlen(host_folder) &&
+                   !mac_char_cmp(name + start, (const uint8_t *)host_folder, len)) {
+            snprintf(path, sizeof path, "/");
         } else {
             char comp[256];
             host_component(path, name + start, len, comp, sizeof comp);
@@ -276,6 +391,10 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
     }
     snprintf(out, outsize, "%s", path);
     LOGF(LOG_TRAPS, "  name %.*s (vref %d, dir %d) -> %s\n", n, (const char *)name, vref, dirid, path);
+    if (!visible(path)) {
+        LOGF(LOG_TRAPS, "  (outside the volume and not granted)\n");
+        return fnfErrF;
+    }
     return noErr;
 }
 
@@ -319,33 +438,57 @@ static const char *entry_name(const char *dir, const char *n)
 /* The n-th (1-based) visible entry of a directory; dirs and files mixed, sorted. */
 static int cmp_names(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
-static bool nth_entry(const char *dir, int n, bool files_only, char *out, size_t outsize)
+/* The visible entries of a directory, sorted; the volume's root also lists
+ * the Host folder (as "/"). */
+static int list_entries(const char *dir, bool files_only, char ***out)
 {
-    DIR *d = opendir(dir);
-    if (!d)
-        return false;
     char **names = NULL;
     int count = 0, cap = 0;
+    bool root = !strcmp(dir, root_path), host_root = !strcmp(dir, "/");
+    DIR *d = opendir(dir);
     struct dirent *e;
-    while ((e = readdir(d))) {
+    while (d && (e = readdir(d))) {
         const char *name = entry_name(dir, e->d_name);
         if (!name)
             continue;
         char full[PATH_MAX];
-        snprintf(full, sizeof full, "%s/%s", dir, name);
+        snprintf(full, sizeof full, "%s/%s", host_root ? "" : dir, name);
         if (files_only && is_dir(full))
             continue;
+        if (!on_volume(full) && !visible(full))
+            continue;
+        if (root && !strcmp(name, host_folder))
+            continue; /* the Host folder's name is taken */
         if (count == cap) {
             cap = cap ? cap * 2 : 32;
             names = realloc(names, (size_t)cap * sizeof *names);
         }
         names[count++] = strdup(name);
     }
-    closedir(d);
-    qsort(names, (size_t)count, sizeof *names, cmp_names);
+    if (d)
+        closedir(d);
+    if (root && !files_only && ngrants) {
+        if (count == cap)
+            names = realloc(names, (size_t)(cap = cap ? cap * 2 : 32) * sizeof *names);
+        names[count++] = strdup(host_folder);
+    }
+    if (count)
+        qsort(names, (size_t)count, sizeof *names, cmp_names);
+    *out = names;
+    return count;
+}
+
+static bool nth_entry(const char *dir, int n, bool files_only, char *out, size_t outsize)
+{
+    char **names;
+    int count = list_entries(dir, files_only, &names);
     bool ok = n >= 1 && n <= count;
-    if (ok)
-        snprintf(out, outsize, "%s/%s", dir, names[n - 1]);
+    if (ok) {
+        if (!strcmp(dir, root_path) && !strcmp(names[n - 1], host_folder) && ngrants)
+            snprintf(out, outsize, "/");
+        else
+            snprintf(out, outsize, "%s/%s", strcmp(dir, "/") ? dir : "", names[n - 1]);
+    }
     for (int i = 0; i < count; i++)
         free(names[i]);
     free(names);
@@ -354,15 +497,11 @@ static bool nth_entry(const char *dir, int n, bool files_only, char *out, size_t
 
 static int count_entries(const char *dir)
 {
-    DIR *d = opendir(dir);
-    if (!d)
-        return 0;
-    int count = 0;
-    struct dirent *e;
-    while ((e = readdir(d)))
-        if (entry_name(dir, e->d_name))
-            count++;
-    closedir(d);
+    char **names;
+    int count = list_entries(dir, false, &names);
+    for (int i = 0; i < count; i++)
+        free(names[i]);
+    free(names);
     return count;
 }
 
@@ -371,6 +510,8 @@ static void host_pname(uint8_t out[32], const char *host)
 {
     const char *base = strrchr(host, '/');
     base = base ? base + 1 : host;
+    if (!strcmp(host, "/"))
+        base = host_folder;
     out[0] = (uint8_t)host_to_mac(base, out + 1);
 }
 
@@ -380,6 +521,8 @@ static void put_name(gaddr namep, const char *host)
         return;
     const char *base = strrchr(host, '/');
     base = base ? base + 1 : host;
+    if (!strcmp(host, "/"))
+        base = host_folder;
     uint8_t mac[32];
     int n = host_to_mac(base, mac);
     wr8(namep, (uint8_t)n);
@@ -465,11 +608,20 @@ static void fcb_sync(int16_t rn)
     }
 }
 
+static const char *disk_path(void);
+static const char *system_folder_path(void);
+
 void fm_init(const char *app_dir)
 {
-    /* The volume is the whole host disk; the app's folder is the default
-     * directory, so documents anywhere can be opened. */
-    snprintf(root_path, sizeof root_path, "%s", "");
+    /* The volume is its own folder; the application's folder (on it or
+     * granted on the host) is the default directory. */
+    char disk[PATH_MAX];
+    if (!realpath(disk_path(), disk))
+        snprintf(disk, sizeof disk, "%s", disk_path());
+    snprintf(root_path, sizeof root_path, "%s", disk);
+    for (int i = 0; i < ngrants; i++)
+        free(grants[i].path);
+    ngrants = 0;
     for (int i = 0; i < ndirs; i++) {
         free(dirs[i]);
         dirs[i] = NULL;
@@ -483,6 +635,10 @@ void fm_init(const char *app_dir)
     char app[PATH_MAX];
     if (!realpath(app_dir, app))
         snprintf(app, sizeof app, "%s", app_dir);
+    fm_grant(app, true);
+    char sys[PATH_MAX];
+    if (realpath(system_folder_path(), sys) && !on_volume(sys))
+        fm_grant(sys, true); /* set elsewhere (machine_set_system_folder) */
     default_vref = VREF;
     default_dir = dir_id_for(rel_of(app));
     static const char name[] = "Macintosh HD";
@@ -495,12 +651,26 @@ void fm_init(const char *app_dir)
     guest_tables_init();
 }
 
+/* The canonical form of a host path that need not exist yet: its folder
+ * resolved (symbolic links and all), then its name. */
+static void canonical_path(const char *path, char *full, size_t size)
+{
+    if (realpath(path, full))
+        return;
+    char dir[PATH_MAX], rdir[PATH_MAX];
+    parent_of(path, dir, sizeof dir);
+    const char *base = strrchr(path, '/');
+    if (base && realpath(dir, rdir))
+        snprintf(full, size, "%s%s", strcmp(rdir, "/") ? rdir : "", base);
+    else
+        snprintf(full, size, "%s", path);
+}
+
 /* An FSSpec for a host path (the file need not exist). */
 void fm_spec_for_path(const char *path, gaddr spec)
 {
     char full[PATH_MAX];
-    if (!realpath(path, full))
-        snprintf(full, sizeof full, "%s", path);
+    canonical_path(path, full, sizeof full);
     char parent[PATH_MAX];
     snprintf(parent, sizeof parent, "%s", full);
     char *slash = strrchr(parent, '/');
@@ -715,6 +885,11 @@ static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
         return fnfErrF;
     uint8_t perm = rd8(pb + IOParam_ioPermssn_off);
     bool write = perm != fsRdPerm;
+    if (write && !writable(path)) {
+        if (perm == fsWrPerm)
+            return permErr;
+        write = false; /* read-write (or current) permission: read-only here */
+    }
     /* Already open for writing?  Return that refnum with opWrErr. */
     for (int i = 0; i < MAX_FCBS; i++) {
         if (fcbs[i].used && fcbs[i].rsrc == rsrc && fcbs[i].write && write && !strcmp(fcbs[i].path, path)) {
@@ -930,6 +1105,8 @@ static int16_t create_file(const char *path)
 {
     if (exists(path))
         return dupFNErr;
+    if (!writable(path))
+        return wPrErr;
     mac_file mf;
     memset(&mf, 0, sizeof mf);
     uint8_t empty = 0;
@@ -976,6 +1153,8 @@ static int16_t delete_path(const char *path)
 {
     if (!exists(path))
         return fnfErrF;
+    if (!writable(path) || !strcmp(path, "/"))
+        return wPrErr;
     if (is_open(path))
         return fBsyErr;
     if (is_dir(path))
@@ -1014,6 +1193,8 @@ static int16_t rename_path(const char *from, gaddr newname)
     snprintf(slash + 1, sizeof to - (size_t)(slash + 1 - to), "%s", comp);
     if (exists(to))
         return dupFNErr;
+    if (!writable(from) || !writable(to) || !strcmp(from, "/"))
+        return wPrErr;
     if (rename(from, to) != 0)
         return ioErrF;
     char *s1 = appledouble_sidecar_path(from), *s2 = appledouble_sidecar_path(to);
@@ -1126,6 +1307,8 @@ static int16_t set_finfo(gaddr pb, bool hfs, bool cat)
         return fnfErrF;
     if (is_dir(path))
         return noErr;
+    if (!writable(path))
+        return wPrErr;
     mac_file mf;
     char e[256];
     if (!appledouble_read(path, &mf, e, sizeof e))
@@ -1169,7 +1352,7 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     wr32(pb + VolumeParam_ioVCrDate_off, mac_now());
     wr32(pb + HVolumeParam_ioVLsMod_off, mac_now());
     wr16(pb + VolumeParam_ioVAtrb_off, 0);
-    wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries("/"));
+    wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries(root_path));
     wr16(pb + HVolumeParam_ioVBitMap_off, 0);
     wr16(pb + HVolumeParam_ioVAllocPtr_off, 0);
     /* 65535 blocks of 32K: about 2 GB, the largest an HFS volume reports. */
@@ -1362,6 +1545,8 @@ int16_t tb_PBDirCreate(gaddr pb, bool async)
         return err;
     if (exists(path))
         return dupFNErr;
+    if (!writable(path))
+        return wPrErr;
     if (mkdir(path, 0755) != 0)
         return ioErrF;
     wr32(pb + HFileParam_ioDirID_off, (uint32_t)dir_id_for(rel_of(path)));
@@ -1383,7 +1568,9 @@ int16_t tb_PBCatMove(gaddr pb, bool async)
         return badMovErr;
     const char *base = strrchr(from, '/');
     char dest[PATH_MAX];
-    snprintf(dest, sizeof dest, "%s%s", to, base);
+    snprintf(dest, sizeof dest, "%s%s", strcmp(to, "/") ? to : "", base);
+    if (!writable(from) || !writable(dest) || !strcmp(from, "/"))
+        return wPrErr;
     if (rename(from, dest) != 0)
         return ioErrF;
     char *s1 = appledouble_sidecar_path(from), *s2 = appledouble_sidecar_path(dest);
@@ -1546,8 +1733,7 @@ int16_t tb_FSpDirCreate(gaddr spec, int16_t script, gaddr created_dir_id)
 int16_t fm_wd_for_path(const char *path, gaddr name_out)
 {
     char full[PATH_MAX], parent[PATH_MAX];
-    if (!realpath(path, full))
-        snprintf(full, sizeof full, "%s", path);
+    canonical_path(path, full, sizeof full);
     snprintf(parent, sizeof parent, "%s", full);
     char *slash = strrchr(parent, '/');
     if (slash)
@@ -1594,8 +1780,12 @@ size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize)
     size_t n = strlen(vol_name);
     if (n >= outsize)
         return 0;
-    memcpy(out, vol_name, n);
-    const char *p = rel_of(full);
+    memcpy(out, vol_name + 1, n = (size_t)vol_name[0]);
+    char rel[PATH_MAX + 16];
+    snprintf(rel, sizeof rel, "%s", rel_of(full));
+    if (rel[0] == HOST_MARK) /* Host:... */
+        snprintf(rel, sizeof rel, "%s%s", host_folder, strcmp(full, "/") ? full : "");
+    const char *p = rel;
     while (*p) {
         const char *slash = strchr(p, '/');
         size_t len = slash ? (size_t)(slash - p) : strlen(p);
@@ -1612,7 +1802,7 @@ size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize)
         if (*p == '/')
             p++;
     }
-    if (n == strlen(vol_name)) { /* the volume itself */
+    if (n == (size_t)vol_name[0]) { /* the volume itself */
         if (n + 1 > outsize)
             return 0;
         out[n++] = ':';
@@ -1634,7 +1824,10 @@ bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize
         size_t start = i;
         while (i < n && mac[i] != ':')
             i++;
-        if (i > start) {
+        if (i > start && !strcmp(path, root_path) && i - start == strlen(host_folder) &&
+            !mac_char_cmp(mac + start, (const uint8_t *)host_folder, (int)(i - start))) {
+            snprintf(path, sizeof path, "/");
+        } else if (i > start) {
             char comp[256];
             host_component(path, mac + start, (int)(i - start), comp, sizeof comp);
             size_t pl = strlen(path);
@@ -1674,20 +1867,48 @@ static bool make_dirs(const char *path)
     return mkdir(p, 0755) == 0 || is_dir(p);
 }
 
+/* Our folder in the user's data: Application Support/Classic on macOS. */
+static void data_folder(char *out, size_t outsize)
+{
+    const char *home = getenv("HOME");
+#ifdef __APPLE__
+    snprintf(out, outsize, "%s/Library/Application Support/Classic", home ? home : "/tmp");
+#else
+    const char *data = getenv("XDG_DATA_HOME");
+    if (data && *data)
+        snprintf(out, outsize, "%s/classic", data);
+    else
+        snprintf(out, outsize, "%s/.local/share/classic", home ? home : "/tmp");
+#endif
+}
+
+static char disk_folder[PATH_MAX];
+
+void machine_set_disk(const char *path) { snprintf(disk_folder, sizeof disk_folder, "%s", path ? path : ""); }
+
+/* The volume's folder ("Macintosh HD"), made on first use. */
+static const char *disk_path(void)
+{
+    if (!disk_folder[0]) {
+        char base[PATH_MAX];
+        data_folder(base, sizeof base);
+        snprintf(disk_folder, sizeof disk_folder, "%s/Macintosh HD", base);
+    }
+    make_dirs(disk_folder);
+    return disk_folder;
+}
+
+/* The System Folder is on the volume.  One kept beside it by earlier
+ * versions moves in. */
 static const char *system_folder_path(void)
 {
     if (!sys_folder[0]) {
-        const char *home = getenv("HOME");
-#ifdef __APPLE__
-        snprintf(sys_folder, sizeof sys_folder, "%s/Library/Application Support/Classic/System Folder",
-                 home ? home : "/tmp");
-#else
-        const char *data = getenv("XDG_DATA_HOME");
-        if (data && *data)
-            snprintf(sys_folder, sizeof sys_folder, "%s/classic/System Folder", data);
-        else
-            snprintf(sys_folder, sizeof sys_folder, "%s/.local/share/classic/System Folder", home ? home : "/tmp");
-#endif
+        snprintf(sys_folder, sizeof sys_folder, "%s/System Folder", disk_path());
+        char base[PATH_MAX], old[PATH_MAX];
+        data_folder(base, sizeof base);
+        snprintf(old, sizeof old, "%s/System Folder", base);
+        if (!is_dir(sys_folder) && is_dir(old))
+            rename(old, sys_folder);
     }
     make_dirs(sys_folder);
     return sys_folder;
@@ -1736,8 +1957,7 @@ int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, 
     char path[PATH_MAX];
     bool found = false;
     if ((uint32_t)folderType == 0x6465736B /* 'desk' */) {
-        const char *home = getenv("HOME");
-        snprintf(path, sizeof path, "%s/Desktop", home ? home : "/tmp");
+        snprintf(path, sizeof path, "%s/Desktop Folder", disk_path());
         found = true;
     }
     for (size_t i = 0; i < sizeof folders / sizeof folders[0] && !found; i++) {
@@ -1823,7 +2043,7 @@ int16_t tb_PBAllocate(gaddr pb, bool async)
     return err;
 }
 
-/* There is one volume, the host's, and it stays mounted. */
+/* There is one volume, and it stays mounted. */
 int16_t tb_PBMountVol(gaddr pb) { return -56; /* nsDrvErr: no such drive */ }
 int16_t tb_PBUnmountVol(gaddr pb) { return fBsyErr; }
 int16_t tb_PBEject(gaddr pb) { return -56; }
@@ -1846,3 +2066,7 @@ int16_t tb_PBHOpenRFDeny(gaddr pb, bool async) { return open_deny(pb, true); }
 
 /* Access privileges are an AppleShare matter; the local volume has none. */
 int16_t tb_PBHGetDirAccess(gaddr pb, bool async) { return paramErr; }
+
+/* Volume dates, attributes and Finder information: the volume's are its
+ * folder's, and nothing here is kept. */
+int16_t tb_PBSetVInfo(gaddr pb, bool async) { return noErr; }
