@@ -249,6 +249,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()
     NativeControls.install()
+    NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
     // Minimal app menu: Quit asks the app to quit; Option shows Force Quit.
@@ -644,5 +645,54 @@ final class ClassicItemsView: NSView {
     }
 
     func willResignActive() { machine_post_suspend_resume(false, false) }
+}
+#endif
+
+#if canImport(AppKit)
+import UserNotifications
+
+/// Notification Manager requests on the host: the message as a macOS
+/// notification (or an alert, when there is no bundle to post as), the
+/// mark as a Dock badge, and a bounce of the Dock icon.
+@MainActor final class NotificationRelay {
+    static let shared = NotificationRelay()
+    private var attention: [Int: Int] = [:]
+
+    func install() {
+        if Bundle.main.bundleIdentifier != nil {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        }
+        machine_set_notification_handler({ id, text, flags, _ in
+            let message = text.map { String(cString: $0) } ?? ""
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { NotificationRelay.shared.post(id: Int(id), message: message, flags: Int(flags)) }
+            }
+        }, nil)
+    }
+
+    private func post(id: Int, message: String, flags: Int) {
+        if id < 0 {
+            if let req = attention.removeValue(forKey: -id) { NSApp.cancelUserAttentionRequest(req) }
+            if attention.isEmpty { NSApp.dockTile.badgeLabel = nil }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["classic-\(-id)"])
+            return
+        }
+        if flags & Int(MACHINE_NOTIFY_MARK) != 0 { NSApp.dockTile.badgeLabel = "◆" }
+        if !NSApp.isActive { attention[id] = NSApp.requestUserAttention(.criticalRequest) }
+        guard !message.isEmpty else { return }
+        if Bundle.main.bundleIdentifier != nil {
+            let content = UNMutableNotificationContent()
+            content.title = ProcessInfo.processInfo.processName
+            content.body = message
+            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "classic-\(id)", content: content,
+                                                                         trigger: nil))
+        } else {
+            let alert = NSAlert()
+            alert.messageText = message
+            alert.alertStyle = .informational
+            if let appIcon { alert.icon = appIcon }
+            alert.runModal()
+        }
+    }
 }
 #endif

@@ -374,6 +374,8 @@ void tb_MovePortTo(int16_t lg, int16_t tg);
 void tb_MoveTo(int16_t h, int16_t v);
 void tb_MoveWindow(gaddr wp, int16_t h, int16_t v, int8_t front);
 int32_t tb_Munger(gaddr h, int32_t off, gaddr p1, int32_t len1, gaddr p2, int32_t len2);
+int16_t tb_NMInstall(gaddr nmptr);
+int16_t tb_NMRemove(gaddr nmptr);
 int16_t tb_NewAlias(gaddr fromFile, gaddr target, gaddr alias);
 int16_t tb_NewAliasMinimal(gaddr target, gaddr alias);
 int16_t tb_NewAliasMinimalFromFullPath(int16_t fullpathLength, gaddr fullpath, gaddr zoneName, gaddr serverName, gaddr alias);

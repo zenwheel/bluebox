@@ -127,3 +127,65 @@ extension Classic {
         }
     }
 }
+
+extension Classic {
+    @Suite struct NotificationManager {
+        nonisolated(unsafe) static var posted: [(Int32, String, Int32)] = []
+        nonisolated(unsafe) static var responses = 0
+
+        static let response: native_fn = { c, _ in
+            guard let c else { return }
+            let ret = cpu_pop32(c)
+            _ = cpu_pop32(c)
+            NotificationManager.responses += 1
+            cpu_push32(c, ret)
+        }
+
+        func request(text: String?, resp: UInt32) -> UInt32 {
+            let nm = tb_NewPtr(Int32(NMRec_SIZEOF), false, true)
+            wr16(nm + UInt32(NMRec_qType_off), 8)
+            wr16(nm + UInt32(NMRec_nmMark_off), 1)
+            if let text {
+                let s = tb_NewPtr(256, false, true)
+                guestPString(text, at: s)
+                wr32(nm + UInt32(NMRec_nmStr_off), s)
+            }
+            wr32(nm + UInt32(NMRec_nmResp_off), resp)
+            return nm
+        }
+
+        @Test func requestsReachTheHostAndResponsesRun() {
+            launchTestApp()
+            Self.posted = []
+            Self.responses = 0
+            machine_set_notification_handler({ id, text, flags, _ in
+                NotificationManager.posted.append((id, text.map { String(cString: $0) } ?? "", flags))
+            }, nil)
+            defer { machine_set_notification_handler(nil, nil) }
+            let proc = native_register(Self.response, "test nm response", 0)
+            let nm = request(text: "Backup finished", resp: proc)
+            #expect(tb_NMInstall(nm) == 0)
+            #expect(Self.posted.count == 1)
+            #expect(Self.posted.first?.1 == "Backup finished")
+            #expect(Self.posted.first?.2 == Int32(MACHINE_NOTIFY_MARK))
+            let evt = tb_NewPtr(16, false, true)
+            _ = tb_WaitNextEvent(-1, evt, 0, 0)
+            #expect(Self.responses == 1)
+            #expect(tb_NMRemove(nm) == 0)
+            #expect(Self.posted.last?.0 == -1)                 // withdrawn
+        }
+
+        @Test func automaticRemoval() {
+            launchTestApp()
+            Self.posted = []
+            machine_set_notification_handler({ id, _, _, _ in NotificationManager.posted.append((id, "", 0)) }, nil)
+            defer { machine_set_notification_handler(nil, nil) }
+            let nm = request(text: nil, resp: 0xFFFF_FFFF)
+            #expect(tb_NMInstall(nm) == 0)
+            let evt = tb_NewPtr(16, false, true)
+            _ = tb_WaitNextEvent(-1, evt, 0, 0)
+            #expect(Self.posted.map(\.0) == [1, -1])
+            #expect(tb_NMRemove(nm) != 0)                      // already gone
+        }
+    }
+}

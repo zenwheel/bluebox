@@ -4509,6 +4509,22 @@ static void glue_Munger(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NMInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_nmptr = (gaddr)c->a[0];
+    int16_t r = tb_NMInstall(a_nmptr);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_NMRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_nmptr = (gaddr)c->a[0];
+    int16_t r = tb_NMRemove(a_nmptr);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_NewAlias(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8116,8 +8132,8 @@ const trap_sig trap_sigs[] = {
     {0xA059, -1, "RmvTime", CONV_REG, 0, 0, 0},
     {0xA05A, -1, "PrimeTime", CONV_REG, 0, 0, 0},
     {0xA05D, -1, "SwapMMUMode", CONV_REG, 0, 0, glue_SwapMMUMode},
-    {0xA05E, -1, "NMInstall", CONV_REG, 0, 0, 0},
-    {0xA05F, -1, "NMRemove", CONV_REG, 0, 0, 0},
+    {0xA05E, -1, "NMInstall", CONV_REG, 0, 0, glue_NMInstall},
+    {0xA05F, -1, "NMRemove", CONV_REG, 0, 0, glue_NMRemove},
     {0xA061, -1, "MaxBlock", CONV_REG, 0, 0, glue_MaxBlock},
     {0xA062, -1, "PurgeSpace", CONV_REG, 0, 0, glue_PurgeSpace},
     {0xA063, -1, "MaxApplZone", CONV_STACK, 0, 0, glue_MaxApplZone},

@@ -251,6 +251,14 @@ typedef struct {
 typedef bool (*machine_control_fn)(const machine_control_request *rq, uint8_t *rgba, void *ctx);
 void machine_set_control_renderer(machine_control_fn fn, void *ctx);
 
+/* ---- Notifications ---- */
+
+enum { MACHINE_NOTIFY_MARK = 1, MACHINE_NOTIFY_ICON = 2 };
+/* A notification request (id > 0) with its message (UTF-8, may be empty)
+ * and MACHINE_NOTIFY_* parts; id < 0 withdraws request -id. */
+typedef void (*machine_notify_fn)(int id, const char *text, int flags, void *ctx);
+void machine_set_notification_handler(machine_notify_fn fn, void *ctx);
+
 /* ---- Sound ---- */
 
 /* Play 16-bit PCM (interleaved when stereo) on a channel; pcm NULL means

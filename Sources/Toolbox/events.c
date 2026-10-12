@@ -256,6 +256,7 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
     sound_pump();
+    notify_pump();
     machine_advance_ticks();
     display_sync();
     if (next_event(em, evt, true, false))
@@ -279,6 +280,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
 {
     machine_advance_ticks();
     sound_pump();
+    notify_pump();
     display_sync();
     if (next_event(mask, evp, true, false))
         return 1;

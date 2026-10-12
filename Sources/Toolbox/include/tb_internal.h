@@ -98,6 +98,11 @@ void raw_CmpString(cpu68k *c, uint16_t tw);
 void raw_RelString(cpu68k *c, uint16_t tw);
 void raw_UprString(cpu68k *c, uint16_t tw);
 
+/* ---- Notification Manager ---- */
+
+void notify_pump(void);
+void notify_reset(void);
+
 /* ---- Sound Manager ---- */
 
 /* Run sound commands whose time has come (at safe points). */
