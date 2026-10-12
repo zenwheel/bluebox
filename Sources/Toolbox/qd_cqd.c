@@ -9,8 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "m68k.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 static void rgb_get(gaddr p, uint16_t c[3])
 {
@@ -659,3 +661,167 @@ int8_t tb_GetAuxiliaryControlRecord(gaddr c, gaddr acHndl)
 }
 
 void tb_SetWinColor(gaddr w, gaddr new_w_ctab) {}
+
+/* ---------------------------------------------------------------------- */
+/* Device colour tables: SetEntries changes the screen's colours (palette
+ * animation); the new seed makes the display pick them up. */
+
+static gaddr device_table(void)
+{
+    gaddr pm = device_pixmap();
+    return pm ? PixMap_pmTable(pm) : 0;
+}
+
+static void bump_seed(gaddr ct)
+{
+    if (ct && rd32(ct))
+        wr32(rd32(ct), rd32(rd32(ct)) + 1);
+}
+
+int32_t tb_GetCTSeed(void)
+{
+    static int32_t seed = 1024;
+    return ++seed;
+}
+
+/* count is the number of entries less one; start -1 takes each entry's
+ * value as its index. */
+void tb_SetEntries(int16_t start, int16_t count, gaddr specs)
+{
+    gaddr ct = device_table();
+    if (!ct || !rd32(ct))
+        return;
+    int n = (int16_t)rd16(rd32(ct) + 6) + 1;
+    for (int i = 0; i <= count; i++) {
+        gaddr s = specs + (uint32_t)i * 8;
+        int index = start < 0 ? (int16_t)rd16(s) : start + i;
+        if (index < 0 || index >= n)
+            continue;
+        gmemcpy(rd32(ct) + 8 + (uint32_t)index * 8 + 2, s + 2, 6);
+    }
+    bump_seed(ct);
+}
+
+void tb_SaveEntries(gaddr src, gaddr result, gaddr selection)
+{
+    gaddr ct = src ? src : device_table();
+    if (!ct || !rd32(ct) || !result || !rd32(result))
+        return;
+    int n = (int16_t)rd16(rd32(selection) + 6) + 1, have = (int16_t)rd16(rd32(ct) + 6) + 1;
+    tb_SetHandleSize(result, 8 + n * 8);
+    wr16(rd32(result) + 6, (uint16_t)(n - 1));
+    for (int i = 0; i < n; i++) {
+        int index = (int16_t)rd16(rd32(selection) + 8 + (uint32_t)i * 8);
+        gaddr d = rd32(result) + 8 + (uint32_t)i * 8;
+        wr16(d, (uint16_t)index);
+        if (index >= 0 && index < have)
+            gmemcpy(d + 2, rd32(ct) + 8 + (uint32_t)index * 8 + 2, 6);
+    }
+}
+
+void tb_RestoreEntries(gaddr src, gaddr dst, gaddr selection)
+{
+    if (!src || !rd32(src))
+        return;
+    int n = (int16_t)rd16(rd32(src) + 6) + 1;
+    gaddr tmp = tb_NewPtr(n * 8, false, false);
+    gmemcpy(tmp, rd32(src) + 8, (uint32_t)n * 8);
+    tb_SetEntries(-1, (int16_t)(n - 1), tmp);
+    tb_DisposePtr(tmp);
+}
+
+void tb_ProtectEntry(int16_t index, int8_t protect) {}
+void tb_ReserveEntry(int16_t index, int8_t reserve) {}
+void tb_SetClientID(int16_t id) {}
+void tb_MakeITable(gaddr ctab, gaddr itab, int16_t res) {}
+void tb_AddSearch(gaddr proc) {}
+void tb_AddComp(gaddr proc) {}
+void tb_DelSearch(gaddr proc) {}
+void tb_DelComp(gaddr proc) {}
+void tb_AllocCursor(void) {}
+
+/* Whether the screen can show the colour exactly (not dithered). */
+int8_t tb_RealColor(gaddr color)
+{
+    if (qd_screen_depth() > 8)
+        return 1;
+    uint16_t c[3], back[3];
+    rgb_get(color, c);
+    gaddr pm = device_pixmap();
+    uint32_t v = qd_rgb_px(PixMap_pixelSize(pm), PixMap_pmTable(pm), c);
+    qd_px_rgb(PixMap_pixelSize(pm), PixMap_pmTable(pm), v, back);
+    return (c[0] >> 8) == (back[0] >> 8) && (c[1] >> 8) == (back[1] >> 8) && (c[2] >> 8) == (back[2] >> 8);
+}
+
+void tb_CopyPixPat(gaddr src, gaddr dst)
+{
+    if (!src || !dst || !rd32(src))
+        return;
+    int32_t n = tb_GetHandleSize(src);
+    tb_SetHandleSize(dst, n);
+    gmemcpy(rd32(dst), rd32(src), (uint32_t)n);
+}
+
+void tb_SetDeviceAttribute(gaddr gdh, int16_t attribute, int8_t value)
+{
+    if (!gdh || !rd32(gdh) || attribute < 0 || attribute > 15)
+        return;
+    uint16_t f = (uint16_t)GDevice_gdFlags(rd32(gdh));
+    f = value ? (uint16_t)(f | (1u << attribute)) : (uint16_t)(f & ~(1u << attribute));
+    GDevice_set_gdFlags(rd32(gdh), (int16_t)f);
+}
+
+/* One device: the drawing procedure runs once, for the screen. */
+void tb_DeviceLoop(gaddr rgn, gaddr proc, int32_t data, uint32_t flags)
+{
+    gaddr gd = rd32(LM_MainDevice);
+    if (!proc)
+        return;
+    cpu68k *c = g_cpu;
+    cpu_push16(c, (uint16_t)qd_screen_depth());
+    cpu_push16(c, (uint16_t)(gd && rd32(gd) ? GDevice_gdFlags(rd32(gd)) : 0));
+    cpu_push32(c, gd);
+    cpu_push32(c, (uint32_t)data);
+    guest_call(proc);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Palette Manager odds and ends */
+
+int32_t tb_Entry2Index(int16_t i)
+{
+    gaddr pal = current_palette();
+    if (i < 0 || i >= entries(pal))
+        return 0;
+    return tb_Color2Index(entry(pal, i) + ColorInfo_ciRGB_off);
+}
+
+void tb_SaveFore(gaddr cs) { wr16(cs, 0); tb_GetForeColor(cs + 2); }
+void tb_SaveBack(gaddr cs) { wr16(cs, 0); tb_GetBackColor(cs + 2); }
+void tb_RestoreFore(gaddr cs) { tb_RGBForeColor(cs + 2); }
+void tb_RestoreBack(gaddr cs) { tb_RGBBackColor(cs + 2); }
+
+/* The screen's depth is set for the whole run. */
+int16_t tb_SetDepth(gaddr gdh, int16_t depth, int16_t which, int16_t flags) { return depth == qd_screen_depth() ? 0 : -1; }
+int16_t tb_HasDepth(gaddr gdh, int16_t depth, int16_t which, int16_t flags)
+{
+    return depth == qd_screen_depth() ? 0x0100 | depth : 0;
+}
+
+int16_t tb_PMgrVersion(void) { return 0x0202; }
+
+static int16_t palette_updates;
+void tb_SetPaletteUpdates(gaddr pal, int16_t updates) { palette_updates = updates; }
+int16_t tb_GetPaletteUpdates(gaddr pal) { return palette_updates; }
+
+/* The grey between two colours: their average luminance. */
+int8_t tb_GetGray(gaddr gdh, gaddr back, gaddr fore)
+{
+    uint16_t a[3], b[3];
+    rgb_get(back, a);
+    rgb_get(fore, b);
+    for (int i = 0; i < 3; i++)
+        a[i] = (uint16_t)(((uint32_t)a[i] + b[i]) / 2);
+    rgb_set(fore, a);
+    return 1;
+}

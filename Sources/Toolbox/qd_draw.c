@@ -8,9 +8,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "m68k.h"
 #include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 enum { srcCopy = 0, srcOr, srcXor, srcBic, notSrcCopy, notSrcOr, notSrcXor, notSrcBic };
 enum { patCopy = 8, patOr, patXor, patBic, notPatCopy, notPatOr, notPatXor, notPatBic };
@@ -302,6 +304,41 @@ static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
     }
 }
 
+/* ---------------------------------------------------------------------- */
+/* Bottlenecks: an application that puts its own procedures in the port's
+ * grafProcs gets every drawing call; its procedures usually draw through
+ * the Std routines.  Our own routines in the table are called directly. */
+
+static gaddr bottleneck(uint32_t off)
+{
+    gaddr port = qd_port();
+    gaddr procs = port ? GrafPort_grafProcs(port) : 0;
+    gaddr p = procs ? rd32(procs + off) : 0;
+    return p && native_index_for(p) < 0 ? p : 0;
+}
+
+/* The pattern a Std routine fills with: the port's fill pattern. */
+static gaddr port_fill(int verb)
+{
+    gaddr port = qd_port();
+    if (verb != V_FILL || !port)
+        return 0;
+    if (qd_port_is_color(port)) {
+        gaddr pp = rd32(port + CGrafPort_fillPixPat_off);
+        if (pp && rd32(pp))
+            return rd32(pp) + PixPat_pat1Data_off;
+    }
+    return port + GrafPort_fillPat_off;
+}
+
+/* Before a Fill call goes to a bottleneck, the pattern goes in the port. */
+static void set_fill(int verb, gaddr pat)
+{
+    gaddr dst = port_fill(verb);
+    if (dst && pat)
+        gmemcpy(dst, pat, 8);
+}
+
 static void verb_rect(int verb, gaddr r, gaddr pat)
 {
     qrect q = qrect_get(r);
@@ -324,11 +361,25 @@ static void verb_rect(int verb, gaddr r, gaddr pat)
     hrgn_free(&inner);
 }
 
-void tb_FrameRect(gaddr r) { verb_rect(V_FRAME, r, 0); }
-void tb_PaintRect(gaddr r) { verb_rect(V_PAINT, r, 0); }
-void tb_EraseRect(gaddr r) { verb_rect(V_ERASE, r, 0); }
-void tb_InvertRect(gaddr r) { verb_rect(V_INVERT, r, 0); }
-void tb_FillRect(gaddr r, gaddr pat) { verb_rect(V_FILL, r, pat); }
+static void rect_entry(int verb, gaddr r, gaddr pat)
+{
+    gaddr proc = bottleneck(QDProcs_rectProc_off);
+    if (!proc) {
+        verb_rect(verb, r, pat);
+        return;
+    }
+    set_fill(verb, pat);
+    cpu_push16(g_cpu, (uint16_t)(verb << 8));
+    cpu_push32(g_cpu, r);
+    guest_call(proc);
+}
+
+void tb_FrameRect(gaddr r) { rect_entry(V_FRAME, r, 0); }
+void tb_PaintRect(gaddr r) { rect_entry(V_PAINT, r, 0); }
+void tb_EraseRect(gaddr r) { rect_entry(V_ERASE, r, 0); }
+void tb_InvertRect(gaddr r) { rect_entry(V_INVERT, r, 0); }
+void tb_FillRect(gaddr r, gaddr pat) { rect_entry(V_FILL, r, pat); }
+void tb_StdRect(int8_t v, gaddr r) { verb_rect(v, r, port_fill(v)); }
 
 static void verb_oval(int verb, gaddr r, gaddr pat)
 {
@@ -352,11 +403,25 @@ static void verb_oval(int verb, gaddr r, gaddr pat)
     hrgn_free(&inner);
 }
 
-void tb_FrameOval(gaddr r) { verb_oval(V_FRAME, r, 0); }
-void tb_PaintOval(gaddr r) { verb_oval(V_PAINT, r, 0); }
-void tb_EraseOval(gaddr r) { verb_oval(V_ERASE, r, 0); }
-void tb_InvertOval(gaddr r) { verb_oval(V_INVERT, r, 0); }
-void tb_FillOval(gaddr r, gaddr pat) { verb_oval(V_FILL, r, pat); }
+static void oval_entry(int verb, gaddr r, gaddr pat)
+{
+    gaddr proc = bottleneck(QDProcs_ovalProc_off);
+    if (!proc) {
+        verb_oval(verb, r, pat);
+        return;
+    }
+    set_fill(verb, pat);
+    cpu_push16(g_cpu, (uint16_t)(verb << 8));
+    cpu_push32(g_cpu, r);
+    guest_call(proc);
+}
+
+void tb_FrameOval(gaddr r) { oval_entry(V_FRAME, r, 0); }
+void tb_PaintOval(gaddr r) { oval_entry(V_PAINT, r, 0); }
+void tb_EraseOval(gaddr r) { oval_entry(V_ERASE, r, 0); }
+void tb_InvertOval(gaddr r) { oval_entry(V_INVERT, r, 0); }
+void tb_FillOval(gaddr r, gaddr pat) { oval_entry(V_FILL, r, pat); }
+void tb_StdOval(int8_t v, gaddr r) { verb_oval(v, r, port_fill(v)); }
 
 static void verb_rrect(int verb, gaddr r, int ow, int oh, gaddr pat)
 {
@@ -381,11 +446,27 @@ static void verb_rrect(int verb, gaddr r, int ow, int oh, gaddr pat)
     hrgn_free(&inner);
 }
 
-void tb_FrameRoundRect(gaddr r, int16_t ow, int16_t oh) { verb_rrect(V_FRAME, r, ow, oh, 0); }
-void tb_PaintRoundRect(gaddr r, int16_t ow, int16_t oh) { verb_rrect(V_PAINT, r, ow, oh, 0); }
-void tb_EraseRoundRect(gaddr r, int16_t ow, int16_t oh) { verb_rrect(V_ERASE, r, ow, oh, 0); }
-void tb_InvertRoundRect(gaddr r, int16_t ow, int16_t oh) { verb_rrect(V_INVERT, r, ow, oh, 0); }
-void tb_FillRoundRect(gaddr r, int16_t ow, int16_t oh, gaddr pat) { verb_rrect(V_FILL, r, ow, oh, pat); }
+static void rrect_entry(int verb, gaddr r, int ow, int oh, gaddr pat)
+{
+    gaddr proc = bottleneck(QDProcs_rRectProc_off);
+    if (!proc) {
+        verb_rrect(verb, r, ow, oh, pat);
+        return;
+    }
+    set_fill(verb, pat);
+    cpu_push16(g_cpu, (uint16_t)(verb << 8));
+    cpu_push32(g_cpu, r);
+    cpu_push16(g_cpu, (uint16_t)ow);
+    cpu_push16(g_cpu, (uint16_t)oh);
+    guest_call(proc);
+}
+
+void tb_FrameRoundRect(gaddr r, int16_t ow, int16_t oh) { rrect_entry(V_FRAME, r, ow, oh, 0); }
+void tb_PaintRoundRect(gaddr r, int16_t ow, int16_t oh) { rrect_entry(V_PAINT, r, ow, oh, 0); }
+void tb_EraseRoundRect(gaddr r, int16_t ow, int16_t oh) { rrect_entry(V_ERASE, r, ow, oh, 0); }
+void tb_InvertRoundRect(gaddr r, int16_t ow, int16_t oh) { rrect_entry(V_INVERT, r, ow, oh, 0); }
+void tb_FillRoundRect(gaddr r, int16_t ow, int16_t oh, gaddr pat) { rrect_entry(V_FILL, r, ow, oh, pat); }
+void tb_StdRRect(int8_t v, gaddr r, int16_t ow, int16_t oh) { verb_rrect(v, r, ow, oh, port_fill(v)); }
 
 static void verb_arc(int verb, gaddr r, int start, int angle, gaddr pat)
 {
@@ -411,11 +492,27 @@ static void verb_arc(int verb, gaddr r, int start, int angle, gaddr pat)
     hrgn_free(&inner);
 }
 
-void tb_FrameArc(gaddr r, int16_t start, int16_t angle) { verb_arc(V_FRAME, r, start, angle, 0); }
-void tb_PaintArc(gaddr r, int16_t start, int16_t angle) { verb_arc(V_PAINT, r, start, angle, 0); }
-void tb_EraseArc(gaddr r, int16_t start, int16_t angle) { verb_arc(V_ERASE, r, start, angle, 0); }
-void tb_InvertArc(gaddr r, int16_t start, int16_t angle) { verb_arc(V_INVERT, r, start, angle, 0); }
-void tb_FillArc(gaddr r, int16_t start, int16_t angle, gaddr pat) { verb_arc(V_FILL, r, start, angle, pat); }
+static void arc_entry(int verb, gaddr r, int start, int angle, gaddr pat)
+{
+    gaddr proc = bottleneck(QDProcs_arcProc_off);
+    if (!proc) {
+        verb_arc(verb, r, start, angle, pat);
+        return;
+    }
+    set_fill(verb, pat);
+    cpu_push16(g_cpu, (uint16_t)(verb << 8));
+    cpu_push32(g_cpu, r);
+    cpu_push16(g_cpu, (uint16_t)start);
+    cpu_push16(g_cpu, (uint16_t)angle);
+    guest_call(proc);
+}
+
+void tb_FrameArc(gaddr r, int16_t start, int16_t angle) { arc_entry(V_FRAME, r, start, angle, 0); }
+void tb_PaintArc(gaddr r, int16_t start, int16_t angle) { arc_entry(V_PAINT, r, start, angle, 0); }
+void tb_EraseArc(gaddr r, int16_t start, int16_t angle) { arc_entry(V_ERASE, r, start, angle, 0); }
+void tb_InvertArc(gaddr r, int16_t start, int16_t angle) { arc_entry(V_INVERT, r, start, angle, 0); }
+void tb_FillArc(gaddr r, int16_t start, int16_t angle, gaddr pat) { arc_entry(V_FILL, r, start, angle, pat); }
+void tb_StdArc(int8_t v, gaddr r, int16_t start, int16_t angle) { verb_arc(v, r, start, angle, port_fill(v)); }
 
 static void verb_rgn(int verb, gaddr rh, gaddr pat)
 {
@@ -438,19 +535,41 @@ static void verb_rgn(int verb, gaddr rh, gaddr pat)
     hrgn_free(&inner);
 }
 
-void tb_FrameRgn(gaddr rh) { verb_rgn(V_FRAME, rh, 0); }
-void tb_PaintRgn(gaddr rh) { verb_rgn(V_PAINT, rh, 0); }
-void tb_EraseRgn(gaddr rh) { verb_rgn(V_ERASE, rh, 0); }
-void tb_InvertRgn(gaddr rh) { verb_rgn(V_INVERT, rh, 0); }
-void tb_FillRgn(gaddr rh, gaddr pat) { verb_rgn(V_FILL, rh, pat); }
+static void rgn_entry(int verb, gaddr rh, gaddr pat)
+{
+    gaddr proc = bottleneck(QDProcs_rgnProc_off);
+    if (!proc) {
+        verb_rgn(verb, rh, pat);
+        return;
+    }
+    set_fill(verb, pat);
+    cpu_push16(g_cpu, (uint16_t)(verb << 8));
+    cpu_push32(g_cpu, rh);
+    guest_call(proc);
+}
+
+void tb_FrameRgn(gaddr rh) { rgn_entry(V_FRAME, rh, 0); }
+void tb_PaintRgn(gaddr rh) { rgn_entry(V_PAINT, rh, 0); }
+void tb_EraseRgn(gaddr rh) { rgn_entry(V_ERASE, rh, 0); }
+void tb_InvertRgn(gaddr rh) { rgn_entry(V_INVERT, rh, 0); }
+void tb_FillRgn(gaddr rh, gaddr pat) { rgn_entry(V_FILL, rh, pat); }
+void tb_StdRgn(int8_t v, gaddr rh) { verb_rgn(v, rh, port_fill(v)); }
 
 /* ---------------------------------------------------------------------- */
 /* Lines */
+
+static void poly_add(gaddr poly, int h, int v);
 
 static void line_to(int h, int v)
 {
     gaddr port = qd_port();
     uint32_t loc = rd32(port + GrafPort_pnLoc_off);
+    gaddr poly = GrafPort_polySave(port);
+    if (poly) {
+        if (rd16(rd32(poly)) == 10)
+            poly_add(poly, pt_h(loc), pt_v(loc));
+        poly_add(poly, h, v);
+    }
     if (GrafPort_pnVis(port) >= 0) {
         int pw, ph;
         pen_size(port, &pw, &ph);
@@ -467,13 +586,203 @@ static void line_to(int h, int v)
     wr32(port + GrafPort_pnLoc_off, make_pt((int16_t)v, (int16_t)h));
 }
 
-void tb_LineTo(int16_t h, int16_t v) { line_to(h, v); }
+static void line_entry(int h, int v)
+{
+    gaddr proc = bottleneck(QDProcs_lineProc_off);
+    if (!proc) {
+        line_to(h, v);
+        return;
+    }
+    cpu_push32(g_cpu, make_pt((int16_t)v, (int16_t)h));
+    guest_call(proc);
+}
+
+void tb_LineTo(int16_t h, int16_t v) { line_entry(h, v); }
+void tb_StdLine(uint32_t p) { line_to(pt_h(p), pt_v(p)); }
 
 void tb_Line(int16_t dh, int16_t dv)
 {
     uint32_t loc = rd32(qd_port() + GrafPort_pnLoc_off);
-    line_to(pt_h(loc) + dh, pt_v(loc) + dv);
+    line_entry(pt_h(loc) + dh, pt_v(loc) + dv);
 }
+
+/* ---------------------------------------------------------------------- */
+/* Polygons: polySize (2), polyBBox (8), then the points (v, h).  While a
+ * polygon is open (polySave), lines add points and the pen is hidden. */
+
+static void poly_add(gaddr poly, int h, int v)
+{
+    int32_t size = (int16_t)rd16(rd32(poly));
+    tb_SetHandleSize(poly, size + 4);
+    gaddr p = rd32(poly);
+    wr32(p + (uint32_t)size, make_pt((int16_t)v, (int16_t)h));
+    wr16(p, (uint16_t)(size + 4));
+}
+
+static void poly_bbox(gaddr poly)
+{
+    gaddr p = rd32(poly);
+    int n = ((int16_t)rd16(p) - 10) / 4;
+    qrect b = { 0, 0, 0, 0 };
+    for (int i = 0; i < n; i++) {
+        uint32_t pt = rd32(p + 10 + (uint32_t)i * 4);
+        int v = pt_v(pt), h = pt_h(pt);
+        if (i == 0 || v < b.top)
+            b.top = (int16_t)v;
+        if (i == 0 || v > b.bottom)
+            b.bottom = (int16_t)v;
+        if (i == 0 || h < b.left)
+            b.left = (int16_t)h;
+        if (i == 0 || h > b.right)
+            b.right = (int16_t)h;
+    }
+    qrect_put(p + 2, b);
+}
+
+gaddr tb_OpenPoly(void)
+{
+    gaddr port = qd_port();
+    gaddr poly = tb_NewHandle(10, false, true);
+    if (!poly)
+        return 0;
+    wr16(rd32(poly), 10);
+    GrafPort_set_polySave(port, poly);
+    tb_HidePen();
+    return poly;
+}
+
+void tb_ClosePoly(void)
+{
+    gaddr port = qd_port();
+    gaddr poly = GrafPort_polySave(port);
+    if (!poly)
+        return;
+    poly_bbox(poly);
+    GrafPort_set_polySave(port, 0);
+    tb_ShowPen();
+}
+
+void tb_KillPoly(gaddr poly)
+{
+    if (poly)
+        tb_DisposeHandle(poly);
+}
+
+void tb_OffsetPoly(gaddr poly, int16_t dh, int16_t dv)
+{
+    if (!poly || !rd32(poly))
+        return;
+    gaddr p = rd32(poly);
+    int n = ((int16_t)rd16(p) - 10) / 4;
+    for (int i = -1; i < n; i++) {
+        /* i == -1: the bounding box's top-left; its bottom-right follows. */
+        gaddr a = i < 0 ? p + 2 : p + 10 + (uint32_t)i * 4;
+        for (int k = 0; k < (i < 0 ? 2 : 1); k++, a += 4) {
+            uint32_t pt = rd32(a);
+            wr32(a, make_pt((int16_t)(pt_v(pt) + dv), (int16_t)(pt_h(pt) + dh)));
+        }
+    }
+}
+
+/* The polygon's interior, even-odd, sampled at each row's centre. */
+static void poly_region(gaddr poly, hrgn *out)
+{
+    gaddr p = rd32(poly);
+    int n = ((int16_t)rd16(p) - 10) / 4;
+    hrgn_rect(out, (qrect){ 0, 0, 0, 0 });
+    if (n < 3)
+        return;
+    int *vs = malloc((size_t)n * sizeof *vs), *hs = malloc((size_t)n * sizeof *hs);
+    for (int i = 0; i < n; i++) {
+        uint32_t pt = rd32(p + 10 + (uint32_t)i * 4);
+        vs[i] = pt_v(pt);
+        hs[i] = pt_h(pt);
+    }
+    qrect b = qrect_get(p + 2);
+    double *xs = malloc((size_t)n * sizeof *xs);
+    hrgn row;
+    hrgn_init(&row);
+    for (int y = b.top; y < b.bottom; y++) {
+        double ys = y + 0.5;
+        int k = 0;
+        for (int i = 0; i < n; i++) {
+            int j = (i + 1) % n;
+            double y0 = vs[i], y1 = vs[j];
+            if ((y0 <= ys && ys < y1) || (y1 <= ys && ys < y0))
+                xs[k++] = hs[i] + (ys - y0) * (hs[j] - hs[i]) / (y1 - y0);
+        }
+        for (int a = 1; a < k; a++) /* insertion sort: few crossings */
+            for (int c = a; c > 0 && xs[c - 1] > xs[c]; c--) {
+                double t = xs[c];
+                xs[c] = xs[c - 1];
+                xs[c - 1] = t;
+            }
+        for (int a = 0; a + 1 < k; a += 2) {
+            int x0 = (int)(xs[a] + 0.5), x1 = (int)(xs[a + 1] + 0.5);
+            if (x1 > x0) {
+                hrgn_rect(&row, (qrect){ (int16_t)y, (int16_t)x0, (int16_t)(y + 1), (int16_t)x1 });
+                hrgn_op(out, out, &row, RGN_UNION);
+            }
+        }
+    }
+    hrgn_free(&row);
+    free(xs);
+    free(vs);
+    free(hs);
+}
+
+static void verb_poly(int verb, gaddr poly, gaddr pat)
+{
+    if (!poly || !rd32(poly))
+        return;
+    gaddr port = qd_port();
+    hrgn shape, frame, seg;
+    hrgn_init(&shape);
+    hrgn_init(&frame);
+    hrgn_init(&seg);
+    if (verb == V_FRAME) {
+        /* The pen along each edge in turn; the polygon isn't closed for you. */
+        gaddr p = rd32(poly);
+        int n = ((int16_t)rd16(p) - 10) / 4, pw, ph;
+        pen_size(port, &pw, &ph);
+        for (int i = 0; i + 1 < n; i++) {
+            uint32_t a = rd32(p + 10 + (uint32_t)i * 4), c = rd32(p + 14 + (uint32_t)i * 4);
+            qd_line_region(&seg, pt_h(a), pt_v(a), pt_h(c), pt_v(c), pw, ph);
+            hrgn_op(&frame, &frame, &seg, RGN_UNION);
+        }
+        if (n > 0) {
+            uint32_t last = rd32(p + 10 + (uint32_t)(n - 1) * 4);
+            wr32(port + GrafPort_pnLoc_off, last);
+        }
+    } else {
+        poly_region(poly, &shape);
+    }
+    set_geom(MACHINE_PRINT_REGION, qrect_get(rd32(poly) + 2), 0, 0);
+    do_verb(verb, &shape, &frame, pat);
+    hrgn_free(&shape);
+    hrgn_free(&frame);
+    hrgn_free(&seg);
+}
+
+static void poly_entry(int verb, gaddr poly, gaddr pat)
+{
+    gaddr proc = bottleneck(QDProcs_polyProc_off);
+    if (!proc) {
+        verb_poly(verb, poly, pat);
+        return;
+    }
+    set_fill(verb, pat);
+    cpu_push16(g_cpu, (uint16_t)(verb << 8));
+    cpu_push32(g_cpu, poly);
+    guest_call(proc);
+}
+
+void tb_FramePoly(gaddr poly) { poly_entry(V_FRAME, poly, 0); }
+void tb_PaintPoly(gaddr poly) { poly_entry(V_PAINT, poly, 0); }
+void tb_ErasePoly(gaddr poly) { poly_entry(V_ERASE, poly, 0); }
+void tb_InvertPoly(gaddr poly) { poly_entry(V_INVERT, poly, 0); }
+void tb_FillPoly(gaddr poly, gaddr pat) { poly_entry(V_FILL, poly, pat); }
+void tb_StdPoly(int8_t v, gaddr poly) { verb_poly(v, poly, port_fill(v)); }
 
 int8_t tb_GetPixel(int16_t h, int16_t v)
 {
@@ -665,7 +974,33 @@ static void record_copy(gaddr src_bitmap, gaddr src_rect, gaddr dst_rect)
     free(rgba);
 }
 
+static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode,
+                            gaddr mask);
+
 void tb_CopyBits(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode, gaddr mask)
+{
+    /* Into the current port: through its bitsProc, when it has one. */
+    gaddr port = qd_port();
+    gaddr proc = bottleneck(QDProcs_bitsProc_off);
+    if (proc && port && resolve_bits(dst_bitmap) == port + GrafPort_portBits_off) {
+        cpu_push32(g_cpu, src_bitmap);
+        cpu_push32(g_cpu, src_rect);
+        cpu_push32(g_cpu, dst_rect);
+        cpu_push16(g_cpu, (uint16_t)mode);
+        cpu_push32(g_cpu, mask);
+        guest_call(proc);
+        return;
+    }
+    copy_bits_entry(src_bitmap, dst_bitmap, src_rect, dst_rect, mode, mask);
+}
+
+void tb_StdBits(gaddr src_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode, gaddr mask)
+{
+    copy_bits_entry(src_bitmap, qd_port() + GrafPort_portBits_off, src_rect, dst_rect, mode, mask);
+}
+
+static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode,
+                            gaddr mask)
 {
     gaddr port = qd_port();
     if (port && qd_rec_active(port) && !qd_rec_suppressed() && resolve_bits(dst_bitmap) == port + GrafPort_portBits_off)

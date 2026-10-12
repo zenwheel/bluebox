@@ -604,3 +604,66 @@ void tb_CloseRgn(gaddr rh)
     rgn_write(rh, &recorded);
     hrgn_free(&recorded);
 }
+
+/* ---------------------------------------------------------------------- */
+/* BitMapToRegion: the 1 bits of a bitmap.  Rows with the same runs make one
+ * band. */
+
+static void add_run_band(hrgn *acc, const int *runs, int n, int top, int bottom)
+{
+    hrgn r;
+    hrgn_init(&r);
+    for (int i = 0; i + 1 < n; i += 2) {
+        hrgn_rect(&r, (qrect){ (int16_t)top, (int16_t)runs[i], (int16_t)bottom, (int16_t)runs[i + 1] });
+        hrgn_op(acc, acc, &r, RGN_UNION);
+    }
+    hrgn_free(&r);
+}
+
+int16_t tb_BitMapToRegion(gaddr rgn, gaddr bm)
+{
+    /* A PixMap must be one bit deep. */
+    uint16_t rb = rd16(bm + 4);
+    if ((rb & 0x8000) && rd16(bm + PixMap_pixelSize_off) != 1)
+        return -148; /* pixmapTooDeepErr */
+    gaddr base = rd32(bm);
+    uint32_t rowbytes = rb & 0x3FFF;
+    qrect b = qrect_get(bm + 6);
+    int w = b.right - b.left;
+    hrgn acc;
+    hrgn_init(&acc);
+    hrgn_rect(&acc, (qrect){ 0, 0, 0, 0 });
+    int *prev = malloc((size_t)(w + 2) * sizeof *prev), *cur = malloc((size_t)(w + 2) * sizeof *cur);
+    int np = 0, band_top = b.top;
+    for (int y = b.top; y <= b.bottom; y++) {
+        int nc = 0;
+        if (y < b.bottom) {
+            gaddr row = base + (uint32_t)(y - b.top) * rowbytes;
+            bool on = false;
+            for (int x = 0; x < w; x++) {
+                bool bit = rd8(row + (uint32_t)(x >> 3)) & (0x80 >> (x & 7));
+                if (bit != on) {
+                    cur[nc++] = b.left + x;
+                    on = bit;
+                }
+            }
+            if (on)
+                cur[nc++] = b.left + w;
+        }
+        bool same = nc == np && !memcmp(cur, prev, (size_t)nc * sizeof *cur);
+        if (!same) {
+            if (np)
+                add_run_band(&acc, prev, np, band_top, y);
+            int *t = prev;
+            prev = cur;
+            cur = t;
+            np = nc;
+            band_top = y;
+        }
+    }
+    free(prev);
+    free(cur);
+    rgn_write(rgn, &acc);
+    hrgn_free(&acc);
+    return noErr;
+}

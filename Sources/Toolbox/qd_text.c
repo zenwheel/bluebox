@@ -5,8 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "m68k.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 enum { bold = 1, italic = 2, underline = 4, outline = 8, shadow = 16, condense = 32, extend = 64 };
 
@@ -254,12 +256,6 @@ void tb_TextSize(int16_t s) { GrafPort_set_txSize(qd_port(), s); }
 void tb_SpaceExtra(int32_t e) { GrafPort_set_spExtra(qd_port(), e); }
 void tb_CharExtra(int32_t extra) {}
 
-void tb_DrawChar(int16_t thec)
-{
-    uint8_t c = (uint8_t)thec;
-    qd_draw_text(qd_port(), &c, 1);
-}
-
 static void draw_guest(gaddr p, int n)
 {
     uint8_t *buf = malloc(n > 0 ? (size_t)n : 1);
@@ -268,8 +264,41 @@ static void draw_guest(gaddr p, int n)
     free(buf);
 }
 
-void tb_DrawString(gaddr s) { draw_guest(s + 1, rd8(s)); }
-void tb_DrawText(gaddr tb, int16_t fb, int16_t bc) { draw_guest(tb + (uint32_t)fb, bc); }
+/* Text goes through the port's textProc when the application installed one. */
+static void text_entry(gaddr p, int n)
+{
+    gaddr port = qd_port();
+    gaddr procs = port ? GrafPort_grafProcs(port) : 0;
+    gaddr proc = procs ? rd32(procs + QDProcs_textProc_off) : 0;
+    if (!proc || native_index_for(proc) >= 0) {
+        draw_guest(p, n);
+        return;
+    }
+    cpu_push16(g_cpu, (uint16_t)n);
+    cpu_push32(g_cpu, p);
+    cpu_push32(g_cpu, 0x00010001); /* numer, denom: 1:1 */
+    cpu_push32(g_cpu, 0x00010001);
+    guest_call(proc);
+}
+
+void tb_DrawChar(int16_t thec)
+{
+    gaddr c = tb_NewPtr(1, false, false);
+    wr8(c, (uint8_t)thec);
+    text_entry(c, 1);
+    tb_DisposePtr(c);
+}
+
+void tb_DrawString(gaddr s) { text_entry(s + 1, rd8(s)); }
+void tb_DrawText(gaddr tb, int16_t fb, int16_t bc) { text_entry(tb + (uint32_t)fb, bc); }
+void tb_StdText(int16_t n, gaddr p, uint32_t numer, uint32_t denom) { draw_guest(p, n); }
+
+int16_t tb_StdTxMeas(int16_t n, gaddr p, gaddr numer, gaddr denom, gaddr info)
+{
+    if (info)
+        tb_GetFontInfo(info);
+    return tb_TextWidth(p, 0, n);
+}
 
 int16_t tb_CharWidth(int16_t thec)
 {

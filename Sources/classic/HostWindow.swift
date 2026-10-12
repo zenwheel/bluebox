@@ -245,6 +245,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     appIcon = icon
     installAlertHandler()
     installFileHandler()
+    installLaunchHandler()
     installPrintHandlers()
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()
@@ -343,6 +344,26 @@ final class ClassicTypeFilter: NSObject, NSOpenSavePanelDelegate {
            url.pathExtension != "app" { return true }
         return types.contains(machine_file_type(url.path))
     }
+}
+
+/// LaunchApplication starts the other classic application as its own run of
+/// this program, with the same appearance.
+func installLaunchHandler() {
+    machine_set_launch_handler({ pathPtr, _ in
+        guard let pathPtr else { return false }
+        let path = String(cString: pathPtr)
+        let me = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+        let exe = Bundle.main.executableURL ?? me
+        var args = ["run", path]
+        if let i = CommandLine.arguments.firstIndex(of: "--appearance"), i + 1 < CommandLine.arguments.count {
+            args += ["--appearance", CommandLine.arguments[i + 1]]
+        }
+        let p = Process()
+        p.executableURL = exe
+        p.arguments = args
+        do { try p.run() } catch { return false }
+        return true
+    }, nil)
 }
 
 /// Standard File becomes the host's open and save panels, run on the main

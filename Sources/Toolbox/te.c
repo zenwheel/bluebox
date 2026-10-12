@@ -144,6 +144,21 @@ static int line_of(gaddr teh, int offset)
     return n > 0 ? n - 1 : 0;
 }
 
+/* Left edge of a line, by the record's justification (teJustCenter 1,
+ * teJustRight -1; left otherwise).  The line's return isn't counted. */
+static int line_x(gaddr teh, int line)
+{
+    qrect dest = qrect_get(te(teh) + TERec_destRect_off);
+    int just = te16(teh, TERec_just_off);
+    if (just != 1 && just != -1)
+        return dest.left;
+    int ls = line_start(teh, line), le = line_start(teh, line + 1);
+    if (le > ls && rd8(text_ptr(teh) + (uint32_t)le - 1) == '\r')
+        le--;
+    int room = (dest.right - dest.left) - width_of(teh, ls, le - ls);
+    return dest.left + (just == 1 ? room / 2 : room);
+}
+
 /* Point (local) of a text offset: left edge of the character, top of line. */
 static void offset_point(gaddr teh, int offset, int *h, int *v)
 {
@@ -160,7 +175,7 @@ static void offset_point(gaddr teh, int offset, int *h, int *v)
             ls = offset;
         }
     }
-    *h = dest.left + width_of(teh, ls, offset - ls);
+    *h = (line < nlines(teh) ? line_x(teh, line) : dest.left) + width_of(teh, ls, offset - ls);
     *v = dest.top + line * te16(teh, TERec_lineHeight_off);
 }
 
@@ -181,7 +196,7 @@ int16_t tb_TEGetOffset(uint32_t pt, gaddr teh)
         int ls = line_start(teh, line), le = line_start(teh, line + 1);
         if (le > ls && rd8(text_ptr(teh) + (uint32_t)le - 1) == '\r')
             le--;
-        int x = dest.left;
+        int x = line_x(teh, line);
         result = le;
         for (int i = ls; i < le; i++) {
             int cw = width_of(teh, i, 1);
@@ -244,8 +259,9 @@ static void invert_range(gaddr teh, int a, int b)
     for (int line = la; line <= lb; line++) {
         int ls = line_start(teh, line), le = line_start(teh, line + 1);
         int s = a > ls ? a : ls, e = b < le ? b : le;
-        int x0 = dest.left + width_of(teh, ls, s - ls);
-        int x1 = (b > le || (e == le && line < lb)) ? dest.right : dest.left + width_of(teh, ls, e - ls);
+        int lx = line_x(teh, line);
+        int x0 = lx + width_of(teh, ls, s - ls);
+        int x1 = (b > le || (e == le && line < lb)) ? dest.right : lx + width_of(teh, ls, e - ls);
         int top = dest.top + line * lh;
         hrgn_rect(&tmp, (qrect){ (int16_t)top, (int16_t)x0, (int16_t)(top + lh), (int16_t)x1 });
         hrgn_op(&r, &r, &tmp, RGN_UNION);
@@ -310,7 +326,7 @@ static void draw_lines(gaddr teh, qrect area)
         int ls = line_start(teh, i), le = line_start(teh, i + 1);
         if (le > ls && rd8(text_ptr(teh) + (uint32_t)le - 1) == '\r')
             le--;
-        tb_MoveTo(dest.left, (int16_t)(top + asc));
+        tb_MoveTo((int16_t)line_x(teh, i), (int16_t)(top + asc));
         int len = le - ls;
         if (len > 0) {
             uint8_t *buf = malloc((size_t)len);
@@ -723,9 +739,13 @@ void tb_TESelView(gaddr teh)
         tb_TEScroll(0, (int16_t)(view.bottom - v - lh), teh);
 }
 
+/* As in the ROM, the text isn't redrawn: the caller updates it. */
+void tb_TESetAlignment(int16_t j, gaddr teh) { set16(teh, TERec_just_off, j); }
+
 void tb_TETextBox(gaddr p, int32_t ln, gaddr r, int16_t j)
 {
     gaddr teh = tb_TENew(r, r);
+    set16(teh, TERec_just_off, j);
     tb_TESetText(p, ln, teh);
     tb_EraseRect(r);
     tb_TEUpdate(r, teh);

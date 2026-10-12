@@ -234,3 +234,8 @@ void tb_StringToNum(gaddr s, uint32_t *lp)
         v = v * 10 + (uint32_t)(rd8(s + 1 + (uint32_t)i) - '0');
     *lp = neg ? (uint32_t)-(int32_t)v : v;
 }
+
+/* Fixed-point trigonometry: angles in radians as Fixed, results as Fract. */
+int32_t tb_FracSin(int32_t x) { return (int32_t)lround(sin(x / 65536.0) * (1 << 30)); }
+int32_t tb_FracCos(int32_t x) { return (int32_t)lround(cos(x / 65536.0) * (1 << 30)); }
+int32_t tb_FixATan2(int32_t x, int32_t y) { return (int32_t)lround(atan2((double)y, (double)x) * 65536.0); }

@@ -3,6 +3,7 @@
 
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 const uint8_t qd_pat_black[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 const uint8_t qd_pat_white[8] = { 0 };
@@ -309,6 +310,22 @@ void qd_port_pattern(gaddr port, int which, uint8_t out[8])
 }
 
 /* ---- Pen ---- */
+
+/* The standard bottlenecks: whatever the trap table holds for them. */
+static const uint16_t std_traps[] = { 0xA882, 0xA890, 0xA8A0, 0xA8AF, 0xA8B6, 0xA8BD, 0xA8C5,
+                                      0xA8D1, 0xA8EB, 0xA8F1, 0xA8ED, 0xA8EE, 0xA8F0 };
+
+void tb_SetStdProcs(gaddr procs)
+{
+    for (unsigned i = 0; i < sizeof std_traps / sizeof std_traps[0]; i++)
+        wr32(procs + i * 4, rd32(TB_TRAP_TABLE + (std_traps[i] & 0x3FFu) * 4));
+}
+
+void tb_SetStdCProcs(gaddr procs)
+{
+    tb_SetStdProcs(procs);
+    gmemset(procs + QDProcs_SIZEOF, 0, CQDProcs_SIZEOF - QDProcs_SIZEOF);
+}
 
 void tb_HidePen(void) { GrafPort_set_pnVis(qd_port(), (int16_t)(GrafPort_pnVis(qd_port()) - 1)); }
 void tb_ShowPen(void) { GrafPort_set_pnVis(qd_port(), (int16_t)(GrafPort_pnVis(qd_port()) + 1)); }

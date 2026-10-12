@@ -322,6 +322,11 @@ the trap census.
   - pressed close and zoom boxes
   - Sound Manager (pulled forward from M4): channels with paced command queues and callbacks at safe points, 'snd ' formats 1 and 2, standard and extended sampled sound, square-wave and wave-table notes, SysBeep; output through AVAudioEngine (MACE/IMA decoding still to do)
   - Notification Manager: messages as macOS notifications (an alert when unbundled), marks as a Dock badge, a Dock bounce, the request's sound, and response procedures at the next safe point
+  - QuickDraw bottlenecks: the Std routines, and every drawing call goes through the port's grafProcs when an application installs its own; `SetStdProcs`/`SetStdCProcs`; polygons (`OpenPoly` … `FillPoly`); `BitMapToRegion`; `SetEntries` and the other device colour table calls (palette animation reaches the screen); Palette Manager odds and ends; `DeviceLoop`; fixed-point trigonometry
+  - International Utilities (Pack6) with US `itl0`/`itl1` in the System file: date and time strings in every form, string ordering; `SecondsToDate`/`DateToSeconds`; `KeyTranslate` (US layout); `LowerText` and its variants; parameter RAM; `InitZone`; `SysError` stops with its code
+  - Icon Utilities: icon suites, `PlotIconID`/`PlotIconSuite` choosing the family member for the size and depth, with masks and transforms; `PlotIconHandle`, `PlotSICNHandle`, hit testing
+  - TextEdit justification (`TESetAlignment`, `TETextBox`'s argument)
+  - `LaunchApplication` starts the other application as its own run (the caller quits unless it asks to continue)
   - List Manager (Pack0): the original ListRec and cell layout, custom LDEFs and a native LDEF 0, rows and columns, cell data, selection with shift/command extension and dragging, double clicks, scroll bars, `LSearch`
   - `ResourceStub` (OS trap A0FC): resource loads go through it when an application patches it, as Installer VISE does to expand its code
   - `GetVol` gives the application's folder as a working directory; menu colour tables (`GetMCEntry` and the rest); `InsertMenuItem`, `DeleteMenuItem`; `GetItemStyle` writes a word, as the ROM did

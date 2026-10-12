@@ -112,6 +112,15 @@ void machine_idle(void);
 void time_reset(void);
 void raw_RelString(cpu68k *c, uint16_t tw);
 void raw_UprString(cpu68k *c, uint16_t tw);
+void raw_LowerText(cpu68k *c, uint16_t tw);
+void raw_ReadXPRam(cpu68k *c, uint16_t tw);
+void raw_WriteXPRam(cpu68k *c, uint16_t tw);
+void raw_InitZone(cpu68k *c, uint16_t tw);
+/* A MacRoman character's comparison key. */
+int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);
+/* Default US 'itl0' and 'itl1' resources. */
+size_t intl_default_itl0(uint8_t out[32]);
+size_t intl_default_itl1(uint8_t out[332]);
 
 /* ---- Notification Manager ---- */
 

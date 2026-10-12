@@ -12,9 +12,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "m68k.h"
 #include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 enum { srcCopy = 0 };
 
@@ -784,4 +786,23 @@ gaddr tb_OpenPicture(gaddr r)
 
 void tb_ClosePicture(void) { open_pic = 0; }
 void tb_KillPicture(gaddr pic) { if (pic) tb_DisposeHandle(pic); }
-void tb_PicComment(int16_t kind, int16_t size, gaddr data) {}
+/* Comments go to the port's commentProc when the application installed one
+ * (print drivers and picture parsers do); StdComment has nothing to do. */
+void tb_PicComment(int16_t kind, int16_t size, gaddr data)
+{
+    gaddr port = qd_port();
+    gaddr procs = port ? GrafPort_grafProcs(port) : 0;
+    gaddr proc = procs ? rd32(procs + QDProcs_commentProc_off) : 0;
+    if (!proc || native_index_for(proc) >= 0)
+        return;
+    cpu_push16(g_cpu, (uint16_t)kind);
+    cpu_push16(g_cpu, (uint16_t)size);
+    cpu_push32(g_cpu, data);
+    guest_call(proc);
+}
+
+void tb_StdComment(int16_t kind, int16_t size, gaddr data) {}
+
+/* Pictures are read and written whole here, so these only move bytes. */
+void tb_StdGetPic(gaddr dp, int16_t bc) { gmemset(dp, 0, (uint32_t)(bc > 0 ? bc : 0)); }
+void tb_StdPutPic(gaddr sp, int16_t bc) {}

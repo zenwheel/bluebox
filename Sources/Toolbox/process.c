@@ -3,6 +3,7 @@
  * (and front) process.  Temporary memory comes from the growable
  * application heap.
  */
+#include "machine.h"
 #include "tb_internal.h"
 
 enum { procNotFound = -600 };
@@ -122,5 +123,35 @@ void tb_TempDisposeHandle(gaddr h, gaddr result_code)
 int16_t tb_GetFrontProcess(gaddr psn, int32_t dummy)
 {
     put_us(psn);
+    return noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* LaunchApplication: the host starts the other application as its own run.
+ * Without launchContinue the caller ends, as the Process Manager did. */
+
+static machine_launch_fn launch_fn;
+static void *launch_ctx;
+
+void machine_set_launch_handler(machine_launch_fn fn, void *ctx)
+{
+    launch_fn = fn;
+    launch_ctx = ctx;
+}
+
+int16_t tb_LaunchApplication(gaddr pb)
+{
+    gaddr spec = rd32(pb + LaunchParamBlockRec_launchAppSpec_off);
+    uint16_t flags = rd16(pb + LaunchParamBlockRec_launchControlFlags_off);
+    char path[1024];
+    if (!spec || !fm_host_path((int16_t)rd16(spec), (int32_t)rd32(spec + 2), spec + 6, true, path, sizeof path))
+        return fnfErr;
+    if (!launch_fn || !launch_fn(path, launch_ctx))
+        return -600; /* procNotFound: nothing could be started */
+    gmemset(pb + LaunchParamBlockRec_launchProcessSN_off, 0, 8);
+    if (!(flags & 0x4000)) { /* launchContinue */
+        rm_update_all();
+        cpu_halt(g_cpu, "ExitToShell (launched %s)", path);
+    }
     return noErr;
 }

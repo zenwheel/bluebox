@@ -251,6 +251,12 @@ typedef struct {
 typedef bool (*machine_control_fn)(const machine_control_request *rq, uint8_t *rgba, void *ctx);
 void machine_set_control_renderer(machine_control_fn fn, void *ctx);
 
+/* ---- Launching other applications ----
+ * LaunchApplication: start the classic application at `path` (a host path)
+ * as a separate run.  Returns false if it could not be started. */
+typedef bool (*machine_launch_fn)(const char *path, void *ctx);
+void machine_set_launch_handler(machine_launch_fn fn, void *ctx);
+
 /* ---- Notifications ---- */
 
 enum { MACHINE_NOTIFY_MARK = 1, MACHINE_NOTIFY_ICON = 2 };

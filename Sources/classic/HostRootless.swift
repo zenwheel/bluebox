@@ -462,6 +462,7 @@ func postScriptLive(_ script: [String]) {
     appIcon = icon
     installAlertHandler()
     installFileHandler()
+    installLaunchHandler()
     installPrintHandlers()
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()

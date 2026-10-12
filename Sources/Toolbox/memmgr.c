@@ -937,3 +937,18 @@ bool mm_check_zone(gaddr z)
     }
     return true;
 }
+
+/* InitZone (A019): A0 points to startPtr, limitPtr, cMoreMasters (word) and
+ * pGrowZone.  The new zone becomes the current one. */
+void raw_InitZone(cpu68k *c, uint16_t tw)
+{
+    gaddr pb = c->a[0];
+    gaddr start = rd32(pb), limit = rd32(pb + 4);
+    uint16_t more = rd16(pb + 8);
+    gaddr grow = rd32(pb + 10);
+    mm_init_zone(start, limit, more);
+    Zone_set_gzProc(start, grow);
+    wr32(LM_TheZone, start);
+    set_mem_err(noErr);
+    c->d[0] = 0;
+}

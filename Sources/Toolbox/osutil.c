@@ -186,3 +186,106 @@ void raw_UprString(cpu68k *c, uint16_t tw)
         wr8(a + (uint32_t)i, upper_mac(ch));
     }
 }
+
+/* A character's comparison key: upper case unless case matters, without its
+ * diacritical mark when marks don't. */
+int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks)
+{
+    if (ignore_marks)
+        c = strip_mark(c);
+    if (!case_sens)
+        c = upper_mac(c);
+    return c;
+}
+
+static uint8_t lower_mac(uint8_t c)
+{
+    if (c >= 'A' && c <= 'Z')
+        return (uint8_t)(c + 32);
+    for (int i = 0x80; i < 0x100; i++)
+        if (i != c && upper_mac((uint8_t)i) == c)
+            return (uint8_t)i;
+    return c;
+}
+
+/* LowerText (A056) and its variants: A0 the text, D0.W its length; trap bit
+ * $0200 strips diacritical marks and $0400 makes upper case. */
+void raw_LowerText(cpu68k *c, uint16_t tw)
+{
+    uint32_t a = c->a[0];
+    int n = (int)(c->d[0] & 0xFFFF);
+    for (int i = 0; i < n; i++) {
+        uint8_t ch = rd8(a + (uint32_t)i);
+        if (tw & 0x0200)
+            ch = strip_mark(ch);
+        wr8(a + (uint32_t)i, (tw & 0x0400) ? upper_mac(ch) : lower_mac(ch));
+    }
+    c->d[0] = 0;
+}
+
+/* Extended parameter RAM: 256 bytes, kept for the session.  A0 the buffer,
+ * D0 = count << 16 | first address. */
+static uint8_t xpram[256];
+
+void raw_ReadXPRam(cpu68k *c, uint16_t tw)
+{
+    uint32_t n = c->d[0] >> 16, at = c->d[0] & 0xFFFF;
+    for (uint32_t i = 0; i < n; i++)
+        wr8(c->a[0] + i, xpram[(at + i) & 0xFF]);
+    c->d[0] = 0;
+}
+
+void raw_WriteXPRam(cpu68k *c, uint16_t tw)
+{
+    uint32_t n = c->d[0] >> 16, at = c->d[0] & 0xFFFF;
+    for (uint32_t i = 0; i < n; i++)
+        xpram[(at + i) & 0xFF] = rd8(c->a[0] + i);
+    c->d[0] = 0;
+}
+
+/* SysError: on a real Mac, the bomb box.  The error code is in D0. */
+void tb_SysError(int16_t code)
+{
+    cpu_halt(g_cpu, "SysError %d", (int16_t)g_cpu->d[0]);
+}
+
+void tb_InitAllPacks(void) {}
+void tb_InitPack(int16_t id) {}
+
+/* ---- KeyTranslate: a US 'KCHR' ----
+ * keycode: the virtual key in bits 0-6, key up in bit 7, modifiers in the
+ * high byte.  The result's low byte is the character. */
+
+static const char key_plain[128] = {
+    'a', 's', 'd', 'f', 'h', 'g', 'z', 'x', 'c', 'v', 0,   'b', 'q', 'w', 'e', 'r',  /* 0x00 */
+    'y', 't', '1', '2', '3', '4', '6', '5', '=', '9', '7', '-', '8', '0', ']', 'o',  /* 0x10 */
+    'u', '[', 'i', 'p', 13,  'l', 'j', '\'', 'k', ';', '\\', ',', '/', 'n', 'm', '.', /* 0x20 */
+    9,   ' ', '`', 8,   0,   27,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,    /* 0x30 */
+    0,   '.', 29,  '*', 0,   '+', 28,  27,  31,  0,   0,   '/', 3,   30,  '-', 0,    /* 0x40 */
+    0,   '=', '0', '1', '2', '3', '4', '5', '6', '7', 0,   '8', '9', 0,   0,   0,    /* 0x50 */
+    16,  16,  16,  16,  16,  16,  0,   16,  0,   16,  0,   16,  0,   16,  0,   16,   /* 0x60: F keys */
+    0,   16,  5,   1,   11,  127, 16,  4,   16,  12,  16,  28,  29,  31,  30,  0,    /* 0x70 */
+};
+
+static char shifted(char ch)
+{
+    static const char from[] = "1234567890-=[]\;',./`", to[] = "!@#$%^&*()_+{}|:\"<>?~";
+    if (ch >= 'a' && ch <= 'z')
+        return (char)(ch - 32);
+    const char *p = strchr(from, ch);
+    return p && ch ? to[p - from] : ch;
+}
+
+uint32_t tb_KeyTranslate(gaddr kchr, uint16_t keycode, gaddr state)
+{
+    if (state)
+        wr32(state, 0);
+    char ch = key_plain[keycode & 0x7F];
+    uint16_t mods = keycode & 0xFF00;
+    bool letter = ch >= 'a' && ch <= 'z';
+    if ((mods & 0x0200) || ((mods & 0x0400) && letter)) /* shift; caps lock for letters */
+        ch = shifted(ch);
+    if ((mods & 0x1000) && letter) /* control */
+        ch = (char)(ch & 0x1F);
+    return (uint8_t)ch;
+}
