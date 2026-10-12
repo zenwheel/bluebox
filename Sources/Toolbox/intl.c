@@ -340,3 +340,14 @@ int16_t tb_IUTextOrder(gaddr a, gaddr b, int16_t la, int16_t lb, int16_t sa, int
 {
     return (int16_t)order(a, la, b, lb);
 }
+
+/* The tables inside the itl resources (word break, truncation …): none. */
+void tb_GetIntlResourceTable(int16_t script, int16_t table, gaddr itlp, gaddr offsetp, gaddr lengthp)
+{
+    if (itlp)
+        wr32(itlp, 0);
+    if (offsetp)
+        wr32(offsetp, 0);
+    if (lengthp)
+        wr32(lengthp, 0);
+}

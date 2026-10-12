@@ -495,3 +495,15 @@ void tb_FontMetrics(gaddr metrp)
     wr32(metrp + 12, (uint32_t)s.widmax << 16);
     wr32(metrp + 16, 0);
 }
+
+/* MeasureText: the left edge of each character and the end, in charLocs
+ * (count + 1 words). */
+void tb_MeasureText(int16_t count, gaddr text, gaddr locs)
+{
+    int x = 0;
+    wr16(locs, 0);
+    for (int i = 0; i < count; i++) {
+        x += tb_TextWidth(text, (int16_t)i, 1);
+        wr16(locs + (uint32_t)(i + 1) * 2, (uint16_t)x);
+    }
+}

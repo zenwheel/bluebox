@@ -806,3 +806,34 @@ void tb_StdComment(int16_t kind, int16_t size, gaddr data) {}
 /* Pictures are read and written whole here, so these only move bytes. */
 void tb_StdGetPic(gaddr dp, int16_t bc) { gmemset(dp, 0, (uint32_t)(bc > 0 ? bc : 0)); }
 void tb_StdPutPic(gaddr sp, int16_t bc) {}
+
+/* ---------------------------------------------------------------------- */
+/* Picture Utilities (Pack15): the frame and resolution; no survey of the
+ * colours, fonts or comments inside. */
+
+int16_t tb_GetPictInfo(gaddr pic, gaddr info, int16_t verb, int16_t colors, int16_t method, int16_t version)
+{
+    gmemset(info, 0, PictInfo_SIZEOF);
+    if (!pic || !rd32(pic))
+        return -11000; /* pictInfoVersionErr-like: no picture */
+    gaddr p = rd32(pic);
+    gmemcpy(info + PictInfo_sourceRect_off, p + 2, 8);
+    wr16(info + PictInfo_version_off, (uint16_t)(rd16(p + 10) == 0x0011 ? 2 : 1));
+    wr32(info + PictInfo_hRes_off, 72u << 16);
+    wr32(info + PictInfo_vRes_off, 72u << 16);
+    wr16(info + PictInfo_depth_off, 1);
+    return noErr;
+}
+
+int16_t tb_GetPixMapInfo(gaddr pm, gaddr info, int16_t verb, int16_t colors, int16_t method, int16_t version)
+{
+    gmemset(info, 0, PictInfo_SIZEOF);
+    if (!pm || !rd32(pm))
+        return -11000;
+    gaddr p = rd32(pm);
+    gmemcpy(info + PictInfo_sourceRect_off, p + PixMap_bounds_off, 8);
+    wr32(info + PictInfo_hRes_off, 72u << 16);
+    wr32(info + PictInfo_vRes_off, 72u << 16);
+    wr16(info + PictInfo_depth_off, (uint16_t)PixMap_pixelSize(p));
+    return noErr;
+}

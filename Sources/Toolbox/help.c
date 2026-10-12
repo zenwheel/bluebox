@@ -41,3 +41,5 @@ int16_t tb_HMGetBalloonWindow(gaddr windowpp)
     return noErr;
 }
 int16_t tb_HMExtractHelpMsg(int32_t type, int16_t resid, int16_t msg, int16_t state, gaddr helpmsgp) { return resNotFound; }
+
+int16_t tb_HMSetMenuResID(int16_t menuid, int16_t resid) { return noErr; }

@@ -1843,3 +1843,6 @@ static int16_t open_deny(gaddr pb, bool rsrc)
 
 int16_t tb_PBHOpenDeny(gaddr pb, bool async) { return open_deny(pb, false); }
 int16_t tb_PBHOpenRFDeny(gaddr pb, bool async) { return open_deny(pb, true); }
+
+/* Access privileges are an AppleShare matter; the local volume has none. */
+int16_t tb_PBHGetDirAccess(gaddr pb, bool async) { return paramErr; }

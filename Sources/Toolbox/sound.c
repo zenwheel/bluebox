@@ -666,3 +666,21 @@ void sound_reset(void)
             stop_host(&chans[i]);
     memset(chans, 0, sizeof chans);
 }
+
+/* Playing from files is not supported yet; stopping is harmless. */
+int16_t tb_SndStopFilePlay(gaddr chan, int8_t async) { return noErr; }
+
+/* Sound input: there is no input device. */
+int16_t tb_SPBOpenDevice(gaddr name, int16_t permission, gaddr refnum)
+{
+    if (refnum)
+        wr32(refnum, 0);
+    return -221; /* siNoSoundInHardware */
+}
+int16_t tb_SPBCloseDevice(int32_t refnum) { return noErr; }
+
+/* Undocumented Sound Manager selectors (low word 4) that Director and
+ * Finale use; named as Executor named them.  Answered as "nothing here". */
+int32_t tb_DirectorUnknown3(void) { return 0; }
+int16_t tb_DirectorUnknown4(int32_t type, int16_t id, gaddr a, gaddr b) { return 0; }
+int16_t tb_FinaleUnknown2(int32_t type, int32_t v, gaddr a, gaddr b) { return 0; }

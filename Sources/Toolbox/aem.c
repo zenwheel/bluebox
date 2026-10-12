@@ -1042,3 +1042,12 @@ int16_t tb_PostHighLevelEvent(gaddr evt, gaddr receiver_id, int32_t refcon, gadd
 {
     return -903; /* noPortErr: there is no one else to talk to */
 }
+
+/* The Apple Event Manager's private handler-table allocation, which some
+ * applications call directly: an empty table. */
+int16_t tb__AE_hdlr_table_alloc(int32_t a, int32_t b, int32_t c, int8_t sys, gaddr tablep)
+{
+    if (tablep)
+        wr32(tablep, tb_NewHandle(0, false, true));
+    return noErr;
+}

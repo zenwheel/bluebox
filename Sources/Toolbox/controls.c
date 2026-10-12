@@ -666,3 +666,5 @@ void tb_DragControl(gaddr ch, uint32_t p, gaddr limit, gaddr slop, int16_t axis)
     qrect r = crect(ch);
     tb_MoveControl(ch, (int16_t)(r.left + pt_h((uint32_t)d)), (int16_t)(r.top + pt_v((uint32_t)d)));
 }
+
+int16_t tb_GetControlVariant(gaddr ch) { return ch ? cvariant(ch) : 0; }
