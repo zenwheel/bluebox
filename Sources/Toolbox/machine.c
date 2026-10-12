@@ -80,6 +80,7 @@ void mdef0_native(cpu68k *c, uint16_t tw);
 void cdef0_native(cpu68k *c, uint16_t tw);
 void cdef1_native(cpu68k *c, uint16_t tw);
 void cdef63_native(cpu68k *c, uint16_t tw);
+void theme_system_icons(rsrc_spec *specs, size_t *n, size_t max);
 void ldef0_native(cpu68k *c, uint16_t tw);
 void events_reset(void);
 void fm_init(const char *root);
@@ -107,7 +108,7 @@ static bool open_system_file(void)
     defproc_stub(cdef1, cdef1_native, "CDEF 1");
     defproc_stub(cdef63, cdef63_native, "CDEF 63");
     defproc_stub(ldef0, ldef0_native, "LDEF 0");
-    rsrc_spec specs[256] = {
+    rsrc_spec specs[512] = {
         { fourcc("WDEF"), 0, NULL, RES_SYS_HEAP, wdef0, 8 },
         { fourcc("MDEF"), 0, NULL, RES_SYS_HEAP, mdef0, 8 },
         { fourcc("CDEF"), 0, NULL, RES_SYS_HEAP, cdef0, 8 },
@@ -119,13 +120,15 @@ static bool open_system_file(void)
     };
     size_t n = 8;
     /* Standard cursors and alert icons (Generators/sysres.py). */
-    for (unsigned i = 0; i < sysres_count && n < 256; i++)
+    for (unsigned i = 0; i < sysres_count && n < 512; i++)
         specs[n++] = (rsrc_spec){ sysres[i].type, sysres[i].id, NULL, RES_SYS_HEAP | RES_PURGEABLE, sysres[i].data,
                                   sysres[i].len };
     /* Bitmap fonts: generated from the OFL faces (Generators/fonts.py). */
-    for (unsigned i = 0; i < sysfont_count && n < 256; i++)
+    for (unsigned i = 0; i < sysfont_count && n < 512; i++)
         specs[n++] = (rsrc_spec){ sysfonts[i].type, sysfonts[i].id, sysfonts[i].name, RES_SYS_HEAP | RES_PURGEABLE,
                                   sysfonts[i].data, sysfonts[i].len };
+    /* A theme's own Finder and system icons replace ours. */
+    theme_system_icons(specs, &n, 512);
     uint8_t *fork;
     size_t len;
     if (!rsrc_build(specs, n, &fork, &len))

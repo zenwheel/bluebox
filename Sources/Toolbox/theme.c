@@ -228,6 +228,36 @@ bool machine_load_theme(const char *path, char *err, size_t errlen)
 
 bool theme_active(void) { return loaded && g_appearance == MACHINE_APPEARANCE_THEME; }
 
+/* A scheme's Finder and system icons (Kaleidoscope 2's "icxx" resources,
+ * IDs -20999 to -3700) take the place of the System file's: put them into
+ * the list it is built from. */
+void theme_system_icons(rsrc_spec *specs, size_t *n, size_t max)
+{
+    if (!theme_active())
+        return;
+    static const char *const types[] = { "ICN#", "icl4", "icl8", "ics#", "ics4", "ics8", "icm#", "icm4", "icm8" };
+    for (size_t i = 0; i < scheme_idx.count; i++) {
+        rsrc_entry *e = &scheme_idx.entries[i];
+        if (e->id < -20999 || e->id > -3700)
+            continue;
+        bool icon = false;
+        for (size_t t = 0; t < sizeof types / sizeof types[0]; t++)
+            icon |= e->type == fourcc(types[t]);
+        if (!icon)
+            continue;
+        const uint8_t *d = rsrc_data(scheme_fork, &scheme_idx, e);
+        size_t k = 0;
+        while (k < *n && !(specs[k].type == e->type && specs[k].id == e->id))
+            k++;
+        if (k == *n) {
+            if (*n >= max)
+                continue;
+            (*n)++;
+        }
+        specs[k] = (rsrc_spec){ e->type, e->id, NULL, RES_SYS_HEAP | RES_PURGEABLE, d, e->data_len };
+    }
+}
+
 /* ---------------------------------------------------------------------- */
 /* Blitting */
 
