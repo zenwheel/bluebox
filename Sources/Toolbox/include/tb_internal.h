@@ -118,6 +118,14 @@ void time_pump(void);
 /* Let the application see and change a host file (and its neighbours) or,
  * with tree, a folder and its contents (filemgr.c). */
 void fm_grant(const char *path, bool tree);
+bool fm_refnum_host_path(int16_t refnum, char *out, size_t outsize);
+/* Components of our own (components.c). */
+uint32_t components_register_native(uint32_t type, uint32_t subtype, uint32_t manufacturer, gaddr entry);
+uint32_t components_open(uint32_t component);
+void components_set_storage(uint32_t ci, gaddr storage);
+void components_close(uint32_t ci);
+void components_reset(void);
+void quicktime_reset(void);
 /* Mouse button and location into low memory (events.c). */
 void events_sync_lowmem(void);
 /* A pop-up menu's area while it is up (display.c), for rootless hosts. */

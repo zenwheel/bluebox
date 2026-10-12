@@ -503,3 +503,32 @@ void raw_ComponentDispatch(cpu68k *c, uint16_t tw)
     cpu_halt(c, "unimplemented ComponentDispatch selector %02X", sel);
 }
 
+
+/* ---- Components of our own (the QuickTime movie controller) ---- */
+
+uint32_t components_register_native(uint32_t type, uint32_t subtype, uint32_t manufacturer, gaddr entry)
+{
+    return register_component(type, subtype, manufacturer, 0, entry, 0, 0, 0, -1);
+}
+
+uint32_t components_open(uint32_t component)
+{
+    int16_t err;
+    return open_component(component, &err);
+}
+
+void components_set_storage(uint32_t ci, gaddr storage)
+{
+    instance *in = inst_of(ci);
+    if (in)
+        in->storage = storage;
+}
+
+void components_close(uint32_t ci) { close_component(ci); }
+
+/* Forget everything registered: a new run. */
+void components_reset(void)
+{
+    memset(comps, 0, sizeof comps);
+    memset(insts, 0, sizeof insts);
+}

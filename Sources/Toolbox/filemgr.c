@@ -2249,3 +2249,14 @@ int16_t tb_PBDTGetInfo(gaddr dtp, bool async)
     wr32(dtp + DTPBRec_ioDTPyLen_off, 0);
     return noErr;
 }
+
+/* The host file behind an open access path (QuickTime reads movie files
+ * through their refnums). */
+bool fm_refnum_host_path(int16_t refnum, char *out, size_t outsize)
+{
+    fcb *f = fcb_for(refnum);
+    if (!f)
+        return false;
+    snprintf(out, outsize, "%s", f->path);
+    return true;
+}

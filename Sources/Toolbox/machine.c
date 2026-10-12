@@ -189,6 +189,8 @@ bool machine_boot(bool census)
     aem_reset_handlers();
     dialogs_reset();
     sound_reset();
+    components_reset();
+    quicktime_reset();
     notify_reset();
 
     qd_screen_init(screen_w, screen_h);

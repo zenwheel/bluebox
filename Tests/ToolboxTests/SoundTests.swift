@@ -267,21 +267,17 @@ extension Classic {
 
 extension Classic {
     @Suite struct QuickTimeStart {
-        /// Movies open and are finished at once, so applications carry on.
-        @Test func moviesPlayAsZeroLength() {
+        /// QuickTime is there; a movie that cannot be opened is reported, and
+        /// asking about no movie says it is done, so applications carry on.
+        @Test func moviesOpenOrFailCleanly() {
             launchTestApp()
             var v: UInt32 = 0
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("qtim")), &v) == 0 && v >> 16 >= 0x0250)
             #expect(tb_EnterMovies() == 0)
             let mp = tb_NewPtr(4, false, true)
-            #expect(tb_NewMovieFromFile(mp, 0, 0, 0, 0, 0) == 0)
-            let movie = rd32(mp)
-            tb_StartMovie(movie)
-            #expect(tb_IsMovieDone(movie) != 0)
-            let box = tb_NewPtr(8, false, true)
-            tb_GetMovieBox(movie, box)
-            #expect(rd16(box + 6) == 320)
-            tb_DisposeMovie(movie)
+            #expect(tb_NewMovieFromFile(mp, 0, 0, 0, 0, 0) != 0)
+            #expect(rd32(mp) == 0)
+            #expect(tb_IsMovieDone(0) != 0)
         }
     }
 }
