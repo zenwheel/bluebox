@@ -330,6 +330,12 @@ def missing_glyph(ascent):
 def build_nfnt(face, extra):
     glyphs = dict(face["glyphs"])
     glyphs.update(extra)
+    # NUL, tab and return are blank, as in Apple's fonts: text drawn with a
+    # trailing return shows nothing there, not the missing-character box.
+    space = glyphs.get(0x20)
+    glyphs.setdefault(0x00, (0, 0, 0, []))
+    glyphs.setdefault(0x09, (space[0] if space else 4, 0, 0, []))
+    glyphs.setdefault(0x0D, (0, 0, 0, []))
     first, last = min(glyphs), max(glyphs)
     asc, desc = face["ascent"], face["descent"]
     height = asc + desc
