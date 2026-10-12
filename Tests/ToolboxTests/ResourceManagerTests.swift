@@ -321,5 +321,34 @@ extension Classic {
             #expect(pstring(at: out) == "Lonely")
         }
     }
+
+    @Suite struct LongNames {
+        /// Host names longer than HFS's 31 characters get a stable short form
+        /// that resolves back; names also match ignoring case.
+        @Test func longNamesShortenAndResolve() throws {
+            let dir = launchTestApp()
+            let long = "A very long folder name that HFS could never hold"
+            let sub = dir.appendingPathComponent(long)
+            try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+            try Data("hi".utf8).write(to: sub.appendingPathComponent("Note"))
+            // Index the folder to learn its Mac name.
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(64, false, true)
+            wr32(pb + 18, name)
+            var found = ""
+            for idx in 1...3 {
+                wr16(pb + 28, UInt16(idx))
+                wr16(pb + 22, 0); wr32(pb + 48, 0)
+                if tb_PBGetCatInfo(pb, false) != 0 { break }
+                let n = pstring(at: name)
+                if n.hasPrefix("A very long") { found = n }
+            }
+            #expect(found.count == 31 && found.contains("#"))
+            // ":<short>:note" (lower case) finds the file.
+            let path = tb_NewPtr(256, false, true)
+            guestPString(":" + found + ":note", at: path)
+            let spec = tb_NewPtr(70, false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, path, spec) == 0)
+        }
+    }
 }
 }

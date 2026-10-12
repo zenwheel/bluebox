@@ -94,6 +94,9 @@ static void mac_to_host(const uint8_t *name, int n, char *out, size_t outsize)
     macroman_to_utf8(tmp, (size_t)n, out, outsize);
 }
 
+/* A host name as a Mac name (at most 31 MacRoman bytes).  Longer names keep
+ * their first 25 bytes and gain '#' and five hex digits of a hash of the
+ * whole name, so they stay distinct and map back (see host_component). */
 static int host_to_mac(const char *name, uint8_t *out)
 {
     char tmp[NAME_MAX + 1];
@@ -101,8 +104,63 @@ static int host_to_mac(const char *name, uint8_t *out)
     for (char *p = tmp; *p; p++)
         if (*p == ':')
             *p = '/';
-    int n = (int)utf8_to_macroman(tmp, out, 31);
-    return n;
+    uint8_t full[NAME_MAX * 2 + 1];
+    int n = (int)utf8_to_macroman(tmp, full, sizeof full);
+    if (n <= 31) {
+        memcpy(out, full, (size_t)n);
+        return n;
+    }
+    uint32_t h = 2166136261u; /* FNV-1a */
+    for (const unsigned char *p = (const unsigned char *)name; *p; p++)
+        h = (h ^ *p) * 16777619u;
+    memcpy(out, full, 25);
+    char tail[8];
+    snprintf(tail, sizeof tail, "#%05X", h & 0xFFFFF);
+    memcpy(out + 25, tail, 6);
+    return 31;
+}
+
+static const char *entry_name(const char *dir, const char *n);
+static int mac_char_cmp(const uint8_t *a, const uint8_t *b, int n)
+{
+    for (int i = 0; i < n; i++)
+        if (mac_char_key(a[i], false, false) != mac_char_key(b[i], false, false))
+            return 1;
+    return 0;
+}
+
+/* The host name in `dir` for a Mac name: the same name when it exists,
+ * else an entry whose Mac name matches ignoring case (as HFS does) or that
+ * was shortened to it; else the plain conversion (for new files). */
+static void host_component(const char *dir, const uint8_t *mac, int n, char *out, size_t outsize)
+{
+    mac_to_host(mac, n, out, outsize);
+    char full[PATH_MAX];
+    struct stat st;
+    snprintf(full, sizeof full, "%s/%s", dir, out);
+    if (stat(full, &st) == 0)
+        return;
+    char *side = appledouble_sidecar_path(full);
+    bool have_side = side && stat(side, &st) == 0;
+    free(side);
+    if (have_side)
+        return;
+    DIR *d = opendir(dir[0] ? dir : "/");
+    if (!d)
+        return;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        const char *name = entry_name(dir, e->d_name);
+        if (!name)
+            continue;
+        uint8_t m[32];
+        int ml = host_to_mac(name, m);
+        if (ml == n && !mac_char_cmp(m, mac, n)) {
+            snprintf(out, outsize, "%s", name);
+            break;
+        }
+    }
+    closedir(d);
 }
 
 static int32_t dir_id_for(const char *rel)
@@ -207,7 +265,7 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
                 slash[1] = 0;
         } else {
             char comp[256];
-            mac_to_host(name + start, len, comp, sizeof comp);
+            host_component(path, name + start, len, comp, sizeof comp);
             size_t pl = strlen(path);
             if (pl && path[pl - 1] == '/')
                 pl--;
@@ -1578,7 +1636,7 @@ bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize
             i++;
         if (i > start) {
             char comp[256];
-            mac_to_host(mac + start, (int)(i - start), comp, sizeof comp);
+            host_component(path, mac + start, (int)(i - start), comp, sizeof comp);
             size_t pl = strlen(path);
             if (pl && path[pl - 1] == '/')
                 pl--;

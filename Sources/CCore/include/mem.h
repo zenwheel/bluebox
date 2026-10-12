@@ -25,8 +25,10 @@ enum {
     GA_SYSHEAP       = 0x00004000u, /* system heap start */
     GA_SYSHEAP_END   = 0x00400000u,
     GA_APPHEAP       = 0x00400000u, /* application heap start (grows up) */
-    GA_APPLLIMIT     = 0xDF000000u, /* application heap may grow to here */
-    GA_A5WORLD_TOP   = 0xE0000000u, /* A5 world ends here; stack below it */
+    /* The heap, stack and A5 world stay below 2 GB: applications do signed
+     * arithmetic on addresses (free memory as ApplLimit - HeapEnd …). */
+    GA_APPLLIMIT     = 0x7F000000u, /* application heap may grow to here */
+    GA_A5WORLD_TOP   = 0x80000000u, /* A5 world ends here; stack below it */
     GA_ROM           = 0xF0000000u, /* fake ROM: header + native stubs */
     GA_ROM_SIZE      = 0x00100000u,
     GA_SCREEN        = 0xF8000000u, /* framebuffer */

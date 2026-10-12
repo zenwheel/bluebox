@@ -39,6 +39,11 @@ void tb_ParamText(gaddr p0, gaddr p1, gaddr p2, gaddr p3)
         gaddr h = rd32(slot);
         if (!params[i]) /* NIL leaves the string alone */
             continue;
+        if (g_log_mask & LOG_TRAPS) {
+            char text[256];
+            pstr_to_c(params[i], text, sizeof text);
+            log_printf("  ^%d = %s\n", i, text);
+        }
         if (h)
             tb_SetString(h, params[i]);
         else
