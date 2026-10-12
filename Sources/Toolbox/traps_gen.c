@@ -10745,6 +10745,16 @@ static void glue_SndNewChannel(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SndPauseFilePlay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndPauseFilePlay(a_chanp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SndPlay(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10784,6 +10794,23 @@ static void glue_SndSoundManagerVersion(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t r = tb_SndSoundManagerVersion();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndStartFilePlay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_async = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_completionp = (gaddr)cpu_pop32(c);
+    gaddr a_theselectionp = (gaddr)cpu_pop32(c);
+    gaddr a_bufferp = (gaddr)cpu_pop32(c);
+    int32_t a_buffersize = (int32_t)cpu_pop32(c);
+    int16_t a_resnum = (int16_t)cpu_pop16(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndStartFilePlay(a_chanp, a_refnum, a_resnum, a_buffersize, a_bufferp, a_theselectionp, a_completionp, a_async);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -14038,7 +14065,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x108000Cu, "CountVoices", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x1100014u, "SPBSignOutDevice", CONV_STACK, 2, 2, 0},
     {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, glue_SndSetSysBeepState},
-    {0xA800, (int32_t)0x2040008u, "SndPauseFilePlay", CONV_STACK, 4, 2, 0},
+    {0xA800, (int32_t)0x2040008u, "SndPauseFilePlay", CONV_STACK, 4, 2, glue_SndPauseFilePlay},
     {0xA800, (int32_t)0x2180008u, "SndGetSysBeepState", CONV_STACK, 4, 0, glue_SndGetSysBeepState},
     {0xA800, (int32_t)0x21C000Cu, "DisposeSpeechChannel", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x21C0014u, "SPBCloseDevice", CONV_STACK, 4, 2, glue_SPBCloseDevice},
@@ -14092,7 +14119,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x828000Cu, "SpeakBuffer", CONV_STACK, 16, 2, 0},
     {0xA800, (int32_t)0xA5C000Cu, "TextToPhonemes", CONV_STACK, 20, 2, 0},
     {0xA800, (int32_t)0xB4C0014u, "SetupAIFFHeader", CONV_STACK, 22, 2, 0},
-    {0xA800, (int32_t)0xD000008u, "SndStartFilePlay", CONV_STACK, 26, 2, 0},
+    {0xA800, (int32_t)0xD000008u, "SndStartFilePlay", CONV_STACK, 26, 2, glue_SndStartFilePlay},
     {0xA800, (int32_t)0xD480014u, "SetupSndHeader", CONV_STACK, 26, 2, 0},
     {0xA800, (int32_t)0xE340014u, "SPBGetRecordingStatus", CONV_STACK, 28, 2, 0},
     {0xA83D, (int32_t)0x0u, "TEStylePaste", CONV_STACK, 4, 0, glue_TEStylePaste},

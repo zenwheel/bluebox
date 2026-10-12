@@ -35,6 +35,7 @@ enum {
     getVolumeCmd = 47, waveTableCmd = 60, soundCmd = 80, bufferCmd = 81, rateCmd = 82, continueCmd = 83,
     doubleBufferCmd = 84, getRateCmd = 85, rateMultiplierCmd = 86, getRateMultiplierCmd = 87, sizeCmd = 90,
     convertCmd = 91,
+    filePlayDoneCmd = 0x7FF0, /* ours: SndStartFilePlay's sound has finished */
 };
 enum { dataPointerFlag = 0x8000 };
 enum { squareWaveSynth = 1, waveTableSynth = 3, sampledSynth = 5 };
@@ -64,6 +65,9 @@ typedef struct {
     gaddr sound_header;  /* the last sound, for freq/note commands on sampled channels */
     gaddr db;            /* SndPlayDoubleBuffer's header while it plays */
     int db_index;        /* the buffer to play next */
+    gaddr file_buffer;   /* SndStartFilePlay: the sound read from a file */
+    gaddr file_completion;
+    bool file_playing;
 } channel;
 
 static channel chans[MAX_CHANNELS];
@@ -286,6 +290,8 @@ static void call_back(channel *c, sndcmd cmd)
 }
 
 /* Do one command now; returns false if it must wait for the channel. */
+static void file_play_done(channel *c, bool call_completion);
+
 static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
 {
     switch (cmd.cmd) {
@@ -334,6 +340,7 @@ static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
     case versionCmd: if (result_cmd) wr32(result_cmd + 4, 0x00030000); break;
     case getRateCmd: if (cmd.p2) wr32((gaddr)cmd.p2, 0x00010000); break;
     case getRateMultiplierCmd: if (cmd.p2) wr32((gaddr)cmd.p2, 0x00010000); break;
+    case filePlayDoneCmd: file_play_done(c, true); break;
     default: break;
     }
 }
@@ -667,8 +674,215 @@ void sound_reset(void)
     memset(chans, 0, sizeof chans);
 }
 
-/* Playing from files is not supported yet; stopping is harmless. */
-int16_t tb_SndStopFilePlay(gaddr chan, int8_t async) { return noErr; }
+
+/* ---- Playing from files ---- */
+
+/* The sound is finished (or stopped): free what we read, and tell the
+ * application through its completion routine, PROCEDURE (chan). */
+static void file_play_done(channel *c, bool call_completion)
+{
+    if (!c->file_playing)
+        return;
+    c->file_playing = false;
+    if (c->file_buffer) {
+        tb_DisposePtr(c->file_buffer);
+        c->file_buffer = 0;
+    }
+    gaddr proc = c->file_completion;
+    c->file_completion = 0;
+    if (call_completion && proc && c->chan && c->chan != 0xFFFFFFFFu) {
+        cpu_push32(g_cpu, c->chan);
+        guest_call(proc);
+    }
+}
+
+/* Read count bytes at offset of an open file into guest memory at dst. */
+static int16_t file_read(int16_t refnum, uint32_t offset, gaddr dst, uint32_t count)
+{
+    gaddr pb = tb_NewPtr(80, false, true);
+    if (!pb)
+        return memFullErr;
+    wr16(pb + 24, (uint16_t)refnum);       /* ioRefNum */
+    wr32(pb + 32, dst);                     /* ioBuffer */
+    wr32(pb + 36, count);                   /* ioReqCount */
+    wr16(pb + 44, 1);                       /* ioPosMode: fsFromStart */
+    wr32(pb + 46, offset);                  /* ioPosOffset */
+    int16_t err = tb_PBRead(pb, false);
+    if (err == -39 /* eofErr */ && rd32(pb + 40) == count)
+        err = noErr;
+    tb_DisposePtr(pb);
+    return err;
+}
+
+static uint32_t file_eof(int16_t refnum)
+{
+    gaddr pb = tb_NewPtr(80, false, true);
+    if (!pb)
+        return 0;
+    wr16(pb + 24, (uint16_t)refnum);
+    uint32_t eof = tb_PBGetEOF(pb, false) ? 0 : rd32(pb + 28); /* ioMisc */
+    tb_DisposePtr(pb);
+    return eof;
+}
+
+/* An 80-bit extended sample rate to a Fixed. */
+static uint32_t rate_fixed(const uint8_t *x)
+{
+    int e = ((x[0] & 0x7F) << 8 | x[1]) - 16383 - 63;
+    uint64_t m = 0;
+    for (int i = 0; i < 8; i++)
+        m = m << 8 | x[2 + i];
+    double r = (double)m;
+    while (e > 0) { r *= 2; e--; }
+    while (e < 0) { r /= 2; e++; }
+    return r >= 65536.0 ? 0xFFFFFFFFu : (uint32_t)(r * 65536.0);
+}
+
+/* An AIFF or AIFF-C file as a sound header followed by its samples, in one
+ * guest block. */
+static gaddr read_aiff(int16_t refnum, int16_t *errp)
+{
+    uint8_t form[12];
+    gaddr tmp = tb_NewPtr(64, false, true);
+    *errp = badFormat;
+    if (!tmp)
+        return 0;
+    uint32_t eof = file_eof(refnum);
+    bool ok = eof >= 12 && !file_read(refnum, 0, tmp, 12);
+    gget(form, tmp, 12);
+    if (!ok || memcmp(form, "FORM", 4) || (memcmp(form + 8, "AIFF", 4) && memcmp(form + 8, "AIFC", 4))) {
+        tb_DisposePtr(tmp);
+        return 0;
+    }
+    bool aifc = !memcmp(form + 8, "AIFC", 4);
+    uint8_t comm[26] = { 0 };
+    bool have_comm = false;
+    uint32_t ssnd_at = 0, ssnd_len = 0;
+    for (uint32_t at = 12; at + 8 <= eof;) {
+        uint8_t ck[8];
+        if (file_read(refnum, at, tmp, 8))
+            break;
+        gget(ck, tmp, 8);
+        uint32_t len = (uint32_t)ck[4] << 24 | (uint32_t)ck[5] << 16 | (uint32_t)ck[6] << 8 | ck[7];
+        if (!memcmp(ck, "COMM", 4)) {
+            uint32_t n = len < sizeof comm ? len : sizeof comm;
+            if (file_read(refnum, at + 8, tmp, n))
+                break;
+            gget(comm, tmp, n);
+            have_comm = true;
+        } else if (!memcmp(ck, "SSND", 4) && len >= 8) {
+            uint8_t off[4];
+            if (file_read(refnum, at + 8, tmp, 4))
+                break;
+            gget(off, tmp, 4);
+            uint32_t skip = (uint32_t)off[0] << 24 | (uint32_t)off[1] << 16 | (uint32_t)off[2] << 8 | off[3];
+            ssnd_at = at + 16 + skip;
+            ssnd_len = len - 8 - skip;
+        }
+        at += 8 + len + (len & 1);
+    }
+    tb_DisposePtr(tmp);
+    if (!have_comm || !ssnd_at || ssnd_len > eof)
+        return 0;
+    uint16_t nch = (uint16_t)(comm[0] << 8 | comm[1]);
+    uint32_t frames = (uint32_t)comm[2] << 24 | (uint32_t)comm[3] << 16 | (uint32_t)comm[4] << 8 | comm[5];
+    uint16_t bits = (uint16_t)(comm[6] << 8 | comm[7]);
+    uint32_t format = aifc ? (uint32_t)comm[18] << 24 | (uint32_t)comm[19] << 16 | (uint32_t)comm[20] << 8 | comm[21]
+                           : fourcc("twos");
+    gaddr h = tb_NewPtr((int32_t)(64 + ssnd_len), false, true);
+    if (!h) {
+        *errp = memFullErr;
+        return 0;
+    }
+    if (file_read(refnum, ssnd_at, h + 64, ssnd_len)) {
+        tb_DisposePtr(h);
+        *errp = ioErr;
+        return 0;
+    }
+    /* A compressed sound header (encode 0xFE) describes every format. */
+    wr32(h + 0, h + 64);                  /* samplePtr */
+    wr32(h + 4, nch);                     /* numChannels */
+    wr32(h + 8, rate_fixed(comm + 8));    /* sampleRate */
+    wr8(h + 20, 0xFE);                    /* encode: cmpSH */
+    wr8(h + 21, 60);                      /* baseFrequency */
+    wr32(h + 22, format == fourcc("ima4") ? ssnd_len / (34u * (nch ? nch : 1)) : frames);
+    gput(h + 26, comm + 8, 10);           /* AIFFSampleRate */
+    wr32(h + 40, format);                 /* format */
+    wr16(h + 62, bits);                   /* sampleSize */
+    *errp = noErr;
+    return h;
+}
+
+/* SndStartFilePlay: a 'snd ' resource (resnum) or an AIFF/AIFF-C file
+ * (refnum).  Asynchronous plays end with the completion routine. */
+int16_t tb_SndStartFilePlay(gaddr chan, int16_t refnum, int16_t resnum, int32_t buffersize, gaddr bufferp,
+                            gaddr selection, gaddr completion, int8_t async)
+{
+    channel *c = chan ? find(chan) : NULL;
+    if (chan && !c)
+        return badChannel;
+    if (async && !c)
+        return badChannel; /* asynchronous play needs the application's channel */
+    if (resnum) {
+        gaddr h = tb_GetResource((int32_t)fourcc("snd "), resnum);
+        if (!h)
+            return -192; /* resNotFound */
+        int16_t err = tb_SndPlay(chan, h, async);
+        if (!err && async) {
+            c->file_playing = true;
+            c->file_completion = completion;
+            enqueue(c, (sndcmd){ filePlayDoneCmd, 0, 0 });
+        }
+        return err;
+    }
+    int16_t err;
+    gaddr h = read_aiff(refnum, &err);
+    if (!h)
+        return err;
+    bool temp = !c;
+    if (temp)
+        c = add(0xFFFFFFFFu, true);
+    if (!c) {
+        tb_DisposePtr(h);
+        return notEnoughHardwareErr;
+    }
+    file_play_done(c, false); /* anything still playing from a file */
+    c->file_playing = true;
+    c->file_buffer = h;
+    c->file_completion = async ? completion : 0;
+    enqueue(c, (sndcmd){ bufferCmd, 0, (int32_t)h });
+    enqueue(c, (sndcmd){ filePlayDoneCmd, 0, 0 });
+    if (!async || temp)
+        drain(c);
+    if (temp)
+        c->chan = 0;
+    return noErr;
+}
+
+int16_t tb_SndPauseFilePlay(gaddr chan)
+{
+    channel *c = find(chan);
+    if (!c || !c->file_playing)
+        return badChannel;
+    c->paused = !c->paused;
+    if (c->paused)
+        stop_host(c);
+    return noErr;
+}
+
+int16_t tb_SndStopFilePlay(gaddr chan, int8_t quietNow)
+{
+    channel *c = find(chan);
+    if (!c)
+        return noErr;
+    if (c->file_playing) {
+        stop_host(c);
+        c->head = c->tail = 0;
+        c->paused = false;
+        file_play_done(c, true);
+    }
+    return noErr;
+}
 
 /* Sound input: there is no input device. */
 int16_t tb_SPBOpenDevice(gaddr name, int16_t permission, gaddr refnum)
