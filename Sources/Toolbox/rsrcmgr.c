@@ -51,23 +51,33 @@ static bool guest_decompress(const uint8_t *d, uint32_t len, uint8_t **out, size
         tb_HLock(code);
         gaddr base = rd32(code);
         uint32_t entry = rd32(base + 4) == fourcc("dcmp") ? 0 : rd16(base + 2);
-        gaddr in = tb_NewPtr((int32_t)(len + 0x100), false, true);
-        gaddr dst = tb_NewPtr((int32_t)(outlen + 0x100), false, true);
+        /* Version 8 decompresses in place, as the Resource Manager does it:
+         * the compressed data sits at the end of the destination buffer,
+         * which has room for the header's expansion bytes. */
+        uint32_t data_len = len - hdrlen;
+        uint32_t room = outlen + (version == 8 ? d[13] : 0) + 0x100;
+        if (room < data_len + 0x100)
+            room = data_len + 0x100;
+        gaddr dst = tb_NewPtr((int32_t)room, false, true);
+        gaddr in = version == 8 ? 0 : tb_NewPtr((int32_t)(len + 0x100), false, true);
         uint32_t worklen = version == 8 ? (len * 256 < 0x1000000 ? len * 256 : 0x1000000) : 0;
         gaddr work = worklen ? tb_NewPtr((int32_t)worklen, false, true) : 0;
-        if (in && dst && (version == 9 || work)) {
-            gput(in, d, len);
-            uint32_t data_size = len - hdrlen + 0x100;
+        if (dst && (version == 8 ? work != 0 : in != 0)) {
+            gaddr src = version == 8 ? dst + room - data_len : in + hdrlen;
+            if (version == 8)
+                gput(src, d + hdrlen, data_len);
+            else
+                gput(in, d, len);
             cpu68k *c = g_cpu;
             uint32_t sp = c->a[7];
             if (version == 8) {
-                cpu_push32(c, in + hdrlen);
+                cpu_push32(c, src);
                 cpu_push32(c, dst);
                 cpu_push32(c, work);
-                cpu_push32(c, data_size);
+                cpu_push32(c, data_len);
             } else {
-                cpu_push32(c, data_size);
-                cpu_push32(c, in + hdrlen);
+                cpu_push32(c, data_len + 0x100);
+                cpu_push32(c, src);
                 cpu_push32(c, dst);
                 cpu_push32(c, in);
             }
