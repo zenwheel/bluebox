@@ -899,3 +899,14 @@ bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool
 }
 
 const char *theme_name(void) { return loaded ? scheme_name : ""; }
+
+/* A cicn's image as RGBA (malloc'd), for PlotCIcon. */
+uint8_t *qd_cicn_rgba(const uint8_t *d, uint32_t len, int *w, int *h)
+{
+    image im;
+    if (!decode_cicn(d, len, &im))
+        return NULL;
+    *w = im.w;
+    *h = im.h;
+    return im.rgba;
+}

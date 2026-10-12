@@ -115,7 +115,7 @@ void qd_port_clip(gaddr port, hrgn *out)
 static void set_pattern(gaddr dst, const uint8_t pat[8]) { gput(dst, pat, 8); }
 
 /* A PixPat handle for an old-style pattern (patType 0). */
-static gaddr pixpat_for(const uint8_t pat[8])
+gaddr qd_pixpat_for(const uint8_t pat[8])
 {
     gaddr h = tb_NewHandle(PixPat_SIZEOF, false, true);
     gaddr p = rd32(h);
@@ -204,9 +204,9 @@ void tb_OpenCPort(gaddr p)
     wr32(p + CGrafPort_portPixMap_off, tb_NewHandle(PixMap_SIZEOF, false, true));
     wr16(p + CGrafPort_portVersion_off, 0xC000);
     wr32(p + CGrafPort_grafVars_off, tb_NewHandle(36, false, true));
-    wr32(p + CGrafPort_bkPixPat_off, pixpat_for(qd_pat_white));
-    wr32(p + CGrafPort_pnPixPat_off, pixpat_for(qd_pat_black));
-    wr32(p + CGrafPort_fillPixPat_off, pixpat_for(qd_pat_black));
+    wr32(p + CGrafPort_bkPixPat_off, qd_pixpat_for(qd_pat_white));
+    wr32(p + CGrafPort_pnPixPat_off, qd_pixpat_for(qd_pat_black));
+    wr32(p + CGrafPort_fillPixPat_off, qd_pixpat_for(qd_pat_black));
     GrafPort_set_visRgn(p, tb_NewRgn());
     GrafPort_set_clipRgn(p, tb_NewRgn());
     tb_InitCPort(p);
@@ -496,15 +496,7 @@ void tb_OpColor(gaddr c) {}
 void tb_HiliteColor(gaddr c) {}
 int16_t tb_QDError(void) { return 0; }
 
-int32_t tb_Color2Index(gaddr c) { return rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? 1 : 0; }
-
-void tb_Index2Color(int32_t i, gaddr c)
-{
-    uint16_t v = i ? 0 : 0xFFFF;
-    rgb_put(c, v, v, v);
-}
-
-gaddr tb_NewPixPat(void) { return pixpat_for(qd_pat_black); }
+gaddr tb_NewPixPat(void) { return qd_pixpat_for(qd_pat_black); }
 
 /* ---- Cursor (state only; the host draws the real cursor) ---- */
 

@@ -186,6 +186,14 @@ void qd_rec_image(gaddr port, int w, int h, const uint8_t *rgba, qrect src, qrec
 void qd_rec_suppress(bool on);
 bool qd_rec_suppressed(void);
 
+/* A PixPat handle for a black-and-white pattern. */
+gaddr qd_pixpat_for(const uint8_t pat[8]);
+/* A cicn's image as RGBA (malloc'd); NULL if it cannot be read. */
+uint8_t *qd_cicn_rgba(const uint8_t *d, uint32_t len, int *w, int *h);
+/* Draw RGBA pixels (transparent where alpha is 0) scaled into dst in the
+ * current port, through its clip. */
+void qd_draw_rgba(const uint8_t *rgba, int w, int h, qrect dst);
+
 /* Draw text at the pen location, advancing it. */
 void qd_draw_text(gaddr port, const uint8_t *text, int len);
 int qd_text_width(gaddr port, const uint8_t *text, int len);
