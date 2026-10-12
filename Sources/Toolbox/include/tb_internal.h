@@ -92,6 +92,12 @@ size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize);
 /* Host path of a Mac full path. */
 bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize);
 
+/* ---- String comparison (register traps) ---- */
+
+void raw_CmpString(cpu68k *c, uint16_t tw);
+void raw_RelString(cpu68k *c, uint16_t tw);
+void raw_UprString(cpu68k *c, uint16_t tw);
+
 /* ---- Sound Manager ---- */
 
 /* Run sound commands whose time has come (at safe points). */

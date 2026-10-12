@@ -739,3 +739,141 @@ void tb_TEInit(void)
     scrap_handle();
     wr16(LM_TEScrpLength, 0);
 }
+
+/* ---------------------------------------------------------------------- */
+/* Styled TextEdit, with one style for the whole record for now: style
+ * calls change the record's font, face and size; queries report it. */
+
+enum { doFont = 1, doFace = 2, doSize = 4, doColor = 8, addFace = 16, addSize = 32, doToggle = 64 };
+
+static void put_style(gaddr teh, gaddr ts)
+{
+    wr16(ts + TextStyle_tsFont_off, (uint16_t)te16(teh, TERec_txFont_off));
+    wr8(ts + TextStyle_tsFace_off, rd8(te(teh) + TERec_txFace_off));
+    wr8(ts + TextStyle_filler_off, 0);
+    wr16(ts + TextStyle_tsSize_off, (uint16_t)te16(teh, TERec_txSize_off));
+    gmemset(ts + TextStyle_tsColor_off, 0, 6); /* black */
+}
+
+static void redraw_view(gaddr teh)
+{
+    gaddr r = tb_NewPtr(8, false, false);
+    gmemcpy(r, te(teh) + TERec_viewRect_off, 8);
+    port_state s = enter(teh);
+    tb_EraseRect(r);
+    leave(teh, s);
+    tb_TEUpdate(r, teh);
+    tb_DisposePtr(r);
+}
+
+static void apply_style(gaddr teh, int mode, gaddr ns, bool draw)
+{
+    if (mode & doFont)
+        set16(teh, TERec_txFont_off, (int16_t)rd16(ns + TextStyle_tsFont_off));
+    if (mode & (doFace | addFace | doToggle)) {
+        uint8_t cur = rd8(te(teh) + TERec_txFace_off), f = rd8(ns + TextStyle_tsFace_off);
+        uint8_t v = (mode & doToggle) ? (uint8_t)(cur ^ f) : (mode & addFace) ? (uint8_t)(cur | f) : f;
+        wr8(te(teh) + TERec_txFace_off, v);
+    }
+    if (mode & doSize)
+        set16(teh, TERec_txSize_off, (int16_t)rd16(ns + TextStyle_tsSize_off));
+    if (mode & addSize)
+        set16(teh, TERec_txSize_off, (int16_t)(te16(teh, TERec_txSize_off) + (int16_t)rd16(ns + TextStyle_tsSize_off)));
+    set_font_metrics(teh);
+    tb_TECalText(teh);
+    if (draw)
+        redraw_view(teh);
+}
+
+void tb_TESetStyle(int16_t mode, gaddr newStyle, int8_t redraw_now, gaddr teh) { apply_style(teh, mode, newStyle, redraw_now); }
+
+void tb_TEReplaceStyle(int16_t mode, gaddr oldStyle, gaddr newStyle, int8_t redraw_now, gaddr teh)
+{
+    gaddr cur = tb_NewPtr(TextStyle_SIZEOF, false, true);
+    put_style(teh, cur);
+    bool match = (!(mode & doFont) || rd16(cur) == rd16(oldStyle + TextStyle_tsFont_off)) &&
+                 (!(mode & doSize) || rd16(cur + 4) == rd16(oldStyle + TextStyle_tsSize_off)) &&
+                 (!(mode & doFace) || rd8(cur + 2) == rd8(oldStyle + TextStyle_tsFace_off));
+    tb_DisposePtr(cur);
+    if (match)
+        apply_style(teh, mode, newStyle, redraw_now);
+}
+
+void tb_TEGetStyle(int16_t offset, gaddr theStyle, gaddr lineHeight, gaddr fontAscent, gaddr teh)
+{
+    if (theStyle)
+        put_style(teh, theStyle);
+    if (lineHeight)
+        wr16(lineHeight, (uint16_t)te16(teh, TERec_lineHeight_off));
+    if (fontAscent)
+        wr16(fontAscent, (uint16_t)te16(teh, TERec_fontAscent_off));
+}
+
+int8_t tb_TEContinuousStyle(gaddr modep, gaddr thestyle, gaddr teh)
+{
+    if (thestyle)
+        put_style(teh, thestyle);
+    return 1; /* one style throughout */
+}
+
+int32_t tb_TEGetHeight(int32_t endLine, int32_t startLine, gaddr teh)
+{
+    if (endLine < startLine) {
+        int32_t t = endLine;
+        endLine = startLine;
+        startLine = t;
+    }
+    int n = nlines(teh);
+    if (endLine > n)
+        endLine = n;
+    if (startLine < 1)
+        startLine = 1;
+    return endLine >= startLine ? (endLine - startLine + 1) * te16(teh, TERec_lineHeight_off) : 0;
+}
+
+void tb_TEStylePaste(gaddr teh) { tb_TEPaste(teh); }
+void tb_TEStyleInsert(gaddr text, int32_t length, gaddr hST, gaddr teh) { tb_TEInsert(text, length, teh); }
+void tb_TEUseStyleScrap(int32_t start, int32_t stop, gaddr newstyles, int8_t redraw_now, gaddr teh) {}
+void tb_TECustomHook(int16_t sel, gaddr addr, gaddr teh) {}
+int32_t tb_TENumStyles(int32_t start, int32_t stop, gaddr teh) { return 1; }
+
+/* A style scrap with the record's one style (StScrpRec). */
+gaddr tb_TEGetStyleScrapHandle(gaddr teh)
+{
+    gaddr h = tb_NewHandle(2 + 20, false, true);
+    gaddr p = rd32(h);
+    wr16(p, 1);                                                /* scrpNStyles */
+    wr32(p + 2, 0);                                            /* scrpStartChar */
+    wr16(p + 6, (uint16_t)te16(teh, TERec_lineHeight_off));   /* scrpHeight */
+    wr16(p + 8, (uint16_t)te16(teh, TERec_fontAscent_off));   /* scrpAscent */
+    wr16(p + 10, (uint16_t)te16(teh, TERec_txFont_off));
+    wr8(p + 12, rd8(te(teh) + TERec_txFace_off));
+    wr16(p + 14, (uint16_t)te16(teh, TERec_txSize_off));
+    return h;
+}
+
+/* The style record (TEStyleRec) describing one run. */
+gaddr tb_TEGetStyleHandle(gaddr teh)
+{
+    gaddr h = tb_NewHandle(32, false, true);
+    gaddr p = rd32(h);
+    wr16(p, 1);              /* nRuns */
+    wr16(p + 2, 1);          /* nStyles */
+    gaddr st = tb_NewHandle(18, false, true);
+    gaddr s = rd32(st);
+    wr16(s, 1);
+    wr16(s + 2, (uint16_t)te16(teh, TERec_lineHeight_off));
+    wr16(s + 4, (uint16_t)te16(teh, TERec_fontAscent_off));
+    wr16(s + 6, (uint16_t)te16(teh, TERec_txFont_off));
+    wr8(s + 8, rd8(te(teh) + TERec_txFace_off));
+    wr16(s + 10, (uint16_t)te16(teh, TERec_txSize_off));
+    wr32(rd32(h) + 4, st);   /* styleTab */
+    wr32(rd32(h) + 8, tb_NewHandle(0, false, true)); /* lhTab */
+    wr16(rd32(h) + 20, 0);   /* runs[0]: start 0, style 0 */
+    wr16(rd32(h) + 22, 0);
+    wr16(rd32(h) + 24, (uint16_t)text_len(teh)); /* end marker */
+    wr16(rd32(h) + 26, 0);
+    return h;
+}
+
+void tb_TESetStyleHandle(gaddr theHandle, gaddr teh) {}

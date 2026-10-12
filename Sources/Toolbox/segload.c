@@ -183,6 +183,9 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
 
 /* Hand-written trap natives (see trap.c). */
 const raw_trap raw_traps[] = {
+    { 0xA03C, "CmpString", raw_CmpString },
+    { 0xA050, "RelString", raw_RelString },
+    { 0xA054, "UprString", raw_UprString },
     { 0xA9F0, "LoadSeg", raw_LoadSeg },
     { 0xA9F1, "UnloadSeg", raw_UnloadSeg },
     { 0xA9F4, "ExitToShell", raw_ExitToShell },

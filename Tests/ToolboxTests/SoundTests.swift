@@ -74,3 +74,56 @@ extension Classic {
         }
     }
 }
+
+extension Classic {
+    @Suite struct StringsAndScripts {
+        func compare(_ a: String, _ b: String, trap: UInt16, _ fn: (UnsafeMutablePointer<cpu68k>?, UInt16) -> Void) -> Int32 {
+            let pa = tb_NewPtr(64, false, true), pb = tb_NewPtr(64, false, true)
+            for (i, c) in a.utf8.enumerated() { wr8(pa + UInt32(i), c) }
+            for (i, c) in b.utf8.enumerated() { wr8(pb + UInt32(i), c) }
+            let c = g_cpu!
+            c.pointee.a.0 = pa
+            c.pointee.a.1 = pb
+            c.pointee.d.0 = UInt32(a.utf8.count) << 16 | UInt32(b.utf8.count)
+            fn(c, trap)
+            return Int32(bitPattern: c.pointee.d.0)
+        }
+
+        @Test func cmpStringHonoursCaseFlag() {
+            launchTestApp()
+            #expect(compare("Hello", "hello", trap: 0xA03C, raw_CmpString) == 0)  // case-insensitive
+            #expect(compare("Hello", "hello", trap: 0xA43C, raw_CmpString) == 1)  // case-sensitive
+            #expect(compare("Hello", "Help", trap: 0xA03C, raw_CmpString) == 1)
+        }
+
+        @Test func relStringOrders() {
+            launchTestApp()
+            #expect(compare("apple", "banana", trap: 0xA050, raw_RelString) == -1)
+            #expect(compare("pear", "pea", trap: 0xA050, raw_RelString) == 1)
+            #expect(compare("Same", "same", trap: 0xA050, raw_RelString) == 0)
+        }
+
+        @Test func scriptManagerReportsRoman() {
+            launchTestApp()
+            #expect(tb_GetScriptManagerVariable(0) == 0x0710)
+            #expect(tb_FontScript() == 0)
+            #expect(tb_GetScriptVariable(0, 86) == (3 << 16 | 12))
+            let t = tb_NewPtr(32, false, true)
+            for (i, c) in "Aa1 .".utf8.enumerated() { wr8(t + UInt32(i), c) }
+            #expect(tb_CharType(t, 0) == 0x4001)   // upper-case ASCII letter
+            #expect(tb_CharType(t, 1) == 0x0001)
+            #expect(tb_CharType(t, 2) == 0x0100)   // digit
+            #expect(tb_CharType(t, 3) == 0x0300)   // blank
+        }
+
+        @Test func findWordFindsTheWordAroundAnOffset() {
+            launchTestApp()
+            let t = tb_NewPtr(32, false, true)
+            let text = "hello brave world"
+            for (i, c) in text.utf8.enumerated() { wr8(t + UInt32(i), c) }
+            let offs = tb_NewPtr(12, false, true)
+            tb_FindWord(t, Int16(text.utf8.count), 8, 1, 0, offs)
+            #expect(rd16(offs) == 6 && rd16(offs + 2) == 11)
+        }
+    }
+}
