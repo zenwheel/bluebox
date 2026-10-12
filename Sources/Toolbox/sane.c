@@ -603,3 +603,148 @@ void tb_ROMlib_Fcstr2dec(gaddr s, gaddr indexp, gaddr dec, gaddr valid)
         len++;
     str2dec(buf, len, indexp, dec, valid, 0);
 }
+
+/* ---------------------------------------------------------------------- */
+/* Script Manager number formatting.  A NumFormatStringRec here simply keeps
+ * the canonical format string (fVersion 1); conversions read it back: the
+ * part before any ';' formats positives, the second part negatives.  Digits
+ * after the '.' set the decimal places, a ',' before it groups thousands,
+ * and other characters (or 'quoted' text) are copied as literals. */
+
+enum { fFormatOK = 0, fEmptyFormatString = 13 };
+
+static int fmt_get(gaddr formatp, char *out)
+{
+    unsigned n = rd8(formatp);
+    if (n > 253)
+        n = 253;
+    for (unsigned i = 0; i < n; i++)
+        out[i] = (char)rd8(formatp + 2 + i);
+    out[n] = 0;
+    return (int)n;
+}
+
+int16_t tb_StringToFormatRec(gaddr in_string, gaddr partsp, gaddr out_string)
+{
+    unsigned n = rd8(in_string);
+    if (n > 253)
+        n = 253;
+    wr8(out_string, (uint8_t)n);
+    wr8(out_string + 1, 1);
+    for (unsigned i = 0; i < n; i++)
+        wr8(out_string + 2 + i, rd8(in_string + 1 + i));
+    return n ? fFormatOK : fEmptyFormatString;
+}
+
+/* The section of a format for this sign: positives, negatives, zero. */
+static const char *fmt_part(const char *fmt, int which, int *len)
+{
+    const char *p = fmt;
+    for (int i = 0; i < which; i++) {
+        const char *semi = strchr(p, ';');
+        if (!semi)
+            return NULL;
+        p = semi + 1;
+    }
+    const char *end = strchr(p, ';');
+    *len = end ? (int)(end - p) : (int)strlen(p);
+    return p;
+}
+
+int16_t tb_ExtendedToString(gaddr xp, gaddr formatp, gaddr partsp, gaddr string)
+{
+    char fmt[256], out[512];
+    double v = ext_get(xp);
+    int len = 0, which = 0;
+    fmt_get(formatp, fmt);
+    if (v < 0 && fmt_part(fmt, 1, &len))
+        which = 1;
+    else if (v == 0 && fmt_part(fmt, 2, &len))
+        which = 2;
+    const char *f = fmt_part(fmt, which, &len);
+    double a = which ? fabs(v) : v;
+
+    int decimals = 0, grouping = 0, seen_point = 0, any_digit = 0;
+    for (int i = 0; i < len; i++) {
+        char ch = f[i];
+        if (ch == '\'') {
+            while (++i < len && f[i] != '\'')
+                ;
+        } else if (ch == '.') {
+            seen_point = 1;
+        } else if (ch == '0' || ch == '#' || ch == '^') {
+            any_digit = 1;
+            if (seen_point)
+                decimals++;
+        } else if (ch == ',' && !seen_point) {
+            grouping = 1;
+        }
+    }
+    if (!any_digit)
+        decimals = 6;
+
+    char num[400], grouped[512];
+    snprintf(num, sizeof num, "%.*f", decimals, a);
+    const char *src = num;
+    char *g = grouped;
+    if (*src == '-')
+        *g++ = *src++;
+    int intlen = (int)strcspn(src, ".");
+    for (int i = 0; i < intlen; i++) {
+        *g++ = src[i];
+        if (grouping && (intlen - i - 1) % 3 == 0 && i != intlen - 1)
+            *g++ = ',';
+    }
+    strcpy(g, src + intlen);
+
+    /* Literals before the first digit placeholder go first, the rest after. */
+    int o = 0, placed = 0;
+    for (int i = 0; i < len && o < 400; i++) {
+        char ch = f[i];
+        if (ch == '\'') {
+            while (++i < len && f[i] != '\'' && o < 400)
+                out[o++] = f[i];
+        } else if (strchr("0#^.,", ch)) {
+            if (!placed) {
+                int gl = (int)strlen(grouped);
+                memcpy(out + o, grouped, (size_t)gl);
+                o += gl;
+                placed = 1;
+            }
+        } else {
+            out[o++] = ch;
+        }
+    }
+    if (!placed) {
+        int gl = (int)strlen(grouped);
+        memcpy(out + o, grouped, (size_t)gl);
+        o += gl;
+    }
+    if (o > 255)
+        o = 255;
+    wr8(string, (uint8_t)o);
+    for (int i = 0; i < o; i++)
+        wr8(string + 1 + (uint32_t)i, (uint8_t)out[i]);
+    return fFormatOK;
+}
+
+int16_t tb_StringToExtended(gaddr string, gaddr formatp, gaddr partsp, gaddr xp)
+{
+    char fmt[256], buf[256];
+    fmt_get(formatp, fmt);
+    unsigned n = rd8(string), k = 0;
+    int negative = 0, any = 0;
+    for (unsigned i = 0; i < n; i++) {
+        char ch = (char)rd8(string + 1 + i);
+        if ((ch >= '0' && ch <= '9') || ch == '.' || ch == 'e' || ch == 'E' || (ch == '-' && any && (buf[k - 1] == 'e' || buf[k - 1] == 'E'))) {
+            buf[k++] = ch;
+            any = 1;
+        } else if (ch == '-' || ch == '(') {
+            negative = 1;
+        }
+    }
+    buf[k] = 0;
+    double v = any ? strtod(buf, NULL) : 0;
+    ext_put(xp, negative ? -v : v);
+    return any ? fFormatOK : 1; /* fBestGuess */
+}

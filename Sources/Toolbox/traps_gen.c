@@ -3059,6 +3059,19 @@ static void glue_ExitMovies(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ExtendedToString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_string = (gaddr)cpu_pop32(c);
+    gaddr a_partsp = (gaddr)cpu_pop32(c);
+    gaddr a_formatp = (gaddr)cpu_pop32(c);
+    gaddr a_xp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExtendedToString(a_xp, a_formatp, a_partsp, a_string);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FMSwapFont(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10619,6 +10632,31 @@ static void glue_StopMovie(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_StringToExtended(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_xp = (gaddr)cpu_pop32(c);
+    gaddr a_partsp = (gaddr)cpu_pop32(c);
+    gaddr a_formatp = (gaddr)cpu_pop32(c);
+    gaddr a_string = (gaddr)cpu_pop32(c);
+    int16_t r = tb_StringToExtended(a_string, a_formatp, a_partsp, a_xp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_StringToFormatRec(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_out_string = (gaddr)cpu_pop32(c);
+    gaddr a_partsp = (gaddr)cpu_pop32(c);
+    gaddr a_in_string = (gaddr)cpu_pop32(c);
+    int16_t r = tb_StringToFormatRec(a_in_string, a_partsp, a_out_string);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_StringToNum(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12972,12 +13010,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x820C0016u, "Char2Pixel", CONV_STACK, 12, 2, glue_Char2Pixel},
     {0xA8B5, (int32_t)0x820C0026u, "FindScriptRun", CONV_STACK, 12, 2, glue_FindScriptRun},
     {0xA8B5, (int32_t)0x820CFFDCu, "ReplaceText", CONV_STACK, 12, 2, glue_ReplaceText},
-    {0xA8B5, (int32_t)0x820CFFECu, "StringToFormatRec", CONV_STACK, 12, 2, 0},
+    {0xA8B5, (int32_t)0x820CFFECu, "StringToFormatRec", CONV_STACK, 12, 2, glue_StringToFormatRec},
     {0xA8B5, (int32_t)0x820E0014u, "Pixel2Char", CONV_STACK, 14, 2, glue_Pixel2Char},
     {0xA8B5, (int32_t)0x820E0018u, "Transliterate", CONV_STACK, 14, 2, glue_Transliterate},
     {0xA8B5, (int32_t)0x820EFFEEu, "ToggleDate", CONV_STACK, 14, 2, 0},
-    {0xA8B5, (int32_t)0x8210FFE6u, "StringToExtended", CONV_STACK, 16, 2, 0},
-    {0xA8B5, (int32_t)0x8210FFE8u, "ExtendedToString", CONV_STACK, 16, 2, 0},
+    {0xA8B5, (int32_t)0x8210FFE6u, "StringToExtended", CONV_STACK, 16, 2, glue_StringToExtended},
+    {0xA8B5, (int32_t)0x8210FFE8u, "ExtendedToString", CONV_STACK, 16, 2, glue_ExtendedToString},
     {0xA8B5, (int32_t)0x8214FFF4u, "StringToTime", CONV_STACK, 20, 2, 0},
     {0xA8B5, (int32_t)0x8214FFF6u, "StringToDate", CONV_STACK, 20, 2, 0},
     {0xA8B5, (int32_t)0x821C0030u, "CharToPixel", CONV_STACK, 28, 2, glue_CharToPixel},
