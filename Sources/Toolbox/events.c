@@ -180,8 +180,12 @@ uint32_t ev_key_count(void)
     return n;
 }
 
+void machine_idle(void);
+
 bool ev_still_down(void)
 {
+    if (!host_attached && g_cpu)
+        events_script_pump(g_cpu->icount); /* scripted input due by now */
     pthread_mutex_lock(&lock);
     bool d = button_down;
     pthread_mutex_unlock(&lock);

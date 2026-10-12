@@ -7781,6 +7781,147 @@ static void glue_PBCreate(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBDTAddAPPL(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTAddAPPL(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTAddIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTAddIcon(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTCloseDown(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    int16_t r = tb_PBDTCloseDown(a_dtp);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTDelete(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTDelete(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTFlush(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTFlush(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTGetAPPL(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTGetAPPL(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTGetComment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTGetComment(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTGetIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTGetIcon(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTGetIconInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTGetIconInfo(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTGetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTGetInfo(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTGetPath(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    int16_t r = tb_PBDTGetPath(a_dtp);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTOpenInform(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    int16_t r = tb_PBDTOpenInform(a_dtp);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTRemoveAPPL(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTRemoveAPPL(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTRemoveComment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTRemoveComment(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTReset(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTReset(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDTSetComment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtp = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDTSetComment(a_dtp, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBDelete(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12983,22 +13124,22 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x18u, "PBCatSearch", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x1Au, "PBOpenDF", CONV_REG, 0, 0, glue_PBOpenDF},
     {0xA060, (int32_t)0x1Au, "PBHOpenDF", CONV_REG, 0, 0, glue_PBHOpenDF},
-    {0xA060, (int32_t)0x20u, "PBDTGetPath", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x21u, "PBDTCloseDown", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x22u, "PBDTAddIcon", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x23u, "PBDTGetIcon", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x24u, "PBDTGetIconInfo", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x25u, "PBDTAddAPPL", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x26u, "PBDTRemoveAPPL", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x27u, "PBDTGetAPPL", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x28u, "PBDTSetComment", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x29u, "PBDTRemoveComment", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x2Au, "PBDTGetComment", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x2Bu, "PBDTFlush", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x2Cu, "PBDTReset", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x2Du, "PBDTGetInfo", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x2Eu, "PBDTOpenInform", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x2Fu, "PBDTDelete", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x20u, "PBDTGetPath", CONV_REG, 0, 0, glue_PBDTGetPath},
+    {0xA060, (int32_t)0x21u, "PBDTCloseDown", CONV_REG, 0, 0, glue_PBDTCloseDown},
+    {0xA060, (int32_t)0x22u, "PBDTAddIcon", CONV_REG, 0, 0, glue_PBDTAddIcon},
+    {0xA060, (int32_t)0x23u, "PBDTGetIcon", CONV_REG, 0, 0, glue_PBDTGetIcon},
+    {0xA060, (int32_t)0x24u, "PBDTGetIconInfo", CONV_REG, 0, 0, glue_PBDTGetIconInfo},
+    {0xA060, (int32_t)0x25u, "PBDTAddAPPL", CONV_REG, 0, 0, glue_PBDTAddAPPL},
+    {0xA060, (int32_t)0x26u, "PBDTRemoveAPPL", CONV_REG, 0, 0, glue_PBDTRemoveAPPL},
+    {0xA060, (int32_t)0x27u, "PBDTGetAPPL", CONV_REG, 0, 0, glue_PBDTGetAPPL},
+    {0xA060, (int32_t)0x28u, "PBDTSetComment", CONV_REG, 0, 0, glue_PBDTSetComment},
+    {0xA060, (int32_t)0x29u, "PBDTRemoveComment", CONV_REG, 0, 0, glue_PBDTRemoveComment},
+    {0xA060, (int32_t)0x2Au, "PBDTGetComment", CONV_REG, 0, 0, glue_PBDTGetComment},
+    {0xA060, (int32_t)0x2Bu, "PBDTFlush", CONV_REG, 0, 0, glue_PBDTFlush},
+    {0xA060, (int32_t)0x2Cu, "PBDTReset", CONV_REG, 0, 0, glue_PBDTReset},
+    {0xA060, (int32_t)0x2Du, "PBDTGetInfo", CONV_REG, 0, 0, glue_PBDTGetInfo},
+    {0xA060, (int32_t)0x2Eu, "PBDTOpenInform", CONV_REG, 0, 0, glue_PBDTOpenInform},
+    {0xA060, (int32_t)0x2Fu, "PBDTDelete", CONV_REG, 0, 0, glue_PBDTDelete},
     {0xA060, (int32_t)0x30u, "PBHGetVolParms", CONV_REG, 0, 0, glue_PBHGetVolParms},
     {0xA060, (int32_t)0x31u, "PBHGetLogInInfo", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x32u, "PBHGetDirAccess", CONV_REG, 0, 0, glue_PBHGetDirAccess},

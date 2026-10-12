@@ -75,6 +75,48 @@ void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mod
     hrgn_free(&r);
 }
 
+/* Highlighting (HiliteMode's bit cleared before an invert, or the pen's
+ * hilite mode): the background colour and the highlight colour (HiliteRGB)
+ * change places; other colours stay.  On one bit it is an ordinary invert. */
+enum { hilite = 50 };
+
+static bool hilite_requested(gaddr port)
+{
+    return !(rd8(LM_HiliteMode) & 0x80) || (GrafPort_pnMode(port) & 0x3F) == hilite;
+}
+
+static void hilite_region(gaddr port, const hrgn *shape)
+{
+    wr8(LM_HiliteMode, (uint8_t)(rd8(LM_HiliteMode) | 0x80)); /* for one operation only */
+    pixdst d = qd_port_pixels(port);
+    if (d.depth == 1) {
+        qd_fill_region(port, shape, qd_pat_black, patXor);
+        return;
+    }
+    hrgn r;
+    hrgn_init(&r);
+    qd_port_clip(port, &r);
+    hrgn_op(&r, shape, &r, RGN_SECT);
+    uint32_t fg, bk;
+    qd_port_bits(port, &fg, &bk);
+    uint16_t rgb[3] = { rd16(LM_HiliteRGB), rd16(LM_HiliteRGB + 2), rd16(LM_HiliteRGB + 4) };
+    uint32_t hi = qd_rgb_px(d.depth, d.ctab, rgb);
+    for (int i = 0; i < r.nbands; i++) {
+        const rband *b = &r.bands[i];
+        for (int y = b->top; y < b->bottom; y++)
+            for (int k = 0; k < b->n; k += 2)
+                for (int x = b->x[k]; x < b->x[k + 1]; x++) {
+                    int c = x - d.bounds.left, row = y - d.bounds.top;
+                    uint32_t v = get_px(&d, c, row);
+                    if (v == bk)
+                        put_px(&d, c, row, hi);
+                    else if (v == hi)
+                        put_px(&d, c, row, bk);
+                }
+    }
+    hrgn_free(&r);
+}
+
 /* ---------------------------------------------------------------------- */
 /* Shapes */
 
@@ -285,6 +327,10 @@ static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
         qd_fill_region(port, frame, p, GrafPort_pnMode(port));
         break;
     case V_PAINT:
+        if ((GrafPort_pnMode(port) & 0x3F) == hilite) {
+            hilite_region(port, shape);
+            break;
+        }
         qd_port_pattern(port, 0, p);
         qd_fill_region(port, shape, p, GrafPort_pnMode(port));
         break;
@@ -293,7 +339,10 @@ static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
         qd_fill_region(port, shape, p, patCopy);
         break;
     case V_INVERT:
-        qd_fill_region(port, shape, qd_pat_black, patXor);
+        if (hilite_requested(port))
+            hilite_region(port, shape);
+        else
+            qd_fill_region(port, shape, qd_pat_black, patXor);
         break;
     default:
         gget(p, pat, 8);

@@ -384,7 +384,7 @@ func runCommand(_ args: [String]) {
     }
     #endif
 
-    var budget = maxInstructions
+    let budget = maxInstructions
     machine_set_instruction_limit(machine_instruction_count() + maxInstructions)
     queueScript(keyScript, start: machine_instruction_count())
     let status = machine_run(budget)

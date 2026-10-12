@@ -50,6 +50,11 @@ static void init_lowmem(void)
     wr32(LM_ROMBase, GA_ROM);
     wr16(LM_ROM85, 0x3FFF);           /* new ROMs, Color QuickDraw */
     wr8(LM_CPUFlag, g_cpu->model == 68040 ? 4 : 2);
+    /* The highlight colour: Mac OS 8's lavender (the Color control panel's). */
+    wr16(LM_HiliteRGB, 0xCCCC);
+    wr16(LM_HiliteRGB + 2, 0xCCCC);
+    wr16(LM_HiliteRGB + 4, 0xFFFF);
+    wr8(LM_HiliteMode, 0xFF); /* no highlighting pending */
     wr8(LM_MMU32Bit, 1);              /* 32-bit addressing */
     wr16(LM_SysVersion, 0x0710);
     wr32(LM_Lo3Bytes, 0x00FFFFFF);

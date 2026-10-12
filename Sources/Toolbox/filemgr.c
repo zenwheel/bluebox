@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "forks.h"
@@ -48,6 +49,30 @@ enum { fsCurPerm = 0, fsRdPerm, fsWrPerm, fsRdWrPerm, fsRdWrShPerm };
 #define FCB_LEN 94
 
 uint32_t mac_now(void);
+
+/* A host time as Mac time (local time, seconds since 1904). */
+static uint32_t mac_time(time_t t)
+{
+    struct tm lt;
+    localtime_r(&t, &lt);
+    return (uint32_t)((int64_t)t + lt.tm_gmtoff + 2082844800LL);
+}
+
+/* A host path's modification (and status-change, for "created") times. */
+static void host_times(const char *path, uint32_t *created, uint32_t *modified)
+{
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        *created = *modified = mac_now();
+        return;
+    }
+#ifdef __APPLE__
+    *created = mac_time(st.st_birthtimespec.tv_sec);
+#else
+    *created = mac_time(st.st_mtime);
+#endif
+    *modified = mac_time(st.st_mtime);
+}
 
 static char root_path[PATH_MAX]; /* the volume's folder */
 static char vol_name[32]; /* MacRoman */
@@ -549,8 +574,10 @@ static void guest_tables_init(void)
     wr16(LM_FSFCBLen, FCB_LEN);
     gaddr v = the_vcb = mm_new_ptr_in(zone, VCB_SIZEOF, true);
     wr16(v + VCB_vcbSigWord_off, 0x4244);
-    wr32(v + VCB_vcbCrDate_off, mac_now());
-    wr32(v + VCB_vcbLsMod_off, mac_now());
+    uint32_t vc, vm;
+    host_times(root_path, &vc, &vm);
+    wr32(v + VCB_vcbCrDate_off, vc);
+    wr32(v + VCB_vcbLsMod_off, vm);
     wr16(v + VCB_vcbNmAlBlks_off, 0xFFFF);
     wr32(v + VCB_vcbAlBlkSiz_off, 32768);
     wr32(v + VCB_vcbClpSiz_off, 32768);
@@ -1257,7 +1284,9 @@ static void fill_file_info(gaddr pb, const char *path, bool cat)
     wr16(pb + FileParam_ioFlRStBlk_off, 0);
     wr32(pb + FileParam_ioFlRLgLen_off, rl);
     wr32(pb + FileParam_ioFlRPyLen_off, (rl + 511) & ~511u);
-    uint32_t c = ok && mf.create_date ? mf.create_date : mac_now(), m = ok && mf.modify_date ? mf.modify_date : c;
+    uint32_t hc, hm;
+    host_times(path, &hc, &hm);
+    uint32_t c = ok && mf.create_date ? mf.create_date : hc, m = ok && mf.modify_date ? mf.modify_date : hm;
     wr32(pb + FileParam_ioFlCrDat_off, c);
     wr32(pb + FileParam_ioFlMdDat_off, m);
     if (cat) {
@@ -1349,8 +1378,10 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     if (namep)
         gput(namep, vol_name, (uint32_t)vol_name[0] + 1);
     wr16(pb + IOParam_ioVRefNum_off, (uint16_t)VREF);
-    wr32(pb + VolumeParam_ioVCrDate_off, mac_now());
-    wr32(pb + HVolumeParam_ioVLsMod_off, mac_now());
+    uint32_t vc, vm;
+    host_times(root_path, &vc, &vm);
+    wr32(pb + VolumeParam_ioVCrDate_off, vc);
+    wr32(pb + HVolumeParam_ioVLsMod_off, vm);
     wr16(pb + VolumeParam_ioVAtrb_off, 0);
     wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries(root_path));
     wr16(pb + HVolumeParam_ioVBitMap_off, 0);
@@ -1522,8 +1553,10 @@ int16_t tb_PBGetCatInfo(gaddr pb, bool async)
         gmemset(pb + DirInfo_ioDrUsrWds_off, 0, 16);
         wr32(pb + DirInfo_ioDrDirID_off, (uint32_t)id);
         wr16(pb + DirInfo_ioDrNmFls_off, (uint16_t)count_entries(path));
-        wr32(pb + DirInfo_ioDrCrDat_off, mac_now());
-        wr32(pb + DirInfo_ioDrMdDat_off, mac_now());
+        uint32_t dc, dm;
+        host_times(path, &dc, &dm);
+        wr32(pb + DirInfo_ioDrCrDat_off, dc);
+        wr32(pb + DirInfo_ioDrMdDat_off, dm);
         wr32(pb + DirInfo_ioDrBkDat_off, 0);
         gmemset(pb + DirInfo_ioDrFndrInfo_off, 0, 16);
         wr32(pb + DirInfo_ioDrParID_off, id == ROOT_ID ? 1 : (uint32_t)parent_id_of(path));
@@ -2070,3 +2103,149 @@ int16_t tb_PBHGetDirAccess(gaddr pb, bool async) { return paramErr; }
 /* Volume dates, attributes and Finder information: the volume's are its
  * folder's, and nothing here is kept. */
 int16_t tb_PBSetVInfo(gaddr pb, bool async) { return noErr; }
+
+/* ---------------------------------------------------------------------- */
+/* The Desktop Manager (PBDT calls): applications by creator, for opening
+ * documents; no icon or comment database of its own. */
+
+enum { afpItemNotFound = -5018 };
+
+/* The Finder information in a file's AppleDouble sidecar, read without
+ * loading the forks. */
+static bool sidecar_finfo(const char *path, uint8_t out[16])
+{
+    char *side = appledouble_sidecar_path(path);
+    FILE *fp = side ? fopen(side, "rb") : NULL;
+    free(side);
+    if (!fp)
+        return false;
+    uint8_t h[26 + 12 * 16];
+    size_t n = fread(h, 1, sizeof h, fp);
+    bool ok = false;
+    if (n >= 26) {
+        int count = h[24] << 8 | h[25];
+        for (int i = 0; i < count && 26 + 12 * (size_t)i + 12 <= n; i++) {
+            const uint8_t *e = h + 26 + 12 * i;
+            uint32_t id = (uint32_t)e[0] << 24 | (uint32_t)e[1] << 16 | (uint32_t)e[2] << 8 | e[3];
+            uint32_t off = (uint32_t)e[4] << 24 | (uint32_t)e[5] << 16 | (uint32_t)e[6] << 8 | e[7];
+            if (id == 9 && fseek(fp, (long)off, SEEK_SET) == 0 && fread(out, 1, 16, fp) == 16)
+                ok = true;
+        }
+    }
+    fclose(fp);
+    return ok;
+}
+
+static struct {
+    uint32_t creator;
+    char *path;
+} *appls;
+static int nappls;
+static bool appls_scanned;
+
+static void scan_appls(const char *dir, int depth)
+{
+    DIR *d = opendir(dir);
+    if (!d)
+        return;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        if (e->d_name[0] == '.')
+            continue;
+        char full[PATH_MAX];
+        snprintf(full, sizeof full, "%s/%s", dir, e->d_name);
+        if (is_dir(full)) {
+            if (depth < 5)
+                scan_appls(full, depth + 1);
+            continue;
+        }
+        uint8_t fi[16];
+        if (!sidecar_finfo(full, fi) || memcmp(fi, "APPL", 4))
+            continue;
+        appls = realloc(appls, (size_t)(nappls + 1) * sizeof *appls);
+        appls[nappls].creator = (uint32_t)fi[4] << 24 | (uint32_t)fi[5] << 16 | (uint32_t)fi[6] << 8 | fi[7];
+        appls[nappls].path = strdup(full);
+        nappls++;
+    }
+    closedir(d);
+}
+
+static void find_appls(void)
+{
+    if (appls_scanned)
+        return;
+    appls_scanned = true;
+    scan_appls(root_path, 0);
+    for (int i = 0; i < ngrants; i++)
+        if (grants[i].kind == GRANT_TREE)
+            scan_appls(grants[i].path, 0);
+}
+
+int16_t tb_PBDTGetPath(gaddr dtp)
+{
+    wr16(dtp + DTPBRec_ioDTRefNum_off, 1); /* one desktop database, for the one volume */
+    return noErr;
+}
+
+int16_t tb_PBDTOpenInform(gaddr dtp)
+{
+    wr16(dtp + DTPBRec_ioDTRefNum_off, 1);
+    wr32(dtp + DTPBRec_ioTagInfo_off, 0); /* not newly created */
+    return noErr;
+}
+
+int16_t tb_PBDTCloseDown(gaddr dtp) { return noErr; }
+
+/* The index-th (1-based; 0 the first) application with a creator. */
+int16_t tb_PBDTGetAPPL(gaddr dtp, bool async)
+{
+    find_appls();
+    uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
+    int want = (int16_t)rd16(dtp + DTPBRec_ioIndex_off);
+    if (want < 1)
+        want = 1;
+    for (int i = 0, k = 0; i < nappls; i++) {
+        if (appls[i].creator != creator || ++k != want)
+            continue;
+        if (!exists(appls[i].path))
+            break;
+        put_name(rd32(dtp + DTPBRec_ioNamePtr_off), appls[i].path);
+        wr32(dtp + DTPBRec_ioAPPLParID_off, (uint32_t)parent_id_of(appls[i].path));
+        wr32(dtp + DTPBRec_ioTagInfo_off, 0);
+        return noErr;
+    }
+    return afpItemNotFound;
+}
+
+int16_t tb_PBDTAddAPPL(gaddr dtp, bool async)
+{
+    appls_scanned = false; /* look again next time */
+    for (int i = 0; i < nappls; i++)
+        free(appls[i].path);
+    nappls = 0;
+    return noErr;
+}
+
+int16_t tb_PBDTRemoveAPPL(gaddr dtp, bool async) { return noErr; }
+int16_t tb_PBDTGetIcon(gaddr dtp, bool async) { return afpItemNotFound; }
+int16_t tb_PBDTGetIconInfo(gaddr dtp, bool async) { return afpItemNotFound; }
+int16_t tb_PBDTAddIcon(gaddr dtp, bool async) { return noErr; }
+
+int16_t tb_PBDTGetComment(gaddr dtp, bool async)
+{
+    wr32(dtp + DTPBRec_ioDTActCount_off, 0);
+    return afpItemNotFound;
+}
+
+int16_t tb_PBDTSetComment(gaddr dtp, bool async) { return noErr; }
+int16_t tb_PBDTRemoveComment(gaddr dtp, bool async) { return noErr; }
+int16_t tb_PBDTFlush(gaddr dtp, bool async) { return noErr; }
+int16_t tb_PBDTReset(gaddr dtp, bool async) { return noErr; }
+int16_t tb_PBDTDelete(gaddr dtp, bool async) { return noErr; }
+
+int16_t tb_PBDTGetInfo(gaddr dtp, bool async)
+{
+    wr32(dtp + DTPBRec_ioDTLgLen_off, 0);
+    wr32(dtp + DTPBRec_ioDTPyLen_off, 0);
+    return noErr;
+}
