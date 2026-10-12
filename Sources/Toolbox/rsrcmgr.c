@@ -16,6 +16,7 @@
 
 #include "forks.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 #define MAX_RESFILES 64
 
@@ -28,6 +29,66 @@ typedef struct {
     gaddr maph;       /* guest handle to the map */
     bool read_only;
 } resfile;
+
+/* A compressed resource whose decompressor is not built in: run the
+ * 'dcmp' resource the file (or System) supplies, as the Resource Manager
+ * did.  Header version 8 gets (source, dest, working buffer, size);
+ * version 9 gets (size, source, dest, header).  Execution starts at 0 when
+ * bytes 4-7 say 'dcmp', else at the offset in bytes 2-3. */
+static bool guest_decompress(const uint8_t *d, uint32_t len, uint8_t **out, size_t *out_len)
+{
+    static int depth;
+    int version = d[6];
+    int16_t id = version == 8 ? (int16_t)((d[14] << 8) | d[15]) : (int16_t)((d[12] << 8) | d[13]);
+    uint32_t hdrlen = (uint32_t)((d[4] << 8) | d[5]);
+    uint32_t outlen = ((uint32_t)d[8] << 24) | ((uint32_t)d[9] << 16) | ((uint32_t)d[10] << 8) | d[11];
+    if ((version != 8 && version != 9) || hdrlen > len || depth > 0 || !g_cpu)
+        return false;
+    depth++;
+    gaddr code = tb_GetResource((int32_t)fourcc("dcmp"), id);
+    bool ok = false;
+    if (code && rd32(code)) {
+        tb_HLock(code);
+        gaddr base = rd32(code);
+        uint32_t entry = rd32(base + 4) == fourcc("dcmp") ? 0 : rd16(base + 2);
+        gaddr in = tb_NewPtr((int32_t)(len + 0x100), false, true);
+        gaddr dst = tb_NewPtr((int32_t)(outlen + 0x100), false, true);
+        uint32_t worklen = version == 8 ? (len * 256 < 0x1000000 ? len * 256 : 0x1000000) : 0;
+        gaddr work = worklen ? tb_NewPtr((int32_t)worklen, false, true) : 0;
+        if (in && dst && (version == 9 || work)) {
+            gput(in, d, len);
+            uint32_t data_size = len - hdrlen + 0x100;
+            cpu68k *c = g_cpu;
+            uint32_t sp = c->a[7];
+            if (version == 8) {
+                cpu_push32(c, in + hdrlen);
+                cpu_push32(c, dst);
+                cpu_push32(c, work);
+                cpu_push32(c, data_size);
+            } else {
+                cpu_push32(c, data_size);
+                cpu_push32(c, in + hdrlen);
+                cpu_push32(c, dst);
+                cpu_push32(c, in);
+            }
+            guest_call(base + entry);
+            c->a[7] = sp;
+            *out = malloc(outlen ? outlen : 1);
+            gget(*out, dst, outlen);
+            *out_len = outlen;
+            ok = !c->halted;
+        }
+        if (work)
+            tb_DisposePtr(work);
+        if (dst)
+            tb_DisposePtr(dst);
+        if (in)
+            tb_DisposePtr(in);
+        tb_HUnlock(code);
+    }
+    depth--;
+    return ok;
+}
 
 static resfile files[MAX_RESFILES];
 static int16_t sys_refnum;
@@ -208,7 +269,8 @@ static gaddr load_ref(gaddr maph, uint32_t r, uint32_t type)
     size_t declen = 0;
     if ((attrs & RES_COMPRESSED) && rsrc_is_compressed(src, len)) {
         char err[128];
-        if (!rsrc_decompress(src, len, &dec, &declen, err, sizeof err)) {
+        if (!rsrc_decompress(src, len, &dec, &declen, err, sizeof err) &&
+            !guest_decompress(src, len, &dec, &declen)) {
             char tc[5];
             log_printf("rsrc: '%s' %d: %s\n", fourcc_str(type, tc), (int16_t)rd16(m + r), err);
             set_res_err(mapReadErr);
