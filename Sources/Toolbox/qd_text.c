@@ -4,6 +4,7 @@
  */
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "m68k.h"
 #include "qd_internal.h"
@@ -24,8 +25,38 @@ typedef struct {
 
 static int16_t rd16s(gaddr a) { return (int16_t)rd16(a); }
 
+/* The families a System 7 Mac had installed, by their classic names and
+ * numbers, and the family of ours that draws each. */
+static const struct {
+    int16_t num;
+    const char *name;
+    int16_t drawn_as;
+} classic_fonts[] = {
+    { 0, "Chicago", 0 },  { 2, "New York", 2 },  { 3, "Geneva", 3 },  { 4, "Monaco", 4 },
+    { 20, "Times", 2 },   { 21, "Helvetica", 3 }, { 22, "Courier", 4 }, { 23, "Symbol", 3 },
+};
+
+static int classic_index(int num)
+{
+    for (unsigned i = 0; i < sizeof classic_fonts / sizeof classic_fonts[0]; i++)
+        if (classic_fonts[i].num == num)
+            return (int)i;
+    return -1;
+}
+
 /* The font resource ID for a family and size, through its FOND if any. */
+static gaddr font_resource_of(int family, int size);
+
 static gaddr font_resource(int family, int size)
+{
+    gaddr h = font_resource_of(family, size);
+    int k;
+    if (!h && (k = classic_index(family)) >= 0 && classic_fonts[k].drawn_as != family)
+        h = font_resource_of(classic_fonts[k].drawn_as, size);
+    return h;
+}
+
+static gaddr font_resource_of(int family, int size)
 {
     gaddr fond = tb_GetResource((int32_t)fourcc("FOND"), (int16_t)family);
     if (fond && rd32(fond)) {
@@ -345,6 +376,13 @@ void tb_InitFonts(void)
 void tb_GetFontName(int16_t fnum, gaddr fnam)
 {
     wr8(fnam, 0);
+    int k = classic_index(fnum);
+    if (k >= 0) {
+        size_t n = strlen(classic_fonts[k].name);
+        wr8(fnam, (uint8_t)n);
+        gput(fnam + 1, classic_fonts[k].name, (uint32_t)n);
+        return;
+    }
     gaddr name = tb_NewPtr(256, false, true);
     gaddr id = tb_NewPtr(2, false, false), type = tb_NewPtr(4, false, false);
     uint8_t saved = rd8(LM_ResLoad);
@@ -375,6 +413,12 @@ void tb_GetFNum(gaddr fnam, gaddr fnum)
     } else if ((h = tb_GetNamedResource((int32_t)fourcc("FONT"), fnam))) {
         tb_GetResInfo(h, id, type, 0);
         wr16(fnum, (uint16_t)((int16_t)rd16(id) / 128));
+    } else {
+        char name[256];
+        pstr_to_c(fnam, name, sizeof name);
+        for (unsigned i = 0; i < sizeof classic_fonts / sizeof classic_fonts[0]; i++)
+            if (!strcasecmp(name, classic_fonts[i].name))
+                wr16(fnum, (uint16_t)classic_fonts[i].num);
     }
     wr8(LM_ResLoad, saved);
     tb_DisposePtr(id);
@@ -383,6 +427,9 @@ void tb_GetFNum(gaddr fnam, gaddr fnum)
 
 int8_t tb_RealFont(int16_t fnum, int16_t sz)
 {
+    int k = classic_index(fnum);
+    if (k >= 0 && classic_fonts[k].drawn_as != fnum && !tb_GetResource((int32_t)fourcc("FOND"), fnum))
+        fnum = classic_fonts[k].drawn_as;
     gaddr fond = tb_GetResource((int32_t)fourcc("FOND"), fnum);
     if (fond && rd32(fond)) {
         gaddr assoc = rd32(fond) + FamRec_SIZEOF;
