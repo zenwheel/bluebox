@@ -34,12 +34,7 @@ static gaddr vbls[MAX_TASKS];
 static uint32_t vbl_ticks; /* Ticks when VBL tasks last ran */
 static bool in_interrupt;
 
-static uint64_t now(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
-}
+static uint64_t now(void) { return machine_time_ns(); }
 
 static int find_timer(gaddr tm)
 {

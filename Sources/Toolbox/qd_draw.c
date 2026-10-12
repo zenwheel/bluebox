@@ -717,13 +717,21 @@ static void poly_region(gaddr poly, hrgn *out)
                 xs[c] = xs[c - 1];
                 xs[c - 1] = t;
             }
-        for (int a = 0; a + 1 < k; a += 2) {
+        int16_t runs[64];
+        int nr = 0;
+        for (int a = 0; a + 1 < k && nr + 2 <= 64; a += 2) {
             int x0 = (int)(xs[a] + 0.5), x1 = (int)(xs[a + 1] + 0.5);
-            if (x1 > x0) {
-                hrgn_rect(&row, (qrect){ (int16_t)y, (int16_t)x0, (int16_t)(y + 1), (int16_t)x1 });
-                hrgn_op(out, out, &row, RGN_UNION);
+            if (x1 <= x0)
+                continue;
+            if (nr && runs[nr - 1] >= x0) { /* touching: extend the last run */
+                if (x1 > runs[nr - 1])
+                    runs[nr - 1] = (int16_t)x1;
+                continue;
             }
+            runs[nr++] = (int16_t)x0;
+            runs[nr++] = (int16_t)x1;
         }
+        hrgn_add_runs(out, y, runs, nr);
     }
     hrgn_free(&row);
     free(xs);
@@ -902,6 +910,27 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
     int m = mode & 7;
     if (mode >= 32) /* arithmetic and dither modes: a plain copy */
         m = srcCopy;
+    /* Indexed colour sources: each source value converted once. */
+    uint32_t *lut_conv = NULL;
+    uint8_t *lut_white = NULL;
+    if (s.depth > 1 && s.depth <= 8) {
+        int nv = 1 << s.depth;
+        lut_conv = malloc(sizeof *lut_conv * (size_t)nv);
+        lut_white = malloc((size_t)nv);
+        bool same_table = s.depth == d.depth && s.ctab == d.ctab && !(m & 4);
+        for (int v = 0; v < nv; v++) {
+            uint16_t rgb[3];
+            qd_px_rgb(s.depth, s.ctab, (uint32_t)v, rgb);
+            if (m & 4) {
+                rgb[0] = (uint16_t)~rgb[0];
+                rgb[1] = (uint16_t)~rgb[1];
+                rgb[2] = (uint16_t)~rgb[2];
+            }
+            lut_white[v] = rgb[0] == 0xFFFF && rgb[1] == 0xFFFF && rgb[2] == 0xFFFF;
+            lut_conv[v] = same_table ? (uint32_t)v : qd_rgb_px(d.depth, d.ctab, rgb);
+        }
+    }
+    uint32_t inv = px_mask(d.depth);
     /* Read source rows first when source and destination overlap. */
     bool same = s.base == d.base;
     uint32_t *snap = NULL;
@@ -931,12 +960,26 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
                         sv = get_px(&s, sx, sy);
                     }
                     int col = x - d.bounds.left, row = y - d.bounds.top;
-                    put_px(&d, col, row, transfer(&s, &d, sv, get_px(&d, col, row), m, fg, bk));
+                    if (lut_conv) {
+                        uint32_t conv = lut_conv[sv], v;
+                        bool white = lut_white[sv];
+                        switch (m & 3) {
+                        case 0: v = conv; break;
+                        case 1: v = white ? get_px(&d, col, row) : conv; break;
+                        case 2: v = white ? get_px(&d, col, row) : get_px(&d, col, row) ^ inv; break;
+                        default: v = white ? get_px(&d, col, row) : bk; break;
+                        }
+                        put_px(&d, col, row, v);
+                    } else {
+                        put_px(&d, col, row, transfer(&s, &d, sv, get_px(&d, col, row), m, fg, bk));
+                    }
                 }
             }
         }
     }
     free(snap);
+    free(lut_conv);
+    free(lut_white);
     hrgn_free(&clip);
     hrgn_free(&tmp);
 }
@@ -1022,30 +1065,35 @@ static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, 
     hrgn_free(&m);
 }
 
+/* The nonzero pixels of a mask's rectangle as a region placed at dst. */
+static void mask_region(gaddr mask_bm, qrect mr, qrect dr, hrgn *out)
+{
+    pixdst mk = bits_at(resolve_bits(mask_bm));
+    int w = mr.right - mr.left;
+    int16_t *runs = malloc(sizeof *runs * (size_t)(w + 2));
+    for (int y = mr.top; y < mr.bottom; y++) {
+        int n = 0;
+        bool on = false;
+        for (int x = mr.left; x <= mr.right; x++) {
+            bool px = x < mr.right && y >= mk.bounds.top && y < mk.bounds.bottom && x >= mk.bounds.left &&
+                      x < mk.bounds.right && get_px(&mk, x - mk.bounds.left, y - mk.bounds.top) != 0;
+            if (px != on) {
+                runs[n++] = (int16_t)(x - mr.left + dr.left);
+                on = px;
+            }
+        }
+        hrgn_add_runs(out, y - mr.top + dr.top, runs, n);
+    }
+    free(runs);
+}
+
 void tb_CopyMask(gaddr srcbp, gaddr mskbp, gaddr dstbp, gaddr srcrp, gaddr mskrp, gaddr dstrp)
 {
     /* Mask bitmap -> region, then a masked copy. */
-    pixdst mk = bits_at(resolve_bits(mskbp));
-    qrect mr = qrect_get(mskrp), dr = qrect_get(dstrp);
+    qrect dr = qrect_get(dstrp);
     hrgn mask;
     hrgn_init(&mask);
-    for (int y = mr.top; y < mr.bottom; y++) {
-        int run = -1;
-        for (int x = mr.left; x <= mr.right; x++) {
-            bool on = x < mr.right && get_px(&mk, x - mk.bounds.left, y - mk.bounds.top);
-            if (on && run < 0)
-                run = x;
-            if (!on && run >= 0) {
-                hrgn t;
-                hrgn_init(&t);
-                hrgn_rect(&t, (qrect){ (int16_t)(y - mr.top + dr.top), (int16_t)(run - mr.left + dr.left),
-                                       (int16_t)(y - mr.top + dr.top + 1), (int16_t)(x - mr.left + dr.left) });
-                hrgn_op(&mask, &mask, &t, RGN_UNION);
-                hrgn_free(&t);
-                run = -1;
-            }
-        }
-    }
+    mask_region(mskbp, qrect_get(mskrp), dr, &mask);
     copy_bits(resolve_bits(srcbp), resolve_bits(dstbp), qrect_get(srcrp), dr, srcCopy, &mask);
     hrgn_free(&mask);
 }
@@ -1173,27 +1221,11 @@ void tb_CalcMask(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t hei
 void tb_CopyDeepMask(gaddr src, gaddr mask, gaddr dst, gaddr src_rect, gaddr mask_rect, gaddr dst_rect, int16_t mode,
                      gaddr mask_rgn)
 {
-    pixdst m = bits_at(resolve_bits(mask));
-    qrect mr = qrect_get(mask_rect), dr = qrect_get(dst_rect);
+    qrect dr = qrect_get(dst_rect);
     hrgn shape, row;
     hrgn_init(&shape);
     hrgn_init(&row);
-    hrgn_rect(&shape, (qrect){ 0, 0, 0, 0 });
-    for (int y = mr.top; y < mr.bottom; y++) {
-        int run = -1;
-        for (int x = mr.left; x <= mr.right; x++) {
-            bool on = x < mr.right && y >= m.bounds.top && y < m.bounds.bottom && x >= m.bounds.left &&
-                      x < m.bounds.right && get_px(&m, x - m.bounds.left, y - m.bounds.top) != 0;
-            if (on && run < 0)
-                run = x;
-            if (!on && run >= 0) {
-                int oy = dr.top + (y - mr.top), ox = dr.left - mr.left;
-                hrgn_rect(&row, (qrect){ (int16_t)oy, (int16_t)(run + ox), (int16_t)(oy + 1), (int16_t)(x + ox) });
-                hrgn_op(&shape, &shape, &row, RGN_UNION);
-                run = -1;
-            }
-        }
-    }
+    mask_region(mask, qrect_get(mask_rect), dr, &shape);
     if (mask_rgn) {
         rgn_read(mask_rgn, &row);
         hrgn_op(&shape, &shape, &row, RGN_SECT);

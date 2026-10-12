@@ -79,12 +79,7 @@ void machine_set_sound_handler(machine_sound_fn fn, void *ctx)
     sound_ctx = ctx;
 }
 
-static uint64_t now_ns(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
-}
+static uint64_t now_ns(void) { return machine_time_ns(); }
 
 static channel *find(gaddr chan)
 {
@@ -450,8 +445,14 @@ static void drain(channel *c)
         pump(c);
         if (c->head == c->tail && now_ns() >= c->busy_until)
             return;
-        struct timespec ts = { 0, 2000000 };
-        nanosleep(&ts, NULL);
+        if (!events_host_attached()) {
+            /* Headless, the clock follows instructions: move it on to the end. */
+            if (c->busy_until > now_ns())
+                machine_skip_time(c->busy_until - now_ns());
+        } else {
+            struct timespec ts = { 0, 2000000 };
+            nanosleep(&ts, NULL);
+        }
         machine_advance_ticks();
     }
 }

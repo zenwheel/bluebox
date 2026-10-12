@@ -34,9 +34,10 @@ void tb_GetDateTime(gaddr p) { wr32(p, mac_now()); }
 
 void tb_Delay(int32_t n, uint32_t *ftp)
 {
-    /* Time is advanced by the run loop; skip ahead rather than spin. */
+    /* The clock skips ahead rather than spin. */
     if (n > 0)
-        wr32(LM_Ticks, rd32(LM_Ticks) + (uint32_t)n);
+        machine_skip_time((uint64_t)n * 1000000000u / 60);
+    machine_advance_ticks();
     *ftp = rd32(LM_Ticks);
 }
 

@@ -117,6 +117,10 @@ void sane_reset(void);
 void time_pump(void);
 /* Bring Ticks up to host time. */
 void machine_advance_ticks(void);
+/* The machine's clock (ns): wall clock with a host, instructions without. */
+uint64_t machine_time_ns(void);
+void machine_skip_time(uint64_t ns);
+bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
 void time_reset(void);

@@ -36,7 +36,7 @@ extension Classic {
             tb_PrimeTime(tm, 1)
             #expect(rd16(tm + 4) & 0x8000 != 0)
             g_cpu!.pointee.d.0 = 7
-            Thread.sleep(forTimeInterval: 0.005)
+            machine_skip_time(5_000_000) // headless, the clock follows instructions
             time_pump()
             #expect(rd32(out) == tm && rd32(out + 8) == 1)
             #expect(g_cpu!.pointee.d.0 == 7)

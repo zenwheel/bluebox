@@ -51,6 +51,7 @@ static void enqueue(int16_t what, uint32_t message)
 }
 
 void machine_attach_host(bool attached) { host_attached = attached; }
+bool events_host_attached(void) { return host_attached; }
 
 /* Suspend and resume (osEvt, suspendResumeMessage): the app moving to the
  * background and back; convert_clipboard says the scrap changed meanwhile. */

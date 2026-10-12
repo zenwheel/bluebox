@@ -27,6 +27,7 @@ void machine_set_screen(int width, int height)
     }
 }
 static uint64_t ticks_base_ns;
+static uint64_t skipped_ns; /* Delay's skips (see machine_time_ns) */
 
 uint32_t mac_now(void);
 
@@ -180,6 +181,7 @@ bool machine_boot(bool census)
     wr32(LM_AppParmHandle, parms);
 
     ticks_base_ns = now_ns();
+    skipped_ns = 0;
     return true;
 }
 
@@ -311,10 +313,25 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     return true;
 }
 
-/* Bring the 60 Hz tick counter up to host time. */
+/* The machine's clock.  With a host attached it is the wall clock; in a
+ * headless run nobody is watching, so it follows the instructions executed
+ * (100 ns each, a 10 MIPS machine) and runs are fast and repeatable.
+ * Delay moves it forward either way. */
+bool events_host_attached(void);
+
+uint64_t machine_time_ns(void)
+{
+    if (!events_host_attached())
+        return cpu.icount * 100u + skipped_ns;
+    return now_ns() - ticks_base_ns + skipped_ns;
+}
+
+void machine_skip_time(uint64_t ns) { skipped_ns += ns; }
+
+/* Bring the 60 Hz tick counter up to the machine's time. */
 void machine_advance_ticks(void)
 {
-    uint64_t ticks = (now_ns() - ticks_base_ns) * 60 / 1000000000u;
+    uint64_t ticks = machine_time_ns() * 60 / 1000000000u;
     if ((uint32_t)ticks > rd32(LM_Ticks))
         wr32(LM_Ticks, (uint32_t)ticks);
 }

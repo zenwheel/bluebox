@@ -58,6 +58,8 @@ bool hrgn_contains(const hrgn *r, int h, int v);
 bool hrgn_equal(const hrgn *a, const hrgn *b);
 /* Add one row's interval [x0, x1) at row y (rows must be added in order). */
 void hrgn_add_row(hrgn *r, int y, int x0, int x1);
+/* Add one row's sorted, disjoint intervals (x0, x1, x0, x1 …); rows in order. */
+void hrgn_add_runs(hrgn *r, int y, const int16_t *x, int n);
 /* Build from a per-row list of intervals: rows[y - top] = {x0, x1} (empty if x0 >= x1). */
 void hrgn_from_rows(hrgn *r, int top, int nrows, const int16_t (*rows)[2]);
 

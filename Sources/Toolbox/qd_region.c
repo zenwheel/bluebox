@@ -289,6 +289,8 @@ void hrgn_add_row(hrgn *r, int y, int x0, int x1)
     add_band(r, y, y + 1, x, 2);
 }
 
+void hrgn_add_runs(hrgn *r, int y, const int16_t *x, int n) { add_band(r, y, y + 1, x, n); }
+
 void hrgn_from_rows(hrgn *r, int top, int nrows, const int16_t (*rows)[2])
 {
     clear(r);

@@ -116,9 +116,9 @@ extension Classic {
             let data = Self.snd(samples: 2225)                   // about 0.1 s
             let h = tb_NewHandle(Int32(data.count), false, false)
             for (i, b) in data.enumerated() { wr8(rd32(h) + UInt32(i), b) }
-            let start = Date()
+            let start = machine_time_ns()
             #expect(tb_SndPlay(0, h, 0) == 0)
-            #expect(Date().timeIntervalSince(start) >= 0.09)
+            #expect(machine_time_ns() - start >= 90_000_000)    // the machine's clock moved past it
             #expect(Self.played.count == 1)
             #expect(Self.played.first?.frames == 2225)
             #expect(abs((Self.played.first?.rate ?? 0) - 22254.5) < 1)
@@ -142,7 +142,7 @@ extension Classic {
             #expect(tb_SndDoCommand(chan, cmd, 0) == 0)
             _ = tb_TickCount()
             #expect(Self.callbacks == 0)                         // still playing
-            usleep(250_000)
+            machine_skip_time(250_000_000)                       // headless: the clock follows instructions
             _ = tb_TickCount()                                   // a safe point
             #expect(Self.callbacks == 1)
             #expect(tb_SndDisposeChannel(chan, 1) == 0)
