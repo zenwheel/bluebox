@@ -147,6 +147,7 @@ bool machine_boot(bool census)
      * 68k stubs that call native code. */
     rm_init();
     sane_reset();
+    time_reset();
     wr32(LM_TheZone, GA_SYSHEAP);
     if (!open_system_file())
         return false;
@@ -313,6 +314,7 @@ run_status machine_run(uint64_t max)
         uint64_t n = max - done < slice ? max - done : slice;
         done += cpu_run(&cpu, n);
         machine_advance_ticks();
+        time_pump();
         if (cpu.stopped)
             break;
     }

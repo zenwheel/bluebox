@@ -102,6 +102,9 @@ void raw_CmpString(cpu68k *c, uint16_t tw);
 void raw_FP68K(cpu68k *c, uint16_t tw);
 void raw_Elems68K(cpu68k *c, uint16_t tw);
 void sane_reset(void);
+/* Time Manager and VBL tasks due now (interrupt time). */
+void time_pump(void);
+void time_reset(void);
 void raw_RelString(cpu68k *c, uint16_t tw);
 void raw_UprString(cpu68k *c, uint16_t tw);
 

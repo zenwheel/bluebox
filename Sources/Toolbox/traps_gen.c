@@ -4457,6 +4457,20 @@ static void glue_InitWindows(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InsTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_taskp = (gaddr)c->a[0];
+    tb_InsTime(a_taskp);
+}
+
+static void glue_InsXTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_taskp = (gaddr)c->a[0];
+    tb_InsXTime(a_taskp);
+}
+
 static void glue_InsertMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6344,6 +6358,14 @@ static void glue_PrValidate(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PrimeTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_taskp = (gaddr)c->a[0];
+    int32_t a_count = (int32_t)c->d[0];
+    tb_PrimeTime(a_taskp, a_count);
+}
+
 static void glue_PrintDefault(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6697,6 +6719,13 @@ static void glue_RestoreDeviceClut(cpu68k *c, uint16_t trapword)
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_RestoreDeviceClut(a_arg0);
     cpu_push32(c, ret);
+}
+
+static void glue_RmvTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_taskp = (gaddr)c->a[0];
+    tb_RmvTime(a_taskp);
 }
 
 static void glue_RsrcZoneInit(cpu68k *c, uint16_t trapword)
@@ -7626,6 +7655,24 @@ static void glue_SlopeFromAngle(cpu68k *c, uint16_t trapword)
     int32_t r = tb_SlopeFromAngle(a_a);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_SlotVInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_vtaskp = (gaddr)c->a[0];
+    int16_t a_slot = (int16_t)c->d[0];
+    int16_t r = tb_SlotVInstall(a_vtaskp, a_slot);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_SlotVRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_vtaskp = (gaddr)c->a[0];
+    int16_t a_slot = (int16_t)c->d[0];
+    int16_t r = tb_SlotVRemove(a_vtaskp, a_slot);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_SndAddModifier(cpu68k *c, uint16_t trapword)
@@ -8773,6 +8820,22 @@ static void glue_UseResFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_VInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_vtaskp = (gaddr)c->a[0];
+    int16_t r = tb_VInstall(a_vtaskp);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_VRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_vtaskp = (gaddr)c->a[0];
+    int16_t r = tb_VRemove(a_vtaskp);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_ValidRect(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8930,8 +8993,8 @@ const trap_sig trap_sigs[] = {
     {0xA030, -1, "OSEventAvail", CONV_REG, 0, 0, glue_OSEventAvail},
     {0xA031, -1, "GetOSEvent", CONV_REG, 0, 0, glue_GetOSEvent},
     {0xA032, -1, "FlushEvents", CONV_REG, 0, 0, glue_FlushEvents},
-    {0xA033, -1, "VInstall", CONV_REG, 0, 0, 0},
-    {0xA034, -1, "VRemove", CONV_REG, 0, 0, 0},
+    {0xA033, -1, "VInstall", CONV_REG, 0, 0, glue_VInstall},
+    {0xA034, -1, "VRemove", CONV_REG, 0, 0, glue_VRemove},
     {0xA035, -1, "PBOffLine", CONV_REG, 0, 0, 0},
     {0xA036, -1, "MoreMasters", CONV_STACK, 0, 0, glue_MoreMasters},
     {0xA038, -1, "WriteParam", CONV_REG, 0, 0, 0},
@@ -8953,9 +9016,9 @@ const trap_sig trap_sigs[] = {
     {0xA04D, -1, "PurgeMem", CONV_REG, 0, 0, glue_PurgeMem},
     {0xA055, -1, "StripAddress", CONV_REG, 0, 0, glue_StripAddress},
     {0xA057, -1, "SetApplBase", CONV_REG, 0, 0, glue_SetApplBase},
-    {0xA058, -1, "InsTime", CONV_REG, 0, 0, 0},
-    {0xA059, -1, "RmvTime", CONV_REG, 0, 0, 0},
-    {0xA05A, -1, "PrimeTime", CONV_REG, 0, 0, 0},
+    {0xA058, -1, "InsTime", CONV_REG, 0, 0, glue_InsTime},
+    {0xA059, -1, "RmvTime", CONV_REG, 0, 0, glue_RmvTime},
+    {0xA05A, -1, "PrimeTime", CONV_REG, 0, 0, glue_PrimeTime},
     {0xA05D, -1, "SwapMMUMode", CONV_REG, 0, 0, glue_SwapMMUMode},
     {0xA05E, -1, "NMInstall", CONV_REG, 0, 0, glue_NMInstall},
     {0xA05F, -1, "NMRemove", CONV_REG, 0, 0, glue_NMRemove},
@@ -8968,8 +9031,8 @@ const trap_sig trap_sigs[] = {
     {0xA068, -1, "HClrRBit", CONV_REG, 0, 0, glue_HClrRBit},
     {0xA069, -1, "HGetState", CONV_REG, 0, 0, glue_HGetState},
     {0xA06A, -1, "HSetState", CONV_REG, 0, 0, glue_HSetState},
-    {0xA06F, -1, "SlotVInstall", CONV_REG, 0, 0, 0},
-    {0xA070, -1, "SlotVRemove", CONV_REG, 0, 0, 0},
+    {0xA06F, -1, "SlotVInstall", CONV_REG, 0, 0, glue_SlotVInstall},
+    {0xA070, -1, "SlotVRemove", CONV_REG, 0, 0, glue_SlotVRemove},
     {0xA077, -1, "CountADBs", CONV_REG, 0, 0, 0},
     {0xA078, -1, "GetIndADB", CONV_REG, 0, 0, 0},
     {0xA079, -1, "GetADBInfo", CONV_REG, 0, 0, 0},
@@ -8999,7 +9062,7 @@ const trap_sig trap_sigs[] = {
     {0xA215, -1, "PBHSetVol", CONV_REG, 0, 0, glue_PBHSetVol},
     {0xA241, -1, "PBHSetFLock", CONV_REG, 0, 0, 0},
     {0xA242, -1, "PBHRstFLock", CONV_REG, 0, 0, 0},
-    {0xA458, -1, "InsXTime", CONV_REG, 0, 0, 0},
+    {0xA458, -1, "InsXTime", CONV_REG, 0, 0, glue_InsXTime},
     {0xA801, -1, "SndDisposeChannel", CONV_STACK, 6, 2, glue_SndDisposeChannel},
     {0xA802, -1, "SndAddModifier", CONV_STACK, 14, 2, glue_SndAddModifier},
     {0xA803, -1, "SndDoCommand", CONV_STACK, 10, 2, glue_SndDoCommand},
