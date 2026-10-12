@@ -315,7 +315,7 @@ the trap census.
   - `classic install`: a macOS `.app` per classic app (Finder icon from `BNDL`/`FREF`/`icl8`, document types from its `FREF`s, an sh launcher); Finder and Dock opens become Open Documents events
   - high-level events: apps whose `SIZE` says so get `odoc`/`oapp` through `AcceptHighLevelEvent` in the System 7 wire format (TeachText parses it itself); Alias Manager
   - alerts as native `NSAlert`s (`ALRT`/`DITL`, `ParamText`, stages)
-  - MacRoman 0x80–0xFF in the bitmap fonts: accented letters, dashes, quotes, ellipsis and ligatures composed from each face's own glyphs; common symbols (© ® ™ ° ± † …) drawn to each face's metrics
+  - MacRoman 0x80–0xFF in the bitmap fonts: accented letters, dashes, quotes, ellipsis and ligatures composed from each face's own glyphs; the symbols (© ® ™ ° ± † § ¶ £ ¥ € ƒ, the spacing accents, ≠ ≤ ≥ ≈ ∞ √ ∑ ∏ ∂ ∆ ∫ π Ω ‰ ◊ …) drawn to each face's metrics; only the Apple logo is missing
   - native menus: opening one is a menu-bar click, so the app adjusts its menus first; `MenuSelect` waits for the host menu
   - keyboard through the host layout with dead keys (Option-E, E → é)
   - Standard File as native open and save panels (types filtered by classic file type); plain text saves stay UTF-8 with no sidecar
@@ -361,14 +361,16 @@ the trap census.
   - themes: `--appearance <scheme>` draws windows and controls from Kaleidoscope schemes (2.x: sliced sample windows from 'wnd#' layouts, widget down states, grow boxes, scroll bars, thumbs, push buttons, checkboxes and radio buttons; 1.x: scheme stripes and grow boxes on classic geometry) on a 32-bit screen; `classic themes` lists imported schemes
   - native style: `--appearance native` gives document windows macOS frames (close, zoom, move and resize reach the app as its own window events) and draws push buttons, checkboxes, radio buttons and scroll bars with AppKit
   - import: .zip archives, .dmg (UDIF) images, and HFS+ volumes (mounted read-only through the host on macOS)
+  - Component Manager (ComponentDispatch): components applications register from code or `thng` resources, instance calls, `CallComponentFunction`, capture and the rest; we register none of our own, so codec searches find nothing. Cursor Device Manager (no extra devices) and Slot Manager (no cards). `StringToFormatRec`, `ExtendedToString` and `StringToExtended` for common number formats
+  - `MethodDispatch` (A9F8): the ROM's MPW Object Pascal method dispatcher, run as the same 68000 routine reading the class table and error routine from 0xBEC/0xBE8 (Skat; Photoshop 1.0 gets to its first dialog)
+  - Applications' own `dcmp` decompressors run in place, the compressed data at the end of the destination buffer
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
 - Next:
-  - glyphs still missing from the bitmap fonts (° © ® ™ § ¶ ß ± and other symbols): draw them, or fall back per glyph to a host font
   - OpenPicture recording (pictures made by apps, e.g. for the clipboard)
   - colour pixel patterns drawn in colour (they draw through their 1-bit form today); `SetDepth` changing the screen's depth while running
   - MACE 3:1 and 6:1 sound decoding (it plays silence of the right length)
-  - QuickTime movie decoding (movies open and play as zero length); the Component Manager
-  - `_MethodDispatch` for early Object Pascal/MacApp applications (Photoshop 1.0)
+  - QuickTime movie decoding (movies open and play as zero length), with its codecs as components
+  - Gestalt reporting the 68881 we emulate (and a 68040 for applications that require one, e.g. ShatterBat), once FPU and 68040 coverage is validated against the oracle
   - themes: utility and floating windows, collapse (WindowShade), popups, sliders, tabs, menus in screen mode, scheme desktop patterns; Mac OS 8.5 Appearance themes; a theme setting for installed bundles
   - native style: map the native scroll knob's position and size onto the classic thumb for dragging; native popups and edit-text frames
   - HFS+ volumes read natively (imports mount them through the host on macOS today; Linux needs our own reader)
