@@ -18,7 +18,11 @@ uint32_t mac_now(void)
     return (uint32_t)((int64_t)t + lt.tm_gmtoff + MAC_EPOCH_OFFSET);
 }
 
-uint32_t tb_TickCount(void) { return rd32(LM_Ticks); }
+uint32_t tb_TickCount(void)
+{
+    sound_pump();
+    return rd32(LM_Ticks);
+}
 
 int16_t tb_ReadDateTime(gaddr secs)
 {
@@ -36,7 +40,7 @@ void tb_Delay(int32_t n, uint32_t *ftp)
     *ftp = rd32(LM_Ticks);
 }
 
-void tb_SysBeep(int16_t i) { LOGF(LOG_TRAPS, "SysBeep(%d)\n", i); }
+void tb_SysBeep(int16_t i) { sound_beep(); }
 
 /* ---- Environment ---- */
 

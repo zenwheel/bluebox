@@ -237,6 +237,7 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
 
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
+    sound_pump();
     machine_advance_ticks();
     display_sync();
     if (next_event(em, evt, true, false))
@@ -259,6 +260,7 @@ int8_t tb_EventAvail(int16_t em, gaddr evt)
 int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
 {
     machine_advance_ticks();
+    sound_pump();
     display_sync();
     if (next_event(mask, evp, true, false))
         return 1;
@@ -365,7 +367,11 @@ void tb_GetKeys(gaddr keys)
 int32_t tb_GetDblTime(void) { return (int32_t)rd32(LM_DoubleTime); }
 int32_t tb_GetCaretTime(void) { return (int32_t)rd32(LM_CaretTime); }
 
-void tb_SystemTask(void) { machine_advance_ticks(); }
+void tb_SystemTask(void)
+{
+    machine_advance_ticks();
+    sound_pump();
+}
 void tb_SystemClick(gaddr evp, gaddr wp) {}
 int8_t tb_SystemEvent(gaddr evp) { return 0; }
 

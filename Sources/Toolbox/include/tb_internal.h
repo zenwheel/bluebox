@@ -92,6 +92,13 @@ size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize);
 /* Host path of a Mac full path. */
 bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize);
 
+/* ---- Sound Manager ---- */
+
+/* Run sound commands whose time has come (at safe points). */
+void sound_pump(void);
+void sound_beep(void);
+void sound_reset(void);
+
 /* ---- Appearance ---- */
 
 /* MACHINE_APPEARANCE_*: how the standard definition procedures draw. */

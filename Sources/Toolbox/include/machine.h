@@ -219,6 +219,14 @@ void machine_set_print_handlers(machine_print_fn print, machine_page_setup_fn pa
 /* The host's default paper, used for new print records. */
 void machine_set_page_defaults(const machine_page_setup *ps);
 
+/* ---- Sound ---- */
+
+/* Play 16-bit PCM (interleaved when stereo) on a channel; pcm NULL means
+ * stop that channel.  Called on the emulator thread; must not block. */
+typedef void (*machine_sound_fn)(int channel, const int16_t *pcm, int frames, int channels, double rate, float volume,
+                                 void *ctx);
+void machine_set_sound_handler(machine_sound_fn fn, void *ctx);
+
 /* ---- Clipboard ---- */
 
 /* Text the app put on its clipboard (UTF-8), for the host clipboard. */

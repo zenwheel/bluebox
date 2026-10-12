@@ -247,6 +247,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     installFileHandler()
     installPrintHandlers()
     ClipboardSync.shared.install()
+    ClassicAudio.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
     // Minimal app menu: Quit asks the app to quit; Option shows Force Quit.

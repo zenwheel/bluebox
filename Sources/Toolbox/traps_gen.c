@@ -2671,6 +2671,16 @@ static void glue_GetDblTime(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_levelp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDefaultOutputVolume(a_levelp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDeviceList(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3193,6 +3203,17 @@ static void glue_GetScrap(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetSoundHeaderOffset(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_offset = (gaddr)cpu_pop32(c);
+    gaddr a_sndHandle = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetSoundHeaderOffset(a_sndHandle, a_offset);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetSpecificHighLevelEvent(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3222,6 +3243,16 @@ static void glue_GetString(cpu68k *c, uint16_t trapword)
     int16_t a_i = (int16_t)cpu_pop16(c);
     gaddr r = tb_GetString(a_i);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetSysBeepVolume(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_levelp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetSysBeepVolume(a_levelp);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5948,6 +5979,16 @@ static void glue_SetCursor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_level = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDefaultOutputVolume(a_level);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDeskCPat(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6288,6 +6329,16 @@ static void glue_SetString(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetSysBeepVolume(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_level = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetSysBeepVolume(a_level);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetTrapAddress(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6429,6 +6480,140 @@ static void glue_SlopeFromAngle(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t a_a = (int16_t)cpu_pop16(c);
     int32_t r = tb_SlopeFromAngle(a_a);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndAddModifier(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_init = (int32_t)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    gaddr a_mod = (gaddr)cpu_pop32(c);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndAddModifier(a_chanp, a_mod, a_id, a_init);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndChannelStatus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_statusp = (gaddr)cpu_pop32(c);
+    int16_t a_length = (int16_t)cpu_pop16(c);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndChannelStatus(a_chanp, a_length, a_statusp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_cmdp = (gaddr)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SndControl(a_id, a_cmdp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndDisposeChannel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_quitnow = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndDisposeChannel(a_chanp, a_quitnow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndDoCommand(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_nowait = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_cmdp = (gaddr)cpu_pop32(c);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndDoCommand(a_chanp, a_cmdp, a_nowait);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndDoImmediate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_cmdp = (gaddr)cpu_pop32(c);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndDoImmediate(a_chanp, a_cmdp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndGetSysBeepState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_statep = (gaddr)cpu_pop32(c);
+    tb_SndGetSysBeepState(a_statep);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndManagerStatus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_statusp = (gaddr)cpu_pop32(c);
+    int16_t a_length = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SndManagerStatus(a_length, a_statusp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndNewChannel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_userroutinep = (gaddr)cpu_pop32(c);
+    int32_t a_init = (int32_t)cpu_pop32(c);
+    int16_t a_synth = (int16_t)cpu_pop16(c);
+    gaddr a_chanpp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndNewChannel(a_chanpp, a_synth, a_init, a_userroutinep);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndPlay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_async = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_sndh = (gaddr)cpu_pop32(c);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndPlay(a_chanp, a_sndh, a_async);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndSetSysBeepState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_state = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SndSetSysBeepState(a_state);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndSoundManagerVersion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_SndSoundManagerVersion();
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -7402,13 +7587,13 @@ const trap_sig trap_sigs[] = {
     {0xA241, -1, "PBHSetFLock", CONV_REG, 0, 0, 0},
     {0xA242, -1, "PBHRstFLock", CONV_REG, 0, 0, 0},
     {0xA458, -1, "InsXTime", CONV_REG, 0, 0, 0},
-    {0xA801, -1, "SndDisposeChannel", CONV_STACK, 6, 2, 0},
-    {0xA802, -1, "SndAddModifier", CONV_STACK, 14, 2, 0},
-    {0xA803, -1, "SndDoCommand", CONV_STACK, 10, 2, 0},
-    {0xA804, -1, "SndDoImmediate", CONV_STACK, 8, 2, 0},
-    {0xA805, -1, "SndPlay", CONV_STACK, 10, 2, 0},
-    {0xA806, -1, "SndControl", CONV_STACK, 6, 2, 0},
-    {0xA807, -1, "SndNewChannel", CONV_STACK, 14, 2, 0},
+    {0xA801, -1, "SndDisposeChannel", CONV_STACK, 6, 2, glue_SndDisposeChannel},
+    {0xA802, -1, "SndAddModifier", CONV_STACK, 14, 2, glue_SndAddModifier},
+    {0xA803, -1, "SndDoCommand", CONV_STACK, 10, 2, glue_SndDoCommand},
+    {0xA804, -1, "SndDoImmediate", CONV_STACK, 8, 2, glue_SndDoImmediate},
+    {0xA805, -1, "SndPlay", CONV_STACK, 10, 2, glue_SndPlay},
+    {0xA806, -1, "SndControl", CONV_STACK, 6, 2, glue_SndControl},
+    {0xA807, -1, "SndNewChannel", CONV_STACK, 14, 2, glue_SndNewChannel},
     {0xA808, -1, "InitProcMenu", CONV_STACK, 2, 0, glue_InitProcMenu},
     {0xA809, -1, "GetControlVariant", CONV_STACK, 4, 2, 0},
     {0xA80A, -1, "GetWVariant", CONV_STACK, 4, 2, 0},
@@ -8535,7 +8720,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x40004u, "FinaleUnknown2", CONV_STACK, 16, 2, 0},
     {0xA800, (int32_t)0x40010u, "Comp3to1", CONV_STACK, 28, 0, 0},
     {0xA800, (int32_t)0x80010u, "Exp1to3", CONV_STACK, 28, 0, 0},
-    {0xA800, (int32_t)0xC0008u, "SndSoundManagerVersion", CONV_STACK, 0, 4, 0},
+    {0xA800, (int32_t)0xC0008u, "SndSoundManagerVersion", CONV_STACK, 0, 4, glue_SndSoundManagerVersion},
     {0xA800, (int32_t)0xC0010u, "Comp6to1", CONV_STACK, 28, 0, 0},
     {0xA800, (int32_t)0x100010u, "Exp1to6", CONV_STACK, 28, 0, 0},
     {0xA800, (int32_t)0x1C0004u, "DirectorUnknown4", CONV_STACK, 14, 2, 0},
@@ -8543,27 +8728,27 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x40000Cu, "SpeechBusySystemWide", CONV_STACK, 0, 2, 0},
     {0xA800, (int32_t)0x108000Cu, "CountVoices", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x1100014u, "SPBSignOutDevice", CONV_STACK, 2, 2, 0},
-    {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, 0},
+    {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, glue_SndSetSysBeepState},
     {0xA800, (int32_t)0x2040008u, "SndPauseFilePlay", CONV_STACK, 4, 2, 0},
-    {0xA800, (int32_t)0x2180008u, "SndGetSysBeepState", CONV_STACK, 4, 0, 0},
+    {0xA800, (int32_t)0x2180008u, "SndGetSysBeepState", CONV_STACK, 4, 0, glue_SndGetSysBeepState},
     {0xA800, (int32_t)0x21C000Cu, "DisposeSpeechChannel", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x21C0014u, "SPBCloseDevice", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x220000Cu, "SpeakString", CONV_STACK, 4, 2, 0},
-    {0xA800, (int32_t)0x2240018u, "GetSysBeepVolume", CONV_STACK, 4, 2, 0},
+    {0xA800, (int32_t)0x2240018u, "GetSysBeepVolume", CONV_STACK, 4, 2, glue_GetSysBeepVolume},
     {0xA800, (int32_t)0x2280014u, "SPBPauseRecording", CONV_STACK, 4, 2, 0},
-    {0xA800, (int32_t)0x2280018u, "SetSysBeepVolume", CONV_STACK, 4, 2, 0},
+    {0xA800, (int32_t)0x2280018u, "SetSysBeepVolume", CONV_STACK, 4, 2, glue_SetSysBeepVolume},
     {0xA800, (int32_t)0x22C000Cu, "StopSpeech", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x22C0014u, "SPBResumeRecording", CONV_STACK, 4, 2, 0},
-    {0xA800, (int32_t)0x22C0018u, "GetDefaultOutputVolume", CONV_STACK, 4, 2, 0},
+    {0xA800, (int32_t)0x22C0018u, "GetDefaultOutputVolume", CONV_STACK, 4, 2, glue_GetDefaultOutputVolume},
     {0xA800, (int32_t)0x2300014u, "SPBStopRecording", CONV_STACK, 4, 2, 0},
-    {0xA800, (int32_t)0x2300018u, "SetDefaultOutputVolume", CONV_STACK, 4, 2, 0},
+    {0xA800, (int32_t)0x2300018u, "SetDefaultOutputVolume", CONV_STACK, 4, 2, glue_SetDefaultOutputVolume},
     {0xA800, (int32_t)0x238000Cu, "ContinueSpeech", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x3080008u, "SndStopFilePlay", CONV_STACK, 6, 2, 0},
     {0xA800, (int32_t)0x30C000Cu, "GetIndVoice", CONV_STACK, 6, 2, 0},
     {0xA800, (int32_t)0x30C0014u, "SPBSignInDevice", CONV_STACK, 6, 2, 0},
-    {0xA800, (int32_t)0x3140008u, "SndManagerStatus", CONV_STACK, 6, 2, 0},
+    {0xA800, (int32_t)0x3140008u, "SndManagerStatus", CONV_STACK, 6, 2, glue_SndManagerStatus},
     {0xA800, (int32_t)0x3200014u, "SPBRecord", CONV_STACK, 6, 2, 0},
-    {0xA800, (int32_t)0x4040018u, "GetSoundHeaderOffset", CONV_STACK, 8, 2, 0},
+    {0xA800, (int32_t)0x4040018u, "GetSoundHeaderOffset", CONV_STACK, 8, 2, glue_GetSoundHeaderOffset},
     {0xA800, (int32_t)0x418000Cu, "NewSpeechChannel", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x4200008u, "SndPlayDoubleBuffer", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x4240014u, "SPBRecordToFile", CONV_STACK, 8, 2, 0},
@@ -8576,7 +8761,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x44C000Cu, "SetSpeechPitch", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x450000Cu, "GetSpeechPitch", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x460000Cu, "UseDictionary", CONV_STACK, 8, 2, 0},
-    {0xA800, (int32_t)0x5100008u, "SndChannelStatus", CONV_STACK, 10, 2, 0},
+    {0xA800, (int32_t)0x5100008u, "SndChannelStatus", CONV_STACK, 10, 2, glue_SndChannelStatus},
     {0xA800, (int32_t)0x5140014u, "SPBGetIndexedDevice", CONV_STACK, 10, 2, 0},
     {0xA800, (int32_t)0x5180014u, "SPBOpenDevice", CONV_STACK, 10, 2, 0},
     {0xA800, (int32_t)0x604000Cu, "MakeVoiceSpec", CONV_STACK, 12, 2, 0},
