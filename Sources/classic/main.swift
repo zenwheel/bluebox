@@ -43,7 +43,8 @@ func usage() -> Never {
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
-      --depth N  screen depth: 1, 8 or 32 bits (default 8, or 32 with a theme or native frames)
+      --depth N  screen depth: 1, 8 or 32 bits (default 32, or the app's setting; an
+                     application can still switch depth itself with SetDepth)
           --screenshot P  write the screen to PNG file P when the run ends
           --print-to F  print to PDF file F instead of the print panel (headless runs)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
@@ -59,6 +60,10 @@ func usage() -> Never {
           Make a macOS application bundle for a classic application (default folder
           ~/Applications/Classic) with its Finder icon; documents dropped on it open
           in the application.
+      classic set <app> [depth 1|8|32|default] [--library dir]
+          Remember settings for an application (by file name), used by every run,
+          including installed bundles: e.g. classic set "Star Chaos" depth 8 for a
+          game that wants 256 colours.  With no setting given, show them.
       classic apps [--library dir]
           List the applications in the library.
       classic themes [--library dir]
@@ -295,7 +300,11 @@ func runCommand(_ args: [String]) {
         var terr = [CChar](repeating: 0, count: 256)
         guard machine_load_theme(themePath, &terr, terr.count) else { fail(str(terr)) }
     }
-    if let screenDepth { machine_set_screen_depth(screenDepth) }
+    if let screenDepth {
+        machine_set_screen_depth(screenDepth)
+    } else if let d = settings(for: app)?.depth {
+        machine_set_screen_depth(Int32(d))
+    }
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }
@@ -567,6 +576,7 @@ switch command {
 case "run": runCommand(rest)
 case "import": importCommand(rest)
 case "apps": appsCommand(rest)
+case "set": setCommand(rest)
 case "rsrc": rsrcCommand(rest)
 case "themes": themesCommand(rest)
 #if canImport(AppKit)

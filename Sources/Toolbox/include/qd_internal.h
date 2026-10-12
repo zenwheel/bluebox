@@ -207,4 +207,12 @@ extern int g_screen_width, g_screen_height;
 /* Standard patterns. */
 extern const uint8_t qd_pat_black[8], qd_pat_white[8], qd_pat_gray[8], qd_pat_ltgray[8], qd_pat_dkgray[8];
 
+/* Screen depth changes (qd_screen.c). */
+void qd_screen_port_opened(gaddr port);
+void qd_screen_port_closed(gaddr port);
+bool qd_screen_supports(int depth);
+bool qd_screen_set_depth(int depth);
+gaddr qd_screen_bits(void);
+void wm_repaint_all(void);
+
 #endif

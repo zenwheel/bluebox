@@ -330,7 +330,7 @@ the trap census.
   - `LoadSeg` patches the calling entry too (Director projectors keep their own copy of the jump table); `NewPixPat` allocates its pixel map and data
   - `CopyDeepMask`, `SeedCFill`, `CalcCMask`, `SetPortPix`; `CouldDialog`/`FreeDialog`; mounting and ejecting are refused (one volume, always mounted); the Edition Manager starts and has nothing to publish or subscribe to
   - Fonts answer to the classic names and numbers a System 7 Mac had (Chicago, New York, Geneva, Monaco, Times, Helvetica, Courier, Symbol); the ones we have no face for draw with the nearest of ours. Sound status calls write at most the record's size.
-  - The screen is 8 bits (256 colours) by default, as most System 7 colour Macs ran: many games refuse to start otherwise, and black-and-white applications look the same
+  - The screen is 32 bits by default; `SetDepth` switches it while an application runs (1, 8 or 32 bits: the device, screenBits and every port on the screen follow, and everything is redrawn), and `HasDepth` answers for those depths. Games that want 256 colours without asking get it from a per-application setting, `classic set <app> depth 8`, kept in the library's Settings.json and used by every run, installed bundles included
   - CurStackBase is exactly A5 less the globals (it was rounded to 4, and MPW's runtime unpacking DATA 0 into the globals then never stopped); `--depth 1|8|32`; `Palette2CTab`/`CTab2Palette`; `DrvrInstall` accepted
   - OS traps whose HFS variant has separate glue (`PBOpenRF`/`PBHOpenRF` …) are told apart by the $0200 bit; previously the H version got every call. `InitWindows` leaves the Window Manager port current. Dialogs are colour windows, as in System 7 with Color QuickDraw. `SetScanOverride`/`GetScanOverride`. Files stored only as a sidecar exist. (ResEdit 2.1.3 and SuperPaint 2.0 start.)
   - `Fix2X`/`Frac2X`/`X2Fix`/`X2Frac`, `Microseconds`, `GetVideoDefault`; Pack7's `Str2Dec`/`CStr2Dec`/`Dec2Str`; colour fills for every shape (`FillCPoly` …, through the pattern's 1-bit form); `GetWVariant`
@@ -367,7 +367,7 @@ the trap census.
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
 - Next:
   - OpenPicture recording (pictures made by apps, e.g. for the clipboard)
-  - colour pixel patterns drawn in colour (they draw through their 1-bit form today); `SetDepth` changing the screen's depth while running
+  - colour pixel patterns drawn in colour (they draw through their 1-bit form today); 2-, 4- and 16-bit screens for `SetDepth`
   - MACE 3:1 and 6:1 sound decoding (it plays silence of the right length)
   - QuickTime movie decoding (movies open and play as zero length), with its codecs as components
   - Gestalt reporting the 68881 we emulate (and a 68040 for applications that require one, e.g. ShatterBat), once FPU and 68040 coverage is validated against the oracle

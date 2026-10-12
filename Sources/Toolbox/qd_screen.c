@@ -1,6 +1,7 @@
 /*
- * The screen: a 1-bit framebuffer at GA_SCREEN, the main GDevice describing
- * it, and PNG snapshots for headless runs.
+ * The screen: a framebuffer at GA_SCREEN (1, 8 or 32 bits deep), the main
+ * GDevice describing it, and PNG snapshots for headless runs.  SetDepth can
+ * change the depth while an application runs.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,8 +13,9 @@
 
 int g_screen_width = 1024, g_screen_height = 768;
 static uint32_t screen_row_bytes;
-static int depth_pref = 8, screen_depth = 1;
+static int depth_pref = 32, screen_depth = 1;
 static gaddr screen_ctab;
+static unsigned nports; /* ports drawing on the screen, below */
 
 void machine_set_screen_depth(int depth) { depth_pref = depth == 8 || depth == 32 ? depth : 1; }
 int qd_screen_depth(void) { return screen_depth; }
@@ -39,33 +41,21 @@ static gaddr make_ctab(const uint16_t (*rgb)[3], int n, int32_t seed)
     return h;
 }
 
-void qd_screen_init(int width, int height)
+static uint32_t row_bytes_for(int depth, int width)
 {
-    g_screen_width = width;
-    g_screen_height = height;
-    screen_depth = depth_pref;
-    screen_row_bytes = screen_depth == 32  ? (uint32_t)width * 4
-                       : screen_depth == 8 ? (uint32_t)((width + 3) & ~3)
-                                           : (uint32_t)((width + 31) / 32 * 4);
-    /* White: 0 in the 1- and 8-bit tables, all ones in direct colour. */
-    gmemset(GA_SCREEN, screen_depth == 32 ? 0xFF : 0, screen_row_bytes * (uint32_t)height);
-    wr32(LM_ScrnBase, GA_SCREEN);
-    wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
-    wr16(LM_ScrVRes, 72);
-    wr16(LM_ScrHRes, 72);
+    return depth == 32  ? (uint32_t)width * 4
+           : depth == 8 ? (uint32_t)((width + 3) & ~3)
+                        : (uint32_t)((width + 31) / 32 * 4);
+}
 
-    /* Main device: PixMap of the screen with its colour table. */
+/* The main device's pixel map, colour table and type for screen_depth. */
+static void describe_screen(gaddr gd, gaddr pm)
+{
     static const uint16_t bw[2][3] = { { 0xFFFF, 0xFFFF, 0xFFFF }, { 0, 0, 0 } };
     static uint16_t std8[256][3];
     for (int i = 0; i < 256; i++)
         qd_std_rgb8(i, std8[i]);
-    gaddr pmh = tb_NewHandle(PixMap_SIZEOF, true, true);
-    gaddr pm = rd32(pmh);
-    PixMap_set_baseAddr(pm, GA_SCREEN);
     PixMap_set_rowBytes(pm, (int16_t)(screen_row_bytes | 0x8000));
-    qrect_put(pm + PixMap_bounds_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
-    PixMap_set_hRes(pm, 72 << 16);
-    PixMap_set_vRes(pm, 72 << 16);
     PixMap_set_pixelSize(pm, (int16_t)screen_depth);
     if (screen_depth == 32) {
         PixMap_set_pixelType(pm, 16);       /* RGBDirect */
@@ -73,24 +63,119 @@ void qd_screen_init(int width, int height)
         PixMap_set_cmpSize(pm, 8);
         screen_ctab = make_ctab(bw, 2, 1);  /* unused by direct pixels */
     } else {
+        PixMap_set_pixelType(pm, 0);
         PixMap_set_cmpCount(pm, 1);
         PixMap_set_cmpSize(pm, (int16_t)screen_depth);
         screen_ctab = screen_depth == 8 ? make_ctab(std8, 256, 8) : make_ctab(bw, 2, 1);
     }
     PixMap_set_pmTable(pm, screen_ctab);
+    GDevice_set_gdType(gd, screen_depth == 32 ? 2 : 0); /* direct or CLUT device */
+    wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
+}
+
+void qd_screen_init(int width, int height)
+{
+    g_screen_width = width;
+    g_screen_height = height;
+    screen_depth = depth_pref;
+    screen_row_bytes = row_bytes_for(screen_depth, width);
+    /* White: 0 in the 1- and 8-bit tables, all ones in direct colour. */
+    gmemset(GA_SCREEN, screen_depth == 32 ? 0xFF : 0, screen_row_bytes * (uint32_t)height);
+    wr32(LM_ScrnBase, GA_SCREEN);
+    wr16(LM_ScrVRes, 72);
+    wr16(LM_ScrHRes, 72);
+
+    /* Main device: PixMap of the screen with its colour table. */
+    gaddr pmh = tb_NewHandle(PixMap_SIZEOF, true, true);
+    gaddr pm = rd32(pmh);
+    PixMap_set_baseAddr(pm, GA_SCREEN);
+    qrect_put(pm + PixMap_bounds_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
+    PixMap_set_hRes(pm, 72 << 16);
+    PixMap_set_vRes(pm, 72 << 16);
 
     gaddr gdh = tb_NewHandle(GDevice_SIZEOF, true, true);
     gaddr gd = rd32(gdh);
-    GDevice_set_gdType(gd, screen_depth == 32 ? 2 : 0); /* direct or CLUT device */
     GDevice_set_gdFlags(gd, (int16_t)((1 << 15) | (1 << 14) | (1 << 13) | (1 << 12) | (1 << 11) | (1 << 10)));
     GDevice_set_gdPMap(gd, pmh);
     qrect_put(gd + GDevice_gdRect_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
     GDevice_set_gdResPref(gd, 3);
     GDevice_set_gdMode(gd, 0x80);
+    describe_screen(gd, pm);
 
     wr32(LM_MainDevice, gdh);
     wr32(LM_DeviceList, gdh);
     wr32(LM_TheGDevice, gdh);
+    nports = 0;
+}
+
+/* ---- Changing depth ---- */
+
+/* Ports opened on the screen, so SetDepth can bring them up to date (the
+ * ROM kept a PortList for the same purpose). */
+#define MAX_PORTS 512
+static gaddr ports[MAX_PORTS];
+
+void qd_screen_port_opened(gaddr port)
+{
+    for (unsigned i = 0; i < nports; i++)
+        if (ports[i] == port)
+            return;
+    if (nports < MAX_PORTS)
+        ports[nports++] = port;
+}
+
+void qd_screen_port_closed(gaddr port)
+{
+    for (unsigned i = 0; i < nports; i++)
+        if (ports[i] == port) {
+            ports[i] = ports[--nports];
+            return;
+        }
+}
+
+bool qd_screen_supports(int depth) { return depth == 1 || depth == 8 || depth == 32; }
+
+/* Switch the screen to another depth: the device, screenBits, and every
+ * port still drawing on the screen change with it; the contents are lost,
+ * so everything is redrawn. */
+bool qd_screen_set_depth(int depth)
+{
+    if (!qd_screen_supports(depth))
+        return false;
+    if (depth == screen_depth)
+        return true;
+    uint32_t old_rb = screen_row_bytes;
+    screen_depth = depth;
+    screen_row_bytes = row_bytes_for(depth, g_screen_width);
+    gmemset(GA_SCREEN, depth == 32 ? 0xFF : 0, screen_row_bytes * (uint32_t)g_screen_height);
+    gaddr gd = rd32(rd32(LM_MainDevice));
+    gaddr pm = rd32(GDevice_gdPMap(gd));
+    describe_screen(gd, pm);
+    gaddr sb = qd_screen_bits();
+    if (sb && BitMap_baseAddr(sb) == GA_SCREEN)
+        BitMap_set_rowBytes(sb, (int16_t)screen_row_bytes);
+    for (unsigned i = 0; i < nports; i++) {
+        gaddr p = ports[i];
+        if (qd_port_is_color(p)) {
+            gaddr h = rd32(p + CGrafPort_portPixMap_off);
+            gaddr ppm = h ? rd32(h) : 0;
+            if (!ppm || PixMap_baseAddr(ppm) != GA_SCREEN)
+                continue;
+            PixMap_set_rowBytes(ppm, PixMap_rowBytes(pm));
+            PixMap_set_pixelSize(ppm, PixMap_pixelSize(pm));
+            PixMap_set_pixelType(ppm, PixMap_pixelType(pm));
+            PixMap_set_cmpCount(ppm, PixMap_cmpCount(pm));
+            PixMap_set_cmpSize(ppm, PixMap_cmpSize(pm));
+            PixMap_set_pmTable(ppm, PixMap_pmTable(pm));
+        } else {
+            gaddr bm = p + GrafPort_portBits_off;
+            if (BitMap_baseAddr(bm) == GA_SCREEN && ((uint16_t)BitMap_rowBytes(bm) & 0x3FFF) == old_rb)
+                BitMap_set_rowBytes(bm, (int16_t)screen_row_bytes);
+        }
+    }
+    wm_repaint_all();
+    tb_DrawMenuBar();
+    return true;
 }
 
 gaddr tb_GetMainDevice(void) { return rd32(LM_MainDevice); }

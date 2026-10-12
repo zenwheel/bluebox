@@ -158,6 +158,7 @@ void tb_InitPort(gaddr p)
     GrafPort_set_rgnSave(p, 0);
     GrafPort_set_polySave(p, 0);
     GrafPort_set_grafProcs(p, 0);
+    qd_screen_port_opened(p);
     tb_SetPort(p);
 }
 
@@ -171,6 +172,7 @@ void tb_OpenPort(gaddr p)
 
 void tb_ClosePort(gaddr p)
 {
+    qd_screen_port_closed(p);
     tb_DisposeRgn(GrafPort_visRgn(p));
     tb_DisposeRgn(GrafPort_clipRgn(p));
 }
