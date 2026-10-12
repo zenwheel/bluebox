@@ -282,6 +282,12 @@ void machine_post_suspend_resume(bool resume, bool convert_clipboard);
  * app through its launch parameters, as the Finder did. */
 void machine_set_launch_documents(const char *const *paths, int n);
 
+/* The host folder that stands in for the System Folder (Preferences and
+ * the other FindFolder folders live inside it).  The default is
+ * ~/Library/Application Support/Classic/System Folder on macOS and
+ * $XDG_DATA_HOME/classic/System Folder elsewhere. */
+void machine_set_system_folder(const char *path);
+
 /* Apple Events to the running app (as the Finder would send them). */
 void machine_open_documents(const char *const *paths, int n, bool print);
 void machine_send_open_application(void);

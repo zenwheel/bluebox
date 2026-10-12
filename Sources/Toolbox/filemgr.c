@@ -325,6 +325,7 @@ void fm_init(const char *app_dir)
     wr16(LM_DefVRefNum, (uint16_t)VREF);
     wr16(LM_SFSaveDisk, (uint16_t)(-VREF));
     wr32(LM_CurDirStore, (uint32_t)default_dir);
+    wr16(LM_BootDrive, (uint16_t)fm_system_vref());
 }
 
 /* An FSSpec for a host path (the file need not exist). */
@@ -1060,6 +1061,24 @@ int16_t tb_PBHSetVol(gaddr pb, bool async) { return set_vol(pb, true); }
 /* ---------------------------------------------------------------------- */
 /* Working directories and the catalog (FSDispatch) */
 
+/* The working directory refnum for a directory ID (the volume for the root);
+ * 0 when every working directory is in use. */
+static int16_t wd_for(int32_t id)
+{
+    if (id == ROOT_ID)
+        return VREF;
+    for (int i = 0; i < MAX_WDS; i++)
+        if (wds[i].used && wds[i].dirid == id)
+            return (int16_t)(-32000 - i);
+    for (int i = 0; i < MAX_WDS; i++)
+        if (!wds[i].used) {
+            wds[i].used = true;
+            wds[i].dirid = id;
+            return (int16_t)(-32000 - i);
+        }
+    return 0;
+}
+
 int16_t tb_PBOpenWD(gaddr pb, bool async)
 {
     char path[PATH_MAX];
@@ -1070,24 +1089,11 @@ int16_t tb_PBOpenWD(gaddr pb, bool async)
         return err;
     if (!is_dir(path))
         return dirNFErr;
-    int32_t id = dir_id_for(rel_of(path));
-    if (id == ROOT_ID) {
-        wr16(pb + IOParam_ioVRefNum_off, (uint16_t)VREF);
-        return noErr;
-    }
-    for (int i = 0; i < MAX_WDS; i++)
-        if (wds[i].used && wds[i].dirid == id) {
-            wr16(pb + IOParam_ioVRefNum_off, (uint16_t)(-32000 - i));
-            return noErr;
-        }
-    for (int i = 0; i < MAX_WDS; i++)
-        if (!wds[i].used) {
-            wds[i].used = true;
-            wds[i].dirid = id;
-            wr16(pb + IOParam_ioVRefNum_off, (uint16_t)(-32000 - i));
-            return noErr;
-        }
-    return tmwdoErr;
+    int16_t wd = wd_for(dir_id_for(rel_of(path)));
+    if (!wd)
+        return tmwdoErr;
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)wd);
+    return noErr;
 }
 
 int16_t tb_PBCloseWD(gaddr pb, bool async)
@@ -1460,3 +1466,143 @@ bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize
     snprintf(out, outsize, "%s", path[0] ? path : "/");
     return true;
 }
+
+/* ---------------------------------------------------------------------- */
+/* The System Folder and FindFolder
+ *
+ * A per-user host folder stands in for the System Folder, so preferences
+ * and other files apps keep there persist between runs. */
+
+static char sys_folder[PATH_MAX];
+
+void machine_set_system_folder(const char *path)
+{
+    snprintf(sys_folder, sizeof sys_folder, "%s", path ? path : "");
+}
+
+static bool make_dirs(const char *path)
+{
+    char p[PATH_MAX];
+    snprintf(p, sizeof p, "%s", path);
+    for (char *s = p + 1; *s; s++)
+        if (*s == '/') {
+            *s = 0;
+            mkdir(p, 0755);
+            *s = '/';
+        }
+    return mkdir(p, 0755) == 0 || is_dir(p);
+}
+
+static const char *system_folder_path(void)
+{
+    if (!sys_folder[0]) {
+        const char *home = getenv("HOME");
+#ifdef __APPLE__
+        snprintf(sys_folder, sizeof sys_folder, "%s/Library/Application Support/Classic/System Folder",
+                 home ? home : "/tmp");
+#else
+        const char *data = getenv("XDG_DATA_HOME");
+        if (data && *data)
+            snprintf(sys_folder, sizeof sys_folder, "%s/classic/System Folder", data);
+        else
+            snprintf(sys_folder, sizeof sys_folder, "%s/.local/share/classic/System Folder", home ? home : "/tmp");
+#endif
+    }
+    make_dirs(sys_folder);
+    return sys_folder;
+}
+
+/* The System Folder's working directory, as SysEnvirons and BootDrive give it. */
+int16_t fm_system_vref(void)
+{
+    char full[PATH_MAX];
+    if (!realpath(system_folder_path(), full))
+        return VREF;
+    int16_t wd = wd_for(dir_id_for(rel_of(full)));
+    return wd ? wd : VREF;
+}
+
+static const struct {
+    char type[5];
+    const char *name; /* inside the System Folder; NULL for the System Folder itself */
+} folders[] = {
+    { "macs", NULL },
+    { "pref", "Preferences" },
+    { "extn", "Extensions" },
+    { "ctrl", "Control Panels" },
+    { "font", "Fonts" },
+    { "strt", "Startup Items" },
+    { "shdf", "Shutdown Items" },
+    { "amnu", "Apple Menu Items" },
+    { "prnt", "PrintMonitor Documents" },
+    { "temp", "Temporary Items" },
+    { "flnt", "Temporary Items" }, /* kChewableItemsFolderType */
+    { "trsh", "Trash" },
+    { "empt", "Trash" },
+    { "asup", "Application Support" },
+    { "appr", "Appearance" },
+    { "cmnu", "Contextual Menu Items" },
+    { "ctrb", "Control Strip Modules" },
+    { "lang", "Language & Region Support" },
+    { "info", "Help" },
+    { "fasf", "Scripting Additions" },
+    { "\xC4" "scr", "Scripts" }, /* 'ƒscr' */
+};
+
+int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, gaddr foundVRefNum,
+                      gaddr foundDirID)
+{
+    char path[PATH_MAX];
+    bool found = false;
+    if ((uint32_t)folderType == 0x6465736B /* 'desk' */) {
+        const char *home = getenv("HOME");
+        snprintf(path, sizeof path, "%s/Desktop", home ? home : "/tmp");
+        found = true;
+    }
+    for (size_t i = 0; i < sizeof folders / sizeof folders[0] && !found; i++) {
+        const uint8_t *t = (const uint8_t *)folders[i].type;
+        uint32_t code = (uint32_t)t[0] << 24 | (uint32_t)t[1] << 16 | (uint32_t)t[2] << 8 | t[3];
+        if (code != (uint32_t)folderType)
+            continue;
+        if (folders[i].name)
+            snprintf(path, sizeof path, "%s/%s", system_folder_path(), folders[i].name);
+        else
+            snprintf(path, sizeof path, "%s", system_folder_path());
+        found = true;
+    }
+    if (!found)
+        return fnfErrF;
+    /* The standard folders always exist, as on a working System. */
+    if (!is_dir(path) && !make_dirs(path))
+        return fnfErrF;
+    char full[PATH_MAX];
+    if (!realpath(path, full))
+        return fnfErrF;
+    if (foundVRefNum)
+        wr16(foundVRefNum, (uint16_t)VREF);
+    if (foundDirID)
+        wr32(foundDirID, (uint32_t)dir_id_for(rel_of(full)));
+    return noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Volume parameters: an HFS volume with no optional features. */
+
+int16_t tb_PBHGetVolParms(gaddr pb, bool async)
+{
+    int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
+    if (vref != 0 && vref != VREF && vref != 1 && !(vref <= -32000 && vref > -32000 - MAX_WDS))
+        return nsvErr;
+    gaddr buf = rd32(pb + HIoParam_ioBuffer_off);
+    int32_t want = (int32_t)rd32(pb + HIoParam_ioReqCount_off);
+    uint8_t info[20] = { 0, 2 }; /* vMVersion 2, vMAttrib 0, no local handle or server */
+    int32_t n = want < (int32_t)sizeof info ? want : (int32_t)sizeof info;
+    if (n < 0)
+        n = 0;
+    if (buf)
+        gput(buf, info, (uint32_t)n);
+    wr32(pb + HIoParam_ioActCount_off, (uint32_t)n);
+    return noErr;
+}
+
+int16_t tb_PBOpenDF(gaddr pb, bool async) { return open_fork(pb, false, hfs_call()); }

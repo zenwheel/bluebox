@@ -199,5 +199,39 @@ extension Classic {
             tb_CloseResFile(rn)
         }
     }
+
+    @Suite struct SystemFolder {
+        @Test func findFolderGivesPreferencesInsideTheSystemFolder() {
+            launchTestApp()
+            let vref = tb_NewPtr(2, false, true), dir = tb_NewPtr(4, false, true)
+            #expect(tb_FindFolder(-1, Int32(bitPattern: fourCC("pref")), 1, vref, dir) == 0)
+            let prefs = URL(fileURLWithPath: testSystemFolder).appendingPathComponent("Preferences")
+            var isDir: ObjCBool = false
+            #expect(FileManager.default.fileExists(atPath: prefs.path, isDirectory: &isDir) && isDir.boolValue)
+            // A preferences file made there lands in the host folder.
+            let name = tb_NewPtr(256, false, true)
+            guestPString("App Prefs", at: name)
+            tb_HCreateResFile(Int16(bitPattern: rd16(vref)), Int32(bitPattern: rd32(dir)), name)
+            #expect(tb_ResError() == 0)
+            #expect(FileManager.default.fileExists(atPath: prefs.appendingPathComponent("App Prefs").path))
+            #expect(tb_FindFolder(-1, Int32(bitPattern: fourCC("zzzz")), 1, vref, dir) == -43)
+        }
+
+        @Test func sysEnvironsPointsAtTheSystemFolder() {
+            launchTestApp()
+            let env = tb_NewPtr(16, false, true)
+            _ = tb_SysEnvirons(2, env)
+            let vref = Int16(bitPattern: rd16(env + 14))
+            #expect(vref != -1)
+            #expect(rd16(UInt32(LM_BootDrive)) == UInt16(bitPattern: vref))
+            let pb = tb_NewPtr(128, false, true)
+            let buf = tb_NewPtr(32, false, true)
+            wr16(pb + 22, rd16(UInt32(LM_BootDrive)))
+            wr32(pb + 32, buf)
+            wr32(pb + 36, 32)
+            #expect(tb_PBHGetVolParms(pb, false) == 0)
+            #expect(rd16(buf) == 2 && rd32(pb + 40) == 20)
+        }
+    }
 }
 }

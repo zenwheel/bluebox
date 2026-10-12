@@ -56,7 +56,7 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
     SysEnvRec_set_hasColorQD(p, 1);
     SysEnvRec_set_keyBoardType(p, 4);  /* envAExtendKbd */
     SysEnvRec_set_atDrvrVersNum(p, 0);
-    SysEnvRec_set_sysVRefNum(p, -1);
+    SysEnvRec_set_sysVRefNum(p, fm_system_vref());
     return vers > 2 ? -5502 : noErr;   /* envVersTooBig */
 }
 

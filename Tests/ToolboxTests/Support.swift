@@ -74,7 +74,11 @@ func dcmp0Resource(decompressedSize: Int, body: [UInt8]) -> [UInt8] {
 }
 
 /// A fresh, empty machine.
+/// Tests keep their System Folder out of the user's.
+let testSystemFolder = tempDir().appendingPathComponent("System Folder").path
+
 func bootMachine() {
+    machine_set_system_folder(testSystemFolder)
     #expect(machine_boot(false))
 }
 

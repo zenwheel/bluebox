@@ -89,6 +89,8 @@ void gestalt_init(void);
 void fm_spec_for_path(const char *path, gaddr spec);
 /* Host path for a (vRefNum, dirID, name) triple. */
 bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize);
+/* The System Folder's working directory refnum. */
+int16_t fm_system_vref(void);
 /* Mac full path (MacRoman) of a host path; returns its length, 0 if too long. */
 size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize);
 /* Host path of a Mac full path. */

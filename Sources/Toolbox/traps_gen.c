@@ -2545,6 +2545,20 @@ static void glue_FindDialogItem(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindFolder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_foundDirID = (gaddr)cpu_pop32(c);
+    gaddr a_foundVRefNum = (gaddr)cpu_pop32(c);
+    int8_t a_createFolder = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_folderType = (int32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FindFolder(a_vRefNum, a_folderType, a_createFolder, a_foundVRefNum, a_foundDirID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FindScriptRun(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5590,6 +5604,15 @@ static void glue_PBHGetVol(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBHGetVolParms(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBHGetVolParms(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBHOpen(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5659,6 +5682,15 @@ static void glue_PBOpen(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBOpen(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBOpenDF(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBOpenDF(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -9546,7 +9578,7 @@ const trap_sig trap_sigs[] = {
 const unsigned trap_sig_count = sizeof trap_sigs / sizeof trap_sigs[0];
 
 const dispatch_sig dispatch_sigs[] = {
-    {0xA823, (int32_t)0x0u, "FindFolder", CONV_STACK, 16, 2, 0},
+    {0xA823, (int32_t)0x0u, "FindFolder", CONV_STACK, 16, 2, glue_FindFolder},
     {0xA823, (int32_t)0x2u, "NewAlias", CONV_STACK, 12, 2, glue_NewAlias},
     {0xA823, (int32_t)0x3u, "ResolveAlias", CONV_STACK, 16, 2, glue_ResolveAlias},
     {0xA823, (int32_t)0x5u, "MatchAlias", CONV_STACK, 32, 2, glue_MatchAlias},
@@ -9622,7 +9654,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x16u, "PBResolveFileIDRef", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x17u, "PBExchangeFiles", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x18u, "PBCatSearch", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x1Au, "PBOpenDF", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x1Au, "PBOpenDF", CONV_REG, 0, 0, glue_PBOpenDF},
     {0xA060, (int32_t)0x1Au, "PBHOpenDF", CONV_REG, 0, 0, glue_PBHOpenDF},
     {0xA060, (int32_t)0x20u, "PBDTGetPath", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x21u, "PBDTCloseDown", CONV_REG, 0, 0, 0},
@@ -9640,7 +9672,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x2Du, "PBDTGetInfo", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x2Eu, "PBDTOpenInform", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x2Fu, "PBDTDelete", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x30u, "PBHGetVolParms", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x30u, "PBHGetVolParms", CONV_REG, 0, 0, glue_PBHGetVolParms},
     {0xA060, (int32_t)0x31u, "PBHGetLogInInfo", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x32u, "PBHGetDirAccess", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x33u, "PBHSetDirAccess", CONV_REG, 0, 0, 0},
