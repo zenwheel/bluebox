@@ -356,7 +356,6 @@ the trap census.
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
 - Next:
   - glyphs still missing from the bitmap fonts (° © ® ™ § ¶ ß ± and other symbols): draw them, or fall back per glyph to a host font
-  - host names longer than 31 characters: a stable shortened Mac name (they are truncated today, so such files cannot be opened by name)
   - Dialog Manager: modal dialogs (TeachText's Save and About)
   - OpenPicture recording (pictures made by apps, e.g. for the clipboard)
   - themes: utility and floating windows, collapse (WindowShade), popups, sliders, tabs, menus in screen mode, scheme desktop patterns; Mac OS 8.5 Appearance themes; a theme setting for installed bundles
