@@ -1,0 +1,6 @@
+.build/
+.cache/
+.swiftpm/
+*.tmp
+__pycache__/
+Software/

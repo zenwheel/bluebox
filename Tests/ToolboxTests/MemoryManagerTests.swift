@@ -1,0 +1,147 @@
+import CCore
+import Testing
+import Toolbox
+
+extension Classic {
+    @Suite struct MemoryManager {
+        let appZone: UInt32
+        let sysZone: UInt32
+
+        init() {
+            bootMachine()
+            appZone = rd32(UInt32(LM_ApplZone))
+            sysZone = rd32(UInt32(LM_SysZone))
+        }
+
+        @Test func handlesAllocateResizeAndKeepContents() {
+            let h = tb_NewHandle(100, false, false)
+            #expect(h != 0)
+            #expect(memErr() == 0)
+            #expect(tb_GetHandleSize(h) == 100)
+            let p = rd32(h)
+            for i in 0..<100 { wr8(p + UInt32(i), UInt8(i)) }
+            tb_SetHandleSize(h, 5000)
+            #expect(memErr() == 0)
+            #expect(tb_GetHandleSize(h) == 5000)
+            let q = rd32(h)
+            #expect((0..<100).allSatisfy { rd8(q + UInt32($0)) == UInt8($0) })
+            tb_SetHandleSize(h, 10)
+            #expect(tb_GetHandleSize(h) == 10)
+            #expect(mm_check_zone(appZone))
+            tb_DisposeHandle(h)
+            #expect(memErr() == 0)
+        }
+
+        @Test func clearedAllocationsAreZero() {
+            let h = tb_NewHandle(64, false, true)
+            #expect((0..<64).allSatisfy { rd8(rd32(h) + UInt32($0)) == 0 })
+            let p = tb_NewPtr(64, false, true)
+            #expect((0..<64).allSatisfy { rd8(p + UInt32($0)) == 0 })
+        }
+
+        @Test func compactionMovesUnlockedBlocksAndUpdatesMasterPointers() {
+            // Fill the system zone (fixed size) so a large request needs compaction.
+            var handles = [UInt32]()
+            while true {
+                let h = tb_NewHandle(64 * 1024, true, false)
+                if h == 0 { break }
+                wr32(rd32(h), h) // tag each block with its own handle
+                handles.append(h)
+            }
+            #expect(memErr() == -108)
+            #expect(handles.count > 10)
+            // Free every other block: lots of free space, none of it contiguous.
+            for (i, h) in handles.enumerated() where i % 2 == 0 { tb_DisposeHandle(h) }
+            let survivors = handles.enumerated().filter { $0.offset % 2 == 1 }.map(\.element)
+            let locked = survivors[0]
+            let lockedAddr = rd32(locked)
+            tb_HLock(locked)
+            let big = tb_NewHandle(200 * 1024, true, false)
+            #expect(big != 0)
+            #expect(mm_check_zone(sysZone))
+            #expect(rd32(locked) == lockedAddr) // locked blocks do not move
+            for h in survivors { #expect(rd32(rd32(h)) == h) } // contents moved with them
+        }
+
+        @Test func purgeableBlocksArePurgedUnderPressure() {
+            let victim = tb_NewHandle(1024 * 1024, true, false)
+            tb_HPurge(victim)
+            var others = [UInt32]()
+            while true {
+                let h = tb_NewHandle(256 * 1024, true, false)
+                if h == 0 { break }
+                others.append(h)
+            }
+            #expect(rd32(victim) == 0) // purged: an empty handle
+            #expect(tb_GetHandleSize(victim) == 0)
+            tb_ReallocateHandle(victim, 16)
+            #expect(memErr() == -108 || rd32(victim) != 0)
+        }
+
+        @Test func pointersResizeInPlaceOnly() {
+            let p = tb_NewPtr(32, false, false)
+            #expect(tb_GetPtrSize(p) == 32)
+            tb_SetPtrSize(p, 16)
+            #expect(memErr() == 0)
+            #expect(tb_GetPtrSize(p) == 16)
+            let blocker = tb_NewPtr(16, false, false) // sits right after p
+            tb_SetPtrSize(p, 4096)
+            if memErr() == 0 {
+                #expect(tb_GetPtrSize(p) == 4096)
+            } else {
+                #expect(memErr() == -108)
+                #expect(tb_GetPtrSize(p) == 16)
+            }
+            tb_DisposePtr(blocker)
+            tb_DisposePtr(p)
+            #expect(mm_check_zone(appZone))
+        }
+
+        @Test func handleStateAndRecovery() {
+            let h = tb_NewHandle(8, false, false)
+            #expect(tb_HGetState(h) == 0)
+            tb_HLock(h)
+            tb_HPurge(h)
+            #expect(UInt8(bitPattern: tb_HGetState(h)) == 0xC0)
+            tb_HSetState(h, 0x20)
+            #expect(tb_HGetState(h) == 0x20)
+            #expect(tb_RecoverHandle(rd32(h), false) == h)
+            #expect(tb_HandleZone(h) == appZone)
+            #expect(tb_PtrZone(tb_NewPtr(4, true, false)) == sysZone)
+        }
+
+        @Test func handleUtilities() {
+            let p = tb_NewPtr(4, false, false)
+            for i in 0..<4 { wr8(p + UInt32(i), UInt8(0x41 + i)) }
+            var h: UInt32 = 0
+            #expect(tb_PtrToHand(p, &h, 4) == 0)
+            #expect(tb_PtrAndHand(p, h, 2) == 0)
+            #expect(tb_GetHandleSize(h) == 6)
+            var copy = h
+            #expect(tb_HandToHand(&copy) == 0)
+            #expect(copy != h)
+            #expect(tb_HandAndHand(h, copy) == 0)
+            #expect(tb_GetHandleSize(copy) == 12)
+            let bytes = (0..<12).map { rd8(rd32(copy) + UInt32($0)) }
+            #expect(bytes == Array("ABCDABABCDAB".utf8))
+        }
+
+        @Test func applicationZoneGrowsOnDemand() {
+            let before = rd32(UInt32(LM_HeapEnd))
+            let h = tb_NewHandle(64 * 1024 * 1024, false, false)
+            #expect(h != 0)
+            #expect(rd32(UInt32(LM_HeapEnd)) > before)
+            #expect(tb_FreeMem(false) <= Int32(g_mem_report_cap))
+            #expect(tb_MaxBlock(false) > 0)
+            #expect(mm_check_zone(appZone))
+        }
+
+        @Test func badHandlesSetErrors() {
+            tb_HLock(0)
+            #expect(memErr() == -109) // nilHandleErr
+            let p = tb_NewPtr(16, false, false)
+            #expect(tb_GetPtrSize(p) == 16)
+            #expect(tb_GetHandleSize(p) < 0 || memErr() != 0)
+        }
+    }
+}
