@@ -51,6 +51,21 @@ static void enqueue(int16_t what, uint32_t message)
 }
 
 void machine_attach_host(bool attached) { host_attached = attached; }
+
+/* The low-memory copies of the mouse that applications read directly:
+ * MBState (bit 7 set while the button is up), and the mouse location as
+ * Mouse, RawMouse and MTemp.  Kept current between emulation slices. */
+void events_sync_lowmem(void)
+{
+    pthread_mutex_lock(&lock);
+    uint32_t pt = make_pt(mouse_v, mouse_h);
+    bool down = button_down;
+    pthread_mutex_unlock(&lock);
+    wr8(LM_MBState, down ? 0x00 : 0x80);
+    wr32(LM_MTemp, pt);
+    wr32(LM_MouseLocation, pt);
+    wr32(LM_MouseLocation2, pt);
+}
 bool events_host_attached(void) { return host_attached; }
 
 /* Suspend and resume (osEvt, suspendResumeMessage): the app moving to the

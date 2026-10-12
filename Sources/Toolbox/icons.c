@@ -186,13 +186,21 @@ static bool suite_image(gaddr suite, int size, icon_img *img)
         int w, h;
     } fam[] = { { "ICN#", "icl8", "icl4", 32, 32 }, { "ics#", "ics8", "ics4", 16, 16 }, { "icm#", "icm8", "icm4", 16, 12 } };
     int depth = qd_screen_depth();
+    /* Nearest size first: 32 large, 16 small, 12 mini, then the others
+     * from the closest down. */
+    static const int order[3][3] = { { 0, 1, 2 }, { 1, 2, 0 }, { 2, 1, 0 } };
     int first = size >= 32 ? 0 : size > 12 ? 1 : 2;
     for (int k = 0; k < 3; k++) {
-        int f = (first + k) % 3;
+        int f = order[first][k];
         int w = fam[f].w, h = fam[f].h;
+        gaddr mh = suite_get(suite, fourcc(fam[f].mask));
+        /* The height follows the data: applications put 16x16 small icons
+         * in a suite as its mini icons (Greg's Browser), to be scaled. */
+        if (mh && rd32(mh) && tb_GetHandleSize(mh) == w / 8 * 32)
+            h = 16;
         uint8_t bw[2 * 32 * 4];
         uint32_t plane = (uint32_t)(w / 8 * h);
-        if (!handle_bytes(suite_get(suite, fourcc(fam[f].mask)), plane * 2, bw))
+        if (!handle_bytes(mh, plane * 2, bw))
             continue;
         uint8_t data[32 * 32];
         if (depth >= 8 && handle_bytes(suite_get(suite, fourcc(fam[f].c8)), (uint32_t)(w * h), data))
@@ -206,26 +214,34 @@ static bool suite_image(gaddr suite, int size, icon_img *img)
     return false;
 }
 
-/* Alignment within the rectangle (default: centred) and the transform. */
+/* Alignment within the rectangle and the transform.  The icon keeps its
+ * size in a rectangle of a standard size it fits, and is otherwise scaled
+ * to fit, keeping its shape.  Alignment: the low two bits place it
+ * vertically (0 or 1 centred, 2 top, 3 bottom), the next two horizontally
+ * (0 or 4 centred, 8 left, 12 right). */
 static void plot(icon_img *img, qrect r, int16_t align, int16_t transform)
 {
     int rw = r.right - r.left, rh = r.bottom - r.top;
-    /* Icons scale to the rectangle only when it is not a standard size. */
-    int dw = rw == 32 || rw == 16 || rw == 12 ? img->w : rw;
-    int dh = rh == 32 || rh == 16 || rh == 12 ? img->h : rh;
-    if (dw > rw)
-        dw = rw;
-    if (dh > rh)
-        dh = rh;
+    int dw = img->w, dh = img->h;
+    bool standard = (rw == 32 || rw == 16 || rw == 12) && (rh == 32 || rh == 16 || rh == 12);
+    if (!standard || dw > rw || dh > rh) {
+        if (rw * img->h < rh * img->w) { /* width limits */
+            dw = rw;
+            dh = img->h * rw / img->w;
+        } else {
+            dh = rh;
+            dw = img->w * rh / img->h;
+        }
+    }
     int left = r.left + (rw - dw) / 2, top = r.top + (rh - dh) / 2;
-    if (align & 0x08) /* atLeft */
-        left = r.left;
-    if (align & 0x04) /* atRight */
-        left = r.right - dw;
-    if (align & 0x02) /* atTop */
-        top = r.top;
-    if (align & 0x01) /* atBottom */
-        top = r.bottom - dh;
+    switch (align & 3) {
+    case 2: top = r.top; break;
+    case 3: top = r.bottom - dh; break;
+    }
+    switch (align & 12) {
+    case 8: left = r.left; break;
+    case 12: left = r.right - dw; break;
+    }
     int t = transform & 0xFF;
     bool sel = transform & ttSelected;
     for (int i = 0; i < img->w * img->h; i++) {

@@ -259,6 +259,219 @@ DIALOGS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Finder icon families (ICN#/ics# with icl4/icl8/ics4/ics8), our own designs.
+# Drawn on a small canvas; letters are colours:
+#   k black, w white, l light grey, m mid grey, d dark grey,
+#   b folder blue (light), B folder blue (dark)
+
+COLOURS = {  # letter: (8-bit standard clut index, 4-bit index, 1-bit)
+    "k": (255, 15, 1), "w": (0, 0, 0), "l": (246, 12, 0), "m": (248, 13, 0), "d": (251, 14, 1),
+    "b": (42, 12, 0), "B": (84, 6, 0),
+}
+
+
+class Canvas:
+    def __init__(self, n):
+        self.n = n
+        self.px = [["." for _ in range(n)] for _ in range(n)]
+
+    def set(self, x, y, c):
+        if 0 <= x < self.n and 0 <= y < self.n:
+            self.px[y][x] = c
+
+    def fill(self, l, t, r, b, c):
+        for y in range(t, b):
+            for x in range(l, r):
+                self.set(x, y, c)
+
+    def frame(self, l, t, r, b, c="k", inside=None):
+        if inside:
+            self.fill(l, t, r, b, inside)
+        for x in range(l, r):
+            self.set(x, t, c)
+            self.set(x, b - 1, c)
+        for y in range(t, b):
+            self.set(l, y, c)
+            self.set(r - 1, y, c)
+
+    def hline(self, l, r, y, c="k"):
+        for x in range(l, r):
+            self.set(x, y, c)
+
+    def vline(self, x, t, b, c="k"):
+        for y in range(t, b):
+            self.set(x, y, c)
+
+    def rows(self):
+        return ["".join(r) for r in self.px]
+
+
+def document(n):
+    c = Canvas(n)
+    if n == 32:
+        l, t, r, b, fold = 6, 1, 26, 31, 7
+    else:
+        l, t, r, b, fold = 3, 0, 13, 16, 4
+    c.frame(l, t, r, b, "k", "w")
+    for i in range(fold):  # dog-ear
+        c.hline(r - fold + i, r, t + i, ".")
+        c.set(r - fold + i, t + i, "k")
+    c.vline(r - fold, t, t + fold, "k")
+    c.hline(r - fold, r, t + fold - 1 + 1, "k")
+    c.fill(r - fold + 1, t + 1, r - fold + 2, t + fold, "l")
+    return c
+
+
+def folder(n, fill="b", tab="B", open_=False):
+    c = Canvas(n)
+    if n == 32:
+        c.frame(1, 6, 13, 10, "k", tab)        # tab
+        c.frame(1, 9, 31, 28, "k", fill)       # body
+        c.hline(2, 30, 10, "w")
+        if open_:
+            c.fill(2, 11, 30, 27, "m")
+    else:
+        c.frame(0, 2, 7, 5, "k", tab)
+        c.frame(0, 4, 16, 14, "k", fill)
+        c.hline(1, 15, 5, "w")
+        if open_:
+            c.fill(1, 6, 15, 13, "m")
+    return c
+
+
+def floppy(n):
+    c = Canvas(n)
+    if n == 32:
+        c.frame(3, 3, 29, 29, "k", "d")
+        c.frame(9, 3, 23, 12, "k", "l")      # shutter
+        c.fill(17, 5, 20, 10, "k")
+        c.frame(7, 17, 25, 29, "k", "w")     # label
+        for y in (20, 23, 26):
+            c.hline(9, 23, y, "m")
+    else:
+        c.frame(1, 1, 15, 15, "k", "d")
+        c.frame(4, 1, 12, 6, "k", "l")
+        c.fill(9, 2, 11, 5, "k")
+        c.frame(3, 9, 13, 15, "k", "w")
+    return c
+
+
+def application(n):
+    c = Canvas(n)
+    h = n // 2
+    r = h - (2 if n == 32 else 1)
+    for y in range(n):
+        span = r - abs(y - h + 0.5) + 0.5
+        if span <= 0:
+            continue
+        span = int(span)
+        for x in range(h - span, h + span):
+            c.set(x, y, "l")
+        c.set(h - span, y, "k")
+        c.set(h + span - 1, y, "k")
+    for x in range(n):  # top and bottom points
+        pass
+    # a hand-written "A" mark in the middle
+    if n == 32:
+        c.fill(13, 12, 19, 20, "B")
+        c.frame(13, 12, 19, 20, "k")
+    else:
+        c.fill(6, 6, 10, 10, "B")
+    return c
+
+
+def hard_disk(n):
+    c = Canvas(n)
+    if n == 32:
+        c.frame(1, 10, 31, 23, "k", "l")
+        c.hline(2, 30, 11, "w")
+        c.hline(2, 30, 21, "m")
+        c.fill(4, 17, 6, 19, "B")            # light
+        c.hline(20, 28, 18, "d")             # slot
+    else:
+        c.frame(0, 5, 16, 12, "k", "l")
+        c.set(2, 9, "B")
+        c.hline(9, 14, 9, "d")
+    return c
+
+
+def trash(n, full=False):
+    c = Canvas(n)
+    if n == 32:
+        c.frame(9, 2, 23, 5, "k", "l")       # handle
+        c.frame(4, 5, 28, 9, "k", "l")       # lid
+        c.frame(6, 9, 26, 31, "k", "l")      # can
+        for x in (10, 14, 18, 22):
+            c.vline(x, 11, 29, "d")
+        if full:
+            c.frame(3, 3, 12, 8, "k", "w")
+            c.frame(20, 1, 30, 6, "k", "w")
+    else:
+        c.frame(5, 0, 11, 2, "k", "l")
+        c.frame(2, 2, 14, 4, "k", "l")
+        c.frame(3, 4, 13, 16, "k", "l")
+        for x in (5, 8, 11):
+            c.vline(x, 6, 14, "d")
+        if full:
+            c.frame(1, 0, 6, 3, "k", "w")
+    return c
+
+
+def desktop(n):
+    c = Canvas(n)
+    if n == 32:
+        c.frame(4, 3, 28, 24, "k", "l")      # monitor
+        c.frame(7, 6, 25, 19, "k", "b")      # screen
+        c.fill(8, 7, 24, 9, "w")             # menu bar
+        c.frame(10, 24, 22, 29, "k", "m")    # stand
+    else:
+        c.frame(2, 1, 14, 12, "k", "l")
+        c.frame(4, 3, 12, 9, "k", "b")
+        c.frame(5, 12, 11, 15, "k", "m")
+    return c
+
+
+def system_folder(n):
+    c = folder(n)
+    if n == 32:
+        c.frame(12, 13, 20, 25, "k", "l")    # a small Mac
+        c.frame(13, 14, 19, 20, "k", "w")
+    else:
+        c.frame(6, 6, 10, 12, "k", "l")
+    return c
+
+
+ICON_FAMILIES = {
+    -4000: document, -3999: folder, -3998: floppy, -3997: lambda n: folder(n, open_=True),
+    -3996: application, -3995: hard_disk, -3993: trash, -3992: desktop,
+    -3984: lambda n: trash(n, True), -3983: system_folder,
+}
+# The special folders (Apple Menu Items, Startup Items, Control Panels,
+# Preferences, Extensions, Fonts …) look like plain folders here.
+for fid in (-3982, -3981, -3980, -3979, -3978, -3977, -3976, -3975, -3974, -3973, -3968, -3965, -3960):
+    ICON_FAMILIES[fid] = folder
+
+
+def icon_family(draw):
+    out = {}
+    for n, mono, c4, c8 in ((32, "ICN#", "icl4", "icl8"), (16, "ics#", "ics4", "ics8")):
+        rows = draw(n).rows()
+        mono_rows = ["".join("#" if COLOURS.get(ch, (0, 0, 0))[2] else "." for ch in r) for r in rows]
+        mask_rows = ["".join("." if ch == "." else "#" for ch in r) for r in rows]
+        out[mono] = bits(mono_rows, n, "#") + bits(mask_rows, n, "#")
+        b8 = bytearray()
+        b4 = bytearray()
+        for r in rows:
+            v = [COLOURS[ch][1] if ch != "." else 0 for ch in r]
+            b8 += bytes(COLOURS[ch][0] if ch != "." else 0 for ch in r)
+            for i in range(0, n, 2):
+                b4.append(v[i] << 4 | v[i + 1])
+        out[c4] = bytes(b4)
+        out[c8] = bytes(b8)
+    return out
+
+
 def be16(v):
     return (v & 0xFFFF).to_bytes(2, "big")
 
@@ -331,6 +544,11 @@ def main():
         assert len(rows) == 32, label
         parts.append(f"/* ICON {rid}: {label} */\n" + c_array(f"icon_{rid}", icon(rows)))
         table.append(("ICON", rid, f"icon_{rid}"))
+    for rid, draw in ICON_FAMILIES.items():
+        for typ, data in icon_family(draw).items():
+            sym = f"{typ.replace('#', 'H')}_m{-rid}"
+            parts.append(c_array(sym, data))
+            table.append((typ, rid, sym))
     for rid, (rect, items) in DIALOGS.items():
         n = -rid
         parts.append(f"/* DLOG/DITL {rid}: Standard File */\n" + c_array(f"dlog_m{n}", dlog(rect, rid)))

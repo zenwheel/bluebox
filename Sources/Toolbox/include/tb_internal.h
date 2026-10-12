@@ -115,6 +115,8 @@ void raw_Elems68K(cpu68k *c, uint16_t tw);
 void sane_reset(void);
 /* Time Manager and VBL tasks due now (interrupt time). */
 void time_pump(void);
+/* Mouse button and location into low memory (events.c). */
+void events_sync_lowmem(void);
 /* Bring Ticks up to host time. */
 void machine_advance_ticks(void);
 /* The machine's clock (ns): wall clock with a host, instructions without. */

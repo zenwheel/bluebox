@@ -176,12 +176,12 @@ func runScript(_ script: [String], budget: inout UInt64) -> run_status {
             let xy = step[step.index(after: colon)...].split(separator: "/").compactMap { Int32($0) }
             guard xy.count == 2 else { fail("mouse steps take x/y: \(step)") }
             let kind = String(step[..<colon])
+            // A click is pressed and released before the application runs on:
+            // the Toolbox's tracking loops wait for the release.
             let presses: [Int32] = kind == "click" ? [1, 0] : kind == "down" ? [1] : kind == "up" ? [0] : [-1]
-            for b in presses {
-                machine_post_mouse(xy[0], xy[1], b)
-                status = machine_run(min(200_000, budget))
-                budget -= min(200_000, budget)
-            }
+            for b in presses { machine_post_mouse(xy[0], xy[1], b) }
+            status = machine_run(min(200_000, budget))
+            budget -= min(200_000, budget)
             continue
         }
         var mods: UInt32 = 0
