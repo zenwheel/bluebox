@@ -217,7 +217,7 @@ classic/
 │  ├─ HostAPI/          C header: struct host_ops
 │  ├─ HostMac/          Swift: AppKit, CoreText, CoreAudio, SpeechSynthesis, AVFoundation
 │  ├─ HostGTK/          GTK4/GDK, FreeType, PipeWire, speech-dispatcher, cairo
-│  │                    (Swift or plain C: decide before M2)
+│  │                    (Swift or plain C: decide before M12)
 │  └─ classic/          Swift CLI: run, import, rsrc (later install, heal, profile, inspect)
 ├─ Generators/gen.py    Multiversal YAML -> struct accessors, low-memory constants, trap tables,
 │                       calling-convention glue (output committed; needs Python + PyYAML only
@@ -376,16 +376,10 @@ the trap census.
   - HFS+ volumes read natively (imports mount them through the host on macOS today; Linux needs our own reader)
   - the remaining Standard File hooks (old SFPGetFile/SFPPutFile hooks, null-event and filter procs)
 
-### M2: Linux parity and the import pipeline
+### M2: The import pipeline
 
-**Goal:** everything from M1 works on Linux, and classic software can be brought in from archives and disk images.
+**Goal:** classic software can be brought in from archives and disk images.
 
-- **Linux host (HostGTK):**
-  - GTK4 rootless windows with per-window Mac coordinates
-  - moves and resizes through `gdk_toplevel_begin_move`/`gdk_toplevel_begin_resize`
-  - menu bar in each window, `xdg_popup` menus
-  - pasteboard, native file dialogs
-- **Linux launching:** `classic install` on Linux produces a `.desktop` file, a PNG icon and shared-mime-info XML.
 - **HFS images:** read-only reader for HFS images (DiskCopy 4.2, raw, NDIF/UDIF with ADC, hybrid ISO), which can also be mounted as volumes.
 - **`classic import <file|url>`:**
   - archives (`.sit`, `.sea`, `.hqx`, `.bin`, `.cpt`) unpacked with `unar`, keeping forks
@@ -393,11 +387,10 @@ the trap census.
   - everything written to AppleDouble and catalogued, with applications detected (`APPL`, 68k vs PPC)
   - works on files and URLs the user supplies; no crawler
 - **`classic heal`:** converts xattr-only resource forks to AppleDouble.
-- **CI:** Linux CI, headless probe runs on both platforms.
 
-**Exit:** a TeachText `.sit` archive downloaded from Macintosh Garden imports, installs and runs on macOS, and on Linux under both Wayland and X11. HFS floppy images mount read-only.
+**Exit:** a TeachText `.sit` archive downloaded from Macintosh Garden imports, installs and runs on macOS. HFS floppy images mount read-only.
 
-**Status (2026-10-12):** the import pipeline was pulled forward and works. `classic import` and `classic run` take MacBinary, StuffIt (1.x, 5, `.sea`), Compact Pro and BinHex files (archives through `unar`). They also take DiskCopy 4.2, Disk Copy 6 NDIF (raw and ADC), raw HFS and partitioned CD images, recursing through nesting (e.g. MacBinary → StuffIt → disk image). Still to do: HFS+, MFS, UDIF `.dmg`, `.moof` flux images, Linux host parity.
+**Status (2026-10-12):** the import pipeline was pulled forward and works. `classic import` and `classic run` take MacBinary, StuffIt (1.x, 5, `.sea`), Compact Pro and BinHex files (archives through `unar`). They also take DiskCopy 4.2, Disk Copy 6 NDIF (raw and ADC), raw HFS and partitioned CD images, recursing through nesting (e.g. MacBinary → StuffIt → disk image). Still to do: HFS+, MFS, UDIF `.dmg`, `.moof` flux images. (Linux parity moved to M12, after everything else.)
 
 ### M3: MacinTalk, SimpleText (68k) and printing
 
@@ -563,6 +556,23 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 ---
 
+### M12: Linux parity
+
+**Goal:** everything that works on macOS works on Linux. (Moved here from M2: the macOS host comes first.)
+
+- **Linux host (HostGTK):**
+  - GTK4 rootless windows with per-window Mac coordinates
+  - moves and resizes through `gdk_toplevel_begin_move`/`gdk_toplevel_begin_resize`
+  - menu bar in each window, `xdg_popup` menus
+  - pasteboard, native file dialogs
+- **Linux launching:** `classic install` on Linux produces a `.desktop` file, a PNG icon and shared-mime-info XML.
+- **Our own HFS+ reader** (macOS imports mount HFS+ through the host).
+- **CI:** Linux CI, headless probe runs on both platforms.
+
+**Exit:** the applications that run on macOS run on Linux under both Wayland and X11, installed as desktop applications.
+
+**Status (2026-10-12):** the core, the headless runner and the census build and run on Linux; there is no windowed host yet.
+
 ## 6. Risks
 
 | Risk | Mitigation |
@@ -571,7 +581,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 | Apple deprecates or removes Carbon `SpeechSynthesis` | `avspeech` backend with automatic fallback; the `record` backend keeps the API behaviour tested |
 | Linux speech quality and phoneme fidelity | Use speech-dispatcher's pluggable synthesizers; document which features are approximated; neural voices through Piper |
 | Rootless limitations on Wayland | Per-window coordinates, interactive move and resize, per-window menus; screen mode as the universal fallback |
-| Swift on Linux and GTK interop | A thin hand-written C wrapper, no third-party bindings; CI on Linux from M2 |
+| Swift on Linux and GTK interop | A thin hand-written C wrapper, no third-party bindings; CI on Linux from M12 |
 | Interpreter speed | Pre-decoded caches in M7, JIT and translation cache in M10 |
 | Legal | Clean-room implementation, MIT licence, no Apple ROM/System/fonts shipped, the oracle kept separate and dependent on user-supplied files, imports only from user-provided files and URLs |
 | Classic codecs and AppleTalk interoperability | Our own decoders for the classic QuickTime codecs; AppleTalk link layer tested against another emulator and a router before M5 exits |
