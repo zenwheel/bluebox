@@ -47,6 +47,7 @@ void gestalt_init(void)
     gestalt_set(fourcc("romv"), 0x077D);
     gestalt_set(fourcc("kbd "), 4);           /* Apple Extended Keyboard */
     gestalt_set(fourcc("os  "), 0x2);         /* Process Manager present (launch control) */
+    gestalt_set(fourcc("evnt"), 0x1);         /* Apple Event Manager present */
 }
 
 int16_t tb_Gestalt(int32_t selector, uint32_t *responsep)

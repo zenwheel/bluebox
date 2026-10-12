@@ -303,7 +303,7 @@ the trap census.
 
 **Exit:** TeachText is installed as a macOS app. Double-clicking a `.txt` file opens it in rootless windows; editing, copy/paste with host apps, Save As and quitting with the unsaved-changes prompt all work. All probes for the managers in this milestone match the oracle.
 
-**Status (2026-10-12):** TeachText opens a window. It runs in a live macOS window (`classic run`) or headless with screenshots (`--screenshot`, `--keys` for scripted input).
+**Status (2026-10-12):** TeachText runs rootless on macOS: each classic window is a borderless macOS window showing its slice of the hidden framebuffer through the window's shape mask, ordered as on the Mac, and the classic menu bar is the native `NSMenu` (host choices go through `MenuSelect`, after the app adjusts its menus). `--screen-window` shows the whole classic screen in one window instead; headless runs take screenshots (`--screenshot`) and scripted input (`--keys`).
 - Done:
   - QuickDraw: regions, 1-bit drawing, text, `CopyBits`, `ScrollRect`
   - Font Manager, with bitmap fonts in the built System file
@@ -312,13 +312,17 @@ the trap census.
   - File Manager over host folders (AppleDouble, both forks, working directories, FSSpec calls)
   - Toolbox Utilities; placeholder Help and Printing Managers
   - screen-in-a-window host on AppKit
+  - `classic install`: a macOS `.app` per classic app (Finder icon from `BNDL`/`FREF`/`icl8`, document types from its `FREF`s, an sh launcher); Finder and Dock opens become Open Documents events
+  - high-level events: apps whose `SIZE` says so get `odoc`/`oapp` through `AcceptHighLevelEvent` in the System 7 wire format (TeachText parses it itself); Alias Manager
+  - alerts as native `NSAlert`s (`ALRT`/`DITL`, `ParamText`, stages)
+  - MacRoman 0x80–0xFF in the bitmap fonts: accented letters, dashes, quotes, ellipsis and ligatures composed from each face's own glyphs
 - Next:
-  - Dialog Manager and alerts (TeachText's Open, Save and About)
+  - glyphs still missing from the bitmap fonts (° © ® ™ § ¶ ß ± and other symbols): draw them, or fall back per glyph to a host font
+  - host names longer than 31 characters: a stable shortened Mac name (they are truncated today, so such files cannot be opened by name)
+  - Dialog Manager: modal dialogs (TeachText's Save and About)
   - Standard File with native panels
-  - Apple Events (`oapp`/`odoc`/`quit`)
+  - `quit` from the host's Quit command
   - host clipboard sync
-  - rootless windows and `NSMenu`
-  - `classic install` app bundles
 
 ### M2: Linux parity and the import pipeline
 

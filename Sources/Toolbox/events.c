@@ -52,6 +52,16 @@ static void enqueue(int16_t what, uint32_t message)
 
 void machine_attach_host(bool attached) { host_attached = attached; }
 
+/* Wake an app sleeping in WaitNextEvent (e.g. an Apple Event arrived). */
+void ev_wake(void)
+{
+    pthread_mutex_lock(&lock);
+    pthread_cond_broadcast(&arrived);
+    pthread_mutex_unlock(&lock);
+}
+
+bool aem_next_event(uint32_t *cls, uint32_t *id, bool remove);
+
 void machine_post_mouse(int x, int y, int button)
 {
     pthread_mutex_lock(&lock);
@@ -100,6 +110,25 @@ uint32_t ev_mouse_global(void)
 }
 
 void machine_advance_ticks(void);
+void display_sync(void);
+
+/* A click in the menu bar, for a choice made in the host's menus. */
+void ev_post_menubar_click(void)
+{
+    pthread_mutex_lock(&lock);
+    int16_t h = mouse_h, v = mouse_v;
+    bool down = button_down;
+    mouse_h = 1;
+    mouse_v = 1;
+    button_down = true;
+    enqueue(mouseDown, 0);
+    button_down = false;
+    enqueue(mouseUp, 0);
+    mouse_h = h;
+    mouse_v = v;
+    button_down = down;
+    pthread_mutex_unlock(&lock);
+}
 
 /* Let time pass while native code waits on the user. */
 void ev_wait_tick(void)
@@ -177,6 +206,14 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
         }
     }
     pthread_mutex_unlock(&lock);
+    /* High-level events (Apple Events): message = class, where = ID. */
+    uint32_t cls, aeid;
+    if (!found && !os_only && (mask & 0x0400) && aem_next_event(&cls, &aeid, remove)) {
+        e.what = 23;
+        e.message = cls;
+        e.where = aeid;
+        found = true;
+    }
     if (!found && !os_only && (mask & (1 << updateEvt))) {
         if (tb_CheckUpdate(evt)) {
             EventRecord_set_when(evt, (int32_t)rd32(LM_Ticks));
@@ -192,6 +229,7 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
     machine_advance_ticks();
+    display_sync();
     if (next_event(em, evt, true, false))
         return 1;
     /* Apps that poll GetNextEvent would spin the host CPU; a null event
@@ -203,17 +241,24 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
     return 0;
 }
 
-int8_t tb_EventAvail(int16_t em, gaddr evt) { return next_event(em, evt, false, false); }
+int8_t tb_EventAvail(int16_t em, gaddr evt)
+{
+    display_sync();
+    return next_event(em, evt, false, false);
+}
 
 int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
 {
     machine_advance_ticks();
+    display_sync();
     if (next_event(mask, evp, true, false))
         return 1;
     if (host_attached && sleep > 0) {
         /* Sleep until input arrives or the time is up. */
+        uint32_t c0, i0;
+        bool hle = (mask & 0x0400) && aem_next_event(&c0, &i0, false);
         pthread_mutex_lock(&lock);
-        if (qhead == qtail) {
+        if (qhead == qtail && !hle) {
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
             long long ns = (long long)(sleep > 600 ? 600 : sleep) * 1000000000LL / 60;
@@ -314,7 +359,6 @@ int32_t tb_GetCaretTime(void) { return (int32_t)rd32(LM_CaretTime); }
 void tb_SystemTask(void) { machine_advance_ticks(); }
 void tb_SystemClick(gaddr evp, gaddr wp) {}
 int8_t tb_SystemEvent(gaddr evp) { return 0; }
-void tb_SystemMenu(int32_t menu) {}
 
 void events_reset(void)
 {

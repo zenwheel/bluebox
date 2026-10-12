@@ -723,7 +723,6 @@ void tb_CloseResFile(int16_t rn)
     set_res_err(noErr);
 }
 
-bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize);
 
 static int16_t open_path(const char *path)
 {

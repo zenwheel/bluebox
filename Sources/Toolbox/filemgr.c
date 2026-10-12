@@ -60,6 +60,7 @@ typedef struct {
     bool rsrc;
     bool write;
     bool dirty;
+    bool host_text; /* a plain host text file: LF/UTF-8 on disk, CR/MacRoman inside */
     char path[PATH_MAX];
     uint8_t *buf;
     uint32_t len, cap, pos;
@@ -120,7 +121,7 @@ static bool host_of_dir(int32_t id, char *out, size_t outsize)
     if (dirs[id][0])
         snprintf(out, outsize, "%s/%s", root_path, dirs[id]);
     else
-        snprintf(out, outsize, "%s", root_path);
+        snprintf(out, outsize, "%s", root_path[0] ? root_path : "/");
     return true;
 }
 
@@ -132,6 +133,9 @@ static const char *rel_of(const char *host)
         return host[n] == '/' ? host + n + 1 : host + n;
     return host;
 }
+
+static void put_name(gaddr namep, const char *host);
+static void put_name_fwd(gaddr namep, const char *host) { put_name(namep, host); }
 
 static int32_t parent_id_of(const char *host)
 {
@@ -183,7 +187,7 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
     if (has_colon && name[0] != ':') {
         while (i < n && name[i] != ':')
             i++;
-        snprintf(path, sizeof path, "%s", root_path);
+        snprintf(path, sizeof path, "%s", root_path[0] ? root_path : "");
         i++;
     } else if (name[0] == ':') {
         i = 1;
@@ -195,12 +199,16 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
         int len = i - start;
         if (len == 0) { /* "::" goes up */
             char *slash = strrchr(path, '/');
-            if (slash && strlen(path) > strlen(root_path))
+            if (slash && slash != path)
                 *slash = 0;
+            else if (slash)
+                slash[1] = 0;
         } else {
             char comp[256];
             mac_to_host(name + start, len, comp, sizeof comp);
             size_t pl = strlen(path);
+            if (pl && path[pl - 1] == '/')
+                pl--;
             snprintf(path + pl, sizeof path - pl, "/%s", comp);
         }
         if (i < n)
@@ -291,35 +299,120 @@ static void put_name(gaddr namep, const char *host)
 /* ---------------------------------------------------------------------- */
 /* Setup */
 
-void fm_init(const char *root)
+void fm_init(const char *app_dir)
 {
-    if (!realpath(root, root_path))
-        snprintf(root_path, sizeof root_path, "%s", root);
+    /* The volume is the whole host disk; the app's folder is the default
+     * directory, so documents anywhere can be opened. */
+    snprintf(root_path, sizeof root_path, "%s", "");
     for (int i = 0; i < ndirs; i++) {
         free(dirs[i]);
         dirs[i] = NULL;
     }
-    ndirs = ROOT_ID;
     dirs[ROOT_ID] = strdup("");
     ndirs = ROOT_ID + 1;
     memset(wds, 0, sizeof wds);
     for (int i = 0; i < MAX_FCBS; i++)
         free(fcbs[i].buf);
     memset(fcbs, 0, sizeof fcbs);
+    char app[PATH_MAX];
+    if (!realpath(app_dir, app))
+        snprintf(app, sizeof app, "%s", app_dir);
     default_vref = VREF;
-    default_dir = ROOT_ID;
-    const char *base = strrchr(root_path, '/');
-    base = base && base[1] ? base + 1 : "Classic";
-    vol_name[0] = (char)host_to_mac(base, (uint8_t *)vol_name + 1);
+    default_dir = dir_id_for(rel_of(app));
+    static const char name[] = "Macintosh HD";
+    vol_name[0] = (char)(sizeof name - 1);
+    memcpy(vol_name + 1, name, sizeof name - 1);
     wr16(LM_DefVRefNum, (uint16_t)VREF);
     wr16(LM_SFSaveDisk, (uint16_t)(-VREF));
-    wr32(LM_CurDirStore, ROOT_ID);
+    wr32(LM_CurDirStore, (uint32_t)default_dir);
+}
+
+/* An FSSpec for a host path (the file need not exist). */
+void fm_spec_for_path(const char *path, gaddr spec)
+{
+    char full[PATH_MAX];
+    if (!realpath(path, full))
+        snprintf(full, sizeof full, "%s", path);
+    char parent[PATH_MAX];
+    snprintf(parent, sizeof parent, "%s", full);
+    char *slash = strrchr(parent, '/');
+    if (slash)
+        *slash = 0;
+    wr16(spec + FSSpec_vRefNum_off, (uint16_t)VREF);
+    wr32(spec + FSSpec_parID_off, (uint32_t)dir_id_for(rel_of(parent)));
+    put_name_fwd(spec + FSSpec_name_off, full);
 }
 
 /* Host path for an (vRefNum, dirID, name) triple; used by the Resource Manager. */
 bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize)
 {
     return resolve(vref, dirid, name, hfs, out, outsize) == noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Plain host files */
+
+/* Classic type and creator for a host file that has no sidecar, from its
+ * extension.  Returns true for text, which is converted on the way in and out. */
+static bool host_file_type(const char *path, uint8_t finfo[16])
+{
+    char *side = appledouble_sidecar_path(path);
+    bool has_side = side && exists(side);
+    free(side);
+    if (has_side)
+        return false;
+    const char *dot = strrchr(path, '.');
+    const char *slash = strrchr(path, '/');
+    if (!dot || (slash && dot < slash))
+        return false;
+    static const struct {
+        const char *ext;
+        const char *type, *creator;
+        bool text;
+    } map[] = {
+        { "txt", "TEXT", "ttxt", true }, { "text", "TEXT", "ttxt", true }, { "md", "TEXT", "ttxt", true },
+        { "c", "TEXT", "ttxt", true },   { "h", "TEXT", "ttxt", true },    { "s", "TEXT", "ttxt", true },
+        { "html", "TEXT", "ttxt", true }, { "csv", "TEXT", "ttxt", true }, { "log", "TEXT", "ttxt", true },
+        { "pict", "PICT", "ttxt", false }, { "pct", "PICT", "ttxt", false },
+    };
+    for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) {
+        if (strcasecmp(dot + 1, map[i].ext))
+            continue;
+        memset(finfo, 0, 16);
+        memcpy(finfo, map[i].type, 4);
+        memcpy(finfo + 4, map[i].creator, 4);
+        return map[i].text;
+    }
+    return false;
+}
+
+/* Host text (UTF-8, LF or CRLF) to classic text (MacRoman, CR). */
+static uint8_t *text_in(const uint8_t *b, size_t n, size_t *out_n)
+{
+    char *z = malloc(n + 1);
+    size_t k = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (b[i] == '\r' && i + 1 < n && b[i + 1] == '\n')
+            continue;
+        z[k++] = b[i] == '\n' ? '\r' : (char)b[i];
+    }
+    z[k] = 0;
+    uint8_t *out = malloc(k + 1);
+    *out_n = utf8_to_macroman(z, out, k);
+    free(z);
+    return out;
+}
+
+/* Classic text back to host text. */
+static uint8_t *text_out(const uint8_t *b, size_t n, size_t *out_n)
+{
+    char *out = malloc(n * 3 + 1);
+    size_t k = macroman_to_utf8(b, n, out, n * 3 + 1);
+    for (size_t i = 0; i < k; i++)
+        if (out[i] == '\r')
+            out[i] = '\n';
+    *out_n = k;
+    return (uint8_t *)out;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -333,10 +426,18 @@ static int16_t load_fork(fcb *f)
         return fnfErrF;
     uint8_t *src = f->rsrc ? mf.rsrc : mf.data;
     size_t n = f->rsrc ? mf.rsrc_len : mf.data_len;
+    uint8_t finfo[16] = { 0 };
+    uint8_t *conv = NULL;
+    f->host_text = !f->rsrc && host_file_type(f->path, finfo);
+    if (f->host_text) {
+        conv = text_in(src, n, &n);
+        src = conv;
+    }
     f->cap = (uint32_t)n + 1024;
     f->buf = malloc(f->cap);
     memcpy(f->buf, src, n);
     f->len = (uint32_t)n;
+    free(conv);
     mac_file_free(&mf);
     return noErr;
 }
@@ -354,6 +455,18 @@ static int16_t save_fork(fcb *f)
         mf.rsrc = malloc(f->len ? f->len : 1);
         memcpy(mf.rsrc, f->buf, f->len);
         mf.rsrc_len = f->len;
+    } else if (f->host_text) {
+        /* Plain host text stays plain: no sidecar, host line endings. */
+        size_t n;
+        uint8_t *out = text_out(f->buf, f->len, &n);
+        mac_file_free(&mf);
+        FILE *fp = fopen(f->path, "wb");
+        bool ok = fp && fwrite(out, 1, n, fp) == n;
+        if (fp)
+            ok = (fclose(fp) == 0) && ok;
+        free(out);
+        f->dirty = false;
+        return ok ? noErr : ioErrF;
     } else {
         free(mf.data);
         mf.data = malloc(f->len ? f->len : 1);
@@ -718,12 +831,24 @@ static void fill_file_info(gaddr pb, const char *path, bool cat)
     uint8_t attrib = is_open(path) ? 0x80 : 0;
     wr8(pb + FileParam_ioFlAttrib_off, attrib);
     gmemset(pb + FileParam_ioFlFndrInfo_off, 0, 16);
+    uint32_t dl = ok ? (uint32_t)mf.data_len : 0, rl = ok ? (uint32_t)mf.rsrc_len : 0;
     if (ok) {
-        gput(pb + FileParam_ioFlFndrInfo_off, mf.finder_info, 16);
+        uint8_t finfo[16] = { 0 };
+        bool host_text = host_file_type(path, finfo);
+        if (host_text || finfo[0]) {
+            /* Plain host file: type from the extension; text length as seen inside. */
+            gput(pb + FileParam_ioFlFndrInfo_off, finfo, 16);
+            if (host_text) {
+                size_t n;
+                free(text_in(mf.data, mf.data_len, &n));
+                dl = (uint32_t)n;
+            }
+        } else {
+            gput(pb + FileParam_ioFlFndrInfo_off, mf.finder_info, 16);
+        }
         if (cat)
             gput(pb + HFileInfo_ioFlXFndrInfo_off, mf.finder_info + 16, 16);
     }
-    uint32_t dl = ok ? (uint32_t)mf.data_len : 0, rl = ok ? (uint32_t)mf.rsrc_len : 0;
     wr32(pb + FileParam_ioFlNum_off, (uint32_t)dir_id_for(rel_of(path)) + 0x10000); /* file IDs */
     wr16(pb + FileParam_ioFlStBlk_off, 0);
     wr32(pb + FileParam_ioFlLgLen_off, dl);
@@ -815,7 +940,7 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     wr32(pb + VolumeParam_ioVCrDate_off, mac_now());
     wr32(pb + HVolumeParam_ioVLsMod_off, mac_now());
     wr16(pb + VolumeParam_ioVAtrb_off, 0);
-    wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries(root_path));
+    wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries("/"));
     wr16(pb + HVolumeParam_ioVBitMap_off, 0);
     wr16(pb + HVolumeParam_ioVAllocPtr_off, 0);
     /* 65535 blocks of 32K: about 2 GB, the largest an HFS volume reports. */
@@ -1076,7 +1201,7 @@ int16_t tb_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id, gaddr file_name, gaddr 
     char parent[PATH_MAX];
     snprintf(parent, sizeof parent, "%s", path);
     char *slash = strrchr(parent, '/');
-    bool at_root = !strcmp(path, root_path);
+    bool at_root = !strcmp(path, "/");
     if (slash && !at_root)
         *slash = 0;
     wr16(spec + FSSpec_vRefNum_off, (uint16_t)VREF);
@@ -1172,4 +1297,110 @@ int16_t tb_FSpDirCreate(gaddr spec, int16_t script, gaddr created_dir_id)
     if (!err && created_dir_id)
         wr32(created_dir_id, rd32(pb + HFileParam_ioDirID_off));
     return err;
+}
+
+/* Old-style (vRefNum, name) for a host file: a working directory for its folder. */
+int16_t fm_wd_for_path(const char *path, gaddr name_out)
+{
+    char full[PATH_MAX], parent[PATH_MAX];
+    if (!realpath(path, full))
+        snprintf(full, sizeof full, "%s", path);
+    snprintf(parent, sizeof parent, "%s", full);
+    char *slash = strrchr(parent, '/');
+    if (slash)
+        *slash = 0;
+    int32_t id = dir_id_for(rel_of(parent));
+    put_name(name_out, full);
+    for (int i = 0; i < MAX_WDS; i++)
+        if (wds[i].used && wds[i].dirid == id)
+            return (int16_t)(-32000 - i);
+    for (int i = 0; i < MAX_WDS; i++)
+        if (!wds[i].used) {
+            wds[i].used = true;
+            wds[i].dirid = id;
+            return (int16_t)(-32000 - i);
+        }
+    return VREF;
+}
+
+/* Classic file type of a host file (from its sidecar or extension). */
+uint32_t fm_type_of_path(const char *path)
+{
+    uint8_t finfo[16] = { 0 };
+    if (host_file_type(path, finfo) || finfo[0])
+        return ((uint32_t)finfo[0] << 24) | ((uint32_t)finfo[1] << 16) | ((uint32_t)finfo[2] << 8) | finfo[3];
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return 0;
+    uint32_t t = mac_file_type(&mf);
+    mac_file_free(&mf);
+    return t;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Full pathnames, for the Alias Manager */
+
+/* The Mac full path ("Macintosh HD:Users:me:file", MacRoman) of a host path.
+ * Returns its length, or 0 if it does not fit. */
+size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize)
+{
+    char full[PATH_MAX];
+    if (!realpath(host, full))
+        snprintf(full, sizeof full, "%s", host);
+    size_t n = strlen(vol_name);
+    if (n >= outsize)
+        return 0;
+    memcpy(out, vol_name, n);
+    const char *p = rel_of(full);
+    while (*p) {
+        const char *slash = strchr(p, '/');
+        size_t len = slash ? (size_t)(slash - p) : strlen(p);
+        char comp[NAME_MAX + 1];
+        snprintf(comp, sizeof comp, "%.*s", (int)len, p);
+        uint8_t mac[32];
+        int ml = host_to_mac(comp, mac);
+        if (n + 1 + (size_t)ml > outsize)
+            return 0;
+        out[n++] = ':';
+        memcpy(out + n, mac, (size_t)ml);
+        n += (size_t)ml;
+        p += len;
+        if (*p == '/')
+            p++;
+    }
+    if (n == strlen(vol_name)) { /* the volume itself */
+        if (n + 1 > outsize)
+            return 0;
+        out[n++] = ':';
+    }
+    return n;
+}
+
+/* The host path of a Mac full path; the volume name is not checked. */
+bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize)
+{
+    size_t i = 0;
+    while (i < n && mac[i] != ':')
+        i++;
+    if (i == n)
+        return false;
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%s", root_path);
+    for (i++; i < n;) {
+        size_t start = i;
+        while (i < n && mac[i] != ':')
+            i++;
+        if (i > start) {
+            char comp[256];
+            mac_to_host(mac + start, (int)(i - start), comp, sizeof comp);
+            size_t pl = strlen(path);
+            if (pl && path[pl - 1] == '/')
+                pl--;
+            snprintf(path + pl, sizeof path - pl, "/%s", comp);
+        }
+        i++;
+    }
+    snprintf(out, outsize, "%s", path[0] ? path : "/");
+    return true;
 }

@@ -44,6 +44,72 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
 /* Tell the Event Manager a host is attached (it may then sleep for input). */
 void machine_attach_host(bool attached);
 
+/* ---- Rootless presentation (snapshots published by the emulator thread) ---- */
+
+typedef struct {
+    uint32_t id;                 /* stable for the window's lifetime */
+    int16_t top, left, bottom, right; /* structure bounds, Mac global coordinates */
+    bool active;
+} machine_window;
+
+/* Changes whenever the window list or a window's shape or position changes. */
+uint32_t machine_windows_version(void);
+/* Visible windows, front to back. */
+int machine_windows(machine_window *out, int max);
+/* The window's shape: width*height bytes, 1 inside.  False if it changed. */
+bool machine_window_mask(uint32_t id, uint8_t *out, int width, int height);
+
+typedef struct {
+    char text[64];               /* MacRoman */
+    bool enabled, separator;
+    uint8_t key, mark, style;
+} machine_menu_item;
+
+typedef struct {
+    int16_t id;
+    char title[64];              /* MacRoman */
+    bool enabled;
+    int nitems;
+    machine_menu_item items[64];
+} machine_menu;
+
+uint32_t machine_menus_version(void);
+int machine_menus(machine_menu *out, int max);
+/* Deliver a choice made in the host's menu bar (item is 1-based). */
+void machine_choose_menu(int16_t menu_id, int16_t item);
+
+/* ---- Alerts (shown by the host) ---- */
+
+enum { MACHINE_ALERT_PLAIN, MACHINE_ALERT_STOP, MACHINE_ALERT_NOTE, MACHINE_ALERT_CAUTION };
+
+typedef struct {
+    int16_t item;                /* DITL item number */
+    char title[64];              /* MacRoman */
+    bool is_default;
+} machine_alert_button;
+
+typedef struct {
+    int kind;
+    char message[1024];          /* MacRoman, CR between paragraphs */
+    int16_t default_item;
+    int nbuttons;
+    machine_alert_button buttons[8];
+} machine_alert;
+
+/* Called on the emulator thread; returns the item chosen (or 0 for the
+ * default).  The handler blocks until the user answers. */
+typedef int (*machine_alert_fn)(const machine_alert *alert, void *ctx);
+void machine_set_alert_handler(machine_alert_fn fn, void *ctx);
+
+/* Documents to open at launch (call before machine_launch): given to the
+ * app through its launch parameters, as the Finder did. */
+void machine_set_launch_documents(const char *const *paths, int n);
+
+/* Apple Events to the running app (as the Finder would send them). */
+void machine_open_documents(const char *const *paths, int n, bool print);
+void machine_send_open_application(void);
+void machine_send_quit(void);
+
 /* Trap census for the current run. */
 typedef struct {
     uint16_t trap;

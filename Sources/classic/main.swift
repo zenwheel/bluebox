@@ -29,11 +29,13 @@ func fail(_ message: String) -> Never {
 func usage() -> Never {
     eprint("""
     usage:
-      classic run <app-or-archive> [--app name] [--census] [--max N] [--log list] [--gestalt sel=value]...
+      classic run <app-or-archive> [document...] [--app name] [--census] [--max N] [--log list] [--gestalt sel=value]...
           Run a classic application.  The argument may be an AppleDouble application
           (data file + ._ sidecar) or a .bin/.sit/.sea/.cpt/.hqx file, which is first
           added to the library; --app picks one when the archive holds several.
           --headless run without a window (the default on Linux for now)
+          --screen-window  show the whole classic screen in one window instead of
+                     rootless windows (implied by --screen)
           --census   keep going past unimplemented traps and report every trap used
           --max N    stop after N instructions (default 50000000)
           --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu
@@ -46,6 +48,10 @@ func usage() -> Never {
       classic import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
           files to the library as AppleDouble.  Archives need unar (The Unarchiver).
+      classic install <app-or-archive> [--app name] [--to folder] [--force]
+          Make a macOS application bundle for a classic application (default folder
+          ~/Applications/Classic) with its Finder icon; documents dropped on it open
+          in the application.
       classic apps [--library dir]
           List the applications in the library.
       classic rsrc <file>
@@ -111,10 +117,44 @@ func loadMacFile(_ path: String) -> mac_file {
     return mf
 }
 
+/// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab.
+func runScript(_ script: [String], budget: inout UInt64) -> run_status {
+    var status = RUN_LIMIT
+    for step in script {
+        if step.hasPrefix("wait:"), let n = UInt64(step.dropFirst(5)) {
+            let slice = min(n, budget)
+            status = machine_run(slice)
+            budget -= slice
+            if status == RUN_HALTED { break }
+            continue
+        }
+        var mods: UInt32 = 0
+        var chars: [UInt8] = []
+        if step.hasPrefix("cmd-") {
+            mods = 0x100
+            chars = Array(step.dropFirst(4).utf8)
+        } else if step.hasPrefix("text:") {
+            chars = Array(step.dropFirst(5).utf8)
+        } else if step == "return" {
+            chars = [13]
+        } else if step == "tab" {
+            chars = [9]
+        }
+        for ch in chars {
+            machine_post_key(Int32(ch), 0, mods, 1, 0)
+            machine_post_key(Int32(ch), 0, mods, 0, 0)
+            status = machine_run(min(50_000, budget))
+            budget -= min(50_000, budget)
+        }
+    }
+    return status
+}
+
 // MARK: - Commands
 
 func runCommand(_ args: [String]) {
     var app: String?
+    var documents: [String] = []
     var appName: String?
     var census = false
     var maxInstructions: UInt64 = 50_000_000
@@ -123,6 +163,7 @@ func runCommand(_ args: [String]) {
     var fontFiles: [String] = []
     var keyScript: [String] = []
     var headless = false
+    var screenWindow = false
     var screenshot: String?
     var i = 0
     while i < args.count {
@@ -130,6 +171,7 @@ func runCommand(_ args: [String]) {
         switch a {
         case "--census": census = true
         case "--headless": headless = true
+        case "--screen-window": screenWindow = true
         case "--fonts":
             i += 1
             guard i < args.count else { usage() }
@@ -147,6 +189,7 @@ func runCommand(_ args: [String]) {
             let parts = i < args.count ? args[i].split(separator: "x").compactMap { Int32($0) } : []
             guard parts.count == 2 else { fail("--screen expects WxH, e.g. 1024x768") }
             machine_set_screen(parts[0], parts[1])
+            screenWindow = true
         case "--app":
             i += 1
             guard i < args.count else { usage() }
@@ -179,14 +222,25 @@ func runCommand(_ args: [String]) {
             }
             gestalts.append((sel, UInt32(truncatingIfNeeded: v)))
         default:
-            if a.hasPrefix("-") || app != nil { usage() }
-            app = a
+            if a.hasPrefix("-psn_") { break } // LaunchServices process serial number
+            if a.hasPrefix("-") { usage() }
+            if app == nil { app = a } else { documents.append(a) }
         }
         i += 1
     }
     guard var app else { usage() }
     app = resolveApplication(app, named: appName)
 
+    #if canImport(AppKit)
+    let interactive = !headless && !census && screenshot == nil
+    if interactive && !screenWindow {
+        // Rootless: the Mac screen covers the host display's visible area.
+        MainActor.assumeIsolated {
+            let vf = rootlessScreenFrame()
+            machine_set_screen(Int32(vf.width), Int32(vf.height + classicMenuBarHeight))
+        }
+    }
+    #endif
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }
@@ -195,48 +249,53 @@ func runCommand(_ args: [String]) {
     for f in fontFiles {
         guard machine_add_resource_file(f, &err, err.count) else { fail(str(err)) }
     }
+    var launchDocs = documents.map { strdup($0) }
+    launchDocs.withUnsafeMutableBufferPointer { buf in
+        buf.baseAddress.map {
+            $0.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) {
+                machine_set_launch_documents($0, Int32(buf.count))
+            }
+        }
+    }
+    launchDocs.forEach { free($0) }
     guard machine_launch(app, &err, err.count) else { fail(str(err)) }
+    // As the Finder does: open the documents, or just open the application.
+    // An interactive host waits, since the Finder may still hand it documents.
+    if !documents.isEmpty {
+        var cpaths = documents.map { strdup($0) }
+        cpaths.withUnsafeMutableBufferPointer { buf in
+            buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) {
+                machine_open_documents($0, Int32(buf.count), false)
+            }
+        }
+        cpaths.forEach { free($0) }
+    }
+    #if canImport(AppKit)
+    launchDocumentsSent = !documents.isEmpty
+    if !interactive && documents.isEmpty { machine_send_open_application() }
+    #else
+    if documents.isEmpty { machine_send_open_application() }
+    #endif
 
     #if canImport(AppKit)
-    if !headless && !census && screenshot == nil && keyScript.isEmpty {
+    if interactive {
         let title = (app as NSString).lastPathComponent
-        MainActor.assumeIsolated { runHostWindow(title: title) }
+        let script = keyScript
+        let icons = finderBundle(applicationAt: app).appIcons
+        if screenWindow {
+            MainActor.assumeIsolated { runHostWindow(title: title, icon: dockImage(icons)) }
+        } else {
+            MainActor.assumeIsolated { runRootless(title: title, icon: dockImage(icons), script: script) }
+        }
     }
     #endif
 
-    // Scripted input: wait:N (instructions), cmd-x, text:..., return, tab.
     var budget = maxInstructions
-    var status = RUN_LIMIT
-    for step in keyScript {
-        if step.hasPrefix("wait:"), let n = UInt64(step.dropFirst(5)) {
-            let slice = min(n, budget)
-            status = machine_run(slice)
-            budget -= slice
-            if status == RUN_HALTED { break }
-            continue
-        }
-        var mods: UInt32 = 0
-        var chars: [UInt8] = []
-        if step.hasPrefix("cmd-") {
-            mods = 0x100
-            chars = Array(step.dropFirst(4).utf8)
-        } else if step.hasPrefix("text:") {
-            chars = Array(step.dropFirst(5).utf8)
-        } else if step == "return" {
-            chars = [13]
-        } else if step == "tab" {
-            chars = [9]
-        }
-        for ch in chars {
-            machine_post_key(Int32(ch), 0, mods, 1, 0)
-            machine_post_key(Int32(ch), 0, mods, 0, 0)
-            status = machine_run(min(50_000, budget))
-            budget -= min(50_000, budget)
-        }
-    }
+    var status = runScript(keyScript, budget: &budget)
     if status != RUN_HALTED && budget > 0 {
         status = machine_run(budget)
     }
+
     let count = machine_instruction_count()
     if status == RUN_HALTED {
         print("stopped: \(String(cString: machine_halt_reason())) after \(count) instructions")
@@ -404,5 +463,8 @@ case "run": runCommand(rest)
 case "import": importCommand(rest)
 case "apps": appsCommand(rest)
 case "rsrc": rsrcCommand(rest)
+#if canImport(AppKit)
+case "install": installCommand(rest)
+#endif
 default: usage()
 }

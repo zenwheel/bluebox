@@ -1,0 +1,14 @@
+# Definitions missing from multiversal (or present there only as
+# Executor-specific snippets).  Same schema as Defs/multiversal/defs.
+
+# GetFrontProcess's glue pushes a dummy -1 long after the PSN pointer.
+- function:
+    name: GetFrontProcess
+    return: OSErr
+    args:
+      - name: serial_number
+        type: ProcessSerialNumber*
+      - name: dummy
+        type: int32_t
+    dispatcher: OSDispatch
+    selector: 0x0039

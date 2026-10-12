@@ -81,4 +81,25 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
 
 void gestalt_init(void);
 
+/* ---- File Manager ---- */
+
+/* An FSSpec for a host path (the file need not exist). */
+void fm_spec_for_path(const char *path, gaddr spec);
+/* Host path for a (vRefNum, dirID, name) triple. */
+bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize);
+/* Mac full path (MacRoman) of a host path; returns its length, 0 if too long. */
+size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize);
+/* Host path of a Mac full path. */
+bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize);
+
+/* ---- Alias Manager ---- */
+
+/* A new alias handle for a host path, stored at alias_out. */
+int16_t alias_new_for_host(const char *host, gaddr alias_out);
+
+/* ---- Process Manager ---- */
+
+/* The application's SIZE flags (isHighLevelEventAware is 0x0040). */
+extern uint16_t g_app_size_flags;
+
 #endif

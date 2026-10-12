@@ -12,6 +12,8 @@
 
 cpu68k *g_cpu;
 char g_app_dir[1024];
+char g_app_path[1024];
+uint32_t g_app_creator;
 
 static cpu68k cpu;
 static int screen_w = 1024, screen_h = 768;
@@ -72,6 +74,9 @@ void cdef0_native(cpu68k *c, uint16_t tw);
 void cdef1_native(cpu68k *c, uint16_t tw);
 void events_reset(void);
 void fm_init(const char *root);
+void display_reset(void);
+void aem_reset(void);
+void aem_reset_handlers(void);
 
 /* A definition procedure resource: `NATIVE index; RTS`. */
 static void defproc_stub(uint8_t out[8], native_fn fn, const char *name)
@@ -146,6 +151,9 @@ bool machine_boot(bool census)
         return false;
     wr32(LM_TheZone, GA_APPHEAP);
     events_reset();
+    display_reset();
+    aem_reset();
+    aem_reset_handlers();
 
     qd_screen_init(screen_w, screen_h);
 
@@ -182,6 +190,50 @@ bool machine_add_resource_file(const char *path, char *err, size_t errlen)
     return true;
 }
 
+static char **launch_docs;
+static int nlaunch_docs;
+
+void machine_set_launch_documents(const char *const *paths, int n)
+{
+    for (int i = 0; i < nlaunch_docs; i++)
+        free(launch_docs[i]);
+    free(launch_docs);
+    launch_docs = n ? calloc((size_t)n, sizeof *launch_docs) : NULL;
+    for (int i = 0; i < n; i++)
+        launch_docs[i] = strdup(paths[i]);
+    nlaunch_docs = n;
+}
+
+int16_t fm_wd_for_path(const char *path, gaddr name_out);
+uint32_t fm_type_of_path(const char *path);
+
+/* The Finder's launch parameters: message, count, then AppFile records
+ * (vRefNum, type, version, filler, name padded to even). */
+static void build_app_parms(void)
+{
+    /* Apps that take high-level events get an Open Documents event instead. */
+    int n = (g_app_size_flags & 0x0040) ? 0 : nlaunch_docs;
+    gaddr h = rd32(LM_AppParmHandle);
+    tb_SetHandleSize(h, 4);
+    wr16(rd32(h), 0); /* appOpen */
+    wr16(rd32(h) + 2, (uint16_t)n);
+    gaddr name = tb_NewPtr(256, false, true);
+    for (int i = 0; i < n; i++) {
+        int16_t vref = fm_wd_for_path(launch_docs[i], name);
+        uint32_t nl = rd8(name);
+        uint32_t rec = 8 + ((nl + 2) & ~1u);
+        int32_t size = tb_GetHandleSize(h);
+        tb_SetHandleSize(h, size + (int32_t)rec);
+        gaddr p = rd32(h) + (uint32_t)size;
+        wr16(p, (uint16_t)vref);
+        wr32(p + 2, fm_type_of_path(launch_docs[i]));
+        wr8(p + 6, 0);
+        wr8(p + 7, 0);
+        gmemcpy(p + 8, name, nl + 1);
+    }
+    tb_DisposePtr(name);
+}
+
 bool machine_launch(const char *app_path, char *err, size_t errlen)
 {
     mac_file mf;
@@ -201,6 +253,8 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
         strcpy(g_app_dir, ".");
 
     fm_init(g_app_dir);
+    snprintf(g_app_path, sizeof g_app_path, "%s", app_path);
+    g_app_creator = mac_file_creator(&mf);
 
     const char *base = strrchr(app_path, '/');
     base = base ? base + 1 : app_path;
@@ -215,6 +269,13 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
         return false;
     }
     wr16(LM_CurApRefNum, (uint16_t)rn);
+
+    /* SIZE -1 (user-modified) takes precedence over SIZE 0. */
+    gaddr size = tb_Get1Resource((int32_t)fourcc("SIZE"), -1);
+    if (!size)
+        size = tb_Get1Resource((int32_t)fourcc("SIZE"), 0);
+    g_app_size_flags = size && rd32(size) ? rd16(rd32(size)) : 0;
+    build_app_parms();
 
     uint32_t a5;
     uint32_t entry = seg_launch(rn, &a5, err, errlen);

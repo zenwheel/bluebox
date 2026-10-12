@@ -84,6 +84,9 @@ static void set_line_count(gaddr teh, int n)
 
 void tb_TECalText(gaddr teh)
 {
+    /* Apps may replace the text by resizing hText; its size is the length. */
+    int32_t hsize = tb_GetHandleSize(TERec_hText(te(teh)));
+    set16(teh, TERec_teLength_off, (int16_t)(hsize > 32767 ? 32767 : hsize));
     port_state s = enter(teh);
     int len = text_len(teh);
     qrect dest = qrect_get(te(teh) + TERec_destRect_off);
@@ -343,8 +346,9 @@ void tb_TEIdle(gaddr teh)
 {
     if (!te16(teh, TERec_active_off) || te16(teh, TERec_selStart_off) != te16(teh, TERec_selEnd_off))
         return;
+    /* caretTime is when the caret next blinks; apps sleep until then. */
     uint32_t now = rd32(LM_Ticks);
-    if (now - (uint32_t)TERec_caretTime(te(teh)) < rd32(LM_CaretTime))
+    if ((int32_t)(now - (uint32_t)TERec_caretTime(te(teh))) < 0)
         return;
     port_state s = enter(teh);
     gaddr clip;
@@ -353,7 +357,7 @@ void tb_TEIdle(gaddr teh)
     restore_clip(clip);
     leave(teh, s);
     wr8(te(teh) + TERec_caretState_off, rd8(te(teh) + TERec_caretState_off) == 0xFF ? 0 : 0xFF);
-    TERec_set_caretTime(te(teh), (int32_t)now);
+    TERec_set_caretTime(te(teh), (int32_t)(now + rd32(LM_CaretTime)));
 }
 
 /* ---------------------------------------------------------------------- */

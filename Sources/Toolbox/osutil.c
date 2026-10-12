@@ -90,3 +90,10 @@ void tb_SetTrapAddress(gaddr addr, uint16_t n, bool newTraps, bool tool)
     LOGF(LOG_TRAPS, "SetTrapAddress(%04X) = %08X\n", n, addr);
     wr32(table_slot(n, newTraps, tool), addr);
 }
+
+/* ---- Desk accessories (none are installed) ---- */
+
+int8_t tb_SystemEdit(int16_t editcmd) { return 0; } /* not handled: the app does it */
+int16_t tb_OpenDeskAcc(gaddr acc) { return 0; }
+void tb_CloseDeskAcc(int16_t rn) {}
+void tb_SystemMenu(int32_t menu) {}

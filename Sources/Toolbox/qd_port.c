@@ -500,3 +500,19 @@ void tb_ShieldCursor(gaddr rp, uint32_t p) { cursor_level--; }
 
 void tb_GetWMgrPort(gaddr wp) { wr32(wp, rd32(LM_WMgrPort)); }
 void tb_GetCWMgrPort(gaddr wp) { wr32(wp, rd32(LM_WMgrCPort)); }
+
+/* ---- Coordinate conversion ---- */
+
+void tb_LocalToGlobal(gaddr pt)
+{
+    pixdst d = qd_port_pixels(qd_port());
+    wr16(pt, (uint16_t)((int16_t)rd16(pt) - d.bounds.top));
+    wr16(pt + 2, (uint16_t)((int16_t)rd16(pt + 2) - d.bounds.left));
+}
+
+void tb_GlobalToLocal(gaddr pt)
+{
+    pixdst d = qd_port_pixels(qd_port());
+    wr16(pt, (uint16_t)((int16_t)rd16(pt) + d.bounds.top));
+    wr16(pt + 2, (uint16_t)((int16_t)rd16(pt + 2) + d.bounds.left));
+}

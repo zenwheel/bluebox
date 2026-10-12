@@ -15,6 +15,7 @@ strike IDs follow the old FONT numbering (family * 128 + size).
 import os
 import re
 import struct
+import unicodedata
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SRC = os.path.join(ROOT, "Resources", "Fonts", "systemless")
@@ -85,6 +86,160 @@ def parse_symbols():
         g = re.search(r'g!\(\s*(-?\d+)\s*,\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)\s*,(.*?)\)\]', part, re.S)
         rows = re.findall(r'"([#.]*)"', g.group(4))
         out[code] = (int(g.group(1)), int(g.group(2)), int(g.group(3)), rows)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# MacRoman 0x80-0xFF, synthesised from each face's own ASCII glyphs: accented
+# letters are the base letter plus a small accent; dashes, curly quotes,
+# ellipsis and ligatures are built from existing glyphs.
+
+ACCENTS = {
+    "̀": ["#.", ".#"],                 # grave
+    "́": [".#", "#."],                 # acute
+    "̂": [".#.", "#.#"],               # circumflex
+    "̃": [".#.#", "#.#."],             # tilde
+    "̈": ["#.#"],                      # diaeresis
+    "̊": [".#.", "#.#", ".#."],        # ring
+}
+CEDILLA = [".#", "##"]
+
+
+def ink(g):
+    """(left, top, rows) with rows padded to one width; left/top are pen-relative."""
+    adv, ox, oy, rows = g
+    w = max((len(r) for r in rows), default=0)
+    return ox, oy, [r.ljust(w, ".") for r in rows]
+
+
+def place(parts, adv):
+    """Combine (left, top, rows) bitmaps into one glyph with advance adv."""
+    parts = [p for p in parts if p[2]]
+    if not parts:
+        return (adv, 0, 0, [])
+    left = min(p[0] for p in parts)
+    top = min(p[1] for p in parts)
+    right = max(p[0] + len(p[2][0]) for p in parts)
+    bottom = max(p[1] + len(p[2]) for p in parts)
+    grid = [["."] * (right - left) for _ in range(bottom - top)]
+    for l, t, rows in parts:
+        for r, line in enumerate(rows):
+            for c, ch in enumerate(line):
+                if ch == "#":
+                    grid[t - top + r][l - left + c] = "#"
+    return (adv, left, top, ["".join(r) for r in grid])
+
+
+def dotless(face, g):
+    """An i or j without its dot: drop rows above the x-height."""
+    xh = face["glyphs"][ord("x")][2]
+    left, top, rows = ink(g)
+    keep = [(top + r, line) for r, line in enumerate(rows) if top + r >= xh]
+    return (g[0], left, keep[0][0], [line for _, line in keep])
+
+
+def accented(face, base, mark):
+    g = face["glyphs"].get(ord(base))
+    if g is None:
+        return None
+    if base in "ij":
+        g = dotless(face, g)
+    left, top, rows = ink(g)
+    width = len(rows[0]) if rows else 0
+    if mark == "̧":
+        acc = CEDILLA
+        al = left + (width - len(acc[0])) // 2
+        return place([(left, top, rows), (al, top + len(rows), acc)], g[0])
+    acc = ACCENTS.get(mark)
+    if acc is None:
+        return None
+    al = left + (width - len(acc[0]) + 1) // 2
+    at = top - 1 - len(acc)
+    at = max(at, -face["ascent"])           # capitals: keep inside the ascent
+    if at + len(acc) >= top:                 # no room for a gap: squeeze the letter's top row
+        rows = rows[1:]
+        top += 1
+    return place([(left, top, rows), (al, at, acc)], g[0])
+
+
+def joined(face, chars, overlap=0):
+    parts, pen = [], 0
+    for ch in chars:
+        g = face["glyphs"].get(ord(ch))
+        if g is None:
+            return None
+        left, top, rows = ink(g)
+        parts.append((pen + left, top, rows))
+        pen += g[0] - overlap
+    return place(parts, pen + overlap)
+
+
+def dash(face, width):
+    left, top, rows = ink(face["glyphs"][ord("-")])
+    return (width + 1, 0, top, ["#" * width for _ in rows])
+
+
+def flipped(face, ch):
+    g = face["glyphs"].get(ord(ch))
+    if g is None:
+        return None
+    left, top, rows = ink(g)
+    # Turned over, hanging from the x-height.
+    return (g[0], left, face["glyphs"][ord("x")][2], rows[::-1])
+
+
+def bullet(face):
+    xh = -face["glyphs"][ord("x")][2]
+    n = 3 if face["ascent"] < 11 else 4
+    rows = [".##.", "####", "####", ".##."] if n == 4 else [".#.", "###", ".#."]
+    return (n + 2, 1, -(xh + n) // 2 - 1, rows)
+
+
+def macroman_glyphs(face):
+    out = {}
+    g = face["glyphs"]
+    n_width = g[ord("n")][0] - 1
+    m_width = g[ord("M")][0]
+    for code in range(0x80, 0x100):
+        ch = bytes([code]).decode("mac_roman")
+        nfd = unicodedata.normalize("NFD", ch)
+        made = None
+        if len(nfd) == 2:
+            made = accented(face, nfd[0], nfd[1])
+        elif ch in "–":
+            made = dash(face, n_width)
+        elif ch == "—":
+            made = dash(face, m_width)
+        elif ch in "‘’‚":
+            made = g.get(ord("'"))
+        elif ch in "“”„":
+            made = g.get(ord('"'))
+        elif ch == "…":
+            made = joined(face, "...")
+        elif ch == "•":
+            made = bullet(face)
+        elif ch == " ":
+            made = g.get(ord(" "))
+        elif ch == "ı":
+            made = dotless(face, g[ord("i")])
+        elif ch in "ﬁﬂ":
+            made = joined(face, "fi" if ch == "ﬁ" else "fl", overlap=1)
+        elif ch in "ÆæŒœ":
+            made = joined(face, {"Æ": "AE", "æ": "ae", "Œ": "OE", "œ": "oe"}[ch], overlap=1)
+        elif ch == "«":
+            made = joined(face, "<<", overlap=2)
+        elif ch == "»":
+            made = joined(face, ">>", overlap=2)
+        elif ch == "‹":
+            made = g.get(ord("<"))
+        elif ch == "›":
+            made = g.get(ord(">"))
+        elif ch == "¡":
+            made = flipped(face, "!")
+        elif ch == "¿":
+            made = flipped(face, "?")
+        if made is not None:
+            out[code] = made
     return out
 
 
@@ -192,7 +347,10 @@ def main():
         metrics = None
         for src, size in faces:
             face = parse_face(src)
-            data = build_nfnt(face, extra if fam == 0 else {})
+            more = macroman_glyphs(face)
+            if fam == 0:
+                more.update(extra)
+            data = build_nfnt(face, more)
             rid = fam * 128 + size
             sym = f"nfnt_{fam}_{size}"
             parts.append(c_array(sym, data))

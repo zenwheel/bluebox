@@ -60,7 +60,8 @@ BASE = {
 
 
 def load():
-    for path in sorted(glob.glob(os.path.join(DEFS, "*.yaml"))):
+    local = os.path.join(os.path.dirname(os.path.abspath(__file__)), "defs")
+    for path in sorted(glob.glob(os.path.join(DEFS, "*.yaml"))) + sorted(glob.glob(os.path.join(local, "*.yaml"))):
         with open(path) as f:
             items = yaml.safe_load(f) or []
         for item in items:

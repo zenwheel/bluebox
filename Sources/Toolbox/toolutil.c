@@ -209,3 +209,28 @@ void tb_UnpackBits(gaddr sp, gaddr dp, int16_t len)
     wr32(sp, s);
     wr32(dp, d);
 }
+
+/* ---- Binary-decimal conversion (Pack7) ---- */
+
+void tb_NumToString(int32_t l, gaddr s)
+{
+    char buf[16];
+    int n = snprintf(buf, sizeof buf, "%d", (int)l);
+    wr8(s, (uint8_t)n);
+    gput(s + 1, buf, (uint32_t)n);
+}
+
+/* Like the ROM: no error checking; a leading sign, then digits. */
+void tb_StringToNum(gaddr s, uint32_t *lp)
+{
+    int n = rd8(s), i = 0;
+    bool neg = false;
+    if (n > 0 && (rd8(s + 1) == '-' || rd8(s + 1) == '+')) {
+        neg = rd8(s + 1) == '-';
+        i = 1;
+    }
+    uint32_t v = 0;
+    for (; i < n; i++)
+        v = v * 10 + (uint32_t)(rd8(s + 1 + (uint32_t)i) - '0');
+    *lp = neg ? (uint32_t)-(int32_t)v : v;
+}

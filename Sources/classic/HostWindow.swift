@@ -99,7 +99,7 @@ final class ScreenView: NSView {
 
     // MARK: Keyboard
 
-    private static func modifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
+    static func modifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
         var m: UInt32 = 0
         if flags.contains(.command) { m |= 0x100 }
         if flags.contains(.shift) { m |= 0x200 }
@@ -110,7 +110,7 @@ final class ScreenView: NSView {
     }
 
     /// The classic character code for a key event (MacRoman).
-    private static func charCode(_ event: NSEvent) -> Int32 {
+    static func charCode(_ event: NSEvent) -> Int32 {
         switch event.keyCode {
         case 123: return 28  // left
         case 124: return 29  // right
@@ -154,13 +154,51 @@ final class ScreenView: NSView {
     }
 }
 
+/// Documents opened from the Finder or Dock become Open Documents events.
+/// The first event is Open Application only if nothing was opened at launch,
+/// as with the System 7 Finder.
+struct LaunchEvents {
+    private var launched = false
+    private var openedAtLaunch = false
+
+    mutating func open(_ urls: [URL]) {
+        let paths = urls.filter(\.isFileURL).map(\.path)
+        guard !paths.isEmpty else { return }
+        if !launched { openedAtLaunch = true }
+        var cpaths = paths.map { strdup($0) }
+        cpaths.withUnsafeMutableBufferPointer { buf in
+            buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) {
+                machine_open_documents($0, Int32(buf.count), false)
+            }
+        }
+        cpaths.forEach { free($0) }
+    }
+
+    mutating func finishLaunching() {
+        if !launched && !openedAtLaunch && !launchDocumentsSent { machine_send_open_application() }
+        launched = true
+    }
+}
+
+/// The classic application's Finder icon, for the Dock and alerts.
+nonisolated(unsafe) var appIcon: NSImage?
+
+/// Set when the command line already sent the launch event.
+nonisolated(unsafe) var launchDocumentsSent = false
+
 final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let title: String
     var window: NSWindow!
+    var launchEvents = LaunchEvents()
 
     init(title: String) { self.title = title }
 
+    func application(_ application: NSApplication, open urls: [URL]) { launchEvents.open(urls) }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // After launch: AppKit sets the icon from the main bundle while launching.
+        if let appIcon { NSApp.applicationIconImage = appIcon }
+        launchEvents.finishLaunching()
         var w: Int32 = 0, h: Int32 = 0, rb: Int32 = 0
         _ = machine_framebuffer(&w, &h, &rb)
         let size = NSSize(width: CGFloat(w), height: CGFloat(h))
@@ -189,10 +227,12 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 }
 
 /// Show the classic screen in a window until the app quits.  Never returns.
-@MainActor func runHostWindow(title: String) -> Never {
+@MainActor func runHostWindow(title: String, icon: NSImage?) -> Never {
     machine_attach_host(true)
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
+    appIcon = icon
+    installAlertHandler()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
     // Minimal app menu so Quit works.
@@ -205,5 +245,58 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     app.mainMenu = menu
     app.run()
     exit(0)
+}
+#endif
+
+#if canImport(AppKit)
+/// Text from a MacRoman C array (CR line breaks become LF).
+func macRomanString<T>(_ tuple: T) -> String {
+    withUnsafeBytes(of: tuple) { raw in
+        let bytes = raw.prefix { $0 != 0 }
+        let s = String(data: Data(bytes), encoding: .macOSRoman) ?? ""
+        return s.replacingOccurrences(of: "\r", with: "\n")
+    }
+}
+
+/// Classic alerts become native alerts, run on the main thread while the
+/// emulator waits for the answer.
+func installAlertHandler() {
+    machine_set_alert_handler({ alertPtr, _ in
+        guard let a = alertPtr?.pointee else { return 0 }
+        let message = macRomanString(a.message)
+        var buttons: [(item: Int16, title: String, isDefault: Bool)] = []
+        withUnsafeBytes(of: a.buttons) { raw in
+            let list = raw.bindMemory(to: machine_alert_button.self)
+            for i in 0..<Int(a.nbuttons) {
+                buttons.append((list[i].item, macRomanString(list[i].title), list[i].is_default))
+            }
+        }
+        // The default button comes first: it is the one Return presses.
+        buttons.sort { $0.isDefault && !$1.isDefault }
+        let kind = a.kind
+        var chosen: Int32 = 0
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                let alert = NSAlert()
+                if let appIcon { alert.icon = appIcon }
+                let paragraphs = message.components(separatedBy: "\n\n")
+                alert.messageText = paragraphs.first ?? ""
+                alert.informativeText = paragraphs.dropFirst().joined(separator: "\n\n")
+                switch Int(kind) {
+                case Int(MACHINE_ALERT_STOP): alert.alertStyle = .critical
+                case Int(MACHINE_ALERT_CAUTION): alert.alertStyle = .warning
+                default: alert.alertStyle = .informational
+                }
+                for b in buttons { alert.addButton(withTitle: b.title) }
+                if buttons.isEmpty { alert.addButton(withTitle: "OK") }
+                let response = alert.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+                if response >= 0 && response < buttons.count { chosen = Int32(buttons[response].item) }
+                if ProcessInfo.processInfo.environment["CLASSIC_DEBUG_HOST"] != nil {
+                    eprint("alert \"\(message)\" -> response \(response), item \(chosen)\n")
+                }
+            }
+        }
+        return chosen
+    }, nil)
 }
 #endif

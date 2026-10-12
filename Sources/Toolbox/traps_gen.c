@@ -716,6 +716,321 @@ const char *const tb_trap_names[1024] = {
     [0x3FF] = "DebugStr",
 };
 
+static void glue_AECoerceDesc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desc_out = (gaddr)cpu_pop32(c);
+    int32_t a_result_type = (int32_t)cpu_pop32(c);
+    gaddr a_desc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AECoerceDesc(a_desc, a_result_type, a_desc_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AECoercePtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desc_out = (gaddr)cpu_pop32(c);
+    int32_t a_result_type = (int32_t)cpu_pop32(c);
+    int32_t a_data_size = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int32_t a_data_type = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AECoercePtr(a_data_type, a_data, a_data_size, a_result_type, a_desc_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AECountItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_count_out = (gaddr)cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AECountItems(a_list, a_count_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AECreateDesc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desc_out = (gaddr)cpu_pop32(c);
+    int32_t a_data_size = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int32_t a_type = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AECreateDesc(a_type, a_data, a_data_size, a_desc_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEDisposeDesc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEDisposeDesc(a_desc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEDuplicateDesc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEDuplicateDesc(a_src, a_dst);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetAttributeDesc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desc_out = (gaddr)cpu_pop32(c);
+    int32_t a_desired_type = (int32_t)cpu_pop32(c);
+    int32_t a_keyword = (int32_t)cpu_pop32(c);
+    gaddr a_evt = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEGetAttributeDesc(a_evt, a_keyword, a_desired_type, a_desc_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetAttributePtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_size_out = (gaddr)cpu_pop32(c);
+    int32_t a_max_size = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_type_out = (gaddr)cpu_pop32(c);
+    int32_t a_desired_type = (int32_t)cpu_pop32(c);
+    int32_t a_keyword = (int32_t)cpu_pop32(c);
+    gaddr a_evt = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEGetAttributePtr(a_evt, a_keyword, a_desired_type, a_type_out, a_data, a_max_size, a_size_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetEventHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_system_handler_p = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_refcon = (gaddr)cpu_pop32(c);
+    gaddr a_hdlr = (gaddr)cpu_pop32(c);
+    int32_t a_event_id = (int32_t)cpu_pop32(c);
+    int32_t a_event_class = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AEGetEventHandler(a_event_class, a_event_id, a_hdlr, a_refcon, a_system_handler_p);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetInteractionAllowed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_return_level = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEGetInteractionAllowed(a_return_level);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetNthDesc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desc_out = (gaddr)cpu_pop32(c);
+    gaddr a_keyword_out = (gaddr)cpu_pop32(c);
+    int32_t a_desired_type = (int32_t)cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEGetNthDesc(a_list, a_index, a_desired_type, a_keyword_out, a_desc_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetNthPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_size_out = (gaddr)cpu_pop32(c);
+    int32_t a_max_size = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_type_out = (gaddr)cpu_pop32(c);
+    gaddr a_keyword_out = (gaddr)cpu_pop32(c);
+    int32_t a_desired_type = (int32_t)cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEGetNthPtr(a_list, a_index, a_desired_type, a_keyword_out, a_type_out, a_data, a_max_size, a_size_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetParamDesc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desc_out = (gaddr)cpu_pop32(c);
+    int32_t a_desired_type = (int32_t)cpu_pop32(c);
+    int32_t a_keyword = (int32_t)cpu_pop32(c);
+    gaddr a_record = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEGetParamDesc(a_record, a_keyword, a_desired_type, a_desc_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetParamPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_size_out = (gaddr)cpu_pop32(c);
+    int32_t a_max_size = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_type_out = (gaddr)cpu_pop32(c);
+    int32_t a_desired_type = (int32_t)cpu_pop32(c);
+    int32_t a_keyword = (int32_t)cpu_pop32(c);
+    gaddr a_record = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEGetParamPtr(a_record, a_keyword, a_desired_type, a_type_out, a_data, a_max_size, a_size_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEGetTheCurrentEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_return_evt = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEGetTheCurrentEvent(a_return_evt);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEInstallEventHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_system_handler_p = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_refcon = (int32_t)cpu_pop32(c);
+    gaddr a_hdlr = (gaddr)cpu_pop32(c);
+    int32_t a_event_id = (int32_t)cpu_pop32(c);
+    int32_t a_event_class = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AEInstallEventHandler(a_event_class, a_event_id, a_hdlr, a_refcon, a_system_handler_p);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEInteractWithUser(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idle_proc = (gaddr)cpu_pop32(c);
+    gaddr a_nm_req = (gaddr)cpu_pop32(c);
+    int32_t a_timeout = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AEInteractWithUser(a_timeout, a_nm_req, a_idle_proc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEProcessAppleEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_evt = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEProcessAppleEvent(a_evt);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEPutParamDesc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desc = (gaddr)cpu_pop32(c);
+    int32_t a_keyword = (int32_t)cpu_pop32(c);
+    gaddr a_record = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEPutParamDesc(a_record, a_keyword, a_desc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEPutParamPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_data_size = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int32_t a_type = (int32_t)cpu_pop32(c);
+    int32_t a_keyword = (int32_t)cpu_pop32(c);
+    gaddr a_record = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEPutParamPtr(a_record, a_keyword, a_type, a_data, a_data_size);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AERemoveEventHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_system_handler_p = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_hdlr = (gaddr)cpu_pop32(c);
+    int32_t a_event_id = (int32_t)cpu_pop32(c);
+    int32_t a_event_class = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AERemoveEventHandler(a_event_class, a_event_id, a_hdlr, a_system_handler_p);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AEResumeTheCurrentEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refcon = (int32_t)cpu_pop32(c);
+    gaddr a_dispatcher = (gaddr)cpu_pop32(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    gaddr a_evt = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AEResumeTheCurrentEvent(a_evt, a_reply, a_dispatcher, a_refcon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AESetInteractionAllowed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint8_t a_level = (uint8_t)(cpu_pop16(c) >> 8);
+    int16_t r = tb_AESetInteractionAllowed(a_level);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AESuspendTheCurrentEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_evt = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AESuspendTheCurrentEvent(a_evt);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AcceptHighLevelEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_msg_length_return = (gaddr)cpu_pop32(c);
+    gaddr a_msg_buf = (gaddr)cpu_pop32(c);
+    gaddr a_refcon_return = (gaddr)cpu_pop32(c);
+    gaddr a_sender_id_return = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AcceptHighLevelEvent(a_sender_id_return, a_refcon_return, a_msg_buf, a_msg_length_return);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AddPt(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -723,6 +1038,17 @@ static void glue_AddPt(cpu68k *c, uint16_t trapword)
     gaddr a_dst = (gaddr)cpu_pop32(c);
     uint32_t a_src = (uint32_t)cpu_pop32(c);
     tb_AddPt(a_src, a_dst);
+    cpu_push32(c, ret);
+}
+
+static void glue_Alert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fp = (gaddr)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    int16_t r = tb_Alert(a_id, a_fp);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -939,6 +1265,17 @@ static void glue_CalcVisBehind(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CautionAlert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fp = (gaddr)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    int16_t r = tb_CautionAlert(a_id, a_fp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CharExtra(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1011,6 +1348,15 @@ static void glue_CloseCPort(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_CloseCPort(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseDeskAcc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_rn = (int16_t)cpu_pop16(c);
+    tb_CloseDeskAcc(a_rn);
     cpu_push32(c, ret);
 }
 
@@ -1113,6 +1459,15 @@ static void glue_CopyRgn(cpu68k *c, uint16_t trapword)
     gaddr a_d = (gaddr)cpu_pop32(c);
     gaddr a_s = (gaddr)cpu_pop32(c);
     tb_CopyRgn(a_s, a_d);
+    cpu_push32(c, ret);
+}
+
+static void glue_CouldAlert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    tb_CouldAlert(a_id);
     cpu_push32(c, ret);
 }
 
@@ -1543,6 +1898,15 @@ static void glue_EraseRoundRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ErrorSound(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_sp = (gaddr)cpu_pop32(c);
+    tb_ErrorSound(a_sp);
+    cpu_push32(c, ret);
+}
+
 static void glue_EventAvail(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1946,6 +2310,15 @@ static void glue_FrameRoundRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FreeAlert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    tb_FreeAlert(a_id);
+    cpu_push32(c, ret);
+}
+
 static void glue_FreeMem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2013,6 +2386,27 @@ static void glue_Get1Resource(cpu68k *c, uint16_t trapword)
     int32_t a_typ = (int32_t)cpu_pop32(c);
     gaddr r = tb_Get1Resource(a_typ, a_id);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetAlertStage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_GetAlertStage();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetAliasInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theString = (gaddr)cpu_pop32(c);
+    int16_t a_index = (int16_t)cpu_pop16(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetAliasInfo(a_alias, a_index, a_theString);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2134,6 +2528,16 @@ static void glue_GetControlValue(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetCurrentProcess(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_serial_number = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetCurrentProcess(a_serial_number);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2206,6 +2610,17 @@ static void glue_GetForeColor(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_GetForeColor(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFrontProcess(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dummy = (int32_t)cpu_pop32(c);
+    gaddr a_serial_number = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFrontProcess(a_serial_number, a_dummy);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2466,6 +2881,16 @@ static void glue_GetNextEvent(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetNextProcess(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_serial_number = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetNextProcess(a_serial_number);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetOSEvent(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2530,6 +2955,28 @@ static void glue_GetPort(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_pp = (gaddr)cpu_pop32(c);
     tb_GetPort(a_pp);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetProcessInformation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    gaddr a_serial_number = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetProcessInformation(a_serial_number, a_info);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetProcessSerialNumberFromPortName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_serial_number = (gaddr)cpu_pop32(c);
+    gaddr a_port_name = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetProcessSerialNumberFromPortName(a_port_name, a_serial_number);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2606,6 +3053,18 @@ static void glue_GetScrap(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetSpecificHighLevelEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_err_return = (gaddr)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_fn = (gaddr)cpu_pop32(c);
+    int8_t r = tb_GetSpecificHighLevelEvent(a_fn, a_data, a_err_return);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_GetString(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2671,6 +3130,15 @@ static void glue_GetZone(cpu68k *c, uint16_t trapword)
     gaddr r = tb_GetZone();
     c->a[0] = (uint32_t)r;
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
+}
+
+static void glue_GlobalToLocal(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pt = (gaddr)cpu_pop32(c);
+    tb_GlobalToLocal(a_pt);
+    cpu_push32(c, ret);
 }
 
 static void glue_GrafDevice(cpu68k *c, uint16_t trapword)
@@ -3336,6 +3804,15 @@ static void glue_LoadScrap(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_LocalToGlobal(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pt = (gaddr)cpu_pop32(c);
+    tb_LocalToGlobal(a_pt);
+    cpu_push32(c, ret);
+}
+
 static void glue_Long2Fix(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3387,6 +3864,23 @@ static void glue_MapRgn(cpu68k *c, uint16_t trapword)
     gaddr a_srcr = (gaddr)cpu_pop32(c);
     gaddr a_rh = (gaddr)cpu_pop32(c);
     tb_MapRgn(a_rh, a_srcr, a_dstr);
+    cpu_push32(c, ret);
+}
+
+static void glue_MatchAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_yourDataPtr = (gaddr)cpu_pop32(c);
+    gaddr a_aliasFilter = (gaddr)cpu_pop32(c);
+    gaddr a_needsUpdate = (gaddr)cpu_pop32(c);
+    gaddr a_aliasList = (gaddr)cpu_pop32(c);
+    gaddr a_aliasCount = (gaddr)cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    int32_t a_rulesMask = (int32_t)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_MatchAlias(a_fromFile, a_rulesMask, a_alias, a_aliasCount, a_aliasList, a_needsUpdate, a_aliasFilter, a_yourDataPtr);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -3529,6 +4023,43 @@ static void glue_Munger(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewAlias(a_fromFile, a_target, a_alias);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewAliasMinimal(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewAliasMinimal(a_target, a_alias);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewAliasMinimalFromFullPath(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_serverName = (gaddr)cpu_pop32(c);
+    gaddr a_zoneName = (gaddr)cpu_pop32(c);
+    gaddr a_fullpath = (gaddr)cpu_pop32(c);
+    int16_t a_fullpathLength = (int16_t)cpu_pop16(c);
+    int16_t r = tb_NewAliasMinimalFromFullPath(a_fullpathLength, a_fullpath, a_zoneName, a_serverName, a_alias);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewCWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3660,6 +4191,25 @@ static void glue_NewWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NoteAlert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fp = (gaddr)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    int16_t r = tb_NoteAlert(a_id, a_fp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NumToString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_l = (int32_t)c->d[0];
+    gaddr a_s = (gaddr)c->a[0];
+    tb_NumToString(a_l, a_s);
+}
+
 static void glue_OSEventAvail(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3714,6 +4264,16 @@ static void glue_OpenCPort(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_OpenCPort(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenDeskAcc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_acc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OpenDeskAcc(a_acc);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -4232,6 +4792,18 @@ static void glue_PaintRoundRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ParamText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_p3 = (gaddr)cpu_pop32(c);
+    gaddr a_p2 = (gaddr)cpu_pop32(c);
+    gaddr a_p1 = (gaddr)cpu_pop32(c);
+    gaddr a_p0 = (gaddr)cpu_pop32(c);
+    tb_ParamText(a_p0, a_p1, a_p2, a_p3);
+    cpu_push32(c, ret);
+}
+
 static void glue_PenMode(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4309,6 +4881,21 @@ static void glue_PostEvent(cpu68k *c, uint16_t trapword)
     int32_t a_evmsg = (int32_t)cpu_pop32(c);
     int16_t a_evcode = (int16_t)cpu_pop16(c);
     int16_t r = tb_PostEvent(a_evcode, a_evmsg);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_PostHighLevelEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_post_options = (int32_t)cpu_pop32(c);
+    int32_t a_msg_length = (int32_t)cpu_pop32(c);
+    gaddr a_msg_buf = (gaddr)cpu_pop32(c);
+    int32_t a_refcon = (int32_t)cpu_pop32(c);
+    gaddr a_receiver_id = (gaddr)cpu_pop32(c);
+    gaddr a_evt = (gaddr)cpu_pop32(c);
+    int16_t r = tb_PostHighLevelEvent(a_evt, a_receiver_id, a_refcon, a_msg_buf, a_msg_length, a_post_options);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -4785,11 +5372,57 @@ static void glue_ReserveMem(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_ResetAlertStage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_ResetAlertStage();
+    cpu_push32(c, ret);
+}
+
+static void glue_ResolveAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasAliased = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ResolveAlias(a_fromFile, a_alias, a_target, a_wasAliased);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ResolveAliasFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasAliased = (gaddr)cpu_pop32(c);
+    gaddr a_targetIsFolder = (gaddr)cpu_pop32(c);
+    int8_t a_resolveAliasChains = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theSpec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ResolveAliasFile(a_theSpec, a_resolveAliasChains, a_targetIsFolder, a_wasAliased);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RsrcZoneInit(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_RsrcZoneInit();
+    cpu_push32(c, ret);
+}
+
+static void glue_SameProcess(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_same_out = (gaddr)cpu_pop32(c);
+    gaddr a_serial_number1 = (gaddr)cpu_pop32(c);
+    gaddr a_serial_number0 = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SameProcess(a_serial_number0, a_serial_number1, a_same_out);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5038,6 +5671,16 @@ static void glue_SetFractEnable(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int8_t a_enable = (int8_t)(cpu_pop16(c) >> 8);
     tb_SetFractEnable(a_enable);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetFrontProcess(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_serial_number = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetFrontProcess(a_serial_number);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5421,6 +6064,26 @@ static void glue_StillDown(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_StopAlert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fp = (gaddr)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    int16_t r = tb_StopAlert(a_id, a_fp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_StringToNum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_s = (gaddr)c->a[0];
+    uint32_t a_lp = 0;
+    tb_StringToNum(a_s, &a_lp);
+    c->d[0] = a_lp;
+}
+
 static void glue_StringWidth(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5492,6 +6155,16 @@ static void glue_SystemClick(cpu68k *c, uint16_t trapword)
     gaddr a_wp = (gaddr)cpu_pop32(c);
     gaddr a_evp = (gaddr)cpu_pop32(c);
     tb_SystemClick(a_evp, a_wp);
+    cpu_push32(c, ret);
+}
+
+static void glue_SystemEdit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_editcmd = (int16_t)cpu_pop16(c);
+    int8_t r = tb_SystemEdit(a_editcmd);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -5830,6 +6503,75 @@ static void glue_TEUpdate(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TempDisposeHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_result_code = (gaddr)cpu_pop32(c);
+    gaddr a_h = (gaddr)cpu_pop32(c);
+    tb_TempDisposeHandle(a_h, a_result_code);
+    cpu_push32(c, ret);
+}
+
+static void glue_TempFreeMem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_TempFreeMem();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TempHLock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_result_code = (gaddr)cpu_pop32(c);
+    gaddr a_h = (gaddr)cpu_pop32(c);
+    tb_TempHLock(a_h, a_result_code);
+    cpu_push32(c, ret);
+}
+
+static void glue_TempHUnlock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_result_code = (gaddr)cpu_pop32(c);
+    gaddr a_h = (gaddr)cpu_pop32(c);
+    tb_TempHUnlock(a_h, a_result_code);
+    cpu_push32(c, ret);
+}
+
+static void glue_TempMaxMem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_grow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_TempMaxMem(a_grow);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TempNewHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_result_code = (gaddr)cpu_pop32(c);
+    int32_t a_logical_size = (int32_t)cpu_pop32(c);
+    gaddr r = tb_TempNewHandle(a_logical_size, a_result_code);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TempTopMem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_TempTopMem();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_TestControl(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6006,6 +6748,19 @@ static void glue_UnpackBits(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UpdateAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasChanged = (gaddr)cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UpdateAlias(a_fromFile, a_target, a_alias, a_wasChanged);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UpdateControls(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6062,6 +6817,16 @@ static void glue_WaitNextEvent(cpu68k *c, uint16_t trapword)
     int16_t a_mask = (int16_t)cpu_pop16(c);
     int8_t r = tb_WaitNextEvent(a_mask, a_evp, a_sleep, a_mousergn);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_WakeUpProcess(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_serial_number = (gaddr)cpu_pop32(c);
+    int16_t r = tb_WakeUpProcess(a_serial_number);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -6296,8 +7061,8 @@ const trap_sig trap_sigs[] = {
     {0xA86D, -1, "InitPort", CONV_STACK, 4, 0, glue_InitPort},
     {0xA86E, -1, "InitGraf", CONV_STACK, 4, 0, glue_InitGraf},
     {0xA86F, -1, "OpenPort", CONV_STACK, 4, 0, glue_OpenPort},
-    {0xA870, -1, "LocalToGlobal", CONV_STACK, 4, 0, 0},
-    {0xA871, -1, "GlobalToLocal", CONV_STACK, 4, 0, 0},
+    {0xA870, -1, "LocalToGlobal", CONV_STACK, 4, 0, glue_LocalToGlobal},
+    {0xA871, -1, "GlobalToLocal", CONV_STACK, 4, 0, glue_GlobalToLocal},
     {0xA872, -1, "GrafDevice", CONV_STACK, 2, 0, glue_GrafDevice},
     {0xA873, -1, "SetPort", CONV_STACK, 4, 0, glue_SetPort},
     {0xA874, -1, "GetPort", CONV_STACK, 4, 0, glue_GetPort},
@@ -6567,14 +7332,14 @@ const trap_sig trap_sigs[] = {
     {0xA982, -1, "CloseDialog", CONV_STACK, 4, 0, 0},
     {0xA983, -1, "DisposeDialog", CONV_STACK, 4, 0, 0},
     {0xA984, -1, "FindDialogItem", CONV_STACK, 8, 2, 0},
-    {0xA985, -1, "Alert", CONV_STACK, 6, 2, 0},
-    {0xA986, -1, "StopAlert", CONV_STACK, 6, 2, 0},
-    {0xA987, -1, "NoteAlert", CONV_STACK, 6, 2, 0},
-    {0xA988, -1, "CautionAlert", CONV_STACK, 6, 2, 0},
-    {0xA989, -1, "CouldAlert", CONV_STACK, 2, 0, 0},
-    {0xA98A, -1, "FreeAlert", CONV_STACK, 2, 0, 0},
-    {0xA98B, -1, "ParamText", CONV_STACK, 16, 0, 0},
-    {0xA98C, -1, "ErrorSound", CONV_STACK, 4, 0, 0},
+    {0xA985, -1, "Alert", CONV_STACK, 6, 2, glue_Alert},
+    {0xA986, -1, "StopAlert", CONV_STACK, 6, 2, glue_StopAlert},
+    {0xA987, -1, "NoteAlert", CONV_STACK, 6, 2, glue_NoteAlert},
+    {0xA988, -1, "CautionAlert", CONV_STACK, 6, 2, glue_CautionAlert},
+    {0xA989, -1, "CouldAlert", CONV_STACK, 2, 0, glue_CouldAlert},
+    {0xA98A, -1, "FreeAlert", CONV_STACK, 2, 0, glue_FreeAlert},
+    {0xA98B, -1, "ParamText", CONV_STACK, 16, 0, glue_ParamText},
+    {0xA98C, -1, "ErrorSound", CONV_STACK, 4, 0, glue_ErrorSound},
     {0xA98D, -1, "GetDialogItem", CONV_STACK, 18, 0, 0},
     {0xA98E, -1, "SetDialogItem", CONV_STACK, 16, 0, 0},
     {0xA98F, -1, "SetDialogItemText", CONV_STACK, 8, 0, 0},
@@ -6614,8 +7379,8 @@ const trap_sig trap_sigs[] = {
     {0xA9B3, -1, "SystemClick", CONV_STACK, 8, 0, glue_SystemClick},
     {0xA9B4, -1, "SystemTask", CONV_STACK, 0, 0, glue_SystemTask},
     {0xA9B5, -1, "SystemMenu", CONV_STACK, 4, 0, glue_SystemMenu},
-    {0xA9B6, -1, "OpenDeskAcc", CONV_STACK, 4, 2, 0},
-    {0xA9B7, -1, "CloseDeskAcc", CONV_STACK, 2, 0, 0},
+    {0xA9B6, -1, "OpenDeskAcc", CONV_STACK, 4, 2, glue_OpenDeskAcc},
+    {0xA9B7, -1, "CloseDeskAcc", CONV_STACK, 2, 0, glue_CloseDeskAcc},
     {0xA9B8, -1, "GetPattern", CONV_STACK, 2, 4, glue_GetPattern},
     {0xA9B9, -1, "GetCursor", CONV_STACK, 2, 4, glue_GetCursor},
     {0xA9BA, -1, "GetString", CONV_STACK, 2, 4, glue_GetString},
@@ -6626,7 +7391,7 @@ const trap_sig trap_sigs[] = {
     {0xA9BF, -1, "GetMenu", CONV_STACK, 2, 4, glue_GetMenu},
     {0xA9C0, -1, "GetNewMBar", CONV_STACK, 2, 4, glue_GetNewMBar},
     {0xA9C1, -1, "UniqueID", CONV_STACK, 4, 2, glue_UniqueID},
-    {0xA9C2, -1, "SystemEdit", CONV_STACK, 2, 2, 0},
+    {0xA9C2, -1, "SystemEdit", CONV_STACK, 2, 2, glue_SystemEdit},
     {0xA9C3, -1, "KeyTranslate", CONV_STACK, 10, 4, 0},
     {0xA9C4, -1, "OpenRFPerm", CONV_STACK, 8, 2, glue_OpenRFPerm},
     {0xA9C5, -1, "RsrcMapEntry", CONV_STACK, 4, 4, 0},
@@ -6789,14 +7554,14 @@ const unsigned trap_sig_count = sizeof trap_sigs / sizeof trap_sigs[0];
 
 const dispatch_sig dispatch_sigs[] = {
     {0xA823, (int32_t)0x0u, "FindFolder", CONV_STACK, 16, 2, 0},
-    {0xA823, (int32_t)0x2u, "NewAlias", CONV_STACK, 12, 2, 0},
-    {0xA823, (int32_t)0x3u, "ResolveAlias", CONV_STACK, 16, 2, 0},
-    {0xA823, (int32_t)0x5u, "MatchAlias", CONV_STACK, 32, 2, 0},
-    {0xA823, (int32_t)0x6u, "UpdateAlias", CONV_STACK, 16, 2, 0},
-    {0xA823, (int32_t)0x7u, "GetAliasInfo", CONV_STACK, 10, 2, 0},
-    {0xA823, (int32_t)0x8u, "NewAliasMinimal", CONV_STACK, 8, 2, 0},
-    {0xA823, (int32_t)0x9u, "NewAliasMinimalFromFullPath", CONV_STACK, 18, 2, 0},
-    {0xA823, (int32_t)0xCu, "ResolveAliasFile", CONV_STACK, 14, 2, 0},
+    {0xA823, (int32_t)0x2u, "NewAlias", CONV_STACK, 12, 2, glue_NewAlias},
+    {0xA823, (int32_t)0x3u, "ResolveAlias", CONV_STACK, 16, 2, glue_ResolveAlias},
+    {0xA823, (int32_t)0x5u, "MatchAlias", CONV_STACK, 32, 2, glue_MatchAlias},
+    {0xA823, (int32_t)0x6u, "UpdateAlias", CONV_STACK, 16, 2, glue_UpdateAlias},
+    {0xA823, (int32_t)0x7u, "GetAliasInfo", CONV_STACK, 10, 2, glue_GetAliasInfo},
+    {0xA823, (int32_t)0x8u, "NewAliasMinimal", CONV_STACK, 8, 2, glue_NewAliasMinimal},
+    {0xA823, (int32_t)0x9u, "NewAliasMinimalFromFullPath", CONV_STACK, 18, 2, glue_NewAliasMinimalFromFullPath},
+    {0xA823, (int32_t)0xCu, "ResolveAliasFile", CONV_STACK, 14, 2, glue_ResolveAliasFile},
     {0xAA5A, (int32_t)0x1u, "GetSharedLibrary", CONV_STACK, 24, 2, 0},
     {0xAA5A, (int32_t)0x2u, "GetDiskFragment", CONV_STACK, 32, 2, 0},
     {0xAA5A, (int32_t)0x3u, "GetMemFragment", CONV_STACK, 28, 2, 0},
@@ -6951,23 +7716,24 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, 0},
     {0xAA59, (int32_t)0x3u, "SaveMixedModeState", CONV_STACK, 8, 2, 0},
     {0xAA59, (int32_t)0x4u, "RestoreMixedModeState", CONV_STACK, 8, 2, 0},
-    {0xA88F, (int32_t)0x15u, "TempMaxMem", CONV_STACK, 4, 4, 0},
-    {0xA88F, (int32_t)0x16u, "TempTopMem", CONV_STACK, 0, 4, 0},
-    {0xA88F, (int32_t)0x18u, "TempFreeMem", CONV_STACK, 0, 4, 0},
-    {0xA88F, (int32_t)0x1Du, "TempNewHandle", CONV_STACK, 8, 4, 0},
-    {0xA88F, (int32_t)0x1Eu, "TempHLock", CONV_STACK, 8, 0, 0},
-    {0xA88F, (int32_t)0x1Fu, "TempHUnlock", CONV_STACK, 8, 0, 0},
-    {0xA88F, (int32_t)0x20u, "TempDisposeHandle", CONV_STACK, 8, 0, 0},
-    {0xA88F, (int32_t)0x33u, "AcceptHighLevelEvent", CONV_STACK, 16, 2, 0},
-    {0xA88F, (int32_t)0x34u, "PostHighLevelEvent", CONV_STACK, 24, 2, 0},
-    {0xA88F, (int32_t)0x35u, "GetProcessSerialNumberFromPortName", CONV_STACK, 8, 2, 0},
-    {0xA88F, (int32_t)0x37u, "GetCurrentProcess", CONV_STACK, 4, 2, 0},
-    {0xA88F, (int32_t)0x38u, "GetNextProcess", CONV_STACK, 4, 2, 0},
-    {0xA88F, (int32_t)0x3Au, "GetProcessInformation", CONV_STACK, 8, 2, 0},
-    {0xA88F, (int32_t)0x3Bu, "SetFrontProcess", CONV_STACK, 4, 2, 0},
-    {0xA88F, (int32_t)0x3Cu, "WakeUpProcess", CONV_STACK, 4, 2, 0},
-    {0xA88F, (int32_t)0x3Du, "SameProcess", CONV_STACK, 12, 2, 0},
-    {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, 0},
+    {0xA88F, (int32_t)0x15u, "TempMaxMem", CONV_STACK, 4, 4, glue_TempMaxMem},
+    {0xA88F, (int32_t)0x16u, "TempTopMem", CONV_STACK, 0, 4, glue_TempTopMem},
+    {0xA88F, (int32_t)0x18u, "TempFreeMem", CONV_STACK, 0, 4, glue_TempFreeMem},
+    {0xA88F, (int32_t)0x1Du, "TempNewHandle", CONV_STACK, 8, 4, glue_TempNewHandle},
+    {0xA88F, (int32_t)0x1Eu, "TempHLock", CONV_STACK, 8, 0, glue_TempHLock},
+    {0xA88F, (int32_t)0x1Fu, "TempHUnlock", CONV_STACK, 8, 0, glue_TempHUnlock},
+    {0xA88F, (int32_t)0x20u, "TempDisposeHandle", CONV_STACK, 8, 0, glue_TempDisposeHandle},
+    {0xA88F, (int32_t)0x33u, "AcceptHighLevelEvent", CONV_STACK, 16, 2, glue_AcceptHighLevelEvent},
+    {0xA88F, (int32_t)0x34u, "PostHighLevelEvent", CONV_STACK, 24, 2, glue_PostHighLevelEvent},
+    {0xA88F, (int32_t)0x35u, "GetProcessSerialNumberFromPortName", CONV_STACK, 8, 2, glue_GetProcessSerialNumberFromPortName},
+    {0xA88F, (int32_t)0x37u, "GetCurrentProcess", CONV_STACK, 4, 2, glue_GetCurrentProcess},
+    {0xA88F, (int32_t)0x38u, "GetNextProcess", CONV_STACK, 4, 2, glue_GetNextProcess},
+    {0xA88F, (int32_t)0x39u, "GetFrontProcess", CONV_STACK, 8, 2, glue_GetFrontProcess},
+    {0xA88F, (int32_t)0x3Au, "GetProcessInformation", CONV_STACK, 8, 2, glue_GetProcessInformation},
+    {0xA88F, (int32_t)0x3Bu, "SetFrontProcess", CONV_STACK, 4, 2, glue_SetFrontProcess},
+    {0xA88F, (int32_t)0x3Cu, "WakeUpProcess", CONV_STACK, 4, 2, glue_WakeUpProcess},
+    {0xA88F, (int32_t)0x3Du, "SameProcess", CONV_STACK, 12, 2, glue_SameProcess},
+    {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, 0},
     {0xA9E7, (int32_t)0x0u, "LActivate", CONV_STACK, 6, 0, 0},
     {0xA9E7, (int32_t)0x4u, "LAddColumn", CONV_STACK, 8, 2, 0},
@@ -7140,22 +7906,22 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9ED, (int32_t)0x20u, "IULangOrder", CONV_STACK, 4, 2, 0},
     {0xA9ED, (int32_t)0x22u, "IUTextOrder", CONV_STACK, 20, 2, 0},
     {0xA9ED, (int32_t)0x24u, "GetIntlResourceTable", CONV_STACK, 16, 0, 0},
-    {0xA9EE, (int32_t)0x0u, "NumToString", CONV_REG, 0, 0, 0},
-    {0xA9EE, (int32_t)0x1u, "StringToNum", CONV_REG, 0, 0, 0},
+    {0xA9EE, (int32_t)0x0u, "NumToString", CONV_REG, 0, 0, glue_NumToString},
+    {0xA9EE, (int32_t)0x1u, "StringToNum", CONV_REG, 0, 0, glue_StringToNum},
     {0xA9EE, (int32_t)0x2u, "ROMlib_Fpstr2dec", CONV_STACK, 16, 0, 0},
     {0xA9EE, (int32_t)0x3u, "ROMlib_Fdec2str", CONV_STACK, 12, 0, 0},
     {0xA9EE, (int32_t)0x4u, "ROMlib_Fcstr2dec", CONV_STACK, 16, 0, 0},
-    {0xA816, (int32_t)0x11Eu, "AESetInteractionAllowed", CONV_STACK, 2, 2, 0},
-    {0xA816, (int32_t)0x204u, "AEDisposeDesc", CONV_STACK, 4, 2, 0},
+    {0xA816, (int32_t)0x11Eu, "AESetInteractionAllowed", CONV_STACK, 2, 2, glue_AESetInteractionAllowed},
+    {0xA816, (int32_t)0x204u, "AEDisposeDesc", CONV_STACK, 4, 2, glue_AEDisposeDesc},
     {0xA816, (int32_t)0x219u, "AEResetTimer", CONV_STACK, 4, 2, 0},
-    {0xA816, (int32_t)0x21Au, "AEGetTheCurrentEvent", CONV_STACK, 4, 2, 0},
-    {0xA816, (int32_t)0x21Bu, "AEProcessAppleEvent", CONV_STACK, 4, 2, 0},
-    {0xA816, (int32_t)0x21Du, "AEGetInteractionAllowed", CONV_STACK, 4, 2, 0},
-    {0xA816, (int32_t)0x22Bu, "AESuspendTheCurrentEvent", CONV_STACK, 4, 2, 0},
+    {0xA816, (int32_t)0x21Au, "AEGetTheCurrentEvent", CONV_STACK, 4, 2, glue_AEGetTheCurrentEvent},
+    {0xA816, (int32_t)0x21Bu, "AEProcessAppleEvent", CONV_STACK, 4, 2, glue_AEProcessAppleEvent},
+    {0xA816, (int32_t)0x21Du, "AEGetInteractionAllowed", CONV_STACK, 4, 2, glue_AEGetInteractionAllowed},
+    {0xA816, (int32_t)0x22Bu, "AESuspendTheCurrentEvent", CONV_STACK, 4, 2, glue_AESuspendTheCurrentEvent},
     {0xA816, (int32_t)0x22Cu, "AESetTheCurrentEvent", CONV_STACK, 4, 2, 0},
     {0xA816, (int32_t)0x23Au, "AEDisposeToken", CONV_STACK, 4, 2, 0},
-    {0xA816, (int32_t)0x405u, "AEDuplicateDesc", CONV_STACK, 8, 2, 0},
-    {0xA816, (int32_t)0x407u, "AECountItems", CONV_STACK, 8, 2, 0},
+    {0xA816, (int32_t)0x405u, "AEDuplicateDesc", CONV_STACK, 8, 2, glue_AEDuplicateDesc},
+    {0xA816, (int32_t)0x407u, "AECountItems", CONV_STACK, 8, 2, glue_AECountItems},
     {0xA816, (int32_t)0x40Eu, "AEDeleteItem", CONV_STACK, 8, 2, 0},
     {0xA816, (int32_t)0x413u, "AEDeleteParam", CONV_STACK, 8, 2, 0},
     {0xA816, (int32_t)0x441u, "AEManagerInfo", CONV_STACK, 4, 2, 0},
@@ -7163,34 +7929,34 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA816, (int32_t)0x501u, "AERemoveSpecialHandler", CONV_STACK, 10, 2, 0},
     {0xA816, (int32_t)0x52Du, "AEGetSpecialHandler", CONV_STACK, 10, 2, 0},
     {0xA816, (int32_t)0x536u, "AEResolve", CONV_STACK, 10, 2, 0},
-    {0xA816, (int32_t)0x603u, "AECoerceDesc", CONV_STACK, 12, 2, 0},
+    {0xA816, (int32_t)0x603u, "AECoerceDesc", CONV_STACK, 12, 2, glue_AECoerceDesc},
     {0xA816, (int32_t)0x609u, "AEPutDesc", CONV_STACK, 12, 2, 0},
-    {0xA816, (int32_t)0x610u, "AEPutParamDesc", CONV_STACK, 12, 2, 0},
-    {0xA816, (int32_t)0x61Cu, "AEInteractWithUser", CONV_STACK, 12, 2, 0},
+    {0xA816, (int32_t)0x610u, "AEPutParamDesc", CONV_STACK, 12, 2, glue_AEPutParamDesc},
+    {0xA816, (int32_t)0x61Cu, "AEInteractWithUser", CONV_STACK, 12, 2, glue_AEInteractWithUser},
     {0xA816, (int32_t)0x627u, "AEPutAttributeDesc", CONV_STACK, 12, 2, 0},
     {0xA816, (int32_t)0x632u, "_AE_hdlr_delete", CONV_STACK, 12, 2, 0},
     {0xA816, (int32_t)0x706u, "AECreateList", CONV_STACK, 14, 2, 0},
-    {0xA816, (int32_t)0x720u, "AERemoveEventHandler", CONV_STACK, 14, 2, 0},
+    {0xA816, (int32_t)0x720u, "AERemoveEventHandler", CONV_STACK, 14, 2, glue_AERemoveEventHandler},
     {0xA816, (int32_t)0x723u, "AERemoveCoercionHandler", CONV_STACK, 14, 2, 0},
     {0xA816, (int32_t)0x738u, "AERemoveObjectAccessor", CONV_STACK, 14, 2, 0},
-    {0xA816, (int32_t)0x812u, "AEGetParamDesc", CONV_STACK, 16, 2, 0},
-    {0xA816, (int32_t)0x818u, "AEResumeTheCurrentEvent", CONV_STACK, 16, 2, 0},
-    {0xA816, (int32_t)0x825u, "AECreateDesc", CONV_STACK, 16, 2, 0},
-    {0xA816, (int32_t)0x826u, "AEGetAttributeDesc", CONV_STACK, 16, 2, 0},
+    {0xA816, (int32_t)0x812u, "AEGetParamDesc", CONV_STACK, 16, 2, glue_AEGetParamDesc},
+    {0xA816, (int32_t)0x818u, "AEResumeTheCurrentEvent", CONV_STACK, 16, 2, glue_AEResumeTheCurrentEvent},
+    {0xA816, (int32_t)0x825u, "AECreateDesc", CONV_STACK, 16, 2, glue_AECreateDesc},
+    {0xA816, (int32_t)0x826u, "AEGetAttributeDesc", CONV_STACK, 16, 2, glue_AEGetAttributeDesc},
     {0xA816, (int32_t)0x828u, "AESizeOfAttribute", CONV_STACK, 16, 2, 0},
     {0xA816, (int32_t)0x829u, "AESizeOfParam", CONV_STACK, 16, 2, 0},
     {0xA816, (int32_t)0x82Au, "AESizeOfNthItem", CONV_STACK, 16, 2, 0},
     {0xA816, (int32_t)0x831u, "_AE_hdlr_install", CONV_STACK, 16, 2, 0},
     {0xA816, (int32_t)0x833u, "_AE_hdlr_lookup", CONV_STACK, 16, 2, 0},
-    {0xA816, (int32_t)0x91Fu, "AEInstallEventHandler", CONV_STACK, 18, 2, 0},
-    {0xA816, (int32_t)0x921u, "AEGetEventHandler", CONV_STACK, 18, 2, 0},
+    {0xA816, (int32_t)0x91Fu, "AEInstallEventHandler", CONV_STACK, 18, 2, glue_AEInstallEventHandler},
+    {0xA816, (int32_t)0x921u, "AEGetEventHandler", CONV_STACK, 18, 2, glue_AEGetEventHandler},
     {0xA816, (int32_t)0x92Eu, "_AE_hdlr_table_alloc", CONV_STACK, 18, 2, 0},
     {0xA816, (int32_t)0x937u, "AEInstallObjectAccessor", CONV_STACK, 18, 2, 0},
     {0xA816, (int32_t)0x939u, "AEGetObjectAccessor", CONV_STACK, 18, 2, 0},
-    {0xA816, (int32_t)0xA02u, "AECoercePtr", CONV_STACK, 20, 2, 0},
+    {0xA816, (int32_t)0xA02u, "AECoercePtr", CONV_STACK, 20, 2, glue_AECoercePtr},
     {0xA816, (int32_t)0xA08u, "AEPutPtr", CONV_STACK, 20, 2, 0},
-    {0xA816, (int32_t)0xA0Bu, "AEGetNthDesc", CONV_STACK, 20, 2, 0},
-    {0xA816, (int32_t)0xA0Fu, "AEPutParamPtr", CONV_STACK, 20, 2, 0},
+    {0xA816, (int32_t)0xA0Bu, "AEGetNthDesc", CONV_STACK, 20, 2, glue_AEGetNthDesc},
+    {0xA816, (int32_t)0xA0Fu, "AEPutParamPtr", CONV_STACK, 20, 2, glue_AEPutParamPtr},
     {0xA816, (int32_t)0xA16u, "AEPutAttributePtr", CONV_STACK, 20, 2, 0},
     {0xA816, (int32_t)0xA22u, "AEInstallCoercionHandler", CONV_STACK, 20, 2, 0},
     {0xA816, (int32_t)0xB0Du, "AEPutArray", CONV_STACK, 22, 2, 0},
@@ -7199,10 +7965,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA816, (int32_t)0xC3Bu, "AECallObjectAccessor", CONV_STACK, 24, 2, 0},
     {0xA816, (int32_t)0xD0Cu, "AEGetArray", CONV_STACK, 26, 2, 0},
     {0xA816, (int32_t)0xD17u, "AESend", CONV_STACK, 26, 2, 0},
-    {0xA816, (int32_t)0xE11u, "AEGetParamPtr", CONV_STACK, 28, 2, 0},
-    {0xA816, (int32_t)0xE15u, "AEGetAttributePtr", CONV_STACK, 28, 2, 0},
+    {0xA816, (int32_t)0xE11u, "AEGetParamPtr", CONV_STACK, 28, 2, glue_AEGetParamPtr},
+    {0xA816, (int32_t)0xE15u, "AEGetAttributePtr", CONV_STACK, 28, 2, glue_AEGetAttributePtr},
     {0xA816, (int32_t)0xE35u, "AESetObjectCallbacks", CONV_STACK, 28, 2, 0},
-    {0xA816, (int32_t)0x100Au, "AEGetNthPtr", CONV_STACK, 32, 2, 0},
+    {0xA816, (int32_t)0x100Au, "AEGetNthPtr", CONV_STACK, 32, 2, glue_AEGetNthPtr},
     {0xAAA2, (int32_t)0x0u, "Entry2Index", CONV_STACK, 2, 4, 0},
     {0xAAA2, (int32_t)0x2u, "RestoreDeviceClut", CONV_STACK, 4, 0, 0},
     {0xAAA2, (int32_t)0x3u, "ResizePalette", CONV_STACK, 6, 0, 0},

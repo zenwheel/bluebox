@@ -24,6 +24,9 @@ bool ev_still_down(void);
 uint32_t ev_mouse_global(void);
 void ev_wait_tick(void);
 
+void display_menus_changed(void);
+int32_t display_take_menu_choice(void);
+
 static gaddr mlist(void) { return rd32(LM_MenuList); }
 static int mbar_height(void) { return (int16_t)rd16(LM_MBarHeight); }
 
@@ -98,6 +101,7 @@ static int16_t system_font_width(const uint8_t *s, int n);
 
 void tb_CalcMenuSize(gaddr mh)
 {
+    display_menus_changed();
     int items = tb_CountMItems(mh);
     int w = 0;
     for (int i = 1; i <= items; i++) {
@@ -315,6 +319,7 @@ void tb_InitMenus(void)
 
 void tb_InsertMenu(gaddr mh, int16_t before)
 {
+    display_menus_changed();
     gaddr l = mlist();
     int n = nmenus();
     int16_t id = MenuInfo_menuID(menu_ptr(mh));
@@ -341,6 +346,7 @@ void tb_InsertMenu(gaddr mh, int16_t before)
 
 void tb_DeleteMenu(int16_t mid)
 {
+    display_menus_changed();
     int n = nmenus();
     for (int i = 0; i < n; i++) {
         if (MenuInfo_menuID(menu_ptr(menu_at(i))) == mid) {
@@ -358,6 +364,7 @@ void tb_DeleteMenu(int16_t mid)
 
 void tb_ClearMenuBar(void)
 {
+    display_menus_changed();
     gaddr l = mlist();
     tb_SetHandleSize(l, 12);
     gmemset(rd32(l), 0, 12);
@@ -383,6 +390,7 @@ gaddr tb_GetMenuBar(void)
 
 void tb_SetMenuBar(gaddr ml)
 {
+    display_menus_changed();
     gaddr l = mlist();
     int32_t size = tb_GetHandleSize(ml);
     tb_SetHandleSize(l, size);
@@ -487,6 +495,7 @@ static void dim_rect(qrect r)
 
 void tb_DrawMenuBar(void)
 {
+    display_menus_changed();
     if (!rd32(LM_WMgrPort) || !mlist())
         return;
     gaddr saved;
@@ -700,8 +709,28 @@ static void restore_bits(qrect r, uint8_t *buf)
     free(buf);
 }
 
+/* A choice made in the host's menu bar: valid only if still enabled now
+ * that the app has had its chance to adjust its menus. */
+static int32_t host_choice(void)
+{
+    int32_t c = display_take_menu_choice();
+    if (!c)
+        return -1;
+    int16_t id = (int16_t)(c >> 16), item = (int16_t)(c & 0xFFFF);
+    gaddr mh = tb_GetMenuHandle(id);
+    if (!mh || !item_enabled(mh, item))
+        return 0;
+    tb_HiliteMenu(id);
+    return c;
+}
+
 int32_t tb_MenuSelect(uint32_t p)
 {
+    int32_t chosen = host_choice();
+    if (chosen >= 0) {
+        last_choice = chosen;
+        return chosen;
+    }
     gaddr saved;
     with_wmgr_port(&saved);
     layout_titles();
@@ -840,6 +869,7 @@ void tb_InitProcMenu(int16_t mbid) { tb_InitMenus(); }
 
 void tb_EnableItem(gaddr mh, int16_t item)
 {
+    display_menus_changed();
     gaddr p = menu_ptr(mh);
     if (item <= 31)
         MenuInfo_set_enableFlags(p, MenuInfo_enableFlags(p) | (int32_t)(1u << item));
@@ -847,6 +877,7 @@ void tb_EnableItem(gaddr mh, int16_t item)
 
 void tb_DisableItem(gaddr mh, int16_t item)
 {
+    display_menus_changed();
     gaddr p = menu_ptr(mh);
     if (item <= 31)
         MenuInfo_set_enableFlags(p, (int32_t)((uint32_t)MenuInfo_enableFlags(p) & ~(1u << item)));
@@ -862,6 +893,7 @@ void tb_CheckItem(gaddr mh, int16_t item, int8_t cflag) { tb_SetItemMark(mh, ite
 
 void tb_SetItemMark(gaddr mh, int16_t item, int16_t mark)
 {
+    display_menus_changed();
     gaddr f = item_field(mh, item, 2);
     if (f)
         wr8(f, (uint8_t)mark);
@@ -888,6 +920,7 @@ void tb_GetItemIcon(gaddr mh, int16_t item, gaddr iconp)
 
 void tb_SetItemStyle(gaddr mh, int16_t item, int16_t style)
 {
+    display_menus_changed();
     gaddr f = item_field(mh, item, 3);
     if (f)
         wr8(f, (uint8_t)style);
@@ -901,6 +934,7 @@ void tb_GetItemStyle(gaddr mh, int16_t item, gaddr stylep)
 
 void tb_SetItemCmd(gaddr mh, int16_t item, int16_t cmd)
 {
+    display_menus_changed();
     gaddr f = item_field(mh, item, 1);
     if (f)
         wr8(f, (uint8_t)cmd);
@@ -923,6 +957,7 @@ void tb_GetMenuItemText(gaddr mh, int16_t item, gaddr str)
 
 void tb_SetMenuItemText(gaddr mh, int16_t item, gaddr str)
 {
+    display_menus_changed();
     gaddr it = item_addr(mh, item);
     if (!it)
         return;

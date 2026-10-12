@@ -305,9 +305,12 @@ void wdef0_native(cpu68k *c, uint16_t tw)
 
 static void gray_rgn(hrgn *out) { rgn_read(rd32(LM_GrayRgn), out); }
 
+void display_windows_changed(void);
+
 /* Recompute every window's visRgn (local coordinates). */
 static void calc_all_vis(void)
 {
+    display_windows_changed();
     hrgn covered, vis, tmp, gray;
     hrgn_init(&covered);
     hrgn_init(&vis);
@@ -452,6 +455,7 @@ static void set_hilite(gaddr w, bool on)
     if (!w || (WindowRecord_hilited(w) != 0) == on)
         return;
     WindowRecord_set_hilited(w, on ? 1 : 0);
+    display_windows_changed();
     if (wvisible(w)) {
         hrgn s, c;
         hrgn_init(&s);
