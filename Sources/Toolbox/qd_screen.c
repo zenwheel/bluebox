@@ -12,7 +12,7 @@
 
 int g_screen_width = 1024, g_screen_height = 768;
 static uint32_t screen_row_bytes;
-static int depth_pref = 1, screen_depth = 1;
+static int depth_pref = 8, screen_depth = 1;
 static gaddr screen_ctab;
 
 void machine_set_screen_depth(int depth) { depth_pref = depth == 8 || depth == 32 ? depth : 1; }

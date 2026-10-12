@@ -43,7 +43,7 @@ func usage() -> Never {
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
-      --depth N  screen depth: 1, 8 or 32 bits (default 1, or 32 with a theme or native frames)
+      --depth N  screen depth: 1, 8 or 32 bits (default 8, or 32 with a theme or native frames)
           --screenshot P  write the screen to PNG file P when the run ends
           --print-to F  print to PDF file F instead of the print panel (headless runs)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
