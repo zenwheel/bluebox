@@ -254,6 +254,24 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     return found;
 }
 
+/* An update event the application never handles comes back forever, as on
+ * a real Mac (input still gets through first).  Headless, that is the
+ * application waiting for input too. */
+static void note_repeated_update(gaddr evt)
+{
+    static uint32_t last_msg;
+    static int repeats;
+    if ((int16_t)rd16(evt) != updateEvt) {
+        repeats = 0;
+        return;
+    }
+    uint32_t msg = rd32(evt + EventRecord_message_off);
+    repeats = msg == last_msg ? repeats + 1 : 0;
+    last_msg = msg;
+    if (repeats > 8 && !host_attached)
+        machine_idle();
+}
+
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
     sound_pump();
@@ -261,8 +279,11 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
     notify_pump();
     machine_advance_ticks();
     display_sync();
-    if (next_event(em, evt, true, false))
+    if (next_event(em, evt, true, false)) {
+        LOGF(LOG_TRAPS, "  event %d message %08X\n", (int16_t)rd16(evt), rd32(evt + 2));
+        note_repeated_update(evt);
         return 1;
+    }
     /* Apps that poll GetNextEvent would spin the host CPU; a null event
      * waits up to a tick for input, as time passed on a real Mac too. */
     if (host_attached) {
@@ -286,8 +307,10 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     time_pump();
     notify_pump();
     display_sync();
-    if (next_event(mask, evp, true, false))
+    if (next_event(mask, evp, true, false)) {
+        note_repeated_update(evp);
         return 1;
+    }
     if (host_attached && sleep > 0) {
         /* Sleep until input arrives or the time is up. */
         uint32_t c0, i0;
