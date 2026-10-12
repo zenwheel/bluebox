@@ -523,6 +523,12 @@ void trap_init(void)
         disps[ndisps++] = (disp_entry){ di->trap, di->name, di->selector_location, first, count };
         if (!any && !g_trap_census)
             continue;
+        /* A hand-written native for the whole trap (FP68K, Elems68K) wins. */
+        bool raw = false;
+        for (const raw_trap *r = raw_traps; r->fn && !raw; r++)
+            raw = r->trap == di->trap;
+        if (raw)
+            continue;
         uint32_t stub = native_register(dispatch_native, di->name, di->trap);
         if (di->trap & 0x0800)
             wr32(TB_TRAP_TABLE + (di->trap & 0x3FFu) * 4, stub);
