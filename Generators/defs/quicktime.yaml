@@ -1,0 +1,7326 @@
+# QuickTime's Movie Toolbox (trap AAAA) and Image Compression Manager
+# (trap AAA3): every selector, with its arguments reduced to their sizes on
+# the stack, taken from the QuickTime interfaces.  Calls we do not implement
+# return zero, as for a movie with nothing in it (see quicktime.c).
+
+- dispatcher:
+    name: ImageCompressionDispatch
+    trap: 0xAAA3
+    selector-location: D0W
+
+- function:
+    name: CheckQuickTimeRegistration
+    args:
+      - name: registrationKey
+        type: Ptr
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2DA
+
+- function:
+    name: GetMoviesError
+    return: OSErr
+    dispatcher: QuickTime
+    selector: 0x3
+
+- function:
+    name: ClearMoviesStickyError
+    dispatcher: QuickTime
+    selector: 0xDE
+
+- function:
+    name: GetMoviesStickyError
+    return: OSErr
+    dispatcher: QuickTime
+    selector: 0x4
+
+- function:
+    name: SetMoviesErrorProc
+    args:
+      - name: errProc
+        type: LONGINT
+      - name: refcon
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xEF
+
+- function:
+    name: PrePrerollMovie
+    return: OSErr
+    args:
+      - name: m
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: rate
+        type: LONGINT
+      - name: proc
+        type: LONGINT
+      - name: refcon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2F7
+
+- function:
+    name: AbortPrePrerollMovie
+    args:
+      - name: m
+        type: LONGINT
+      - name: err
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x2F8
+
+- function:
+    name: LoadMovieIntoRam
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x7
+
+- function:
+    name: LoadTrackIntoRam
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x16E
+
+- function:
+    name: LoadMediaIntoRam
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x8
+
+- function:
+    name: GetMovieActive
+    return: Boolean
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xA
+
+- function:
+    name: QTGetWallClockTimeBase
+    return: OSErr
+    args:
+      - name: wallClockTimeBase
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x347
+
+- function:
+    name: QTIdleManagerOpen
+    return: LONGINT
+    dispatcher: QuickTime
+    selector: 0x348
+
+- function:
+    name: QTIdleManagerClose
+    return: OSErr
+    args:
+      - name: im
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x349
+
+- function:
+    name: QTIdleManagerGetNextIdleTime
+    return: OSErr
+    args:
+      - name: im
+        type: LONGINT
+      - name: nextIdle
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x34A
+
+- function:
+    name: QTIdleManagerSetNextIdleTime
+    return: OSErr
+    args:
+      - name: im
+        type: LONGINT
+      - name: nextIdle
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x34B
+
+- function:
+    name: QTIdleManagerSetNextIdleTimeNever
+    return: OSErr
+    args:
+      - name: im
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x373
+
+- function:
+    name: QTIdleManagerSetNextIdleTimeNow
+    return: OSErr
+    args:
+      - name: im
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x374
+
+- function:
+    name: QTIdleManagerSetNextIdleTimeDelta
+    return: OSErr
+    args:
+      - name: im
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+      - name: scale
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x375
+
+- function:
+    name: QTIdleManagerSetParent
+    return: OSErr
+    args:
+      - name: im
+        type: LONGINT
+      - name: parent
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x34C
+
+- function:
+    name: QTIdleManagerNeedsAnIdle
+    return: OSErr
+    args:
+      - name: im
+        type: LONGINT
+      - name: needsOne
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x371
+
+- function:
+    name: CreateMovieControl
+    return: OSErr
+    args:
+      - name: theWindow
+        type: LONGINT
+      - name: localRect
+        type: Ptr
+      - name: theMovie
+        type: LONGINT
+      - name: options
+        type: LONGINT
+      - name: returnedControl
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x378
+
+- function:
+    name: GoToEndOfMovie
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xE
+
+- function:
+    name: GetMoviePreviewMode
+    return: Boolean
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xF
+
+- function:
+    name: SetMoviePreviewMode
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: usePreview
+        type: Boolean
+    dispatcher: QuickTime
+    selector: 0x10
+
+- function:
+    name: ShowMoviePoster
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x11
+
+- function:
+    name: PlayMoviePreview
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: callOutProc
+        type: LONGINT
+      - name: refcon
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xF2
+
+- function:
+    name: GetMovieTimeBase
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x12
+
+- function:
+    name: SetMovieMasterTimeBase
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: tb
+        type: LONGINT
+      - name: slaveZero
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x167
+
+- function:
+    name: SetMovieMasterClock
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: clockMeister
+        type: LONGINT
+      - name: slaveZero
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x168
+
+- function:
+    name: ChooseMovieClock
+    args:
+      - name: m
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x269
+
+- function:
+    name: GetMovieGWorld
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: port
+        type: Ptr
+      - name: gdh
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x15
+
+- function:
+    name: SetMovieDrawingCompleteProc
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: proc
+        type: LONGINT
+      - name: refCon
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1DE
+
+- function:
+    name: GetMovieNaturalBoundsRect
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: naturalBounds
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x22C
+
+- function:
+    name: GetNextTrackForCompositing
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1FA
+
+- function:
+    name: GetPrevTrackForCompositing
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1FB
+
+- function:
+    name: SetTrackGWorld
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: port
+        type: LONGINT
+      - name: gdh
+        type: LONGINT
+      - name: proc
+        type: LONGINT
+      - name: refCon
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x9D
+
+- function:
+    name: GetMoviePict
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: time
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1D
+
+- function:
+    name: GetTrackPict
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: time
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1E
+
+- function:
+    name: GetMoviePosterPict
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xF7
+
+- function:
+    name: InvalidateMovieRegion
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: invalidRgn
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x22A
+
+- function:
+    name: GetMovieDisplayClipRgn
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xFC
+
+- function:
+    name: SetMovieDisplayClipRgn
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: theClip
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xFD
+
+- function:
+    name: GetMovieClipRgn
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x100
+
+- function:
+    name: SetMovieClipRgn
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: theClip
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x101
+
+- function:
+    name: GetTrackClipRgn
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x102
+
+- function:
+    name: SetTrackClipRgn
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: theClip
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x103
+
+- function:
+    name: GetMovieDisplayBoundsRgn
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xFB
+
+- function:
+    name: GetTrackDisplayBoundsRgn
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x112
+
+- function:
+    name: GetMovieBoundsRgn
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xFE
+
+- function:
+    name: GetTrackMovieBoundsRgn
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xFF
+
+- function:
+    name: GetTrackBoundsRgn
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x111
+
+- function:
+    name: GetTrackMatte
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x115
+
+- function:
+    name: SetTrackMatte
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: theMatte
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x116
+
+- function:
+    name: DisposeMatte
+    args:
+      - name: theMatte
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x14A
+
+- function:
+    name: SetMovieVideoOutput
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: vout
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x340
+
+- function:
+    name: NewMovie
+    return: LONGINT
+    args:
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x187
+
+- function:
+    name: PutMovieIntoHandle
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: publicMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x22
+
+- function:
+    name: PutMovieIntoDataFork
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: fRefNum
+        type: INTEGER
+      - name: offset
+        type: LONGINT
+      - name: maxSize
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1B4
+
+- function:
+    name: PutMovieIntoDataFork64
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: fRefNum
+        type: LONGINT
+      - name: offset
+        type: Ptr
+      - name: maxSize
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2EA
+
+- function:
+    name: PutMovieIntoStorage
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: dh
+        type: LONGINT
+      - name: offset
+        type: Ptr
+      - name: maxSize
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x391
+
+- function:
+    name: PutMovieForDataRefIntoHandle
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: publicMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x380
+
+- function:
+    name: GetMovieCreationTime
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x26
+
+- function:
+    name: GetMovieModificationTime
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x27
+
+- function:
+    name: GetMovieTimeScale
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x29
+
+- function:
+    name: SetMovieTimeScale
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: timeScale
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2A
+
+- function:
+    name: GetMovieDuration
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2B
+
+- function:
+    name: GetMovieRate
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2C
+
+- function:
+    name: SetMovieRate
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: rate
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2D
+
+- function:
+    name: SetMoviePreferredRate
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: rate
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xF4
+
+- function:
+    name: GetMoviePreferredVolume
+    return: INTEGER
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xF5
+
+- function:
+    name: SetMoviePreferredVolume
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: volume
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0xF6
+
+- function:
+    name: SetMovieVolume
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: volume
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x2F
+
+- function:
+    name: GetMovieMatrix
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: matrix
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x31
+
+- function:
+    name: SetMovieMatrix
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: matrix
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x32
+
+- function:
+    name: GetMoviePreviewTime
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: previewTime
+        type: Ptr
+      - name: previewDuration
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x33
+
+- function:
+    name: SetMoviePreviewTime
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: previewTime
+        type: LONGINT
+      - name: previewDuration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x34
+
+- function:
+    name: GetMoviePosterTime
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x35
+
+- function:
+    name: SetMoviePosterTime
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: posterTime
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x36
+
+- function:
+    name: GetMovieSelection
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: selectionTime
+        type: Ptr
+      - name: selectionDuration
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x37
+
+- function:
+    name: SetMovieSelection
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: selectionTime
+        type: LONGINT
+      - name: selectionDuration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x38
+
+- function:
+    name: SetMovieActiveSegment
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x15C
+
+- function:
+    name: GetMovieActiveSegment
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: startTime
+        type: Ptr
+      - name: duration
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x15D
+
+- function:
+    name: GetMovieTime
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: currentTime
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x39
+
+- function:
+    name: SetMovieTime
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: newtime
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x3C
+
+- function:
+    name: SetMovieTimeValue
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: newtime
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x3D
+
+- function:
+    name: GetMovieUserData
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x3E
+
+- function:
+    name: QTGetTimeUntilNextTask
+    return: OSErr
+    args:
+      - name: duration
+        type: Ptr
+      - name: scale
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x36F
+
+- function:
+    name: QTInstallNextTaskNeededSoonerCallback
+    return: OSErr
+    args:
+      - name: callbackProc
+        type: LONGINT
+      - name: scale
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: refcon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x376
+
+- function:
+    name: QTUninstallNextTaskNeededSoonerCallback
+    return: OSErr
+    args:
+      - name: callbackProc
+        type: LONGINT
+      - name: refcon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x377
+
+- function:
+    name: GetMovieTrackCount
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x3F
+
+- function:
+    name: GetMovieTrack
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: trackID
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x40
+
+- function:
+    name: GetMovieIndTrack
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x117
+
+- function:
+    name: GetMovieIndTrackType
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: index
+        type: LONGINT
+      - name: trackType
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x208
+
+- function:
+    name: GetTrackID
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x127
+
+- function:
+    name: GetTrackMovie
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xD0
+
+- function:
+    name: NewMovieTrack
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: width
+        type: LONGINT
+      - name: height
+        type: LONGINT
+      - name: trackVolume
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x188
+
+- function:
+    name: DisposeMovieTrack
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x42
+
+- function:
+    name: GetTrackCreationTime
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x43
+
+- function:
+    name: GetTrackModificationTime
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x44
+
+- function:
+    name: GetTrackEnabled
+    return: Boolean
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x45
+
+- function:
+    name: SetTrackEnabled
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: isEnabled
+        type: Boolean
+    dispatcher: QuickTime
+    selector: 0x46
+
+- function:
+    name: GetTrackUsage
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x47
+
+- function:
+    name: SetTrackUsage
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: usage
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x48
+
+- function:
+    name: GetTrackDuration
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x4B
+
+- function:
+    name: GetTrackOffset
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x4C
+
+- function:
+    name: SetTrackOffset
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: movieOffsetTime
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x4D
+
+- function:
+    name: GetTrackLayer
+    return: INTEGER
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x50
+
+- function:
+    name: SetTrackLayer
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: layer
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x51
+
+- function:
+    name: GetTrackAlternate
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x52
+
+- function:
+    name: SetTrackAlternate
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: alternateT
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x53
+
+- function:
+    name: SetAutoTrackAlternatesEnabled
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: enable
+        type: Boolean
+    dispatcher: QuickTime
+    selector: 0x15E
+
+- function:
+    name: SelectMovieAlternates
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x15F
+
+- function:
+    name: GetTrackVolume
+    return: INTEGER
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x54
+
+- function:
+    name: SetTrackVolume
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: volume
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x55
+
+- function:
+    name: GetTrackMatrix
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: matrix
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x56
+
+- function:
+    name: SetTrackMatrix
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: matrix
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x57
+
+- function:
+    name: GetTrackDimensions
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: width
+        type: Ptr
+      - name: height
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x5D
+
+- function:
+    name: SetTrackDimensions
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: width
+        type: LONGINT
+      - name: height
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x5E
+
+- function:
+    name: GetTrackUserData
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x5F
+
+- function:
+    name: GetTrackDisplayMatrix
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: matrix
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x263
+
+- function:
+    name: GetTrackSoundLocalizationSettings
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: settings
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x282
+
+- function:
+    name: SetTrackSoundLocalizationSettings
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: settings
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x283
+
+- function:
+    name: NewTrackMedia
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: mediaType
+        type: LONGINT
+      - name: timeScale
+        type: LONGINT
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x18E
+
+- function:
+    name: DisposeTrackMedia
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x61
+
+- function:
+    name: GetTrackMedia
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x62
+
+- function:
+    name: GetMediaTrack
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xC5
+
+- function:
+    name: GetMediaCreationTime
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x66
+
+- function:
+    name: GetMediaModificationTime
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x67
+
+- function:
+    name: GetMediaTimeScale
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x68
+
+- function:
+    name: SetMediaTimeScale
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: timeScale
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x69
+
+- function:
+    name: GetMediaDuration
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x6A
+
+- function:
+    name: GetMediaLanguage
+    return: INTEGER
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x6B
+
+- function:
+    name: SetMediaLanguage
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: language
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x6C
+
+- function:
+    name: GetMediaQuality
+    return: INTEGER
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x6D
+
+- function:
+    name: SetMediaQuality
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: quality
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x6E
+
+- function:
+    name: GetMediaHandlerDescription
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: mediaType
+        type: Ptr
+      - name: creatorName
+        type: LONGINT
+      - name: creatorManufacturer
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x6F
+
+- function:
+    name: GetMediaUserData
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x70
+
+- function:
+    name: GetMediaInputMap
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: inputMap
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x249
+
+- function:
+    name: SetMediaInputMap
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: inputMap
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x24A
+
+- function:
+    name: GetMediaHandler
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x71
+
+- function:
+    name: SetMediaHandler
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: mH
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x190
+
+- function:
+    name: BeginMediaEdits
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x72
+
+- function:
+    name: EndMediaEdits
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x73
+
+- function:
+    name: SetMediaDefaultDataRefIndex
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x1E0
+
+- function:
+    name: GetMediaDataHandlerDescription
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: INTEGER
+      - name: dhType
+        type: Ptr
+      - name: creatorName
+        type: LONGINT
+      - name: creatorManufacturer
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x19E
+
+- function:
+    name: GetMediaDataHandler
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x19F
+
+- function:
+    name: SetMediaDataHandler
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: INTEGER
+      - name: dataHandler
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1A0
+
+- function:
+    name: GetDataHandler
+    return: LONGINT
+    args:
+      - name: dataRef
+        type: LONGINT
+      - name: dataHandlerSubType
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1ED
+
+- function:
+    name: OpenADataHandler
+    return: OSErr
+    args:
+      - name: dataRef
+        type: LONGINT
+      - name: dataHandlerSubType
+        type: LONGINT
+      - name: anchorDataRef
+        type: LONGINT
+      - name: anchorDataRefType
+        type: LONGINT
+      - name: tb
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: dh
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x31C
+
+- function:
+    name: GetMediaSampleDescriptionCount
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x77
+
+- function:
+    name: GetMediaSampleDescription
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: LONGINT
+      - name: descH
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x78
+
+- function:
+    name: SetMediaSampleDescription
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: LONGINT
+      - name: descH
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1D0
+
+- function:
+    name: GetMediaSampleCount
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x79
+
+- function:
+    name: GetMediaSyncSampleCount
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2B2
+
+- function:
+    name: SampleNumToMediaTime
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: logicalSampleNum
+        type: LONGINT
+      - name: sampleTime
+        type: Ptr
+      - name: sampleDuration
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x7A
+
+- function:
+    name: MediaTimeToSampleNum
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: sampleNum
+        type: Ptr
+      - name: sampleTime
+        type: Ptr
+      - name: sampleDuration
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x7B
+
+- function:
+    name: AddMediaSample
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: dataIn
+        type: LONGINT
+      - name: inOffset
+        type: LONGINT
+      - name: size
+        type: LONGINT
+      - name: durationPerSample
+        type: LONGINT
+      - name: sampleDescriptionH
+        type: LONGINT
+      - name: numberOfSamples
+        type: LONGINT
+      - name: sampleFlags
+        type: INTEGER
+      - name: sampleTime
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x7C
+
+- function:
+    name: AddMediaSampleReference
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: dataOffset
+        type: LONGINT
+      - name: size
+        type: LONGINT
+      - name: durationPerSample
+        type: LONGINT
+      - name: sampleDescriptionH
+        type: LONGINT
+      - name: numberOfSamples
+        type: LONGINT
+      - name: sampleFlags
+        type: INTEGER
+      - name: sampleTime
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x7D
+
+- function:
+    name: AddMediaSampleReferences
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: sampleDescriptionH
+        type: LONGINT
+      - name: numberOfSamples
+        type: LONGINT
+      - name: sampleRefs
+        type: LONGINT
+      - name: sampleTime
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x1F7
+
+- function:
+    name: AddMediaSampleReferences64
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: sampleDescriptionH
+        type: LONGINT
+      - name: numberOfSamples
+        type: LONGINT
+      - name: sampleRefs
+        type: LONGINT
+      - name: sampleTime
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2E8
+
+- function:
+    name: GetMediaSample
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: dataOut
+        type: LONGINT
+      - name: maxSizeToGrow
+        type: LONGINT
+      - name: size
+        type: Ptr
+      - name: time
+        type: LONGINT
+      - name: sampleTime
+        type: Ptr
+      - name: durationPerSample
+        type: Ptr
+      - name: sampleDescriptionH
+        type: LONGINT
+      - name: sampleDescriptionIndex
+        type: Ptr
+      - name: maxNumberOfSamples
+        type: LONGINT
+      - name: numberOfSamples
+        type: Ptr
+      - name: sampleFlags
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x7E
+
+- function:
+    name: GetMediaSampleReference
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: dataOffset
+        type: Ptr
+      - name: size
+        type: Ptr
+      - name: time
+        type: LONGINT
+      - name: sampleTime
+        type: Ptr
+      - name: durationPerSample
+        type: Ptr
+      - name: sampleDescriptionH
+        type: LONGINT
+      - name: sampleDescriptionIndex
+        type: Ptr
+      - name: maxNumberOfSamples
+        type: LONGINT
+      - name: numberOfSamples
+        type: Ptr
+      - name: sampleFlags
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x7F
+
+- function:
+    name: GetMediaSampleReferences
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: sampleTime
+        type: Ptr
+      - name: sampleDescriptionH
+        type: LONGINT
+      - name: sampleDescriptionIndex
+        type: Ptr
+      - name: maxNumberOfEntries
+        type: LONGINT
+      - name: actualNumberofEntries
+        type: Ptr
+      - name: sampleRefs
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x235
+
+- function:
+    name: GetMediaSampleReferences64
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: sampleTime
+        type: Ptr
+      - name: sampleDescriptionH
+        type: LONGINT
+      - name: sampleDescriptionIndex
+        type: Ptr
+      - name: maxNumberOfEntries
+        type: LONGINT
+      - name: actualNumberofEntries
+        type: Ptr
+      - name: sampleRefs
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2E9
+
+- function:
+    name: SetMediaPreferredChunkSize
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: maxChunkSize
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1F8
+
+- function:
+    name: GetMediaPreferredChunkSize
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: maxChunkSize
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x1F9
+
+- function:
+    name: SetMediaShadowSync
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: frameDiffSampleNum
+        type: LONGINT
+      - name: syncSampleNum
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x121
+
+- function:
+    name: GetMediaShadowSync
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: frameDiffSampleNum
+        type: LONGINT
+      - name: syncSampleNum
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x122
+
+- function:
+    name: InsertMediaIntoTrack
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: trackStart
+        type: LONGINT
+      - name: mediaTime
+        type: LONGINT
+      - name: mediaDuration
+        type: LONGINT
+      - name: mediaRate
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x183
+
+- function:
+    name: InsertTrackSegment
+    return: OSErr
+    args:
+      - name: srcTrack
+        type: LONGINT
+      - name: dstTrack
+        type: LONGINT
+      - name: srcIn
+        type: LONGINT
+      - name: srcDuration
+        type: LONGINT
+      - name: dstIn
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x85
+
+- function:
+    name: InsertMovieSegment
+    return: OSErr
+    args:
+      - name: srcMovie
+        type: LONGINT
+      - name: dstMovie
+        type: LONGINT
+      - name: srcIn
+        type: LONGINT
+      - name: srcDuration
+        type: LONGINT
+      - name: dstIn
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x86
+
+- function:
+    name: InsertEmptyTrackSegment
+    return: OSErr
+    args:
+      - name: dstTrack
+        type: LONGINT
+      - name: dstIn
+        type: LONGINT
+      - name: dstDuration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x87
+
+- function:
+    name: InsertEmptyMovieSegment
+    return: OSErr
+    args:
+      - name: dstMovie
+        type: LONGINT
+      - name: dstIn
+        type: LONGINT
+      - name: dstDuration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x88
+
+- function:
+    name: DeleteTrackSegment
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x89
+
+- function:
+    name: DeleteMovieSegment
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x8A
+
+- function:
+    name: ScaleTrackSegment
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: oldDuration
+        type: LONGINT
+      - name: newDuration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x8B
+
+- function:
+    name: ScaleMovieSegment
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: oldDuration
+        type: LONGINT
+      - name: newDuration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x8C
+
+- function:
+    name: CutMovieSelection
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x8D
+
+- function:
+    name: CopyMovieSelection
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x8E
+
+- function:
+    name: PasteMovieSelection
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: src
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x8F
+
+- function:
+    name: AddMovieSelection
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: src
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x152
+
+- function:
+    name: ClearMovieSelection
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xE1
+
+- function:
+    name: PasteHandleIntoMovie
+    return: OSErr
+    args:
+      - name: h
+        type: LONGINT
+      - name: handleType
+        type: LONGINT
+      - name: theMovie
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: userComp
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xCB
+
+- function:
+    name: PutMovieIntoTypedHandle
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: targetTrack
+        type: LONGINT
+      - name: handleType
+        type: LONGINT
+      - name: publicMovie
+        type: LONGINT
+      - name: start
+        type: LONGINT
+      - name: dur
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: userComp
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1CD
+
+- function:
+    name: IsScrapMovie
+    return: LONGINT
+    args:
+      - name: targetTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xCC
+
+- function:
+    name: CopyTrackSettings
+    return: OSErr
+    args:
+      - name: srcTrack
+        type: LONGINT
+      - name: dstTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x153
+
+- function:
+    name: CopyMovieSettings
+    return: OSErr
+    args:
+      - name: srcMovie
+        type: LONGINT
+      - name: dstMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x154
+
+- function:
+    name: AddEmptyTrackToMovie
+    return: OSErr
+    args:
+      - name: srcTrack
+        type: LONGINT
+      - name: dstMovie
+        type: LONGINT
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: dstTrack
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x74
+
+- function:
+    name: AddClonedTrackToMovie
+    return: OSErr
+    args:
+      - name: srcTrack
+        type: LONGINT
+      - name: dstMovie
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: dstTrack
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x344
+
+- function:
+    name: NewMovieEditState
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x104
+
+- function:
+    name: UseMovieEditState
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: toState
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x105
+
+- function:
+    name: DisposeMovieEditState
+    return: OSErr
+    args:
+      - name: state
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x106
+
+- function:
+    name: NewTrackEditState
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x107
+
+- function:
+    name: UseTrackEditState
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: state
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x108
+
+- function:
+    name: DisposeTrackEditState
+    return: OSErr
+    args:
+      - name: state
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x109
+
+- function:
+    name: AddTrackReference
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: refTrack
+        type: LONGINT
+      - name: refType
+        type: LONGINT
+      - name: addedIndex
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x1F0
+
+- function:
+    name: DeleteTrackReference
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: refType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1F1
+
+- function:
+    name: SetTrackReference
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: refTrack
+        type: LONGINT
+      - name: refType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1F2
+
+- function:
+    name: GetTrackReference
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: refType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1F3
+
+- function:
+    name: GetNextTrackReferenceType
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: refType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1F4
+
+- function:
+    name: GetTrackReferenceCount
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: refType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1F5
+
+- function:
+    name: ConvertFileToMovieFile
+    return: OSErr
+    args:
+      - name: inputFile
+        type: Ptr
+      - name: outputFile
+        type: Ptr
+      - name: creator
+        type: LONGINT
+      - name: scriptTag
+        type: INTEGER
+      - name: resID
+        type: Ptr
+      - name: flags
+        type: LONGINT
+      - name: userComp
+        type: LONGINT
+      - name: proc
+        type: LONGINT
+      - name: refCon
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1CB
+
+- function:
+    name: ConvertMovieToFile
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: onlyTrack
+        type: LONGINT
+      - name: outputFile
+        type: Ptr
+      - name: fileType
+        type: LONGINT
+      - name: creator
+        type: LONGINT
+      - name: scriptTag
+        type: INTEGER
+      - name: resID
+        type: Ptr
+      - name: flags
+        type: LONGINT
+      - name: userComp
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1CC
+
+- function:
+    name: GetMovieImporterForDataRef
+    return: OSErr
+    args:
+      - name: dataRefType
+        type: LONGINT
+      - name: dataRef
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: importer
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2C7
+
+- function:
+    name: QTGetMIMETypeInfo
+    return: OSErr
+    args:
+      - name: mimeStringStart
+        type: Ptr
+      - name: mimeStringLength
+        type: INTEGER
+      - name: infoSelector
+        type: LONGINT
+      - name: infoDataPtr
+        type: Ptr
+      - name: infoDataSize
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x36A
+
+- function:
+    name: TrackTimeToMediaTime
+    return: LONGINT
+    args:
+      - name: value
+        type: LONGINT
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x96
+
+- function:
+    name: GetTrackEditRate
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: atTime
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x123
+
+- function:
+    name: GetMovieDataSize
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x98
+
+- function:
+    name: GetMovieDataSize64
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+      - name: dataSize
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2EB
+
+- function:
+    name: GetTrackDataSize
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x149
+
+- function:
+    name: GetTrackDataSize64
+    return: OSErr
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+      - name: dataSize
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2EC
+
+- function:
+    name: GetMediaDataSize
+    return: LONGINT
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x99
+
+- function:
+    name: GetMediaDataSize64
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: startTime
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+      - name: dataSize
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2ED
+
+- function:
+    name: PtInMovie
+    return: Boolean
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: pt
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x9A
+
+- function:
+    name: PtInTrack
+    return: Boolean
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: pt
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x9B
+
+- function:
+    name: SetMovieLanguage
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: language
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x9C
+
+- function:
+    name: GetUserData
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x9E
+
+- function:
+    name: AddUserData
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x9F
+
+- function:
+    name: RemoveUserData
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xA0
+
+- function:
+    name: CountUserDataType
+    return: INTEGER
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x14B
+
+- function:
+    name: GetNextUserDataType
+    return: LONGINT
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1A5
+
+- function:
+    name: GetUserDataItem
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: data
+        type: Ptr
+      - name: size
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x126
+
+- function:
+    name: SetUserDataItem
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: data
+        type: Ptr
+      - name: size
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x12E
+
+- function:
+    name: AddUserDataText
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+      - name: itlRegionTag
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x14C
+
+- function:
+    name: GetUserDataText
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+      - name: itlRegionTag
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x14D
+
+- function:
+    name: RemoveUserDataText
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: udType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+      - name: itlRegionTag
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x14E
+
+- function:
+    name: NewUserData
+    return: OSErr
+    args:
+      - name: theUserData
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x12F
+
+- function:
+    name: DisposeUserData
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x130
+
+- function:
+    name: NewUserDataFromHandle
+    return: OSErr
+    args:
+      - name: h
+        type: LONGINT
+      - name: theUserData
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x131
+
+- function:
+    name: PutUserDataIntoHandle
+    return: OSErr
+    args:
+      - name: theUserData
+        type: LONGINT
+      - name: h
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x132
+
+- function:
+    name: CopyMovieUserData
+    return: OSErr
+    args:
+      - name: srcMovie
+        type: LONGINT
+      - name: dstMovie
+        type: LONGINT
+      - name: copyRule
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x386
+
+- function:
+    name: CopyTrackUserData
+    return: OSErr
+    args:
+      - name: srcTrack
+        type: LONGINT
+      - name: dstTrack
+        type: LONGINT
+      - name: copyRule
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x387
+
+- function:
+    name: CopyMediaUserData
+    return: OSErr
+    args:
+      - name: srcMedia
+        type: LONGINT
+      - name: dstMedia
+        type: LONGINT
+      - name: copyRule
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x388
+
+- function:
+    name: CopyUserData
+    return: OSErr
+    args:
+      - name: srcUserData
+        type: LONGINT
+      - name: dstUserData
+        type: LONGINT
+      - name: copyRule
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x389
+
+- function:
+    name: SetMoviePropertyAtom
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: propertyAtom
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x284
+
+- function:
+    name: GetMoviePropertyAtom
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: propertyAtom
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x285
+
+- function:
+    name: GetMediaNextInterestingTime
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: interestingTimeFlags
+        type: INTEGER
+      - name: time
+        type: LONGINT
+      - name: rate
+        type: LONGINT
+      - name: interestingTime
+        type: Ptr
+      - name: interestingDuration
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x16D
+
+- function:
+    name: GetTrackNextInterestingTime
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: interestingTimeFlags
+        type: INTEGER
+      - name: time
+        type: LONGINT
+      - name: rate
+        type: LONGINT
+      - name: interestingTime
+        type: Ptr
+      - name: interestingDuration
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xE2
+
+- function:
+    name: GetMovieNextInterestingTime
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: interestingTimeFlags
+        type: INTEGER
+      - name: numMediaTypes
+        type: INTEGER
+      - name: whichMediaTypes
+        type: Ptr
+      - name: time
+        type: LONGINT
+      - name: rate
+        type: LONGINT
+      - name: interestingTime
+        type: Ptr
+      - name: interestingDuration
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x10E
+
+- function:
+    name: CreateMovieFile
+    return: OSErr
+    args:
+      - name: fileSpec
+        type: Ptr
+      - name: creator
+        type: LONGINT
+      - name: scriptTag
+        type: INTEGER
+      - name: createMovieFileFlags
+        type: LONGINT
+      - name: resRefNum
+        type: Ptr
+      - name: newmovie
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x191
+
+- function:
+    name: DeleteMovieFile
+    return: OSErr
+    args:
+      - name: fileSpec
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x175
+
+- function:
+    name: NewMovieFromHandle
+    return: OSErr
+    args:
+      - name: theMovie
+        type: Ptr
+      - name: h
+        type: LONGINT
+      - name: newMovieFlags
+        type: INTEGER
+      - name: dataRefWasChanged
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xF1
+
+- function:
+    name: NewMovieFromDataFork
+    return: OSErr
+    args:
+      - name: theMovie
+        type: Ptr
+      - name: fRefNum
+        type: INTEGER
+      - name: fileOffset
+        type: LONGINT
+      - name: newMovieFlags
+        type: INTEGER
+      - name: dataRefWasChanged
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x1B3
+
+- function:
+    name: NewMovieFromDataFork64
+    return: OSErr
+    args:
+      - name: theMovie
+        type: Ptr
+      - name: fRefNum
+        type: LONGINT
+      - name: fileOffset
+        type: Ptr
+      - name: newMovieFlags
+        type: INTEGER
+      - name: dataRefWasChanged
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2EE
+
+- function:
+    name: NewMovieFromUserProc
+    return: OSErr
+    args:
+      - name: m
+        type: Ptr
+      - name: flags
+        type: INTEGER
+      - name: dataRefWasChanged
+        type: Ptr
+      - name: getProc
+        type: LONGINT
+      - name: refCon
+        type: Ptr
+      - name: defaultDataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1EC
+
+- function:
+    name: NewMovieFromDataRef
+    return: OSErr
+    args:
+      - name: m
+        type: Ptr
+      - name: flags
+        type: INTEGER
+      - name: id
+        type: Ptr
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x220
+
+- function:
+    name: NewMovieFromStorageOffset
+    return: OSErr
+    args:
+      - name: theMovie
+        type: Ptr
+      - name: dh
+        type: LONGINT
+      - name: fileOffset
+        type: Ptr
+      - name: newMovieFlags
+        type: INTEGER
+      - name: dataRefWasChanged
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x3B4
+
+- function:
+    name: NewMovieForDataRefFromHandle
+    return: OSErr
+    args:
+      - name: theMovie
+        type: Ptr
+      - name: h
+        type: LONGINT
+      - name: newMovieFlags
+        type: INTEGER
+      - name: dataRefWasChanged
+        type: Ptr
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x381
+
+- function:
+    name: AddMovieResource
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: resRefNum
+        type: INTEGER
+      - name: resId
+        type: Ptr
+      - name: resName
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xD7
+
+- function:
+    name: UpdateMovieResource
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: resRefNum
+        type: INTEGER
+      - name: resId
+        type: INTEGER
+      - name: resName
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xD8
+
+- function:
+    name: RemoveMovieResource
+    return: OSErr
+    args:
+      - name: resRefNum
+        type: INTEGER
+      - name: resId
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x176
+
+- function:
+    name: CreateMovieStorage
+    return: OSErr
+    args:
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: creator
+        type: LONGINT
+      - name: scriptTag
+        type: INTEGER
+      - name: createMovieFileFlags
+        type: LONGINT
+      - name: outDataHandler
+        type: Ptr
+      - name: newmovie
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x38A
+
+- function:
+    name: OpenMovieStorage
+    return: OSErr
+    args:
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: outDataHandler
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x38B
+
+- function:
+    name: CloseMovieStorage
+    return: OSErr
+    args:
+      - name: dh
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x38C
+
+- function:
+    name: DeleteMovieStorage
+    return: OSErr
+    args:
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x38D
+
+- function:
+    name: AddMovieToStorage
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: dh
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x38F
+
+- function:
+    name: UpdateMovieInStorage
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: dh
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x390
+
+- function:
+    name: HasMovieChanged
+    return: Boolean
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xD9
+
+- function:
+    name: ClearMovieChanged
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x113
+
+- function:
+    name: SetMovieDefaultDataRef
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1C1
+
+- function:
+    name: GetMovieDefaultDataRef
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: dataRef
+        type: Ptr
+      - name: dataRefType
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x1D2
+
+- function:
+    name: SetMovieAnchorDataRef
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x315
+
+- function:
+    name: GetMovieAnchorDataRef
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: dataRef
+        type: Ptr
+      - name: dataRefType
+        type: Ptr
+      - name: outFlags
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x316
+
+- function:
+    name: SetMovieColorTable
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: ctab
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x205
+
+- function:
+    name: GetMovieColorTable
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: ctab
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x206
+
+- function:
+    name: FlattenMovie
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: movieFlattenFlags
+        type: LONGINT
+      - name: theFile
+        type: Ptr
+      - name: creator
+        type: LONGINT
+      - name: scriptTag
+        type: INTEGER
+      - name: createMovieFileFlags
+        type: LONGINT
+      - name: resId
+        type: Ptr
+      - name: resName
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x19B
+
+- function:
+    name: FlattenMovieData
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: movieFlattenFlags
+        type: LONGINT
+      - name: theFile
+        type: Ptr
+      - name: creator
+        type: LONGINT
+      - name: scriptTag
+        type: INTEGER
+      - name: createMovieFileFlags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x19C
+
+- function:
+    name: FlattenMovieDataToDataRef
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: movieFlattenFlags
+        type: LONGINT
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: creator
+        type: LONGINT
+      - name: scriptTag
+        type: INTEGER
+      - name: createMovieFileFlags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x392
+
+- function:
+    name: SetMovieProgressProc
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: p
+        type: LONGINT
+      - name: refcon
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x19A
+
+- function:
+    name: GetMovieProgressProc
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: p
+        type: Ptr
+      - name: refcon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x300
+
+- function:
+    name: CreateShortcutMovieFile
+    return: OSErr
+    args:
+      - name: fileSpec
+        type: Ptr
+      - name: creator
+        type: LONGINT
+      - name: scriptTag
+        type: INTEGER
+      - name: createMovieFileFlags
+        type: LONGINT
+      - name: targetDataRef
+        type: LONGINT
+      - name: targetDataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2FA
+
+- function:
+    name: MovieSearchText
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: text
+        type: LONGINT
+      - name: size
+        type: LONGINT
+      - name: searchFlags
+        type: LONGINT
+      - name: searchTrack
+        type: Ptr
+      - name: searchTime
+        type: Ptr
+      - name: searchOffset
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x207
+
+- function:
+    name: GetPosterBox
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: boxRect
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x16F
+
+- function:
+    name: SetPosterBox
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: boxRect
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x170
+
+- function:
+    name: GetMovieSegmentDisplayBoundsRgn
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x16C
+
+- function:
+    name: GetTrackSegmentDisplayBoundsRgn
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: time
+        type: LONGINT
+      - name: duration
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x16B
+
+- function:
+    name: SetMovieCoverProcs
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: uncoverProc
+        type: LONGINT
+      - name: coverProc
+        type: LONGINT
+      - name: refcon
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x179
+
+- function:
+    name: GetMovieCoverProcs
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: uncoverProc
+        type: Ptr
+      - name: coverProc
+        type: Ptr
+      - name: refcon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x1DD
+
+- function:
+    name: GetTrackStatus
+    return: LONGINT
+    args:
+      - name: theTrack
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x172
+
+- function:
+    name: GetMovieStatus
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: firstProblemTrack
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x173
+
+- function:
+    name: GetMovieLoadState
+    return: LONGINT
+    args:
+      - name: theMovie
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x314
+
+- function:
+    name: CanQuickTimeOpenFile
+    return: OSErr
+    args:
+      - name: fileSpec
+        type: LONGINT
+      - name: fileType
+        type: LONGINT
+      - name: fileNameExtension
+        type: LONGINT
+      - name: outCanOpenWithGraphicsImporter
+        type: Ptr
+      - name: outCanOpenAsMovie
+        type: Ptr
+      - name: outPreferGraphicsImporter
+        type: Ptr
+      - name: inFlags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x33E
+
+- function:
+    name: CanQuickTimeOpenDataRef
+    return: OSErr
+    args:
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: outCanOpenWithGraphicsImporter
+        type: Ptr
+      - name: outCanOpenAsMovie
+        type: Ptr
+      - name: outPreferGraphicsImporter
+        type: Ptr
+      - name: inFlags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x33F
+
+- function:
+    name: ShowMovieInformation
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: filterProc
+        type: LONGINT
+      - name: refCon
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x209
+
+- function:
+    name: PutMovieOnScrap
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: movieScrapFlags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x18C
+
+- function:
+    name: NewMovieFromScrap
+    return: LONGINT
+    args:
+      - name: newMovieFlags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x18D
+
+- function:
+    name: GetMediaDataRef
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: INTEGER
+      - name: dataRef
+        type: Ptr
+      - name: dataRefType
+        type: Ptr
+      - name: dataRefAttributes
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x197
+
+- function:
+    name: SetMediaDataRef
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: INTEGER
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1C9
+
+- function:
+    name: SetMediaDataRefAttributes
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: INTEGER
+      - name: dataRefAttributes
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1CA
+
+- function:
+    name: AddMediaDataRef
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: index
+        type: Ptr
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x198
+
+- function:
+    name: GetMediaDataRefCount
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: count
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x199
+
+- function:
+    name: QTNewAlias
+    return: OSErr
+    args:
+      - name: fss
+        type: Ptr
+      - name: alias
+        type: Ptr
+      - name: minimal
+        type: Boolean
+    dispatcher: QuickTime
+    selector: 0x201
+
+- function:
+    name: SetMoviePlayHints
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: flagsMask
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1A1
+
+- function:
+    name: SetMediaPlayHints
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: flagsMask
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1A2
+
+- function:
+    name: GetMediaPlayHints
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: flags
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2CE
+
+- function:
+    name: SetTrackLoadSettings
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: preloadTime
+        type: LONGINT
+      - name: preloadDuration
+        type: LONGINT
+      - name: preloadFlags
+        type: LONGINT
+      - name: defaultHints
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1E3
+
+- function:
+    name: GetTrackLoadSettings
+    args:
+      - name: theTrack
+        type: LONGINT
+      - name: preloadTime
+        type: Ptr
+      - name: preloadDuration
+        type: Ptr
+      - name: preloadFlags
+        type: Ptr
+      - name: defaultHints
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x1E4
+
+- function:
+    name: BeginFullScreen
+    return: OSErr
+    args:
+      - name: restoreState
+        type: Ptr
+      - name: whichGD
+        type: LONGINT
+      - name: desiredWidth
+        type: Ptr
+      - name: desiredHeight
+        type: Ptr
+      - name: newWindow
+        type: Ptr
+      - name: eraseColor
+        type: Ptr
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x233
+
+- function:
+    name: EndFullScreen
+    return: OSErr
+    args:
+      - name: fullState
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x234
+
+- function:
+    name: AddMovieExecuteWiredActionsProc
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: proc
+        type: LONGINT
+      - name: refCon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x302
+
+- function:
+    name: RemoveMovieExecuteWiredActionsProc
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: proc
+        type: LONGINT
+      - name: refCon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x303
+
+- function:
+    name: MovieExecuteWiredActions
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: actions
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x304
+
+- function:
+    name: NewSpriteWorld
+    return: OSErr
+    args:
+      - name: newSpriteWorld
+        type: Ptr
+      - name: destination
+        type: LONGINT
+      - name: spriteLayer
+        type: LONGINT
+      - name: backgroundColor
+        type: Ptr
+      - name: background
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x239
+
+- function:
+    name: DisposeSpriteWorld
+    args:
+      - name: theSpriteWorld
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x23A
+
+- function:
+    name: SetSpriteWorldClip
+    return: OSErr
+    args:
+      - name: theSpriteWorld
+        type: LONGINT
+      - name: clipRgn
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x23B
+
+- function:
+    name: SetSpriteWorldMatrix
+    return: OSErr
+    args:
+      - name: theSpriteWorld
+        type: LONGINT
+      - name: matrix
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x23C
+
+- function:
+    name: SetSpriteWorldGraphicsMode
+    return: OSErr
+    args:
+      - name: theSpriteWorld
+        type: LONGINT
+      - name: mode
+        type: LONGINT
+      - name: opColor
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2D9
+
+- function:
+    name: SpriteWorldIdle
+    return: OSErr
+    args:
+      - name: theSpriteWorld
+        type: LONGINT
+      - name: flagsIn
+        type: LONGINT
+      - name: flagsOut
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x23D
+
+- function:
+    name: InvalidateSpriteWorld
+    return: OSErr
+    args:
+      - name: theSpriteWorld
+        type: LONGINT
+      - name: invalidArea
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x23E
+
+- function:
+    name: SpriteWorldHitTest
+    return: OSErr
+    args:
+      - name: theSpriteWorld
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: loc
+        type: LONGINT
+      - name: spriteHit
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x246
+
+- function:
+    name: SpriteHitTest
+    return: OSErr
+    args:
+      - name: theSprite
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: loc
+        type: LONGINT
+      - name: wasHit
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x247
+
+- function:
+    name: DisposeAllSprites
+    args:
+      - name: theSpriteWorld
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x23F
+
+- function:
+    name: SetSpriteWorldFlags
+    return: OSErr
+    args:
+      - name: spriteWorld
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: flagsMask
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2C2
+
+- function:
+    name: NewSprite
+    return: OSErr
+    args:
+      - name: newSprite
+        type: Ptr
+      - name: itsSpriteWorld
+        type: LONGINT
+      - name: idh
+        type: LONGINT
+      - name: imageDataPtr
+        type: LONGINT
+      - name: matrix
+        type: Ptr
+      - name: visible
+        type: Boolean
+      - name: layer
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0x240
+
+- function:
+    name: DisposeSprite
+    args:
+      - name: theSprite
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x241
+
+- function:
+    name: InvalidateSprite
+    args:
+      - name: theSprite
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x242
+
+- function:
+    name: SetSpriteProperty
+    return: OSErr
+    args:
+      - name: theSprite
+        type: LONGINT
+      - name: propertyType
+        type: LONGINT
+      - name: propertyValue
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x243
+
+- function:
+    name: GetSpriteProperty
+    return: OSErr
+    args:
+      - name: theSprite
+        type: LONGINT
+      - name: propertyType
+        type: LONGINT
+      - name: propertyValue
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x244
+
+- function:
+    name: QTNewAtomContainer
+    return: OSErr
+    args:
+      - name: atomData
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x20C
+
+- function:
+    name: QTDisposeAtomContainer
+    return: OSErr
+    args:
+      - name: atomData
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x20D
+
+- function:
+    name: QTGetNextChildType
+    return: LONGINT
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: currentChildType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x20E
+
+- function:
+    name: QTCountChildrenOfType
+    return: INTEGER
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: childType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x20F
+
+- function:
+    name: QTFindChildByIndex
+    return: LONGINT
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: atomType
+        type: LONGINT
+      - name: index
+        type: INTEGER
+      - name: id
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x210
+
+- function:
+    name: QTFindChildByID
+    return: LONGINT
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: atomType
+        type: LONGINT
+      - name: id
+        type: LONGINT
+      - name: index
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x21D
+
+- function:
+    name: QTNextChildAnyType
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: currentChild
+        type: LONGINT
+      - name: nextChild
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x200
+
+- function:
+    name: QTSetAtomData
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+      - name: dataSize
+        type: LONGINT
+      - name: atomData
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x211
+
+- function:
+    name: QTCopyAtomDataToHandle
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+      - name: targetHandle
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x212
+
+- function:
+    name: QTCopyAtomDataToPtr
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+      - name: sizeOrLessOK
+        type: Boolean
+      - name: size
+        type: LONGINT
+      - name: targetPtr
+        type: Ptr
+      - name: actualSize
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x213
+
+- function:
+    name: QTGetAtomTypeAndID
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+      - name: atomType
+        type: Ptr
+      - name: id
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x232
+
+- function:
+    name: QTCopyAtom
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+      - name: targetContainer
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x214
+
+- function:
+    name: QTLockContainer
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x215
+
+- function:
+    name: QTGetAtomDataPtr
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+      - name: dataSize
+        type: Ptr
+      - name: atomData
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x216
+
+- function:
+    name: QTUnlockContainer
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x217
+
+- function:
+    name: QTInsertChild
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: atomType
+        type: LONGINT
+      - name: id
+        type: LONGINT
+      - name: index
+        type: INTEGER
+      - name: dataSize
+        type: LONGINT
+      - name: data
+        type: Ptr
+      - name: newAtom
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x218
+
+- function:
+    name: QTInsertChildren
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: childrenContainer
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x219
+
+- function:
+    name: QTRemoveAtom
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x21A
+
+- function:
+    name: QTRemoveChildren
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x21B
+
+- function:
+    name: QTReplaceAtom
+    return: OSErr
+    args:
+      - name: targetContainer
+        type: LONGINT
+      - name: targetAtom
+        type: LONGINT
+      - name: replacementContainer
+        type: LONGINT
+      - name: replacementAtom
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x21C
+
+- function:
+    name: QTSwapAtoms
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom1
+        type: LONGINT
+      - name: atom2
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x1FF
+
+- function:
+    name: QTSetAtomID
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: atom
+        type: LONGINT
+      - name: newID
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x231
+
+- function:
+    name: QTGetAtomParent
+    return: LONGINT
+    args:
+      - name: container
+        type: LONGINT
+      - name: childAtom
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2EF
+
+- function:
+    name: SetMediaPropertyAtom
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: propertyAtom
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x22E
+
+- function:
+    name: GetMediaPropertyAtom
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: propertyAtom
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x22F
+
+- function:
+    name: QTNewTween
+    return: OSErr
+    args:
+      - name: tween
+        type: Ptr
+      - name: container
+        type: LONGINT
+      - name: tweenAtom
+        type: LONGINT
+      - name: maxTime
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x29D
+
+- function:
+    name: QTDisposeTween
+    return: OSErr
+    args:
+      - name: tween
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x29F
+
+- function:
+    name: QTDoTween
+    return: OSErr
+    args:
+      - name: tween
+        type: LONGINT
+      - name: atTime
+        type: LONGINT
+      - name: result
+        type: LONGINT
+      - name: resultSize
+        type: Ptr
+      - name: tweenDataProc
+        type: LONGINT
+      - name: tweenDataRefCon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x29E
+
+- function:
+    name: QTDoTweenPtr
+    return: OSErr
+    args:
+      - name: tween
+        type: LONGINT
+      - name: atTime
+        type: LONGINT
+      - name: result
+        type: LONGINT
+      - name: resultSize
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x36E
+
+- function:
+    name: AddSoundDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: extension
+        type: LONGINT
+      - name: idType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2CF
+
+- function:
+    name: GetSoundDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: extension
+        type: Ptr
+      - name: idType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2D0
+
+- function:
+    name: RemoveSoundDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: idType
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2D1
+
+- function:
+    name: GetQuickTimePreference
+    return: OSErr
+    args:
+      - name: preferenceType
+        type: LONGINT
+      - name: preferenceAtom
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2D4
+
+- function:
+    name: SetQuickTimePreference
+    return: OSErr
+    args:
+      - name: preferenceType
+        type: LONGINT
+      - name: preferenceAtom
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2D5
+
+- function:
+    name: QTGetEffectsList
+    return: OSErr
+    args:
+      - name: returnedList
+        type: Ptr
+      - name: minSources
+        type: LONGINT
+      - name: maxSources
+        type: LONGINT
+      - name: getOptions
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2C9
+
+- function:
+    name: QTGetEffectsListExtended
+    return: OSErr
+    args:
+      - name: returnedList
+        type: Ptr
+      - name: minSources
+        type: LONGINT
+      - name: maxSources
+        type: LONGINT
+      - name: getOptions
+        type: LONGINT
+      - name: majorClass
+        type: LONGINT
+      - name: minorClass
+        type: LONGINT
+      - name: filterProc
+        type: LONGINT
+      - name: filterRefCon
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x36D
+
+- function:
+    name: QTCreateStandardParameterDialog
+    return: OSErr
+    args:
+      - name: effectList
+        type: LONGINT
+      - name: parameters
+        type: LONGINT
+      - name: dialogOptions
+        type: LONGINT
+      - name: createdDialog
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2CA
+
+- function:
+    name: QTIsStandardParameterDialogEvent
+    return: OSErr
+    args:
+      - name: pEvent
+        type: Ptr
+      - name: createdDialog
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2CB
+
+- function:
+    name: QTDismissStandardParameterDialog
+    return: OSErr
+    args:
+      - name: createdDialog
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2CC
+
+- function:
+    name: QTStandardParameterDialogDoAction
+    return: OSErr
+    args:
+      - name: createdDialog
+        type: LONGINT
+      - name: action
+        type: LONGINT
+      - name: params
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2CD
+
+- function:
+    name: QTGetEffectSpeed
+    return: OSErr
+    args:
+      - name: parameters
+        type: LONGINT
+      - name: pFPS
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2D2
+
+- function:
+    name: QTAddMovieError
+    return: OSErr
+    args:
+      - name: movieH
+        type: LONGINT
+      - name: c
+        type: LONGINT
+      - name: errorCode
+        type: LONGINT
+      - name: stringReplacements
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x37A
+
+- function:
+    name: QTGetAccessKeys
+    return: OSErr
+    args:
+      - name: accessKeyType
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: keys
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2B3
+
+- function:
+    name: QTRegisterAccessKey
+    return: OSErr
+    args:
+      - name: accessKeyType
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: accessKey
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2B4
+
+- function:
+    name: QTUnregisterAccessKey
+    return: OSErr
+    args:
+      - name: accessKeyType
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: accessKey
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2B5
+
+- function:
+    name: QTGetMovieRestrictions
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: outRestrictionSet
+        type: Ptr
+      - name: outSeed
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x3A5
+
+- function:
+    name: QTRestrictionsGetInfo
+    return: OSErr
+    args:
+      - name: inRestrictionSet
+        type: LONGINT
+      - name: outRestrictionClassCount
+        type: Ptr
+      - name: outSeed
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x3A1
+
+- function:
+    name: QTRestrictionsGetIndClass
+    return: OSErr
+    args:
+      - name: inRestrictionSet
+        type: LONGINT
+      - name: inIndex
+        type: LONGINT
+      - name: outClass
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x3A2
+
+- function:
+    name: QTRestrictionsGetItem
+    return: OSErr
+    args:
+      - name: inRestrictionSet
+        type: LONGINT
+      - name: inRestrictionClass
+        type: LONGINT
+      - name: outRestrictions
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x3A3
+
+- function:
+    name: QTGetSupportedRestrictions
+    return: OSErr
+    args:
+      - name: inRestrictionClass
+        type: LONGINT
+      - name: outRestrictionIDs
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x3B2
+
+- function:
+    name: QTCreateUUID
+    return: OSErr
+    args:
+      - name: outUUID
+        type: Ptr
+      - name: creationFlags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x39B
+
+- function:
+    name: QTEqualUUIDs
+    return: Boolean
+    args:
+      - name: uuid1
+        type: Ptr
+      - name: uuid2
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x39C
+
+- function:
+    name: MakeTrackTimeTable
+    return: OSErr
+    args:
+      - name: trackH
+        type: LONGINT
+      - name: offsets
+        type: Ptr
+      - name: startTime
+        type: LONGINT
+      - name: endTime
+        type: LONGINT
+      - name: timeIncrement
+        type: LONGINT
+      - name: firstDataRefIndex
+        type: INTEGER
+      - name: lastDataRefIndex
+        type: INTEGER
+      - name: retdataRefSkew
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2BE
+
+- function:
+    name: MakeMediaTimeTable
+    return: OSErr
+    args:
+      - name: theMedia
+        type: LONGINT
+      - name: offsets
+        type: Ptr
+      - name: startTime
+        type: LONGINT
+      - name: endTime
+        type: LONGINT
+      - name: timeIncrement
+        type: LONGINT
+      - name: firstDataRefIndex
+        type: INTEGER
+      - name: lastDataRefIndex
+        type: INTEGER
+      - name: retdataRefSkew
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2BF
+
+- function:
+    name: GetMaxLoadedTimeInMovie
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: time
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2C0
+
+- function:
+    name: QTMovieNeedsTimeTable
+    return: OSErr
+    args:
+      - name: theMovie
+        type: LONGINT
+      - name: needsTimeTable
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2C3
+
+- function:
+    name: QTGetDataRefMaxFileOffset
+    return: OSErr
+    args:
+      - name: movieH
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: dataRef
+        type: LONGINT
+      - name: offset
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x2C6
+
+- function:
+    name: QTBandwidthRequest
+    return: OSErr
+    args:
+      - name: priority
+        type: LONGINT
+      - name: callback
+        type: LONGINT
+      - name: refcon
+        type: Ptr
+      - name: bwRef
+        type: Ptr
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2F5
+
+- function:
+    name: QTBandwidthRequestForTimeBase
+    return: OSErr
+    args:
+      - name: tb
+        type: LONGINT
+      - name: priority
+        type: LONGINT
+      - name: callback
+        type: LONGINT
+      - name: refcon
+        type: Ptr
+      - name: bwRef
+        type: Ptr
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x318
+
+- function:
+    name: QTBandwidthRelease
+    return: OSErr
+    args:
+      - name: bwRef
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2F6
+
+- function:
+    name: QTScheduledBandwidthRequest
+    return: OSErr
+    args:
+      - name: scheduleRec
+        type: LONGINT
+      - name: notificationCallback
+        type: LONGINT
+      - name: refcon
+        type: Ptr
+      - name: sbwRef
+        type: Ptr
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x310
+
+- function:
+    name: QTScheduledBandwidthRelease
+    return: OSErr
+    args:
+      - name: sbwRef
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x311
+
+- function:
+    name: ITextAddString
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: theRegionCode
+        type: INTEGER
+      - name: theString
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x27A
+
+- function:
+    name: ITextRemoveString
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: theRegionCode
+        type: INTEGER
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x27B
+
+- function:
+    name: ITextGetString
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: parentAtom
+        type: LONGINT
+      - name: requestedRegion
+        type: INTEGER
+      - name: foundRegion
+        type: Ptr
+      - name: theString
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x27C
+
+- function:
+    name: QTTextToNativeText
+    return: OSErr
+    args:
+      - name: theText
+        type: LONGINT
+      - name: encoding
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x2DB
+
+- function:
+    name: QTParseTextHREF
+    return: OSErr
+    args:
+      - name: href
+        type: Ptr
+      - name: hrefLen
+        type: LONGINT
+      - name: inContainer
+        type: LONGINT
+      - name: outContainer
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x319
+
+- function:
+    name: NewTimeBase
+    return: LONGINT
+    dispatcher: QuickTime
+    selector: 0xA5
+
+- function:
+    name: DisposeTimeBase
+    args:
+      - name: tb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xB6
+
+- function:
+    name: GetTimeBaseTime
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+      - name: s
+        type: LONGINT
+      - name: tr
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xA6
+
+- function:
+    name: SetTimeBaseTime
+    args:
+      - name: tb
+        type: LONGINT
+      - name: tr
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xA7
+
+- function:
+    name: SetTimeBaseValue
+    args:
+      - name: tb
+        type: LONGINT
+      - name: t
+        type: LONGINT
+      - name: s
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xA8
+
+- function:
+    name: GetTimeBaseRate
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xA9
+
+- function:
+    name: SetTimeBaseRate
+    args:
+      - name: tb
+        type: LONGINT
+      - name: r
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xAA
+
+- function:
+    name: GetTimeBaseStartTime
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+      - name: s
+        type: LONGINT
+      - name: tr
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xAB
+
+- function:
+    name: SetTimeBaseStartTime
+    args:
+      - name: tb
+        type: LONGINT
+      - name: tr
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xAC
+
+- function:
+    name: GetTimeBaseStopTime
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+      - name: s
+        type: LONGINT
+      - name: tr
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xAD
+
+- function:
+    name: SetTimeBaseStopTime
+    args:
+      - name: tb
+        type: LONGINT
+      - name: tr
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xAE
+
+- function:
+    name: GetTimeBaseFlags
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xB1
+
+- function:
+    name: SetTimeBaseFlags
+    args:
+      - name: tb
+        type: LONGINT
+      - name: timeBaseFlags
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xB2
+
+- function:
+    name: SetTimeBaseMasterTimeBase
+    args:
+      - name: slave
+        type: LONGINT
+      - name: master
+        type: LONGINT
+      - name: slaveZero
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xB4
+
+- function:
+    name: GetTimeBaseMasterTimeBase
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xAF
+
+- function:
+    name: SetTimeBaseMasterClock
+    args:
+      - name: slave
+        type: LONGINT
+      - name: clockMeister
+        type: LONGINT
+      - name: slaveZero
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0xB3
+
+- function:
+    name: GetTimeBaseMasterClock
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xB0
+
+- function:
+    name: ConvertTime
+    args:
+      - name: inout
+        type: Ptr
+      - name: newBase
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xB5
+
+- function:
+    name: ConvertTimeScale
+    args:
+      - name: inout
+        type: Ptr
+      - name: newScale
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xB7
+
+- function:
+    name: AddTime
+    args:
+      - name: dst
+        type: Ptr
+      - name: src
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x10C
+
+- function:
+    name: SubtractTime
+    args:
+      - name: dst
+        type: Ptr
+      - name: src
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x10D
+
+- function:
+    name: GetTimeBaseStatus
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+      - name: unpinnedTime
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x10B
+
+- function:
+    name: SetTimeBaseZero
+    args:
+      - name: tb
+        type: LONGINT
+      - name: zero
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x128
+
+- function:
+    name: GetTimeBaseEffectiveRate
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x124
+
+- function:
+    name: NewCallBack
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+      - name: cbType
+        type: INTEGER
+    dispatcher: QuickTime
+    selector: 0xEB
+
+- function:
+    name: DisposeCallBack
+    args:
+      - name: cb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xEC
+
+- function:
+    name: GetCallBackType
+    return: INTEGER
+    args:
+      - name: cb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xED
+
+- function:
+    name: GetCallBackTimeBase
+    return: LONGINT
+    args:
+      - name: cb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xEE
+
+- function:
+    name: CallMeWhen
+    return: OSErr
+    args:
+      - name: cb
+        type: LONGINT
+      - name: callBackProc
+        type: LONGINT
+      - name: refCon
+        type: LONGINT
+      - name: param1
+        type: LONGINT
+      - name: param2
+        type: LONGINT
+      - name: param3
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xB8
+
+- function:
+    name: CancelCallBack
+    args:
+      - name: cb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0xB9
+
+- function:
+    name: AddCallBackToTimeBase
+    return: OSErr
+    args:
+      - name: cb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x129
+
+- function:
+    name: RemoveCallBackFromTimeBase
+    return: OSErr
+    args:
+      - name: cb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x12A
+
+- function:
+    name: GetFirstCallBack
+    return: LONGINT
+    args:
+      - name: tb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x12B
+
+- function:
+    name: GetNextCallBack
+    return: LONGINT
+    args:
+      - name: cb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x12C
+
+- function:
+    name: ExecuteCallBack
+    args:
+      - name: cb
+        type: LONGINT
+    dispatcher: QuickTime
+    selector: 0x12D
+
+- function:
+    name: CodecManagerVersion
+    return: OSErr
+    args:
+      - name: version
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x0
+
+- function:
+    name: GetCodecNameList
+    return: OSErr
+    args:
+      - name: list
+        type: Ptr
+      - name: showAll
+        type: INTEGER
+    dispatcher: ImageCompressionDispatch
+    selector: 0x1
+
+- function:
+    name: DisposeCodecNameList
+    return: OSErr
+    args:
+      - name: list
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0xF
+
+- function:
+    name: GetCodecInfo
+    return: OSErr
+    args:
+      - name: info
+        type: Ptr
+      - name: cType
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x3
+
+- function:
+    name: GetMaxCompressionSize
+    return: OSErr
+    args:
+      - name: src
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: colorDepth
+        type: INTEGER
+      - name: quality
+        type: LONGINT
+      - name: cType
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+      - name: size
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x4
+
+- function:
+    name: GetCSequenceMaxCompressionSize
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: src
+        type: LONGINT
+      - name: size
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x74
+
+- function:
+    name: GetCompressionTime
+    return: OSErr
+    args:
+      - name: src
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: colorDepth
+        type: INTEGER
+      - name: cType
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+      - name: spatialQuality
+        type: Ptr
+      - name: temporalQuality
+        type: Ptr
+      - name: compressTime
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x5
+
+- function:
+    name: CompressImage
+    return: OSErr
+    args:
+      - name: src
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: quality
+        type: LONGINT
+      - name: cType
+        type: LONGINT
+      - name: desc
+        type: LONGINT
+      - name: data
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x6
+
+- function:
+    name: FCompressImage
+    return: OSErr
+    args:
+      - name: src
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: colorDepth
+        type: INTEGER
+      - name: quality
+        type: LONGINT
+      - name: cType
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+      - name: ctable
+        type: LONGINT
+      - name: flags
+        type: INTEGER
+      - name: bufferSize
+        type: LONGINT
+      - name: flushProc
+        type: LONGINT
+      - name: progressProc
+        type: LONGINT
+      - name: desc
+        type: LONGINT
+      - name: data
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x7
+
+- function:
+    name: DecompressImage
+    return: OSErr
+    args:
+      - name: data
+        type: LONGINT
+      - name: desc
+        type: LONGINT
+      - name: dst
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: dstRect
+        type: Ptr
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x8
+
+- function:
+    name: FDecompressImage
+    return: OSErr
+    args:
+      - name: data
+        type: LONGINT
+      - name: desc
+        type: LONGINT
+      - name: dst
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: matrix
+        type: LONGINT
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: LONGINT
+      - name: matte
+        type: LONGINT
+      - name: matteRect
+        type: Ptr
+      - name: accuracy
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+      - name: bufferSize
+        type: LONGINT
+      - name: dataProc
+        type: LONGINT
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x9
+
+- function:
+    name: CompressSequenceBegin
+    return: OSErr
+    args:
+      - name: seqID
+        type: Ptr
+      - name: src
+        type: LONGINT
+      - name: prev
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: prevRect
+        type: Ptr
+      - name: colorDepth
+        type: INTEGER
+      - name: cType
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+      - name: spatialQuality
+        type: LONGINT
+      - name: temporalQuality
+        type: LONGINT
+      - name: keyFrameRate
+        type: LONGINT
+      - name: ctable
+        type: LONGINT
+      - name: flags
+        type: INTEGER
+      - name: desc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0xA
+
+- function:
+    name: CompressSequenceFrame
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: src
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: flags
+        type: INTEGER
+      - name: data
+        type: LONGINT
+      - name: dataSize
+        type: Ptr
+      - name: similarity
+        type: Ptr
+      - name: asyncCompletionProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0xB
+
+- function:
+    name: DecompressSequenceBegin
+    return: OSErr
+    args:
+      - name: seqID
+        type: Ptr
+      - name: desc
+        type: LONGINT
+      - name: port
+        type: LONGINT
+      - name: gdh
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: matrix
+        type: LONGINT
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: LONGINT
+      - name: flags
+        type: INTEGER
+      - name: accuracy
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0xD
+
+- function:
+    name: DecompressSequenceBeginS
+    return: OSErr
+    args:
+      - name: seqID
+        type: Ptr
+      - name: desc
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: dataSize
+        type: LONGINT
+      - name: port
+        type: LONGINT
+      - name: gdh
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: matrix
+        type: LONGINT
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: LONGINT
+      - name: flags
+        type: INTEGER
+      - name: accuracy
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x5D
+
+- function:
+    name: DecompressSequenceFrame
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: inFlags
+        type: INTEGER
+      - name: outFlags
+        type: Ptr
+      - name: asyncCompletionProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0xE
+
+- function:
+    name: DecompressSequenceFrameS
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: dataSize
+        type: LONGINT
+      - name: inFlags
+        type: INTEGER
+      - name: outFlags
+        type: Ptr
+      - name: asyncCompletionProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x47
+
+- function:
+    name: DecompressSequenceFrameWhen
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: dataSize
+        type: LONGINT
+      - name: inFlags
+        type: INTEGER
+      - name: outFlags
+        type: Ptr
+      - name: asyncCompletionProc
+        type: LONGINT
+      - name: frameTime
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x5E
+
+- function:
+    name: CDSequenceFlush
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x5F
+
+- function:
+    name: SetDSequenceMatrix
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: matrix
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x10
+
+- function:
+    name: GetDSequenceMatrix
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: matrix
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x91
+
+- function:
+    name: SetDSequenceMatte
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: matte
+        type: LONGINT
+      - name: matteRect
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x11
+
+- function:
+    name: SetDSequenceMask
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: mask
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x12
+
+- function:
+    name: SetDSequenceTransferMode
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: mode
+        type: INTEGER
+      - name: opColor
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x13
+
+- function:
+    name: SetDSequenceDataProc
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: dataProc
+        type: LONGINT
+      - name: bufferSize
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x14
+
+- function:
+    name: SetDSequenceAccuracy
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: accuracy
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x34
+
+- function:
+    name: SetDSequenceSrcRect
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x35
+
+- function:
+    name: SetDSequenceFlags
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: flagsMask
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x57
+
+- function:
+    name: ICMSequenceGetInfo
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: which
+        type: LONGINT
+      - name: data
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x89
+
+- function:
+    name: ICMSequenceSetInfo
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: which
+        type: LONGINT
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x9D
+
+- function:
+    name: GetDSequenceImageBuffer
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: gworld
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x15
+
+- function:
+    name: GetDSequenceScreenBuffer
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: gworld
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x16
+
+- function:
+    name: SetCSequenceQuality
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: spatialQuality
+        type: LONGINT
+      - name: temporalQuality
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x17
+
+- function:
+    name: SetCSequencePrev
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: prev
+        type: LONGINT
+      - name: prevRect
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x18
+
+- function:
+    name: SetCSequenceFlushProc
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: flushProc
+        type: LONGINT
+      - name: bufferSize
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x33
+
+- function:
+    name: SetCSequenceKeyFrameRate
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: keyFrameRate
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x36
+
+- function:
+    name: GetCSequenceKeyFrameRate
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: keyFrameRate
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x4B
+
+- function:
+    name: GetCSequencePrevBuffer
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: gworld
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x19
+
+- function:
+    name: CDSequenceBusy
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x1A
+
+- function:
+    name: CDSequenceEnd
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x1B
+
+- function:
+    name: CDSequenceEquivalentImageDescription
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: newDesc
+        type: LONGINT
+      - name: equivalent
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x65
+
+- function:
+    name: CDSequenceEquivalentImageDescriptionS
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: newDesc
+        type: LONGINT
+      - name: equivalent
+        type: Ptr
+      - name: canSwitch
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x9F
+
+- function:
+    name: ReplaceDSequenceImageDescription
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: newDesc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0xA0
+
+- function:
+    name: GetCompressedImageSize
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: bufferSize
+        type: LONGINT
+      - name: dataProc
+        type: LONGINT
+      - name: dataSize
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x1C
+
+- function:
+    name: GetSimilarity
+    return: OSErr
+    args:
+      - name: src
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: desc
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: similarity
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x1D
+
+- function:
+    name: GetImageDescriptionCTable
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: ctable
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x1E
+
+- function:
+    name: SetImageDescriptionCTable
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: ctable
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x1F
+
+- function:
+    name: GetImageDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: extension
+        type: Ptr
+      - name: idType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x20
+
+- function:
+    name: AddImageDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: extension
+        type: LONGINT
+      - name: idType
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x21
+
+- function:
+    name: RemoveImageDescriptionExtension
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: idType
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x3A
+
+- function:
+    name: CountImageDescriptionExtensionType
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: idType
+        type: LONGINT
+      - name: count
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x3B
+
+- function:
+    name: GetNextImageDescriptionExtensionType
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: idType
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x3C
+
+- function:
+    name: FindCodec
+    return: OSErr
+    args:
+      - name: cType
+        type: LONGINT
+      - name: specCodec
+        type: LONGINT
+      - name: compressor
+        type: Ptr
+      - name: decompressor
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x23
+
+- function:
+    name: CompressPicture
+    return: OSErr
+    args:
+      - name: srcPicture
+        type: LONGINT
+      - name: dstPicture
+        type: LONGINT
+      - name: quality
+        type: LONGINT
+      - name: cType
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x24
+
+- function:
+    name: FCompressPicture
+    return: OSErr
+    args:
+      - name: srcPicture
+        type: LONGINT
+      - name: dstPicture
+        type: LONGINT
+      - name: colorDepth
+        type: INTEGER
+      - name: ctable
+        type: LONGINT
+      - name: quality
+        type: LONGINT
+      - name: doDither
+        type: INTEGER
+      - name: compressAgain
+        type: INTEGER
+      - name: progressProc
+        type: LONGINT
+      - name: cType
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x25
+
+- function:
+    name: CompressPictureFile
+    return: OSErr
+    args:
+      - name: srcRefNum
+        type: INTEGER
+      - name: dstRefNum
+        type: INTEGER
+      - name: quality
+        type: LONGINT
+      - name: cType
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x26
+
+- function:
+    name: FCompressPictureFile
+    return: OSErr
+    args:
+      - name: srcRefNum
+        type: INTEGER
+      - name: dstRefNum
+        type: INTEGER
+      - name: colorDepth
+        type: INTEGER
+      - name: ctable
+        type: LONGINT
+      - name: quality
+        type: LONGINT
+      - name: doDither
+        type: INTEGER
+      - name: compressAgain
+        type: INTEGER
+      - name: progressProc
+        type: LONGINT
+      - name: cType
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x27
+
+- function:
+    name: GetPictureFileHeader
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: frame
+        type: Ptr
+      - name: header
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x28
+
+- function:
+    name: DrawPictureFile
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: frame
+        type: Ptr
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x29
+
+- function:
+    name: DrawTrimmedPicture
+    return: OSErr
+    args:
+      - name: srcPicture
+        type: LONGINT
+      - name: frame
+        type: Ptr
+      - name: trimMask
+        type: LONGINT
+      - name: doDither
+        type: INTEGER
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x2E
+
+- function:
+    name: DrawTrimmedPictureFile
+    return: OSErr
+    args:
+      - name: srcRefnum
+        type: INTEGER
+      - name: frame
+        type: Ptr
+      - name: trimMask
+        type: LONGINT
+      - name: doDither
+        type: INTEGER
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x2F
+
+- function:
+    name: MakeThumbnailFromPicture
+    return: OSErr
+    args:
+      - name: picture
+        type: LONGINT
+      - name: colorDepth
+        type: INTEGER
+      - name: thumbnail
+        type: LONGINT
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x2A
+
+- function:
+    name: MakeThumbnailFromPictureFile
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: colorDepth
+        type: INTEGER
+      - name: thumbnail
+        type: LONGINT
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x2B
+
+- function:
+    name: MakeThumbnailFromPixMap
+    return: OSErr
+    args:
+      - name: src
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: colorDepth
+        type: INTEGER
+      - name: thumbnail
+        type: LONGINT
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x2C
+
+- function:
+    name: TrimImage
+    return: OSErr
+    args:
+      - name: desc
+        type: LONGINT
+      - name: inData
+        type: LONGINT
+      - name: inBufferSize
+        type: LONGINT
+      - name: dataProc
+        type: LONGINT
+      - name: outData
+        type: LONGINT
+      - name: outBufferSize
+        type: LONGINT
+      - name: flushProc
+        type: LONGINT
+      - name: trimRect
+        type: Ptr
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x2D
+
+- function:
+    name: ConvertImage
+    return: OSErr
+    args:
+      - name: srcDD
+        type: LONGINT
+      - name: srcData
+        type: LONGINT
+      - name: colorDepth
+        type: INTEGER
+      - name: ctable
+        type: LONGINT
+      - name: accuracy
+        type: LONGINT
+      - name: quality
+        type: LONGINT
+      - name: cType
+        type: LONGINT
+      - name: codec
+        type: LONGINT
+      - name: dstDD
+        type: LONGINT
+      - name: dstData
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x30
+
+- function:
+    name: GetCompressedPixMapInfo
+    return: OSErr
+    args:
+      - name: pix
+        type: LONGINT
+      - name: desc
+        type: Ptr
+      - name: data
+        type: Ptr
+      - name: bufferSize
+        type: Ptr
+      - name: dataProc
+        type: Ptr
+      - name: progressProc
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x37
+
+- function:
+    name: SetCompressedPixMapInfo
+    return: OSErr
+    args:
+      - name: pix
+        type: LONGINT
+      - name: desc
+        type: LONGINT
+      - name: data
+        type: LONGINT
+      - name: bufferSize
+        type: LONGINT
+      - name: dataProc
+        type: LONGINT
+      - name: progressProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x38
+
+- function:
+    name: StdPix
+    args:
+      - name: src
+        type: LONGINT
+      - name: srcRect
+        type: Ptr
+      - name: matrix
+        type: LONGINT
+      - name: mode
+        type: INTEGER
+      - name: mask
+        type: LONGINT
+      - name: matte
+        type: LONGINT
+      - name: matteRect
+        type: Ptr
+      - name: flags
+        type: INTEGER
+    dispatcher: ImageCompressionDispatch
+    selector: 0xC
+
+- function:
+    name: TransformRgn
+    return: OSErr
+    args:
+      - name: matrix
+        type: LONGINT
+      - name: rgn
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x39
+
+- function:
+    name: SFGetFilePreview
+    args:
+      - name: where
+        type: LONGINT
+      - name: prompt
+        type: LONGINT
+      - name: fileFilter
+        type: LONGINT
+      - name: numTypes
+        type: INTEGER
+      - name: typeList
+        type: LONGINT
+      - name: dlgHook
+        type: LONGINT
+      - name: reply
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x41
+
+- function:
+    name: SFPGetFilePreview
+    args:
+      - name: where
+        type: LONGINT
+      - name: prompt
+        type: LONGINT
+      - name: fileFilter
+        type: LONGINT
+      - name: numTypes
+        type: INTEGER
+      - name: typeList
+        type: LONGINT
+      - name: dlgHook
+        type: LONGINT
+      - name: reply
+        type: Ptr
+      - name: dlgID
+        type: INTEGER
+      - name: filterProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x42
+
+- function:
+    name: StandardGetFilePreview
+    args:
+      - name: fileFilter
+        type: LONGINT
+      - name: numTypes
+        type: INTEGER
+      - name: typeList
+        type: LONGINT
+      - name: reply
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x43
+
+- function:
+    name: CustomGetFilePreview
+    args:
+      - name: fileFilter
+        type: LONGINT
+      - name: numTypes
+        type: INTEGER
+      - name: typeList
+        type: LONGINT
+      - name: reply
+        type: Ptr
+      - name: dlgID
+        type: INTEGER
+      - name: where
+        type: LONGINT
+      - name: dlgHook
+        type: LONGINT
+      - name: filterProc
+        type: LONGINT
+      - name: activeList
+        type: LONGINT
+      - name: activateProc
+        type: LONGINT
+      - name: yourDataPtr
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x44
+
+- function:
+    name: MakeFilePreview
+    return: OSErr
+    args:
+      - name: resRefNum
+        type: INTEGER
+      - name: progress
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x45
+
+- function:
+    name: AddFilePreview
+    return: OSErr
+    args:
+      - name: resRefNum
+        type: INTEGER
+      - name: previewType
+        type: LONGINT
+      - name: previewData
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x46
+
+- function:
+    name: AlignScreenRect
+    args:
+      - name: rp
+        type: Ptr
+      - name: alignmentProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x4C
+
+- function:
+    name: AlignWindow
+    args:
+      - name: wp
+        type: LONGINT
+      - name: front
+        type: Boolean
+      - name: alignmentRect
+        type: Ptr
+      - name: alignmentProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x4D
+
+- function:
+    name: DragAlignedWindow
+    args:
+      - name: wp
+        type: LONGINT
+      - name: startPt
+        type: LONGINT
+      - name: boundsRect
+        type: Ptr
+      - name: alignmentRect
+        type: Ptr
+      - name: alignmentProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x4E
+
+- function:
+    name: DragAlignedGrayRgn
+    return: LONGINT
+    args:
+      - name: theRgn
+        type: LONGINT
+      - name: startPt
+        type: LONGINT
+      - name: boundsRect
+        type: Ptr
+      - name: slopRect
+        type: Ptr
+      - name: axis
+        type: INTEGER
+      - name: actionProc
+        type: LONGINT
+      - name: alignmentRect
+        type: Ptr
+      - name: alignmentProc
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x4F
+
+- function:
+    name: SetCSequenceDataRateParams
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: params
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x50
+
+- function:
+    name: SetCSequenceFrameNumber
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: frameNumber
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x51
+
+- function:
+    name: SetCSequencePreferredPacketSize
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: preferredPacketSizeInBytes
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x78
+
+- function:
+    name: NewImageGWorld
+    return: OSErr
+    args:
+      - name: gworld
+        type: Ptr
+      - name: idh
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x52
+
+- function:
+    name: GetCSequenceDataRateParams
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: params
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x53
+
+- function:
+    name: GetCSequenceFrameNumber
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: frameNumber
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x54
+
+- function:
+    name: GetBestDeviceRect
+    return: OSErr
+    args:
+      - name: gdh
+        type: Ptr
+      - name: rp
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x55
+
+- function:
+    name: SetSequenceProgressProc
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: progressProc
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x56
+
+- function:
+    name: GDHasScale
+    return: OSErr
+    args:
+      - name: gdh
+        type: LONGINT
+      - name: depth
+        type: INTEGER
+      - name: scale
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x5A
+
+- function:
+    name: GDGetScale
+    return: OSErr
+    args:
+      - name: gdh
+        type: LONGINT
+      - name: scale
+        type: Ptr
+      - name: flags
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x5B
+
+- function:
+    name: GDSetScale
+    return: OSErr
+    args:
+      - name: gdh
+        type: LONGINT
+      - name: scale
+        type: LONGINT
+      - name: flags
+        type: INTEGER
+    dispatcher: ImageCompressionDispatch
+    selector: 0x5C
+
+- function:
+    name: ICMShieldSequenceCursor
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x62
+
+- function:
+    name: ICMDecompressComplete
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: err
+        type: INTEGER
+      - name: flag
+        type: INTEGER
+      - name: completionRtn
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x63
+
+- function:
+    name: ICMDecompressCompleteS
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: err
+        type: INTEGER
+      - name: flag
+        type: INTEGER
+      - name: completionRtn
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x82
+
+- function:
+    name: ICMSequenceLockBits
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: dst
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x7C
+
+- function:
+    name: ICMSequenceUnlockBits
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x7D
+
+- function:
+    name: ICMGetPixelFormatInfo
+    return: OSErr
+    args:
+      - name: PixelFormat
+        type: LONGINT
+      - name: theInfo
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x83
+
+- function:
+    name: ICMSetPixelFormatInfo
+    return: OSErr
+    args:
+      - name: PixelFormat
+        type: LONGINT
+      - name: theInfo
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x8A
+
+- function:
+    name: ICMSequenceGetChainMember
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: retSeqID
+        type: Ptr
+      - name: flags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x7E
+
+- function:
+    name: SetDSequenceTimeCode
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: timeCodeFormat
+        type: Ptr
+      - name: timeCodeTime
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x64
+
+- function:
+    name: CDSequenceNewMemory
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT
+      - name: dataUse
+        type: LONGINT
+      - name: memoryGoneProc
+        type: LONGINT
+      - name: refCon
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x66
+
+- function:
+    name: CDSequenceDisposeMemory
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: data
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x67
+
+- function:
+    name: CDSequenceNewDataSource
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: sourceID
+        type: Ptr
+      - name: sourceType
+        type: LONGINT
+      - name: sourceInputNumber
+        type: LONGINT
+      - name: dataDescription
+        type: LONGINT
+      - name: transferProc
+        type: LONGINT
+      - name: refCon
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x68
+
+- function:
+    name: CDSequenceDisposeDataSource
+    return: OSErr
+    args:
+      - name: sourceID
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x69
+
+- function:
+    name: CDSequenceSetSourceData
+    return: OSErr
+    args:
+      - name: sourceID
+        type: LONGINT
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x6A
+
+- function:
+    name: CDSequenceChangedSourceData
+    return: OSErr
+    args:
+      - name: sourceID
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x6B
+
+- function:
+    name: CDSequenceSetSourceDataQueue
+    return: OSErr
+    args:
+      - name: sourceID
+        type: LONGINT
+      - name: dataQueue
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x7B
+
+- function:
+    name: CDSequenceGetDataSource
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: sourceID
+        type: Ptr
+      - name: sourceType
+        type: LONGINT
+      - name: sourceInputNumber
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x7F
+
+- function:
+    name: PtInDSequenceData
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT
+      - name: where
+        type: LONGINT
+      - name: hit
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x6C
+
+- function:
+    name: HitTestDSequenceData
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT
+      - name: where
+        type: LONGINT
+      - name: hit
+        type: Ptr
+      - name: hitFlags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x87
+
+- function:
+    name: GetGraphicsImporterForFile
+    return: OSErr
+    args:
+      - name: theFile
+        type: Ptr
+      - name: gi
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x6E
+
+- function:
+    name: GetGraphicsImporterForDataRef
+    return: OSErr
+    args:
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: gi
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x77
+
+- function:
+    name: GetGraphicsImporterForFileWithFlags
+    return: OSErr
+    args:
+      - name: theFile
+        type: Ptr
+      - name: gi
+        type: Ptr
+      - name: flags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x84
+
+- function:
+    name: GetGraphicsImporterForDataRefWithFlags
+    return: OSErr
+    args:
+      - name: dataRef
+        type: LONGINT
+      - name: dataRefType
+        type: LONGINT
+      - name: gi
+        type: Ptr
+      - name: flags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x85
+
+- function:
+    name: QTGetFileNameExtension
+    return: OSErr
+    args:
+      - name: fileName
+        type: LONGINT
+      - name: fileType
+        type: LONGINT
+      - name: extension
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x61
+
+- function:
+    name: ImageTranscodeSequenceBegin
+    return: OSErr
+    args:
+      - name: its
+        type: Ptr
+      - name: srcDesc
+        type: LONGINT
+      - name: destType
+        type: LONGINT
+      - name: dstDesc
+        type: Ptr
+      - name: data
+        type: Ptr
+      - name: dataSize
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x6F
+
+- function:
+    name: ImageTranscodeSequenceEnd
+    return: OSErr
+    args:
+      - name: its
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x70
+
+- function:
+    name: ImageTranscodeFrame
+    return: OSErr
+    args:
+      - name: its
+        type: LONGINT
+      - name: srcData
+        type: Ptr
+      - name: srcDataSize
+        type: LONGINT
+      - name: dstData
+        type: Ptr
+      - name: dstDataSize
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x71
+
+- function:
+    name: ImageTranscodeDisposeFrameData
+    return: OSErr
+    args:
+      - name: its
+        type: LONGINT
+      - name: dstData
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x72
+
+- function:
+    name: CDSequenceInvalidate
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: invalRgn
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x73
+
+- function:
+    name: CDSequenceSetTimeBase
+    return: OSErr
+    args:
+      - name: seqID
+        type: LONGINT
+      - name: base
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x79
+
+- function:
+    name: ImageFieldSequenceBegin
+    return: OSErr
+    args:
+      - name: ifs
+        type: Ptr
+      - name: desc1
+        type: LONGINT
+      - name: desc2
+        type: LONGINT
+      - name: descOut
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x6D
+
+- function:
+    name: ImageFieldSequenceExtractCombine
+    return: OSErr
+    args:
+      - name: ifs
+        type: LONGINT
+      - name: fieldFlags
+        type: LONGINT
+      - name: data1
+        type: Ptr
+      - name: dataSize1
+        type: LONGINT
+      - name: data2
+        type: Ptr
+      - name: dataSize2
+        type: LONGINT
+      - name: outputData
+        type: Ptr
+      - name: outDataSize
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x75
+
+- function:
+    name: ImageFieldSequenceEnd
+    return: OSErr
+    args:
+      - name: ifs
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x76
+
+- function:
+    name: QTNewGWorld
+    return: OSErr
+    args:
+      - name: offscreenGWorld
+        type: Ptr
+      - name: PixelFormat
+        type: LONGINT
+      - name: boundsRect
+        type: Ptr
+      - name: cTable
+        type: LONGINT
+      - name: aGDevice
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x80
+
+- function:
+    name: QTNewGWorldFromPtr
+    return: OSErr
+    args:
+      - name: gw
+        type: Ptr
+      - name: pixelFormat
+        type: LONGINT
+      - name: boundsRect
+        type: Ptr
+      - name: cTable
+        type: LONGINT
+      - name: aGDevice
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+      - name: baseAddr
+        type: Ptr
+      - name: rowBytes
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x8B
+
+- function:
+    name: QTUpdateGWorld
+    return: LONGINT
+    args:
+      - name: offscreenGWorld
+        type: Ptr
+      - name: PixelFormat
+        type: LONGINT
+      - name: boundsRect
+        type: Ptr
+      - name: cTable
+        type: LONGINT
+      - name: aGDevice
+        type: LONGINT
+      - name: flags
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x81
+
+- function:
+    name: MakeImageDescriptionForPixMap
+    return: OSErr
+    args:
+      - name: pixmap
+        type: LONGINT
+      - name: idh
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x7A
+
+- function:
+    name: MakeImageDescriptionForEffect
+    return: OSErr
+    args:
+      - name: effectType
+        type: LONGINT
+      - name: idh
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x92
+
+- function:
+    name: QTGetPixelSize
+    return: INTEGER
+    args:
+      - name: PixelFormat
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x86
+
+- function:
+    name: QTGetPixelFormatDepthForImageDescription
+    return: INTEGER
+    args:
+      - name: pixelFormat
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0xA3
+
+- function:
+    name: QTGetPixMapPtrRowBytes
+    return: LONGINT
+    args:
+      - name: pm
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x8D
+
+- function:
+    name: QTGetPixMapHandleRowBytes
+    return: LONGINT
+    args:
+      - name: pm
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x8E
+
+- function:
+    name: QTSetPixMapPtrRowBytes
+    return: OSErr
+    args:
+      - name: pm
+        type: LONGINT
+      - name: rowBytes
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x90
+
+- function:
+    name: QTSetPixMapHandleRowBytes
+    return: OSErr
+    args:
+      - name: pm
+        type: LONGINT
+      - name: rowBytes
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x8F
+
+- function:
+    name: QTGetPixMapPtrGammaLevel
+    return: LONGINT
+    args:
+      - name: pm
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x93
+
+- function:
+    name: QTSetPixMapPtrGammaLevel
+    return: OSErr
+    args:
+      - name: pm
+        type: LONGINT
+      - name: gammaLevel
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x94
+
+- function:
+    name: QTGetPixMapHandleGammaLevel
+    return: LONGINT
+    args:
+      - name: pm
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x96
+
+- function:
+    name: QTSetPixMapHandleGammaLevel
+    return: OSErr
+    args:
+      - name: pm
+        type: LONGINT
+      - name: gammaLevel
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x97
+
+- function:
+    name: QTGetPixMapPtrRequestedGammaLevel
+    return: LONGINT
+    args:
+      - name: pm
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x98
+
+- function:
+    name: QTSetPixMapPtrRequestedGammaLevel
+    return: OSErr
+    args:
+      - name: pm
+        type: LONGINT
+      - name: requestedGammaLevel
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x99
+
+- function:
+    name: QTGetPixMapHandleRequestedGammaLevel
+    return: LONGINT
+    args:
+      - name: pm
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x9A
+
+- function:
+    name: QTSetPixMapHandleRequestedGammaLevel
+    return: OSErr
+    args:
+      - name: pm
+        type: LONGINT
+      - name: requestedGammaLevel
+        type: LONGINT
+    dispatcher: ImageCompressionDispatch
+    selector: 0x9B
+
+- function:
+    name: QuadToQuadMatrix
+    return: OSErr
+    args:
+      - name: source
+        type: Ptr
+      - name: dest
+        type: Ptr
+      - name: map
+        type: Ptr
+    dispatcher: ImageCompressionDispatch
+    selector: 0x95

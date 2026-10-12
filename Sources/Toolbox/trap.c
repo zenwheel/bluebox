@@ -158,6 +158,14 @@ static void census_skip(cpu68k *c, const trap_sig *s)
     }
 }
 
+/* QuickTime's managers: a call we do not implement answers zero (no error,
+ * nothing found, nothing to show), as for a movie with nothing in it,
+ * rather than stopping the application. */
+static bool answers_zero(const char *dispatcher)
+{
+    return !strcmp(dispatcher, "QuickTime") || !strcmp(dispatcher, "ImageCompressionDispatch");
+}
+
 static void dispatch_native(cpu68k *c, uint16_t tw)
 {
     const disp_entry *d = find_disp(tw);
@@ -214,6 +222,21 @@ static void dispatch_native(cpu68k *c, uint16_t tw)
     }
     if (!s) {
         cpu_halt(c, "%s: unknown selector %d (0x%X) at %08X", d->name, sel, (unsigned)sel, c->op_pc);
+        return;
+    }
+    if (answers_zero(d->name)) {
+        /* Called often (every frame, say): reported the first time only. */
+        static const dispatch_sig *reported[256];
+        static unsigned nreported;
+        bool seen = false;
+        for (unsigned i = 0; i < nreported && !seen; i++)
+            seen = reported[i] == s;
+        if (!seen) {
+            if (nreported < 256)
+                reported[nreported++] = s;
+            LOGF(LOG_UNIMPL, "unimplemented: %s (%s selector %d) at %08X, answered zero\n", s->name, d->name, sel, c->op_pc);
+        }
+        census_skip(c, s);
         return;
     }
     LOGF(LOG_UNIMPL, "unimplemented: %s (%s selector %d) at %08X\n", s->name, d->name, sel, c->op_pc);
@@ -576,7 +599,7 @@ void trap_init(void)
         if (!first || ndisps >= sizeof disps / sizeof disps[0])
             continue;
         disps[ndisps++] = (disp_entry){ di->trap, di->name, di->selector_location, first, count };
-        if (!any && !g_trap_census)
+        if (!any && !g_trap_census && !answers_zero(di->name))
             continue;
         /* A hand-written native for the whole trap (FP68K, Elems68K) wins. */
         bool raw = false;
