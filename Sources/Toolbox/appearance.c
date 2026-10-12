@@ -15,6 +15,7 @@
 typedef struct {
     uint32_t frame, title_bg, title_bg_inactive, stripe_dark, stripe_light, light, shade, text_inactive;
     uint32_t track, thumb, thumb_light, thumb_shade, arrow_bg, button_bg, button_shade;
+    uint32_t box_frame, content_edge, frame_inactive;
     bool shadow;   /* System 7's one-pixel window shadow */
     bool grips;    /* Platinum: grip lines only beside the title */
 } palette;
@@ -23,14 +24,16 @@ static const palette system7 = {
     .frame = 0x000000, .title_bg = 0xDDDDDD, .title_bg_inactive = 0xFFFFFF, .stripe_dark = 0x777777,
     .stripe_light = 0xFFFFFF, .light = 0xFFFFFF, .shade = 0x999999, .text_inactive = 0x888888,
     .track = 0xEEEEEE, .thumb = 0xCCCCFF, .thumb_light = 0xEEEEFF, .thumb_shade = 0x8888AA, .arrow_bg = 0xDDDDDD,
-    .button_bg = 0xFFFFFF, .button_shade = 0xFFFFFF, .shadow = true, .grips = false,
+    .button_bg = 0xFFFFFF, .button_shade = 0xFFFFFF, .box_frame = 0x000000, .content_edge = 0x000000,
+    .frame_inactive = 0xFFFFFF, .shadow = true, .grips = false,
 };
 
 static const palette platinum = {
     .frame = 0x000000, .title_bg = 0xDDDDDD, .title_bg_inactive = 0xEEEEEE, .stripe_dark = 0x999999,
     .stripe_light = 0xFFFFFF, .light = 0xFFFFFF, .shade = 0x888888, .text_inactive = 0x999999,
     .track = 0xBBBBBB, .thumb = 0xCCCCFF, .thumb_light = 0xEEEEFF, .thumb_shade = 0x666699, .arrow_bg = 0xDDDDDD,
-    .button_bg = 0xDDDDDD, .button_shade = 0x888888, .shadow = false, .grips = true,
+    .button_bg = 0xDDDDDD, .button_shade = 0x888888, .box_frame = 0x444444, .content_edge = 0x777777,
+    .frame_inactive = 0xEEEEEE, .shadow = false, .grips = true,
 };
 
 bool app_colour(void) { return g_appearance != MACHINE_APPEARANCE_BW; }
@@ -142,13 +145,13 @@ static void title_box(int top, int left, bool zoom, bool down)
     qrect area = { (int16_t)top, (int16_t)left, (int16_t)(top + 13), (int16_t)(left + 13) };
     fill_rgb(area, p->title_bg);
     qrect box = inset(area, 1);
-    frame_rgb(box, p->frame);
+    frame_rgb(box, p->box_frame);
     qrect in = inset(box, 1);
     fill_rgb(in, down ? p->shade : p->title_bg);
     bevel(in, p->light, p->shade, down);
     if (zoom) {
         qrect small = { in.top, in.left, (int16_t)(in.top + 5), (int16_t)(in.left + 5) };
-        frame_rgb(small, p->frame);
+        frame_rgb(small, p->box_frame);
     }
     if (down && !p->grips) {
         /* System 7's pressed close box: a small starburst. */
@@ -173,16 +176,40 @@ void app_draw_document(gaddr w, qrect c, qrect t, bool hilited, bool goaway, boo
             title_box(t.top + 2, t.right - 21, true, down);
         return;
     }
-    qrect outer = { (int16_t)(t.top - 1), (int16_t)(c.left - 1), (int16_t)(c.bottom + 1), (int16_t)(c.right + 1) };
+    int side = c.left - t.left + 1; /* 1, or Platinum's wider frame */
+    qrect outer = { (int16_t)(t.top - 1), (int16_t)(c.left - side), (int16_t)(c.bottom + side), (int16_t)(c.right + side) };
     frame_rgb(outer, p->frame);
     if (p->shadow) {
         vline(c.right + 1, t.top, c.bottom + 2, p->frame);
         hline(c.left, c.right + 2, c.bottom + 1, p->frame);
     }
-    hline(c.left, c.right, c.top - 1, p->frame); /* title bar / content separator */
-    fill_rgb(t, hilited ? p->title_bg : p->title_bg_inactive);
-    if (hilited)
-        bevel(t, p->light, p->shade, false);
+    uint32_t bg = hilited ? p->title_bg : p->title_bg_inactive;
+    if (side > 1) {
+        /* Platinum: the title bar and frame are one bevelled grey surface. */
+        uint32_t fbg = hilited ? p->title_bg : p->frame_inactive;
+        qrect body = inset(outer, 1);
+        fill_rgb((qrect){ c.top, body.left, c.bottom, (int16_t)(c.left - 1) }, fbg);                 /* left */
+        fill_rgb((qrect){ c.top, (int16_t)(c.right + 1), c.bottom, body.right }, fbg);               /* right */
+        fill_rgb((qrect){ (int16_t)(c.top - 1), body.left, c.top, (int16_t)(c.left - 1) }, fbg);
+        fill_rgb((qrect){ (int16_t)(c.top - 1), (int16_t)(c.right + 1), c.top, body.right }, fbg);
+        fill_rgb((qrect){ (int16_t)(c.bottom + 1), body.left, body.bottom, body.right }, fbg);       /* bottom */
+        fill_rgb((qrect){ c.bottom, body.left, (int16_t)(c.bottom + 1), (int16_t)(c.left - 1) }, fbg);
+        fill_rgb((qrect){ c.bottom, (int16_t)(c.right + 1), (int16_t)(c.bottom + 1), body.right }, fbg);
+        fill_rgb(t, bg);
+        if (hilited) {
+            hline(body.left, body.right - 1, body.top, p->light);
+            vline(body.left, body.top, body.bottom - 1, p->light);
+            hline(body.left + 1, body.right, body.bottom - 1, p->shade);
+            vline(body.right - 1, body.top + 1, body.bottom, p->shade);
+        }
+        frame_rgb((qrect){ (int16_t)(c.top - 1), (int16_t)(c.left - 1), (int16_t)(c.bottom + 1), (int16_t)(c.right + 1) },
+                  hilited ? p->content_edge : p->shade);
+    } else {
+        hline(c.left, c.right, c.top - 1, p->frame); /* title bar / content separator */
+        fill_rgb(t, bg);
+        if (hilited)
+            bevel(t, p->light, p->shade, false);
+    }
 
     /* Title text, centred, with room cleared around it. */
     gaddr th = WindowRecord_titleHandle(w);
@@ -334,5 +361,43 @@ bool app_draw_button(qrect r, const uint8_t *title, int n, bool pressed_in, bool
     int tw = qd_text_width(port, title, n);
     tb_MoveTo((int16_t)(r.left + (r.right - r.left - tw) / 2), (int16_t)(r.top + (r.bottom - r.top + asc - desc) / 2));
     text_rgb(port, title, n, disabled ? p->text_inactive : pressed_in ? 0xFFFFFF : 0x000000);
+    return true;
+}
+
+/* Checkboxes and radio buttons (Platinum): sunken, bevelled boxes. */
+bool app_draw_check(qrect box, bool radio, bool on, bool pressed_in, bool disabled)
+{
+    if (g_appearance != MACHINE_APPEARANCE_PLATINUM)
+        return false;
+    const palette *p = pal();
+    uint32_t edge = disabled ? p->shade : p->box_frame;
+    uint32_t face = pressed_in ? p->shade : disabled ? p->title_bg_inactive : 0xFFFFFF;
+    if (radio) {
+        /* A circle from spans: radius 6 in a 12x12 box. */
+        static const int span[12] = { 4, 2, 1, 1, 0, 0, 0, 0, 1, 1, 2, 4 };
+        for (int y = 0; y < 12; y++) {
+            int a = span[y];
+            hline(box.left + a, box.right - a, box.top + y, edge);
+            if (y > 0 && y < 11)
+                hline(box.left + a + 1, box.right - a - 1, box.top + y, face);
+        }
+        hline(box.left + 4, box.right - 4, box.top + 1, pressed_in ? p->light : p->shade); /* inner shading */
+        if (on) {
+            qrect dot = { (int16_t)(box.top + 4), (int16_t)(box.left + 4), (int16_t)(box.bottom - 4), (int16_t)(box.right - 4) };
+            fill_rgb(dot, disabled ? p->shade : 0x000000);
+        }
+        return true;
+    }
+    frame_rgb(box, edge);
+    qrect in = inset(box, 1);
+    fill_rgb(in, face);
+    bevel(in, p->shade, p->light, false); /* sunken */
+    if (on) {
+        uint32_t c = disabled ? p->shade : 0x000000;
+        for (int i = 0; i < 3; i++) /* a check mark */
+            fill_rgb((qrect){ (int16_t)(in.top + 5 + i), (int16_t)(in.left + 2 + i), (int16_t)(in.top + 7 + i), (int16_t)(in.left + 3 + i) }, c);
+        for (int i = 0; i < 5; i++)
+            fill_rgb((qrect){ (int16_t)(in.top + 6 - i), (int16_t)(in.left + 5 + i), (int16_t)(in.top + 8 - i), (int16_t)(in.left + 6 + i) }, c);
+    }
     return true;
 }

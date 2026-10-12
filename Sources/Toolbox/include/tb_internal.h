@@ -104,6 +104,7 @@ void app_draw_document(gaddr w, qrect c, qrect t, bool hilited, bool goaway, boo
 void app_draw_grow(qrect c, bool hilited);
 void app_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
 bool app_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
+bool app_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);
 
 /* ---- Dialog Manager ---- */
 

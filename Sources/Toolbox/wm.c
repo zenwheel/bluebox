@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "qd_internal.h"
+#include "machine.h"
 #include "tb_internal.h"
 
 enum { wDraw = 0, wHit, wCalcRgns, wNew, wDispose, wGrow, wDrawGIcon };
@@ -105,6 +106,20 @@ static bool is_dialog_variant(int var) { return var == 1 || var == 2 || var == 3
 static bool has_zoom(int var) { return var == 8 || var == 12; }
 static bool has_grow(int var) { return var == 0 || var == 8; }
 
+/* Width of a document window's frame beside and below the content: the
+ * one-pixel outline, or Platinum's bevelled grey frame. */
+static int side_width(int var)
+{
+    return g_appearance == MACHINE_APPEARANCE_PLATINUM && !is_dialog_variant(var) ? 6 : 1;
+}
+
+static void title_rect_var(qrect c, int var, qrect *t)
+{
+    int side = side_width(var);
+    *t = (qrect){ (int16_t)(c.top - TITLE_HEIGHT), (int16_t)(c.left - side + 1), (int16_t)(c.top - 1),
+                  (int16_t)(c.right + side - 1) };
+}
+
 static void title_rect(qrect c, qrect *t) { *t = (qrect){ (int16_t)(c.top - TITLE_HEIGHT), c.left, (int16_t)(c.top - 1), c.right }; }
 
 static void wdef_calc(gaddr w, int var)
@@ -120,6 +135,10 @@ static void wdef_calc(gaddr w, int var)
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - 1), (int16_t)(c.left - 1), (int16_t)(c.bottom + 1), (int16_t)(c.right + 1) });
     } else if (var == 3) { /* altDBoxProc: frame plus 2-pixel shadow */
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - 1), (int16_t)(c.left - 1), (int16_t)(c.bottom + 3), (int16_t)(c.right + 3) });
+    } else if (side_width(var) > 1) { /* Platinum documents: a frame all round, no shadow */
+        int sw = side_width(var);
+        hrgn_rect(&s, (qrect){ (int16_t)(c.top - TITLE_HEIGHT - 1), (int16_t)(c.left - sw), (int16_t)(c.bottom + sw),
+                               (int16_t)(c.right + sw) });
     } else { /* documents: frame, title bar, 1-pixel shadow */
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - TITLE_HEIGHT - 1), (int16_t)(c.left - 1), (int16_t)(c.bottom + 2),
                                (int16_t)(c.right + 2) });
@@ -194,6 +213,7 @@ static void wdef_draw(gaddr w, int var, int32_t param)
     qrect t;
     title_rect(c, &t);
     if (app_colour()) {
+        title_rect_var(c, var, &t);
         app_draw_document(w, c, t, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var), param);
         tb_DisposePtr(r);
         return;
@@ -263,8 +283,12 @@ static int32_t wdef_hit(gaddr w, int var, uint32_t pt)
     if (is_dialog_variant(var))
         return wNoHit;
     qrect t;
-    title_rect(c, &t);
-    if (v >= t.top - 1 && v < c.top && h >= c.left - 1 && h <= c.right) {
+    title_rect_var(c, var, &t);
+    int sw = side_width(var);
+    bool in_frame = sw > 1 && v >= t.top - 1 && v < c.bottom + sw && h >= c.left - sw && h < c.right + sw;
+    if (in_frame && v >= c.top) /* Platinum: the frame drags the window too */
+        return wInDrag;
+    if (v >= t.top - 1 && v < c.top && h >= c.left - sw && h <= c.right + sw - 1) {
         if (WindowRecord_hilited(w)) {
             if (WindowRecord_goAwayFlag(w) && h >= t.left + 8 && h < t.left + 19 && v >= t.top + 3 && v < t.top + 14)
                 return wInGoAway;

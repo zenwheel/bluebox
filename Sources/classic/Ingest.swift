@@ -84,7 +84,7 @@ private func readPrefix(_ path: String, _ n: Int = 2048) -> [UInt8] {
 private let stuffItSignatures: Set<String> = ["SIT!", "ST46", "ST50", "ST60", "ST65", "STin", "STi2", "STi3", "STi4"]
 private let archiveTypes: Set<String> = ["SIT!", "SITD", "SIT5", "SITX", "PACT", "BnHq"]
 private let archiveCreators: Set<String> = ["SIT!", "SITx", "CPCT", "aust", "BnHq", "ArcF"]
-private let archiveExtensions: Set<String> = ["sit", "sea", "cpt", "hqx"]
+private let archiveExtensions: Set<String> = ["sit", "sea", "cpt", "hqx", "zip"]
 private let diskTypes: Set<String> = ["dImg", "rohd", "dCpy", "ddsk", "hdsk"]
 private let diskExtensions: Set<String> = ["img", "image", "dsk", "dc42", "iso", "toast", "hfs", "cdr", "disk"]
 
@@ -103,6 +103,7 @@ private func looksLikeArchiveData(_ b: [UInt8]) -> Bool {
         if stuffItSignatures.contains(sig) && String(decoding: b[10..<14], as: UTF8.self) == "rLau" { return true }
     }
     if b.starts(with: Array("StuffIt (c)1997".utf8)) { return true }
+    if b.starts(with: [0x50, 0x4B, 0x03, 0x04]) { return true } // zip
     let text = String(decoding: b, as: UTF8.self)
     return text.contains("(This file must be converted with BinHex")
 }
@@ -156,6 +157,7 @@ func classify(_ path: String) -> InputKind {
         return .appleDouble
     }
     if archiveExtensions.contains(ext) || looksLikeArchiveData(prefix) { return .archive }
+    if isUDIF(path) { return .diskImage }
     if diskExtensions.contains(ext) && looksLikeDiskData(prefix) { return .diskImage }
     if looksLikeDiskData(prefix) { return .diskImage }
     return .plain
@@ -405,7 +407,46 @@ private func cError(_ err: [CChar]) -> String {
 
 /// Extract every file of the image's HFS volume into a folder named after the
 /// volume, next to the image.  Returns that folder.
+/// A modern Mac disk image (UDIF, .dmg): its trailer starts with 'koly'.
+func isUDIF(_ path: String) -> Bool {
+    guard let h = FileHandle(forReadingAtPath: path) else { return false }
+    defer { try? h.close() }
+    guard let end = try? h.seekToEnd(), end >= 512 else { return false }
+    try? h.seek(toOffset: end - 512)
+    return h.readData(ofLength: 4) == Data("koly".utf8)
+}
+
+/// Convert a UDIF image to a raw one (hdiutil on macOS, dmg2img elsewhere).
+private func rawFromUDIF(_ path: String) throws -> String {
+    let out = NSTemporaryDirectory() + "classic-udif-\(UUID().uuidString).img"
+    let p = Process()
+    #if os(macOS)
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+    p.arguments = ["convert", path, "-format", "UDTO", "-quiet", "-o", out]
+    #else
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    p.arguments = ["dmg2img", "-s", path, out]
+    #endif
+    p.standardOutput = FileHandle.nullDevice
+    p.standardError = FileHandle.nullDevice
+    try p.run()
+    p.waitUntilExit()
+    let produced = FileManager.default.fileExists(atPath: out) ? out : out + ".cdr"
+    guard p.terminationStatus == 0, FileManager.default.fileExists(atPath: produced) else {
+        throw IngestError.diskImage(path, "could not convert the .dmg (needs hdiutil, or dmg2img on Linux)")
+    }
+    return produced
+}
+
 func extractDiskImage(_ path: String, into dir: String, notes: inout [String]) throws -> String {
+    if isUDIF(path) {
+        let raw = try rawFromUDIF(path)
+        defer { try? FileManager.default.removeItem(atPath: raw) }
+        return try extractDiskImage(raw, into: dir, notes: &notes)
+    }
+    #if os(macOS)
+    if isHFSPlus(path) { return try extractMounted(path, into: dir) }
+    #endif
     var f = mac_file()
     var err = [CChar](repeating: 0, count: 256)
     guard appledouble_read(path, &f, &err, err.count) else { throw IngestError.unreadable(path) }
@@ -474,3 +515,78 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String]) t
     }
     return root
 }
+
+// MARK: - HFS+ (macOS: through the system's own driver)
+
+/// An HFS+ or HFSX volume, bare or as the first partition after a driver map.
+func isHFSPlus(_ path: String) -> Bool {
+    guard let h = FileHandle(forReadingAtPath: path) else { return false }
+    defer { try? h.close() }
+    let head = h.readData(ofLength: 1026)
+    guard head.count == 1026 else { return false }
+    let sig = head[1024..<1026]
+    return sig == Data("H+".utf8) || sig == Data("HX".utf8)
+}
+
+#if os(macOS)
+/// Mount the image read-only and copy its files out as AppleDouble.
+private func extractMounted(_ path: String, into dir: String) throws -> String {
+    let mount = NSTemporaryDirectory() + "classic-mount-\(UUID().uuidString)"
+    try FileManager.default.createDirectory(atPath: mount, withIntermediateDirectories: true)
+    func hdiutil(_ args: [String]) -> Int32 {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        p.arguments = args
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return -1 }
+        p.waitUntilExit()
+        return p.terminationStatus
+    }
+    guard hdiutil(["attach", "-readonly", "-nobrowse", "-noverify", "-noautoopen", "-mountpoint", mount, "-imagekey",
+                   "diskimage-class=CRawDiskImage", path]) == 0 else {
+        throw IngestError.diskImage(path, "could not mount the HFS+ volume")
+    }
+    defer {
+        _ = hdiutil(["detach", mount, "-quiet", "-force"])
+        try? FileManager.default.removeItem(atPath: mount)
+    }
+    let fm = FileManager.default
+    let volName = fm.displayName(atPath: mount)
+    let root = uniquePath(dir + "/" + (volName.isEmpty ? "Untitled" : volName))
+    try fm.createDirectory(atPath: root, withIntermediateDirectories: true)
+    guard let walker = fm.enumerator(atPath: mount) else { return root }
+    for case let rel as String in walker {
+        let src = mount + "/" + rel, dst = root + "/" + rel
+        if rel.split(separator: "/").contains(where: { $0.hasPrefix(".") }) { continue }
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: src, isDirectory: &isDir) else { continue }
+        if isDir.boolValue {
+            try fm.createDirectory(atPath: dst, withIntermediateDirectories: true)
+            continue
+        }
+        var data = (try? Data(contentsOf: URL(fileURLWithPath: src))) ?? Data()
+        var rsrc = (try? Data(contentsOf: URL(fileURLWithPath: src + "/..namedfork/rsrc"))) ?? Data()
+        var info = [UInt8](repeating: 0, count: 32)
+        let n = getxattr(src, "com.apple.FinderInfo", &info, 32, 0, 0)
+        var mf = mac_file()
+        try data.withUnsafeMutableBytes { d in
+            try rsrc.withUnsafeMutableBytes { r in
+                mf.data = d.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                mf.data_len = d.count
+                mf.rsrc = r.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                mf.rsrc_len = r.count
+                if n > 0 {
+                    withUnsafeMutableBytes(of: &mf.finder_info) { $0.copyBytes(from: info) }
+                    mf.has_finder_info = true
+                }
+                var err = [CChar](repeating: 0, count: 256)
+                if !appledouble_write(dst, &mf, &err, err.count) {
+                    throw IngestError.diskImage(path, str(err))
+                }
+            }
+        }
+    }
+    return root
+}
+#endif

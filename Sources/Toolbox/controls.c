@@ -169,6 +169,15 @@ static void cdef0_draw(gaddr ch)
         gaddr rr = tmp_rect(r);
         tb_EraseRect(rr);
         qrect_put(rr, box);
+        if (app_draw_check(box, kind != 1, cvalue(ch) != 0, hil == inCheckBox, hil == 255)) {
+            tb_MoveTo((int16_t)(box.right + 5), (int16_t)base);
+            qd_draw_text(port, title, n);
+            tb_DisposePtr(rr);
+            if (hil == 255)
+                fill((qrect){ r.top, (int16_t)(box.right + 1), r.bottom, r.right }, qd_pat_gray, patBic);
+            restore_font(f, s, face);
+            return;
+        }
         if (kind == 1) {
             tb_FrameRect(rr);
             if (cvalue(ch)) {
