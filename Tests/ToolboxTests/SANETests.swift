@@ -102,5 +102,26 @@ extension Classic {
             tb_ROMlib_Fdec2str(form, dec, out)
             #expect(pstring(at: out) == "-1.23e+2")
         }
+
+        @Test func floatingPointCoprocessor() {
+            let x = tb_NewPtr(8, false, true)
+            let code: [UInt16] = [
+                0xF23C, 0x4000, 0x0000, 0x0003,   // FMOVE.L #3,FP0
+                0xF23C, 0x4022, 0x0000, 0x0004,   // FADD.L #4,FP0
+                0xF201, 0x6000,                   // FMOVE.L FP0,D1
+                0xF23C, 0x4038, 0x0000, 0x0007,   // FCMP.L #7,FP0
+                0xF281, 0x0004,                   // FBEQ.W +4 (over the next instruction)
+                0x7401,                           // MOVEQ #1,D2 (skipped)
+                0xF23C, 0x4080, 0x0000, 0x0002,   // FMOVE.L #2,FP1
+                0xF200, 0x00A0,                   // FDIV.X FP0,FP1 → 2/7
+                0xF239, 0x7480, UInt16(x >> 16), UInt16(x & 0xFFFF), // FMOVE.D FP1,x
+                0xA9F4,
+            ]
+            #expect(run(code) == "ExitToShell")
+            #expect(cpu.pointee.d.1 == 7)
+            #expect(cpu.pointee.d.2 == 0)
+            let bits = UInt64(rd32(x)) << 32 | UInt64(rd32(x + 4))
+            #expect(abs(Double(bitPattern: bits) - 2.0 / 7.0) < 1e-12)
+        }
     }
 }

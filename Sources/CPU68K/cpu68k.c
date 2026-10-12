@@ -7,6 +7,7 @@
  */
 #include "m68k.h"
 
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -1468,6 +1469,432 @@ static void op_lineE(cpu68k *c, uint16_t op)
 /* ---------------------------------------------------------------------- */
 /* Main loop */
 
+/* ---------------------------------------------------------------------- */
+/* 68881 floating point (coprocessor 1), in doubles.  Gestalt reports no
+ * FPU, so applications that check use SANE; this is for the ones that
+ * assume a coprocessor.  Packed decimal operands are not supported. */
+
+enum { FPCC_N = 1u << 27, FPCC_Z = 1u << 26, FPCC_I = 1u << 25, FPCC_NAN = 1u << 24 };
+
+static double ext_read(cpu68k *c, uint32_t a)
+{
+    uint16_t se = mr16(c, a);
+    uint64_t m = (uint64_t)mr32(c, a + 4) << 32 | mr32(c, a + 8);
+    int e = se & 0x7FFF;
+    double v = e == 0x7FFF ? ((m << 1) ? NAN : INFINITY) : ldexp((double)m, e - 16383 - 63);
+    return (se & 0x8000) ? -v : v;
+}
+
+static void ext_write(cpu68k *c, uint32_t a, double v)
+{
+    uint16_t se = signbit(v) ? 0x8000 : 0;
+    uint64_t m = 0;
+    if (isnan(v)) {
+        se |= 0x7FFF;
+        m = 0xC000000000000000ull;
+    } else if (isinf(v)) {
+        se |= 0x7FFF;
+    } else if (v != 0) {
+        int e;
+        double f = frexp(fabs(v), &e);
+        m = (uint64_t)ldexp(f, 64);
+        se |= (uint16_t)(e - 1 + 16383);
+    }
+    mw16(c, a, se);
+    mw16(c, a + 2, 0);
+    mw32(c, a + 4, (uint32_t)(m >> 32));
+    mw32(c, a + 8, (uint32_t)m);
+}
+
+static const int fmt_size[8] = { 4, 4, 12, 12, 2, 8, 1, 0 };
+
+/* An operand of format fmt (L S X P W D B) from an effective address. */
+static bool fp_load(cpu68k *c, int mode, int reg, int fmt, double *out)
+{
+    int sz = fmt_size[fmt];
+    if (fmt == 3 || !sz)
+        return false;
+    if (mode == 0) { /* Dn: integer and single formats only */
+        uint32_t v = c->d[reg];
+        switch (fmt) {
+        case 0: *out = (int32_t)v; return true;
+        case 1: { float f; memcpy(&f, &v, 4); *out = f; return true; }
+        case 4: *out = (int16_t)v; return true;
+        case 6: *out = (int8_t)v; return true;
+        default: return false;
+        }
+    }
+    uint32_t a;
+    if (mode == 7 && reg == 4) { /* immediate: the operand follows */
+        a = c->pc;
+        c->pc += (uint32_t)(sz == 1 ? 2 : sz);
+        if (sz == 1)
+            a += 1;
+    } else {
+        ea_t e = ea_resolve(c, mode, reg, sz > 4 ? 4 : sz);
+        if (e.kind != EA_M)
+            return false;
+        a = e.addr;
+        if (sz > 4 && mode == 3)
+            c->a[reg] += (uint32_t)sz - 4;
+        if (sz > 4 && mode == 4) {
+            c->a[reg] -= (uint32_t)sz - 4;
+            a = c->a[reg];
+        }
+    }
+    switch (fmt) {
+    case 0: *out = (int32_t)mr32(c, a); break;
+    case 1: { uint32_t v = mr32(c, a); float f; memcpy(&f, &v, 4); *out = f; break; }
+    case 2: *out = ext_read(c, a); break;
+    case 4: *out = (int16_t)mr16(c, a); break;
+    case 5: { uint64_t v = (uint64_t)mr32(c, a) << 32 | mr32(c, a + 4); memcpy(out, &v, 8); break; }
+    default: *out = (int8_t)mr8(c, a); break;
+    }
+    return true;
+}
+
+static int32_t fp_to_int(cpu68k *c, double v, double lo, double hi)
+{
+    if (isnan(v))
+        return (int32_t)hi;
+    int mode = (c->fpcr >> 4) & 3; /* rounding: nearest, zero, minus, plus */
+    double r = mode == 1 ? trunc(v) : mode == 2 ? floor(v) : mode == 3 ? ceil(v) : nearbyint(v);
+    if (r < lo)
+        return (int32_t)lo;
+    if (r > hi)
+        return (int32_t)hi;
+    return (int32_t)r;
+}
+
+static bool fp_store(cpu68k *c, int mode, int reg, int fmt, double v)
+{
+    int sz = fmt_size[fmt];
+    if (fmt == 3 || !sz)
+        return false;
+    if (mode == 0) {
+        switch (fmt) {
+        case 0: c->d[reg] = (uint32_t)fp_to_int(c, v, -2147483648.0, 2147483647.0); return true;
+        case 1: { float f = (float)v; memcpy(&c->d[reg], &f, 4); return true; }
+        case 4: c->d[reg] = (c->d[reg] & 0xFFFF0000u) | (uint16_t)fp_to_int(c, v, -32768, 32767); return true;
+        case 6: c->d[reg] = (c->d[reg] & 0xFFFFFF00u) | (uint8_t)fp_to_int(c, v, -128, 127); return true;
+        default: return false;
+        }
+    }
+    ea_t e = ea_resolve(c, mode, reg, sz > 4 ? 4 : sz);
+    if (e.kind != EA_M)
+        return false;
+    uint32_t a = e.addr;
+    if (sz > 4 && mode == 3)
+        c->a[reg] += (uint32_t)sz - 4;
+    if (sz > 4 && mode == 4) {
+        c->a[reg] -= (uint32_t)sz - 4;
+        a = c->a[reg];
+    }
+    switch (fmt) {
+    case 0: mw32(c, a, (uint32_t)fp_to_int(c, v, -2147483648.0, 2147483647.0)); break;
+    case 1: { float f = (float)v; uint32_t b; memcpy(&b, &f, 4); mw32(c, a, b); break; }
+    case 2: ext_write(c, a, v); break;
+    case 4: mw16(c, a, (uint16_t)fp_to_int(c, v, -32768, 32767)); break;
+    case 5: { uint64_t b; memcpy(&b, &v, 8); mw32(c, a, (uint32_t)(b >> 32)); mw32(c, a + 4, (uint32_t)b); break; }
+    default: mw8(c, a, (uint8_t)fp_to_int(c, v, -128, 127)); break;
+    }
+    return true;
+}
+
+static void fp_setcc(cpu68k *c, double v)
+{
+    uint32_t cc = 0;
+    if (isnan(v))
+        cc |= FPCC_NAN;
+    else {
+        if (v == 0)
+            cc |= FPCC_Z;
+        if (isinf(v))
+            cc |= FPCC_I;
+    }
+    if (signbit(v))
+        cc |= FPCC_N;
+    c->fpsr = (c->fpsr & 0x00FFFFFFu) | cc;
+}
+
+static bool fp_cond(cpu68k *c, int cc)
+{
+    bool N = c->fpsr & FPCC_N, Z = c->fpsr & FPCC_Z, U = c->fpsr & FPCC_NAN;
+    switch (cc & 15) {
+    case 0: return false;
+    case 1: return Z;
+    case 2: return !(U || Z || N);
+    case 3: return Z || !(U || N);
+    case 4: return N && !(U || Z);
+    case 5: return Z || (N && !U);
+    case 6: return !(U || Z);
+    case 7: return !U;
+    case 8: return U;
+    case 9: return U || Z;
+    case 10: return U || !(N || Z);
+    case 11: return U || Z || !N;
+    case 12: return U || (N && !Z);
+    case 13: return U || Z || N;
+    case 14: return !Z;
+    default: return true;
+    }
+}
+
+/* The arithmetic of a general instruction's opmode; false if unknown. */
+static bool fp_arith(cpu68k *c, int opmode, double src, int dst)
+{
+    double d = c->fp[dst], r;
+    int op = opmode & 0x7F;
+    if (op >= 0x40) { /* 68040 single (FS) and double (FD) rounding forms */
+        switch (op) {
+        case 0x40: case 0x44: op = 0x00; break; /* FMOVE */
+        case 0x41: case 0x45: op = 0x04; break; /* FSQRT */
+        case 0x58: case 0x5C: op = 0x18; break; /* FABS */
+        case 0x5A: case 0x5E: op = 0x1A; break; /* FNEG */
+        case 0x60: case 0x64: op = 0x20; break; /* FDIV */
+        case 0x62: case 0x66: op = 0x22; break; /* FADD */
+        case 0x63: case 0x67: op = 0x23; break; /* FMUL */
+        case 0x68: case 0x6C: op = 0x28; break; /* FSUB */
+        default: return false;
+        }
+    }
+    switch (op) {
+    case 0x00: r = src; break;                         /* FMOVE */
+    case 0x01: r = nearbyint(src); break;              /* FINT */
+    case 0x02: r = sinh(src); break;
+    case 0x03: r = trunc(src); break;                  /* FINTRZ */
+    case 0x04: r = sqrt(src); break;
+    case 0x06: r = log1p(src); break;
+    case 0x08: r = expm1(src); break;
+    case 0x09: r = tanh(src); break;
+    case 0x0A: r = atan(src); break;
+    case 0x0C: r = asin(src); break;
+    case 0x0D: r = atanh(src); break;
+    case 0x0E: r = sin(src); break;
+    case 0x0F: r = tan(src); break;
+    case 0x10: r = exp(src); break;
+    case 0x11: r = exp2(src); break;
+    case 0x12: r = pow(10, src); break;
+    case 0x14: r = log(src); break;
+    case 0x15: r = log10(src); break;
+    case 0x16: r = log2(src); break;
+    case 0x18: r = fabs(src); break;
+    case 0x19: r = cosh(src); break;
+    case 0x1A: r = -src; break;
+    case 0x1C: r = acos(src); break;
+    case 0x1D: r = cos(src); break;
+    case 0x1E: r = src == 0 || isinf(src) || isnan(src) ? src : (double)ilogb(src); break; /* FGETEXP */
+    case 0x1F: { int e; r = src == 0 || isinf(src) || isnan(src) ? src : frexp(src, &e) * 2; break; } /* FGETMAN */
+    case 0x20: r = d / src; break;
+    case 0x21: r = fmod(d, src); break;
+    case 0x22: r = d + src; break;
+    case 0x23: r = d * src; break;
+    case 0x24: r = (float)(d / src); break;
+    case 0x25: r = remainder(d, src); break;
+    case 0x26: r = ldexp(d, (int)src); break;
+    case 0x27: r = (float)d * (float)src; break;
+    case 0x28: r = d - src; break;
+    case 0x30: case 0x31: case 0x32: case 0x33: case 0x34: case 0x35: case 0x36: case 0x37:
+        c->fp[op & 7] = cos(src); /* FSINCOS: cosine to FPc, sine to FPs */
+        r = sin(src);
+        break;
+    case 0x38: fp_setcc(c, d - src); return true;     /* FCMP */
+    case 0x3A: fp_setcc(c, src); return true;         /* FTST */
+    default: return false;
+    }
+    if ((opmode & 0x44) == 0x40) /* FSxxx: round to single */
+        r = (float)r;
+    c->fp[dst] = r;
+    fp_setcc(c, r);
+    return true;
+}
+
+static void fp_general(cpu68k *c, uint16_t op)
+{
+    uint16_t w = fetch16(c);
+    int mode = (op >> 3) & 7, reg = op & 7;
+    int opclass = w >> 13, rx = (w >> 10) & 7, ry = (w >> 7) & 7;
+    switch (opclass) {
+    case 0: /* FPm to FPn */
+        if (!fp_arith(c, w & 0x7F, c->fp[rx], ry))
+            cpu_exception(c, 11, c->op_pc);
+        return;
+    case 2: { /* <ea> to FPn */
+        double src;
+        if (rx == 7) { /* FMOVECR: constants from the ROM */
+            static const struct { int off; double v; } k[] = {
+                { 0x00, M_PI }, { 0x0B, 0.30102999566398120 }, { 0x0C, M_E }, { 0x0D, M_LOG2E }, { 0x0E, M_LOG10E },
+                { 0x0F, 0.0 }, { 0x30, M_LN2 }, { 0x31, M_LN10 }, { 0x32, 1e0 }, { 0x33, 1e1 }, { 0x34, 1e2 },
+                { 0x35, 1e4 }, { 0x36, 1e8 }, { 0x37, 1e16 }, { 0x38, 1e32 }, { 0x39, 1e64 }, { 0x3A, 1e128 },
+                { 0x3B, 1e256 }, { 0x3C, INFINITY }, { 0x3D, INFINITY }, { 0x3E, INFINITY }, { 0x3F, INFINITY },
+            };
+            double v = 0;
+            for (unsigned i = 0; i < sizeof k / sizeof k[0]; i++)
+                if (k[i].off == (w & 0x7F))
+                    v = k[i].v;
+            c->fp[ry] = v;
+            fp_setcc(c, v);
+            return;
+        }
+        if (!fp_load(c, mode, reg, rx, &src) || !fp_arith(c, w & 0x7F, src, ry))
+            cpu_exception(c, 11, c->op_pc);
+        return;
+    }
+    case 3: /* FMOVE FPn to <ea> */
+        if (!fp_store(c, mode, reg, rx, c->fp[ry]))
+            cpu_exception(c, 11, c->op_pc);
+        return;
+    case 4:
+    case 5: { /* FMOVE(M) control registers */
+        uint32_t *regs[3] = { &c->fpcr, &c->fpsr, &c->fpiar };
+        int sel[3] = { 4, 2, 1 }, n = 0;
+        for (int i = 0; i < 3; i++)
+            n += (rx & sel[i]) != 0;
+        bool to_mem = opclass == 5;
+        if (mode == 0 || mode == 1) { /* one register to or from Dn/An */
+            for (int i = 0; i < 3; i++)
+                if (rx & sel[i]) {
+                    uint32_t *r = mode == 0 ? &c->d[reg] : &c->a[reg];
+                    if (to_mem)
+                        *r = *regs[i];
+                    else
+                        *regs[i] = *r;
+                }
+            return;
+        }
+        if (mode == 7 && reg == 4 && !to_mem) {
+            for (int i = 0; i < 3; i++)
+                if (rx & sel[i])
+                    *regs[i] = fetch32(c);
+            return;
+        }
+        uint32_t a;
+        if (mode == 4) {
+            c->a[reg] -= (uint32_t)n * 4;
+            a = c->a[reg];
+        } else if (mode == 3) {
+            a = c->a[reg];
+            c->a[reg] += (uint32_t)n * 4;
+        } else {
+            ea_t e = ea_resolve(c, mode, reg, 4);
+            a = e.addr;
+        }
+        for (int i = 0; i < 3; i++)
+            if (rx & sel[i]) {
+                if (to_mem)
+                    mw32(c, a, *regs[i]);
+                else
+                    *regs[i] = mr32(c, a);
+                a += 4;
+            }
+        return;
+    }
+    case 6:
+    case 7: { /* FMOVEM data registers */
+        bool to_mem = opclass == 7;
+        int list = (w & 0x0800) ? (int)(c->d[(w >> 4) & 7] & 0xFF) : (w & 0xFF);
+        bool predec = !(w & 0x1000);
+        int count = 0;
+        for (int i = 0; i < 8; i++)
+            count += (list >> i) & 1;
+        uint32_t a;
+        if (mode == 4) {
+            c->a[reg] -= (uint32_t)count * 12;
+            a = c->a[reg];
+        } else if (mode == 3) {
+            a = c->a[reg];
+            c->a[reg] += (uint32_t)count * 12;
+        } else {
+            ea_t e = ea_resolve(c, mode, reg, 4);
+            a = e.addr;
+        }
+        for (int r = 0; r < 8; r++) {
+            int bit = predec ? r : 7 - r; /* predecrement lists FP7 in bit 7 … FP0 in bit 0 */
+            if (!((list >> bit) & 1))
+                continue;
+            if (to_mem)
+                ext_write(c, a, c->fp[r]);
+            else
+                c->fp[r] = ext_read(c, a);
+            a += 12;
+        }
+        return;
+    }
+    default:
+        cpu_exception(c, 11, c->op_pc);
+    }
+}
+
+static void op_lineF(cpu68k *c, uint16_t op)
+{
+    if ((op & 0x0E00) != 0x0200) { /* not coprocessor 1 */
+        cpu_exception(c, 11, c->op_pc);
+        return;
+    }
+    switch ((op >> 6) & 7) {
+    case 0: fp_general(c, op); break;
+    case 1: { /* FScc, FDBcc, FTRAPcc */
+        uint16_t w = fetch16(c);
+        bool t = fp_cond(c, w & 0x3F);
+        int mode = (op >> 3) & 7, reg = op & 7;
+        if (mode == 1) { /* FDBcc */
+            int16_t disp = (int16_t)fetch16(c);
+            if (!t) {
+                uint16_t v = (uint16_t)(c->d[reg] - 1);
+                c->d[reg] = (c->d[reg] & 0xFFFF0000u) | v;
+                if (v != 0xFFFF)
+                    c->pc = c->op_pc + 4 + (uint32_t)(int32_t)disp;
+            }
+        } else if (mode == 7 && reg >= 2) { /* FTRAPcc */
+            if (reg == 2)
+                fetch16(c);
+            else if (reg == 3)
+                fetch32(c);
+            if (t)
+                cpu_exception(c, 7, c->pc);
+        } else {
+            ea_t e = ea_resolve(c, mode, reg, 1);
+            ea_put(c, &e, 1, t ? 0xFF : 0);
+        }
+        break;
+    }
+    case 2:
+    case 3: { /* FBcc */
+        uint32_t base = c->pc;
+        int32_t disp = (op & 0x40) ? (int32_t)fetch32(c) : (int16_t)fetch16(c);
+        if (fp_cond(c, op & 0x3F))
+            c->pc = base + (uint32_t)disp;
+        break;
+    }
+    case 4: { /* FSAVE: an idle frame */
+        int mode = (op >> 3) & 7, reg = op & 7;
+        if (mode == 4) {
+            c->a[reg] -= 4;
+            mw32(c, c->a[reg], 0x1F180000u);
+        } else {
+            ea_t e = ea_resolve(c, mode, reg, 4);
+            mw32(c, e.addr, 0x1F180000u);
+        }
+        break;
+    }
+    case 5: { /* FRESTORE */
+        int mode = (op >> 3) & 7, reg = op & 7;
+        uint32_t a = mode == 3 ? c->a[reg] : ea_resolve(c, mode, reg, 4).addr;
+        uint32_t fmt = mr32(c, a);
+        if (mode == 3)
+            c->a[reg] += 4 + ((fmt >> 16) & 0xFF);
+        if ((fmt >> 24) == 0) { /* null frame: reset */
+            c->fpcr = c->fpsr = c->fpiar = 0;
+            for (int i = 0; i < 8; i++)
+                c->fp[i] = NAN;
+        }
+        break;
+    }
+    default:
+        cpu_exception(c, 11, c->op_pc);
+    }
+}
+
 void cpu_init(cpu68k *c)
 {
     memset(c, 0, sizeof *c);
@@ -1514,7 +1941,7 @@ void cpu_step(cpu68k *c)
             cpu_exception(c, 10, c->op_pc);
         break;
     case 0xE: op_lineE(c, op); break;
-    case 0xF: cpu_exception(c, 11, c->op_pc); break;
+    case 0xF: op_lineF(c, op); break;
     default: op_arith(c, op); break;
     }
 }

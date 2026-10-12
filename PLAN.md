@@ -323,6 +323,7 @@ the trap census.
   - Sound Manager (pulled forward from M4): channels with paced command queues and callbacks at safe points, 'snd ' formats 1 and 2, standard and extended sampled sound, square-wave and wave-table notes, SysBeep; output through AVAudioEngine (MACE/IMA decoding still to do)
   - Notification Manager: messages as macOS notifications (an alert when unbundled), marks as a Dock badge, a Dock bounce, the request's sound, and response procedures at the next safe point
   - Host names longer than 31 characters get a stable short Mac name (prefix, '#', hash) that resolves back; names match ignoring case, as on HFS. The heap, stack and A5 world sit below 2 GB, since applications do signed arithmetic on addresses (free memory as ApplLimit − HeapEnd). ParamText strings appear in trap logs.
+  - 68881 floating point: FMOVE in every format but packed, FMOVEM, control registers, the arithmetic and transcendental operations (and the 68040 rounding forms), FMOVECR constants, FBcc/FScc/FDBcc/FTRAPcc, FSAVE/FRESTORE, in doubles; Gestalt still reports no FPU, so applications that check use SANE
   - The System file has the standard cursors (CURS 1–4) and alert icons (ICON 0–2), drawn by `Generators/sysres.py`; Gestalt answers the selectors System 7.1 did for the managers we provide, and calls selector functions installed with `NewGestalt`; `GetProcessInformation` gives the SIZE flags as processMode (it said background-only); `PBHOpenDeny`/`PBHOpenRFDeny`
   - QuickTime start-up: Gestalt reports 2.5, `EnterMovies` and the basic Movie Toolbox calls work, and movies open but play as zero length, so applications that require QuickTime start (decoding is still to do)
   - `LoadSeg` patches the calling entry too (Director projectors keep their own copy of the jump table); `NewPixPat` allocates its pixel map and data
@@ -366,7 +367,7 @@ the trap census.
   - colour pixel patterns drawn in colour (they draw through their 1-bit form today); `SetDepth` changing the screen's depth while running
   - MACE 3:1 and 6:1 sound decoding (it plays silence of the right length)
   - QuickTime movie decoding (movies open and play as zero length); the Component Manager
-  - a 68881/68882 FPU for applications built for one (a handful of titles stop on F-line instructions); `_MethodDispatch` for early Object Pascal/MacApp applications (Photoshop 1.0)
+  - `_MethodDispatch` for early Object Pascal/MacApp applications (Photoshop 1.0)
   - themes: utility and floating windows, collapse (WindowShade), popups, sliders, tabs, menus in screen mode, scheme desktop patterns; Mac OS 8.5 Appearance themes; a theme setting for installed bundles
   - native style: map the native scroll knob's position and size onto the classic thumb for dragging; native popups and edit-text frames
   - HFS+ volumes read natively (imports mount them through the host on macOS today; Linux needs our own reader)
