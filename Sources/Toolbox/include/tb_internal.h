@@ -99,6 +99,9 @@ bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize
 /* ---- String comparison (register traps) ---- */
 
 void raw_CmpString(cpu68k *c, uint16_t tw);
+void raw_FP68K(cpu68k *c, uint16_t tw);
+void raw_Elems68K(cpu68k *c, uint16_t tw);
+void sane_reset(void);
 void raw_RelString(cpu68k *c, uint16_t tw);
 void raw_UprString(cpu68k *c, uint16_t tw);
 

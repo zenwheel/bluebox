@@ -146,6 +146,7 @@ bool machine_boot(bool census)
     /* The System file: built here, with our definition procedures as
      * 68k stubs that call native code. */
     rm_init();
+    sane_reset();
     wr32(LM_TheZone, GA_SYSHEAP);
     if (!open_system_file())
         return false;
