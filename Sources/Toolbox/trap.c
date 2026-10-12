@@ -18,6 +18,8 @@ uint16_t trap_current_word(void) { return last_trapword; }
 /* Natives and their ROM stubs */
 
 #define STUB_BASE (GA_ROM + 0x1000u)
+/* 68000 routines the ROM provides, below the stubs. */
+#define METHOD_DISPATCH_CODE (GA_ROM + 0x800u)
 #define STUB_SIZE 8u
 #define MAX_NATIVES 8192
 
@@ -506,6 +508,54 @@ void trap_init(void)
         else
             wr32(OS_TRAP_TABLE + (r->trap & 0xFFu) * 4, stub);
     }
+
+    /* MethodDispatch (A9F8): the MPW Object Pascal method dispatcher that
+     * the 128K and later ROMs carried.  The runtime library's own copy is
+     * used on 64K ROMs; on later ones its start-up code stores the class
+     * table pointer in 0xBEC and the error routine in 0xBE8 instead of in
+     * its A5 world and calls the trap.  This is that same routine, in 68000
+     * code, reading the two globals.  The caller's inline data after the
+     * JSR is a count and a method cache of (class ID, offset) pairs; the
+     * object handle is the second long on the stack. */
+    static const uint16_t method_dispatch[] = {
+        0x205F,         /* move.l (sp)+,a0      inline data */
+        0x226F, 0x0004, /* move.l 4(sp),a1      the object */
+        0x2251,         /* move.l (a1),a1 */
+        0x3011,         /* move.w (a1),d0       its class ID */
+        0x3218,         /* move.w (a0)+,d1      cache entries - 1 */
+        0xB050,         /* cmp.w (a0),d0        the last class seen? */
+        0x6612,         /* bne.s search */
+        0x3028, 0x0002, /* found: move.w 2(a0),d0 */
+        0x0880, 0x0000, /* bclr #0,d0           odd: relative to the cache */
+        0x6604,         /* bne.s relative */
+        0x4EF5, 0x0000, /* jmp 0(a5,d0.w)       even: a jump table entry */
+        0x4EF0, 0x0002, /* relative: jmp 2(a0,d0.w) */
+        0x3080,         /* search: move.w d0,(a0) */
+        0x2408,         /* move.l a0,d2 */
+        0x5888,         /* 1: addq.l #4,a0 */
+        0xB050,         /* cmp.w (a0),d0 */
+        0x54C9, 0xFFFA, /* dbcc d1,1b */
+        0x6722,         /* beq.s hit */
+        0x2278, 0x0BEC, /* move.l $BEC,a1       class table */
+        0x2251,         /* move.l (a1),a1 */
+        0x600A,         /* bra.s super */
+        0x5888,         /* 2: addq.l #4,a0 */
+        0xB050,         /* cmp.w (a0),d0 */
+        0x54C9, 0xFFFA, /* dbcc d1,2b */
+        0x6710,         /* beq.s hit */
+        0x3031, 0x0000, /* super: move.w 0(a1,d0.w),d0  the superclass */
+        0x66F2,         /* bne.s 2b */
+        0x2242,         /* move.l d2,a1         not understood */
+        0x4291,         /* clr.l (a1) */
+        0x2278, 0x0BE8, /* move.l $BE8,a1       error routine */
+        0x4ED1,         /* jmp (a1) */
+        0x2242,         /* hit: move.l d2,a1 */
+        0x3368, 0x0002, 0x0002, /* move.w 2(a0),2(a1)  cache it */
+        0x60B4,         /* bra.s found */
+    };
+    for (unsigned i = 0; i < sizeof method_dispatch / sizeof method_dispatch[0]; i++)
+        wr16(METHOD_DISPATCH_CODE + i * 2, method_dispatch[i]);
+    wr32(TB_TRAP_TABLE + 0x1F8u * 4, METHOD_DISPATCH_CODE);
 
     /* Selector dispatchers: installed when any selector is implemented
      * (or always, in census mode, so arguments can be discarded). */
