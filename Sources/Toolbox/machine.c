@@ -8,6 +8,7 @@
 #include "qd_internal.h"
 #include "sysfonts.h"
 #include "tb_internal.h"
+#include "sysres_gen.h"
 #include "machine.h"
 
 cpu68k *g_cpu;
@@ -108,6 +109,10 @@ static bool open_system_file(void)
         { fourcc("itl1"), 0, NULL, RES_SYS_HEAP, itl1, sizeof itl1 },
     };
     size_t n = 7;
+    /* Standard cursors and alert icons (Generators/sysres.py). */
+    for (unsigned i = 0; i < sysres_count && n < 64; i++)
+        specs[n++] = (rsrc_spec){ sysres[i].type, sysres[i].id, NULL, RES_SYS_HEAP | RES_PURGEABLE, sysres[i].data,
+                                  sysres[i].len };
     /* Bitmap fonts: generated from the OFL faces (Generators/fonts.py). */
     for (unsigned i = 0; i < sysfont_count && n < 64; i++)
         specs[n++] = (rsrc_spec){ sysfonts[i].type, sysfonts[i].id, sysfonts[i].name, RES_SYS_HEAP | RES_PURGEABLE,

@@ -1828,3 +1828,18 @@ int16_t tb_PBMountVol(gaddr pb) { return -56; /* nsDrvErr: no such drive */ }
 int16_t tb_PBUnmountVol(gaddr pb) { return fBsyErr; }
 int16_t tb_PBEject(gaddr pb) { return -56; }
 int16_t tb_PBOffLine(gaddr pb) { return -56; }
+
+/* Opening with deny modes (AppleShare): the read and write access bits
+ * become the permission; there is no one else to deny. */
+static int16_t open_deny(gaddr pb, bool rsrc)
+{
+    uint16_t deny = rd16(pb + 26); /* ioDenyModes */
+    uint8_t saved = rd8(pb + IOParam_ioPermssn_off);
+    wr8(pb + IOParam_ioPermssn_off, (uint8_t)((deny & 3) ? (deny & 3) : fsRdPerm));
+    int16_t err = open_fork(pb, rsrc, true);
+    wr8(pb + IOParam_ioPermssn_off, saved);
+    return err;
+}
+
+int16_t tb_PBHOpenDeny(gaddr pb, bool async) { return open_deny(pb, false); }
+int16_t tb_PBHOpenRFDeny(gaddr pb, bool async) { return open_deny(pb, true); }

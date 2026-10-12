@@ -2,7 +2,9 @@
  * Gestalt.  Values describe the machine we present; the environment profile
  * can override any selector (gestalt_set).
  */
+#include "m68k.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 #define MAX_GESTALT 128
 
@@ -49,16 +51,39 @@ void gestalt_init(void)
     gestalt_set(fourcc("kbd "), 4);           /* Apple Extended Keyboard */
     gestalt_set(fourcc("os  "), 0x2);         /* Process Manager present (launch control) */
     gestalt_set(fourcc("evnt"), 0x1);         /* Apple Event Manager present */
+    /* What else System 7.1 answered, for the managers we provide. */
+    gestalt_set(fourcc("vers"), 1);           /* Gestalt itself */
+    gestalt_set(fourcc("scri"), 0x0710);      /* Script Manager */
+    gestalt_set(fourcc("te  "), 5);           /* TextEdit (gestaltTE5) */
+    gestalt_set(fourcc("hdwr"), 0x009B);      /* VIA1, VIA2, ASC, SCC, SCSI */
+    gestalt_set(fourcc("edtn"), 0x1);         /* Edition Manager present */
+    gestalt_set(fourcc("help"), 0x1);         /* Help Manager present */
+    gestalt_set(fourcc("alis"), 0x1);         /* Alias Manager present */
+    gestalt_set(fourcc("fold"), 0x1);         /* Folder Manager (FindFolder) present */
+    gestalt_set(fourcc("fs  "), 0x2);         /* FSSpec calls */
+    gestalt_set(fourcc("stdf"), 0x1);         /* Standard File 5.8 calls */
+    gestalt_set(fourcc("icon"), 0x1);         /* Icon Utilities present */
+    gestalt_set(fourcc("tmgr"), 3);           /* extended Time Manager */
+    gestalt_set(fourcc("snd "), 0x3);         /* stereo, stereo mixing */
+    gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
 }
 
-int16_t tb_Gestalt(int32_t selector, uint32_t *responsep)
+static int16_t gestalt_lookup(int32_t selector, uint32_t *responsep)
 {
     for (unsigned i = 0; i < count; i++) {
         if (table[i].selector == (uint32_t)selector) {
             if (table[i].proc) {
-                /* Calling guest selector functions needs nested execution. */
-                *responsep = 0;
-                return gestaltUnknownErr;
+                /* FUNCTION selFunc(selector: OSType; VAR response: LONGINT): OSErr */
+                cpu68k *c = g_cpu;
+                gaddr resp = tb_NewPtr(4, false, true);
+                cpu_push16(c, 0);
+                cpu_push32(c, (uint32_t)selector);
+                cpu_push32(c, resp);
+                guest_call(table[i].proc);
+                int16_t err = (int16_t)cpu_pop16(c);
+                *responsep = rd32(resp);
+                tb_DisposePtr(resp);
+                return err;
             }
             *responsep = table[i].value;
             return noErr;
@@ -66,6 +91,16 @@ int16_t tb_Gestalt(int32_t selector, uint32_t *responsep)
     }
     *responsep = 0;
     return gestaltUnknownErr;
+}
+
+int16_t tb_Gestalt(int32_t selector, uint32_t *responsep)
+{
+    int16_t err = gestalt_lookup(selector, responsep);
+    if (g_log_mask & LOG_TRAPS) {
+        char tc[5];
+        log_printf("  Gestalt '%s' -> %d, %08X\n", fourcc_str((uint32_t)selector, tc), err, *responsep);
+    }
+    return err;
 }
 
 int16_t tb_NewGestalt(int32_t selector, gaddr selFunc)

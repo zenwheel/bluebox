@@ -7460,12 +7460,30 @@ static void glue_PBHOpenDF(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBHOpenDeny(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_a = (trapword & 0x400) != 0;
+    int16_t r = tb_PBHOpenDeny(a_pb, a_a);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBHOpenRF(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBHOpenRF(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBHOpenRFDeny(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_a = (trapword & 0x400) != 0;
+    int16_t r = tb_PBHOpenRFDeny(a_pb, a_a);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12363,7 +12381,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x35u, "PBHMapName", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x36u, "PBHCopyFile", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x37u, "PBHMoveRename", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x38u, "PBHOpenDeny", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x38u, "PBHOpenDeny", CONV_REG, 0, 0, glue_PBHOpenDeny},
+    {0xA060, (int32_t)0x39u, "PBHOpenRFDeny", CONV_REG, 0, 0, glue_PBHOpenRFDeny},
     {0xA854, (int32_t)0x0u, "IsOutline", CONV_STACK, 8, 2, 0},
     {0xA854, (int32_t)0x1u, "SetOutlinePreferred", CONV_STACK, 2, 0, 0},
     {0xA854, (int32_t)0x8u, "OutlineMetrics", CONV_STACK, 34, 2, 0},

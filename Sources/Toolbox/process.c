@@ -54,7 +54,7 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
     put_us(info + ProcessInfoRec_processNumber_off);
     ProcessInfoRec_set_processType(info, fourcc("APPL"));
     ProcessInfoRec_set_processSignature(info, (int32_t)g_app_creator);
-    ProcessInfoRec_set_processMode(info, 0x00000400); /* modeHighLevelEventAware-ish defaults */
+    ProcessInfoRec_set_processMode(info, g_app_size_flags); /* the SIZE flags, as the Process Manager gave */
     ProcessInfoRec_set_processLocation(info, rd32(LM_ApplZone));
     ProcessInfoRec_set_processSize(info, (uint32_t)tb_FreeMem(false));
     ProcessInfoRec_set_processFreeMem(info, (uint32_t)tb_FreeMem(false));

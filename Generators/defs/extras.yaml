@@ -28,3 +28,19 @@
     return: Boolean
     dispatcher: ResourceDispatch
     selector: 0x0008
+
+- function:
+    name: PBHOpenRFDeny
+    return: OSErr
+    args:
+      - name: pb
+        type: HParmBlkPtr
+        register: A0
+      - name: a
+        type: Boolean
+        register: TrapBit<0x400>
+    file_trap: true
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x39
+    returnreg: D0
