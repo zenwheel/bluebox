@@ -234,6 +234,23 @@ void machine_set_print_handlers(machine_print_fn print, machine_page_setup_fn pa
 /* The host's default paper, used for new print records. */
 void machine_set_page_defaults(const machine_page_setup *ps);
 
+/* ---- Native controls (the native appearance) ---- */
+
+enum { MACHINE_CONTROL_BUTTON, MACHINE_CONTROL_CHECKBOX, MACHINE_CONTROL_RADIO, MACHINE_CONTROL_SCROLLBAR };
+typedef struct {
+    int kind;
+    int width, height;
+    bool pressed, disabled, on;  /* buttons: pressed; check/radio: on */
+    bool vertical;               /* scroll bars */
+    double position, proportion; /* scroll bars: 0..1, and the visible part (0 when nothing to scroll) */
+    int pressed_part;            /* scroll bars: 20 up arrow, 21 down, 22/23 page, 129 thumb */
+    char title[256];             /* buttons: UTF-8 */
+} machine_control_request;
+/* Fill rgba (width*height*4, transparent where nothing is drawn); false to
+ * fall back to the classic look.  Called on the emulator thread. */
+typedef bool (*machine_control_fn)(const machine_control_request *rq, uint8_t *rgba, void *ctx);
+void machine_set_control_renderer(machine_control_fn fn, void *ctx);
+
 /* ---- Sound ---- */
 
 /* Play 16-bit PCM (interleaved when stereo) on a channel; pcm NULL means

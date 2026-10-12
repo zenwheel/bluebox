@@ -327,6 +327,7 @@ the trap census.
   - QuickDraw pictures: DrawPicture for version 1 and 2 (shapes, polygons, regions, text, patterns, all bitmap and pixmap opcodes); pictures and bitmaps print as images
   - colour: an 8-bit screen with the standard colour table; drawing, text and CopyBits at any depth
   - themes: `--appearance <scheme>` draws windows and controls from Kaleidoscope schemes (2.x: sliced sample windows from 'wnd#' layouts, widget down states, grow boxes, scroll bars, thumbs, push buttons, checkboxes and radio buttons; 1.x: scheme stripes and grow boxes on classic geometry) on a 32-bit screen; `classic themes` lists imported schemes
+  - native style: `--appearance native` gives document windows macOS frames (close, zoom, move and resize reach the app as its own window events) and draws push buttons, checkboxes, radio buttons and scroll bars with AppKit
   - import: .zip archives, .dmg (UDIF) images, and HFS+ volumes (mounted read-only through the host on macOS)
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
 - Next:
@@ -335,7 +336,7 @@ the trap census.
   - Dialog Manager: modal dialogs (TeachText's Save and About)
   - OpenPicture recording (pictures made by apps, e.g. for the clipboard)
   - themes: utility and floating windows, collapse (WindowShade), popups, sliders, tabs, menus in screen mode, scheme desktop patterns; Mac OS 8.5 Appearance themes; a theme setting for installed bundles
-  - native window style: macOS window frames in rootless mode, with title-bar actions turned into the app's own window events
+  - native style: map the native scroll knob's position and size onto the classic thumb for dragging; native popups and edit-text frames
   - HFS+ volumes read natively (imports mount them through the host on macOS today; Linux needs our own reader)
   - the remaining Standard File hooks (old SFPGetFile/SFPPutFile hooks, null-event and filter procs)
   - `quit` from the host's Quit command

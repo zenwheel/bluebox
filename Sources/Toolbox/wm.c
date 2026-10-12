@@ -385,7 +385,7 @@ static void wdef_grow_icon(gaddr w, int var)
     if (!has_grow(var) || !wvisible(w))
         return;
     qrect c = qrect_get(w + GrafPort_portRect_off);
-    if (theme_draw_grow(c, WindowRecord_hilited(w) != 0))
+    if (native_frame(var) || theme_draw_grow(c, WindowRecord_hilited(w) != 0))
         return;
     gaddr r = tb_NewPtr(8, false, false);
     tb_PenNormal();

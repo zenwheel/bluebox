@@ -122,6 +122,10 @@ bool theme_draw_grow(qrect c, bool active);
 bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
 bool theme_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);
+/* Native controls (native_controls.c), drawn by the host. */
+bool native_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
+bool native_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);
+bool native_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, int value, int min, int max);
 
 /* ---- Dialog Manager ---- */
 

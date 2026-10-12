@@ -465,6 +465,7 @@ func postScriptLive(_ script: [String]) {
     installPrintHandlers()
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()
+    NativeControls.install()
     let host = RootlessHost(title: title)
     host.script = script
     app.delegate = host
