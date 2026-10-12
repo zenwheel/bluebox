@@ -65,6 +65,19 @@ func defaultLibrary() -> String {
     #endif
 }
 
+/// The folder that is the classic Mac's disk (Macintosh HD), where
+/// installers put what they install (see filemgr.c).
+func defaultDisk() -> String {
+    let env = ProcessInfo.processInfo.environment
+    let home = env["HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.path
+    #if os(macOS)
+    return home + "/Library/Application Support/Classic/Macintosh HD"
+    #else
+    let data = env["XDG_DATA_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? home + "/.local/share"
+    return data + "/classic/Macintosh HD"
+    #endif
+}
+
 // MARK: - Recognising inputs
 
 enum InputKind {

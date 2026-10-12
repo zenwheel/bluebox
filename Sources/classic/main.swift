@@ -68,7 +68,8 @@ func usage() -> Never {
           game that wants 256 colours, or cpu 68020 for one that misbehaves on a
           68040.  With no setting given, show them.
       classic apps [--library dir]
-          List the applications in the library.
+          List the applications in the library and those installed on the classic
+          Mac's disk (\(defaultDisk())), which runs and installs by path.
       classic themes [--library dir]
           List the themes (Kaleidoscope schemes) in the library.
       classic rsrc <file>
@@ -508,15 +509,18 @@ func appsCommand(_ args: [String]) {
     } else if !args.isEmpty {
         usage()
     }
-    let apps = scan(library).filter { $0.isApplication }
-    if apps.isEmpty {
-        print("no applications in \(library)")
-        return
+    // The library, then what installers put on Macintosh HD.
+    var any = false
+    for (root, label) in [(library, ""), (defaultDisk(), "Macintosh HD/")] {
+        guard FileManager.default.fileExists(atPath: root) else { continue }
+        for a in scan(root).filter({ $0.isApplication }) {
+            let rel = String(a.path.dropFirst(root.count + 1))
+            if rel.hasPrefix("System Folder/") { continue }
+            print("\(a.architecture.padding(8)) \(fourCCString(a.creator))  \(label)\(rel)")
+            any = true
+        }
     }
-    for a in apps {
-        let rel = String(a.path.dropFirst(library.count + 1))
-        print("\(a.architecture.padding(8)) \(fourCCString(a.creator))  \(rel)")
-    }
+    if !any { print("no applications in \(library)") }
 }
 
 /// Kaleidoscope schemes ('Colr'/'Acid' files) in a library.
