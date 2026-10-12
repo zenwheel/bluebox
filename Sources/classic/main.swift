@@ -357,7 +357,8 @@ func runCommand(_ args: [String]) {
     if status == RUN_HALTED {
         print("stopped: \(String(cString: machine_halt_reason())) after \(count) instructions")
     } else {
-        print("instruction limit reached after \(count) instructions (pc \(String(machine_pc(), radix: 16, uppercase: true)))")
+        let waiting = machine_waiting_for_input() ? " waiting for input" : ""
+        print("instruction limit reached\(waiting) after \(count) instructions (pc \(String(machine_pc(), radix: 16, uppercase: true)))")
     }
 
     if let screenshot {

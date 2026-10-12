@@ -390,11 +390,16 @@ void machine_set_instruction_limit(uint64_t total) { icount_cap = total; }
 /* A null event with no host attached: time passes as if the app had run,
  * so an app waiting for input (often in a Toolbox loop such as ModalDialog
  * that runs no guest code) still meets the instruction limit. */
+static uint64_t last_idle; /* instruction count at the last idle moment */
+
+bool machine_waiting_for_input(void) { return g_cpu && g_cpu->icount - last_idle < 2000000; }
+
 void machine_idle(void)
 {
     cpu68k *c = g_cpu;
     if (!c || c->halted)
         return;
+    last_idle = c->icount;
     c->icount += 1000;
     if (icount_cap && c->icount >= icount_cap)
         cpu_halt(c, "instruction limit reached waiting for input");

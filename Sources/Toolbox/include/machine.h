@@ -303,6 +303,9 @@ void machine_set_system_folder(const char *path);
 /* A hard cap on instructions executed, also inside routines the Toolbox
  * calls back (filters, hooks); 0 for none.  For headless runs. */
 void machine_set_instruction_limit(uint64_t total);
+/* Whether the application idled recently (a null event, an unpressed
+ * button): stopped at the limit, it was waiting for input. */
+bool machine_waiting_for_input(void);
 
 /* Apple Events to the running app (as the Finder would send them). */
 void machine_open_documents(const char *const *paths, int n, bool print);

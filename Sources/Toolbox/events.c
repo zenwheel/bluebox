@@ -344,7 +344,14 @@ int16_t tb_PostEvent(int16_t evcode, int32_t evmsg)
 
 void tb_SetEventMask(int16_t evmask) { wr16(LM_SysEvtMask, (uint16_t)evmask); }
 
-int8_t tb_Button(void) { return ev_still_down(); }
+int8_t tb_Button(void)
+{
+    /* Polling a released button is waiting for input, like a null event. */
+    bool down = ev_still_down();
+    if (!down && !host_attached)
+        machine_idle();
+    return down;
+}
 int8_t tb_StillDown(void)
 {
     /* True if the button is down and no new mouse event is waiting. */
