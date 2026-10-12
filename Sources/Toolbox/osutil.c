@@ -270,7 +270,7 @@ static const char key_plain[128] = {
 
 static char shifted(char ch)
 {
-    static const char from[] = "1234567890-=[]\;',./`", to[] = "!@#$%^&*()_+{}|:\"<>?~";
+    static const char from[] = "1234567890-=[]\\;',./`", to[] = "!@#$%^&*()_+{}|:\"<>?~";
     if (ch >= 'a' && ch <= 'z')
         return (char)(ch - 32);
     const char *p = strchr(from, ch);
