@@ -76,6 +76,39 @@ extension Classic {
             _ = tb_SndDisposeChannel(chan, 1)
         }
 
+        nonisolated(unsafe) static var firstSamples: [Int16] = []
+
+        /// A compressed sound header in IMA 4:1 decodes to 64 samples a packet.
+        @Test func ima4Decodes() {
+            launchTestApp()
+            Self.played = []
+            Self.firstSamples = []
+            machine_set_sound_handler({ _, pcm, frames, channels, rate, _, _ in
+                guard let pcm else { return }
+                SoundManager.played.append((frames, channels, rate))
+                SoundManager.firstSamples = (0..<3).map { pcm[$0] }
+            }, nil)
+            defer { machine_set_sound_handler(nil, nil) }
+            let chanp = tb_NewPtr(4, false, true)
+            #expect(tb_SndNewChannel(chanp, 5, 0, 0) == 0)
+            let h = tb_NewPtr(64 + 34, false, true)
+            wr32(h + 4, 1)                          // mono
+            wr32(h + 8, 0x5622_0000)                // 22050 Hz
+            wr8(h + 20, 0xFE)                       // compressed
+            wr32(h + 22, 1)                         // one packet
+            wr32(h + 40, fourCC("ima4"))
+            wr16(h + 56, 0xFFFF)                    // compressionID: use the format
+            wr16(h + 62, 16)
+            for k in 0..<32 { wr8(h + 64 + 2 + UInt32(k), 0x77) } // header 0: predictor 0, index 0
+            let cmd = tb_NewPtr(8, false, true)
+            wr16(cmd, 81); wr32(cmd + 4, h)         // bufferCmd
+            #expect(tb_SndDoImmediate(rd32(chanp), cmd) == 0)
+            #expect(Self.played.count == 1 && Self.played[0].frames == 64)
+            // Nibble 7 each time: +11 (step 7), +30 (step 16), +63 (step 34) …
+            #expect(Self.firstSamples == [11, 41, 104])
+            _ = tb_SndDisposeChannel(rd32(chanp), 1)
+        }
+
         @Test func synchronousPlayWaitsForTheSound() {
             launchTestApp()
             install()

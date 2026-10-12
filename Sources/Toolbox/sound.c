@@ -10,9 +10,10 @@
  * timing is the same and nothing is heard.
  *
  * Supported: 'snd ' formats 1 and 2; standard and extended sound headers
- * (8-bit unsigned and 16-bit signed, mono and stereo); square-wave and
- * wave-table notes; SysBeep.  Compressed (MACE, IMA) headers play silence
- * of the right length for now.
+ * (8-bit unsigned and 16-bit signed, mono and stereo); compressed headers
+ * in IMA 4:1 and the uncompressed 'twos'/'sowt'/'raw ' formats; square-wave
+ * and wave-table notes; SysBeep.  MACE plays silence of the right length
+ * for now.
  */
 #include <math.h>
 #include <pthread.h>
@@ -155,6 +156,52 @@ static void play_note(channel *c, int note, double seconds)
 
 static double fixed_rate(uint32_t r) { return (double)r / 65536.0; }
 
+/* IMA 4:1 ('ima4'): packets of 34 bytes per channel, a 2-byte header (the
+ * predictor's top 9 bits and the step index) then 64 four-bit samples, low
+ * nibble first; stereo packets alternate.  Tables from the IMA standard. */
+static const int16_t ima_steps[89] = {
+    7,     8,     9,     10,    11,    12,    13,    14,    16,    17,    19,    21,    23,    25,    28,
+    31,    34,    37,    41,    45,    50,    55,    60,    66,    73,    80,    88,    97,    107,   118,
+    130,   143,   157,   173,   190,   209,   230,   253,   279,   307,   337,   371,   408,   449,   494,
+    544,   598,   658,   724,   796,   876,   963,   1060,  1166,  1282,  1411,  1552,  1707,  1878,  2066,
+    2272,  2499,  2749,  3024,  3327,  3660,  4026,  4428,  4871,  5358,  5894,  6484,  7132,  7845,  8630,
+    9493,  10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767,
+};
+static const int8_t ima_index[16] = { -1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8 };
+
+static void play_ima4(channel *c, gaddr data, uint32_t packets, int nch, double rate)
+{
+    if (packets > 0x100000)
+        return;
+    uint32_t frames = packets * 64;
+    int16_t *pcm = malloc(sizeof *pcm * (frames * (uint32_t)nch ? frames * (uint32_t)nch : 1));
+    for (uint32_t p = 0; p < packets; p++)
+        for (int ch = 0; ch < nch; ch++) {
+            gaddr pk = data + (p * (uint32_t)nch + (uint32_t)ch) * 34;
+            uint16_t hdr = rd16(pk);
+            int pred = (int16_t)(hdr & 0xFF80), index = hdr & 0x7F;
+            if (index > 88)
+                index = 88;
+            for (int k = 0; k < 64; k++) {
+                int nib = (rd8(pk + 2 + (uint32_t)(k / 2)) >> ((k & 1) * 4)) & 15;
+                int step = ima_steps[index], diff = step >> 3;
+                if (nib & 1)
+                    diff += step >> 2;
+                if (nib & 2)
+                    diff += step >> 1;
+                if (nib & 4)
+                    diff += step;
+                pred += (nib & 8) ? -diff : diff;
+                pred = pred < -32768 ? -32768 : pred > 32767 ? 32767 : pred;
+                index += ima_index[nib];
+                index = index < 0 ? 0 : index > 88 ? 88 : index;
+                pcm[(p * 64 + (uint32_t)k) * (uint32_t)nch + (uint32_t)ch] = (int16_t)pred;
+            }
+        }
+    emit(c, pcm, (int)frames, nch, rate);
+    free(pcm);
+}
+
 /* Play a sound header (standard, extended or compressed). */
 static void play_header(channel *c, gaddr h)
 {
@@ -193,9 +240,34 @@ static void play_header(channel *c, gaddr h)
         free(pcm);
         return;
     }
-    /* compressed (0xFE): keep the timing, play silence */
-    int16_t *pcm = calloc(frames * nch ? frames * nch : 1, sizeof *pcm);
-    emit(c, pcm, (int)frames, (int)nch, rate);
+    /* compressed (0xFE) */
+    uint32_t format = rd32(h + 40);
+    if (!data)
+        data = h + 64;
+    if (format == fourcc("ima4")) {
+        play_ima4(c, data, frames, (int)nch, rate);
+        return;
+    }
+    if (format == fourcc("twos") || format == fourcc("sowt") || format == fourcc("raw ") || format == fourcc("NONE")) {
+        int bits = (int16_t)rd16(h + 62);
+        uint32_t n = frames * nch;
+        int16_t *pcm = malloc(sizeof *pcm * (n ? n : 1));
+        for (uint32_t i = 0; i < n; i++) {
+            if (bits == 16)
+                pcm[i] = format == fourcc("sowt") ? (int16_t)(rd8(data + i * 2) | rd8(data + i * 2 + 1) << 8)
+                                                  : (int16_t)rd16(data + i * 2);
+            else
+                pcm[i] = format == fourcc("twos") ? (int16_t)((int8_t)rd8(data + i) << 8)
+                                                  : (int16_t)(((int)rd8(data + i) - 128) << 8);
+        }
+        emit(c, pcm, (int)frames, (int)nch, rate);
+        free(pcm);
+        return;
+    }
+    /* MACE and others: keep the timing, play silence. */
+    uint32_t samples = rd16(h + 56) == 3 ? frames * 6 : rd16(h + 56) == 4 ? frames * 12 : frames;
+    int16_t *pcm = calloc(samples * nch ? samples * nch : 1, sizeof *pcm);
+    emit(c, pcm, (int)samples, (int)nch, rate);
     free(pcm);
 }
 
