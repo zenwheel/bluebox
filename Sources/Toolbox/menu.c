@@ -988,6 +988,9 @@ int32_t tb_MenuKey(int16_t thec)
 
 int32_t tb_MenuChoice(void) { return last_choice; }
 
+uint32_t ev_press_count(void);
+uint32_t ev_key_count(void);
+
 int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
 {
     gaddr saved;
@@ -997,6 +1000,7 @@ int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
     qrect box = { t, left, (int16_t)(t + MenuInfo_menuHeight(mp)), (int16_t)(left + MenuInfo_menuWidth(mp)) };
     qrect area = { (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 2), (int16_t)(box.right + 2) };
     uint32_t *under = save_bits(area);
+    display_set_transient(true, area.top, area.left, area.bottom, area.right);
     gaddr fr = tb_NewPtr(8, false, false);
     qrect_put(fr, (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 1), (int16_t)(box.right + 1) });
     tb_FrameRect(fr);
@@ -1015,18 +1019,30 @@ int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
      * menu open, as Mac OS 8's did: the next click chooses (or, outside the
      * menu, cancels). */
     if (events_host_attached() && rd32(LM_Ticks) - start < 30) {
-        while (!ev_still_down()) {
+        /* Presses are counted, as a quick click can fall between two looks
+         * at the button; a key cancels. */
+        uint32_t p0 = ev_press_count(), k0 = ev_key_count();
+        bool cancelled = false;
+        while (ev_press_count() == p0) {
+            if (ev_key_count() != k0) {
+                cancelled = true;
+                break;
+            }
             call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
             ev_wait_tick();
         }
-        while (ev_still_down()) {
+        while (!cancelled && ev_still_down()) {
             call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
             ev_wait_tick();
         }
-        call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
+        if (cancelled)
+            wr16(which, 0);
+        else
+            call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
     }
     int chosen = (int16_t)rd16(which);
     restore_bits(area, under);
+    display_set_transient(false, 0, 0, 0, 0);
     tb_DisposePtr(which);
     tb_SetPort(saved);
     return chosen ? ((int32_t)MenuInfo_menuID(mp) << 16) | chosen : 0;

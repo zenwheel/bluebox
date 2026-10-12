@@ -88,6 +88,54 @@ final class MacWindowView: NSView {
     override func mouseDragged(with event: NSEvent) { post(event, button: -1) }
 }
 
+/// While a pop-up menu is up: a window over the whole screen showing the
+/// menu (drawn outside the classic windows, which show only their own
+/// shapes) and taking every click, so the menu sees its clicks and a click
+/// elsewhere reaches it to cancel.
+final class TransientView: NSView {
+    let menuLayer = CALayer()
+    override var isFlipped: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        menuLayer.magnificationFilter = .nearest
+        layer?.addSublayer(menuLayer)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// Show the Mac screen's rectangle (top, left, bottom, right) at its place.
+    @MainActor func show(_ r: [Int16]) {
+        let top = Int(r[0]), left = Int(r[1]), w = Int(r[3]) - left, h = Int(r[2]) - top
+        guard w > 0, h > 0 else { return }
+        var rgba = [UInt32](repeating: 0, count: w * h)
+        rgba.withUnsafeMutableBytes { raw in
+            machine_screen_rgba(Int32(left), Int32(top), Int32(w), Int32(h), raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
+        }
+        let image: CGImage? = rgba.withUnsafeMutableBytes { buf in
+            CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                      space: CGColorSpaceCreateDeviceRGB(),
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        menuLayer.frame = CGRect(x: CGFloat(left), y: CGFloat(top) - classicMenuBarHeight, width: CGFloat(w), height: CGFloat(h))
+        menuLayer.contents = image
+        CATransaction.commit()
+    }
+
+    private func post(_ button: Int32) {
+        let (x, y) = hostToMac(NSEvent.mouseLocation)
+        machine_post_mouse(x, y, button)
+    }
+
+    override func mouseDown(with event: NSEvent) { post(1) }
+    override func mouseUp(with event: NSEvent) { post(0) }
+    override func mouseDragged(with event: NSEvent) { post(-1) }
+}
+
 @MainActor final class RootlessHost: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     let title: String
     var script: [String] = []
@@ -97,6 +145,8 @@ final class MacWindowView: NSView {
     var lastMouse = NSPoint(x: -1, y: -1)
     var timer: Timer?
     var launchEvents = LaunchEvents()
+    var transientVersion: UInt32 = .max
+    var transientWindow: NSWindow?
 
     init(title: String) { self.title = title }
 
@@ -137,7 +187,40 @@ final class MacWindowView: NSView {
         }
         syncWindows()
         for w in windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }
+        syncTransient()
         syncMenus()
+    }
+
+    // MARK: Pop-up menus
+
+    func syncTransient() {
+        var r = [Int16](repeating: 0, count: 4)
+        var on = false
+        let version = r.withUnsafeMutableBufferPointer { machine_transient($0.baseAddress!, &on) }
+        if !on {
+            if let w = transientWindow {
+                w.orderOut(nil)
+                transientWindow = nil
+            }
+            transientVersion = version
+            return
+        }
+        if transientWindow == nil {
+            let frame = rootlessScreenFrame()
+            let w = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+            w.isOpaque = false
+            // Nearly clear: a fully transparent window would let clicks through.
+            w.backgroundColor = NSColor(white: 0, alpha: 0.01)
+            w.level = .popUpMenu
+            w.hasShadow = false
+            w.isReleasedWhenClosed = false
+            w.contentView = TransientView(frame: NSRect(origin: .zero, size: frame.size))
+            w.orderFrontRegardless()
+            transientWindow = w
+        }
+        // Redraw every tick while up: the menu highlights as the mouse moves.
+        (transientWindow?.contentView as? TransientView)?.show(r)
+        transientVersion = version
     }
 
     // MARK: Windows

@@ -33,6 +33,7 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t arrived = PTHREAD_COND_INITIALIZER;
 static int16_t mouse_h, mouse_v;
 static bool button_down;
+static uint32_t presses, key_presses; /* counted, so a quick click is never missed */
 static uint16_t key_mods;
 static uint8_t keymap[16];
 static bool host_attached;
@@ -135,6 +136,8 @@ void machine_post_mouse(int x, int y, int button)
     mouse_v = (int16_t)y;
     if (button >= 0 && (button != 0) != button_down) {
         button_down = button != 0;
+        if (button_down)
+            presses++;
         enqueue(button_down ? mouseDown : mouseUp, 0);
     }
     pthread_cond_broadcast(&arrived);
@@ -144,6 +147,8 @@ void machine_post_mouse(int x, int y, int button)
 void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, int repeat)
 {
     pthread_mutex_lock(&lock);
+    if (down && !repeat && charcode > 0)
+        key_presses++;
     key_mods = (uint16_t)modifiers;
     if (keycode >= 0 && keycode < 128) {
         if (down)
@@ -158,6 +163,22 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
 
 /* ---------------------------------------------------------------------- */
 /* Mouse state for tracking loops */
+
+uint32_t ev_press_count(void)
+{
+    pthread_mutex_lock(&lock);
+    uint32_t n = presses;
+    pthread_mutex_unlock(&lock);
+    return n;
+}
+
+uint32_t ev_key_count(void)
+{
+    pthread_mutex_lock(&lock);
+    uint32_t n = key_presses;
+    pthread_mutex_unlock(&lock);
+    return n;
+}
 
 bool ev_still_down(void)
 {

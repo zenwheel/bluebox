@@ -103,6 +103,10 @@ typedef struct {
 } machine_menu;
 
 uint32_t machine_menus_version(void);
+/* Drawing outside the windows that must show above them (a pop-up menu):
+ * its rectangle (top, left, bottom, right) and whether it is up; the
+ * result changes whenever it does. */
+uint32_t machine_transient(int16_t rect[4], bool *on);
 int machine_menus(machine_menu *out, int max);
 /* Deliver a choice made in the host's menu bar (item is 1-based). */
 void machine_choose_menu(int16_t menu_id, int16_t item);

@@ -69,7 +69,8 @@ func usage() -> Never {
           68040.  With no setting given, show them.
       classic apps [--library dir]
           List the applications in the library and those installed on the classic
-          Mac's disk (\(defaultDisk())), which runs and installs by path.
+          Mac's disk (\(defaultDisk())).  run and install take
+          an application as listed ("Macintosh HD/Folder/App") or by its name.
       classic themes [--library dir]
           List the themes (Kaleidoscope schemes) in the library.
       classic rsrc <file>
@@ -422,7 +423,34 @@ func runCommand(_ args: [String]) {
 
 /// Turn a run argument into an AppleDouble application path, ingesting
 /// MacBinary and archives into the library first.
-func resolveApplication(_ path: String, named: String?) -> String {
+/// What `classic apps` lists can be given back as it was printed
+/// ("Macintosh HD/Folder/App", or a path inside the library), or just as an
+/// application's name, when no such file exists here.
+func findListedApplication(_ spec: String) -> String? {
+    let fm = FileManager.default
+    if fm.fileExists(atPath: spec) { return nil }
+    let disk = defaultDisk(), library = defaultLibrary()
+    if spec.hasPrefix("Macintosh HD/") {
+        let p = disk + "/" + spec.dropFirst("Macintosh HD/".count)
+        return fm.fileExists(atPath: p) ? p : nil
+    }
+    let inLibrary = library + "/" + spec
+    if fm.fileExists(atPath: inLibrary) { return inLibrary }
+    if spec.contains("/") { return nil }
+    var found: [String] = []
+    for root in [library, disk] where fm.fileExists(atPath: root) {
+        found += scan(root).filter { $0.isApplication && ($0.path as NSString).lastPathComponent == spec }.map(\.path)
+    }
+    if found.count > 1 {
+        eprint("several applications named \(spec):\n")
+        for f in found { eprint("  \(f)\n") }
+        exit(2)
+    }
+    return found.first
+}
+
+func resolveApplication(_ given: String, named: String?) -> String {
+    let path = findListedApplication(given) ?? given
     switch classify(path) {
     case .appleDouble:
         return path

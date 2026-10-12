@@ -326,3 +326,34 @@ void display_reset(void)
     pending_choice = 0;
     tracking = in_select = track_done = false;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Transient drawing outside the windows: a pop-up menu.  Rootless hosts
+ * show the area above everything while it is up, and take every click. */
+
+static pthread_mutex_t transient_lock = PTHREAD_MUTEX_INITIALIZER;
+static int16_t transient[4];
+static bool transient_on;
+static uint32_t transient_version;
+
+void display_set_transient(bool on, int16_t top, int16_t left, int16_t bottom, int16_t right)
+{
+    pthread_mutex_lock(&transient_lock);
+    transient_on = on;
+    transient[0] = top;
+    transient[1] = left;
+    transient[2] = bottom;
+    transient[3] = right;
+    transient_version++;
+    pthread_mutex_unlock(&transient_lock);
+}
+
+uint32_t machine_transient(int16_t rect[4], bool *on)
+{
+    pthread_mutex_lock(&transient_lock);
+    memcpy(rect, transient, sizeof transient);
+    *on = transient_on;
+    uint32_t v = transient_version;
+    pthread_mutex_unlock(&transient_lock);
+    return v;
+}

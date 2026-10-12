@@ -120,6 +120,8 @@ void time_pump(void);
 void fm_grant(const char *path, bool tree);
 /* Mouse button and location into low memory (events.c). */
 void events_sync_lowmem(void);
+/* A pop-up menu's area while it is up (display.c), for rootless hosts. */
+void display_set_transient(bool on, int16_t top, int16_t left, int16_t bottom, int16_t right);
 /* Scripted input (events.c): apply the steps due by `now`; the next one's time. */
 void events_script_pump(uint64_t now);
 uint64_t events_script_next_at(void);
