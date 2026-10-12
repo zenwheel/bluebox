@@ -262,12 +262,134 @@ def symbol(face, ch):
         slash = ["".join("#" if x == (w - 1) * (h - 1 - y) // max(h - 1, 1) else "." for x in range(w))
                  for y in range(h)]
         return place([(left, top, rows), (left, top, slash)], base[0])
+    made = symbol_more(face, ch, cap, xh, mid)
+    if made is not None:
+        return made
     if ch == "\u00DF":
         made = joined(face, "B")
         if made:
             adv, left, top, rows = made
             # A tall B with a descender-less stem reads as sharp s at these sizes.
             return (adv, left, top, rows)
+    return None
+
+
+def fit(rows, h, stretch):
+    """rows made h tall by repeating row `stretch` (or dropping copies of it)."""
+    rows = list(rows)
+    while len(rows) < h:
+        rows.insert(stretch, rows[stretch])
+    while len(rows) > h and len(rows) > 2:
+        del rows[stretch]
+    return rows
+
+
+# Accents on their own, sitting above the x-height.
+SPACING = {
+    "\u00B4": ACCENTS["\u0301"], "\u00A8": ACCENTS["\u0308"], "\u02C6": ACCENTS["\u0302"],
+    "\u02DC": ACCENTS["\u0303"], "\u02DA": ACCENTS["\u030A"], "\u00AF": ["###"], "\u02D8": ["#.#", ".#."],
+    "\u02D9": ["#"], "\u02DD": [".#.#", "#.#."], "\u02C7": ["#.#", ".#."],
+}
+
+
+def symbol_more(face, ch, cap, xh, mid):
+    g = face["glyphs"]
+    if ch in SPACING:
+        rows = SPACING[ch]
+        return (len(rows[0]) + 2, 1, -xh - 1 - len(rows), rows)
+    if ch == "\u00B8":  # cedilla
+        return (4, 1, 1, CEDILLA)
+    if ch == "\u02DB":  # ogonek
+        return (4, 1, 1, [".#", "#.", ".#"])
+    if ch == "\u00B7":  # middle dot
+        return (3, 1, mid, ["#"])
+    if ch == "\u2260":  # not equal: = with a slash
+        return (7, 1, mid - 3, ["...#.", "#####", "..#..", "#####", ".#..."])
+    if ch == "\u2264":
+        return (7, 1, mid - 4, ["...##", ".##..", "#....", ".##..", "...##", ".....", "#####"])
+    if ch == "\u2265":
+        return (7, 1, mid - 4, ["##...", "..##.", "....#", "..##.", "##...", ".....", "#####"])
+    if ch == "\u2248":
+        return (7, 1, mid - 2, [".#..#", "#.##.", ".....", ".#..#", "#.##."])
+    if ch == "\u221E":
+        return (9, 1, mid - 1, [".##.##.", "#..#..#", ".##.##."])
+    if ch == "\u221A":  # square root
+        rows = fit(["....#", "....#", "#..#.", ".#.#.", "..#.."], cap, 1)
+        return (7, 1, -cap, rows)
+    if ch == "\u2211":  # summation
+        n = max(cap, 5)
+        half = (n - 2) // 2
+        zig = [("." * i + "#").ljust(5, ".") for i in range(1, half + 1)]
+        rows = ["#####"] + zig + zig[::-1][(n - 2) % 2 == 0:] + ["#####"]
+        return (7, 1, -cap, rows[:n])
+    if ch == "\u220F":  # product
+        return (8, 1, -cap, ["######"] + [".#..#."] * (cap - 1))
+    if ch == "\u03C0":  # pi
+        return (7, 1, -xh, ["#####"] + [".#.#."] * (xh - 1))
+    if ch in "\u2126\u03A9":  # Omega
+        rows = fit([".###.", "#...#", "#...#", ".#.#.", "##.##"], cap, 1)
+        return (7, 1, -cap, rows)
+    if ch == "\u2206":  # increment (triangle)
+        n = max(cap, 5)
+        w = 2 * n - 1 if n < 6 else n + (n % 2 == 0)
+        rows = []
+        for y in range(n):
+            half = (w - 1) * y // (2 * (n - 1))
+            c = w // 2
+            row = ["."] * w
+            if y == n - 1:
+                row = ["#"] * w
+            else:
+                row[c - half] = row[c + half] = "#"
+            rows.append("".join(row))
+        return (w + 2, 1, -cap, rows)
+    if ch == "\u25CA":  # lozenge
+        rows = [".#.", "#.#", "#.#", ".#."]
+        rows = fit(rows, cap, 1)
+        return (5, 1, -cap, rows)
+    if ch == "\u2202":  # partial differential
+        rows = fit(["..##.", "....#", ".####", "#...#", "#...#", ".###."], cap, 1)
+        return (7, 1, -cap, rows)
+    if ch == "\u222B":  # integral
+        rows = fit(["..#", ".#.", ".#.", "#.."], cap + face["descent"] - 1, 1)
+        return (5, 1, -cap, rows)
+    if ch == "\u2044":  # fraction slash
+        rows = [("." * ((cap - 1 - y) // 2) + "#").ljust((cap + 1) // 2, ".") for y in range(cap)]
+        return (len(rows[0]) + 1, 0, -cap, rows)
+    if ch == "\u2030":  # per mille: % and a small o
+        made = joined(face, "%")
+        if made:
+            adv, left, top, rows = made
+            return place([(left, top, rows), (adv, -2, ["##", "##"])], adv + 3)
+    if ch == "\u20AC":  # euro: C with two bars
+        c = g.get(ord("C"))
+        if c:
+            left, top, rows = ink(c)
+            h = len(rows)
+            bars = [(left - 1, top + h // 2 - 1, ["####"]), (left - 1, top + h // 2 + 1, ["####"])]
+            return place([(left + 1, top, rows)] + bars, c[0] + 1)
+    if ch == "\u00A3":  # pound
+        rows = fit(["..##", ".#..", ".#..", "###.", ".#..", "####"], cap, 1)
+        return (6, 1, -cap, rows)
+    if ch == "\u00A5":  # yen: Y with two bars
+        y = g.get(ord("Y"))
+        if y:
+            left, top, rows = ink(y)
+            h, w = len(rows), len(rows[0])
+            return place([(left, top, rows), (left, top + h // 2, ["#" * w]), (left, top + h // 2 + 2, ["#" * w])], y[0])
+    if ch == "\u0192":  # florin
+        rows = fit(["..##", ".#..", "###.", ".#..", ".#..", "#..."], cap + 2, 3)
+        return (6, 1, -cap, rows)
+    if ch == "\u00AA":  # feminine ordinal
+        return (5, 1, -cap, ["##.", "..#", ".##", "#.#", ".##", "...", "###"][:max(cap, 5)])
+    if ch == "\u00BA":  # masculine ordinal
+        return (5, 1, -cap, [".#.", "#.#", "#.#", ".#.", "...", "###"][:max(cap, 4)])
+    if ch == "\u00A7":  # section
+        rows = fit([".##", "#..", ".#.", "#.#", ".#.", "..#", "##."], cap, 3)
+        return (5, 1, -cap, rows)
+    if ch == "\u00B6":  # pilcrow
+        rows = fit([".####", "###.#", "###.#", ".##.#", "..#.#"], cap, 4)
+        return (7, 1, -cap, rows)
     return None
 
 
@@ -280,7 +402,7 @@ def macroman_glyphs(face):
         ch = bytes([code]).decode("mac_roman")
         nfd = unicodedata.normalize("NFD", ch)
         made = None
-        if len(nfd) == 2:
+        if len(nfd) == 2 and ch != "\u2260":
             made = accented(face, nfd[0], nfd[1])
         elif ch in "–":
             made = dash(face, n_width)
