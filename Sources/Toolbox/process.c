@@ -141,6 +141,11 @@ void machine_set_launch_handler(machine_launch_fn fn, void *ctx)
     launch_ctx = ctx;
 }
 
+bool process_launch(const char *app, const char *const *docs, int ndocs)
+{
+    return launch_fn && launch_fn(app, docs, ndocs, launch_ctx);
+}
+
 int16_t tb_LaunchApplication(gaddr pb)
 {
     gaddr spec = rd32(pb + LaunchParamBlockRec_launchAppSpec_off);
@@ -151,7 +156,7 @@ int16_t tb_LaunchApplication(gaddr pb)
     /* Documents to open come as an Open Documents event in the parameters. */
     char **docs = NULL;
     int ndocs = aem_launch_documents(LaunchParamBlockRec_launchAppParameters(pb), &docs);
-    bool ok = launch_fn && launch_fn(path, (const char *const *)docs, ndocs, launch_ctx);
+    bool ok = process_launch(path, (const char *const *)docs, ndocs);
     for (int i = 0; i < ndocs; i++)
         free(docs[i]);
     free(docs);

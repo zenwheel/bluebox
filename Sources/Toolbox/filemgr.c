@@ -2226,6 +2226,23 @@ int16_t tb_PBDTAddAPPL(gaddr dtp, bool async)
     return noErr;
 }
 
+bool fm_app_for_document(const char *doc, char *app, size_t appsize)
+{
+    uint8_t fi[16] = { 0 };
+    if (!sidecar_finfo(doc, fi) && !host_file_type(doc, fi))
+        return false;
+    uint32_t creator = (uint32_t)fi[4] << 24 | (uint32_t)fi[5] << 16 | (uint32_t)fi[6] << 8 | fi[7];
+    if (!creator)
+        return false;
+    find_appls();
+    for (int i = 0; i < nappls; i++)
+        if (appls[i].creator == creator && exists(appls[i].path) && strlen(appls[i].path) < appsize) {
+            strcpy(app, appls[i].path);
+            return true;
+        }
+    return false;
+}
+
 int16_t tb_PBDTRemoveAPPL(gaddr dtp, bool async) { return noErr; }
 int16_t tb_PBDTGetIcon(gaddr dtp, bool async) { return afpItemNotFound; }
 int16_t tb_PBDTGetIconInfo(gaddr dtp, bool async) { return afpItemNotFound; }

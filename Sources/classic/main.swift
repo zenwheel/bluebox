@@ -384,6 +384,14 @@ func runCommand(_ args: [String]) {
     }
     #endif
 
+    // Headless, another application is not started: the launch is reported.
+    machine_set_launch_handler({ pathPtr, docsPtr, ndocs, _ in
+        guard let pathPtr else { return false }
+        let docs = (0..<Int(ndocs)).compactMap { i in docsPtr?[i].map { String(cString: $0) } }
+        print("launch: \(String(cString: pathPtr))" + docs.map { " \($0)" }.joined())
+        return true
+    }, nil)
+
     let budget = maxInstructions
     machine_set_instruction_limit(machine_instruction_count() + maxInstructions)
     queueScript(keyScript, start: machine_instruction_count())

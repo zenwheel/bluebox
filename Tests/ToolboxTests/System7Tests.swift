@@ -474,5 +474,43 @@ extension Classic {
             #expect(tb_AESend(evt, reply, 3, 0, -1, 0, 0) == 0)
             #expect(rd32(calls) == 1)
         }
+
+        /// Events to the Finder that open items: an application is launched,
+        /// a document opened with the application of its creator.
+        @Test func finderOpensItems() throws {
+            let dir = launchTestApp()
+            _ = initToolbox()
+            func create(_ name: String, _ type: String) -> UInt32 {
+                let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+                fm_spec_for_path(dir.appendingPathComponent(name).path, spec)
+                _ = tb_FSpCreate(spec, Int32(bitPattern: fourCC("TeSt")), Int32(bitPattern: fourCC(type)), 0)
+                return spec
+            }
+            let app = create("Tester", "APPL"), doc = create("Tester Doc", "TDoc")
+            _ = tb_PBDTAddAPPL(tb_NewPtr(128, false, true), false) // scan again
+            launched = []
+            machine_set_launch_handler({ path, docs, n, _ in
+                launched.append(([String(cString: path!)] + (0..<Int(n)).map { String(cString: docs![$0]!) })
+                    .map { ($0 as NSString).lastPathComponent }.joined(separator: " "))
+                return true
+            }, nil)
+            defer { machine_set_launch_handler(nil, nil) }
+
+            let target = tb_NewPtr(8, false, true), sig = tb_NewPtr(4, false, true)
+            wr32(sig, fourCC("MACS"))
+            _ = tb_AECreateDesc(Int32(bitPattern: fourCC("sign")), sig, 4, target)
+            let evt = tb_NewPtr(8, false, true), reply = tb_NewPtr(8, false, true)
+            #expect(tb_AECreateAppleEvent(Int32(bitPattern: fourCC("aevt")), Int32(bitPattern: fourCC("odoc")),
+                                          target, -1, 0, evt) == 0)
+            let list = tb_NewPtr(8, false, true)
+            _ = tb_AECreateList(0, 0, 0, list)
+            _ = tb_AEPutPtr(list, 0, Int32(bitPattern: fourCC("fss ")), app, Int32(FSSpec_SIZEOF))
+            _ = tb_AEPutPtr(list, 0, Int32(bitPattern: fourCC("fss ")), doc, Int32(FSSpec_SIZEOF))
+            _ = tb_AEPutParamDesc(evt, Int32(bitPattern: fourCC("----")), list)
+            #expect(tb_AESend(evt, reply, 1, 0, -1, 0, 0) == 0)
+            #expect(launched == ["Tester", "Tester Tester Doc"])
+        }
     }
 }
+
+private nonisolated(unsafe) var launched: [String] = []

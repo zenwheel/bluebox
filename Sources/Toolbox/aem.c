@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 
 #include "machine.h"
 #include "tb_internal.h"
@@ -250,13 +251,93 @@ static void remove_entry(gaddr h, uint32_t off, uint32_t type, bool attr)
 }
 
 /* Copy an entry's data out to (data, max), or into a new descriptor. */
+/* The system's built-in coercions between numbers (shor, long, magn,
+ * bool, sing, doub) and among the four-character types (enum, type, keyw):
+ * data of `type` at `src` as `desired`, into out (big-endian); its length,
+ * or -1. */
+static int coerce_bytes(uint32_t type, gaddr src, uint32_t len, uint32_t desired, uint8_t out[8])
+{
+    double v;
+    if (type == T("shor") && len == 2)
+        v = (int16_t)rd16(src);
+    else if ((type == T("long") || type == T("magn")) && len == 4)
+        v = type == T("long") ? (double)(int32_t)rd32(src) : (double)rd32(src);
+    else if (type == T("bool") && len >= 1)
+        v = rd8(src) != 0;
+    else if (type == T("sing") && len == 4) {
+        uint32_t b = rd32(src);
+        float f;
+        memcpy(&f, &b, 4);
+        v = f;
+    } else if (type == T("doub") && len == 8) {
+        uint64_t b = (uint64_t)rd32(src) << 32 | rd32(src + 4);
+        memcpy(&v, &b, 8);
+    } else if ((type == T("enum") || type == T("type") || type == T("keyw")) && len == 4 &&
+               (desired == T("enum") || desired == T("type") || desired == T("keyw"))) {
+        uint32_t b = rd32(src);
+        for (int i = 0; i < 4; i++)
+            out[i] = (uint8_t)(b >> (24 - 8 * i));
+        return 4;
+    } else
+        return -1;
+    if (desired == T("shor") || desired == T("long") || desired == T("magn") || desired == T("bool")) {
+        if (v != (double)(int64_t)v)
+            return -1; /* not a whole number */
+        int64_t n = (int64_t)v;
+        if (desired == T("shor")) {
+            if (n < -32768 || n > 32767)
+                return -1;
+            out[0] = (uint8_t)(n >> 8), out[1] = (uint8_t)n;
+            return 2;
+        }
+        if (desired == T("bool")) {
+            if (n != 0 && n != 1)
+                return -1;
+            out[0] = (uint8_t)n;
+            return 1;
+        }
+        if (desired == T("long") ? (n < INT32_MIN || n > INT32_MAX) : (n < 0 || n > UINT32_MAX))
+            return -1;
+        for (int i = 0; i < 4; i++)
+            out[i] = (uint8_t)((uint64_t)n >> (24 - 8 * i));
+        return 4;
+    }
+    if (desired == T("sing")) {
+        float f = (float)v;
+        uint32_t b;
+        memcpy(&b, &f, 4);
+        for (int i = 0; i < 4; i++)
+            out[i] = (uint8_t)(b >> (24 - 8 * i));
+        return 4;
+    }
+    if (desired == T("doub")) {
+        uint64_t b;
+        memcpy(&b, &v, 8);
+        for (int i = 0; i < 8; i++)
+            out[i] = (uint8_t)(b >> (56 - 8 * i));
+        return 8;
+    }
+    return -1;
+}
+
 static int16_t entry_to_ptr(gaddr h, uint32_t off, uint32_t desired, gaddr type_out, gaddr data, int32_t max,
                             gaddr size_out)
 {
     gaddr p = rd32(h);
     uint32_t type = rd32(p + off + 4), len = rd32(p + off + 8);
-    if (desired != T("****") && desired != type)
-        return errAECoercionFail;
+    if (desired != T("****") && desired != type) {
+        uint8_t buf[8];
+        int n = coerce_bytes(type, p + off + 12, len, desired, buf);
+        if (n < 0)
+            return errAECoercionFail;
+        if (type_out)
+            wr32(type_out, desired);
+        if (size_out)
+            wr32(size_out, (uint32_t)n);
+        for (int i = 0; data && i < n && i < max; i++)
+            wr8(data + (uint32_t)i, buf[i]);
+        return noErr;
+    }
     if (type_out)
         wr32(type_out, type);
     if (size_out)
@@ -270,8 +351,19 @@ static int16_t entry_to_desc(gaddr h, uint32_t off, uint32_t desired, gaddr desc
 {
     gaddr p = rd32(h);
     uint32_t type = rd32(p + off + 4), len = rd32(p + off + 8);
-    if (desired != T("****") && desired != type)
-        return errAECoercionFail;
+    if (desired != T("****") && desired != type) {
+        uint8_t buf[8];
+        int n = coerce_bytes(type, p + off + 12, len, desired, buf);
+        if (n < 0)
+            return errAECoercionFail;
+        gaddr nh = tb_NewHandle(n, false, false);
+        if (!nh)
+            return memFullErr;
+        for (int i = 0; i < n; i++)
+            wr8(rd32(nh) + (uint32_t)i, buf[i]);
+        set_desc(desc_out, desired, nh);
+        return noErr;
+    }
     gaddr nh = new_handle_with(NULL, len, rd32(h) + off + 12);
     set_desc(desc_out, type, nh);
     return nh ? noErr : memFullErr;
@@ -350,6 +442,7 @@ int aem_launch_documents(gaddr params, char ***paths_out)
     if (!h)
         return 0;
     gmemcpy(rd32(h), params + 24, n);
+    tb_HLock(h); /* resolving an alias allocates */
     int count = 0;
     char **paths = NULL;
     uint32_t off = find_entry(h, T("aevt"), T("----"), false);
@@ -384,14 +477,26 @@ int16_t tb_AECoerceDesc(gaddr desc, int32_t result_type, gaddr desc_out)
         return tb_AEDuplicateDesc(desc, desc_out);
     if ((uint32_t)result_type == T("appa") && desc_type(desc) == T("aevt"))
         return coerce_to_app_parameters(desc, desc_out);
-    return errAECoercionFail;
+    gaddr h = desc_handle(desc);
+    if (!h)
+        return errAECoercionFail;
+    return tb_AECoercePtr((int32_t)desc_type(desc), rd32(h), tb_GetHandleSize(h), result_type, desc_out);
 }
 
 int16_t tb_AECoercePtr(int32_t data_type, gaddr data, int32_t data_size, int32_t result_type, gaddr desc_out)
 {
     if (data_type == result_type || (uint32_t)result_type == T("****"))
         return tb_AECreateDesc(data_type, data, data_size, desc_out);
-    return errAECoercionFail;
+    uint8_t buf[8];
+    int n = coerce_bytes((uint32_t)data_type, data, (uint32_t)data_size, (uint32_t)result_type, buf);
+    if (n < 0)
+        return errAECoercionFail;
+    gaddr tmp = tb_NewPtr(n, false, false);
+    for (int i = 0; i < n; i++)
+        wr8(tmp + (uint32_t)i, buf[i]);
+    int16_t err = tb_AECreateDesc(result_type, tmp, n, desc_out);
+    tb_DisposePtr(tmp);
+    return err;
 }
 
 int16_t tb_AECountItems(gaddr list, gaddr count_out)
@@ -794,11 +899,100 @@ static uint32_t attr_long(gaddr evt, uint32_t key)
     return off ? rd32(rd32(h) + off + 12) : 0;
 }
 
+/* ---- The Finder ----
+ * There is no Finder process, so the events applications send it to open
+ * things (Open Documents, and the Finder's own Open Selection from file
+ * browsers such as Greg's Browser) are carried out here: applications are
+ * launched, documents opened with their creator's application. */
+
+static bool to_finder(gaddr evt)
+{
+    gaddr h = desc_handle(evt);
+    uint32_t off = h ? find_entry(h, T("aevt"), T("addr"), true) : 0;
+    return off && rd32(rd32(h) + off + 4) == T("sign") && rd32(rd32(h) + off + 12) == T("MACS");
+}
+
+/* Host paths of an alias, FSSpec or list of them (in a handle, at off). */
+static int item_paths(gaddr h, uint32_t off, char ***paths, int count)
+{
+    gaddr p = rd32(h) + off;
+    uint32_t type = rd32(p + 4), len = rd32(p + 8);
+    gaddr data = p + 12;
+    if (type == T("list")) {
+        /* Entries (keyword, type, length, data) after the count; resolving
+         * an alias allocates, so offsets, not addresses, are kept. */
+        uint32_t items = rd32(data), at = off + 16;
+        for (uint32_t i = 0; i < items && at < off + 12 + len; i++) {
+            count = item_paths(h, at, paths, count);
+            at += 12 + pad(rd32(rd32(h) + at + 8));
+        }
+        return count;
+    }
+    char host[1024];
+    bool ok = false;
+    if (type == T("fss ") && len >= 70)
+        ok = fm_host_path((int16_t)rd16(data), (int32_t)rd32(data + 2), data + 6, true, host, sizeof host);
+    else if (type == T("alis"))
+        ok = alias_host_of_record(data, len, host, sizeof host);
+    if (ok) {
+        *paths = realloc(*paths, (size_t)(count + 1) * sizeof **paths);
+        (*paths)[count++] = strdup(host);
+    }
+    return count;
+}
+
+/* Open one item as the Finder would. */
+static int16_t finder_open(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0)
+        return -43; /* fnfErr */
+    if (S_ISDIR(st.st_mode))
+        return noErr; /* a folder: there is no Finder window to open */
+    uint32_t type = fm_type_of_path(path);
+    if (type == T("APPL") || type == T("APPC") || type == T("APPD") || type == T("appe"))
+        return process_launch(path, NULL, 0) ? noErr : -600;
+    char app[1024];
+    if (!fm_app_for_document(path, app, sizeof app))
+        return -35; /* the Finder's "application not found" */
+    const char *docs[1] = { path };
+    return process_launch(app, docs, 1) ? noErr : -600;
+}
+
+static int16_t finder_event(gaddr evt)
+{
+    uint32_t cls = attr_long(evt, T("evcl")), id = attr_long(evt, T("evid"));
+    bool open = (cls == T("aevt") && id == T("odoc")) || (cls == T("FNDR") && id == T("sope"));
+    if (!open)
+        return cls == T("aevt") && id == T("oapp") ? noErr : errAEEventNotHandled;
+    gaddr h = desc_handle(evt);
+    /* Open Selection names the items in 'fsel' (its direct object is their
+     * folder); Open Documents in the direct object. */
+    uint32_t off = cls == T("FNDR") ? find_entry(h, T("aevt"), T("fsel"), false) : 0;
+    if (!off)
+        off = find_entry(h, T("aevt"), T("----"), false);
+    if (!off)
+        return errAEDescNotFound;
+    char **paths = NULL;
+    int n = item_paths(h, off, &paths, 0);
+    int16_t err = noErr;
+    for (int i = 0; i < n; i++) {
+        int16_t e = finder_open(paths[i]);
+        if (e && !err)
+            err = e;
+        free(paths[i]);
+    }
+    free(paths);
+    return err;
+}
+
 int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, int32_t timeout, gaddr idle,
                   gaddr filter)
 {
     if (reply)
         set_desc(reply, T("null"), 0);
+    if (to_finder(evt))
+        return finder_event(evt);
     if (!to_self(evt))
         return -600; /* procNotFound */
     const handler_entry *hd = find_handler(attr_long(evt, T("evcl")), attr_long(evt, T("evid")));

@@ -723,14 +723,16 @@ int8_t tb_LSearch(gaddr dp, int16_t dl, gaddr proc, gaddr cellp, gaddr list)
         data_range(list, i, &off, &len);
         bool match;
         if (proc) {
-            /* FUNCTION (aPtr, bPtr: Ptr; aLen, bLen: INTEGER): INTEGER; 0 = match */
+            /* FUNCTION (aPtr, bPtr: Ptr; aLen, bLen: INTEGER): INTEGER; 0 = match.
+             * a is the cell's data and b what is searched for (Greg's
+             * Browser's procedure reads them so). */
             cpu68k *c = g_cpu;
             tb_HLock(cells);
             cpu_push16(c, 0);
-            cpu_push32(c, dp);
             cpu_push32(c, rd32(cells) + off);
-            cpu_push16(c, (uint16_t)dl);
+            cpu_push32(c, dp);
             cpu_push16(c, (uint16_t)len);
+            cpu_push16(c, (uint16_t)dl);
             guest_call(proc);
             match = cpu_pop16(c) == 0;
             tb_HUnlock(cells);

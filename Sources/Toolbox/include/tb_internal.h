@@ -77,6 +77,9 @@ int16_t rm_open_empty_system(void);
 /* ---- Segment Loader ---- */
 
 /* Load CODE 0, build the A5 world and jump table; returns entry point or 0. */
+/* Start another classic application (the host's launcher); false if
+ * there is none or it failed. */
+bool process_launch(const char *app, const char *const *docs, int ndocs);
 uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errlen);
 
 /* ---- Gestalt ---- */
@@ -89,6 +92,11 @@ void gestalt_init(void);
 void fm_spec_for_path(const char *path, gaddr spec);
 /* Host path for a (vRefNum, dirID, name) triple. */
 bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize);
+/* Classic file type of a host file (0 if unknown). */
+uint32_t fm_type_of_path(const char *path);
+/* The application (host path) that opens a document: one with the
+ * document's creator, on the disk or in a granted folder. */
+bool fm_app_for_document(const char *doc, char *app, size_t appsize);
 /* The System Folder's working directory refnum. */
 int16_t fm_system_vref(void);
 /* The guest FCB table: an access path opened, closed, or resized. */
