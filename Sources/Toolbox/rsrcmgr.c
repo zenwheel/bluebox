@@ -1,5 +1,5 @@
 /*
- * Resource Manager (read side).
+ * Resource Manager.
  *
  * Each open resource file has its map loaded into a guest handle in the
  * original format, chained through the "next map" field from TopMapHndl, so
@@ -91,6 +91,7 @@ static bool guest_decompress(const uint8_t *d, uint32_t len, uint8_t **out, size
 }
 
 static resfile files[MAX_RESFILES];
+static int16_t update_file(resfile *f);
 static int16_t sys_refnum;
 
 /* FCB-style reference numbers: 2, 96, 190, ... */
@@ -755,6 +756,7 @@ void tb_CloseResFile(int16_t rn)
         return;
     }
     gaddr maph = f->maph;
+    update_file(f);
     /* Dispose loaded resources. */
     for (unsigned i = 0; i < map_ntypes(maph); i++) {
         unsigned n = type_count(maph, i);
@@ -854,4 +856,485 @@ void rm_init(void)
     wr32(LM_TopMapHndl, 0);
     wr8(LM_ResLoad, 1);
     set_res_err(noErr);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Writing
+ *
+ * Structural changes (adding, removing, renaming) rebuild the guest map in
+ * place from a host list of references; the map handle and the resources'
+ * handles stay the same.  Writing a file rebuilds the whole fork: changed
+ * resources from their handles, the rest from the bytes last read or
+ * written.  Files opened read-only (the application, fonts) keep their
+ * changes in memory. */
+
+#define MAP_CHANGED 0x20
+#define MAP_READ_ONLY 0x80
+
+typedef struct {
+    uint32_t type;
+    int16_t id;
+    uint8_t attrs;
+    uint32_t doff;
+    gaddr h;
+    uint8_t name[256]; /* Pascal string; name[0] == 0xFF means none */
+} ref_rec;
+
+typedef struct {
+    ref_rec *v;
+    size_t n, cap;
+} ref_list;
+
+static void refs_push(ref_list *l, const ref_rec *r)
+{
+    if (l->n == l->cap) {
+        l->cap = l->cap ? l->cap * 2 : 32;
+        l->v = realloc(l->v, l->cap * sizeof *l->v);
+    }
+    l->v[l->n++] = *r;
+}
+
+static void read_refs(gaddr maph, ref_list *out)
+{
+    memset(out, 0, sizeof *out);
+    unsigned nt = map_ntypes(maph);
+    for (unsigned i = 0; i < nt; i++) {
+        unsigned n = type_count(maph, i);
+        for (unsigned j = 0; j < n; j++) {
+            gaddr m = mp_of(maph);
+            uint32_t r = ref_off(maph, i, j);
+            ref_rec rec = { .type = type_code(maph, i),
+                            .id = (int16_t)rd16(m + r),
+                            .attrs = rd8(m + r + 4),
+                            .doff = rd32(m + r + 4) & 0x00FFFFFF,
+                            .h = rd32(m + r + 8) };
+            uint16_t noff = rd16(m + r + 2);
+            if (noff == 0xFFFF)
+                rec.name[0] = 0xFF;
+            else
+                gget(rec.name, m + rd16(m + 26) + noff, (uint32_t)rd8(m + rd16(m + 26) + noff) + 1);
+            refs_push(out, &rec);
+        }
+    }
+}
+
+/* Serialize a map: 28-byte header, type list, reference lists, names. */
+static uint8_t *build_map(const uint8_t header[16], int16_t refnum, uint16_t attrs, const ref_list *l, uint32_t *len)
+{
+    uint32_t types[512];
+    unsigned per[512] = { 0 }, nt = 0;
+    size_t names = 0;
+    for (size_t k = 0; k < l->n; k++) {
+        unsigned t = 0;
+        while (t < nt && types[t] != l->v[k].type)
+            t++;
+        if (t == nt && nt < 512)
+            types[nt++] = l->v[k].type;
+        per[t]++;
+        if (l->v[k].name[0] != 0xFF)
+            names += (size_t)l->v[k].name[0] + 1;
+    }
+    uint32_t tl = 28, rl = tl + 2 + nt * 8, nl = rl + (uint32_t)l->n * 12;
+    *len = nl + (uint32_t)names;
+    uint8_t *m = calloc(1, *len);
+    memcpy(m, header, 16);
+    m[20] = (uint8_t)(refnum >> 8), m[21] = (uint8_t)refnum;
+    m[22] = (uint8_t)(attrs >> 8), m[23] = (uint8_t)attrs;
+    m[24] = (uint8_t)(tl >> 8), m[25] = (uint8_t)tl;
+    m[26] = (uint8_t)(nl >> 8), m[27] = (uint8_t)nl;
+    uint16_t ntm1 = (uint16_t)(nt - 1);
+    m[tl] = (uint8_t)(ntm1 >> 8), m[tl + 1] = (uint8_t)ntm1;
+    uint32_t r = rl, np = 0;
+    for (unsigned t = 0; t < nt; t++) {
+        uint8_t *te = m + tl + 2 + t * 8;
+        te[0] = (uint8_t)(types[t] >> 24), te[1] = (uint8_t)(types[t] >> 16);
+        te[2] = (uint8_t)(types[t] >> 8), te[3] = (uint8_t)types[t];
+        te[4] = (uint8_t)((per[t] - 1) >> 8), te[5] = (uint8_t)(per[t] - 1);
+        te[6] = (uint8_t)((r - tl) >> 8), te[7] = (uint8_t)(r - tl);
+        for (size_t k = 0; k < l->n; k++) {
+            const ref_rec *e = &l->v[k];
+            if (e->type != types[t])
+                continue;
+            uint8_t *p = m + r;
+            p[0] = (uint8_t)(e->id >> 8), p[1] = (uint8_t)e->id;
+            if (e->name[0] == 0xFF) {
+                p[2] = p[3] = 0xFF;
+            } else {
+                p[2] = (uint8_t)(np >> 8), p[3] = (uint8_t)np;
+                memcpy(m + nl + np, e->name, (size_t)e->name[0] + 1);
+                np += (uint32_t)e->name[0] + 1;
+            }
+            p[4] = e->attrs;
+            p[5] = (uint8_t)(e->doff >> 16), p[6] = (uint8_t)(e->doff >> 8), p[7] = (uint8_t)e->doff;
+            p[8] = (uint8_t)(e->h >> 24), p[9] = (uint8_t)(e->h >> 16);
+            p[10] = (uint8_t)(e->h >> 8), p[11] = (uint8_t)e->h;
+            r += 12;
+        }
+    }
+    return m;
+}
+
+/* Replace the guest map's contents, keeping its header copy and chain link. */
+static bool store_refs(gaddr maph, const ref_list *l, uint16_t attrs)
+{
+    uint8_t header[16];
+    gget(header, mp_of(maph), 16);
+    gaddr next = map_next(maph);
+    uint32_t len;
+    uint8_t *m = build_map(header, map_refnum(maph), attrs, l, &len);
+    tb_SetHandleSize(maph, (int32_t)len);
+    bool ok = (uint32_t)tb_GetHandleSize(maph) == len;
+    if (ok) {
+        gput(mp_of(maph), m, len);
+        wr32(mp_of(maph) + 16, next);
+    }
+    free(m);
+    return ok;
+}
+
+static uint16_t map_attrs(gaddr maph) { return rd16(mp_of(maph) + 22); }
+static void mark_map_changed(gaddr maph) { wr16(mp_of(maph) + 22, map_attrs(maph) | MAP_CHANGED); }
+
+static void put32(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)(v >> 24), p[1] = (uint8_t)(v >> 16), p[2] = (uint8_t)(v >> 8), p[3] = (uint8_t)v;
+}
+
+/* A whole fork from a reference list; data offsets in l are updated. */
+static uint8_t *build_fork(resfile *f, ref_list *l, uint16_t attrs, uint32_t *len_out)
+{
+    size_t cap = 256 + 1024, len = 256;
+    uint8_t *out = calloc(1, cap);
+    uint32_t old_dstart = f && f->len >= 4 ? rd32(mp_of(f->maph)) : 0;
+    for (size_t k = 0; k < l->n; k++) {
+        ref_rec *e = &l->v[k];
+        const uint8_t *src = NULL;
+        uint32_t n = 0;
+        uint8_t *tmp = NULL;
+        if ((e->attrs & RES_CHANGED) && e->h && rd32(e->h)) {
+            n = (uint32_t)tb_GetHandleSize(e->h);
+            src = tmp = malloc(n ? n : 1);
+            gget(tmp, rd32(e->h), n);
+            e->attrs &= (uint8_t)~RES_COMPRESSED;
+        } else if (f && f->fork && (uint64_t)old_dstart + e->doff + 4 <= f->len) {
+            const uint8_t *p = f->fork + old_dstart + e->doff;
+            n = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
+            if ((uint64_t)old_dstart + e->doff + 4 + n > f->len)
+                n = 0;
+            src = p + 4;
+        }
+        while (len + 4 + n > cap) {
+            cap *= 2;
+            out = realloc(out, cap);
+        }
+        e->doff = (uint32_t)len - 256;
+        put32(out + len, n);
+        if (n)
+            memcpy(out + len + 4, src, n);
+        len += 4 + n;
+        e->attrs &= (uint8_t)~RES_CHANGED;
+        free(tmp);
+    }
+    uint32_t dlen = (uint32_t)len - 256;
+    uint8_t header[16];
+    put32(header, 256);
+    put32(header + 4, (uint32_t)len);
+    put32(header + 8, dlen);
+    uint32_t mlen;
+    uint8_t *m = build_map(header, 0, attrs, l, &mlen);
+    put32(header + 12, mlen);
+    memcpy(m, header, 16);
+    out = realloc(out, len + mlen);
+    memcpy(out, header, 16);
+    /* On disk the map's handle fields are zero. */
+    uint8_t *disk = out + len;
+    memcpy(disk, m, mlen);
+    uint32_t tl = 28, nt = (uint32_t)((disk[tl] << 8) | disk[tl + 1]) + 1;
+    if (l->n == 0)
+        nt = 0;
+    for (uint32_t k = 0; k < (uint32_t)l->n; k++)
+        memset(disk + tl + 2 + nt * 8 + k * 12 + 8, 0, 4);
+    free(m);
+    *len_out = (uint32_t)len + mlen;
+    return out;
+}
+
+/* Store a fork in a host file, keeping its data fork and Finder info. */
+static bool write_host_fork(const char *path, const uint8_t *fork, uint32_t len)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        memset(&mf, 0, sizeof mf);
+    free(mf.rsrc);
+    mf.rsrc = malloc(len);
+    memcpy(mf.rsrc, fork, len);
+    mf.rsrc_len = len;
+    bool ok = appledouble_write(path, &mf, err, sizeof err);
+    if (!ok)
+        log_printf("rsrc: %s: %s\n", path, err);
+    mac_file_free(&mf);
+    return ok;
+}
+
+static int16_t update_file(resfile *f)
+{
+    gaddr maph = f->maph;
+    ref_list l;
+    read_refs(maph, &l);
+    bool changed = map_attrs(maph) & MAP_CHANGED;
+    for (size_t k = 0; k < l.n && !changed; k++)
+        changed = l.v[k].attrs & RES_CHANGED;
+    if (!changed) {
+        free(l.v);
+        return noErr;
+    }
+    uint16_t attrs = map_attrs(maph) & (uint16_t)~(MAP_CHANGED | MAP_READ_ONLY);
+    uint32_t len;
+    uint8_t *fork = build_fork(f, &l, attrs, &len);
+    int16_t err = noErr;
+    if (f->path && !f->read_only && !write_host_fork(f->path, fork, len))
+        err = ioErr;
+    free(f->fork);
+    f->fork = fork;
+    f->len = len;
+    /* The guest map now describes the new fork. */
+    gput(mp_of(maph), fork, 16);
+    if (!store_refs(maph, &l, attrs | (f->read_only ? MAP_READ_ONLY : 0)))
+        err = memFullErr;
+    free(l.v);
+    return err;
+}
+
+void tb_UpdateResFile(int16_t rn)
+{
+    resfile *f = file_for(rn ? rn : sys_refnum);
+    if (!f) {
+        set_res_err(resFNotFound);
+        return;
+    }
+    set_res_err(update_file(f));
+}
+
+/* At ExitToShell, as the Resource Manager did when closing every file. */
+void rm_update_all(void)
+{
+    for (int i = 0; i < MAX_RESFILES; i++)
+        if (files[i].used && files[i].path && !files[i].read_only)
+            update_file(&files[i]);
+}
+
+static resfile *editable(gaddr res, gaddr *maph, uint32_t *r)
+{
+    if (!find_handle(res, maph, r, NULL)) {
+        set_res_err(resNotFound);
+        return NULL;
+    }
+    return file_for_map(*maph);
+}
+
+void tb_ChangedResource(gaddr res)
+{
+    gaddr maph;
+    uint32_t r;
+    if (!editable(res, &maph, &r))
+        return;
+    gaddr a = mp_of(maph) + r + 4;
+    if (rd8(a) & RES_PROTECTED) {
+        set_res_err(resAttrErr);
+        return;
+    }
+    wr8(a, rd8(a) | RES_CHANGED);
+    mark_map_changed(maph);
+    set_res_err(noErr);
+}
+
+void tb_WriteResource(gaddr res)
+{
+    gaddr maph;
+    uint32_t r;
+    resfile *f = editable(res, &maph, &r);
+    if (!f)
+        return;
+    if (!(rd8(mp_of(maph) + r + 4) & RES_CHANGED)) {
+        set_res_err(noErr);
+        return;
+    }
+    set_res_err(update_file(f));
+}
+
+void tb_SetResAttrs(gaddr res, int16_t attrs)
+{
+    gaddr maph;
+    uint32_t r;
+    if (!editable(res, &maph, &r))
+        return;
+    wr8(mp_of(maph) + r + 4, (uint8_t)attrs);
+    set_res_err(noErr);
+}
+
+void tb_SetResInfo(gaddr res, int16_t id, gaddr name)
+{
+    gaddr maph;
+    uint32_t r;
+    if (!editable(res, &maph, &r))
+        return;
+    if (rd8(mp_of(maph) + r + 4) & RES_PROTECTED) {
+        set_res_err(resAttrErr);
+        return;
+    }
+    ref_list l;
+    read_refs(maph, &l);
+    for (size_t k = 0; k < l.n; k++)
+        if (l.v[k].h == res) {
+            l.v[k].id = id;
+            if (name)
+                gget(l.v[k].name, name, (uint32_t)rd8(name) + 1);
+        }
+    set_res_err(store_refs(maph, &l, map_attrs(maph) | MAP_CHANGED) ? noErr : memFullErr);
+    free(l.v);
+}
+
+void tb_AddResource(gaddr data, int32_t typ, int16_t id, gaddr name)
+{
+    gaddr maph0;
+    uint32_t r0;
+    gaddr maph = cur_map();
+    if (!data || !maph || find_handle(data, &maph0, &r0, NULL)) {
+        set_res_err(addResFailed);
+        return;
+    }
+    ref_list l;
+    read_refs(maph, &l);
+    ref_rec rec = { .type = (uint32_t)typ, .id = id, .attrs = RES_CHANGED, .h = data };
+    rec.name[0] = 0xFF;
+    if (name && rd8(name))
+        gget(rec.name, name, (uint32_t)rd8(name) + 1);
+    /* Keep a type's references together: insert after the last of its type. */
+    size_t at = l.n;
+    for (size_t k = 0; k < l.n; k++)
+        if (l.v[k].type == (uint32_t)typ)
+            at = k + 1;
+    refs_push(&l, &rec);
+    memmove(&l.v[at + 1], &l.v[at], (l.n - 1 - at) * sizeof *l.v);
+    l.v[at] = rec;
+    if (store_refs(maph, &l, map_attrs(maph) | MAP_CHANGED)) {
+        tb_HSetRBit(data);
+        set_res_err(noErr);
+    } else {
+        set_res_err(addResFailed);
+    }
+    free(l.v);
+}
+
+void tb_RemoveResource(gaddr res)
+{
+    gaddr maph;
+    uint32_t r;
+    if (!editable(res, &maph, &r))
+        return;
+    if (rd8(mp_of(maph) + r + 4) & RES_PROTECTED) {
+        set_res_err(rmvResFailed);
+        return;
+    }
+    ref_list l;
+    read_refs(maph, &l);
+    size_t w = 0;
+    for (size_t k = 0; k < l.n; k++)
+        if (l.v[k].h != res)
+            l.v[w++] = l.v[k];
+    l.n = w;
+    store_refs(maph, &l, map_attrs(maph) | MAP_CHANGED);
+    free(l.v);
+    tb_HClrRBit(res);
+    set_res_err(noErr);
+}
+
+void tb_ReadPartialResource(gaddr res, int32_t offset, gaddr buffer, int32_t count)
+{
+    tb_LoadResource(res);
+    if (rd16(LM_ResErr))
+        return;
+    if (offset < 0 || count < 0 || offset + count > tb_GetHandleSize(res)) {
+        set_res_err(-39 /* eofErr */);
+        return;
+    }
+    gmemcpy(buffer, rd32(res) + (uint32_t)offset, (uint32_t)count);
+}
+
+void tb_WritePartialResource(gaddr res, int32_t offset, gaddr buffer, int32_t count)
+{
+    tb_LoadResource(res);
+    if (rd16(LM_ResErr))
+        return;
+    if (offset < 0 || count < 0) {
+        set_res_err(paramErr);
+        return;
+    }
+    if (offset + count > tb_GetHandleSize(res))
+        tb_SetHandleSize(res, offset + count);
+    gmemcpy(rd32(res) + (uint32_t)offset, buffer, (uint32_t)count);
+    tb_ChangedResource(res);
+    if (!rd16(LM_ResErr))
+        tb_WriteResource(res);
+}
+
+void tb_SetResourceSize(gaddr res, int32_t size)
+{
+    tb_LoadResource(res);
+    if (rd16(LM_ResErr))
+        return;
+    tb_SetHandleSize(res, size);
+    tb_ChangedResource(res);
+}
+
+/* Creating: an empty resource fork for a new or fork-less file. */
+static void create_res_file(const char *path, uint32_t type, uint32_t creator, bool set_info)
+{
+    mac_file mf;
+    char err[256];
+    bool exists = appledouble_read(path, &mf, err, sizeof err);
+    if (exists && mf.rsrc_len) {
+        mac_file_free(&mf);
+        set_res_err(-48 /* dupFNErr */);
+        return;
+    }
+    if (!exists) {
+        memset(&mf, 0, sizeof mf);
+        mf.data = malloc(1);
+        put32(mf.finder_info, set_info ? type : 0x3F3F3F3F);
+        put32(mf.finder_info + 4, set_info ? creator : 0x3F3F3F3F);
+        mf.has_finder_info = true;
+    }
+    ref_list l = { 0 };
+    uint32_t len;
+    uint8_t *fork = build_fork(NULL, &l, 0, &len);
+    free(mf.rsrc);
+    mf.rsrc = fork;
+    mf.rsrc_len = len;
+    bool ok = appledouble_write(path, &mf, err, sizeof err);
+    mac_file_free(&mf);
+    set_res_err(ok ? noErr : ioErr);
+}
+
+void tb_HCreateResFile(int16_t vrefnum, int32_t parid, gaddr name)
+{
+    char path[1024];
+    if (!fm_host_path(vrefnum, parid, name, true, path, sizeof path)) {
+        set_res_err(-120 /* dirNFErr */);
+        return;
+    }
+    create_res_file(path, 0, 0, false);
+}
+
+void tb_CreateResFile(gaddr fn) { tb_HCreateResFile(0, 0, fn); }
+
+void tb_FSpCreateResFile(gaddr spec, int32_t creator, int32_t file_type, int16_t script)
+{
+    char path[1024];
+    if (!fm_host_path((int16_t)rd16(spec), (int32_t)rd32(spec + 2), spec + 6, true, path, sizeof path)) {
+        set_res_err(-120 /* dirNFErr */);
+        return;
+    }
+    create_res_file(path, (uint32_t)file_type, (uint32_t)creator, true);
 }

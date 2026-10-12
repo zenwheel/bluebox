@@ -65,6 +65,8 @@ bool mm_check_zone(gaddr zone);
 /* ---- Resource Manager internals ---- */
 
 void rm_init(void);
+/* Write every changed resource file (at ExitToShell). */
+void rm_update_all(void);
 /* Open a host file's resource fork as a resource file; returns refnum or -1. */
 int16_t rm_open_host_file(const char *path, const uint8_t *fork, uint32_t len, bool read_only);
 /* Make an open resource file the System file. */

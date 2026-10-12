@@ -1050,6 +1050,18 @@ static void glue_AddPt(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    int32_t a_typ = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    tb_AddResource(a_data, a_typ, a_id, a_name);
+    cpu_push32(c, ret);
+}
+
 static void glue_Alert(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1333,6 +1345,15 @@ static void glue_CautionAlert(cpu68k *c, uint16_t trapword)
     int16_t a_id = (int16_t)cpu_pop16(c);
     int16_t r = tb_CautionAlert(a_id, a_fp);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ChangedResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_res = (gaddr)cpu_pop32(c);
+    tb_ChangedResource(a_res);
     cpu_push32(c, ret);
 }
 
@@ -1693,6 +1714,15 @@ static void glue_CountTypes(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_CountTypes();
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateResFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fn = (gaddr)cpu_pop32(c);
+    tb_CreateResFile(a_fn);
     cpu_push32(c, ret);
 }
 
@@ -2302,6 +2332,18 @@ static void glue_FSpCreate(cpu68k *c, uint16_t trapword)
     gaddr a_spec = (gaddr)cpu_pop32(c);
     int16_t r = tb_FSpCreate(a_spec, a_creator, a_file_type, a_script);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSpCreateResFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    int32_t a_file_type = (int32_t)cpu_pop32(c);
+    int32_t a_creator = (int32_t)cpu_pop32(c);
+    gaddr a_spec = (gaddr)cpu_pop32(c);
+    tb_FSpCreateResFile(a_spec, a_creator, a_file_type, a_script);
     cpu_push32(c, ret);
 }
 
@@ -3878,6 +3920,17 @@ static void glue_HClrRBit(cpu68k *c, uint16_t trapword)
     gaddr a_h = (gaddr)c->a[0];
     tb_HClrRBit(a_h);
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
+}
+
+static void glue_HCreateResFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int32_t a_parid = (int32_t)cpu_pop32(c);
+    int16_t a_vrefnum = (int16_t)cpu_pop16(c);
+    tb_HCreateResFile(a_vrefnum, a_parid, a_name);
+    cpu_push32(c, ret);
 }
 
 static void glue_HGetState(cpu68k *c, uint16_t trapword)
@@ -6439,6 +6492,18 @@ static void glue_ReadDateTime(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_ReadPartialResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_count = (int32_t)cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    int32_t a_offset = (int32_t)cpu_pop32(c);
+    gaddr a_resource = (gaddr)cpu_pop32(c);
+    tb_ReadPartialResource(a_resource, a_offset, a_buffer, a_count);
+    cpu_push32(c, ret);
+}
+
 static void glue_RealFont(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6496,6 +6561,15 @@ static void glue_ReleaseResource(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_res = (gaddr)cpu_pop32(c);
     tb_ReleaseResource(a_res);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_res = (gaddr)cpu_pop32(c);
+    tb_RemoveResource(a_res);
     cpu_push32(c, ret);
 }
 
@@ -7265,6 +7339,16 @@ static void glue_SetRectRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetResAttrs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_attrs = (int16_t)cpu_pop16(c);
+    gaddr a_res = (gaddr)cpu_pop32(c);
+    tb_SetResAttrs(a_res, a_attrs);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetResFileAttrs(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7272,6 +7356,17 @@ static void glue_SetResFileAttrs(cpu68k *c, uint16_t trapword)
     int16_t a_attrs = (int16_t)cpu_pop16(c);
     int16_t a_rn = (int16_t)cpu_pop16(c);
     tb_SetResFileAttrs(a_rn, a_attrs);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetResInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    gaddr a_res = (gaddr)cpu_pop32(c);
+    tb_SetResInfo(a_res, a_id, a_name);
     cpu_push32(c, ret);
 }
 
@@ -7290,6 +7385,16 @@ static void glue_SetResPurge(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int8_t a_install = (int8_t)(cpu_pop16(c) >> 8);
     tb_SetResPurge(a_install);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetResourceSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_size = (int32_t)cpu_pop32(c);
+    gaddr a_resource = (gaddr)cpu_pop32(c);
+    tb_SetResourceSize(a_resource, a_size);
     cpu_push32(c, ret);
 }
 
@@ -8618,6 +8723,15 @@ static void glue_UpdateGWorld(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UpdateResFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_rn = (int16_t)cpu_pop16(c);
+    tb_UpdateResFile(a_rn);
+    cpu_push32(c, ret);
+}
+
 static void glue_UseResFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8685,6 +8799,27 @@ static void glue_WakeUpProcess(cpu68k *c, uint16_t trapword)
     gaddr a_serial_number = (gaddr)cpu_pop32(c);
     int16_t r = tb_WakeUpProcess(a_serial_number);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_WritePartialResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_count = (int32_t)cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    int32_t a_offset = (int32_t)cpu_pop32(c);
+    gaddr a_resource = (gaddr)cpu_pop32(c);
+    tb_WritePartialResource(a_resource, a_offset, a_buffer, a_count);
+    cpu_push32(c, ret);
+}
+
+static void glue_WriteResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_res = (gaddr)cpu_pop32(c);
+    tb_WriteResource(a_res);
     cpu_push32(c, ret);
 }
 
@@ -8856,7 +8991,7 @@ const trap_sig trap_sigs[] = {
     {0xA817, -1, "CopyMask", CONV_STACK, 24, 0, glue_CopyMask},
     {0xA818, -1, "FixATan2", CONV_STACK, 8, 4, 0},
     {0xA81A, -1, "HOpenResFile", CONV_STACK, 12, 2, glue_HOpenResFile},
-    {0xA81B, -1, "HCreateResFile", CONV_STACK, 10, 0, 0},
+    {0xA81B, -1, "HCreateResFile", CONV_STACK, 10, 0, glue_HCreateResFile},
     {0xA81C, -1, "Count1Types", CONV_STACK, 0, 2, glue_Count1Types},
     {0xA81D, -1, "InvalMenuBar", CONV_STACK, 0, 0, glue_InvalMenuBar},
     {0xA81F, -1, "Get1Resource", CONV_STACK, 6, 4, glue_Get1Resource},
@@ -9210,7 +9345,7 @@ const trap_sig trap_sigs[] = {
     {0xA996, -1, "RsrcZoneInit", CONV_STACK, 0, 0, glue_RsrcZoneInit},
     {0xA997, -1, "OpenResFile", CONV_STACK, 4, 2, glue_OpenResFile},
     {0xA998, -1, "UseResFile", CONV_STACK, 2, 0, glue_UseResFile},
-    {0xA999, -1, "UpdateResFile", CONV_STACK, 2, 0, 0},
+    {0xA999, -1, "UpdateResFile", CONV_STACK, 2, 0, glue_UpdateResFile},
     {0xA99A, -1, "CloseResFile", CONV_STACK, 2, 0, glue_CloseResFile},
     {0xA99B, -1, "SetResLoad", CONV_STACK, 2, 0, glue_SetResLoad},
     {0xA99C, -1, "CountResources", CONV_STACK, 4, 2, glue_CountResources},
@@ -9224,15 +9359,15 @@ const trap_sig trap_sigs[] = {
     {0xA9A4, -1, "HomeResFile", CONV_STACK, 4, 2, glue_HomeResFile},
     {0xA9A5, -1, "GetResourceSizeOnDisk", CONV_STACK, 4, 4, glue_GetResourceSizeOnDisk},
     {0xA9A6, -1, "GetResAttrs", CONV_STACK, 4, 2, glue_GetResAttrs},
-    {0xA9A7, -1, "SetResAttrs", CONV_STACK, 6, 0, 0},
+    {0xA9A7, -1, "SetResAttrs", CONV_STACK, 6, 0, glue_SetResAttrs},
     {0xA9A8, -1, "GetResInfo", CONV_STACK, 16, 0, glue_GetResInfo},
-    {0xA9A9, -1, "SetResInfo", CONV_STACK, 10, 0, 0},
-    {0xA9AA, -1, "ChangedResource", CONV_STACK, 4, 0, 0},
-    {0xA9AB, -1, "AddResource", CONV_STACK, 14, 0, 0},
-    {0xA9AD, -1, "RemoveResource", CONV_STACK, 4, 0, 0},
+    {0xA9A9, -1, "SetResInfo", CONV_STACK, 10, 0, glue_SetResInfo},
+    {0xA9AA, -1, "ChangedResource", CONV_STACK, 4, 0, glue_ChangedResource},
+    {0xA9AB, -1, "AddResource", CONV_STACK, 14, 0, glue_AddResource},
+    {0xA9AD, -1, "RemoveResource", CONV_STACK, 4, 0, glue_RemoveResource},
     {0xA9AF, -1, "ResError", CONV_STACK, 0, 2, glue_ResError},
-    {0xA9B0, -1, "WriteResource", CONV_STACK, 4, 0, 0},
-    {0xA9B1, -1, "CreateResFile", CONV_STACK, 4, 0, 0},
+    {0xA9B0, -1, "WriteResource", CONV_STACK, 4, 0, glue_WriteResource},
+    {0xA9B1, -1, "CreateResFile", CONV_STACK, 4, 0, glue_CreateResFile},
     {0xA9B2, -1, "SystemEvent", CONV_STACK, 4, 2, glue_SystemEvent},
     {0xA9B3, -1, "SystemClick", CONV_STACK, 8, 0, glue_SystemClick},
     {0xA9B4, -1, "SystemTask", CONV_STACK, 0, 0, glue_SystemTask},
@@ -9537,7 +9672,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA52, (int32_t)0xBu, "FSpRename", CONV_STACK, 8, 2, glue_FSpRename},
     {0xAA52, (int32_t)0xCu, "FSpCatMove", CONV_STACK, 8, 2, 0},
     {0xAA52, (int32_t)0xDu, "FSpOpenResFile", CONV_STACK, 6, 2, glue_FSpOpenResFile},
-    {0xAA52, (int32_t)0xEu, "FSpCreateResFile", CONV_STACK, 14, 0, 0},
+    {0xAA52, (int32_t)0xEu, "FSpCreateResFile", CONV_STACK, 14, 0, glue_FSpCreateResFile},
     {0xAA52, (int32_t)0xFu, "FSpExchangeFiles", CONV_STACK, 8, 2, 0},
     {0xABC9, (int32_t)0x207u, "NewIconSuite", CONV_STACK, 4, 2, 0},
     {0xABC9, (int32_t)0x217u, "GetSuiteLabel", CONV_STACK, 4, 2, 0},
@@ -9908,9 +10043,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x18Au, "NewMovieController", CONV_STACK, 12, 4, 0},
     {0xAAAA, (int32_t)0x18Bu, "DisposeMovieController", CONV_STACK, 4, 0, 0},
     {0xAAAA, (int32_t)0x192u, "OpenMovieFile", CONV_STACK, 10, 2, 0},
-    {0xA822, (int32_t)0x1u, "ReadPartialResource", CONV_STACK, 16, 0, 0},
-    {0xA822, (int32_t)0x2u, "WritePartialResource", CONV_STACK, 16, 0, 0},
-    {0xA822, (int32_t)0x3u, "SetResourceSize", CONV_STACK, 8, 0, 0},
+    {0xA822, (int32_t)0x1u, "ReadPartialResource", CONV_STACK, 16, 0, glue_ReadPartialResource},
+    {0xA822, (int32_t)0x2u, "WritePartialResource", CONV_STACK, 16, 0, glue_WritePartialResource},
+    {0xA822, (int32_t)0x3u, "SetResourceSize", CONV_STACK, 8, 0, glue_SetResourceSize},
     {0xA822, (int32_t)0xAu, "GetNextFOND", CONV_STACK, 4, 4, 0},
     {0xA8B5, (int32_t)0x80020004u, "KeyScript", CONV_STACK, 2, 0, glue_KeyScript},
     {0xA8B5, (int32_t)0x8008001Eu, "DrawJust", CONV_STACK, 8, 0, glue_DrawJust},

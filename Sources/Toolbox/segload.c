@@ -123,12 +123,14 @@ static void raw_UnloadSeg(cpu68k *c, uint16_t tw)
 
 static void raw_ExitToShell(cpu68k *c, uint16_t tw)
 {
+    rm_update_all();
     cpu_halt(c, "ExitToShell");
 }
 
 /* Return address for the application's main routine. */
 static void app_returned(cpu68k *c, uint16_t tw)
 {
+    rm_update_all();
     cpu_halt(c, "ExitToShell (main returned)");
 }
 
