@@ -34,6 +34,7 @@ enum IngestError: Error, CustomStringConvertible {
     case unarMissing
     case unarFailed(String, String)
     case notAnArchive(String)
+    case diskImage(String, String)
 
     var description: String {
         switch self {
@@ -41,7 +42,8 @@ enum IngestError: Error, CustomStringConvertible {
         case .unarMissing:
             return "extracting archives needs unar (The Unarchiver): brew install unar, or apt install unar"
         case .unarFailed(let p, let msg): return "unar could not extract \(p): \(msg)"
-        case .notAnArchive(let p): return "\(p) is not MacBinary, an archive, or an AppleDouble file"
+        case .notAnArchive(let p): return "\(p) is not MacBinary, an archive, a disk image, or an AppleDouble file"
+        case .diskImage(let p, let msg): return "\((p as NSString).lastPathComponent): \(msg)"
         }
     }
 }
@@ -68,11 +70,12 @@ func defaultLibrary() -> String {
 enum InputKind {
     case macBinary
     case archive
+    case diskImage    // an HFS disk image (DiskCopy 4.2, Disk Copy 6 NDIF, raw, CD-ROM)
     case appleDouble  // a data file with a "._" sidecar
     case plain
 }
 
-private func readPrefix(_ path: String, _ n: Int = 1024) -> [UInt8] {
+private func readPrefix(_ path: String, _ n: Int = 2048) -> [UInt8] {
     guard let h = FileHandle(forReadingAtPath: path) else { return [] }
     defer { try? h.close() }
     return Array((try? h.read(upToCount: n)) ?? Data())
@@ -82,6 +85,16 @@ private let stuffItSignatures: Set<String> = ["SIT!", "ST46", "ST50", "ST60", "S
 private let archiveTypes: Set<String> = ["SIT!", "SITD", "SIT5", "SITX", "PACT", "BnHq"]
 private let archiveCreators: Set<String> = ["SIT!", "SITx", "CPCT", "aust", "BnHq"]
 private let archiveExtensions: Set<String> = ["sit", "sea", "cpt", "hqx"]
+private let diskTypes: Set<String> = ["dImg", "rohd", "dCpy", "ddsk", "hdsk"]
+private let diskExtensions: Set<String> = ["img", "image", "dsk", "dc42", "iso", "toast", "hfs", "cdr", "disk"]
+
+/// An HFS signature where a raw volume or a DiskCopy 4.2 image would have one.
+private func looksLikeDiskData(_ b: [UInt8]) -> Bool {
+    if b.count >= 1026 && b[1024] == 0x42 && b[1025] == 0x44 { return true }
+    if b.count >= 1026 && b[0] == 0x45 && b[1] == 0x52 && b[512] == 0x50 && b[513] == 0x4D { return true }
+    return b.count >= 84 + 1026 && b[0] <= 63 && b[82] == 0x01 && b[83] == 0x00 &&
+        b[84 + 1024] == 0x42 && b[84 + 1025] == 0x44
+}
 
 /// Archive formats recognisable from the data fork alone.
 private func looksLikeArchiveData(_ b: [UInt8]) -> Bool {
@@ -126,6 +139,8 @@ func classify(_ path: String) -> InputKind {
         if appledouble_read(path, &f, &err, err.count) {
             defer { mac_file_free(&f) }
             let name = (path as NSString).lastPathComponent
+            let t = fourCCString(mac_file_type(&f)), c = fourCCString(mac_file_creator(&f))
+            if diskTypes.contains(t) || diskTypes.contains(c) || looksLikeDiskData(prefix) { return .diskImage }
             if isArchive(type: mac_file_type(&f), creator: mac_file_creator(&f), name: name, data: prefix) {
                 return .archive
             }
@@ -134,6 +149,8 @@ func classify(_ path: String) -> InputKind {
     }
     let ext = (path as NSString).pathExtension.lowercased()
     if archiveExtensions.contains(ext) || looksLikeArchiveData(prefix) { return .archive }
+    if diskExtensions.contains(ext) && looksLikeDiskData(prefix) { return .diskImage }
+    if looksLikeDiskData(prefix) { return .diskImage }
     return .plain
 }
 
@@ -210,6 +227,14 @@ private func normalise(_ dir: String, depth: Int, notes: inout [String]) throws 
         case .macBinary:
             try decodeMacBinary(path, into: dir, depth: depth, notes: &notes)
             try? fm.removeItem(atPath: path) // only an encoding wrapper
+        case .diskImage where depth < 4:
+            do {
+                let vol = try extractDiskImage(path, into: dir)
+                notes.append("\(name): extracted volume \"\((vol as NSString).lastPathComponent)\"")
+                try normalise(vol, depth: depth + 1, notes: &notes)
+            } catch {
+                notes.append("\(name): not extracted (\(error))")
+            }
         case .archive where depth < 4:
             let sub = dir + "/" + name + " ƒ"
             if !fm.fileExists(atPath: sub) {
@@ -254,7 +279,8 @@ private func decodeMacBinary(_ path: String, into dir: String, depth: Int, notes
 /// The library folder for a source file: its name without wrapper extensions.
 private func entryName(_ source: String) -> String {
     var name = (source as NSString).lastPathComponent
-    let wrappers: Set<String> = ["bin", "sit", "sea", "cpt", "hqx", "macbin"]
+    let wrappers: Set<String> = ["bin", "sit", "sea", "cpt", "hqx", "macbin", "img", "image", "dsk", "dc42",
+                                 "iso", "toast", "hfs", "cdr"]
     while wrappers.contains((name as NSString).pathExtension.lowercased()) {
         name = (name as NSString).deletingPathExtension
     }
@@ -289,10 +315,13 @@ func ingest(_ source: String, library: String, force: Bool = false) throws -> (e
         case .archive:
             try unar(source, into: entry)
             try normalise(entry, depth: 1, notes: &notes)
-        case .appleDouble:
+        case .appleDouble, .diskImage:
             let name = (source as NSString).lastPathComponent
             try fm.copyItem(atPath: source, toPath: entry + "/" + name)
-            try fm.copyItem(atPath: sidecarPath(source), toPath: entry + "/._" + name)
+            if fm.fileExists(atPath: sidecarPath(source)) {
+                try fm.copyItem(atPath: sidecarPath(source), toPath: entry + "/._" + name)
+            }
+            try normalise(entry, depth: 1, notes: &notes)
         case .plain:
             throw IngestError.notAnArchive(source)
         }
@@ -333,4 +362,103 @@ func scan(_ root: String) -> [IngestedFile] {
                                 dataSize: f.data_len, rsrcSize: f.rsrc_len, hasCODE: hasCODE, hasCfrg: hasCfrg))
     }
     return out.sorted { $0.path < $1.path }
+}
+
+// MARK: - Disk images
+
+/// MacRoman bytes as a String.
+func macRoman(_ bytes: [UInt8]) -> String {
+    String(bytes: bytes, encoding: .macOSRoman) ?? String(decoding: bytes, as: UTF8.self)
+}
+
+private func pascal<T>(_ tuple: inout T) -> [UInt8] {
+    withUnsafeBytes(of: &tuple) { raw in
+        let n = Int(raw[0])
+        return Array(raw[1..<min(1 + n, raw.count)])
+    }
+}
+
+private func uniquePath(_ base: String) -> String {
+    var path = base
+    var n = 2
+    while FileManager.default.fileExists(atPath: path) {
+        path = "\(base) \(n)"
+        n += 1
+    }
+    return path
+}
+
+private func cError(_ err: [CChar]) -> String {
+    String(decoding: err.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+}
+
+/// Extract every file of the image's HFS volume into a folder named after the
+/// volume, next to the image.  Returns that folder.
+func extractDiskImage(_ path: String, into dir: String) throws -> String {
+    var f = mac_file()
+    var err = [CChar](repeating: 0, count: 256)
+    guard appledouble_read(path, &f, &err, err.count) else { throw IngestError.unreadable(path) }
+    defer { mac_file_free(&f) }
+    var vol: UnsafeMutablePointer<UInt8>?
+    var vlen = 0
+    guard diskimage_decode(&f, &vol, &vlen, &err, err.count) else {
+        throw IngestError.diskImage(path, cError(err))
+    }
+    defer { free(vol) }
+    guard let v = hfs_open(vol, vlen, &err, err.count) else { throw IngestError.diskImage(path, cError(err)) }
+    defer { hfs_close(v) }
+    var entries: UnsafeMutablePointer<hfs_entry>?
+    var count = 0
+    guard hfs_list(v, &entries, &count, &err, err.count), let entries else {
+        throw IngestError.diskImage(path, cError(err))
+    }
+    defer { free(entries) }
+
+    let volName = macRoman(Array(UnsafeBufferPointer(start: hfs_volume_name(v) + 1,
+                                                     count: Int(hfs_volume_name(v)[0]))))
+    let root = uniquePath(dir + "/" + hostName(volName.isEmpty ? "Untitled" : volName))
+    let fm = FileManager.default
+    try fm.createDirectory(atPath: root, withIntermediateDirectories: true)
+
+    // Folder paths by directory ID; the root folder (ID 2) is the volume itself.
+    var dirs: [UInt32: String] = [2: root]
+    var byID: [UInt32: hfs_entry] = [:]
+    for i in 0..<count where entries[i].is_dir { byID[entries[i].cnid] = entries[i] }
+    func folder(_ id: UInt32, depth: Int = 0) -> String? {
+        if let p = dirs[id] { return p }
+        guard depth < 100, var e = byID[id], let parent = folder(e.parent, depth: depth + 1) else { return nil }
+        let p = parent + "/" + hostName(macRoman(pascal(&e.name)))
+        dirs[id] = p
+        return p
+    }
+    for id in byID.keys {
+        if let p = folder(id) { try fm.createDirectory(atPath: p, withIntermediateDirectories: true) }
+    }
+    for i in 0..<count where !entries[i].is_dir {
+        var e = entries[i]
+        guard let parent = folder(e.parent) else { continue }
+        let nameBytes = pascal(&e.name)
+        var mf = mac_file()
+        var data: UnsafeMutablePointer<UInt8>?, rsrc: UnsafeMutablePointer<UInt8>?
+        var dlen = 0, rlen = 0
+        guard hfs_read_fork(v, &e, false, &data, &dlen, &err, err.count),
+              hfs_read_fork(v, &e, true, &rsrc, &rlen, &err, err.count) else {
+            free(data)
+            throw IngestError.diskImage(path, cError(err))
+        }
+        mf.data = data; mf.data_len = dlen
+        mf.rsrc = rsrc; mf.rsrc_len = rlen
+        withUnsafeMutableBytes(of: &mf.finder_info) { dst in
+            withUnsafeBytes(of: &e.finder_info) { src in dst.copyMemory(from: src) }
+        }
+        mf.has_finder_info = true
+        withUnsafeMutableBytes(of: &mf.name) { dst in
+            for (k, b) in nameBytes.prefix(63).enumerated() { dst[k] = b }
+        }
+        mf.create_date = e.create_date
+        mf.modify_date = e.modify_date
+        defer { mac_file_free(&mf) }
+        try writeAppleDouble(&mf, to: parent + "/" + hostName(macRoman(nameBytes)))
+    }
+    return root
 }

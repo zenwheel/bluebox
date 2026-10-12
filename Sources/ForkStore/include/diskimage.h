@@ -5,8 +5,8 @@
  * volume.  Supported containers: DiskCopy 4.2, Disk Copy 6 NDIF (raw and
  * ADC-compressed chunks), raw volumes, and Apple partition maps (CD-ROMs).
  */
-#ifndef HFS_H
-#define HFS_H
+#ifndef FORKSTORE_DISKIMAGE_H
+#define FORKSTORE_DISKIMAGE_H
 
 #include <stdbool.h>
 #include <stddef.h>

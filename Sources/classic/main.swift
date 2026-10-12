@@ -201,36 +201,37 @@ func resolveApplication(_ path: String, named: String?) -> String {
     case .appleDouble:
         return path
     case .plain:
-        fail("\(path) has no resource fork: expected an application, .bin, .sit, .sea, .cpt or .hqx")
-    case .macBinary, .archive:
-        let entry: String
-        do {
-            let result = try ingest(path, library: defaultLibrary())
-            entry = result.entry
-            for n in result.notes { eprint("note: \(n)\n") }
-        } catch {
-            fail("\(error)")
-        }
-        let apps = scan(entry).filter { $0.isApplication }
-        var candidates = apps.filter { $0.hasCODE }
-        if let named {
-            candidates = candidates.filter {
-                ($0.path as NSString).lastPathComponent.range(of: named, options: .caseInsensitive) != nil
-            }
-        }
-        if candidates.count == 1 { return candidates[0].path }
-        if candidates.isEmpty {
-            let ppc = apps.filter { $0.hasCfrg && !$0.hasCODE }
-            if !ppc.isEmpty {
-                fail("only PowerPC applications in \(entry) (68k only for now): " +
-                     ppc.map { ($0.path as NSString).lastPathComponent }.joined(separator: ", "))
-            }
-            fail(named == nil ? "no 68k application found in \(entry)" : "no application matching \"\(named!)\" in \(entry)")
-        }
-        eprint("several applications in \(entry); choose one with --app:\n")
-        for a in candidates { eprint("  \((a.path as NSString).lastPathComponent)\n") }
-        exit(2)
+        fail("\(path) has no resource fork: expected an application, a disk image, or a .bin/.sit/.sea/.cpt/.hqx file")
+    case .macBinary, .archive, .diskImage:
+        break
     }
+    let entry: String
+    do {
+        let result = try ingest(path, library: defaultLibrary())
+        entry = result.entry
+        for n in result.notes { eprint("note: \(n)\n") }
+    } catch {
+        fail("\(error)")
+    }
+    let apps = scan(entry).filter { $0.isApplication }
+    var candidates = apps.filter { $0.hasCODE }
+    if let named {
+        candidates = candidates.filter {
+            ($0.path as NSString).lastPathComponent.range(of: named, options: .caseInsensitive) != nil
+        }
+    }
+    if candidates.count == 1 { return candidates[0].path }
+    if candidates.isEmpty {
+        let ppc = apps.filter { $0.hasCfrg && !$0.hasCODE }
+        if !ppc.isEmpty {
+            fail("only PowerPC applications in \(entry) (68k only for now): " +
+                 ppc.map { ($0.path as NSString).lastPathComponent }.joined(separator: ", "))
+        }
+        fail(named == nil ? "no 68k application found in \(entry)" : "no application matching \"\(named!)\" in \(entry)")
+    }
+    eprint("several applications in \(entry); choose one with --app:\n")
+    for a in candidates { eprint("  \((a.path as NSString).lastPathComponent)\n") }
+    exit(2)
 }
 
 func printEntry(_ entry: String, filesOnly: Bool = false) {
