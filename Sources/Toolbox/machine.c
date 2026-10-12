@@ -72,6 +72,7 @@ void wdef0_native(cpu68k *c, uint16_t tw);
 void mdef0_native(cpu68k *c, uint16_t tw);
 void cdef0_native(cpu68k *c, uint16_t tw);
 void cdef1_native(cpu68k *c, uint16_t tw);
+void ldef0_native(cpu68k *c, uint16_t tw);
 void events_reset(void);
 void fm_init(const char *root);
 void display_reset(void);
@@ -89,18 +90,20 @@ static void defproc_stub(uint8_t out[8], native_fn fn, const char *name)
 
 static bool open_system_file(void)
 {
-    uint8_t wdef0[8], mdef0[8], cdef0[8], cdef1[8];
+    uint8_t wdef0[8], mdef0[8], cdef0[8], cdef1[8], ldef0[8];
     defproc_stub(wdef0, wdef0_native, "WDEF 0");
     defproc_stub(mdef0, mdef0_native, "MDEF 0");
     defproc_stub(cdef0, cdef0_native, "CDEF 0");
     defproc_stub(cdef1, cdef1_native, "CDEF 1");
+    defproc_stub(ldef0, ldef0_native, "LDEF 0");
     rsrc_spec specs[64] = {
         { fourcc("WDEF"), 0, NULL, RES_SYS_HEAP, wdef0, 8 },
         { fourcc("MDEF"), 0, NULL, RES_SYS_HEAP, mdef0, 8 },
         { fourcc("CDEF"), 0, NULL, RES_SYS_HEAP, cdef0, 8 },
         { fourcc("CDEF"), 1, NULL, RES_SYS_HEAP, cdef1, 8 },
+        { fourcc("LDEF"), 0, NULL, RES_SYS_HEAP, ldef0, 8 },
     };
-    size_t n = 4;
+    size_t n = 5;
     /* Bitmap fonts: generated from the OFL faces (Generators/fonts.py). */
     for (unsigned i = 0; i < sysfont_count && n < 64; i++)
         specs[n++] = (rsrc_spec){ sysfonts[i].type, sysfonts[i].id, sysfonts[i].name, RES_SYS_HEAP | RES_PURGEABLE,

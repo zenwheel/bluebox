@@ -539,6 +539,9 @@ static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
     char path[PATH_MAX];
     int16_t err = resolve((int16_t)rd16(pb + IOParam_ioVRefNum_off), hfs ? (int32_t)rd32(pb + HFileParam_ioDirID_off) : 0,
                           namep, hfs, path, sizeof path);
+    LOGF(LOG_TRAPS, "  open %s fork: vref %d dir %d -> %s (%d)\n", rsrc ? "resource" : "data",
+         (int16_t)rd16(pb + IOParam_ioVRefNum_off), hfs ? (int32_t)rd32(pb + HFileParam_ioDirID_off) : 0,
+         err ? "?" : path, err);
     if (err)
         return err;
     if (!exists(path) || is_dir(path))
@@ -1025,12 +1028,22 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
 int16_t tb_PBGetVInfo(gaddr pb, bool async) { return get_vinfo(pb, false); }
 int16_t tb_PBHGetVInfo(gaddr pb, bool async) { return get_vinfo(pb, true); }
 
+static int16_t wd_for(int32_t id);
+
+/* The default directory as a working directory, as the Finder left it at
+ * launch: apps open files next to themselves with GetVol's refnum. */
+static int16_t default_wd(void)
+{
+    int16_t wd = default_dir == ROOT_ID ? VREF : wd_for(default_dir);
+    return wd ? wd : default_vref;
+}
+
 int16_t tb_PBGetVol(gaddr pb, bool async)
 {
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
     if (namep)
         gput(namep, vol_name, (uint32_t)vol_name[0] + 1);
-    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)default_vref);
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)default_wd());
     return noErr;
 }
 

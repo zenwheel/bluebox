@@ -268,6 +268,7 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
         ev_wait_tick();
         return next_event(em, evt, true, false);
     }
+    machine_idle();
     return 0;
 }
 
@@ -307,6 +308,8 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
         machine_advance_ticks();
         return next_event(mask, evp, true, false);
     }
+    if (!host_attached)
+        machine_idle();
     return 0;
 }
 

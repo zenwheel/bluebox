@@ -338,6 +338,7 @@ func runCommand(_ args: [String]) {
     #endif
 
     var budget = maxInstructions
+    machine_set_instruction_limit(machine_instruction_count() + maxInstructions)
     var status = runScript(keyScript, budget: &budget)
     if status != RUN_HALTED && budget > 0 {
         status = machine_run(budget)

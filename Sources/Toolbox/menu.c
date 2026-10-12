@@ -216,6 +216,33 @@ static void append_items(gaddr mh, const uint8_t *s, int n, int after)
     tb_CalcMenuSize(mh);
 }
 
+void tb_InsertMenuItem(gaddr mh, gaddr str, int16_t after)
+{
+    uint8_t buf[256];
+    int n = rd8(str);
+    gget(buf, str + 1, (uint32_t)n);
+    append_items(mh, buf, n, after < 0 ? 0 : after);
+}
+
+void tb_DeleteMenuItem(gaddr mh, int16_t item)
+{
+    int count = tb_CountMItems(mh);
+    if (item < 1 || item > count)
+        return;
+    gaddr it = item_addr(mh, item);
+    menu_delete_bytes(mh, it - rd32(mh), (uint32_t)rd8(it) + 5);
+    gaddr p = menu_ptr(mh);
+    uint32_t flags = (uint32_t)MenuInfo_enableFlags(p);
+    if (item <= 31) {
+        /* Later items' flags move down; the top bit stays set. */
+        uint32_t low = flags & ((1u << item) - 1);
+        uint32_t high = (flags >> (item + 1)) << item;
+        flags = low | high | 0x80000000u;
+    }
+    MenuInfo_set_enableFlags(p, (int32_t)flags);
+    tb_CalcMenuSize(mh);
+}
+
 void tb_AppendMenu(gaddr mh, gaddr str)
 {
     uint8_t buf[256];
@@ -302,6 +329,111 @@ static int nmenus(void)
 
 static gaddr menu_at(int i) { return rd32(rd32(mlist()) + 6 + (uint32_t)i * 6); }
 
+/* ---------------------------------------------------------------------- */
+/* Menu colour table (MenuCInfo): kept for applications to read and write;
+ * the native menus draw in the host's colours.  Entries are 30 bytes and
+ * the table ends with an entry whose ID is -99. */
+
+#define MC_END -99
+
+static void mc_init(void)
+{
+    gaddr h = rd32(LM_MenuCInfo);
+    if (!h || !rd32(h)) {
+        h = tb_NewHandle(MCEntry_SIZEOF, true, true);
+        wr32(LM_MenuCInfo, h);
+    }
+    tb_SetHandleSize(h, MCEntry_SIZEOF);
+    gmemset(rd32(h), 0, MCEntry_SIZEOF);
+    MCEntry_set_mctID(rd32(h), MC_END);
+}
+
+static int mc_count(void)
+{
+    gaddr h = rd32(LM_MenuCInfo);
+    if (!h || !rd32(h))
+        return 0;
+    int n = 0;
+    while (MCEntry_mctID(rd32(h) + (uint32_t)n * MCEntry_SIZEOF) != MC_END)
+        n++;
+    return n;
+}
+
+gaddr tb_GetMCEntry(int16_t mid, int16_t item)
+{
+    gaddr h = rd32(LM_MenuCInfo);
+    int n = mc_count();
+    for (int i = 0; i < n; i++) {
+        gaddr e = rd32(h) + (uint32_t)i * MCEntry_SIZEOF;
+        if (MCEntry_mctID(e) == mid && MCEntry_mctItem(e) == item)
+            return e;
+    }
+    return 0;
+}
+
+void tb_SetMCEntries(int16_t n, gaddr entries)
+{
+    if (!rd32(LM_MenuCInfo))
+        mc_init();
+    for (int k = 0; k < n; k++) {
+        gaddr src = entries + (uint32_t)k * MCEntry_SIZEOF;
+        gaddr e = tb_GetMCEntry(MCEntry_mctID(src), MCEntry_mctItem(src));
+        if (!e) {
+            gaddr h = rd32(LM_MenuCInfo);
+            int count = mc_count();
+            tb_SetHandleSize(h, (count + 2) * MCEntry_SIZEOF);
+            e = rd32(h) + (uint32_t)count * MCEntry_SIZEOF;
+            gmemset(e + MCEntry_SIZEOF, 0, MCEntry_SIZEOF);
+            MCEntry_set_mctID(e + MCEntry_SIZEOF, MC_END);
+        }
+        gmemcpy(e, src, MCEntry_SIZEOF);
+    }
+}
+
+/* Item -98 (mctAllItems) removes every entry for the menu. */
+void tb_DeleteMCEntries(int16_t mid, int16_t item)
+{
+    gaddr h = rd32(LM_MenuCInfo);
+    int n = mc_count(), w = 0;
+    for (int i = 0; i <= n; i++) { /* the end marker moves too */
+        gaddr e = rd32(h) + (uint32_t)i * MCEntry_SIZEOF;
+        bool drop = i < n && MCEntry_mctID(e) == mid && (item == -98 || MCEntry_mctItem(e) == item);
+        if (!drop) {
+            if (w != i)
+                gmemcpy(rd32(h) + (uint32_t)w * MCEntry_SIZEOF, e, MCEntry_SIZEOF);
+            w++;
+        }
+    }
+    tb_SetHandleSize(h, w * MCEntry_SIZEOF);
+}
+
+gaddr tb_GetMCInfo(void)
+{
+    uint32_t h = rd32(LM_MenuCInfo);
+    if (!h)
+        return 0;
+    tb_HandToHand(&h);
+    return h;
+}
+
+void tb_SetMCInfo(gaddr table)
+{
+    if (!table || !rd32(table))
+        return;
+    uint32_t h = table;
+    tb_HandToHand(&h);
+    gaddr old = rd32(LM_MenuCInfo);
+    wr32(LM_MenuCInfo, h);
+    if (old)
+        tb_DisposeHandle(old);
+}
+
+void tb_DisposeMCInfo(gaddr table)
+{
+    if (table && table != rd32(LM_MenuCInfo))
+        tb_DisposeHandle(table);
+}
+
 void tb_InitMenus(void)
 {
     gaddr l = mlist();
@@ -314,6 +446,7 @@ void tb_InitMenus(void)
     gmemset(p, 0, 12);
     wr8(LM_MenuFlash, 3);
     wr16(LM_TheMenu, 0);
+    mc_init();
     tb_DrawMenuBar();
 }
 
@@ -933,8 +1066,10 @@ void tb_SetItemStyle(gaddr mh, int16_t item, int16_t style)
 
 void tb_GetItemStyle(gaddr mh, int16_t item, gaddr stylep)
 {
+    /* A word with the style in the low byte, as the ROM wrote it (MPW's
+     * glue for C callers keeps only that byte). */
     gaddr f = item_field(mh, item, 3);
-    wr8(stylep, f ? rd8(f) : 0);
+    wr16(stylep, f ? rd8(f) : 0);
 }
 
 void tb_SetItemCmd(gaddr mh, int16_t item, int16_t cmd)

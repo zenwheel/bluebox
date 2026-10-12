@@ -697,7 +697,7 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
     }
     gaddr evt = tb_NewPtr(EventRecord_SIZEOF, false, true);
     gaddr dp = tb_NewPtr(4, false, true);
-    for (;;) {
+    while (!g_cpu->halted) {
         bool got = tb_WaitNextEvent(-1, evt, 6, 0) != 0;
         if (filter) {
             cpu68k *c = g_cpu;

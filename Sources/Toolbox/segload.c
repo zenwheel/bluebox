@@ -188,6 +188,7 @@ const raw_trap raw_traps[] = {
     { 0xA03C, "CmpString", raw_CmpString },
     { 0xA050, "RelString", raw_RelString },
     { 0xA054, "UprString", raw_UprString },
+    { 0xA0FC, "ResourceStub", raw_ResourceStub },
     { 0xA9EB, "FP68K", raw_FP68K },
     { 0xA9EC, "Elems68K", raw_Elems68K },
     { 0xA9F0, "LoadSeg", raw_LoadSeg },

@@ -233,5 +233,44 @@ extension Classic {
             #expect(rd16(buf) == 2 && rd32(pb + 40) == 20)
         }
     }
+
+    @Suite struct ResourceStubPatch {
+        /// Installers patch OS trap A0FC to expand resources as they load.
+        @Test func patchedStubSeesEveryLoad() {
+            bootMachine()
+            var fork = buildFork([TestResource(type: "TEST", id: 128, data: [10, 20])])
+            #expect(rm_open_host_file(nil, &fork, UInt32(fork.count), true) > 0)
+            let original = tb_GetTrapAddress(0xA0FC, true, false)
+            let words: [UInt16] = [
+                0x4EB9, UInt16(original >> 16), UInt16(original & 0xFFFF), // JSR original
+                0x2250,                                                     // MOVEA.L (A0),A1
+                0x5211,                                                     // ADDQ.B #1,(A1)
+                0x4E75,                                                     // RTS
+            ]
+            let patch = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(patch + UInt32(i * 2), w) }
+            let stack = tb_NewPtr(65536, false, true)
+            g_cpu!.pointee.a.7 = stack + 65536 - 16
+            tb_SetTrapAddress(patch, 0xA0FC, true, false)
+            defer { tb_SetTrapAddress(original, 0xA0FC, true, false) }
+            let h = tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128)
+            #expect(h != 0 && rd8(rd32(h)) == 11 && rd8(rd32(h) + 1) == 20)
+        }
+    }
+
+    @Suite struct DefaultDirectory {
+        /// GetVol gives the application's folder as a working directory, so a
+        /// bare name opens files next to the application.
+        @Test func getVolGivesTheApplicationsFolder() {
+            launchTestApp()
+            let pb = tb_NewPtr(128, false, true)
+            #expect(tb_PBGetVol(pb, false) == 0)
+            let vref = Int16(bitPattern: rd16(pb + 22))
+            #expect(vref != -1)
+            let name = tb_NewPtr(64, false, true), spec = tb_NewPtr(70, false, true)
+            guestPString("Test App", at: name)
+            #expect(tb_FSMakeFSSpec(vref, 0, name, spec) == 0)
+        }
+    }
 }
 }

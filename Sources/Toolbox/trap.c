@@ -379,17 +379,31 @@ void trap_aline(cpu68k *c, uint16_t op)
 /* Calling guest code from native code */
 
 static uint32_t guest_return_stub;
+static uint64_t icount_cap; /* 0: none */
+
+void machine_set_instruction_limit(uint64_t total) { icount_cap = total; }
+
+/* A null event with no host attached: time passes as if the app had run,
+ * so an app waiting for input (often in a Toolbox loop such as ModalDialog
+ * that runs no guest code) still meets the instruction limit. */
+void machine_idle(void)
+{
+    cpu68k *c = g_cpu;
+    if (!c || c->halted)
+        return;
+    c->icount += 1000;
+    if (icount_cap && c->icount >= icount_cap)
+        cpu_halt(c, "instruction limit reached waiting for input");
+}
 static int call_depth, returned_depth;
 
 static void guest_return_native(cpu68k *c, uint16_t tw) { returned_depth = call_depth; }
 
-void guest_call(gaddr fn)
+/* Call fn and return with the registers it left (the caller saves what it needs). */
+void guest_call_regs(gaddr fn)
 {
     cpu68k *c = g_cpu;
     uint32_t saved_pc = c->pc;
-    uint32_t d[8], a[7];
-    memcpy(d, c->d, sizeof d);
-    memcpy(a, c->a, sizeof a);
     int n = native_index_for(fn);
     if (n >= 0) {
         /* Our own routine: run it directly; it leaves the return address. */
@@ -400,14 +414,26 @@ void guest_call(gaddr fn)
         int depth = ++call_depth;
         cpu_push32(c, guest_return_stub);
         c->pc = fn;
-        while (!c->halted && returned_depth != depth)
+        while (!c->halted && returned_depth != depth) {
             cpu_step(c);
+            if (icount_cap && c->icount >= icount_cap)
+                cpu_halt(c, "instruction limit reached in a call from the Toolbox (pc %08X)", c->pc);
+        }
         returned_depth = 0;
         call_depth--;
     }
+    c->pc = saved_pc;
+}
+
+void guest_call(gaddr fn)
+{
+    cpu68k *c = g_cpu;
+    uint32_t d[8], a[7];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    guest_call_regs(fn);
     memcpy(c->d, d, sizeof d);
     memcpy(c->a, a, sizeof a);
-    c->pc = saved_pc;
 }
 
 /* ---------------------------------------------------------------------- */

@@ -288,6 +288,10 @@ void machine_set_launch_documents(const char *const *paths, int n);
  * $XDG_DATA_HOME/classic/System Folder elsewhere. */
 void machine_set_system_folder(const char *path);
 
+/* A hard cap on instructions executed, also inside routines the Toolbox
+ * calls back (filters, hooks); 0 for none.  For headless runs. */
+void machine_set_instruction_limit(uint64_t total);
+
 /* Apple Events to the running app (as the Finder would send them). */
 void machine_open_documents(const char *const *paths, int n, bool print);
 void machine_send_open_application(void);

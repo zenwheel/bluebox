@@ -63,6 +63,8 @@ int native_index_for(uint32_t addr);
  * result space and arguments the caller has already pushed.  Registers other
  * than A7 are preserved. */
 void guest_call(gaddr fn);
+/* The same, leaving the registers as the routine left them. */
+void guest_call_regs(gaddr fn);
 
 /* Trap word of the routine currently executing (e.g. HFS bit 0x200). */
 uint16_t trap_current_word(void);

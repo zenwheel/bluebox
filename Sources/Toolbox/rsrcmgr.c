@@ -228,7 +228,7 @@ static bool find_handle(gaddr h, gaddr *maph_out, uint32_t *ref_out, uint32_t *t
 /* Loading */
 
 /* Read the data for ref r of map maph into handle h (allocating if 0). */
-static gaddr load_ref(gaddr maph, uint32_t r, uint32_t type)
+static gaddr load_ref_direct(gaddr maph, uint32_t r, uint32_t type)
 {
     resfile *f = file_for_map(maph);
     gaddr m = mp_of(maph);
@@ -315,6 +315,45 @@ static gaddr load_ref(gaddr maph, uint32_t r, uint32_t type)
     }
     set_res_err(noErr);
     return h;
+}
+
+/* The Resource Manager loads every resource through OS trap A0FC
+ * (ResourceStub): A4 = the map handle, A2 and A3 = the reference entry,
+ * the handle back in A0.  Installers and code compressors patch it to
+ * expand resources as they load, so a patched stub is called. */
+void raw_ResourceStub(cpu68k *c, uint16_t tw)
+{
+    gaddr maph = c->a[4];
+    gaddr ref = c->a[2];
+    uint32_t type = 0;
+    uint32_t r = maph && rd32(maph) && ref > mp_of(maph) ? ref - mp_of(maph) : 0;
+    /* The type, for logging: the type entry whose reference list holds r. */
+    for (unsigned i = 0; r && i < map_ntypes(maph); i++)
+        if (r >= ref_off(maph, i, 0) && r < ref_off(maph, i, 0) + type_count(maph, i) * 12)
+            type = type_code(maph, i);
+    c->a[0] = r ? load_ref_direct(maph, r, type) : 0;
+}
+
+static gaddr load_ref(gaddr maph, uint32_t r, uint32_t type)
+{
+    cpu68k *c = g_cpu;
+    gaddr stub = rd32(OS_TRAP_TABLE + 0xFC * 4);
+    if (!c || native_index_for(stub) >= 0)
+        return load_ref_direct(maph, r, type);
+    gaddr h = rd32(mp_of(maph) + r + 8);
+    if (h && rd32(h))
+        return h; /* already loaded: the stub isn't consulted */
+    uint32_t d[8], a[8];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    c->a[4] = maph;
+    c->a[3] = c->a[2] = mp_of(maph) + r;
+    c->a[0] = stub;
+    guest_call_regs(stub);
+    gaddr result = c->a[0];
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    return result;
 }
 
 static gaddr get_res(uint32_t type, int16_t id, bool one)

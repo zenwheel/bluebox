@@ -1798,12 +1798,32 @@ static void glue_Delay(cpu68k *c, uint16_t trapword)
     c->d[0] = a_ftp;
 }
 
+static void glue_DeleteMCEntries(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_arg1 = (int16_t)cpu_pop16(c);
+    int16_t a_arg0 = (int16_t)cpu_pop16(c);
+    tb_DeleteMCEntries(a_arg0, a_arg1);
+    cpu_push32(c, ret);
+}
+
 static void glue_DeleteMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t a_mid = (int16_t)cpu_pop16(c);
     tb_DeleteMenu(a_mid);
+    cpu_push32(c, ret);
+}
+
+static void glue_DeleteMenuItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_mh = (gaddr)cpu_pop32(c);
+    tb_DeleteMenuItem(a_mh, a_item);
     cpu_push32(c, ret);
 }
 
@@ -1929,6 +1949,15 @@ static void glue_DisposeHandle(cpu68k *c, uint16_t trapword)
     gaddr a_h = (gaddr)c->a[0];
     tb_DisposeHandle(a_h);
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
+}
+
+static void glue_DisposeMCInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    tb_DisposeMCInfo(a_arg0);
+    cpu_push32(c, ret);
 }
 
 static void glue_DisposeMenu(cpu68k *c, uint16_t trapword)
@@ -3367,6 +3396,26 @@ static void glue_GetKeys(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetMCEntry(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_arg1 = (int16_t)cpu_pop16(c);
+    int16_t a_arg0 = (int16_t)cpu_pop16(c);
+    gaddr r = tb_GetMCEntry(a_arg0, a_arg1);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMCInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_GetMCInfo();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetMainDevice(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4481,6 +4530,17 @@ static void glue_InsertMenu(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InsertMenuItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_after = (int16_t)cpu_pop16(c);
+    gaddr a_str = (gaddr)cpu_pop32(c);
+    gaddr a_mh = (gaddr)cpu_pop32(c);
+    tb_InsertMenuItem(a_mh, a_str, a_after);
+    cpu_push32(c, ret);
+}
+
 static void glue_InsertResMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4641,6 +4701,301 @@ static void glue_KillPicture(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_pic = (gaddr)cpu_pop32(c);
     tb_KillPicture(a_pic);
+    cpu_push32(c, ret);
+}
+
+static void glue_LActivate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int8_t a_act = (int8_t)(cpu_pop16(c) >> 8);
+    tb_LActivate(a_act, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LAddColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t a_coln = (int16_t)cpu_pop16(c);
+    int16_t a_count = (int16_t)cpu_pop16(c);
+    int16_t r = tb_LAddColumn(a_count, a_coln, a_list);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_LAddRow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t a_rown = (int16_t)cpu_pop16(c);
+    int16_t a_count = (int16_t)cpu_pop16(c);
+    int16_t r = tb_LAddRow(a_count, a_rown, a_list);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_LAddToCell(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_cell = (uint32_t)cpu_pop32(c);
+    int16_t a_dl = (int16_t)cpu_pop16(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_LAddToCell(a_dp, a_dl, a_cell, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LAutoScroll(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    tb_LAutoScroll(a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LCellSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_csize = (uint32_t)cpu_pop32(c);
+    tb_LCellSize(a_csize, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LClick(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t a_mods = (int16_t)cpu_pop16(c);
+    uint32_t a_pt = (uint32_t)cpu_pop32(c);
+    int8_t r = tb_LClick(a_pt, a_mods, a_list);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_LClrCell(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_cell = (uint32_t)cpu_pop32(c);
+    tb_LClrCell(a_cell, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LDelColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t a_coln = (int16_t)cpu_pop16(c);
+    int16_t a_count = (int16_t)cpu_pop16(c);
+    tb_LDelColumn(a_count, a_coln, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LDelRow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t a_rown = (int16_t)cpu_pop16(c);
+    int16_t a_count = (int16_t)cpu_pop16(c);
+    tb_LDelRow(a_count, a_rown, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LDispose(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    tb_LDispose(a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LDraw(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_cell = (uint32_t)cpu_pop32(c);
+    tb_LDraw(a_cell, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LGetCell(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_cell = (uint32_t)cpu_pop32(c);
+    gaddr a_dlp = (gaddr)cpu_pop32(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_LGetCell(a_dp, a_dlp, a_cell, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LGetCellDataLocation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_cell = (uint32_t)cpu_pop32(c);
+    gaddr a_lenp = (gaddr)cpu_pop32(c);
+    gaddr a_offsetp = (gaddr)cpu_pop32(c);
+    tb_LGetCellDataLocation(a_offsetp, a_lenp, a_cell, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LGetSelect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    gaddr a_cellp = (gaddr)cpu_pop32(c);
+    int8_t a_next = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t r = tb_LGetSelect(a_next, a_cellp, a_list);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_LLastClick(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int32_t r = tb_LLastClick(a_list);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_LNew(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_scrollv = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_scrollh = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_grow = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_draw = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_wind = (gaddr)cpu_pop32(c);
+    int16_t a_proc = (int16_t)cpu_pop16(c);
+    uint32_t a_csize = (uint32_t)cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr a_rview = (gaddr)cpu_pop32(c);
+    gaddr r = tb_LNew(a_rview, a_bounds, a_csize, a_proc, a_wind, a_draw, a_grow, a_scrollh, a_scrollv);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_LNextCell(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    gaddr a_cellp = (gaddr)cpu_pop32(c);
+    int8_t a_vnext = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_hnext = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t r = tb_LNextCell(a_hnext, a_vnext, a_cellp, a_list);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_LRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_cell = (uint32_t)cpu_pop32(c);
+    gaddr a_cellrect = (gaddr)cpu_pop32(c);
+    tb_LRect(a_cellrect, a_cell, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LScroll(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t a_nrow = (int16_t)cpu_pop16(c);
+    int16_t a_ncol = (int16_t)cpu_pop16(c);
+    tb_LScroll(a_ncol, a_nrow, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LSearch(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    gaddr a_cellp = (gaddr)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    int16_t a_dl = (int16_t)cpu_pop16(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    int8_t r = tb_LSearch(a_dp, a_dl, a_proc, a_cellp, a_list);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_LSetCell(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_cell = (uint32_t)cpu_pop32(c);
+    int16_t a_dl = (int16_t)cpu_pop16(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_LSetCell(a_dp, a_dl, a_cell, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LSetDrawingMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int8_t a_draw = (int8_t)(cpu_pop16(c) >> 8);
+    tb_LSetDrawingMode(a_draw, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LSetSelect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    uint32_t a_cell = (uint32_t)cpu_pop32(c);
+    int8_t a_setit = (int8_t)(cpu_pop16(c) >> 8);
+    tb_LSetSelect(a_setit, a_cell, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t a_height = (int16_t)cpu_pop16(c);
+    int16_t a_width = (int16_t)cpu_pop16(c);
+    tb_LSize(a_width, a_height, a_list);
+    cpu_push32(c, ret);
+}
+
+static void glue_LUpdate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    gaddr a_rgn = (gaddr)cpu_pop32(c);
+    tb_LUpdate(a_rgn, a_list);
     cpu_push32(c, ret);
 }
 
@@ -7267,6 +7622,25 @@ static void glue_SetItemStyle(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetMCEntries(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg1 = (gaddr)cpu_pop32(c);
+    int16_t a_arg0 = (int16_t)cpu_pop16(c);
+    tb_SetMCEntries(a_arg0, a_arg1);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMCInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    tb_SetMCInfo(a_arg0);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetMenuBar(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9092,7 +9466,7 @@ const trap_sig trap_sigs[] = {
     {0xA81F, -1, "Get1Resource", CONV_STACK, 6, 4, glue_Get1Resource},
     {0xA820, -1, "Get1NamedResource", CONV_STACK, 8, 4, glue_Get1NamedResource},
     {0xA821, -1, "GetMaxResourceSize", CONV_STACK, 4, 4, glue_GetMaxResourceSize},
-    {0xA826, -1, "InsertMenuItem", CONV_STACK, 10, 0, 0},
+    {0xA826, -1, "InsertMenuItem", CONV_STACK, 10, 0, glue_InsertMenuItem},
     {0xA827, -1, "HideDialogItem", CONV_STACK, 6, 0, glue_HideDialogItem},
     {0xA828, -1, "ShowDialogItem", CONV_STACK, 6, 0, glue_ShowDialogItem},
     {0xA834, -1, "SetFScaleDisable", CONV_STACK, 2, 0, glue_SetFScaleDisable},
@@ -9369,7 +9743,7 @@ const trap_sig trap_sigs[] = {
     {0xA94F, -1, "DeltaPoint", CONV_STACK, 8, 4, glue_DeltaPoint},
     {0xA950, -1, "CountMItems", CONV_STACK, 4, 2, glue_CountMItems},
     {0xA951, -1, "InsertResMenu", CONV_STACK, 10, 0, glue_InsertResMenu},
-    {0xA952, -1, "DeleteMenuItem", CONV_STACK, 6, 0, 0},
+    {0xA952, -1, "DeleteMenuItem", CONV_STACK, 6, 0, glue_DeleteMenuItem},
     {0xA953, -1, "UpdateControls", CONV_STACK, 8, 0, glue_UpdateControls},
     {0xA954, -1, "NewControl", CONV_STACK, 26, 4, glue_NewControl},
     {0xA955, -1, "DisposeControl", CONV_STACK, 4, 0, glue_DisposeControl},
@@ -9610,12 +9984,12 @@ const trap_sig trap_sigs[] = {
     {0xAA4F, -1, "CalcCMask", CONV_STACK, 28, 0, 0},
     {0xAA50, -1, "SeedCFill", CONV_STACK, 28, 0, 0},
     {0xAA51, -1, "CopyDeepMask", CONV_STACK, 30, 0, 0},
-    {0xAA60, -1, "DeleteMCEntries", CONV_STACK, 4, 0, 0},
-    {0xAA61, -1, "GetMCInfo", CONV_STACK, 0, 4, 0},
-    {0xAA62, -1, "SetMCInfo", CONV_STACK, 4, 0, 0},
-    {0xAA63, -1, "DisposeMCInfo", CONV_STACK, 4, 0, 0},
-    {0xAA64, -1, "GetMCEntry", CONV_STACK, 4, 4, 0},
-    {0xAA65, -1, "SetMCEntries", CONV_STACK, 6, 0, 0},
+    {0xAA60, -1, "DeleteMCEntries", CONV_STACK, 4, 0, glue_DeleteMCEntries},
+    {0xAA61, -1, "GetMCInfo", CONV_STACK, 0, 4, glue_GetMCInfo},
+    {0xAA62, -1, "SetMCInfo", CONV_STACK, 4, 0, glue_SetMCInfo},
+    {0xAA63, -1, "DisposeMCInfo", CONV_STACK, 4, 0, glue_DisposeMCInfo},
+    {0xAA64, -1, "GetMCEntry", CONV_STACK, 4, 4, glue_GetMCEntry},
+    {0xAA65, -1, "SetMCEntries", CONV_STACK, 6, 0, glue_SetMCEntries},
     {0xAA66, -1, "MenuChoice", CONV_STACK, 0, 4, glue_MenuChoice},
     {0xAA90, -1, "InitPalettes", CONV_STACK, 0, 0, glue_InitPalettes},
     {0xAA91, -1, "NewPalette", CONV_STACK, 10, 4, glue_NewPalette},
@@ -9823,32 +10197,32 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x3Du, "SameProcess", CONV_STACK, 12, 2, glue_SameProcess},
     {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, 0},
-    {0xA9E7, (int32_t)0x0u, "LActivate", CONV_STACK, 6, 0, 0},
-    {0xA9E7, (int32_t)0x4u, "LAddColumn", CONV_STACK, 8, 2, 0},
-    {0xA9E7, (int32_t)0x8u, "LAddRow", CONV_STACK, 8, 2, 0},
-    {0xA9E7, (int32_t)0xCu, "LAddToCell", CONV_STACK, 14, 0, 0},
-    {0xA9E7, (int32_t)0x10u, "LAutoScroll", CONV_STACK, 4, 0, 0},
-    {0xA9E7, (int32_t)0x14u, "LCellSize", CONV_STACK, 8, 0, 0},
-    {0xA9E7, (int32_t)0x18u, "LClick", CONV_STACK, 10, 2, 0},
-    {0xA9E7, (int32_t)0x1Cu, "LClrCell", CONV_STACK, 8, 0, 0},
-    {0xA9E7, (int32_t)0x20u, "LDelColumn", CONV_STACK, 8, 0, 0},
-    {0xA9E7, (int32_t)0x24u, "LDelRow", CONV_STACK, 8, 0, 0},
-    {0xA9E7, (int32_t)0x28u, "LDispose", CONV_STACK, 4, 0, 0},
-    {0xA9E7, (int32_t)0x2Cu, "LSetDrawingMode", CONV_STACK, 6, 0, 0},
-    {0xA9E7, (int32_t)0x30u, "LDraw", CONV_STACK, 8, 0, 0},
-    {0xA9E7, (int32_t)0x34u, "LGetCellDataLocation", CONV_STACK, 16, 0, 0},
-    {0xA9E7, (int32_t)0x38u, "LGetCell", CONV_STACK, 16, 0, 0},
-    {0xA9E7, (int32_t)0x3Cu, "LGetSelect", CONV_STACK, 10, 2, 0},
-    {0xA9E7, (int32_t)0x40u, "LLastClick", CONV_STACK, 4, 4, 0},
-    {0xA9E7, (int32_t)0x44u, "LNew", CONV_STACK, 26, 4, 0},
-    {0xA9E7, (int32_t)0x48u, "LNextCell", CONV_STACK, 12, 2, 0},
-    {0xA9E7, (int32_t)0x4Cu, "LRect", CONV_STACK, 12, 0, 0},
-    {0xA9E7, (int32_t)0x50u, "LScroll", CONV_STACK, 8, 0, 0},
-    {0xA9E7, (int32_t)0x54u, "LSearch", CONV_STACK, 18, 2, 0},
-    {0xA9E7, (int32_t)0x58u, "LSetCell", CONV_STACK, 14, 0, 0},
-    {0xA9E7, (int32_t)0x5Cu, "LSetSelect", CONV_STACK, 10, 0, 0},
-    {0xA9E7, (int32_t)0x60u, "LSize", CONV_STACK, 8, 0, 0},
-    {0xA9E7, (int32_t)0x64u, "LUpdate", CONV_STACK, 8, 0, 0},
+    {0xA9E7, (int32_t)0x0u, "LActivate", CONV_STACK, 6, 0, glue_LActivate},
+    {0xA9E7, (int32_t)0x4u, "LAddColumn", CONV_STACK, 8, 2, glue_LAddColumn},
+    {0xA9E7, (int32_t)0x8u, "LAddRow", CONV_STACK, 8, 2, glue_LAddRow},
+    {0xA9E7, (int32_t)0xCu, "LAddToCell", CONV_STACK, 14, 0, glue_LAddToCell},
+    {0xA9E7, (int32_t)0x10u, "LAutoScroll", CONV_STACK, 4, 0, glue_LAutoScroll},
+    {0xA9E7, (int32_t)0x14u, "LCellSize", CONV_STACK, 8, 0, glue_LCellSize},
+    {0xA9E7, (int32_t)0x18u, "LClick", CONV_STACK, 10, 2, glue_LClick},
+    {0xA9E7, (int32_t)0x1Cu, "LClrCell", CONV_STACK, 8, 0, glue_LClrCell},
+    {0xA9E7, (int32_t)0x20u, "LDelColumn", CONV_STACK, 8, 0, glue_LDelColumn},
+    {0xA9E7, (int32_t)0x24u, "LDelRow", CONV_STACK, 8, 0, glue_LDelRow},
+    {0xA9E7, (int32_t)0x28u, "LDispose", CONV_STACK, 4, 0, glue_LDispose},
+    {0xA9E7, (int32_t)0x2Cu, "LSetDrawingMode", CONV_STACK, 6, 0, glue_LSetDrawingMode},
+    {0xA9E7, (int32_t)0x30u, "LDraw", CONV_STACK, 8, 0, glue_LDraw},
+    {0xA9E7, (int32_t)0x34u, "LGetCellDataLocation", CONV_STACK, 16, 0, glue_LGetCellDataLocation},
+    {0xA9E7, (int32_t)0x38u, "LGetCell", CONV_STACK, 16, 0, glue_LGetCell},
+    {0xA9E7, (int32_t)0x3Cu, "LGetSelect", CONV_STACK, 10, 2, glue_LGetSelect},
+    {0xA9E7, (int32_t)0x40u, "LLastClick", CONV_STACK, 4, 4, glue_LLastClick},
+    {0xA9E7, (int32_t)0x44u, "LNew", CONV_STACK, 26, 4, glue_LNew},
+    {0xA9E7, (int32_t)0x48u, "LNextCell", CONV_STACK, 12, 2, glue_LNextCell},
+    {0xA9E7, (int32_t)0x4Cu, "LRect", CONV_STACK, 12, 0, glue_LRect},
+    {0xA9E7, (int32_t)0x50u, "LScroll", CONV_STACK, 8, 0, glue_LScroll},
+    {0xA9E7, (int32_t)0x54u, "LSearch", CONV_STACK, 18, 2, glue_LSearch},
+    {0xA9E7, (int32_t)0x58u, "LSetCell", CONV_STACK, 14, 0, glue_LSetCell},
+    {0xA9E7, (int32_t)0x5Cu, "LSetSelect", CONV_STACK, 10, 0, glue_LSetSelect},
+    {0xA9E7, (int32_t)0x60u, "LSize", CONV_STACK, 8, 0, glue_LSize},
+    {0xA9E7, (int32_t)0x64u, "LUpdate", CONV_STACK, 8, 0, glue_LUpdate},
     {0xA82D, (int32_t)0x100u, "InitEditionPackVersion", CONV_STACK, 2, 2, 0},
     {0xA82D, (int32_t)0x206u, "UnRegisterSection", CONV_STACK, 4, 2, 0},
     {0xA82D, (int32_t)0x208u, "IsRegisteredSection", CONV_STACK, 4, 2, 0},
