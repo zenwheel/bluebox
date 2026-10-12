@@ -582,7 +582,11 @@ int16_t tb_SndChannelStatus(gaddr chan, int16_t length, gaddr statusp)
     channel *c = find(chan);
     if (!c)
         return badChannel;
-    gmemset(statusp, 0, (uint32_t)length);
+    /* At most an SCStatus (24 bytes), whatever length the caller claims. */
+    if (length > 24)
+        length = 24;
+    if (length > 0)
+        gmemset(statusp, 0, (uint32_t)length);
     pump(c);
     bool busy = c->head != c->tail || now_ns() < c->busy_until || c->db;
     if (length >= 16) {
@@ -594,7 +598,10 @@ int16_t tb_SndChannelStatus(gaddr chan, int16_t length, gaddr statusp)
 
 int16_t tb_SndManagerStatus(int16_t length, gaddr statusp)
 {
-    gmemset(statusp, 0, (uint32_t)length);
+    if (length > 6) /* an SMStatus */
+        length = 6;
+    if (length > 0)
+        gmemset(statusp, 0, (uint32_t)length);
     if (length >= 2)
         wr16(statusp, 16); /* smMaxCPULoad: any value; we have plenty */
     return noErr;
