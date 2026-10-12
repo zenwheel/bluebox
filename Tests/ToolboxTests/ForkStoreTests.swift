@@ -156,4 +156,22 @@ struct ForkStoreTests {
         var err = [CChar](repeating: 0, count: 256)
         #expect(!rsrc_decompress(&res, res.count, &out, &outLen, &err, err.count))
     }
+
+    @Test func adcLiteralsAndBackReferences() {
+        // literal "abc"; two-byte code: copy 6 from distance 3; three-byte code:
+        // copy 5 from distance 1 (overlapping run of the last byte).
+        let input: [UInt8] = [0x82, 0x61, 0x62, 0x63,  // literal, 3 bytes
+                              0x0C, 0x02,              // len ((0x0C>>2)&0xF)+3 = 6, dist 2+1 = 3
+                              0x41, 0x00, 0x00]        // len (1)+4 = 5, dist 0+1 = 1
+        var out = [UInt8](repeating: 0, count: 64)
+        let n = adc_decompress(input, input.count, &out, out.count)
+        #expect(n == 14)
+        #expect(Array(out[0..<14]) == Array("abcabcabcccccc".utf8))
+    }
+
+    @Test func adcRejectsReferencesBeforeTheStart() {
+        let input: [UInt8] = [0x0C, 0x05]
+        var out = [UInt8](repeating: 0, count: 16)
+        #expect(adc_decompress(input, input.count, &out, out.count) == -1)
+    }
 }

@@ -83,7 +83,7 @@ private func readPrefix(_ path: String, _ n: Int = 2048) -> [UInt8] {
 
 private let stuffItSignatures: Set<String> = ["SIT!", "ST46", "ST50", "ST60", "ST65", "STin", "STi2", "STi3", "STi4"]
 private let archiveTypes: Set<String> = ["SIT!", "SITD", "SIT5", "SITX", "PACT", "BnHq"]
-private let archiveCreators: Set<String> = ["SIT!", "SITx", "CPCT", "aust", "BnHq"]
+private let archiveCreators: Set<String> = ["SIT!", "SITx", "CPCT", "aust", "BnHq", "ArcF"]
 private let archiveExtensions: Set<String> = ["sit", "sea", "cpt", "hqx"]
 private let diskTypes: Set<String> = ["dImg", "rohd", "dCpy", "ddsk", "hdsk"]
 private let diskExtensions: Set<String> = ["img", "image", "dsk", "dc42", "iso", "toast", "hfs", "cdr", "disk"]
@@ -109,7 +109,9 @@ private func looksLikeArchiveData(_ b: [UInt8]) -> Bool {
 
 private func isArchive(type: UInt32, creator: UInt32, name: String, data: [UInt8]) -> Bool {
     let t = fourCCString(type), c = fourCCString(creator)
-    if archiveTypes.contains(t) || (archiveCreators.contains(c) && t != "APPL") { return true }
+    if looksLikeArchiveData(data) { return true }
+    // Types alone are not enough: Word settings files, for one, are 'SITD'.
+    if archiveTypes.contains(t) && archiveCreators.contains(c) { return true }
     if t == "APPL" && (c == "aust" || c == "EXTR") { return true } // self-extracting archives
     let ext = (name as NSString).pathExtension.lowercased()
     return archiveExtensions.contains(ext) || looksLikeArchiveData(data)
@@ -131,8 +133,14 @@ func sidecarPath(_ path: String) -> String {
 
 func classify(_ path: String) -> InputKind {
     var prefix = readPrefix(path)
-    if macbinary_detect(&prefix, prefix.count) { return .macBinary }
-    if FileManager.default.fileExists(atPath: sidecarPath(path)) {
+    let hasSidecar = FileManager.default.fileExists(atPath: sidecarPath(path))
+    let ext = (path as NSString).pathExtension.lowercased()
+    // The MacBinary I check is weak; a file that already has Mac forks is only
+    // MacBinary if it says so in its name.
+    if macbinary_detect(&prefix, prefix.count) && (!hasSidecar || ext == "bin" || ext == "macbin") {
+        return .macBinary
+    }
+    if hasSidecar {
         // An AppleDouble file may itself be an archive (e.g. a .sit with its forks split out).
         var f = mac_file()
         var err = [CChar](repeating: 0, count: 256)
@@ -147,7 +155,6 @@ func classify(_ path: String) -> InputKind {
         }
         return .appleDouble
     }
-    let ext = (path as NSString).pathExtension.lowercased()
     if archiveExtensions.contains(ext) || looksLikeArchiveData(prefix) { return .archive }
     if diskExtensions.contains(ext) && looksLikeDiskData(prefix) { return .diskImage }
     if looksLikeDiskData(prefix) { return .diskImage }
@@ -225,11 +232,15 @@ private func normalise(_ dir: String, depth: Int, notes: inout [String]) throws 
         if isDir.boolValue { continue }
         switch classify(path) {
         case .macBinary:
-            try decodeMacBinary(path, into: dir, depth: depth, notes: &notes)
-            try? fm.removeItem(atPath: path) // only an encoding wrapper
+            do {
+                try decodeMacBinary(path, into: dir, depth: depth, notes: &notes)
+                try? fm.removeItem(atPath: path) // only an encoding wrapper
+            } catch {
+                notes.append("\(name): not decoded (\(error))")
+            }
         case .diskImage where depth < 4:
             do {
-                let vol = try extractDiskImage(path, into: dir)
+                let vol = try extractDiskImage(path, into: dir, notes: &notes)
                 notes.append("\(name): extracted volume \"\((vol as NSString).lastPathComponent)\"")
                 try normalise(vol, depth: depth + 1, notes: &notes)
             } catch {
@@ -394,7 +405,7 @@ private func cError(_ err: [CChar]) -> String {
 
 /// Extract every file of the image's HFS volume into a folder named after the
 /// volume, next to the image.  Returns that folder.
-func extractDiskImage(_ path: String, into dir: String) throws -> String {
+func extractDiskImage(_ path: String, into dir: String, notes: inout [String]) throws -> String {
     var f = mac_file()
     var err = [CChar](repeating: 0, count: 256)
     guard appledouble_read(path, &f, &err, err.count) else { throw IngestError.unreadable(path) }
@@ -444,7 +455,8 @@ func extractDiskImage(_ path: String, into dir: String) throws -> String {
         guard hfs_read_fork(v, &e, false, &data, &dlen, &err, err.count),
               hfs_read_fork(v, &e, true, &rsrc, &rlen, &err, err.count) else {
             free(data)
-            throw IngestError.diskImage(path, cError(err))
+            notes.append("\(macRoman(nameBytes)): skipped (\(cError(err)); image truncated or damaged?)")
+            continue
         }
         mf.data = data; mf.data_len = dlen
         mf.rsrc = rsrc; mf.rsrc_len = rlen
