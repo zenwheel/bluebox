@@ -947,3 +947,10 @@ void tb_CTab2Palette(gaddr ctab, gaddr pal, int16_t usage, int16_t tolerance)
         wr16(e + ColorInfo_ciTolerance_off, (uint16_t)tolerance);
     }
 }
+
+void tb_SetPortPix(gaddr pm)
+{
+    gaddr port = qd_port();
+    if (port && qd_port_is_color(port) && pm)
+        wr32(port + CGrafPort_portPixMap_off, pm);
+}

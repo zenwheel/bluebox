@@ -1757,6 +1757,21 @@ static void glue_CTabChanged(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CalcCMask(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_matchdata = (int32_t)cpu_pop32(c);
+    gaddr a_matchprocp = (gaddr)cpu_pop32(c);
+    gaddr a_seedrgbp = (gaddr)cpu_pop32(c);
+    gaddr a_dstrp = (gaddr)cpu_pop32(c);
+    gaddr a_srcrp = (gaddr)cpu_pop32(c);
+    gaddr a_dstbp = (gaddr)cpu_pop32(c);
+    gaddr a_srcbp = (gaddr)cpu_pop32(c);
+    tb_CalcCMask(a_srcbp, a_dstbp, a_srcrp, a_dstrp, a_seedrgbp, a_matchprocp, a_matchdata);
+    cpu_push32(c, ret);
+}
+
 static void glue_CalcMask(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2091,6 +2106,22 @@ static void glue_CopyBits(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CopyDeepMask(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_maskRgn = (gaddr)cpu_pop32(c);
+    int16_t a_mode = (int16_t)cpu_pop16(c);
+    gaddr a_dstRect = (gaddr)cpu_pop32(c);
+    gaddr a_maskRect = (gaddr)cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    gaddr a_dstBits = (gaddr)cpu_pop32(c);
+    gaddr a_maskBits = (gaddr)cpu_pop32(c);
+    gaddr a_srcBits = (gaddr)cpu_pop32(c);
+    tb_CopyDeepMask(a_srcBits, a_maskBits, a_dstBits, a_srcRect, a_maskRect, a_dstRect, a_mode, a_maskRgn);
+    cpu_push32(c, ret);
+}
+
 static void glue_CopyMask(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2154,6 +2185,15 @@ static void glue_CouldAlert(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t a_id = (int16_t)cpu_pop16(c);
     tb_CouldAlert(a_id);
+    cpu_push32(c, ret);
+}
+
+static void glue_CouldDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    tb_CouldDialog(a_id);
     cpu_push32(c, ret);
 }
 
@@ -3583,6 +3623,15 @@ static void glue_FreeAlert(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FreeDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    tb_FreeDialog(a_id);
+    cpu_push32(c, ret);
+}
+
 static void glue_FreeMem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4223,6 +4272,16 @@ static void glue_GetLabel(cpu68k *c, uint16_t trapword)
     gaddr a_label_color = (gaddr)cpu_pop32(c);
     int16_t a_label = (int16_t)cpu_pop16(c);
     int16_t r = tb_GetLabel(a_label, a_label_color, a_label_string);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetLastEditionContainerUsed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_container = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetLastEditionContainerUsed(a_container);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -5505,6 +5564,16 @@ static void glue_InitDialogs(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InitEditionPackVersion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_unused = (int16_t)cpu_pop16(c);
+    int16_t r = tb_InitEditionPackVersion(a_unused);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InitFonts(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5770,6 +5839,16 @@ static void glue_IsDialogEvent(cpu68k *c, uint16_t trapword)
     gaddr a_evt = (gaddr)cpu_pop32(c);
     int8_t r = tb_IsDialogEvent(a_evt);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsRegisteredSection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_section = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IsRegisteredSection(a_section);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -6741,6 +6820,16 @@ static void glue_NewPtr(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_NewPublisherDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewPublisherDialog(a_reply);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewRgn(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6770,6 +6859,16 @@ static void glue_NewString(cpu68k *c, uint16_t trapword)
     gaddr a_s = (gaddr)cpu_pop32(c);
     gaddr r = tb_NewString(a_s);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewSubscriberDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewSubscriberDialog(a_reply);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -7048,6 +7147,14 @@ static void glue_PBDirCreate(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBEject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    int16_t r = tb_PBEject(a_pb);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBFlushFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7255,6 +7362,22 @@ static void glue_PBKillIO(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBMountVol(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    int16_t r = tb_PBMountVol(a_pb);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBOffLine(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    int16_t r = tb_PBOffLine(a_pb);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBOpen(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7378,6 +7501,14 @@ static void glue_PBStatus(cpu68k *c, uint16_t trapword)
     gaddr a_pbp = (gaddr)c->a[0];
     bool a_a = (trapword & 0x400) != 0;
     int16_t r = tb_PBStatus(a_pbp, a_a);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBUnmountVol(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    int16_t r = tb_PBUnmountVol(a_pb);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -8448,6 +8579,18 @@ static void glue_RectRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RegisterSection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_alias_was_updated_p_out = (gaddr)cpu_pop32(c);
+    gaddr a_section = (gaddr)cpu_pop32(c);
+    gaddr a_section_doc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RegisterSection(a_section_doc, a_section, a_alias_was_updated_p_out);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ReleaseResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8794,6 +8937,32 @@ static void glue_SectRgn(cpu68k *c, uint16_t trapword)
     gaddr a_s2 = (gaddr)cpu_pop32(c);
     gaddr a_s1 = (gaddr)cpu_pop32(c);
     tb_SectRgn(a_s1, a_s2, a_dest);
+    cpu_push32(c, ret);
+}
+
+static void glue_SectionOptionsDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SectionOptionsDialog(a_reply);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SeedCFill(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_matchdata = (int32_t)cpu_pop32(c);
+    gaddr a_matchprocp = (gaddr)cpu_pop32(c);
+    int16_t a_seedv = (int16_t)cpu_pop16(c);
+    int16_t a_seedh = (int16_t)cpu_pop16(c);
+    gaddr a_dstrp = (gaddr)cpu_pop32(c);
+    gaddr a_srcrp = (gaddr)cpu_pop32(c);
+    gaddr a_dstbp = (gaddr)cpu_pop32(c);
+    gaddr a_srcbp = (gaddr)cpu_pop32(c);
+    tb_SeedCFill(a_srcbp, a_dstbp, a_srcrp, a_dstrp, a_seedh, a_seedv, a_matchprocp, a_matchdata);
     cpu_push32(c, ret);
 }
 
@@ -9348,6 +9517,15 @@ static void glue_SetPortBits(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_bm = (gaddr)cpu_pop32(c);
     tb_SetPortBits(a_bm);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetPortPix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    tb_SetPortPix(a_arg0);
     cpu_push32(c, ret);
 }
 
@@ -10901,6 +11079,16 @@ static void glue_TruncString(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UnRegisterSection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_section = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UnRegisterSection(a_section);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UnionRect(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11182,8 +11370,8 @@ const trap_sig trap_sigs[] = {
     {0xA00B, -1, "PBRename", CONV_REG, 0, 0, glue_PBRename},
     {0xA00C, -1, "PBGetFInfo", CONV_REG, 0, 0, glue_PBGetFInfo},
     {0xA00D, -1, "PBSetFInfo", CONV_REG, 0, 0, glue_PBSetFInfo},
-    {0xA00E, -1, "PBUnmountVol", CONV_REG, 0, 0, 0},
-    {0xA00F, -1, "PBMountVol", CONV_REG, 0, 0, 0},
+    {0xA00E, -1, "PBUnmountVol", CONV_REG, 0, 0, glue_PBUnmountVol},
+    {0xA00F, -1, "PBMountVol", CONV_REG, 0, 0, glue_PBMountVol},
     {0xA010, -1, "PBAllocate", CONV_REG, 0, 0, glue_PBAllocate},
     {0xA011, -1, "PBGetEOF", CONV_REG, 0, 0, glue_PBGetEOF},
     {0xA012, -1, "PBSetEOF", CONV_REG, 0, 0, glue_PBSetEOF},
@@ -11191,7 +11379,7 @@ const trap_sig trap_sigs[] = {
     {0xA014, -1, "PBGetVol", CONV_REG, 0, 0, glue_PBGetVol},
     {0xA015, -1, "PBSetVol", CONV_REG, 0, 0, glue_PBSetVol},
     {0xA016, -1, "FInitQueue", CONV_STACK, 0, 0, 0},
-    {0xA017, -1, "PBEject", CONV_REG, 0, 0, 0},
+    {0xA017, -1, "PBEject", CONV_REG, 0, 0, glue_PBEject},
     {0xA018, -1, "PBGetFPos", CONV_REG, 0, 0, glue_PBGetFPos},
     {0xA01B, -1, "SetZone", CONV_REG, 0, 0, glue_SetZone},
     {0xA01C, -1, "FreeMem", CONV_REG, 0, 0, glue_FreeMem},
@@ -11213,7 +11401,7 @@ const trap_sig trap_sigs[] = {
     {0xA032, -1, "FlushEvents", CONV_REG, 0, 0, glue_FlushEvents},
     {0xA033, -1, "VInstall", CONV_REG, 0, 0, glue_VInstall},
     {0xA034, -1, "VRemove", CONV_REG, 0, 0, glue_VRemove},
-    {0xA035, -1, "PBOffLine", CONV_REG, 0, 0, 0},
+    {0xA035, -1, "PBOffLine", CONV_REG, 0, 0, glue_PBOffLine},
     {0xA036, -1, "MoreMasters", CONV_STACK, 0, 0, glue_MoreMasters},
     {0xA038, -1, "WriteParam", CONV_REG, 0, 0, 0},
     {0xA039, -1, "ReadDateTime", CONV_REG, 0, 0, glue_ReadDateTime},
@@ -11626,8 +11814,8 @@ const trap_sig trap_sigs[] = {
     {0xA976, -1, "GetKeys", CONV_STACK, 4, 0, glue_GetKeys},
     {0xA977, -1, "WaitMouseUp", CONV_STACK, 0, 2, glue_WaitMouseUp},
     {0xA978, -1, "UpdateDialog", CONV_STACK, 8, 0, glue_UpdateDialog},
-    {0xA979, -1, "CouldDialog", CONV_STACK, 2, 0, 0},
-    {0xA97A, -1, "FreeDialog", CONV_STACK, 2, 0, 0},
+    {0xA979, -1, "CouldDialog", CONV_STACK, 2, 0, glue_CouldDialog},
+    {0xA97A, -1, "FreeDialog", CONV_STACK, 2, 0, glue_FreeDialog},
     {0xA97B, -1, "InitDialogs", CONV_STACK, 4, 0, glue_InitDialogs},
     {0xA97C, -1, "GetNewDialog", CONV_STACK, 10, 4, glue_GetNewDialog},
     {0xA97D, -1, "NewDialog", CONV_STACK, 30, 4, glue_NewDialog},
@@ -11753,7 +11941,7 @@ const trap_sig trap_sigs[] = {
     {0xAA03, -1, "NewPixMap", CONV_STACK, 0, 4, glue_NewPixMap},
     {0xAA04, -1, "DisposePixMap", CONV_STACK, 4, 0, glue_DisposePixMap},
     {0xAA05, -1, "CopyPixMap", CONV_STACK, 8, 0, glue_CopyPixMap},
-    {0xAA06, -1, "SetPortPix", CONV_STACK, 4, 0, 0},
+    {0xAA06, -1, "SetPortPix", CONV_STACK, 4, 0, glue_SetPortPix},
     {0xAA07, -1, "NewPixPat", CONV_STACK, 0, 4, glue_NewPixPat},
     {0xAA08, -1, "DisposePixPat", CONV_STACK, 4, 0, glue_DisposePixPat},
     {0xAA09, -1, "CopyPixPat", CONV_STACK, 8, 0, glue_CopyPixPat},
@@ -11825,9 +12013,9 @@ const trap_sig trap_sigs[] = {
     {0xAA4C, -1, "DelSearch", CONV_STACK, 4, 0, glue_DelSearch},
     {0xAA4D, -1, "DelComp", CONV_STACK, 4, 0, glue_DelComp},
     {0xAA4E, -1, "SetStdCProcs", CONV_STACK, 4, 0, glue_SetStdCProcs},
-    {0xAA4F, -1, "CalcCMask", CONV_STACK, 28, 0, 0},
-    {0xAA50, -1, "SeedCFill", CONV_STACK, 28, 0, 0},
-    {0xAA51, -1, "CopyDeepMask", CONV_STACK, 30, 0, 0},
+    {0xAA4F, -1, "CalcCMask", CONV_STACK, 28, 0, glue_CalcCMask},
+    {0xAA50, -1, "SeedCFill", CONV_STACK, 28, 0, glue_SeedCFill},
+    {0xAA51, -1, "CopyDeepMask", CONV_STACK, 30, 0, glue_CopyDeepMask},
     {0xAA60, -1, "DeleteMCEntries", CONV_STACK, 4, 0, glue_DeleteMCEntries},
     {0xAA61, -1, "GetMCInfo", CONV_STACK, 0, 4, glue_GetMCInfo},
     {0xAA62, -1, "SetMCInfo", CONV_STACK, 4, 0, glue_SetMCInfo},
@@ -12067,17 +12255,17 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9E7, (int32_t)0x5Cu, "LSetSelect", CONV_STACK, 10, 0, glue_LSetSelect},
     {0xA9E7, (int32_t)0x60u, "LSize", CONV_STACK, 8, 0, glue_LSize},
     {0xA9E7, (int32_t)0x64u, "LUpdate", CONV_STACK, 8, 0, glue_LUpdate},
-    {0xA82D, (int32_t)0x100u, "InitEditionPackVersion", CONV_STACK, 2, 2, 0},
-    {0xA82D, (int32_t)0x206u, "UnRegisterSection", CONV_STACK, 4, 2, 0},
-    {0xA82D, (int32_t)0x208u, "IsRegisteredSection", CONV_STACK, 4, 2, 0},
+    {0xA82D, (int32_t)0x100u, "InitEditionPackVersion", CONV_STACK, 2, 2, glue_InitEditionPackVersion},
+    {0xA82D, (int32_t)0x206u, "UnRegisterSection", CONV_STACK, 4, 2, glue_UnRegisterSection},
+    {0xA82D, (int32_t)0x208u, "IsRegisteredSection", CONV_STACK, 4, 2, glue_IsRegisteredSection},
     {0xA82D, (int32_t)0x210u, "DeleteEditionContainerFile", CONV_STACK, 4, 2, 0},
     {0xA82D, (int32_t)0x224u, "GoToPublisherSection", CONV_STACK, 4, 2, 0},
-    {0xA82D, (int32_t)0x226u, "GetLastEditionContainerUsed", CONV_STACK, 4, 2, 0},
+    {0xA82D, (int32_t)0x226u, "GetLastEditionContainerUsed", CONV_STACK, 4, 2, glue_GetLastEditionContainerUsed},
     {0xA82D, (int32_t)0x22Au, "GetEditionOpenerProc", CONV_STACK, 4, 2, 0},
     {0xA82D, (int32_t)0x22Cu, "SetEditionOpenerProc", CONV_STACK, 4, 2, 0},
-    {0xA82D, (int32_t)0x232u, "NewSubscriberDialog", CONV_STACK, 4, 2, 0},
-    {0xA82D, (int32_t)0x236u, "NewPublisherDialog", CONV_STACK, 4, 2, 0},
-    {0xA82D, (int32_t)0x23Au, "SectionOptionsDialog", CONV_STACK, 4, 2, 0},
+    {0xA82D, (int32_t)0x232u, "NewSubscriberDialog", CONV_STACK, 4, 2, glue_NewSubscriberDialog},
+    {0xA82D, (int32_t)0x236u, "NewPublisherDialog", CONV_STACK, 4, 2, glue_NewPublisherDialog},
+    {0xA82D, (int32_t)0x23Au, "SectionOptionsDialog", CONV_STACK, 4, 2, glue_SectionOptionsDialog},
     {0xA82D, (int32_t)0x316u, "CloseEdition", CONV_STACK, 6, 2, 0},
     {0xA82D, (int32_t)0x40Cu, "AssociateSection", CONV_STACK, 8, 2, 0},
     {0xA82D, (int32_t)0x412u, "OpenEdition", CONV_STACK, 8, 2, 0},
@@ -12085,7 +12273,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA82D, (int32_t)0x50Eu, "CreateEditionContainerFile", CONV_STACK, 10, 2, 0},
     {0xA82D, (int32_t)0x52Eu, "CallEditionOpenerProc", CONV_STACK, 10, 2, 0},
     {0xA82D, (int32_t)0x530u, "CallFormatIOProc", CONV_STACK, 10, 2, 0},
-    {0xA82D, (int32_t)0x604u, "RegisterSection", CONV_STACK, 12, 2, 0},
+    {0xA82D, (int32_t)0x604u, "RegisterSection", CONV_STACK, 12, 2, glue_RegisterSection},
     {0xA82D, (int32_t)0x618u, "EditionHasFormat", CONV_STACK, 12, 2, 0},
     {0xA82D, (int32_t)0x61Eu, "GetEditionFormatMark", CONV_STACK, 12, 2, 0},
     {0xA82D, (int32_t)0x620u, "SetEditionFormatMark", CONV_STACK, 12, 2, 0},

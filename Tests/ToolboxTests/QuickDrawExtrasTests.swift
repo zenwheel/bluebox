@@ -70,6 +70,24 @@ extension Classic {
             GrafPort_set_grafProcs(rd32(port), 0)
         }
 
+        @Test func seedFillAndColourMask() {
+            let gw = offscreen()
+            tb_FrameRect(rect(5, 5, 15, 15))
+            let src = gw + 2 // the port's bits, as CopyBits takes them
+            // A 1-bit 32x20 mask bitmap.
+            let bits = tb_NewPtr(4 * 20, false, true), bm = tb_NewPtr(14, false, true)
+            wr32(bm, bits); wr16(bm + 4, 4)
+            for (i, v) in [0, 0, 20, 32].enumerated() { wr16(bm + 6 + UInt32(i * 2), UInt16(v)) }
+            func bit(_ x: Int, _ y: Int) -> Bool { rd8(bits + UInt32(y * 4 + x / 8)) & UInt8(0x80 >> (x % 8)) != 0 }
+            let r = rect(0, 0, 20, 20)
+            tb_SeedCFill(src, bm, r, r, 10, 10, 0, 0)
+            #expect(bit(10, 10) && !bit(2, 2) && !bit(5, 5))
+            for i in 0..<80 { wr8(bits + UInt32(i), 0) }
+            let black = tb_NewPtr(6, false, true)
+            tb_CalcCMask(src, bm, r, r, black, 0, 0)
+            #expect(bit(10, 10) && bit(5, 5) && !bit(2, 2))
+        }
+
         @Test func bitMapToRegion() {
             launchTestApp()
             _ = initToolbox()

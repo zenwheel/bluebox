@@ -150,3 +150,15 @@ void tb_HSL2RGB(gaddr hsl, gaddr rgb)
     tb_HSV2RGB(tmp, rgb);
     tb_DisposePtr(tmp);
 }
+
+/* ---- Edition Manager (Pack11): publishing and subscribing ----
+ * Applications start it at launch; there are no editions to share. */
+
+int16_t tb_InitEditionPackVersion(int16_t unused) { return noErr; }
+int16_t tb_RegisterSection(gaddr doc, gaddr section, gaddr updated) { return -450; /* editionMgrInitErr */ }
+int16_t tb_UnRegisterSection(gaddr section) { return noErr; }
+int16_t tb_IsRegisteredSection(gaddr section) { return -463; /* notRegisteredSectionErr */ }
+int16_t tb_GetLastEditionContainerUsed(gaddr container) { return fnfErr; }
+int16_t tb_NewSubscriberDialog(gaddr reply) { return -128; /* userCanceledErr */ }
+int16_t tb_NewPublisherDialog(gaddr reply) { return -128; }
+int16_t tb_SectionOptionsDialog(gaddr reply) { return -128; }

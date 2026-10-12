@@ -1822,3 +1822,9 @@ int16_t tb_PBAllocate(gaddr pb, bool async)
     fcb_sync((int16_t)rd16(pb + IOParam_ioRefNum_off));
     return err;
 }
+
+/* There is one volume, the host's, and it stays mounted. */
+int16_t tb_PBMountVol(gaddr pb) { return -56; /* nsDrvErr: no such drive */ }
+int16_t tb_PBUnmountVol(gaddr pb) { return fBsyErr; }
+int16_t tb_PBEject(gaddr pb) { return -56; }
+int16_t tb_PBOffLine(gaddr pb) { return -56; }

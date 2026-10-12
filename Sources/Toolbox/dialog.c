@@ -150,8 +150,12 @@ int16_t tb_Alert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_PLAI
 int16_t tb_StopAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_STOP); }
 int16_t tb_NoteAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_NOTE); }
 int16_t tb_CautionAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_CAUTION); }
-void tb_CouldAlert(int16_t id) {}
-void tb_FreeAlert(int16_t id) {}
 void tb_ErrorSound(gaddr sp) {}
 int16_t tb_GetAlertStage(void) { return (int16_t)rd16(LM_ACount); }
 void tb_ResetAlertStage(void) { wr16(LM_ACount, (uint16_t)-1); }
+
+/* Loading dialog and alert resources ahead of time: nothing to do now. */
+void tb_CouldDialog(int16_t id) {}
+void tb_FreeDialog(int16_t id) {}
+void tb_CouldAlert(int16_t id) {}
+void tb_FreeAlert(int16_t id) {}

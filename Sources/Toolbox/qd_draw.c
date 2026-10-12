@@ -1164,3 +1164,130 @@ void tb_CalcMask(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t hei
     free(stack);
     free(outside);
 }
+
+/* ---------------------------------------------------------------------- */
+/* Colour masks and copying through them */
+
+/* CopyDeepMask: the mask's nonzero pixels, placed on dstRect, limit the
+ * copy (with maskRgn too).  The mask is not scaled. */
+void tb_CopyDeepMask(gaddr src, gaddr mask, gaddr dst, gaddr src_rect, gaddr mask_rect, gaddr dst_rect, int16_t mode,
+                     gaddr mask_rgn)
+{
+    pixdst m = bits_at(resolve_bits(mask));
+    qrect mr = qrect_get(mask_rect), dr = qrect_get(dst_rect);
+    hrgn shape, row;
+    hrgn_init(&shape);
+    hrgn_init(&row);
+    hrgn_rect(&shape, (qrect){ 0, 0, 0, 0 });
+    for (int y = mr.top; y < mr.bottom; y++) {
+        int run = -1;
+        for (int x = mr.left; x <= mr.right; x++) {
+            bool on = x < mr.right && y >= m.bounds.top && y < m.bounds.bottom && x >= m.bounds.left &&
+                      x < m.bounds.right && get_px(&m, x - m.bounds.left, y - m.bounds.top) != 0;
+            if (on && run < 0)
+                run = x;
+            if (!on && run >= 0) {
+                int oy = dr.top + (y - mr.top), ox = dr.left - mr.left;
+                hrgn_rect(&row, (qrect){ (int16_t)oy, (int16_t)(run + ox), (int16_t)(oy + 1), (int16_t)(x + ox) });
+                hrgn_op(&shape, &shape, &row, RGN_UNION);
+                run = -1;
+            }
+        }
+    }
+    if (mask_rgn) {
+        rgn_read(mask_rgn, &row);
+        hrgn_op(&shape, &shape, &row, RGN_SECT);
+    }
+    copy_bits(resolve_bits(src), resolve_bits(dst), qrect_get(src_rect), dr, mode, &shape);
+    hrgn_free(&shape);
+    hrgn_free(&row);
+}
+
+/* Flood fills over a colour image, producing a 1-bit mask in dst. */
+static void set_mask_bit(gaddr dst, int col, int row, bool on)
+{
+    pixdst d = bits_at(resolve_bits(dst));
+    if (col >= 0 && row >= 0 && col < d.bounds.right - d.bounds.left && row < d.bounds.bottom - d.bounds.top)
+        put_px(&d, col, row, on ? 1 : 0);
+}
+
+static void flood(const pixdst *s, qrect sr, uint8_t *mark, bool (*pass)(uint32_t, uint32_t), uint32_t key,
+                  int sx, int sy)
+{
+    /* Pixels are marked as they are pushed, so each is on the stack once. */
+    int w = sr.right - sr.left, h = sr.bottom - sr.top;
+    if (sx < 0 || sy < 0 || sx >= w || sy >= h || mark[sy * w + sx] ||
+        !pass(get_px(s, sr.left + sx - s->bounds.left, sr.top + sy - s->bounds.top), key))
+        return;
+    int *stack = malloc(sizeof(int) * 2 * (size_t)(w * h));
+    int n = 0;
+    mark[sy * w + sx] = 1;
+    stack[n++] = sx;
+    stack[n++] = sy;
+    while (n) {
+        int y = stack[--n], x = stack[--n];
+        int nb[8] = { x + 1, y, x - 1, y, x, y + 1, x, y - 1 };
+        for (int k = 0; k < 8; k += 2) {
+            int nx = nb[k], ny = nb[k + 1];
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h || mark[ny * w + nx])
+                continue;
+            if (!pass(get_px(s, sr.left + nx - s->bounds.left, sr.top + ny - s->bounds.top), key))
+                continue;
+            mark[ny * w + nx] = 1;
+            stack[n++] = nx;
+            stack[n++] = ny;
+        }
+    }
+    free(stack);
+}
+
+static bool same_px(uint32_t v, uint32_t key) { return v == key; }
+static bool other_px(uint32_t v, uint32_t key) { return v != key; }
+
+/* SeedCFill: the area around (seedH, seedV) of the seed pixel's colour. */
+void tb_SeedCFill(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, int16_t seed_h, int16_t seed_v, gaddr proc,
+                  int32_t data)
+{
+    pixdst s = bits_at(resolve_bits(src));
+    qrect sr = qrect_get(src_rect);
+    int w = sr.right - sr.left, h = sr.bottom - sr.top;
+    if (w <= 0 || h <= 0 || seed_h < sr.left || seed_v < sr.top || seed_h >= sr.right || seed_v >= sr.bottom)
+        return;
+    uint8_t *mark = calloc((size_t)(w * h), 1);
+    uint32_t key = get_px(&s, seed_h - s.bounds.left, seed_v - s.bounds.top);
+    flood(&s, sr, mark, same_px, key, seed_h - sr.left, seed_v - sr.top);
+    qrect dr = qrect_get(dst_rect);
+    pixdst d = bits_at(resolve_bits(dst));
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            set_mask_bit(dst, dr.left - d.bounds.left + x, dr.top - d.bounds.top + y, mark[y * w + x]);
+    free(mark);
+}
+
+/* CalcCMask: what can't be reached from the rectangle's edges without
+ * crossing pixels of the seed colour. */
+void tb_CalcCMask(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, gaddr seed_rgb, gaddr proc, int32_t data)
+{
+    pixdst s = bits_at(resolve_bits(src));
+    qrect sr = qrect_get(src_rect);
+    int w = sr.right - sr.left, h = sr.bottom - sr.top;
+    if (w <= 0 || h <= 0)
+        return;
+    uint16_t rgb[3] = { rd16(seed_rgb), rd16(seed_rgb + 2), rd16(seed_rgb + 4) };
+    uint32_t key = qd_rgb_px(s.depth, s.ctab, rgb);
+    uint8_t *mark = calloc((size_t)(w * h), 1);
+    for (int x = 0; x < w; x++) {
+        flood(&s, sr, mark, other_px, key, x, 0);
+        flood(&s, sr, mark, other_px, key, x, h - 1);
+    }
+    for (int y = 0; y < h; y++) {
+        flood(&s, sr, mark, other_px, key, 0, y);
+        flood(&s, sr, mark, other_px, key, w - 1, y);
+    }
+    qrect dr = qrect_get(dst_rect);
+    pixdst d = bits_at(resolve_bits(dst));
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            set_mask_bit(dst, dr.left - d.bounds.left + x, dr.top - d.bounds.top + y, !mark[y * w + x]);
+    free(mark);
+}
