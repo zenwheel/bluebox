@@ -155,6 +155,7 @@ void time_pump(void)
         return;
     in_interrupt = true;
     sound_pump(); /* sound completion ran at interrupt time too */
+    midi_pump();
     uint64_t t = now();
     for (int i = 0; i < MAX_TASKS; i++) {
         if (!timers[i].tm || !timers[i].active || timers[i].due > t)
@@ -193,6 +194,7 @@ void time_pump(void)
 
 void time_reset(void)
 {
+    midi_reset();
     memset(timers, 0, sizeof timers);
     memset(vbls, 0, sizeof vbls);
     vbl_ticks = 0;

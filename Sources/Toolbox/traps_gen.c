@@ -6526,6 +6526,391 @@ static void glue_MACEVersion(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MIDIConnectData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dstPortID = (int32_t)cpu_pop32(c);
+    int32_t a_dstClID = (int32_t)cpu_pop32(c);
+    int32_t a_srcPortID = (int32_t)cpu_pop32(c);
+    int32_t a_srcClID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_MIDIConnectData(a_srcClID, a_srcPortID, a_dstClID, a_dstPortID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIConnectTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dstPortID = (int32_t)cpu_pop32(c);
+    int32_t a_dstClID = (int32_t)cpu_pop32(c);
+    int32_t a_srcPortID = (int32_t)cpu_pop32(c);
+    int32_t a_srcClID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_MIDIConnectTime(a_srcClID, a_srcPortID, a_dstClID, a_dstPortID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIConvertTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_time = (int32_t)cpu_pop32(c);
+    int16_t a_dstFormat = (int16_t)cpu_pop16(c);
+    int16_t a_srcFormat = (int16_t)cpu_pop16(c);
+    int32_t r = tb_MIDIConvertTime(a_srcFormat, a_dstFormat, a_time);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIFlush(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIFlush(a_refnum);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetClRefCon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    int32_t r = tb_MIDIGetClRefCon(a_clientID);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetClientIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    gaddr r = tb_MIDIGetClientIcon(a_clientID);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetClientName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    tb_MIDIGetClientName(a_clientID, a_name);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetClients(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_MIDIGetClients();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetCurTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int32_t r = tb_MIDIGetCurTime(a_refnum);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetOffsetTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int32_t r = tb_MIDIGetOffsetTime(a_refnum);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetPortInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_portID = (int32_t)cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    gaddr r = tb_MIDIGetPortInfo(a_clientID, a_portID);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetPortName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int32_t a_portID = (int32_t)cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    tb_MIDIGetPortName(a_clientID, a_portID, a_name);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetPorts(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    gaddr r = tb_MIDIGetPorts(a_clientID);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetReadHook(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    gaddr r = tb_MIDIGetReadHook(a_refnum);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetRefCon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int32_t r = tb_MIDIGetRefCon(a_refnum);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetSync(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_MIDIGetSync(a_refnum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetTCFormat(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_MIDIGetTCFormat(a_refnum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIPoll(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_offsetTime = (int32_t)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIPoll(a_refnum, a_offsetTime);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIRemovePort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIRemovePort(a_refnum);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetClRefCon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    tb_MIDISetClRefCon(a_clientID, a_refCon);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetClientName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    tb_MIDISetClientName(a_clientID, a_name);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetCurTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_time = (int32_t)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetCurTime(a_refnum, a_time);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetOffsetTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_offsetTime = (int32_t)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetOffsetTime(a_refnum, a_offsetTime);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetPortName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int32_t a_portID = (int32_t)cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    tb_MIDISetPortName(a_clientID, a_portID, a_name);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetReadHook(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_hook = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetReadHook(a_refnum, a_hook);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetRefCon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetRefCon(a_refnum, a_refCon);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetRunRate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_time = (int32_t)cpu_pop32(c);
+    int16_t a_rate = (int16_t)cpu_pop16(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetRunRate(a_refnum, a_rate, a_time);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetSync(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_sync = (int16_t)cpu_pop16(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetSync(a_refnum, a_sync);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetTCFormat(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_format = (int16_t)cpu_pop16(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetTCFormat(a_refnum, a_format);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISignOut(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    tb_MIDISignOut(a_clientID);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIStartTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIStartTime(a_refnum);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIStopTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIStopTime(a_refnum);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIUnConnectData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dstPortID = (int32_t)cpu_pop32(c);
+    int32_t a_dstClID = (int32_t)cpu_pop32(c);
+    int32_t a_srcPortID = (int32_t)cpu_pop32(c);
+    int32_t a_srcClID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_MIDIUnConnectData(a_srcClID, a_srcPortID, a_dstClID, a_dstPortID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIUnConnectTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dstPortID = (int32_t)cpu_pop32(c);
+    int32_t a_dstClID = (int32_t)cpu_pop32(c);
+    int32_t a_srcPortID = (int32_t)cpu_pop32(c);
+    int32_t a_srcClID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_MIDIUnConnectTime(a_srcClID, a_srcPortID, a_dstClID, a_dstPortID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIWakeUp(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_timeProc = (gaddr)cpu_pop32(c);
+    int32_t a_period = (int32_t)cpu_pop32(c);
+    int32_t a_time = (int32_t)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIWakeUp(a_refnum, a_time, a_period, a_timeProc);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIWorldChanged(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    int8_t r = tb_MIDIWorldChanged(a_clientID);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIWritePacket(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_packet = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_MIDIWritePacket(a_refnum, a_packet);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MakeITable(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13040,13 +13425,50 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x14u, "SPBVersion", CONV_STACK, 0, 4, glue_SPBVersion},
     {0xA800, (int32_t)0x40004u, "FinaleUnknown2", CONV_STACK, 16, 2, glue_FinaleUnknown2},
     {0xA800, (int32_t)0x40010u, "Comp3to1", CONV_STACK, 28, 0, 0},
+    {0xA800, (int32_t)0x80004u, "MIDISignOut", CONV_STACK, 4, 0, glue_MIDISignOut},
     {0xA800, (int32_t)0x80010u, "Exp1to3", CONV_STACK, 28, 0, 0},
+    {0xA800, (int32_t)0xC0004u, "MIDIGetClients", CONV_STACK, 0, 4, glue_MIDIGetClients},
     {0xA800, (int32_t)0xC0008u, "SndSoundManagerVersion", CONV_STACK, 0, 4, glue_SndSoundManagerVersion},
     {0xA800, (int32_t)0xC0010u, "Comp6to1", CONV_STACK, 28, 0, 0},
+    {0xA800, (int32_t)0x100004u, "MIDIGetClientName", CONV_STACK, 8, 0, glue_MIDIGetClientName},
     {0xA800, (int32_t)0x100010u, "Exp1to6", CONV_STACK, 28, 0, 0},
+    {0xA800, (int32_t)0x140004u, "MIDISetClientName", CONV_STACK, 8, 0, glue_MIDISetClientName},
+    {0xA800, (int32_t)0x180004u, "MIDIGetPorts", CONV_STACK, 4, 4, glue_MIDIGetPorts},
     {0xA800, (int32_t)0x1C0004u, "DirectorUnknown4", CONV_STACK, 14, 2, glue_DirectorUnknown4},
+    {0xA800, (int32_t)0x200004u, "MIDIGetPortInfo", CONV_STACK, 8, 4, glue_MIDIGetPortInfo},
+    {0xA800, (int32_t)0x240004u, "MIDIConnectData", CONV_STACK, 16, 2, glue_MIDIConnectData},
+    {0xA800, (int32_t)0x280004u, "MIDIUnConnectData", CONV_STACK, 16, 2, glue_MIDIUnConnectData},
+    {0xA800, (int32_t)0x2C0004u, "MIDIConnectTime", CONV_STACK, 16, 2, glue_MIDIConnectTime},
+    {0xA800, (int32_t)0x300004u, "MIDIUnConnectTime", CONV_STACK, 16, 2, glue_MIDIUnConnectTime},
+    {0xA800, (int32_t)0x340004u, "MIDIFlush", CONV_STACK, 2, 0, glue_MIDIFlush},
+    {0xA800, (int32_t)0x380004u, "MIDIGetReadHook", CONV_STACK, 2, 4, glue_MIDIGetReadHook},
+    {0xA800, (int32_t)0x3C0004u, "MIDISetReadHook", CONV_STACK, 6, 0, glue_MIDISetReadHook},
     {0xA800, (int32_t)0x3C000Cu, "SpeechBusy", CONV_STACK, 0, 2, 0},
+    {0xA800, (int32_t)0x400004u, "MIDIGetPortName", CONV_STACK, 12, 0, glue_MIDIGetPortName},
     {0xA800, (int32_t)0x40000Cu, "SpeechBusySystemWide", CONV_STACK, 0, 2, 0},
+    {0xA800, (int32_t)0x440004u, "MIDISetPortName", CONV_STACK, 12, 0, glue_MIDISetPortName},
+    {0xA800, (int32_t)0x480004u, "MIDIWakeUp", CONV_STACK, 14, 0, glue_MIDIWakeUp},
+    {0xA800, (int32_t)0x4C0004u, "MIDIRemovePort", CONV_STACK, 2, 0, glue_MIDIRemovePort},
+    {0xA800, (int32_t)0x500004u, "MIDIGetSync", CONV_STACK, 2, 2, glue_MIDIGetSync},
+    {0xA800, (int32_t)0x540004u, "MIDISetSync", CONV_STACK, 4, 0, glue_MIDISetSync},
+    {0xA800, (int32_t)0x580004u, "MIDIGetCurTime", CONV_STACK, 2, 4, glue_MIDIGetCurTime},
+    {0xA800, (int32_t)0x5C0004u, "MIDISetCurTime", CONV_STACK, 6, 0, glue_MIDISetCurTime},
+    {0xA800, (int32_t)0x600004u, "MIDIStartTime", CONV_STACK, 2, 0, glue_MIDIStartTime},
+    {0xA800, (int32_t)0x640004u, "MIDIStopTime", CONV_STACK, 2, 0, glue_MIDIStopTime},
+    {0xA800, (int32_t)0x680004u, "MIDIPoll", CONV_STACK, 6, 0, glue_MIDIPoll},
+    {0xA800, (int32_t)0x6C0004u, "MIDIWritePacket", CONV_STACK, 6, 2, glue_MIDIWritePacket},
+    {0xA800, (int32_t)0x700004u, "MIDIWorldChanged", CONV_STACK, 4, 2, glue_MIDIWorldChanged},
+    {0xA800, (int32_t)0x740004u, "MIDIGetOffsetTime", CONV_STACK, 2, 4, glue_MIDIGetOffsetTime},
+    {0xA800, (int32_t)0x780004u, "MIDISetOffsetTime", CONV_STACK, 6, 0, glue_MIDISetOffsetTime},
+    {0xA800, (int32_t)0x7C0004u, "MIDIConvertTime", CONV_STACK, 8, 4, glue_MIDIConvertTime},
+    {0xA800, (int32_t)0x800004u, "MIDIGetRefCon", CONV_STACK, 2, 4, glue_MIDIGetRefCon},
+    {0xA800, (int32_t)0x840004u, "MIDISetRefCon", CONV_STACK, 6, 0, glue_MIDISetRefCon},
+    {0xA800, (int32_t)0x880004u, "MIDIGetClRefCon", CONV_STACK, 4, 4, glue_MIDIGetClRefCon},
+    {0xA800, (int32_t)0x8C0004u, "MIDISetClRefCon", CONV_STACK, 8, 0, glue_MIDISetClRefCon},
+    {0xA800, (int32_t)0x900004u, "MIDIGetTCFormat", CONV_STACK, 2, 2, glue_MIDIGetTCFormat},
+    {0xA800, (int32_t)0x940004u, "MIDISetTCFormat", CONV_STACK, 4, 0, glue_MIDISetTCFormat},
+    {0xA800, (int32_t)0x980004u, "MIDISetRunRate", CONV_STACK, 8, 0, glue_MIDISetRunRate},
+    {0xA800, (int32_t)0x9C0004u, "MIDIGetClientIcon", CONV_STACK, 4, 4, glue_MIDIGetClientIcon},
     {0xA800, (int32_t)0x108000Cu, "CountVoices", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x1100014u, "SPBSignOutDevice", CONV_STACK, 2, 2, 0},
     {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, glue_SndSetSysBeepState},

@@ -44,3 +44,388 @@
     dispatcher: FSDispatch
     selector: 0x39
     returnreg: D0
+
+# MIDI Manager: SoundDispatch tool 4, (routine << 16) | 4 in D0.
+# MIDISignIn (FinaleUnknown2), MIDIAddPort (DirectorUnknown4) and the
+# version call (DirectorUnknown3) are in multiversal under other names.
+
+- function:
+    name: MIDISignOut
+    args:
+      - name: clientID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x00080004
+
+- function:
+    name: MIDIGetClients
+    return: Handle
+    dispatcher: SoundDispatch
+    selector: 0x000C0004
+
+- function:
+    name: MIDIGetClientName
+    args:
+      - name: clientID
+        type: OSType
+      - name: name
+        type: StringPtr
+    dispatcher: SoundDispatch
+    selector: 0x00100004
+
+- function:
+    name: MIDISetClientName
+    args:
+      - name: clientID
+        type: OSType
+      - name: name
+        type: ConstStringPtr
+    dispatcher: SoundDispatch
+    selector: 0x00140004
+
+- function:
+    name: MIDIGetPorts
+    return: Handle
+    args:
+      - name: clientID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x00180004
+
+- function:
+    name: MIDIGetPortInfo
+    return: Handle
+    args:
+      - name: clientID
+        type: OSType
+      - name: portID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x00200004
+
+- function:
+    name: MIDIConnectData
+    return: OSErr
+    args:
+      - name: srcClID
+        type: OSType
+      - name: srcPortID
+        type: OSType
+      - name: dstClID
+        type: OSType
+      - name: dstPortID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x00240004
+
+- function:
+    name: MIDIUnConnectData
+    return: OSErr
+    args:
+      - name: srcClID
+        type: OSType
+      - name: srcPortID
+        type: OSType
+      - name: dstClID
+        type: OSType
+      - name: dstPortID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x00280004
+
+- function:
+    name: MIDIConnectTime
+    return: OSErr
+    args:
+      - name: srcClID
+        type: OSType
+      - name: srcPortID
+        type: OSType
+      - name: dstClID
+        type: OSType
+      - name: dstPortID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x002C0004
+
+- function:
+    name: MIDIUnConnectTime
+    return: OSErr
+    args:
+      - name: srcClID
+        type: OSType
+      - name: srcPortID
+        type: OSType
+      - name: dstClID
+        type: OSType
+      - name: dstPortID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x00300004
+
+- function:
+    name: MIDIFlush
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00340004
+
+- function:
+    name: MIDIGetReadHook
+    return: ProcPtr
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00380004
+
+- function:
+    name: MIDISetReadHook
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: hook
+        type: ProcPtr
+    dispatcher: SoundDispatch
+    selector: 0x003C0004
+
+- function:
+    name: MIDIGetPortName
+    args:
+      - name: clientID
+        type: OSType
+      - name: portID
+        type: OSType
+      - name: name
+        type: StringPtr
+    dispatcher: SoundDispatch
+    selector: 0x00400004
+
+- function:
+    name: MIDISetPortName
+    args:
+      - name: clientID
+        type: OSType
+      - name: portID
+        type: OSType
+      - name: name
+        type: ConstStringPtr
+    dispatcher: SoundDispatch
+    selector: 0x00440004
+
+- function:
+    name: MIDIWakeUp
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: time
+        type: LONGINT
+      - name: period
+        type: LONGINT
+      - name: timeProc
+        type: ProcPtr
+    dispatcher: SoundDispatch
+    selector: 0x00480004
+
+- function:
+    name: MIDIRemovePort
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x004C0004
+
+- function:
+    name: MIDIGetSync
+    return: INTEGER
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00500004
+
+- function:
+    name: MIDISetSync
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: sync
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00540004
+
+- function:
+    name: MIDIGetCurTime
+    return: LONGINT
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00580004
+
+- function:
+    name: MIDISetCurTime
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: time
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x005C0004
+
+- function:
+    name: MIDIStartTime
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00600004
+
+- function:
+    name: MIDIStopTime
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00640004
+
+- function:
+    name: MIDIPoll
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: offsetTime
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x00680004
+
+- function:
+    name: MIDIWritePacket
+    return: OSErr
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: packet
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x006C0004
+
+- function:
+    name: MIDIWorldChanged
+    return: Boolean
+    args:
+      - name: clientID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x00700004
+
+- function:
+    name: MIDIGetOffsetTime
+    return: LONGINT
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00740004
+
+- function:
+    name: MIDISetOffsetTime
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: offsetTime
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x00780004
+
+- function:
+    name: MIDIConvertTime
+    return: LONGINT
+    args:
+      - name: srcFormat
+        type: INTEGER
+      - name: dstFormat
+        type: INTEGER
+      - name: time
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x007C0004
+
+- function:
+    name: MIDIGetRefCon
+    return: LONGINT
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00800004
+
+- function:
+    name: MIDISetRefCon
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: refCon
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x00840004
+
+- function:
+    name: MIDIGetClRefCon
+    return: LONGINT
+    args:
+      - name: clientID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x00880004
+
+- function:
+    name: MIDISetClRefCon
+    args:
+      - name: clientID
+        type: OSType
+      - name: refCon
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x008C0004
+
+- function:
+    name: MIDIGetTCFormat
+    return: INTEGER
+    args:
+      - name: refnum
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00900004
+
+- function:
+    name: MIDISetTCFormat
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: format
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00940004
+
+- function:
+    name: MIDISetRunRate
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: rate
+        type: INTEGER
+      - name: time
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x00980004
+
+- function:
+    name: MIDIGetClientIcon
+    return: Handle
+    args:
+      - name: clientID
+        type: OSType
+    dispatcher: SoundDispatch
+    selector: 0x009C0004
