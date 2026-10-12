@@ -463,6 +463,7 @@ func postScriptLive(_ script: [String]) {
     installAlertHandler()
     installFileHandler()
     installLaunchHandler()
+    installColorPicker()
     installPrintHandlers()
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()

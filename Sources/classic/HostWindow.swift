@@ -246,6 +246,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     installAlertHandler()
     installFileHandler()
     installLaunchHandler()
+    installColorPicker()
     installPrintHandlers()
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()
@@ -362,6 +363,37 @@ func installLaunchHandler() {
         p.executableURL = exe
         p.arguments = args
         do { try p.run() } catch { return false }
+        return true
+    }, nil)
+}
+
+/// The Color Picker's GetColor: an alert with a colour well (which opens the
+/// system colour panel), run on the main thread while the emulator waits.
+func installColorPicker() {
+    machine_set_color_picker({ promptPtr, inPtr, outPtr, _ in
+        guard let inPtr, let outPtr else { return false }
+        let prompt = promptPtr.map { String(cString: $0) } ?? ""
+        let start = NSColor(srgbRed: CGFloat(inPtr[0]) / 65535, green: CGFloat(inPtr[1]) / 65535,
+                            blue: CGFloat(inPtr[2]) / 65535, alpha: 1)
+        var chosen: NSColor?
+        let ask = {
+            MainActor.assumeIsolated {
+                let alert = NSAlert()
+                alert.messageText = prompt.isEmpty ? "Choose a color:" : prompt
+                alert.addButton(withTitle: "OK")
+                alert.addButton(withTitle: "Cancel")
+                let well = NSColorWell(frame: NSRect(x: 0, y: 0, width: 160, height: 44))
+                well.color = start
+                alert.accessoryView = well
+                if alert.runModal() == .alertFirstButtonReturn { chosen = well.color }
+                NSColorPanel.shared.orderOut(nil)
+            }
+        }
+        if Thread.isMainThread { ask() } else { DispatchQueue.main.sync(execute: ask) }
+        guard let c = chosen?.usingColorSpace(.sRGB) else { return false }
+        outPtr[0] = UInt16(max(0, min(1, c.redComponent)) * 65535)
+        outPtr[1] = UInt16(max(0, min(1, c.greenComponent)) * 65535)
+        outPtr[2] = UInt16(max(0, min(1, c.blueComponent)) * 65535)
         return true
     }, nil)
 }

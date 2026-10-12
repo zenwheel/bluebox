@@ -72,5 +72,35 @@ extension Classic {
             #expect(rd8(dec) == 0 && Int16(bitPattern: rd16(dec + 2)) == -4)
             #expect(pstring(at: dec + 4) == "31416")
         }
+
+        @Test func fix2XLeavesTheResultAddress() {
+            let result = tb_NewPtr(10, false, true)
+            // PEA result; MOVE.L #$00018000,-(SP) (1.5); _Fix2X; MOVEA.L (SP)+,A2;
+            // then X2Fix back: CLR.L -(SP); MOVE.L A2,-(SP); _X2Fix; MOVE.L (SP)+,D5
+            let code = pea(result) + [0x2F3C, 0x0001, 0x8000, 0xA843, 0x245F,
+                                      0x42A7, 0x2F0A, 0xA844, 0x2A1F, 0xA9F4]
+            #expect(run(code) == "ExitToShell")
+            #expect(double(result) == 1.5)
+            #expect(cpu.pointee.a.2 == result)
+            #expect(cpu.pointee.d.5 == 0x0001_8000)
+        }
+
+        @Test func decimalStrings() {
+            let form = tb_NewPtr(4, false, true)
+            wr16(form, 1); wr16(form + 2, 2) // fixed, two places
+            let dec = tb_NewPtr(26, false, true)
+            let s = tb_NewPtr(256, false, true), idx = tb_NewPtr(2, false, true), ok = tb_NewPtr(2, false, true)
+            guestPString("  -12.345e1xyz", at: s)
+            wr16(idx, 1)
+            tb_ROMlib_Fpstr2dec(s, idx, dec, ok)
+            #expect(rd8(ok) == 1 && rd16(idx) == 12) // stops at 'x'
+            #expect(rd8(dec) == 1 && Int16(bitPattern: rd16(dec + 2)) == -2 && pstring(at: dec + 4) == "12345")
+            let out = tb_NewPtr(256, false, true)
+            tb_ROMlib_Fdec2str(form, dec, out)
+            #expect(pstring(at: out) == "-123.45")
+            wr16(form, 0); wr16(form + 2, 3) // floating, three digits
+            tb_ROMlib_Fdec2str(form, dec, out)
+            #expect(pstring(at: out) == "-1.23e+2")
+        }
     }
 }

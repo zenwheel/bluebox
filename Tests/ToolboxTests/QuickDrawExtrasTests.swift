@@ -123,5 +123,29 @@ extension Classic {
             #expect(tb_KeyTranslate(0, 0x0200 | 0x00, 0) == UInt32(UInt8(ascii: "A")))
             #expect(tb_KeyTranslate(0, 0x0012, 0) == UInt32(UInt8(ascii: "1")))
         }
+    
+    @Suite struct ColorPicker {
+        @Test func colourModelsRoundTrip() {
+            launchTestApp()
+            let rgb = tb_NewPtr(6, false, true), hsv = tb_NewPtr(6, false, true), back = tb_NewPtr(6, false, true)
+            wr16(rgb, 0xFFFF); wr16(rgb + 2, 0x8000); wr16(rgb + 4, 0)
+            tb_RGB2HSV(rgb, hsv)
+            #expect(rd16(hsv + 4) == 0xFFFF) // value: the brightest component
+            tb_HSV2RGB(hsv, back)
+            #expect(abs(Int(rd16(back + 2)) - 0x8000) < 4)
+            tb_RGB2HSL(rgb, hsv)
+            tb_HSL2RGB(hsv, back)
+            #expect(abs(Int(rd16(back + 2)) - 0x8000) < 4 && rd16(back) > 0xFFF0)
+            tb_RGB2CMY(rgb, back)
+            #expect(rd16(back) == 0 && rd16(back + 4) == 0xFFFF)
+            // Headless: GetColor is cancelled and gives the colour back unchanged.
+            #expect(tb_GetColor(0, 0, rgb, back) == 0 && rd16(back + 2) == 0x8000)
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (k, v) in [50, 50, 150, 250].enumerated() { wr16(r + UInt32(k * 2), UInt16(v)) }
+            let win = tb_NewWindow(0, r, 0, 0, 4, 0xFFFF_FFFF, 0, 0)
+            #expect(tb_GetWVariant(win) == 4)
+        }
     }
+}
 }

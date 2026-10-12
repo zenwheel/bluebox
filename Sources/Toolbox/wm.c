@@ -1355,3 +1355,5 @@ void tb_InitWindows(void)
     hrgn_free(&bar);
     wr8(LM_WWExist, 0);
 }
+
+int16_t tb_GetWVariant(gaddr w) { return w ? varcode(w) : 0; }

@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <time.h>
 
 #include "m68k.h"
 #include "tb_internal.h"
@@ -430,3 +432,174 @@ void raw_Elems68K(cpu68k *c, uint16_t tw)
 }
 
 void sane_reset(void) { env = 0; }
+
+/* ---------------------------------------------------------------------- */
+/* Toolbox Utilities' conversions to and from extended (Fix2X and friends). */
+
+/* FUNCTION Fix2X(x: Fixed): Extended: the caller pushed the result's
+ * address before x; it stays on the stack as the function result. */
+static void to_extended(cpu68k *c, double scale)
+{
+    uint32_t ret = cpu_pop32(c);
+    int32_t v = (int32_t)cpu_pop32(c);
+    gaddr result = cpu_pop32(c);
+    ext_put(result, v / scale);
+    cpu_push32(c, result);
+    cpu_push32(c, ret);
+}
+
+void raw_Fix2X(cpu68k *c, uint16_t tw) { to_extended(c, 65536.0); }
+void raw_Frac2X(cpu68k *c, uint16_t tw) { to_extended(c, 1073741824.0); }
+
+static int32_t from_extended(gaddr x, double scale)
+{
+    double v = ext_get(x) * scale;
+    if (isnan(v))
+        return INT32_MIN;
+    if (v >= 2147483647.0)
+        return INT32_MAX;
+    if (v <= -2147483648.0)
+        return INT32_MIN;
+    return (int32_t)lround(v);
+}
+
+int32_t tb_R_X2Fix(gaddr x) { return from_extended(x, 65536.0); }
+int32_t tb_R_X2Frac(gaddr x) { return from_extended(x, 1073741824.0); }
+
+/* Microseconds (A193): a 64-bit count, high half in A0 and low in D0. */
+void raw_Microseconds(cpu68k *c, uint16_t tw)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t us = (uint64_t)ts.tv_sec * 1000000u + (uint64_t)ts.tv_nsec / 1000u;
+    c->a[0] = (uint32_t)(us >> 32);
+    c->d[0] = (uint32_t)us;
+}
+
+/* GetVideoDefault (A080): no slot video parameters to report. */
+void raw_GetVideoDefault(cpu68k *c, uint16_t tw) { c->d[0] = 0; }
+
+/* ---------------------------------------------------------------------- */
+/* Pack7's decimal string conversions */
+
+/* Dec2Str: a decimal record as text, in the decform's style. */
+void tb_ROMlib_Fdec2str(gaddr form, gaddr dec, gaddr out)
+{
+    double v = dec_get(dec);
+    int style = (int16_t)rd16(form), digits = (int16_t)rd16(form + 2);
+    char buf[128];
+    if (isnan(v))
+        snprintf(buf, sizeof buf, "NAN(017)");
+    else if (isinf(v))
+        snprintf(buf, sizeof buf, v < 0 ? "-INF" : "INF");
+    else if (style == 1) { /* fixed */
+        if (digits < 0)
+            digits = 0;
+        if (digits > 60)
+            digits = 60;
+        snprintf(buf, sizeof buf, "%.*f", digits, v);
+    } else { /* floating: no padding in the exponent */
+        if (digits < 1)
+            digits = 1;
+        if (digits > 19)
+            digits = 19;
+        char tmp[64];
+        snprintf(tmp, sizeof tmp, "%.*e", digits - 1, v);
+        char *e = strchr(tmp, 'e');
+        int x = e ? atoi(e + 1) : 0;
+        if (e)
+            *e = 0;
+        snprintf(buf, sizeof buf, "%se%+d", tmp, x);
+    }
+    size_t n = strlen(buf);
+    if (n > 80)
+        n = 80;
+    wr8(out, (uint8_t)n);
+    gput(out + 1, buf, (uint32_t)n);
+}
+
+/* Str2Dec: the longest numeric prefix of s from *index on.  Pascal strings
+ * count from 1, C strings from 0. */
+static void str2dec(const char *s, int len, gaddr indexp, gaddr dec, gaddr valid, int base)
+{
+    int i = (int16_t)rd16(indexp) - base;
+    int start = i;
+    while (i < len && (s[i] == ' ' || s[i] == '\t'))
+        i++;
+    int sgn = 0;
+    if (i < len && (s[i] == '+' || s[i] == '-'))
+        sgn = s[i++] == '-';
+    /* All the mantissa's digits; frac of them follow the point. */
+    char all[256];
+    int na = 0, frac = 0;
+    bool point = false;
+    while (i < len && ((s[i] >= '0' && s[i] <= '9') || (s[i] == '.' && !point))) {
+        if (s[i] == '.')
+            point = true;
+        else if (na < 255) {
+            all[na++] = s[i];
+            frac += point;
+        }
+        i++;
+    }
+    int mant = na, lead = 0;
+    while (lead < na && all[lead] == '0')
+        lead++;
+    char digits[32];
+    int nd = na - lead < 19 ? na - lead : 19;
+    memcpy(digits, all + lead, (size_t)(nd > 0 ? nd : 0));
+    int exp = (na - lead - nd) - frac; /* digits dropped past 19 scale it up */
+    bool ok = mant > 0;
+    if (ok && i < len && (s[i] == 'e' || s[i] == 'E')) {
+        int j = i + 1, esgn = 1, ev = 0, ed = 0;
+        if (j < len && (s[j] == '+' || s[j] == '-'))
+            esgn = s[j++] == '-' ? -1 : 1;
+        while (j < len && s[j] >= '0' && s[j] <= '9' && ed < 5) {
+            ev = ev * 10 + (s[j++] - '0');
+            ed++;
+        }
+        if (ed) {
+            exp += esgn * ev;
+            i = j;
+        }
+    }
+    if (!ok && i + 2 < len + 0 && !strncasecmp(s + i, "INF", 3)) {
+        digits[0] = 'I';
+        nd = 1;
+        i += 3;
+        ok = true;
+        exp = 0;
+    }
+    if (!nd) {
+        digits[0] = '0';
+        nd = 1;
+        exp = 0;
+    }
+    if (!ok)
+        i = start;
+    wr8(dec, (uint8_t)sgn);
+    wr8(dec + 1, 0);
+    wr16(dec + 2, (uint16_t)(int16_t)exp);
+    wr8(dec + 4, (uint8_t)nd);
+    gput(dec + 5, digits, (uint32_t)nd);
+    wr16(indexp, (uint16_t)(i + base));
+    if (valid)
+        wr8(valid, ok ? 1 : 0);
+}
+
+void tb_ROMlib_Fpstr2dec(gaddr s, gaddr indexp, gaddr dec, gaddr valid)
+{
+    char buf[256];
+    int len = rd8(s);
+    gget(buf, s + 1, (uint32_t)len);
+    str2dec(buf, len, indexp, dec, valid, 1);
+}
+
+void tb_ROMlib_Fcstr2dec(gaddr s, gaddr indexp, gaddr dec, gaddr valid)
+{
+    char buf[256];
+    int len = 0;
+    while (len < 255 && (buf[len] = (char)rd8(s + (uint32_t)len)))
+        len++;
+    str2dec(buf, len, indexp, dec, valid, 0);
+}

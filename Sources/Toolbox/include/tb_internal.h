@@ -106,6 +106,10 @@ bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize
 
 void raw_CmpString(cpu68k *c, uint16_t tw);
 void raw_FP68K(cpu68k *c, uint16_t tw);
+void raw_Fix2X(cpu68k *c, uint16_t tw);
+void raw_Frac2X(cpu68k *c, uint16_t tw);
+void raw_Microseconds(cpu68k *c, uint16_t tw);
+void raw_GetVideoDefault(cpu68k *c, uint16_t tw);
 void raw_ResourceStub(cpu68k *c, uint16_t tw);
 void raw_Elems68K(cpu68k *c, uint16_t tw);
 void sane_reset(void);

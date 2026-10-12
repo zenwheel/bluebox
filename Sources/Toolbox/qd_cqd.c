@@ -491,6 +491,52 @@ static void fill_with(void (*fill)(gaddr, gaddr), gaddr r, gaddr pp)
 void tb_FillCRect(gaddr r, gaddr pp) { fill_with(tb_FillRect, r, pp); }
 void tb_FillCOval(gaddr r, gaddr pp) { fill_with(tb_FillOval, r, pp); }
 
+/* The others take extra arguments, so they copy the pattern themselves. */
+static gaddr pat_of(gaddr pp)
+{
+    if (!pp || !rd32(pp))
+        return 0;
+    gaddr pat = tb_NewPtr(8, false, false);
+    gmemcpy(pat, rd32(pp) + PixPat_pat1Data_off, 8);
+    return pat;
+}
+
+void tb_FillCRoundRect(gaddr r, int16_t ow, int16_t oh, gaddr pp)
+{
+    gaddr pat = pat_of(pp);
+    if (pat) {
+        tb_FillRoundRect(r, ow, oh, pat);
+        tb_DisposePtr(pat);
+    }
+}
+
+void tb_FillCArc(gaddr r, int16_t start, int16_t angle, gaddr pp)
+{
+    gaddr pat = pat_of(pp);
+    if (pat) {
+        tb_FillArc(r, start, angle, pat);
+        tb_DisposePtr(pat);
+    }
+}
+
+void tb_FillCRgn(gaddr rgn, gaddr pp)
+{
+    gaddr pat = pat_of(pp);
+    if (pat) {
+        tb_FillRgn(rgn, pat);
+        tb_DisposePtr(pat);
+    }
+}
+
+void tb_FillCPoly(gaddr poly, gaddr pp)
+{
+    gaddr pat = pat_of(pp);
+    if (pat) {
+        tb_FillPoly(poly, pat);
+        tb_DisposePtr(pat);
+    }
+}
+
 /* ---------------------------------------------------------------------- */
 /* Palette Manager: palettes are kept and their colours used for drawing;
  * the 8-bit screen's table stays the standard one. */

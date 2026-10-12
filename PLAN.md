@@ -322,6 +322,8 @@ the trap census.
   - pressed close and zoom boxes
   - Sound Manager (pulled forward from M4): channels with paced command queues and callbacks at safe points, 'snd ' formats 1 and 2, standard and extended sampled sound, square-wave and wave-table notes, SysBeep; output through AVAudioEngine (MACE/IMA decoding still to do)
   - Notification Manager: messages as macOS notifications (an alert when unbundled), marks as a Dock badge, a Dock bounce, the request's sound, and response procedures at the next safe point
+  - `Fix2X`/`Frac2X`/`X2Fix`/`X2Frac`, `Microseconds`, `GetVideoDefault`; Pack7's `Str2Dec`/`CStr2Dec`/`Dec2Str`; colour fills for every shape (`FillCPoly` …, through the pattern's 1-bit form); `GetWVariant`
+  - Color Picker (Pack12): `GetColor` shows a host colour panel; RGB/HSV/HSL/CMY conversions; Disk Initialization (Pack2) answers that there are no disks to initialize
   - The FCB table (`FCBSPtr`, `FSFCBLen`) and the volume's VCB (`VCBQHdr`, `DefVCBPtr`), kept current for every open file, resource files included, as applications read them directly; `PBGetFCBInfo` works on resource files (fixes a stray write of each opened file's name into guest memory)
   - Apple Event Manager: lists and records (`AECreateList`, `AEPutPtr`/`AEPutDesc`, deletion, sizes), attributes, `AECreateAppleEvent`, `AESend` to ourselves; coercion and special handlers and object accessors are recorded (nothing resolves without a scripting client)
   - QDExtensions complete: screen buffers, `GetGWorldDevice`, `QDDone`, `OffscreenVersion`

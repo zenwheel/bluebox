@@ -257,6 +257,12 @@ void machine_set_control_renderer(machine_control_fn fn, void *ctx);
 typedef bool (*machine_launch_fn)(const char *path, void *ctx);
 void machine_set_launch_handler(machine_launch_fn fn, void *ctx);
 
+/* ---- Color Picker ----
+ * GetColor: show `prompt`, start from `in` (16-bit RGB), and on OK write the
+ * choice to `out` and return true. */
+typedef bool (*machine_color_fn)(const char *prompt, const uint16_t in[3], uint16_t out[3], void *ctx);
+void machine_set_color_picker(machine_color_fn fn, void *ctx);
+
 /* ---- Notifications ---- */
 
 enum { MACHINE_NOTIFY_MARK = 1, MACHINE_NOTIFY_ICON = 2 };
