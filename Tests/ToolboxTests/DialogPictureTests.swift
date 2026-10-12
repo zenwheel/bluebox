@@ -303,3 +303,28 @@ extension Classic {
         }
     }
 }
+
+extension Classic {
+    @Suite struct Clipboard {
+        nonisolated(unsafe) static var exported: String?
+
+        @Test func hostTextBecomesTheDeskScrapAndBack() {
+            launchTestApp()
+            Self.exported = nil
+            machine_set_clipboard_handler({ utf8, _ in Clipboard.exported = utf8.map { String(cString: $0) } }, nil)
+            defer { machine_set_clipboard_handler(nil, nil) }
+            machine_set_clipboard_text("café\nline")
+            let h = tb_NewHandle(0, false, false)
+            let off = tb_NewPtr(4, false, true)
+            let n = tb_GetScrap(h, Int32(bitPattern: fourCC("TEXT")), off)
+            #expect(n == 9)                                          // MacRoman é is one byte
+            #expect(rd8(rd32(h) + 3) == 0x8E)                        // é
+            #expect(rd8(rd32(h) + 4) == 0x0D)                        // CR
+            #expect(Self.exported == nil)                            // importing is not exporting
+            #expect(tb_TEFromScrap() == 0)
+            #expect(tb_TEGetScrapLength() == 9)
+            #expect(tb_TEToScrap() == 0)
+            #expect(Self.exported == "café\nline")
+        }
+    }
+}

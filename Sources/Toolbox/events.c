@@ -52,6 +52,15 @@ static void enqueue(int16_t what, uint32_t message)
 
 void machine_attach_host(bool attached) { host_attached = attached; }
 
+/* Suspend and resume (osEvt, suspendResumeMessage): the app moving to the
+ * background and back; convert_clipboard says the scrap changed meanwhile. */
+void machine_post_suspend_resume(bool resume, bool convert_clipboard)
+{
+    pthread_mutex_lock(&lock);
+    enqueue(osEvt, 0x01000000u | (resume ? 1u : 0u) | (convert_clipboard ? 2u : 0u));
+    pthread_mutex_unlock(&lock);
+}
+
 /* Wake an app sleeping in WaitNextEvent (e.g. an Apple Event arrived). */
 void ev_wake(void)
 {

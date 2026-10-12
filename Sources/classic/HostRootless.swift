@@ -99,6 +99,8 @@ final class MacWindowView: NSView {
     init(title: String) { self.title = title }
 
     func application(_ application: NSApplication, open urls: [URL]) { launchEvents.open(urls) }
+    func applicationDidBecomeActive(_ notification: Notification) { ClipboardSync.shared.didBecomeActive() }
+    func applicationWillResignActive(_ notification: Notification) { ClipboardSync.shared.willResignActive() }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // After launch: AppKit sets the icon from the main bundle while launching.
@@ -376,6 +378,7 @@ func postScriptLive(_ script: [String]) {
     installAlertHandler()
     installFileHandler()
     installPrintHandlers()
+    ClipboardSync.shared.install()
     let host = RootlessHost(title: title)
     host.script = script
     app.delegate = host

@@ -19,7 +19,7 @@ per-app quirks list is the reality, and the test oracle keeps us honest about th
 | Process model | One classic app per host process, launched from the host OS. No inter-app communication except via host clipboard and files. No Finder. |
 | Core language | C17 for the CPU cores, memory model, trap dispatch, and the whole Toolbox. |
 | Host language | Swift for the macOS host and the CLI. Python for code generation (and possibly import/install tooling). |
-| Linux UI | GTK4/GDK. Open: written in plain C (GTK is a C library) or Swift through a module map; decide before M2. |
+| Linux UI | GTK4/GDK, written in Swift (decided 2026-10-12) through a module map and a thin hand-written C shim. |
 | macOS UI | AppKit, CoreText, CoreAudio. |
 | Build | One SwiftPM package (C targets + Swift targets). |
 | License | MIT. GPL code may be used only in the separate, never-linked test oracle. |
@@ -320,6 +320,7 @@ the trap census.
   - keyboard through the host layout with dead keys (Option-E, E → é)
   - Standard File as native open and save panels (types filtered by classic file type); plain text saves stay UTF-8 with no sidecar
   - pressed close and zoom boxes
+  - host clipboard: text in both directions at suspend and resume, as System 7 apps expect (TEToScrap/TEFromScrap)
   - Dialog Manager: dialogs from DLOG/DITL, items, edit text, ModalDialog with filters, standard filter, default and cancel items
   - Standard File extras: the app's own items (TeachText's Document / Stationery) as an accessory view in the native panel, run through the app's dialog hook in a hidden classic dialog
   - QuickDraw pictures: DrawPicture for version 1 and 2 (shapes, polygons, regions, text, patterns, all bitmap and pixmap opcodes); pictures and bitmaps print as images
@@ -334,7 +335,6 @@ the trap census.
   - appearances: Platinum's own window geometry (wider frame), dialog frames, checkboxes and radio buttons, classic menus in screen mode; a setting in installed bundles
   - the remaining Standard File hooks (old SFPGetFile/SFPPutFile hooks, null-event and filter procs)
   - `quit` from the host's Quit command
-  - host clipboard sync
 
 ### M2: Linux parity and the import pipeline
 

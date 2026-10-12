@@ -219,6 +219,17 @@ void machine_set_print_handlers(machine_print_fn print, machine_page_setup_fn pa
 /* The host's default paper, used for new print records. */
 void machine_set_page_defaults(const machine_page_setup *ps);
 
+/* ---- Clipboard ---- */
+
+/* Text the app put on its clipboard (UTF-8), for the host clipboard. */
+typedef void (*machine_clipboard_fn)(const char *utf8, void *ctx);
+void machine_set_clipboard_handler(machine_clipboard_fn fn, void *ctx);
+/* The host clipboard changed: this text becomes the app's clipboard. */
+void machine_set_clipboard_text(const char *utf8);
+/* The app went to the background or came back (suspend/resume events);
+ * convert_clipboard tells it to read the clipboard again. */
+void machine_post_suspend_resume(bool resume, bool convert_clipboard);
+
 /* Documents to open at launch (call before machine_launch): given to the
  * app through its launch parameters, as the Finder did. */
 void machine_set_launch_documents(const char *const *paths, int n);

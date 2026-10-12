@@ -608,8 +608,32 @@ void tb_TEPaste(gaddr teh)
 
 gaddr tb_TEScrapHandle(void) { return scrap_handle(); }
 int32_t tb_TEGetScrapLength(void) { return (int16_t)rd16(LM_TEScrpLength); }
-int16_t tb_TEFromScrap(void) { return noErr; }
-int16_t tb_TEToScrap(void) { return noErr; }
+/* Between the TextEdit scrap and the desk scrap (apps do this on resume
+ * and suspend). */
+int16_t tb_TEFromScrap(void)
+{
+    gaddr h = scrap_handle();
+    gaddr off = tb_NewPtr(4, false, true);
+    int32_t n = tb_GetScrap(h, (int32_t)fourcc("TEXT"), off);
+    tb_DisposePtr(off);
+    if (n < 0) {
+        wr16(LM_TEScrpLength, 0);
+        return (int16_t)n;
+    }
+    wr16(LM_TEScrpLength, (uint16_t)(n > 32767 ? 32767 : n));
+    return noErr;
+}
+
+int16_t tb_TEToScrap(void)
+{
+    gaddr h = scrap_handle();
+    int32_t n = (int16_t)rd16(LM_TEScrpLength);
+    tb_ZeroScrap();
+    tb_HLock(h);
+    int32_t err = tb_PutScrap(n > 0 ? n : 0, (int32_t)fourcc("TEXT"), rd32(h));
+    tb_HUnlock(h);
+    return (int16_t)err;
+}
 
 /* ---------------------------------------------------------------------- */
 /* Clicking */

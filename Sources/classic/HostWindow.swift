@@ -200,6 +200,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     init(title: String) { self.title = title }
 
     func application(_ application: NSApplication, open urls: [URL]) { launchEvents.open(urls) }
+    func applicationDidBecomeActive(_ notification: Notification) { ClipboardSync.shared.didBecomeActive() }
+    func applicationWillResignActive(_ notification: Notification) { ClipboardSync.shared.willResignActive() }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // After launch: AppKit sets the icon from the main bundle while launching.
@@ -244,6 +246,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     installAlertHandler()
     installFileHandler()
     installPrintHandlers()
+    ClipboardSync.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
     // Minimal app menu: Quit asks the app to quit; Option shows Force Quit.
@@ -594,5 +597,50 @@ final class ClassicItemsView: NSView {
 
     @objc func clicked(_ sender: NSButton) { hit(Int16(sender.tag), text: nil) }
     @objc func edited(_ sender: NSTextField) { hit(Int16(sender.tag), text: sender.stringValue) }
+}
+#endif
+
+#if canImport(AppKit)
+/// The classic clipboard and the host's, kept in step at the moments
+/// System 7 apps expect: suspend (export) and resume (import).
+@MainActor final class ClipboardSync {
+    static let shared = ClipboardSync()
+    private var seenChange = NSPasteboard.general.changeCount
+    private var launched = false
+
+    func install() {
+        // Start with whatever text the host clipboard holds.
+        if let text = NSPasteboard.general.string(forType: .string) {
+            text.withCString { machine_set_clipboard_text($0) }
+        }
+        machine_set_clipboard_handler({ utf8, _ in
+            guard let utf8 else { return }
+            let text = String(cString: utf8)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(text, forType: .string)
+                    ClipboardSync.shared.seenChange = pb.changeCount
+                }
+            }
+        }, nil)
+    }
+
+    func didBecomeActive() {
+        guard launched else { launched = true; return }
+        let pb = NSPasteboard.general
+        var changed = false
+        if pb.changeCount != seenChange {
+            seenChange = pb.changeCount
+            if let text = pb.string(forType: .string) {
+                text.withCString { machine_set_clipboard_text($0) }
+                changed = true
+            }
+        }
+        machine_post_suspend_resume(true, changed)
+    }
+
+    func willResignActive() { machine_post_suspend_resume(false, false) }
 }
 #endif
