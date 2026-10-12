@@ -513,7 +513,20 @@ void tb_OpColor(gaddr c) {}
 void tb_HiliteColor(gaddr c) {}
 int16_t tb_QDError(void) { return 0; }
 
-gaddr tb_NewPixPat(void) { return qd_pixpat_for(qd_pat_black); }
+/* A pixel pattern with its pixel map and (empty) data handles, which
+ * applications fill in themselves. */
+gaddr tb_NewPixPat(void)
+{
+    gaddr h = qd_pixpat_for(qd_pat_black);
+    gaddr pm = tb_NewPixMap(), data = tb_NewHandle(0, false, true), xdata = tb_NewHandle(0, false, true);
+    gaddr p = rd32(h);
+    PixPat_set_patType(p, 1); /* pixelPat */
+    wr32(p + PixPat_patMap_off, pm);
+    wr32(p + PixPat_patData_off, data);
+    wr32(p + PixPat_patXData_off, xdata);
+    wr16(p + PixPat_patXValid_off, 0xFFFF); /* the expanded data needs rebuilding */
+    return h;
+}
 
 /* ---- Cursor (state only; the host draws the real cursor) ---- */
 

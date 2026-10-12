@@ -67,6 +67,17 @@ static void raw_LoadSeg(cpu68k *c, uint16_t tw)
         cpu_halt(c, "LoadSeg: cannot load CODE %d", seg);
         return;
     }
+    /* The entry that called is patched too, as the ROM did: applications
+     * that run with a copy of the jump table in an A5 world of their own
+     * (Director projectors) call through entries not at CurrentA5. */
+    gaddr e = ret - 8;
+    if (rd16(e + 2) == 0x3F3C && (int16_t)rd16(e + 4) == seg && rd16(e + 6) == 0xA9F0) {
+        gaddr code = rd32(get_code(seg));
+        uint16_t off = rd16(e);
+        wr16(e, (uint16_t)seg);
+        wr16(e + 2, JMP_ABS_L);
+        wr32(e + 4, code + off + 4);
+    }
     /* Re-execute the entry, now a JMP: entry+2 = trap address - 4. */
     cpu_push32(c, ret - 6);
 }
