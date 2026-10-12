@@ -29,6 +29,8 @@ let classicMenuBarHeight: CGFloat = 20
 }
 
 final class MacWindow: NSWindow {
+    var macID: UInt32 = 0
+    var native = false
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 }
@@ -86,7 +88,7 @@ final class MacWindowView: NSView {
     override func mouseDragged(with event: NSEvent) { post(event, button: -1) }
 }
 
-@MainActor final class RootlessHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
+@MainActor final class RootlessHost: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     let title: String
     var script: [String] = []
     var windows: [UInt32: MacWindow] = [:]
@@ -159,10 +161,39 @@ final class MacWindowView: NSView {
             let width = Int(mw.right) - Int(mw.left), height = Int(mw.bottom) - Int(mw.top)
             let origin = macToHost(CGFloat(mw.left), CGFloat(mw.bottom))
             let frame = NSRect(x: origin.x, y: origin.y, width: CGFloat(width), height: CGFloat(height))
+            let native = mw.flags & UInt8(MACHINE_WINDOW_NATIVE) != 0
+            if let existing = windows[mw.id], existing.native != native {
+                existing.orderOut(nil)
+                windows[mw.id] = nil
+            }
             let window: MacWindow
             if let existing = windows[mw.id] {
                 window = existing
-                if window.frame != frame { window.setFrame(frame, display: false) }
+                if native {
+                    let current = window.contentRect(forFrameRect: window.frame)
+                    if current != frame && !window.inLiveResize {
+                        applyingFrame = true
+                        window.setFrame(window.frameRect(forContentRect: frame), display: false)
+                        applyingFrame = false
+                    }
+                } else if window.frame != frame {
+                    window.setFrame(frame, display: false)
+                }
+            } else if native {
+                var style: NSWindow.StyleMask = [.titled, .miniaturizable]
+                if mw.flags & UInt8(MACHINE_WINDOW_CLOSE) != 0 { style.insert(.closable) }
+                if mw.flags & UInt8(MACHINE_WINDOW_GROW) != 0 { style.insert(.resizable) }
+                window = MacWindow(contentRect: frame, styleMask: style, backing: .buffered, defer: false)
+                window.native = true
+                window.isReleasedWhenClosed = false
+                window.acceptsMouseMovedEvents = true
+                window.delegate = self
+                window.contentView = MacWindowView(frame: NSRect(origin: .zero, size: frame.size))
+                window.standardWindowButton(.zoomButton)?.isEnabled = mw.flags & UInt8(MACHINE_WINDOW_ZOOM) != 0
+                applyingFrame = true
+                window.setFrame(window.frameRect(forContentRect: frame), display: false)
+                applyingFrame = false
+                windows[mw.id] = window
             } else {
                 window = MacWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
                 window.isOpaque = false
@@ -172,6 +203,12 @@ final class MacWindowView: NSView {
                 window.acceptsMouseMovedEvents = true
                 window.contentView = MacWindowView(frame: NSRect(origin: .zero, size: frame.size))
                 windows[mw.id] = window
+            }
+            window.macID = mw.id
+            if native {
+                var mutable = mw
+                let title = withUnsafeBytes(of: &mutable.title) { Self.string($0.baseAddress!, 256) }
+                if window.title != title { window.title = title }
             }
             guard let view = window.contentView as? MacWindowView else { continue }
             view.frame = NSRect(origin: .zero, size: frame.size)
@@ -198,6 +235,54 @@ final class MacWindowView: NSView {
     }
 
     var openMenus = 0
+    var applyingFrame = false
+
+    // MARK: Native window frames
+    //
+    // The title bar's actions go to the classic app as the clicks it knows:
+    // it calls TrackGoAway, TrackBox, DragWindow or GrowWindow and gets the
+    // host's answer, so its own code moves, sizes and closes the window.
+
+    private func action(_ window: NSWindow, _ kind: Int32, _ a: Int32, _ b: Int32) {
+        guard let w = window as? MacWindow, w.native else { return }
+        // Where the click lands matters to some apps (a grow click inside the
+        // grow box); use the window's current Mac position.
+        guard let view = w.contentView as? MacWindowView else { return }
+        let m = view.macBounds
+        let (x, y) = kind == Int32(MACHINE_ACTION_RESIZE)
+            ? (Int32(m.right) - 8, Int32(m.bottom) - 8) : (Int32(m.left) + 2, Int32(m.top) + 2)
+        machine_window_action(w.macID, kind, a, b, x, y)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        action(sender, Int32(MACHINE_ACTION_CLOSE), 0, 0)
+        return false
+    }
+
+    func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
+        action(window, Int32(MACHINE_ACTION_ZOOM), 0, 0)
+        return false
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard !applyingFrame, let w = notification.object as? MacWindow, w.native, !w.inLiveResize else { return }
+        let content = w.contentRect(forFrameRect: w.frame)
+        let (left, top) = hostToMac(NSPoint(x: content.minX, y: content.maxY))
+        action(w, Int32(MACHINE_ACTION_MOVE), left, top)
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        // Resizes outside a live drag (window tiling, scripts) as well.
+        guard !applyingFrame, let w = notification.object as? MacWindow, w.native, !w.inLiveResize else { return }
+        let content = w.contentRect(forFrameRect: w.frame)
+        action(w, Int32(MACHINE_ACTION_RESIZE), Int32(content.width), Int32(content.height))
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        guard let w = notification.object as? MacWindow, w.native else { return }
+        let content = w.contentRect(forFrameRect: w.frame)
+        action(w, Int32(MACHINE_ACTION_RESIZE), Int32(content.width), Int32(content.height))
+    }
 
     func syncMenus() {
         let version = machine_menus_version()

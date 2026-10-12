@@ -7,6 +7,9 @@
  * native, reached through 68k stubs in the System file) into the Window
  * Manager port; exposed content is added to updateRgn for update events.
  */
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "qd_internal.h"
@@ -106,6 +109,92 @@ static bool is_dialog_variant(int var) { return var == 1 || var == 2 || var == 3
 static bool has_zoom(int var) { return var == 8 || var == 12; }
 static bool has_grow(int var) { return var == 0 || var == 8; }
 
+/* The native appearance: document windows' frames are the host's. */
+static bool native_frame(int var)
+{
+    return g_appearance == MACHINE_APPEARANCE_NATIVE && (var == 0 || var == 4 || var == 8 || var == 12);
+}
+
+/* ---- Actions from the host's window frames ---- */
+
+static pthread_mutex_t action_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct {
+    gaddr w;
+    int action, a, b;
+    bool waiting;  /* posted; the next FindWindow takes it */
+    bool taken;    /* FindWindow reported it; the Track/Drag/Grow call completes it */
+} pending;
+
+void ev_post_click_at(int x, int y);
+
+void machine_window_action(uint32_t id, int action, int a, int b, int x, int y)
+{
+    pthread_mutex_lock(&action_lock);
+    pending.w = id;
+    pending.action = action;
+    pending.a = a;
+    pending.b = b;
+    pending.waiting = true;
+    pending.taken = false;
+    pthread_mutex_unlock(&action_lock);
+    if (getenv("CLASSIC_DEBUG_HOST"))
+        fprintf(stderr, "window action %d on %08X (%d, %d) click %d,%d\n", action, id, a, b, x, y);
+    ev_post_click_at(x, y);
+}
+
+/* If a host action is pending for FindWindow, its part (else 0). */
+static int16_t take_action(gaddr wpp)
+{
+    pthread_mutex_lock(&action_lock);
+    int16_t part = 0;
+    if (pending.waiting) {
+        pending.waiting = false;
+        pending.taken = true;
+        wr32(wpp, pending.w);
+        switch (pending.action) {
+        case MACHINE_ACTION_CLOSE: part = 6; break;   /* inGoAway */
+        case MACHINE_ACTION_ZOOM: part = 8; break;    /* inZoomOut */
+        case MACHINE_ACTION_MOVE: part = 4; break;    /* inDrag */
+        case MACHINE_ACTION_RESIZE: part = 5; break;  /* inGrow */
+        default: pending.taken = false; break;
+        }
+    }
+    pthread_mutex_unlock(&action_lock);
+    return part;
+}
+
+/* The pending action for this window and kind, consumed; false if none. */
+static bool complete_action(gaddr w, int action, int *a, int *b)
+{
+    pthread_mutex_lock(&action_lock);
+    bool ok = pending.taken && pending.w == w && pending.action == action;
+    if (ok) {
+        pending.taken = false;
+        if (a)
+            *a = pending.a;
+        if (b)
+            *b = pending.b;
+    }
+    pthread_mutex_unlock(&action_lock);
+    return ok;
+}
+
+/* Snapshot flags for the host. */
+uint8_t wm_window_flags(gaddr w)
+{
+    int var = varcode(w);
+    if (!native_frame(var))
+        return 0;
+    uint8_t f = MACHINE_WINDOW_NATIVE;
+    if (WindowRecord_goAwayFlag(w))
+        f |= MACHINE_WINDOW_CLOSE;
+    if (has_zoom(var))
+        f |= MACHINE_WINDOW_ZOOM;
+    if (has_grow(var))
+        f |= MACHINE_WINDOW_GROW;
+    return f;
+}
+
 static void title_rect(qrect c, qrect *t) { *t = (qrect){ (int16_t)(c.top - TITLE_HEIGHT), c.left, (int16_t)(c.top - 1), c.right }; }
 
 static void wdef_calc(gaddr w, int var)
@@ -115,7 +204,9 @@ static void wdef_calc(gaddr w, int var)
     hrgn_init(&s);
     hrgn_init(&k);
     hrgn_rect(&k, c);
-    if (theme_window_region(w, var, c, &s)) {
+    if (native_frame(var)) {
+        hrgn_rect(&s, c); /* the host draws the frame */
+    } else if (theme_window_region(w, var, c, &s)) {
         /* the theme's frame shape */
     } else if (var == 1) { /* dBoxProc: 8-pixel border */
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - 8), (int16_t)(c.left - 8), (int16_t)(c.bottom + 8), (int16_t)(c.right + 8) });
@@ -169,7 +260,8 @@ static void wdef_draw(gaddr w, int var, int32_t param)
         return;
     qrect c = global_content(w);
     bool hilited = WindowRecord_hilited(w) != 0;
-    if (theme_draw_window(w, var, c, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var), param))
+    if (native_frame(var) ||
+        theme_draw_window(w, var, c, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var), param))
         return;
     gaddr r = tb_NewPtr(8, false, false);
     tb_PenNormal();
@@ -807,6 +899,9 @@ gaddr tb_GetWindowPic(gaddr w) { return WindowRecord_windowPic(w); }
 int16_t tb_FindWindow(uint32_t p, gaddr wpp)
 {
     wr32(wpp, 0);
+    int16_t action_part = take_action(wpp);
+    if (action_part)
+        return action_part;
     if (pt_v(p) < (int16_t)rd16(LM_MBarHeight) && pt_v(p) >= 0)
         return inMenuBar;
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
@@ -1033,6 +1128,12 @@ int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int1
 
 void tb_DragWindow(gaddr wp, uint32_t p, gaddr rp)
 {
+    int nx, ny;
+    if (complete_action(wp, MACHINE_ACTION_MOVE, &nx, &ny)) {
+        tb_MoveWindow(wp, (int16_t)nx, (int16_t)ny, 0);
+        tb_SelectWindow(wp);
+        return;
+    }
     gaddr slop = tb_NewPtr(8, false, false);
     qrect_put(slop, qrect_get(rp));
     int32_t d = tb_DragGrayRgn(WindowRecord_strucRgn(wp), p, rp, slop, 0, 0);
@@ -1047,6 +1148,15 @@ void tb_DragWindow(gaddr wp, uint32_t p, gaddr rp)
 
 int32_t tb_GrowWindow(gaddr w, uint32_t startp, gaddr rp)
 {
+    int nw, nh;
+    if (complete_action(w, MACHINE_ACTION_RESIZE, &nw, &nh)) {
+        qrect lim = qrect_get(rp);
+        if (nw < lim.left) nw = lim.left;
+        if (nh < lim.top) nh = lim.top;
+        if (nw > lim.right) nw = lim.right;
+        if (nh > lim.bottom) nh = lim.bottom;
+        return (int32_t)make_pt((int16_t)nh, (int16_t)nw);
+    }
     qrect c = global_content(w);
     qrect lim = qrect_get(rp); /* min and max sizes */
     hrgn outline, inner;
@@ -1119,8 +1229,19 @@ static int8_t track_box(gaddr w, uint32_t p, int part)
     return inside;
 }
 
-int8_t tb_TrackGoAway(gaddr w, uint32_t p) { return track_box(w, p, wInGoAway); }
-int8_t tb_TrackBox(gaddr wp, uint32_t pt, int16_t part) { return track_box(wp, pt, part == inZoomIn ? wInZoomIn : wInZoomOut); }
+int8_t tb_TrackGoAway(gaddr w, uint32_t p)
+{
+    if (complete_action(w, MACHINE_ACTION_CLOSE, NULL, NULL))
+        return 1;
+    return track_box(w, p, wInGoAway);
+}
+
+int8_t tb_TrackBox(gaddr wp, uint32_t pt, int16_t part)
+{
+    if (complete_action(wp, MACHINE_ACTION_ZOOM, NULL, NULL))
+        return 1;
+    return track_box(wp, pt, part == inZoomIn ? wInZoomIn : wInZoomOut);
+}
 
 void tb_ZoomWindow(gaddr wp, int16_t part, int8_t front)
 {

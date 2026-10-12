@@ -24,7 +24,11 @@ typedef struct {
     qrect bounds;
     uint8_t *mask; /* one byte per pixel of bounds: 1 inside the structure region */
     bool active;
+    uint8_t flags;
+    char title[256];
 } win_snap;
+
+uint8_t wm_window_flags(gaddr w);
 
 static win_snap wins[64];
 static int nwins;
@@ -58,7 +62,14 @@ static void publish_windows(void)
                            (size_t)(band->x[k + 1] - band->x[k]));
         }
         hrgn_free(&s);
-        fresh[n++] = (win_snap){ w, b, mask, WindowRecord_hilited(w) != 0 };
+        fresh[n] = (win_snap){ w, b, mask, WindowRecord_hilited(w) != 0, wm_window_flags(w), { 0 } };
+        gaddr th = WindowRecord_titleHandle(w);
+        if (th && rd32(th)) {
+            uint32_t tl = rd8(rd32(th));
+            gget(fresh[n].title, rd32(th) + 1, tl);
+            fresh[n].title[tl] = 0;
+        }
+        n++;
     }
     pthread_mutex_lock(&lock);
     for (int i = 0; i < nwins; i++)
@@ -83,8 +94,11 @@ int machine_windows(machine_window *out, int max)
     pthread_mutex_lock(&lock);
     int n = nwins < max ? nwins : max;
     for (int i = 0; i < n; i++)
+    {
         out[i] = (machine_window){ wins[i].id, wins[i].bounds.top, wins[i].bounds.left, wins[i].bounds.bottom,
-                                   wins[i].bounds.right, wins[i].active };
+                                   wins[i].bounds.right, wins[i].active, wins[i].flags, { 0 } };
+        memcpy(out[i].title, wins[i].title, sizeof out[i].title);
+    }
     pthread_mutex_unlock(&lock);
     return n;
 }

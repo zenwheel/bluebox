@@ -122,6 +122,24 @@ void machine_advance_ticks(void);
 void display_sync(void);
 
 /* A click in the menu bar, for a choice made in the host's menus. */
+/* A click at a point (for actions from the host's window frames). */
+void ev_post_click_at(int x, int y)
+{
+    pthread_mutex_lock(&lock);
+    int16_t h = mouse_h, v = mouse_v;
+    bool down = button_down;
+    mouse_h = (int16_t)x;
+    mouse_v = (int16_t)y;
+    button_down = true;
+    enqueue(mouseDown, 0);
+    button_down = false;
+    enqueue(mouseUp, 0);
+    mouse_h = h;
+    mouse_v = v;
+    button_down = down;
+    pthread_mutex_unlock(&lock);
+}
+
 void ev_post_menubar_click(void)
 {
     pthread_mutex_lock(&lock);

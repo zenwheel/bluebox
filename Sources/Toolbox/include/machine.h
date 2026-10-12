@@ -56,11 +56,23 @@ void machine_attach_host(bool attached);
 
 /* ---- Rootless presentation (snapshots published by the emulator thread) ---- */
 
+enum { MACHINE_WINDOW_NATIVE = 1, MACHINE_WINDOW_CLOSE = 2, MACHINE_WINDOW_ZOOM = 4, MACHINE_WINDOW_GROW = 8 };
+
 typedef struct {
     uint32_t id;                 /* stable for the window's lifetime */
     int16_t top, left, bottom, right; /* structure bounds, Mac global coordinates */
     bool active;
+    uint8_t flags;               /* MACHINE_WINDOW_*: native frame and its controls */
+    char title[256];             /* MacRoman */
 } machine_window;
+
+/* With the native appearance, the host draws document windows' frames;
+ * its title-bar actions reach the app as the classic clicks would (the app
+ * calls TrackGoAway, TrackBox, DragWindow or GrowWindow and gets the
+ * host's result).  x, y: a point in the window's content (global). */
+enum { MACHINE_ACTION_CLOSE = 1, MACHINE_ACTION_ZOOM, MACHINE_ACTION_MOVE, MACHINE_ACTION_RESIZE };
+/* MOVE: a, b = the content's new left, top; RESIZE: a, b = new width, height. */
+void machine_window_action(uint32_t id, int action, int a, int b, int x, int y);
 
 /* Changes whenever the window list or a window's shape or position changes. */
 uint32_t machine_windows_version(void);

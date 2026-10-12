@@ -46,8 +46,9 @@ func usage() -> Never {
           --screenshot P  write the screen to PNG file P when the run ends
           --print-to F  print to PDF file F instead of the print panel (headless runs)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
-                     Kaleidoscope scheme file, or the name of one in the library
-                     (classic themes lists them); themes use a 32-bit screen
+                     Kaleidoscope scheme file, an archive of schemes (.sit etc.,
+                     "archive.sit:Name" picks one), or the name of an imported
+                     scheme (classic themes lists them); themes use a 32-bit screen
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1)
       classic import <file>... [--library dir] [--force]
@@ -478,10 +479,35 @@ func themes(in library: String) -> [String] {
     scan(library).filter { fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid" }.map(\.path)
 }
 
-/// A theme by path, or by name among the library's schemes.
-func findTheme(_ name: String) -> String? {
+/// A theme by path (a scheme file, or an archive or disk image holding
+/// schemes, which is imported first; "archive.sit:Name" picks one of
+/// several), or by name among the library's schemes.
+func findTheme(_ spec: String) -> String? {
     let fm = FileManager.default
-    if fm.fileExists(atPath: name) || fm.fileExists(atPath: sidecarPath(name)) { return name }
+    var name = spec, pick: String?
+    if !fm.fileExists(atPath: name), let colon = spec.lastIndex(of: ":"),
+       fm.fileExists(atPath: String(spec[..<colon])) {
+        name = String(spec[..<colon])
+        pick = String(spec[spec.index(after: colon)...])
+    }
+    if fm.fileExists(atPath: name) || fm.fileExists(atPath: sidecarPath(name)) {
+        switch classify(name) {
+        case .archive, .macBinary, .diskImage:
+            let entry: String
+            do { entry = try ingest(name, library: defaultLibrary()).entry } catch { fail("\(error)") }
+            let found = themes(in: entry)
+            if let pick {
+                return found.first { ($0 as NSString).lastPathComponent.caseInsensitiveCompare(pick) == .orderedSame }
+            }
+            if found.count == 1 { return found[0] }
+            if found.isEmpty { fail("no Kaleidoscope schemes in \(name)") }
+            eprint("several schemes in \(name); choose one with --appearance \"\(name):Name\" or by name:\n")
+            for t in found { eprint("  \((t as NSString).lastPathComponent)\n") }
+            exit(2)
+        default:
+            return name
+        }
+    }
     let all = themes(in: defaultLibrary())
     return all.first { ($0 as NSString).lastPathComponent.caseInsensitiveCompare(name) == .orderedSame }
         ?? all.first { ($0 as NSString).lastPathComponent.range(of: name, options: .caseInsensitive) != nil }
