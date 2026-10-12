@@ -50,3 +50,28 @@ extension Classic {
         }
     }
 }
+
+extension Classic {
+    @Suite struct FontMenu {
+        @Test func fontMenuShowsClassicNames() {
+            launchTestApp()
+            _ = initToolbox()
+            let p = tb_NewPtr(256, false, true)
+            guestPString("Font", at: p)
+            let m = tb_NewMenu(300, p)
+            tb_AppendResMenu(m, Int32(bitPattern: fourCC("FONT")))
+            var names: [String] = []
+            for i in 1...tb_CountMItems(m) {
+                let t = tb_NewPtr(256, false, true)
+                tb_GetMenuItemText(m, Int16(i), t)
+                names.append(pstring(at: t))
+            }
+            #expect(names.contains("Geneva") && names.contains("Times") && names.contains("Monaco"))
+            #expect(!names.contains("Classic Sans"))
+            let num = tb_NewPtr(2, false, true)
+            guestPString("Helvetica", at: p)
+            tb_GetFNum(p, num)
+            #expect(rd16(num) == 21)
+        }
+    }
+}

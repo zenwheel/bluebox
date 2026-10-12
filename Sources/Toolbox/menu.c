@@ -276,6 +276,8 @@ static void res_menu(gaddr mh, int32_t restype, int after)
                 continue;
             if ((uint32_t)types[t] == fourcc("FONT") && ((int16_t)rd16(id) & 127))
                 continue; /* only family entries (size 0) */
+            if ((uint32_t)types[t] == fourcc("FOND")) /* the name applications know it by */
+                tb_GetFontName((int16_t)rd16(id), name);
             char s[256];
             pstr_to_c(name, s, sizeof s);
             if (s[0] == '.' || s[0] == '%')
@@ -288,6 +290,18 @@ static void res_menu(gaddr mh, int32_t restype, int after)
             if (!dup)
                 strcpy(names[count++], shown);
         }
+    }
+    /* The families a System 7 Font menu listed that we draw with others. */
+    static const int16_t classic[] = { 20, 21, 22, 23 };
+    for (unsigned c = 0; (uint32_t)restype == fourcc("FONT") && c < sizeof classic / sizeof classic[0]; c++) {
+        tb_GetFontName(classic[c], name);
+        char s[256];
+        pstr_to_c(name, s, sizeof s);
+        bool dup = !s[0];
+        for (int k = 0; k < count && !dup; k++)
+            dup = !strcmp(names[k], s);
+        if (!dup && count < 512)
+            strcpy(names[count++], s);
     }
     wr8(LM_ResLoad, saved);
     tb_DisposePtr(name);
