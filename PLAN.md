@@ -361,13 +361,15 @@ the trap census.
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
 - Next:
   - glyphs still missing from the bitmap fonts (° © ® ™ § ¶ ß ± and other symbols): draw them, or fall back per glyph to a host font
-  - Dialog Manager: modal dialogs (TeachText's Save and About)
   - OpenPicture recording (pictures made by apps, e.g. for the clipboard)
+  - colour pixel patterns drawn in colour (they draw through their 1-bit form today); `SetDepth` changing the screen's depth while running
+  - MACE 3:1 and 6:1 sound decoding (it plays silence of the right length)
+  - QuickTime movie decoding (movies open and play as zero length); the Component Manager
+  - a 68881/68882 FPU for applications built for one (a handful of titles stop on F-line instructions); `_MethodDispatch` for early Object Pascal/MacApp applications (Photoshop 1.0)
   - themes: utility and floating windows, collapse (WindowShade), popups, sliders, tabs, menus in screen mode, scheme desktop patterns; Mac OS 8.5 Appearance themes; a theme setting for installed bundles
   - native style: map the native scroll knob's position and size onto the classic thumb for dragging; native popups and edit-text frames
   - HFS+ volumes read natively (imports mount them through the host on macOS today; Linux needs our own reader)
   - the remaining Standard File hooks (old SFPGetFile/SFPPutFile hooks, null-event and filter procs)
-  - `quit` from the host's Quit command
 
 ### M2: Linux parity and the import pipeline
 
