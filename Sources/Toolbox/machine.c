@@ -60,7 +60,7 @@ static void init_lowmem(void)
     wr16(LM_SysFontSiz, 12);
     wr16(LM_MBarHeight, 20);
     wr32(LM_ScrnBase, GA_SCREEN);
-    wr16(LM_ApFontID, 1);
+    wr16(LM_ApFontID, 3); /* applFont is Geneva (our Classic Sans) */
     wr8(LM_ScrDmpEnb, 0xFF);
 
     /* Fake ROM header: version word at ROMBase+8. */

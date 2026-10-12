@@ -315,12 +315,19 @@ the trap census.
   - `classic install`: a macOS `.app` per classic app (Finder icon from `BNDL`/`FREF`/`icl8`, document types from its `FREF`s, an sh launcher); Finder and Dock opens become Open Documents events
   - high-level events: apps whose `SIZE` says so get `odoc`/`oapp` through `AcceptHighLevelEvent` in the System 7 wire format (TeachText parses it itself); Alias Manager
   - alerts as native `NSAlert`s (`ALRT`/`DITL`, `ParamText`, stages)
-  - MacRoman 0x80–0xFF in the bitmap fonts: accented letters, dashes, quotes, ellipsis and ligatures composed from each face's own glyphs
+  - MacRoman 0x80–0xFF in the bitmap fonts: accented letters, dashes, quotes, ellipsis and ligatures composed from each face's own glyphs; common symbols (© ® ™ ° ± † …) drawn to each face's metrics
+  - native menus: opening one is a menu-bar click, so the app adjusts its menus first; `MenuSelect` waits for the host menu
+  - keyboard through the host layout with dead keys (Option-E, E → é)
+  - Standard File as native open and save panels (types filtered by classic file type); plain text saves stay UTF-8 with no sidecar
+  - pressed close and zoom boxes
+  - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
 - Next:
   - glyphs still missing from the bitmap fonts (° © ® ™ § ¶ ß ± and other symbols): draw them, or fall back per glyph to a host font
   - host names longer than 31 characters: a stable shortened Mac name (they are truncated today, so such files cannot be opened by name)
   - Dialog Manager: modal dialogs (TeachText's Save and About)
-  - Standard File with native panels
+  - Standard File: the app's extra dialog items (TeachText's Document / Stationery) as an accessory view in the native panel, with the app's dialog hook run against a hidden classic dialog
+  - printing: CopyBits and pictures (PICT) in printed pages; QuickDraw pictures in general (TeachText also opens PICT documents)
+  - optional window appearance: colour System 7 and Mac OS 8 Platinum, as alternatives to black and white
   - `quit` from the host's Quit command
   - host clipboard sync
 

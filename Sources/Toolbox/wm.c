@@ -193,7 +193,21 @@ static void wdef_draw(gaddr w, int var, int32_t param)
     }
     qrect t;
     title_rect(c, &t);
-    if (param == 4 || param == 5) { /* toggle a box highlight only */
+    if (param == wInGoAway || param == wInZoomIn || param == wInZoomOut) {
+        /* Toggle a pressed box: System 7 draws a starburst inside it, here
+         * in XOR so a second call restores the box. */
+        int left = param == wInGoAway ? t.left + 9 : t.right - 19;
+        int top = t.top + 4;
+        tb_PenMode(patXor);
+        static const int spokes[8][4] = {
+            { 0, 0, 2, 2 }, { 4, 0, 4, 2 }, { 8, 0, 6, 2 }, { 0, 4, 2, 4 },
+            { 8, 4, 6, 4 }, { 0, 8, 2, 6 }, { 4, 8, 4, 6 }, { 8, 8, 6, 6 },
+        };
+        for (int i = 0; i < 8; i++) {
+            tb_MoveTo((int16_t)(left + spokes[i][0]), (int16_t)(top + spokes[i][1]));
+            tb_LineTo((int16_t)(left + spokes[i][2]), (int16_t)(top + spokes[i][3]));
+        }
+        tb_PenNormal();
         tb_DisposePtr(r);
         return;
     }
@@ -1055,15 +1069,34 @@ int32_t tb_GrowWindow(gaddr w, uint32_t startp, gaddr rp)
     return (int32_t)make_pt((int16_t)last_h, (int16_t)last_w);
 }
 
+/* Ask the WDEF to toggle a box's pressed look, clipped to the window. */
+static void toggle_box(gaddr w, int part)
+{
+    gaddr saved = qd_port();
+    gaddr wp = wmgr_port();
+    tb_SetPort(wp);
+    tb_CopyRgn(WindowRecord_strucRgn(w), GrafPort_clipRgn(wp));
+    call_wdef(w, wDraw, part);
+    tb_SetRectRgn(GrafPort_clipRgn(wp), -32767, -32767, 32767, 32767);
+    tb_SetPort(saved);
+}
+
 static int8_t track_box(gaddr w, uint32_t p, int part)
 {
-    /* Highlight while the mouse is in the box; true if released inside. */
-    bool inside = true;
+    /* Pressed while the mouse is in the box; true if released inside. */
+    bool inside = true, shown = true;
+    toggle_box(w, part);
     while (ev_still_down()) {
         uint32_t m = ev_mouse_global();
         inside = call_wdef(w, wHit, (int32_t)m) == part;
+        if (inside != shown) {
+            toggle_box(w, part);
+            shown = inside;
+        }
         ev_wait_tick();
     }
+    if (shown)
+        toggle_box(w, part);
     return inside;
 }
 

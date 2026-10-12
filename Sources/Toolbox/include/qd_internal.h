@@ -133,6 +133,19 @@ void qd_rrect_region(hrgn *out, qrect r, int ow, int oh);
 /* Region covered by the pen moving from (h0,v0) to (h1,v1). */
 void qd_line_region(hrgn *out, int h0, int v0, int h1, int v1, int pw, int ph);
 
+/* ---- Recording (printing) ---- */
+
+/* Start recording drawing in port; qd_rec_end discards the recording. */
+void qd_rec_begin(gaddr port);
+void qd_rec_end(void);
+bool qd_rec_active(gaddr port);
+void qd_rec_open_page(void);
+void qd_rec_close_page(void);
+void qd_rec_shape(gaddr port, int kind, int verb, qrect r, int a, int b, const hrgn *shape, const uint8_t pat[8],
+                  int mode);
+void qd_rec_line(gaddr port, int h0, int v0, int h1, int v1, const uint8_t pat[8], int mode);
+void qd_rec_text(gaddr port, int family, int size, int face, int x, int y, const uint8_t *text, int len, int width);
+
 /* Draw text at the pen location, advancing it. */
 void qd_draw_text(gaddr port, const uint8_t *text, int len);
 int qd_text_width(gaddr port, const uint8_t *text, int len);

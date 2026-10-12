@@ -77,6 +77,11 @@ uint32_t machine_menus_version(void);
 int machine_menus(machine_menu *out, int max);
 /* Deliver a choice made in the host's menu bar (item is 1-based). */
 void machine_choose_menu(int16_t menu_id, int16_t item);
+/* A host menu opened: the app adjusts its menus (waits briefly for that,
+ * then the menu snapshot is current).  End when the menu closes, after any
+ * choice was delivered. */
+void machine_menu_tracking_begin(void);
+void machine_menu_tracking_end(void);
 
 /* ---- Alerts (shown by the host) ---- */
 
@@ -100,6 +105,87 @@ typedef struct {
  * default).  The handler blocks until the user answers. */
 typedef int (*machine_alert_fn)(const machine_alert *alert, void *ctx);
 void machine_set_alert_handler(machine_alert_fn fn, void *ctx);
+
+/* ---- Standard File (open and save panels shown by the host) ---- */
+
+typedef struct {
+    bool save;
+    char prompt[256];            /* UTF-8; may be empty */
+    char default_name[256];      /* UTF-8, for save */
+    uint32_t types[16];          /* for open; none means any file */
+    int ntypes;
+    char directory[1024];        /* where to start; empty for the host's choice */
+} machine_file_request;
+
+/* Called on the emulator thread; blocks until the user answers.  Returns
+ * false if cancelled, else the chosen host path. */
+typedef bool (*machine_file_fn)(const machine_file_request *rq, char *path, size_t pathsize, void *ctx);
+void machine_set_file_handler(machine_file_fn fn, void *ctx);
+/* Classic file type of a host file (for filtering open panels). */
+uint32_t machine_file_type(const char *path);
+
+/* ---- Printing (pages recorded from QuickDraw; the host renders them) ---- */
+
+enum {
+    MACHINE_PRINT_RECT, MACHINE_PRINT_OVAL, MACHINE_PRINT_RRECT, MACHINE_PRINT_ARC, MACHINE_PRINT_REGION,
+    MACHINE_PRINT_LINE, MACHINE_PRINT_TEXT,
+};
+enum { MACHINE_VERB_FRAME, MACHINE_VERB_PAINT, MACHINE_VERB_ERASE, MACHINE_VERB_INVERT, MACHINE_VERB_FILL };
+
+typedef struct {
+    int16_t top, left, bottom, right;
+} mprect;
+
+/* One drawing operation, in device coordinates (72 per inch, 0,0 at the top
+ * left of the printable area). */
+typedef struct {
+    int kind, verb;
+    mprect r;                    /* shapes */
+    int16_t a, b;                /* round rect: oval width, height; arc: start, angle (degrees) */
+    int16_t h0, v0, h1, v1;      /* line ends; text: h0, v0 is the baseline start */
+    int16_t pen_w, pen_h;
+    uint8_t pattern[8];          /* the pattern drawn with (rows, high bit leftmost) */
+    int mode;                    /* QuickDraw transfer mode */
+    bool fg_black;               /* foreground colour is dark */
+    int nclip;
+    mprect *clip;                /* the clip, as rectangles */
+    int nrects;
+    mprect *rects;               /* region shapes, as rectangles */
+    int16_t font_id;             /* text */
+    char font_name[64];          /* MacRoman */
+    int16_t size, width;         /* point size; the run's width with classic metrics */
+    uint8_t face;
+    int len;
+    uint8_t *text;               /* MacRoman */
+} machine_print_op;
+
+typedef struct {
+    int nops;
+    machine_print_op *ops;
+} machine_print_page;
+
+typedef struct {
+    int npages;
+    const machine_print_page *pages;
+    mprect page;                 /* printable area (rPage) */
+    mprect paper;                /* paper, relative to the printable area (rPaper) */
+    int copies;
+} machine_print_job;
+
+/* Page setup as the host's page layout panel describes it, in points. */
+typedef struct {
+    double paper_width, paper_height;
+    double left, top, right, bottom;   /* imageable area within the paper */
+    bool landscape;
+} machine_page_setup;
+
+/* Print the job (show the host's print panel); blocks until done. */
+typedef bool (*machine_print_fn)(const machine_print_job *job, void *ctx);
+/* Run the host's page setup panel, starting from and updating ps; false if cancelled. */
+typedef bool (*machine_page_setup_fn)(machine_page_setup *ps, void *ctx);
+void machine_set_print_handlers(machine_print_fn print, machine_page_setup_fn page_setup, void *ctx);
+/* The host's default paper, used for new print records. */
+void machine_set_page_defaults(const machine_page_setup *ps);
 
 /* Documents to open at launch (call before machine_launch): given to the
  * app through its launch parameters, as the Finder did. */

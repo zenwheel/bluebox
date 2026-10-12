@@ -1,6 +1,7 @@
 import CCore
 import CPU68K
 import Foundation
+import ForkStore
 import Testing
 import Toolbox
 
@@ -91,4 +92,58 @@ func tempDir() -> URL {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent("classic-tests-\(UUID().uuidString)")
     try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
+}
+
+/// Launch a minimal application (it never needs to run) with extra resources,
+/// so the A5 world, File Manager and SIZE flags are set up as for a real app.
+/// Returns the folder it lives in.
+@discardableResult
+func launchTestApp(_ extra: [TestResource] = [], sizeFlags: UInt16 = 0, documents: [String] = []) -> URL {
+    bootMachine()
+    let jt = cat(be16(0), be16(0x3F3C), be16(1), be16(0xA9F0))
+    let code0 = cat(be32(40), be32(256), be32(8), be32(32), jt)
+    let code1 = cat(be16(0), be16(1), be16(0xA9F4))
+    let size = cat(be16(Int(sizeFlags)), be32(0x80000), be32(0x80000))
+    var fork = buildFork([
+        TestResource(type: "CODE", id: 0, data: code0),
+        TestResource(type: "CODE", id: 1, data: code1),
+        TestResource(type: "SIZE", id: -1, data: size),
+    ] + extra)
+    let dir = tempDir()
+    let path = dir.appendingPathComponent("Test App").path
+    var f = mac_file()
+    var empty: [UInt8] = []
+    empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+    fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+    var err = [CChar](repeating: 0, count: 256)
+    #expect(appledouble_write(path, &f, &err, err.count))
+    withCStrings(documents) { machine_set_launch_documents($0, Int32(documents.count)) }
+    #expect(machine_launch(path, &err, err.count))
+    return dir
+}
+
+/// Pass Swift strings as a const char *const * array.
+func withCStrings<R>(_ strings: [String], _ body: (UnsafePointer<UnsafePointer<CChar>?>?) -> R) -> R {
+    let copies = strings.map { strdup($0) }
+    defer { copies.forEach { free($0) } }
+    return copies.map { UnsafePointer($0) }.withUnsafeBufferPointer { body($0.baseAddress) }
+}
+
+/// A Pascal string read from guest memory (MacRoman bytes as Latin-1 for ASCII tests).
+func pstring(at addr: UInt32) -> String {
+    let n = Int(rd8(addr))
+    return String(decoding: (0..<n).map { rd8(addr + 1 + UInt32($0)) }, as: UTF8.self)
+}
+
+/// QuickDraw, fonts, windows, menus and TextEdit initialised, with a port.
+func initToolbox() -> UInt32 {
+    let globals = tb_NewPtr(512, false, true)
+    tb_InitGraf(globals + 400)
+    tb_InitFonts()
+    tb_InitWindows()
+    tb_InitMenus()
+    tb_TEInit()
+    let port = tb_NewPtr(Int32(GrafPort_SIZEOF), false, true)
+    tb_OpenPort(port)
+    return port
 }

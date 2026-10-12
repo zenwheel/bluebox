@@ -6,6 +6,7 @@
  * them.  The host never walks guest structures itself.
  */
 #include <pthread.h>
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -186,17 +187,74 @@ int machine_menus(machine_menu *out, int max)
     return n;
 }
 
-/* A choice made in the host's menu bar, delivered through MenuSelect. */
+/* The host's menu bar.  A choice is delivered through MenuSelect, after the
+ * app has adjusted its menus.  While a host menu is open (tracking), the
+ * app is given the menu-bar click right away, so it adjusts its menus
+ * before they are shown, and MenuSelect waits for the host menu to close. */
 static int32_t pending_choice;
+static pthread_cond_t track_cond = PTHREAD_COND_INITIALIZER;
+static bool tracking, in_select, track_done;
+
+void ev_post_menubar_click(void);
 
 void machine_choose_menu(int16_t menu_id, int16_t item)
 {
     pthread_mutex_lock(&lock);
     pending_choice = ((int32_t)menu_id << 16) | (uint16_t)item;
+    bool waiting = tracking;
+    if (waiting) {
+        track_done = true;
+        pthread_cond_broadcast(&track_cond);
+    }
     pthread_mutex_unlock(&lock);
-    /* The app sees a click in its menu bar and calls MenuSelect. */
-    void ev_post_menubar_click(void);
-    ev_post_menubar_click();
+    /* Otherwise the app sees a click in its menu bar and calls MenuSelect. */
+    if (!waiting)
+        ev_post_menubar_click();
+}
+
+static void deadline_after_ms(struct timespec *ts, long ms)
+{
+    clock_gettime(CLOCK_REALTIME, ts);
+    ts->tv_nsec += ms * 1000000L;
+    ts->tv_sec += ts->tv_nsec / 1000000000L;
+    ts->tv_nsec %= 1000000000L;
+}
+
+/* One tracking session lasts while any host menu is open (moving from menu
+ * to menu does not start a new one). */
+void machine_menu_tracking_begin(void)
+{
+    pthread_mutex_lock(&lock);
+    bool start = !tracking;
+    if (start) {
+        tracking = true;
+        in_select = false;
+        track_done = false;
+        pending_choice = 0;
+    }
+    pthread_mutex_unlock(&lock);
+    if (start)
+        ev_post_menubar_click();
+    /* Give the app a moment to adjust its menus; it may be busy. */
+    struct timespec ts;
+    deadline_after_ms(&ts, 150);
+    pthread_mutex_lock(&lock);
+    while (tracking && !in_select)
+        if (pthread_cond_timedwait(&track_cond, &lock, &ts))
+            break;
+    pthread_mutex_unlock(&lock);
+}
+
+void machine_menu_tracking_end(void)
+{
+    pthread_mutex_lock(&lock);
+    if (in_select) {
+        track_done = true;
+        pthread_cond_broadcast(&track_cond);
+    } else {
+        tracking = false; /* the app has not got there yet: any choice stays pending */
+    }
+    pthread_mutex_unlock(&lock);
 }
 
 int32_t display_take_menu_choice(void)
@@ -206,6 +264,31 @@ int32_t display_take_menu_choice(void)
     pending_choice = 0;
     pthread_mutex_unlock(&lock);
     return c;
+}
+
+/* For MenuSelect: if a host menu is open, publish the menus as adjusted and
+ * wait for it to close.  Returns false if no host menu is open. */
+bool display_menu_tracking_wait(void)
+{
+    pthread_mutex_lock(&lock);
+    bool active = tracking;
+    pthread_mutex_unlock(&lock);
+    if (!active)
+        return false;
+    menus_dirty = false;
+    publish_menus();
+    pthread_mutex_lock(&lock);
+    in_select = true;
+    pthread_cond_broadcast(&track_cond);
+    while (!track_done) {
+        struct timespec ts;
+        deadline_after_ms(&ts, 60000);
+        if (pthread_cond_timedwait(&track_cond, &lock, &ts))
+            break;
+    }
+    tracking = in_select = track_done = false;
+    pthread_mutex_unlock(&lock);
+    return true;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -227,4 +310,5 @@ void display_reset(void)
 {
     wins_dirty = menus_dirty = true;
     pending_choice = 0;
+    tracking = in_select = track_done = false;
 }

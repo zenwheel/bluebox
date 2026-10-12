@@ -1528,6 +1528,43 @@ static void glue_CurResFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CustomGetFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_yourdatap = (gaddr)cpu_pop32(c);
+    gaddr a_activateproc = (gaddr)cpu_pop32(c);
+    gaddr a_activeList = (gaddr)cpu_pop32(c);
+    gaddr a_filterproc = (gaddr)cpu_pop32(c);
+    gaddr a_dlghook = (gaddr)cpu_pop32(c);
+    uint32_t a_where = (uint32_t)cpu_pop32(c);
+    int16_t a_dlgid = (int16_t)cpu_pop16(c);
+    gaddr a_replyp = (gaddr)cpu_pop32(c);
+    gaddr a_typelist = (gaddr)cpu_pop32(c);
+    int16_t a_numtypes = (int16_t)cpu_pop16(c);
+    gaddr a_filefilter = (gaddr)cpu_pop32(c);
+    tb_CustomGetFile(a_filefilter, a_numtypes, a_typelist, a_replyp, a_dlgid, a_where, a_dlghook, a_filterproc, a_activeList, a_activateproc, a_yourdatap);
+    cpu_push32(c, ret);
+}
+
+static void glue_CustomPutFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_yourdatap = (gaddr)cpu_pop32(c);
+    gaddr a_activateproc = (gaddr)cpu_pop32(c);
+    gaddr a_activeList = (gaddr)cpu_pop32(c);
+    gaddr a_filterproc = (gaddr)cpu_pop32(c);
+    gaddr a_dlghook = (gaddr)cpu_pop32(c);
+    uint32_t a_where = (uint32_t)cpu_pop32(c);
+    int16_t a_dlgid = (int16_t)cpu_pop16(c);
+    gaddr a_replyp = (gaddr)cpu_pop32(c);
+    gaddr a_defaultName = (gaddr)cpu_pop32(c);
+    gaddr a_prompt = (gaddr)cpu_pop32(c);
+    tb_CustomPutFile(a_prompt, a_defaultName, a_replyp, a_dlgid, a_where, a_dlghook, a_filterproc, a_activeList, a_activateproc, a_yourdatap);
+    cpu_push32(c, ret);
+}
+
 static void glue_DebugStr(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5414,6 +5451,66 @@ static void glue_RsrcZoneInit(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SFGetFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_rep = (gaddr)cpu_pop32(c);
+    gaddr a_dh = (gaddr)cpu_pop32(c);
+    gaddr a_tl = (gaddr)cpu_pop32(c);
+    int16_t a_numt = (int16_t)cpu_pop16(c);
+    gaddr a_filef = (gaddr)cpu_pop32(c);
+    gaddr a_prompt = (gaddr)cpu_pop32(c);
+    uint32_t a_p = (uint32_t)cpu_pop32(c);
+    tb_SFGetFile(a_p, a_prompt, a_filef, a_numt, a_tl, a_dh, a_rep);
+    cpu_push32(c, ret);
+}
+
+static void glue_SFPGetFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fp = (gaddr)cpu_pop32(c);
+    int16_t a_dig = (int16_t)cpu_pop16(c);
+    gaddr a_rep = (gaddr)cpu_pop32(c);
+    gaddr a_dh = (gaddr)cpu_pop32(c);
+    gaddr a_tl = (gaddr)cpu_pop32(c);
+    int16_t a_numt = (int16_t)cpu_pop16(c);
+    gaddr a_filef = (gaddr)cpu_pop32(c);
+    gaddr a_prompt = (gaddr)cpu_pop32(c);
+    uint32_t a_p = (uint32_t)cpu_pop32(c);
+    tb_SFPGetFile(a_p, a_prompt, a_filef, a_numt, a_tl, a_dh, a_rep, a_dig, a_fp);
+    cpu_push32(c, ret);
+}
+
+static void glue_SFPPutFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fp = (gaddr)cpu_pop32(c);
+    int16_t a_dig = (int16_t)cpu_pop16(c);
+    gaddr a_rep = (gaddr)cpu_pop32(c);
+    gaddr a_dh = (gaddr)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    gaddr a_prompt = (gaddr)cpu_pop32(c);
+    uint32_t a_p = (uint32_t)cpu_pop32(c);
+    tb_SFPPutFile(a_p, a_prompt, a_name, a_dh, a_rep, a_dig, a_fp);
+    cpu_push32(c, ret);
+}
+
+static void glue_SFPutFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_rep = (gaddr)cpu_pop32(c);
+    gaddr a_dh = (gaddr)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    gaddr a_prompt = (gaddr)cpu_pop32(c);
+    uint32_t a_p = (uint32_t)cpu_pop32(c);
+    tb_SFPutFile(a_p, a_prompt, a_name, a_dh, a_rep);
+    cpu_push32(c, ret);
+}
+
 static void glue_SameProcess(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6053,6 +6150,29 @@ static void glue_StackSpace(cpu68k *c, uint16_t trapword)
     (void)trapword;
     int32_t r = tb_StackSpace();
     c->d[0] = (uint32_t)r;
+}
+
+static void glue_StandardGetFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_replyp = (gaddr)cpu_pop32(c);
+    gaddr a_tl = (gaddr)cpu_pop32(c);
+    int16_t a_numt = (int16_t)cpu_pop16(c);
+    gaddr a_filef = (gaddr)cpu_pop32(c);
+    tb_StandardGetFile(a_filef, a_numt, a_tl, a_replyp);
+    cpu_push32(c, ret);
+}
+
+static void glue_StandardPutFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_replyp = (gaddr)cpu_pop32(c);
+    gaddr a_defaultname = (gaddr)cpu_pop32(c);
+    gaddr a_prompt = (gaddr)cpu_pop32(c);
+    tb_StandardPutFile(a_prompt, a_defaultname, a_replyp);
+    cpu_push32(c, ret);
 }
 
 static void glue_StillDown(cpu68k *c, uint16_t trapword)
@@ -7834,14 +7954,14 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9E9, (int32_t)0x6u, "DIFormat", CONV_STACK, 2, 2, 0},
     {0xA9E9, (int32_t)0x8u, "DIVerify", CONV_STACK, 2, 2, 0},
     {0xA9E9, (int32_t)0xAu, "DIZero", CONV_STACK, 6, 2, 0},
-    {0xA9EA, (int32_t)0x1u, "SFPutFile", CONV_STACK, 20, 0, 0},
-    {0xA9EA, (int32_t)0x2u, "SFGetFile", CONV_STACK, 26, 0, 0},
-    {0xA9EA, (int32_t)0x3u, "SFPPutFile", CONV_STACK, 26, 0, 0},
-    {0xA9EA, (int32_t)0x4u, "SFPGetFile", CONV_STACK, 32, 0, 0},
-    {0xA9EA, (int32_t)0x5u, "StandardPutFile", CONV_STACK, 12, 0, 0},
-    {0xA9EA, (int32_t)0x6u, "StandardGetFile", CONV_STACK, 14, 0, 0},
-    {0xA9EA, (int32_t)0x7u, "CustomPutFile", CONV_STACK, 38, 0, 0},
-    {0xA9EA, (int32_t)0x8u, "CustomGetFile", CONV_STACK, 40, 0, 0},
+    {0xA9EA, (int32_t)0x1u, "SFPutFile", CONV_STACK, 20, 0, glue_SFPutFile},
+    {0xA9EA, (int32_t)0x2u, "SFGetFile", CONV_STACK, 26, 0, glue_SFGetFile},
+    {0xA9EA, (int32_t)0x3u, "SFPPutFile", CONV_STACK, 26, 0, glue_SFPPutFile},
+    {0xA9EA, (int32_t)0x4u, "SFPGetFile", CONV_STACK, 32, 0, glue_SFPGetFile},
+    {0xA9EA, (int32_t)0x5u, "StandardPutFile", CONV_STACK, 12, 0, glue_StandardPutFile},
+    {0xA9EA, (int32_t)0x6u, "StandardGetFile", CONV_STACK, 14, 0, glue_StandardGetFile},
+    {0xA9EA, (int32_t)0x7u, "CustomPutFile", CONV_STACK, 38, 0, glue_CustomPutFile},
+    {0xA9EA, (int32_t)0x8u, "CustomGetFile", CONV_STACK, 40, 0, glue_CustomGetFile},
     {0xA9EB, (int32_t)0x0u, "ROMlib_Faddx", CONV_STACK, 10, 0, 0},
     {0xA9EB, (int32_t)0x1u, "ROMlib_Fsetenv", CONV_STACK, 6, 0, 0},
     {0xA9EB, (int32_t)0x2u, "ROMlib_Fsubx", CONV_STACK, 10, 0, 0},

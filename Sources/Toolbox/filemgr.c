@@ -354,17 +354,12 @@ bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, 
 
 /* Classic type and creator for a host file that has no sidecar, from its
  * extension.  Returns true for text, which is converted on the way in and out. */
-static bool host_file_type(const char *path, uint8_t finfo[16])
+static int implied_type(const char *path, uint8_t finfo[16])
 {
-    char *side = appledouble_sidecar_path(path);
-    bool has_side = side && exists(side);
-    free(side);
-    if (has_side)
-        return false;
     const char *dot = strrchr(path, '.');
     const char *slash = strrchr(path, '/');
     if (!dot || (slash && dot < slash))
-        return false;
+        return 0;
     static const struct {
         const char *ext;
         const char *type, *creator;
@@ -381,9 +376,47 @@ static bool host_file_type(const char *path, uint8_t finfo[16])
         memset(finfo, 0, 16);
         memcpy(finfo, map[i].type, 4);
         memcpy(finfo + 4, map[i].creator, 4);
-        return map[i].text;
+        return map[i].text ? 2 : 1;
     }
-    return false;
+    return 0;
+}
+
+/* A sidecar adds nothing to a host text file whose type its extension
+ * already gives, with no resource fork and no Finder flags that matter. */
+static bool sidecar_redundant(const char *path, const mac_file *mf)
+{
+    uint8_t implied[16];
+    if (implied_type(path, implied) != 2 || mf->rsrc_len)
+        return false;
+    if (!mf->has_finder_info)
+        return true;
+    bool untyped = !memcmp(mf->finder_info, "\0\0\0\0", 4);
+    uint16_t flags = (uint16_t)(mf->finder_info[8] << 8 | mf->finder_info[9]);
+    return (untyped || !memcmp(mf->finder_info, implied, 4)) && !(flags & ~0x0100u);
+}
+
+/* Classic type and creator for a host file whose sidecar adds nothing, from
+ * its extension.  Returns true for text, which is converted on the way in
+ * and out. */
+static bool host_file_type(const char *path, uint8_t finfo[16])
+{
+    char *side = appledouble_sidecar_path(path);
+    bool has_side = side && exists(side);
+    free(side);
+    if (has_side) {
+        mac_file mf;
+        char err[256];
+        if (!appledouble_read(path, &mf, err, sizeof err))
+            return false;
+        bool plain = sidecar_redundant(path, &mf);
+        if (plain && mf.has_finder_info && memcmp(mf.finder_info, "\0\0\0\0", 4))
+            memcpy(finfo, mf.finder_info, 16);
+        else if (plain)
+            implied_type(path, finfo);
+        mac_file_free(&mf);
+        return plain;
+    }
+    return implied_type(path, finfo) == 2;
 }
 
 /* Host text (UTF-8, LF or CRLF) to classic text (MacRoman, CR). */
@@ -720,6 +753,10 @@ static int16_t create_file(const char *path)
     mf.data = &empty;
     mf.rsrc = &empty;
     mf.create_date = mf.modify_date = mac_now();
+    if (sidecar_redundant(path, &mf)) {
+        FILE *fp = fopen(path, "wb");
+        return fp && fclose(fp) == 0 ? noErr : ioErrF;
+    }
     char err[256];
     return appledouble_write(path, &mf, err, sizeof err) ? noErr : ioErrF;
 }
@@ -916,6 +953,15 @@ static int16_t set_finfo(gaddr pb, bool hfs, bool cat)
     mf.has_finder_info = true;
     mf.create_date = rd32(pb + FileParam_ioFlCrDat_off);
     mf.modify_date = rd32(pb + FileParam_ioFlMdDat_off);
+    if (sidecar_redundant(path, &mf)) {
+        /* Plain host text: the extension says it all; drop any sidecar. */
+        mac_file_free(&mf);
+        char *side = appledouble_sidecar_path(path);
+        if (side)
+            unlink(side);
+        free(side);
+        return noErr;
+    }
     bool ok = appledouble_write(path, &mf, e, sizeof e);
     mac_file_free(&mf);
     return ok ? noErr : ioErrF;

@@ -234,6 +234,11 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
         }
         hrgn_free(&clip);
         tb_HSetState(s.handle, st);
+        if (qd_rec_active(port)) {
+            int family, size, face;
+            port_font(port, &family, &size, &face);
+            qd_rec_text(port, family, size, face, start, base, text, len, x - start);
+        }
     } else {
         x += 7 * len;
     }

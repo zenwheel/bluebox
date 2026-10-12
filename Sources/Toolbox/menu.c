@@ -724,9 +724,14 @@ static int32_t host_choice(void)
     return c;
 }
 
+bool display_menu_tracking_wait(void);
+
 int32_t tb_MenuSelect(uint32_t p)
 {
+    bool hosted = display_menu_tracking_wait(); /* a host menu is open: wait for it */
     int32_t chosen = host_choice();
+    if (hosted && chosen < 0)
+        chosen = 0; /* closed without a choice */
     if (chosen >= 0) {
         last_choice = chosen;
         return chosen;

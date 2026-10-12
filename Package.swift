@@ -22,14 +22,16 @@ let package = Package(
         .target(name: "ForkStore", cSettings: warnings),
         // Trap dispatch and the Toolbox managers.
         .target(name: "Toolbox", dependencies: ["CCore", "CPU68K", "ForkStore"], cSettings: warnings),
-        // Command-line tool: run, import, rsrc.
-        .executableTarget(name: "classic", dependencies: ["Toolbox", "ForkStore", "CCore"]),
+        // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
+        .target(name: "ClassicHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
+        // Command-line tool: run, import, install, apps, rsrc.
+        .executableTarget(name: "classic", dependencies: ["ClassicHost", "Toolbox", "ForkStore", "CCore"]),
         // Runner for the SingleStepTests CPU vectors (test-only).
         .target(name: "CPUTestSupport", dependencies: ["CPU68K", "CCore"], path: "Tests/CPUTestSupport",
                 cSettings: warnings),
         // Tests touch C globals (one guest arena per process) and run serialized.
         .testTarget(name: "ToolboxTests",
-                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CCore", "CPUTestSupport"],
+                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CCore", "CPUTestSupport", "ClassicHost"],
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ],
     cLanguageStandard: .c17

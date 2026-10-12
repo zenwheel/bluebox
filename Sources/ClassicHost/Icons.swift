@@ -10,22 +10,27 @@ import Foundation
 import ForkStore
 
 /// A square RGBA image (premultiplication not needed: alpha is 0 or 255).
-struct IconImage {
-    let size: Int
-    var rgba: [UInt8]
+public struct IconImage: Sendable {
+    public let size: Int
+    public var rgba: [UInt8]
+    public init(size: Int, rgba: [UInt8]) {
+        self.size = size
+        self.rgba = rgba
+    }
 }
 
 /// What the Finder knew about an application.
-struct FinderBundle {
-    var appIcons: [IconImage] = []          // 32 and/or 16 pixel
-    var documentTypes: [UInt32] = []        // FREF file types other than APPL
+public struct FinderBundle: Sendable {
+    public var appIcons: [IconImage] = []   // 32 and/or 16 pixel
+    public var documentTypes: [UInt32] = [] // FREF file types other than APPL
+    public init() {}
 }
 
 /// Resources of one fork by type and ID, decompressed if needed.
-struct ResourceFork {
+public struct ResourceFork {
     private var table: [UInt32: [Int16: [UInt8]]] = [:]
 
-    init?(fork: UnsafePointer<UInt8>?, length: Int) {
+    public init?(fork: UnsafePointer<UInt8>?, length: Int) {
         guard let fork, length > 0 else { return nil }
         var idx = rsrc_index()
         var err = [CChar](repeating: 0, count: 256)
@@ -47,10 +52,17 @@ struct ResourceFork {
         }
     }
 
-    subscript(type: String, id: Int16) -> [UInt8]? { table[fourcc(type)]?[id] }
-    func ids(_ type: String) -> [Int16] { (table[fourcc(type)] ?? [:]).keys.sorted() }
+    public subscript(type: String, id: Int16) -> [UInt8]? { table[fourcc(type)]?[id] }
+    public func ids(_ type: String) -> [Int16] { (table[fourcc(type)] ?? [:]).keys.sorted() }
 
     private func fourcc(_ s: String) -> UInt32 { s.utf8.reduce(0) { ($0 << 8) | UInt32($1) } }
+}
+
+func fourCCText(_ code: UInt32) -> String {
+    String((0..<4).map { i -> Character in
+        let b = UInt8((code >> UInt32(24 - i * 8)) & 0xFF)
+        return b >= 0x20 && b < 0x7F ? Character(UnicodeScalar(b)) : "?"
+    })
 }
 
 private func be16(_ b: [UInt8], _ o: Int) -> Int { o + 2 <= b.count ? Int(b[o]) << 8 | Int(b[o + 1]) : 0 }
@@ -59,7 +71,7 @@ private func be32(_ b: [UInt8], _ o: Int) -> UInt32 {
 }
 
 /// Read the BNDL for the given creator (or the only one) and its icons.
-func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
+public func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
     var result = FinderBundle()
     var bndl: [UInt8]?
     for id in fork.ids("BNDL") {
@@ -74,7 +86,7 @@ func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
     let ntypes = be16(b, o) + 1
     o += 2
     for _ in 0..<ntypes where o + 6 <= b.count {
-        let type = fourCCString(be32(b, o))
+        let type = fourCCText(be32(b, o))
         let n = be16(b, o + 4) + 1
         o += 6
         for _ in 0..<n where o + 4 <= b.count {
@@ -87,7 +99,7 @@ func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
     for (_, frefID) in maps["FREF"] ?? [:] {
         guard let f = fork["FREF", frefID], f.count >= 6 else { continue }
         let type = be32(f, 0)
-        if fourCCString(type) == "APPL" {
+        if fourCCText(type) == "APPL" {
             appLocal = be16(f, 4)
         } else if !result.documentTypes.contains(type) {
             result.documentTypes.append(type)
@@ -101,7 +113,7 @@ func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
 }
 
 /// The 32 and 16 pixel icons with this ID, best colour depth available.
-func icons(fork: ResourceFork, id: Int16) -> [IconImage] {
+public func icons(fork: ResourceFork, id: Int16) -> [IconImage] {
     var out: [IconImage] = []
     if let mono = fork["ICN#", id], mono.count >= 256 {
         let mask = Array(mono[128..<256])
@@ -156,7 +168,7 @@ private func colorIcon(size: Int, depth: Int, pixels: [UInt8], mask: [UInt8]) ->
 
 /// The standard 8-bit Macintosh colour table: a 6×6×6 cube from white,
 /// then ten-step red, green, blue and grey ramps, then black.
-func macPalette8(_ i: Int) -> (UInt8, UInt8, UInt8) {
+public func macPalette8(_ i: Int) -> (UInt8, UInt8, UInt8) {
     if i < 215 {
         let r = 5 - i / 36, g = 5 - (i / 6) % 6, b = 5 - i % 6
         return (UInt8(r * 0x33), UInt8(g * 0x33), UInt8(b * 0x33))
@@ -173,7 +185,7 @@ func macPalette8(_ i: Int) -> (UInt8, UInt8, UInt8) {
 }
 
 /// The standard 4-bit Macintosh colour table.
-let macPalette4: [(UInt8, UInt8, UInt8)] = [
+public let macPalette4: [(UInt8, UInt8, UInt8)] = [
     (0xFF, 0xFF, 0xFF), (0xFC, 0xF3, 0x05), (0xFF, 0x64, 0x02), (0xDD, 0x08, 0x06),
     (0xF2, 0x08, 0x84), (0x46, 0x00, 0xA5), (0x00, 0x00, 0xD4), (0x02, 0xAB, 0xEA),
     (0x1F, 0xB7, 0x14), (0x00, 0x64, 0x11), (0x56, 0x2C, 0x05), (0x90, 0x71, 0x3A),
@@ -181,7 +193,7 @@ let macPalette4: [(UInt8, UInt8, UInt8)] = [
 ]
 
 /// Nearest-neighbour scale (icons are pixel art).
-func scaled(_ img: IconImage, to size: Int) -> IconImage {
+public func scaled(_ img: IconImage, to size: Int) -> IconImage {
     var out = IconImage(size: size, rgba: [UInt8](repeating: 0, count: size * size * 4))
     for y in 0..<size {
         let sy = y * img.size / size
@@ -195,7 +207,7 @@ func scaled(_ img: IconImage, to size: Int) -> IconImage {
 }
 
 /// The application's Finder bundle, read from its AppleDouble or MacBinary file.
-func finderBundle(applicationAt path: String) -> FinderBundle {
+public func finderBundle(applicationAt path: String) -> FinderBundle {
     var mf = mac_file()
     var err = [CChar](repeating: 0, count: 256)
     guard appledouble_read(path, &mf, &err, err.count) else { return FinderBundle() }

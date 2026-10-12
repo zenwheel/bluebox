@@ -8,6 +8,7 @@
 
 #if canImport(AppKit)
 import AppKit
+import ClassicHost
 import Toolbox
 
 let classicMenuBarHeight: CGFloat = 20
@@ -101,7 +102,7 @@ final class MacWindowView: NSView {
     override func mouseDragged(with event: NSEvent) { post(event, button: -1) }
 }
 
-@MainActor final class RootlessHost: NSObject, NSApplicationDelegate {
+@MainActor final class RootlessHost: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let title: String
     var script: [String] = []
     var windows: [UInt32: MacWindow] = [:]
@@ -210,9 +211,11 @@ final class MacWindowView: NSView {
         return String(bytes: out, encoding: .macOSRoman) ?? ""
     }
 
+    var openMenus = 0
+
     func syncMenus() {
         let version = machine_menus_version()
-        guard version != menusVersion else { return }
+        guard version != menusVersion, openMenus == 0 else { return }
         menusVersion = version
         var menus = [machine_menu](repeating: machine_menu(), count: 32)
         let n = Int(machine_menus(&menus, 32))
@@ -221,6 +224,7 @@ final class MacWindowView: NSView {
         bar.addItem(appItem)
         let appMenu = NSMenu()
         appMenu.autoenablesItems = false
+        appMenu.delegate = self
         appItem.submenu = appMenu
         for i in 0..<n {
             var m = menus[i]
@@ -232,6 +236,7 @@ final class MacWindowView: NSView {
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
                 let sub = NSMenu(title: title)
                 sub.autoenablesItems = false
+                sub.delegate = self
                 item.submenu = sub
                 item.isEnabled = m.enabled
                 bar.addItem(item)
@@ -263,6 +268,53 @@ final class MacWindowView: NSView {
         NSApp.mainMenu = bar
     }
 
+    // MARK: Menu tracking
+    //
+    // Opening a host menu is a click in the classic menu bar: the app adjusts
+    // its menus (enabling items, changing their text) and calls MenuSelect,
+    // which waits until the host menu closes.
+
+    func menuWillOpen(_ menu: NSMenu) {
+        openMenus += 1
+        machine_menu_tracking_begin() // the first menu starts the session; later ones just wait for it
+        refreshItems(of: menu)
+    }
+
+    // Command keys go to the classic app through the key monitor.
+    func menuHasKeyEquivalent(_ menu: NSMenu, for event: NSEvent, target: AutoreleasingUnsafeMutablePointer<AnyObject?>,
+                              action: UnsafeMutablePointer<Selector?>) -> Bool { false }
+
+    func menuDidClose(_ menu: NSMenu) {
+        // The chosen item's action comes after this; end tracking after it.
+        // Moving to another menu opens it before this close is handled, so
+        // the session ends only when no host menu is open.
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                self.openMenus = max(0, self.openMenus - 1)
+                if self.openMenus == 0 { machine_menu_tracking_end() }
+            }
+        }
+    }
+
+    /// Update a menu's items in place from the current snapshot.
+    func refreshItems(of menu: NSMenu) {
+        var menus = [machine_menu](repeating: machine_menu(), count: 32)
+        let n = Int(machine_menus(&menus, 32))
+        for item in menu.items {
+            guard let pair = item.representedObject as? [Int], pair.count == 2 else { continue }
+            guard var m = menus[0..<n].first(where: { Int($0.id) == pair[0] }) else { continue }
+            let k = pair[1] - 1
+            guard k >= 0, k < Int(m.nitems) else { continue }
+            withUnsafeBytes(of: &m.items) { raw in
+                var it = raw.bindMemory(to: machine_menu_item.self)[k]
+                let text = withUnsafeBytes(of: &it.text) { Self.string($0.baseAddress!, 64) }
+                item.isEnabled = it.enabled && m.enabled
+                item.state = it.mark == 0x12 ? .on : .off
+                if item.title != text { item.title = text }
+            }
+        }
+    }
+
     @objc func chooseMenu(_ sender: NSMenuItem) {
         guard let pair = sender.representedObject as? [Int], pair.count == 2 else { return }
         machine_choose_menu(Int16(pair[0]), Int16(pair[1]))
@@ -272,7 +324,9 @@ final class MacWindowView: NSView {
 
     func installKeyMonitor() {
         NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { event in
-            MainActor.assumeIsolated {
+            let forClassic = MainActor.assumeIsolated { () -> Bool in
+                // Native panels and alerts (Standard File, Alert) keep their keys.
+                if let w = event.window ?? NSApp.keyWindow, !(w is MacWindow) { return false }
                 let mods = ScreenView.modifiers(event.modifierFlags)
                 switch event.type {
                 case .keyDown:
@@ -282,8 +336,9 @@ final class MacWindowView: NSView {
                 default:
                     machine_post_key(-1, Int32(event.keyCode), mods, 1, 0)
                 }
+                return true
             }
-            return nil // the classic app handles every key, command keys included
+            return forClassic ? nil : event // the classic app handles every key, command keys included
         }
     }
 }
@@ -293,6 +348,10 @@ func postScriptLive(_ script: [String]) {
     for step in script {
         if step.hasPrefix("wait:"), let n = UInt64(step.dropFirst(5)) {
             usleep(useconds_t(max(200_000, min(n, 10_000_000))))
+            continue
+        }
+        if let (menu, item) = menuStep(step) {
+            machine_choose_menu(menu, item)
             continue
         }
         var mods: UInt32 = 0
@@ -320,6 +379,8 @@ func postScriptLive(_ script: [String]) {
     app.setActivationPolicy(.regular)
     appIcon = icon
     installAlertHandler()
+    installFileHandler()
+    installPrintHandlers()
     let host = RootlessHost(title: title)
     host.script = script
     app.delegate = host

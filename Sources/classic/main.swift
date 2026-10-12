@@ -13,6 +13,7 @@ import Glibc
 import CCore
 import Foundation
 import ForkStore
+import ClassicHost
 import Toolbox
 
 /// Write to standard error (fd 2; glibc's `stderr` global is not concurrency-safe).
@@ -43,8 +44,9 @@ func usage() -> Never {
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
           --screenshot P  write the screen to PNG file P when the run ends
+          --print-to F  print to PDF file F instead of the print panel (headless runs)
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
-                     text:abc, return, tab
+                     text:abc, return, tab, menu:ID/item (e.g. menu:128/1)
       classic import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
           files to the library as AppleDouble.  Archives need unar (The Unarchiver).
@@ -117,7 +119,14 @@ func loadMacFile(_ path: String) -> mac_file {
     return mf
 }
 
-/// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab.
+/// A "menu:ID/item" script step.
+func menuStep(_ step: String) -> (Int16, Int16)? {
+    guard step.hasPrefix("menu:") else { return nil }
+    let parts = step.dropFirst(5).split(separator: "/").compactMap { Int16($0) }
+    return parts.count == 2 ? (parts[0], parts[1]) : nil
+}
+
+/// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item.
 func runScript(_ script: [String], budget: inout UInt64) -> run_status {
     var status = RUN_LIMIT
     for step in script {
@@ -126,6 +135,12 @@ func runScript(_ script: [String], budget: inout UInt64) -> run_status {
             status = machine_run(slice)
             budget -= slice
             if status == RUN_HALTED { break }
+            continue
+        }
+        if let (menu, item) = menuStep(step) {
+            machine_choose_menu(menu, item)
+            status = machine_run(min(200_000, budget))
+            budget -= min(200_000, budget)
             continue
         }
         var mods: UInt32 = 0
@@ -165,6 +180,7 @@ func runCommand(_ args: [String]) {
     var headless = false
     var screenWindow = false
     var screenshot: String?
+    var printTo: String?
     var i = 0
     while i < args.count {
         let a = args[i]
@@ -180,6 +196,10 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             keyScript = args[i].split(separator: ",").map(String.init)
+        case "--print-to":
+            i += 1
+            guard i < args.count else { usage() }
+            printTo = args[i]
         case "--screenshot":
             i += 1
             guard i < args.count else { usage() }
@@ -232,7 +252,7 @@ func runCommand(_ args: [String]) {
     app = resolveApplication(app, named: appName)
 
     #if canImport(AppKit)
-    let interactive = !headless && !census && screenshot == nil
+    let interactive = !headless && !census && screenshot == nil && printTo == nil
     if interactive && !screenWindow {
         // Rootless: the Mac screen covers the host display's visible area.
         MainActor.assumeIsolated {
@@ -271,6 +291,7 @@ func runCommand(_ args: [String]) {
         cpaths.forEach { free($0) }
     }
     #if canImport(AppKit)
+    if let printTo { installPrintToFile(printTo) }
     launchDocumentsSent = !documents.isEmpty
     if !interactive && documents.isEmpty { machine_send_open_application() }
     #else

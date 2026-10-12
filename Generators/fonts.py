@@ -195,6 +195,82 @@ def bullet(face):
     return (n + 2, 1, -(xh + n) // 2 - 1, rows)
 
 
+def ring(d):
+    """A circle outline d pixels across."""
+    c = (d - 1) / 2
+    rows = []
+    for y in range(d):
+        row = ""
+        for x in range(d):
+            r = ((x - c) ** 2 + (y - c) ** 2) ** 0.5
+            row += "#" if abs(r - c) < 0.6 else "."
+        rows.append(row)
+    return rows
+
+
+def overlay(base, inner):
+    """inner centred inside base (both lists of equal-width strings)."""
+    out = [list(r) for r in base]
+    t = (len(base) - len(inner)) // 2
+    l = (len(base[0]) - len(inner[0])) // 2
+    for y, line in enumerate(inner):
+        for x, ch in enumerate(line):
+            if ch == "#":
+                out[t + y][l + x] = "#"
+    return ["".join(r) for r in out]
+
+
+def symbol(face, ch):
+    """Symbols with no ASCII parts, drawn to the face's cap and x-heights."""
+    g = face["glyphs"]
+    cap = -g[ord("H")][2]
+    xh = -g[ord("x")][2]
+    mid = -(xh + 1) // 2 - 1                # a row near the middle of the x-height
+    if ch in "\u00A9\u00AE":
+        d = cap + 1 if cap % 2 == 0 else cap
+        inner = ([".##", "#..", ".##"] if ch == "\u00A9" else ["##.", "#.#", "##.", "#.#"]) if d >= 8 else \
+                (["##", "#."] if ch == "\u00A9" else ["##", "#."])
+        rows = overlay(ring(d), inner)
+        return (d + 2, 1, -cap, rows)
+    if ch == "\u2122":
+        rows = ["###.#...#", ".#..##.##", ".#..#.#.#"]
+        return (11, 1, -cap, rows)
+    if ch == "\u00B0":
+        return (5, 1, -cap, [".#.", "#.#", ".#."])
+    if ch == "\u00B1":
+        return (7, 1, -xh, ["..#..", "..#..", "#####", "..#..", "..#..", ".....", "#####"][: xh + 1])
+    if ch == "\u00F7":
+        return (7, 1, mid - 2, ["..#..", ".....", "#####", ".....", "..#.."])
+    if ch == "\u00AC":
+        return (7, 1, mid, ["#####", "....#"])
+    if ch == "\u2020":
+        return (7, 1, -cap, ["..#..", "#####"] + ["..#.."] * (cap - 2))
+    if ch == "\u2021":
+        return (7, 1, -cap, ["..#..", "#####"] + ["..#.."] * (cap - 4) + ["#####", "..#.."])
+    if ch == "\u00B5":
+        left, top, rows = ink(g[ord("u")])
+        return (g[ord("u")][0], left, top, rows + [rows[-1][0] + "." * (len(rows[0]) - 1)] * 2)
+    if ch == "\u00A2":
+        left, top, rows = ink(g[ord("c")])
+        col = len(rows[0]) // 2
+        stem = "." * col + "#" + "." * (len(rows[0]) - col - 1)
+        return place([(left, top, rows), (left, top - 1, [stem]), (left, top + len(rows), [stem])], g[ord("c")][0])
+    if ch in "\u00F8\u00D8":
+        base = g[ord("o" if ch == "\u00F8" else "O")]
+        left, top, rows = ink(base)
+        h, w = len(rows), len(rows[0])
+        slash = ["".join("#" if x == (w - 1) * (h - 1 - y) // max(h - 1, 1) else "." for x in range(w))
+                 for y in range(h)]
+        return place([(left, top, rows), (left, top, slash)], base[0])
+    if ch == "\u00DF":
+        made = joined(face, "B")
+        if made:
+            adv, left, top, rows = made
+            # A tall B with a descender-less stem reads as sharp s at these sizes.
+            return (adv, left, top, rows)
+    return None
+
+
 def macroman_glyphs(face):
     out = {}
     g = face["glyphs"]
@@ -238,6 +314,8 @@ def macroman_glyphs(face):
             made = flipped(face, "!")
         elif ch == "¿":
             made = flipped(face, "?")
+        else:
+            made = symbol(face, ch)
         if made is not None:
             out[code] = made
     return out

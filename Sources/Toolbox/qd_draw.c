@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
 
@@ -222,12 +223,57 @@ static void pen_size(gaddr port, int *pw, int *ph)
     *ph = pt_v(s);
 }
 
+/* The shape being drawn, for recording ports (printing). */
+static struct {
+    int kind;
+    qrect r;
+    int a, b;
+} geom;
+
+static void set_geom(int kind, qrect r, int a, int b)
+{
+    geom.kind = kind;
+    geom.r = r;
+    geom.a = a;
+    geom.b = b;
+}
+
+static void record_verb(gaddr port, int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
+{
+    uint8_t p[8];
+    int mode;
+    switch (verb) {
+    case V_FRAME:
+    case V_PAINT:
+        if (verb == V_FRAME && GrafPort_pnVis(port) < 0)
+            return;
+        qd_port_pattern(port, 0, p);
+        mode = GrafPort_pnMode(port);
+        break;
+    case V_ERASE:
+        qd_port_pattern(port, 1, p);
+        mode = patCopy;
+        break;
+    case V_INVERT:
+        memcpy(p, qd_pat_black, 8);
+        mode = patXor;
+        break;
+    default:
+        gget(p, pat, 8);
+        mode = patCopy;
+        break;
+    }
+    qd_rec_shape(port, geom.kind, verb, geom.r, geom.a, geom.b, verb == V_FRAME ? frame : shape, p, mode);
+}
+
 /* Perform a verb on a filled shape; `frame` is the shape's outline region. */
 static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
 {
     gaddr port = qd_port();
     if (!port)
         return;
+    if (qd_rec_active(port))
+        record_verb(port, verb, shape, frame, pat);
     uint8_t p[8];
     switch (verb) {
     case V_FRAME:
@@ -271,6 +317,7 @@ static void verb_rect(int verb, gaddr r, gaddr pat)
                                    (int16_t)(q.right - pw) });
         hrgn_op(&frame, &shape, &inner, RGN_DIFF);
     }
+    set_geom(MACHINE_PRINT_RECT, q, 0, 0);
     do_verb(verb, &shape, &frame, pat);
     hrgn_free(&shape);
     hrgn_free(&frame);
@@ -298,6 +345,7 @@ static void verb_oval(int verb, gaddr r, gaddr pat)
                                         (int16_t)(q.right - pw) });
         hrgn_op(&frame, &shape, &inner, RGN_DIFF);
     }
+    set_geom(MACHINE_PRINT_OVAL, q, 0, 0);
     do_verb(verb, &shape, &frame, pat);
     hrgn_free(&shape);
     hrgn_free(&frame);
@@ -326,6 +374,7 @@ static void verb_rrect(int verb, gaddr r, int ow, int oh, gaddr pat)
                         ow - 2 * pw, oh - 2 * ph);
         hrgn_op(&frame, &shape, &inner, RGN_DIFF);
     }
+    set_geom(MACHINE_PRINT_RRECT, q, ow, oh);
     do_verb(verb, &shape, &frame, pat);
     hrgn_free(&shape);
     hrgn_free(&frame);
@@ -355,6 +404,7 @@ static void verb_arc(int verb, gaddr r, int start, int angle, gaddr pat)
         arc_mask(&frame, q, start, angle);
     }
     arc_mask(&shape, q, start, angle);
+    set_geom(MACHINE_PRINT_ARC, q, start, angle);
     do_verb(verb, &shape, &frame, pat);
     hrgn_free(&shape);
     hrgn_free(&frame);
@@ -381,6 +431,7 @@ static void verb_rgn(int verb, gaddr rh, gaddr pat)
         hrgn_inset(&inner, pw, ph);
         hrgn_op(&frame, &shape, &inner, RGN_DIFF);
     }
+    set_geom(MACHINE_PRINT_REGION, hrgn_bbox(&shape), 0, 0);
     do_verb(verb, &shape, &frame, pat);
     hrgn_free(&shape);
     hrgn_free(&frame);
@@ -408,6 +459,8 @@ static void line_to(int h, int v)
         qd_line_region(&shape, pt_h(loc), pt_v(loc), h, v, pw, ph);
         uint8_t p[8];
         qd_port_pattern(port, 0, p);
+        if (qd_rec_active(port))
+            qd_rec_line(port, pt_h(loc), pt_v(loc), h, v, p, GrafPort_pnMode(port));
         qd_fill_region(port, &shape, p, GrafPort_pnMode(port));
         hrgn_free(&shape);
     }

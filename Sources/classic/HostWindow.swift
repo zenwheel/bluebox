@@ -6,6 +6,7 @@
 
 #if canImport(AppKit)
 import AppKit
+import ClassicHost
 import Toolbox
 
 final class ScreenView: NSView {
@@ -124,7 +125,12 @@ final class ScreenView: NSView {
         case 53: return 27   // escape
         default: break
         }
-        let chars = event.modifierFlags.contains(.command) ? event.charactersIgnoringModifiers : event.characters
+        var chars = event.modifierFlags.contains(.command) ? event.charactersIgnoringModifiers : event.characters
+        if event.type == .keyDown && !event.modifierFlags.contains(.command) {
+            // Through the keyboard layout, so dead keys (Option-E, E) compose.
+            guard let composed = keyTranslator.translate(event) else { return -1 }
+            chars = composed
+        }
         guard let s = chars, let data = s.data(using: .macOSRoman, allowLossyConversion: true), let b = data.first else {
             return -1
         }
@@ -180,6 +186,8 @@ struct LaunchEvents {
     }
 }
 
+@MainActor let keyTranslator = KeyTranslator()
+
 /// The classic application's Finder icon, for the Dock and alerts.
 nonisolated(unsafe) var appIcon: NSImage?
 
@@ -233,6 +241,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     app.setActivationPolicy(.regular)
     appIcon = icon
     installAlertHandler()
+    installFileHandler()
+    installPrintHandlers()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
     // Minimal app menu so Quit works.
@@ -298,5 +308,148 @@ func installAlertHandler() {
         }
         return chosen
     }, nil)
+}
+#endif
+
+#if canImport(AppKit)
+/// Shows only files of the requested classic types (and folders).
+final class ClassicTypeFilter: NSObject, NSOpenSavePanelDelegate {
+    let types: Set<UInt32>
+    init(types: Set<UInt32>) { self.types = types }
+
+    func panel(_ sender: Any, shouldEnable url: URL) -> Bool {
+        if types.isEmpty { return true }
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue,
+           url.pathExtension != "app" { return true }
+        return types.contains(machine_file_type(url.path))
+    }
+}
+
+/// Standard File becomes the host's open and save panels, run on the main
+/// thread while the emulator waits.
+func installFileHandler() {
+    machine_set_file_handler({ rqPtr, pathOut, pathSize, _ in
+        guard let rq = rqPtr?.pointee, let pathOut else { return false }
+        let save = rq.save
+        let prompt = withUnsafeBytes(of: rq.prompt) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        let name = withUnsafeBytes(of: rq.default_name) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        let dir = withUnsafeBytes(of: rq.directory) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        let types = withUnsafeBytes(of: rq.types) { raw in
+            Set(raw.bindMemory(to: UInt32.self).prefix(Int(rq.ntypes)))
+        }
+        var chosen: String?
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                let panel: NSSavePanel
+                let filter = ClassicTypeFilter(types: types)
+                if save {
+                    panel = NSSavePanel()
+                    panel.nameFieldStringValue = name
+                    // Classic names are taken as typed: no extension added or hidden.
+                    panel.allowsOtherFileTypes = true
+                    panel.isExtensionHidden = false
+                    panel.canSelectHiddenExtension = false
+                    panel.canCreateDirectories = true
+                } else {
+                    let open = NSOpenPanel()
+                    open.canChooseFiles = true
+                    open.canChooseDirectories = false
+                    open.allowsMultipleSelection = false
+                    open.delegate = filter
+                    panel = open
+                }
+                if !prompt.isEmpty { panel.message = prompt }
+                if !dir.isEmpty { panel.directoryURL = URL(fileURLWithPath: dir, isDirectory: true) }
+                if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
+                _ = filter
+            }
+        }
+        guard let chosen else { return false }
+        let bytes = Array(chosen.utf8)
+        guard bytes.count < pathSize else { return false }
+        for (i, b) in bytes.enumerated() { pathOut[i] = CChar(bitPattern: b) }
+        pathOut[bytes.count] = 0
+        return true
+    }, nil)
+}
+#endif
+
+#if canImport(AppKit)
+import PDFKit
+
+/// Print settings for the session (the page layout panel edits them).
+@MainActor let sessionPrintInfo: NSPrintInfo = {
+    let info = NSPrintInfo.shared.copy() as! NSPrintInfo
+    info.horizontalPagination = .clip
+    info.verticalPagination = .clip
+    return info
+}()
+
+@MainActor func pageSetup(from info: NSPrintInfo) -> machine_page_setup {
+    let paper = info.paperSize, ib = info.imageablePageBounds
+    return machine_page_setup(paper_width: paper.width, paper_height: paper.height,
+                              left: ib.minX, top: paper.height - ib.maxY, right: ib.maxX, bottom: paper.height - ib.minY,
+                              landscape: info.orientation == .landscape)
+}
+
+/// Printing goes to the host: Page Setup is the page layout panel, and the
+/// recorded pages are printed as PDF through the print panel (with preview).
+@MainActor func installPrintHandlers() {
+    var defaults = pageSetup(from: sessionPrintInfo)
+    machine_set_page_defaults(&defaults)
+    machine_set_print_handlers({ job, _ in
+        guard let job else { return false }
+        let pdf = ClassicPrint.pdf(job)
+        var ok = false
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                guard let doc = PDFDocument(data: pdf) else { return }
+                let info = sessionPrintInfo.copy() as! NSPrintInfo
+                info.topMargin = 0
+                info.bottomMargin = 0
+                info.leftMargin = 0
+                info.rightMargin = 0
+                guard let op = doc.printOperation(for: info, scalingMode: .pageScaleNone, autoRotate: false) else { return }
+                op.jobTitle = NSApp.windows.first(where: { $0.isKeyWindow })?.title ?? ProcessInfo.processInfo.processName
+                op.showsPrintPanel = true
+                op.showsProgressPanel = true
+                ok = op.run()
+            }
+        }
+        return ok
+    }, { psPtr, _ in
+        guard let psPtr else { return false }
+        var result = false
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                let info = sessionPrintInfo
+                if NSPageLayout().runModal(with: info) == NSApplication.ModalResponse.OK.rawValue {
+                    psPtr.pointee = pageSetup(from: info)
+                    result = true
+                }
+            }
+        }
+        return result
+    }, nil)
+}
+
+/// Where headless runs write printed pages (--print-to).
+nonisolated(unsafe) var printToPath: String?
+
+/// Headless printing: the job is written as a PDF file, no panels.
+func installPrintToFile(_ path: String) {
+    printToPath = path
+    machine_set_print_handlers({ job, _ in
+        guard let job, let path = printToPath else { return false }
+        do {
+            try ClassicPrint.pdf(job).write(to: URL(fileURLWithPath: path))
+            print("printed \(job.pointee.npages) page(s) to \(path)")
+            return true
+        } catch {
+            eprint("could not write \(path): \(error)\n")
+            return false
+        }
+    }, nil, nil)
 }
 #endif
