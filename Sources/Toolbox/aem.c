@@ -308,10 +308,82 @@ int16_t tb_AEDuplicateDesc(gaddr src, gaddr dst)
     return nh ? noErr : memFullErr;
 }
 
+/* An Apple event as Process Manager launch parameters ('appa',
+ * AppParameters): a high-level event record (class in the message, ID in
+ * where), a refCon, the length, then the event's data as we keep it. */
+static int16_t coerce_to_app_parameters(gaddr evt, gaddr desc_out)
+{
+    gaddr h = desc_handle(evt);
+    if (!h || !rd32(h))
+        return errAENotAEDesc;
+    uint32_t n = (uint32_t)tb_GetHandleSize(h);
+    uint32_t cls = 0, id = 0;
+    uint32_t off = find_entry(h, T("aevt"), T("evcl"), true);
+    if (off)
+        cls = rd32(rd32(h) + off + 12);
+    off = find_entry(h, T("aevt"), T("evid"), true);
+    if (off)
+        id = rd32(rd32(h) + off + 12);
+    gaddr out = tb_NewHandle((int32_t)(24 + n), false, true);
+    if (!out)
+        return memFullErr;
+    gaddr p = rd32(out);
+    wr16(p, 23);           /* kHighLevelEvent */
+    wr32(p + 2, cls);      /* message */
+    wr32(p + 10, id);      /* where */
+    wr32(p + 20, n);       /* messageLength (after eventRefCon at 16) */
+    gmemcpy(p + 24, rd32(h), n);
+    set_desc(desc_out, T("appa"), out);
+    return noErr;
+}
+
+/* The files an Open Documents event in launch parameters names (host paths,
+ * malloc'd); the count, or 0. */
+bool alias_host_of_record(gaddr rec, uint32_t len, char *host, size_t hostsize);
+int aem_launch_documents(gaddr params, char ***paths_out)
+{
+    *paths_out = NULL;
+    if (!params || rd16(params) != 23 || rd32(params + 2) != T("aevt") || rd32(params + 10) != T("odoc"))
+        return 0;
+    uint32_t n = rd32(params + 20);
+    gaddr h = tb_NewHandle((int32_t)n, false, false);
+    if (!h)
+        return 0;
+    gmemcpy(rd32(h), params + 24, n);
+    int count = 0;
+    char **paths = NULL;
+    uint32_t off = find_entry(h, T("aevt"), T("----"), false);
+    if (off && rd32(rd32(h) + off + 4) == T("list")) {
+        /* The list's own data: count, then entries (keyword, type, length, data). */
+        gaddr lp = rd32(h) + off + 12;
+        uint32_t items = rd32(lp), at = 4;
+        for (uint32_t i = 0; i < items; i++) {
+            uint32_t type = rd32(lp + at + 4), len = rd32(lp + at + 8);
+            gaddr data = lp + at + 12;
+            char host[1024];
+            bool ok = false;
+            if (type == T("fss ") && len >= 70)
+                ok = fm_host_path((int16_t)rd16(data), (int32_t)rd32(data + 2), data + 6, true, host, sizeof host);
+            else if (type == T("alis"))
+                ok = alias_host_of_record(data, len, host, sizeof host);
+            if (ok) {
+                paths = realloc(paths, (size_t)(count + 1) * sizeof *paths);
+                paths[count++] = strdup(host);
+            }
+            at += 12 + pad(len);
+        }
+    }
+    tb_DisposeHandle(h);
+    *paths_out = paths;
+    return count;
+}
+
 int16_t tb_AECoerceDesc(gaddr desc, int32_t result_type, gaddr desc_out)
 {
     if ((uint32_t)result_type == desc_type(desc) || (uint32_t)result_type == T("****"))
         return tb_AEDuplicateDesc(desc, desc_out);
+    if ((uint32_t)result_type == T("appa") && desc_type(desc) == T("aevt"))
+        return coerce_to_app_parameters(desc, desc_out);
     return errAECoercionFail;
 }
 

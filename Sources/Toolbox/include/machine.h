@@ -265,7 +265,8 @@ void machine_set_control_renderer(machine_control_fn fn, void *ctx);
 /* ---- Launching other applications ----
  * LaunchApplication: start the classic application at `path` (a host path)
  * as a separate run.  Returns false if it could not be started. */
-typedef bool (*machine_launch_fn)(const char *path, void *ctx);
+/* Start another application (with the documents it is to open). */
+typedef bool (*machine_launch_fn)(const char *path, const char *const *documents, int ndocuments, void *ctx);
 void machine_set_launch_handler(machine_launch_fn fn, void *ctx);
 
 /* ---- Color Picker ----

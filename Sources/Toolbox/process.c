@@ -3,6 +3,7 @@
  * (and front) process.  Temporary memory comes from the growable
  * application heap.
  */
+#include <stdlib.h>
 #include "machine.h"
 #include "tb_internal.h"
 
@@ -130,6 +131,7 @@ int16_t tb_GetFrontProcess(gaddr psn, int32_t dummy)
 /* LaunchApplication: the host starts the other application as its own run.
  * Without launchContinue the caller ends, as the Process Manager did. */
 
+int aem_launch_documents(gaddr params, char ***paths_out);
 static machine_launch_fn launch_fn;
 static void *launch_ctx;
 
@@ -146,7 +148,14 @@ int16_t tb_LaunchApplication(gaddr pb)
     char path[1024];
     if (!spec || !fm_host_path((int16_t)rd16(spec), (int32_t)rd32(spec + 2), spec + 6, true, path, sizeof path))
         return fnfErr;
-    if (!launch_fn || !launch_fn(path, launch_ctx))
+    /* Documents to open come as an Open Documents event in the parameters. */
+    char **docs = NULL;
+    int ndocs = aem_launch_documents(LaunchParamBlockRec_launchAppParameters(pb), &docs);
+    bool ok = launch_fn && launch_fn(path, (const char *const *)docs, ndocs, launch_ctx);
+    for (int i = 0; i < ndocs; i++)
+        free(docs[i]);
+    free(docs);
+    if (!ok)
         return -600; /* procNotFound: nothing could be started */
     gmemset(pb + LaunchParamBlockRec_launchProcessSN_off, 0, 8);
     if (!(flags & 0x4000)) { /* launchContinue */

@@ -350,12 +350,13 @@ final class ClassicTypeFilter: NSObject, NSOpenSavePanelDelegate {
 /// LaunchApplication starts the other classic application as its own run of
 /// this program, with the same appearance.
 func installLaunchHandler() {
-    machine_set_launch_handler({ pathPtr, _ in
+    machine_set_launch_handler({ pathPtr, docsPtr, ndocs, _ in
         guard let pathPtr else { return false }
         let path = String(cString: pathPtr)
+        let docs = (0..<Int(ndocs)).compactMap { i in docsPtr?[i].map { String(cString: $0) } }
         let me = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         let exe = Bundle.main.executableURL ?? me
-        var args = ["run", path]
+        var args = ["run", path] + docs
         if let i = CommandLine.arguments.firstIndex(of: "--appearance"), i + 1 < CommandLine.arguments.count {
             args += ["--appearance", CommandLine.arguments[i + 1]]
         }

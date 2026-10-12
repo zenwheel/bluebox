@@ -213,6 +213,18 @@ static bool target_host(gaddr alias, char *host, size_t hostsize)
     return fm_host_of_mac_path(path, len, host, hostsize);
 }
 
+/* The host path of an alias record held in guest memory (not a handle). */
+bool alias_host_of_record(gaddr rec, uint32_t len, char *host, size_t hostsize)
+{
+    gaddr h = tb_NewHandle((int32_t)len, false, false);
+    if (!h)
+        return false;
+    gmemcpy(rd32(h), rec, len);
+    bool ok = target_host(h, host, hostsize);
+    tb_DisposeHandle(h);
+    return ok;
+}
+
 int16_t tb_ResolveAlias(gaddr fromFile, gaddr alias, gaddr target, gaddr wasChanged)
 {
     if (wasChanged)
