@@ -60,6 +60,8 @@ typedef struct {
     uint8_t wave[512];
     bool has_wave;
     gaddr sound_header;  /* the last sound, for freq/note commands on sampled channels */
+    gaddr db;            /* SndPlayDoubleBuffer's header while it plays */
+    int db_index;        /* the buffer to play next */
 } channel;
 
 static channel chans[MAX_CHANNELS];
@@ -219,8 +221,8 @@ static void call_back(channel *c, sndcmd cmd)
 static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
 {
     switch (cmd.cmd) {
-    case quietCmd: stop_host(c); break;
-    case flushCmd: c->head = c->tail = 0; break;
+    case quietCmd: stop_host(c); c->db = 0; break;
+    case flushCmd: c->head = c->tail = 0; c->db = 0; break;
     case reInitCmd: break;
     case waitCmd: {
         uint64_t start = c->busy_until > now_ns() ? c->busy_until : now_ns();
@@ -268,9 +270,67 @@ static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
     }
 }
 
+/* Double buffering: each ready buffer goes to the host a little before the
+ * one playing ends, then the application's doubleBack refills it. */
+#define DB_LEAD_NS 100000000u
+
+static void pump_double(channel *c)
+{
+    while (c->db && !c->paused && now_ns() + DB_LEAD_NS >= c->busy_until) {
+        gaddr h = c->db;
+        gaddr buf = rd32(h + SndDoubleBufferHeader_dbhBufferPtr_off + (uint32_t)c->db_index * 4);
+        uint32_t flags = rd32(buf + SndDoubleBuffer_dbFlags_off);
+        if (!(flags & 1)) /* dbBufferReady: not yet; the app is late */
+            return;
+        int nch = (int16_t)rd16(h + SndDoubleBufferHeader_dbhNumChannels_off);
+        int bits = (int16_t)rd16(h + SndDoubleBufferHeader_dbhSampleSize_off);
+        double rate = fixed_rate(rd32(h + SndDoubleBufferHeader_dbhSampleRate_off));
+        uint32_t frames = rd32(buf + SndDoubleBuffer_dbNumFrames_off);
+        if (nch < 1 || nch > 2 || frames > 0x1000000)
+            frames = 0;
+        if (rate < 1000 || rate > 100000)
+            rate = 22254.5454;
+        uint32_t n = frames * (uint32_t)(nch > 0 ? nch : 1);
+        int16_t *pcm = malloc(sizeof *pcm * (n ? n : 1));
+        gaddr data = buf + SndDoubleBuffer_dbSoundData_off;
+        for (uint32_t i = 0; i < n; i++)
+            pcm[i] = bits == 16 ? (int16_t)rd16(data + i * 2) : (int16_t)(((int)rd8(data + i) - 128) << 8);
+        emit(c, pcm, (int)frames, nch, rate);
+        free(pcm);
+        bool last = flags & 4; /* dbLastBuffer */
+        wr32(buf + SndDoubleBuffer_dbFlags_off, flags & ~1u);
+        c->db_index ^= 1;
+        if (last) {
+            c->db = 0;
+            return;
+        }
+        gaddr back = rd32(h + SndDoubleBufferHeader_dbhDoubleBack_off);
+        if (back) {
+            cpu_push32(g_cpu, c->chan);
+            cpu_push32(g_cpu, buf);
+            guest_call(back);
+        }
+    }
+}
+
+int16_t tb_SndPlayDoubleBuffer(gaddr chan, gaddr params)
+{
+    channel *c = find(chan);
+    if (!c)
+        return badChannel;
+    int bits = (int16_t)rd16(params + SndDoubleBufferHeader_dbhSampleSize_off);
+    if (rd16(params + SndDoubleBufferHeader_dbhCompressionID_off) || (bits != 8 && bits != 16))
+        return badFormat;
+    c->db = params;
+    c->db_index = 0;
+    pump_double(c);
+    return noErr;
+}
+
 /* Run queued commands whose time has come. */
 static void pump(channel *c)
 {
+    pump_double(c);
     while (!c->paused && c->head != c->tail && now_ns() >= c->busy_until) {
         sndcmd cmd = c->q[c->head];
         c->head = (c->head + 1) % QUEUE_LEN;
@@ -452,7 +512,7 @@ int16_t tb_SndChannelStatus(gaddr chan, int16_t length, gaddr statusp)
         return badChannel;
     gmemset(statusp, 0, (uint32_t)length);
     pump(c);
-    bool busy = c->head != c->tail || now_ns() < c->busy_until;
+    bool busy = c->head != c->tail || now_ns() < c->busy_until || c->db;
     if (length >= 16) {
         wr8(statusp + 8, busy ? 1 : 0);     /* scChannelBusy */
         wr8(statusp + 10, c->paused ? 1 : 0); /* scChannelPaused */
@@ -469,6 +529,8 @@ int16_t tb_SndManagerStatus(int16_t length, gaddr statusp)
 }
 
 int32_t tb_SndSoundManagerVersion(void) { return 0x03008000; }
+int32_t tb_MACEVersion(void) { return 0x03008000; }
+int32_t tb_SPBVersion(void) { return 0x03008000; }
 
 void tb_SndGetSysBeepState(gaddr statep) { wr16(statep, beep_state); }
 int16_t tb_SndSetSysBeepState(int16_t state) { beep_state = (uint16_t)state; return noErr; }

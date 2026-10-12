@@ -5636,6 +5636,15 @@ static void glue_LongSecondsToDate(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MACEVersion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_MACEVersion();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MakeITable(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7929,6 +7938,15 @@ static void glue_SFPutFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SPBVersion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_SPBVersion();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SameProcess(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9058,6 +9076,17 @@ static void glue_SndPlay(cpu68k *c, uint16_t trapword)
     gaddr a_sndh = (gaddr)cpu_pop32(c);
     gaddr a_chanp = (gaddr)cpu_pop32(c);
     int16_t r = tb_SndPlay(a_chanp, a_sndh, a_async);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndPlayDoubleBuffer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_paramp = (gaddr)cpu_pop32(c);
+    gaddr a_chanp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndPlayDoubleBuffer(a_chanp, a_paramp);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -11625,8 +11654,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x0u, "FinaleUnknown1", CONV_STACK, 0, 0, 0},
     {0xA800, (int32_t)0x4u, "DirectorUnknown3", CONV_STACK, 0, 4, 0},
     {0xA800, (int32_t)0xCu, "SpeechManagerVersion", CONV_STACK, 0, 4, 0},
-    {0xA800, (int32_t)0x10u, "MACEVersion", CONV_STACK, 0, 4, 0},
-    {0xA800, (int32_t)0x14u, "SPBVersion", CONV_STACK, 0, 4, 0},
+    {0xA800, (int32_t)0x10u, "MACEVersion", CONV_STACK, 0, 4, glue_MACEVersion},
+    {0xA800, (int32_t)0x14u, "SPBVersion", CONV_STACK, 0, 4, glue_SPBVersion},
     {0xA800, (int32_t)0x40004u, "FinaleUnknown2", CONV_STACK, 16, 2, 0},
     {0xA800, (int32_t)0x40010u, "Comp3to1", CONV_STACK, 28, 0, 0},
     {0xA800, (int32_t)0x80010u, "Exp1to3", CONV_STACK, 28, 0, 0},
@@ -11660,7 +11689,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x3200014u, "SPBRecord", CONV_STACK, 6, 2, 0},
     {0xA800, (int32_t)0x4040018u, "GetSoundHeaderOffset", CONV_STACK, 8, 2, glue_GetSoundHeaderOffset},
     {0xA800, (int32_t)0x418000Cu, "NewSpeechChannel", CONV_STACK, 8, 2, 0},
-    {0xA800, (int32_t)0x4200008u, "SndPlayDoubleBuffer", CONV_STACK, 8, 2, 0},
+    {0xA800, (int32_t)0x4200008u, "SndPlayDoubleBuffer", CONV_STACK, 8, 2, glue_SndPlayDoubleBuffer},
     {0xA800, (int32_t)0x4240014u, "SPBRecordToFile", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x430000Cu, "StopSpeechAt", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x434000Cu, "PauseSpeechAt", CONV_STACK, 8, 2, 0},

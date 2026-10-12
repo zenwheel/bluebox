@@ -159,6 +159,7 @@ void time_pump(void)
     if (in_interrupt || !c || c->halted || (c->sr & 0x0700))
         return;
     in_interrupt = true;
+    sound_pump(); /* sound completion ran at interrupt time too */
     uint64_t t = now();
     for (int i = 0; i < MAX_TASKS; i++) {
         if (!timers[i].tm || !timers[i].active || timers[i].due > t)

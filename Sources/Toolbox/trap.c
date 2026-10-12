@@ -165,13 +165,17 @@ static void dispatch_native(cpu68k *c, uint16_t tw)
     }
     const char *loc = d->loc;
     int32_t sel;
+    uint32_t mask = 0xFFFFFFFFu; /* applied to the table's selectors too */
     bool on_stack = false;
     if (!strcmp(loc, "D0W"))
         sel = (int16_t)c->d[0];
     else if (!strcmp(loc, "D0L"))
         sel = (int32_t)c->d[0];
-    else if (!strncmp(loc, "D0<", 3))
-        sel = (int32_t)(c->d[0] & strtoul(loc + 3, NULL, 0));
+    else if (!strncmp(loc, "D0<", 3)) {
+        /* SoundDispatch: older interfaces left the parameter size byte zero. */
+        mask = (uint32_t)strtoul(loc + 3, NULL, 0);
+        sel = (int32_t)(c->d[0] & mask);
+    }
     else if (!strcmp(loc, "TrapBits"))
         sel = (tw >> 9) & 3;
     else if (!strcmp(loc, "StackW") || !strncmp(loc, "StackWMasked", 12)) {
@@ -190,7 +194,7 @@ static void dispatch_native(cpu68k *c, uint16_t tw)
     }
     const dispatch_sig *s = NULL;
     for (unsigned i = 0; i < d->count; i++) {
-        if (d->first[i].selector == sel) {
+        if (((uint32_t)d->first[i].selector & mask) == (uint32_t)sel) {
             s = &d->first[i];
             break;
         }

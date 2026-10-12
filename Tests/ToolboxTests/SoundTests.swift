@@ -34,6 +34,48 @@ extension Classic {
             }, nil)
         }
 
+        /// SndPlayDoubleBuffer through the old selector (parameter size zero),
+        /// as compiled with older interfaces: both ready buffers play and the
+        /// doubleBack procedure is called for each.
+        @Test func doubleBufferPlaysReadyBuffersAndCallsBack() {
+            launchTestApp()
+            install()
+            defer { machine_set_sound_handler(nil, nil) }
+            let stack = tb_NewPtr(65536, false, true)
+            g_cpu!.pointee.a.7 = stack + 65536 - 16
+            let chanp = tb_NewPtr(4, false, true)
+            #expect(tb_SndNewChannel(chanp, 5, 0, 0) == 0)
+            let chan = rd32(chanp)
+            let count = tb_NewPtr(4, false, true)
+            // PROCEDURE doubleBack(chan, buffer): count calls.
+            let back: [UInt16] = [0x205F, 0x508F, 0x52B9, UInt16(count >> 16), UInt16(count & 0xFFFF), 0x4ED0]
+            let backCode = tb_NewPtr(Int32(back.count * 2), false, false)
+            for (i, w) in back.enumerated() { wr16(backCode + UInt32(i * 2), w) }
+            let header = tb_NewPtr(24, false, true)
+            wr16(header, 1); wr16(header + 2, 8)
+            wr32(header + 8, 0x5622_0000) // 22050 Hz
+            for i in 0..<2 {
+                let buf = tb_NewPtr(16 + 100, false, true)
+                wr32(buf, 100); wr32(buf + 4, 1) // ready
+                wr32(header + 12 + UInt32(i * 4), buf)
+            }
+            wr32(header + 20, backCode)
+            // CLR.W -(SP); PEA chan; PEA header; MOVE.L #$00200008,D0; _SoundDispatch; MOVE.W (SP)+,D7; _ExitToShell
+            let words: [UInt16] = [0x4267, 0x4879, UInt16(chan >> 16), UInt16(chan & 0xFFFF),
+                                   0x4879, UInt16(header >> 16), UInt16(header & 0xFFFF),
+                                   0x203C, 0x0020, 0x0008, 0xA800, 0x3E1F, 0xA9F4]
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            g_cpu!.pointee.pc = code
+            g_cpu!.pointee.halted = false
+            _ = cpu_run(g_cpu, 100_000)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0)
+            #expect(Self.played.count == 2 && Self.played.allSatisfy { $0.frames == 100 })
+            #expect(rd32(count) == 2)
+            _ = tb_SndDisposeChannel(chan, 1)
+        }
+
         @Test func synchronousPlayWaitsForTheSound() {
             launchTestApp()
             install()
