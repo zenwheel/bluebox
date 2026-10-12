@@ -79,6 +79,7 @@ void wdef0_native(cpu68k *c, uint16_t tw);
 void mdef0_native(cpu68k *c, uint16_t tw);
 void cdef0_native(cpu68k *c, uint16_t tw);
 void cdef1_native(cpu68k *c, uint16_t tw);
+void cdef63_native(cpu68k *c, uint16_t tw);
 void ldef0_native(cpu68k *c, uint16_t tw);
 void events_reset(void);
 void fm_init(const char *root);
@@ -97,24 +98,26 @@ static void defproc_stub(uint8_t out[8], native_fn fn, const char *name)
 
 static bool open_system_file(void)
 {
-    uint8_t wdef0[8], mdef0[8], cdef0[8], cdef1[8], ldef0[8], itl0[32], itl1[332];
+    uint8_t wdef0[8], mdef0[8], cdef0[8], cdef1[8], cdef63[8], ldef0[8], itl0[32], itl1[332];
     intl_default_itl0(itl0);
     intl_default_itl1(itl1);
     defproc_stub(wdef0, wdef0_native, "WDEF 0");
     defproc_stub(mdef0, mdef0_native, "MDEF 0");
     defproc_stub(cdef0, cdef0_native, "CDEF 0");
     defproc_stub(cdef1, cdef1_native, "CDEF 1");
+    defproc_stub(cdef63, cdef63_native, "CDEF 63");
     defproc_stub(ldef0, ldef0_native, "LDEF 0");
     rsrc_spec specs[64] = {
         { fourcc("WDEF"), 0, NULL, RES_SYS_HEAP, wdef0, 8 },
         { fourcc("MDEF"), 0, NULL, RES_SYS_HEAP, mdef0, 8 },
         { fourcc("CDEF"), 0, NULL, RES_SYS_HEAP, cdef0, 8 },
         { fourcc("CDEF"), 1, NULL, RES_SYS_HEAP, cdef1, 8 },
+        { fourcc("CDEF"), 63, NULL, RES_SYS_HEAP, cdef63, 8 },
         { fourcc("LDEF"), 0, NULL, RES_SYS_HEAP, ldef0, 8 },
         { fourcc("itl0"), 0, NULL, RES_SYS_HEAP, itl0, sizeof itl0 },
         { fourcc("itl1"), 0, NULL, RES_SYS_HEAP, itl1, sizeof itl1 },
     };
-    size_t n = 7;
+    size_t n = 8;
     /* Standard cursors and alert icons (Generators/sysres.py). */
     for (unsigned i = 0; i < sysres_count && n < 64; i++)
         specs[n++] = (rsrc_spec){ sysres[i].type, sysres[i].id, NULL, RES_SYS_HEAP | RES_PURGEABLE, sysres[i].data,

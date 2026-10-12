@@ -560,7 +560,7 @@ int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
         tb_DisposePtr(chp);
         int n = 0;
         if (part) {
-            if (tb_TrackControl(ch, p, 0))
+            if (tb_TrackControl(ch, p, 0xFFFFFFFFu)) /* as the Dialog Manager did */
                 n = item_for_handle(d, ch);
         } else {
             n = tb_FindDialogItem(d, p) + 1;

@@ -53,7 +53,8 @@ func usage() -> Never {
                      "archive.sit:Name" picks one), or the name of an imported
                      scheme (classic themes lists them); themes use a 32-bit screen
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
-                     text:abc, return, tab, menu:ID/item (e.g. menu:128/1)
+                     text:abc, return, tab, menu:ID/item (e.g. menu:128/1), and
+                     the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2
       classic import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
           files to the library as AppleDouble.  Archives need unar (The Unarchiver).
@@ -155,6 +156,32 @@ func runScript(_ script: [String], budget: inout UInt64) -> run_status {
             machine_choose_menu(menu, item)
             status = machine_run(min(200_000, budget))
             budget -= min(200_000, budget)
+            continue
+        }
+        // Mouse: down:x/y, move:x/y, up:x/y (button held from down to up),
+        // click:x/y (both), drag:x1/y1/x2/y2 (press, move and release at
+        // once, for the Toolbox's own tracking loops), in global coordinates.
+        if step.hasPrefix("drag:") {
+            let v = step.dropFirst(5).split(separator: "/").compactMap { Int32($0) }
+            guard v.count == 4 else { fail("drag takes x1/y1/x2/y2: \(step)") }
+            machine_post_mouse(v[0], v[1], 1)
+            machine_post_mouse(v[2], v[3], -1)
+            machine_post_mouse(v[2], v[3], 0)
+            status = machine_run(min(400_000, budget))
+            budget -= min(400_000, budget)
+            continue
+        }
+        if let colon = step.firstIndex(of: ":"),
+           ["down", "move", "up", "click"].contains(String(step[..<colon])) {
+            let xy = step[step.index(after: colon)...].split(separator: "/").compactMap { Int32($0) }
+            guard xy.count == 2 else { fail("mouse steps take x/y: \(step)") }
+            let kind = String(step[..<colon])
+            let presses: [Int32] = kind == "click" ? [1, 0] : kind == "down" ? [1] : kind == "up" ? [0] : [-1]
+            for b in presses {
+                machine_post_mouse(xy[0], xy[1], b)
+                status = machine_run(min(200_000, budget))
+                budget -= min(200_000, budget)
+            }
             continue
         }
         var mods: UInt32 = 0

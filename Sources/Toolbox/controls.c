@@ -1,6 +1,6 @@
 /*
- * Control Manager, with native CDEF 0 (buttons, check boxes, radio buttons)
- * and CDEF 1 (scroll bars).
+ * Control Manager, with native CDEF 0 (buttons, check boxes, radio buttons),
+ * CDEF 1 (scroll bars) and CDEF 63 (pop-up menus).
  */
 #include <string.h>
 
@@ -368,6 +368,232 @@ void cdef0_native(cpu68k *c, uint16_t tw) { cdef_entry(c, false); }
 void cdef1_native(cpu68k *c, uint16_t tw) { cdef_entry(c, true); }
 
 /* ---------------------------------------------------------------------- */
+/* CDEF 63: pop-up menu (procIDs 1008-1015), as System 7's.
+ *
+ * At creation the value is the title's style and justification, the
+ * minimum the menu ID and the maximum the title's width; the CDEF then
+ * takes the menu (into the hierarchical part of the menu list), keeps those
+ * in contrlData (PopupPrivateData: menu handle, menu ID, then ours) and
+ * makes the value the chosen item, from 1 to the number of items.
+ * Variants: 1 fixed width, 2 variable width (fitting the item), 4 the
+ * refCon is a resource type whose names are added, 8 the window's font. */
+
+enum { popupFixedWidth = 1, popupVariableWidth = 2, popupUseAddResMenu = 4 };
+enum { inPopUpMenu = 2 }; /* kControlMenuPart */
+enum { popupTitleLeftJust = 0, popupTitleCenterJust = 1, popupTitleRightJust = 0xFF };
+#define POPUP_DATA_SIZE 10 /* mHandle, mID, title style, title width */
+
+static gaddr popup_data(gaddr ch)
+{
+    gaddr h = ControlRecord_contrlData(cp(ch));
+    return h && rd32(h) ? rd32(h) : 0;
+}
+
+static gaddr popup_menu(gaddr ch)
+{
+    gaddr d = popup_data(ch);
+    return d ? rd32(d) : 0;
+}
+
+static void popup_init(gaddr ch)
+{
+    gaddr p = cp(ch);
+    int16_t style = ControlRecord_contrlValue(p);
+    int16_t mid = ControlRecord_contrlMin(p);
+    int16_t width = ControlRecord_contrlMax(p);
+    int32_t rc = ControlRecord_contrlRfCon(p);
+    gaddr mh = tb_GetMenuHandle(mid);
+    if (!mh) {
+        mh = tb_GetMenu(mid);
+        if (mh) {
+            if (cvariant(ch) & popupUseAddResMenu)
+                tb_AppendResMenu(mh, rc);
+            tb_InsertMenu(mh, -1);
+        }
+    }
+    gaddr dh = tb_NewHandle(POPUP_DATA_SIZE, false, true);
+    if (dh && rd32(dh)) {
+        gaddr d = rd32(dh);
+        wr32(d, mh);
+        wr16(d + 4, (uint16_t)mid);
+        wr16(d + 6, (uint16_t)style);
+        wr16(d + 8, (uint16_t)width);
+    }
+    p = cp(ch);
+    ControlRecord_set_contrlData(p, dh);
+    ControlRecord_set_contrlAction(p, 0xFFFFFFFFu); /* tracked by the CDEF itself */
+    ControlRecord_set_contrlMin(p, 1);
+    ControlRecord_set_contrlMax(p, (int16_t)(mh ? tb_CountMItems(mh) : 0));
+    ControlRecord_set_contrlValue(p, 1);
+}
+
+/* The title area and the menu box. */
+static void popup_parts(gaddr ch, qrect *title, qrect *box)
+{
+    qrect r = crect(ch);
+    gaddr d = popup_data(ch);
+    int tw = d ? (int16_t)rd16(d + 8) : 0;
+    *title = (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + tw) };
+    *box = (qrect){ (int16_t)(r.top + 1), (int16_t)(r.left + tw + (tw ? 2 : 0)), (int16_t)(r.bottom - 1), r.right };
+    if (cvariant(ch) & popupVariableWidth) {
+        gaddr mh = popup_menu(ch);
+        if (mh) {
+            gaddr s = tb_NewPtr(256, false, true);
+            tb_GetMenuItemText(mh, cvalue(ch), s);
+            uint8_t buf[256];
+            gget(buf, s + 1, rd8(s));
+            int w = qd_text_width(qd_port(), buf, rd8(s)) + 32;
+            tb_DisposePtr(s);
+            if (box->left + w < box->right)
+                box->right = (int16_t)(box->left + w);
+        }
+    }
+}
+
+static void popup_draw(gaddr ch)
+{
+    if (!ControlRecord_contrlVis(cp(ch)))
+        return;
+    int16_t f, sz;
+    uint8_t face;
+    control_font(ch, &f, &sz, &face);
+    tb_PenNormal();
+    gaddr port = qd_port();
+    qrect title, box;
+    popup_parts(ch, &title, &box);
+    gaddr fi = tb_NewPtr(8, false, false);
+    tb_GetFontInfo(fi);
+    int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2);
+    tb_DisposePtr(fi);
+    int base = box.top + (box.bottom - box.top - 1 + asc - desc) / 2;
+    gaddr rr = tmp_rect(crect(ch));
+    tb_EraseRect(rr);
+
+    /* Title, in its style, justified in its width. */
+    gaddr d = popup_data(ch);
+    uint16_t style = d ? rd16(d + 6) : 0;
+    uint8_t t[256];
+    int n;
+    title_text(ch, t, &n);
+    if (n && title.right > title.left) {
+        GrafPort_set_txFace(port, (uint8_t)(style >> 8 & 0x7F));
+        int tw = qd_text_width(port, t, n);
+        int x = title.left;
+        if ((style & 0xFF) == popupTitleCenterJust)
+            x = title.left + (title.right - title.left - tw) / 2;
+        else if ((style & 0xFF) == popupTitleRightJust)
+            x = title.right - tw;
+        tb_MoveTo((int16_t)x, (int16_t)base);
+        qd_draw_text(port, t, n);
+        GrafPort_set_txFace(port, (cvariant(ch) & 8) ? face : 0);
+    }
+
+    /* The box with its drop shadow, the current item and the triangle. */
+    qrect frame = { box.top, box.left, (int16_t)(box.bottom - 1), (int16_t)(box.right - 1) };
+    qrect_put(rr, frame);
+    tb_EraseRect(rr);
+    tb_FrameRect(rr);
+    tb_MoveTo((int16_t)(frame.left + 3), frame.bottom);
+    tb_LineTo(frame.right, frame.bottom);
+    tb_LineTo(frame.right, (int16_t)(frame.top + 3));
+    gaddr mh = popup_menu(ch);
+    if (mh) {
+        gaddr s = tb_NewPtr(256, false, true);
+        tb_GetMenuItemText(mh, cvalue(ch), s);
+        uint8_t buf[256];
+        int len = rd8(s);
+        gget(buf, s + 1, (uint32_t)len);
+        tb_DisposePtr(s);
+        int room = frame.right - frame.left - 30;
+        while (len > 0 && qd_text_width(port, buf, len) > room)
+            len--;
+        tb_MoveTo((int16_t)(frame.left + 13), (int16_t)base);
+        qd_draw_text(port, buf, len);
+    }
+    int tx = frame.right - 17, ty = frame.top + (frame.bottom - frame.top) / 2 - 2;
+    for (int i = 0; i < 6; i++) {
+        tb_MoveTo((int16_t)(tx + i), (int16_t)(ty + i));
+        tb_LineTo((int16_t)(tx + 10 - i), (int16_t)(ty + i));
+    }
+    if (chilite(ch) == inPopUpMenu) {
+        qrect in = { (int16_t)(frame.top + 1), (int16_t)(frame.left + 1), frame.bottom, frame.right };
+        qrect_put(rr, in);
+        tb_InvertRect(rr);
+    }
+    tb_DisposePtr(rr);
+    if (chilite(ch) == 255)
+        fill(crect(ch), qd_pat_gray, patBic);
+    restore_font(f, sz, face);
+}
+
+static int32_t popup_test(gaddr ch, uint32_t pt)
+{
+    if (chilite(ch) == 255 || !ControlRecord_contrlVis(cp(ch)))
+        return 0;
+    qrect title, box;
+    popup_parts(ch, &title, &box);
+    qrect r = { title.top, title.left, box.bottom, box.right };
+    if (pt_h(pt) >= r.left && pt_h(pt) < r.right && pt_v(pt) >= r.top && pt_v(pt) < r.bottom)
+        return inPopUpMenu;
+    return 0;
+}
+
+/* autoTrack: the menu pops up over the box with the current item under the
+ * mouse; the value becomes the item chosen. */
+static void popup_track(gaddr ch)
+{
+    gaddr mh = popup_menu(ch);
+    if (!mh)
+        return;
+    qrect title, box;
+    popup_parts(ch, &title, &box);
+    gaddr pt = tb_NewPtr(4, false, true);
+    wr32(pt, make_pt(box.top, box.left));
+    tb_LocalToGlobal(pt);
+    uint32_t g = rd32(pt);
+    tb_DisposePtr(pt);
+    /* The item marked is the current one. */
+    int16_t cur = cvalue(ch);
+    int items = tb_CountMItems(mh);
+    for (int i = 1; i <= items; i++)
+        tb_SetItemMark(mh, (int16_t)i, i == cur ? 0x12 : 0);
+    tb_HiliteControl(ch, inPopUpMenu);
+    int32_t r = tb_PopUpMenuSelect(mh, (int16_t)pt_v(g), (int16_t)pt_h(g), cur);
+    tb_HiliteControl(ch, 0);
+    int16_t item = (int16_t)(r & 0xFFFF);
+    if (r && item > 0) {
+        ControlRecord_set_contrlValue(cp(ch), item);
+        tb_Draw1Control(ch);
+    }
+}
+
+void cdef63_native(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int32_t param = (int32_t)cpu_pop32(c);
+    int16_t msg = (int16_t)cpu_pop16(c);
+    gaddr ch = cpu_pop32(c);
+    cpu_pop16(c);
+    int32_t result = 0;
+    switch (msg) {
+    case drawCntl: popup_draw(ch); break;
+    case testCntl: result = popup_test(ch, (uint32_t)param); break;
+    case initCntl: popup_init(ch); break;
+    case dispCntl: {
+        gaddr dh = ControlRecord_contrlData(cp(ch));
+        if (dh)
+            tb_DisposeHandle(dh);
+        ControlRecord_set_contrlData(cp(ch), 0);
+        break;
+    }
+    case autoTrack: popup_track(ch); break;
+    default: break;
+    }
+    wr32(c->a[7], (uint32_t)result);
+    cpu_push32(c, ret);
+}
+
+/* ---------------------------------------------------------------------- */
 /* Creating and disposing */
 
 gaddr tb_NewControl(gaddr wst, gaddr r, gaddr title, int8_t vis, int16_t value, int16_t min, int16_t max,
@@ -622,8 +848,15 @@ int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a)
     if (!part)
         return 0;
     gaddr w = cowner(ch);
-    if (a == 0xFFFFFFFFu)
+    /* -1: the control's own action procedure.  A control whose action is -1
+     * tracks itself, even when the caller passes none. */
+    if (a == 0xFFFFFFFFu || (!a && ControlRecord_contrlAction(cp(ch)) == 0xFFFFFFFFu))
         a = ControlRecord_contrlAction(cp(ch));
+    if (a == 0xFFFFFFFFu) {
+        /* The CDEF tracks the mouse itself (pop-up menus). */
+        call_cdef(ch, autoTrack, part);
+        return part;
+    }
     if (part == inThumb) {
         /* Drag the thumb; the value follows the mouse along the track. */
         qrect r = crect(ch);

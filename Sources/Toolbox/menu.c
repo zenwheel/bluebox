@@ -1003,10 +1003,13 @@ int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
     tb_DisposePtr(fr);
     gaddr which = tb_NewPtr(2, false, true);
     call_mdef(mh, mDrawMsg, box, 0, which);
-    while (ev_still_down()) {
+    /* At least once: a quick click chooses the item under the mouse. */
+    do {
         call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
+        if (!ev_still_down())
+            break;
         ev_wait_tick();
-    }
+    } while (true);
     int chosen = (int16_t)rd16(which);
     restore_bits(area, under);
     tb_DisposePtr(which);
