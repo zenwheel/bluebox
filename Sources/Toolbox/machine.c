@@ -338,8 +338,8 @@ static void trace_cpu(cpu68k *c)
 {
     char buf[64];
     cpu_disasm(c->pc, buf, sizeof buf);
-    log_printf("%08X  %-16s d0=%08X d1=%08X a0=%08X a7=%08X sr=%04X\n", c->pc, buf, c->d[0], c->d[1], c->a[0],
-               c->a[7], c->sr);
+    log_printf("%08X  %-16s d0=%08X d1=%08X a0=%08X a1=%08X a2=%08X a3=%08X a4=%08X a7=%08X sr=%04X\n", c->pc, buf,
+               c->d[0], c->d[1], c->a[0], c->a[1], c->a[2], c->a[3], c->a[4], c->a[7], c->sr);
 }
 
 void machine_set_log(unsigned mask)

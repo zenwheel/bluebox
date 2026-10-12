@@ -443,6 +443,17 @@ void guest_call(gaddr fn)
 /* ---------------------------------------------------------------------- */
 /* Setup */
 
+/* OS traps with separate glue for their HFS variant: [slot][bit $0200]. */
+static native_fn os_variants[256][2];
+
+static void os_variant_native(cpu68k *c, uint16_t tw)
+{
+    native_fn fn = os_variants[tw & 0xFF][(tw & 0x0200) ? 1 : 0];
+    if (!fn)
+        fn = os_variants[tw & 0xFF][(tw & 0x0200) ? 0 : 1];
+    fn(c, tw);
+}
+
 void trap_init(void)
 {
     native_count = 0;
@@ -461,16 +472,25 @@ void trap_init(void)
     for (unsigned i = 0; i < 1024; i++)
         wr32(TB_TRAP_TABLE + i * 4, unimpl_stub);
 
-    /* Generated glue for implemented, undispatched traps. */
+    /* Generated glue for implemented, undispatched traps.  OS traps whose
+     * HFS variant (bit $0200: PBHOpen beside PBOpen …) has its own glue
+     * share a slot, so the slot goes to a native that picks by that bit. */
+    memset(os_variants, 0, sizeof os_variants);
     for (unsigned i = 0; i < trap_sig_count; i++) {
         const trap_sig *s = &trap_sigs[i];
         if (!s->glue)
             continue;
-        uint32_t stub = native_register(s->glue, s->name, s->trap);
-        if (s->trap & 0x0800)
-            wr32(TB_TRAP_TABLE + (s->trap & 0x3FFu) * 4, stub);
+        if (s->trap & 0x0800) {
+            wr32(TB_TRAP_TABLE + (s->trap & 0x3FFu) * 4, native_register(s->glue, s->name, s->trap));
+            continue;
+        }
+        unsigned slot = s->trap & 0xFFu;
+        os_variants[slot][(s->trap & 0x0200) ? 1 : 0] = s->glue;
+        native_fn other = os_variants[slot][(s->trap & 0x0200) ? 0 : 1];
+        if (other && other != s->glue)
+            wr32(OS_TRAP_TABLE + slot * 4, native_register(os_variant_native, s->name, (uint16_t)(0xA000 | slot)));
         else
-            wr32(OS_TRAP_TABLE + (s->trap & 0xFFu) * 4, stub);
+            wr32(OS_TRAP_TABLE + slot * 4, native_register(s->glue, s->name, s->trap));
     }
 
     /* Hand-written natives that manage the stack themselves. */

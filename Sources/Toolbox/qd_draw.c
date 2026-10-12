@@ -979,6 +979,14 @@ static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, 
 
 void tb_CopyBits(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode, gaddr mask)
 {
+    if (g_log_mask & LOG_TRAPS) {
+        gaddr sb = resolve_bits(src_bitmap), db = resolve_bits(dst_bitmap);
+        qrect sr = qrect_get(src_rect), dr = qrect_get(dst_rect), sbb = qrect_get(sb + 6), dbb = qrect_get(db + 6);
+        log_printf("  CopyBits %08X rb %04X (%d,%d,%d,%d) [%d,%d,%d,%d] -> %08X rb %04X (%d,%d,%d,%d) [%d,%d,%d,%d] "
+                   "mode %d\n", rd32(sb), rd16(sb + 4), sbb.top, sbb.left, sbb.bottom, sbb.right, sr.top, sr.left,
+                   sr.bottom, sr.right, rd32(db), rd16(db + 4), dbb.top, dbb.left, dbb.bottom, dbb.right, dr.top, dr.left,
+                   dr.bottom, dr.right, mode);
+    }
     /* Into the current port: through its bitsProc, when it has one. */
     gaddr port = qd_port();
     gaddr proc = bottleneck(QDProcs_bitsProc_off);

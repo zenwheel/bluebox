@@ -671,6 +671,8 @@ static gaddr new_string_handle(gaddr pstr)
 static gaddr new_window(gaddr storage, qrect bounds, gaddr title, bool vis, int16_t procid, gaddr behind, bool goaway,
                         int32_t refcon, bool color)
 {
+    LOGF(LOG_TRAPS, "  new window %d,%d,%d,%d proc %d vis %d\n", bounds.top, bounds.left, bounds.bottom, bounds.right,
+         procid, vis);
     gaddr saved = qd_port();
     gaddr w = storage ? storage : tb_NewPtr(WindowRecord_SIZEOF, false, true);
     if (!w)
@@ -1354,6 +1356,8 @@ void tb_InitWindows(void)
     hrgn_free(&gray);
     hrgn_free(&bar);
     wr8(LM_WWExist, 0);
+    /* As in the ROM, the Window Manager port is left current. */
+    tb_SetPort(wp);
 }
 
 int16_t tb_GetWVariant(gaddr w) { return w ? varcode(w) : 0; }

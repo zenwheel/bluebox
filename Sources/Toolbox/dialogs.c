@@ -186,7 +186,9 @@ gaddr tb_NewDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, ga
     gaddr d = dst ? dst : tb_NewPtr(DialogRecord_SIZEOF, false, true);
     if (!d)
         return 0;
-    tb_NewWindow(d, r, tit, 0, procid, behind, gaflag, rc);
+    /* With Color QuickDraw, the System 7 Dialog Manager makes every dialog a
+     * colour window; applications rely on its portPixMap. */
+    tb_NewCWindow(d, r, tit, 0, procid, behind, gaflag, rc);
     WindowRecord_set_windowKind(d, dialogKind);
     wr32(d + DialogRecord_items_off, items);
     wr16(d + DialogRecord_aDefItem_off, 1);

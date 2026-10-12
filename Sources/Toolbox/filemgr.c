@@ -648,7 +648,7 @@ static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
     char path[PATH_MAX];
     int16_t err = resolve((int16_t)rd16(pb + IOParam_ioVRefNum_off), hfs ? (int32_t)rd32(pb + HFileParam_ioDirID_off) : 0,
                           namep, hfs, path, sizeof path);
-    LOGF(LOG_TRAPS, "  open %s fork: vref %d dir %d -> %s (%d)\n", rsrc ? "resource" : "data",
+    LOGF(LOG_TRAPS, "  open %s fork (trap %04X): vref %d dir %d -> %s (%d)\n", rsrc ? "resource" : "data", trap_current_word(),
          (int16_t)rd16(pb + IOParam_ioVRefNum_off), hfs ? (int32_t)rd32(pb + HFileParam_ioDirID_off) : 0,
          err ? "?" : path, err);
     if (err)

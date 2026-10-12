@@ -12,3 +12,19 @@
         type: int32_t
     dispatcher: OSDispatch
     selector: 0x0039
+
+# ResourceDispatch's private override calls (ResourcesPriv.h); ResEdit
+# turns scanning of override maps on and off around its own searches.
+- function:
+    name: SetScanOverride
+    args:
+      - name: scanOverride
+        type: Boolean
+    dispatcher: ResourceDispatch
+    selector: 0x0007
+
+- function:
+    name: GetScanOverride
+    return: Boolean
+    dispatcher: ResourceDispatch
+    selector: 0x0008

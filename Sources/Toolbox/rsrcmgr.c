@@ -1381,3 +1381,8 @@ void tb_FSpCreateResFile(gaddr spec, int32_t creator, int32_t file_type, int16_t
     }
     create_res_file(path, (uint32_t)file_type, (uint32_t)creator, true);
 }
+
+/* Override maps aren't used here, so scanning them has no effect. */
+static bool scan_override;
+void tb_SetScanOverride(int8_t scan) { scan_override = scan != 0; }
+int8_t tb_GetScanOverride(void) { return scan_override; }

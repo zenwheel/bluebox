@@ -4622,6 +4622,15 @@ static void glue_GetResourceSizeOnDisk(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetScanOverride(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t r = tb_GetScanOverride();
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_GetScrap(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9425,6 +9434,15 @@ static void glue_SetResourceSize(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetScanOverride(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_scanOverride = (int8_t)(cpu_pop16(c) >> 8);
+    tb_SetScanOverride(a_scanOverride);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetScriptManagerVariable(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12319,6 +12337,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA822, (int32_t)0x1u, "ReadPartialResource", CONV_STACK, 16, 0, glue_ReadPartialResource},
     {0xA822, (int32_t)0x2u, "WritePartialResource", CONV_STACK, 16, 0, glue_WritePartialResource},
     {0xA822, (int32_t)0x3u, "SetResourceSize", CONV_STACK, 8, 0, glue_SetResourceSize},
+    {0xA822, (int32_t)0x7u, "SetScanOverride", CONV_STACK, 2, 0, glue_SetScanOverride},
+    {0xA822, (int32_t)0x8u, "GetScanOverride", CONV_STACK, 0, 2, glue_GetScanOverride},
     {0xA822, (int32_t)0xAu, "GetNextFOND", CONV_STACK, 4, 4, 0},
     {0xA8B5, (int32_t)0x80020004u, "KeyScript", CONV_STACK, 2, 0, glue_KeyScript},
     {0xA8B5, (int32_t)0x8008001Eu, "DrawJust", CONV_STACK, 8, 0, glue_DrawJust},
