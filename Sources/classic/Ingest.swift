@@ -347,14 +347,42 @@ func ingest(_ source: String, library: String, force: Bool = false) throws -> (e
 }
 
 /// Every Mac file (data file + optional sidecar) under a folder.
+/// Every file under root, relative paths, including "._" sidecars (which
+/// Foundation's directory listings hide).
+func walkFiles(_ root: String) -> [String] {
+    var out: [String] = []
+    func walk(_ rel: String) {
+        let dirPath = rel.isEmpty ? root : root + "/" + rel
+        guard let d = opendir(dirPath) else { return }
+        defer { closedir(d) }
+        while let e = readdir(d) {
+            let name = withUnsafeBytes(of: e.pointee.d_name) { raw in
+                String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+            }
+            if name == "." || name == ".." { continue }
+            let child = rel.isEmpty ? name : rel + "/" + name
+            if e.pointee.d_type == UInt8(DT_DIR) { walk(child) } else { out.append(child) }
+        }
+    }
+    walk("")
+    return out
+}
+
 func scan(_ root: String) -> [IngestedFile] {
     let fm = FileManager.default
     var out = [IngestedFile]()
-    guard let walker = fm.enumerator(atPath: root) else { return out }
-    for case let rel as String in walker {
-        let name = (rel as NSString).lastPathComponent
-        if name.hasPrefix("._") || name == ".classic-source" || name.hasPrefix(".") { continue }
-        let path = root + "/" + rel
+    for rel in walkFiles(root) {
+        var name = (rel as NSString).lastPathComponent
+        var path = root + "/" + rel
+        if name.hasPrefix("._") {
+            // A sidecar whose file has no data fork stands for that file.
+            let bare = (path as NSString).deletingLastPathComponent + "/" + String(name.dropFirst(2))
+            if fm.fileExists(atPath: bare) { continue }
+            path = bare
+            name = String(name.dropFirst(2))
+        } else if name == ".classic-source" || name.hasPrefix(".") {
+            continue
+        }
         var isDir: ObjCBool = false
         fm.fileExists(atPath: path, isDirectory: &isDir)
         if isDir.boolValue { continue }

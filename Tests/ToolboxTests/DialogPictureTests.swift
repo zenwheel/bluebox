@@ -1,6 +1,7 @@
 import CCore
 import CPU68K
 import Foundation
+import ForkStore
 import Testing
 import Toolbox
 
@@ -264,8 +265,8 @@ extension Classic {
         }
 
         @Test func oldPortsDrawAtTheScreensDepth() {
-            machine_set_appearance(Int32(MACHINE_APPEARANCE_SYSTEM7))
-            defer { machine_set_appearance(Int32(MACHINE_APPEARANCE_BW)) }
+            machine_set_screen_depth(8)
+            defer { machine_set_screen_depth(1) }
             launchTestApp()
             _ = initToolbox()
             #expect(PixMap_pixelSize(rd32(GDevice_gdPMap(rd32(tb_GetMainDevice())))) == 8)
@@ -279,22 +280,6 @@ extension Classic {
             tb_PaintRect(r)
             let red = rgba(110, 110)
             #expect(red[0] > 150 && red[1] < 80 && red[2] < 80)
-        }
-
-        @Test func colourWindowsHaveGreyTitleBars() {
-            machine_set_appearance(Int32(MACHINE_APPEARANCE_PLATINUM))
-            defer { machine_set_appearance(Int32(MACHINE_APPEARANCE_BW)) }
-            launchTestApp()
-            _ = initToolbox()
-            let r = tb_NewPtr(8, false, true)
-            for (i, v) in [100, 100, 300, 400].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
-            let title = tb_NewPtr(256, false, true)
-            guestPString("Test", at: title)
-            let w = tb_NewWindow(0, r, title, 1, 0, 0xFFFF_FFFF, 1, 0)
-            tb_SelectWindow(w)
-            // Inside the title bar, away from text, stripes and boxes: the title bar grey.
-            let grey = rgba(300, 100 - 18 + 1)
-            #expect(grey[0] == grey[1] && grey[1] == grey[2] && grey[0] > 150 && grey[0] < 255)
         }
 
         @Test func blackAndWhiteStaysOneBit() {
@@ -325,6 +310,71 @@ extension Classic {
             #expect(tb_TEGetScrapLength() == 9)
             #expect(tb_TEToScrap() == 0)
             #expect(Self.exported == "café\nline")
+        }
+    }
+}
+
+/// A cicn (8-bit, two colours) from a pixel function: 0 white, 1 red; mask everything.
+func cicnData(w: Int, h: Int, _ pixel: (Int, Int) -> UInt8) -> [UInt8] {
+    let rb = w, mrb = (w + 15) / 16 * 2
+    var d = cat(be32(0), be16(0x8000 | rb), be16(0), be16(0), be16(h), be16(w), be16(0), be16(0), be32(0),
+                be32(0x480000), be32(0x480000), be16(0), be16(8), be16(1), be16(8), be32(0), be32(0), be32(0))
+    d += cat(be32(0), be16(mrb), be16(0), be16(0), be16(h), be16(w))   // mask BitMap
+    d += cat(be32(0), be16(0), be16(0), be16(0), be16(h), be16(w))     // icon BitMap (no data)
+    d += be32(0)                                                         // iconData
+    d += [UInt8](repeating: 0xFF, count: mrb * h)                        // mask: all opaque
+    d += cat(be32(0), be16(0), be16(1),                                  // ctab: 2 entries
+             be16(0), be16(0xFFFF), be16(0xFFFF), be16(0xFFFF),
+             be16(1), be16(0xFFFF), be16(0), be16(0))
+    for y in 0..<h { for x in 0..<w { d.append(pixel(x, y)) } }
+    return d
+}
+
+extension Classic {
+    @Suite struct Themes {
+        /// A tiny scheme: a 40x30 sample document window, red frame, content (10,5)-(25,35).
+        static func scheme() -> URL {
+            let sample = cicnData(w: 40, h: 30) { x, y in (y >= 10 && y < 25 && x >= 5 && x < 35) ? 0 : 1 }
+            let wnd = cat(be16(0), be16(0), be16(10), be16(5), be16(25), be16(35),   // content rect
+                          be16(1), be16(0), be16(0), be16(8), be16(40),             // top: start 0, stretch to 40
+                          be16(1), be16(0), be16(0), be16(8), be16(40),             // bottom
+                          be16(1), be16(0), be16(10), be16(8), be16(25),            // left
+                          be16(1), be16(0), be16(10), be16(8), be16(25))            // right
+            var fork = buildFork([
+                TestResource(type: "wnd#", id: -14336, data: wnd),
+                TestResource(type: "cicn", id: -14335, data: sample),
+                TestResource(type: "cicn", id: -14336, data: sample),
+            ])
+            let url = tempDir().appendingPathComponent("Tiny Scheme")
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(url.path, &f, &err, err.count))
+            return url
+        }
+
+        @Test func schemeFramesDocumentWindows() {
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_load_theme(Self.scheme().path, &err, err.count))
+            defer { machine_set_appearance(Int32(MACHINE_APPEARANCE_BW)) }
+            launchTestApp()
+            _ = initToolbox()
+            #expect(PixMap_pixelSize(rd32(GDevice_gdPMap(rd32(tb_GetMainDevice())))) == 32)
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [100, 100, 200, 300].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let w = tb_NewWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 1, 0)
+            tb_SelectWindow(w)
+            var px = [UInt8](repeating: 0, count: 4)
+            machine_screen_rgba(150, 95, 1, 1, &px)                 // in the top band, 5 above the content
+            #expect(Array(px[0..<3]) == [255, 0, 0])
+            machine_screen_rgba(97, 150, 1, 1, &px)                 // left side band
+            #expect(Array(px[0..<3]) == [255, 0, 0])
+            // The structure extends by the sample's margins: 10 top, 5 sides, 5 bottom.
+            let s = rd32(WindowRecord_strucRgn(w))
+            #expect(Int16(bitPattern: rd16(s + 2)) == 90 && Int16(bitPattern: rd16(s + 4)) == 95)
+            #expect(Int16(bitPattern: rd16(s + 6)) == 205 && Int16(bitPattern: rd16(s + 8)) == 305)
         }
     }
 }

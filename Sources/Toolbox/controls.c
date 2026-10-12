@@ -145,7 +145,7 @@ static void cdef0_draw(gaddr ch)
     int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2);
     tb_DisposePtr(fi);
     int base = r.top + (r.bottom - r.top + asc - desc) / 2;
-    if (kind == 0 && app_draw_button(r, title, n, hil == inButton, hil == 255)) {
+    if (kind == 0 && theme_draw_button(r, title, n, hil == inButton, hil == 255)) {
         restore_font(f, s, face);
         return;
     }
@@ -169,7 +169,7 @@ static void cdef0_draw(gaddr ch)
         gaddr rr = tmp_rect(r);
         tb_EraseRect(rr);
         qrect_put(rr, box);
-        if (app_draw_check(box, kind != 1, cvalue(ch) != 0, hil == inCheckBox, hil == 255)) {
+        if (theme_draw_check(box, kind != 1, cvalue(ch) != 0, hil == inCheckBox, hil == 255)) {
             tb_MoveTo((int16_t)(box.right + 5), (int16_t)base);
             qd_draw_text(port, title, n);
             tb_DisposePtr(rr);
@@ -270,10 +270,8 @@ static void cdef1_draw(gaddr ch, int part)
         return;
     qrect r = crect(ch);
     bool v = sb_vertical(r);
-    if (app_colour()) {
-        app_draw_scrollbar(r, v, chilite(ch), chilite(ch) != 255, chilite(ch) != 255 && cmax(ch) > cmin(ch), sb_thumb(ch));
+    if (theme_draw_scrollbar(r, v, chilite(ch), chilite(ch) != 255, chilite(ch) != 255 && cmax(ch) > cmin(ch), sb_thumb(ch)))
         return;
-    }
     tb_PenNormal();
     gaddr rr = tmp_rect(r);
     tb_EraseRect(rr);

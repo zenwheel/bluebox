@@ -45,8 +45,9 @@ func usage() -> Never {
           --screen WxH  screen size (default 1024x768)
           --screenshot P  write the screen to PNG file P when the run ends
           --print-to F  print to PDF file F instead of the print panel (headless runs)
-          --appearance A  bw (default), system7 (colour System 7) or platinum (Mac OS 8);
-                     the colour appearances use an 8-bit screen
+          --appearance A  bw (default); native (macOS window frames); or a theme: a
+                     Kaleidoscope scheme file, or the name of one in the library
+                     (classic themes lists them); themes use a 32-bit screen
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1)
       classic import <file>... [--library dir] [--force]
@@ -58,6 +59,8 @@ func usage() -> Never {
           in the application.
       classic apps [--library dir]
           List the applications in the library.
+      classic themes [--library dir]
+          List the themes (Kaleidoscope schemes) in the library.
       classic rsrc <file>
           List the resources in a file (AppleDouble or MacBinary).
 
@@ -184,6 +187,7 @@ func runCommand(_ args: [String]) {
     var screenshot: String?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
+    var themePath: String?
     var i = 0
     while i < args.count {
         let a = args[i]
@@ -204,9 +208,13 @@ func runCommand(_ args: [String]) {
             guard i < args.count else { usage() }
             switch args[i] {
             case "bw", "classic": appearance = Int32(MACHINE_APPEARANCE_BW)
-            case "system7", "color", "colour": appearance = Int32(MACHINE_APPEARANCE_SYSTEM7)
-            case "platinum", "macos8": appearance = Int32(MACHINE_APPEARANCE_PLATINUM)
-            default: fail("--appearance expects bw, system7 or platinum")
+            case "native": appearance = Int32(MACHINE_APPEARANCE_NATIVE)
+            default:
+                guard let path = findTheme(args[i]) else {
+                    fail("no theme \"\(args[i])\": give a scheme file, or import one and use its name (classic themes)")
+                }
+                themePath = path
+                appearance = Int32(MACHINE_APPEARANCE_THEME)
             }
         case "--print-to":
             i += 1
@@ -274,6 +282,10 @@ func runCommand(_ args: [String]) {
     }
     #endif
     machine_set_appearance(appearance)
+    if let themePath {
+        var terr = [CChar](repeating: 0, count: 256)
+        guard machine_load_theme(themePath, &terr, terr.count) else { fail(str(terr)) }
+    }
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }
@@ -461,6 +473,28 @@ func appsCommand(_ args: [String]) {
     }
 }
 
+/// Kaleidoscope schemes ('Colr'/'Acid' files) in a library.
+func themes(in library: String) -> [String] {
+    scan(library).filter { fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid" }.map(\.path)
+}
+
+/// A theme by path, or by name among the library's schemes.
+func findTheme(_ name: String) -> String? {
+    let fm = FileManager.default
+    if fm.fileExists(atPath: name) || fm.fileExists(atPath: sidecarPath(name)) { return name }
+    let all = themes(in: defaultLibrary())
+    return all.first { ($0 as NSString).lastPathComponent.caseInsensitiveCompare(name) == .orderedSame }
+        ?? all.first { ($0 as NSString).lastPathComponent.range(of: name, options: .caseInsensitive) != nil }
+}
+
+func themesCommand(_ args: [String]) {
+    var library = defaultLibrary()
+    if args.count == 2 && args[0] == "--library" { library = args[1] } else if !args.isEmpty { usage() }
+    let found = themes(in: library)
+    if found.isEmpty { print("no themes in \(library); import a Kaleidoscope scheme archive with classic import") }
+    for t in found { print("\((t as NSString).lastPathComponent)  (\(String(t.dropFirst(library.count + 1))))") }
+}
+
 func rsrcCommand(_ args: [String]) {
     guard args.count == 1 else { usage() }
     var mf = loadMacFile(args[0])
@@ -497,6 +531,7 @@ case "run": runCommand(rest)
 case "import": importCommand(rest)
 case "apps": appsCommand(rest)
 case "rsrc": rsrcCommand(rest)
+case "themes": themesCommand(rest)
 #if canImport(AppKit)
 case "install": installCommand(rest)
 #endif

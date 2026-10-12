@@ -197,7 +197,7 @@ int g_appearance = MACHINE_APPEARANCE_BW;
 void machine_set_appearance(int appearance)
 {
     g_appearance = appearance;
-    machine_set_screen_depth(appearance == MACHINE_APPEARANCE_BW ? 1 : 8);
+    machine_set_screen_depth(appearance == MACHINE_APPEARANCE_THEME ? 32 : 1);
 }
 
 static char **launch_docs;

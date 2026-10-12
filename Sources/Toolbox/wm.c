@@ -106,20 +106,6 @@ static bool is_dialog_variant(int var) { return var == 1 || var == 2 || var == 3
 static bool has_zoom(int var) { return var == 8 || var == 12; }
 static bool has_grow(int var) { return var == 0 || var == 8; }
 
-/* Width of a document window's frame beside and below the content: the
- * one-pixel outline, or Platinum's bevelled grey frame. */
-static int side_width(int var)
-{
-    return g_appearance == MACHINE_APPEARANCE_PLATINUM && !is_dialog_variant(var) ? 6 : 1;
-}
-
-static void title_rect_var(qrect c, int var, qrect *t)
-{
-    int side = side_width(var);
-    *t = (qrect){ (int16_t)(c.top - TITLE_HEIGHT), (int16_t)(c.left - side + 1), (int16_t)(c.top - 1),
-                  (int16_t)(c.right + side - 1) };
-}
-
 static void title_rect(qrect c, qrect *t) { *t = (qrect){ (int16_t)(c.top - TITLE_HEIGHT), c.left, (int16_t)(c.top - 1), c.right }; }
 
 static void wdef_calc(gaddr w, int var)
@@ -129,16 +115,14 @@ static void wdef_calc(gaddr w, int var)
     hrgn_init(&s);
     hrgn_init(&k);
     hrgn_rect(&k, c);
-    if (var == 1) { /* dBoxProc: 8-pixel border */
+    if (theme_window_region(w, var, c, &s)) {
+        /* the theme's frame shape */
+    } else if (var == 1) { /* dBoxProc: 8-pixel border */
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - 8), (int16_t)(c.left - 8), (int16_t)(c.bottom + 8), (int16_t)(c.right + 8) });
     } else if (var == 2) { /* plainDBox */
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - 1), (int16_t)(c.left - 1), (int16_t)(c.bottom + 1), (int16_t)(c.right + 1) });
     } else if (var == 3) { /* altDBoxProc: frame plus 2-pixel shadow */
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - 1), (int16_t)(c.left - 1), (int16_t)(c.bottom + 3), (int16_t)(c.right + 3) });
-    } else if (side_width(var) > 1) { /* Platinum documents: a frame all round, no shadow */
-        int sw = side_width(var);
-        hrgn_rect(&s, (qrect){ (int16_t)(c.top - TITLE_HEIGHT - 1), (int16_t)(c.left - sw), (int16_t)(c.bottom + sw),
-                               (int16_t)(c.right + sw) });
     } else { /* documents: frame, title bar, 1-pixel shadow */
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - TITLE_HEIGHT - 1), (int16_t)(c.left - 1), (int16_t)(c.bottom + 2),
                                (int16_t)(c.right + 2) });
@@ -185,6 +169,8 @@ static void wdef_draw(gaddr w, int var, int32_t param)
         return;
     qrect c = global_content(w);
     bool hilited = WindowRecord_hilited(w) != 0;
+    if (theme_draw_window(w, var, c, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var), param))
+        return;
     gaddr r = tb_NewPtr(8, false, false);
     tb_PenNormal();
     if (is_dialog_variant(var)) {
@@ -212,12 +198,6 @@ static void wdef_draw(gaddr w, int var, int32_t param)
     }
     qrect t;
     title_rect(c, &t);
-    if (app_colour()) {
-        title_rect_var(c, var, &t);
-        app_draw_document(w, c, t, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var), param);
-        tb_DisposePtr(r);
-        return;
-    }
     if (param == wInGoAway || param == wInZoomIn || param == wInZoomOut) {
         /* Toggle a pressed box: System 7 draws a starburst inside it, here
          * in XOR so a second call restores the box. */
@@ -269,6 +249,7 @@ static void wdef_draw(gaddr w, int var, int32_t param)
     }
     draw_title(w, t, hilited);
     tb_DisposePtr(r);
+    theme_decorate_window(w, var, c, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var));
 }
 
 static int32_t wdef_hit(gaddr w, int var, uint32_t pt)
@@ -280,15 +261,22 @@ static int32_t wdef_hit(gaddr w, int var, uint32_t pt)
             return wInGrow;
         return wInContent;
     }
+    int part = theme_active() ? theme_window_hit(w, var, c, h, v) : -1;
+    if (part >= 0) {
+        bool hil = WindowRecord_hilited(w) != 0;
+        if (part == 1 && hil && WindowRecord_goAwayFlag(w))
+            return wInGoAway;
+        if (part == 2 && hil && has_zoom(var))
+            return wInZoomIn;
+        if (part == 0)
+            return wNoHit;
+        return is_dialog_variant(var) ? wNoHit : wInDrag; /* the frame drags documents and movable dialogs */
+    }
     if (is_dialog_variant(var))
         return wNoHit;
     qrect t;
-    title_rect_var(c, var, &t);
-    int sw = side_width(var);
-    bool in_frame = sw > 1 && v >= t.top - 1 && v < c.bottom + sw && h >= c.left - sw && h < c.right + sw;
-    if (in_frame && v >= c.top) /* Platinum: the frame drags the window too */
-        return wInDrag;
-    if (v >= t.top - 1 && v < c.top && h >= c.left - sw && h <= c.right + sw - 1) {
+    title_rect(c, &t);
+    if (v >= t.top - 1 && v < c.top && h >= c.left - 1 && h <= c.right) {
         if (WindowRecord_hilited(w)) {
             if (WindowRecord_goAwayFlag(w) && h >= t.left + 8 && h < t.left + 19 && v >= t.top + 3 && v < t.top + 14)
                 return wInGoAway;
@@ -305,10 +293,8 @@ static void wdef_grow_icon(gaddr w, int var)
     if (!has_grow(var) || !wvisible(w))
         return;
     qrect c = qrect_get(w + GrafPort_portRect_off);
-    if (app_colour()) {
-        app_draw_grow(c, WindowRecord_hilited(w) != 0);
+    if (theme_draw_grow(c, WindowRecord_hilited(w) != 0))
         return;
-    }
     gaddr r = tb_NewPtr(8, false, false);
     tb_PenNormal();
     tb_MoveTo((int16_t)(c.right - 16), c.top);

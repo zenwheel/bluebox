@@ -15,7 +15,7 @@ static uint32_t screen_row_bytes;
 static int depth_pref = 1, screen_depth = 1;
 static gaddr screen_ctab;
 
-void machine_set_screen_depth(int depth) { depth_pref = depth == 8 ? 8 : 1; }
+void machine_set_screen_depth(int depth) { depth_pref = depth == 8 || depth == 32 ? depth : 1; }
 int qd_screen_depth(void) { return screen_depth; }
 gaddr qd_screen_ctab(void) { return screen_depth == 1 ? 0 : screen_ctab; }
 
@@ -44,8 +44,11 @@ void qd_screen_init(int width, int height)
     g_screen_width = width;
     g_screen_height = height;
     screen_depth = depth_pref;
-    screen_row_bytes = screen_depth == 8 ? (uint32_t)((width + 3) & ~3) : (uint32_t)((width + 31) / 32 * 4);
-    gmemset(GA_SCREEN, 0, screen_row_bytes * (uint32_t)height); /* white: 0 at both depths */
+    screen_row_bytes = screen_depth == 32  ? (uint32_t)width * 4
+                       : screen_depth == 8 ? (uint32_t)((width + 3) & ~3)
+                                           : (uint32_t)((width + 31) / 32 * 4);
+    /* White: 0 in the 1- and 8-bit tables, all ones in direct colour. */
+    gmemset(GA_SCREEN, screen_depth == 32 ? 0xFF : 0, screen_row_bytes * (uint32_t)height);
     wr32(LM_ScrnBase, GA_SCREEN);
     wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
     wr16(LM_ScrVRes, 72);
@@ -64,14 +67,21 @@ void qd_screen_init(int width, int height)
     PixMap_set_hRes(pm, 72 << 16);
     PixMap_set_vRes(pm, 72 << 16);
     PixMap_set_pixelSize(pm, (int16_t)screen_depth);
-    PixMap_set_cmpCount(pm, 1);
-    PixMap_set_cmpSize(pm, (int16_t)screen_depth);
-    screen_ctab = screen_depth == 8 ? make_ctab(std8, 256, 8) : make_ctab(bw, 2, 1);
+    if (screen_depth == 32) {
+        PixMap_set_pixelType(pm, 16);       /* RGBDirect */
+        PixMap_set_cmpCount(pm, 3);
+        PixMap_set_cmpSize(pm, 8);
+        screen_ctab = make_ctab(bw, 2, 1);  /* unused by direct pixels */
+    } else {
+        PixMap_set_cmpCount(pm, 1);
+        PixMap_set_cmpSize(pm, (int16_t)screen_depth);
+        screen_ctab = screen_depth == 8 ? make_ctab(std8, 256, 8) : make_ctab(bw, 2, 1);
+    }
     PixMap_set_pmTable(pm, screen_ctab);
 
     gaddr gdh = tb_NewHandle(GDevice_SIZEOF, true, true);
     gaddr gd = rd32(gdh);
-    GDevice_set_gdType(gd, 0); /* CLUT device */
+    GDevice_set_gdType(gd, screen_depth == 32 ? 2 : 0); /* direct or CLUT device */
     GDevice_set_gdFlags(gd, (int16_t)((1 << 15) | (1 << 14) | (1 << 13) | (1 << 12) | (1 << 11) | (1 << 10)));
     GDevice_set_gdPMap(gd, pmh);
     qrect_put(gd + GDevice_gdRect_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
@@ -174,7 +184,11 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
                 continue;
             }
             uint32_t v = get_px(&d, sx, sy);
-            if (screen_depth == 8) {
+            if (screen_depth == 32) {
+                o[0] = (uint8_t)(v >> 16);
+                o[1] = (uint8_t)(v >> 8);
+                o[2] = (uint8_t)v;
+            } else if (screen_depth == 8) {
                 o[0] = lut[v][0];
                 o[1] = lut[v][1];
                 o[2] = lut[v][2];

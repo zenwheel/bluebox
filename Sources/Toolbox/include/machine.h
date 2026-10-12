@@ -31,9 +31,12 @@ void machine_screen_size(int *width, int *height);
 void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out);
 /* Window, control and menu appearance; the colour ones use an 8-bit screen.
  * Call before boot. */
-enum { MACHINE_APPEARANCE_BW, MACHINE_APPEARANCE_SYSTEM7, MACHINE_APPEARANCE_PLATINUM };
+enum { MACHINE_APPEARANCE_BW, MACHINE_APPEARANCE_THEME, MACHINE_APPEARANCE_NATIVE };
 void machine_set_appearance(int appearance);
-/* Screen depth: 1 (black and white, the default) or 8 (colour); before boot. */
+/* Use a Kaleidoscope 2 scheme file (AppleDouble) for windows and controls;
+ * implies MACHINE_APPEARANCE_THEME and a 32-bit screen.  Before boot. */
+bool machine_load_theme(const char *path, char *err, size_t errlen);
+/* Screen depth: 1 (black and white, the default), 8 or 32; before boot. */
 void machine_set_screen_depth(int depth);
 bool machine_halted(void);
 /* Write the screen to a PNG file. */
