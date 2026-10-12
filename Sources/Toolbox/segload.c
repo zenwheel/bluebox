@@ -161,7 +161,9 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
     /* A5 world at the top of the address space reserved for it; the stack
      * grows down from just below it. */
     gaddr a5 = (GA_A5WORLD_TOP - above) & ~3u;
-    gaddr base = (a5 - below) & ~3u;
+    /* CurStackBase is exactly A5 less the globals: MPW's runtime unpacks
+     * DATA 0 from there up to A5 and stops only on reaching it. */
+    gaddr base = a5 - below;
     gmemset(base, 0, a5 - base);
     gmemset(a5, 0, above);
     gmemcpy(a5 + jtoff, c0 + 16, jtsize);
@@ -175,7 +177,7 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
 
     /* Stack: main's return address goes to a stub that ends the app. */
     uint32_t returned_stub = native_register(app_returned, "AppReturned", 0);
-    g_cpu->a[7] = base;
+    g_cpu->a[7] = base & ~3u;
     cpu_push32(g_cpu, returned_stub);
     g_cpu->a[5] = a5;
     LOGF(LOG_SEG, "seg: A5 %08X, below %u, above %u, jump table %u bytes at +%u\n", a5, below, above, jtsize, jtoff);
@@ -187,6 +189,7 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
 const raw_trap raw_traps[] = {
     { 0xA019, "InitZone", raw_InitZone },
     { 0xA03C, "CmpString", raw_CmpString },
+    { 0xA03D, "DrvrInstall", raw_DrvrInstall },
     { 0xA051, "ReadXPRam", raw_ReadXPRam },
     { 0xA052, "WriteXPRam", raw_WriteXPRam },
     { 0xA056, "LowerText", raw_LowerText },

@@ -1736,6 +1736,18 @@ static void glue_CMY2RGB(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CTab2Palette(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_arg3 = (int16_t)cpu_pop16(c);
+    int16_t a_arg2 = (int16_t)cpu_pop16(c);
+    gaddr a_arg1 = (gaddr)cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    tb_CTab2Palette(a_arg0, a_arg1, a_arg2, a_arg3);
+    cpu_push32(c, ret);
+}
+
 static void glue_CTabChanged(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7476,6 +7488,16 @@ static void glue_PaintRoundRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_Palette2CTab(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg1 = (gaddr)cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    tb_Palette2CTab(a_arg0, a_arg1);
+    cpu_push32(c, ret);
+}
+
 static void glue_ParamText(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11828,8 +11850,8 @@ const trap_sig trap_sigs[] = {
     {0xAA9C, -1, "SetEntryColor", CONV_STACK, 10, 0, glue_SetEntryColor},
     {0xAA9D, -1, "GetEntryUsage", CONV_STACK, 14, 0, glue_GetEntryUsage},
     {0xAA9E, -1, "SetEntryUsage", CONV_STACK, 10, 0, glue_SetEntryUsage},
-    {0xAA9F, -1, "CTab2Palette", CONV_STACK, 12, 0, 0},
-    {0xAAA0, -1, "Palette2CTab", CONV_STACK, 8, 0, 0},
+    {0xAA9F, -1, "CTab2Palette", CONV_STACK, 12, 0, glue_CTab2Palette},
+    {0xAAA0, -1, "Palette2CTab", CONV_STACK, 8, 0, glue_Palette2CTab},
     {0xAAA1, -1, "CopyPalette", CONV_STACK, 14, 0, glue_CopyPalette},
     {0xABCA, -1, "DeviceLoop", CONV_STACK, 16, 0, glue_DeviceLoop},
     {0xABFF, -1, "DebugStr", CONV_STACK, 4, 0, glue_DebugStr},

@@ -914,3 +914,36 @@ void tb_DisposeScreenBuffer(gaddr pmh)
     tb_DisposePtr(PixMap_baseAddr(rd32(pmh)));
     tb_DisposePixMap(pmh);
 }
+
+/* Palettes and colour tables, entry for entry. */
+void tb_Palette2CTab(gaddr pal, gaddr ctab)
+{
+    int n = entries(pal);
+    if (!ctab || n <= 0)
+        return;
+    tb_SetHandleSize(ctab, 8 + n * 8);
+    gaddr p = rd32(ctab);
+    wr32(p, (uint32_t)tb_GetCTSeed());
+    wr16(p + 4, 0);
+    wr16(p + 6, (uint16_t)(n - 1));
+    for (int i = 0; i < n; i++) {
+        wr16(p + 8 + (uint32_t)i * 8, (uint16_t)i);
+        gmemcpy(p + 8 + (uint32_t)i * 8 + 2, entry(pal, i) + ColorInfo_ciRGB_off, 6);
+    }
+}
+
+void tb_CTab2Palette(gaddr ctab, gaddr pal, int16_t usage, int16_t tolerance)
+{
+    if (!ctab || !rd32(ctab) || !pal)
+        return;
+    int n = (int16_t)rd16(rd32(ctab) + 6) + 1;
+    tb_SetHandleSize(pal, Palette_pmInfo_off + n * ColorInfo_SIZEOF);
+    wr16(rd32(pal) + Palette_pmEntries_off, (uint16_t)n);
+    for (int i = 0; i < n; i++) {
+        gaddr e = entry(pal, i);
+        gmemset(e, 0, ColorInfo_SIZEOF);
+        gmemcpy(e + ColorInfo_ciRGB_off, rd32(ctab) + 8 + (uint32_t)i * 8 + 2, 6);
+        wr16(e + ColorInfo_ciUsage_off, (uint16_t)usage);
+        wr16(e + ColorInfo_ciTolerance_off, (uint16_t)tolerance);
+    }
+}

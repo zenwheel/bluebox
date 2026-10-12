@@ -289,3 +289,8 @@ uint32_t tb_KeyTranslate(gaddr kchr, uint16_t keycode, gaddr state)
         ch = (char)(ch & 0x1F);
     return (uint8_t)ch;
 }
+
+/* DrvrInstall (A03D): A0 the driver, D0 its refnum.  Nothing calls drivers
+ * here (the Device Manager answers for files and absent drivers), so the
+ * installation is accepted and otherwise ignored. */
+void raw_DrvrInstall(cpu68k *c, uint16_t tw) { c->d[0] = 0; }

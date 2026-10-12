@@ -123,6 +123,7 @@ void time_reset(void);
 void raw_RelString(cpu68k *c, uint16_t tw);
 void raw_UprString(cpu68k *c, uint16_t tw);
 void raw_LowerText(cpu68k *c, uint16_t tw);
+void raw_DrvrInstall(cpu68k *c, uint16_t tw);
 void raw_ReadXPRam(cpu68k *c, uint16_t tw);
 void raw_WriteXPRam(cpu68k *c, uint16_t tw);
 void raw_InitZone(cpu68k *c, uint16_t tw);
