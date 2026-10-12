@@ -847,7 +847,7 @@ void tb_SaveBack(gaddr cs) { wr16(cs, 0); tb_GetBackColor(cs + 2); }
 void tb_RestoreFore(gaddr cs) { tb_RGBForeColor(cs + 2); }
 void tb_RestoreBack(gaddr cs) { tb_RGBBackColor(cs + 2); }
 
-/* The screen can be 1, 8 or 32 bits deep.  SetDepth asks for the mode's
+/* The screen can be 1, 8, 16 or 32 bits deep.  SetDepth asks for the mode's
  * depth, or (32-bit mode numbers aside) the mode number 0x80.. itself. */
 static int mode_depth(int16_t depth)
 {
@@ -864,7 +864,7 @@ int16_t tb_SetDepth(gaddr gdh, int16_t depth, int16_t which, int16_t flags)
 int16_t tb_HasDepth(gaddr gdh, int16_t depth, int16_t which, int16_t flags)
 {
     int d = mode_depth(depth);
-    return qd_screen_supports(d) ? 0x0080 + (d == 1 ? 0 : d == 8 ? 3 : 5) : 0;
+    return qd_screen_supports(d) ? 0x0080 + (d == 1 ? 0 : d == 8 ? 3 : d == 16 ? 4 : 5) : 0;
 }
 
 int16_t tb_PMgrVersion(void) { return 0x0202; }

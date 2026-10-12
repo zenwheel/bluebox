@@ -43,8 +43,9 @@ func usage() -> Never {
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
-      --depth N  screen depth: 1, 8 or 32 bits (default 32, or the app's setting; an
+      --depth N  screen depth: 1, 8, 16 or 32 bits (default 32, or the app's setting; an
                      application can still switch depth itself with SetDepth)
+          --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
           --screenshot P  write the screen to PNG file P when the run ends
           --print-to F  print to PDF file F instead of the print panel (headless runs)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
@@ -60,10 +61,11 @@ func usage() -> Never {
           Make a macOS application bundle for a classic application (default folder
           ~/Applications/Classic) with its Finder icon; documents dropped on it open
           in the application.
-      classic set <app> [depth 1|8|32|default] [--library dir]
+      classic set <app> [depth 1|8|16|32|default] [cpu 68020|68040|default] [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. classic set "Star Chaos" depth 8 for a
-          game that wants 256 colours.  With no setting given, show them.
+          game that wants 256 colours, or cpu 68020 for one that misbehaves on a
+          68040.  With no setting given, show them.
       classic apps [--library dir]
           List the applications in the library.
       classic themes [--library dir]
@@ -193,6 +195,7 @@ func runCommand(_ args: [String]) {
     var screenWindow = false
     var screenshot: String?
     var screenDepth: Int32?
+    var cpuModel: Int32?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
     var themePath: String?
@@ -230,10 +233,16 @@ func runCommand(_ args: [String]) {
             printTo = args[i]
         case "--depth":
             i += 1
-            guard i < args.count, let d = Int32(args[i]), [1, 8, 32].contains(d) else {
-                fail("--depth expects 1, 8 or 32")
+            guard i < args.count, let d = Int32(args[i]), [1, 8, 16, 32].contains(d) else {
+                fail("--depth expects 1, 8, 16 or 32")
             }
             screenDepth = d
+        case "--cpu":
+            i += 1
+            guard i < args.count, let m = Int32(args[i]), [68020, 68040].contains(m) else {
+                fail("--cpu expects 68020 or 68040")
+            }
+            cpuModel = m
         case "--screenshot":
             i += 1
             guard i < args.count else { usage() }
@@ -305,6 +314,7 @@ func runCommand(_ args: [String]) {
     } else if let d = settings(for: app)?.depth {
         machine_set_screen_depth(Int32(d))
     }
+    if let m = cpuModel ?? settings(for: app)?.cpu.map(Int32.init) { machine_set_cpu(m) }
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }

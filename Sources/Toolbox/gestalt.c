@@ -36,8 +36,9 @@ void gestalt_init(void)
     gestalt_set(fourcc("sysv"), 0x0710);      /* System 7.1 */
     gestalt_set(fourcc("sysa"), 1);           /* 68k architecture */
     gestalt_set(fourcc("mach"), 35);          /* Quadra 800 */
-    gestalt_set(fourcc("proc"), 3);           /* 68020 */
-    gestalt_set(fourcc("fpu "), 0);           /* no FPU (yet) */
+    bool m040 = g_cpu && g_cpu->model == 68040;
+    gestalt_set(fourcc("proc"), m040 ? 5 : 3); /* 68040 or 68020 */
+    gestalt_set(fourcc("fpu "), m040 ? 3 : 0); /* the 68040's own FPU, or none */
     gestalt_set(fourcc("mmu "), 0);
     gestalt_set(fourcc("qd  "), 0x0130);      /* 32-bit QuickDraw 1.3 */
     gestalt_set(fourcc("addr"), 0x7);         /* 32-bit addressing, sys zone, capable */

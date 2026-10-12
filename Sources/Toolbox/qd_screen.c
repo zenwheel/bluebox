@@ -1,5 +1,5 @@
 /*
- * The screen: a framebuffer at GA_SCREEN (1, 8 or 32 bits deep), the main
+ * The screen: a framebuffer at GA_SCREEN (1, 8, 16 or 32 bits deep), the main
  * GDevice describing it, and PNG snapshots for headless runs.  SetDepth can
  * change the depth while an application runs.
  */
@@ -17,7 +17,7 @@ static int depth_pref = 32, screen_depth = 1;
 static gaddr screen_ctab;
 static unsigned nports; /* ports drawing on the screen, below */
 
-void machine_set_screen_depth(int depth) { depth_pref = depth == 8 || depth == 32 ? depth : 1; }
+void machine_set_screen_depth(int depth) { depth_pref = depth == 8 || depth == 16 || depth == 32 ? depth : 1; }
 int qd_screen_depth(void) { return screen_depth; }
 gaddr qd_screen_ctab(void) { return screen_depth == 1 ? 0 : screen_ctab; }
 
@@ -44,6 +44,7 @@ static gaddr make_ctab(const uint16_t (*rgb)[3], int n, int32_t seed)
 static uint32_t row_bytes_for(int depth, int width)
 {
     return depth == 32  ? (uint32_t)width * 4
+           : depth == 16 ? (uint32_t)((width * 2 + 3) & ~3)
            : depth == 8 ? (uint32_t)((width + 3) & ~3)
                         : (uint32_t)((width + 31) / 32 * 4);
 }
@@ -57,10 +58,10 @@ static void describe_screen(gaddr gd, gaddr pm)
         qd_std_rgb8(i, std8[i]);
     PixMap_set_rowBytes(pm, (int16_t)(screen_row_bytes | 0x8000));
     PixMap_set_pixelSize(pm, (int16_t)screen_depth);
-    if (screen_depth == 32) {
+    if (screen_depth >= 16) {
         PixMap_set_pixelType(pm, 16);       /* RGBDirect */
         PixMap_set_cmpCount(pm, 3);
-        PixMap_set_cmpSize(pm, 8);
+        PixMap_set_cmpSize(pm, screen_depth == 16 ? 5 : 8);
         screen_ctab = make_ctab(bw, 2, 1);  /* unused by direct pixels */
     } else {
         PixMap_set_pixelType(pm, 0);
@@ -69,7 +70,7 @@ static void describe_screen(gaddr gd, gaddr pm)
         screen_ctab = screen_depth == 8 ? make_ctab(std8, 256, 8) : make_ctab(bw, 2, 1);
     }
     PixMap_set_pmTable(pm, screen_ctab);
-    GDevice_set_gdType(gd, screen_depth == 32 ? 2 : 0); /* direct or CLUT device */
+    GDevice_set_gdType(gd, screen_depth >= 16 ? 2 : 0); /* direct or CLUT device */
     wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
 }
 
@@ -80,7 +81,7 @@ void qd_screen_init(int width, int height)
     screen_depth = depth_pref;
     screen_row_bytes = row_bytes_for(screen_depth, width);
     /* White: 0 in the 1- and 8-bit tables, all ones in direct colour. */
-    gmemset(GA_SCREEN, screen_depth == 32 ? 0xFF : 0, screen_row_bytes * (uint32_t)height);
+    gmemset(GA_SCREEN, screen_depth >= 16 ? 0xFF : 0, screen_row_bytes * (uint32_t)height);
     wr32(LM_ScrnBase, GA_SCREEN);
     wr16(LM_ScrVRes, 72);
     wr16(LM_ScrHRes, 72);
@@ -95,7 +96,9 @@ void qd_screen_init(int width, int height)
 
     gaddr gdh = tb_NewHandle(GDevice_SIZEOF, true, true);
     gaddr gd = rd32(gdh);
-    GDevice_set_gdFlags(gd, (int16_t)((1 << 15) | (1 << 14) | (1 << 13) | (1 << 12) | (1 << 11) | (1 << 10)));
+    /* screenActive, screenDevice, allInit, mainScreen, ramInit (it has a
+     * driver: games look for one to switch modes through) */
+    GDevice_set_gdFlags(gd, (int16_t)((1 << 15) | (1 << 13) | (1 << 12) | (1 << 11) | (1 << 10)));
     GDevice_set_gdPMap(gd, pmh);
     qrect_put(gd + GDevice_gdRect_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
     GDevice_set_gdResPref(gd, 3);
@@ -133,7 +136,7 @@ void qd_screen_port_closed(gaddr port)
         }
 }
 
-bool qd_screen_supports(int depth) { return depth == 1 || depth == 8 || depth == 32; }
+bool qd_screen_supports(int depth) { return depth == 1 || depth == 8 || depth == 16 || depth == 32; }
 
 /* Switch the screen to another depth: the device, screenBits, and every
  * port still drawing on the screen change with it; the contents are lost,
@@ -147,7 +150,7 @@ bool qd_screen_set_depth(int depth)
     uint32_t old_rb = screen_row_bytes;
     screen_depth = depth;
     screen_row_bytes = row_bytes_for(depth, g_screen_width);
-    gmemset(GA_SCREEN, depth == 32 ? 0xFF : 0, screen_row_bytes * (uint32_t)g_screen_height);
+    gmemset(GA_SCREEN, depth >= 16 ? 0xFF : 0, screen_row_bytes * (uint32_t)g_screen_height);
     gaddr gd = rd32(rd32(LM_MainDevice));
     gaddr pm = rd32(GDevice_gdPMap(gd));
     describe_screen(gd, pm);
@@ -273,6 +276,11 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
                 o[0] = (uint8_t)(v >> 16);
                 o[1] = (uint8_t)(v >> 8);
                 o[2] = (uint8_t)v;
+            } else if (screen_depth == 16) { /* x1555 */
+                uint8_t r5 = (v >> 10) & 31, g5 = (v >> 5) & 31, b5 = v & 31;
+                o[0] = (uint8_t)(r5 << 3 | r5 >> 2);
+                o[1] = (uint8_t)(g5 << 3 | g5 >> 2);
+                o[2] = (uint8_t)(b5 << 3 | b5 >> 2);
             } else if (screen_depth == 8) {
                 o[0] = lut[v][0];
                 o[1] = lut[v][1];

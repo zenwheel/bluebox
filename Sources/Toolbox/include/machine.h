@@ -38,6 +38,8 @@ void machine_set_appearance(int appearance);
 bool machine_load_theme(const char *path, char *err, size_t errlen);
 /* Screen depth: 1 (black and white, the default), 8 or 32; before boot. */
 void machine_set_screen_depth(int depth);
+/* 68040 (with FPU, the default) or 68020 (no FPU). Before machine_boot. */
+void machine_set_cpu(int model);
 bool machine_halted(void);
 /* Write the screen to a PNG file. */
 bool machine_screenshot(const char *path);

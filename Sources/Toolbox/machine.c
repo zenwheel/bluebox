@@ -38,13 +38,18 @@ static uint64_t now_ns(void)
     return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
 }
 
+/* The processor we present: a 68040 with its FPU (a Quadra 800), or a
+ * 68020 with no FPU for applications that misbehave on the 68040. */
+static int cpu_model = 68040;
+void machine_set_cpu(int model) { cpu_model = model == 68020 ? 68020 : 68040; }
+
 static void init_lowmem(void)
 {
     wr32(LM_MemTop, GA_ROM);
     wr32(LM_BufPtr, GA_A5WORLD_TOP);
     wr32(LM_ROMBase, GA_ROM);
     wr16(LM_ROM85, 0x3FFF);           /* new ROMs, Color QuickDraw */
-    wr8(LM_CPUFlag, 2);               /* 68020 */
+    wr8(LM_CPUFlag, g_cpu->model == 68040 ? 4 : 2);
     wr8(LM_MMU32Bit, 1);              /* 32-bit addressing */
     wr16(LM_SysVersion, 0x0710);
     wr32(LM_Lo3Bytes, 0x00FFFFFF);
@@ -136,6 +141,7 @@ bool machine_boot(bool census)
         return false;
     mem_reset();
     cpu_init(&cpu);
+    cpu.model = cpu_model;
     g_cpu = &cpu;
     cpu.aline = trap_aline;
     cpu.native = trap_native;

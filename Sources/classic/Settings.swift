@@ -5,6 +5,11 @@ import Foundation
 /// command line says otherwise; installed bundles run through it too.
 struct AppSettings: Codable {
     var depth: Int?
+    var cpu: Int?
+    var isEmpty: Bool { depth == nil && cpu == nil }
+    var summary: String {
+        "depth \(depth.map(String.init) ?? "default (32)"), cpu \(cpu.map(String.init) ?? "default (68040)")"
+    }
 }
 
 func settingsPath(_ library: String) -> String {
@@ -32,7 +37,7 @@ func settingsKey(_ app: String) -> String { (app as NSString).lastPathComponent 
 
 func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[settingsKey(app)] }
 
-/// classic set <app> [depth 1|8|32|default]
+/// classic set <app> [depth 1|8|16|32|default] [cpu 68020|68040|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -46,7 +51,7 @@ func setCommand(_ args: [String]) {
     var s = all[key] ?? AppSettings()
     var pairs = Array(rest.dropFirst())
     if pairs.isEmpty {
-        print("\(key): depth \(s.depth.map(String.init) ?? "default (32)")")
+        print("\(key): \(s.summary)")
         return
     }
     while pairs.count >= 2 {
@@ -56,17 +61,25 @@ func setCommand(_ args: [String]) {
         case "depth":
             if value == "default" {
                 s.depth = nil
-            } else if let d = Int(value), [1, 8, 32].contains(d) {
+            } else if let d = Int(value), [1, 8, 16, 32].contains(d) {
                 s.depth = d
             } else {
-                fail("depth expects 1, 8, 32 or default")
+                fail("depth expects 1, 8, 16, 32 or default")
+            }
+        case "cpu":
+            if value == "default" {
+                s.cpu = nil
+            } else if let m = Int(value), [68020, 68040].contains(m) {
+                s.cpu = m
+            } else {
+                fail("cpu expects 68020, 68040 or default")
             }
         default:
-            fail("unknown setting \(name) (settings: depth)")
+            fail("unknown setting \(name) (settings: depth, cpu)")
         }
     }
     if !pairs.isEmpty { usage() }
-    all[key] = s.depth == nil ? nil : s
+    all[key] = s.isEmpty ? nil : s
     saveSettings(all, library: library)
-    print("\(key): depth \(s.depth.map(String.init) ?? "default (32)")")
+    print("\(key): \(s.summary)")
 }

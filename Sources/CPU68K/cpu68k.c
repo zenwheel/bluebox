@@ -1142,7 +1142,17 @@ static void op_line4(cpu68k *c, uint16_t op)
         case 0x802: cr = &c->caar; break;
         case 0x803: /* MSP */
         case 0x804: cr = &c->isp; break;
-        default: illegal(c); return;
+        default:
+            /* The 68040's MMU and cache registers: TC, ITT0/1, DTT0/1,
+             * MMUSR, URP, SRP.  There is no MMU; they read back what was
+             * written. */
+            if (c->model >= 68040 && ((ext & 0xFFF) - 0x003 < 5 || (ext & 0xFFF) - 0x805 < 3)) {
+                static uint32_t mmu_regs[16];
+                cr = &mmu_regs[(ext & 0x800 ? 8 : 0) + (ext & 7)];
+                break;
+            }
+            illegal(c);
+            return;
         }
         if (op == 0x4E7A)
             *r = *cr;
@@ -1825,8 +1835,54 @@ static void fp_general(cpu68k *c, uint16_t op)
     }
 }
 
+/* MOVE16: 16 bytes, both addresses rounded down to a line. */
+static void move16(cpu68k *c, uint32_t from, uint32_t to)
+{
+    from &= ~15u;
+    to &= ~15u;
+    uint32_t v[4];
+    for (int i = 0; i < 4; i++)
+        v[i] = mr32(c, from + (uint32_t)i * 4);
+    for (int i = 0; i < 4; i++)
+        mw32(c, to + (uint32_t)i * 4, v[i]);
+}
+
+/* The 68040's own line-F instructions: CINV/CPUSH and PFLUSH/PTEST (no
+ * caches or MMU to act on) and MOVE16. */
+static bool op_040(cpu68k *c, uint16_t op)
+{
+    if ((op & 0xFE00) == 0xF400) { /* CINV, CPUSH (F4xx); PFLUSH, PTEST (F5xx) */
+        if (!(c->sr & SR_S))
+            privilege(c);
+        return true;
+    }
+    if ((op & 0xFFF8) == 0xF620) { /* MOVE16 (Ax)+,(Ay)+ */
+        uint16_t ext = fetch16(c);
+        int ax = op & 7, ay = (ext >> 12) & 7;
+        move16(c, c->a[ax], c->a[ay]);
+        c->a[ax] += 16;
+        if (ay != ax)
+            c->a[ay] += 16;
+        return true;
+    }
+    if ((op & 0xFFE0) == 0xF600) { /* MOVE16 with an absolute address */
+        uint32_t abs = fetch32(c);
+        int ay = op & 7;
+        switch ((op >> 3) & 3) {
+        case 0: move16(c, c->a[ay], abs); c->a[ay] += 16; break; /* (Ay)+,(xxx).L */
+        case 1: move16(c, abs, c->a[ay]); c->a[ay] += 16; break; /* (xxx).L,(Ay)+ */
+        case 2: move16(c, c->a[ay], abs); break;                 /* (Ay),(xxx).L */
+        case 3: move16(c, abs, c->a[ay]); break;                 /* (xxx).L,(Ay) */
+        }
+        return true;
+    }
+    return false;
+}
+
 static void op_lineF(cpu68k *c, uint16_t op)
 {
+    if (c->model >= 68040 && op_040(c, op))
+        return;
     if ((op & 0x0E00) != 0x0200) { /* not coprocessor 1 */
         cpu_exception(c, 11, c->op_pc);
         return;
