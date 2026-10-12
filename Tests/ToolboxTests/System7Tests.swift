@@ -431,3 +431,48 @@ extension Classic {
         }
     }
 }
+
+extension Classic {
+    @Suite struct AppleEventBuilding {
+        @Test func listsRecordsAndSendingToOurselves() {
+            launchTestApp()
+            let list = tb_NewPtr(8, false, true)
+            #expect(tb_AECreateList(0, 0, 0, list) == 0)
+            let v = tb_NewPtr(4, false, true)
+            for i in 1...3 {
+                wr32(v, UInt32(i * 10))
+                #expect(tb_AEPutPtr(list, 0, Int32(bitPattern: fourCC("long")), v, 4) == 0)
+            }
+            wr32(v, 99)
+            #expect(tb_AEPutPtr(list, 2, Int32(bitPattern: fourCC("long")), v, 4) == 0) // replace item 2
+            let count = tb_NewPtr(4, false, true)
+            _ = tb_AECountItems(list, count)
+            #expect(rd32(count) == 3)
+            let out = tb_NewPtr(4, false, true), type = tb_NewPtr(4, false, true), size = tb_NewPtr(4, false, true)
+            _ = tb_AEGetNthPtr(list, 2, Int32(bitPattern: fourCC("long")), 0, type, out, 4, size)
+            #expect(rd32(out) == 99)
+            #expect(tb_AEDeleteItem(list, 1) == 0)
+            _ = tb_AEGetNthPtr(list, 1, Int32(bitPattern: fourCC("long")), 0, type, out, 4, size)
+            #expect(rd32(out) == 99)
+            _ = tb_AEDisposeDesc(list)
+
+            // An event to ourselves reaches our handler, which counts calls.
+            let calls = tb_NewPtr(4, false, true)
+            // FUNCTION handler(event, reply: AppleEvent; refcon): OSErr
+            let words: [UInt16] = [0x205F, 0x4FEF, 0x000C, 0x52B9, UInt16(calls >> 16), UInt16(calls & 0xFFFF),
+                                   0x4257, 0x4ED0] // MOVEA.L (SP)+,A0; LEA 12(SP),SP; ADDQ.L #1,calls; CLR.W (SP); JMP (A0)
+            let handler = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(handler + UInt32(i * 2), w) }
+            g_cpu!.pointee.a.7 = tb_NewPtr(65536, false, true) + 65536 - 16
+            _ = tb_AEInstallEventHandler(Int32(bitPattern: fourCC("test")), Int32(bitPattern: fourCC("ping")), handler, 0, 0)
+            let target = tb_NewPtr(8, false, true), psn = tb_NewPtr(8, false, true)
+            wr32(psn + 4, 2) // kCurrentProcess
+            _ = tb_AECreateDesc(Int32(bitPattern: fourCC("psn ")), psn, 8, target)
+            let evt = tb_NewPtr(8, false, true), reply = tb_NewPtr(8, false, true)
+            #expect(tb_AECreateAppleEvent(Int32(bitPattern: fourCC("test")), Int32(bitPattern: fourCC("ping")),
+                                          target, -1, 0, evt) == 0)
+            #expect(tb_AESend(evt, reply, 3, 0, -1, 0, 0) == 0)
+            #expect(rd32(calls) == 1)
+        }
+    }
+}

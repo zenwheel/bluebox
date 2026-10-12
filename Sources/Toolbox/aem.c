@@ -540,6 +540,393 @@ int16_t tb_AEProcessAppleEvent(gaddr evt)
     return result;
 }
 
+/* ---------------------------------------------------------------------- */
+/* Building lists, records and events */
+
+int16_t tb_AECreateList(gaddr prefix, int32_t prefix_size, int8_t is_record, gaddr list_out)
+{
+    gaddr h = tb_NewHandle(is_record ? 8 : 4, false, true);
+    set_desc(list_out, is_record ? T("reco") : T("list"), h);
+    return h ? noErr : memFullErr;
+}
+
+/* index 0 (or one past the end) appends; otherwise the item is replaced. */
+int16_t tb_AEPutPtr(gaddr list, int32_t index, int32_t type, gaddr data, int32_t size)
+{
+    gaddr h = desc_handle(list);
+    if (!h)
+        return errAENotAEDesc;
+    uint32_t n;
+    first_entry(h, desc_type(list), &n, false);
+    if (index < 0 || (uint32_t)index > n + 1)
+        return errAEBadListItem;
+    if (index == 0 || (uint32_t)index == n + 1) {
+        append_entry(h, desc_type(list), false, 0, (uint32_t)type, data, (uint32_t)size, NULL);
+        return noErr;
+    }
+    /* Replace: rebuild with the new item in place. */
+    gaddr nh = tb_NewHandle(is_record(desc_type(list)) ? 8 : 4, false, true);
+    for (uint32_t i = 1; i <= n; i++) {
+        uint32_t off = nth_entry(h, desc_type(list), (int32_t)i);
+        gaddr p = rd32(h);
+        if ((int32_t)i == index) {
+            append_entry(nh, desc_type(list), false, rd32(p + off), (uint32_t)type, data, (uint32_t)size, NULL);
+        } else {
+            uint32_t len = rd32(p + off + 8);
+            uint8_t *tmp = malloc(len ? len : 1);
+            gget(tmp, p + off + 12, len);
+            append_entry(nh, desc_type(list), false, rd32(p + off), rd32(p + off + 4), 0, len, tmp);
+            free(tmp);
+        }
+    }
+    tb_DisposeHandle(h);
+    AEDesc_set_dataHandle(list, nh);
+    return noErr;
+}
+
+int16_t tb_AEPutDesc(gaddr list, int32_t index, gaddr desc)
+{
+    gaddr dh = desc_handle(desc);
+    int32_t n = dh ? tb_GetHandleSize(dh) : 0;
+    if (dh)
+        tb_HLock(dh);
+    int16_t err = tb_AEPutPtr(list, index, (int32_t)desc_type(desc), dh ? rd32(dh) : 0, n);
+    if (dh)
+        tb_HUnlock(dh);
+    return err;
+}
+
+int16_t tb_AEDeleteItem(gaddr list, int32_t index)
+{
+    gaddr h = desc_handle(list);
+    uint32_t off = h ? nth_entry(h, desc_type(list), index) : 0;
+    if (!off)
+        return errAEBadListItem;
+    remove_entry(h, off, desc_type(list), false);
+    return noErr;
+}
+
+int16_t tb_AEDeleteParam(gaddr record, int32_t keyword)
+{
+    gaddr h = desc_handle(record);
+    uint32_t off = h ? find_entry(h, desc_type(record), (uint32_t)keyword, false) : 0;
+    if (!off)
+        return errAEDescNotFound;
+    remove_entry(h, off, desc_type(record), false);
+    return noErr;
+}
+
+static int16_t size_of(gaddr h, uint32_t off, gaddr type_out, gaddr size_out)
+{
+    if (!off)
+        return errAEDescNotFound;
+    if (type_out)
+        wr32(type_out, rd32(rd32(h) + off + 4));
+    if (size_out)
+        wr32(size_out, rd32(rd32(h) + off + 8));
+    return noErr;
+}
+
+int16_t tb_AESizeOfNthItem(gaddr list, int32_t index, gaddr type_out, gaddr size_out)
+{
+    gaddr h = desc_handle(list);
+    uint32_t off = h ? nth_entry(h, desc_type(list), index) : 0;
+    return off ? size_of(h, off, type_out, size_out) : errAEBadListItem;
+}
+
+int16_t tb_AESizeOfParam(gaddr record, int32_t keyword, gaddr type_out, gaddr size_out)
+{
+    gaddr h = desc_handle(record);
+    return size_of(h, h ? find_entry(h, desc_type(record), (uint32_t)keyword, false) : 0, type_out, size_out);
+}
+
+int16_t tb_AESizeOfAttribute(gaddr evt, int32_t keyword, gaddr type_out, gaddr size_out)
+{
+    gaddr h = desc_handle(evt);
+    return size_of(h, h ? find_entry(h, desc_type(evt), (uint32_t)keyword, true) : 0, type_out, size_out);
+}
+
+int16_t tb_AEPutAttributePtr(gaddr evt, int32_t keyword, int32_t type, gaddr data, int32_t size)
+{
+    gaddr h = desc_handle(evt);
+    if (!h || desc_type(evt) != T("aevt"))
+        return errAENotAEDesc;
+    uint32_t off = find_entry(h, T("aevt"), (uint32_t)keyword, true);
+    if (off)
+        remove_entry(h, off, T("aevt"), true);
+    append_entry(h, T("aevt"), true, (uint32_t)keyword, (uint32_t)type, data, (uint32_t)size, NULL);
+    return noErr;
+}
+
+int16_t tb_AEPutAttributeDesc(gaddr evt, int32_t keyword, gaddr desc)
+{
+    gaddr dh = desc_handle(desc);
+    int32_t n = dh ? tb_GetHandleSize(dh) : 0;
+    if (dh)
+        tb_HLock(dh);
+    int16_t err = tb_AEPutAttributePtr(evt, keyword, (int32_t)desc_type(desc), dh ? rd32(dh) : 0, n);
+    if (dh)
+        tb_HUnlock(dh);
+    return err;
+}
+
+int16_t tb_AECreateAppleEvent(int32_t cls, int32_t id, gaddr target, int16_t return_id, int32_t transaction,
+                              gaddr evt)
+{
+    gaddr h = tb_NewHandle(8, false, true);
+    if (!h)
+        return memFullErr;
+    set_desc(evt, T("aevt"), h);
+    uint32_t c = __builtin_bswap32((uint32_t)cls), i = __builtin_bswap32((uint32_t)id);
+    uint32_t rid = __builtin_bswap32((uint32_t)(int32_t)return_id), tid = __builtin_bswap32((uint32_t)transaction);
+    append_entry(h, T("aevt"), true, T("evcl"), T("type"), 0, 4, &c);
+    append_entry(h, T("aevt"), true, T("evid"), T("type"), 0, 4, &i);
+    append_entry(h, T("aevt"), true, T("rtid"), T("shor"), 0, 2, (uint8_t *)&rid + 2);
+    append_entry(h, T("aevt"), true, T("tran"), T("long"), 0, 4, &tid);
+    if (target && desc_handle(target))
+        tb_AEPutAttributeDesc(evt, (int32_t)T("addr"), target);
+    return noErr;
+}
+
+int16_t tb_AEGetArray(gaddr list, uint8_t array_type, gaddr array_ptr, int32_t max_size, gaddr item_type,
+                      gaddr item_size, gaddr item_count)
+{
+    return errAEWrongDataType;
+}
+
+int16_t tb_AEPutArray(gaddr list, uint8_t type, gaddr data, int32_t item_type, int32_t item_size, int32_t count)
+{
+    return errAEWrongDataType;
+}
+
+/* AESend: events to ourselves go straight to our handler; there is no
+ * other process to send to. */
+static bool to_self(gaddr evt)
+{
+    gaddr h = desc_handle(evt);
+    uint32_t off = h ? find_entry(h, T("aevt"), T("addr"), true) : 0;
+    if (!off)
+        return true;
+    gaddr p = rd32(h);
+    uint32_t type = rd32(p + off + 4);
+    if (type == T("psn "))
+        return rd32(p + off + 12) == 0 && (rd32(p + off + 16) == 2 || rd32(p + off + 16) == 0x1000); /* us */
+    return false;
+}
+
+static uint32_t attr_long(gaddr evt, uint32_t key)
+{
+    gaddr h = desc_handle(evt);
+    uint32_t off = h ? find_entry(h, T("aevt"), key, true) : 0;
+    return off ? rd32(rd32(h) + off + 12) : 0;
+}
+
+int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, int32_t timeout, gaddr idle,
+                  gaddr filter)
+{
+    if (reply)
+        set_desc(reply, T("null"), 0);
+    if (!to_self(evt))
+        return -600; /* procNotFound */
+    const handler_entry *hd = find_handler(attr_long(evt, T("evcl")), attr_long(evt, T("evid")));
+    if (!hd)
+        return errAEEventNotHandled;
+    gaddr r = tb_NewPtr(AEDesc_SIZEOF, false, true);
+    set_desc(r, T("aevt"), tb_NewHandle(8, false, true));
+    gaddr saved = current_event_desc;
+    current_event_desc = evt;
+    cpu68k *c = g_cpu;
+    cpu_push16(c, 0);
+    cpu_push32(c, evt);
+    cpu_push32(c, r);
+    cpu_push32(c, (uint32_t)hd->refcon);
+    guest_call(hd->handler);
+    int16_t result = (int16_t)cpu_pop16(c);
+    current_event_desc = saved;
+    /* kAEWaitReply (3): the caller gets the reply. */
+    if (reply && (send_mode & 3) == 3)
+        gmemcpy(reply, r, AEDesc_SIZEOF);
+    else
+        tb_AEDisposeDesc(r);
+    tb_DisposePtr(r);
+    return result;
+}
+
+int16_t tb_AEResetTimer(gaddr evt) { return noErr; }
+int16_t tb_AESetTheCurrentEvent(gaddr evt)
+{
+    current_event_desc = evt;
+    return noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Coercion and special handlers: recorded; our coercions are identities. */
+
+typedef struct {
+    uint32_t from, to;
+    gaddr handler;
+    int32_t refcon;
+    bool from_desc;
+} coercion_entry;
+
+static coercion_entry coercions[32];
+static int ncoercions;
+
+int16_t tb_AEInstallCoercionHandler(int32_t from, int32_t to, gaddr hdlr, int32_t refcon, int8_t from_desc, int8_t sys)
+{
+    for (int i = 0; i < ncoercions; i++)
+        if (coercions[i].from == (uint32_t)from && coercions[i].to == (uint32_t)to) {
+            coercions[i] = (coercion_entry){ (uint32_t)from, (uint32_t)to, hdlr, refcon, from_desc != 0 };
+            return noErr;
+        }
+    if (ncoercions >= 32)
+        return memFullErr;
+    coercions[ncoercions++] = (coercion_entry){ (uint32_t)from, (uint32_t)to, hdlr, refcon, from_desc != 0 };
+    return noErr;
+}
+
+int16_t tb_AERemoveCoercionHandler(int32_t from, int32_t to, gaddr hdlr, int8_t sys)
+{
+    for (int i = 0; i < ncoercions; i++)
+        if (coercions[i].from == (uint32_t)from && coercions[i].to == (uint32_t)to) {
+            coercions[i] = coercions[--ncoercions];
+            return noErr;
+        }
+    return errAEHandlerNotFound;
+}
+
+int16_t tb_AEGetCoercionHandler(int32_t from, int32_t to, gaddr hdlr_out, gaddr refcon_out, gaddr from_desc_out,
+                                int8_t sys)
+{
+    for (int i = 0; i < ncoercions; i++)
+        if (coercions[i].from == (uint32_t)from && coercions[i].to == (uint32_t)to) {
+            if (hdlr_out)
+                wr32(hdlr_out, coercions[i].handler);
+            if (refcon_out)
+                wr32(refcon_out, (uint32_t)coercions[i].refcon);
+            if (from_desc_out)
+                wr8(from_desc_out, coercions[i].from_desc);
+            return noErr;
+        }
+    return errAEHandlerNotFound;
+}
+
+static struct {
+    uint32_t cls;
+    gaddr handler;
+} specials[16];
+static int nspecials;
+
+int16_t tb_AEInstallSpecialHandler(int32_t cls, gaddr hdlr, int8_t sys)
+{
+    for (int i = 0; i < nspecials; i++)
+        if (specials[i].cls == (uint32_t)cls) {
+            specials[i].handler = hdlr;
+            return noErr;
+        }
+    if (nspecials >= 16)
+        return memFullErr;
+    specials[nspecials].cls = (uint32_t)cls;
+    specials[nspecials++].handler = hdlr;
+    return noErr;
+}
+
+int16_t tb_AERemoveSpecialHandler(int32_t cls, gaddr hdlr, int8_t sys)
+{
+    for (int i = 0; i < nspecials; i++)
+        if (specials[i].cls == (uint32_t)cls) {
+            specials[i] = specials[--nspecials];
+            return noErr;
+        }
+    return errAEHandlerNotFound;
+}
+
+int16_t tb_AEGetSpecialHandler(int32_t cls, gaddr hdlr_out, int8_t sys)
+{
+    for (int i = 0; i < nspecials; i++)
+        if (specials[i].cls == (uint32_t)cls) {
+            wr32(hdlr_out, specials[i].handler);
+            return noErr;
+        }
+    return errAEHandlerNotFound;
+}
+
+/* AEManagerInfo: the number of Apple Events processed and the like. */
+int16_t tb_AEManagerInfo(gaddr result)
+{
+    if (result)
+        wr32(result, 0);
+    return noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Object Support Library: accessors are recorded; resolving is up to a
+ * scripting client, which we don't have, so nothing resolves. */
+
+typedef struct {
+    uint32_t desired, container;
+    gaddr accessor;
+    int32_t refcon;
+} accessor_entry;
+
+static accessor_entry accessors[32];
+static int naccessors;
+
+int16_t tb_AEInstallObjectAccessor(int32_t desired, int32_t container, gaddr accessor, int32_t refcon, int8_t sys)
+{
+    for (int i = 0; i < naccessors; i++)
+        if (accessors[i].desired == (uint32_t)desired && accessors[i].container == (uint32_t)container) {
+            accessors[i].accessor = accessor;
+            accessors[i].refcon = refcon;
+            return noErr;
+        }
+    if (naccessors >= 32)
+        return memFullErr;
+    accessors[naccessors++] = (accessor_entry){ (uint32_t)desired, (uint32_t)container, accessor, refcon };
+    return noErr;
+}
+
+int16_t tb_AERemoveObjectAccessor(int32_t desired, int32_t container, gaddr accessor, int8_t sys)
+{
+    for (int i = 0; i < naccessors; i++)
+        if (accessors[i].desired == (uint32_t)desired && accessors[i].container == (uint32_t)container) {
+            accessors[i] = accessors[--naccessors];
+            return noErr;
+        }
+    return errAEHandlerNotFound;
+}
+
+int16_t tb_AEGetObjectAccessor(int32_t desired, int32_t container, gaddr accessor_out, gaddr refcon_out, int8_t sys)
+{
+    for (int i = 0; i < naccessors; i++)
+        if (accessors[i].desired == (uint32_t)desired && accessors[i].container == (uint32_t)container) {
+            wr32(accessor_out, accessors[i].accessor);
+            wr32(refcon_out, (uint32_t)accessors[i].refcon);
+            return noErr;
+        }
+    return errAEHandlerNotFound;
+}
+
+int16_t tb_AECallObjectAccessor(int32_t desired, gaddr container_token, int32_t container_class, int32_t key_form,
+                                gaddr key_data, gaddr token)
+{
+    return -1723; /* errAEAccessorNotFound */
+}
+
+int16_t tb_AESetObjectCallbacks(gaddr compare, gaddr count, gaddr dispose, gaddr getmark, gaddr mark, gaddr adjust,
+                                gaddr errdesc)
+{
+    return noErr;
+}
+
+int16_t tb_AEResolve(gaddr spec, int16_t flags, gaddr token)
+{
+    set_desc(token, T("null"), 0);
+    return -1728; /* errAENoSuchObject */
+}
+
+int16_t tb_AEDisposeToken(gaddr token) { return tb_AEDisposeDesc(token); }
+
 int16_t tb_AEInteractWithUser(int32_t timeout, gaddr nm_req, gaddr idle_proc) { return noErr; }
 int16_t tb_AESetInteractionAllowed(uint8_t level) { interaction = level; return noErr; }
 int16_t tb_AEGetInteractionAllowed(gaddr return_level) { wr8(return_level, interaction); return noErr; }
@@ -554,7 +941,13 @@ int16_t tb_AEGetTheCurrentEvent(gaddr return_evt)
 int16_t tb_AESuspendTheCurrentEvent(gaddr evt) { return noErr; }
 int16_t tb_AEResumeTheCurrentEvent(gaddr evt, gaddr reply, gaddr dispatcher, int32_t refcon) { return noErr; }
 
-void aem_reset_handlers(void) { nhandlers = 0; }
+void aem_reset_handlers(void)
+{
+    nhandlers = 0;
+    ncoercions = 0;
+    nspecials = 0;
+    naccessors = 0;
+}
 
 /* Raw high-level events.  Early System 7 apps (TeachText) accept the
  * message themselves and walk the Apple Event's wire format:

@@ -825,3 +825,46 @@ int8_t tb_GetGray(gaddr gdh, gaddr back, gaddr fore)
     rgb_set(fore, a);
     return 1;
 }
+
+/* ---------------------------------------------------------------------- */
+/* The rest of QDExtensions */
+
+gaddr tb_GetGWorldDevice(gaddr port) { return rd32(LM_MainDevice); }
+int8_t tb_QDDone(gaddr port) { return 1; }  /* drawing is never pending */
+int32_t tb_OffscreenVersion(void) { return 0x130; }
+
+/* A pixmap at the screen's depth for a global rectangle. */
+static int16_t screen_buffer(gaddr rect, gaddr gdhp, gaddr pmp)
+{
+    qrect r = qrect_get(rect);
+    int depth = qd_screen_depth(), w = r.right - r.left, h = r.bottom - r.top;
+    if (w <= 0 || h <= 0)
+        return paramErr;
+    gaddr pmh = tb_NewPixMap();
+    uint32_t rb = row_bytes_for(w, depth);
+    gaddr bits = tb_NewPtr((int32_t)(rb * (uint32_t)h), false, true);
+    if (!pmh || !bits)
+        return memFullErr;
+    gaddr pm = rd32(pmh);
+    PixMap_set_baseAddr(pm, bits);
+    PixMap_set_rowBytes(pm, (int16_t)(rb | 0x8000));
+    qrect_put(pm + PixMap_bounds_off, r);
+    PixMap_set_pixelSize(pm, (int16_t)depth);
+    wr32(gdhp, rd32(LM_MainDevice));
+    wr32(pmp, pmh);
+    return noErr;
+}
+
+int16_t tb_NewScreenBuffer(gaddr rect, int8_t purgeable, gaddr gdhp, gaddr pmp) { return screen_buffer(rect, gdhp, pmp); }
+int16_t tb_NewTempScreenBuffer(gaddr rect, int8_t purgeable, gaddr gdhp, gaddr pmp)
+{
+    return screen_buffer(rect, gdhp, pmp);
+}
+
+void tb_DisposeScreenBuffer(gaddr pmh)
+{
+    if (!pmh || !rd32(pmh))
+        return;
+    tb_DisposePtr(PixMap_baseAddr(rd32(pmh)));
+    tb_DisposePixMap(pmh);
+}
