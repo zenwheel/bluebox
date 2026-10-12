@@ -2,7 +2,8 @@
 import PackageDescription
 
 let warnings: [CSetting] = [
-    .unsafeFlags(["-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-unused-function"]),
+    .unsafeFlags(["-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-unused-function",
+                  "-Werror=int-conversion"]), // a host pointer passed as a guest address
     // glibc hides POSIX/BSD declarations (strdup, localtime_r, MAP_ANON) under strict C17.
     .define("_DEFAULT_SOURCE"),
 ]
