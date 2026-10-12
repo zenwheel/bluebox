@@ -247,8 +247,16 @@ final class MacWindowView: NSView {
             }
         }
         if appMenu.numberOfItems > 0 { appMenu.addItem(.separator()) }
-        let quit = NSMenuItem(title: "Force Quit \(title)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        // Quit asks the classic app to quit; with Option held, Force Quit
+        // ends it at once.  (Command keys themselves go to the app.)
+        let quit = NSMenuItem(title: "Quit \(title)", action: #selector(quitApp(_:)), keyEquivalent: "q")
+        quit.target = self
         appMenu.addItem(quit)
+        let force = NSMenuItem(title: "Force Quit \(title)", action: #selector(NSApplication.terminate(_:)),
+                               keyEquivalent: "q")
+        force.keyEquivalentModifierMask = [.command, .option]
+        force.isAlternate = true
+        appMenu.addItem(force)
         NSApp.mainMenu = bar
     }
 
@@ -298,6 +306,8 @@ final class MacWindowView: NSView {
             }
         }
     }
+
+    @objc func quitApp(_ sender: NSMenuItem) { machine_request_quit() }
 
     @objc func chooseMenu(_ sender: NSMenuItem) {
         guard let pair = sender.representedObject as? [Int], pair.count == 2 else { return }

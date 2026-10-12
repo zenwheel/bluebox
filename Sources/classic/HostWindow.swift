@@ -228,6 +228,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    @objc func quitApp(_ sender: NSMenuItem) { machine_request_quit() }
+
     func windowWillClose(_ notification: Notification) { NSApp.terminate(nil) }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
@@ -244,12 +246,18 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     installPrintHandlers()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
-    // Minimal app menu so Quit works.
+    // Minimal app menu: Quit asks the app to quit; Option shows Force Quit.
     let menu = NSMenu()
     let appItem = NSMenuItem()
     menu.addItem(appItem)
     let appMenu = NSMenu()
-    appMenu.addItem(NSMenuItem(title: "Quit Classic", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    let quit = NSMenuItem(title: "Quit \(title)", action: #selector(HostDelegate.quitApp(_:)), keyEquivalent: "q")
+    quit.target = delegate
+    appMenu.addItem(quit)
+    let force = NSMenuItem(title: "Force Quit \(title)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    force.keyEquivalentModifierMask = [.command, .option]
+    force.isAlternate = true
+    appMenu.addItem(force)
     appItem.submenu = appMenu
     app.mainMenu = menu
     app.run()

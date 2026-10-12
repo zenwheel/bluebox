@@ -227,6 +227,8 @@ void machine_set_launch_documents(const char *const *paths, int n);
 void machine_open_documents(const char *const *paths, int n, bool print);
 void machine_send_open_application(void);
 void machine_send_quit(void);
+/* Ask the app to quit (Quit Application event, or its own Quit command). */
+void machine_request_quit(void);
 
 /* Trap census for the current run. */
 typedef struct {

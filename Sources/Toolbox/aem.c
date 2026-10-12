@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "machine.h"
 #include "tb_internal.h"
@@ -64,6 +65,29 @@ void machine_open_documents(const char *const *paths, int n, bool print)
 void machine_send_open_application(void) { queue_event(T("aevt"), T("oapp"), NULL, 0); }
 void machine_send_quit(void) { queue_event(T("aevt"), T("quit"), NULL, 0); }
 
+/* Ask the app to quit as the System 7 Finder did: a Quit Application event
+ * if it takes high-level events, otherwise its own Quit menu item. */
+static bool has_handler(uint32_t cls, uint32_t id);
+
+void machine_request_quit(void)
+{
+    bool aware = (g_app_size_flags & 0x0040) || has_handler(T("aevt"), T("quit"));
+    if (aware) {
+        machine_send_quit();
+        return;
+    }
+    static machine_menu menus[32];
+    int n = machine_menus(menus, 32);
+    for (int i = 0; i < n; i++)
+        for (int k = 0; k < menus[i].nitems; k++)
+            if (!strncasecmp(menus[i].items[k].text, "Quit", 4) && menus[i].items[k].enabled) {
+                machine_choose_menu(menus[i].id, (int16_t)(k + 1));
+                return;
+            }
+    machine_post_key('q', 12, 0x0100, 1, 0); /* Command-Q */
+    machine_post_key('q', 12, 0x0100, 0, 0);
+}
+
 static void free_event(pending_ae *e)
 {
     for (int i = 0; i < e->nfiles; i++)
@@ -73,7 +97,6 @@ static void free_event(pending_ae *e)
 }
 
 /* For the Event Manager: take the next queued event (true if one was waiting). */
-static bool has_handler(uint32_t cls, uint32_t id);
 
 bool aem_next_event(uint32_t *cls, uint32_t *id, bool remove)
 {
