@@ -217,6 +217,7 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
             i++;
     }
     snprintf(out, outsize, "%s", path);
+    LOGF(LOG_TRAPS, "  name %.*s (vref %d, dir %d) -> %s\n", n, (const char *)name, vref, dirid, path);
     return noErr;
 }
 
@@ -226,15 +227,35 @@ static bool is_dir(const char *p)
     return stat(p, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
+/* A file exists if its data fork does, or only its AppleDouble sidecar
+ * (files with an empty data fork are often stored that way). */
 static bool exists(const char *p)
 {
     struct stat st;
-    return stat(p, &st) == 0;
+    if (stat(p, &st) == 0)
+        return true;
+    char *side = appledouble_sidecar_path(p);
+    bool ok = side && stat(side, &st) == 0;
+    free(side);
+    return ok;
 }
 
 static bool hidden_name(const char *n)
 {
     return n[0] == '.' || !strcmp(n, "Icon\r");
+}
+
+/* The Mac-visible name for a directory entry, or NULL: sidecars stand for
+ * their file when the data fork itself is missing. */
+static const char *entry_name(const char *dir, const char *n)
+{
+    if (n[0] == '.' && n[1] == '_' && n[2]) {
+        char full[PATH_MAX];
+        struct stat st;
+        snprintf(full, sizeof full, "%s/%s", dir, n + 2);
+        return stat(full, &st) == 0 ? NULL : n + 2;
+    }
+    return hidden_name(n) ? NULL : n;
 }
 
 /* The n-th (1-based) visible entry of a directory; dirs and files mixed, sorted. */
@@ -249,17 +270,18 @@ static bool nth_entry(const char *dir, int n, bool files_only, char *out, size_t
     int count = 0, cap = 0;
     struct dirent *e;
     while ((e = readdir(d))) {
-        if (hidden_name(e->d_name))
+        const char *name = entry_name(dir, e->d_name);
+        if (!name)
             continue;
         char full[PATH_MAX];
-        snprintf(full, sizeof full, "%s/%s", dir, e->d_name);
+        snprintf(full, sizeof full, "%s/%s", dir, name);
         if (files_only && is_dir(full))
             continue;
         if (count == cap) {
             cap = cap ? cap * 2 : 32;
             names = realloc(names, (size_t)cap * sizeof *names);
         }
-        names[count++] = strdup(e->d_name);
+        names[count++] = strdup(name);
     }
     closedir(d);
     qsort(names, (size_t)count, sizeof *names, cmp_names);
@@ -280,7 +302,7 @@ static int count_entries(const char *dir)
     int count = 0;
     struct dirent *e;
     while ((e = readdir(d)))
-        if (!hidden_name(e->d_name))
+        if (entry_name(dir, e->d_name))
             count++;
     closedir(d);
     return count;

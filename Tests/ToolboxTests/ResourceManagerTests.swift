@@ -303,5 +303,23 @@ extension Classic {
             #expect(rd32(table + drn) == 0)
         }
     }
+
+    @Suite struct SidecarOnlyFiles {
+        /// A file with an empty data fork may be stored as just its sidecar.
+        @Test func sidecarOnlyFileIsFoundAndListed() throws {
+            let dir = launchTestApp()
+            let side = dir.appendingPathComponent("._Lonely")
+            try FileManager.default.copyItem(at: dir.appendingPathComponent("._Test App"), to: side)
+            let name = tb_NewPtr(64, false, true), spec = tb_NewPtr(70, false, true)
+            guestPString("Lonely", at: name)
+            #expect(tb_FSMakeFSSpec(0, 0, name, spec) == 0)
+            // Indexed: "Lonely" and "Test App" are the folder's two files.
+            let pb = tb_NewPtr(128, false, true), out = tb_NewPtr(64, false, true)
+            wr32(pb + 18, out)
+            wr16(pb + 28, 1)
+            #expect(tb_PBGetCatInfo(pb, false) == 0)
+            #expect(pstring(at: out) == "Lonely")
+        }
+    }
 }
 }
