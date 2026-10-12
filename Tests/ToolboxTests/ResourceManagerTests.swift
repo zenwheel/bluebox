@@ -272,5 +272,36 @@ extension Classic {
             #expect(tb_FSMakeFSSpec(vref, 0, name, spec) == 0)
         }
     }
+
+    @Suite struct FileControlBlocks {
+        /// Applications read the FCB table and the volume's VCB directly.
+        @Test func fcbTableDescribesOpenFiles() {
+            launchTestApp()
+            let table = rd32(UInt32(LM_FCBSPtr))
+            #expect(table != 0 && rd16(UInt32(LM_FSFCBLen)) == 94)
+            // The application's resource file is in the table, found from CurResFile.
+            let rn = UInt32(UInt16(bitPattern: tb_CurResFile()))
+            let fcb = table + rn
+            let vcb = rd32(fcb + 20)
+            #expect(vcb != 0 && Int16(bitPattern: rd16(vcb + 78)) == -1)
+            #expect(rd8(fcb + 4) & 0x02 != 0) // resource fork
+            #expect(rd32(UInt32(LM_VCBQHdr) + 2) == vcb)
+            // GetFCBInfo on it gives the application's name.
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(64, false, true)
+            wr32(pb + 18, name)
+            wr16(pb + 24, UInt16(rn))
+            #expect(tb_PBGetFCBInfo(pb, false) == 0)
+            #expect(pstring(at: name) == "Test App")
+            // A data fork opened through the File Manager appears too, and goes on close.
+            wr32(pb + 18, name)
+            wr16(pb + 22, 0)
+            wr8(pb + 27, 1)
+            #expect(tb_PBOpen(pb, false) == 0)
+            let drn = UInt32(rd16(pb + 24))
+            #expect(rd32(table + drn) != 0 && rd8(table + drn + 4) & 0x02 == 0)
+            #expect(tb_PBClose(pb, false) == 0)
+            #expect(rd32(table + drn) == 0)
+        }
+    }
 }
 }

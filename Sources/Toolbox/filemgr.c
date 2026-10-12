@@ -37,6 +37,8 @@ enum { fsCurPerm = 0, fsRdPerm, fsWrPerm, fsRdWrPerm, fsRdWrShPerm };
 #define MAX_WDS 64
 #define FCB_FIRST 32 /* refnum slots below this belong to the Resource Manager */
 #define MAX_FCBS 300
+#define FCB_SLOTS (FCB_FIRST + MAX_FCBS)
+#define FCB_LEN 94
 
 uint32_t mac_now(void);
 
@@ -284,6 +286,14 @@ static int count_entries(const char *dir)
     return count;
 }
 
+/* A host path's Mac name as a Pascal string (host memory, Str31). */
+static void host_pname(uint8_t out[32], const char *host)
+{
+    const char *base = strrchr(host, '/');
+    base = base ? base + 1 : host;
+    out[0] = (uint8_t)host_to_mac(base, out + 1);
+}
+
 static void put_name(gaddr namep, const char *host)
 {
     if (!namep)
@@ -298,6 +308,82 @@ static void put_name(gaddr namep, const char *host)
 
 /* ---------------------------------------------------------------------- */
 /* Setup */
+
+/* ---------------------------------------------------------------------- */
+/* The FCB table and the volume's control block, as applications read them
+ * directly (FCBSPtr, FSFCBLen, VCBQHdr).  An access path's refnum is its
+ * FCB's offset in the table; the Resource Manager's files are included. */
+
+static gaddr fcb_table, the_vcb;
+
+static void guest_tables_init(void)
+{
+    gaddr zone = rd32(LM_SysZone);
+    uint32_t size = 2 + FCB_SLOTS * FCB_LEN;
+    fcb_table = mm_new_ptr_in(zone, size, true);
+    wr16(fcb_table, (uint16_t)size);
+    wr32(LM_FCBSPtr, fcb_table);
+    wr16(LM_FSFCBLen, FCB_LEN);
+    gaddr v = the_vcb = mm_new_ptr_in(zone, VCB_SIZEOF, true);
+    wr16(v + VCB_vcbSigWord_off, 0x4244);
+    wr32(v + VCB_vcbCrDate_off, mac_now());
+    wr32(v + VCB_vcbLsMod_off, mac_now());
+    wr16(v + VCB_vcbNmAlBlks_off, 0xFFFF);
+    wr32(v + VCB_vcbAlBlkSiz_off, 32768);
+    wr32(v + VCB_vcbClpSiz_off, 32768);
+    wr16(v + VCB_vcbFreeBks_off, 0xC000);
+    gput(v + VCB_vcbVN_off, vol_name, (uint32_t)vol_name[0] + 1);
+    wr16(v + VCB_vcbDrvNum_off, 1);
+    wr16(v + VCB_vcbDRefNum_off, (uint16_t)-5);
+    wr16(v + VCB_vcbVRefNum_off, (uint16_t)VREF);
+    wr16(LM_VCBQHdr, 0);
+    wr32(LM_VCBQHdr + 2, v);
+    wr32(LM_VCBQHdr + 6, v);
+    wr32(LM_DefVCBPtr, v);
+}
+
+void fm_fcb_record(int16_t rn, const char *path, bool rsrc, bool write, uint32_t eof, uint32_t pos)
+{
+    if (!fcb_table || rn < 2 || (rn - 2) % FCB_LEN || rn >= 2 + FCB_SLOTS * FCB_LEN)
+        return;
+    gaddr f = fcb_table + (uint32_t)rn;
+    gmemset(f, 0, FCB_LEN);
+    wr32(f, (uint32_t)dir_id_for(rel_of(path)) + 0x10000); /* fcbFlNum: never 0 while open */
+    wr8(f + 4, (uint8_t)((write ? 0x01 : 0) | (rsrc ? 0x02 : 0)));
+    wr32(f + 8, eof);
+    wr32(f + 12, (eof + 511) & ~511u);
+    wr32(f + 16, pos);
+    wr32(f + 20, the_vcb);
+    wr32(f + 58, (uint32_t)parent_id_of(path));
+    uint8_t name[32];
+    host_pname(name, path);
+    gput(f + 62, name, (uint32_t)name[0] + 1);
+}
+
+void fm_fcb_forget(int16_t rn)
+{
+    if (fcb_table && rn >= 2 && (rn - 2) % FCB_LEN == 0 && rn < 2 + FCB_SLOTS * FCB_LEN)
+        gmemset(fcb_table + (uint32_t)rn, 0, FCB_LEN);
+}
+
+void fm_fcb_eof(int16_t rn, uint32_t eof)
+{
+    if (fcb_table && rn >= 2 && (rn - 2) % FCB_LEN == 0 && rn < 2 + FCB_SLOTS * FCB_LEN) {
+        wr32(fcb_table + (uint32_t)rn + 8, eof);
+        wr32(fcb_table + (uint32_t)rn + 12, (eof + 511) & ~511u);
+    }
+}
+
+void fm_reset(void) { fcb_table = the_vcb = 0; }
+
+static void fcb_sync(int16_t rn)
+{
+    fcb *f = fcb_for(rn);
+    if (f && fcb_table) {
+        fm_fcb_eof(rn, f->len);
+        wr32(fcb_table + (uint32_t)rn + 16, f->pos);
+    }
+}
 
 void fm_init(const char *app_dir)
 {
@@ -326,6 +412,7 @@ void fm_init(const char *app_dir)
     wr16(LM_SFSaveDisk, (uint16_t)(-VREF));
     wr32(LM_CurDirStore, (uint32_t)default_dir);
     wr16(LM_BootDrive, (uint16_t)fm_system_vref());
+    guest_tables_init();
 }
 
 /* An FSSpec for a host path (the file need not exist). */
@@ -569,8 +656,9 @@ static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
             return err;
         }
         f->parid = parent_id_of(path);
-        put_name(f->name, path);
+        host_pname(f->name, path);
         wr16(pb + IOParam_ioRefNum_off, (uint16_t)fcb_refnum(i));
+        fm_fcb_record(fcb_refnum(i), path, rsrc, write, f->len, 0);
         return noErr;
     }
     return tmfoErr;
@@ -590,6 +678,7 @@ int16_t tb_PBClose(gaddr pb, bool async)
     int16_t err = save_fork(f);
     free(f->buf);
     memset(f, 0, sizeof *f);
+    fm_fcb_forget((int16_t)rd16(pb + IOParam_ioRefNum_off));
     return err;
 }
 
@@ -615,7 +704,7 @@ static int16_t set_mark(fcb *f, int mode, int32_t off)
     return noErr;
 }
 
-int16_t tb_PBRead(gaddr pb, bool async)
+static int16_t pb_read(gaddr pb, bool async)
 {
     fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
     wr32(pb + IOParam_ioActCount_off, 0);
@@ -659,7 +748,7 @@ static bool reserve(fcb *f, uint32_t need)
     return true;
 }
 
-int16_t tb_PBWrite(gaddr pb, bool async)
+static int16_t pb_write(gaddr pb, bool async)
 {
     fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
     wr32(pb + IOParam_ioActCount_off, 0);
@@ -693,7 +782,7 @@ int16_t tb_PBGetEOF(gaddr pb, bool async)
     return noErr;
 }
 
-int16_t tb_PBSetEOF(gaddr pb, bool async)
+static int16_t pb_set_eof(gaddr pb, bool async)
 {
     fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
     if (!f)
@@ -724,7 +813,7 @@ int16_t tb_PBGetFPos(gaddr pb, bool async)
     return noErr;
 }
 
-int16_t tb_PBSetFPos(gaddr pb, bool async)
+static int16_t pb_set_fpos(gaddr pb, bool async)
 {
     fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
     if (!f)
@@ -734,7 +823,7 @@ int16_t tb_PBSetFPos(gaddr pb, bool async)
     return err;
 }
 
-int16_t tb_PBAllocate(gaddr pb, bool async)
+static int16_t pb_allocate(gaddr pb, bool async)
 {
     wr32(pb + IOParam_ioActCount_off, rd32(pb + IOParam_ioReqCount_off));
     return noErr;
@@ -1226,36 +1315,35 @@ int16_t tb_PBCatMove(gaddr pb, bool async)
 
 int16_t tb_PBGetFCBInfo(gaddr pb, bool async)
 {
+    /* Every open access path, resource files included, from the FCB table. */
     int16_t idx = (int16_t)rd16(pb + FCBPBRec_ioFCBIndx_off);
-    fcb *f = NULL;
     int16_t rn = 0;
     if (idx > 0) {
         int n = 0;
-        for (int i = 0; i < MAX_FCBS; i++)
-            if (fcbs[i].used && ++n == idx) {
-                f = &fcbs[i];
-                rn = fcb_refnum(i);
-                break;
-            }
+        for (int i = 0; i < FCB_SLOTS && !rn; i++)
+            if (rd32(fcb_table + 2 + (uint32_t)i * FCB_LEN) && ++n == idx)
+                rn = (int16_t)(2 + i * FCB_LEN);
+        if (!rn)
+            return fnOpnErr;
     } else {
         rn = (int16_t)rd16(pb + IOParam_ioRefNum_off);
-        f = fcb_for(rn);
+        if (rn < 2 || (rn - 2) % FCB_LEN || rn >= 2 + FCB_SLOTS * FCB_LEN || !rd32(fcb_table + (uint32_t)rn))
+            return rfNumErr;
     }
-    if (!f)
-        return idx > 0 ? fnOpnErr : rfNumErr;
+    gaddr f = fcb_table + (uint32_t)rn;
     wr16(pb + IOParam_ioRefNum_off, (uint16_t)rn);
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
     if (namep)
-        gput(namep, f->name, (uint32_t)f->name[0] + 1);
-    wr32(pb + FCBPBRec_ioFCBFlNm_off, (uint32_t)dir_id_for(rel_of(f->path)) + 0x10000);
-    wr16(pb + FCBPBRec_ioFCBFlags_off, (uint16_t)((f->write ? 0x0100 : 0) | (f->rsrc ? 0x0200 : 0)));
+        gmemcpy(namep, f + 62, (uint32_t)rd8(f + 62) + 1);
+    wr32(pb + FCBPBRec_ioFCBFlNm_off, rd32(f));
+    wr16(pb + FCBPBRec_ioFCBFlags_off, (uint16_t)(rd8(f + 4) << 8));
     wr16(pb + FCBPBRec_ioFCBStBlk_off, 0);
-    wr32(pb + FCBPBRec_ioFCBEOF_off, f->len);
-    wr32(pb + FCBPBRec_ioFCBPLen_off, (f->len + 511) & ~511u);
-    wr32(pb + FCBPBRec_ioFCBCrPs_off, f->pos);
+    wr32(pb + FCBPBRec_ioFCBEOF_off, rd32(f + 8));
+    wr32(pb + FCBPBRec_ioFCBPLen_off, rd32(f + 12));
+    wr32(pb + FCBPBRec_ioFCBCrPs_off, rd32(f + 16));
     wr16(pb + FCBPBRec_ioFCBVRefNum_off, (uint16_t)VREF);
     wr32(pb + FCBPBRec_ioFCBClpSiz_off, 0);
-    wr32(pb + FCBPBRec_ioFCBParID_off, (uint32_t)f->parid);
+    wr32(pb + FCBPBRec_ioFCBParID_off, rd32(f + 58));
     return noErr;
 }
 
@@ -1619,3 +1707,38 @@ int16_t tb_PBHGetVolParms(gaddr pb, bool async)
 }
 
 int16_t tb_PBOpenDF(gaddr pb, bool async) { return open_fork(pb, false, hfs_call()); }
+
+int16_t tb_PBRead(gaddr pb, bool async)
+{
+    int16_t err = pb_read(pb, async);
+    fcb_sync((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    return err;
+}
+
+int16_t tb_PBWrite(gaddr pb, bool async)
+{
+    int16_t err = pb_write(pb, async);
+    fcb_sync((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    return err;
+}
+
+int16_t tb_PBSetEOF(gaddr pb, bool async)
+{
+    int16_t err = pb_set_eof(pb, async);
+    fcb_sync((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    return err;
+}
+
+int16_t tb_PBSetFPos(gaddr pb, bool async)
+{
+    int16_t err = pb_set_fpos(pb, async);
+    fcb_sync((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    return err;
+}
+
+int16_t tb_PBAllocate(gaddr pb, bool async)
+{
+    int16_t err = pb_allocate(pb, async);
+    fcb_sync((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    return err;
+}

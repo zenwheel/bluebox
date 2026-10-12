@@ -740,6 +740,8 @@ static int16_t open_fork(const char *path, const uint8_t *fork, uint32_t len, bo
     f->maph = maph;
     f->read_only = read_only;
     wr16(m + 20, (uint16_t)f->refnum);
+    if (path)
+        fm_fcb_record(f->refnum, path, true, !read_only, len, 0);
     if (read_only)
         wr16(m + 22, rd16(m + 22) | 0x80); /* mapReadOnly */
 
@@ -820,6 +822,7 @@ void tb_CloseResFile(int16_t rn)
     if ((int16_t)rd16(LM_CurMap) == rn)
         wr16(LM_CurMap, (uint16_t)(rd32(LM_TopMapHndl) ? map_refnum(rd32(LM_TopMapHndl)) : sys_refnum));
     tb_DisposeHandle(maph);
+    fm_fcb_forget(f->refnum);
     free(f->path);
     free(f->fork);
     memset(f, 0, sizeof *f);
@@ -1137,6 +1140,7 @@ static int16_t update_file(resfile *f)
     free(f->fork);
     f->fork = fork;
     f->len = len;
+    fm_fcb_eof(f->refnum, len);
     /* The guest map now describes the new fork. */
     gput(mp_of(maph), fork, 16);
     if (!store_refs(maph, &l, attrs | (f->read_only ? MAP_READ_ONLY : 0)))

@@ -91,6 +91,12 @@ void fm_spec_for_path(const char *path, gaddr spec);
 bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize);
 /* The System Folder's working directory refnum. */
 int16_t fm_system_vref(void);
+/* The guest FCB table: an access path opened, closed, or resized. */
+void fm_fcb_record(int16_t rn, const char *path, bool rsrc, bool write, uint32_t eof, uint32_t pos);
+void fm_fcb_forget(int16_t rn);
+/* Forget the guest tables (at boot, before memory is reused). */
+void fm_reset(void);
+void fm_fcb_eof(int16_t rn, uint32_t eof);
 /* Mac full path (MacRoman) of a host path; returns its length, 0 if too long. */
 size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize);
 /* Host path of a Mac full path. */
