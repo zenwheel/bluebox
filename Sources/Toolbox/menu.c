@@ -1004,12 +1004,27 @@ int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
     gaddr which = tb_NewPtr(2, false, true);
     call_mdef(mh, mDrawMsg, box, 0, which);
     /* At least once: a quick click chooses the item under the mouse. */
+    uint32_t start = rd32(LM_Ticks);
     do {
         call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
         if (!ev_still_down())
             break;
         ev_wait_tick();
     } while (true);
+    /* With a person at the mouse, a click that let go at once leaves the
+     * menu open, as Mac OS 8's did: the next click chooses (or, outside the
+     * menu, cancels). */
+    if (events_host_attached() && rd32(LM_Ticks) - start < 30) {
+        while (!ev_still_down()) {
+            call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
+            ev_wait_tick();
+        }
+        while (ev_still_down()) {
+            call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
+            ev_wait_tick();
+        }
+        call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
+    }
     int chosen = (int16_t)rd16(which);
     restore_bits(area, under);
     tb_DisposePtr(which);
