@@ -45,8 +45,10 @@ extension Classic {
             #expect(tb_GetMaxResourceSize(h) == 4)
         }
 
-        @Test func missingResourceSetsResError() {
+        @Test func missingResourceLeavesResErrorAlone() {
             #expect(tb_GetResource(Int32(bitPattern: fourCC("TEST")), 999) == 0)
+            #expect(resErr() == 0) // as on real System 7.1 (oracle probe)
+            #expect(tb_GetIndResource(Int32(bitPattern: fourCC("TEST")), 99) == 0)
             #expect(resErr() == -192)
         }
 
@@ -59,7 +61,8 @@ extension Classic {
             #expect(tb_Count1Resources(Int32(bitPattern: fourCC("TEST"))) == 2)
             #expect(tb_GetIndResource(Int32(bitPattern: fourCC("TEST")), 2) != 0)
             #expect(tb_GetIndResource(Int32(bitPattern: fourCC("TEST")), 3) == 0)
-            #expect(tb_CountTypes() == 3)
+            #expect(tb_Count1Types() == 3)
+            #expect(tb_CountTypes() > 3) // the chain includes the System file
             let t = tb_NewPtr(4, false, true)
             tb_GetIndType(t, 2)
             #expect(rd32(t) == fourCC("STR "))

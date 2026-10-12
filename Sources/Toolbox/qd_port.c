@@ -1,0 +1,502 @@
+/* QuickDraw globals, graphics ports, pen state, colours and the cursor. */
+#include <string.h>
+
+#include "qd_internal.h"
+#include "tb_internal.h"
+
+const uint8_t qd_pat_black[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+const uint8_t qd_pat_white[8] = { 0 };
+const uint8_t qd_pat_gray[8] = { 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55 };
+const uint8_t qd_pat_ltgray[8] = { 0x88, 0x22, 0x88, 0x22, 0x88, 0x22, 0x88, 0x22 };
+const uint8_t qd_pat_dkgray[8] = { 0x77, 0xDD, 0x77, 0xDD, 0x77, 0xDD, 0x77, 0xDD };
+
+static const uint16_t arrow_data[16] = { 0x0000, 0x4000, 0x6000, 0x7000, 0x7800, 0x7C00, 0x7E00, 0x7F00,
+                                         0x7F80, 0x7C00, 0x6C00, 0x4600, 0x0600, 0x0300, 0x0300, 0x0000 };
+static const uint16_t arrow_mask[16] = { 0xC000, 0xE000, 0xF000, 0xF800, 0xFC00, 0xFE00, 0xFF00, 0xFF80,
+                                         0xFFC0, 0xFFE0, 0xFE00, 0xEF00, 0xCF00, 0x8780, 0x0780, 0x0380 };
+
+enum { blackColor = 33, whiteColor = 30 };
+enum { patCopy = 8, srcOr = 1 };
+
+/* ---- QuickDraw globals ---- */
+
+/* Address of the app's thePort variable (QuickDraw globals end there). */
+static gaddr qd_globals_ptr(void)
+{
+    gaddr a5 = rd32(LM_CurrentA5);
+    return a5 ? rd32(a5) : 0;
+}
+
+gaddr qd_port(void)
+{
+    gaddr g = qd_globals_ptr();
+    return g ? rd32(g) : 0;
+}
+
+static gaddr qd_global(uint32_t off)
+{
+    return qd_globals_ptr() - QDGlobals_thePort_off + off;
+}
+
+gaddr qd_screen_bits(void) { return qd_global(QDGlobals_screenBits_off); }
+
+uint32_t qd_screen_row_bytes(void);
+
+void tb_InitGraf(gaddr gp)
+{
+    wr32(rd32(LM_CurrentA5), gp);
+    gaddr base = gp - QDGlobals_thePort_off;
+    wr32(gp, 0); /* thePort */
+    gput(base + QDGlobals_white_off, qd_pat_white, 8);
+    gput(base + QDGlobals_black_off, qd_pat_black, 8);
+    gput(base + QDGlobals_gray_off, qd_pat_gray, 8);
+    gput(base + QDGlobals_ltGray_off, qd_pat_ltgray, 8);
+    gput(base + QDGlobals_dkGray_off, qd_pat_dkgray, 8);
+    gaddr arrow = base + QDGlobals_arrow_off;
+    for (int i = 0; i < 16; i++) {
+        wr16(arrow + (uint32_t)i * 2, arrow_data[i]);
+        wr16(arrow + 32 + (uint32_t)i * 2, arrow_mask[i]);
+    }
+    wr16(arrow + 64, 1);
+    wr16(arrow + 66, 1);
+    gaddr sb = base + QDGlobals_screenBits_off;
+    BitMap_set_baseAddr(sb, rd32(LM_ScrnBase));
+    BitMap_set_rowBytes(sb, (int16_t)qd_screen_row_bytes());
+    qrect_put(sb + BitMap_bounds_off, (qrect){ 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width });
+    wr32(base + QDGlobals_randSeed_off, 1);
+    wr8(LM_QDExist, 0);
+}
+
+/* ---- Ports ---- */
+
+bool qd_port_is_color(gaddr port) { return port && (rd16(port + GrafPort_portBits_off + 4) & 0xC000) == 0xC000; }
+
+pixdst qd_port_pixels(gaddr port)
+{
+    pixdst d;
+    if (qd_port_is_color(port)) {
+        gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
+        d.base = PixMap_baseAddr(pm);
+        d.row_bytes = (uint16_t)PixMap_rowBytes(pm) & 0x3FFF;
+        d.bounds = qrect_get(pm + PixMap_bounds_off);
+        d.depth = PixMap_pixelSize(pm);
+    } else {
+        gaddr bm = port + GrafPort_portBits_off;
+        d.base = BitMap_baseAddr(bm);
+        d.row_bytes = (uint16_t)BitMap_rowBytes(bm) & 0x3FFF;
+        d.bounds = qrect_get(bm + BitMap_bounds_off);
+        d.depth = 1;
+    }
+    if (d.depth < 1)
+        d.depth = 1;
+    return d;
+}
+
+void qd_port_clip(gaddr port, hrgn *out)
+{
+    hrgn clip;
+    hrgn_init(&clip);
+    rgn_read(GrafPort_visRgn(port), out);
+    rgn_read(GrafPort_clipRgn(port), &clip);
+    hrgn_op(out, out, &clip, RGN_SECT);
+    pixdst d = qd_port_pixels(port);
+    hrgn_rect(&clip, d.bounds);
+    hrgn_op(out, out, &clip, RGN_SECT);
+    hrgn_free(&clip);
+}
+
+static void set_pattern(gaddr dst, const uint8_t pat[8]) { gput(dst, pat, 8); }
+
+/* A PixPat handle for an old-style pattern (patType 0). */
+static gaddr pixpat_for(const uint8_t pat[8])
+{
+    gaddr h = tb_NewHandle(PixPat_SIZEOF, false, true);
+    gaddr p = rd32(h);
+    PixPat_set_patType(p, 0);
+    gput(p + PixPat_pat1Data_off, pat, 8);
+    return h;
+}
+
+void tb_InitPort(gaddr p)
+{
+    bool color = qd_port_is_color(p);
+    gaddr sb = qd_screen_bits();
+    if (!color) {
+        gmemcpy(p + GrafPort_portBits_off, sb, BitMap_SIZEOF);
+    }
+    GrafPort_set_device(p, 0);
+    qrect_put(p + GrafPort_portRect_off, qrect_get(sb + BitMap_bounds_off));
+    tb_RectRgn(GrafPort_visRgn(p), sb + BitMap_bounds_off);
+    tb_SetRectRgn(GrafPort_clipRgn(p), -32767, -32767, 32767, 32767);
+    if (!color) {
+        set_pattern(p + GrafPort_bkPat_off, qd_pat_white);
+        set_pattern(p + GrafPort_fillPat_off, qd_pat_black);
+        set_pattern(p + GrafPort_pnPat_off, qd_pat_black);
+        GrafPort_set_fgColor(p, blackColor);
+        GrafPort_set_bkColor(p, whiteColor);
+    }
+    wr32(p + GrafPort_pnLoc_off, 0);
+    wr32(p + GrafPort_pnSize_off, make_pt(1, 1));
+    GrafPort_set_pnMode(p, patCopy);
+    GrafPort_set_pnVis(p, 0);
+    GrafPort_set_txFont(p, 0);
+    GrafPort_set_txFace(p, 0);
+    GrafPort_set_txMode(p, srcOr);
+    GrafPort_set_txSize(p, 0);
+    GrafPort_set_spExtra(p, 0);
+    GrafPort_set_colrBit(p, 0);
+    GrafPort_set_patStretch(p, 0);
+    GrafPort_set_picSave(p, 0);
+    GrafPort_set_rgnSave(p, 0);
+    GrafPort_set_polySave(p, 0);
+    GrafPort_set_grafProcs(p, 0);
+    tb_SetPort(p);
+}
+
+void tb_OpenPort(gaddr p)
+{
+    wr16(p + GrafPort_portBits_off + 4, 0); /* make sure it is not taken for a CGrafPort */
+    GrafPort_set_visRgn(p, tb_NewRgn());
+    GrafPort_set_clipRgn(p, tb_NewRgn());
+    tb_InitPort(p);
+}
+
+void tb_ClosePort(gaddr p)
+{
+    tb_DisposeRgn(GrafPort_visRgn(p));
+    tb_DisposeRgn(GrafPort_clipRgn(p));
+}
+
+/* ---- Colour ports ---- */
+
+static void rgb_put(gaddr dst, uint16_t r, uint16_t g, uint16_t b)
+{
+    wr16(dst, r);
+    wr16(dst + 2, g);
+    wr16(dst + 4, b);
+}
+
+void tb_InitCPort(gaddr p)
+{
+    /* The pixmap mirrors the main device's. */
+    gaddr pmh = rd32(p + CGrafPort_portPixMap_off);
+    gaddr screen_pm = rd32(GDevice_gdPMap(rd32(rd32(LM_MainDevice))));
+    gmemcpy(rd32(pmh), screen_pm, PixMap_SIZEOF);
+    wr16(p + CGrafPort_portVersion_off, 0xC000);
+    wr16(p + CGrafPort_chExtra_off, 0);
+    wr16(p + CGrafPort_pnLocHFrac_off, 0x8000);
+    rgb_put(p + CGrafPort_rgbFgColor_off, 0, 0, 0);
+    rgb_put(p + CGrafPort_rgbBkColor_off, 0xFFFF, 0xFFFF, 0xFFFF);
+    GrafPort_set_fgColor(p, 1);
+    GrafPort_set_bkColor(p, 0);
+    tb_InitPort(p);
+}
+
+void tb_OpenCPort(gaddr p)
+{
+    wr32(p + CGrafPort_portPixMap_off, tb_NewHandle(PixMap_SIZEOF, false, true));
+    wr16(p + CGrafPort_portVersion_off, 0xC000);
+    wr32(p + CGrafPort_grafVars_off, tb_NewHandle(36, false, true));
+    wr32(p + CGrafPort_bkPixPat_off, pixpat_for(qd_pat_white));
+    wr32(p + CGrafPort_pnPixPat_off, pixpat_for(qd_pat_black));
+    wr32(p + CGrafPort_fillPixPat_off, pixpat_for(qd_pat_black));
+    GrafPort_set_visRgn(p, tb_NewRgn());
+    GrafPort_set_clipRgn(p, tb_NewRgn());
+    tb_InitCPort(p);
+}
+
+void tb_CloseCPort(gaddr p)
+{
+    tb_ClosePort(p);
+    tb_DisposeHandle(rd32(p + CGrafPort_portPixMap_off));
+    tb_DisposeHandle(rd32(p + CGrafPort_grafVars_off));
+    tb_DisposeHandle(rd32(p + CGrafPort_bkPixPat_off));
+    tb_DisposeHandle(rd32(p + CGrafPort_pnPixPat_off));
+    tb_DisposeHandle(rd32(p + CGrafPort_fillPixPat_off));
+}
+
+void tb_SetPort(gaddr p)
+{
+    gaddr g = qd_globals_ptr();
+    if (g)
+        wr32(g, p);
+}
+
+void tb_GetPort(gaddr pp) { wr32(pp, qd_port()); }
+void tb_GrafDevice(int16_t d) { GrafPort_set_device(qd_port(), d); }
+
+void tb_SetPortBits(gaddr bm)
+{
+    gaddr p = qd_port();
+    if (!qd_port_is_color(p))
+        gmemcpy(p + GrafPort_portBits_off, bm, BitMap_SIZEOF);
+}
+
+void tb_PortSize(int16_t w, int16_t h)
+{
+    gaddr p = qd_port();
+    qrect r = qrect_get(p + GrafPort_portRect_off);
+    r.right = (int16_t)(r.left + w);
+    r.bottom = (int16_t)(r.top + h);
+    qrect_put(p + GrafPort_portRect_off, r);
+}
+
+void tb_MovePortTo(int16_t lg, int16_t tg)
+{
+    /* Move the port's bitmap bounds so local (0,0) is at global (lg, tg). */
+    gaddr p = qd_port();
+    gaddr bounds = qd_port_is_color(p) ? rd32(rd32(p + CGrafPort_portPixMap_off)) + PixMap_bounds_off
+                                       : p + GrafPort_portBits_off + BitMap_bounds_off;
+    qrect r = qrect_get(p + GrafPort_portRect_off);
+    qrect b = qrect_get(bounds);
+    int16_t w = (int16_t)(b.right - b.left), h = (int16_t)(b.bottom - b.top);
+    b.left = (int16_t)(r.left - lg);
+    b.top = (int16_t)(r.top - tg);
+    b.right = (int16_t)(b.left + w);
+    b.bottom = (int16_t)(b.top + h);
+    qrect_put(bounds, b);
+}
+
+void tb_SetOrigin(int16_t h, int16_t v)
+{
+    gaddr p = qd_port();
+    qrect r = qrect_get(p + GrafPort_portRect_off);
+    int16_t dh = (int16_t)(h - r.left), dv = (int16_t)(v - r.top);
+    if (!dh && !dv)
+        return;
+    tb_OffsetRect(p + GrafPort_portRect_off, dh, dv);
+    gaddr bounds = qd_port_is_color(p) ? rd32(rd32(p + CGrafPort_portPixMap_off)) + PixMap_bounds_off
+                                       : p + GrafPort_portBits_off + BitMap_bounds_off;
+    tb_OffsetRect(bounds, dh, dv);
+    tb_OffsetRgn(GrafPort_visRgn(p), dh, dv);
+}
+
+void tb_SetClip(gaddr r) { tb_CopyRgn(r, GrafPort_clipRgn(qd_port())); }
+void tb_GetClip(gaddr r) { tb_CopyRgn(GrafPort_clipRgn(qd_port()), r); }
+void tb_ClipRect(gaddr r) { tb_RectRgn(GrafPort_clipRgn(qd_port()), r); }
+
+void tb_BackPat(gaddr pp)
+{
+    gaddr p = qd_port();
+    if (qd_port_is_color(p))
+        gmemcpy(rd32(rd32(p + CGrafPort_bkPixPat_off)) + PixPat_pat1Data_off, pp, 8);
+    else
+        gmemcpy(p + GrafPort_bkPat_off, pp, 8);
+}
+
+/* The 8x8 pattern a port uses for pen, background or fill. */
+void qd_port_pattern(gaddr port, int which, uint8_t out[8])
+{
+    if (qd_port_is_color(port)) {
+        uint32_t off = which == 0 ? CGrafPort_pnPixPat_off : which == 1 ? CGrafPort_bkPixPat_off : CGrafPort_fillPixPat_off;
+        gaddr h = rd32(port + off);
+        if (h && rd32(h)) {
+            gget(out, rd32(h) + PixPat_pat1Data_off, 8);
+            return;
+        }
+        memcpy(out, which == 1 ? qd_pat_white : qd_pat_black, 8);
+        return;
+    }
+    uint32_t off = which == 0 ? GrafPort_pnPat_off : which == 1 ? GrafPort_bkPat_off : GrafPort_fillPat_off;
+    gget(out, port + off, 8);
+}
+
+/* ---- Pen ---- */
+
+void tb_HidePen(void) { GrafPort_set_pnVis(qd_port(), (int16_t)(GrafPort_pnVis(qd_port()) - 1)); }
+void tb_ShowPen(void) { GrafPort_set_pnVis(qd_port(), (int16_t)(GrafPort_pnVis(qd_port()) + 1)); }
+void tb_GetPen(gaddr ptp) { wr32(ptp, rd32(qd_port() + GrafPort_pnLoc_off)); }
+
+void tb_GetPenState(gaddr ps)
+{
+    gaddr p = qd_port();
+    wr32(ps + PenState_pnLoc_off, rd32(p + GrafPort_pnLoc_off));
+    wr32(ps + PenState_pnSize_off, rd32(p + GrafPort_pnSize_off));
+    wr16(ps + PenState_pnMode_off, (uint16_t)GrafPort_pnMode(p));
+    uint8_t pat[8];
+    qd_port_pattern(p, 0, pat);
+    gput(ps + PenState_pnPat_off, pat, 8);
+}
+
+void tb_SetPenState(gaddr ps)
+{
+    gaddr p = qd_port();
+    wr32(p + GrafPort_pnLoc_off, rd32(ps + PenState_pnLoc_off));
+    wr32(p + GrafPort_pnSize_off, rd32(ps + PenState_pnSize_off));
+    GrafPort_set_pnMode(p, (int16_t)rd16(ps + PenState_pnMode_off));
+    tb_PenPat(ps + PenState_pnPat_off);
+}
+
+void tb_PenSize(int16_t w, int16_t h) { wr32(qd_port() + GrafPort_pnSize_off, make_pt(h, w)); }
+void tb_PenMode(int16_t m) { GrafPort_set_pnMode(qd_port(), m); }
+
+void tb_PenPat(gaddr pp)
+{
+    gaddr p = qd_port();
+    if (qd_port_is_color(p))
+        gmemcpy(rd32(rd32(p + CGrafPort_pnPixPat_off)) + PixPat_pat1Data_off, pp, 8);
+    else
+        gmemcpy(p + GrafPort_pnPat_off, pp, 8);
+}
+
+void tb_PenNormal(void)
+{
+    gaddr p = qd_port();
+    wr32(p + GrafPort_pnSize_off, make_pt(1, 1));
+    GrafPort_set_pnMode(p, patCopy);
+    if (qd_port_is_color(p))
+        gput(rd32(rd32(p + CGrafPort_pnPixPat_off)) + PixPat_pat1Data_off, qd_pat_black, 8);
+    else
+        gput(p + GrafPort_pnPat_off, qd_pat_black, 8);
+}
+
+void tb_MoveTo(int16_t h, int16_t v) { wr32(qd_port() + GrafPort_pnLoc_off, make_pt(v, h)); }
+
+void tb_Move(int16_t dh, int16_t dv)
+{
+    gaddr p = qd_port();
+    uint32_t loc = rd32(p + GrafPort_pnLoc_off);
+    wr32(p + GrafPort_pnLoc_off, make_pt((int16_t)(pt_v(loc) + dv), (int16_t)(pt_h(loc) + dh)));
+}
+
+/* ---- Colour ---- */
+
+/* Is a colour dark enough to be black on a 1-bit screen? */
+static bool rgb_dark(uint16_t r, uint16_t g, uint16_t b)
+{
+    return (uint32_t)r * 30 + (uint32_t)g * 59 + (uint32_t)b * 11 < 0x8000u * 100;
+}
+
+static void old_color_rgb(int32_t c, uint16_t rgb[3])
+{
+    switch (c) {
+    case whiteColor: rgb[0] = rgb[1] = rgb[2] = 0xFFFF; break;
+    case 69: rgb[0] = 0xFC00, rgb[1] = 0xF37D, rgb[2] = 0x052F; break;   /* yellow */
+    case 137: rgb[0] = 0xF2D7, rgb[1] = 0x0856, rgb[2] = 0x84EC; break;  /* magenta */
+    case 205: rgb[0] = 0xDD6B, rgb[1] = 0x08C2, rgb[2] = 0x06A2; break;  /* red */
+    case 273: rgb[0] = 0x0241, rgb[1] = 0xAB54, rgb[2] = 0xEAFF; break;  /* cyan */
+    case 341: rgb[0] = 0x0000, rgb[1] = 0x8000, rgb[2] = 0x11B0; break;  /* green */
+    case 409: rgb[0] = 0x0000, rgb[1] = 0x0000, rgb[2] = 0xD400; break;  /* blue */
+    default: rgb[0] = rgb[1] = rgb[2] = 0; break;                        /* black */
+    }
+}
+
+/* 1-bit pixel values (1 = black) for the port's foreground and background. */
+void qd_port_bits(gaddr port, int *fg, int *bk)
+{
+    if (qd_port_is_color(port)) {
+        gaddr f = port + CGrafPort_rgbFgColor_off, b = port + CGrafPort_rgbBkColor_off;
+        *fg = rgb_dark(rd16(f), rd16(f + 2), rd16(f + 4));
+        *bk = rgb_dark(rd16(b), rd16(b + 2), rd16(b + 4));
+        return;
+    }
+    uint16_t rgb[3];
+    old_color_rgb(GrafPort_fgColor(port), rgb);
+    *fg = rgb_dark(rgb[0], rgb[1], rgb[2]);
+    old_color_rgb(GrafPort_bkColor(port), rgb);
+    *bk = rgb_dark(rgb[0], rgb[1], rgb[2]);
+}
+
+void tb_ForeColor(int32_t c)
+{
+    gaddr p = qd_port();
+    GrafPort_set_fgColor(p, c);
+    if (qd_port_is_color(p)) {
+        uint16_t rgb[3];
+        old_color_rgb(c, rgb);
+        rgb_put(p + CGrafPort_rgbFgColor_off, rgb[0], rgb[1], rgb[2]);
+    }
+}
+
+void tb_BackColor(int32_t c)
+{
+    gaddr p = qd_port();
+    GrafPort_set_bkColor(p, c);
+    if (qd_port_is_color(p)) {
+        uint16_t rgb[3];
+        old_color_rgb(c, rgb);
+        rgb_put(p + CGrafPort_rgbBkColor_off, rgb[0], rgb[1], rgb[2]);
+    }
+}
+
+void tb_ColorBit(int16_t b) { GrafPort_set_colrBit(qd_port(), b); }
+
+void tb_RGBForeColor(gaddr c)
+{
+    gaddr p = qd_port();
+    if (qd_port_is_color(p)) {
+        gmemcpy(p + CGrafPort_rgbFgColor_off, c, 6);
+        GrafPort_set_fgColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? 1 : 0);
+    } else {
+        GrafPort_set_fgColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? blackColor : whiteColor);
+    }
+}
+
+void tb_RGBBackColor(gaddr c)
+{
+    gaddr p = qd_port();
+    if (qd_port_is_color(p)) {
+        gmemcpy(p + CGrafPort_rgbBkColor_off, c, 6);
+        GrafPort_set_bkColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? 1 : 0);
+    } else {
+        GrafPort_set_bkColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? blackColor : whiteColor);
+    }
+}
+
+void tb_GetForeColor(gaddr c)
+{
+    gaddr p = qd_port();
+    if (qd_port_is_color(p)) {
+        gmemcpy(c, p + CGrafPort_rgbFgColor_off, 6);
+    } else {
+        uint16_t rgb[3];
+        old_color_rgb(GrafPort_fgColor(p), rgb);
+        rgb_put(c, rgb[0], rgb[1], rgb[2]);
+    }
+}
+
+void tb_GetBackColor(gaddr c)
+{
+    gaddr p = qd_port();
+    if (qd_port_is_color(p)) {
+        gmemcpy(c, p + CGrafPort_rgbBkColor_off, 6);
+    } else {
+        uint16_t rgb[3];
+        old_color_rgb(GrafPort_bkColor(p), rgb);
+        rgb_put(c, rgb[0], rgb[1], rgb[2]);
+    }
+}
+
+void tb_OpColor(gaddr c) {}
+void tb_HiliteColor(gaddr c) {}
+int16_t tb_QDError(void) { return 0; }
+
+int32_t tb_Color2Index(gaddr c) { return rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? 1 : 0; }
+
+void tb_Index2Color(int32_t i, gaddr c)
+{
+    uint16_t v = i ? 0 : 0xFFFF;
+    rgb_put(c, v, v, v);
+}
+
+gaddr tb_NewPixPat(void) { return pixpat_for(qd_pat_black); }
+
+/* ---- Cursor (state only; the host draws the real cursor) ---- */
+
+static int cursor_level;
+
+void tb_InitCursor(void) { cursor_level = 0; }
+void tb_SetCursor(gaddr cp) {}
+void tb_HideCursor(void) { cursor_level--; }
+void tb_ShowCursor(void)
+{
+    if (cursor_level < 0)
+        cursor_level++;
+}
+void tb_ObscureCursor(void) {}
+void tb_ShieldCursor(gaddr rp, uint32_t p) { cursor_level--; }
+
+/* ---- Window Manager port (also needed by QuickDraw-level code) ---- */
+
+void tb_GetWMgrPort(gaddr wp) { wr32(wp, rd32(LM_WMgrPort)); }
+void tb_GetCWMgrPort(gaddr wp) { wr32(wp, rd32(LM_WMgrCPort)); }

@@ -81,6 +81,21 @@ void rsrc_index_free(rsrc_index *idx);
 /* Pointer to the resource's data inside the fork. */
 const uint8_t *rsrc_data(const uint8_t *fork, const rsrc_index *idx, const rsrc_entry *e);
 
+/* Build a resource fork from a list of resources (malloc'd). */
+typedef struct {
+    uint32_t type;
+    int16_t id;
+    const char *name; /* NULL or "" for none (MacRoman) */
+    uint8_t attrs;
+    const uint8_t *data;
+    uint32_t len;
+} rsrc_spec;
+bool rsrc_build(const rsrc_spec *specs, size_t n, uint8_t **out, size_t *out_len);
+
+/* A new fork holding only the resources of the given types (malloc'd). */
+bool rsrc_filter(const uint8_t *fork, size_t len, const uint32_t *types, size_t ntypes, uint8_t **out,
+                 size_t *out_len, char *err, size_t errlen);
+
 /* Compressed resources ('dcmp' 0, 1 and 2).  Returns true and a malloc'd
  * buffer if data is a compressed resource that decompressed correctly. */
 bool rsrc_is_compressed(const uint8_t *data, size_t len);
@@ -93,6 +108,10 @@ enum {
     RES_SYS_HEAP = 0x40, RES_PURGEABLE = 0x20, RES_LOCKED = 0x10,
     RES_PROTECTED = 0x08, RES_PRELOAD = 0x04, RES_CHANGED = 0x02, RES_COMPRESSED = 0x01,
 };
+
+/* MacRoman <-> UTF-8 (file names).  Return bytes written. */
+size_t macroman_to_utf8(const uint8_t *in, size_t n, char *out, size_t outsize);
+size_t utf8_to_macroman(const char *in, uint8_t *out, size_t outsize);
 
 /* Whole-file helpers. */
 bool read_file(const char *path, uint8_t **buf, size_t *len);

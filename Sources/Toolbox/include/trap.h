@@ -59,6 +59,14 @@ uint32_t native_register(native_fn fn, const char *name, uint16_t trapword);
 /* Native index of a stub address, or -1. */
 int native_index_for(uint32_t addr);
 
+/* Call a Pascal-convention routine (guest code, or one of our stubs) whose
+ * result space and arguments the caller has already pushed.  Registers other
+ * than A7 are preserved. */
+void guest_call(gaddr fn);
+
+/* Trap word of the routine currently executing (e.g. HFS bit 0x200). */
+uint16_t trap_current_word(void);
+
 /* The CPU hooks. */
 void trap_aline(cpu68k *c, uint16_t op);
 void trap_native(cpu68k *c, uint16_t index);

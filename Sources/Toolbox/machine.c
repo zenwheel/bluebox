@@ -1,9 +1,12 @@
 /* Booting the environment and launching an application. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #include "forks.h"
+#include "qd_internal.h"
+#include "sysfonts.h"
 #include "tb_internal.h"
 #include "machine.h"
 
@@ -11,6 +14,15 @@ cpu68k *g_cpu;
 char g_app_dir[1024];
 
 static cpu68k cpu;
+static int screen_w = 1024, screen_h = 768;
+
+void machine_set_screen(int width, int height)
+{
+    if (width >= 512 && height >= 342 && width <= 4096 && height <= 4096) {
+        screen_w = width;
+        screen_h = height;
+    }
+}
 static uint64_t ticks_base_ns;
 
 uint32_t mac_now(void);
@@ -54,6 +66,52 @@ static void init_lowmem(void)
     wr16(GA_ROM + 8, 0x077D);
 }
 
+void wdef0_native(cpu68k *c, uint16_t tw);
+void mdef0_native(cpu68k *c, uint16_t tw);
+void cdef0_native(cpu68k *c, uint16_t tw);
+void cdef1_native(cpu68k *c, uint16_t tw);
+void events_reset(void);
+void fm_init(const char *root);
+
+/* A definition procedure resource: `NATIVE index; RTS`. */
+static void defproc_stub(uint8_t out[8], native_fn fn, const char *name)
+{
+    uint32_t stub = native_register(fn, name, 0);
+    int idx = native_index_for(stub);
+    uint8_t s[8] = { 0x71, 0xFF, (uint8_t)(idx >> 8), (uint8_t)idx, 0x4E, 0x75, 0x4E, 0x71 };
+    memcpy(out, s, 8);
+}
+
+static bool open_system_file(void)
+{
+    uint8_t wdef0[8], mdef0[8], cdef0[8], cdef1[8];
+    defproc_stub(wdef0, wdef0_native, "WDEF 0");
+    defproc_stub(mdef0, mdef0_native, "MDEF 0");
+    defproc_stub(cdef0, cdef0_native, "CDEF 0");
+    defproc_stub(cdef1, cdef1_native, "CDEF 1");
+    rsrc_spec specs[64] = {
+        { fourcc("WDEF"), 0, NULL, RES_SYS_HEAP, wdef0, 8 },
+        { fourcc("MDEF"), 0, NULL, RES_SYS_HEAP, mdef0, 8 },
+        { fourcc("CDEF"), 0, NULL, RES_SYS_HEAP, cdef0, 8 },
+        { fourcc("CDEF"), 1, NULL, RES_SYS_HEAP, cdef1, 8 },
+    };
+    size_t n = 4;
+    /* Bitmap fonts: generated from the OFL faces (Generators/fonts.py). */
+    for (unsigned i = 0; i < sysfont_count && n < 64; i++)
+        specs[n++] = (rsrc_spec){ sysfonts[i].type, sysfonts[i].id, sysfonts[i].name, RES_SYS_HEAP | RES_PURGEABLE,
+                                  sysfonts[i].data, sysfonts[i].len };
+    uint8_t *fork;
+    size_t len;
+    if (!rsrc_build(specs, n, &fork, &len))
+        return false;
+    int16_t rn = rm_open_host_file(NULL, fork, (uint32_t)len, true);
+    free(fork);
+    if (rn < 0)
+        return false;
+    rm_set_system(rn);
+    return true;
+}
+
 bool machine_boot(bool census)
 {
     if (!mem_init())
@@ -80,18 +138,47 @@ bool machine_boot(bool census)
     wr32(LM_HeapEnd, Zone_bkLim(GA_APPHEAP));
     mm_set_appl_growth(GA_APPLLIMIT);
 
-    /* The System file: an empty resource map for now. */
+    /* The System file: built here, with our definition procedures as
+     * 68k stubs that call native code. */
     rm_init();
     wr32(LM_TheZone, GA_SYSHEAP);
-    if (rm_open_empty_system() < 0)
+    if (!open_system_file())
         return false;
     wr32(LM_TheZone, GA_APPHEAP);
+    events_reset();
+
+    qd_screen_init(screen_w, screen_h);
 
     /* No documents to open. */
     gaddr parms = tb_NewHandle(4, false, true);
     wr32(LM_AppParmHandle, parms);
 
     ticks_base_ns = now_ns();
+    return true;
+}
+
+bool machine_add_resource_file(const char *path, char *err, size_t errlen)
+{
+    mac_file mf;
+    if (!appledouble_read(path, &mf, err, errlen))
+        return false;
+    /* Only fonts: a System file's code resources must not shadow ours. */
+    static const uint32_t font_types[] = { 0x464F4E44 /* FOND */, 0x4E464E54 /* NFNT */, 0x464F4E54 /* FONT */ };
+    uint8_t *fonts;
+    size_t flen;
+    bool ok = rsrc_filter(mf.rsrc, mf.rsrc_len, font_types, 3, &fonts, &flen, err, errlen);
+    mac_file_free(&mf);
+    if (!ok)
+        return false;
+    gaddr saved = rd32(LM_TheZone);
+    wr32(LM_TheZone, rd32(LM_SysZone));
+    int16_t rn = rm_open_host_file(path, fonts, (uint32_t)flen, true);
+    wr32(LM_TheZone, saved);
+    free(fonts);
+    if (rn < 0) {
+        snprintf(err, errlen, "%s: no usable resource fork", path);
+        return false;
+    }
     return true;
 }
 
@@ -112,6 +199,8 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
         *slash = 0;
     else
         strcpy(g_app_dir, ".");
+
+    fm_init(g_app_dir);
 
     const char *base = strrchr(app_path, '/');
     base = base ? base + 1 : app_path;
@@ -135,6 +224,14 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     return true;
 }
 
+/* Bring the 60 Hz tick counter up to host time. */
+void machine_advance_ticks(void)
+{
+    uint64_t ticks = (now_ns() - ticks_base_ns) * 60 / 1000000000u;
+    if ((uint32_t)ticks > rd32(LM_Ticks))
+        wr32(LM_Ticks, (uint32_t)ticks);
+}
+
 run_status machine_run(uint64_t max)
 {
     const uint64_t slice = 20000;
@@ -142,10 +239,7 @@ run_status machine_run(uint64_t max)
     while (!cpu.halted && done < max) {
         uint64_t n = max - done < slice ? max - done : slice;
         done += cpu_run(&cpu, n);
-        /* 60.15 Hz tick counter from host time. */
-        uint64_t ticks = (now_ns() - ticks_base_ns) * 60 / 1000000000u;
-        if ((uint32_t)ticks > rd32(LM_Ticks))
-            wr32(LM_Ticks, (uint32_t)ticks);
+        machine_advance_ticks();
         if (cpu.stopped)
             break;
     }
@@ -153,6 +247,7 @@ run_status machine_run(uint64_t max)
 }
 
 const char *machine_halt_reason(void) { return cpu.halt_reason; }
+bool machine_halted(void) { return cpu.halted; }
 uint64_t machine_instruction_count(void) { return cpu.icount; }
 uint32_t machine_pc(void) { return cpu.pc; }
 

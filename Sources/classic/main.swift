@@ -33,10 +33,16 @@ func usage() -> Never {
           Run a classic application.  The argument may be an AppleDouble application
           (data file + ._ sidecar) or a .bin/.sit/.sea/.cpt/.hqx file, which is first
           added to the library; --app picks one when the archive holds several.
+          --headless run without a window (the default on Linux for now)
           --census   keep going past unimplemented traps and report every trap used
           --max N    stop after N instructions (default 50000000)
           --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
+          --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
+          --screen WxH  screen size (default 1024x768)
+          --screenshot P  write the screen to PNG file P when the run ends
+          --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
+                     text:abc, return, tab
       classic import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
           files to the library as AppleDouble.  Archives need unar (The Unarchiver).
@@ -114,11 +120,33 @@ func runCommand(_ args: [String]) {
     var maxInstructions: UInt64 = 50_000_000
     var logMask: UInt32 = UInt32(LOG_UNIMPL)
     var gestalts: [(UInt32, UInt32)] = []
+    var fontFiles: [String] = []
+    var keyScript: [String] = []
+    var headless = false
+    var screenshot: String?
     var i = 0
     while i < args.count {
         let a = args[i]
         switch a {
         case "--census": census = true
+        case "--headless": headless = true
+        case "--fonts":
+            i += 1
+            guard i < args.count else { usage() }
+            fontFiles.append(args[i])
+        case "--keys":
+            i += 1
+            guard i < args.count else { usage() }
+            keyScript = args[i].split(separator: ",").map(String.init)
+        case "--screenshot":
+            i += 1
+            guard i < args.count else { usage() }
+            screenshot = args[i]
+        case "--screen":
+            i += 1
+            let parts = i < args.count ? args[i].split(separator: "x").compactMap { Int32($0) } : []
+            guard parts.count == 2 else { fail("--screen expects WxH, e.g. 1024x768") }
+            machine_set_screen(parts[0], parts[1])
         case "--app":
             i += 1
             guard i < args.count else { usage() }
@@ -164,14 +192,60 @@ func runCommand(_ args: [String]) {
     for (sel, v) in gestalts { gestalt_set(sel, v) }
 
     var err = [CChar](repeating: 0, count: 256)
+    for f in fontFiles {
+        guard machine_add_resource_file(f, &err, err.count) else { fail(str(err)) }
+    }
     guard machine_launch(app, &err, err.count) else { fail(str(err)) }
 
-    let status = machine_run(maxInstructions)
+    #if canImport(AppKit)
+    if !headless && !census && screenshot == nil && keyScript.isEmpty {
+        let title = (app as NSString).lastPathComponent
+        MainActor.assumeIsolated { runHostWindow(title: title) }
+    }
+    #endif
+
+    // Scripted input: wait:N (instructions), cmd-x, text:..., return, tab.
+    var budget = maxInstructions
+    var status = RUN_LIMIT
+    for step in keyScript {
+        if step.hasPrefix("wait:"), let n = UInt64(step.dropFirst(5)) {
+            let slice = min(n, budget)
+            status = machine_run(slice)
+            budget -= slice
+            if status == RUN_HALTED { break }
+            continue
+        }
+        var mods: UInt32 = 0
+        var chars: [UInt8] = []
+        if step.hasPrefix("cmd-") {
+            mods = 0x100
+            chars = Array(step.dropFirst(4).utf8)
+        } else if step.hasPrefix("text:") {
+            chars = Array(step.dropFirst(5).utf8)
+        } else if step == "return" {
+            chars = [13]
+        } else if step == "tab" {
+            chars = [9]
+        }
+        for ch in chars {
+            machine_post_key(Int32(ch), 0, mods, 1, 0)
+            machine_post_key(Int32(ch), 0, mods, 0, 0)
+            status = machine_run(min(50_000, budget))
+            budget -= min(50_000, budget)
+        }
+    }
+    if status != RUN_HALTED && budget > 0 {
+        status = machine_run(budget)
+    }
     let count = machine_instruction_count()
     if status == RUN_HALTED {
         print("stopped: \(String(cString: machine_halt_reason())) after \(count) instructions")
     } else {
         print("instruction limit reached after \(count) instructions (pc \(String(machine_pc(), radix: 16, uppercase: true)))")
+    }
+
+    if let screenshot {
+        if machine_screenshot(screenshot) { print("screenshot: \(screenshot)") } else { eprint("could not write \(screenshot)\n") }
     }
 
     var regs = [CChar](repeating: 0, count: 512)

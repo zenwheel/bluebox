@@ -117,15 +117,15 @@ extension Classic {
 
         @Test func unimplementedTrapsShareTheUnimplementedAddress() {
             let unimplemented = tb_GetTrapAddress(0xA89F, true, true)
-            #expect(tb_GetTrapAddress(0xA86E, true, true) == unimplemented) // InitGraf, for now
+            #expect(tb_GetTrapAddress(0xA9F2, true, true) == unimplemented) // _Launch: one app per process
             #expect(tb_GetTrapAddress(0xA9A0, true, true) != unimplemented) // GetResource
             // Old-style numbering: 0x46 is the OS trap GetTrapAddress itself.
             #expect(tb_GetTrapAddress(0x46, false, false) != unimplemented)
         }
 
         @Test func unimplementedTrapHaltsWithItsName() {
-            let reason = run([0xA86E]) // _InitGraf
-            #expect(reason.contains("InitGraf"))
+            let reason = run([0xA9F2]) // _Launch
+            #expect(reason.contains("Launch"))
         }
     }
 

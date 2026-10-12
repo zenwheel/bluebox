@@ -1,0 +1,64 @@
+MemRsrc probe v1
+== memory
+NewHandle(100) nil=0 MemErr=0
+GetHandleSize 100 MemErr=0
+HGetState 00 MemErr=0
+SetHandleSize(200) MemErr=0 size=200
+SetHandleSize(10) MemErr=0 size=10
+SetHandleSize(0) MemErr=0 size=0
+SetHandleSize(huge) MemErr=-108 size=0
+HLock MemErr=0 HGetState 80
+HUnlock MemErr=0 HGetState 00
+HPurge MemErr=0 HGetState 40
+HSetRBit MemErr=0 HGetState 20
+HSetState(e0) MemErr=0 HGetState e0
+HSetState(00) HGetState 00
+SetHandleSize(4000) MemErr=0 keeps data 1
+RecoverHandle same 1 MemErr=0
+HandToHand err=0 size=4000 distinct 1
+EmptyHandle MemErr=0 master nil 1
+GetHandleSize(empty) -109 MemErr=-109
+HGetState(empty) 93
+ReallocateHandle(32) MemErr=0 size=32
+DisposeHandle MemErr=0
+NewHandleClear(16) MemErr=0 zero 1
+NewHandle(0) nil=0 MemErr=0 size=0
+NewHandle(huge) nil=1 MemErr=-108
+NewPtr(64) nil=0 MemErr=0 even 1
+GetPtrSize 64 MemErr=0
+SetPtrSize(32) MemErr=0 size=32
+DisposePtr MemErr=0
+NewPtrClear(10) MemErr=0 size=10 zero 1
+PtrToHand err=0 size=10
+NewPtr(huge) nil=1 MemErr=-108
+== resources
+CurResFile is app 1
+Count1Resources(PRBs) 4 ResError=0
+Count1Resources(QQQQ) 0 ResError=0
+Get1Resource(PRBs,128) nil=0 ResError=0
+size 4 bytes 01 02 03 04
+GetResInfo id=128 type=PRBs name="First" ResError=0
+GetResAttrs 00 ResError=0
+HomeResFile is app 1 ResError=0
+GetResourceSizeOnDisk 4 ResError=0
+HGetState 20
+Get1Resource again same 1
+Get1Resource(129) id=129 name="Second" size=6 attrs=20 ResError=0
+HGetState 60
+Get1NamedResource(Second) nil=0 ResError=0
+  id=129
+Get1Resource(PRBs,999) nil=1 ResError=0
+GetResource(QQQQ,1) nil=1 ResError=0
+SetResLoad(false) Get1Resource nil=0 master nil=1 ResError=0
+LoadResource ResError=0 size=1 byte aa
+Get1IndResource(1) id=128 name="First" ResError=0
+Get1IndResource(2) id=129 name="Second" ResError=0
+Get1IndResource(3) id=130 name="" ResError=0
+Get1IndResource(4) id=131 name="Lazy" ResError=0
+Get1IndResource(99) nil=1 ResError=-192
+GetString(128) nil=0 "probe string" ResError=0
+ReleaseResource ResError=0
+reload after release nil=0 size=8 ResError=0
+UseResFile ResError=0
+UseResFile(bad) ResError=-193
+== end

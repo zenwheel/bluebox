@@ -267,7 +267,9 @@ static gaddr get_res(uint32_t type, int16_t id, bool one)
         char tc[5];
         log_printf("rsrc: '%s' %d not found\n", fourcc_str(type, tc), id);
     }
-    set_res_err(resNotFound);
+    /* Real System 7.1 leaves ResError at noErr for a missing resource
+     * (oracle: Tests/Probes/MemRsrc/expected-system71.txt). */
+    set_res_err(noErr);
     return 0;
 }
 
@@ -661,6 +663,13 @@ int16_t rm_open_host_file(const char *path, const uint8_t *fork, uint32_t len, b
     return open_fork(path, fork, len, read_only, rd32(LM_TheZone));
 }
 
+void rm_set_system(int16_t rn)
+{
+    sys_refnum = rn;
+    wr32(LM_SysMapHndl, rd32(LM_TopMapHndl));
+    wr16(LM_SysMap, (uint16_t)rn);
+}
+
 int16_t rm_open_empty_system(void)
 {
     int16_t rn = open_fork(NULL, empty_fork, sizeof empty_fork, true, rd32(LM_SysZone));
@@ -714,18 +723,11 @@ void tb_CloseResFile(int16_t rn)
     set_res_err(noErr);
 }
 
-/* Until the File Manager exists, names resolve against the app's folder. */
-extern char g_app_dir[];
+bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize);
 
-static int16_t open_named(gaddr fn)
+static int16_t open_path(const char *path)
 {
-    char name[256], path[1024];
-    pstr_to_c(fn, name, sizeof name);
-    for (char *p = name; *p; p++)
-        if (*p == '/')
-            *p = ':';
     /* Already open?  The Resource Manager returns the existing refnum. */
-    snprintf(path, sizeof path, "%s/%s", g_app_dir, name[0] == ':' ? name + 1 : name);
     for (int i = 0; i < MAX_RESFILES; i++)
         if (files[i].used && files[i].path && !strcmp(files[i].path, path)) {
             set_res_err(noErr);
@@ -739,11 +741,46 @@ static int16_t open_named(gaddr fn)
     }
     int16_t rn = rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, false);
     mac_file_free(&mf);
+    if (rn < 0 && !rd16(LM_ResErr))
+        set_res_err(-39); /* eofErr: no resource fork */
     return rn;
 }
 
+static int16_t open_named(gaddr fn)
+{
+    char path[1024];
+    if (!fm_host_path(0, 0, fn, false, path, sizeof path)) {
+        set_res_err(-35);
+        return -1;
+    }
+    return open_path(path);
+}
+
+int16_t tb_HOpenResFile(int16_t vref, int32_t dirid, gaddr file_name, int8_t perm)
+{
+    char path[1024];
+    if (!fm_host_path(vref, dirid, file_name, true, path, sizeof path)) {
+        set_res_err(-35);
+        return -1;
+    }
+    return open_path(path);
+}
+
+int16_t tb_FSpOpenResFile(gaddr spec, int8_t perms)
+{
+    return tb_HOpenResFile((int16_t)rd16(spec), (int32_t)rd32(spec + 2), spec + 6, perms);
+}
+
 int16_t tb_OpenResFile(gaddr fn) { return open_named(fn); }
-int16_t tb_OpenRFPerm(gaddr fn, int16_t vref, uint8_t perm) { return open_named(fn); }
+int16_t tb_OpenRFPerm(gaddr fn, int16_t vref, uint8_t perm)
+{
+    char path[1024];
+    if (!fm_host_path(vref, 0, fn, false, path, sizeof path)) {
+        set_res_err(-35);
+        return -1;
+    }
+    return open_path(path);
+}
 
 void rm_init(void)
 {

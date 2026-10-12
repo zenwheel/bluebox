@@ -1,0 +1,142 @@
+diff --git a/BasiliskII/src/uae_cpu/newcpu.cpp b/BasiliskII/src/uae_cpu/newcpu.cpp
+index d24b7ba..606bd83 100644
+--- a/BasiliskII/src/uae_cpu/newcpu.cpp
++++ b/BasiliskII/src/uae_cpu/newcpu.cpp
+@@ -1247,11 +1247,67 @@ void m68k_emulop(uae_u32 opcode)
+ 	MakeFromSR();
+ }
+ 
++/*
++ * Opt-in A-line trap trace (classic oracle). When BASILISK_TRAP_LOG names a
++ * file, every A-line opcode the CPU executes is logged there, one line each:
++ *   pc=<addr> trap=<word> d0= d1= a0= a1= a7= sp=<4 longwords from (A7)>
++ * Unset, the cost is one predictable branch per A-line trap.
++ */
++static FILE *trap_log_file = NULL;
++static int trap_log_state = 0;	/* 0 = not checked yet, 1 = on, -1 = off */
++static unsigned long trap_log_seq = 0;
++
++static void trap_log_close(void)
++{
++	if (trap_log_file) {
++		fclose(trap_log_file);
++		trap_log_file = NULL;
++	}
++}
++
++static void trap_log_open(void)
++{
++	const char *path = getenv("BASILISK_TRAP_LOG");
++	trap_log_state = -1;
++	if (path == NULL || *path == '\0')
++		return;
++	trap_log_file = fopen(path, "w");
++	if (trap_log_file == NULL) {
++		fprintf(stderr, "BASILISK_TRAP_LOG: cannot open %s\n", path);
++		return;
++	}
++	setvbuf(trap_log_file, NULL, _IOFBF, 1 << 20);
++	fprintf(trap_log_file, "# seq pc trap d0 d1 a0 a1 a7 (a7)+0 +4 +8 +12\n");
++	atexit(trap_log_close);
++	trap_log_state = 1;
++}
++
++static void trap_log(uae_u32 opcode)
++{
++	if (trap_log_state == 0)
++		trap_log_open();
++	if (trap_log_state < 0)
++		return;
++	uaecptr sp = m68k_areg(regs, 7);
++	uae_u32 s[4] = { 0, 0, 0, 0 };
++	/* Only read the stack when it lies in Mac RAM, so a wild A7 cannot fault the host. */
++	if (sp >= RAMBaseMac && sp - RAMBaseMac + 16 <= RAMSize)
++		for (int i = 0; i < 4; i++)
++			s[i] = get_long(sp + 4 * i);
++	fprintf(trap_log_file,
++		"%lu pc=%08x trap=%04x d0=%08x d1=%08x a0=%08x a1=%08x a7=%08x sp=%08x %08x %08x %08x\n",
++		++trap_log_seq, (unsigned)m68k_getpc(), (unsigned)(opcode & 0xffff),
++		(unsigned)m68k_dreg(regs, 0), (unsigned)m68k_dreg(regs, 1),
++		(unsigned)m68k_areg(regs, 0), (unsigned)m68k_areg(regs, 1), (unsigned)sp,
++		(unsigned)s[0], (unsigned)s[1], (unsigned)s[2], (unsigned)s[3]);
++}
++
+ void REGPARAM2 op_illg (uae_u32 opcode)
+ {
+ 	uaecptr pc = m68k_getpc ();
+ 
+ 	if ((opcode & 0xF000) == 0xA000) {
++		trap_log(opcode);
+ 		Exception(0xA,0);
+ 		return;
+ 	}
+diff --git a/BasiliskII/src/uae_cpu_2021/newcpu.cpp b/BasiliskII/src/uae_cpu_2021/newcpu.cpp
+index e8c38ad..eca35c6 100644
+--- a/BasiliskII/src/uae_cpu_2021/newcpu.cpp
++++ b/BasiliskII/src/uae_cpu_2021/newcpu.cpp
+@@ -1256,9 +1256,65 @@ static void rts68000()
+ }
+ #endif
+ 
++/*
++ * Opt-in A-line trap trace (classic oracle). When BASILISK_TRAP_LOG names a
++ * file, every A-line opcode the CPU executes is logged there, one line each:
++ *   pc=<addr> trap=<word> d0= d1= a0= a1= a7= sp=<4 longwords from (A7)>
++ * Unset, the cost is one predictable branch per A-line trap.
++ */
++static FILE *trap_log_file = NULL;
++static int trap_log_state = 0;	/* 0 = not checked yet, 1 = on, -1 = off */
++static unsigned long trap_log_seq = 0;
++
++static void trap_log_close(void)
++{
++	if (trap_log_file) {
++		fclose(trap_log_file);
++		trap_log_file = NULL;
++	}
++}
++
++static void trap_log_open(void)
++{
++	const char *path = getenv("BASILISK_TRAP_LOG");
++	trap_log_state = -1;
++	if (path == NULL || *path == '\0')
++		return;
++	trap_log_file = fopen(path, "w");
++	if (trap_log_file == NULL) {
++		fprintf(stderr, "BASILISK_TRAP_LOG: cannot open %s\n", path);
++		return;
++	}
++	setvbuf(trap_log_file, NULL, _IOFBF, 1 << 20);
++	fprintf(trap_log_file, "# seq pc trap d0 d1 a0 a1 a7 (a7)+0 +4 +8 +12\n");
++	atexit(trap_log_close);
++	trap_log_state = 1;
++}
++
++static void trap_log(uae_u32 opcode)
++{
++	if (trap_log_state == 0)
++		trap_log_open();
++	if (trap_log_state < 0)
++		return;
++	uaecptr sp = m68k_areg(regs, 7);
++	uae_u32 s[4] = { 0, 0, 0, 0 };
++	/* Only read the stack when it lies in Mac RAM, so a wild A7 cannot fault the host. */
++	if (sp >= RAMBaseMac && sp - RAMBaseMac + 16 <= RAMSize)
++		for (int i = 0; i < 4; i++)
++			s[i] = get_long(sp + 4 * i);
++	fprintf(trap_log_file,
++		"%lu pc=%08x trap=%04x d0=%08x d1=%08x a0=%08x a1=%08x a7=%08x sp=%08x %08x %08x %08x\n",
++		++trap_log_seq, (unsigned)m68k_getpc(), (unsigned)(opcode & 0xffff),
++		(unsigned)m68k_dreg(regs, 0), (unsigned)m68k_dreg(regs, 1),
++		(unsigned)m68k_areg(regs, 0), (unsigned)m68k_areg(regs, 1), (unsigned)sp,
++		(unsigned)s[0], (unsigned)s[1], (unsigned)s[2], (unsigned)s[3]);
++}
++
+ void REGPARAM2 op_illg (uae_u32 opcode)
+ {
+ 	if ((opcode & 0xF000) == 0xA000) {
++		trap_log(opcode);
+ #if 0
+ 		if (opcode == 0xa0ff)
+ 		{

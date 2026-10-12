@@ -73,7 +73,7 @@ extension Classic {
                 others.append(h)
             }
             #expect(rd32(victim) == 0) // purged: an empty handle
-            #expect(tb_GetHandleSize(victim) == 0)
+            #expect(tb_GetHandleSize(victim) == -109) // nilHandleErr, as on System 7.1
             tb_ReallocateHandle(victim, 16)
             #expect(memErr() == -108 || rd32(victim) != 0)
         }

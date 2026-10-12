@@ -10,6 +10,10 @@
 
 bool g_trap_census;
 
+static uint16_t last_trapword; /* the trap word of the routine running now */
+
+uint16_t trap_current_word(void) { return last_trapword; }
+
 /* ---------------------------------------------------------------------- */
 /* Natives and their ROM stubs */
 
@@ -63,7 +67,10 @@ void trap_native(cpu68k *c, uint16_t index)
     uint16_t tw = n->trapword;
     if (tw && !(tw & 0x0800))
         tw = (uint16_t)c->d[1];
+    uint16_t saved = last_trapword;
+    last_trapword = tw;
     n->fn(c, tw);
+    last_trapword = saved;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -237,6 +244,12 @@ static void unimplemented_native(cpu68k *c, uint16_t tw)
     }
     const trap_sig *s = find_sig(t);
     LOGF(LOG_UNIMPL, "unimplemented: %s (%04X) at %08X\n", trap_name(t), t, c->op_pc);
+    if (!(t & 0x0800) && (t & 0xFF) < 0x60 && c->a[0] && rd32(c->a[0] + 18)) {
+        /* File Manager calls: show the name in the parameter block. */
+        char name[256];
+        pstr_to_c(rd32(c->a[0] + 18), name, sizeof name);
+        LOGF(LOG_UNIMPL, "  ioNamePtr \"%s\" ioVRefNum %d\n", name, (int16_t)rd16(c->a[0] + 22));
+    }
     if (!g_trap_census || !s) {
         cpu_halt(c, "unimplemented trap %s (%04X)", trap_name(t), t);
         return;
@@ -307,7 +320,10 @@ void trap_aline(cpu68k *c, uint16_t op)
             cpu_push32(c, c->pc);
         if (n >= 0) {
             current_trap = op;
+            uint16_t saved = last_trapword;
+            last_trapword = op;
             natives[n].fn(c, op);
+            last_trapword = saved;
             current_trap = 0;
             if (!c->halted)
                 c->pc = cpu_pop32(c);
@@ -329,7 +345,10 @@ void trap_aline(cpu68k *c, uint16_t op)
         uint32_t a0 = c->a[0], a1 = c->a[1], d1 = c->d[1], d2 = c->d[2];
         c->d[1] = op;
         current_trap = op;
+        uint16_t saved = last_trapword;
+        last_trapword = op;
         natives[n].fn(c, op);
+        last_trapword = saved;
         current_trap = 0;
         c->a[1] = a1;
         c->d[1] = d1;
@@ -357,6 +376,41 @@ void trap_aline(cpu68k *c, uint16_t op)
 }
 
 /* ---------------------------------------------------------------------- */
+/* Calling guest code from native code */
+
+static uint32_t guest_return_stub;
+static int call_depth, returned_depth;
+
+static void guest_return_native(cpu68k *c, uint16_t tw) { returned_depth = call_depth; }
+
+void guest_call(gaddr fn)
+{
+    cpu68k *c = g_cpu;
+    uint32_t saved_pc = c->pc;
+    uint32_t d[8], a[7];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    int n = native_index_for(fn);
+    if (n >= 0) {
+        /* Our own routine: run it directly; it leaves the return address. */
+        cpu_push32(c, guest_return_stub);
+        natives[n].fn(c, natives[n].trapword);
+        cpu_pop32(c);
+    } else {
+        int depth = ++call_depth;
+        cpu_push32(c, guest_return_stub);
+        c->pc = fn;
+        while (!c->halted && returned_depth != depth)
+            cpu_step(c);
+        returned_depth = 0;
+        call_depth--;
+    }
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    c->pc = saved_pc;
+}
+
+/* ---------------------------------------------------------------------- */
 /* Setup */
 
 void trap_init(void)
@@ -367,6 +421,8 @@ void trap_init(void)
     current_trap = 0;
 
     unimpl_stub = native_register(unimplemented_native, "Unimplemented", 0xA89F);
+    guest_return_stub = native_register(guest_return_native, "GuestReturn", 0);
+    call_depth = returned_depth = 0;
     os_epilogue_stub = native_register(os_epilogue_native, "OSTrapEpilogue", 0);
     aline_vector_stub = native_register(aline_vector_native, "ALineVector", 0);
 

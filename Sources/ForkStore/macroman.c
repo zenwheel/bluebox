@@ -1,0 +1,124 @@
+/* MacRoman <-> UTF-8 for file names. */
+#include <string.h>
+
+#include "forks.h"
+
+static const uint16_t high[128] = {
+    0x00C4, 0x00C5, 0x00C7, 0x00C9, 0x00D1, 0x00D6, 0x00DC, 0x00E1, 0x00E0, 0x00E2, 0x00E4, 0x00E3, 0x00E5, 0x00E7, 0x00E9, 0x00E8,
+    0x00EA, 0x00EB, 0x00ED, 0x00EC, 0x00EE, 0x00EF, 0x00F1, 0x00F3, 0x00F2, 0x00F4, 0x00F6, 0x00F5, 0x00FA, 0x00F9, 0x00FB, 0x00FC,
+    0x2020, 0x00B0, 0x00A2, 0x00A3, 0x00A7, 0x2022, 0x00B6, 0x00DF, 0x00AE, 0x00A9, 0x2122, 0x00B4, 0x00A8, 0x2260, 0x00C6, 0x00D8,
+    0x221E, 0x00B1, 0x2264, 0x2265, 0x00A5, 0x00B5, 0x2202, 0x2211, 0x220F, 0x03C0, 0x222B, 0x00AA, 0x00BA, 0x03A9, 0x00E6, 0x00F8,
+    0x00BF, 0x00A1, 0x00AC, 0x221A, 0x0192, 0x2248, 0x2206, 0x00AB, 0x00BB, 0x2026, 0x00A0, 0x00C0, 0x00C3, 0x00D5, 0x0152, 0x0153,
+    0x2013, 0x2014, 0x201C, 0x201D, 0x2018, 0x2019, 0x00F7, 0x25CA, 0x00FF, 0x0178, 0x2044, 0x20AC, 0x2039, 0x203A, 0xFB01, 0xFB02,
+    0x2021, 0x00B7, 0x201A, 0x201E, 0x2030, 0x00C2, 0x00CA, 0x00C1, 0x00CB, 0x00C8, 0x00CD, 0x00CE, 0x00CF, 0x00CC, 0x00D3, 0x00D4,
+    0xF8FF, 0x00D2, 0x00DA, 0x00DB, 0x00D9, 0x0131, 0x02C6, 0x02DC, 0x00AF, 0x02D8, 0x02D9, 0x02DA, 0x00B8, 0x02DD, 0x02DB, 0x02C7,
+};
+
+size_t macroman_to_utf8(const uint8_t *in, size_t n, char *out, size_t outsize)
+{
+    size_t o = 0;
+    for (size_t i = 0; i < n; i++) {
+        uint32_t cp = in[i] < 0x80 ? in[i] : high[in[i] - 0x80];
+        char buf[4];
+        size_t k;
+        if (cp < 0x80) {
+            buf[0] = (char)cp;
+            k = 1;
+        } else if (cp < 0x800) {
+            buf[0] = (char)(0xC0 | (cp >> 6));
+            buf[1] = (char)(0x80 | (cp & 0x3F));
+            k = 2;
+        } else {
+            buf[0] = (char)(0xE0 | (cp >> 12));
+            buf[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+            buf[2] = (char)(0x80 | (cp & 0x3F));
+            k = 3;
+        }
+        if (o + k + 1 > outsize)
+            break;
+        memcpy(out + o, buf, k);
+        o += k;
+    }
+    if (outsize)
+        out[o] = 0;
+    return o;
+}
+
+/* Decode one UTF-8 sequence; returns its length (1 on error). */
+static size_t utf8_next(const char *s, size_t n, uint32_t *cp)
+{
+    const uint8_t *u = (const uint8_t *)s;
+    if (u[0] < 0x80) {
+        *cp = u[0];
+        return 1;
+    }
+    if ((u[0] & 0xE0) == 0xC0 && n >= 2) {
+        *cp = ((uint32_t)(u[0] & 0x1F) << 6) | (u[1] & 0x3F);
+        return 2;
+    }
+    if ((u[0] & 0xF0) == 0xE0 && n >= 3) {
+        *cp = ((uint32_t)(u[0] & 0x0F) << 12) | ((uint32_t)(u[1] & 0x3F) << 6) | (u[2] & 0x3F);
+        return 3;
+    }
+    if ((u[0] & 0xF8) == 0xF0 && n >= 4) {
+        *cp = ((uint32_t)(u[0] & 0x07) << 18) | ((uint32_t)(u[1] & 0x3F) << 12) | ((uint32_t)(u[2] & 0x3F) << 6) |
+              (u[3] & 0x3F);
+        return 4;
+    }
+    *cp = '?';
+    return 1;
+}
+
+/* Combine a base letter with a following combining mark (decomposed names). */
+static uint32_t compose(uint32_t base, uint32_t mark)
+{
+    static const struct {
+        uint16_t base, mark, out;
+    } t[] = {
+        { 'A', 0x308, 0xC4 }, { 'A', 0x30A, 0xC5 }, { 'C', 0x327, 0xC7 }, { 'E', 0x301, 0xC9 }, { 'N', 0x303, 0xD1 },
+        { 'O', 0x308, 0xD6 }, { 'U', 0x308, 0xDC }, { 'a', 0x301, 0xE1 }, { 'a', 0x300, 0xE0 }, { 'a', 0x302, 0xE2 },
+        { 'a', 0x308, 0xE4 }, { 'a', 0x303, 0xE3 }, { 'a', 0x30A, 0xE5 }, { 'c', 0x327, 0xE7 }, { 'e', 0x301, 0xE9 },
+        { 'e', 0x300, 0xE8 }, { 'e', 0x302, 0xEA }, { 'e', 0x308, 0xEB }, { 'i', 0x301, 0xED }, { 'i', 0x300, 0xEC },
+        { 'i', 0x302, 0xEE }, { 'i', 0x308, 0xEF }, { 'n', 0x303, 0xF1 }, { 'o', 0x301, 0xF3 }, { 'o', 0x300, 0xF2 },
+        { 'o', 0x302, 0xF4 }, { 'o', 0x308, 0xF6 }, { 'o', 0x303, 0xF5 }, { 'u', 0x301, 0xFA }, { 'u', 0x300, 0xF9 },
+        { 'u', 0x302, 0xFB }, { 'u', 0x308, 0xFC }, { 'A', 0x300, 0xC0 }, { 'A', 0x303, 0xC3 }, { 'O', 0x303, 0xD5 },
+        { 'y', 0x308, 0xFF }, { 'Y', 0x308, 0x178 }, { 'A', 0x302, 0xC2 }, { 'E', 0x302, 0xCA }, { 'A', 0x301, 0xC1 },
+        { 'E', 0x308, 0xCB }, { 'E', 0x300, 0xC8 }, { 'I', 0x301, 0xCD }, { 'I', 0x302, 0xCE }, { 'I', 0x308, 0xCF },
+        { 'I', 0x300, 0xCC }, { 'O', 0x301, 0xD3 }, { 'O', 0x302, 0xD4 }, { 'O', 0x300, 0xD2 }, { 'U', 0x301, 0xDA },
+        { 'U', 0x302, 0xDB }, { 'U', 0x300, 0xD9 },
+    };
+    for (size_t i = 0; i < sizeof t / sizeof t[0]; i++)
+        if (t[i].base == base && t[i].mark == mark)
+            return t[i].out;
+    return 0;
+}
+
+size_t utf8_to_macroman(const char *in, uint8_t *out, size_t outsize)
+{
+    size_t n = strlen(in), i = 0, o = 0;
+    while (i < n && o < outsize) {
+        uint32_t cp;
+        i += utf8_next(in + i, n - i, &cp);
+        if (i < n) {
+            uint32_t mark;
+            size_t k = utf8_next(in + i, n - i, &mark);
+            if (mark >= 0x300 && mark < 0x370) {
+                uint32_t c = compose(cp, mark);
+                if (c) {
+                    cp = c;
+                    i += k;
+                }
+            }
+        }
+        uint8_t b = '?';
+        if (cp < 0x80) {
+            b = (uint8_t)cp;
+        } else {
+            for (int k = 0; k < 128; k++)
+                if (high[k] == cp)
+                    b = (uint8_t)(0x80 + k);
+        }
+        out[o++] = b;
+    }
+    return o;
+}

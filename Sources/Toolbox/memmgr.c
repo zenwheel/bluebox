@@ -510,8 +510,9 @@ int32_t tb_GetHandleSize(gaddr h)
     int16_t err;
     gaddr b = handle_block(h, &err);
     if (!b) {
+        /* Empty (purged) handles report nilHandleErr, as on System 7.1. */
         set_mem_err(err);
-        return h && rd32(h) == 0 ? 0 : err;
+        return err;
     }
     set_mem_err(noErr);
     return (int32_t)b_lsize(b);

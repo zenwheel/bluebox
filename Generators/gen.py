@@ -398,12 +398,12 @@ def gen_glue(name, sig):
             ti = cls[2]
             ct = ctype_for(ti)
             if stack_slot(ti) == 4:
-                lines.append(f"    {ct} {name_} = ({ct})cpu_pop32(c);\n")
+                lines.append(f"    {ct} a_{name_} = ({ct})cpu_pop32(c);\n")
             elif ti.size == 1:
-                lines.append(f"    {ct} {name_} = ({ct})(cpu_pop16(c) >> 8);\n")
+                lines.append(f"    {ct} a_{name_} = ({ct})(cpu_pop16(c) >> 8);\n")
             else:
-                lines.append(f"    {ct} {name_} = ({ct})cpu_pop16(c);\n")
-        call_args = [n for n, _ in sig["args"]]
+                lines.append(f"    {ct} a_{name_} = ({ct})cpu_pop16(c);\n")
+        call_args = ["a_" + n for n, _ in sig["args"]]
         rt = c_return(sig)
         call = f"tb_{name}({', '.join(call_args)})"
         if rt == "void":
@@ -426,23 +426,23 @@ def gen_glue(name, sig):
             if reg.startswith("TrapBit"):
                 bit = reg[len("TrapBit<"):-1]
                 bit = TRAPBITS.get(bit, bit)
-                lines.append(f"    bool {name_} = (trapword & {bit}) != 0;\n")
-                call_args.append(name_)
+                lines.append(f"    bool a_{name_} = (trapword & {bit}) != 0;\n")
+                call_args.append("a_" + name_)
             elif reg.startswith("Out<") or reg.startswith("InOut<"):
                 r = reg[reg.index("<") + 1:-1]
                 init = REGS[r] if reg.startswith("InOut") else "0"
-                lines.append(f"    uint32_t {name_} = {init};\n")
-                call_args.append("&" + name_)
-                outs.append((r, name_))
+                lines.append(f"    uint32_t a_{name_} = {init};\n")
+                call_args.append("&a_" + name_)
+                outs.append((r, "a_" + name_))
             elif reg == "D0LowWord":
-                lines.append(f"    {ct} {name_} = ({ct})(c->d[0] & 0xFFFF);\n")
-                call_args.append(name_)
+                lines.append(f"    {ct} a_{name_} = ({ct})(c->d[0] & 0xFFFF);\n")
+                call_args.append("a_" + name_)
             elif reg == "D0HighWord":
-                lines.append(f"    {ct} {name_} = ({ct})(c->d[0] >> 16);\n")
-                call_args.append(name_)
+                lines.append(f"    {ct} a_{name_} = ({ct})(c->d[0] >> 16);\n")
+                call_args.append("a_" + name_)
             else:
-                lines.append(f"    {ct} {name_} = ({ct}){REGS[reg]};\n")
-                call_args.append(name_)
+                lines.append(f"    {ct} a_{name_} = ({ct}){REGS[reg]};\n")
+                call_args.append("a_" + name_)
         rt = c_return(sig)
         call = f"tb_{name}({', '.join(call_args)})"
         if rt == "void":

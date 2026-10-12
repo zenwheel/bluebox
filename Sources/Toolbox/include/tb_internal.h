@@ -67,6 +67,8 @@ bool mm_check_zone(gaddr zone);
 void rm_init(void);
 /* Open a host file's resource fork as a resource file; returns refnum or -1. */
 int16_t rm_open_host_file(const char *path, const uint8_t *fork, uint32_t len, bool read_only);
+/* Make an open resource file the System file. */
+void rm_set_system(int16_t rn);
 /* Register an empty resource map to act as the System file. */
 int16_t rm_open_empty_system(void);
 
