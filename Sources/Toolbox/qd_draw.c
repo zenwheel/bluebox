@@ -19,7 +19,7 @@ bool qd_region_recording(void);
 void qd_region_record(const hrgn *shape);
 
 /* Fill one row span [c0, c1) of bitmap row `row`. */
-static void fill_span_1bpp(const pixdst *d, int row, int c0, int c1, uint8_t pat, int mode, int fg, int bk)
+static void fill_span_1bpp(const pixdst *d, int row, int c0, int c1, uint8_t pat, int mode, uint32_t fg, uint32_t bk)
 {
     gaddr rowp = d->base + (uint32_t)row * d->row_bytes;
     if (mode & 4)
@@ -50,7 +50,7 @@ void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mod
     qd_port_clip(port, &r);
     hrgn_op(&r, shape, &r, RGN_SECT);
     pixdst d = qd_port_pixels(port);
-    int fg, bk;
+    uint32_t fg, bk, inv = px_mask(d.depth);
     qd_port_bits(port, &fg, &bk);
     for (int i = 0; i < r.nbands; i++) {
         const rband *b = &r.bands[i];
@@ -64,7 +64,7 @@ void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mod
                 } else {
                     for (int c = c0; c < c1; c++) {
                         int s = (p >> (7 - (c & 7))) & 1;
-                        put_px(&d, c, row, apply_mode(mode, s, get_px(&d, c, row), fg, bk));
+                        put_px(&d, c, row, apply_mode(mode, s, get_px(&d, c, row), fg, bk, inv));
                     }
                 }
             }
@@ -480,7 +480,12 @@ int8_t tb_GetPixel(int16_t h, int16_t v)
     pixdst d = qd_port_pixels(qd_port());
     if (h < d.bounds.left || h >= d.bounds.right || v < d.bounds.top || v >= d.bounds.bottom)
         return 0;
-    return (int8_t)get_px(&d, h - d.bounds.left, v - d.bounds.top);
+    uint32_t v0 = get_px(&d, h - d.bounds.left, v - d.bounds.top);
+    if (d.depth == 1)
+        return (int8_t)v0;
+    uint16_t rgb[3];
+    qd_px_rgb(d.depth, d.ctab, v0, rgb);
+    return (rgb[0] * 30u + rgb[1] * 59u + rgb[2] * 11u) / 100u < 0x8000u; /* dark */
 }
 
 /* ---------------------------------------------------------------------- */
@@ -495,6 +500,11 @@ static pixdst bits_at(gaddr bm)
     d.row_bytes = rb & 0x3FFF;
     d.bounds = qrect_get(bm + 6);
     d.depth = (rb & 0x8000) ? PixMap_pixelSize(bm) : 1;
+    d.ctab = (rb & 0x8000) ? PixMap_pmTable(bm) : 0;
+    if (!(rb & 0x8000) && d.base == GA_SCREEN) { /* screenBits on a deep screen */
+        d.depth = qd_screen_depth();
+        d.ctab = qd_screen_ctab();
+    }
     if (d.depth < 1)
         d.depth = 1;
     return d;
@@ -508,15 +518,59 @@ static gaddr port_bits_addr(gaddr port)
     return port + GrafPort_portBits_off;
 }
 
+/* One source pixel onto a destination pixel.  A 1-bit source is drawn in
+ * the port's colours; a deep one is converted through RGB. */
+static uint32_t transfer(const pixdst *s, const pixdst *d, uint32_t sv, uint32_t dv, int m, uint32_t fg, uint32_t bk)
+{
+    uint32_t inv = px_mask(d->depth);
+    if (s->depth == 1)
+        return apply_mode(m, (int)sv, dv, fg, bk, inv);
+    bool same = s->depth == d->depth && s->ctab == d->ctab;
+    uint16_t rgb[3];
+    qd_px_rgb(s->depth, s->ctab, sv, rgb);
+    if (m & 4) {
+        rgb[0] = (uint16_t)~rgb[0];
+        rgb[1] = (uint16_t)~rgb[1];
+        rgb[2] = (uint16_t)~rgb[2];
+        same = false;
+    }
+    bool white = rgb[0] == 0xFFFF && rgb[1] == 0xFFFF && rgb[2] == 0xFFFF;
+    uint32_t conv = same ? sv : qd_rgb_px(d->depth, d->ctab, rgb);
+    switch (m & 3) {
+    case 0: return conv;
+    case 1: return white ? dv : conv;
+    case 2: return white ? dv : dv ^ inv;
+    default: return white ? dv : bk;
+    }
+}
+
 static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, const hrgn *mask)
 {
     /* Callers pass a PixMap via its handle's master pointer or directly; a
      * CGrafPort's portBits field holds the pixmap handle. */
     pixdst s = bits_at(src_bm), d = bits_at(dst_bm);
     gaddr port = qd_port();
-    int fg = 1, bk = 0;
-    if (port)
-        qd_port_bits(port, &fg, &bk);
+    uint32_t fg = 1, bk = 0;
+    if (port) {
+        uint32_t pf, pb;
+        qd_port_bits(port, &pf, &pb);
+        /* The port's colours, at the destination's depth. */
+        pixdst pd = qd_port_pixels(port);
+        if (pd.depth == d.depth) {
+            fg = pf;
+            bk = pb;
+        } else {
+            uint16_t c[3];
+            qd_px_rgb(pd.depth, pd.ctab, pf, c);
+            fg = qd_rgb_px(d.depth, d.ctab, c);
+            qd_px_rgb(pd.depth, pd.ctab, pb, c);
+            bk = qd_rgb_px(d.depth, d.ctab, c);
+        }
+    } else if (d.depth != 1) {
+        static const uint16_t black[3] = { 0, 0, 0 }, white[3] = { 0xFFFF, 0xFFFF, 0xFFFF };
+        fg = qd_rgb_px(d.depth, d.ctab, black);
+        bk = qd_rgb_px(d.depth, d.ctab, white);
+    }
     hrgn clip, tmp;
     hrgn_init(&clip);
     hrgn_init(&tmp);
@@ -537,18 +591,18 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
         return;
     }
     int m = mode & 7;
-    if (mode >= 32) /* arithmetic and dither modes: plain copy on 1-bit */
+    if (mode >= 32) /* arithmetic and dither modes: a plain copy */
         m = srcCopy;
     /* Read source rows first when source and destination overlap. */
     bool same = s.base == d.base;
-    uint8_t *snap = NULL;
+    uint32_t *snap = NULL;
     if (same) {
-        snap = malloc((size_t)sw * (size_t)sh);
+        snap = malloc((size_t)sw * (size_t)sh * sizeof *snap);
         for (int y = 0; y < sh; y++)
             for (int x = 0; x < sw; x++) {
                 int sx = sr.left + x - s.bounds.left, sy = sr.top + y - s.bounds.top;
                 bool ok = sx >= 0 && sy >= 0 && sx < s.bounds.right - s.bounds.left && sy < s.bounds.bottom - s.bounds.top;
-                snap[(size_t)y * (size_t)sw + (size_t)x] = ok ? (uint8_t)get_px(&s, sx, sy) : 0;
+                snap[(size_t)y * (size_t)sw + (size_t)x] = ok ? get_px(&s, sx, sy) : 0;
             }
     }
     for (int i = 0; i < clip.nbands; i++) {
@@ -558,17 +612,17 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
             for (int k = 0; k < b->n; k += 2) {
                 for (int x = b->x[k]; x < b->x[k + 1]; x++) {
                     int sxo = (int)((int64_t)(x - dr.left) * sw / dw);
-                    int bit;
+                    uint32_t sv;
                     if (snap) {
-                        bit = snap[(size_t)syo * (size_t)sw + (size_t)sxo];
+                        sv = snap[(size_t)syo * (size_t)sw + (size_t)sxo];
                     } else {
                         int sx = sr.left + sxo - s.bounds.left, sy = sr.top + syo - s.bounds.top;
                         if (sx < 0 || sy < 0 || sx >= s.bounds.right - s.bounds.left || sy >= s.bounds.bottom - s.bounds.top)
                             continue;
-                        bit = get_px(&s, sx, sy);
+                        sv = get_px(&s, sx, sy);
                     }
                     int col = x - d.bounds.left, row = y - d.bounds.top;
-                    put_px(&d, col, row, apply_mode(m, bit, get_px(&d, col, row), fg, bk));
+                    put_px(&d, col, row, transfer(&s, &d, sv, get_px(&d, col, row), m, fg, bk));
                 }
             }
         }
@@ -578,8 +632,6 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
     hrgn_free(&tmp);
 }
 
-/* A CGrafPort's "portBits" is a PixMap handle followed by 0xC000; CopyBits
- * receives &port->portBits.  Resolve that to the PixMap itself. */
 static gaddr resolve_bits(gaddr bm)
 {
     if ((rd16(bm + 4) & 0xC000) == 0xC000)
@@ -587,8 +639,37 @@ static gaddr resolve_bits(gaddr bm)
     return bm;
 }
 
+/* Copying into a printing port: record the source pixels as an image. */
+static void record_copy(gaddr src_bitmap, gaddr src_rect, gaddr dst_rect)
+{
+    pixdst s = bits_at(resolve_bits(src_bitmap));
+    qrect sr = qrect_get(src_rect);
+    int w = sr.right - sr.left, h = sr.bottom - sr.top;
+    if (w <= 0 || h <= 0 || w > 4096 || h > 4096)
+        return;
+    uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) {
+            int sx = sr.left + x - s.bounds.left, sy = sr.top + y - s.bounds.top;
+            bool in = sx >= 0 && sy >= 0 && sx < s.bounds.right - s.bounds.left && sy < s.bounds.bottom - s.bounds.top;
+            uint16_t c[3] = { 0xFFFF, 0xFFFF, 0xFFFF };
+            if (in)
+                qd_px_rgb(s.depth, s.ctab, get_px(&s, sx, sy), c);
+            uint8_t *p = rgba + ((size_t)y * (size_t)w + (size_t)x) * 4;
+            p[0] = (uint8_t)(c[0] >> 8);
+            p[1] = (uint8_t)(c[1] >> 8);
+            p[2] = (uint8_t)(c[2] >> 8);
+            p[3] = 255;
+        }
+    qd_rec_image(qd_port(), w, h, rgba, (qrect){ 0, 0, (int16_t)h, (int16_t)w }, qrect_get(dst_rect));
+    free(rgba);
+}
+
 void tb_CopyBits(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode, gaddr mask)
 {
+    gaddr port = qd_port();
+    if (port && qd_rec_active(port) && !qd_rec_suppressed() && resolve_bits(dst_bitmap) == port + GrafPort_portBits_off)
+        record_copy(src_bitmap, src_rect, dst_rect);
     hrgn m;
     hrgn_init(&m);
     if (mask)
@@ -645,10 +726,10 @@ void tb_ScrollRect(gaddr rp, int16_t dh, int16_t dv, gaddr updatergn)
     qrect bb = hrgn_bbox(&moved);
     int w = bb.right - bb.left, h = bb.bottom - bb.top;
     if (w > 0 && h > 0) {
-        uint8_t *buf = malloc((size_t)w * (size_t)h);
+        uint32_t *buf = malloc((size_t)w * (size_t)h * sizeof *buf);
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
-                buf[(size_t)y * (size_t)w + (size_t)x] = (uint8_t)get_px(
+                buf[(size_t)y * (size_t)w + (size_t)x] = get_px(
                     &d, bb.left + x - dh - d.bounds.left, bb.top + y - dv - d.bounds.top);
         for (int i = 0; i < moved.nbands; i++) {
             const rband *b = &moved.bands[i];

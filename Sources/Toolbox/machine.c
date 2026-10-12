@@ -154,6 +154,7 @@ bool machine_boot(bool census)
     display_reset();
     aem_reset();
     aem_reset_handlers();
+    dialogs_reset();
 
     qd_screen_init(screen_w, screen_h);
 
@@ -188,6 +189,14 @@ bool machine_add_resource_file(const char *path, char *err, size_t errlen)
         return false;
     }
     return true;
+}
+
+int g_appearance = MACHINE_APPEARANCE_BW;
+
+void machine_set_appearance(int appearance)
+{
+    g_appearance = appearance;
+    machine_set_screen_depth(appearance == MACHINE_APPEARANCE_BW ? 1 : 8);
 }
 
 static char **launch_docs;

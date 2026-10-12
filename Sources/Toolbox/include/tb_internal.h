@@ -92,6 +92,26 @@ size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize);
 /* Host path of a Mac full path. */
 bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize);
 
+/* ---- Appearance ---- */
+
+/* MACHINE_APPEARANCE_*: how the standard definition procedures draw. */
+extern int g_appearance;
+/* Colour artwork (appearance.c); the app_draw_* calls return false or do
+ * nothing when the black-and-white look applies. */
+#include "qd_internal.h"
+bool app_colour(void);
+void app_draw_document(gaddr w, qrect c, qrect t, bool hilited, bool goaway, bool zoom, int param);
+void app_draw_grow(qrect c, bool hilited);
+void app_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
+bool app_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
+
+/* ---- Dialog Manager ---- */
+
+/* A dialog from DLOG id; vis_override -1 keeps the resource's visibility. */
+gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override, int32_t refcon_override,
+                           bool use_refcon);
+void dialogs_reset(void);
+
 /* ---- Alias Manager ---- */
 
 /* A new alias handle for a host path, stored at alias_out. */

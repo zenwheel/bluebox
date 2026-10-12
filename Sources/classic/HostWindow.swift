@@ -12,7 +12,6 @@ import Toolbox
 final class ScreenView: NSView {
     private var timer: Timer?
     private var rgba = [UInt32]()
-    private var last = [UInt8]()
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -33,10 +32,14 @@ final class ScreenView: NSView {
 
     /// Ask for a redraw only when the framebuffer changed (cheap hash check).
     func refreshIfChanged() {
-        var w: Int32 = 0, h: Int32 = 0, rb: Int32 = 0
-        guard let fb = machine_framebuffer(&w, &h, &rb) else { return }
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
+        if rgba.count != Int(w) * Int(h) { rgba = [UInt32](repeating: 0, count: Int(w) * Int(h)) }
+        rgba.withUnsafeMutableBytes { raw in
+            machine_screen_rgba(0, 0, w, h, raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
+        }
         var hasher = Hasher()
-        hasher.combine(bytes: UnsafeRawBufferPointer(start: fb, count: Int(rb) * Int(h)))
+        rgba.withUnsafeBytes { hasher.combine(bytes: $0) }
         let sum = hasher.finalize()
         if sum != lastChecksum {
             lastChecksum = sum
@@ -45,28 +48,10 @@ final class ScreenView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        var w: Int32 = 0, h: Int32 = 0, rowBytes: Int32 = 0
-        guard let fb = machine_framebuffer(&w, &h, &rowBytes) else { return }
-        let width = Int(w), height = Int(h), rb = Int(rowBytes)
-        if rgba.count != width * height { rgba = [UInt32](repeating: 0, count: width * height) }
-        // Convert only when the framebuffer changed since the last frame.
-        let bytes = UnsafeBufferPointer(start: fb, count: rb * height)
-        if last.count != bytes.count || !last.elementsEqual(bytes) {
-            last = Array(bytes)
-            rgba.withUnsafeMutableBufferPointer { out in
-                for y in 0..<height {
-                    let row = y * rb
-                    for xb in 0..<(width + 7) / 8 {
-                        let b = last[row + xb]
-                        for bit in 0..<8 {
-                            let x = xb * 8 + bit
-                            if x >= width { break }
-                            out[y * width + x] = (b >> (7 - UInt8(bit))) & 1 != 0 ? 0xFF00_0000 : 0xFFFF_FFFF
-                        }
-                    }
-                }
-            }
-        }
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
+        let width = Int(w), height = Int(h)
+        guard rgba.count == width * height else { return }
         let space = CGColorSpaceCreateDeviceRGB()
         rgba.withUnsafeMutableBytes { buf in
             guard let ctx = CGContext(data: buf.baseAddress, width: width, height: height, bitsPerComponent: 8,
@@ -87,8 +72,8 @@ final class ScreenView: NSView {
 
     private func post(_ event: NSEvent, button: Int32) {
         let p = convert(event.locationInWindow, from: nil)
-        var w: Int32 = 0, h: Int32 = 0, rb: Int32 = 0
-        _ = machine_framebuffer(&w, &h, &rb)
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
         let x = Int32(p.x * CGFloat(w) / bounds.width), y = Int32(p.y * CGFloat(h) / bounds.height)
         machine_post_mouse(x, y, button)
     }
@@ -188,6 +173,19 @@ struct LaunchEvents {
 
 @MainActor let keyTranslator = KeyTranslator()
 
+/// Name the host process after the classic application, so the macOS
+/// application menu, Dock and app switcher say "TeachText", not "classic".
+/// Must run before NSApplication is created.
+func nameProcess(_ name: String) {
+    ProcessInfo.processInfo.processName = name
+    if let info = Bundle.main.infoDictionary as NSDictionary? as? NSMutableDictionary {
+        info["CFBundleName"] = name
+        info["CFBundleDisplayName"] = name
+    } else if let info = Bundle.main.infoDictionary as NSDictionary? {
+        info.setValue(name, forKey: "CFBundleName")
+    }
+}
+
 /// The classic application's Finder icon, for the Dock and alerts.
 nonisolated(unsafe) var appIcon: NSImage?
 
@@ -207,8 +205,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // After launch: AppKit sets the icon from the main bundle while launching.
         if let appIcon { NSApp.applicationIconImage = appIcon }
         launchEvents.finishLaunching()
-        var w: Int32 = 0, h: Int32 = 0, rb: Int32 = 0
-        _ = machine_framebuffer(&w, &h, &rb)
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
         let size = NSSize(width: CGFloat(w), height: CGFloat(h))
         window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable],
                           backing: .buffered, defer: false)
@@ -236,6 +234,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
 /// Show the classic screen in a window until the app quits.  Never returns.
 @MainActor func runHostWindow(title: String, icon: NSImage?) -> Never {
+    nameProcess(title)
     machine_attach_host(true)
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
@@ -259,6 +258,12 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 #endif
 
 #if canImport(AppKit)
+/// Run on the main thread and wait.  Already there (an app's dialog hook
+/// running while a panel is up), run directly rather than deadlock.
+func onMain(_ body: () -> Void) {
+    if Thread.isMainThread { body() } else { DispatchQueue.main.sync(execute: body) }
+}
+
 /// Text from a MacRoman C array (CR line breaks become LF).
 func macRomanString<T>(_ tuple: T) -> String {
     withUnsafeBytes(of: tuple) { raw in
@@ -285,7 +290,7 @@ func installAlertHandler() {
         buttons.sort { $0.isDefault && !$1.isDefault }
         let kind = a.kind
         var chosen: Int32 = 0
-        DispatchQueue.main.sync {
+        onMain {
             MainActor.assumeIsolated {
                 let alert = NSAlert()
                 if let appIcon { alert.icon = appIcon }
@@ -338,8 +343,11 @@ func installFileHandler() {
         let types = withUnsafeBytes(of: rq.types) { raw in
             Set(raw.bindMemory(to: UInt32.self).prefix(Int(rq.ntypes)))
         }
+        let items = withUnsafeBytes(of: rq.items) { raw in
+            Array(raw.bindMemory(to: machine_file_item.self).prefix(Int(rq.nitems)))
+        }
         var chosen: String?
-        DispatchQueue.main.sync {
+        onMain {
             MainActor.assumeIsolated {
                 let panel: NSSavePanel
                 let filter = ClassicTypeFilter(types: types)
@@ -361,6 +369,11 @@ func installFileHandler() {
                 }
                 if !prompt.isEmpty { panel.message = prompt }
                 if !dir.isEmpty { panel.directoryURL = URL(fileURLWithPath: dir, isDirectory: true) }
+                let accessory = ClassicItemsView(items: items, panel: panel)
+                if !items.isEmpty {
+                    panel.accessoryView = accessory
+                    if let open = panel as? NSOpenPanel { open.isAccessoryViewDisclosed = true }
+                }
                 if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
                 _ = filter
             }
@@ -395,14 +408,16 @@ import PDFKit
 
 /// Printing goes to the host: Page Setup is the page layout panel, and the
 /// recorded pages are printed as PDF through the print panel (with preview).
-@MainActor func installPrintHandlers() {
-    var defaults = pageSetup(from: sessionPrintInfo)
+/// Not main-actor isolated: the handlers run on the emulator thread and hop
+/// to the main thread themselves.
+func installPrintHandlers() {
+    var defaults = MainActor.assumeIsolated { pageSetup(from: sessionPrintInfo) }
     machine_set_page_defaults(&defaults)
     machine_set_print_handlers({ job, _ in
         guard let job else { return false }
         let pdf = ClassicPrint.pdf(job)
         var ok = false
-        DispatchQueue.main.sync {
+        onMain {
             MainActor.assumeIsolated {
                 guard let doc = PDFDocument(data: pdf) else { return }
                 let info = sessionPrintInfo.copy() as! NSPrintInfo
@@ -420,17 +435,18 @@ import PDFKit
         return ok
     }, { psPtr, _ in
         guard let psPtr else { return false }
-        var result = false
-        DispatchQueue.main.sync {
+        var chosen: machine_page_setup?
+        onMain {
             MainActor.assumeIsolated {
                 let info = sessionPrintInfo
                 if NSPageLayout().runModal(with: info) == NSApplication.ModalResponse.OK.rawValue {
-                    psPtr.pointee = pageSetup(from: info)
-                    result = true
+                    chosen = pageSetup(from: info)
                 }
             }
         }
-        return result
+        guard let chosen else { return false }
+        psPtr.pointee = chosen
+        return true
     }, nil)
 }
 
@@ -451,5 +467,124 @@ func installPrintToFile(_ path: String) {
             return false
         }
     }, nil, nil)
+}
+#endif
+
+#if canImport(AppKit)
+/// The items an app added to its Standard File dialog, laid out as in the
+/// app's own dialog, below the host panel.  Clicks go to the app's dialog
+/// hook, which decides the items' new states.
+final class ClassicItemsView: NSView {
+    weak var panel: NSSavePanel?
+    var controls: [Int16: NSView] = [:]
+    var origin = CGPoint.zero
+    override var isFlipped: Bool { true }
+
+    init(items: [machine_file_item], panel: NSSavePanel) {
+        self.panel = panel
+        let shown = items.filter { $0.visible }
+        let rects = shown.map { CGRect(x: CGFloat($0.rect.left), y: CGFloat($0.rect.top),
+                                       width: CGFloat($0.rect.right - $0.rect.left),
+                                       height: CGFloat($0.rect.bottom - $0.rect.top)) }
+        let box = rects.reduce(CGRect.null) { $0.union($1) }
+        let margin: CGFloat = 8
+        super.init(frame: CGRect(x: 0, y: 0, width: (box.isNull ? 0 : box.width) + 2 * margin,
+                                 height: (box.isNull ? 0 : box.height) + 2 * margin))
+        origin = box.isNull ? .zero : CGPoint(x: box.minX - margin, y: box.minY - margin)
+        // Icons first, so buttons drawn over them still get the clicks.
+        for it in shown.sorted(by: { ($0.kind == Int32(MACHINE_ITEM_ICON) ? 0 : 1) < ($1.kind == Int32(MACHINE_ITEM_ICON) ? 0 : 1) }) {
+            let frame = CGRect(x: CGFloat(it.rect.left) - origin.x, y: CGFloat(it.rect.top) - origin.y,
+                               width: CGFloat(it.rect.right - it.rect.left), height: CGFloat(it.rect.bottom - it.rect.top))
+            let view = makeView(it, frame: frame)
+            addSubview(view)
+            controls[it.item] = view
+        }
+        refresh(items)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    static func title(_ it: machine_file_item) -> String {
+        withUnsafeBytes(of: it.title) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+    }
+
+    static func icon(_ it: machine_file_item) -> NSImage {
+        // A plain ICON has no mask: its inside is white, found by filling
+        // the clear pixels reachable from the edge (those stay transparent).
+        var on = [Bool](repeating: false, count: 32 * 32)
+        withUnsafeBytes(of: it.icon) { raw in
+            for y in 0..<32 { for x in 0..<32 { on[y * 32 + x] = raw[y * 4 + x / 8] & (0x80 >> UInt8(x % 8)) != 0 } }
+        }
+        var outside = [Bool](repeating: false, count: 32 * 32)
+        var stack = (0..<32).flatMap { i in [(i, 0), (i, 31), (0, i), (31, i)] }
+        while let (x, y) = stack.popLast() {
+            guard x >= 0, y >= 0, x < 32, y < 32, !on[y * 32 + x], !outside[y * 32 + x] else { continue }
+            outside[y * 32 + x] = true
+            stack += [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+        }
+        var rgba = [UInt8](repeating: 0, count: 32 * 32 * 4)
+        for i in 0..<(32 * 32) where !outside[i] {
+            let v: UInt8 = on[i] ? 0 : 255
+            rgba[i * 4] = v; rgba[i * 4 + 1] = v; rgba[i * 4 + 2] = v; rgba[i * 4 + 3] = 255
+        }
+        let img = IconImage(size: 32, rgba: rgba)
+        return dockImage([img]).map { i in i.size = NSSize(width: 32, height: 32); return i } ?? NSImage()
+    }
+
+    func makeView(_ it: machine_file_item, frame: CGRect) -> NSView {
+        let title = Self.title(it)
+        let view: NSView
+        switch Int(it.kind) {
+        case Int(MACHINE_ITEM_CHECKBOX):
+            view = NSButton(checkboxWithTitle: title, target: self, action: #selector(clicked(_:)))
+        case Int(MACHINE_ITEM_RADIO):
+            view = NSButton(radioButtonWithTitle: title, target: self, action: #selector(clicked(_:)))
+        case Int(MACHINE_ITEM_BUTTON):
+            let b = NSButton(title: title, target: self, action: #selector(clicked(_:)))
+            b.bezelStyle = .push
+            view = b
+        case Int(MACHINE_ITEM_EDIT):
+            let f = NSTextField(string: title)
+            f.target = self
+            f.action = #selector(edited(_:))
+            view = f
+        case Int(MACHINE_ITEM_ICON):
+            let iv = NSImageView(image: Self.icon(it))
+            iv.imageScaling = .scaleNone
+            view = iv
+        default:
+            view = NSTextField(wrappingLabelWithString: title)
+        }
+        view.frame = frame
+        (view as? NSControl)?.tag = Int(it.item)
+        return view
+    }
+
+    /// Show the states the app's hook left the items in.
+    func refresh(_ items: [machine_file_item]) {
+        for it in items {
+            guard let v = controls[it.item] else { continue }
+            v.isHidden = !it.visible
+            if let b = v as? NSButton {
+                b.state = it.value != 0 ? .on : .off
+                b.isEnabled = it.enabled
+                if b.title != Self.title(it) { b.title = Self.title(it) }
+            } else if let f = v as? NSTextField, f.isEditable == false {
+                f.stringValue = Self.title(it)
+            }
+        }
+    }
+
+    func hit(_ item: Int16, text: String?) {
+        let result = text.map { t in t.withCString { machine_file_item_hit(item, $0) } } ?? machine_file_item_hit(item, nil)
+        var states = [machine_file_item](repeating: machine_file_item(), count: 16)
+        let n = Int(machine_file_items(&states, 16))
+        refresh(Array(states.prefix(n)))
+        if result == 1 { panel?.ok(nil) }
+        if result == 2 { panel?.cancel(nil) }
+    }
+
+    @objc func clicked(_ sender: NSButton) { hit(Int16(sender.tag), text: nil) }
+    @objc func edited(_ sender: NSTextField) { hit(Int16(sender.tag), text: sender.stringValue) }
 }
 #endif

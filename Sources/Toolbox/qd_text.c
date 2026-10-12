@@ -163,7 +163,7 @@ int qd_text_width(gaddr port, const uint8_t *text, int len)
 
 /* Draw one glyph's bitmap with its top-left at (x, top) in local coordinates. */
 static void draw_glyph(const strike *s, int idx, int x, int top, const pixdst *d, const hrgn *clip, int mode,
-                       int fg, int bk)
+                       uint32_t fg, uint32_t bk)
 {
     int c0 = (int16_t)rd16(s->loc + (uint32_t)idx * 2), c1 = (int16_t)rd16(s->loc + (uint32_t)idx * 2 + 2);
     int gw = c1 - c0;
@@ -191,10 +191,10 @@ static void draw_glyph(const strike *s, int idx, int x, int top, const pixdst *d
             if (!bit && (mode & 3) != 0) /* or/xor/bic leave unset pixels alone */
                 continue;
             int dc = xx - d->bounds.left, dr = y - d->bounds.top;
-            put_px(d, dc, dr, apply_mode(mode, bit, get_px(d, dc, dr), fg, bk));
+            put_px(d, dc, dr, apply_mode(mode, bit, get_px(d, dc, dr), fg, bk, px_mask(d->depth)));
             if ((s->face & bold) && bit && xx + 1 < xs[n - 1]) {
                 int dc2 = dc + 1;
-                put_px(d, dc2, dr, apply_mode(mode, 1, get_px(d, dc2, dr), fg, bk));
+                put_px(d, dc2, dr, apply_mode(mode, 1, get_px(d, dc2, dr), fg, bk, px_mask(d->depth)));
             }
         }
     }
@@ -215,7 +215,7 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
         hrgn clip;
         hrgn_init(&clip);
         qd_port_clip(port, &clip);
-        int fg, bk;
+        uint32_t fg, bk;
         qd_port_bits(port, &fg, &bk);
         int mode = GrafPort_txMode(port) & 7;
         for (int i = 0; i < len; i++) {

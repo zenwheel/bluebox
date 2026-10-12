@@ -47,6 +47,10 @@ public enum ClassicPrint {
             text(op, in: ctx)
             return
         }
+        if Int(op.kind) == Int(MACHINE_PRINT_IMAGE) {
+            image(op, in: ctx)
+            return
+        }
         guard let (path, evenOdd) = shape(op) else { return }
         paint(path, evenOdd: evenOdd, op: op, in: ctx)
     }
@@ -167,6 +171,26 @@ public enum ClassicPrint {
             ctx.setFillColor(gray: 1, alpha: cov)
         }
         ctx.fillPath(using: evenOdd ? .evenOdd : .winding)
+    }
+
+    // MARK: Images
+
+    static func image(_ op: machine_print_op, in ctx: CGContext) {
+        let w = Int(op.image_w), h = Int(op.image_h)
+        guard w > 0, h > 0, let px = op.image else { return }
+        let data = Data(bytes: px, count: w * h * 4)
+        guard let provider = CGDataProvider(data: data as CFData),
+              let img = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+        else { return }
+        let r = rect(op.r)
+        // Enlarged bitmaps keep their pixels crisp, as on a LaserWriter.
+        ctx.interpolationQuality = r.width >= CGFloat(w) ? .none : .high
+        ctx.translateBy(x: r.minX, y: r.maxY)
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(img, in: CGRect(origin: .zero, size: r.size))
     }
 
     // MARK: Text

@@ -193,6 +193,11 @@ static void wdef_draw(gaddr w, int var, int32_t param)
     }
     qrect t;
     title_rect(c, &t);
+    if (app_colour()) {
+        app_draw_document(w, c, t, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var), param);
+        tb_DisposePtr(r);
+        return;
+    }
     if (param == wInGoAway || param == wInZoomIn || param == wInZoomOut) {
         /* Toggle a pressed box: System 7 draws a starburst inside it, here
          * in XOR so a second call restores the box. */
@@ -276,6 +281,10 @@ static void wdef_grow_icon(gaddr w, int var)
     if (!has_grow(var) || !wvisible(w))
         return;
     qrect c = qrect_get(w + GrafPort_portRect_off);
+    if (app_colour()) {
+        app_draw_grow(c, WindowRecord_hilited(w) != 0);
+        return;
+    }
     gaddr r = tb_NewPtr(8, false, false);
     tb_PenNormal();
     tb_MoveTo((int16_t)(c.right - 16), c.top);

@@ -52,38 +52,22 @@ final class MacWindowView: NSView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    /// Rebuild the image from the framebuffer if this window's pixels changed.
+    /// Rebuild the image from the screen if this window's pixels changed.
     func refresh(force: Bool) {
-        var fw: Int32 = 0, fh: Int32 = 0, rb: Int32 = 0
-        guard let fb = machine_framebuffer(&fw, &fh, &rb) else { return }
         let left = Int(macBounds.left), top = Int(macBounds.top)
         let w = Int(macBounds.right) - left, h = Int(macBounds.bottom) - top
         guard w > 0, h > 0, mask.count == w * h else { return }
-        var hasher = Hasher()
-        for y in 0..<h {
-            let fy = top + y
-            guard fy >= 0, fy < Int(fh) else { continue }
-            let x0 = max(left, 0) >> 3, x1 = min((left + w + 7) >> 3, Int(rb))
-            if x1 > x0 { hasher.combine(bytes: UnsafeRawBufferPointer(start: fb + fy * Int(rb) + x0, count: x1 - x0)) }
+        if rgba.count != w * h { rgba = [UInt32](repeating: 0, count: w * h) }
+        rgba.withUnsafeMutableBytes { raw in
+            machine_screen_rgba(Int32(left), Int32(top), Int32(w), Int32(h), raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
         }
+        var hasher = Hasher()
+        rgba.withUnsafeBytes { hasher.combine(bytes: $0) }
         let hash = hasher.finalize()
         if !force && hash == lastHash { return }
         lastHash = hash
-        if rgba.count != w * h { rgba = [UInt32](repeating: 0, count: w * h) }
-        rgba.withUnsafeMutableBufferPointer { out in
-            for y in 0..<h {
-                let fy = top + y
-                for x in 0..<w {
-                    let fx = left + x
-                    var px: UInt32 = 0 // transparent outside the window's shape
-                    if mask[y * w + x] != 0, fx >= 0, fy >= 0, fx < Int(fw), fy < Int(fh) {
-                        let black = (fb[fy * Int(rb) + (fx >> 3)] >> (7 - UInt8(fx & 7))) & 1 != 0
-                        px = black ? 0xFF00_0000 : 0xFFFF_FFFF
-                    }
-                    out[y * w + x] = px
-                }
-            }
-        }
+        // Transparent outside the window's shape.
+        for k in 0..<(w * h) where mask[k] == 0 { rgba[k] = 0 }
         let space = CGColorSpaceCreateDeviceRGB()
         let image: CGImage? = rgba.withUnsafeMutableBytes { buf in
             CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
@@ -374,6 +358,7 @@ func postScriptLive(_ script: [String]) {
 
 /// Run with rootless windows and the native menu bar until the app quits.
 @MainActor func runRootless(title: String, icon: NSImage?, script: [String] = []) -> Never {
+    nameProcess(title)
     machine_attach_host(true)
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)

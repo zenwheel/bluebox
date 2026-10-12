@@ -15,6 +15,10 @@
 #include "tb_internal.h"
 
 static gaddr rec_port;
+static int suppressed; /* while a picture shows an image it already recorded */
+
+void qd_rec_suppress(bool on) { suppressed += on ? 1 : -1; }
+bool qd_rec_suppressed(void) { return suppressed > 0; }
 static machine_print_page *pages;
 static int npages, cap_pages;
 static bool page_open;
@@ -32,6 +36,7 @@ static void free_op(machine_print_op *op)
     free(op->clip);
     free(op->rects);
     free(op->text);
+    free(op->image);
 }
 
 void qd_rec_end(void)
@@ -114,9 +119,12 @@ static machine_print_op *new_op(gaddr port, int kind)
     uint32_t s = rd32(port + GrafPort_pnSize_off);
     op->pen_w = pt_h(s);
     op->pen_h = pt_v(s);
-    int fg, bk;
+    uint32_t fg, bk;
     qd_port_bits(port, &fg, &bk);
-    op->fg_black = fg != 0;
+    pixdst pd = qd_port_pixels(port);
+    uint16_t rgb[3];
+    qd_px_rgb(pd.depth, pd.ctab, fg, rgb);
+    op->fg_black = (rgb[0] * 30u + rgb[1] * 59u + rgb[2] * 11u) / 100u < 0x8000u;
     return op;
 }
 
@@ -170,4 +178,23 @@ void qd_rec_text(gaddr port, int family, int size, int face, int x, int y, const
     op->len = len;
     op->text = malloc(len ? (size_t)len : 1);
     memcpy(op->text, text, (size_t)len);
+}
+
+void qd_rec_image(gaddr port, int w, int h, const uint8_t *rgba, qrect src, qrect dst)
+{
+    /* Crop to the source rectangle. */
+    int x0 = src.left < 0 ? 0 : src.left, y0 = src.top < 0 ? 0 : src.top;
+    int x1 = src.right > w ? w : src.right, y1 = src.bottom > h ? h : src.bottom;
+    if (x1 <= x0 || y1 <= y0)
+        return;
+    machine_print_op *op = new_op(port, MACHINE_PRINT_IMAGE);
+    int dh, dv;
+    device_offset(port, &dh, &dv);
+    op->r = dev_rect(dst, dh, dv);
+    op->image_w = x1 - x0;
+    op->image_h = y1 - y0;
+    op->image = malloc((size_t)op->image_w * (size_t)op->image_h * 4);
+    for (int y = y0; y < y1; y++)
+        memcpy(op->image + (size_t)(y - y0) * (size_t)op->image_w * 4, rgba + ((size_t)y * (size_t)w + (size_t)x0) * 4,
+               (size_t)op->image_w * 4);
 }

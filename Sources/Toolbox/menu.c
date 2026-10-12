@@ -688,18 +688,18 @@ static void call_mdef(gaddr mh, int16_t msg, qrect r, uint32_t hit, gaddr which)
 static int32_t last_choice;
 
 /* Save and restore the screen under a pulled-down menu. */
-static uint8_t *save_bits(qrect r)
+static uint32_t *save_bits(qrect r)
 {
     int w = r.right - r.left, h = r.bottom - r.top;
-    uint8_t *buf = malloc((size_t)w * (size_t)h);
+    uint32_t *buf = malloc((size_t)w * (size_t)h * sizeof *buf);
     pixdst d = qd_port_pixels(rd32(LM_WMgrPort));
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
-            buf[(size_t)y * (size_t)w + (size_t)x] = (uint8_t)get_px(&d, r.left + x, r.top + y);
+            buf[(size_t)y * (size_t)w + (size_t)x] = get_px(&d, r.left + x, r.top + y);
     return buf;
 }
 
-static void restore_bits(qrect r, uint8_t *buf)
+static void restore_bits(qrect r, uint32_t *buf)
 {
     int w = r.right - r.left, h = r.bottom - r.top;
     pixdst d = qd_port_pixels(rd32(LM_WMgrPort));
@@ -742,7 +742,7 @@ int32_t tb_MenuSelect(uint32_t p)
     int n = nmenus();
     int open = -1;
     qrect box = { 0, 0, 0, 0 }, saved_area = { 0, 0, 0, 0 };
-    uint8_t *under = NULL;
+    uint32_t *under = NULL;
     gaddr which = tb_NewPtr(2, false, true);
     int32_t result = 0;
     do {
@@ -849,7 +849,7 @@ int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
     int16_t t = (int16_t)(top - (item > 0 ? (item - 1) * ITEM_HEIGHT : 0));
     qrect box = { t, left, (int16_t)(t + MenuInfo_menuHeight(mp)), (int16_t)(left + MenuInfo_menuWidth(mp)) };
     qrect area = { (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 2), (int16_t)(box.right + 2) };
-    uint8_t *under = save_bits(area);
+    uint32_t *under = save_bits(area);
     gaddr fr = tb_NewPtr(8, false, false);
     qrect_put(fr, (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 1), (int16_t)(box.right + 1) });
     tb_FrameRect(fr);

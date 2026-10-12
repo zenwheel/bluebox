@@ -45,6 +45,8 @@ func usage() -> Never {
           --screen WxH  screen size (default 1024x768)
           --screenshot P  write the screen to PNG file P when the run ends
           --print-to F  print to PDF file F instead of the print panel (headless runs)
+          --appearance A  bw (default), system7 (colour System 7) or platinum (Mac OS 8);
+                     the colour appearances use an 8-bit screen
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1)
       classic import <file>... [--library dir] [--force]
@@ -181,6 +183,7 @@ func runCommand(_ args: [String]) {
     var screenWindow = false
     var screenshot: String?
     var printTo: String?
+    var appearance = Int32(MACHINE_APPEARANCE_BW)
     var i = 0
     while i < args.count {
         let a = args[i]
@@ -196,6 +199,15 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             keyScript = args[i].split(separator: ",").map(String.init)
+        case "--appearance":
+            i += 1
+            guard i < args.count else { usage() }
+            switch args[i] {
+            case "bw", "classic": appearance = Int32(MACHINE_APPEARANCE_BW)
+            case "system7", "color", "colour": appearance = Int32(MACHINE_APPEARANCE_SYSTEM7)
+            case "platinum", "macos8": appearance = Int32(MACHINE_APPEARANCE_PLATINUM)
+            default: fail("--appearance expects bw, system7 or platinum")
+            }
         case "--print-to":
             i += 1
             guard i < args.count else { usage() }
@@ -261,6 +273,7 @@ func runCommand(_ args: [String]) {
         }
     }
     #endif
+    machine_set_appearance(appearance)
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }

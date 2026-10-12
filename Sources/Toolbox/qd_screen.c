@@ -12,6 +12,12 @@
 
 int g_screen_width = 1024, g_screen_height = 768;
 static uint32_t screen_row_bytes;
+static int depth_pref = 1, screen_depth = 1;
+static gaddr screen_ctab;
+
+void machine_set_screen_depth(int depth) { depth_pref = depth == 8 ? 8 : 1; }
+int qd_screen_depth(void) { return screen_depth; }
+gaddr qd_screen_ctab(void) { return screen_depth == 1 ? 0 : screen_ctab; }
 
 uint32_t qd_screen_row_bytes(void) { return screen_row_bytes; }
 
@@ -37,15 +43,19 @@ void qd_screen_init(int width, int height)
 {
     g_screen_width = width;
     g_screen_height = height;
-    screen_row_bytes = (uint32_t)((width + 31) / 32 * 4);
-    gmemset(GA_SCREEN, 0, screen_row_bytes * (uint32_t)height); /* white */
+    screen_depth = depth_pref;
+    screen_row_bytes = screen_depth == 8 ? (uint32_t)((width + 3) & ~3) : (uint32_t)((width + 31) / 32 * 4);
+    gmemset(GA_SCREEN, 0, screen_row_bytes * (uint32_t)height); /* white: 0 at both depths */
     wr32(LM_ScrnBase, GA_SCREEN);
     wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
     wr16(LM_ScrVRes, 72);
     wr16(LM_ScrHRes, 72);
 
-    /* Main device: PixMap of the screen with a black-and-white CLUT. */
+    /* Main device: PixMap of the screen with its colour table. */
     static const uint16_t bw[2][3] = { { 0xFFFF, 0xFFFF, 0xFFFF }, { 0, 0, 0 } };
+    static uint16_t std8[256][3];
+    for (int i = 0; i < 256; i++)
+        qd_std_rgb8(i, std8[i]);
     gaddr pmh = tb_NewHandle(PixMap_SIZEOF, true, true);
     gaddr pm = rd32(pmh);
     PixMap_set_baseAddr(pm, GA_SCREEN);
@@ -53,10 +63,11 @@ void qd_screen_init(int width, int height)
     qrect_put(pm + PixMap_bounds_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
     PixMap_set_hRes(pm, 72 << 16);
     PixMap_set_vRes(pm, 72 << 16);
-    PixMap_set_pixelSize(pm, 1);
+    PixMap_set_pixelSize(pm, (int16_t)screen_depth);
     PixMap_set_cmpCount(pm, 1);
-    PixMap_set_cmpSize(pm, 1);
-    PixMap_set_pmTable(pm, make_ctab(bw, 2, 1));
+    PixMap_set_cmpSize(pm, (int16_t)screen_depth);
+    screen_ctab = screen_depth == 8 ? make_ctab(std8, 256, 8) : make_ctab(bw, 2, 1);
+    PixMap_set_pmTable(pm, screen_ctab);
 
     gaddr gdh = tb_NewHandle(GDevice_SIZEOF, true, true);
     gaddr gd = rd32(gdh);
@@ -124,27 +135,72 @@ static bool chunk(FILE *fp, const char *type, const uint8_t *data, size_t len)
     return fwrite(hdr, 1, 8, fp) == 8 && fwrite(data, 1, len, fp) == len && fwrite(c, 1, 4, fp) == 4;
 }
 
-const uint8_t *machine_framebuffer(int *width, int *height, int *row_bytes)
+void machine_screen_size(int *width, int *height)
 {
     *width = g_screen_width;
     *height = g_screen_height;
-    *row_bytes = (int)screen_row_bytes;
-    return gptr(GA_SCREEN);
+}
+
+/* A rectangle of the screen as RGBA (out holds w*h*4 bytes). */
+void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
+{
+    pixdst d = { GA_SCREEN, screen_row_bytes, { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width },
+                 screen_depth, qd_screen_ctab() };
+    static uint8_t lut[256][3];
+    static gaddr lut_for;
+    static uint32_t lut_seed;
+    if (screen_depth == 8) {
+        uint32_t seed = rd32(rd32(screen_ctab));
+        if (lut_for != screen_ctab || lut_seed != seed) {
+            for (int i = 0; i < 256; i++) {
+                uint16_t c[3];
+                qd_px_rgb(8, screen_ctab, (uint32_t)i, c);
+                lut[i][0] = (uint8_t)(c[0] >> 8);
+                lut[i][1] = (uint8_t)(c[1] >> 8);
+                lut[i][2] = (uint8_t)(c[2] >> 8);
+            }
+            lut_for = screen_ctab;
+            lut_seed = seed;
+        }
+    }
+    for (int r = 0; r < h; r++) {
+        uint8_t *o = out + (size_t)r * (size_t)w * 4;
+        int sy = y + r;
+        for (int c = 0; c < w; c++, o += 4) {
+            int sx = x + c;
+            if (sx < 0 || sy < 0 || sx >= g_screen_width || sy >= g_screen_height) {
+                o[0] = o[1] = o[2] = 255;
+                o[3] = 255;
+                continue;
+            }
+            uint32_t v = get_px(&d, sx, sy);
+            if (screen_depth == 8) {
+                o[0] = lut[v][0];
+                o[1] = lut[v][1];
+                o[2] = lut[v][2];
+            } else {
+                o[0] = o[1] = o[2] = v ? 0 : 255;
+            }
+            o[3] = 255;
+        }
+    }
 }
 
 bool machine_screenshot(const char *path)
 {
     int w = g_screen_width, h = g_screen_height;
-    size_t raw_row = (size_t)(w + 7) / 8 + 1; /* filter byte + 1-bit pixels */
+    size_t raw_row = (size_t)w * 3 + 1; /* filter byte + RGB */
     size_t raw_len = raw_row * (size_t)h;
     uint8_t *raw = malloc(raw_len);
+    uint8_t *rgba = malloc((size_t)w * 4);
     for (int y = 0; y < h; y++) {
         uint8_t *row = raw + (size_t)y * raw_row;
         row[0] = 0;
-        /* PNG grayscale 1-bit: 1 = white; QuickDraw: 1 = black. */
-        for (size_t i = 0; i + 1 < raw_row; i++)
-            row[1 + i] = (uint8_t)~rd8(GA_SCREEN + (uint32_t)y * screen_row_bytes + (uint32_t)i);
+        machine_screen_rgba(0, y, w, 1, rgba);
+        for (int x = 0; x < w; x++)
+            memcpy(row + 1 + x * 3, rgba + x * 4, 3);
     }
+    free(rgba);
     /* zlib stream of stored blocks. */
     size_t nblocks = raw_len / 65535 + 1;
     size_t zlen = 2 + raw_len + nblocks * 5 + 4;
@@ -180,8 +236,8 @@ bool machine_screenshot(const char *path)
         uint8_t ihdr[13];
         put32be(ihdr, (uint32_t)w);
         put32be(ihdr + 4, (uint32_t)h);
-        ihdr[8] = 1;  /* bit depth */
-        ihdr[9] = 0;  /* grayscale */
+        ihdr[8] = 8;  /* bit depth */
+        ihdr[9] = 2;  /* RGB */
         ihdr[10] = 0;
         ihdr[11] = 0;
         ihdr[12] = 0;

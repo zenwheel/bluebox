@@ -145,6 +145,10 @@ static void cdef0_draw(gaddr ch)
     int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2);
     tb_DisposePtr(fi);
     int base = r.top + (r.bottom - r.top + asc - desc) / 2;
+    if (kind == 0 && app_draw_button(r, title, n, hil == inButton, hil == 255)) {
+        restore_font(f, s, face);
+        return;
+    }
     if (kind == 0) {
         gaddr rr = tmp_rect(r);
         int round = (r.bottom - r.top) < 16 ? (r.bottom - r.top) : 16;
@@ -257,6 +261,10 @@ static void cdef1_draw(gaddr ch, int part)
         return;
     qrect r = crect(ch);
     bool v = sb_vertical(r);
+    if (app_colour()) {
+        app_draw_scrollbar(r, v, chilite(ch), chilite(ch) != 255, chilite(ch) != 255 && cmax(ch) > cmin(ch), sb_thumb(ch));
+        return;
+    }
     tb_PenNormal();
     gaddr rr = tmp_rect(r);
     tb_EraseRect(rr);

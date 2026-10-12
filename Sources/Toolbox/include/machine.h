@@ -26,8 +26,15 @@ void machine_set_screen(int width, int height);
 /* Open the fonts (FOND/NFNT/FONT) of a resource file below the application.
  * Call after machine_boot and before machine_launch. */
 bool machine_add_resource_file(const char *path, char *err, size_t errlen);
-/* The 1-bit framebuffer (1 = black), for the host to display. */
-const uint8_t *machine_framebuffer(int *width, int *height, int *row_bytes);
+/* The screen, for the host to display: its size, and any rectangle as RGBA. */
+void machine_screen_size(int *width, int *height);
+void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out);
+/* Window, control and menu appearance; the colour ones use an 8-bit screen.
+ * Call before boot. */
+enum { MACHINE_APPEARANCE_BW, MACHINE_APPEARANCE_SYSTEM7, MACHINE_APPEARANCE_PLATINUM };
+void machine_set_appearance(int appearance);
+/* Screen depth: 1 (black and white, the default) or 8 (colour); before boot. */
+void machine_set_screen_depth(int depth);
 bool machine_halted(void);
 /* Write the screen to a PNG file. */
 bool machine_screenshot(const char *path);
@@ -109,18 +116,45 @@ void machine_set_alert_handler(machine_alert_fn fn, void *ctx);
 /* ---- Standard File (open and save panels shown by the host) ---- */
 
 typedef struct {
+    int16_t top, left, bottom, right;
+} mprect;
+
+/* An item the app added to its Standard File dialog (shown by the host
+ * next to its panel).  Rectangles are the app's own dialog coordinates. */
+enum { MACHINE_ITEM_BUTTON, MACHINE_ITEM_CHECKBOX, MACHINE_ITEM_RADIO, MACHINE_ITEM_TEXT, MACHINE_ITEM_EDIT,
+       MACHINE_ITEM_ICON };
+typedef struct {
+    int16_t item;
+    int kind;
+    char title[256];             /* UTF-8: control title or text */
+    int16_t value;
+    bool enabled, visible;
+    mprect rect;
+    uint8_t icon[256];           /* ICON: 32x32, 1 bit (128 bytes); icon_mask: second half */
+    bool has_icon;
+} machine_file_item;
+
+typedef struct {
     bool save;
     char prompt[256];            /* UTF-8; may be empty */
     char default_name[256];      /* UTF-8, for save */
     uint32_t types[16];          /* for open; none means any file */
     int ntypes;
     char directory[1024];        /* where to start; empty for the host's choice */
+    int nitems;                  /* the app's own extra items */
+    machine_file_item items[16];
 } machine_file_request;
 
 /* Called on the emulator thread; blocks until the user answers.  Returns
  * false if cancelled, else the chosen host path. */
 typedef bool (*machine_file_fn)(const machine_file_request *rq, char *path, size_t pathsize, void *ctx);
 void machine_set_file_handler(machine_file_fn fn, void *ctx);
+/* While the panel is up (callable from the host's main thread): the user
+ * clicked an extra item, or edited one (text is UTF-8, or NULL).  Runs the
+ * app's dialog hook; returns 0, or 1 / 2 if the app asks to save (open) or
+ * cancel.  machine_file_items then gives the items' new states. */
+int machine_file_item_hit(int16_t item, const char *text);
+int machine_file_items(machine_file_item *out, int max);
 /* Classic file type of a host file (for filtering open panels). */
 uint32_t machine_file_type(const char *path);
 
@@ -128,13 +162,9 @@ uint32_t machine_file_type(const char *path);
 
 enum {
     MACHINE_PRINT_RECT, MACHINE_PRINT_OVAL, MACHINE_PRINT_RRECT, MACHINE_PRINT_ARC, MACHINE_PRINT_REGION,
-    MACHINE_PRINT_LINE, MACHINE_PRINT_TEXT,
+    MACHINE_PRINT_LINE, MACHINE_PRINT_TEXT, MACHINE_PRINT_IMAGE,
 };
 enum { MACHINE_VERB_FRAME, MACHINE_VERB_PAINT, MACHINE_VERB_ERASE, MACHINE_VERB_INVERT, MACHINE_VERB_FILL };
-
-typedef struct {
-    int16_t top, left, bottom, right;
-} mprect;
 
 /* One drawing operation, in device coordinates (72 per inch, 0,0 at the top
  * left of the printable area). */
@@ -157,6 +187,8 @@ typedef struct {
     uint8_t face;
     int len;
     uint8_t *text;               /* MacRoman */
+    int image_w, image_h;        /* images: RGBA pixels shown in r */
+    uint8_t *image;
 } machine_print_op;
 
 typedef struct {

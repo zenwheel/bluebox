@@ -74,6 +74,7 @@ typedef struct {
     uint32_t row_bytes;
     qrect bounds;   /* in the port's local coordinates */
     int depth;      /* bits per pixel: 1, 2, 4, 8, 16, 32 */
+    gaddr ctab;     /* colour table handle for indexed depths (0: the standard one) */
 } pixdst;
 
 gaddr qd_port(void);
@@ -82,46 +83,80 @@ pixdst qd_port_pixels(gaddr port);
 /* visRgn ∩ clipRgn ∩ bitmap bounds, in local coordinates. */
 void qd_port_clip(gaddr port, hrgn *out);
 
-/* ---- Pixel access ---- */
+/* ---- Colour ---- */
 
-static inline int get_px(const pixdst *d, int col, int row)
+/* The screen's depth (1 or 8) and colour table. */
+int qd_screen_depth(void);
+gaddr qd_screen_ctab(void);
+/* Pixel value <-> RGB for a depth and colour table. */
+void qd_px_rgb(int depth, gaddr ctab, uint32_t v, uint16_t rgb[3]);
+uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3]);
+/* The standard Macintosh colour for an 8-bit index. */
+void qd_std_rgb8(int i, uint16_t rgb[3]);
+
+/* ---- Pixel access (raw values: bit, index, or 16/32-bit RGB) ---- */
+
+static inline uint32_t px_mask(int depth) { return depth >= 32 ? 0xFFFFFFu : (1u << depth) - 1; }
+
+static inline uint32_t get_px(const pixdst *d, int col, int row)
 {
     gaddr rowp = d->base + (uint32_t)row * d->row_bytes;
-    if (d->depth == 1)
-        return (rd8(rowp + (uint32_t)(col >> 3)) >> (7 - (col & 7))) & 1;
-    if (d->depth == 8)
-        return rd8(rowp + (uint32_t)col) != 0;
-    return 0;
-}
-
-static inline void put_px(const pixdst *d, int col, int row, int v)
-{
-    gaddr rowp = d->base + (uint32_t)row * d->row_bytes;
-    if (d->depth == 1) {
-        gaddr a = rowp + (uint32_t)(col >> 3);
-        uint8_t m = (uint8_t)(0x80 >> (col & 7));
-        wr8(a, v ? (uint8_t)(rd8(a) | m) : (uint8_t)(rd8(a) & ~m));
-    } else if (d->depth == 8) {
-        wr8(rowp + (uint32_t)col, v ? 0xFF : 0x00);
+    switch (d->depth) {
+    case 1: return (rd8(rowp + (uint32_t)(col >> 3)) >> (7 - (col & 7))) & 1;
+    case 8: return rd8(rowp + (uint32_t)col);
+    case 16: return rd16(rowp + (uint32_t)col * 2);
+    case 32: return rd32(rowp + (uint32_t)col * 4) & 0xFFFFFF;
+    default: {
+        int bit = col * d->depth;
+        return (uint32_t)(rd8(rowp + (uint32_t)(bit >> 3)) >> (8 - d->depth - (bit & 7))) & px_mask(d->depth);
+    }
     }
 }
 
-/* Apply a transfer mode for one pixel: s is the source/pattern bit. */
-static inline int apply_mode(int mode, int s, int dst, int fg, int bk)
+static inline void put_px(const pixdst *d, int col, int row, uint32_t v)
+{
+    gaddr rowp = d->base + (uint32_t)row * d->row_bytes;
+    switch (d->depth) {
+    case 1: {
+        gaddr a = rowp + (uint32_t)(col >> 3);
+        uint8_t m = (uint8_t)(0x80 >> (col & 7));
+        wr8(a, v ? (uint8_t)(rd8(a) | m) : (uint8_t)(rd8(a) & ~m));
+        break;
+    }
+    case 8: wr8(rowp + (uint32_t)col, (uint8_t)v); break;
+    case 16: wr16(rowp + (uint32_t)col * 2, (uint16_t)v); break;
+    case 32: wr32(rowp + (uint32_t)col * 4, v & 0xFFFFFF); break;
+    default: {
+        int bit = col * d->depth, shift = 8 - d->depth - (bit & 7);
+        gaddr a = rowp + (uint32_t)(bit >> 3);
+        uint8_t m = (uint8_t)(px_mask(d->depth) << shift);
+        wr8(a, (uint8_t)((rd8(a) & ~m) | ((v << shift) & m)));
+        break;
+    }
+    }
+}
+
+/* Apply a transfer mode for one pixel: s is the source/pattern bit, fg and
+ * bk are pixel values at the destination's depth, inv inverts a pixel. */
+static inline uint32_t apply_mode(int mode, int s, uint32_t dst, uint32_t fg, uint32_t bk, uint32_t inv)
 {
     if (mode & 4)
         s = !s;
     switch (mode & 3) {
     case 0: return s ? fg : bk;         /* copy */
     case 1: return s ? fg : dst;        /* or */
-    case 2: return s ? !dst : dst;      /* xor */
+    case 2: return s ? dst ^ inv : dst; /* xor */
     default: return s ? bk : dst;       /* bic */
     }
 }
 
 /* Clip intervals of a region on row y: returns the band's x list (or NULL). */
 const int16_t *hrgn_row(const hrgn *r, int y, int *n);
-void qd_port_bits(gaddr port, int *fg, int *bk);
+/* Draw with this foreground colour instead of the port's (NULL to stop);
+ * for the system's own colour drawing in old-style ports. */
+void qd_set_fg_override(const uint16_t *rgb);
+/* The port's foreground and background as pixel values for its depth. */
+void qd_port_bits(gaddr port, uint32_t *fg, uint32_t *bk);
 void qd_port_pattern(gaddr port, int which, uint8_t out[8]);
 
 /* Fill a region with an 8x8 1-bit pattern using a pattern transfer mode
@@ -145,6 +180,11 @@ void qd_rec_shape(gaddr port, int kind, int verb, qrect r, int a, int b, const h
                   int mode);
 void qd_rec_line(gaddr port, int h0, int v0, int h1, int v1, const uint8_t pat[8], int mode);
 void qd_rec_text(gaddr port, int family, int size, int face, int x, int y, const uint8_t *text, int len, int width);
+/* An RGBA image (w x h) whose src part is shown in dst (local coordinates). */
+void qd_rec_image(gaddr port, int w, int h, const uint8_t *rgba, qrect src, qrect dst);
+/* CopyBits does not record while suppressed (the caller recorded already). */
+void qd_rec_suppress(bool on);
+bool qd_rec_suppressed(void);
 
 /* Draw text at the pen location, advancing it. */
 void qd_draw_text(gaddr port, const uint8_t *text, int len);

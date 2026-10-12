@@ -1360,6 +1360,23 @@ static void glue_CloseDeskAcc(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CloseDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_CloseDialog(a_dp);
+    cpu_push32(c, ret);
+}
+
+static void glue_ClosePicture(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_ClosePicture();
+    cpu_push32(c, ret);
+}
+
 static void glue_ClosePort(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1620,6 +1637,18 @@ static void glue_DetachResource(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DialogSelect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    gaddr a_dpp = (gaddr)cpu_pop32(c);
+    gaddr a_evt = (gaddr)cpu_pop32(c);
+    int8_t r = tb_DialogSelect(a_evt, a_dpp, a_item);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_DiffRgn(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1647,6 +1676,15 @@ static void glue_DisposeControl(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     tb_DisposeControl(a_c);
+    cpu_push32(c, ret);
+}
+
+static void glue_DisposeDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_DisposeDialog(a_dp);
     cpu_push32(c, ret);
 }
 
@@ -1759,6 +1797,15 @@ static void glue_DrawControls(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DrawDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_DrawDialog(a_dp);
+    cpu_push32(c, ret);
+}
+
 static void glue_DrawGrowIcon(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1783,6 +1830,16 @@ static void glue_DrawNew(cpu68k *c, uint16_t trapword)
     int8_t a_flag = (int8_t)(cpu_pop16(c) >> 8);
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_DrawNew(a_w, a_flag);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawPicture(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_destrp = (gaddr)cpu_pop32(c);
+    gaddr a_pic = (gaddr)cpu_pop32(c);
+    tb_DrawPicture(a_pic, a_destrp);
     cpu_push32(c, ret);
 }
 
@@ -2143,6 +2200,17 @@ static void glue_FindControl(cpu68k *c, uint16_t trapword)
     gaddr a_w = (gaddr)cpu_pop32(c);
     uint32_t a_p = (uint32_t)cpu_pop32(c);
     int16_t r = tb_FindControl(a_p, a_w, a_cp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FindDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_pt = (uint32_t)cpu_pop32(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FindDialogItem(a_dp, a_pt);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -2612,6 +2680,29 @@ static void glue_GetDeviceList(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    gaddr a_itype = (gaddr)cpu_pop32(c);
+    int16_t a_itemno = (int16_t)cpu_pop16(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_GetDialogItem(a_dp, a_itemno, a_itype, a_item, a_r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogItemText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    tb_GetDialogItemText(a_item, a_text);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetFNum(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2875,6 +2966,18 @@ static void glue_GetNewControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetNewDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    int16_t a_id = (int16_t)cpu_pop16(c);
+    gaddr r = tb_GetNewDialog(a_id, a_dst, a_behind);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetNewMBar(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3099,6 +3202,16 @@ static void glue_GetSpecificHighLevelEvent(cpu68k *c, uint16_t trapword)
     gaddr a_fn = (gaddr)cpu_pop32(c);
     int8_t r = tb_GetSpecificHighLevelEvent(a_fn, a_data, a_err_return);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_GetStdFilterProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetStdFilterProc(a_proc);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -3496,6 +3609,16 @@ static void glue_HideCursor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_HideDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_HideDialogItem(a_dp, a_item);
+    cpu_push32(c, ret);
+}
+
 static void glue_HidePen(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3784,12 +3907,31 @@ static void glue_InvertRoundRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsDialogEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_evt = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsDialogEvent(a_evt);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_KillControls(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_KillControls(a_w);
+    cpu_push32(c, ret);
+}
+
+static void glue_KillPicture(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pic = (gaddr)cpu_pop32(c);
+    tb_KillPicture(a_pic);
     cpu_push32(c, ret);
 }
 
@@ -3976,6 +4118,16 @@ static void glue_MenuSelect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ModalDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    gaddr a_fp = (gaddr)cpu_pop32(c);
+    tb_ModalDialog(a_fp, a_item);
+    cpu_push32(c, ret);
+}
+
 static void glue_MoreMasters(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4114,6 +4266,24 @@ static void glue_NewCWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewColorDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg8 = (gaddr)cpu_pop32(c);
+    int32_t a_arg7 = (int32_t)cpu_pop32(c);
+    int8_t a_arg6 = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_arg5 = (gaddr)cpu_pop32(c);
+    int16_t a_arg4 = (int16_t)cpu_pop16(c);
+    int8_t a_arg3 = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_arg2 = (gaddr)cpu_pop32(c);
+    gaddr a_arg1 = (gaddr)cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    gaddr r = tb_NewColorDialog(a_arg0, a_arg1, a_arg2, a_arg3, a_arg4, a_arg5, a_arg6, a_arg7, a_arg8);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewControl(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4128,6 +4298,24 @@ static void glue_NewControl(cpu68k *c, uint16_t trapword)
     gaddr a_r = (gaddr)cpu_pop32(c);
     gaddr a_wst = (gaddr)cpu_pop32(c);
     gaddr r = tb_NewControl(a_wst, a_r, a_title, a_vis, a_value, a_min, a_max, a_procid, a_rc);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    int32_t a_rc = (int32_t)cpu_pop32(c);
+    int8_t a_gaflag = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int16_t a_procid = (int16_t)cpu_pop16(c);
+    int8_t a_vis = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_tit = (gaddr)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    gaddr r = tb_NewDialog(a_dst, a_r, a_tit, a_vis, a_procid, a_behind, a_gaflag, a_rc, a_items);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -4311,6 +4499,16 @@ static void glue_OpenDeskAcc(cpu68k *c, uint16_t trapword)
     gaddr a_acc = (gaddr)cpu_pop32(c);
     int16_t r = tb_OpenDeskAcc(a_acc);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenPicture(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pf = (gaddr)cpu_pop32(c);
+    gaddr r = tb_OpenPicture(a_pf);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -4877,6 +5075,17 @@ static void glue_PenSize(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PicComment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_hand = (gaddr)cpu_pop32(c);
+    int16_t a_size = (int16_t)cpu_pop16(c);
+    int16_t a_kind = (int16_t)cpu_pop16(c);
+    tb_PicComment(a_kind, a_size, a_hand);
+    cpu_push32(c, ret);
+}
+
 static void glue_PinRect(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4885,6 +5094,16 @@ static void glue_PinRect(cpu68k *c, uint16_t trapword)
     gaddr a_r = (gaddr)cpu_pop32(c);
     int32_t r = tb_PinRect(a_r, a_p);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_PlotIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_icon = (gaddr)cpu_pop32(c);
+    gaddr a_rect = (gaddr)cpu_pop32(c);
+    tb_PlotIcon(a_rect, a_icon);
     cpu_push32(c, ret);
 }
 
@@ -5604,6 +5823,18 @@ static void glue_SeedFill(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SelectDialogItemText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_stop = (int16_t)cpu_pop16(c);
+    int16_t a_start = (int16_t)cpu_pop16(c);
+    int16_t a_itemno = (int16_t)cpu_pop16(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_SelectDialogItemText(a_dp, a_itemno, a_start, a_stop);
+    cpu_push32(c, ret);
+}
+
 static void glue_SelectWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5723,6 +5954,62 @@ static void glue_SetDeskCPat(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_SetDeskCPat(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDialogCancelItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_new_item = (int16_t)cpu_pop16(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDialogCancelItem(a_dialog, a_new_item);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDialogDefaultItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_new_item = (int16_t)cpu_pop16(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDialogDefaultItem(a_dialog, a_new_item);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    int16_t a_itype = (int16_t)cpu_pop16(c);
+    int16_t a_itemno = (int16_t)cpu_pop16(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_SetDialogItem(a_dp, a_itemno, a_itype, a_item, a_r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDialogItemText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    tb_SetDialogItemText(a_item, a_text);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDialogTracksCursor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_tracks = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDialogTracksCursor(a_dialog, a_tracks);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -6073,6 +6360,16 @@ static void glue_ShowCursor(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_ShowCursor();
+    cpu_push32(c, ret);
+}
+
+static void glue_ShowDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_ShowDialogItem(a_dp, a_item);
     cpu_push32(c, ret);
 }
 
@@ -6891,6 +7188,16 @@ static void glue_UpdateControls(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UpdateDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_rgn = (gaddr)cpu_pop32(c);
+    gaddr a_dp = (gaddr)cpu_pop32(c);
+    tb_UpdateDialog(a_dp, a_rgn);
+    cpu_push32(c, ret);
+}
+
 static void glue_UseResFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7125,8 +7432,8 @@ const trap_sig trap_sigs[] = {
     {0xA820, -1, "Get1NamedResource", CONV_STACK, 8, 4, glue_Get1NamedResource},
     {0xA821, -1, "GetMaxResourceSize", CONV_STACK, 4, 4, glue_GetMaxResourceSize},
     {0xA826, -1, "InsertMenuItem", CONV_STACK, 10, 0, 0},
-    {0xA827, -1, "HideDialogItem", CONV_STACK, 6, 0, 0},
-    {0xA828, -1, "ShowDialogItem", CONV_STACK, 6, 0, 0},
+    {0xA827, -1, "HideDialogItem", CONV_STACK, 6, 0, glue_HideDialogItem},
+    {0xA828, -1, "ShowDialogItem", CONV_STACK, 6, 0, glue_ShowDialogItem},
     {0xA834, -1, "SetFScaleDisable", CONV_STACK, 2, 0, glue_SetFScaleDisable},
     {0xA835, -1, "FontMetrics", CONV_STACK, 4, 0, glue_FontMetrics},
     {0xA836, -1, "GetMaskTable", CONV_STACK, 0, 4, 0},
@@ -7307,11 +7614,11 @@ const trap_sig trap_sigs[] = {
     {0xA8EF, -1, "ScrollRect", CONV_STACK, 12, 0, glue_ScrollRect},
     {0xA8F0, -1, "StdPutPic", CONV_STACK, 6, 0, 0},
     {0xA8F1, -1, "StdComment", CONV_STACK, 8, 0, 0},
-    {0xA8F2, -1, "PicComment", CONV_STACK, 8, 0, 0},
-    {0xA8F3, -1, "OpenPicture", CONV_STACK, 4, 4, 0},
-    {0xA8F4, -1, "ClosePicture", CONV_STACK, 0, 0, 0},
-    {0xA8F5, -1, "KillPicture", CONV_STACK, 4, 0, 0},
-    {0xA8F6, -1, "DrawPicture", CONV_STACK, 8, 0, 0},
+    {0xA8F2, -1, "PicComment", CONV_STACK, 8, 0, glue_PicComment},
+    {0xA8F3, -1, "OpenPicture", CONV_STACK, 4, 4, glue_OpenPicture},
+    {0xA8F4, -1, "ClosePicture", CONV_STACK, 0, 0, glue_ClosePicture},
+    {0xA8F5, -1, "KillPicture", CONV_STACK, 4, 0, glue_KillPicture},
+    {0xA8F6, -1, "DrawPicture", CONV_STACK, 8, 0, glue_DrawPicture},
     {0xA8F8, -1, "ScalePt", CONV_STACK, 12, 0, glue_ScalePt},
     {0xA8F9, -1, "MapPt", CONV_STACK, 12, 0, glue_MapPt},
     {0xA8FA, -1, "MapRect", CONV_STACK, 12, 0, glue_MapRect},
@@ -7394,7 +7701,7 @@ const trap_sig trap_sigs[] = {
     {0xA948, -1, "CalcMenuSize", CONV_STACK, 4, 0, glue_CalcMenuSize},
     {0xA949, -1, "GetMenuHandle", CONV_STACK, 2, 4, glue_GetMenuHandle},
     {0xA94A, -1, "SetMenuFlash", CONV_STACK, 2, 0, glue_SetMenuFlash},
-    {0xA94B, -1, "PlotIcon", CONV_STACK, 8, 0, 0},
+    {0xA94B, -1, "PlotIcon", CONV_STACK, 8, 0, glue_PlotIcon},
     {0xA94C, -1, "FlashMenuBar", CONV_STACK, 2, 0, glue_FlashMenuBar},
     {0xA94D, -1, "AppendResMenu", CONV_STACK, 8, 0, glue_AppendResMenu},
     {0xA94E, -1, "PinRect", CONV_STACK, 8, 4, glue_PinRect},
@@ -7439,19 +7746,19 @@ const trap_sig trap_sigs[] = {
     {0xA975, -1, "TickCount", CONV_STACK, 0, 4, glue_TickCount},
     {0xA976, -1, "GetKeys", CONV_STACK, 4, 0, glue_GetKeys},
     {0xA977, -1, "WaitMouseUp", CONV_STACK, 0, 2, glue_WaitMouseUp},
-    {0xA978, -1, "UpdateDialog", CONV_STACK, 8, 0, 0},
+    {0xA978, -1, "UpdateDialog", CONV_STACK, 8, 0, glue_UpdateDialog},
     {0xA979, -1, "CouldDialog", CONV_STACK, 2, 0, 0},
     {0xA97A, -1, "FreeDialog", CONV_STACK, 2, 0, 0},
     {0xA97B, -1, "InitDialogs", CONV_STACK, 4, 0, glue_InitDialogs},
-    {0xA97C, -1, "GetNewDialog", CONV_STACK, 10, 4, 0},
-    {0xA97D, -1, "NewDialog", CONV_STACK, 30, 4, 0},
-    {0xA97E, -1, "SelectDialogItemText", CONV_STACK, 10, 0, 0},
-    {0xA97F, -1, "IsDialogEvent", CONV_STACK, 4, 2, 0},
-    {0xA980, -1, "DialogSelect", CONV_STACK, 12, 2, 0},
-    {0xA981, -1, "DrawDialog", CONV_STACK, 4, 0, 0},
-    {0xA982, -1, "CloseDialog", CONV_STACK, 4, 0, 0},
-    {0xA983, -1, "DisposeDialog", CONV_STACK, 4, 0, 0},
-    {0xA984, -1, "FindDialogItem", CONV_STACK, 8, 2, 0},
+    {0xA97C, -1, "GetNewDialog", CONV_STACK, 10, 4, glue_GetNewDialog},
+    {0xA97D, -1, "NewDialog", CONV_STACK, 30, 4, glue_NewDialog},
+    {0xA97E, -1, "SelectDialogItemText", CONV_STACK, 10, 0, glue_SelectDialogItemText},
+    {0xA97F, -1, "IsDialogEvent", CONV_STACK, 4, 2, glue_IsDialogEvent},
+    {0xA980, -1, "DialogSelect", CONV_STACK, 12, 2, glue_DialogSelect},
+    {0xA981, -1, "DrawDialog", CONV_STACK, 4, 0, glue_DrawDialog},
+    {0xA982, -1, "CloseDialog", CONV_STACK, 4, 0, glue_CloseDialog},
+    {0xA983, -1, "DisposeDialog", CONV_STACK, 4, 0, glue_DisposeDialog},
+    {0xA984, -1, "FindDialogItem", CONV_STACK, 8, 2, glue_FindDialogItem},
     {0xA985, -1, "Alert", CONV_STACK, 6, 2, glue_Alert},
     {0xA986, -1, "StopAlert", CONV_STACK, 6, 2, glue_StopAlert},
     {0xA987, -1, "NoteAlert", CONV_STACK, 6, 2, glue_NoteAlert},
@@ -7460,11 +7767,11 @@ const trap_sig trap_sigs[] = {
     {0xA98A, -1, "FreeAlert", CONV_STACK, 2, 0, glue_FreeAlert},
     {0xA98B, -1, "ParamText", CONV_STACK, 16, 0, glue_ParamText},
     {0xA98C, -1, "ErrorSound", CONV_STACK, 4, 0, glue_ErrorSound},
-    {0xA98D, -1, "GetDialogItem", CONV_STACK, 18, 0, 0},
-    {0xA98E, -1, "SetDialogItem", CONV_STACK, 16, 0, 0},
-    {0xA98F, -1, "SetDialogItemText", CONV_STACK, 8, 0, 0},
-    {0xA990, -1, "GetDialogItemText", CONV_STACK, 8, 0, 0},
-    {0xA991, -1, "ModalDialog", CONV_STACK, 8, 0, 0},
+    {0xA98D, -1, "GetDialogItem", CONV_STACK, 18, 0, glue_GetDialogItem},
+    {0xA98E, -1, "SetDialogItem", CONV_STACK, 16, 0, glue_SetDialogItem},
+    {0xA98F, -1, "SetDialogItemText", CONV_STACK, 8, 0, glue_SetDialogItemText},
+    {0xA990, -1, "GetDialogItemText", CONV_STACK, 8, 0, glue_GetDialogItemText},
+    {0xA991, -1, "ModalDialog", CONV_STACK, 8, 0, glue_ModalDialog},
     {0xA992, -1, "DetachResource", CONV_STACK, 4, 0, glue_DetachResource},
     {0xA993, -1, "SetResPurge", CONV_STACK, 2, 0, glue_SetResPurge},
     {0xA994, -1, "CurResFile", CONV_STACK, 0, 2, glue_CurResFile},
@@ -7635,7 +7942,7 @@ const trap_sig trap_sigs[] = {
     {0xAA48, -1, "GetCWMgrPort", CONV_STACK, 4, 0, glue_GetCWMgrPort},
     {0xAA49, -1, "SaveEntries", CONV_STACK, 12, 0, 0},
     {0xAA4A, -1, "RestoreEntries", CONV_STACK, 12, 0, 0},
-    {0xAA4B, -1, "NewColorDialog", CONV_STACK, 30, 4, 0},
+    {0xAA4B, -1, "NewColorDialog", CONV_STACK, 30, 4, glue_NewColorDialog},
     {0xAA4C, -1, "DelSearch", CONV_STACK, 4, 0, 0},
     {0xAA4D, -1, "DelComp", CONV_STACK, 4, 0, 0},
     {0xAA4E, -1, "SetStdCProcs", CONV_STACK, 4, 0, 0},
@@ -7689,10 +7996,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA5A, (int32_t)0x5u, "FindSymbol", CONV_STACK, 16, 2, 0},
     {0xAA5A, (int32_t)0x6u, "CountSymbols", CONV_STACK, 8, 2, 0},
     {0xAA5A, (int32_t)0x7u, "GetIndSymbol", CONV_STACK, 20, 2, 0},
-    {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, 0},
-    {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, 0},
-    {0xAA68, (int32_t)0x305u, "SetDialogCancelItem", CONV_STACK, 6, 2, 0},
-    {0xAA68, (int32_t)0x306u, "SetDialogTracksCursor", CONV_STACK, 6, 2, 0},
+    {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
+    {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},
+    {0xAA68, (int32_t)0x305u, "SetDialogCancelItem", CONV_STACK, 6, 2, glue_SetDialogCancelItem},
+    {0xAA68, (int32_t)0x306u, "SetDialogTracksCursor", CONV_STACK, 6, 2, glue_SetDialogTracksCursor},
     {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, 0},
     {0xABED, (int32_t)0x1u, "InstallTrackingHandler", CONV_STACK, 12, 2, 0},
     {0xABED, (int32_t)0x2u, "InstallReceiveHandler", CONV_STACK, 12, 2, 0},

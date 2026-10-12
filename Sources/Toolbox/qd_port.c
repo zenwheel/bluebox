@@ -74,18 +74,25 @@ bool qd_port_is_color(gaddr port) { return port && (rd16(port + GrafPort_portBit
 pixdst qd_port_pixels(gaddr port)
 {
     pixdst d;
+    d.ctab = 0;
     if (qd_port_is_color(port)) {
         gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
         d.base = PixMap_baseAddr(pm);
         d.row_bytes = (uint16_t)PixMap_rowBytes(pm) & 0x3FFF;
         d.bounds = qrect_get(pm + PixMap_bounds_off);
         d.depth = PixMap_pixelSize(pm);
+        d.ctab = PixMap_pmTable(pm);
     } else {
         gaddr bm = port + GrafPort_portBits_off;
         d.base = BitMap_baseAddr(bm);
         d.row_bytes = (uint16_t)BitMap_rowBytes(bm) & 0x3FFF;
         d.bounds = qrect_get(bm + BitMap_bounds_off);
         d.depth = 1;
+        /* An old port on a deep screen draws at the screen's depth. */
+        if (d.base == GA_SCREEN) {
+            d.depth = qd_screen_depth();
+            d.ctab = qd_screen_ctab();
+        }
     }
     if (d.depth < 1)
         d.depth = 1;
@@ -381,20 +388,38 @@ static void old_color_rgb(int32_t c, uint16_t rgb[3])
     }
 }
 
-/* 1-bit pixel values (1 = black) for the port's foreground and background. */
-void qd_port_bits(gaddr port, int *fg, int *bk)
+static bool fg_override;
+static uint16_t fg_override_rgb[3];
+
+void qd_set_fg_override(const uint16_t *rgb)
 {
+    fg_override = rgb != NULL;
+    if (rgb)
+        memcpy(fg_override_rgb, rgb, sizeof fg_override_rgb);
+}
+
+/* The port's foreground and background as pixel values at its depth. */
+void qd_port_bits(gaddr port, uint32_t *fg, uint32_t *bk)
+{
+    uint16_t f[3], b[3];
     if (qd_port_is_color(port)) {
-        gaddr f = port + CGrafPort_rgbFgColor_off, b = port + CGrafPort_rgbBkColor_off;
-        *fg = rgb_dark(rd16(f), rd16(f + 2), rd16(f + 4));
-        *bk = rgb_dark(rd16(b), rd16(b + 2), rd16(b + 4));
+        gaddr fa = port + CGrafPort_rgbFgColor_off, ba = port + CGrafPort_rgbBkColor_off;
+        f[0] = rd16(fa); f[1] = rd16(fa + 2); f[2] = rd16(fa + 4);
+        b[0] = rd16(ba); b[1] = rd16(ba + 2); b[2] = rd16(ba + 4);
+    } else {
+        old_color_rgb(GrafPort_fgColor(port), f);
+        old_color_rgb(GrafPort_bkColor(port), b);
+    }
+    if (fg_override)
+        memcpy(f, fg_override_rgb, sizeof f);
+    pixdst d = qd_port_pixels(port);
+    if (d.depth == 1) {
+        *fg = (uint32_t)rgb_dark(f[0], f[1], f[2]);
+        *bk = (uint32_t)rgb_dark(b[0], b[1], b[2]);
         return;
     }
-    uint16_t rgb[3];
-    old_color_rgb(GrafPort_fgColor(port), rgb);
-    *fg = rgb_dark(rgb[0], rgb[1], rgb[2]);
-    old_color_rgb(GrafPort_bkColor(port), rgb);
-    *bk = rgb_dark(rgb[0], rgb[1], rgb[2]);
+    *fg = qd_rgb_px(d.depth, d.ctab, f);
+    *bk = qd_rgb_px(d.depth, d.ctab, b);
 }
 
 void tb_ForeColor(int32_t c)

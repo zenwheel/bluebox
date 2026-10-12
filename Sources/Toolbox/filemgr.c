@@ -395,28 +395,38 @@ static bool sidecar_redundant(const char *path, const mac_file *mf)
     return (untyped || !memcmp(mf->finder_info, implied, 4)) && !(flags & ~0x0100u);
 }
 
-/* Classic type and creator for a host file whose sidecar adds nothing, from
- * its extension.  Returns true for text, which is converted on the way in
- * and out. */
+/* Classic type and creator for a host file without a meaningful sidecar,
+ * from its extension (or from its sidecar's Finder info).  Returns true for
+ * text kept as host text (UTF-8, host line ends): a text extension, no
+ * resource fork, and a text type (TEXT or ttro), with or without a sidecar
+ * holding Finder info such as the stationery flag. */
 static bool host_file_type(const char *path, uint8_t finfo[16])
 {
+    uint8_t implied[16];
+    int kind = implied_type(path, implied);
     char *side = appledouble_sidecar_path(path);
     bool has_side = side && exists(side);
     free(side);
-    if (has_side) {
-        mac_file mf;
-        char err[256];
-        if (!appledouble_read(path, &mf, err, sizeof err))
-            return false;
-        bool plain = sidecar_redundant(path, &mf);
-        if (plain && mf.has_finder_info && memcmp(mf.finder_info, "\0\0\0\0", 4))
-            memcpy(finfo, mf.finder_info, 16);
-        else if (plain)
-            implied_type(path, finfo);
-        mac_file_free(&mf);
-        return plain;
+    if (!has_side) {
+        if (kind)
+            memcpy(finfo, implied, 16);
+        return kind == 2;
     }
-    return implied_type(path, finfo) == 2;
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return false;
+    bool typed = mf.has_finder_info && memcmp(mf.finder_info, "\0\0\0\0", 4);
+    bool text_type = !typed || !memcmp(mf.finder_info, "TEXT", 4) || !memcmp(mf.finder_info, "ttro", 4);
+    bool text = kind == 2 && mf.rsrc_len == 0 && text_type;
+    if (text) {
+        if (typed)
+            memcpy(finfo, mf.finder_info, 16);
+        else
+            memcpy(finfo, implied, 16);
+    }
+    mac_file_free(&mf);
+    return text;
 }
 
 /* Host text (UTF-8, LF or CRLF) to classic text (MacRoman, CR). */

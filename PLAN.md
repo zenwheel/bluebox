@@ -320,14 +320,19 @@ the trap census.
   - keyboard through the host layout with dead keys (Option-E, E → é)
   - Standard File as native open and save panels (types filtered by classic file type); plain text saves stay UTF-8 with no sidecar
   - pressed close and zoom boxes
+  - Dialog Manager: dialogs from DLOG/DITL, items, edit text, ModalDialog with filters, standard filter, default and cancel items
+  - Standard File extras: the app's own items (TeachText's Document / Stationery) as an accessory view in the native panel, run through the app's dialog hook in a hidden classic dialog
+  - QuickDraw pictures: DrawPicture for version 1 and 2 (shapes, polygons, regions, text, patterns, all bitmap and pixmap opcodes); pictures and bitmaps print as images
+  - colour: an 8-bit screen with the standard colour table; drawing, text and CopyBits at any depth
+  - appearances: `--appearance system7|platinum` colour artwork for window frames, scroll bars, grow boxes and (Platinum) push buttons, on the same geometry as black and white
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
 - Next:
   - glyphs still missing from the bitmap fonts (° © ® ™ § ¶ ß ± and other symbols): draw them, or fall back per glyph to a host font
   - host names longer than 31 characters: a stable shortened Mac name (they are truncated today, so such files cannot be opened by name)
   - Dialog Manager: modal dialogs (TeachText's Save and About)
-  - Standard File: the app's extra dialog items (TeachText's Document / Stationery) as an accessory view in the native panel, with the app's dialog hook run against a hidden classic dialog
-  - printing: CopyBits and pictures (PICT) in printed pages; QuickDraw pictures in general (TeachText also opens PICT documents)
-  - optional window appearance: colour System 7 and Mac OS 8 Platinum, as alternatives to black and white
+  - OpenPicture recording (pictures made by apps, e.g. for the clipboard)
+  - appearances: Platinum's own window geometry (wider frame), dialog frames, checkboxes and radio buttons, classic menus in screen mode; a setting in installed bundles
+  - the remaining Standard File hooks (old SFPGetFile/SFPPutFile hooks, null-event and filter procs)
   - `quit` from the host's Quit command
   - host clipboard sync
 
