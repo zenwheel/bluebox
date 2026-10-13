@@ -575,7 +575,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
     - Revisit the stopgap from 2026-10-13: `HiliteRGB` is set at boot from the host's selection colour (`useHostSelectionColor` in `HostWindow.swift`, `machine_set_hilite_color`). With the Appearance Manager, the theme's highlight brushes (`kThemeBrushPrimaryHighlightColor` and the selection brushes) should take the host's accent and selection colours, and `HiliteRGB` follow the theme (and change when the host's colours change, not only at launch).
     - Test case: Greg's Browser's list definition (LDEF 128) highlights a selected row only when Gestalt `appr` reports the Appearance Manager: it then calls `SetThemeBackground`/`SetThemeTextColor` (ThemeDispatch `$AA74`, selectors 2 and 3) and erases the row in `HiliteRGB`. Without it (System 7, today) it draws no selection at all. Its focus frame (an `InvertRgn` around the list) sometimes shows on an inactive list, which needs checking against activate events.
   - Navigation Services (native dialogs when no hooks)
-  - Thread Manager, Contextual Menu Manager, Window Manager 2.0 additions, Control Manager 2.0
+  - Contextual Menu Manager, Window Manager 2.0 additions, Control Manager 2.0
+  - Thread Manager: cooperative threads are done (2026-10-13). Preemptive threads are still scheduled cooperatively, and a custom scheduler (`SetThreadScheduler`) is recorded but not consulted.
 - **Drag Manager ↔ host drag and drop:** files and text in and out of classic apps.
 - **Open Transport** (it comes after M8 because its API is delivered as Code Fragment Manager shared libraries, CFM-68K on 68k Macs):
   - endpoints, providers and notifiers; TCP, UDP and DNS on host sockets
@@ -593,6 +594,9 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **JIT** for 68k and PPC on macOS (`MAP_JIT`) and Linux.
 - **Persistent translation cache** keyed by a hash of each code resource or fragment, with an ahead-of-time "pre-translate" option in `classic install`. The interpreter remains the fallback.
 - **Games:** InputSprocket → host gamepads, DrawSprocket → screen mode, and Sound input.
+- Drawing problems seen in the census (2026-10-13), to investigate:
+  - StarGuardian reaches "Click on rabbit to continue" but draws no rabbit. It copies its pictures with `CopyBits` from bitmaps it builds itself from its data fork.
+  - Sword of Ages (a World Builder game) opens its windows, but their content shows the desktop pattern rather than the scene.
 
 **Exit:** a defined game corpus runs at full original speed or better, including QuickTime playback from M4 at full frame rate.
 
