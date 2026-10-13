@@ -212,12 +212,15 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
     PixMap_set_pixelType(pm, depth > 8 ? 16 : 0);
     PixMap_set_cmpCount(pm, depth > 8 ? 3 : 1);
     PixMap_set_cmpSize(pm, (int16_t)(depth == 32 ? 8 : depth == 16 ? 5 : depth));
-    if (depth <= 8) {
-        uint32_t ct = ctab ? ctab : tb_GetCTable((int16_t)depth);
-        if (ctab)
-            tb_HandToHand(&ct);
-        PixMap_set_pmTable(pm, ct);
-    }
+    /* The GWorld owns its colour table (a copy of the one asked for, or
+     * the standard one for the depth; a direct-colour world gets the 8-bit
+     * table), and DisposeGWorld disposes it. */
+    uint32_t ct = ctab ? ctab : tb_GetCTable((int16_t)(depth <= 8 ? depth : 8));
+    if (ctab)
+        tb_HandToHand(&ct);
+    if (PixMap_pmTable(pm))
+        tb_DisposeHandle(PixMap_pmTable(pm));
+    PixMap_set_pmTable(pm, ct);
     qrect_put(port + GrafPort_portRect_off, r);
     tb_RectRgn(GrafPort_visRgn(port), port + GrafPort_portRect_off);
     tb_RectRgn(GrafPort_clipRgn(port), port + GrafPort_portRect_off);
@@ -232,6 +235,9 @@ int16_t tb_NewGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect
     if (!port)
         return memFullErr;
     tb_OpenCPort(port);
+    /* InitCPort lent the port the screen's colour table; set_pixels gives
+     * the world one of its own. */
+    PixMap_set_pmTable(rd32(rd32(port + CGrafPort_portPixMap_off)), 0);
     if (!set_pixels(port, qrect_get(boundsRect), gworld_depth(pixelDepth), cTable)) {
         tb_CloseCPort(port);
         tb_DisposePtr(port);
