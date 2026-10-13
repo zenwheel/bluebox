@@ -186,21 +186,6 @@ func nameProcess(_ name: String) {
     }
 }
 
-/// The Dock labels a process that is not in a bundle with its executable's
-/// name, whatever the process calls itself; Launch Services' display name
-/// (private, so looked up at run time, as Chromium does) changes the label.
-func nameDockTile(_ name: String) {
-    guard let ls = dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices", RTLD_LAZY),
-          let getASN = dlsym(ls, "_LSGetCurrentApplicationASN"),
-          let setItem = dlsym(ls, "_LSSetApplicationInformationItem"),
-          let keyPtr = dlsym(ls, "_kLSDisplayNameKey") else { return }
-    typealias GetASN = @convention(c) () -> Unmanaged<CFTypeRef>?
-    typealias SetItem = @convention(c) (Int32, CFTypeRef, CFString, CFTypeRef, UnsafeMutableRawPointer?) -> Int32
-    guard let asn = unsafeBitCast(getASN, to: GetASN.self)()?.takeUnretainedValue() else { return }
-    let key = keyPtr.assumingMemoryBound(to: CFString.self).pointee
-    _ = unsafeBitCast(setItem, to: SetItem.self)(-2 /* kLSDefaultSessionID */, asn, key, name as CFString, nil)
-}
-
 /// The classic application's Finder icon, for the Dock and alerts.
 nonisolated(unsafe) var appIcon: NSImage?
 
@@ -221,7 +206,6 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // After launch: AppKit sets the icon from the main bundle while launching.
         if let appIcon { NSApp.applicationIconImage = appIcon }
-        if Bundle.main.bundleIdentifier == nil { nameDockTile(title) }
         launchEvents.finishLaunching()
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)
@@ -370,8 +354,9 @@ func installLaunchHandler() {
         guard let pathPtr else { return false }
         let path = String(cString: pathPtr)
         let docs = (0..<Int(ndocs)).compactMap { i in docsPtr?[i].map { String(cString: $0) } }
+        // The program itself, not the bundle this run was named by.
         let me = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-        let exe = Bundle.main.executableURL ?? me
+        let exe = (Bundle.main.executableURL ?? me).resolvingSymlinksInPath()
         var args = ["run", path] + docs
         if let i = CommandLine.arguments.firstIndex(of: "--appearance"), i + 1 < CommandLine.arguments.count {
             args += ["--appearance", CommandLine.arguments[i + 1]]
@@ -379,6 +364,9 @@ func installLaunchHandler() {
         let p = Process()
         p.executableURL = exe
         p.arguments = args
+        var env = ProcessInfo.processInfo.environment
+        env["__CFBundleIdentifier"] = nil // its own name, not its launcher's
+        p.environment = env
         do { try p.run() } catch { return false }
         return true
     }, nil)

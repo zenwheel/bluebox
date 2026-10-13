@@ -189,4 +189,59 @@ func installCommand(_ args: [String]) {
     if !types.isEmpty { print("  documents: \(types)") }
 }
 
+// MARK: - Dock name
+
+/// The Dock names a tile after the bundle a process was started from, and
+/// after the executable's file name without one, so an interactive run
+/// outside a bundle starts itself again from a small bundle of the
+/// application's name: a link to this program, an Info.plist and the
+/// Finder icon, kept with the library.  Returns only if that fails.
+func reexecInNamedBundle(app: String) {
+    let env = ProcessInfo.processInfo.environment
+    // Started by Launch Services from a `classic install` bundle: the Dock
+    // already has that bundle's name (and it may hold documents to open).
+    let launcher = env["__CFBundleIdentifier"] ?? ""
+    if launcher.hasPrefix("local.classic.") && !launcher.hasPrefix("local.classic.run.") { return }
+    guard Bundle.main.bundleIdentifier == nil, env["CLASSIC_NO_BUNDLE"] == nil,
+          let me = Bundle.main.executableURL?.resolvingSymlinksInPath().path else { return }
+    let name = (app as NSString).lastPathComponent
+    let file = name.replacingOccurrences(of: "/", with: ":")
+    let support = ((defaultLibrary() as NSString).deletingLastPathComponent as NSString)
+    let bundle = support.appendingPathComponent("Bundles/\(file).app")
+    let exe = bundle + "/Contents/MacOS/classic"
+    let fm = FileManager.default
+    let slug = name.lowercased().map { $0.isLetter || $0.isNumber ? String($0) : "-" }.joined()
+    var info: [String: Any] = [
+        "CFBundleExecutable": "classic",
+        "CFBundleIdentifier": "local.classic.run.\(slug)",
+        "CFBundleInfoDictionaryVersion": "6.0",
+        "CFBundleName": name,
+        "CFBundleDisplayName": name,
+        "CFBundlePackageType": "APPL",
+        "NSHighResolutionCapable": true,
+        "NSPrincipalClass": "NSApplication",
+        bundleAppKey: app,
+    ]
+    let icns = icnsData(finderBundle(applicationAt: app).appIcons)
+    if icns != nil { info["CFBundleIconFile"] = "AppIcon" }
+    do {
+        try fm.createDirectory(atPath: bundle + "/Contents/MacOS", withIntermediateDirectories: true)
+        try fm.createDirectory(atPath: bundle + "/Contents/Resources", withIntermediateDirectories: true)
+        if (try? fm.destinationOfSymbolicLink(atPath: exe)) != me {
+            try? fm.removeItem(atPath: exe)
+            try fm.createSymbolicLink(atPath: exe, withDestinationPath: me)
+        }
+        let plist = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        let plistURL = URL(fileURLWithPath: bundle + "/Contents/Info.plist")
+        if (try? Data(contentsOf: plistURL)) != plist { try plist.write(to: plistURL) }
+        if let icns { try icns.write(to: URL(fileURLWithPath: bundle + "/Contents/Resources/AppIcon.icns")) }
+    } catch {
+        return
+    }
+    let args = [exe] + CommandLine.arguments.dropFirst()
+    var cargs = args.map { strdup($0) } + [nil]
+    execv(exe, &cargs)
+    cargs.forEach { free($0) }
+}
+
 #endif

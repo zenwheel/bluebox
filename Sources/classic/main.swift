@@ -315,6 +315,7 @@ func runCommand(_ args: [String]) {
 
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
+    if interactive { reexecInNamedBundle(app: app) }
     if interactive && !screenWindow {
         // Rootless: the Mac screen covers the host display's visible area.
         MainActor.assumeIsolated {
