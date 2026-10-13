@@ -6,10 +6,14 @@ rsrcfork, which the build itself does not):
 
     import_bitmap_font.py nfnt <AppleDouble ._file> <NFNT id> <out.bdf>
         a classic Mac bitmap strike, as it is (all 256 MacRoman codes)
-    import_bitmap_font.py ttf <font.ttf> <pixels> <out.bdf>
+    import_bitmap_font.py ttf <font.ttf> <pixels> <out.bdf> [name=value...]
         a TrueType font drawn in black and white at one pixel size, for
         faces whose outlines sit on the pixel grid (ChicagoFLF at 12,
         FontStruct pixel fonts at their design size)
+
+Options set the classic face's line metrics where the source's differ:
+ascent=, descent= (in pixels; glyphs keep their place on the baseline),
+leading=, and space= (the space's width).
 
 The BDF's ENCODING values are MacRoman character codes.
 """
@@ -19,7 +23,7 @@ import struct
 import sys
 
 
-def write_bdf(path, name, size, ascent, descent, glyphs):
+def write_bdf(path, name, size, ascent, descent, glyphs, leading=0):
     """glyphs: {code: (advance, left, top, rows)} with top relative to the
     baseline (negative is above) and rows strings of '#' and '.'."""
     out = [
@@ -27,9 +31,10 @@ def write_bdf(path, name, size, ascent, descent, glyphs):
         f"FONT {name}",
         f"SIZE {size} 72 72",
         f"FONTBOUNDINGBOX {max((len(g[3][0]) if g[3] else 0) for g in glyphs.values())} {ascent + descent} 0 {-descent}",
-        "STARTPROPERTIES 2",
+        "STARTPROPERTIES 3",
         f"FONT_ASCENT {ascent}",
         f"FONT_DESCENT {descent}",
+        f"X_CLASSIC_LEADING {leading}",
         "ENDPROPERTIES",
         f"CHARS {len(glyphs)}",
     ]
@@ -116,16 +121,22 @@ def from_ttf(path, px):
 
 
 def main():
-    if len(sys.argv) != 5 or sys.argv[1] not in ("nfnt", "ttf"):
+    if len(sys.argv) < 5 or sys.argv[1] not in ("nfnt", "ttf"):
         raise SystemExit(__doc__)
-    kind, src, num, out = sys.argv[1:]
+    kind, src, num, out = sys.argv[1:5]
+    opts = dict(a.split("=", 1) for a in sys.argv[5:])
     if kind == "nfnt":
         ascent, descent, glyphs = from_nfnt(src, int(num))
     else:
         ascent, descent, glyphs = from_ttf(src, int(num))
+    ascent = int(opts.get("ascent", ascent))
+    descent = int(opts.get("descent", descent))
+    leading = int(opts.get("leading", 0))
+    if "space" in opts and 0x20 in glyphs:
+        glyphs[0x20] = (int(opts["space"]),) + glyphs[0x20][1:]
     name = out.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-    write_bdf(out, name, int(num) if kind == "ttf" else ascent + descent, ascent, descent, glyphs)
-    print(f"{out}: {len(glyphs)} glyphs, ascent {ascent}, descent {descent}")
+    write_bdf(out, name, int(num) if kind == "ttf" else ascent + descent, ascent, descent, glyphs, leading)
+    print(f"{out}: {len(glyphs)} glyphs, ascent {ascent}, descent {descent}, leading {leading}")
 
 
 if __name__ == "__main__":
