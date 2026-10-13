@@ -495,12 +495,12 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Link layer: LocalTalk over UDP ("LToUDP")**, LocalTalk frames on a UDP multicast group. Other emulators and AppleTalk routers use the same convention (to confirm when this milestone starts), so instances of this environment can play each other, and emulators and real Macs (through a router) on the same network.
   - LLAP node address acquisition, broadcast, and the multicast group configurable in the profile
   - a host-only loopback mode, so two apps on one machine can play without a network
-- **Link layer: EtherTalk (optional), bridged onto a real Ethernet**, for AppleTalk with real Macs, netatalk file servers and routers on the local network that do not speak LToUDP. It needs raw Ethernet frames, so it is optional and set up once from the shell (M2b):
+- **Link layer: EtherTalk (optional), bridged onto a wired Ethernet**, for AppleTalk with real Macs, netatalk file servers and routers on the local network that do not speak LToUDP. Bridging is only for these raw AppleTalk/EtherTalk frames, never for TCP/IP, and only over a wired interface (Wi-Fi access points do not pass frames from a second MAC address). It needs raw Ethernet frames, so it is optional and set up once from the shell (M2b), which offers only wired interfaces:
   - macOS: `vmnet.framework` in bridged mode (needs the networking entitlement, or a small privileged helper), or BPF through a helper that holds the device
   - Linux: a `tap` device or an `AF_PACKET` socket, granted `CAP_NET_RAW` to a helper
   - AARP for node addresses, the AppleTalk Phase 2 multicast addresses, and zone information from a seed router when there is one
   - Without it, AppleTalk still works between instances and LToUDP emulators, and a router (e.g. jrouter or a real AppleTalk router) can join LToUDP to EtherTalk.
-- **MacTCP** on host sockets: the `.IPP` driver interface (TCP streams, UDP), and the DNR resolver (`StrToAddr`, `AddrToName`) through the host resolver. TCP/IP needs no bridging: connections are the host's own, so it works with no privileges and through VPNs.
+- **MacTCP** on host sockets: the `.IPP` driver interface (TCP streams, UDP), and the DNR resolver (`StrToAddr`, `AddrToName`) through the host resolver. TCP/IP is never bridged: MacTCP here and Open Transport (M9) always use the host's own sockets, so they work over any interface (Wi-Fi included), with no privileges, and through VPNs.
 - **Gestalt and low memory** report AppleTalk and MacTCP as present.
 
 **Exit:** two copies of Spectre (and a second AppleTalk game, e.g. Bolo) on two hosts find each other through NBP and play a networked game; one of them also interoperates with another emulator on the same LToUDP network; a MacTCP client (Fetch or an IRC client) connects to a real server.
