@@ -150,6 +150,7 @@ Each Toolbox routine is an ordinary C function. Calling-convention glue is gener
 - **No PostScript Type 1 / ATM:** `LWFN` outline fonts are out of scope. Documents that use them fall back to the matching bitmap `NFNT` or a host-font substitute.
 - **Smoothing:** 1-bit rendering by default for exact output. Grayscale smoothing is an option.
 - **Bitmap faces stay bitmaps:** Chicago 12 and Geneva 9 (and the other stand-ins) are drawn from their bitmaps at their own sizes, pixel-doubled with everything else by the display scale, never re-rendered from outlines. The user's own Apple bitmap fonts, added through the shell, replace the stand-ins for an exact look.
+- **Outline fonts at the display's resolution:** text in host fonts and classic TrueType fonts is rendered at the host's real resolution (two or more device pixels per Mac pixel on Retina, times the display scale) so it looks smooth, not pixel-doubled. The framebuffer keeps the 1-bit or low-resolution version the program measures and reads back; the host draws the high-resolution glyph runs over it for display, recorded per window the way pictures already are.
 
 ### 2.6 Environment profile
 
