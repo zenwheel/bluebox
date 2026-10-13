@@ -50,10 +50,13 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
     if (vers < 1)
         return -5501; /* envBadVers */
     SysEnvRec_set_environsVersion(p, vers > 2 ? 2 : vers);
-    SysEnvRec_set_machineType(p, 0);   /* envMachUnknown: newer than SysEnvirons knows */
+    /* As System 7 does, from Gestalt: the machine (its Gestalt number less
+     * two), the processor and the FPU. */
+    uint32_t mach = gestalt_value(fourcc("mach"), 0), proc = gestalt_value(fourcc("proc"), 3);
+    SysEnvRec_set_machineType(p, (int16_t)(mach > 2 ? mach - 2 : 0));
     SysEnvRec_set_systemVersion(p, (int16_t)rd16(LM_SysVersion));
-    SysEnvRec_set_processor(p, 3);     /* env68020 */
-    SysEnvRec_set_hasFPU(p, 0);
+    SysEnvRec_set_processor(p, (int16_t)proc); /* numbered alike: env68040 = 5 */
+    SysEnvRec_set_hasFPU(p, gestalt_value(fourcc("fpu "), 0) != 0);
     SysEnvRec_set_hasColorQD(p, 1);
     SysEnvRec_set_keyBoardType(p, 4);  /* envAExtendKbd */
     SysEnvRec_set_atDrvrVersNum(p, 0);

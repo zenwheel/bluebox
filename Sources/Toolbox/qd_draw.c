@@ -873,6 +873,7 @@ static pixdst bits_at(gaddr bm)
     }
     if (d.depth < 1)
         d.depth = 1;
+    pixdst_clamp(&d);
     return d;
 }
 

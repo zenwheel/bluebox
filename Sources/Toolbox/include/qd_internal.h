@@ -79,6 +79,16 @@ typedef struct {
     gaddr ctab;     /* colour table handle for indexed depths (0: the standard one) */
 } pixdst;
 
+/* No wider than its rows hold: a PixMap whose pixelSize disagrees with its
+ * rowBytes (set up for another screen depth) is drawn into only as far as
+ * each row reaches, and not past the end of its buffer. */
+static inline void pixdst_clamp(pixdst *d)
+{
+    int fit = (int)(d->row_bytes * 8u / (unsigned)(d->depth > 0 ? d->depth : 1));
+    if (d->bounds.right - d->bounds.left > fit)
+        d->bounds.right = (int16_t)(d->bounds.left + fit);
+}
+
 gaddr qd_port(void);
 bool qd_port_is_color(gaddr port);
 pixdst qd_port_pixels(gaddr port);

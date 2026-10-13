@@ -37,6 +37,17 @@ static uint32_t presses, key_presses; /* counted, so a quick click is never miss
 static uint16_t key_mods;
 static uint8_t keymap[16];
 static bool host_attached;
+/* For low memory: the last key down (key code and character) and whether
+ * a key or the button changed since it was last written. */
+static uint16_t key_last;
+static bool key_new, button_new;
+
+/* Keyboard and mouse globals missing from lowmem_gen.h. */
+#define LM_MBTicks 0x016Eu    /* LONGINT: Ticks at the last button change */
+#define LM_KeyLast 0x0184u    /* INTEGER: the last key's code and character */
+#define LM_KeyTime 0x0186u    /* LONGINT: Ticks at the last key down */
+#define LM_KeyRepTime 0x018Au /* LONGINT: Ticks at the last repeat */
+#define LM_HiKeyLast 0x0216u  /* INTEGER: as KeyLast */
 
 /* ---------------------------------------------------------------------- */
 /* Host side */
@@ -106,8 +117,19 @@ void events_sync_lowmem(void)
     bool down = button_down;
     uint8_t keys[16];
     memcpy(keys, keymap, sizeof keys);
+    bool key_changed = key_new, button_changed = button_new;
+    uint16_t last = key_last;
+    key_new = button_new = false;
     pthread_mutex_unlock(&lock);
     gput(LM_KeyMap, keys, sizeof keys); /* games read it in place of GetKeys */
+    if (key_changed) {
+        wr16(LM_KeyLast, last);
+        wr16(LM_HiKeyLast, last);
+        wr32(LM_KeyTime, rd32(LM_Ticks));
+        wr32(LM_KeyRepTime, rd32(LM_Ticks));
+    }
+    if (button_changed)
+        wr32(LM_MBTicks, rd32(LM_Ticks));
     wr8(LM_MBState, down ? 0x00 : 0x80);
     wr32(LM_MTemp, pt);
     wr32(LM_MouseLocation, pt);
@@ -143,6 +165,7 @@ void machine_post_mouse(int x, int y, int button)
         button_down = button != 0;
         if (button_down)
             presses++;
+        button_new = true;
         enqueue(button_down ? mouseDown : mouseUp, 0);
     }
     pthread_cond_broadcast(&arrived);
@@ -154,6 +177,10 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
     pthread_mutex_lock(&lock);
     if (down && !repeat && charcode > 0)
         key_presses++;
+    if (down) {
+        key_last = (uint16_t)((keycode & 0xFF) << 8 | (charcode & 0xFF));
+        key_new = true;
+    }
     key_mods = (uint16_t)modifiers;
     if (keycode >= 0 && keycode < 128) {
         if (down)
@@ -526,6 +553,8 @@ void events_reset(void)
     button_down = false;
     key_mods = 0;
     memset(keymap, 0, sizeof keymap);
+    key_last = 0;
+    key_new = button_new = false;
     mouse_h = 100;
     mouse_v = 100;
     pthread_mutex_unlock(&lock);

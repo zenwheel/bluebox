@@ -83,7 +83,7 @@ static void coalesce(gaddr z, gaddr b)
     gaddr lim = z_lim(z);
     uint32_t ps = b_psize(b);
     gaddr n = b + ps;
-    while (n < lim && b_use(n) == USE_FREE) {
+    while (n < lim && b_use(n) == USE_FREE && b_psize(n) >= HDR) { /* a smashed header ends it */
         ps += b_psize(n);
         n = b + ps;
     }
@@ -205,6 +205,10 @@ static gaddr find_free(gaddr z, uint32_t psize)
         if (pass && (end < first || end >= lim))
             end = lim;
         for (gaddr b = pass ? first : start; b < end; b = b_next(b)) {
+            if (b_psize(b) < HDR) { /* a smashed header: no way past it */
+                LOGF(LOG_MEM, "mm: zone %08X damaged at block %08X\n", z, b);
+                return 0;
+            }
             if (b_use(b) != USE_FREE)
                 continue;
             coalesce(z, b);

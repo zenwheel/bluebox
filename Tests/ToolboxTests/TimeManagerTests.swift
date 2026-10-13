@@ -67,9 +67,51 @@ extension Classic {
             machine_post_key(Int32(UInt8(ascii: "p")), 35, 0, 1, 0)
             events_sync_lowmem()
             #expect(rd8(0x174 + 4) & 0x08 != 0) // key code 35: byte 4, bit 3
+            #expect(rd16(0x184) == 0x2370) // KeyLast: key code and character
             machine_post_key(Int32(UInt8(ascii: "p")), 35, 0, 0, 0)
             events_sync_lowmem()
             #expect(rd8(0x174 + 4) & 0x08 == 0)
+            // MBTicks: Ticks when the button last changed.
+            machine_skip_time(1_000_000_000)
+            machine_advance_ticks()
+            machine_post_mouse(10, 10, 1)
+            events_sync_lowmem()
+            #expect(rd32(0x16E) == rd32(0x16A) && rd32(0x16E) >= 60)
+            machine_post_mouse(10, 10, 0)
+        }
+
+        /// The VBL queue in low memory lists installed tasks after the
+        /// system's own, as programs that look for theirs expect.
+        @Test func vblQueueInLowMemory() {
+            let v = tb_NewPtr(Int32(VBLTask_SIZEOF), false, true)
+            wr16(v + 4, 1)
+            #expect(tb_VInstall(v) == 0)
+            let head = rd32(0x160 + 2)
+            #expect(head != 0 && head != v)       // a system task comes first
+            #expect(rd32(head) == v)              // and links to ours
+            #expect(rd32(0x160 + 6) == v)         // the tail
+            #expect(tb_VRemove(v) == 0)
+            #expect(rd32(head) == 0)
+        }
+
+        /// SysEnvirons agrees with Gestalt: a Quadra with a 68040 and its FPU.
+        @Test func sysEnvironsFollowsGestalt() {
+            let rec = tb_NewPtr(16, false, true)
+            #expect(tb_SysEnvirons(2, rec) == 0)
+            #expect(rd16(rec + 2) == 33)          // machineType: Quadra 800 (Gestalt 35 - 2)
+            #expect(rd16(rec + 6) == 5)           // processor: 68040
+            #expect(rd8(rec + 8) != 0)            // hasFPU
+        }
+
+        /// Low memory programs read directly holds what a real Mac's would.
+        @Test func lowMemoryAtBoot() {
+            #expect(Int16(bitPattern: rd16(0x100)) < 0)  // MonkeyLives: no Monkey
+            #expect(rd8(0x21E) == 2)                     // KbdType: extended keyboard
+            #expect(rd8(0x260) == 7)                     // SdVolume
+            #expect(rd16(0xD00) > 0)                     // TimeDBRA
+            // Hardware and the unit table: memory of their own, not address 0.
+            for a in [0x1D4, 0x1D8, 0x1DC, 0x1E0, 0x266, 0x11C] as [UInt32] { #expect(rd32(a) >= 0x1000) }
+            #expect(rd16(0x1D2) > 0)                     // UnitNtryCnt
         }
 
         @Test func vblTaskRunsWhenItsCountReachesZero() {

@@ -103,6 +103,32 @@ void tb_RmvTime(gaddr taskp)
     memset(&timers[i], 0, sizeof timers[i]);
 }
 
+/* The VBL queue in low memory (VBLQueue: qFlags, qHead, qTail), which
+ * programs walk to find their tasks: the installed tasks, linked through
+ * their qLink fields in the order they run. */
+static gaddr system_vbl; /* stands for the system's own tasks, ahead of any program's */
+
+static void link_vbl_queue(void)
+{
+    gaddr head = system_vbl, prev = system_vbl;
+    if (system_vbl)
+        wr32(system_vbl, 0);
+    for (int i = 0; i < MAX_TASKS; i++) {
+        gaddr v = vbls[i];
+        if (!v)
+            continue;
+        wr32(v, 0);
+        if (prev)
+            wr32(prev, v);
+        else
+            head = v;
+        prev = v;
+    }
+    wr16(LM_VBLQueue, 0);
+    wr32(LM_VBLQueue + 2, head);
+    wr32(LM_VBLQueue + 6, prev);
+}
+
 int16_t tb_VInstall(gaddr vtaskp)
 {
     if (!vtaskp)
@@ -113,6 +139,7 @@ int16_t tb_VInstall(gaddr vtaskp)
     for (int i = 0; i < MAX_TASKS; i++)
         if (!vbls[i]) {
             vbls[i] = vtaskp;
+            link_vbl_queue();
             return noErr;
         }
     return -2;
@@ -123,6 +150,7 @@ int16_t tb_VRemove(gaddr vtaskp)
     for (int i = 0; i < MAX_TASKS; i++)
         if (vbls[i] == vtaskp) {
             vbls[i] = 0;
+            link_vbl_queue();
             return noErr;
         }
     return -1; /* qErr for a task not in the queue */
@@ -197,6 +225,16 @@ void time_reset(void)
     midi_reset();
     memset(timers, 0, sizeof timers);
     memset(vbls, 0, sizeof vbls);
+    /* A real Mac's queue always holds system tasks (the cursor's, ADB's), so
+     * programs that find theirs by its predecessor's link find it.  Ours
+     * waits for ever (vblCount 0) and would only return. */
+    system_vbl = mm_new_ptr_in(rd32(LM_SysZone), VBLTask_SIZEOF + 2, true);
+    if (system_vbl) {
+        wr16(system_vbl + 4, 1); /* qType: vType */
+        wr16(system_vbl + VBLTask_SIZEOF, 0x4E75); /* RTS */
+        wr32(system_vbl + VBLTask_vblAddr_off, system_vbl + VBLTask_SIZEOF);
+    }
+    link_vbl_queue();
     vbl_ticks = 0;
     in_interrupt = false;
 }

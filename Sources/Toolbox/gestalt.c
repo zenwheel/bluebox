@@ -30,6 +30,15 @@ void gestalt_set(uint32_t selector, uint32_t value)
         table[count++] = (gestalt_entry){ selector, value, 0 };
 }
 
+/* A selector's fixed value (not one answered by a guest function). */
+uint32_t gestalt_value(uint32_t selector, uint32_t fallback)
+{
+    for (unsigned i = 0; i < count; i++)
+        if (table[i].selector == selector && !table[i].proc)
+            return table[i].value;
+    return fallback;
+}
+
 void gestalt_init(void)
 {
     count = 0;

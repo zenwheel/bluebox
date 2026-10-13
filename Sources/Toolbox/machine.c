@@ -66,6 +66,19 @@ static void init_lowmem(void)
     boot_time = mac_now();
     wr32(LM_Time, boot_time);
     wr32(LM_Ticks, 0);
+    wr16(LM_monkeylives, 0xFFFF);     /* negative: the Monkey is not running */
+    wr8(LM_KbdType, 2);               /* Apple Extended Keyboard (ADB) */
+    wr8(LM_KbdLast, 2);               /* its ADB address */
+    wr8(LM_SdVolume, 7);              /* the speaker at full volume */
+    wr8(LM_SEvtEnb, 0xFF);            /* SystemEvent enabled */
+    gput(LM_FinderName, (const uint8_t *)"\006Finder", 7); /* the Finder's name */
+    wr32(LM_RndSeed, boot_time);      /* a seed that varies from run to run */
+    /* Loop counts per millisecond, for programs that time short delays by
+     * them (an emulated 68040 runs about ten instructions a microsecond). */
+    wr16(LM_TimeDBRA, 10000);
+    wr16(LM_TimeSCCDB, 2500);
+    wr16(LM_TimeSCSIDB, 2500);
+    wr16(0x0CEA, 1500);               /* TimeVIADB */
     wr8(LM_QDExist, 0xFF);            /* QuickDraw not initialised */
     wr8(LM_WWExist, 0xFF);            /* Window Manager not initialised */
     wr32(LM_DoubleTime, 30);
@@ -150,6 +163,26 @@ static bool open_system_file(void)
     return true;
 }
 
+/* Hardware a program may address through low memory (the VIA, the serial
+ * chip, the floppy controller, the sound buffer) and the driver unit
+ * table: harmless memory of their own, so a program poking them writes
+ * there and not over the vectors near address 0. */
+static void hardware_globals(void)
+{
+    gaddr via = mm_new_ptr_in(GA_SYSHEAP, 16 * 512, true);
+    if (via)
+        wr8(via, 0x80); /* vBufA: sound off */
+    wr32(LM_VIA, via);
+    gaddr scc = mm_new_ptr_in(GA_SYSHEAP, 64, true);
+    wr32(LM_SCCRd, scc);
+    wr32(LM_SCCWr, scc);
+    wr32(LM_IWM, mm_new_ptr_in(GA_SYSHEAP, 16 * 512, true));
+    wr32(LM_SoundBase, mm_new_ptr_in(GA_SYSHEAP, 370 * 2, true));
+    /* No drivers live in the table: every unit empty. */
+    wr32(LM_UTableBase, mm_new_ptr_in(GA_SYSHEAP, 64 * 4, true));
+    wr16(LM_UnitNtryCnt, 64);
+}
+
 bool machine_boot(bool census)
 {
     if (!mem_init())
@@ -176,6 +209,7 @@ bool machine_boot(bool census)
     wr32(LM_ApplLimit, GA_APPLLIMIT);
     wr32(LM_HeapEnd, Zone_bkLim(GA_APPHEAP));
     mm_set_appl_growth(GA_APPLLIMIT);
+    hardware_globals();
 
     /* The System file: built here, with our definition procedures as
      * 68k stubs that call native code. */

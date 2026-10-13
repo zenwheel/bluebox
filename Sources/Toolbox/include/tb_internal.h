@@ -85,6 +85,7 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
 /* ---- Gestalt ---- */
 
 void gestalt_init(void);
+uint32_t gestalt_value(uint32_t selector, uint32_t fallback);
 
 /* ---- File Manager ---- */
 

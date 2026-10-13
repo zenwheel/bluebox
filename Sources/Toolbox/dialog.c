@@ -142,6 +142,7 @@ static int16_t run_alert(int16_t id, int kind)
             result = (int16_t)r;
     } else {
         LOGF(LOG_UNIMPL, "alert %d: %s\n", id, a.message);
+        machine_idle(); /* headless: the user's answer is the wait for input */
     }
     return result;
 }

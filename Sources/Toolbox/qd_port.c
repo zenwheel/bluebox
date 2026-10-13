@@ -99,6 +99,7 @@ pixdst qd_port_pixels(gaddr port)
     }
     if (d.depth < 1)
         d.depth = 1;
+    pixdst_clamp(&d);
     return d;
 }
 
