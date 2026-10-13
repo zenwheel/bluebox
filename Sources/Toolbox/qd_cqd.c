@@ -415,7 +415,12 @@ gaddr tb_GetCCursor(int16_t id)
     return h;
 }
 
-void tb_SetCCursor(gaddr c) {} /* the host draws its own pointer */
+void cursor_set_color(gaddr c);
+void tb_SetCCursor(gaddr c)
+{
+    if (c && rd32(c))
+        cursor_set_color(rd32(c));
+}
 void tb_DisposeCCursor(gaddr c)
 {
     if (c)

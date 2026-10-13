@@ -75,6 +75,41 @@ extension Classic {
             tb_DisposeGWorld(rd32(gw))
         }
 
+        /// The host sees the cursor's level, image and shield rectangle.
+        @Test func cursorStateReachesTheHost() {
+            launchTestApp()
+            _ = initToolbox()
+            var c = machine_cursor()
+            tb_InitCursor()
+            _ = machine_cursor_state(&c)
+            #expect(!c.hidden && c.arrow)
+            #expect(rd8(0x8CC) != 0) // CrsrVis
+            tb_HideCursor()
+            _ = machine_cursor_state(&c)
+            #expect(c.hidden && Int16(bitPattern: rd16(0x8D0)) == -1) // CrsrState
+            tb_ShowCursor()
+            _ = machine_cursor_state(&c)
+            #expect(!c.hidden)
+            let crsr = tb_NewPtr(68, false, true)
+            for i in 0..<16 { wr16(crsr + UInt32(i * 2), 0x0FF0); wr16(crsr + 32 + UInt32(i * 2), 0x1FF8) }
+            wr16(crsr + 64, 8); wr16(crsr + 66, 8)
+            tb_SetCursor(crsr)
+            _ = machine_cursor_state(&c)
+            #expect(!c.arrow && c.hot_h == 8 && c.data.0 == 0x0F)
+            // Shielded: hidden only while the mouse is in the rectangle.
+            tb_ShieldCursor(rect(100, 100, 200, 200), 0)
+            machine_post_mouse(150, 150, -1)
+            _ = machine_cursor_state(&c)
+            #expect(c.hidden)
+            machine_post_mouse(20, 20, -1)
+            _ = machine_cursor_state(&c)
+            #expect(!c.hidden)
+            tb_ShowCursor()
+            machine_post_mouse(150, 150, -1)
+            _ = machine_cursor_state(&c)
+            #expect(!c.hidden)
+        }
+
         @Test func palettesKeepTheirColours() {
             launchTestApp()
             let w = initToolbox()

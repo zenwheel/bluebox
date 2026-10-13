@@ -1,8 +1,10 @@
 /* QuickDraw globals, graphics ports, pen state, colours and the cursor. */
+#include <pthread.h>
 #include <string.h>
 
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "machine.h"
 #include "trap.h"
 
 const uint8_t qd_pat_black[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
@@ -532,18 +534,122 @@ gaddr tb_NewPixPat(void)
 
 /* ---- Cursor (state only; the host draws the real cursor) ---- */
 
-static int cursor_level;
+/* What the host shows: the cursor's image, its level (hidden below 0) and
+ * the rectangle ShieldCursor keeps it out of.  Kept under a lock: the host
+ * reads it from its own thread. */
+uint32_t ev_mouse_global(void);
+static pthread_mutex_t cursor_lock = PTHREAD_MUTEX_INITIALIZER;
+static machine_cursor cursor = { .arrow = true };
+static int cursor_level, shield_depth;
+static qrect shield; /* global */
+static uint32_t cursor_version;
 
-void tb_InitCursor(void) { cursor_level = 0; }
-void tb_SetCursor(gaddr cp) {}
-void tb_HideCursor(void) { cursor_level--; }
+static void cursor_changed(void)
+{
+    cursor.hidden = cursor_level < 0;
+    cursor_version++;
+    /* Low memory that programs read: CrsrState (the level) and CrsrVis. */
+    wr16(LM_CrsrState, (uint16_t)(int16_t)cursor_level);
+    wr8(LM_CrsrVis, cursor_level >= 0 ? 0xFF : 0);
+}
+
+uint32_t machine_cursor_state(machine_cursor *out)
+{
+    pthread_mutex_lock(&cursor_lock);
+    *out = cursor;
+    /* Shielded: hidden only while the mouse is in the rectangle. */
+    if (shield_depth > 0 && cursor_level + shield_depth >= 0) {
+        uint32_t pt = ev_mouse_global();
+        int16_t v = (int16_t)(pt >> 16), h = (int16_t)pt;
+        out->hidden = v >= shield.top && v < shield.bottom && h >= shield.left && h < shield.right;
+    }
+    uint32_t version = cursor_version;
+    pthread_mutex_unlock(&cursor_lock);
+    return version;
+}
+
+static void set_image(gaddr data, gaddr mask, gaddr hot)
+{
+    pthread_mutex_lock(&cursor_lock);
+    gget(cursor.data, data, 32);
+    gget(cursor.mask, mask, 32);
+    cursor.hot_v = (int16_t)rd16(hot);
+    cursor.hot_h = (int16_t)rd16(hot + 2);
+    bool arrow = true;
+    for (int i = 0; i < 16; i++)
+        if ((cursor.data[i * 2] << 8 | cursor.data[i * 2 + 1]) != arrow_data[i] ||
+            (cursor.mask[i * 2] << 8 | cursor.mask[i * 2 + 1]) != arrow_mask[i])
+            arrow = false;
+    cursor.arrow = arrow && cursor.hot_v == 1 && cursor.hot_h == 1;
+    cursor_version++;
+    pthread_mutex_unlock(&cursor_lock);
+}
+
+void tb_InitCursor(void)
+{
+    pthread_mutex_lock(&cursor_lock);
+    cursor.arrow = true;
+    cursor_level = 0;
+    shield_depth = 0;
+    cursor_changed();
+    pthread_mutex_unlock(&cursor_lock);
+}
+
+/* Cursor: data (16 words), mask (16 words), hotSpot. */
+void tb_SetCursor(gaddr cp)
+{
+    if (cp)
+        set_image(cp, cp + 32, cp + 64);
+}
+
+/* CCrsr: its black-and-white version (crsr1Data, crsrMask, crsrHotSpot). */
+void cursor_set_color(gaddr c)
+{
+    if (c)
+        set_image(c + 20, c + 52, c + 84);
+}
+
+void tb_HideCursor(void)
+{
+    pthread_mutex_lock(&cursor_lock);
+    cursor_level--;
+    cursor_changed();
+    pthread_mutex_unlock(&cursor_lock);
+}
+
 void tb_ShowCursor(void)
 {
+    pthread_mutex_lock(&cursor_lock);
+    if (shield_depth > 0)
+        shield_depth--;
     if (cursor_level < 0)
         cursor_level++;
+    cursor_changed();
+    pthread_mutex_unlock(&cursor_lock);
 }
-void tb_ObscureCursor(void) {}
-void tb_ShieldCursor(gaddr rp, uint32_t p) { cursor_level--; }
+
+/* Hidden until the mouse moves: the host does that part. */
+void tb_ObscureCursor(void)
+{
+    pthread_mutex_lock(&cursor_lock);
+    cursor.obscures++;
+    cursor_version++;
+    pthread_mutex_unlock(&cursor_lock);
+}
+
+/* Hidden while the mouse is in the rectangle (local to a port whose
+ * bounds' top left is p); ShowCursor ends it. */
+void tb_ShieldCursor(gaddr rp, uint32_t p)
+{
+    qrect r = qrect_get(rp);
+    int16_t dv = (int16_t)(p >> 16), dh = (int16_t)p;
+    pthread_mutex_lock(&cursor_lock);
+    shield = (qrect){ (int16_t)(r.top - dv), (int16_t)(r.left - dh), (int16_t)(r.bottom - dv), (int16_t)(r.right - dh) };
+    shield_depth++;
+    cursor_level--;
+    cursor_changed();
+    pthread_mutex_unlock(&cursor_lock);
+}
 
 /* ---- Window Manager port (also needed by QuickDraw-level code) ---- */
 

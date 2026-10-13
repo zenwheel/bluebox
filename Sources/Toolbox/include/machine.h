@@ -102,6 +102,18 @@ typedef struct {
     machine_menu_item items[64];
 } machine_menu;
 
+/* The cursor as the host should show it: hidden (HideCursor, or the mouse
+ * in a ShieldCursor rectangle), the arrow or a 16x16 image (data and mask
+ * bits, rows of two bytes, the hot spot), and a count of ObscureCursor
+ * calls (hide until the mouse moves).  The result changes with it. */
+typedef struct {
+    bool hidden, arrow;
+    uint8_t data[32], mask[32];
+    int16_t hot_h, hot_v;
+    uint32_t obscures;
+} machine_cursor;
+uint32_t machine_cursor_state(machine_cursor *out);
+
 uint32_t machine_menus_version(void);
 /* Drawing outside the windows that must show above them (a pop-up menu):
  * its rectangle (top, left, bottom, right) and whether it is up; the

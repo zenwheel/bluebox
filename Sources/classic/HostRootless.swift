@@ -44,6 +44,7 @@ final class MacWindowView: NSView {
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var wantsUpdateLayer: Bool { true }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: CursorSync.shared.cursor) }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -189,6 +190,7 @@ final class TransientView: NSView {
         for w in windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }
         syncTransient()
         syncMenus()
+        CursorSync.shared.tick()
     }
 
     // MARK: Pop-up menus
