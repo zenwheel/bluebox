@@ -875,7 +875,10 @@ int16_t tb_SetDepth(gaddr gdh, int16_t depth, int16_t which, int16_t flags)
 int16_t tb_HasDepth(gaddr gdh, int16_t depth, int16_t which, int16_t flags)
 {
     int d = mode_depth(depth);
-    return qd_screen_supports(d) ? 0x0080 + (d == 1 ? 0 : d == 8 ? 3 : d == 16 ? 4 : 5) : 0;
+    int log2 = 0;
+    while ((1 << log2) < d)
+        log2++;
+    return qd_screen_supports(d) ? 0x0080 + log2 : 0; /* the mode for the depth */
 }
 
 int16_t tb_PMgrVersion(void) { return 0x0202; }

@@ -17,7 +17,7 @@ static int depth_pref = 32, screen_depth = 1;
 static gaddr screen_ctab;
 static unsigned nports; /* ports drawing on the screen, below */
 
-void machine_set_screen_depth(int depth) { depth_pref = depth == 8 || depth == 16 || depth == 32 ? depth : 1; }
+void machine_set_screen_depth(int depth) { depth_pref = qd_screen_supports(depth) ? depth : 1; }
 int qd_screen_depth(void) { return screen_depth; }
 gaddr qd_screen_ctab(void) { return screen_depth == 1 ? 0 : screen_ctab; }
 
@@ -43,19 +43,14 @@ static gaddr make_ctab(const uint16_t (*rgb)[3], int n, int32_t seed)
 
 static uint32_t row_bytes_for(int depth, int width)
 {
-    return depth == 32  ? (uint32_t)width * 4
-           : depth == 16 ? (uint32_t)((width * 2 + 3) & ~3)
-           : depth == 8 ? (uint32_t)((width + 3) & ~3)
-                        : (uint32_t)((width + 31) / 32 * 4);
+    return (uint32_t)((width * depth + 31) / 32 * 4); /* whole longs */
 }
 
 /* The main device's pixel map, colour table and type for screen_depth. */
 static void describe_screen(gaddr gd, gaddr pm)
 {
     static const uint16_t bw[2][3] = { { 0xFFFF, 0xFFFF, 0xFFFF }, { 0, 0, 0 } };
-    static uint16_t std8[256][3];
-    for (int i = 0; i < 256; i++)
-        qd_std_rgb8(i, std8[i]);
+    static uint16_t std[256][3];
     PixMap_set_rowBytes(pm, (int16_t)(screen_row_bytes | 0x8000));
     PixMap_set_pixelSize(pm, (int16_t)screen_depth);
     if (screen_depth >= 16) {
@@ -67,7 +62,11 @@ static void describe_screen(gaddr gd, gaddr pm)
         PixMap_set_pixelType(pm, 0);
         PixMap_set_cmpCount(pm, 1);
         PixMap_set_cmpSize(pm, (int16_t)screen_depth);
-        screen_ctab = screen_depth == 8 ? make_ctab(std8, 256, 8) : make_ctab(bw, 2, 1);
+        /* The standard table for the depth (clut 2, 4 or 8). */
+        int n = 1 << screen_depth;
+        for (int i = 0; i < n && screen_depth > 1; i++)
+            qd_px_rgb(screen_depth, 0, (uint32_t)i, std[i]);
+        screen_ctab = screen_depth == 1 ? make_ctab(bw, 2, 1) : make_ctab(std, n, screen_depth);
     }
     PixMap_set_pmTable(pm, screen_ctab);
     GDevice_set_gdType(gd, screen_depth >= 16 ? 2 : 0); /* direct or CLUT device */
@@ -136,7 +135,10 @@ void qd_screen_port_closed(gaddr port)
         }
 }
 
-bool qd_screen_supports(int depth) { return depth == 1 || depth == 8 || depth == 16 || depth == 32; }
+bool qd_screen_supports(int depth)
+{
+    return depth == 1 || depth == 2 || depth == 4 || depth == 8 || depth == 16 || depth == 32;
+}
 
 /* Switch the screen to another depth: the device, screenBits, and every
  * port still drawing on the screen change with it; the contents are lost,
@@ -247,12 +249,14 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
     static uint8_t lut[256][3];
     static gaddr lut_for;
     static uint32_t lut_seed;
-    if (screen_depth == 8) {
+    static int lut_depth;
+    if (screen_depth > 1 && screen_depth <= 8) {
         uint32_t seed = rd32(rd32(screen_ctab));
-        if (lut_for != screen_ctab || lut_seed != seed) {
-            for (int i = 0; i < 256; i++) {
+        if (lut_for != screen_ctab || lut_seed != seed || lut_depth != screen_depth) {
+            lut_depth = screen_depth;
+            for (int i = 0; i < (1 << screen_depth); i++) {
                 uint16_t c[3];
-                qd_px_rgb(8, screen_ctab, (uint32_t)i, c);
+                qd_px_rgb(screen_depth, screen_ctab, (uint32_t)i, c);
                 lut[i][0] = (uint8_t)(c[0] >> 8);
                 lut[i][1] = (uint8_t)(c[1] >> 8);
                 lut[i][2] = (uint8_t)(c[2] >> 8);
@@ -281,7 +285,7 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
                 o[0] = (uint8_t)(r5 << 3 | r5 >> 2);
                 o[1] = (uint8_t)(g5 << 3 | g5 >> 2);
                 o[2] = (uint8_t)(b5 << 3 | b5 >> 2);
-            } else if (screen_depth == 8) {
+            } else if (screen_depth > 1) {
                 o[0] = lut[v][0];
                 o[1] = lut[v][1];
                 o[2] = lut[v][2];

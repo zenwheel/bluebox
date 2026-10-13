@@ -37,7 +37,7 @@ func settingsKey(_ app: String) -> String { (app as NSString).lastPathComponent 
 
 func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[settingsKey(app)] }
 
-/// classic set <app> [depth 1|8|16|32|default] [cpu 68020|68040|default]
+/// classic set <app> [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -61,10 +61,10 @@ func setCommand(_ args: [String]) {
         case "depth":
             if value == "default" {
                 s.depth = nil
-            } else if let d = Int(value), [1, 8, 16, 32].contains(d) {
+            } else if let d = Int(value), [1, 2, 4, 8, 16, 32].contains(d) {
                 s.depth = d
             } else {
-                fail("depth expects 1, 8, 16, 32 or default")
+                fail("depth expects 1, 2, 4, 8, 16, 32 or default")
             }
         case "cpu":
             if value == "default" {

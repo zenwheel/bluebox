@@ -33,6 +33,8 @@ static native_entry natives[MAX_NATIVES];
 static unsigned native_count;
 static uint32_t unimpl_stub;
 static uint32_t os_epilogue_stub;
+/* Toolbox traps that take and return their values in registers. */
+static bool tb_reg_traps[1024];
 static uint32_t aline_vector_stub;
 
 uint32_t native_register(native_fn fn, const char *name, uint16_t trapword)
@@ -369,6 +371,16 @@ void trap_aline(cpu68k *c, uint16_t op)
             last_trapword = saved;
             current_trap = 0;
             threads_switch_if_pending(c); /* a Thread Manager call returns in another thread */
+            if (tb_reg_traps[op & 0x3FF]) {
+                /* Register-based routines with Toolbox numbers (HandToHand,
+                 * PtrToHand ...) leave the condition codes from D0.W, as
+                 * OS traps do: programs branch on them straight after. */
+                c->sr &= (uint16_t)~(SR_N | SR_Z | SR_V | SR_C);
+                if (c->d[0] & 0x8000)
+                    c->sr |= SR_N;
+                if ((c->d[0] & 0xFFFF) == 0)
+                    c->sr |= SR_Z;
+            }
             if (!c->halted)
                 c->pc = cpu_pop32(c);
         } else {
@@ -556,6 +568,7 @@ void trap_init(void)
             continue;
         if (s->trap & 0x0800) {
             wr32(TB_TRAP_TABLE + (s->trap & 0x3FFu) * 4, native_register(s->glue, s->name, s->trap));
+            tb_reg_traps[s->trap & 0x3FFu] = s->conv == CONV_REG;
             continue;
         }
         unsigned slot = s->trap & 0xFFu;

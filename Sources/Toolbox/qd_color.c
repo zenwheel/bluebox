@@ -39,10 +39,20 @@ static void std_rgb(int depth, uint32_t v, uint16_t rgb[3])
         qd_std_rgb8((int)v, rgb);
         return;
     }
-    /* 2 and 4 bits without a table: a grey ramp from white to black. */
-    uint32_t max = px_mask(depth);
-    uint16_t g = (uint16_t)(0xFFFF - v * 0xFFFF / (max ? max : 1));
-    rgb[0] = rgb[1] = rgb[2] = g;
+    /* The standard 'clut' 4 and 'clut' 2 of the ROM: the sixteen system
+     * colours, and four greys. */
+    static const uint16_t clut4[16][3] = {
+        { 0xFFFF, 0xFFFF, 0xFFFF }, { 0xFC00, 0xF37D, 0x052F }, { 0xFFFF, 0x648A, 0x028C }, { 0xDD6B, 0x08C2, 0x06A2 },
+        { 0xF2D7, 0x0856, 0x84EC }, { 0x46E3, 0x0000, 0xA53E }, { 0x0000, 0x0000, 0xD400 }, { 0x0241, 0xAB54, 0xEAFF },
+        { 0x1F21, 0xB793, 0x1431 }, { 0x0000, 0x64AF, 0x11B0 }, { 0x5600, 0x2C9D, 0x0524 }, { 0x90D7, 0x7160, 0x3A34 },
+        { 0xC000, 0xC000, 0xC000 }, { 0x8000, 0x8000, 0x8000 }, { 0x4000, 0x4000, 0x4000 }, { 0x0000, 0x0000, 0x0000 },
+    };
+    static const uint16_t clut2[4] = { 0xFFFF, 0xACAC, 0x5555, 0x0000 };
+    if (depth == 4) {
+        memcpy(rgb, clut4[v & 15], sizeof clut4[0]);
+        return;
+    }
+    rgb[0] = rgb[1] = rgb[2] = clut2[v & 3];
 }
 
 void qd_px_rgb(int depth, gaddr ctab, uint32_t v, uint16_t rgb[3])

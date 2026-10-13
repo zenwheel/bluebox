@@ -43,7 +43,7 @@ func usage() -> Never {
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
-      --depth N  screen depth: 1, 8, 16 or 32 bits (default 32, or the app's setting; an
+      --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
                      application can still switch depth itself with SetDepth)
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
           --screenshot P  write the screen to PNG file P when the run ends
@@ -64,7 +64,7 @@ func usage() -> Never {
           Make a macOS application bundle for a classic application (default folder
           ~/Applications/Classic) with its Finder icon; documents dropped on it open
           in the application.
-      classic set <app> [depth 1|8|16|32|default] [cpu 68020|68040|default] [--library dir]
+      classic set <app> [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default] [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. classic set "Star Chaos" depth 8 for a
           game that wants 256 colours, or cpu 68020 for one that misbehaves on a
@@ -287,8 +287,8 @@ func runCommand(_ args: [String]) {
             printTo = args[i]
         case "--depth":
             i += 1
-            guard i < args.count, let d = Int32(args[i]), [1, 8, 16, 32].contains(d) else {
-                fail("--depth expects 1, 8, 16 or 32")
+            guard i < args.count, let d = Int32(args[i]), [1, 2, 4, 8, 16, 32].contains(d) else {
+                fail("--depth expects 1, 2, 4, 8, 16 or 32")
             }
             screenDepth = d
         case "--cpu":
