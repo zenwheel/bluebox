@@ -92,9 +92,15 @@ def from_ttf(path, px):
     font = ImageFont.truetype(path, px)
     ascent, descent = font.getmetrics()
     glyphs = {}
+    # A character the font lacks draws its .notdef box: compare with one
+    # from the private use area, which no font here maps.
+    def picture(ch):
+        m = font.getmask(ch)
+        return m.size, bytes(m)
+    notdef = picture("\uF8FF\uE000"[1])
     for code in list(range(0x20, 0x7F)) + list(range(0x80, 0x100)):
         ch = bytes([code]).decode("mac_roman")
-        if code != 0x20 and not font.getmask(ch).getbbox():
+        if code != 0x20 and (not font.getmask(ch).getbbox() or picture(ch) == notdef):
             continue  # not in the font
         adv = round(font.getlength(ch))
         w = adv + px

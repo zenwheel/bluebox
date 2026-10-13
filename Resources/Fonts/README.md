@@ -11,7 +11,8 @@ numbers (0 system, 2 New York, 3 Geneva, 4 Monaco) and our own names
 | Chicago | 12 | ChicagoFLF 1.0 | Robin Casady | public domain (see `chicagoflf/README.md`) |
 | Chicago | 9 | Jarrah | Systemless | SIL OFL 1.1 (`systemless/OFL.txt`) |
 | Monaco | 9, 10, 12 | ProFont 2.2 (Mac bitmaps with €) | Tobias Jung's ProFont distribution | MIT (`profont/LICENSE`) |
-| Geneva | 9, 10, 12, 14, 18, 24 | Kurrajong | Systemless | SIL OFL 1.1 |
+| Geneva | 9 | Geneva 9, with characters it lacks from Geneva 9.1 | Kelsey Higham (FontStruct) | CC BY 3.0 and SIL OFL 1.1 (`geneva9/`) |
+| Geneva | 10, 12, 14, 18, 24 | Kurrajong | Systemless | SIL OFL 1.1 |
 | New York | 12, 14, 18 | Ironbark | Systemless | SIL OFL 1.1 |
 | menu symbols | | | Systemless | SIL OFL 1.1 |
 
@@ -28,6 +29,19 @@ original files (which are not kept here):
   `549a8d52b6e01614ac0319bb545b372779d5c7995611b453a56886996af22525`) drawn
   in black and white at 12 pixels, where its outlines fall on Chicago 12's
   pixels.
+- `geneva9/Geneva-9.bdf`: Kelsey Higham's "Geneva 9"
+  (<https://fontstruct.com/fontstructions/show/349277>, CC BY 3.0), a clone
+  of the original Macintosh Geneva 9 made from MacPaint 1.4; its FontStruct
+  OpenType file (SHA-256 of the downloaded archive
+  `06a63e27454ee74de484213bec172e2dda74017a61d04cc8b6285b38eef23640`) drawn
+  at 16 pixels, where each FontStruct square is one pixel.
+- `geneva9/Geneva-9.1.bdf`: Kelsey Higham's "Geneva 9.1"
+  (<https://fontstruct.com/fontstructions/show/1304775>, SIL OFL 1.1), the
+  same clone with more accented letters (archive SHA-256
+  `4b96b6998e1daffcd61d726660074ba6b54b1d69a7c4dd52d5280299e76838f0`),
+  drawn the same way. Geneva 9's own glyphs come first; 9.1 supplies the
+  characters Geneva 9 lacks. The archives' readme and licence files are kept
+  beside them, as FontStruct asks.
 
 Characters a face lacks among MacRoman 0x80-0xFF are synthesised by the
 generator from the face's own letters (accents, ligatures, dashes).
