@@ -768,11 +768,28 @@ void tb_LUpdate(gaddr rgn, gaddr list)
     port_state s = enter(list);
     int n = nrows(list) * ncols(list);
     gaddr r = tb_NewPtr(8, false, false);
-    qrect_put(r, view_of(list));
-    if (!rgn || tb_RectInRgn(r, rgn))
-        tb_EraseRect(r);
+    /* The cells are the LDEF's to draw, wherever it draws them (an
+     * application's LDEF may draw into an offscreen world of its own); only
+     * the part of rView with no cells, below and right of the data, is
+     * erased here. */
+    qrect v = view_of(list), vis = visible_of(list), b = bounds_of(list);
+    int bottom = v.top + (b.bottom - vis.top) * cell_h(list), right = v.left + (b.right - vis.left) * cell_w(list);
+    if (bottom < v.top)
+        bottom = v.top;
+    if (right < v.left)
+        right = v.left;
+    qrect empty[2] = {
+        { (int16_t)bottom, v.left, v.bottom, v.right },
+        { v.top, (int16_t)right, (int16_t)(bottom < v.bottom ? bottom : v.bottom), v.right },
+    };
+    for (int k = 0; k < 2; k++) {
+        if (empty[k].top >= empty[k].bottom || empty[k].left >= empty[k].right)
+            continue;
+        qrect_put(r, empty[k]);
+        if (!rgn || tb_RectInRgn(r, rgn))
+            tb_EraseRect(r);
+    }
     for (int i = 0; i < n; i++) {
-        qrect vis = visible_of(list);
         uint32_t cell = cell_at(list, i);
         if (pt_v(cell) < vis.top || pt_v(cell) >= vis.bottom || pt_h(cell) < vis.left || pt_h(cell) >= vis.right)
             continue;
