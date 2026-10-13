@@ -213,11 +213,15 @@ uint32_t ev_key_count(void)
 }
 
 void machine_idle(void);
+void machine_pass_tick(void);
 
 bool ev_still_down(void)
 {
-    if (!host_attached && g_cpu)
+    if (!host_attached && g_cpu) {
+        if (g_cpu->halted) /* the instruction limit ended the run mid-drag */
+            return false;
         events_script_pump(g_cpu->icount); /* scripted input due by now */
+    }
     pthread_mutex_lock(&lock);
     bool d = button_down;
     pthread_mutex_unlock(&lock);
@@ -275,8 +279,12 @@ void ev_post_menubar_click(void)
 void ev_wait_tick(void)
 {
     machine_advance_ticks();
-    if (!host_attached)
+    if (!host_attached) {
+        /* Headless, a tick of the instruction clock passes, so scripted
+         * input arrives: a Toolbox tracking loop runs no guest code. */
+        machine_pass_tick();
         return;
+    }
     pthread_mutex_lock(&lock);
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);

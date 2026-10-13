@@ -435,6 +435,17 @@ void machine_idle(void)
     if (icount_cap && c->icount >= icount_cap)
         cpu_halt(c, "instruction limit reached waiting for input");
 }
+/* A tick spent in a Toolbox loop (mouse tracking) with no host attached. */
+void machine_pass_tick(void)
+{
+    cpu68k *c = g_cpu;
+    if (!c || c->halted)
+        return;
+    c->icount += 20000;
+    events_script_pump(c->icount);
+    if (icount_cap && c->icount >= icount_cap)
+        cpu_halt(c, "instruction limit reached");
+}
 static int call_depth, returned_depth;
 
 static void guest_return_native(cpu68k *c, uint16_t tw) { returned_depth = call_depth; }
