@@ -714,6 +714,7 @@ const char *const tb_trap_names[1024] = {
     [0x3CA] = "DeviceLoop",
     [0x3EB] = "DisplayDispatch",
     [0x3ED] = "DragDispatch",
+    [0x3F2] = "ThreadDispatch",
     [0x3FF] = "DebugStr",
 };
 
@@ -1438,6 +1439,18 @@ static void glue_AddComp(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_AddComp(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_AddFilePreview(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_previewData = (int32_t)cpu_pop32(c);
+    int32_t a_previewType = (int32_t)cpu_pop32(c);
+    int16_t a_resRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_AddFilePreview(a_resRefNum, a_previewType, a_previewData);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2273,6 +2286,18 @@ static void glue_CreateResFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CreateThreadPool(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_stackSize = (int32_t)cpu_pop32(c);
+    int16_t a_numToCreate = (int16_t)cpu_pop16(c);
+    int32_t a_threadStyle = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CreateThreadPool(a_threadStyle, a_numToCreate, a_stackSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CurResFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2298,6 +2323,25 @@ static void glue_CustomGetFile(cpu68k *c, uint16_t trapword)
     int16_t a_numtypes = (int16_t)cpu_pop16(c);
     gaddr a_filefilter = (gaddr)cpu_pop32(c);
     tb_CustomGetFile(a_filefilter, a_numtypes, a_typelist, a_replyp, a_dlgid, a_where, a_dlghook, a_filterproc, a_activeList, a_activateproc, a_yourdatap);
+    cpu_push32(c, ret);
+}
+
+static void glue_CustomGetFilePreview(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_yourDataPtr = (gaddr)cpu_pop32(c);
+    int32_t a_activateProc = (int32_t)cpu_pop32(c);
+    int32_t a_activeList = (int32_t)cpu_pop32(c);
+    int32_t a_filterProc = (int32_t)cpu_pop32(c);
+    int32_t a_dlgHook = (int32_t)cpu_pop32(c);
+    int32_t a_where = (int32_t)cpu_pop32(c);
+    int16_t a_dlgID = (int16_t)cpu_pop16(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    int32_t a_typeList = (int32_t)cpu_pop32(c);
+    int16_t a_numTypes = (int16_t)cpu_pop16(c);
+    int32_t a_fileFilter = (int32_t)cpu_pop32(c);
+    tb_CustomGetFilePreview(a_fileFilter, a_numTypes, a_typeList, a_reply, a_dlgID, a_where, a_dlgHook, a_filterProc, a_activeList, a_activateProc, a_yourDataPtr);
     cpu_push32(c, ret);
 }
 
@@ -2468,6 +2512,15 @@ static void glue_DeltaPoint(cpu68k *c, uint16_t trapword)
     int32_t r = tb_DeltaPoint(a_a, a_b);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_Dequeue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_e = (gaddr)c->a[0];
+    gaddr a_h = (gaddr)c->a[1];
+    int16_t r = tb_Dequeue(a_e, a_h);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_DetachResource(cpu68k *c, uint16_t trapword)
@@ -2717,6 +2770,18 @@ static void glue_DisposeScreenBuffer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DisposeThread(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_recycleThread = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_threadResult = (gaddr)cpu_pop32(c);
+    int32_t a_threadToDump = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DisposeThread(a_threadToDump, a_threadResult, a_recycleThread);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposeWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2928,6 +2993,14 @@ static void glue_EndUpdate(cpu68k *c, uint16_t trapword)
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_EndUpdate(a_w);
     cpu_push32(c, ret);
+}
+
+static void glue_Enqueue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_e = (gaddr)c->a[0];
+    gaddr a_h = (gaddr)c->a[1];
+    tb_Enqueue(a_e, a_h);
 }
 
 static void glue_EnterMovies(cpu68k *c, uint16_t trapword)
@@ -4046,6 +4119,16 @@ static void glue_GetCurrentProcess(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetCurrentThread(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_currentThreadID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetCurrentThread(a_currentThreadID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4080,6 +4163,17 @@ static void glue_GetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_levelp = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetDefaultOutputVolume(a_levelp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDefaultThreadStackSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_stackSize = (gaddr)cpu_pop32(c);
+    int32_t a_threadStyle = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetDefaultThreadStackSize(a_threadStyle, a_stackSize);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -4174,6 +4268,17 @@ static void glue_GetForeColor(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_GetForeColor(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFreeThreadCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_freeCount = (gaddr)cpu_pop32(c);
+    int32_t a_threadStyle = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetFreeThreadCount(a_threadStyle, a_freeCount);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5157,6 +5262,18 @@ static void glue_GetSoundHeaderOffset(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetSpecificFreeThreadCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_freeCount = (gaddr)cpu_pop32(c);
+    int32_t a_stackSize = (int32_t)cpu_pop32(c);
+    int32_t a_threadStyle = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetSpecificFreeThreadCount(a_threadStyle, a_stackSize, a_freeCount);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetSpecificHighLevelEvent(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5220,6 +5337,39 @@ static void glue_GetSysBeepVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetThreadCurrentTaskRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_threadTRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetThreadCurrentTaskRef(a_threadTRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThreadState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_threadState = (gaddr)cpu_pop32(c);
+    int32_t a_threadToGet = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetThreadState(a_threadToGet, a_threadState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThreadStateGivenTaskRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_threadState = (gaddr)cpu_pop32(c);
+    int32_t a_threadToGet = (int32_t)cpu_pop32(c);
+    int32_t a_threadTRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetThreadStateGivenTaskRef(a_threadTRef, a_threadToGet, a_threadState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetTimeBaseTime(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5229,6 +5379,16 @@ static void glue_GetTimeBaseTime(cpu68k *c, uint16_t trapword)
     int32_t a_tb = (int32_t)cpu_pop32(c);
     int32_t r = tb_GetTimeBaseTime(a_tb, a_s, a_tr);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTrackEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theTrack = (int32_t)cpu_pop32(c);
+    int8_t r = tb_GetTrackEnabled(a_theTrack);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -7178,6 +7338,17 @@ static void glue_MIDIWritePacket(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MakeFilePreview(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_progress = (int32_t)cpu_pop32(c);
+    int16_t a_resRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_MakeFilePreview(a_resRefNum, a_progress);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MakeITable(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7828,6 +7999,22 @@ static void glue_NewTempScreenBuffer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewThread(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_threadMade = (gaddr)cpu_pop32(c);
+    gaddr a_threadResult = (gaddr)cpu_pop32(c);
+    int32_t a_options = (int32_t)cpu_pop32(c);
+    int32_t a_stackSize = (int32_t)cpu_pop32(c);
+    gaddr a_threadParam = (gaddr)cpu_pop32(c);
+    gaddr a_threadEntry = (gaddr)cpu_pop32(c);
+    int32_t a_threadStyle = (int32_t)cpu_pop32(c);
+    int16_t r = tb_NewThread(a_threadStyle, a_threadEntry, a_threadParam, a_stackSize, a_options, a_threadResult, a_threadMade);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8084,6 +8271,15 @@ static void glue_PBCreate(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBCreateFileIDRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCreateFileIDRef(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBDTAddAPPL(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8231,6 +8427,15 @@ static void glue_PBDelete(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBDelete(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDeleteFileIDRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDeleteFileIDRef(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -8552,6 +8757,15 @@ static void glue_PBRename(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBRename(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBResolveFileIDRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBResolveFileIDRef(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -9916,6 +10130,21 @@ static void glue_SFGetFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SFGetFilePreview(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    int32_t a_dlgHook = (int32_t)cpu_pop32(c);
+    int32_t a_typeList = (int32_t)cpu_pop32(c);
+    int16_t a_numTypes = (int16_t)cpu_pop16(c);
+    int32_t a_fileFilter = (int32_t)cpu_pop32(c);
+    int32_t a_prompt = (int32_t)cpu_pop32(c);
+    int32_t a_where = (int32_t)cpu_pop32(c);
+    tb_SFGetFilePreview(a_where, a_prompt, a_fileFilter, a_numTypes, a_typeList, a_dlgHook, a_reply);
+    cpu_push32(c, ret);
+}
+
 static void glue_SFPGetFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9930,6 +10159,23 @@ static void glue_SFPGetFile(cpu68k *c, uint16_t trapword)
     gaddr a_prompt = (gaddr)cpu_pop32(c);
     uint32_t a_p = (uint32_t)cpu_pop32(c);
     tb_SFPGetFile(a_p, a_prompt, a_filef, a_numt, a_tl, a_dh, a_rep, a_dig, a_fp);
+    cpu_push32(c, ret);
+}
+
+static void glue_SFPGetFilePreview(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_filterProc = (int32_t)cpu_pop32(c);
+    int16_t a_dlgID = (int16_t)cpu_pop16(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    int32_t a_dlgHook = (int32_t)cpu_pop32(c);
+    int32_t a_typeList = (int32_t)cpu_pop32(c);
+    int16_t a_numTypes = (int16_t)cpu_pop16(c);
+    int32_t a_fileFilter = (int32_t)cpu_pop32(c);
+    int32_t a_prompt = (int32_t)cpu_pop32(c);
+    int32_t a_where = (int32_t)cpu_pop32(c);
+    tb_SFPGetFilePreview(a_where, a_prompt, a_fileFilter, a_numTypes, a_typeList, a_dlgHook, a_reply, a_dlgID, a_filterProc);
     cpu_push32(c, ret);
 }
 
@@ -9961,12 +10207,74 @@ static void glue_SFPutFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SPBBytesToMilliseconds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bytecountp = (gaddr)cpu_pop32(c);
+    int32_t a_refnum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SPBBytesToMilliseconds(a_refnum, a_bytecountp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SPBCloseDevice(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int32_t a_inrefnum = (int32_t)cpu_pop32(c);
     int16_t r = tb_SPBCloseDevice(a_inrefnum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBGetDeviceInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infop = (gaddr)cpu_pop32(c);
+    int32_t a_info = (int32_t)cpu_pop32(c);
+    int32_t a_refnum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SPBGetDeviceInfo(a_refnum, a_info, a_infop);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBGetIndexedDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_deviceiconhandlep = (gaddr)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int16_t a_count = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SPBGetIndexedDevice(a_count, a_name, a_deviceiconhandlep);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBGetRecordingStatus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numbermsecsrecorded = (gaddr)cpu_pop32(c);
+    gaddr a_totalmsecstorecord = (gaddr)cpu_pop32(c);
+    gaddr a_numsampsrecorded = (gaddr)cpu_pop32(c);
+    gaddr a_totalsampstorecord = (gaddr)cpu_pop32(c);
+    gaddr a_meterlevel = (gaddr)cpu_pop32(c);
+    gaddr a_recordingstatus = (gaddr)cpu_pop32(c);
+    int32_t a_refnum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SPBGetRecordingStatus(a_refnum, a_recordingstatus, a_meterlevel, a_totalsampstorecord, a_numsampsrecorded, a_totalmsecstorecord, a_numbermsecsrecorded);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBMillisecondsToBytes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_millip = (gaddr)cpu_pop32(c);
+    int32_t a_refnum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SPBMillisecondsToBytes(a_refnum, a_millip);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -9979,6 +10287,92 @@ static void glue_SPBOpenDevice(cpu68k *c, uint16_t trapword)
     int16_t a_permission = (int16_t)cpu_pop16(c);
     gaddr a_name = (gaddr)cpu_pop32(c);
     int16_t r = tb_SPBOpenDevice(a_name, a_permission, a_inrefnump);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBPauseRecording(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refnum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SPBPauseRecording(a_refnum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBRecord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_async = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_inparamp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SPBRecord(a_inparamp, a_async);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBRecordToFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_async = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_inparamp = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SPBRecordToFile(a_refnum, a_inparamp, a_async);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBResumeRecording(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refnum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SPBResumeRecording(a_refnum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBSetDeviceInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infop = (gaddr)cpu_pop32(c);
+    int32_t a_info = (int32_t)cpu_pop32(c);
+    int32_t a_refnum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SPBSetDeviceInfo(a_refnum, a_info, a_infop);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBSignInDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SPBSignInDevice(a_refnum, a_name);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBSignOutDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SPBSignOutDevice(a_refnum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SPBStopRecording(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refnum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SPBStopRecording(a_refnum);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -10299,6 +10693,18 @@ static void glue_SetCursor(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_cp = (gaddr)cpu_pop32(c);
     tb_SetCursor(a_cp);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDebuggerNotificationProcs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_notifyThreadScheduler = (gaddr)cpu_pop32(c);
+    gaddr a_notifyDisposeThread = (gaddr)cpu_pop32(c);
+    gaddr a_notifyNewThread = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDebuggerNotificationProcs(a_notifyNewThread, a_notifyDisposeThread, a_notifyThreadScheduler);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -11004,6 +11410,76 @@ static void glue_SetSysBeepVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetThreadReadyGivenTaskRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_threadToSet = (int32_t)cpu_pop32(c);
+    int32_t a_threadTRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetThreadReadyGivenTaskRef(a_threadTRef, a_threadToSet);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThreadScheduler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_threadScheduler = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetThreadScheduler(a_threadScheduler);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThreadState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_suggestedThread = (int32_t)cpu_pop32(c);
+    int16_t a_newState = (int16_t)cpu_pop16(c);
+    int32_t a_threadToSet = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetThreadState(a_threadToSet, a_newState, a_suggestedThread);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThreadStateEndCritical(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_suggestedThread = (int32_t)cpu_pop32(c);
+    int16_t a_newState = (int16_t)cpu_pop16(c);
+    int32_t a_threadToSet = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetThreadStateEndCritical(a_threadToSet, a_newState, a_suggestedThread);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThreadSwitcher(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_inOrOut = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_switchProcParam = (gaddr)cpu_pop32(c);
+    gaddr a_threadSwitcher = (gaddr)cpu_pop32(c);
+    int32_t a_thread = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetThreadSwitcher(a_thread, a_threadSwitcher, a_switchProcParam, a_inOrOut);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThreadTerminator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_terminationProcParam = (gaddr)cpu_pop32(c);
+    gaddr a_threadTerminator = (gaddr)cpu_pop32(c);
+    int32_t a_thread = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetThreadTerminator(a_thread, a_threadTerminator, a_terminationProcParam);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetTimeBaseRate(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11011,6 +11487,16 @@ static void glue_SetTimeBaseRate(cpu68k *c, uint16_t trapword)
     int32_t a_r = (int32_t)cpu_pop32(c);
     int32_t a_tb = (int32_t)cpu_pop32(c);
     tb_SetTimeBaseRate(a_tb, a_r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTrackEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isEnabled = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_theTrack = (int32_t)cpu_pop32(c);
+    tb_SetTrackEnabled(a_theTrack, a_isEnabled);
     cpu_push32(c, ret);
 }
 
@@ -11342,6 +11828,32 @@ static void glue_SndPlayDoubleBuffer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SndRecord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_sndhandlep = (gaddr)cpu_pop32(c);
+    int32_t a_quality = (int32_t)cpu_pop32(c);
+    uint32_t a_corner = (uint32_t)cpu_pop32(c);
+    gaddr a_filterp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndRecord(a_filterp, a_corner, a_quality, a_sndhandlep);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndRecordToFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int32_t a_quality = (int32_t)cpu_pop32(c);
+    uint32_t a_corner = (uint32_t)cpu_pop32(c);
+    gaddr a_filterp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndRecordToFile(a_filterp, a_corner, a_quality, a_refnum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SndSetSysBeepState(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11414,6 +11926,18 @@ static void glue_StandardGetFile(cpu68k *c, uint16_t trapword)
     int16_t a_numt = (int16_t)cpu_pop16(c);
     gaddr a_filef = (gaddr)cpu_pop32(c);
     tb_StandardGetFile(a_filef, a_numt, a_tl, a_replyp);
+    cpu_push32(c, ret);
+}
+
+static void glue_StandardGetFilePreview(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    int32_t a_typeList = (int32_t)cpu_pop32(c);
+    int16_t a_numTypes = (int16_t)cpu_pop16(c);
+    int32_t a_fileFilter = (int32_t)cpu_pop32(c);
+    tb_StandardGetFilePreview(a_fileFilter, a_numTypes, a_typeList, a_reply);
     cpu_push32(c, ret);
 }
 
@@ -12385,6 +12909,35 @@ static void glue_TextWidth(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ThreadBeginCritical(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_ThreadBeginCritical();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ThreadCurrentStackSpace(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_freeStack = (gaddr)cpu_pop32(c);
+    int32_t a_thread = (int32_t)cpu_pop32(c);
+    int16_t r = tb_ThreadCurrentStackSpace(a_thread, a_freeStack);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ThreadEndCritical(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_ThreadEndCritical();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_TickCount(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12734,6 +13287,16 @@ static void glue_XorRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_YieldToThread(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_suggestedThread = (int32_t)cpu_pop32(c);
+    int16_t r = tb_YieldToThread(a_suggestedThread);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ZeroScrap(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12751,6 +13314,57 @@ static void glue_ZoomWindow(cpu68k *c, uint16_t trapword)
     int16_t a_part = (int16_t)cpu_pop16(c);
     gaddr a_wp = (gaddr)cpu_pop32(c);
     tb_ZoomWindow(a_wp, a_part, a_front);
+    cpu_push32(c, ret);
+}
+
+static void glue__AE_hdlr_delete(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg2 = (gaddr)cpu_pop32(c);
+    int32_t a_arg1 = (int32_t)cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    int16_t r = tb__AE_hdlr_delete(a_arg0, a_arg1, a_arg2);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue__AE_hdlr_insert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg3 = (gaddr)cpu_pop32(c);
+    gaddr a_arg2 = (gaddr)cpu_pop32(c);
+    int32_t a_arg1 = (int32_t)cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    int16_t r = tb__AE_hdlr_insert(a_arg0, a_arg1, a_arg2, a_arg3);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue__AE_hdlr_install(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg3 = (gaddr)cpu_pop32(c);
+    gaddr a_arg2 = (gaddr)cpu_pop32(c);
+    int32_t a_arg1 = (int32_t)cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    int16_t r = tb__AE_hdlr_install(a_arg0, a_arg1, a_arg2, a_arg3);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue__AE_hdlr_lookup(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg3 = (gaddr)cpu_pop32(c);
+    gaddr a_arg2 = (gaddr)cpu_pop32(c);
+    int32_t a_arg1 = (int32_t)cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    int16_t r = tb__AE_hdlr_lookup(a_arg0, a_arg1, a_arg2, a_arg3);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -13216,8 +13830,8 @@ const trap_sig trap_sigs[] = {
     {0xA96B, -1, "SetControlAction", CONV_STACK, 8, 0, glue_SetControlAction},
     {0xA96C, -1, "FindControl", CONV_STACK, 12, 2, glue_FindControl},
     {0xA96D, -1, "Draw1Control", CONV_STACK, 4, 0, glue_Draw1Control},
-    {0xA96E, -1, "Dequeue", CONV_REG, 0, 0, 0},
-    {0xA96F, -1, "Enqueue", CONV_REG, 0, 0, 0},
+    {0xA96E, -1, "Dequeue", CONV_REG, 0, 0, glue_Dequeue},
+    {0xA96F, -1, "Enqueue", CONV_REG, 0, 0, glue_Enqueue},
     {0xA970, -1, "GetNextEvent", CONV_STACK, 6, 2, glue_GetNextEvent},
     {0xA971, -1, "EventAvail", CONV_STACK, 6, 2, glue_EventAvail},
     {0xA972, -1, "GetMouse", CONV_STACK, 4, 0, glue_GetMouse},
@@ -13531,9 +14145,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0xBu, "PBSetVInfo", CONV_REG, 0, 0, glue_PBSetVInfo},
     {0xA060, (int32_t)0x10u, "PBLockRange", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x11u, "PBUnlockRange", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x14u, "PBCreateFileIDRef", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x15u, "PBDeleteFileIDRef", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x16u, "PBResolveFileIDRef", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x14u, "PBCreateFileIDRef", CONV_REG, 0, 0, glue_PBCreateFileIDRef},
+    {0xA060, (int32_t)0x15u, "PBDeleteFileIDRef", CONV_REG, 0, 0, glue_PBDeleteFileIDRef},
+    {0xA060, (int32_t)0x16u, "PBResolveFileIDRef", CONV_REG, 0, 0, glue_PBResolveFileIDRef},
     {0xA060, (int32_t)0x17u, "PBExchangeFiles", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x18u, "PBCatSearch", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x1Au, "PBOpenDF", CONV_REG, 0, 0, glue_PBOpenDF},
@@ -13676,12 +14290,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x3Au, "RemoveImageDescriptionExtension", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x3Bu, "CountImageDescriptionExtensionType", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x3Cu, "GetNextImageDescriptionExtensionType", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x41u, "SFGetFilePreview", CONV_STACK, 26, 0, 0},
-    {0xAAA3, (int32_t)0x42u, "SFPGetFilePreview", CONV_STACK, 32, 0, 0},
-    {0xAAA3, (int32_t)0x43u, "StandardGetFilePreview", CONV_STACK, 14, 0, 0},
-    {0xAAA3, (int32_t)0x44u, "CustomGetFilePreview", CONV_STACK, 40, 0, 0},
-    {0xAAA3, (int32_t)0x45u, "MakeFilePreview", CONV_STACK, 6, 2, 0},
-    {0xAAA3, (int32_t)0x46u, "AddFilePreview", CONV_STACK, 10, 2, 0},
+    {0xAAA3, (int32_t)0x41u, "SFGetFilePreview", CONV_STACK, 26, 0, glue_SFGetFilePreview},
+    {0xAAA3, (int32_t)0x42u, "SFPGetFilePreview", CONV_STACK, 32, 0, glue_SFPGetFilePreview},
+    {0xAAA3, (int32_t)0x43u, "StandardGetFilePreview", CONV_STACK, 14, 0, glue_StandardGetFilePreview},
+    {0xAAA3, (int32_t)0x44u, "CustomGetFilePreview", CONV_STACK, 40, 0, glue_CustomGetFilePreview},
+    {0xAAA3, (int32_t)0x45u, "MakeFilePreview", CONV_STACK, 6, 2, glue_MakeFilePreview},
+    {0xAAA3, (int32_t)0x46u, "AddFilePreview", CONV_STACK, 10, 2, glue_AddFilePreview},
     {0xAAA3, (int32_t)0x47u, "DecompressSequenceFrameS", CONV_STACK, 22, 2, 0},
     {0xAAA3, (int32_t)0x4Bu, "GetCSequenceKeyFrameRate", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x4Cu, "AlignScreenRect", CONV_STACK, 8, 0, 0},
@@ -13986,7 +14600,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA816, (int32_t)0x610u, "AEPutParamDesc", CONV_STACK, 12, 2, glue_AEPutParamDesc},
     {0xA816, (int32_t)0x61Cu, "AEInteractWithUser", CONV_STACK, 12, 2, glue_AEInteractWithUser},
     {0xA816, (int32_t)0x627u, "AEPutAttributeDesc", CONV_STACK, 12, 2, glue_AEPutAttributeDesc},
-    {0xA816, (int32_t)0x632u, "_AE_hdlr_delete", CONV_STACK, 12, 2, 0},
+    {0xA816, (int32_t)0x632u, "_AE_hdlr_delete", CONV_STACK, 12, 2, glue__AE_hdlr_delete},
     {0xA816, (int32_t)0x706u, "AECreateList", CONV_STACK, 14, 2, glue_AECreateList},
     {0xA816, (int32_t)0x720u, "AERemoveEventHandler", CONV_STACK, 14, 2, glue_AERemoveEventHandler},
     {0xA816, (int32_t)0x723u, "AERemoveCoercionHandler", CONV_STACK, 14, 2, glue_AERemoveCoercionHandler},
@@ -13998,8 +14612,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA816, (int32_t)0x828u, "AESizeOfAttribute", CONV_STACK, 16, 2, glue_AESizeOfAttribute},
     {0xA816, (int32_t)0x829u, "AESizeOfParam", CONV_STACK, 16, 2, glue_AESizeOfParam},
     {0xA816, (int32_t)0x82Au, "AESizeOfNthItem", CONV_STACK, 16, 2, glue_AESizeOfNthItem},
-    {0xA816, (int32_t)0x831u, "_AE_hdlr_install", CONV_STACK, 16, 2, 0},
-    {0xA816, (int32_t)0x833u, "_AE_hdlr_lookup", CONV_STACK, 16, 2, 0},
+    {0xA816, (int32_t)0x830u, "_AE_hdlr_insert", CONV_STACK, 16, 2, glue__AE_hdlr_insert},
+    {0xA816, (int32_t)0x831u, "_AE_hdlr_install", CONV_STACK, 16, 2, glue__AE_hdlr_install},
+    {0xA816, (int32_t)0x833u, "_AE_hdlr_lookup", CONV_STACK, 16, 2, glue__AE_hdlr_lookup},
     {0xA816, (int32_t)0x91Fu, "AEInstallEventHandler", CONV_STACK, 18, 2, glue_AEInstallEventHandler},
     {0xA816, (int32_t)0x921u, "AEGetEventHandler", CONV_STACK, 18, 2, glue_AEGetEventHandler},
     {0xA816, (int32_t)0x92Eu, "_AE_hdlr_table_alloc", CONV_STACK, 18, 2, glue__AE_hdlr_table_alloc},
@@ -14132,8 +14747,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x42u, "DisposeMovieTrack", CONV_STACK, 4, 0, 0},
     {0xAAAA, (int32_t)0x43u, "GetTrackCreationTime", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x44u, "GetTrackModificationTime", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0x45u, "GetTrackEnabled", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x46u, "SetTrackEnabled", CONV_STACK, 6, 0, 0},
+    {0xAAAA, (int32_t)0x45u, "GetTrackEnabled", CONV_STACK, 4, 2, glue_GetTrackEnabled},
+    {0xAAAA, (int32_t)0x46u, "SetTrackEnabled", CONV_STACK, 6, 0, glue_SetTrackEnabled},
     {0xAAAA, (int32_t)0x47u, "GetTrackUsage", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x48u, "SetTrackUsage", CONV_STACK, 8, 0, 0},
     {0xAAAA, (int32_t)0x4Bu, "GetTrackDuration", CONV_STACK, 4, 4, 0},
@@ -14627,7 +15242,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x980004u, "MIDISetRunRate", CONV_STACK, 8, 0, glue_MIDISetRunRate},
     {0xA800, (int32_t)0x9C0004u, "MIDIGetClientIcon", CONV_STACK, 4, 4, glue_MIDIGetClientIcon},
     {0xA800, (int32_t)0x108000Cu, "CountVoices", CONV_STACK, 4, 2, 0},
-    {0xA800, (int32_t)0x1100014u, "SPBSignOutDevice", CONV_STACK, 2, 2, 0},
+    {0xA800, (int32_t)0x1100014u, "SPBSignOutDevice", CONV_STACK, 2, 2, glue_SPBSignOutDevice},
     {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, glue_SndSetSysBeepState},
     {0xA800, (int32_t)0x2040008u, "SndPauseFilePlay", CONV_STACK, 4, 2, glue_SndPauseFilePlay},
     {0xA800, (int32_t)0x2180008u, "SndGetSysBeepState", CONV_STACK, 4, 0, glue_SndGetSysBeepState},
@@ -14635,34 +15250,34 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x21C0014u, "SPBCloseDevice", CONV_STACK, 4, 2, glue_SPBCloseDevice},
     {0xA800, (int32_t)0x220000Cu, "SpeakString", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x2240018u, "GetSysBeepVolume", CONV_STACK, 4, 2, glue_GetSysBeepVolume},
-    {0xA800, (int32_t)0x2280014u, "SPBPauseRecording", CONV_STACK, 4, 2, 0},
+    {0xA800, (int32_t)0x2280014u, "SPBPauseRecording", CONV_STACK, 4, 2, glue_SPBPauseRecording},
     {0xA800, (int32_t)0x2280018u, "SetSysBeepVolume", CONV_STACK, 4, 2, glue_SetSysBeepVolume},
     {0xA800, (int32_t)0x22C000Cu, "StopSpeech", CONV_STACK, 4, 2, 0},
-    {0xA800, (int32_t)0x22C0014u, "SPBResumeRecording", CONV_STACK, 4, 2, 0},
+    {0xA800, (int32_t)0x22C0014u, "SPBResumeRecording", CONV_STACK, 4, 2, glue_SPBResumeRecording},
     {0xA800, (int32_t)0x22C0018u, "GetDefaultOutputVolume", CONV_STACK, 4, 2, glue_GetDefaultOutputVolume},
-    {0xA800, (int32_t)0x2300014u, "SPBStopRecording", CONV_STACK, 4, 2, 0},
+    {0xA800, (int32_t)0x2300014u, "SPBStopRecording", CONV_STACK, 4, 2, glue_SPBStopRecording},
     {0xA800, (int32_t)0x2300018u, "SetDefaultOutputVolume", CONV_STACK, 4, 2, glue_SetDefaultOutputVolume},
     {0xA800, (int32_t)0x238000Cu, "ContinueSpeech", CONV_STACK, 4, 2, 0},
     {0xA800, (int32_t)0x3080008u, "SndStopFilePlay", CONV_STACK, 6, 2, glue_SndStopFilePlay},
     {0xA800, (int32_t)0x30C000Cu, "GetIndVoice", CONV_STACK, 6, 2, 0},
-    {0xA800, (int32_t)0x30C0014u, "SPBSignInDevice", CONV_STACK, 6, 2, 0},
+    {0xA800, (int32_t)0x30C0014u, "SPBSignInDevice", CONV_STACK, 6, 2, glue_SPBSignInDevice},
     {0xA800, (int32_t)0x3140008u, "SndManagerStatus", CONV_STACK, 6, 2, glue_SndManagerStatus},
-    {0xA800, (int32_t)0x3200014u, "SPBRecord", CONV_STACK, 6, 2, 0},
+    {0xA800, (int32_t)0x3200014u, "SPBRecord", CONV_STACK, 6, 2, glue_SPBRecord},
     {0xA800, (int32_t)0x4040018u, "GetSoundHeaderOffset", CONV_STACK, 8, 2, glue_GetSoundHeaderOffset},
     {0xA800, (int32_t)0x418000Cu, "NewSpeechChannel", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x4200008u, "SndPlayDoubleBuffer", CONV_STACK, 8, 2, glue_SndPlayDoubleBuffer},
-    {0xA800, (int32_t)0x4240014u, "SPBRecordToFile", CONV_STACK, 8, 2, 0},
+    {0xA800, (int32_t)0x4240014u, "SPBRecordToFile", CONV_STACK, 8, 2, glue_SPBRecordToFile},
     {0xA800, (int32_t)0x430000Cu, "StopSpeechAt", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x434000Cu, "PauseSpeechAt", CONV_STACK, 8, 2, 0},
-    {0xA800, (int32_t)0x4400014u, "SPBMillisecondsToBytes", CONV_STACK, 8, 2, 0},
+    {0xA800, (int32_t)0x4400014u, "SPBMillisecondsToBytes", CONV_STACK, 8, 2, glue_SPBMillisecondsToBytes},
     {0xA800, (int32_t)0x444000Cu, "SetSpeechRate", CONV_STACK, 8, 2, 0},
-    {0xA800, (int32_t)0x4440014u, "SPBBytesToMilliseconds", CONV_STACK, 8, 2, 0},
+    {0xA800, (int32_t)0x4440014u, "SPBBytesToMilliseconds", CONV_STACK, 8, 2, glue_SPBBytesToMilliseconds},
     {0xA800, (int32_t)0x448000Cu, "GetSpeechRate", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x44C000Cu, "SetSpeechPitch", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x450000Cu, "GetSpeechPitch", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x460000Cu, "UseDictionary", CONV_STACK, 8, 2, 0},
     {0xA800, (int32_t)0x5100008u, "SndChannelStatus", CONV_STACK, 10, 2, glue_SndChannelStatus},
-    {0xA800, (int32_t)0x5140014u, "SPBGetIndexedDevice", CONV_STACK, 10, 2, 0},
+    {0xA800, (int32_t)0x5140014u, "SPBGetIndexedDevice", CONV_STACK, 10, 2, glue_SPBGetIndexedDevice},
     {0xA800, (int32_t)0x5180014u, "SPBOpenDevice", CONV_STACK, 10, 2, glue_SPBOpenDevice},
     {0xA800, (int32_t)0x604000Cu, "MakeVoiceSpec", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x60C0018u, "UnsignedFixedMulDiv", CONV_STACK, 12, 4, 0},
@@ -14670,22 +15285,22 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x614000Cu, "GetVoiceInfo", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x624000Cu, "SpeakText", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x6340018u, "SetSoundPreference", CONV_STACK, 12, 2, 0},
-    {0xA800, (int32_t)0x6380014u, "SPBGetDeviceInfo", CONV_STACK, 12, 2, 0},
+    {0xA800, (int32_t)0x6380014u, "SPBGetDeviceInfo", CONV_STACK, 12, 2, glue_SPBGetDeviceInfo},
     {0xA800, (int32_t)0x6380018u, "GetSoundPreference", CONV_STACK, 12, 2, 0},
-    {0xA800, (int32_t)0x63C0014u, "SPBSetDeviceInfo", CONV_STACK, 12, 2, 0},
+    {0xA800, (int32_t)0x63C0014u, "SPBSetDeviceInfo", CONV_STACK, 12, 2, glue_SPBSetDeviceInfo},
     {0xA800, (int32_t)0x63C0018u, "SndGetInfo", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x6400018u, "SndSetInfo", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x654000Cu, "SetSpeechInfo", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x658000Cu, "GetSpeechInfo", CONV_STACK, 12, 2, 0},
-    {0xA800, (int32_t)0x7080014u, "SndRecordToFile", CONV_STACK, 14, 2, 0},
+    {0xA800, (int32_t)0x7080014u, "SndRecordToFile", CONV_STACK, 14, 2, glue_SndRecordToFile},
     {0xA800, (int32_t)0x7100018u, "GetCompressionInfo", CONV_STACK, 14, 2, 0},
-    {0xA800, (int32_t)0x8040014u, "SndRecord", CONV_STACK, 16, 2, 0},
+    {0xA800, (int32_t)0x8040014u, "SndRecord", CONV_STACK, 16, 2, glue_SndRecord},
     {0xA800, (int32_t)0x828000Cu, "SpeakBuffer", CONV_STACK, 16, 2, 0},
     {0xA800, (int32_t)0xA5C000Cu, "TextToPhonemes", CONV_STACK, 20, 2, 0},
     {0xA800, (int32_t)0xB4C0014u, "SetupAIFFHeader", CONV_STACK, 22, 2, 0},
     {0xA800, (int32_t)0xD000008u, "SndStartFilePlay", CONV_STACK, 26, 2, glue_SndStartFilePlay},
     {0xA800, (int32_t)0xD480014u, "SetupSndHeader", CONV_STACK, 26, 2, 0},
-    {0xA800, (int32_t)0xE340014u, "SPBGetRecordingStatus", CONV_STACK, 28, 2, 0},
+    {0xA800, (int32_t)0xE340014u, "SPBGetRecordingStatus", CONV_STACK, 28, 2, glue_SPBGetRecordingStatus},
     {0xA83D, (int32_t)0x0u, "TEStylePaste", CONV_STACK, 4, 0, glue_TEStylePaste},
     {0xA83D, (int32_t)0x1u, "TESetStyle", CONV_STACK, 12, 0, glue_TESetStyle},
     {0xA83D, (int32_t)0x2u, "TEReplaceStyle", CONV_STACK, 16, 0, glue_TEReplaceStyle},
@@ -14701,6 +15316,27 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA83D, (int32_t)0xCu, "TECustomHook", CONV_STACK, 10, 0, glue_TECustomHook},
     {0xA83D, (int32_t)0xDu, "TENumStyles", CONV_STACK, 12, 4, glue_TENumStyles},
     {0xA83D, (int32_t)0xEu, "TEFeatureFlag", CONV_STACK, 8, 2, glue_TEFeatureFlag},
+    {0xABF2, (int32_t)0xBu, "ThreadBeginCritical", CONV_STACK, 0, 2, glue_ThreadBeginCritical},
+    {0xABF2, (int32_t)0xCu, "ThreadEndCritical", CONV_STACK, 0, 2, glue_ThreadEndCritical},
+    {0xABF2, (int32_t)0x205u, "YieldToThread", CONV_STACK, 4, 2, glue_YieldToThread},
+    {0xABF2, (int32_t)0x206u, "GetCurrentThread", CONV_STACK, 4, 2, glue_GetCurrentThread},
+    {0xABF2, (int32_t)0x209u, "SetThreadScheduler", CONV_STACK, 4, 2, glue_SetThreadScheduler},
+    {0xABF2, (int32_t)0x20Eu, "GetThreadCurrentTaskRef", CONV_STACK, 4, 2, glue_GetThreadCurrentTaskRef},
+    {0xABF2, (int32_t)0x402u, "GetFreeThreadCount", CONV_STACK, 8, 2, glue_GetFreeThreadCount},
+    {0xABF2, (int32_t)0x407u, "GetThreadState", CONV_STACK, 8, 2, glue_GetThreadState},
+    {0xABF2, (int32_t)0x410u, "SetThreadReadyGivenTaskRef", CONV_STACK, 8, 2, glue_SetThreadReadyGivenTaskRef},
+    {0xABF2, (int32_t)0x413u, "GetDefaultThreadStackSize", CONV_STACK, 8, 2, glue_GetDefaultThreadStackSize},
+    {0xABF2, (int32_t)0x414u, "ThreadCurrentStackSpace", CONV_STACK, 8, 2, glue_ThreadCurrentStackSpace},
+    {0xABF2, (int32_t)0x501u, "CreateThreadPool", CONV_STACK, 10, 2, glue_CreateThreadPool},
+    {0xABF2, (int32_t)0x504u, "DisposeThread", CONV_STACK, 10, 2, glue_DisposeThread},
+    {0xABF2, (int32_t)0x508u, "SetThreadState", CONV_STACK, 10, 2, glue_SetThreadState},
+    {0xABF2, (int32_t)0x512u, "SetThreadStateEndCritical", CONV_STACK, 10, 2, glue_SetThreadStateEndCritical},
+    {0xABF2, (int32_t)0x60Du, "SetDebuggerNotificationProcs", CONV_STACK, 12, 2, glue_SetDebuggerNotificationProcs},
+    {0xABF2, (int32_t)0x60Fu, "GetThreadStateGivenTaskRef", CONV_STACK, 12, 2, glue_GetThreadStateGivenTaskRef},
+    {0xABF2, (int32_t)0x611u, "SetThreadTerminator", CONV_STACK, 12, 2, glue_SetThreadTerminator},
+    {0xABF2, (int32_t)0x615u, "GetSpecificFreeThreadCount", CONV_STACK, 12, 2, glue_GetSpecificFreeThreadCount},
+    {0xABF2, (int32_t)0x70Au, "SetThreadSwitcher", CONV_STACK, 14, 2, glue_SetThreadSwitcher},
+    {0xABF2, (int32_t)0xE03u, "NewThread", CONV_STACK, 28, 2, glue_NewThread},
 };
 const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[0];
 
@@ -14739,5 +15375,6 @@ const dispatcher_info dispatchers[] = {
     {0xA895, "ShutDown", "StackW"},
     {0xA800, "SoundDispatch", "D0<0xFFFFFF>"},
     {0xA83D, "TEDispatch", "StackW"},
+    {0xABF2, "ThreadDispatch", "D0W"},
 };
 const unsigned dispatcher_count = sizeof dispatchers / sizeof dispatchers[0];

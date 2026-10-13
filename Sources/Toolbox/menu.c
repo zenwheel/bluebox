@@ -163,6 +163,8 @@ void tb_DisposeMenu(gaddr mh)
  * < style, / key equivalent, ( disabled. */
 static void append_items(gaddr mh, const uint8_t *s, int n, int after)
 {
+    if (!mh || !rd32(mh))
+        return; /* a nil menu: nothing to add to (and not low memory to write over) */
     int pos = 0;
     while (pos <= n) {
         uint8_t name[256];

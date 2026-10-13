@@ -1310,11 +1310,77 @@ int16_t tb_PostHighLevelEvent(gaddr evt, gaddr receiver_id, int32_t refcon, gadd
     return -903; /* noPortErr: there is no one else to talk to */
 }
 
-/* The Apple Event Manager's private handler-table allocation, which some
- * applications call directly: an empty table. */
+/* The Apple Event Manager's private handler tables, which applications
+ * that link ObjectSupportLib call directly: a handle holding a count and
+ * then entries of an 8-byte selector (class and ID) and an 8-byte handler
+ * (routine and refCon). */
+enum { HDLR_ENTRY = 16 };
+
 int16_t tb__AE_hdlr_table_alloc(int32_t a, int32_t b, int32_t c, int8_t sys, gaddr tablep)
 {
+    gaddr h = tb_NewHandle(4, false, true);
+    if (!h)
+        return memFullErr;
     if (tablep)
-        wr32(tablep, tb_NewHandle(0, false, true));
+        wr32(tablep, h);
+    return noErr;
+}
+
+static int hdlr_find(gaddr table, gaddr selector)
+{
+    if (!table || !rd32(table) || !selector)
+        return -1;
+    int n = (int)rd32(rd32(table));
+    for (int i = 0; i < n; i++) {
+        gaddr e = rd32(table) + 4 + (uint32_t)i * HDLR_ENTRY;
+        if (rd32(e) == rd32(selector) && rd32(e + 4) == rd32(selector + 4))
+            return i;
+    }
+    return -1;
+}
+
+int16_t tb__AE_hdlr_install(gaddr table, int32_t unused, gaddr selector, gaddr hdlr)
+{
+    if (!table || !rd32(table) || !selector || !hdlr)
+        return paramErr;
+    int i = hdlr_find(table, selector);
+    if (i < 0) {
+        i = (int)rd32(rd32(table));
+        tb_SetHandleSize(table, 4 + (i + 1) * HDLR_ENTRY);
+        if (tb_GetHandleSize(table) < 4 + (i + 1) * HDLR_ENTRY)
+            return memFullErr;
+        wr32(rd32(table), (uint32_t)(i + 1));
+    }
+    gaddr e = rd32(table) + 4 + (uint32_t)i * HDLR_ENTRY;
+    gmemcpy(e, selector, 8);
+    gmemcpy(e + 8, hdlr, 8);
+    return noErr;
+}
+
+int16_t tb__AE_hdlr_insert(gaddr table, int32_t unused, gaddr selector, gaddr hdlr)
+{
+    return tb__AE_hdlr_install(table, unused, selector, hdlr);
+}
+
+int16_t tb__AE_hdlr_lookup(gaddr table, int32_t unused, gaddr selector, gaddr hdlr_return)
+{
+    int i = hdlr_find(table, selector);
+    if (i < 0)
+        return errAEHandlerNotFound;
+    if (hdlr_return)
+        gmemcpy(hdlr_return, rd32(table) + 4 + (uint32_t)i * HDLR_ENTRY + 8, 8);
+    return noErr;
+}
+
+int16_t tb__AE_hdlr_delete(gaddr table, int32_t unused, gaddr selector)
+{
+    int i = hdlr_find(table, selector);
+    if (i < 0)
+        return errAEHandlerNotFound;
+    int n = (int)rd32(rd32(table));
+    gaddr e = rd32(table) + 4 + (uint32_t)i * HDLR_ENTRY;
+    gmemcpy(e, e + HDLR_ENTRY, (uint32_t)(n - i - 1) * HDLR_ENTRY);
+    wr32(rd32(table), (uint32_t)(n - 1));
+    tb_SetHandleSize(table, 4 + (n - 1) * HDLR_ENTRY);
     return noErr;
 }

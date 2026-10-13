@@ -429,3 +429,220 @@
         type: OSType
     dispatcher: SoundDispatch
     selector: 0x009C0004
+
+# A fourth private Apple Event Manager handler-table call beside install
+# ($0831), lookup ($0833) and delete ($0632), with install's arguments.
+# The ObjectSupportLib linked into applications (SpookHouse) stores its
+# table entries with it; its real name is not known.
+- function:
+    name: _AE_hdlr_insert
+    return: OSErr
+    args:
+      - type: AE_hdlr_table_h
+      - type: int32_t
+      - type: AE_hdlr_selector_t*
+      - type: AE_hdlr_t*
+    dispatcher: Pack8
+    selector: 0x0830
+
+# The Thread Manager (Threads.h): an extension for System 7.1, built in
+# from 7.5. Selectors from the header's inline glue; YieldToAnyThread is
+# YieldToThread(kNoThreadID).
+- dispatcher:
+    name: ThreadDispatch
+    trap: 0xABF2
+    selector-location: D0W
+
+- function:
+    name: CreateThreadPool
+    return: OSErr
+    args:
+      - { name: threadStyle, type: LONGINT }
+      - { name: numToCreate, type: INTEGER }
+      - { name: stackSize, type: LONGINT }
+    dispatcher: ThreadDispatch
+    selector: 0x0501
+
+- function:
+    name: GetFreeThreadCount
+    return: OSErr
+    args:
+      - { name: threadStyle, type: LONGINT }
+      - { name: freeCount, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x0402
+
+- function:
+    name: GetSpecificFreeThreadCount
+    return: OSErr
+    args:
+      - { name: threadStyle, type: LONGINT }
+      - { name: stackSize, type: LONGINT }
+      - { name: freeCount, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x0615
+
+- function:
+    name: GetDefaultThreadStackSize
+    return: OSErr
+    args:
+      - { name: threadStyle, type: LONGINT }
+      - { name: stackSize, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x0413
+
+- function:
+    name: ThreadCurrentStackSpace
+    return: OSErr
+    args:
+      - { name: thread, type: LONGINT }
+      - { name: freeStack, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x0414
+
+- function:
+    name: NewThread
+    return: OSErr
+    args:
+      - { name: threadStyle, type: LONGINT }
+      - { name: threadEntry, type: ProcPtr }
+      - { name: threadParam, type: Ptr }
+      - { name: stackSize, type: LONGINT }
+      - { name: options, type: LONGINT }
+      - { name: threadResult, type: Ptr }
+      - { name: threadMade, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x0E03
+
+- function:
+    name: SetThreadScheduler
+    return: OSErr
+    args:
+      - { name: threadScheduler, type: ProcPtr }
+    dispatcher: ThreadDispatch
+    selector: 0x0209
+
+- function:
+    name: SetThreadSwitcher
+    return: OSErr
+    args:
+      - { name: thread, type: LONGINT }
+      - { name: threadSwitcher, type: ProcPtr }
+      - { name: switchProcParam, type: Ptr }
+      - { name: inOrOut, type: Boolean }
+    dispatcher: ThreadDispatch
+    selector: 0x070A
+
+- function:
+    name: SetThreadTerminator
+    return: OSErr
+    args:
+      - { name: thread, type: LONGINT }
+      - { name: threadTerminator, type: ProcPtr }
+      - { name: terminationProcParam, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x0611
+
+- function:
+    name: SetDebuggerNotificationProcs
+    return: OSErr
+    args:
+      - { name: notifyNewThread, type: ProcPtr }
+      - { name: notifyDisposeThread, type: ProcPtr }
+      - { name: notifyThreadScheduler, type: ProcPtr }
+    dispatcher: ThreadDispatch
+    selector: 0x060D
+
+- function:
+    name: DisposeThread
+    return: OSErr
+    args:
+      - { name: threadToDump, type: LONGINT }
+      - { name: threadResult, type: Ptr }
+      - { name: recycleThread, type: Boolean }
+    dispatcher: ThreadDispatch
+    selector: 0x0504
+
+- function:
+    name: YieldToThread
+    return: OSErr
+    args:
+      - { name: suggestedThread, type: LONGINT }
+    dispatcher: ThreadDispatch
+    selector: 0x0205
+
+- function:
+    name: GetCurrentThread
+    return: OSErr
+    args:
+      - { name: currentThreadID, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x0206
+
+- function:
+    name: GetThreadState
+    return: OSErr
+    args:
+      - { name: threadToGet, type: LONGINT }
+      - { name: threadState, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x0407
+
+- function:
+    name: SetThreadState
+    return: OSErr
+    args:
+      - { name: threadToSet, type: LONGINT }
+      - { name: newState, type: INTEGER }
+      - { name: suggestedThread, type: LONGINT }
+    dispatcher: ThreadDispatch
+    selector: 0x0508
+
+- function:
+    name: SetThreadStateEndCritical
+    return: OSErr
+    args:
+      - { name: threadToSet, type: LONGINT }
+      - { name: newState, type: INTEGER }
+      - { name: suggestedThread, type: LONGINT }
+    dispatcher: ThreadDispatch
+    selector: 0x0512
+
+- function:
+    name: ThreadBeginCritical
+    return: OSErr
+    dispatcher: ThreadDispatch
+    selector: 0x000B
+
+- function:
+    name: ThreadEndCritical
+    return: OSErr
+    dispatcher: ThreadDispatch
+    selector: 0x000C
+
+- function:
+    name: GetThreadCurrentTaskRef
+    return: OSErr
+    args:
+      - { name: threadTRef, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x020E
+
+- function:
+    name: GetThreadStateGivenTaskRef
+    return: OSErr
+    args:
+      - { name: threadTRef, type: LONGINT }
+      - { name: threadToGet, type: LONGINT }
+      - { name: threadState, type: Ptr }
+    dispatcher: ThreadDispatch
+    selector: 0x060F
+
+- function:
+    name: SetThreadReadyGivenTaskRef
+    return: OSErr
+    args:
+      - { name: threadTRef, type: LONGINT }
+      - { name: threadToSet, type: LONGINT }
+    dispatcher: ThreadDispatch
+    selector: 0x0410

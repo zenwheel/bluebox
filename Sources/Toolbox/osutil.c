@@ -325,3 +325,40 @@ void raw_SlotManager(cpu68k *c, uint16_t tw)
 {
     c->d[0] = (uint32_t)-344; /* smNoMoresRsrcs */
 }
+
+/* Operating System queues: a header of qFlags (word), qHead and qTail; each
+ * element begins with its link to the next. */
+enum { qErr = -1 };
+
+void tb_Enqueue(gaddr e, gaddr h)
+{
+    if (!e || !h)
+        return;
+    wr32(e, 0);
+    gaddr tail = rd32(h + 6);
+    if (!rd32(h + 2) || !tail)
+        wr32(h + 2, e);
+    else
+        wr32(tail, e);
+    wr32(h + 6, e);
+}
+
+int16_t tb_Dequeue(gaddr e, gaddr h)
+{
+    if (!e || !h)
+        return qErr;
+    gaddr prev = 0;
+    for (gaddr q = rd32(h + 2); q; prev = q, q = rd32(q)) {
+        if (q != e)
+            continue;
+        gaddr next = rd32(q);
+        if (prev)
+            wr32(prev, next);
+        else
+            wr32(h + 2, next);
+        if (rd32(h + 6) == q)
+            wr32(h + 6, prev);
+        return noErr;
+    }
+    return qErr;
+}

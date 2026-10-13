@@ -293,6 +293,36 @@ void tb_SFPGetFile(uint32_t p, gaddr prompt, gaddr filef, int16_t numt, gaddr tl
     tb_SFGetFile(p, prompt, filef, numt, tl, dh, rep);
 }
 
+/* QuickTime's open dialogs with a preview pane: the same dialogs. */
+void tb_SFGetFilePreview(int32_t where, int32_t prompt, int32_t filef, int16_t numt, int32_t tl, int32_t dh, gaddr rep)
+{
+    tb_SFGetFile((uint32_t)where, (gaddr)prompt, (gaddr)filef, numt, (gaddr)tl, (gaddr)dh, rep);
+}
+
+void tb_SFPGetFilePreview(int32_t where, int32_t prompt, int32_t filef, int16_t numt, int32_t tl, int32_t dh, gaddr rep,
+                          int16_t dig, int32_t fp)
+{
+    tb_SFPGetFile((uint32_t)where, (gaddr)prompt, (gaddr)filef, numt, (gaddr)tl, (gaddr)dh, rep, dig, (gaddr)fp);
+}
+
+void tb_StandardGetFilePreview(int32_t filef, int16_t numt, int32_t tl, gaddr replyp)
+{
+    tb_StandardGetFile((gaddr)filef, numt, (gaddr)tl, replyp);
+}
+
+void tb_CustomGetFilePreview(int32_t filef, int16_t numt, int32_t tl, gaddr replyp, int16_t dlgid, int32_t where,
+                             int32_t dlghook, int32_t filterproc, int32_t activeList, int32_t activateproc,
+                             gaddr yourdatap)
+{
+    tb_CustomGetFile((gaddr)filef, numt, (gaddr)tl, replyp, dlgid, (uint32_t)where, (gaddr)dlghook, (gaddr)filterproc,
+                     (gaddr)activeList, (gaddr)activateproc, yourdatap);
+}
+
+/* A file's preview ('pnot' and its picture) only shows in a preview
+ * pane, which our dialogs do not have: nothing is added. */
+int16_t tb_MakeFilePreview(int16_t refnum, int32_t progress) { return noErr; }
+int16_t tb_AddFilePreview(int16_t refnum, int32_t type, int32_t data) { return noErr; }
+
 void tb_SFPPutFile(uint32_t p, gaddr prompt, gaddr name, gaddr dh, gaddr rep, int16_t dig, gaddr fp)
 {
     tb_SFPutFile(p, prompt, name, dh, rep);

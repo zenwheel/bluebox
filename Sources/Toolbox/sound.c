@@ -884,12 +884,43 @@ int16_t tb_SndStopFilePlay(gaddr chan, int8_t quietNow)
     return noErr;
 }
 
-/* Sound input: there is no input device. */
+/* Sound input: a Mac with no input device. Opening one fails, and every
+ * call on a device refNum (the zero a failed open leaves, which some
+ * programs go on to use) answers that it is not a device. */
+enum { siNoSoundInHardware = -221, siBadSoundInDevice = -220, siBadRefNum = -229 };
+
 int16_t tb_SPBOpenDevice(gaddr name, int16_t permission, gaddr refnum)
 {
     if (refnum)
         wr32(refnum, 0);
-    return -221; /* siNoSoundInHardware */
+    return siNoSoundInHardware;
 }
-int16_t tb_SPBCloseDevice(int32_t refnum) { return noErr; }
+int16_t tb_SPBCloseDevice(int32_t refnum) { return siBadRefNum; }
+int16_t tb_SPBGetIndexedDevice(int16_t count, gaddr name, gaddr iconp)
+{
+    if (iconp)
+        wr32(iconp, 0);
+    return siBadSoundInDevice; /* none to list */
+}
+int16_t tb_SPBSignInDevice(int16_t refnum, gaddr name) { return noErr; }
+int16_t tb_SPBSignOutDevice(int16_t refnum) { return noErr; }
+int16_t tb_SPBGetDeviceInfo(int32_t refnum, int32_t info, gaddr infop) { return siBadRefNum; }
+int16_t tb_SPBSetDeviceInfo(int32_t refnum, int32_t info, gaddr infop) { return siBadRefNum; }
+int16_t tb_SPBRecord(gaddr inparamp, int8_t async) { return siBadRefNum; }
+int16_t tb_SPBRecordToFile(int16_t refnum, gaddr inparamp, int8_t async) { return siBadRefNum; }
+int16_t tb_SPBPauseRecording(int32_t refnum) { return siBadRefNum; }
+int16_t tb_SPBResumeRecording(int32_t refnum) { return siBadRefNum; }
+int16_t tb_SPBStopRecording(int32_t refnum) { return siBadRefNum; }
+int16_t tb_SPBGetRecordingStatus(int32_t refnum, gaddr status, gaddr meter, gaddr total_samps, gaddr samps,
+                                 gaddr total_ms, gaddr ms)
+{
+    return siBadRefNum;
+}
+int16_t tb_SPBMillisecondsToBytes(int32_t refnum, gaddr millip) { return siBadRefNum; }
+int16_t tb_SPBBytesToMilliseconds(int32_t refnum, gaddr bytesp) { return siBadRefNum; }
+int16_t tb_SndRecord(gaddr filterp, uint32_t corner, int32_t quality, gaddr sndhandlep) { return siNoSoundInHardware; }
+int16_t tb_SndRecordToFile(gaddr filterp, uint32_t corner, int32_t quality, int16_t refnum)
+{
+    return siNoSoundInHardware;
+}
 

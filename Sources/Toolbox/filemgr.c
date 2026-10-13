@@ -2271,6 +2271,55 @@ bool fm_app_for_document(const char *doc, char *app, size_t appsize)
     return false;
 }
 
+/* ---------------------------------------------------------------------- */
+/* File IDs: a file's ID is its file number (ioFlNum), which lasts as long
+ * as the file keeps its path. */
+
+enum { fidNotFound = -1300, notAFileErr = -1302 };
+enum { FIDParam_ioSrcDirID = 48, FIDParam_ioFileID = 54 };
+
+int16_t tb_PBCreateFileIDRef(gaddr pb, bool async)
+{
+    char path[PATH_MAX];
+    int16_t err = resolve((int16_t)rd16(pb + IOParam_ioVRefNum_off), (int32_t)rd32(pb + FIDParam_ioSrcDirID),
+                          rd32(pb + IOParam_ioNamePtr_off), true, path, sizeof path);
+    if (err)
+        return err;
+    struct stat st;
+    if (stat(path, &st))
+        return fnfErr;
+    if (S_ISDIR(st.st_mode))
+        return notAFileErr;
+    wr32(pb + FIDParam_ioFileID, (uint32_t)dir_id_for(rel_of(path)) + 0x10000);
+    return noErr;
+}
+
+/* The host path of a file ID, if the file is still there. */
+static bool file_of_id(int32_t id, char *path, size_t size)
+{
+    struct stat st;
+    return id >= 0x10000 && host_of_dir(id - 0x10000, path, size) && !stat(path, &st) && !S_ISDIR(st.st_mode) &&
+           visible(path);
+}
+
+int16_t tb_PBResolveFileIDRef(gaddr pb, bool async)
+{
+    char path[PATH_MAX];
+    if (!file_of_id((int32_t)rd32(pb + FIDParam_ioFileID), path, sizeof path))
+        return fidNotFound;
+    gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
+    if (namep)
+        put_name(namep, path);
+    wr32(pb + FIDParam_ioSrcDirID, (uint32_t)parent_id_of(path));
+    return noErr;
+}
+
+int16_t tb_PBDeleteFileIDRef(gaddr pb, bool async)
+{
+    char path[PATH_MAX];
+    return file_of_id((int32_t)rd32(pb + FIDParam_ioFileID), path, sizeof path) ? noErr : fidNotFound;
+}
+
 int16_t tb_PBDTRemoveAPPL(gaddr dtp, bool async) { return noErr; }
 int16_t tb_PBDTGetIcon(gaddr dtp, bool async) { return afpItemNotFound; }
 int16_t tb_PBDTGetIconInfo(gaddr dtp, bool async) { return afpItemNotFound; }

@@ -1,4 +1,5 @@
-/* Help Manager: balloon help is off and there is no Help menu (yet). */
+/* Help Manager: balloon help is off; the Help menu is there for programs
+ * to add to. */
 #include "tb_internal.h"
 
 enum { hmHelpManagerNotInited = -855, hmBalloonAborted = -853 };
@@ -17,10 +18,33 @@ int16_t tb_HMShowMenuBalloon(int16_t item, int16_t menuid, int32_t flags, int32_
     return hmBalloonAborted;
 }
 int16_t tb_HMRemoveBalloon(void) { return noErr; }
+/* The system's Help menu (kHMHelpMenuID), to which programs append their
+ * own help items after the Help Manager's two. It lives in the system
+ * heap and is made once per run. */
+enum { kHMHelpMenuID = -16490 };
+static gaddr help_menu;
+
+void help_reset(void) { help_menu = 0; }
+
 int16_t tb_HMGetHelpMenuHandle(gaddr mhp)
 {
-    wr32(mhp, 0);
-    return noErr;
+    if (!help_menu) {
+        gaddr saved = tb_GetZone();
+        tb_SetZone(rd32(LM_SysZone));
+        gaddr title = tb_NewPtr(2, false, false);
+        wr8(title, 1);
+        wr8(title + 1, '?');
+        help_menu = tb_NewMenu(kHMHelpMenuID, title);
+        tb_DisposePtr(title);
+        static const char items[] = "About Balloon Help\xC9;(Show Balloons";
+        gaddr s = tb_NewPtr(sizeof items, false, false);
+        pstr_from_c(s, items);
+        tb_AppendMenu(help_menu, s);
+        tb_DisposePtr(s);
+        tb_SetZone(saved);
+    }
+    wr32(mhp, help_menu);
+    return help_menu ? noErr : memFullErr;
 }
 int16_t tb_HMGetFont(gaddr fontp)
 {

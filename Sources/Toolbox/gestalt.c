@@ -43,6 +43,7 @@ void gestalt_init(void)
 {
     count = 0;
     gestalt_set(fourcc("sysv"), 0x0710);      /* System 7.1 */
+    gestalt_set(fourcc("thds"), 0x3);         /* the Thread Manager, with exact-match pools */
     gestalt_set(fourcc("sysa"), 1);           /* 68k architecture */
     gestalt_set(fourcc("mach"), 35);          /* Quadra 800 */
     bool m040 = g_cpu && g_cpu->model == 68040;

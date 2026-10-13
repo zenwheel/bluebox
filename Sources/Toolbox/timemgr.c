@@ -160,13 +160,14 @@ int16_t tb_SlotVInstall(gaddr vtaskp, int16_t slot) { return tb_VInstall(vtaskp)
 int16_t tb_SlotVRemove(gaddr vtaskp, int16_t slot) { return tb_VRemove(vtaskp); }
 
 /* Run guest code as an interrupt handler would: everything preserved. */
-static void interrupt_call(gaddr fn, gaddr a0, gaddr a1)
+static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0)
 {
     cpu68k *c = g_cpu;
     uint32_t d[8], a[8];
     memcpy(d, c->d, sizeof d);
     memcpy(a, c->a, sizeof a);
     uint16_t sr = c->sr;
+    c->d[0] = d0;
     c->a[0] = a0;
     c->a[1] = a1;
     c->sr = (uint16_t)((c->sr & ~0x0700) | 0x0100); /* level 1, as the VIA interrupt */
@@ -176,12 +177,48 @@ static void interrupt_call(gaddr fn, gaddr a0, gaddr a1)
     c->sr = sr;
 }
 
+static void interrupt_call(gaddr fn, gaddr a0, gaddr a1) { interrupt_call_d0(fn, a0, a1, 0); }
+
+/* Completion routines of asynchronous File and Device Manager calls: our
+ * calls finish at once, and their completions run soon after, at interrupt
+ * level, with the parameter block in A0 and the result in D0, as when the
+ * I/O finished. Not from inside the call: a completion that queues the
+ * next read would otherwise recurse. */
+enum { MAX_COMPLETIONS = 64 };
+typedef struct {
+    gaddr pb;
+    int16_t result;
+} completion;
+static completion completions[MAX_COMPLETIONS];
+static int ncompletions;
+
+void io_complete_later(gaddr pb, int16_t result)
+{
+    if (ncompletions < MAX_COMPLETIONS)
+        completions[ncompletions++] = (completion){ pb, result };
+}
+
+static void run_completions(void)
+{
+    /* Those a completion queues wait for the next pump. */
+    int n = ncompletions;
+    completion due[MAX_COMPLETIONS];
+    memcpy(due, completions, sizeof due[0] * (size_t)n);
+    ncompletions = 0;
+    for (int i = 0; i < n; i++) {
+        gaddr fn = rd32(due[i].pb + 12); /* ioCompletion */
+        if (fn)
+            interrupt_call_d0(fn, due[i].pb, 0, (uint32_t)(int32_t)due[i].result);
+    }
+}
+
 void time_pump(void)
 {
     cpu68k *c = g_cpu;
     if (in_interrupt || !c || c->halted || (c->sr & 0x0700))
         return;
     in_interrupt = true;
+    run_completions();
     sound_pump(); /* sound completion ran at interrupt time too */
     midi_pump();
     uint64_t t = now();
@@ -236,5 +273,6 @@ void time_reset(void)
     }
     link_vbl_queue();
     vbl_ticks = 0;
+    ncompletions = 0;
     in_interrupt = false;
 }

@@ -58,6 +58,8 @@ int native_index_for(uint32_t addr)
     return (int)((addr - STUB_BASE) / STUB_SIZE);
 }
 
+void threads_switch_if_pending(cpu68k *c);
+
 void trap_native(cpu68k *c, uint16_t index)
 {
     if (index >= native_count) {
@@ -73,6 +75,7 @@ void trap_native(cpu68k *c, uint16_t index)
     last_trapword = tw;
     n->fn(c, tw);
     last_trapword = saved;
+    threads_switch_if_pending(c); /* before the stub's RTS */
 }
 
 /* ---------------------------------------------------------------------- */
@@ -332,6 +335,17 @@ static void aline_vector_native(cpu68k *c, uint16_t tw)
 /* ---------------------------------------------------------------------- */
 /* Dispatch */
 
+void io_complete_later(gaddr pb, int16_t result);
+void threads_switch_if_pending(cpu68k *c);
+
+/* The File and Device Manager traps, whose argument is a parameter block
+ * (InitQueue, $A016, has none). */
+static bool param_block_trap(uint16_t op)
+{
+    unsigned t = op & 0xFF;
+    return (t <= 0x18 && t != 0x16) || (t >= 0x41 && t <= 0x45) || t == 0x60;
+}
+
 void trap_aline(cpu68k *c, uint16_t op)
 {
     if (rd32(0x28) != aline_vector_stub) {
@@ -354,6 +368,7 @@ void trap_aline(cpu68k *c, uint16_t op)
             natives[n].fn(c, op);
             last_trapword = saved;
             current_trap = 0;
+            threads_switch_if_pending(c); /* a Thread Manager call returns in another thread */
             if (!c->halted)
                 c->pc = cpu_pop32(c);
         } else {
@@ -363,7 +378,9 @@ void trap_aline(cpu68k *c, uint16_t op)
     }
 
     /* OS trap: preserve A1, D1, D2 (and A0 unless bit 8), trap word in D1,
-     * condition codes from D0.W on return. */
+     * condition codes from D0.W on return. File and Device Manager calls
+     * also leave their result in the parameter block's ioResult, and an
+     * asynchronous one's completion routine runs. */
     uint32_t entry = rd32(OS_TRAP_TABLE + (op & 0xFFu) * 4);
     int n = native_index_for(entry);
     bool save_a0 = !(op & 0x0100);
@@ -379,6 +396,11 @@ void trap_aline(cpu68k *c, uint16_t op)
         natives[n].fn(c, op);
         last_trapword = saved;
         current_trap = 0;
+        if (param_block_trap(op) && a0 && !c->halted) {
+            wr16(a0 + 16, (uint16_t)c->d[0]); /* ioResult */
+            if ((op & 0x0400) && rd32(a0 + 12)) /* async, with an ioCompletion */
+                io_complete_later(a0, (int16_t)c->d[0]);
+        }
         c->a[1] = a1;
         c->d[1] = d1;
         c->d[2] = d2;
@@ -642,6 +664,23 @@ void trap_init(void)
     wr32(LM_JFLUSH, noop);
     wr32(LM_JResUnknown1, noop);
     wr32(LM_JResUnknown2, noop);
+
+    /* Jump vectors to ROM routines that are also traps, which programs
+     * call directly (StarGuardian calls FMSwapFont through JSwapFont):
+     * the trap's own entry, which a JSR reaches as the trap would. */
+    static const struct {
+        uint32_t lm;
+        uint16_t trap;
+    } jumps[] = {
+        { LM_JInitCrsr, 0xA850 },   { LM_JSetCrsr, 0xA851 },      { LM_JHideCursor, 0xA852 },
+        { LM_JShowCursor, 0xA853 }, { LM_JShieldCursor, 0xA855 }, { LM_JCrsrObscure, 0xA856 },
+        { LM_JSwapFont, 0xA901 },
+    };
+    for (unsigned i = 0; i < sizeof jumps / sizeof jumps[0]; i++) {
+        uint32_t entry = rd32(TB_TRAP_TABLE + (jumps[i].trap & 0x3FFu) * 4);
+        if (entry != unimpl_stub)
+            wr32(jumps[i].lm, entry);
+    }
 
     /* Exception vectors 2..63 (A-line gets its own marker stub). */
     uint32_t exc = native_register(exception_native, "Exception", 0);

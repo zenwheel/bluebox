@@ -53,6 +53,7 @@ typedef struct {
     uint32_t type; /* 'vide', 'soun', ... */
     int16_t width, height;
     gaddr handle;  /* the Track (and its Media, handle + 2) */
+    bool disabled; /* SetTrackEnabled(false) */
 } track;
 
 typedef struct {
@@ -77,6 +78,26 @@ typedef struct {
     track tracks[MAX_TRACKS];
     int ntracks;
 } movie;
+
+/* Whether any enabled track has this media type (or there are no tracks of
+ * it to go by). */
+static bool plays(const movie *m, const char *type)
+{
+    bool any = false;
+    for (int k = 0; k < m->ntracks; k++)
+        if (m->tracks[k].type == fourcc(type)) {
+            any = true;
+            if (!m->tracks[k].disabled)
+                return true;
+        }
+    return !any;
+}
+
+/* VLC's volume (0-100) for the movie's: silent with its sound disabled. */
+static int vlc_volume(const movie *m)
+{
+    return m->volume < 0 || !plays(m, "soun") ? 0 : m->volume * 100 / 256;
+}
 
 static movie movies[MAX_MOVIES];
 
@@ -493,7 +514,7 @@ static void ensure_player(movie *m)
     if (!m->player && m->play_path && use_vlc()) {
         m->player = qt_vlc_open(m->play_path, m->index_depth != 0);
         if (m->player)
-            qt_vlc_set_volume(m->player, m->volume * 100 / 256);
+            qt_vlc_set_volume(m->player, vlc_volume(m));
     }
 }
 
@@ -544,7 +565,7 @@ static void draw_frame(movie *m, bool force)
     if (!m->player)
         return;
     bool fresh = qt_vlc_frame(m->player, &m->serial, &m->frame, &m->fw, &m->fh, &m->frame_indexed);
-    if ((!fresh && !force) || !m->frame || !m->active)
+    if ((!fresh && !force) || !m->frame || !m->active || !plays(m, "vide"))
         return;
     gaddr saved = qd_port();
     tb_SetPort(m->port);
@@ -806,7 +827,7 @@ void tb_SetMovieVolume(int32_t h, int16_t volume)
         return;
     m->volume = volume;
     if (m->player)
-        qt_vlc_set_volume(m->player, volume < 0 ? 0 : volume * 100 / 256);
+        qt_vlc_set_volume(m->player, vlc_volume(m));
 }
 
 int16_t tb_GetMoviePreferredVolume(int32_t h)
@@ -975,6 +996,23 @@ int32_t tb_GetTrackMovie(int32_t t)
 {
     movie *m = movie_of_track((gaddr)t);
     return m ? (int32_t)m->handle : 0;
+}
+
+int8_t tb_GetTrackEnabled(int32_t t)
+{
+    track *tr = track_of((gaddr)t);
+    return tr && !tr->disabled;
+}
+
+void tb_SetTrackEnabled(int32_t t, int8_t enabled)
+{
+    track *tr = track_of((gaddr)t);
+    movie *m = movie_of_track((gaddr)t);
+    if (!tr || !m)
+        return;
+    tr->disabled = !enabled;
+    if (m->player)
+        qt_vlc_set_volume(m->player, vlc_volume(m));
 }
 
 int32_t tb_GetTrackMedia(int32_t t)
