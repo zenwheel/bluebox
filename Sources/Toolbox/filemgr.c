@@ -590,6 +590,22 @@ static void guest_tables_init(void)
     wr32(LM_VCBQHdr + 2, v);
     wr32(LM_VCBQHdr + 6, v);
     wr32(LM_DefVCBPtr, v);
+    /* The drive queue: drive 1 holds the volume.  Four flag bytes precede
+     * the element: not write-protected, a fixed disk, installed, one side. */
+    gaddr dq = mm_new_ptr_in(zone, 4 + DrvQEl_SIZEOF, true);
+    if (dq) {
+        wr8(dq + 1, 8);
+        wr8(dq + 2, 1);
+        gaddr e = dq + 4;
+        wr16(e + DrvQEl_qType_off, 1); /* dQDrvSz2 is valid */
+        wr16(e + DrvQEl_dQDrive_off, 1);
+        wr16(e + DrvQEl_dQRefNum_off, (uint16_t)-5);
+        wr16(e + DrvQEl_dQDrvSz_off, 0);      /* 2 GB in 512-byte blocks */
+        wr16(e + DrvQEl_dQDrvSz2_off, 0x40);
+        wr16(LM_DrvQHdr, 0);
+        wr32(LM_DrvQHdr + 2, e);
+        wr32(LM_DrvQHdr + 6, e);
+    }
 }
 
 void fm_fcb_record(int16_t rn, const char *path, bool rsrc, bool write, uint32_t eof, uint32_t pos)

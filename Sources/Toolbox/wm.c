@@ -509,18 +509,21 @@ static void repaint(const hrgn *clobbered)
         hrgn_op(&area, &area, &covered, RGN_DIFF);
         hrgn_op(&area, &area, &gray, RGN_SECT);
         if (!hrgn_empty(&area)) {
-            /* Content: erase and queue an update. */
+            /* Content: erase and queue an update (unless the program
+             * cleared PaintWhite or SaveUpdate to ask for neither). */
             hrgn cont;
             hrgn_init(&cont);
             rgn_read(WindowRecord_contRgn(w), &cont);
             hrgn_op(&cont, &cont, &area, RGN_SECT);
-            if (!hrgn_empty(&cont)) {
+            if (!hrgn_empty(&cont) && rd16(LM_SaveUpdate)) {
                 hrgn upd;
                 hrgn_init(&upd);
                 rgn_read(WindowRecord_updateRgn(w), &upd);
                 hrgn_op(&upd, &upd, &cont, RGN_UNION);
                 rgn_write(WindowRecord_updateRgn(w), &upd);
                 hrgn_free(&upd);
+            }
+            if (!hrgn_empty(&cont) && rd16(LM_PaintWhite)) {
                 gaddr saved = qd_port();
                 tb_SetPort(w);
                 int dh, dv;
@@ -569,8 +572,10 @@ static void repaint_all(void)
 
 static gaddr first_visible(void)
 {
+    /* GhostWindow (a floating window) is never the front one. */
+    gaddr ghost = rd32(LM_GhostWindow);
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
-        if (wvisible(w))
+        if (wvisible(w) && w != ghost)
             return w;
     return 0;
 }

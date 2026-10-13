@@ -24,7 +24,10 @@ enum { iPrAbort = 128, iMemFullErr = -108 };
 enum { TPrint_SIZE = 120, TPrPort_SIZE = 178 };
 int qd_rec_pages(const machine_print_page **out);
 
-static int16_t print_error;
+/* The Printing Manager's result: PrintErr in low memory, which programs
+ * also read and set directly. */
+static void set_print_error(int16_t e) { wr16(LM_PrintErr, (uint16_t)e); }
+#define print_error ((int16_t)rd16(LM_PrintErr))
 static machine_print_fn print_fn;
 static machine_page_setup_fn page_setup_fn;
 static void *print_ctx;
@@ -44,8 +47,8 @@ void machine_set_print_handlers(machine_print_fn print, machine_page_setup_fn pa
 void machine_set_page_defaults(const machine_page_setup *ps) { defaults = *ps; }
 
 int16_t tb_PrError(void) { return print_error; }
-void tb_PrSetError(int16_t iErr) { print_error = iErr; }
-void tb_PrOpen(void) { print_error = noErr; }
+void tb_PrSetError(int16_t iErr) { set_print_error(iErr); }
+void tb_PrOpen(void) { set_print_error(noErr); }
 void tb_PrClose(void) {}
 void tb_PrDrvrOpen(void) {}
 void tb_PrDrvrClose(void) {}
@@ -96,7 +99,7 @@ void tb_PrintDefault(gaddr h)
     wr16(p + 64, 9999);                /* iLstPage */
     wr16(p + 66, 1);                   /* iCopies */
     wr8(p + 68, 0);                    /* bJDocLoop: draft, no spooling */
-    print_error = noErr;
+    set_print_error(noErr);
 }
 
 int8_t tb_PrValidate(gaddr h)
@@ -114,11 +117,11 @@ int8_t tb_PrStlDialog(gaddr h)
     machine_page_setup ps;
     get_setup(rd32(h), &ps);
     if (!page_setup_fn) {
-        print_error = noErr;
+        set_print_error(noErr);
         return 1; /* no host panel: keep the defaults */
     }
     if (!page_setup_fn(&ps, print_ctx)) {
-        print_error = noErr;
+        set_print_error(noErr);
         return 0;
     }
     put_setup(rd32(h), &ps);
@@ -135,7 +138,7 @@ int8_t tb_PrJobDialog(gaddr h)
     wr16(p + 64, 9999);
     wr16(p + 66, 1);
     wr8(p + 68, 0);
-    print_error = noErr;
+    set_print_error(noErr);
     return 1;
 }
 
@@ -152,7 +155,7 @@ gaddr tb_PrOpenDoc(gaddr h, gaddr port, gaddr pIOBuf)
     if (!port)
         port = tb_NewPtr(TPrPort_SIZE, false, true);
     if (!port) {
-        print_error = iMemFullErr;
+        set_print_error(iMemFullErr);
         return 0;
     }
     /* A real bitmap for the page, so anything drawing pixels has somewhere
@@ -169,7 +172,7 @@ gaddr tb_PrOpenDoc(gaddr h, gaddr port, gaddr pIOBuf)
     job_port = port;
     job_print = h;
     qd_rec_begin(port);
-    print_error = noErr;
+    set_print_error(noErr);
     return port;
 }
 

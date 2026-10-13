@@ -79,6 +79,22 @@ static void init_lowmem(void)
     wr16(LM_TimeSCCDB, 2500);
     wr16(LM_TimeSCSIDB, 2500);
     wr16(0x0CEA, 1500);               /* TimeVIADB */
+    /* The parameter RAM copy (SysParam): valid, the serial ports at 9600
+     * baud 8N2, no alarm, Geneva as the application font, key repeat,
+     * speaker volume 7, double-click and caret times (8 x 4 ticks). */
+    wr8(LM_SPValid, 0xA8);
+    wr16(LM_SPPortA, 0xCC0A);
+    wr16(LM_SPPortB, 0xCC0A);
+    wr16(LM_SPFont, 0);               /* applFont less one */
+    wr8(LM_SPKbd, 0x63);
+    wr8(LM_SPVolCtl, 7);
+    wr8(LM_SPClikCaret, 0x88);
+    wr8(LM_SPMisc2, 0x4C);
+    wr32(LM_MinStack, 0x400);
+    wr32(LM_DefltStack, 0x2000);
+    gput(LM_SysResName, (const uint8_t *)"\006System", 7);
+    wr16(LM_PaintWhite, 0xFFFF);      /* erase what is exposed */
+    wr16(LM_SaveUpdate, 0xFFFF);      /* and queue its update */
     wr8(LM_QDExist, 0xFF);            /* QuickDraw not initialised */
     wr8(LM_WWExist, 0xFF);            /* Window Manager not initialised */
     wr32(LM_DoubleTime, 30);
@@ -181,6 +197,12 @@ static void hardware_globals(void)
     /* No drivers live in the table: every unit empty. */
     wr32(LM_UTableBase, mm_new_ptr_in(GA_SYSHEAP, 64 * 4, true));
     wr16(LM_UnitNtryCnt, 64);
+    /* ScrapName: the Clipboard file's name. */
+    static const uint8_t scrap[] = "\016Clipboard File";
+    gaddr name = mm_new_ptr_in(GA_SYSHEAP, sizeof scrap, true);
+    if (name)
+        gput(name, scrap, sizeof scrap - 1);
+    wr32(LM_ScrapName, name);
 }
 
 bool machine_boot(bool census)
@@ -232,6 +254,8 @@ bool machine_boot(bool census)
     notify_reset();
 
     qd_screen_init(screen_w, screen_h);
+    /* CrsrPin: the mouse stays on the screen. */
+    qrect_put(LM_CrsrPin, (qrect){ 0, 0, (int16_t)screen_h, (int16_t)screen_w });
 
     /* No documents to open. */
     gaddr parms = tb_NewHandle(4, false, true);

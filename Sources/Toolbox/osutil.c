@@ -250,6 +250,7 @@ void raw_WriteXPRam(cpu68k *c, uint16_t tw)
 /* SysError: on a real Mac, the bomb box.  The error code is in D0. */
 void tb_SysError(int16_t code)
 {
+    wr16(LM_DSErrCode, (uint16_t)g_cpu->d[0]);
     cpu_halt(g_cpu, "SysError %d", (int16_t)g_cpu->d[0]);
 }
 

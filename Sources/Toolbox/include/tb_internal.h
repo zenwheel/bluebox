@@ -46,7 +46,14 @@ enum {
 };
 
 static inline void set_mem_err(int16_t e) { wr16(LM_MemErr, (uint16_t)e); }
-static inline void set_res_err(int16_t e) { wr16(LM_ResErr, (uint16_t)e); }
+/* ResErr, and the application's ResErrProc (if any) told of an error. */
+void res_err_proc(int16_t e);
+static inline void set_res_err(int16_t e)
+{
+    wr16(LM_ResErr, (uint16_t)e);
+    if (e && rd32(LM_ResErrProc))
+        res_err_proc(e);
+}
 
 /* ---- Memory Manager internals ---- */
 

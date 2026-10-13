@@ -105,6 +105,7 @@ extension Classic {
 
         /// Low memory programs read directly holds what a real Mac's would.
         @Test func lowMemoryAtBoot() {
+            launchTestApp() // the file system's tables come with a launch
             #expect(Int16(bitPattern: rd16(0x100)) < 0)  // MonkeyLives: no Monkey
             #expect(rd8(0x21E) == 2)                     // KbdType: extended keyboard
             #expect(rd8(0x260) == 7)                     // SdVolume
@@ -112,6 +113,29 @@ extension Classic {
             // Hardware and the unit table: memory of their own, not address 0.
             for a in [0x1D4, 0x1D8, 0x1DC, 0x1E0, 0x266, 0x11C] as [UInt32] { #expect(rd32(a) >= 0x1000) }
             #expect(rd16(0x1D2) > 0)                     // UnitNtryCnt
+            #expect(rd8(0x1F8) == 0xA8)                  // SPValid: parameter RAM valid
+            #expect(Int16(bitPattern: rd16(0x9DC)) == -1) // PaintWhite
+            // The drive queue holds the volume as drive 1.
+            let drive = rd32(0x308 + 2)
+            #expect(drive != 0 && rd16(drive + 6) == 1)
+            let scrap = rd32(0x96C)                      // ScrapName
+            #expect(scrap != 0 && rd8(scrap) == 14)
+        }
+
+        /// ResErrProc hears of resource errors; RomMapInsert lasts one call.
+        @Test func resourceManagerLowMemory() {
+            setStack()
+            let out = tb_NewPtr(4, false, true)
+            let words: [UInt16] = [0x23C0, UInt16(out >> 16), UInt16(out & 0xFFFF), 0x4E75] // MOVE.L D0,out; RTS
+            let proc = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(proc + UInt32(i * 2), w) }
+            wr32(0xAF2, proc)
+            _ = tb_HomeResFile(0)
+            #expect(Int32(bitPattern: rd32(out)) == -192) // resNotFound
+            wr32(0xAF2, 0)
+            wr8(0xB9E, 0xFF)
+            _ = tb_GetResource(Int32(bitPattern: 0x43555253), 1) // 'CURS' 1
+            #expect(rd8(0xB9E) == 0)
         }
 
         @Test func vblTaskRunsWhenItsCountReachesZero() {

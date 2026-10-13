@@ -366,7 +366,53 @@ static gaddr load_ref(gaddr maph, uint32_t r, uint32_t type)
     return result;
 }
 
+/* ResErrProc: called with the error in D0 whenever ResErr is set to one
+ * (not again for errors its own Resource Manager calls make). */
+void res_err_proc(int16_t e)
+{
+    static bool busy;
+    gaddr proc = rd32(LM_ResErrProc);
+    if (busy || !proc || !g_cpu)
+        return;
+    busy = true;
+    uint32_t d0 = g_cpu->d[0];
+    g_cpu->d[0] = (uint32_t)(int32_t)e;
+    guest_call(proc);
+    g_cpu->d[0] = d0;
+    busy = false;
+}
+
+/* RomMapInsert: the next call also searches the ROM's resources (here the
+ * System file stands in for the ROM, so it always does), loading them as
+ * TmpResLoad says; both are cleared after that one call. */
+static uint8_t rom_map_begin(void)
+{
+    uint8_t saved = rd8(LM_ResLoad);
+    if (rd8(LM_RomMapInsert))
+        wr8(LM_ResLoad, rd8(LM_TmpResLoad));
+    return saved;
+}
+
+static void rom_map_end(uint8_t saved)
+{
+    if (!rd8(LM_RomMapInsert))
+        return;
+    wr8(LM_ResLoad, saved);
+    wr8(LM_RomMapInsert, 0);
+    wr8(LM_TmpResLoad, 0);
+}
+
+static gaddr get_res_in(uint32_t type, int16_t id, bool one);
+
 static gaddr get_res(uint32_t type, int16_t id, bool one)
+{
+    uint8_t saved = rom_map_begin();
+    gaddr h = get_res_in(type, id, one);
+    rom_map_end(saved);
+    return h;
+}
+
+static gaddr get_res_in(uint32_t type, int16_t id, bool one)
 {
     for (gaddr maph = cur_map(); maph; maph = map_next(maph)) {
         uint32_t r = find_ref(maph, type, id);
