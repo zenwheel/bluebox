@@ -410,6 +410,7 @@ the trap census.
   - Preferences files are kept with the disk.
 - **Settings**, in one place (the environment profile behind them stays a file `classic` reads):
   - per application: screen depth, CPU, appearance or theme, memory size
+  - the highlight colour (HiliteRGB): by default the host's selection colour, read at launch
   - networking (M5): AppleTalk on or off, the LocalTalk-over-UDP group, the EtherTalk interface, MacTCP on or off
   - serial ports (M5b): what modem and printer ports connect to
   - fonts: add the user's own classic fonts (from their own System file or font suitcases), which then replace the open-source stand-ins

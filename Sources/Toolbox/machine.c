@@ -34,6 +34,15 @@ uint32_t mac_now(void);
 /* The date at boot: Time follows the machine's clock from it. */
 static uint32_t boot_time;
 
+static uint16_t hilite_rgb[3] = { 0xCCCC, 0xCCCC, 0xFFFF };
+
+void machine_set_hilite_color(uint16_t r, uint16_t g, uint16_t b)
+{
+    hilite_rgb[0] = r;
+    hilite_rgb[1] = g;
+    hilite_rgb[2] = b;
+}
+
 static uint64_t now_ns(void)
 {
     struct timespec ts;
@@ -53,10 +62,11 @@ static void init_lowmem(void)
     wr32(LM_ROMBase, GA_ROM);
     wr16(LM_ROM85, 0x3FFF);           /* new ROMs, Color QuickDraw */
     wr8(LM_CPUFlag, g_cpu->model == 68040 ? 4 : 2);
-    /* The highlight colour: Mac OS 8's lavender (the Color control panel's). */
-    wr16(LM_HiliteRGB, 0xCCCC);
-    wr16(LM_HiliteRGB + 2, 0xCCCC);
-    wr16(LM_HiliteRGB + 4, 0xFFFF);
+    /* The highlight colour: the host's selection colour when the host gave
+     * one, else Mac OS 8's lavender (the Color control panel's). */
+    wr16(LM_HiliteRGB, hilite_rgb[0]);
+    wr16(LM_HiliteRGB + 2, hilite_rgb[1]);
+    wr16(LM_HiliteRGB + 4, hilite_rgb[2]);
     wr8(LM_HiliteMode, 0xFF); /* no highlighting pending */
     wr8(LM_MMU32Bit, 1);              /* 32-bit addressing */
     wr16(LM_SysVersion, 0x0710);

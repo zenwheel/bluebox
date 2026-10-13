@@ -33,6 +33,9 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out);
  * Call before boot. */
 enum { MACHINE_APPEARANCE_BW, MACHINE_APPEARANCE_THEME, MACHINE_APPEARANCE_NATIVE };
 void machine_set_appearance(int appearance);
+/* The highlight colour (HiliteRGB) from boot on: the host's selection
+ * colour, for selected text and list rows to match the host. */
+void machine_set_hilite_color(uint16_t r, uint16_t g, uint16_t b);
 /* Use a Kaleidoscope 2 scheme file (AppleDouble) for windows and controls;
  * implies MACHINE_APPEARANCE_THEME and a 32-bit screen.  Before boot. */
 bool machine_load_theme(const char *path, char *err, size_t errlen);

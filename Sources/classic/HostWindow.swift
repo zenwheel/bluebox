@@ -263,6 +263,14 @@ func nameProcess(_ name: String) {
     }
 }
 
+/// The classic highlight colour (HiliteRGB) follows the host's selection
+/// colour, so selected text and rows look as the host's do.
+@MainActor func useHostSelectionColor() {
+    guard let c = NSColor.selectedTextBackgroundColor.usingColorSpace(.sRGB) else { return }
+    func word(_ v: CGFloat) -> UInt16 { UInt16((max(0, min(1, v)) * 65535).rounded()) }
+    machine_set_hilite_color(word(c.redComponent), word(c.greenComponent), word(c.blueComponent))
+}
+
 /// The classic application's Finder icon, for the Dock and alerts.
 nonisolated(unsafe) var appIcon: NSImage?
 

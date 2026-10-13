@@ -360,6 +360,9 @@ func runCommand(_ args: [String]) {
     }
     #endif
     machine_set_appearance(appearance)
+    #if canImport(AppKit)
+    if interactive { MainActor.assumeIsolated { useHostSelectionColor() } }
+    #endif
     if let themePath {
         var terr = [CChar](repeating: 0, count: 256)
         guard machine_load_theme(themePath, &terr, terr.count) else { fail(str(terr)) }
