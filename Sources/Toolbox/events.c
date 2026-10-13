@@ -61,7 +61,7 @@ void machine_attach_host(bool attached) { host_attached = attached; }
 
 typedef struct {
     uint64_t at;
-    int kind; /* 0 key, 1 mouse, 2 menu */
+    int kind; /* 0 key, 1 mouse, 2 menu, 3 key down, 4 key up */
     int a, b, c;
 } script_step;
 
@@ -84,10 +84,12 @@ void events_script_pump(uint64_t now)
     while (script_next < nscript && script[script_next].at <= now) {
         script_step s = script[script_next++];
         switch (s.kind) {
-        case 0:
-            machine_post_key(s.a, 0, (unsigned)s.b, 1, 0);
-            machine_post_key(s.a, 0, (unsigned)s.b, 0, 0);
+        case 0: /* a: character, b: modifiers, c: key code */
+            machine_post_key(s.a, s.c, (unsigned)s.b, 1, 0);
+            machine_post_key(s.a, s.c, (unsigned)s.b, 0, 0);
             break;
+        case 3: machine_post_key(s.a, s.c, (unsigned)s.b, 1, 0); break; /* held down */
+        case 4: machine_post_key(s.a, s.c, (unsigned)s.b, 0, 0); break; /* released */
         case 1: machine_post_mouse(s.a, s.b, s.c); break;
         case 2: machine_choose_menu((int16_t)s.a, (int16_t)s.b); break;
         }
@@ -102,7 +104,10 @@ void events_sync_lowmem(void)
     pthread_mutex_lock(&lock);
     uint32_t pt = make_pt(mouse_v, mouse_h);
     bool down = button_down;
+    uint8_t keys[16];
+    memcpy(keys, keymap, sizeof keys);
     pthread_mutex_unlock(&lock);
+    gput(LM_KeyMap, keys, sizeof keys); /* games read it in place of GetKeys */
     wr8(LM_MBState, down ? 0x00 : 0x80);
     wr32(LM_MTemp, pt);
     wr32(LM_MouseLocation, pt);
@@ -389,6 +394,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     notify_pump();
     display_sync();
     if (next_event(mask, evp, true, false)) {
+        LOGF(LOG_TRAPS, "  event %d message %08X\n", (int16_t)rd16(evp), rd32(evp + 2));
         note_repeated_update(evp);
         return 1;
     }

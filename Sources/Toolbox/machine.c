@@ -31,6 +31,9 @@ static uint64_t skipped_ns; /* Delay's skips (see machine_time_ns) */
 
 uint32_t mac_now(void);
 
+/* The date at boot: Time follows the machine's clock from it. */
+static uint32_t boot_time;
+
 static uint64_t now_ns(void)
 {
     struct timespec ts;
@@ -60,7 +63,8 @@ static void init_lowmem(void)
     wr32(LM_Lo3Bytes, 0x00FFFFFF);
     wr32(LM_MinusOne, 0xFFFFFFFF);
     wr32(LM_OneOne, 0x00010001);
-    wr32(LM_Time, mac_now());
+    boot_time = mac_now();
+    wr32(LM_Time, boot_time);
     wr32(LM_Ticks, 0);
     wr8(LM_QDExist, 0xFF);            /* QuickDraw not initialised */
     wr8(LM_WWExist, 0xFF);            /* Window Manager not initialised */
@@ -351,9 +355,14 @@ void machine_skip_time(uint64_t ns) { skipped_ns += ns; }
 /* Bring the 60 Hz tick counter up to the machine's time. */
 void machine_advance_ticks(void)
 {
-    uint64_t ticks = machine_time_ns() * 60 / 1000000000u;
+    uint64_t ns = machine_time_ns();
+    uint64_t ticks = ns * 60 / 1000000000u;
     if ((uint32_t)ticks > rd32(LM_Ticks))
         wr32(LM_Ticks, (uint32_t)ticks);
+    /* Time, the seconds since 1904, which programs also read in place. */
+    uint32_t secs = boot_time + (uint32_t)(ns / 1000000000u);
+    if (secs > rd32(LM_Time))
+        wr32(LM_Time, secs);
 }
 
 run_status machine_run(uint64_t max)

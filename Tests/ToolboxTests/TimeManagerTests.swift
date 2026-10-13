@@ -36,10 +36,12 @@ extension Classic {
             tb_PrimeTime(tm, 1)
             #expect(rd16(tm + 4) & 0x8000 != 0)
             g_cpu!.pointee.d.0 = 7
+            g_cpu!.pointee.sr = 0x2004 // Z set: the interrupted code may be about to branch on it
             machine_skip_time(5_000_000) // headless, the clock follows instructions
             time_pump()
             #expect(rd32(out) == tm && rd32(out + 8) == 1)
             #expect(g_cpu!.pointee.d.0 == 7)
+            #expect(g_cpu!.pointee.sr == 0x2004)
             #expect(rd16(tm + 4) & 0x8000 == 0)
             time_pump()
             #expect(rd32(out + 8) == 1) // once only
@@ -48,6 +50,26 @@ extension Classic {
             tb_RmvTime(tm)
             let left = Int32(bitPattern: rd32(tm + UInt32(TMTask_tmCount_off)))
             #expect(left < -9_000_000 && left >= -10_000_000)
+        }
+
+        /// Time (seconds since 1904) moves on with the clock, as Ticks does.
+        @Test func timeFollowsTheClock() {
+            machine_advance_ticks()
+            let t0 = rd32(0x20C)
+            machine_skip_time(2_000_000_000)
+            machine_advance_ticks()
+            #expect(rd32(0x20C) - t0 == 2)
+        }
+
+        /// Keys held down show in the low-memory KeyMap, which games read
+        /// in place of GetKeys.
+        @Test func keyMapInLowMemory() {
+            machine_post_key(Int32(UInt8(ascii: "p")), 35, 0, 1, 0)
+            events_sync_lowmem()
+            #expect(rd8(0x174 + 4) & 0x08 != 0) // key code 35: byte 4, bit 3
+            machine_post_key(Int32(UInt8(ascii: "p")), 35, 0, 0, 0)
+            events_sync_lowmem()
+            #expect(rd8(0x174 + 4) & 0x08 == 0)
         }
 
         @Test func vblTaskRunsWhenItsCountReachesZero() {

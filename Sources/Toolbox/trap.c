@@ -465,15 +465,20 @@ void guest_call_regs(gaddr fn)
     c->pc = saved_pc;
 }
 
+/* Call fn with the registers kept, the status register (condition codes)
+ * included: tasks run between two instructions, as an interrupt would,
+ * must not change a comparison the interrupted code is about to branch on. */
 void guest_call(gaddr fn)
 {
     cpu68k *c = g_cpu;
     uint32_t d[8], a[7];
+    uint16_t sr = c->sr;
     memcpy(d, c->d, sizeof d);
     memcpy(a, c->a, sizeof a);
     guest_call_regs(fn);
     memcpy(c->d, d, sizeof d);
     memcpy(c->a, a, sizeof a);
+    c->sr = sr;
 }
 
 /* ---------------------------------------------------------------------- */

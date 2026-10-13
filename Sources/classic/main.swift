@@ -53,7 +53,9 @@ func usage() -> Never {
                      "archive.sit:Name" picks one), or the name of an imported
                      scheme (classic themes lists them); themes use a 32-bit screen
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
-                     text:abc, return, tab, menu:ID/item (e.g. menu:128/1), and
+                     text:abc, return, tab, menu:ID/item (e.g. menu:128/1),
+                     keydown:K and keyup:K (K a character, space, return, tab,
+                     escape, delete or an arrow: left, right, up, down), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2
       classic import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
@@ -143,8 +145,29 @@ func menuStep(_ step: String) -> (Int16, Int16)? {
     return parts.count == 2 ? (parts[0], parts[1]) : nil
 }
 
+/// US key codes for scripted keys: characters, and named keys.
+private let scriptKeyCodes: [String: Int32] = {
+    var codes: [String: Int32] = [:]
+    let rows: [(String, [Int32])] = [
+        ("asdfhgzxcv", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        ("bqweryt123465=97-8", [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]),
+        ("0]ou[ip", [29, 30, 31, 32, 33, 34, 35]),
+        ("lj'k;\\,/nm.", [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]),
+    ]
+    for (chars, keys) in rows {
+        for (c, k) in zip(chars, keys) { codes[String(c)] = k; codes[String(c).uppercased()] = k }
+    }
+    codes["`"] = 50
+    for (name, k) in [("return", 36), ("tab", 48), ("space", 49), ("delete", 51), ("escape", 53),
+                      ("left", 123), ("right", 124), ("down", 125), ("up", 126)] as [(String, Int32)] {
+        codes[name] = k
+    }
+    return codes
+}()
+
 /// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item,
-/// and the mouse.  Each step is queued at an instruction count (the waits
+/// keydown:K and keyup:K (K a character or return, tab, space, delete, escape,
+/// left, right, up, down: held for games that poll the keyboard), and the mouse.  Each step is queued at an instruction count (the waits
 /// add up; other steps are spaced a little apart) and applied by the
 /// emulator when due, even while the application waits in the Toolbox.
 func queueScript(_ script: [String], start: UInt64) {
@@ -182,6 +205,15 @@ func queueScript(_ script: [String], start: UInt64) {
             at += 200_000
             continue
         }
+        if let colon = step.firstIndex(of: ":"), ["keydown", "keyup"].contains(String(step[..<colon])) {
+            let name = String(step[step.index(after: colon)...])
+            guard let code = scriptKeyCodes[name] else { fail("unknown key: \(step)") }
+            let ch: Int32 = name.count == 1 ? Int32(name.utf8.first!) :
+                ["return": 13, "tab": 9, "space": 32, "delete": 8, "escape": 27, "left": 28, "right": 29,
+                 "up": 30, "down": 31][name] ?? 0
+            add(step.hasPrefix("keydown") ? 3 : 4, ch, 0, code, after: 50_000)
+            continue
+        }
         var mods: Int32 = 0
         var chars: [UInt8] = []
         if step.hasPrefix("cmd-") {
@@ -194,7 +226,10 @@ func queueScript(_ script: [String], start: UInt64) {
         } else if step == "tab" {
             chars = [9]
         }
-        for ch in chars { add(0, Int32(ch), mods, after: 50_000) }
+        for ch in chars {
+            let code = ch == 13 ? 36 : ch == 9 ? 48 : scriptKeyCodes[String(UnicodeScalar(ch))] ?? 0
+            add(0, Int32(ch), mods, code, after: 50_000)
+        }
     }
 }
 
