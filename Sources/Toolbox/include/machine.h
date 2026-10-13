@@ -106,8 +106,19 @@ typedef struct {
  * in a ShieldCursor rectangle), the arrow or a 16x16 image (data and mask
  * bits, rows of two bytes, the hot spot), and a count of ObscureCursor
  * calls (hide until the mouse moves).  The result changes with it. */
+/* Which cursor it is, so the host can show its own: the arrow, one of the
+ * System's (CURS 1 to 4), or an image of the application's. */
+enum {
+    MACHINE_CURSOR_CUSTOM,
+    MACHINE_CURSOR_ARROW,
+    MACHINE_CURSOR_IBEAM,
+    MACHINE_CURSOR_CROSS,
+    MACHINE_CURSOR_PLUS,
+    MACHINE_CURSOR_WATCH,
+};
 typedef struct {
     bool hidden, arrow;
+    int kind;
     uint8_t data[32], mask[32];
     int16_t hot_h, hot_v;
     uint32_t obscures;

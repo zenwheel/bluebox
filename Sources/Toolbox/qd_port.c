@@ -5,6 +5,7 @@
 #include "qd_internal.h"
 #include "tb_internal.h"
 #include "machine.h"
+#include "sysres_gen.h"
 #include "trap.h"
 
 const uint8_t qd_pat_black[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
@@ -540,7 +541,7 @@ gaddr tb_NewPixPat(void)
  * reads it from its own thread. */
 uint32_t ev_mouse_global(void);
 static pthread_mutex_t cursor_lock = PTHREAD_MUTEX_INITIALIZER;
-static machine_cursor cursor = { .arrow = true };
+static machine_cursor cursor = { .arrow = true, .kind = MACHINE_CURSOR_ARROW };
 static int cursor_level, shield_depth;
 static qrect shield; /* global */
 static uint32_t cursor_version;
@@ -569,6 +570,22 @@ uint32_t machine_cursor_state(machine_cursor *out)
     return version;
 }
 
+/* One of the System's own cursors (CURS 1 to 4), which the host can show
+ * as its own equivalent; MACHINE_CURSOR_CUSTOM otherwise. */
+static int standard_kind(const machine_cursor *c)
+{
+    static const int kinds[5] = { 0, MACHINE_CURSOR_IBEAM, MACHINE_CURSOR_CROSS, MACHINE_CURSOR_PLUS,
+                                  MACHINE_CURSOR_WATCH };
+    for (unsigned i = 0; i < sysres_count; i++) {
+        const sysres_entry *e = &sysres[i];
+        if (e->type != 0x43555253u /* CURS */ || e->id < 1 || e->id > 4 || e->len < 68)
+            continue;
+        if (!memcmp(e->data, c->data, 32) && !memcmp(e->data + 32, c->mask, 32))
+            return kinds[e->id];
+    }
+    return MACHINE_CURSOR_CUSTOM;
+}
+
 static void set_image(gaddr data, gaddr mask, gaddr hot)
 {
     pthread_mutex_lock(&cursor_lock);
@@ -582,6 +599,7 @@ static void set_image(gaddr data, gaddr mask, gaddr hot)
             (cursor.mask[i * 2] << 8 | cursor.mask[i * 2 + 1]) != arrow_mask[i])
             arrow = false;
     cursor.arrow = arrow && cursor.hot_v == 1 && cursor.hot_h == 1;
+    cursor.kind = cursor.arrow ? MACHINE_CURSOR_ARROW : standard_kind(&cursor);
     cursor_version++;
     pthread_mutex_unlock(&cursor_lock);
 }
@@ -590,6 +608,7 @@ void tb_InitCursor(void)
 {
     pthread_mutex_lock(&cursor_lock);
     cursor.arrow = true;
+    cursor.kind = MACHINE_CURSOR_ARROW;
     cursor_level = 0;
     shield_depth = 0;
     cursor_changed();

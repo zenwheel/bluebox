@@ -219,9 +219,40 @@ static bool suite_image(gaddr suite, int size, icon_img *img)
  * to fit, keeping its shape.  Alignment: the low two bits place it
  * vertically (0 or 1 centred, 2 top, 3 bottom), the next two horizontally
  * (0 or 4 centred, 8 left, 12 right). */
+/* Keep only the drawn part (the mask's bounding box) of an icon. */
+static void crop_to_mask(icon_img *img)
+{
+    int top = img->h, left = img->w, bottom = 0, right = 0;
+    for (int y = 0; y < img->h; y++)
+        for (int x = 0; x < img->w; x++)
+            if (img->px[(y * img->w + x) * 4 + 3]) {
+                if (y < top) top = y;
+                if (y >= bottom) bottom = y + 1;
+                if (x < left) left = x;
+                if (x >= right) right = x + 1;
+            }
+    if (bottom <= top || (top == 0 && left == 0 && bottom == img->h && right == img->w))
+        return;
+    int w = right - left, h = bottom - top;
+    for (int y = 0; y < h; y++)
+        memmove(img->px + (size_t)y * (size_t)w * 4, img->px + ((size_t)(y + top) * (size_t)img->w + (size_t)left) * 4,
+                (size_t)w * 4);
+    img->w = w;
+    img->h = h;
+}
+
 static void plot(icon_img *img, qrect r, int16_t align, int16_t transform)
 {
     int rw = r.right - r.left, rh = r.bottom - r.top;
+    /* A small icon in a mini icon's place (16x12): its drawing is rarely the
+     * full 16 rows, so it is shown at its own size when what it draws fits,
+     * rather than shrunk (which loses rows of detail). */
+    if (img->w > rw || img->h > rh) {
+        icon_img trimmed = *img;
+        crop_to_mask(&trimmed);
+        if (trimmed.w <= rw && trimmed.h <= rh)
+            *img = trimmed;
+    }
     int dw = img->w, dh = img->h;
     bool standard = (rw == 32 || rw == 16 || rw == 12) && (rh == 32 || rh == 16 || rh == 12);
     if (!standard || dw > rw || dh > rh) {

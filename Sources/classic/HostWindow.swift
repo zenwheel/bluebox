@@ -208,7 +208,7 @@ func nameProcess(_ name: String) {
                 obscures = state.obscures
                 NSCursor.setHiddenUntilMouseMoves(true)
             }
-            let key = [state.arrow ? 1 : 0, Int(state.hot_h), Int(state.hot_v)]
+            let key = [Int(state.kind), Int(state.hot_h), Int(state.hot_v)]
                 + withUnsafeBytes(of: state.data) { $0.map(Int.init) } + withUnsafeBytes(of: state.mask) { $0.map(Int.init) }
             if key != imageKey {
                 imageKey = key
@@ -225,33 +225,41 @@ func nameProcess(_ name: String) {
 
     private func setImage() {
         let next: NSCursor
-        if state.arrow {
-            next = .arrow
-        } else {
-            // Mask and data: black, white, clear; data outside the mask inverts (shown black).
-            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 16, pixelsHigh: 16, bitsPerSample: 8,
-                                       samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                       colorSpaceName: .deviceRGB, bytesPerRow: 64, bitsPerPixel: 32)!
-            let px = rep.bitmapData!
-            let data = withUnsafeBytes(of: state.data) { Array($0) }
-            let mask = withUnsafeBytes(of: state.mask) { Array($0) }
-            for y in 0..<16 {
-                for x in 0..<16 {
-                    let bit = UInt8(0x80 >> (x % 8)), i = y * 2 + x / 8
-                    let d = data[i] & bit != 0, m = mask[i] & bit != 0
-                    let o = (y * 16 + x) * 4
-                    let v: UInt8 = d ? 0 : 255
-                    px[o] = v; px[o + 1] = v; px[o + 2] = v
-                    px[o + 3] = d || m ? 255 : 0
-                }
-            }
-            let image = NSImage(size: NSSize(width: 16, height: 16))
-            image.addRepresentation(rep)
-            next = NSCursor(image: image, hotSpot: NSPoint(x: CGFloat(state.hot_h), y: CGFloat(state.hot_v)))
+        // The System's own cursors as the host's (the plus and the watch
+        // have no public macOS equivalent and keep their classic images).
+        switch Int(state.kind) {
+        case Int(MACHINE_CURSOR_ARROW): next = .arrow
+        case Int(MACHINE_CURSOR_IBEAM): next = .iBeam
+        case Int(MACHINE_CURSOR_CROSS): next = .crosshair
+        default: next = classicImage()
         }
         cursor = next
         for w in NSApp.windows { w.invalidateCursorRects(for: w.contentView ?? NSView()) }
         if NSApp.windows.contains(where: { $0.isVisible && $0.frame.contains(NSEvent.mouseLocation) }) { next.set() }
+    }
+
+    /// The cursor's own 16x16 image: black, white or clear by data and mask
+    /// (data outside the mask, which inverts, shown black).
+    private func classicImage() -> NSCursor {
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 16, pixelsHigh: 16, bitsPerSample: 8,
+                                   samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 64, bitsPerPixel: 32)!
+        let px = rep.bitmapData!
+        let data = withUnsafeBytes(of: state.data) { Array($0) }
+        let mask = withUnsafeBytes(of: state.mask) { Array($0) }
+        for y in 0..<16 {
+            for x in 0..<16 {
+                let bit = UInt8(0x80 >> (x % 8)), i = y * 2 + x / 8
+                let d = data[i] & bit != 0, m = mask[i] & bit != 0
+                let o = (y * 16 + x) * 4
+                let v: UInt8 = d ? 0 : 255
+                px[o] = v; px[o + 1] = v; px[o + 2] = v
+                px[o + 3] = d || m ? 255 : 0
+            }
+        }
+        let image = NSImage(size: NSSize(width: 16, height: 16))
+        image.addRepresentation(rep)
+        return NSCursor(image: image, hotSpot: NSPoint(x: CGFloat(state.hot_h), y: CGFloat(state.hot_v)))
     }
 }
 

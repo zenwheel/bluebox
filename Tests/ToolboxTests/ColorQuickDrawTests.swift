@@ -96,6 +96,12 @@ extension Classic {
             tb_SetCursor(crsr)
             _ = machine_cursor_state(&c)
             #expect(!c.arrow && c.hot_h == 8 && c.data.0 == 0x0F)
+            #expect(c.kind == Int32(MACHINE_CURSOR_CUSTOM))
+            // The System's I-beam (CURS 1) is known, for the host's own.
+            tb_SetCursor(rd32(tb_GetCursor(1)))
+            _ = machine_cursor_state(&c)
+            #expect(c.kind == Int32(MACHINE_CURSOR_IBEAM))
+            tb_SetCursor(crsr)
             // Shielded: hidden only while the mouse is in the rectangle.
             tb_ShieldCursor(rect(100, 100, 200, 200), 0)
             machine_post_mouse(150, 150, -1)
