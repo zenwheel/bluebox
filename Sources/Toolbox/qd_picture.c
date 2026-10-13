@@ -341,24 +341,43 @@ static void show_image(const image *img, qrect src, qrect dst, int mode, const h
     gaddr port = qd_port();
     if (qd_rec_active(port))
         qd_rec_image(port, img->w, img->h, img->rgba, src, dst);
-    static const int bayer[4][4] = { { 0, 8, 2, 10 }, { 12, 4, 14, 6 }, { 3, 11, 1, 9 }, { 15, 7, 13, 5 } };
-    uint32_t rb = (uint32_t)((img->w + 15) / 16 * 2);
+    /* Into a colour port: the image as a 32-bit PixMap, which CopyBits
+     * takes to the port's depth and colours; into a black-and-white one,
+     * an ordered dither. */
+    bool deep = qd_port_pixels(port).depth > 1 || (rd16(port + GrafPort_portBits_off + 4) & 0x8000);
+    uint32_t rb = deep ? (uint32_t)img->w * 4 : (uint32_t)((img->w + 15) / 16 * 2);
     gaddr bits = tb_NewPtr((int32_t)(rb * (uint32_t)img->h), false, true);
     if (!bits)
         return;
-    for (int y = 0; y < img->h; y++)
-        for (int x = 0; x < img->w; x++) {
-            const uint8_t *p = img->rgba + ((size_t)y * (size_t)img->w + (size_t)x) * 4;
-            int lum = (p[0] * 30 + p[1] * 59 + p[2] * 11) / 100;
-            int threshold = (bayer[y & 3][x & 3] * 255 + 128) / 16;
-            if (lum < threshold || (lum < 255 && lum == 0)) {
-                gaddr a = bits + (uint32_t)y * rb + (uint32_t)(x >> 3);
-                wr8(a, (uint8_t)(rd8(a) | (0x80 >> (x & 7))));
+    gaddr bm = tb_NewPtr(PixMap_SIZEOF, false, true);
+    if (deep) {
+        for (int y = 0; y < img->h; y++)
+            for (int x = 0; x < img->w; x++) {
+                const uint8_t *p = img->rgba + ((size_t)y * (size_t)img->w + (size_t)x) * 4;
+                wr32(bits + (uint32_t)y * rb + (uint32_t)x * 4, (uint32_t)p[0] << 16 | (uint32_t)p[1] << 8 | p[2]);
             }
-        }
-    gaddr bm = tb_NewPtr(14, false, true), sr = tb_NewPtr(8, false, false), dr = tb_NewPtr(8, false, false);
+        PixMap_set_pixelSize(bm, 32);
+        PixMap_set_pixelType(bm, 16); /* RGBDirect */
+        PixMap_set_cmpCount(bm, 3);
+        PixMap_set_cmpSize(bm, 8);
+        PixMap_set_hRes(bm, 72 << 16);
+        PixMap_set_vRes(bm, 72 << 16);
+    } else {
+        static const int bayer[4][4] = { { 0, 8, 2, 10 }, { 12, 4, 14, 6 }, { 3, 11, 1, 9 }, { 15, 7, 13, 5 } };
+        for (int y = 0; y < img->h; y++)
+            for (int x = 0; x < img->w; x++) {
+                const uint8_t *p = img->rgba + ((size_t)y * (size_t)img->w + (size_t)x) * 4;
+                int lum = (p[0] * 30 + p[1] * 59 + p[2] * 11) / 100;
+                int threshold = (bayer[y & 3][x & 3] * 255 + 128) / 16;
+                if (lum < threshold || (lum < 255 && lum == 0)) {
+                    gaddr a = bits + (uint32_t)y * rb + (uint32_t)(x >> 3);
+                    wr8(a, (uint8_t)(rd8(a) | (0x80 >> (x & 7))));
+                }
+            }
+    }
+    gaddr sr = tb_NewPtr(8, false, false), dr = tb_NewPtr(8, false, false);
     wr32(bm, bits);
-    wr16(bm + 4, (uint16_t)rb);
+    wr16(bm + 4, (uint16_t)(rb | (deep ? 0x8000 : 0)));
     qrect_put(bm + 6, (qrect){ 0, 0, (int16_t)img->h, (int16_t)img->w });
     qrect_put(sr, src);
     qrect_put(dr, dst);

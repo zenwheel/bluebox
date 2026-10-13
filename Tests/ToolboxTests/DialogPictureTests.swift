@@ -181,6 +181,33 @@ extension Classic {
             #expect(pixel(bits, 10, 1))
         }
 
+        /// A colour PixMap in a picture keeps its colours in a colour port.
+        @Test func colourPixMapsKeepTheirColours() {
+            launchTestApp()
+            _ = initToolbox()
+            let gw = tb_NewPtr(4, false, true), bounds = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 0, 2, 2].enumerated() { wr16(bounds + UInt32(i * 2), UInt16(v)) }
+            #expect(tb_NewGWorld(gw, 32, bounds, 0, 0, 0) == 0)
+            tb_SetGWorld(rd32(gw), 0)
+            // PackBitsRect: a 2x2 8-bit PixMap (rowBytes 2: rows unpacked), index 0 red, 1 blue.
+            let pixmap = cat(be16(0x8002), be16(0), be16(0), be16(2), be16(2), be16(0), be16(0), be32(0),
+                             be32(0x0048_0000), be32(0x0048_0000), be16(0), be16(8), be16(1), be16(8),
+                             be32(0), be32(0), be32(0))
+            let ctab = cat(be32(0), be16(0), be16(1), be16(0), be16(0xFFFF), be16(0), be16(0),
+                           be16(1), be16(0), be16(0), be16(0xFFFF))
+            let pic = picture(cat(be16(0), be16(0), be16(0), be16(2), be16(2), be16(0x0011), be16(0x02FF),
+                                  be16(0x0C00), [UInt8](repeating: 0xFF, count: 4), [UInt8](repeating: 0, count: 20),
+                                  be16(0x0098), pixmap, ctab,
+                                  be16(0), be16(0), be16(2), be16(2), be16(0), be16(0), be16(2), be16(2), be16(0),
+                                  [0, 1, 1, 0], be16(0x00FF)))
+            draw(pic, [0, 0, 2, 2])
+            let c = tb_NewPtr(6, false, true)
+            tb_GetCPixel(0, 0, c)
+            #expect(rd16(c) == 0xFFFF && rd16(c + 4) == 0) // red, not dithered to black and white
+            tb_GetCPixel(1, 0, c)
+            #expect(rd16(c) == 0 && rd16(c + 4) == 0xFFFF) // blue
+        }
+
         @Test func openPictureMakesAValidEmptyPicture() {
             launchTestApp()
             _ = offscreen()
