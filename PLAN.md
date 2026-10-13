@@ -572,6 +572,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 - **8/9-era managers:**
   - Appearance Manager (themes: Platinum by default, System 7 look optional)
+    - Revisit the stopgap from 2026-10-13: `HiliteRGB` is set at boot from the host's selection colour (`useHostSelectionColor` in `HostWindow.swift`, `machine_set_hilite_color`). With the Appearance Manager, the theme's highlight brushes (`kThemeBrushPrimaryHighlightColor` and the selection brushes) should take the host's accent and selection colours, and `HiliteRGB` follow the theme (and change when the host's colours change, not only at launch).
+    - Test case: Greg's Browser's list definition (LDEF 128) highlights a selected row only when Gestalt `appr` reports the Appearance Manager: it then calls `SetThemeBackground`/`SetThemeTextColor` (ThemeDispatch `$AA74`, selectors 2 and 3) and erases the row in `HiliteRGB`. Without it (System 7, today) it draws no selection at all. Its focus frame (an `InvertRgn` around the list) sometimes shows on an inactive list, which needs checking against activate events.
   - Navigation Services (native dialogs when no hooks)
   - Thread Manager, Contextual Menu Manager, Window Manager 2.0 additions, Control Manager 2.0
 - **Drag Manager ↔ host drag and drop:** files and text in and out of classic apps.
