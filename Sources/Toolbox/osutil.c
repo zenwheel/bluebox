@@ -295,6 +295,15 @@ uint32_t tb_KeyTranslate(gaddr kchr, uint16_t keycode, gaddr state)
     return (uint8_t)ch;
 }
 
+/* Key1Trans and Key2Trans (low-memory vectors, called by JSR): the key
+ * code in D2.W and the modifier flags' high byte in D1, the character
+ * returned in D0. */
+void key_trans_native(cpu68k *c, uint16_t tw)
+{
+    uint16_t keycode = (uint16_t)(((c->d[1] & 0xFF) << 8) | (c->d[2] & 0x7F));
+    c->d[0] = tb_KeyTranslate(0, keycode, 0) & 0xFF;
+}
+
 /* DrvrInstall (A03D): A0 the driver, D0 its refnum.  Nothing calls drivers
  * here (the Device Manager answers for files and absent drivers), so the
  * installation is accepted and otherwise ignored. */

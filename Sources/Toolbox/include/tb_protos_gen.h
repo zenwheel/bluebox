@@ -156,6 +156,7 @@ void tb_DILoad(void);
 void tb_DIUnload(void);
 int16_t tb_DIVerify(int16_t dn);
 int16_t tb_DIZero(int16_t dn, gaddr vname);
+int16_t tb_DTInstall(gaddr dtTaskPtr);
 void tb_DateToSeconds(gaddr d, uint32_t *s);
 void tb_DebugStr(gaddr p);
 void tb_Debugger(void);

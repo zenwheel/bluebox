@@ -646,3 +646,15 @@
       - { name: threadToSet, type: LONGINT }
     dispatcher: ThreadDispatch
     selector: 0x0410
+
+# The Deferred Task Manager: a task (qLink, qType dtQType, dtFlags, dtAddr,
+# dtParam) runs once, at the end of interrupt processing, with A1 = dtParam.
+- function:
+    name: DTInstall
+    return: OSErr
+    args:
+      - name: dtTaskPtr
+        type: Ptr
+        register: A0
+    trap: 0xA082
+    returnreg: D0

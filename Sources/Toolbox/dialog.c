@@ -23,9 +23,26 @@ void machine_set_alert_handler(machine_alert_fn fn, void *ctx)
     alert_ctx = ctx;
 }
 
+/* The standard alert sound procedure, pascal (sound: INTEGER): that many
+ * beeps (0 to 3). ErrorSound replaces it in DABeeper. */
+static void standard_beeper(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int16_t n = (int16_t)cpu_pop16(c);
+    cpu_push32(c, ret);
+    for (int i = 0; i < n && i < 3; i++)
+        tb_SysBeep(30);
+}
+
+void dialog_reset(void)
+{
+    wr32(LM_DABeeper, native_register(standard_beeper, "StandardBeeper", 0));
+}
+
 void tb_InitDialogs(gaddr rp)
 {
     resume_proc = rp;
+    wr32(LM_ResumeProc, rp);
     wr16(LM_ANumber, 0);
     wr16(LM_ACount, (uint16_t)-1);
     wr16(LM_DlgFont, 0);
@@ -120,8 +137,10 @@ static int16_t run_alert(int16_t id, int kind)
     wr16(LM_ACount, (uint16_t)count);
     unsigned stage = (stages >> (count * 4)) & 0xF;
     int16_t default_item = (stage & 8) ? 2 : 1;
-    if (stage & 3)
-        tb_SysBeep(30);
+    if ((stage & 3) && rd32(LM_DABeeper)) { /* the stage's sound, through the sound procedure */
+        cpu_push16(g_cpu, (uint16_t)(stage & 3));
+        guest_call(rd32(LM_DABeeper));
+    }
     if (!(stage & 4)) /* no alert box at this stage */
         return -1;
 
@@ -151,7 +170,7 @@ int16_t tb_Alert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_PLAI
 int16_t tb_StopAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_STOP); }
 int16_t tb_NoteAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_NOTE); }
 int16_t tb_CautionAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_CAUTION); }
-void tb_ErrorSound(gaddr sp) {}
+void tb_ErrorSound(gaddr sp) { wr32(LM_DABeeper, sp); }
 int16_t tb_GetAlertStage(void) { return (int16_t)rd16(LM_ACount); }
 void tb_ResetAlertStage(void) { wr16(LM_ACount, (uint16_t)-1); }
 

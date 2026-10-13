@@ -717,7 +717,6 @@ int8_t tb_GetAuxiliaryControlRecord(gaddr c, gaddr acHndl)
     return 1;
 }
 
-void tb_SetWinColor(gaddr w, gaddr new_w_ctab) {}
 
 /* ---------------------------------------------------------------------- */
 /* Device colour tables: SetEntries changes the screen's colours (palette

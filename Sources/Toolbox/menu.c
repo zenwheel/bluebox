@@ -918,6 +918,22 @@ int32_t tb_MenuSelect(uint32_t p)
                 qrect t = title_rect(open);
                 box = (qrect){ (int16_t)mbar_height(), t.left, (int16_t)(mbar_height() + MenuInfo_menuHeight(mp)),
                                (int16_t)(t.left + MenuInfo_menuWidth(mp)) };
+                /* MBarHook sees the menu's rectangle before it is drawn; a
+                 * result other than zero abandons the choice. */
+                if (rd32(LM_MBarHook)) {
+                    cpu68k *c = g_cpu;
+                    uint32_t sp = c->a[7];
+                    gaddr r = tb_NewPtr(8, false, false);
+                    qrect_put(r, box);
+                    cpu_push32(c, r);
+                    uint32_t d0 = hook_call(rd32(LM_MBarHook), 0, 0, sp);
+                    tb_DisposePtr(r);
+                    if (d0) {
+                        tb_HiliteMenu(0);
+                        open = -1;
+                        break;
+                    }
+                }
                 saved_area = (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 2),
                                       (int16_t)(box.right + 2) };
                 under = save_bits(saved_area);
@@ -940,6 +956,8 @@ int32_t tb_MenuSelect(uint32_t p)
         }
         if (open >= 0 && !qrect_empty(box))
             call_mdef(menu_at(open), mChooseMsg, box, m, which);
+        if (rd32(LM_MenuHook)) /* called on every pass while the menu is tracked */
+            hook_call(rd32(LM_MenuHook), 0, 0, g_cpu->a[7]);
         if (!ev_still_down())
             break;
         ev_wait_tick();

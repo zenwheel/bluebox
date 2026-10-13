@@ -483,11 +483,32 @@ static void paint_desk(const hrgn *area)
     hrgn r;
     hrgn_init(&r);
     hrgn_copy(&r, area);
-    uint8_t pat[8];
-    gget(pat, LM_DeskPattern, 8);
-    qd_fill_region(wp, &r, pat, patCopy);
+    if (rd32(LM_DeskHook)) {
+        /* The program paints the desktop itself: D0 zero, the area to paint
+         * the WMgrPort's clipRgn. */
+        hrgn clip;
+        hrgn_init(&clip);
+        rgn_read(GrafPort_clipRgn(wp), &clip);
+        rgn_write(GrafPort_clipRgn(wp), &r);
+        hook_call(rd32(LM_DeskHook), 0, 0, g_cpu->a[7]);
+        tb_SetPort(wp);
+        rgn_write(GrafPort_clipRgn(wp), &clip);
+        hrgn_free(&clip);
+    } else {
+        uint8_t pat[8];
+        gget(pat, LM_DeskPattern, 8);
+        qd_fill_region(wp, &r, pat, patCopy);
+    }
     hrgn_free(&r);
     tb_SetPort(saved);
+}
+
+/* DragHook: called on every pass of the Window Manager's mouse tracking
+ * (DragWindow, DragGrayRgn, GrowWindow, TrackGoAway, TrackBox). */
+static void drag_hook(void)
+{
+    if (rd32(LM_DragHook))
+        hook_call(rd32(LM_DragHook), 0, 0, g_cpu->a[7]);
 }
 
 /* Repaint everything inside `clobbered` (global): frames, desk, and add
@@ -744,6 +765,8 @@ gaddr tb_NewCWindow(gaddr storage, gaddr r, gaddr title, int8_t vis, int16_t pro
     return new_window(storage, qrect_get(r), title, vis != 0, procid, behind, gaflag != 0, rc, true);
 }
 
+static void remove_aux(gaddr w);
+
 /* WIND: bounds(8), procID(2), visible(2), goAway(2), refCon(4), title. */
 static gaddr get_new_window(int16_t id, gaddr storage, gaddr behind, bool color)
 {
@@ -755,6 +778,9 @@ static gaddr get_new_window(int16_t id, gaddr storage, gaddr behind, bool color)
     gaddr w = new_window(storage, qrect_get(p), p + 18, rd16(p + 10) != 0, (int16_t)rd16(p + 8), behind,
                          rd16(p + 12) != 0, (int32_t)rd32(p + 14), color);
     tb_HUnlock(h);
+    gaddr ctab = color && w ? tb_GetResource((int32_t)fourcc("wctb"), id) : 0;
+    if (ctab && rd32(ctab))
+        tb_SetWinColor(w, ctab); /* its colour table, by the WIND's ID */
     return w;
 }
 
@@ -769,6 +795,7 @@ void tb_CloseWindow(gaddr w)
     rgn_read(WindowRecord_strucRgn(w), &s);
     call_wdef(w, wDispose, 0);
     unlink_window(w);
+    remove_aux(w);
     WindowRecord_set_visible(w, 0);
     if (rd32(LM_CurActivate) == w)
         wr32(LM_CurActivate, 0);
@@ -948,7 +975,8 @@ int16_t tb_FindWindow(uint32_t p, gaddr wpp)
         default: return inZoomOut;
         }
     }
-    return inDesk;
+    /* A desk hook takes clicks on the desktop, through SystemClick. */
+    return rd32(LM_DeskHook) ? inSysWindow : inDesk;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1190,7 +1218,12 @@ int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int1
     int dh = 0, dv = 0;
     bool shown = false;
     qrect lim = qrect_get(limit);
+    uint8_t pat[8];
+    gget(pat, LM_DragPattern, 8);
     while (ev_still_down()) {
+        drag_hook();
+        if (proc) /* the caller's action procedure, on every pass */
+            guest_call(proc);
         uint32_t m = ev_mouse_global();
         int ndh = pt_h(m) - pt_h(startp), ndv = pt_v(m) - pt_v(startp);
         if (axis == 1)
@@ -1203,10 +1236,10 @@ int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int1
         }
         if (ndh != dh || ndv != dv || !shown) {
             if (shown)
-                qd_fill_region(wmgr_port(), &moved, qd_pat_gray, patXor);
+                qd_fill_region(wmgr_port(), &moved, pat, patXor);
             hrgn_copy(&moved, &shape);
             hrgn_offset(&moved, ndh, ndv);
-            qd_fill_region(wmgr_port(), &moved, qd_pat_gray, patXor);
+            qd_fill_region(wmgr_port(), &moved, pat, patXor);
             shown = true;
             dh = ndh;
             dv = ndv;
@@ -1214,7 +1247,7 @@ int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int1
         ev_wait_tick();
     }
     if (shown)
-        qd_fill_region(wmgr_port(), &moved, qd_pat_gray, patXor);
+        qd_fill_region(wmgr_port(), &moved, pat, patXor);
     tb_SetPort(saved);
     hrgn_free(&shape);
     hrgn_free(&moved);
@@ -1282,6 +1315,7 @@ int32_t tb_GrowWindow(gaddr w, uint32_t startp, gaddr rp)
             last_w = nw;
             last_h = nh;
         }
+        drag_hook();
         ev_wait_tick();
     }
     if (shown)
@@ -1318,6 +1352,7 @@ static int8_t track_box(gaddr w, uint32_t p, int part)
             toggle_box(w, part);
             shown = inside;
         }
+        drag_hook();
         ev_wait_tick();
     }
     if (shown)
@@ -1386,10 +1421,79 @@ void tb_ClipAbove(gaddr w)
 }
 void tb_SaveOld(gaddr w) {}
 void tb_DrawNew(gaddr w, int8_t flag) { repaint_rgn_of(w); }
-int8_t tb_GetAuxWin(gaddr w, gaddr h)
+/* ---------------------------------------------------------------------- */
+/* Auxiliary window records (AuxWinHead): handles of awNext, awOwner,
+ * awCTable, dialogCItem, awFlags, awReserved, awRefCon, one for each window
+ * with colours of its own, and last the default one (no owner) with the
+ * default window colour table. */
+enum { AUX_SIZE = 28, AW_NEXT = 0, AW_OWNER = 4, AW_CTABLE = 8 };
+
+static gaddr aux_of(gaddr w)
 {
-    wr32(h, 0);
+    for (gaddr h = rd32(LM_AuxWinHead); h && rd32(h); h = rd32(rd32(h) + AW_NEXT))
+        if (rd32(rd32(h) + AW_OWNER) == w)
+            return h;
     return 0;
+}
+
+/* The default: content white, frame, text and highlight black, title bar
+ * white (wContentColor .. wTitleBarColor). */
+static void make_default_aux(void)
+{
+    if (aux_of(0))
+        return;
+    static const uint16_t rgb[5][3] = { { 0xFFFF, 0xFFFF, 0xFFFF }, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 },
+                                        { 0xFFFF, 0xFFFF, 0xFFFF } };
+    gaddr ct = tb_NewHandle(8 + 5 * 8, true, true);
+    gaddr t = rd32(ct);
+    wr16(t + 6, 4); /* ctSize */
+    for (int i = 0; i < 5; i++) {
+        wr16(t + 8 + (uint32_t)i * 8, (uint16_t)i);
+        for (int k = 0; k < 3; k++)
+            wr16(t + 8 + (uint32_t)i * 8 + 2 + (uint32_t)k * 2, rgb[i][k]);
+    }
+    gaddr h = tb_NewHandle(AUX_SIZE, true, true);
+    wr32(rd32(h) + AW_CTABLE, ct);
+    wr32(LM_AuxWinHead, h);
+}
+
+int8_t tb_GetAuxWin(gaddr w, gaddr hp)
+{
+    gaddr h = w ? aux_of(w) : 0;
+    wr32(hp, h ? h : aux_of(0));
+    return h != 0;
+}
+
+void tb_SetWinColor(gaddr w, gaddr ctab)
+{
+    gaddr h = aux_of(w);
+    if (!h) {
+        h = tb_NewHandle(AUX_SIZE, false, true);
+        if (!h)
+            return;
+        wr32(rd32(h) + AW_OWNER, w);
+        wr32(rd32(h) + AW_NEXT, rd32(LM_AuxWinHead));
+        wr32(LM_AuxWinHead, h);
+    }
+    wr32(rd32(h) + AW_CTABLE, ctab);
+    if (w && wvisible(w))
+        repaint_rgn_of(w);
+}
+
+static void remove_aux(gaddr w)
+{
+    gaddr prev = 0;
+    for (gaddr h = rd32(LM_AuxWinHead); h && rd32(h); prev = h, h = rd32(rd32(h) + AW_NEXT)) {
+        if (rd32(rd32(h) + AW_OWNER) != w)
+            continue;
+        gaddr next = rd32(rd32(h) + AW_NEXT);
+        if (prev)
+            wr32(rd32(prev) + AW_NEXT, next);
+        else
+            wr32(LM_AuxWinHead, next);
+        tb_DisposeHandle(h);
+        return;
+    }
 }
 void tb_SetDeskCPat(gaddr p) {}
 
@@ -1414,6 +1518,10 @@ void tb_InitWindows(void)
     wr32(LM_CurActivate, 0);
     wr32(LM_CurDeactive, 0);
     gput(LM_DeskPattern, qd_pat_gray, 8);
+    gput(LM_DragPattern, qd_pat_gray, 8);
+    make_default_aux();
+    wr32(LM_DeskHook, 0);
+    wr32(LM_DragHook, 0);
     int mbar = (int16_t)rd16(LM_MBarHeight) ? (int16_t)rd16(LM_MBarHeight) : 20;
     wr16(LM_MBarHeight, (uint16_t)mbar);
 

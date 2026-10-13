@@ -185,10 +185,13 @@ static int char_advance(const strike *s, uint8_t c, gaddr port)
     return adv;
 }
 
+static void note_width_table(const strike *s, gaddr port);
+
 int qd_text_width(gaddr port, const uint8_t *text, int len)
 {
     strike s;
-    load_strike(port, &s);
+    if (load_strike(port, &s))
+        note_width_table(&s, port);
     int w = 0;
     for (int i = 0; i < len; i++)
         w += char_advance(&s, text[i], port);
@@ -238,6 +241,8 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
 {
     strike s;
     bool have = load_strike(port, &s);
+    if (have)
+        note_width_table(&s, port);
     uint32_t loc = rd32(port + GrafPort_pnLoc_off);
     int x = pt_h(loc), base = pt_v(loc);
     int start = x;
@@ -451,6 +456,67 @@ void tb_SetFractEnable(int8_t enable) { wr8(LM_FractEnable, enable ? 0xFF : 0); 
 
 static gaddr fmoutput;
 
+/* The width table of the font FMSwapFont last chose (WidthTabHandle, and
+ * WidthPtr to it), as the Font Manager kept it for programs that measure
+ * text themselves: each character's advance as a Fixed, and the font. */
+static void fill_width_table(const strike *s, gaddr port, int16_t family, int16_t size, uint8_t face, uint16_t device,
+                             uint32_t numer, uint32_t denom)
+{
+    gaddr h = rd32(LM_WidthTabHandle);
+    if (!h || !rd32(h)) {
+        h = mm_new_handle_in(rd32(LM_SysZone), WidthTable_SIZEOF, true);
+        if (!h)
+            return;
+        wr32(LM_WidthTabHandle, h);
+        gaddr list = mm_new_handle_in(rd32(LM_SysZone), 4, true); /* the cached tables: just this one */
+        if (list) {
+            wr32(rd32(list), h);
+            wr32(LM_WidthListHand, list);
+        }
+    }
+    gaddr t = rd32(h);
+    for (int c = 0; c < 256; c++)
+        wr32(t + WidthTable_tabData_off + (uint32_t)c * 4, (uint32_t)char_advance(s, (uint8_t)c, port) << 16);
+    WidthTable_set_tabFont(t, s->handle);
+    WidthTable_set_sExtra(t, (int32_t)GrafPort_spExtra(port));
+    wr32(t + WidthTable_style_off, (uint32_t)style_extra(s->face) << 16);
+    wr16(t + WidthTable_fID_off, (uint16_t)family);
+    wr16(t + WidthTable_fSize_off, (uint16_t)size);
+    wr16(t + WidthTable_face_off, face);
+    wr16(t + WidthTable_device_off, device);
+    wr32(t + WidthTable_inNumer_off, numer);
+    wr32(t + WidthTable_inDenom_off, denom);
+    wr16(t + WidthTable_aFID_off, (uint16_t)family);
+    uint16_t res_err = rd16(LM_ResErr); /* measuring text leaves ResErr alone */
+    wr32(t + WidthTable_fHand_off, tb_GetResource((int32_t)fourcc("FOND"), family));
+    wr16(LM_ResErr, res_err);
+    wr8(t + WidthTable_usedFam_off, rd32(t + WidthTable_fHand_off) ? 1 : 0);
+    wr8(t + WidthTable_aFace_off, (uint8_t)s->face);
+    wr16(t + WidthTable_vOutput_off, 256); /* no scaling: 1.0 as 8.8 */
+    wr16(t + WidthTable_hOutput_off, 256);
+    wr16(t + WidthTable_vFactor_off, 256);
+    wr16(t + WidthTable_hFactor_off, 256);
+    wr16(t + WidthTable_aSize_off, (uint16_t)size);
+    wr16(t + WidthTable_tabSize_off, WidthTable_SIZEOF);
+    wr32(LM_WidthPtr, t);
+    wr32(LM_LastSPExtra, (uint32_t)GrafPort_spExtra(port));
+}
+
+/* Measuring and drawing go through FMSwapFont on a real Mac, so the width
+ * table follows the port's font: rebuilt when that changes. */
+static void note_width_table(const strike *s, gaddr port)
+{
+    gaddr h = rd32(LM_WidthTabHandle);
+    gaddr t = h ? rd32(h) : 0;
+    int16_t family = GrafPort_txFont(port), size = GrafPort_txSize(port);
+    uint8_t face = GrafPort_txFace(port);
+    if (t && rd32(LM_WidthPtr) == t && (int16_t)rd16(t + WidthTable_fID_off) == family &&
+        (int16_t)rd16(t + WidthTable_fSize_off) == size && rd16(t + WidthTable_face_off) == face &&
+        WidthTable_sExtra(t) == (int32_t)GrafPort_spExtra(port) && WidthTable_tabFont(t) == s->handle)
+        return;
+    fill_width_table(s, port, family, size, face, 0, 0x00010001, 0x00010001);
+}
+
 gaddr tb_FMSwapFont(gaddr fmip)
 {
     if (!fmoutput)
@@ -464,6 +530,10 @@ gaddr tb_FMSwapFont(gaddr fmip)
     GrafPort_set_txFace(port, rd8(fmip + FMInput_face_off));
     strike s;
     bool ok = load_strike(port, &s);
+    if (ok)
+        fill_width_table(&s, port, (int16_t)rd16(fmip + FMInput_family_off), (int16_t)rd16(fmip + FMInput_size_off),
+                         rd8(fmip + FMInput_face_off), rd16(fmip + FMInput_device_off),
+                         rd32(fmip + FMInput_numer_off), rd32(fmip + FMInput_denom_off));
     GrafPort_set_txFont(port, f);
     GrafPort_set_txSize(port, sz);
     GrafPort_set_txFace(port, face);

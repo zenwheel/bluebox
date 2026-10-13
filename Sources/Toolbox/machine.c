@@ -125,6 +125,7 @@ static void init_lowmem(void)
 
 void threads_reset(void);
 void help_reset(void);
+void dialog_reset(void);
 void wdef0_native(cpu68k *c, uint16_t tw);
 void mdef0_native(cpu68k *c, uint16_t tw);
 void cdef0_native(cpu68k *c, uint16_t tw);
@@ -253,6 +254,7 @@ bool machine_boot(bool census)
     time_reset();
     threads_reset();
     help_reset();
+    dialog_reset();
     wr32(LM_TheZone, GA_SYSHEAP);
     if (!open_system_file())
         return false;

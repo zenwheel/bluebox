@@ -102,6 +102,7 @@ const char *const os_trap_names[256] = {
     [0x79] = "GetADBInfo",
     [0x7A] = "SetADBInfo",
     [0x7B] = "ADBReInit",
+    [0x82] = "DTInstall",
     [0x90] = "SysEnvirons",
     [0x98] = "HWPriv",
     [0xAD] = "GestaltDispatch",
@@ -2419,6 +2420,14 @@ static void glue_DIZero(cpu68k *c, uint16_t trapword)
     int16_t r = tb_DIZero(a_dn, a_vname);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_DTInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_dtTaskPtr = (gaddr)c->a[0];
+    int16_t r = tb_DTInstall(a_dtTaskPtr);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_DateToSeconds(cpu68k *c, uint16_t trapword)
@@ -13471,6 +13480,7 @@ const trap_sig trap_sigs[] = {
     {0xA079, -1, "GetADBInfo", CONV_REG, 0, 0, 0},
     {0xA07A, -1, "SetADBInfo", CONV_REG, 0, 0, 0},
     {0xA07B, -1, "ADBReInit", CONV_STACK, 0, 0, 0},
+    {0xA082, -1, "DTInstall", CONV_REG, 0, 0, glue_DTInstall},
     {0xA090, -1, "SysEnvirons", CONV_REG, 0, 0, glue_SysEnvirons},
     {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, 0},
     {0xA11A, -1, "GetZone", CONV_REG, 0, 0, glue_GetZone},

@@ -198,6 +198,33 @@ void io_complete_later(gaddr pb, int16_t result)
         completions[ncompletions++] = (completion){ pb, result };
 }
 
+/* Deferred tasks (DTInstall): run once at the next interrupt pump. */
+static gaddr deferred[MAX_COMPLETIONS];
+static int ndeferred;
+
+int16_t tb_DTInstall(gaddr task)
+{
+    if (!task || rd16(task + 4) != 7) /* dtQType */
+        return -1; /* vTypErr */
+    if (ndeferred >= MAX_COMPLETIONS)
+        return -1;
+    deferred[ndeferred++] = task;
+    return noErr;
+}
+
+static void run_deferred(void)
+{
+    int n = ndeferred;
+    gaddr due[MAX_COMPLETIONS];
+    memcpy(due, deferred, sizeof due[0] * (size_t)n);
+    ndeferred = 0;
+    for (int i = 0; i < n; i++) {
+        gaddr fn = rd32(due[i] + 8);
+        if (fn)
+            interrupt_call(fn, due[i], rd32(due[i] + 12));
+    }
+}
+
 static void run_completions(void)
 {
     /* Those a completion queues wait for the next pump. */
@@ -219,6 +246,7 @@ void time_pump(void)
         return;
     in_interrupt = true;
     run_completions();
+    run_deferred();
     sound_pump(); /* sound completion ran at interrupt time too */
     midi_pump();
     uint64_t t = now();
@@ -274,5 +302,6 @@ void time_reset(void)
     link_vbl_queue();
     vbl_ticks = 0;
     ncompletions = 0;
+    ndeferred = 0;
     in_interrupt = false;
 }

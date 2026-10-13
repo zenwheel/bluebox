@@ -65,6 +65,9 @@ int native_index_for(uint32_t addr);
 void guest_call(gaddr fn);
 /* The same, leaving the registers as the routine left them. */
 void guest_call_regs(gaddr fn);
+/* Call a low-memory hook with D0 and A0 set; all registers (A7 = sp) are
+ * restored afterwards.  Returns the D0 it left. */
+uint32_t hook_call(gaddr fn, uint32_t d0, uint32_t a0, uint32_t sp);
 
 /* Trap word of the routine currently executing (e.g. HFS bit 0x200). */
 uint16_t trap_current_word(void);

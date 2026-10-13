@@ -29,6 +29,8 @@ typedef struct {
 #define QSIZE 64
 static event queue[QSIZE];
 static int qhead, qtail;
+static uint32_t qversion; /* changes with the queue, for its low-memory copy */
+static void mirror_queue(void);
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t arrived = PTHREAD_COND_INITIALIZER;
 static int16_t mouse_h, mouse_v;
@@ -60,6 +62,7 @@ static void enqueue(int16_t what, uint32_t message)
     queue[qtail] = (event){ what, message, rd32(LM_Ticks), make_pt(mouse_v, mouse_h),
                             (uint16_t)(key_mods | (button_down ? 0 : btnState)) };
     qtail = next;
+    qversion++;
     pthread_cond_broadcast(&arrived);
 }
 
@@ -110,8 +113,53 @@ void events_script_pump(uint64_t now)
 /* The low-memory copies of the mouse that applications read directly:
  * MBState (bit 7 set while the button is up), and the mouse location as
  * Mouse, RawMouse and MTemp.  Kept current between emulation slices. */
+/* EventQueue in low memory: a copy of the queue as event records
+ * (qLink, qType 4, evtQWhat, evtQMessage, evtQWhen, evtQWhere,
+ * evtQModifiers), from a buffer of SysEvtCnt + 1 of them at SysEvtBuf,
+ * for programs that look at it directly. */
+#define LM_SysEvtBuf 0x0146u /* Ptr */
+#define LM_SysEvtCnt 0x0154u /* INTEGER: the buffer's records less one */
+enum { EVQEL = 22 };
+static uint32_t mirrored = (uint32_t)-1;
+
+static void mirror_queue(void)
+{
+    gaddr buf = rd32(LM_SysEvtBuf);
+    if (!buf)
+        return;
+    pthread_mutex_lock(&lock);
+    if (qversion == mirrored) {
+        pthread_mutex_unlock(&lock);
+        return;
+    }
+    mirrored = qversion;
+    event copy[QSIZE];
+    int n = 0;
+    for (int i = qhead; i != qtail; i = (i + 1) % QSIZE)
+        copy[n++] = queue[i];
+    pthread_mutex_unlock(&lock);
+    gaddr prev = 0;
+    for (int i = 0; i < n; i++) {
+        gaddr q = buf + (uint32_t)i * EVQEL;
+        wr32(q, 0);
+        wr16(q + 4, 4); /* evType */
+        wr16(q + 6, (uint16_t)copy[i].what);
+        wr32(q + 8, copy[i].message);
+        wr32(q + 12, copy[i].when);
+        wr32(q + 16, copy[i].where);
+        wr16(q + 20, copy[i].modifiers);
+        if (prev)
+            wr32(prev, q);
+        prev = q;
+    }
+    wr16(LM_EventQueue, 0); /* qFlags */
+    wr32(LM_EventQueue + 2, n ? buf : 0);
+    wr32(LM_EventQueue + 6, prev);
+}
+
 void events_sync_lowmem(void)
 {
+    mirror_queue();
     pthread_mutex_lock(&lock);
     uint32_t pt = make_pt(mouse_v, mouse_h);
     bool down = button_down;
@@ -349,12 +397,14 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
                     for (int j = i; j != qhead; j = (j - 1 + QSIZE) % QSIZE)
                         queue[j] = queue[(j - 1 + QSIZE) % QSIZE];
                     qhead = (qhead + 1) % QSIZE;
+                    qversion++;
                 }
                 break;
             }
         }
     }
     pthread_mutex_unlock(&lock);
+    mirror_queue();
     /* High-level events (Apple Events): message = class, where = ID. */
     uint32_t cls, aeid;
     if (!found && !os_only && (mask & 0x0400) && aem_next_event(&cls, &aeid, remove)) {
@@ -477,7 +527,9 @@ void tb_FlushEvents(int16_t evmask, int16_t stopmask)
     qhead = 0;
     qtail = n;
     memcpy(queue, keep, (size_t)n * sizeof *keep);
+    qversion++;
     pthread_mutex_unlock(&lock);
+    mirror_queue();
 }
 
 int16_t tb_PostEvent(int16_t evcode, int32_t evmsg)
@@ -485,6 +537,7 @@ int16_t tb_PostEvent(int16_t evcode, int32_t evmsg)
     pthread_mutex_lock(&lock);
     enqueue(evcode, (uint32_t)evmsg);
     pthread_mutex_unlock(&lock);
+    mirror_queue();
     return noErr;
 }
 
@@ -514,6 +567,7 @@ int8_t tb_WaitMouseUp(void)
                 for (int j = i; j != qhead; j = (j - 1 + QSIZE) % QSIZE)
                     queue[j] = queue[(j - 1 + QSIZE) % QSIZE];
                 qhead = (qhead + 1) % QSIZE;
+                qversion++;
                 break;
             }
         pthread_mutex_unlock(&lock);
@@ -551,13 +605,23 @@ void tb_SystemTask(void)
     sound_pump();
     time_pump();
 }
-void tb_SystemClick(gaddr evp, gaddr wp) {}
+void tb_SystemClick(gaddr evp, gaddr wp)
+{
+    /* A click on the desktop goes to the desk hook: D0 -1, A0 the event. */
+    if (!wp && rd32(LM_DeskHook))
+        hook_call(rd32(LM_DeskHook), 0xFFFFFFFFu, evp, g_cpu->a[7]);
+}
 int8_t tb_SystemEvent(gaddr evp) { return 0; }
 
 void events_reset(void)
 {
+    gaddr buf = mm_new_ptr_in(rd32(LM_SysZone), QSIZE * EVQEL, true);
+    wr32(LM_SysEvtBuf, buf);
+    wr16(LM_SysEvtCnt, QSIZE - 1);
+    mirrored = (uint32_t)-1;
     pthread_mutex_lock(&lock);
     qhead = qtail = 0;
+    qversion++;
     button_down = false;
     key_mods = 0;
     memset(keymap, 0, sizeof keymap);

@@ -338,6 +338,7 @@ static void aline_vector_native(cpu68k *c, uint16_t tw)
 /* Dispatch */
 
 void io_complete_later(gaddr pb, int16_t result);
+void key_trans_native(cpu68k *c, uint16_t tw);
 void threads_switch_if_pending(cpu68k *c);
 
 /* The File and Device Manager traps, whose argument is a parameter block
@@ -508,6 +509,27 @@ void guest_call_regs(gaddr fn)
         call_depth--;
     }
     c->pc = saved_pc;
+}
+
+/* Call a low-memory hook (MenuHook, DragHook, DeskHook ...): D0 and A0 as
+ * given, any stack arguments already pushed; every register, A7 included,
+ * is as before afterwards.  Returns D0 as the hook left it. */
+uint32_t hook_call(gaddr fn, uint32_t d0, uint32_t a0, uint32_t sp)
+{
+    cpu68k *c = g_cpu;
+    uint32_t d[8], a[8];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    a[7] = sp; /* below any arguments pushed for the hook */
+    uint16_t sr = c->sr;
+    c->d[0] = d0;
+    c->a[0] = a0;
+    guest_call_regs(fn);
+    uint32_t result = c->d[0];
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    c->sr = sr;
+    return result;
 }
 
 /* Call fn with the registers kept, the status register (condition codes)
@@ -694,6 +716,16 @@ void trap_init(void)
         if (entry != unimpl_stub)
             wr32(jumps[i].lm, entry);
     }
+    uint32_t keytrans = native_register(key_trans_native, "KeyTrans", 0);
+    wr32(LM_Key1Trans, keytrans);
+    wr32(LM_Key2Trans, keytrans);
+    /* DTInstall's entry for JDTInstall; the cursor and ADB tasks have
+     * nothing to do. */
+    uint32_t dt = rd32(OS_TRAP_TABLE + 0x82u * 4);
+    if (dt != unimpl_stub)
+        wr32(LM_JDTInstall, dt);
+    wr32(LM_JCrsrTask, noop);
+    wr32(LM_JADBProc, noop);
 
     /* Exception vectors 2..63 (A-line gets its own marker stub). */
     uint32_t exc = native_register(exception_native, "Exception", 0);

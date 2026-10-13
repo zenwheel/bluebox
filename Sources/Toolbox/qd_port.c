@@ -166,8 +166,47 @@ void tb_InitPort(gaddr p)
     tb_SetPort(p);
 }
 
+/* PortList: a handle of a count (word) and then every open port. */
+static void port_list_add(gaddr p)
+{
+    gaddr h = rd32(LM_PortList);
+    if (!h || !rd32(h)) {
+        h = tb_NewHandle(2, true, true);
+        if (!h)
+            return;
+        wr32(LM_PortList, h);
+    }
+    int n = (int16_t)rd16(rd32(h));
+    for (int i = 0; i < n; i++)
+        if (rd32(rd32(h) + 2 + (uint32_t)i * 4) == p)
+            return;
+    tb_SetHandleSize(h, 2 + (n + 1) * 4);
+    if (tb_GetHandleSize(h) < 2 + (n + 1) * 4)
+        return;
+    wr32(rd32(h) + 2 + (uint32_t)n * 4, p);
+    wr16(rd32(h), (uint16_t)(n + 1));
+}
+
+static void port_list_remove(gaddr p)
+{
+    gaddr h = rd32(LM_PortList);
+    if (!h || !rd32(h))
+        return;
+    int n = (int16_t)rd16(rd32(h));
+    for (int i = 0; i < n; i++) {
+        gaddr e = rd32(h) + 2 + (uint32_t)i * 4;
+        if (rd32(e) != p)
+            continue;
+        gmemcpy(e, e + 4, (uint32_t)(n - i - 1) * 4);
+        wr16(rd32(h), (uint16_t)(n - 1));
+        tb_SetHandleSize(h, 2 + (n - 1) * 4);
+        return;
+    }
+}
+
 void tb_OpenPort(gaddr p)
 {
+    port_list_add(p);
     wr16(p + GrafPort_portBits_off + 4, 0); /* make sure it is not taken for a CGrafPort */
     GrafPort_set_visRgn(p, tb_NewRgn());
     GrafPort_set_clipRgn(p, tb_NewRgn());
@@ -176,6 +215,7 @@ void tb_OpenPort(gaddr p)
 
 void tb_ClosePort(gaddr p)
 {
+    port_list_remove(p);
     qd_screen_port_closed(p);
     tb_DisposeRgn(GrafPort_visRgn(p));
     tb_DisposeRgn(GrafPort_clipRgn(p));
@@ -208,6 +248,7 @@ void tb_InitCPort(gaddr p)
 
 void tb_OpenCPort(gaddr p)
 {
+    port_list_add(p);
     wr32(p + CGrafPort_portPixMap_off, tb_NewHandle(PixMap_SIZEOF, false, true));
     wr16(p + CGrafPort_portVersion_off, 0xC000);
     wr32(p + CGrafPort_grafVars_off, tb_NewHandle(36, false, true));
