@@ -129,6 +129,7 @@ Each Toolbox routine is an ordinary C function. Calling-convention glue is gener
   - uses the Display Manager or DrawSprocket
 
   Direct writes that stay inside the app's own window region only mark that area as damaged; the app stays rootless.
+- **Scale:** one Mac pixel is one host point by default, which is two device pixels on a Retina display, drawn with nearest-neighbour sampling so bitmap fonts and icons stay sharp. Classic interfaces were designed for 72 dpi screens and look small on modern ones, so a scale setting (per application and as a default, in the shell, M2b) shows each Mac pixel as 1, 1.5 or 2 host points (2 = four device pixels on Retina, still whole pixels). The Mac screen size shrinks to match, the host's mouse coordinates are divided back, and window frames, menus and pop-ups scale together.
 - **Remembering the mode:** the decision is stored in the app's profile, and a manual override is available.
 - **Clipboard:** the Scrap Manager syncs with the host pasteboard (`TEXT` ↔ UTF-8, `PICT` ↔ PNG/PDF).
 - **Standard File, Navigation Services and the print dialogs** use native host dialogs when the app installs no hooks, and a classic-style dialog when it does.
@@ -148,6 +149,7 @@ Each Toolbox routine is an ordinary C function. Calling-convention glue is gener
 - **Classic font files:** suitcases (`FFIL`) containing bitmap (`FONT`/`NFNT`) and TrueType (`sfnt`) fonts, from a host fonts folder that appears as the System Folder's Fonts folder. Classic TrueType renders through the same host rasterizer as host fonts.
 - **No PostScript Type 1 / ATM:** `LWFN` outline fonts are out of scope. Documents that use them fall back to the matching bitmap `NFNT` or a host-font substitute.
 - **Smoothing:** 1-bit rendering by default for exact output. Grayscale smoothing is an option.
+- **Bitmap faces stay bitmaps:** Chicago 12 and Geneva 9 (and the other stand-ins) are drawn from their bitmaps at their own sizes, pixel-doubled with everything else by the display scale, never re-rendered from outlines. The user's own Apple bitmap fonts, added through the shell, replace the stand-ins for an exact look.
 
 ### 2.6 Environment profile
 
@@ -392,6 +394,28 @@ the trap census.
 
 **Status (2026-10-12):** the import pipeline was pulled forward and works. `classic import` and `classic run` take MacBinary, StuffIt (1.x, 5, `.sea`), Compact Pro and BinHex files (archives through `unar`). They also take DiskCopy 4.2, Disk Copy 6 NDIF (raw and ADC), raw HFS and partitioned CD images, recursing through nesting (e.g. MacBinary → StuffIt → disk image). Still to do: HFS+, MFS, UDIF `.dmg`, `.moof` flux images. (Linux parity moved to M12, after everything else.)
 
+### M2b: The Classic shell (launcher, library and settings)
+
+**Goal:** one host application is the home of the environment: it launches classic applications, brings new ones in, and holds the settings that are not per run.
+
+- **Launcher and library:** browses the library and the classic Mac's disk, launches applications (each still its own rootless process, as `classic run` starts them), and shows recent and installed ones. `classic install` bundles remain available.
+- **Import:** drop archives, disk images or folders onto the shell (or its Dock icon) to import them, with progress, the applications found, and the option to run an installer.
+- **Watching the System Folder:** the shell notices what installers put into the classic Mac's System Folder and acts on it:
+  - Control Panels and Apple Menu Items become launchable items (the Apple menu of every run lists Apple Menu Items, as on a real Mac);
+  - Startup Items can run when the shell starts;
+  - Extensions and fonts: fonts join the font list; extensions (INITs) are listed with whether the environment supports what they patch, and supported ones load at boot;
+  - Preferences files are kept with the disk.
+- **Settings**, in one place (the environment profile behind them stays a file `classic` reads):
+  - per application: screen depth, CPU, appearance or theme, memory size
+  - networking (M5): AppleTalk on or off, the LocalTalk-over-UDP group, the EtherTalk interface, MacTCP on or off
+  - serial ports (M5b): what modem and printer ports connect to
+  - fonts: add the user's own classic fonts (from their own System file or font suitcases), which then replace the open-source stand-ins
+  - library location, sandboxed disk location, granted folders
+- **Form:** a regular application with a window, plus an optional menu-bar status item (running classic applications, quick launch, network and port status). The status item keeps working when the window is closed, so the shell can sit in the background like the Finder did.
+- **Linux (M12):** the same shell in GTK, with a tray icon where the desktop has one.
+
+**Exit:** a user imports an installer archive by dropping it on the shell, runs the installer, and then launches the installed application and one of the control panels it added from the shell; changing a per-application setting there takes effect on its next launch.
+
 ### M3: MacinTalk, SimpleText (68k) and printing
 
 **Goal:** speech is a working, required feature, and SimpleText's 68k code path runs fully, including Speak All and printing to PDF.
@@ -467,10 +491,34 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Link layer: LocalTalk over UDP ("LToUDP")**, LocalTalk frames on a UDP multicast group. Other emulators and AppleTalk routers use the same convention (to confirm when this milestone starts), so instances of this environment can play each other, and emulators and real Macs (through a router) on the same network.
   - LLAP node address acquisition, broadcast, and the multicast group configurable in the profile
   - a host-only loopback mode, so two apps on one machine can play without a network
-- **MacTCP** on host sockets: the `.IPP` driver interface (TCP streams, UDP), and the DNR resolver (`StrToAddr`, `AddrToName`) through the host resolver.
+- **Link layer: EtherTalk (optional), bridged onto a real Ethernet**, for AppleTalk with real Macs, netatalk file servers and routers on the local network that do not speak LToUDP. It needs raw Ethernet frames, so it is optional and set up once from the shell (M2b):
+  - macOS: `vmnet.framework` in bridged mode (needs the networking entitlement, or a small privileged helper), or BPF through a helper that holds the device
+  - Linux: a `tap` device or an `AF_PACKET` socket, granted `CAP_NET_RAW` to a helper
+  - AARP for node addresses, the AppleTalk Phase 2 multicast addresses, and zone information from a seed router when there is one
+  - Without it, AppleTalk still works between instances and LToUDP emulators, and a router (e.g. jrouter or a real AppleTalk router) can join LToUDP to EtherTalk.
+- **MacTCP** on host sockets: the `.IPP` driver interface (TCP streams, UDP), and the DNR resolver (`StrToAddr`, `AddrToName`) through the host resolver. TCP/IP needs no bridging: connections are the host's own, so it works with no privileges and through VPNs.
 - **Gestalt and low memory** report AppleTalk and MacTCP as present.
 
 **Exit:** two copies of Spectre (and a second AppleTalk game, e.g. Bolo) on two hosts find each other through NBP and play a networked game; one of them also interoperates with another emulator on the same LToUDP network; a MacTCP client (Fetch or an IRC client) connects to a real server.
+
+### M5b: Serial ports
+
+**Goal:** applications that use the modem and printer ports (terminal programs, file transfer, MIDI and serial devices, LocalTalk-port printers) work, connected to real hardware or to the host.
+
+- **The Serial Driver:** `.AIn`/`.AOut` (modem port) and `.BIn`/`.BOut` (printer port) through the Device Manager: `SerReset`, `SerSetBuf`, `SerHShake`, `SerSetBrk`/`SerClrBrk`, `SerGetBuf`, `SerStatus`, and the `PBControl`/`PBStatus` codes behind them; reads and writes asynchronous with completion routines.
+- **What each port connects to** (chosen in the shell, M2b, or the profile):
+  - a host serial device (`/dev/cu.*` on macOS, `/dev/ttyS*`/`/dev/ttyUSB*` on Linux), with baud rate, data bits, parity, stop bits and handshake (XON/XOFF, hardware) passed through
+  - a pseudo-terminal the host can open (`screen`, `minicom`, another emulator)
+  - a named pipe or a Unix socket
+  - a TCP connection (raw, or Telnet with RFC 2217 serial control) to a host and port, or listening for one
+  - a Hayes modem emulation: `ATDT host:port` dials a TCP connection, `ATA` answers one, `+++` and `ATH` hang up, so BBS and terminal programs work unchanged
+  - nothing (the port is present but unplugged)
+- **Port sharing:** the printer port is shared with LocalTalk; when AppleTalk uses LocalTalk over UDP the printer port stays free for serial use, as the environment has no physical LocalTalk.
+- **The Communications Toolbox** (Connection, Terminal and File Transfer Managers with the Serial tool) for applications built on it, after the driver.
+- **MIDI:** the MIDI Manager's serial port drivers on top of the same ports, or CoreMIDI/ALSA directly.
+- **Low memory and Gestalt:** `PortAUse`, `PortBUse` and `SPConfig` say which ports are in use and by what; the serial Gestalt selectors report both ports.
+
+**Exit:** a terminal program (e.g. ZTerm) talks to a USB serial adapter and, through the modem emulation, to a Telnet BBS; a second instance connects to the first through a pty.
 
 ### M6: ResEdit and screen-mode detection
 
