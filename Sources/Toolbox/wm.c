@@ -531,7 +531,19 @@ static void repaint(const hrgn *clobbered)
                 hrgn_offset(&cont, dh, dv);
                 uint8_t bk[8];
                 qd_port_pattern(w, 1, bk);
+                /* The Window Manager erases what was uncovered whatever
+                 * clip the program has left set, which may leave some of
+                 * its window out; only the visRgn limits it. */
+                hrgn clip, open;
+                hrgn_init(&clip);
+                hrgn_init(&open);
+                rgn_read(GrafPort_clipRgn(w), &clip);
+                hrgn_rect(&open, (qrect){ -32767, -32767, 32767, 32767 });
+                rgn_write(GrafPort_clipRgn(w), &open);
                 qd_fill_region(w, &cont, bk, patCopy);
+                rgn_write(GrafPort_clipRgn(w), &clip);
+                hrgn_free(&clip);
+                hrgn_free(&open);
                 tb_SetPort(saved);
             }
             hrgn_free(&cont);
@@ -1020,25 +1032,102 @@ void wm_repaint_all(void) { repaint_all(); }
 /* ---------------------------------------------------------------------- */
 /* Moving and sizing */
 
+/* The part of a window's structure that shows: within the desktop and
+ * not under a visible window in front of it. */
+static void visible_struct(gaddr w, hrgn *out)
+{
+    hrgn tmp;
+    hrgn_init(&tmp);
+    rgn_read(WindowRecord_strucRgn(w), out);
+    gray_rgn(&tmp);
+    hrgn_op(out, out, &tmp, RGN_SECT);
+    for (gaddr f = wlist(); f && f != w; f = WindowRecord_nextWindow(f)) {
+        if (!wvisible(f))
+            continue;
+        rgn_read(WindowRecord_strucRgn(f), &tmp);
+        hrgn_op(out, out, &tmp, RGN_DIFF);
+    }
+    hrgn_free(&tmp);
+}
+
+/* Copy the screen's pixels in rgn - (dh, dv) to rgn. */
+static void copy_screen(const hrgn *rgn, int dh, int dv)
+{
+    pixdst d = qd_port_pixels(wmgr_port());
+    qrect box = hrgn_bbox(rgn);
+    int bw = box.right - box.left, bh = box.bottom - box.top;
+    if (bw <= 0 || bh <= 0)
+        return;
+    uint32_t *buf = malloc((size_t)bw * (size_t)bh * sizeof *buf);
+    if (!buf)
+        return;
+    /* Read everything first: source and destination overlap. */
+    for (int pass = 0; pass < 2; pass++)
+        for (int y = box.top; y < box.bottom; y++) {
+            int n;
+            const int16_t *xs = hrgn_row(rgn, y, &n);
+            int sy = y - dv;
+            if (!xs || y < d.bounds.top || y >= d.bounds.bottom || sy < d.bounds.top || sy >= d.bounds.bottom)
+                continue;
+            for (int k = 0; k < n; k += 2)
+                for (int x = xs[k]; x < xs[k + 1]; x++) {
+                    int sx = x - dh;
+                    if (x < d.bounds.left || x >= d.bounds.right || sx < d.bounds.left || sx >= d.bounds.right)
+                        continue;
+                    uint32_t *p = &buf[(size_t)(y - box.top) * (size_t)bw + (size_t)(x - box.left)];
+                    if (pass == 0)
+                        *p = get_px(&d, sx - d.bounds.left, sy - d.bounds.top);
+                    else
+                        put_px(&d, x - d.bounds.left, y - d.bounds.top, *p);
+                }
+        }
+    free(buf);
+}
+
 void tb_MoveWindow(gaddr w, int16_t h, int16_t v, int8_t front)
 {
-    hrgn old;
+    /* As the Window Manager did: what showed of the window moves with it as
+     * pixels, its pending update moves too, and only what that leaves
+     * uncovered (where it was, and the parts of it that were hidden) is
+     * repainted. Programs need not redraw a window that only moved. */
+    hrgn old, shown, now;
     hrgn_init(&old);
+    hrgn_init(&shown);
+    hrgn_init(&now);
     rgn_read(WindowRecord_strucRgn(w), &old);
+    bool vis = wvisible(w);
+    if (vis)
+        visible_struct(w, &shown);
+    qrect before = global_content(w);
     gaddr saved = qd_port();
     tb_SetPort(w);
     tb_MovePortTo(h, v);
     tb_SetPort(saved);
     call_wdef(w, wCalcRgns, 0);
+    qrect after = global_content(w);
+    int dh = after.left - before.left, dv = after.top - before.top;
+    hrgn upd;
+    hrgn_init(&upd);
+    rgn_read(WindowRecord_updateRgn(w), &upd);
+    hrgn_offset(&upd, dh, dv);
+    rgn_write(WindowRecord_updateRgn(w), &upd);
+    hrgn_free(&upd);
+    if (vis) {
+        hrgn_offset(&shown, dh, dv);
+        visible_struct(w, &now);
+        hrgn_op(&shown, &shown, &now, RGN_SECT);
+        copy_screen(&shown, dh, dv);
+        rgn_read(WindowRecord_strucRgn(w), &now);
+        hrgn_op(&old, &old, &now, RGN_UNION);
+        hrgn_op(&old, &old, &shown, RGN_DIFF);
+        repaint(&old);
+    } else {
+        calc_all_vis();
+    }
     if (front)
         tb_SelectWindow(w);
-    /* Simple and correct: repaint the old and new areas; content is updated. */
-    hrgn now;
-    hrgn_init(&now);
-    rgn_read(WindowRecord_strucRgn(w), &now);
-    hrgn_op(&old, &old, &now, RGN_UNION);
-    repaint(&old);
     hrgn_free(&old);
+    hrgn_free(&shown);
     hrgn_free(&now);
 }
 
