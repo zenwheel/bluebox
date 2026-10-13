@@ -157,6 +157,7 @@ final class TransientView: NSView {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // After launch: AppKit sets the icon from the main bundle while launching.
         if let appIcon { NSApp.applicationIconImage = appIcon }
+        if Bundle.main.bundleIdentifier == nil { nameDockTile(title) }
         launchEvents.finishLaunching()
         NSApp.activate(ignoringOtherApps: true)
         installKeyMonitor()

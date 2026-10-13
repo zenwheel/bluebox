@@ -108,6 +108,15 @@ uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3])
     if (cache.valid && cache.depth == depth && cache.ctab == ctab && cache.seed == seed && !memcmp(cache.rgb, rgb, 6))
         return cache.v;
     uint32_t best = 0, best_d = UINT32_MAX, n = px_mask(depth) + 1;
+    /* Black is the last entry when that is black, as in a device's table,
+     * even while a fade has made other entries black too. */
+    uint16_t last[3];
+    qd_px_rgb(depth, ctab, n - 1, last);
+    if (!(rgb[0] | rgb[1] | rgb[2]) && !dist(last, rgb)) {
+        best = n - 1;
+        best_d = 0;
+        n = 0;
+    }
     for (uint32_t v = 0; v < n; v++) {
         uint16_t c[3];
         qd_px_rgb(depth, ctab, v, c);

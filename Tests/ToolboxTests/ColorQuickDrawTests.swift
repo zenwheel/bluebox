@@ -55,6 +55,26 @@ extension Classic {
             tb_DisposeCTable(ct)
         }
 
+        /// Black is the table's last entry even while a fade has made every
+        /// entry black, so it is still black when the colours come back.
+        @Test func blackIsTheLastEntryDuringAFade() {
+            launchTestApp()
+            _ = initToolbox()
+            let ct = tb_GetCTable(8)
+            for i in 0..<256 { for k in 0..<3 { wr16(rd32(ct) + 8 + UInt32(i * 8 + 2 + k * 2), 0) } }
+            let screen = tb_NewPtr(4, false, true), dev = tb_NewPtr(4, false, true)
+            tb_GetGWorld(screen, dev)
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 8, rect(0, 0, 4, 4), ct, 0, 0) == 0)
+            tb_SetGWorld(rd32(gw), 0)
+            tb_SetCPixel(1, 1, rgb(0, 0, 0))
+            let base = tb_GetPixBaseAddr(tb_GetGWorldPixMap(rd32(gw)))
+            let rowBytes = UInt32(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + 4) & 0x3FFF)
+            #expect(rd8(base + rowBytes + 1) == 255)
+            tb_SetGWorld(rd32(screen), rd32(dev))
+            tb_DisposeGWorld(rd32(gw))
+        }
+
         @Test func palettesKeepTheirColours() {
             launchTestApp()
             let w = initToolbox()

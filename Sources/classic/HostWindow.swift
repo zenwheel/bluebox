@@ -186,6 +186,21 @@ func nameProcess(_ name: String) {
     }
 }
 
+/// The Dock labels a process that is not in a bundle with its executable's
+/// name, whatever the process calls itself; Launch Services' display name
+/// (private, so looked up at run time, as Chromium does) changes the label.
+func nameDockTile(_ name: String) {
+    guard let ls = dlopen("/System/Library/Frameworks/CoreServices.framework/CoreServices", RTLD_LAZY),
+          let getASN = dlsym(ls, "_LSGetCurrentApplicationASN"),
+          let setItem = dlsym(ls, "_LSSetApplicationInformationItem"),
+          let keyPtr = dlsym(ls, "_kLSDisplayNameKey") else { return }
+    typealias GetASN = @convention(c) () -> Unmanaged<CFTypeRef>?
+    typealias SetItem = @convention(c) (Int32, CFTypeRef, CFString, CFTypeRef, UnsafeMutableRawPointer?) -> Int32
+    guard let asn = unsafeBitCast(getASN, to: GetASN.self)()?.takeUnretainedValue() else { return }
+    let key = keyPtr.assumingMemoryBound(to: CFString.self).pointee
+    _ = unsafeBitCast(setItem, to: SetItem.self)(-2 /* kLSDefaultSessionID */, asn, key, name as CFString, nil)
+}
+
 /// The classic application's Finder icon, for the Dock and alerts.
 nonisolated(unsafe) var appIcon: NSImage?
 
@@ -206,6 +221,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // After launch: AppKit sets the icon from the main bundle while launching.
         if let appIcon { NSApp.applicationIconImage = appIcon }
+        if Bundle.main.bundleIdentifier == nil { nameDockTile(title) }
         launchEvents.finishLaunching()
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)

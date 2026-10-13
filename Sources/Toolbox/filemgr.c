@@ -1515,9 +1515,8 @@ int16_t tb_PBGetWDInfo(gaddr pb, bool async)
     return noErr;
 }
 
-int16_t tb_PBGetCatInfo(gaddr pb, bool async)
+static int16_t get_cat_info(gaddr pb, char *path)
 {
-    char path[PATH_MAX];
     int16_t idx = (int16_t)rd16(pb + FileParam_ioFDirIndex_off);
     int32_t dirid = (int32_t)rd32(pb + HFileInfo_ioDirID_off);
     int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
@@ -1527,12 +1526,14 @@ int16_t tb_PBGetCatInfo(gaddr pb, bool async)
         int32_t d = base_dir(vref, dirid, true);
         if (!d || !host_of_dir(d, dir, sizeof dir))
             return dirNFErr;
-        if (!nth_entry(dir, idx, false, path, sizeof path))
+        if (!nth_entry(dir, idx, false, path, PATH_MAX))
             return fnfErrF;
         put_name(namep, path);
     } else if (idx < 0) {
+        if (dirid == 1)
+            return fnfErrF; /* the root's parent has no record of its own */
         int32_t d = base_dir(vref, dirid, true);
-        if (!d || !host_of_dir(d, path, sizeof path))
+        if (!d || !host_of_dir(d, path, PATH_MAX))
             return dirNFErr;
         if (namep) {
             if (d == ROOT_ID)
@@ -1541,7 +1542,7 @@ int16_t tb_PBGetCatInfo(gaddr pb, bool async)
                 put_name(namep, path);
         }
     } else {
-        int16_t err = resolve(vref, dirid, namep, true, path, sizeof path);
+        int16_t err = resolve(vref, dirid, namep, true, path, PATH_MAX);
         if (err)
             return err;
         if (!exists(path))
@@ -1565,6 +1566,17 @@ int16_t tb_PBGetCatInfo(gaddr pb, bool async)
         wr32(pb + HFileInfo_ioDirID_off, rd32(pb + FileParam_ioFlNum_off));
     }
     return noErr;
+}
+
+int16_t tb_PBGetCatInfo(gaddr pb, bool async)
+{
+    char path[PATH_MAX] = "";
+    int16_t idx = (int16_t)rd16(pb + FileParam_ioFDirIndex_off);
+    int32_t dirid = (int32_t)rd32(pb + HFileInfo_ioDirID_off);
+    int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
+    int16_t err = get_cat_info(pb, path);
+    LOGF(LOG_TRAPS, "  PBGetCatInfo vref %d dir %d index %d -> %d %s\n", vref, dirid, idx, err, path);
+    return err;
 }
 
 int16_t tb_PBSetCatInfo(gaddr pb, bool async) { return set_finfo(pb, true, true); }

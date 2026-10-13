@@ -322,6 +322,22 @@ extension Classic {
         }
     }
 
+    @Suite struct RootParent {
+        /// Walking up parents ends at the root: its parent (directory 1)
+        /// has no record of its own.
+        @Test func rootParentIsNotFound() {
+            launchTestApp()
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(64, false, true)
+            wr32(pb + 18, name)
+            wr16(pb + 28, UInt16(bitPattern: -1))
+            wr32(pb + 48, 2)
+            #expect(tb_PBGetCatInfo(pb, false) == 0)
+            #expect(rd32(pb + 100) == 1) // ioDrParID
+            wr32(pb + 48, 1)
+            #expect(tb_PBGetCatInfo(pb, false) == -43)
+        }
+    }
+
     @Suite struct LongNames {
         /// Host names longer than HFS's 31 characters get a stable short form
         /// that resolves back; names also match ignoring case.

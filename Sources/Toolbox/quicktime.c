@@ -71,6 +71,8 @@ typedef struct {
     qt_vlc_player *player;
     uint8_t *frame;
     int fw, fh;
+    bool frame_indexed;
+    int index_depth;     /* palettized video with the standard colours (0: none) */
     uint32_t serial;
     track tracks[MAX_TRACKS];
     int ntracks;
@@ -134,6 +136,26 @@ static uint8_t *find_atom(uint8_t *p, uint8_t *end, const char *type, uint32_t *
     return NULL;
 }
 
+/* A video track whose first sample description is palettized (1 to 8 bits)
+ * without a colour table of its own: QuickTime copied such pixels to a
+ * screen of that depth as they are, so they take the screen's colours. */
+static void index_depth(movie *m, uint8_t *mdia, uint32_t len)
+{
+    static const char *const path[] = { "minf", "stbl", "stsd" };
+    uint8_t *p = mdia, *end = mdia + len;
+    uint32_t n = len;
+    for (int i = 0; i < 3 && p; i++) {
+        p = find_atom(p + 8, end, path[i], &n);
+        end = p ? p + n : NULL;
+    }
+    if (!p || n < 16 + 86 || be32(p + 12) < 1)
+        return;
+    uint8_t *e = p + 16;
+    int16_t depth = (int16_t)(e[82] << 8 | e[83]), ctab = (int16_t)(e[84] << 8 | e[85]);
+    if ((depth == 1 || depth == 2 || depth == 4 || depth == 8) && ctab != 0)
+        m->index_depth = depth;
+}
+
 /* Read time scale, duration and tracks from a 'moov' atom. */
 static bool describe(movie *m, uint8_t *moov, uint32_t len)
 {
@@ -173,6 +195,7 @@ static bool describe(movie *m, uint8_t *moov, uint32_t len)
             if (hdlr && hk >= 20)
                 tr->type = be32(hdlr + 16);
             if (tr->type == fourcc("vide")) {
+                index_depth(m, mdia, k);
                 if (tr->width > w)
                     w = tr->width;
                 if (tr->height > h)
@@ -468,7 +491,7 @@ static bool movie_done(movie *m)
 static void ensure_player(movie *m)
 {
     if (!m->player && m->play_path && use_vlc()) {
-        m->player = qt_vlc_open(m->play_path);
+        m->player = qt_vlc_open(m->play_path, m->index_depth != 0);
         if (m->player)
             qt_vlc_set_volume(m->player, m->volume * 100 / 256);
     }
@@ -520,12 +543,33 @@ static void draw_frame(movie *m, bool force)
 {
     if (!m->player)
         return;
-    bool fresh = qt_vlc_frame(m->player, &m->serial, &m->frame, &m->fw, &m->fh);
+    bool fresh = qt_vlc_frame(m->player, &m->serial, &m->frame, &m->fw, &m->fh, &m->frame_indexed);
     if ((!fresh && !force) || !m->frame || !m->active)
         return;
     gaddr saved = qd_port();
     tb_SetPort(m->port);
-    qd_draw_rgba(m->frame, m->fw, m->fh, m->box);
+    if (m->frame_indexed) {
+        /* The port's colours at the movie's depth, else the standard ones. */
+        pixdst d = qd_port_pixels(m->port);
+        gaddr ct = d.depth == m->index_depth ? d.ctab : 0;
+        size_t n = (size_t)m->fw * m->fh;
+        uint8_t *rgba = malloc(n * 4);
+        uint8_t map[256][3];
+        for (int v = 0; v < 256; v++) {
+            uint16_t c[3];
+            qd_px_rgb(m->index_depth, ct, (uint32_t)v & ((1u << m->index_depth) - 1), c);
+            for (int k = 0; k < 3; k++)
+                map[v][k] = (uint8_t)(c[k] >> 8);
+        }
+        for (size_t i = 0; i < n; i++) {
+            memcpy(rgba + i * 4, map[m->frame[i]], 3);
+            rgba[i * 4 + 3] = 255;
+        }
+        qd_draw_rgba(rgba, m->fw, m->fh, m->box);
+        free(rgba);
+    } else {
+        qd_draw_rgba(m->frame, m->fw, m->fh, m->box);
+    }
     tb_SetPort(saved);
 }
 

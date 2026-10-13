@@ -132,8 +132,10 @@ struct qt_vlc_player {
     libvlc_media_player_t *mp;
     pthread_mutex_t lock;
     uint8_t *decode;   /* where libvlc writes (BGRX) */
-    uint8_t *frame;    /* the last complete frame (RGBA) */
+    uint8_t *frame;    /* the last complete frame (RGBA, or indices) */
     unsigned w, h;
+    bool want_indices; /* palette indices, not colours, for indexed video */
+    bool indexed;      /* frames are indices (one byte each) */
     uint32_t serial;   /* bumped per frame */
     bool started;
 };
@@ -142,16 +144,21 @@ static unsigned setup(void **opaque, char *chroma, unsigned *width, unsigned *he
                       unsigned *lines)
 {
     qt_vlc_player *p = *opaque;
-    memcpy(chroma, "RV32", 4);
+    /* Palette indices as they are, when asked for and offered. */
+    bool indexed = p->want_indices && !memcmp(chroma, "RGBP", 4);
+    if (!indexed)
+        memcpy(chroma, "RV32", 4);
+    unsigned bpp = indexed ? 1 : 4;
     pthread_mutex_lock(&p->lock);
     p->w = *width;
     p->h = *height;
+    p->indexed = indexed;
     free(p->decode);
     free(p->frame);
-    p->decode = calloc((size_t)p->w * p->h, 4);
-    p->frame = calloc((size_t)p->w * p->h, 4);
+    p->decode = calloc((size_t)p->w * p->h, bpp);
+    p->frame = calloc((size_t)p->w * p->h, bpp);
     pthread_mutex_unlock(&p->lock);
-    pitches[0] = p->w * 4;
+    pitches[0] = p->w * bpp;
     lines[0] = p->h;
     return 1;
 }
@@ -172,6 +179,12 @@ static void display(void *opaque, void *picture)
     qt_vlc_player *p = opaque;
     pthread_mutex_lock(&p->lock);
     size_t n = (size_t)p->w * p->h;
+    if (p->indexed) {
+        memcpy(p->frame, p->decode, n);
+        p->serial++;
+        pthread_mutex_unlock(&p->lock);
+        return;
+    }
     const uint8_t *s = p->decode;
     uint8_t *d = p->frame;
     for (size_t i = 0; i < n; i++, s += 4, d += 4) { /* BGRX in memory to RGBA */
@@ -184,7 +197,7 @@ static void display(void *opaque, void *picture)
     pthread_mutex_unlock(&p->lock);
 }
 
-qt_vlc_player *qt_vlc_open(const char *path)
+qt_vlc_player *qt_vlc_open(const char *path, bool indices)
 {
     if (!qt_vlc_available())
         return NULL;
@@ -193,6 +206,7 @@ qt_vlc_player *qt_vlc_open(const char *path)
         return NULL;
     vlc.media_add_option(m, ":no-video-title-show");
     qt_vlc_player *p = calloc(1, sizeof *p);
+    p->want_indices = indices;
     pthread_mutex_init(&p->lock, NULL);
     p->mp = vlc.player_new_from_media(m);
     vlc.media_release(m);
@@ -267,12 +281,13 @@ bool qt_vlc_ended(qt_vlc_player *p)
 void qt_vlc_set_rate(qt_vlc_player *p, float rate) { vlc.set_rate(p->mp, rate); }
 void qt_vlc_set_volume(qt_vlc_player *p, int percent) { vlc.audio_set_volume(p->mp, percent); }
 
-bool qt_vlc_frame(qt_vlc_player *p, uint32_t *serial, uint8_t **rgba, int *w, int *h)
+bool qt_vlc_frame(qt_vlc_player *p, uint32_t *serial, uint8_t **rgba, int *w, int *h, bool *indexed)
 {
     pthread_mutex_lock(&p->lock);
     bool fresh = p->frame && p->serial != *serial;
     if (fresh) {
-        size_t n = (size_t)p->w * p->h * 4;
+        size_t n = (size_t)p->w * p->h * (p->indexed ? 1 : 4);
+        *indexed = p->indexed;
         *rgba = realloc(*rgba, n);
         memcpy(*rgba, p->frame, n);
         *w = (int)p->w;
