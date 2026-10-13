@@ -520,6 +520,16 @@ func postScriptLive(_ script: [String]) {
             machine_choose_menu(menu, item)
             continue
         }
+        if let colon = step.firstIndex(of: ":"), let button = ["click": 2, "down": 1, "up": 0, "move": -1][step[..<colon]] {
+            let xy = step[step.index(after: colon)...].split(separator: "/").compactMap { Int32($0) }
+            guard xy.count == 2 else { continue }
+            machine_post_mouse(xy[0], xy[1], button == 2 ? 1 : Int32(button))
+            if button == 2 {
+                usleep(100_000)
+                machine_post_mouse(xy[0], xy[1], 0)
+            }
+            continue
+        }
         var mods: UInt32 = 0
         var chars: [UInt8] = []
         if step.hasPrefix("cmd-") {
