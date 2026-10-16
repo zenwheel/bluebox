@@ -988,6 +988,13 @@ static void main_returned(ppc_cpu *c)
     ppc_halt(c, "ExitToShell (main returned)");
 }
 
+/* BLUEBOX_PPC_TRACE: each PowerPC instruction, for study. */
+static void trace_instruction(ppc_cpu *c)
+{
+    fprintf(stderr, "%08X %08X  r3 %08X r4 %08X r5 %08X lr %08X\n", c->pc, rd32(c->pc), c->gpr[3], c->gpr[4],
+            c->gpr[5], c->lr);
+}
+
 bool cfm_launch(const char *app_path, char *err, size_t errlen)
 {
     nnatives = 0;
@@ -1033,6 +1040,8 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
     }
     ppc_init(&g_ppc);
     g_ppc.native = dispatch_native;
+    if (getenv("BLUEBOX_PPC_TRACE"))
+        g_ppc.trace = trace_instruction;
     g_ppc.gpr[1] = (stack + stack_size - 64) & ~15u;
     wr32(g_ppc.gpr[1], 0);
     done_code = rd32(native_tvector(main_returned, "main returned"));

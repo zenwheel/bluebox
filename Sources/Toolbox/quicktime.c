@@ -1516,7 +1516,7 @@ int16_t tb_EndFullScreen(int32_t fullState, int32_t flags)
 int16_t tb_GetCodecNameList(gaddr listp, int16_t showAll)
 {
     (void)showAll;
-    gaddr list = tb_NewPtr(2 + 44, true, false);
+    gaddr list = tb_NewPtr(2 + 44, false, true);
     if (!list)
         return memFullErr;
     if (listp)

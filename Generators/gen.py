@@ -504,8 +504,11 @@ def gen_ppc_glue(name, fn, sig, variant):
     slot = 1 if struct_result else 0
     for name_, cls in sig["args"]:
         kind, reg, ti = cls
-        if kind == "reg" and reg.startswith("TrapBit") and fixed:
-            call_args.append("true" if ppc_variant_bits(variant, reg) else "false")
+        if kind == "reg" and reg.startswith("TrapBit") and (fixed or not name.startswith("PB")):
+            # A named variant sets its bits; otherwise only the PB calls
+            # take the bit (async) as an argument, and the rest are the
+            # plain call (PurgeSpace, MaxMem: the application heap).
+            call_args.append("true" if fixed and ppc_variant_bits(variant, reg) else "false")
             continue
         ct = "bool" if (kind == "reg" and reg.startswith("TrapBit")) else ctype_for(ti)
         src = f"c->gpr[{3 + slot}]" if slot < 8 else f"rd32(c->gpr[1] + {24 + 4 * slot})"
@@ -575,6 +578,12 @@ def gen_ppc_trapcall(name, fn, sig, variant):
         return None
     if loc == "TrapBits":
         trap = (trap & ~0x0600) | ((sel & 3) << 9)
+    # An OS trap that answers in A0 has bit 8 set, or the dispatcher would
+    # put the caller's A0 back over the answer (PurgeSpace is $A162).
+    answers_a0 = sig["retreg"] == "A0" or any(
+        c[0] == "reg" and c[1] in ("Out<A0>", "InOut<A0>") for _, c in sig["args"])
+    if not (trap & 0x0800) and answers_a0:
+        trap |= 0x0100
     cname = f"ppctrap_{variant or name}"
     lines = [f"static void {cname}(ppc_cpu *c)\n{{\n", "    ppc_trap_begin();\n"]
     bits = []
@@ -589,8 +598,8 @@ def gen_ppc_trapcall(name, fn, sig, variant):
         if kind == "reg" and reg.startswith("TrapBit"):
             bit = reg[len("TrapBit<"):-1]
             bit = TRAPBITS.get(bit, bit)
-            if variant is not None:
-                if ppc_variant_bits(variant, reg):
+            if variant is not None or not name.startswith("PB"):
+                if variant is not None and ppc_variant_bits(variant, reg):
                     bits.append(f"{bit}")
                 continue
             src = f"c->gpr[{3 + slot}]" if slot < 8 else f"rd32(c->gpr[1] + {24 + 4 * slot})"

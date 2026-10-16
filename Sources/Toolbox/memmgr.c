@@ -23,7 +23,11 @@ enum { USE_FREE = 0, USE_NREL = 1, USE_REL = 2 };
 enum { ST_LOCK = 0x80, ST_PURGE = 0x40, ST_RSRC = 0x20 };
 enum { HDR = 12, MIN_BLOCK = 16 };
 
-uint32_t g_mem_report_cap = 1u << 30;
+/* What the Memory Manager reports at most (free space, Gestalt's RAM):
+ * 256 MB, a big machine of the time.  Programs add these up in signed
+ * longs (SpookHouse adds its own pool to PurgeSpace's contiguous space and
+ * a gigabyte overflowed). */
+uint32_t g_mem_report_cap = 1u << 28;
 static gaddr appl_max_limit; /* 0 = application zone does not grow */
 
 /* ---------------------------------------------------------------------- */
@@ -826,6 +830,7 @@ void tb_PurgeSpace(uint32_t *totalp, uint32_t *contigp, bool sys_p)
             total += b_psize(b);
     *totalp = cap(total);
     *contigp = cap(largest_possible(z, true));
+    LOGF(LOG_TRAPS, "  PurgeSpace in zone %08X: total %u, contiguous %u\n", z, *totalp, *contigp);
     set_mem_err(noErr);
 }
 

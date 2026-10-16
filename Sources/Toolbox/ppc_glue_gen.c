@@ -13246,7 +13246,7 @@ static void ppctrap_PurgeSpace(ppc_cpu *c)
     ppc_trap_begin();
     gaddr o_totalp = c->gpr[3];
     gaddr o_contigp = c->gpr[4];
-    ppc_trap((uint16_t)(0xA062));
+    ppc_trap((uint16_t)(0xA162));
     if (o_totalp) wr32(o_totalp, ppc_trap_get(0));
     if (o_contigp) wr32(o_contigp, ppc_trap_get(8));
     ppc_trap_end();
@@ -13258,7 +13258,7 @@ static void ppctrap_PurgeSpaceSys(ppc_cpu *c)
     ppc_trap_begin();
     gaddr o_totalp = c->gpr[3];
     gaddr o_contigp = c->gpr[4];
-    ppc_trap((uint16_t)(0xA062 | 0x400));
+    ppc_trap((uint16_t)(0xA162 | 0x400));
     if (o_totalp) wr32(o_totalp, ppc_trap_get(0));
     if (o_contigp) wr32(o_contigp, ppc_trap_get(8));
     ppc_trap_end();

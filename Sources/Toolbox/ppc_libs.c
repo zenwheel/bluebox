@@ -332,7 +332,7 @@ static void s_memchr(ppc_cpu *c)
 }
 /* malloc and friends: Memory Manager pointers with the size in front. */
 static void s_malloc(ppc_cpu *c) { RETURN(tb_NewPtr((int32_t)R(0), false, false)); }
-static void s_calloc(ppc_cpu *c) { RETURN(tb_NewPtr((int32_t)(R(0) * R(1)), true, false)); }
+static void s_calloc(ppc_cpu *c) { RETURN(tb_NewPtr((int32_t)(R(0) * R(1)), false, true)); }
 static void s_free(ppc_cpu *c)
 {
     if (R(0))
