@@ -585,3 +585,20 @@ void tb_MeasureText(int16_t count, gaddr text, gaddr locs)
         wr16(locs + (uint32_t)(i + 1) * 2, (uint16_t)x);
     }
 }
+
+/* ---------------------------------------------------------------------- */
+/* The outline font calls (FontDispatch): the fonts are bitmaps. */
+
+static bool outline_preferred, preserve_glyph;
+
+int8_t tb_IsOutline(uint32_t numer, uint32_t denom) { return false; }
+void tb_SetOutlinePreferred(int8_t on) { outline_preferred = on != 0; }
+int8_t tb_GetOutlinePreferred(void) { return outline_preferred; }
+void tb_SetPreserveGlyph(int8_t on) { preserve_glyph = on != 0; }
+int8_t tb_GetPreserveGlyph(void) { return preserve_glyph; }
+int16_t tb_FlushFonts(void) { return noErr; }
+int16_t tb_OutlineMetrics(int16_t byte_count, gaddr text, uint32_t numer, uint32_t denom, gaddr y_max, gaddr y_min,
+                          gaddr aw_array, gaddr lsb_array, gaddr bounds_array)
+{
+    return -32615; /* fontNotOutlineErr */
+}

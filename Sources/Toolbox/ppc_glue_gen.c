@@ -4092,6 +4092,61 @@ static void ppcglue_SetFractEnable(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetOutlinePreferred(ppc_cpu *c)
+{
+    int8_t a__outline_perferred_p = (int8_t)c->gpr[3];
+    tb_SetOutlinePreferred(a__outline_perferred_p);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetOutlinePreferred(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetOutlinePreferred();
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsOutline(ppc_cpu *c)
+{
+    uint32_t a_numer = (uint32_t)c->gpr[3];
+    uint32_t a_denom = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsOutline(a_numer, a_denom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OutlineMetrics(ppc_cpu *c)
+{
+    int16_t a_byte_count = (int16_t)c->gpr[3];
+    gaddr a_text = (gaddr)c->gpr[4];
+    uint32_t a_numer = (uint32_t)c->gpr[5];
+    uint32_t a_denom = (uint32_t)c->gpr[6];
+    gaddr a_y_max = (gaddr)c->gpr[7];
+    gaddr a_y_min = (gaddr)c->gpr[8];
+    gaddr a_aw_array = (gaddr)c->gpr[9];
+    gaddr a_lsb_array = (gaddr)c->gpr[10];
+    gaddr a_bounds_array = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OutlineMetrics(a_byte_count, a_text, a_numer, a_denom, a_y_max, a_y_min, a_aw_array, a_lsb_array, a_bounds_array);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetPreserveGlyph(ppc_cpu *c)
+{
+    int8_t a_preserve_glyph = (int8_t)c->gpr[3];
+    tb_SetPreserveGlyph(a_preserve_glyph);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetPreserveGlyph(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetPreserveGlyph();
+    c->pc = c->lr;
+}
+
+static void ppcglue_FlushFonts(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FlushFonts();
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewGestalt(ppc_cpu *c)
 {
     int32_t a_selector = (int32_t)c->gpr[3];
@@ -8345,19 +8400,25 @@ static void ppcglue_SndManagerStatus(ppc_cpu *c)
 
 static void ppcglue_SndSoundManagerVersion(ppc_cpu *c)
 {
-    c->gpr[3] = (uint32_t)tb_SndSoundManagerVersion();
+    gaddr result = c->gpr[3];
+    int32_t r = tb_SndSoundManagerVersion();
+    if (result) wr32(result, r);
     c->pc = c->lr;
 }
 
 static void ppcglue_MACEVersion(ppc_cpu *c)
 {
-    c->gpr[3] = (uint32_t)tb_MACEVersion();
+    gaddr result = c->gpr[3];
+    int32_t r = tb_MACEVersion();
+    if (result) wr32(result, r);
     c->pc = c->lr;
 }
 
 static void ppcglue_SPBVersion(ppc_cpu *c)
 {
-    c->gpr[3] = (uint32_t)tb_SPBVersion();
+    gaddr result = c->gpr[3];
+    int32_t r = tb_SPBVersion();
+    if (result) wr32(result, r);
     c->pc = c->lr;
 }
 
@@ -8669,7 +8730,9 @@ static void ppcglue_DirectorUnknown4(ppc_cpu *c)
 
 static void ppcglue_SpeechManagerVersion(ppc_cpu *c)
 {
-    c->gpr[3] = (uint32_t)tb_SpeechManagerVersion();
+    gaddr result = c->gpr[3];
+    int32_t r = tb_SpeechManagerVersion();
+    if (result) wr32(result, r);
     c->pc = c->lr;
 }
 
@@ -11100,6 +11163,21 @@ static void ppcglue_SetTimeBaseRate(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetCodecNameList(ppc_cpu *c)
+{
+    gaddr a_list = (gaddr)c->gpr[3];
+    int16_t a_showAll = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetCodecNameList(a_list, a_showAll);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeCodecNameList(ppc_cpu *c)
+{
+    int32_t a_list = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisposeCodecNameList(a_list);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SFGetFilePreview(ppc_cpu *c)
 {
     int32_t a_where = (int32_t)c->gpr[3];
@@ -12824,97 +12902,6 @@ static void ppctrap_FSpRstFLock(ppc_cpu *c)
     ppc_trap_set(0, 0xAu);
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap((uint16_t)(0xAA52));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetOutlinePreferred(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x1u);
-    ppc_trap_push(1, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA854));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetOutlinePreferred(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9u);
-    ppc_trap((uint16_t)(0xA854));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_IsOutline(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA854));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_OutlineMetrics(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8u);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap((uint16_t)(0xA854));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetPreserveGlyph(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xAu);
-    ppc_trap_push(1, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA854));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetPreserveGlyph(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xBu);
-    ppc_trap((uint16_t)(0xA854));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FlushFonts(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xCu);
-    ppc_trap((uint16_t)(0xA854));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
@@ -19711,33 +19698,6 @@ static void ppctrap_CodecManagerVersion(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_GetCodecNameList(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeCodecNameList(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_GetCodecInfo(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -22603,7 +22563,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeCIcon", ppcglue_DisposeCIcon},
     {"DisposeCTable", ppcglue_DisposeCTable},
     {"DisposeCallBack", ppctrap_DisposeCallBack},
-    {"DisposeCodecNameList", ppctrap_DisposeCodecNameList},
+    {"DisposeCodecNameList", ppcglue_DisposeCodecNameList},
     {"DisposeControl", ppcglue_DisposeControl},
     {"DisposeDialog", ppcglue_DisposeDialog},
     {"DisposeDrag", ppctrap_DisposeDrag},
@@ -22744,7 +22704,7 @@ const ppc_export ppc_exports[] = {
     {"FlattenMovieDataToDataRef", ppctrap_FlattenMovieDataToDataRef},
     {"FlushCodeCache", ppctrap_FlushCodeCache},
     {"FlushEvents", ppcglue_FlushEvents},
-    {"FlushFonts", ppctrap_FlushFonts},
+    {"FlushFonts", ppcglue_FlushFonts},
     {"FontMetrics", ppcglue_FontMetrics},
     {"FontScript", ppcglue_FontScript},
     {"FontToScript", ppcglue_FontToScript},
@@ -22800,7 +22760,7 @@ const ppc_export ppc_exports[] = {
     {"GetCaretTime", ppcglue_GetCaretTime},
     {"GetClip", ppcglue_GetClip},
     {"GetCodecInfo", ppctrap_GetCodecInfo},
-    {"GetCodecNameList", ppctrap_GetCodecNameList},
+    {"GetCodecNameList", ppcglue_GetCodecNameList},
     {"GetColor", ppcglue_GetColor},
     {"GetCompressedImageSize", ppctrap_GetCompressedImageSize},
     {"GetCompressedPixMapInfo", ppctrap_GetCompressedPixMapInfo},
@@ -22992,7 +22952,7 @@ const ppc_export ppc_exports[] = {
     {"GetNextUserDataType", ppctrap_GetNextUserDataType},
     {"GetOSEvent", ppcglue_GetOSEvent},
     {"GetOSTrapAddress", ppcglue_GetOSTrapAddress},
-    {"GetOutlinePreferred", ppctrap_GetOutlinePreferred},
+    {"GetOutlinePreferred", ppcglue_GetOutlinePreferred},
     {"GetPalette", ppcglue_GetPalette},
     {"GetPaletteUpdates", ppcglue_GetPaletteUpdates},
     {"GetPattern", ppcglue_GetPattern},
@@ -23009,7 +22969,7 @@ const ppc_export ppc_exports[] = {
     {"GetPort", ppcglue_GetPort},
     {"GetPortNameFromProcessSerialNumber", ppctrap_GetPortNameFromProcessSerialNumber},
     {"GetPosterBox", ppctrap_GetPosterBox},
-    {"GetPreserveGlyph", ppctrap_GetPreserveGlyph},
+    {"GetPreserveGlyph", ppcglue_GetPreserveGlyph},
     {"GetPrevTrackForCompositing", ppctrap_GetPrevTrackForCompositing},
     {"GetProcessInformation", ppcglue_GetProcessInformation},
     {"GetProcessSerialNumberFromPortName", ppcglue_GetProcessSerialNumberFromPortName},
@@ -23248,7 +23208,7 @@ const ppc_export ppc_exports[] = {
     {"IsDialogEvent", ppcglue_IsDialogEvent},
     {"IsMetric", ppcglue_IsMetric},
     {"IsMovieDone", ppcglue_IsMovieDone},
-    {"IsOutline", ppctrap_IsOutline},
+    {"IsOutline", ppcglue_IsOutline},
     {"IsRegisteredSection", ppcglue_IsRegisteredSection},
     {"IsScrapMovie", ppctrap_IsScrapMovie},
     {"KeyScript", ppcglue_KeyScript},
@@ -23933,7 +23893,7 @@ const ppc_export ppc_exports[] = {
     {"OpenRFPerm", ppcglue_OpenRFPerm},
     {"OpenResFile", ppcglue_OpenResFile},
     {"OpenRgn", ppcglue_OpenRgn},
-    {"OutlineMetrics", ppctrap_OutlineMetrics},
+    {"OutlineMetrics", ppcglue_OutlineMetrics},
     {"PBAllocate", ppcglue_PBAllocate},
     {"PBAllocateAsync", ppcglue_PBAllocateAsync},
     {"PBAllocateSync", ppcglue_PBAllocateSync},
@@ -24643,7 +24603,7 @@ const ppc_export ppc_exports[] = {
     {"SetMoviesErrorProc", ppctrap_SetMoviesErrorProc},
     {"SetOSTrapAddress", ppcglue_SetOSTrapAddress},
     {"SetOrigin", ppcglue_SetOrigin},
-    {"SetOutlinePreferred", ppctrap_SetOutlinePreferred},
+    {"SetOutlinePreferred", ppcglue_SetOutlinePreferred},
     {"SetPalette", ppcglue_SetPalette},
     {"SetPaletteUpdates", ppcglue_SetPaletteUpdates},
     {"SetPenState", ppcglue_SetPenState},
@@ -24652,7 +24612,7 @@ const ppc_export ppc_exports[] = {
     {"SetPortBits", ppcglue_SetPortBits},
     {"SetPortPix", ppcglue_SetPortPix},
     {"SetPosterBox", ppctrap_SetPosterBox},
-    {"SetPreserveGlyph", ppctrap_SetPreserveGlyph},
+    {"SetPreserveGlyph", ppcglue_SetPreserveGlyph},
     {"SetPt", ppcglue_SetPt},
     {"SetPtrSize", ppcglue_SetPtrSize},
     {"SetQuickTimePreference", ppctrap_SetQuickTimePreference},

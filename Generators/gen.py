@@ -498,7 +498,10 @@ def gen_ppc_glue(name, fn, sig, variant):
     cname = f"ppcglue_{variant or name}"
     lines = [f"static void {cname}(ppc_cpu *c)\n{{\n"]
     call_args = []
-    slot = 0
+    # A struct result (NumVersion, Point) comes back through a pointer the
+    # caller passes in r3; the arguments follow it.
+    struct_result = ppc_struct_result(fn, sig)
+    slot = 1 if struct_result else 0
     for name_, cls in sig["args"]:
         kind, reg, ti = cls
         if kind == "reg" and reg.startswith("TrapBit") and fixed:
@@ -516,6 +519,10 @@ def gen_ppc_glue(name, fn, sig, variant):
     call = f"tb_{name}({', '.join(call_args)})"
     if rt == "void":
         lines.append(f"    {call};\n")
+    elif struct_result:
+        wr = "wr32" if sig["rti"].size == 4 else "wr16"
+        lines.append(f"    gaddr result = c->gpr[3];\n    {rt} r = {call};\n")
+        lines.append(f"    if (result) {wr}(result, r);\n")
     elif rt == "bool":
         lines.append(f"    c->gpr[3] = {call} ? 1 : 0;\n")
     else:
@@ -529,6 +536,15 @@ def gen_ppc_glue(name, fn, sig, variant):
 
 
 REG_INDEX = {"D0": 0, "D1": 1, "D2": 2, "A0": 8, "A1": 9, "A2": 10}
+
+# Results that are structs in C though the definitions call them longs; a
+# PowerPC caller passes a pointer for them in r3.
+PPC_STRUCT_RESULTS = {"NumVersion"}
+
+
+def ppc_struct_result(fn, sig):
+    ret = clean(fn.get("return") or "void")
+    return sig["rti"] is not None and (sig["rti"].struct is not None or ret in PPC_STRUCT_RESULTS)
 
 
 def selector_value(fn):
@@ -563,7 +579,8 @@ def gen_ppc_trapcall(name, fn, sig, variant):
     lines = [f"static void {cname}(ppc_cpu *c)\n{{\n", "    ppc_trap_begin();\n"]
     bits = []
     outs = []
-    slot = 0
+    struct_result = ppc_struct_result(fn, sig)
+    slot = 1 if struct_result else 0
     if sig["conv"] == "stack" and sig["retbytes"]:
         lines.append(f"    ppc_trap_push({sig['retbytes']}, 0);\n")
     if loc in ("D0W", "D0L") or (loc or "").startswith("D0<"):
@@ -621,7 +638,10 @@ def gen_ppc_trapcall(name, fn, sig, variant):
             v = f"(uint32_t)({'(int32_t)' if ti.signed else ''}({t})({v}))"
         lines.append(f"    uint32_t r = {v};\n")
     lines.append("    ppc_trap_end();\n")
-    if ti is not None:
+    if ti is not None and struct_result:
+        wr = "wr32" if ti.size == 4 else "wr16"
+        lines.append(f"    if (c->gpr[3]) {wr}(c->gpr[3], r);\n")
+    elif ti is not None:
         lines.append("    c->gpr[3] = r;\n")
     lines.append("    c->pc = c->lr;\n}\n\n")
     return cname, "".join(lines)

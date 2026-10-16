@@ -1510,3 +1510,23 @@ int16_t tb_EndFullScreen(int32_t fullState, int32_t flags)
     }
     return noErr;
 }
+
+/* GetCodecNameList(*list, showAll): the codecs installed, none listed yet
+ * (CodecNameSpecList: a count, then 44-byte entries). */
+int16_t tb_GetCodecNameList(gaddr listp, int16_t showAll)
+{
+    (void)showAll;
+    gaddr list = tb_NewPtr(2 + 44, true, false);
+    if (!list)
+        return memFullErr;
+    if (listp)
+        wr32(listp, list);
+    return noErr;
+}
+
+int16_t tb_DisposeCodecNameList(int32_t list)
+{
+    if (list)
+        tb_DisposePtr((gaddr)list);
+    return noErr;
+}

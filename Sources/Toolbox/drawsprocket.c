@@ -94,7 +94,13 @@ static void dsp_Shutdown(ppc_cpu *c)
     started = false;
     RETURN(0);
 }
-static void dsp_GetVersion(ppc_cpu *c) { RETURN(0x01708000); } /* 1.7 */
+/* 1.7, as a NumVersion through the result pointer in r3 */
+static void dsp_GetVersion(ppc_cpu *c)
+{
+    if (R(0))
+        wr32(R(0), 0x01708000);
+    c->pc = c->lr;
+}
 
 /* DSpFindBestContext(desired, *context): ours, whatever was asked. */
 static void dsp_FindBestContext(ppc_cpu *c)
@@ -382,7 +388,54 @@ static void dsp_GetMaxFrameRate(ppc_cpu *c)
 }
 static void dsp_UserSelectContext(ppc_cpu *c) { RETURN(kDSpContextNotFoundErr); }
 
+/* The rest, for one context with nothing to save, queue or blit. */
+static void dsp_GetFlattenedSize(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), ATTR_SIZE);
+    RETURN(0);
+}
+static void dsp_Flatten(ppc_cpu *c)
+{
+    if (R(1))
+        ppc_copy(R(1), ctx, ATTR_SIZE);
+    RETURN(0);
+}
+static void dsp_Restore(ppc_cpu *c)
+{
+    context_make();
+    if (R(1))
+        wr32(R(1), ctx);
+    RETURN(0);
+}
+static void dsp_GetDirtyRectGridSize(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), 16);
+    if (R(2))
+        wr32(R(2), 16);
+    RETURN(0);
+}
+static void dsp_unsupported(ppc_cpu *c) { RETURN(-30450); } /* kDSpFeatureNotImplementedErr */
+
 const ppc_export dsp_exports[] = {
+    { "DSpAltBuffer_Dispose", dsp_noErr },
+    { "DSpAltBuffer_GetCGrafPtr", dsp_unsupported },
+    { "DSpAltBuffer_InvalRect", dsp_noErr },
+    { "DSpAltBuffer_New", dsp_unsupported },
+    { "DSpBlit_Faster", dsp_unsupported },
+    { "DSpBlit_Fastest", dsp_unsupported },
+    { "DSpContext_Dispose", dsp_noErr },
+    { "DSpContext_Flatten", dsp_Flatten },
+    { "DSpContext_GetDirtyRectGridSize", dsp_GetDirtyRectGridSize },
+    { "DSpContext_GetDirtyRectGridUnits", dsp_GetDirtyRectGridSize },
+    { "DSpContext_GetFlattenedSize", dsp_GetFlattenedSize },
+    { "DSpContext_GetUnderlayAltBuffer", dsp_unsupported },
+    { "DSpContext_Queue", dsp_noErr },
+    { "DSpContext_Restore", dsp_Restore },
+    { "DSpContext_SetDirtyRectGridSize", dsp_noErr },
+    { "DSpContext_SetUnderlayAltBuffer", dsp_noErr },
+    { "DSpContext_Switch", dsp_noErr },
     { "DSpCanUserSelectContext", dsp_false },
     { "DSpContext_CanUserSelectContext", dsp_false },
     { "DSpContext_FadeGamma", dsp_noErr },

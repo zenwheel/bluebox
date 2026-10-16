@@ -30,6 +30,23 @@ void gestalt_set(uint32_t selector, uint32_t value)
         table[count++] = (gestalt_entry){ selector, value, 0 };
 }
 
+bool gestalt_exists(uint32_t selector)
+{
+    for (unsigned i = 0; i < count; i++)
+        if (table[i].selector == selector)
+            return true;
+    return false;
+}
+
+void gestalt_delete(uint32_t selector)
+{
+    for (unsigned i = 0; i < count; i++)
+        if (table[i].selector == selector) {
+            table[i] = table[--count];
+            return;
+        }
+}
+
 /* A selector's fixed value (not one answered by a guest function). */
 uint32_t gestalt_value(uint32_t selector, uint32_t fallback)
 {
@@ -92,6 +109,7 @@ void gestalt_powerpc(void)
 {
     gestalt_set(fourcc("sysa"), 2);      /* gestaltPowerPC */
     gestalt_set(fourcc("sysv"), 0x0761);
+    wr16(LM_SysVersion, 0x0761);         /* SysEnvirons reads it */
     gestalt_set(fourcc("qtrs"), 0x1);    /* gestaltPPCQuickTimeLibPresent */
     gestalt_set(fourcc("dplv"), 0x00020000); /* the Display Manager, 2.0 */
     gestalt_set(fourcc("dply"), 0x1);    /* gestaltDisplayMgrPresent */

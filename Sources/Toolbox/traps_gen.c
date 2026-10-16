@@ -2680,6 +2680,16 @@ static void glue_DisposeCTable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DisposeCodecNameList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_list = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DisposeCodecNameList(a_list);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposeControl(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3705,6 +3715,15 @@ static void glue_FlushEvents(cpu68k *c, uint16_t trapword)
     tb_FlushEvents(a_evmask, a_stopmask);
 }
 
+static void glue_FlushFonts(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_FlushFonts();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FontMetrics(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4109,6 +4128,17 @@ static void glue_GetClip(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_r = (gaddr)cpu_pop32(c);
     tb_GetClip(a_r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCodecNameList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_showAll = (int16_t)cpu_pop16(c);
+    gaddr a_list = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetCodecNameList(a_list, a_showAll);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5085,6 +5115,15 @@ static void glue_GetOSEvent(cpu68k *c, uint16_t trapword)
     c->d[0] = r ? 0 : 0xFFFFFFFFu;
 }
 
+static void glue_GetOutlinePreferred(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t r = tb_GetOutlinePreferred();
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_GetPalette(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5220,6 +5259,15 @@ static void glue_GetPort(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_pp = (gaddr)cpu_pop32(c);
     tb_GetPort(a_pp);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetPreserveGlyph(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t r = tb_GetPreserveGlyph();
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -6654,6 +6702,17 @@ static void glue_IsMovieDone(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_movie = (gaddr)cpu_pop32(c);
     int8_t r = tb_IsMovieDone(a_movie);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsOutline(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_denom = (uint32_t)cpu_pop32(c);
+    uint32_t a_numer = (uint32_t)cpu_pop32(c);
+    int8_t r = tb_IsOutline(a_numer, a_denom);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -8441,6 +8500,24 @@ static void glue_OpenRgn(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_OpenRgn();
+    cpu_push32(c, ret);
+}
+
+static void glue_OutlineMetrics(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds_array = (gaddr)cpu_pop32(c);
+    gaddr a_lsb_array = (gaddr)cpu_pop32(c);
+    gaddr a_aw_array = (gaddr)cpu_pop32(c);
+    gaddr a_y_min = (gaddr)cpu_pop32(c);
+    gaddr a_y_max = (gaddr)cpu_pop32(c);
+    uint32_t a_denom = (uint32_t)cpu_pop32(c);
+    uint32_t a_numer = (uint32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int16_t a_byte_count = (int16_t)cpu_pop16(c);
+    int16_t r = tb_OutlineMetrics(a_byte_count, a_text, a_numer, a_denom, a_y_max, a_y_min, a_aw_array, a_lsb_array, a_bounds_array);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -11426,6 +11503,15 @@ static void glue_SetOrigin(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetOutlinePreferred(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a__outline_perferred_p = (int8_t)(cpu_pop16(c) >> 8);
+    tb_SetOutlinePreferred(a__outline_perferred_p);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetPalette(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11490,6 +11576,15 @@ static void glue_SetPortPix(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_SetPortPix(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetPreserveGlyph(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_preserve_glyph = (int8_t)(cpu_pop16(c) >> 8);
+    tb_SetPreserveGlyph(a_preserve_glyph);
     cpu_push32(c, ret);
 }
 
@@ -14611,13 +14706,13 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x37u, "PBHMoveRename", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x38u, "PBHOpenDeny", CONV_REG, 0, 0, glue_PBHOpenDeny},
     {0xA060, (int32_t)0x39u, "PBHOpenRFDeny", CONV_REG, 0, 0, glue_PBHOpenRFDeny},
-    {0xA854, (int32_t)0x0u, "IsOutline", CONV_STACK, 8, 2, 0},
-    {0xA854, (int32_t)0x1u, "SetOutlinePreferred", CONV_STACK, 2, 0, 0},
-    {0xA854, (int32_t)0x8u, "OutlineMetrics", CONV_STACK, 34, 2, 0},
-    {0xA854, (int32_t)0x9u, "GetOutlinePreferred", CONV_STACK, 0, 2, 0},
-    {0xA854, (int32_t)0xAu, "SetPreserveGlyph", CONV_STACK, 2, 0, 0},
-    {0xA854, (int32_t)0xBu, "GetPreserveGlyph", CONV_STACK, 0, 2, 0},
-    {0xA854, (int32_t)0xCu, "FlushFonts", CONV_STACK, 0, 2, 0},
+    {0xA854, (int32_t)0x0u, "IsOutline", CONV_STACK, 8, 2, glue_IsOutline},
+    {0xA854, (int32_t)0x1u, "SetOutlinePreferred", CONV_STACK, 2, 0, glue_SetOutlinePreferred},
+    {0xA854, (int32_t)0x8u, "OutlineMetrics", CONV_STACK, 34, 2, glue_OutlineMetrics},
+    {0xA854, (int32_t)0x9u, "GetOutlinePreferred", CONV_STACK, 0, 2, glue_GetOutlinePreferred},
+    {0xA854, (int32_t)0xAu, "SetPreserveGlyph", CONV_STACK, 2, 0, glue_SetPreserveGlyph},
+    {0xA854, (int32_t)0xBu, "GetPreserveGlyph", CONV_STACK, 0, 2, glue_GetPreserveGlyph},
+    {0xA854, (int32_t)0xCu, "FlushFonts", CONV_STACK, 0, 2, glue_FlushFonts},
     {0xA1AD, (int32_t)0x0u, "Gestalt", CONV_REG, 0, 0, glue_Gestalt},
     {0xA1AD, (int32_t)0x200u, "NewGestalt", CONV_REG, 0, 0, glue_NewGestalt},
     {0xA1AD, (int32_t)0x400u, "ReplaceGestalt", CONV_REG, 0, 0, glue_ReplaceGestalt},
@@ -14667,7 +14762,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABC9, (int32_t)0x912u, "RectInIconMethod", CONV_STACK, 18, 2, 0},
     {0xABC9, (int32_t)0x915u, "IconMethodToRgn", CONV_STACK, 18, 2, 0},
     {0xAAA3, (int32_t)0x0u, "CodecManagerVersion", CONV_STACK, 4, 2, 0},
-    {0xAAA3, (int32_t)0x1u, "GetCodecNameList", CONV_STACK, 6, 2, 0},
+    {0xAAA3, (int32_t)0x1u, "GetCodecNameList", CONV_STACK, 6, 2, glue_GetCodecNameList},
     {0xAAA3, (int32_t)0x3u, "GetCodecInfo", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x4u, "GetMaxCompressionSize", CONV_STACK, 26, 2, 0},
     {0xAAA3, (int32_t)0x5u, "GetCompressionTime", CONV_STACK, 30, 2, 0},
@@ -14680,7 +14775,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0xCu, "StdPix", CONV_STACK, 28, 0, 0},
     {0xAAA3, (int32_t)0xDu, "DecompressSequenceBegin", CONV_STACK, 40, 2, 0},
     {0xAAA3, (int32_t)0xEu, "DecompressSequenceFrame", CONV_STACK, 18, 2, 0},
-    {0xAAA3, (int32_t)0xFu, "DisposeCodecNameList", CONV_STACK, 4, 2, 0},
+    {0xAAA3, (int32_t)0xFu, "DisposeCodecNameList", CONV_STACK, 4, 2, glue_DisposeCodecNameList},
     {0xAAA3, (int32_t)0x10u, "SetDSequenceMatrix", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x11u, "SetDSequenceMatte", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x12u, "SetDSequenceMask", CONV_STACK, 8, 2, 0},

@@ -1176,7 +1176,13 @@ static void g_equalstring(ppc_cpu *c) { c_compare(c, 0xA03C, true); }
 static void g_relstring(ppc_cpu *c) { c_compare(c, 0xA050, false); }
 
 /* The Sound Manager's version: 3.2.1. */
-static void g_SVersion(ppc_cpu *c) { RETURN(0x03218000); }
+static void g_SVersion(ppc_cpu *c)
+{
+    /* NumVersion results come back through the pointer in r3. */
+    if (R(0))
+        wr32(R(0), 0x03218000);
+    c->pc = c->lr;
+}
 /* No AppleTalk: the port isn't configured. */
 static void g_portNotCf(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
 /* FindServiceWindow(where, *window): no input method windows. */
@@ -1334,6 +1340,68 @@ static void cs_newcwindow(ppc_cpu *c) { with_pascals(c, "NewCWindow", 4); }
 static void cs_setwtitle(ppc_cpu *c) { with_pascals(c, "SetWTitle", 2); }
 static void cs_getwtitle(ppc_cpu *c) { with_pascal(c, "GetWTitle", -1, 1); }
 static void cs_newcontrol(ppc_cpu *c) { with_pascals(c, "NewControl", 8); }
+/* The Gestalt value calls (Mac OS 7.6): selectors with plain values. */
+static void g_NewGestaltValue(ppc_cpu *c)
+{
+    if (gestalt_exists(R(0))) {
+        RETURN((uint32_t)(int32_t)-5552); /* gestaltDupSelectorErr */
+        return;
+    }
+    gestalt_set(R(0), R(1));
+    RETURN(0);
+}
+static void g_ReplaceGestaltValue(ppc_cpu *c)
+{
+    if (!gestalt_exists(R(0))) {
+        RETURN((uint32_t)(int32_t)-5551); /* gestaltUndefSelectorErr */
+        return;
+    }
+    gestalt_set(R(0), R(1));
+    RETURN(0);
+}
+static void g_SetGestaltValue(ppc_cpu *c)
+{
+    gestalt_set(R(0), R(1));
+    RETURN(0);
+}
+static void g_DeleteGestaltValue(ppc_cpu *c)
+{
+    if (!gestalt_exists(R(0))) {
+        RETURN((uint32_t)(int32_t)-5551);
+        return;
+    }
+    gestalt_delete(R(0));
+    RETURN(0);
+}
+/* YieldToAnyThread(): YieldToThread(kNoThreadID). */
+static void g_YieldToAnyThread(ppc_cpu *c)
+{
+    void (*fn)(ppc_cpu *) = cfm_export_fn("YieldToThread");
+    c->gpr[3] = 0;
+    if (fn)
+        fn(c);
+    else
+        RETURN(0);
+}
+static void cs_openresfile(ppc_cpu *c) { with_pascals(c, "OpenResFile", 1); }
+static void cs_createresfile(ppc_cpu *c) { with_pascals(c, "CreateResFile", 1); }
+static void cs_getnamedresource(ppc_cpu *c) { with_pascals(c, "GetNamedResource", 2); }
+/* InitZone(growProc, masterCount, limitPtr, startPtr): _InitZone with its
+ * parameter block. */
+static void g_InitZone(ppc_cpu *c)
+{
+    gaddr pb = tb_NewPtr(14, true, true);
+    wr32(pb, R(3));
+    wr32(pb + 4, R(2));
+    wr16(pb + 8, (uint16_t)R(1));
+    wr32(pb + 10, R(0));
+    ppc_trap_begin();
+    ppc_trap_set(8, pb);
+    ppc_trap(0xA019);
+    ppc_trap_end();
+    tb_DisposePtr(pb);
+    c->pc = c->lr;
+}
 static void cs_setdialogitemtext(ppc_cpu *c) { with_pascal(c, "SetDialogItemText", 1, -1); }
 static void cs_getdialogitemtext(ppc_cpu *c) { with_pascal(c, "GetDialogItemText", -1, 1); }
 static void cs_numtostring(ppc_cpu *c) { with_pascal(c, "NumToString", -1, 1); }
@@ -1549,6 +1617,10 @@ const ppc_export lib_exports[] = {
     { "fsmakefsspec", cs_fsmakefsspec }, { "opendeskacc", cs_opendeskacc }, { "opendriver", cs_opendriver },
     { "newwindow", cs_newwindow }, { "newcwindow", cs_newcwindow }, { "setwtitle", cs_setwtitle },
     { "getwtitle", cs_getwtitle }, { "newcontrol", cs_newcontrol },
+    { "YieldToAnyThread", g_YieldToAnyThread }, { "NewGestaltValue", g_NewGestaltValue }, { "ReplaceGestaltValue", g_ReplaceGestaltValue },
+    { "SetGestaltValue", g_SetGestaltValue }, { "DeleteGestaltValue", g_DeleteGestaltValue },
+    { "openresfile", cs_openresfile }, { "createresfile", cs_createresfile },
+    { "getnamedresource", cs_getnamedresource }, { "InitZone", g_InitZone },
     { "appendmenu", cs_appendmenu }, { "debugstr", cs_debugstr }, { "drawstring", cs_drawstring },
     { "getcontroltitle", cs_getcontroltitle }, { "getdialogitemtext", cs_getdialogitemtext },
     { "getindstring", cs_getindstring }, { "getmenuitemtext", cs_getmenuitemtext },

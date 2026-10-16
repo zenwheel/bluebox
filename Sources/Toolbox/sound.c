@@ -667,7 +667,8 @@ int16_t tb_SndManagerStatus(int16_t length, gaddr statusp)
     return noErr;
 }
 
-int32_t tb_SndSoundManagerVersion(void) { return 0x03008000; }
+/* 3.0 with System 7.1; a PowerPC Mac's System 7.6.1 had 3.2.1. */
+int32_t tb_SndSoundManagerVersion(void) { return g_ppc_mode ? 0x03218000 : 0x03008000; }
 int32_t tb_MACEVersion(void) { return 0x03008000; }
 int32_t tb_SPBVersion(void) { return 0x03008000; }
 

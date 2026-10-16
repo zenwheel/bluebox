@@ -293,7 +293,13 @@ static void isp_ListFlush(ppc_cpu *c)
     RETURN(0);
 }
 static void isp_noErr(ppc_cpu *c) { RETURN(0); }
-static void isp_GetVersion(ppc_cpu *c) { RETURN(0x01408000); } /* 1.4 */
+/* 1.4, as a NumVersion through the result pointer in r3 */
+static void isp_GetVersion(ppc_cpu *c)
+{
+    if (R(0))
+        wr32(R(0), 0x01408000);
+    c->pc = c->lr;
+}
 /* ISpConfigure(eventProc, *accepted): no dialog; the mapping stands. */
 static void isp_Configure(ppc_cpu *c)
 {
