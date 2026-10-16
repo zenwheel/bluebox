@@ -220,6 +220,95 @@ extension BlueBox {
             draw(pic, [0, 0, 20, 30])                     // and it plays without trouble
             tb_KillPicture(pic)
         }
+
+        func rect(_ v: [Int]) -> UInt32 {
+            let r = tb_NewPtr(8, false, true)
+            for (i, x) in v.enumerated() { wr16(r + UInt32(i * 2), UInt16(bitPattern: Int16(x))) }
+            return r
+        }
+
+        func currentPort() -> UInt32 {
+            let p = tb_NewPtr(4, false, true)
+            tb_GetPort(p)
+            return rd32(p)
+        }
+
+        func clear(_ bits: UInt32) { for i in 0..<(8 * 64) { wr8(bits + UInt32(i), 0) } }
+
+        /// Drawing between OpenPicture and ClosePicture is recorded, not shown,
+        /// and the picture draws it again, scaled to where it is drawn.
+        @Test func openPictureRecordsTheDrawing() {
+            launchTestApp()
+            let bits = offscreen()
+            let pic = tb_OpenPicture(rect([0, 0, 32, 32]))
+            tb_PaintRect(rect([2, 2, 10, 10]))
+            tb_PenSize(2, 2)
+            tb_MoveTo(0, 30)
+            tb_LineTo(31, 30)
+            tb_PenNormal()
+            tb_FrameOval(rect([12, 12, 30, 30]))
+            tb_ClosePicture()
+            #expect(!pixel(bits, 5, 5))                   // nothing drawn while recording
+            #expect(Int16(bitPattern: rd16(currentPort() + UInt32(GrafPort_pnVis_off))) == 0) // the pen shown again
+            draw(pic, [0, 0, 64, 64])
+            #expect(pixel(bits, 10, 10))                  // the painted rectangle, doubled
+            #expect(!pixel(bits, 22, 22))
+            #expect(pixel(bits, 40, 61))                  // the 2-pixel line, doubled
+            #expect(pixel(bits, 42, 24))                  // the oval's frame...
+            #expect(!pixel(bits, 42, 42))                 // ...not its inside
+            tb_KillPicture(pic)
+        }
+
+        /// CopyBits into a recording port keeps the source's pixels.
+        @Test func recordedCopyBitsKeepsItsPixels() {
+            launchTestApp()
+            let bits = offscreen()
+            tb_PaintRect(rect([0, 0, 16, 16]))
+            tb_FrameRect(rect([20, 20, 30, 30]))
+            let src = tb_NewPtr(14, false, true)
+            wr32(src, bits)
+            wr16(src + 4, 8)
+            for (i, v) in [0, 0, 64, 64].enumerated() { wr16(src + 6 + UInt32(i * 2), UInt16(v)) }
+            // Keep the source: copy it to its own buffer first.
+            let copy = tb_NewPtr(8 * 64, false, true)
+            for i in 0..<(8 * 64) { wr8(copy + UInt32(i), rd8(bits + UInt32(i))) }
+            wr32(src, copy)
+            clear(bits)
+            let pic = tb_OpenPicture(rect([0, 0, 32, 32]))
+            tb_CopyBits(src, currentPort() + UInt32(GrafPort_portBits_off), rect([0, 0, 32, 32]),
+                        rect([0, 0, 32, 32]), 0, 0)
+            tb_ClosePicture()
+            #expect(!pixel(bits, 4, 4))
+            draw(pic, [0, 0, 32, 32])
+            #expect(pixel(bits, 4, 4))
+            #expect(pixel(bits, 20, 25))
+            #expect(!pixel(bits, 25, 25))
+            tb_KillPicture(pic)
+        }
+
+        /// Text is recorded with its font settings.
+        @Test func recordedTextDrawsAgain() {
+            launchTestApp()
+            let bits = offscreen()
+            let pic = tb_OpenPicture(rect([0, 0, 64, 64]))
+            tb_TextFont(4)
+            tb_TextSize(9)
+            tb_MoveTo(2, 20)
+            let s = tb_NewPtr(4, false, true)
+            for (i, c) in "WWW".utf8.enumerated() { wr8(s + UInt32(i), c) }
+            tb_DrawText(s, 0, 3)
+            tb_ClosePicture()
+            var before = 0
+            for y in 0..<64 { for x in 0..<64 where pixel(bits, x, y) { before += 1 } }
+            #expect(before == 0)
+            tb_TextFont(0)
+            tb_TextSize(0)
+            draw(pic, [0, 0, 64, 64])
+            var after = 0
+            for y in 10..<22 { for x in 0..<30 where pixel(bits, x, y) { after += 1 } }
+            #expect(after > 10)
+            tb_KillPicture(pic)
+        }
     }
 
     /// Items an app adds to its Standard File dialog run through its hook.

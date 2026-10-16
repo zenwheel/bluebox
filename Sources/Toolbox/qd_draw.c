@@ -267,11 +267,13 @@ static void pen_size(gaddr port, int *pw, int *ph)
     *ph = pt_v(s);
 }
 
-/* The shape being drawn, for recording ports (printing). */
+/* The shape being drawn, for recording ports (printing) and pictures:
+ * polygons and regions also keep their handle. */
 static struct {
     int kind;
     qrect r;
     int a, b;
+    gaddr poly, rgn;
 } geom;
 
 static void set_geom(int kind, qrect r, int a, int b)
@@ -280,6 +282,19 @@ static void set_geom(int kind, qrect r, int a, int b)
     geom.r = r;
     geom.a = a;
     geom.b = b;
+    geom.poly = geom.rgn = 0;
+}
+
+/* The shape's opcode in a picture (frameRect ...), less the verb. */
+static int pic_opbase(void)
+{
+    switch (geom.kind) {
+    case MACHINE_PRINT_RECT: return 0x30;
+    case MACHINE_PRINT_RRECT: return 0x40;
+    case MACHINE_PRINT_OVAL: return 0x50;
+    case MACHINE_PRINT_ARC: return 0x60;
+    default: return geom.poly ? 0x70 : geom.rgn ? 0x80 : 0;
+    }
 }
 
 static void record_verb(gaddr port, int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
@@ -319,10 +334,16 @@ static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
     if (qd_rec_active(port))
         record_verb(port, verb, shape, frame, pat);
     uint8_t p[8];
+    if (qd_pic_of(port) && pic_opbase()) {
+        if (verb == V_FILL)
+            gget(p, pat, 8);
+        qd_pic_shape(port, pic_opbase(), verb, geom.r, geom.a, geom.b, geom.poly ? geom.poly : geom.rgn, p);
+    }
+    /* A hidden pen draws nothing (a picture being recorded hides it). */
+    if (GrafPort_pnVis(port) < 0)
+        return;
     switch (verb) {
     case V_FRAME:
-        if (GrafPort_pnVis(port) < 0)
-            return;
         qd_port_pattern(port, 0, p);
         qd_fill_region(port, frame, p, GrafPort_pnMode(port));
         break;
@@ -578,6 +599,7 @@ static void verb_rgn(int verb, gaddr rh, gaddr pat)
         hrgn_op(&frame, &shape, &inner, RGN_DIFF);
     }
     set_geom(MACHINE_PRINT_REGION, hrgn_bbox(&shape), 0, 0);
+    geom.rgn = rh;
     do_verb(verb, &shape, &frame, pat);
     hrgn_free(&shape);
     hrgn_free(&frame);
@@ -619,6 +641,7 @@ static void line_to(int h, int v)
             poly_add(poly, pt_h(loc), pt_v(loc));
         poly_add(poly, h, v);
     }
+    qd_pic_line(port, pt_h(loc), pt_v(loc), h, v);
     if (GrafPort_pnVis(port) >= 0) {
         int pw, ph;
         pen_size(port, &pw, &ph);
@@ -815,6 +838,7 @@ static void verb_poly(int verb, gaddr poly, gaddr pat)
         poly_region(poly, &shape);
     }
     set_geom(MACHINE_PRINT_REGION, qrect_get(rd32(poly) + 2), 0, 0);
+    geom.poly = poly;
     do_verb(verb, &shape, &frame, pat);
     hrgn_free(&shape);
     hrgn_free(&frame);
@@ -1070,6 +1094,172 @@ static void record_copy(gaddr src_bitmap, gaddr src_rect, gaddr dst_rect)
     free(rgba);
 }
 
+/* Bytes for a picture's CopyBits opcode. */
+typedef struct {
+    uint8_t *p;
+    size_t n, cap;
+} picbuf;
+
+static void pb_put(picbuf *b, const void *data, size_t n)
+{
+    if (b->n + n > b->cap) {
+        b->cap = (b->n + n) * 2 + 256;
+        b->p = realloc(b->p, b->cap);
+    }
+    memcpy(b->p + b->n, data, n);
+    b->n += n;
+}
+
+static void pb16(picbuf *b, int v)
+{
+    uint8_t x[2] = { (uint8_t)(v >> 8), (uint8_t)v };
+    pb_put(b, x, 2);
+}
+
+static void pb32(picbuf *b, uint32_t v)
+{
+    pb16(b, (int)(v >> 16));
+    pb16(b, (int)(v & 0xFFFF));
+}
+
+static void pb_rect(picbuf *b, qrect r)
+{
+    pb16(b, r.top);
+    pb16(b, r.left);
+    pb16(b, r.bottom);
+    pb16(b, r.right);
+}
+
+/* PackBits: runs of a repeated byte, or literal stretches, up to 128. */
+static void pb_packbits(picbuf *b, const uint8_t *in, size_t n, int count_bytes)
+{
+    picbuf row = { 0 };
+    for (size_t i = 0; i < n;) {
+        size_t run = 1;
+        while (i + run < n && run < 128 && in[i + run] == in[i])
+            run++;
+        if (run >= 2) {
+            uint8_t hdr[2] = { (uint8_t)(1 - (int)run), in[i] };
+            pb_put(&row, hdr, 2);
+            i += run;
+            continue;
+        }
+        size_t lit = 0;
+        while (i + lit < n && lit < 128 && !(i + lit + 1 < n && in[i + lit] == in[i + lit + 1]))
+            lit++;
+        if (!lit)
+            lit = 1;
+        uint8_t hdr = (uint8_t)(lit - 1);
+        pb_put(&row, &hdr, 1);
+        pb_put(&row, in + i, lit);
+        i += lit;
+    }
+    if (count_bytes == 2)
+        pb16(b, (int)row.n);
+    else {
+        uint8_t c = (uint8_t)row.n;
+        pb_put(b, &c, 1);
+    }
+    pb_put(b, row.p, row.n);
+    free(row.p);
+}
+
+/* Copying into a port recording a picture: the source rectangle as a
+ * BitsRect, PackBitsRect or DirectBitsRect (with Rgn when masked). */
+static void record_copy_pic(gaddr port, gaddr src_bitmap, gaddr src_rect, gaddr dst_rect, int mode, gaddr mask)
+{
+    pixdst s = bits_at(resolve_bits(src_bitmap));
+    qrect sr = qrect_get(src_rect);
+    int w = sr.right - sr.left, h = sr.bottom - sr.top;
+    if (w <= 0 || h <= 0 || w > 8192 || h > 8192)
+        return;
+    bool direct = s.depth > 8;
+    int depth = direct ? 32 : s.depth;
+    uint32_t rb = direct ? (uint32_t)w * 4 : (uint32_t)((w * depth + 15) / 16) * 2;
+    bool packed = rb >= 8;
+    picbuf b = { 0 };
+    int code;
+    if (direct) {
+        code = 0x9A;
+        pb32(&b, 0x000000FF);
+    } else {
+        code = packed ? 0x98 : 0x90;
+    }
+    if (mask)
+        code |= 1;
+    pb16(&b, (int)(rb | (depth > 1 ? 0x8000u : 0)));
+    pb_rect(&b, sr);
+    if (depth > 1) {
+        pb16(&b, 0);                  /* pmVersion */
+        pb16(&b, direct ? 4 : 0);     /* packType */
+        pb32(&b, 0);                  /* packSize */
+        pb32(&b, 72u << 16);          /* hRes */
+        pb32(&b, 72u << 16);          /* vRes */
+        pb16(&b, direct ? 16 : 0);    /* pixelType */
+        pb16(&b, depth);              /* pixelSize */
+        pb16(&b, direct ? 3 : 1);     /* cmpCount */
+        pb16(&b, direct ? 8 : depth); /* cmpSize */
+        pb32(&b, 0);                  /* planeBytes */
+        pb32(&b, 0);                  /* pmTable */
+        pb32(&b, 0);                  /* pmReserved */
+        if (!direct) {
+            int n = 1 << depth;
+            pb32(&b, 0);              /* ctSeed */
+            pb16(&b, 0);              /* ctFlags */
+            pb16(&b, n - 1);
+            for (int v = 0; v < n; v++) {
+                uint16_t c[3];
+                qd_px_rgb(s.depth, s.ctab, (uint32_t)v, c);
+                pb16(&b, v);
+                pb16(&b, c[0]);
+                pb16(&b, c[1]);
+                pb16(&b, c[2]);
+            }
+        }
+    }
+    pb_rect(&b, sr);
+    pb_rect(&b, qrect_get(dst_rect));
+    pb16(&b, mode);
+    if (mask && rd32(mask)) {
+        uint32_t len = rd16(rd32(mask));
+        uint8_t *m = malloc(len ? len : 1);
+        gget(m, rd32(mask), len);
+        pb_put(&b, m, len);
+        free(m);
+    }
+    uint8_t *row = calloc(rb + 8, 1), *planes = direct ? malloc((size_t)w * 3) : NULL;
+    for (int y = 0; y < h; y++) {
+        memset(row, 0, rb);
+        for (int x = 0; x < w; x++) {
+            int sx = sr.left + x - s.bounds.left, sy = sr.top + y - s.bounds.top;
+            bool in = sx >= 0 && sy >= 0 && sx < s.bounds.right - s.bounds.left && sy < s.bounds.bottom - s.bounds.top;
+            uint32_t v = in ? get_px(&s, sx, sy) : 0;
+            if (direct) {
+                uint16_t c[3] = { 0xFFFF, 0xFFFF, 0xFFFF };
+                if (in)
+                    qd_px_rgb(s.depth, s.ctab, v, c);
+                for (int k = 0; k < 3; k++) {
+                    planes[(size_t)k * (size_t)w + (size_t)x] = (uint8_t)(c[k] >> 8);
+                    row[x * 4 + 1 + k] = (uint8_t)(c[k] >> 8);
+                }
+            } else {
+                int bit = x * depth;
+                row[bit >> 3] |= (uint8_t)(v << (8 - depth - (bit & 7)));
+            }
+        }
+        if (direct && packed)
+            pb_packbits(&b, planes, (size_t)w * 3, rb > 250 ? 2 : 1);
+        else if (packed)
+            pb_packbits(&b, row, rb, rb > 250 ? 2 : 1);
+        else
+            pb_put(&b, row, rb);
+    }
+    free(row);
+    free(planes);
+    qd_pic_bits(port, code, b.p, (uint32_t)b.n);
+    free(b.p);
+}
+
 static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode,
                             gaddr mask);
 
@@ -1107,8 +1297,14 @@ static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, 
                             gaddr mask)
 {
     gaddr port = qd_port();
-    if (port && qd_rec_active(port) && !qd_rec_suppressed() && resolve_bits(dst_bitmap) == port + GrafPort_portBits_off)
+    bool into_port = port && resolve_bits(dst_bitmap) == port + GrafPort_portBits_off;
+    if (into_port && qd_rec_active(port) && !qd_rec_suppressed())
         record_copy(src_bitmap, src_rect, dst_rect);
+    if (into_port && qd_pic_of(port))
+        record_copy_pic(port, src_bitmap, src_rect, dst_rect, mode, mask);
+    /* Into a port with its pen hidden (recording a picture): nothing drawn. */
+    if (into_port && GrafPort_pnVis(port) < 0)
+        return;
     hrgn m;
     hrgn_init(&m);
     if (mask)

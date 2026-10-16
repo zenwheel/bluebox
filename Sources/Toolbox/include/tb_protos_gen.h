@@ -705,6 +705,7 @@ void tb_OffsetPoly(gaddr poly, int16_t dh, int16_t dv);
 void tb_OffsetRect(gaddr r, int16_t dh, int16_t dv);
 void tb_OffsetRgn(gaddr rh, int16_t dh, int16_t dv);
 void tb_OpColor(gaddr arg0);
+gaddr tb_OpenCPicture(gaddr newheaderp);
 void tb_OpenCPort(gaddr arg0);
 int16_t tb_OpenDeskAcc(gaddr acc);
 int16_t tb_OpenMovieFile(gaddr filespecp, gaddr refnump, uint8_t perm);

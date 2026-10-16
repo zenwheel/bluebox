@@ -186,6 +186,13 @@ void qd_line_region(hrgn *out, int h0, int v0, int h1, int v1, int pw, int ph);
 /* ---- Recording (printing) ---- */
 
 /* Start recording drawing in port; qd_rec_end discards the recording. */
+/* Pictures being recorded (OpenPicture): the port's picSave, or 0. */
+gaddr qd_pic_of(gaddr port);
+void qd_pic_shape(gaddr port, int opbase, int verb, qrect r, int a, int b, gaddr data, const uint8_t fill[8]);
+void qd_pic_line(gaddr port, int h0, int v0, int h1, int v1);
+void qd_pic_text(gaddr port, int x, int y, const uint8_t *text, int len);
+void qd_pic_comment(gaddr port, int kind, int size, gaddr data);
+void qd_pic_bits(gaddr port, int code, const uint8_t *data, uint32_t len);
 void qd_rec_begin(gaddr port);
 void qd_rec_end(void);
 bool qd_rec_active(gaddr port);

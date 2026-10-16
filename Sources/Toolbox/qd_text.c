@@ -246,7 +246,12 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
     uint32_t loc = rd32(port + GrafPort_pnLoc_off);
     int x = pt_h(loc), base = pt_v(loc);
     int start = x;
-    if (have) {
+    qd_pic_text(port, x, base, text, len);
+    if (have && GrafPort_pnVis(port) < 0) {
+        /* A hidden pen (a picture being recorded) draws nothing. */
+        for (int i = 0; i < len; i++)
+            x += char_advance(&s, text[i], port);
+    } else if (have) {
         int8_t st = tb_HGetState(s.handle);
         tb_HLock(s.handle);
         load_strike(port, &s); /* re-read after locking */

@@ -776,34 +776,6 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
     tb_HSetState(pic, state);
 }
 
-/* Pictures being defined: a valid, empty version 2 picture of the frame.
- * size(2) frame(8) 0x0011 0x02FF, HeaderOp 0x0C00 + 24 bytes (version -1,
- * -1, fixed-point bounds, reserved), EndOfPicture. */
-static gaddr open_pic;
-
-gaddr tb_OpenPicture(gaddr r)
-{
-    gaddr h = tb_NewHandle(42, false, true);
-    gaddr p = rd32(h);
-    qrect q = qrect_get(r);
-    wr16(p, 42);
-    gmemcpy(p + 2, r, 8);
-    wr16(p + 10, 0x0011);
-    wr16(p + 12, 0x02FF);
-    wr16(p + 14, 0x0C00);
-    wr16(p + 16, 0xFFFF);
-    wr16(p + 18, 0xFFFF);
-    wr32(p + 20, (uint32_t)q.left << 16);
-    wr32(p + 24, (uint32_t)q.top << 16);
-    wr32(p + 28, (uint32_t)q.right << 16);
-    wr32(p + 32, (uint32_t)q.bottom << 16);
-    wr32(p + 36, 0);
-    wr16(p + 40, 0x00FF);
-    open_pic = h;
-    return h;
-}
-
-void tb_ClosePicture(void) { open_pic = 0; }
 void tb_KillPicture(gaddr pic) { if (pic) tb_DisposeHandle(pic); }
 /* Comments go to the port's commentProc when the application installed one
  * (print drivers and picture parsers do); StdComment has nothing to do. */
@@ -812,8 +784,10 @@ void tb_PicComment(int16_t kind, int16_t size, gaddr data)
     gaddr port = qd_port();
     gaddr procs = port ? GrafPort_grafProcs(port) : 0;
     gaddr proc = procs ? rd32(procs + QDProcs_commentProc_off) : 0;
-    if (!proc || native_index_for(proc) >= 0)
+    if (!proc || native_index_for(proc) >= 0) {
+        qd_pic_comment(port, kind, size, data);
         return;
+    }
     cpu_push16(g_cpu, (uint16_t)kind);
     cpu_push16(g_cpu, (uint16_t)size);
     cpu_push32(g_cpu, data);

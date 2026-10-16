@@ -8137,6 +8137,16 @@ static void glue_OpColor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_OpenCPicture(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newheaderp = (gaddr)cpu_pop32(c);
+    gaddr r = tb_OpenCPicture(a_newheaderp);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_OpenCPort(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14013,7 +14023,7 @@ const trap_sig trap_sigs[] = {
     {0xAA1D, -1, "AllocCursor", CONV_STACK, 0, 0, glue_AllocCursor},
     {0xAA1E, -1, "GetCIcon", CONV_STACK, 2, 4, glue_GetCIcon},
     {0xAA1F, -1, "PlotCIcon", CONV_STACK, 8, 0, glue_PlotCIcon},
-    {0xAA20, -1, "OpenCPicture", CONV_STACK, 4, 4, 0},
+    {0xAA20, -1, "OpenCPicture", CONV_STACK, 4, 4, glue_OpenCPicture},
     {0xAA21, -1, "OpColor", CONV_STACK, 4, 0, glue_OpColor},
     {0xAA22, -1, "HiliteColor", CONV_STACK, 4, 0, glue_HiliteColor},
     {0xAA23, -1, "CharExtra", CONV_STACK, 4, 0, glue_CharExtra},
