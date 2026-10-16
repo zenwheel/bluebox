@@ -75,6 +75,63 @@ void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mod
     hrgn_free(&r);
 }
 
+gaddr qd_fill_pixpat;
+
+/* The port's pixel pattern for the pen (0), background (1) or fill (2)
+ * when it has colours of its own. */
+static gaddr port_pixpat(gaddr port, int which)
+{
+    if (!qd_port_is_color(port))
+        return 0;
+    uint32_t off = which == 0 ? CGrafPort_pnPixPat_off : which == 1 ? CGrafPort_bkPixPat_off : CGrafPort_fillPixPat_off;
+    gaddr h = rd32(port + off);
+    return h && rd32(h) && (int16_t)rd16(rd32(h) + PixPat_patType_off) != 0 ? h : 0;
+}
+
+/* Filling with a pixel pattern's own colours: on colour screens, in the
+ * copy modes (the others, and one bit deep, use its black-and-white form).
+ * The pattern lines up with the port's pixels, as 8x8 patterns do. */
+static bool fill_region_pixpat(gaddr port, const hrgn *shape, gaddr pp, int mode)
+{
+    if (!pp || (mode & 3) != 0)
+        return false;
+    pixdst d = qd_port_pixels(port);
+    if (d.depth == 1)
+        return false;
+    int w, h;
+    uint16_t (*rgb)[3];
+    if (!qd_pixpat_image(pp, &w, &h, &rgb))
+        return false;
+    uint32_t *px = malloc(sizeof *px * (size_t)w * (size_t)h);
+    for (int i = 0; i < w * h; i++) {
+        uint16_t c[3] = { rgb[i][0], rgb[i][1], rgb[i][2] };
+        if (mode & 4)
+            for (int k = 0; k < 3; k++)
+                c[k] = (uint16_t)~c[k];
+        px[i] = qd_rgb_px(d.depth, d.ctab, c);
+    }
+    free(rgb);
+    if (qd_region_recording())
+        qd_region_record(shape);
+    hrgn r;
+    hrgn_init(&r);
+    qd_port_clip(port, &r);
+    hrgn_op(&r, shape, &r, RGN_SECT);
+    for (int i = 0; i < r.nbands; i++) {
+        const rband *b = &r.bands[i];
+        for (int y = b->top; y < b->bottom; y++) {
+            int row = y - d.bounds.top;
+            const uint32_t *line = px + (size_t)(((row % h) + h) % h) * (size_t)w;
+            for (int k = 0; k < b->n; k += 2)
+                for (int c = b->x[k] - d.bounds.left; c < b->x[k + 1] - d.bounds.left; c++)
+                    put_px(&d, c, row, line[((c % w) + w) % w]);
+        }
+    }
+    hrgn_free(&r);
+    free(px);
+    return true;
+}
+
 /* Highlighting (HiliteMode's bit cleared before an invert, or the pen's
  * hilite mode): the background colour and the highlight colour (HiliteRGB)
  * change places; other colours stay.  On one bit it is an ordinary invert. */
@@ -344,6 +401,8 @@ static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
         return;
     switch (verb) {
     case V_FRAME:
+        if (fill_region_pixpat(port, frame, port_pixpat(port, 0), GrafPort_pnMode(port)))
+            break;
         qd_port_pattern(port, 0, p);
         qd_fill_region(port, frame, p, GrafPort_pnMode(port));
         break;
@@ -352,10 +411,14 @@ static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
             hilite_region(port, shape);
             break;
         }
+        if (fill_region_pixpat(port, shape, port_pixpat(port, 0), GrafPort_pnMode(port)))
+            break;
         qd_port_pattern(port, 0, p);
         qd_fill_region(port, shape, p, GrafPort_pnMode(port));
         break;
     case V_ERASE:
+        if (fill_region_pixpat(port, shape, port_pixpat(port, 1), patCopy))
+            break;
         qd_port_pattern(port, 1, p);
         qd_fill_region(port, shape, p, patCopy);
         break;
@@ -366,6 +429,8 @@ static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
             qd_fill_region(port, shape, qd_pat_black, patXor);
         break;
     default:
+        if (fill_region_pixpat(port, shape, qd_fill_pixpat, patCopy))
+            break;
         gget(p, pat, 8);
         if (!qd_port_is_color(port))
             gmemcpy(port + GrafPort_fillPat_off, pat, 8);
@@ -652,7 +717,8 @@ static void line_to(int h, int v)
         qd_port_pattern(port, 0, p);
         if (qd_rec_active(port))
             qd_rec_line(port, pt_h(loc), pt_v(loc), h, v, p, GrafPort_pnMode(port));
-        qd_fill_region(port, &shape, p, GrafPort_pnMode(port));
+        if (!fill_region_pixpat(port, &shape, port_pixpat(port, 0), GrafPort_pnMode(port)))
+            qd_fill_region(port, &shape, p, GrafPort_pnMode(port));
         hrgn_free(&shape);
     }
     wr32(port + GrafPort_pnLoc_off, make_pt((int16_t)v, (int16_t)h));

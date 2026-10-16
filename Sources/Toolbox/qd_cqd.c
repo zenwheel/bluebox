@@ -443,16 +443,103 @@ void tb_DisposeCCursor(gaddr c)
 }
 
 /* ---------------------------------------------------------------------- */
-/* Pixel patterns: drawn through their black-and-white version */
+/* Pixel patterns: their own colours on colour screens (qd_pixpat_image),
+ * their black-and-white version elsewhere */
 
+/* A 'ppat' resource: the PixPat, then at the offsets its fields give the
+ * PixMap (whose pmTable is the colour table's offset) and the pixels. */
 gaddr tb_GetPixPat(int16_t id)
 {
     gaddr r = tb_GetResource((int32_t)fourcc("ppat"), id);
     if (!r || !rd32(r))
         return 0;
-    uint8_t pat[8];
-    gget(pat, rd32(r) + PixPat_pat1Data_off, 8);
-    return qd_pixpat_for(pat);
+    uint32_t size = (uint32_t)tb_GetHandleSize(r);
+    gaddr res = rd32(r);
+    int type = (int16_t)rd16(res + PixPat_patType_off);
+    uint32_t map_off = rd32(res + PixPat_patMap_off), data_off = rd32(res + PixPat_patData_off);
+    if (type != 1 || map_off + PixMap_SIZEOF > size || data_off >= size) {
+        uint8_t pat[8];
+        gget(pat, res + PixPat_pat1Data_off, 8);
+        return qd_pixpat_for(pat);
+    }
+    gaddr pp = tb_NewPixPat();
+    gaddr p = rd32(pp);
+    gmemcpy(p + PixPat_pat1Data_off, rd32(r) + PixPat_pat1Data_off, 8);
+    gaddr pmh = rd32(p + PixPat_patMap_off);
+    gaddr ctab = rd32(rd32(pmh) + PixMap_pmTable_off);
+    gmemcpy(rd32(pmh), rd32(r) + map_off, PixMap_SIZEOF);
+    PixMap_set_baseAddr(rd32(pmh), 0);
+    uint32_t ct_off = rd32(rd32(r) + map_off + PixMap_pmTable_off);
+    if (ct_off && ct_off + 8 <= size) {
+        uint32_t n = (uint32_t)rd16(rd32(r) + ct_off + 6) + 1;
+        uint32_t len = 8 + n * 8;
+        if (ct_off + len > size)
+            len = size - ct_off;
+        if (!ctab)
+            ctab = tb_NewHandle(0, false, true);
+        tb_SetHandleSize(ctab, (int32_t)len);
+        gmemcpy(rd32(ctab), rd32(r) + ct_off, len);
+    }
+    PixMap_set_pmTable(rd32(pmh), ctab);
+    qrect b = qrect_get(rd32(pmh) + PixMap_bounds_off);
+    uint32_t len = (uint32_t)(PixMap_rowBytes(rd32(pmh)) & 0x3FFF) * (uint32_t)(b.bottom - b.top);
+    uint32_t end = ct_off > data_off ? ct_off : size;
+    if (data_off + len > end)
+        len = end - data_off;
+    gaddr data = rd32(rd32(pp) + PixPat_patData_off);
+    tb_SetHandleSize(data, (int32_t)len);
+    gmemcpy(rd32(data), rd32(r) + data_off, len);
+    return pp;
+}
+
+/* A pixel pattern's colours as w x h RGB triples (malloc'd); false for a
+ * black-and-white pattern (type 0) or one without pixels. */
+bool qd_pixpat_image(gaddr pp, int *w, int *h, uint16_t (**rgb)[3])
+{
+    if (!pp || !rd32(pp))
+        return false;
+    gaddr p = rd32(pp);
+    int type = (int16_t)rd16(p + PixPat_patType_off);
+    if (type == 2) { /* MakeRGBPat: one colour, kept in patXData */
+        gaddr x = rd32(p + PixPat_patXData_off);
+        if (!x || !rd32(x) || tb_GetHandleSize(x) < 6)
+            return false;
+        *w = *h = 1;
+        *rgb = malloc(sizeof **rgb);
+        for (int i = 0; i < 3; i++)
+            (*rgb)[0][i] = rd16(rd32(x) + (uint32_t)i * 2);
+        return true;
+    }
+    if (type != 1)
+        return false;
+    gaddr pmh = rd32(p + PixPat_patMap_off), data = rd32(p + PixPat_patData_off);
+    if (!pmh || !rd32(pmh) || !data || !rd32(data))
+        return false;
+    gaddr pm = rd32(pmh);
+    qrect b = qrect_get(pm + PixMap_bounds_off);
+    int ww = b.right - b.left, hh = b.bottom - b.top, depth = PixMap_pixelSize(pm);
+    uint32_t rb = (uint32_t)(PixMap_rowBytes(pm) & 0x3FFF);
+    if (ww <= 0 || hh <= 0 || ww > 256 || hh > 256 || !depth || (uint32_t)tb_GetHandleSize(data) < rb * (uint32_t)hh)
+        return false;
+    gaddr ctab = PixMap_pmTable(pm);
+    *w = ww;
+    *h = hh;
+    *rgb = malloc(sizeof **rgb * (size_t)ww * (size_t)hh);
+    for (int y = 0; y < hh; y++)
+        for (int x = 0; x < ww; x++) {
+            gaddr row = rd32(data) + (uint32_t)y * rb;
+            uint32_t v;
+            if (depth == 32)
+                v = rd32(row + (uint32_t)x * 4);
+            else if (depth == 16)
+                v = rd16(row + (uint32_t)x * 2);
+            else {
+                int bit = x * depth;
+                v = (uint32_t)(rd8(row + (uint32_t)(bit >> 3)) >> (8 - depth - (bit & 7))) & ((1u << depth) - 1);
+            }
+            qd_px_rgb(depth, ctab, v, (*rgb)[y * ww + x]);
+        }
+    return true;
 }
 
 void tb_DisposePixPat(gaddr pp)
@@ -480,7 +567,8 @@ static void set_port_pixpat(uint32_t color_off, uint32_t old_off, gaddr pp)
 void tb_PenPixPat(gaddr pp) { set_port_pixpat(CGrafPort_pnPixPat_off, GrafPort_pnPat_off, pp); }
 void tb_BackPixPat(gaddr pp) { set_port_pixpat(CGrafPort_bkPixPat_off, GrafPort_bkPat_off, pp); }
 
-/* A colour as a pattern: dithered to black and white by its lightness. */
+/* A colour as a pattern: the colour, and for black and white dithered by
+ * its lightness. */
 void tb_MakeRGBPat(gaddr pp, gaddr colorp)
 {
     uint16_t c[3];
@@ -496,6 +584,17 @@ void tb_MakeRGBPat(gaddr pp, gaddr colorp)
         return;
     PixPat_set_patType(rd32(pp), 2);
     gput(rd32(pp) + PixPat_pat1Data_off, ramp[lum], 8);
+    /* The colour itself, for colour screens. */
+    gaddr x = rd32(rd32(pp) + PixPat_patXData_off);
+    if (!x) {
+        x = tb_NewHandle(6, false, true);
+        wr32(rd32(pp) + PixPat_patXData_off, x);
+    } else {
+        tb_SetHandleSize(x, 6);
+    }
+    if (rd32(x))
+        for (int i = 0; i < 3; i++)
+            wr16(rd32(x) + (uint32_t)i * 2, c[i]);
 }
 
 static void fill_with(void (*fill)(gaddr, gaddr), gaddr r, gaddr pp)
@@ -504,7 +603,9 @@ static void fill_with(void (*fill)(gaddr, gaddr), gaddr r, gaddr pp)
         return;
     gaddr pat = tb_NewPtr(8, false, false);
     gmemcpy(pat, rd32(pp) + PixPat_pat1Data_off, 8);
+    qd_fill_pixpat = pp;
     fill(r, pat);
+    qd_fill_pixpat = 0;
     tb_DisposePtr(pat);
 }
 
@@ -525,7 +626,9 @@ void tb_FillCRoundRect(gaddr r, int16_t ow, int16_t oh, gaddr pp)
 {
     gaddr pat = pat_of(pp);
     if (pat) {
+        qd_fill_pixpat = pp;
         tb_FillRoundRect(r, ow, oh, pat);
+        qd_fill_pixpat = 0;
         tb_DisposePtr(pat);
     }
 }
@@ -534,7 +637,9 @@ void tb_FillCArc(gaddr r, int16_t start, int16_t angle, gaddr pp)
 {
     gaddr pat = pat_of(pp);
     if (pat) {
+        qd_fill_pixpat = pp;
         tb_FillArc(r, start, angle, pat);
+        qd_fill_pixpat = 0;
         tb_DisposePtr(pat);
     }
 }
@@ -543,7 +648,9 @@ void tb_FillCRgn(gaddr rgn, gaddr pp)
 {
     gaddr pat = pat_of(pp);
     if (pat) {
+        qd_fill_pixpat = pp;
         tb_FillRgn(rgn, pat);
+        qd_fill_pixpat = 0;
         tb_DisposePtr(pat);
     }
 }
@@ -552,7 +659,9 @@ void tb_FillCPoly(gaddr poly, gaddr pp)
 {
     gaddr pat = pat_of(pp);
     if (pat) {
+        qd_fill_pixpat = pp;
         tb_FillPoly(poly, pat);
+        qd_fill_pixpat = 0;
         tb_DisposePtr(pat);
     }
 }

@@ -210,6 +210,9 @@ bool qd_rec_suppressed(void);
 
 /* A PixPat handle for a black-and-white pattern. */
 gaddr qd_pixpat_for(const uint8_t pat[8]);
+bool qd_pixpat_image(gaddr pp, int *w, int *h, uint16_t (**rgb)[3]);
+/* The pixel pattern a FillC... call fills with, while it does. */
+extern gaddr qd_fill_pixpat;
 /* A cicn's image as RGBA (malloc'd); NULL if it cannot be read. */
 uint8_t *qd_cicn_rgba(const uint8_t *d, uint32_t len, int *w, int *h);
 /* Draw RGBA pixels (transparent where alpha is 0) scaled into dst in the

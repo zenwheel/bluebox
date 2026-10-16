@@ -432,17 +432,23 @@ static void bits_op(reader *r, const mapping *m, int op)
 }
 
 /* A colour pattern: keep its black-and-white version. */
-static void pixpat(reader *r, uint8_t pat[8])
+static gaddr pixpat(reader *r, uint8_t pat[8])
 {
     int type = r16(r);
     for (int i = 0; i < 8; i++)
         pat[i] = (uint8_t)r8(r);
     if (type == 2) {
-        skip(r, 6); /* RGB */
-        return;
+        gaddr c = tb_NewPtr(6, false, false);
+        for (int i = 0; i < 3; i++)
+            wr16(c + (uint32_t)i * 2, (uint16_t)r16(r));
+        gaddr pp = tb_NewPixPat();
+        tb_MakeRGBPat(pp, c);
+        gput(rd32(pp) + PixPat_pat1Data_off, pat, 8);
+        tb_DisposePtr(c);
+        return pp;
     }
     if (type != 1)
-        return;
+        return 0;
     pixinfo pi;
     memset(&pi, 0, sizeof pi);
     r32(r);
@@ -454,7 +460,26 @@ static void pixpat(reader *r, uint8_t pat[8])
     read_ctable(r, &pi);
     image img;
     decode_pixels(r, &pi, true, &img);
+    gaddr pp = 0;
+    if (img.w > 0 && img.h > 0 && img.w <= 256 && img.h <= 256) {
+        /* Kept as a 32-bit pattern of the decoded colours. */
+        pp = tb_NewPixPat();
+        gput(rd32(pp) + PixPat_pat1Data_off, pat, 8);
+        gaddr pm = rd32(rd32(pp) + PixPat_patMap_off);
+        PixMap_set_rowBytes(rd32(pm), (int16_t)(0x8000 | img.w * 4));
+        qrect_put(rd32(pm) + PixMap_bounds_off, (qrect){ 0, 0, (int16_t)img.h, (int16_t)img.w });
+        PixMap_set_pixelType(rd32(pm), 16);
+        PixMap_set_pixelSize(rd32(pm), 32);
+        PixMap_set_cmpCount(rd32(pm), 3);
+        PixMap_set_cmpSize(rd32(pm), 8);
+        gaddr data = rd32(rd32(pp) + PixPat_patData_off);
+        tb_SetHandleSize(data, img.w * img.h * 4);
+        for (int i = 0; i < img.w * img.h; i++)
+            wr32(rd32(data) + (uint32_t)i * 4,
+                 (uint32_t)img.rgba[i * 4] << 16 | (uint32_t)img.rgba[i * 4 + 1] << 8 | img.rgba[i * 4 + 2]);
+    }
     free(img.rgba);
+    return pp;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -467,6 +492,7 @@ typedef struct {
     hrgn rgn;
     uint32_t text_pt;
     uint8_t fill_pat[8];
+    gaddr fill_pp; /* a colour fill pattern (PixPat), or 0 */
 } last_shapes;
 
 enum { V_FRAME, V_PAINT, V_ERASE, V_INVERT, V_FILL };
@@ -571,6 +597,7 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         if (op == 0xFF || (r->v2 && op == 0x00FF))
             break;
         gaddr before = r->p;
+        qd_fill_pixpat = ls.fill_pp; /* fill verbs use the picture's colour pattern */
         switch (op) {
         case 0x00: break;
         case 0x01: {
@@ -593,7 +620,7 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0x07: { int v = r16(r), h = r16(r); tb_PenSize((int16_t)scale_h(m, h), (int16_t)scale_v(m, v)); break; }
         case 0x08: tb_PenMode((int16_t)r16(r)); break;
         case 0x09: { uint8_t p[8]; for (int i = 0; i < 8; i++) p[i] = (uint8_t)r8(r); set_pat(tb_PenPat, p); break; }
-        case 0x0A: for (int i = 0; i < 8; i++) ls.fill_pat[i] = (uint8_t)r8(r); break;
+        case 0x0A: for (int i = 0; i < 8; i++) ls.fill_pat[i] = (uint8_t)r8(r); ls.fill_pp = 0; break;
         case 0x0B: ls.ov_h = scale_v(m, r16(r)); ls.ov_w = scale_h(m, r16(r)); break;
         case 0x0C: { int dh = r16(r), dv = r16(r); m->src.left += dh; m->src.right += dh; m->src.top += dv; m->src.bottom += dv; break; }
         case 0x0D: tb_TextSize((int16_t)scale_v(m, r16(r))); break;
@@ -601,9 +628,17 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0x0F: tb_BackColor((int32_t)r32(r)); break;
         case 0x10: skip(r, 8); break;
         case 0x11: r->v2 ? (void)r16(r) : (void)r8(r); break;
-        case 0x12: { uint8_t p[8]; pixpat(r, p); set_pat(tb_BackPat, p); break; }
-        case 0x13: { uint8_t p[8]; pixpat(r, p); set_pat(tb_PenPat, p); break; }
-        case 0x14: pixpat(r, ls.fill_pat); break;
+        case 0x12:
+        case 0x13: {
+            uint8_t p[8];
+            gaddr pp = pixpat(r, p);
+            if (pp && qd_port_is_color(port))
+                (op == 0x12 ? tb_BackPixPat : tb_PenPixPat)(pp);
+            else
+                set_pat(op == 0x12 ? tb_BackPat : tb_PenPat, p);
+            break;
+        }
+        case 0x14: ls.fill_pp = pixpat(r, ls.fill_pat); break;
         case 0x15: case 0x16: r16(r); break;
         case 0x1A: case 0x1B: case 0x1D: case 0x1F: {
             uint16_t c[3] = { (uint16_t)r16(r), (uint16_t)r16(r), (uint16_t)r16(r) };
@@ -721,6 +756,7 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         if (r->v2 && (r->p & 1)) /* opcodes are word aligned in version 2 */
             skip(r, 1);
     }
+    qd_fill_pixpat = 0;
     free(ls.pl.pts);
     hrgn_free(&ls.rgn);
 }
@@ -754,6 +790,15 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
     /* The picture draws with its own pen and text state. */
     uint8_t saved[GrafPort_SIZEOF];
     gget(saved, port, GrafPort_SIZEOF);
+    /* A colour port's patterns live in its PixPat handles. */
+    static const uint32_t pp_offs[3] = { CGrafPort_pnPixPat_off, CGrafPort_bkPixPat_off, CGrafPort_fillPixPat_off };
+    uint8_t saved_pp[3][PixPat_SIZEOF];
+    bool color = qd_port_is_color(port);
+    for (int i = 0; i < 3 && color; i++) {
+        gaddr h = rd32(port + pp_offs[i]);
+        if (h && rd32(h))
+            gget(saved_pp[i], rd32(h), PixPat_SIZEOF);
+    }
     gaddr saved_clip = tb_NewRgn();
     tb_GetClip(saved_clip);
     hrgn base;
@@ -771,6 +816,11 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
     /* Restore pen, text and patterns (keep the regions the port owns). */
     gaddr vis = GrafPort_visRgn(port), clip = GrafPort_clipRgn(port);
     gput(port + GrafPort_bkPat_off, saved + GrafPort_bkPat_off, GrafPort_SIZEOF - GrafPort_bkPat_off);
+    for (int i = 0; i < 3 && color; i++) {
+        gaddr h = rd32(port + pp_offs[i]);
+        if (h && rd32(h))
+            gput(rd32(h), saved_pp[i], PixPat_SIZEOF);
+    }
     GrafPort_set_visRgn(port, vis);
     GrafPort_set_clipRgn(port, clip);
     tb_HSetState(pic, state);

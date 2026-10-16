@@ -331,11 +331,23 @@ void tb_SetClip(gaddr r) { tb_CopyRgn(r, GrafPort_clipRgn(qd_port())); }
 void tb_GetClip(gaddr r) { tb_CopyRgn(GrafPort_clipRgn(qd_port()), r); }
 void tb_ClipRect(gaddr r) { tb_RectRgn(GrafPort_clipRgn(qd_port()), r); }
 
+/* An old-style pattern in a colour port: its pixel pattern becomes a
+ * black-and-white one (type 0) with these bits. */
+static void set_old_pattern(gaddr pph, const uint8_t pat[8])
+{
+    if (!pph || !rd32(pph))
+        return;
+    PixPat_set_patType(rd32(pph), 0);
+    gput(rd32(pph) + PixPat_pat1Data_off, pat, 8);
+}
+
 void tb_BackPat(gaddr pp)
 {
     gaddr p = qd_port();
+    uint8_t pat[8];
+    gget(pat, pp, 8);
     if (qd_port_is_color(p))
-        gmemcpy(rd32(rd32(p + CGrafPort_bkPixPat_off)) + PixPat_pat1Data_off, pp, 8);
+        set_old_pattern(rd32(p + CGrafPort_bkPixPat_off), pat);
     else
         gmemcpy(p + GrafPort_bkPat_off, pp, 8);
 }
@@ -405,8 +417,10 @@ void tb_PenMode(int16_t m) { GrafPort_set_pnMode(qd_port(), m); }
 void tb_PenPat(gaddr pp)
 {
     gaddr p = qd_port();
+    uint8_t pat[8];
+    gget(pat, pp, 8);
     if (qd_port_is_color(p))
-        gmemcpy(rd32(rd32(p + CGrafPort_pnPixPat_off)) + PixPat_pat1Data_off, pp, 8);
+        set_old_pattern(rd32(p + CGrafPort_pnPixPat_off), pat);
     else
         gmemcpy(p + GrafPort_pnPat_off, pp, 8);
 }
@@ -417,7 +431,7 @@ void tb_PenNormal(void)
     wr32(p + GrafPort_pnSize_off, make_pt(1, 1));
     GrafPort_set_pnMode(p, patCopy);
     if (qd_port_is_color(p))
-        gput(rd32(rd32(p + CGrafPort_pnPixPat_off)) + PixPat_pat1Data_off, qd_pat_black, 8);
+        set_old_pattern(rd32(p + CGrafPort_pnPixPat_off), qd_pat_black);
     else
         gput(p + GrafPort_pnPat_off, qd_pat_black, 8);
 }

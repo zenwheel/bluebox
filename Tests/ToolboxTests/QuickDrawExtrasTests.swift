@@ -29,6 +29,56 @@ extension BlueBox {
             return rd16(c) == 0 && rd16(c + 2) == 0
         }
 
+        func color(_ h: Int, _ v: Int) -> [UInt16] {
+            let c = tb_NewPtr(6, false, true)
+            tb_GetCPixel(Int16(h), Int16(v), c)
+            return [rd16(c), rd16(c + 2), rd16(c + 4)]
+        }
+
+        func rgb(_ r: UInt16, _ g: UInt16, _ b: UInt16) -> UInt32 {
+            let c = tb_NewPtr(6, false, true)
+            wr16(c, r); wr16(c + 2, g); wr16(c + 4, b)
+            return c
+        }
+
+        /// Pixel patterns draw in their own colours, and an old-style pattern
+        /// set afterwards draws in black and white again.
+        @Test func pixelPatternsDrawInColour() {
+            _ = offscreen()
+            let red = tb_NewPixPat()
+            tb_MakeRGBPat(red, rgb(0xFFFF, 0, 0))
+            tb_FillCRect(rect(0, 0, 10, 10), red)
+            #expect(color(5, 5) == [0xFFFF, 0, 0])
+
+            // A 2x2 8-bit pattern: index 0 green, 1 blue, in a checkerboard.
+            let pp = tb_NewPixPat()
+            let pm = rd32(rd32(pp) + UInt32(PixPat_patMap_off))
+            wr16(rd32(pm) + UInt32(PixMap_rowBytes_off), 0x8002)
+            for (i, v) in [0, 0, 2, 2].enumerated() { wr16(rd32(pm) + UInt32(PixMap_bounds_off) + UInt32(i * 2), UInt16(v)) }
+            wr16(rd32(pm) + UInt32(PixMap_pixelSize_off), 8)
+            let ctab = tb_NewHandle(8 + 2 * 8, false, true)
+            wr16(rd32(ctab) + 6, 1)
+            for (i, c) in [[0, 0xFFFF, 0], [0, 0, 0xFFFF]].enumerated() {
+                let e = rd32(ctab) + 8 + UInt32(i * 8)
+                wr16(e, UInt16(i)); wr16(e + 2, UInt16(c[0])); wr16(e + 4, UInt16(c[1])); wr16(e + 6, UInt16(c[2]))
+            }
+            wr32(rd32(pm) + UInt32(PixMap_pmTable_off), ctab)
+            let data = rd32(rd32(pp) + UInt32(PixPat_patData_off))
+            tb_SetHandleSize(data, 4)
+            for (i, v) in [0, 1, 1, 0].enumerated() { wr8(rd32(data) + UInt32(i), UInt8(v)) }
+            tb_PenPixPat(pp)
+            tb_PaintRect(rect(20, 20, 30, 30))
+            #expect(color(20, 20) == [0, 0xFFFF, 0])
+            #expect(color(21, 20) == [0, 0, 0xFFFF])
+            #expect(color(21, 21) == [0, 0xFFFF, 0])
+
+            let black = tb_NewPtr(8, false, true)
+            for i in 0..<8 { wr8(black + UInt32(i), 0xFF) }
+            tb_PenPat(black)
+            tb_PaintRect(rect(30, 30, 35, 35))
+            #expect(color(31, 31) == [0, 0, 0])
+        }
+
         @Test func polygonsPaintTheirInside() {
             _ = offscreen()
             let poly = tb_OpenPoly()
