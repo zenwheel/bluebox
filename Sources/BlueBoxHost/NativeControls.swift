@@ -7,32 +7,46 @@ import AppKit
 import Toolbox
 
 public enum NativeControls {
-    nonisolated(unsafe) private static var cache: [String: [UInt8]] = [:]
+    /// A rendered control: its pixels, and for a scroll bar where the knob
+    /// and its slot are along the bar (lo, hi pairs; zeros when none).
+    private struct Rendered {
+        var pixels: [UInt8]
+        var knob = (0, 0), slot = (0, 0)
+    }
+
+    nonisolated(unsafe) private static var cache: [String: Rendered] = [:]
     private static let lock = NSLock()
 
     public static func install() {
-        machine_set_control_renderer({ rq, rgba, _ in
-            guard let rq = rq?.pointee, let rgba else { return false }
+        machine_set_control_renderer({ rqp, rgba, _ in
+            guard let rqp, let rgba else { return false }
+            let rq = rqp.pointee
             let key = NativeControls.key(rq)
             NativeControls.lock.lock()
             let cached = NativeControls.cache[key]
             NativeControls.lock.unlock()
-            let pixels: [UInt8]
+            let result: Rendered
             if let cached {
-                pixels = cached
+                result = cached
             } else {
-                var rendered: [UInt8]?
+                var rendered: Rendered?
                 let render = { rendered = MainActor.assumeIsolated { NativeControls.render(rq) } }
                 if Thread.isMainThread { render() } else { DispatchQueue.main.sync(execute: render) }
                 guard let r = rendered else { return false }
-                pixels = r
+                result = r
                 NativeControls.lock.lock()
                 if NativeControls.cache.count > 512 { NativeControls.cache.removeAll() }
                 NativeControls.cache[key] = r
                 NativeControls.lock.unlock()
             }
-            guard pixels.count == Int(rq.width) * Int(rq.height) * 4 else { return false }
-            pixels.withUnsafeBytes { rgba.update(from: $0.bindMemory(to: UInt8.self).baseAddress!, count: pixels.count) }
+            guard result.pixels.count == Int(rq.width) * Int(rq.height) * 4 else { return false }
+            result.pixels.withUnsafeBytes {
+                rgba.update(from: $0.bindMemory(to: UInt8.self).baseAddress!, count: result.pixels.count)
+            }
+            rqp.pointee.knob_lo = Int32(result.knob.0)
+            rqp.pointee.knob_hi = Int32(result.knob.1)
+            rqp.pointee.slot_lo = Int32(result.slot.0)
+            rqp.pointee.slot_hi = Int32(result.slot.1)
             return true
         }, nil)
     }
@@ -77,13 +91,24 @@ public enum NativeControls {
         }
     }
 
-    @MainActor static func render(_ rq: machine_control_request) -> [UInt8]? {
+    @MainActor private static func render(_ rq: machine_control_request) -> Rendered? {
         let w = Int(rq.width), h = Int(rq.height)
         guard w > 0, h > 0 else { return nil }
         let bounds = NSRect(x: 0, y: 0, width: w, height: h)
         let container = NSView(frame: bounds)
         container.appearance = NSAppearance(named: .aqua)
-        container.addSubview(control(rq, bounds))
+        let view = control(rq, bounds)
+        container.addSubview(view)
+        var knob = (0, 0), slot = (0, 0)
+        if let s = view as? NSScroller, s.isEnabled {
+            // Along the bar from its top (the view is not flipped) or left.
+            func span(_ r: NSRect) -> (Int, Int) {
+                rq.vertical ? (Int((bounds.height - r.maxY).rounded()), Int((bounds.height - r.minY).rounded()))
+                            : (Int(r.minX.rounded()), Int(r.maxX.rounded()))
+            }
+            knob = span(s.rect(for: .knob))
+            slot = span(s.rect(for: .knobSlot))
+        }
         guard let rep = container.bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
         container.cacheDisplay(in: bounds, to: rep)
         // Into plain RGBA (premultiplied), top row first.
@@ -96,7 +121,7 @@ public enum NativeControls {
             ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
             return true
         }
-        return ok ? pixels : nil
+        return ok ? Rendered(pixels: pixels, knob: knob, slot: slot) : nil
     }
 }
 #endif

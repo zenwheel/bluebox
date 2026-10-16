@@ -234,6 +234,12 @@ static qrect sb_thumb(gaddr ch)
 {
     qrect r = crect(ch);
     bool v = sb_vertical(r);
+    int klo, khi, slo, shi;
+    if (native_scroll_knob(ch, &klo, &khi, &slo, &shi)) { /* where macOS drew its knob */
+        if (v)
+            return (qrect){ (int16_t)(r.top + klo), r.left, (int16_t)(r.top + khi), r.right };
+        return (qrect){ r.top, (int16_t)(r.left + klo), r.bottom, (int16_t)(r.left + khi) };
+    }
     int len = v ? r.bottom - r.top : r.right - r.left;
     int track = len - 2 * 16 - 16;
     int range = cmax(ch) - cmin(ch);
@@ -272,7 +278,7 @@ static void cdef1_draw(gaddr ch, int part)
         return;
     qrect r = crect(ch);
     bool v = sb_vertical(r);
-    if (native_draw_scrollbar(r, v, chilite(ch), chilite(ch) != 255, chilite(ch) != 255 && cmax(ch) > cmin(ch), cvalue(ch),
+    if (native_draw_scrollbar(ch, r, v, chilite(ch), chilite(ch) != 255, chilite(ch) != 255 && cmax(ch) > cmin(ch), cvalue(ch),
                               cmin(ch), cmax(ch)) ||
         theme_draw_scrollbar(r, v, chilite(ch), chilite(ch) != 255, chilite(ch) != 255 && cmax(ch) > cmin(ch), sb_thumb(ch)))
         return;
@@ -321,9 +327,11 @@ static int32_t cdef1_test(gaddr ch, uint32_t pt)
         return 0;
     bool vert = sb_vertical(r);
     int c = vert ? v : h, lo = vert ? r.top : r.left, hi = vert ? r.bottom : r.right;
-    if (c < lo + 16)
+    int klo, khi, slo, shi;
+    bool native = native_scroll_knob(ch, &klo, &khi, &slo, &shi); /* macOS's bars have no arrows */
+    if (!native && c < lo + 16)
         return inUpButton;
-    if (c >= hi - 16)
+    if (!native && c >= hi - 16)
         return inDownButton;
     if (cmax(ch) <= cmin(ch))
         return 0;
@@ -646,6 +654,7 @@ void tb_DisposeControl(gaddr ch)
     gaddr w = cowner(ch);
     tb_HideControl(ch);
     call_cdef(ch, dispCntl, 0);
+    native_forget_control(ch);
     gaddr prev = 0;
     for (gaddr x = WindowRecord_controlList(w); x; prev = x, x = ControlRecord_nextControl(cp(x))) {
         if (x == ch) {
@@ -862,6 +871,9 @@ int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a)
         qrect r = crect(ch);
         bool v = sb_vertical(r);
         int len = (v ? r.bottom - r.top : r.right - r.left) - 48;
+        int klo, khi, slo, shi;
+        if (native_scroll_knob(ch, &klo, &khi, &slo, &shi)) /* the knob's travel along its slot */
+            len = (shi - slo) - (khi - klo);
         int start = v ? pt_v(p) : pt_h(p);
         int16_t v0 = cvalue(ch);
         int range = cmax(ch) - cmin(ch);

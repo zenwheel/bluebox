@@ -102,7 +102,52 @@ bool native_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabl
     return show(&rq, r);
 }
 
-bool native_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, int value, int min, int max)
+/* Where the host drew each scroll bar's knob, for hit testing and dragging
+ * where it shows (macOS's knob is not the classic 16-pixel thumb). */
+static struct {
+    gaddr ch;
+    int knob_lo, knob_hi, slot_lo, slot_hi;
+} knobs[64];
+
+bool native_scroll_knob(gaddr ch, int *knob_lo, int *knob_hi, int *slot_lo, int *slot_hi)
+{
+    if (!native_on())
+        return false;
+    for (int i = 0; i < 64; i++)
+        if (knobs[i].ch == ch && knobs[i].slot_hi > knobs[i].slot_lo) {
+            *knob_lo = knobs[i].knob_lo;
+            *knob_hi = knobs[i].knob_hi;
+            *slot_lo = knobs[i].slot_lo;
+            *slot_hi = knobs[i].slot_hi;
+            return true;
+        }
+    return false;
+}
+
+static void remember_knob(gaddr ch, const machine_control_request *rq)
+{
+    int slot = -1;
+    for (int i = 0; i < 64; i++)
+        if (knobs[i].ch == ch || (slot < 0 && !knobs[i].ch))
+            slot = i;
+    if (slot < 0)
+        slot = (int)(ch % 64);
+    knobs[slot].ch = ch;
+    knobs[slot].knob_lo = rq->knob_lo;
+    knobs[slot].knob_hi = rq->knob_hi;
+    knobs[slot].slot_lo = rq->slot_lo;
+    knobs[slot].slot_hi = rq->slot_hi;
+}
+
+void native_forget_control(gaddr ch)
+{
+    for (int i = 0; i < 64; i++)
+        if (knobs[i].ch == ch)
+            knobs[i].ch = 0;
+}
+
+bool native_draw_scrollbar(gaddr ch, qrect r, bool vertical, int hilite, bool enabled, bool active, int value, int min,
+                           int max)
 {
     if (!native_on())
         return false;
@@ -120,5 +165,8 @@ bool native_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, boo
         if (rq.proportion > 0.5)
             rq.proportion = 0.5;
     }
-    return show(&rq, r);
+    bool shown = show(&rq, r);
+    if (shown)
+        remember_knob(ch, &rq);
+    return shown;
 }

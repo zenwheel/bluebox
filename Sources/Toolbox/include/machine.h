@@ -300,10 +300,14 @@ typedef struct {
     double position, proportion; /* scroll bars: 0..1, and the visible part (0 when nothing to scroll) */
     int pressed_part;            /* scroll bars: 20 up arrow, 21 down, 22/23 page, 129 thumb */
     char title[256];             /* buttons: UTF-8 */
+    /* Scroll bars, set by the host: where its knob and the knob's slot are
+     * along the bar, in pixels from its top or left (knob_hi 0: no knob). */
+    int knob_lo, knob_hi, slot_lo, slot_hi;
 } machine_control_request;
-/* Fill rgba (width*height*4, transparent where nothing is drawn); false to
- * fall back to the classic look.  Called on the emulator thread. */
-typedef bool (*machine_control_fn)(const machine_control_request *rq, uint8_t *rgba, void *ctx);
+/* Fill rgba (width*height*4, transparent where nothing is drawn), and for
+ * a scroll bar its knob geometry; false to fall back to the classic look.
+ * Called on the emulator thread. */
+typedef bool (*machine_control_fn)(machine_control_request *rq, uint8_t *rgba, void *ctx);
 void machine_set_control_renderer(machine_control_fn fn, void *ctx);
 
 /* ---- Launching other applications ----

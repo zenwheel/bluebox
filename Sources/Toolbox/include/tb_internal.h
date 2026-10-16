@@ -209,7 +209,11 @@ bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disable
 /* Native controls (native_controls.c), drawn by the host. */
 bool native_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool native_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);
-bool native_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, int value, int min, int max);
+bool native_draw_scrollbar(gaddr ch, qrect r, bool vertical, int hilite, bool enabled, bool active, int value, int min,
+                           int max);
+/* Where the host last drew a scroll bar's knob and its slot, along the bar. */
+bool native_scroll_knob(gaddr ch, int *knob_lo, int *knob_hi, int *slot_lo, int *slot_hi);
+void native_forget_control(gaddr ch);
 
 /* ---- Dialog Manager ---- */
 

@@ -349,3 +349,37 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    /// Native scroll bars are hit where macOS draws their knob.
+    @Suite struct NativeScrollBars {
+        @Test func theKnobIsWhereTheHostDrewIt() {
+            launchTestApp()
+            _ = initToolbox()
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_NATIVE))
+            defer {
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+                machine_set_control_renderer(nil, nil)
+            }
+            // A host that draws nothing visible, its knob at 40..70 of a 2..198 slot.
+            machine_set_control_renderer({ rq, _, _ in
+                rq!.pointee.knob_lo = 40; rq!.pointee.knob_hi = 70
+                rq!.pointee.slot_lo = 2; rq!.pointee.slot_hi = 198
+                return true
+            }, nil)
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [20, 300, 220, 316].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let w = tb_NewCWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            let cr = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 0, 200, 16].enumerated() { wr16(cr + UInt32(i * 2), UInt16(v)) }
+            let ch = tb_NewControl(w, cr, 0, 1, 0, 0, 100, 16, 0)
+            tb_Draw1Control(ch)
+            #expect(tb_TestControl(ch, UInt32(50) << 16 | 8) == 129)   // inThumb: in the native knob
+            #expect(tb_TestControl(ch, UInt32(25) << 16 | 8) == 22)    // inPageUp, above it
+            #expect(tb_TestControl(ch, UInt32(5) << 16 | 8) == 22)     // no up arrow
+            #expect(tb_TestControl(ch, UInt32(195) << 16 | 8) == 23)   // no down arrow
+            tb_DisposeWindow(w)
+        }
+    }
+}
