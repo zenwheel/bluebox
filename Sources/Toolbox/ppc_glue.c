@@ -431,7 +431,84 @@ static void g_DirCreate(ppc_cpu *c)
 }
 
 /* Sorted by name. */
+/* OpenDF(fileName, vRefNum, *refNum) */
+static void g_OpenDF(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    int16_t e = tb_PBHOpenDF(pb, false);
+    out16(R(2), rd16(pb + IOParam_ioRefNum_off));
+    RET(e);
+}
+
+/* OpenWD(vRefNum, dirID, procID, *wdRefNum) / CloseWD(wdRefNum) */
+static void g_OpenWD(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + 48, R(1)); /* ioWDDirID */
+    wr32(pb + 28, R(2)); /* ioWDProcID */
+    int16_t e = tb_PBOpenWD(pb, false);
+    out16(R(3), rd16(pb + IOParam_ioVRefNum_off));
+    RET(e);
+}
+static void g_CloseWD(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    RET(tb_PBCloseWD(pb, false));
+}
+
+/* GetVInfo(drvNum, volName, *vRefNum, *freeBytes) */
+static void g_GetVInfo(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(1));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr16(pb + VolumeParam_ioVolIndex_off, 0);
+    int16_t e = tb_PBGetVInfo(pb, false);
+    out16(R(2), rd16(pb + IOParam_ioVRefNum_off));
+    out32(R(3), (uint32_t)rd16(pb + VolumeParam_ioVFrBlk_off) * rd32(pb + VolumeParam_ioVAlBlkSiz_off));
+    RET(e);
+}
+
+/* CatMove(vRefNum, dirID, oldName, newDirID, newName) */
+static void g_CatMove(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + CMovePBRec_ioNewName_off, R(4));
+    wr32(pb + CMovePBRec_ioNewDirID_off, R(3));
+    RET(tb_PBCatMove(pb, false));
+}
+
+/* Eject(volName, vRefNum) / UnmountVol(volName, vRefNum) */
+static void g_Eject(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    RET(tb_PBEject(pb));
+}
+static void g_UnmountVol(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    RET(tb_PBUnmountVol(pb));
+}
+
 const ppc_export ppc_glue_exports[] = {
+    { "CatMove", g_CatMove },
+    { "CloseWD", g_CloseWD },
+    { "Eject", g_Eject },
+    { "GetVInfo", g_GetVInfo },
+    { "OpenDF", g_OpenDF },
+    { "OpenWD", g_OpenWD },
+    { "UnmountVol", g_UnmountVol },
     { "Allocate", g_Allocate },   { "Create", g_Create },       { "DirCreate", g_DirCreate },
     { "FSClose", g_FSClose },     { "FSDelete", g_FSDelete },   { "FSOpen", g_FSOpen },
     { "FSRead", g_FSRead },       { "FSWrite", g_FSWrite },     { "FlushVol", g_FlushVol },

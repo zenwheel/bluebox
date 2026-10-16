@@ -156,6 +156,8 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     return NULL;
 }
 
+void (*cfm_export_fn(const char *name))(ppc_cpu *) { return export_fn(name); }
+
 /* ---------------------------------------------------------------------- */
 /* PEF */
 
@@ -416,7 +418,7 @@ static const char *const native_libraries[] = {
     "InterfaceLib", "MathLib", "StdCLib", "QuickTimeLib", "DragLib", "ThreadsLib", "AppearanceLib",
     "PrivateInterfaceLib", "ObjectSupportLib", "AppleScriptLib", "TranslationLib", "ControlStripLib",
     "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
-    "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr",
+    "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib",
 };
 
 static bool core_library(const char *name)

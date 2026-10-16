@@ -29,6 +29,8 @@ extern const unsigned cfm_export_count;
  * InterfaceLib calls that are glue rather than traps. */
 extern const ppc_export lib_exports[];
 extern const unsigned lib_export_count;
+/* The function that implements an export, or NULL. */
+void (*cfm_export_fn(const char *name))(ppc_cpu *);
 /* The address of an exported data symbol (allocated on first use), or 0. */
 gaddr ppc_data_export(const char *name);
 /* Mixed Mode (mixedmode.c). */

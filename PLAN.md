@@ -573,6 +573,31 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** SimpleText PPC and HyperCard 2.4 (PPC) reach parity with their 68k runs from M3 and M7. A fat app picks PPC by default; the profile can force 68k.
 
+**Status (2026-10-16):**
+
+- **Done:**
+  - The interpreter (`Sources/CPUPPC`), checked against hand-made vectors and a Retro68 probe (`Tests/Probes/PPC`) whose integer and floating-point results match the host's bit for bit.
+  - The Code Fragment Manager (`cfm.c`): PEF sections and pattern data; relocations, repeats included, relative to each section's default address; imports and exports, weak imports, data imports.
+  - Library search: the application's own file (data fork, or a resource compressed with the application's own 'dcmp'), then its folder.
+  - Init routines run before main. GetSharedLibrary, GetDiskFragment, GetMemFragment, FindSymbol and the rest work, and accelerated code resources are prepared on their first call.
+  - Mixed Mode (`mixedmode.c`) works in both directions: Pascal, C, register and dispatched procInfos; fat descriptors; CallComponentUPP.
+  - InterfaceLib:
+    - Generated glue calls the `tb_` functions, or runs the 68k trap itself (stack, register and selector conventions, trap bits).
+    - LMGet/LMSet come from the low-memory definitions.
+    - Hand-written glue in `ppc_glue.c` and `ppc_libs.c`.
+  - MathLib, StdCLib (strings, memory, sprintf, setjmp, qsort), the Component Manager and movie controller calls, the Display Manager basics, and stubs for TSM, the Communications Toolbox, AppleTalk, ObjectSupportLib and Internet Config.
+  - Gestalt answers as a PowerPC G3 with System 7.6.1 for PowerPC applications.
+- **Census:** of the 225 PowerPC and fat applications in the corpus, run as PowerPC, 146 reach their event loop (`--ppc`).
+- **Next:**
+  - **DrawSprocket of our own** (`DrawSprocketLib` as one of our libraries, contexts on our screen, with back buffers, gamma fades and the mouse). Games ship Apple's DrawSprocketLib, which loads but finds no display modes through our minimal Display Manager (Squirrel Kombat, SpaceDeubza).
+  - InputSprocket.
+  - Open Transport's libraries (M9).
+  - The rest of the missing imports, ranked by the PowerPC census (`imports` column).
+  - A fat application still defaults to 68k; switch the default once the PowerPC side holds up as well.
+  - SimpleText PPC and HyperCard PPC against the exit criteria.
+  - A PowerPC oracle (SheepShaver with a New World ROM) for comparing runs.
+- **Known:** Star Chaos and Smashing Windows II run wild in a VBL task. Space Debris spends its headless budget mixing sound in its double-buffer callback (the headless clock gives 100 ns an instruction).
+
 ### M9: Open Transport and the Mac OS 8/9 surface
 
 **Goal:** a broad range of apps from the 7.5–9.2 era runs.

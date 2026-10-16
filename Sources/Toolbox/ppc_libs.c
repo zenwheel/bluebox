@@ -1192,7 +1192,311 @@ static void g_GetVideoDefault(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* ---------------------------------------------------------------------- */
+/* Wide (64-bit) arithmetic: hi long then lo long in memory. */
+
+static int64_t wide_get(gaddr w) { return (int64_t)((uint64_t)rd32(w) << 32 | rd32(w + 4)); }
+static void wide_put(gaddr w, int64_t v)
+{
+    wr32(w, (uint32_t)((uint64_t)v >> 32));
+    wr32(w + 4, (uint32_t)v);
+}
+static void w_WideAdd(ppc_cpu *c) { wide_put(R(0), (int64_t)((uint64_t)wide_get(R(0)) + (uint64_t)wide_get(R(1)))); RETURN(R(0)); }
+static void w_WideSubtract(ppc_cpu *c) { wide_put(R(0), (int64_t)((uint64_t)wide_get(R(0)) - (uint64_t)wide_get(R(1)))); RETURN(R(0)); }
+static void w_WideNegate(ppc_cpu *c) { wide_put(R(0), (int64_t)(0 - (uint64_t)wide_get(R(0)))); RETURN(R(0)); }
+static void w_WideCompare(ppc_cpu *c)
+{
+    int64_t a = wide_get(R(0)), b = wide_get(R(1));
+    RETURN((int32_t)(a < b ? -1 : a > b));
+}
+static void w_WideMultiply(ppc_cpu *c) { wide_put(R(2), (int64_t)(int32_t)R(0) * (int32_t)R(1)); RETURN(R(2)); }
+/* WideDivide(dividend, divisor, *remainder): the quotient (a long). */
+static void w_WideDivide(ppc_cpu *c)
+{
+    int64_t a = wide_get(R(0));
+    int32_t d = (int32_t)R(1);
+    if (!d) {
+        if (R(2))
+            wr32(R(2), 0x80000000u);
+        RETURN(0x80000000u);
+        return;
+    }
+    if (R(2))
+        wr32(R(2), (uint32_t)(int32_t)(a % d));
+    RETURN((uint32_t)(int32_t)(a / d));
+}
+/* WideWideDivide(dividend, divisor, *remainder): the quotient in place. */
+static void w_WideWideDivide(ppc_cpu *c)
+{
+    int64_t a = wide_get(R(0));
+    int32_t d = (int32_t)R(1);
+    if (d) {
+        if (R(2))
+            wr32(R(2), (uint32_t)(int32_t)(a % d));
+        wide_put(R(0), a / d);
+    }
+    RETURN(R(0));
+}
+/* WideShift(src, shift): arithmetic, right for a positive shift, rounded. */
+static void w_WideShift(ppc_cpu *c)
+{
+    int64_t a = wide_get(R(0));
+    int32_t n = (int32_t)R(1);
+    if (n > 0 && n < 64)
+        a = (a + ((int64_t)1 << (n - 1))) >> n;
+    else if (n < 0 && n > -64)
+        a = (int64_t)((uint64_t)a << -n);
+    wide_put(R(0), a);
+    RETURN(R(0));
+}
+static void w_WideBitShift(ppc_cpu *c)
+{
+    int64_t a = wide_get(R(0));
+    int32_t n = (int32_t)R(1);
+    if (n > 0 && n < 64)
+        a >>= n;
+    else if (n < 0 && n > -64)
+        a = (int64_t)((uint64_t)a << -n);
+    wide_put(R(0), a);
+    RETURN(R(0));
+}
+static void w_WideSquareRoot(ppc_cpu *c)
+{
+    int64_t a = wide_get(R(0));
+    RETURN(a > 0 ? (uint32_t)sqrt((double)a) : 0);
+}
+
+/* ---------------------------------------------------------------------- */
+/* The C-string forms of Pascal-string calls: the strings go over to
+ * Pascal, the Pascal routine runs, and strings it fills come back. */
+
+/* Call the export `name` with argument `in` (a C string) made Pascal, and
+ * argument `out` (a buffer) made C after; -1 for none. */
+static void with_pascal(ppc_cpu *c, const char *name, int in, int out)
+{
+    void (*fn)(ppc_cpu *) = cfm_export_fn(name);
+    if (!fn) {
+        ppc_halt(c, "unimplemented: %s (for the C-string form)", name);
+        return;
+    }
+    gaddr tmp = 0, cbuf = out >= 0 ? R(out) : 0;
+    if (in >= 0 && R(in)) {
+        tmp = temp_pstring(R(in));
+        c->gpr[3 + in] = tmp;
+    }
+    if (cbuf) {
+        tmp = tmp ? tmp : tb_NewPtr(256, true, true);
+        c->gpr[3 + out] = tmp;
+    }
+    uint32_t lr = c->lr;
+    fn(c);
+    if (cbuf)
+        p_to_c(tmp, cbuf);
+    if (tmp)
+        tb_DisposePtr(tmp);
+    c->pc = lr;
+}
+/* The same with several string arguments: bit n of `ins` for argument n. */
+static void with_pascals(ppc_cpu *c, const char *name, unsigned ins)
+{
+    void (*fn)(ppc_cpu *) = cfm_export_fn(name);
+    if (!fn) {
+        ppc_halt(c, "unimplemented: %s (for the C-string form)", name);
+        return;
+    }
+    gaddr t[8] = { 0 };
+    for (int i = 0; i < 8; i++)
+        if ((ins >> i) & 1 && R(i)) {
+            t[i] = temp_pstring(R(i));
+            c->gpr[3 + i] = t[i];
+        }
+    uint32_t lr = c->lr;
+    fn(c);
+    for (int i = 0; i < 8; i++)
+        if (t[i])
+            tb_DisposePtr(t[i]);
+    c->pc = lr;
+}
+static void cs_getfinfo(ppc_cpu *c) { with_pascals(c, "GetFInfo", 1); }
+static void cs_setfinfo(ppc_cpu *c) { with_pascals(c, "SetFInfo", 1); }
+static void cs_fsopen(ppc_cpu *c) { with_pascals(c, "FSOpen", 1); }
+static void cs_openrf(ppc_cpu *c) { with_pascals(c, "OpenRF", 1); }
+static void cs_create(ppc_cpu *c) { with_pascals(c, "Create", 1); }
+static void cs_fsdelete(ppc_cpu *c) { with_pascals(c, "FSDelete", 1); }
+static void cs_rename(ppc_cpu *c) { with_pascals(c, "Rename", 1 | 4); }
+static void cs_hopen(ppc_cpu *c) { with_pascals(c, "HOpen", 4); }
+static void cs_fsmakefsspec(ppc_cpu *c) { with_pascals(c, "FSMakeFSSpec", 4); }
+static void cs_opendeskacc(ppc_cpu *c) { with_pascals(c, "OpenDeskAcc", 1); }
+static void cs_opendriver(ppc_cpu *c) { with_pascals(c, "OpenDriver", 1); }
+static void cs_newwindow(ppc_cpu *c) { with_pascals(c, "NewWindow", 4); }
+static void cs_newcwindow(ppc_cpu *c) { with_pascals(c, "NewCWindow", 4); }
+static void cs_setwtitle(ppc_cpu *c) { with_pascals(c, "SetWTitle", 2); }
+static void cs_getwtitle(ppc_cpu *c) { with_pascal(c, "GetWTitle", -1, 1); }
+static void cs_newcontrol(ppc_cpu *c) { with_pascals(c, "NewControl", 8); }
+static void cs_setdialogitemtext(ppc_cpu *c) { with_pascal(c, "SetDialogItemText", 1, -1); }
+static void cs_getdialogitemtext(ppc_cpu *c) { with_pascal(c, "GetDialogItemText", -1, 1); }
+static void cs_numtostring(ppc_cpu *c) { with_pascal(c, "NumToString", -1, 1); }
+static void cs_stringtonum(ppc_cpu *c) { with_pascal(c, "StringToNum", 0, -1); }
+static void cs_setcontroltitle(ppc_cpu *c) { with_pascal(c, "SetControlTitle", 1, -1); }
+static void cs_getcontroltitle(ppc_cpu *c) { with_pascal(c, "GetControlTitle", -1, 1); }
+static void cs_insertmenuitem(ppc_cpu *c) { with_pascal(c, "InsertMenuItem", 1, -1); }
+static void cs_appendmenu(ppc_cpu *c) { with_pascal(c, "AppendMenu", 1, -1); }
+static void cs_setmenuitemtext(ppc_cpu *c) { with_pascal(c, "SetMenuItemText", 2, -1); }
+static void cs_getmenuitemtext(ppc_cpu *c) { with_pascal(c, "GetMenuItemText", -1, 2); }
+static void cs_drawstring(ppc_cpu *c) { with_pascal(c, "DrawString", 0, -1); }
+static void cs_stringwidth(ppc_cpu *c) { with_pascal(c, "StringWidth", 0, -1); }
+static void cs_upperstring(ppc_cpu *c) { with_pascal(c, "UpperString", 0, 0); }
+static void cs_debugstr(ppc_cpu *c) { c->pc = c->lr; }
+static void cs_newmenu(ppc_cpu *c) { with_pascal(c, "NewMenu", 1, -1); }
+static void cs_getindstring(ppc_cpu *c) { with_pascal(c, "GetIndString", -1, 0); }
+/* paramtext(a, b, c, d): four strings in. */
+static void cs_paramtext(ppc_cpu *c)
+{
+    gaddr t[4];
+    for (int i = 0; i < 4; i++) {
+        t[i] = R(i) ? temp_pstring(R(i)) : 0;
+        c->gpr[3 + i] = t[i];
+    }
+    uint32_t lr = c->lr;
+    void (*fn)(ppc_cpu *) = cfm_export_fn("ParamText");
+    if (fn)
+        fn(c);
+    for (int i = 0; i < 4; i++)
+        if (t[i])
+            tb_DisposePtr(t[i]);
+    c->pc = lr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Assorted */
+
+/* The Display Manager's modes: the one mode the screen is in. */
+static void dm_GetDisplayMode(ppc_cpu *c)
+{
+    /* VDSwitchInfoRec: csMode (word), csData (long), csPage, csBaseAddr */
+    gaddr r = R(1);
+    gaddr gd = R(0) ? R(0) : rd32(LM_MainDevice);
+    gaddr pm = gd && rd32(gd) ? rd32(rd32(gd) + GDevice_gdPMap_off) : 0;
+    int depth = pm && rd32(pm) ? (int16_t)rd16(rd32(pm) + PixMap_pixelSize_off) : 8;
+    if (r) {
+        wr16(r, (uint16_t)(0x80 + (depth == 1 ? 0 : depth == 2 ? 1 : depth == 4 ? 2 : depth == 8 ? 3 : depth == 16 ? 4 : 5)));
+        wr32(r + 2, 0x80); /* the display mode */
+        wr16(r + 6, 0);
+        wr32(r + 8, pm && rd32(pm) ? rd32(rd32(pm) + PixMap_baseAddr_off) : 0);
+    }
+    RETURN(0);
+}
+/* DMCheckDisplayMode(gd, mode, depth, *switchFlags, reserved, *modeOk) */
+static void dm_CheckDisplayMode(ppc_cpu *c)
+{
+    if (R(3))
+        wr32(R(3), 0);
+    if (R(5))
+        wr8(R(5), R(1) == 0x80);
+    RETURN(0);
+}
+/* DMNewDisplayModeList(displayID, flags, info, *count, *list): one mode. */
+static void dm_NewDisplayModeList(ppc_cpu *c)
+{
+    if (R(3))
+        wr32(R(3), 0);
+    if (R(4))
+        wr32(R(4), 0);
+    RETURN(0);
+}
+static void dm_notFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-6229); }
+
+/* TextEdit's click loop is a field. */
+static void g_TESetClickLoop(ppc_cpu *c)
+{
+    if (R(1) && rd32(R(1)))
+        wr32(rd32(R(1)) + TERec_wordBreak_off + 4, R(0));
+    c->pc = c->lr;
+}
+static void g_InlineGetHandleSize(ppc_cpu *c) { RETURN(R(0) ? (uint32_t)tb_GetHandleSize(R(0)) : 0); }
+static void g_GZSaveHnd(ppc_cpu *c) { RETURN(rd32(LM_GZRootHnd)); }
+static void g_LMGetSysFontSize(ppc_cpu *c) { RETURN((int32_t)(int16_t)rd16(0x0BA8)); }
+static void g_LMSetSysFontSize(ppc_cpu *c) { wr16(0x0BA8, (uint16_t)R(0)); c->pc = c->lr; }
+static void g_LMGetGNEFilter(ppc_cpu *c) { RETURN(rd32(0x029A)); }
+static void g_LMSetGNEFilter(ppc_cpu *c) { wr32(0x029A, R(0)); c->pc = c->lr; }
+static void g_IUEqualPString(ppc_cpu *c) { g_IUEqualString(c); }
+static void g_IUCompPString(ppc_cpu *c) { g_IUCompString(c); }
+static void g_GetComponentVersion(ppc_cpu *c) { instance_call(c, -4, ""); }
+static void g_false(ppc_cpu *c) { RETURN(0); }
+/* NewTSMDocument(count, types, *docID, refcon): a document that does nothing. */
+static void g_NewTSMDocument(ppc_cpu *c)
+{
+    if (R(2))
+        wr32(R(2), 1);
+    RETURN(0);
+}
+/* The serial driver's calls, on a port that is always idle. */
+static void g_SerGetBuf(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), 0);
+    RETURN(0);
+}
+static void g_SerStatus(ppc_cpu *c)
+{
+    if (R(1))
+        gmemset(R(1), 0, 6);
+    RETURN(0);
+}
+/* The Communications Toolbox: no tools. */
+static void g_cmNoTools(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-2); }
+static void g_zero_handle(ppc_cpu *c) { RETURN(0); }
+/* The AppleTalk calls: AppleTalk isn't there. */
+static void g_noAppleTalk(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
+
 const ppc_export lib_exports[] = {
+    /* Wide arithmetic */
+    { "WideAdd", w_WideAdd }, { "WideBitShift", w_WideBitShift }, { "WideCompare", w_WideCompare },
+    { "WideDivide", w_WideDivide }, { "WideMultiply", w_WideMultiply }, { "WideNegate", w_WideNegate },
+    { "WideShift", w_WideShift }, { "WideSquareRoot", w_WideSquareRoot }, { "WideSubtract", w_WideSubtract },
+    { "WideWideDivide", w_WideWideDivide },
+    /* C-string forms */
+    { "getfinfo", cs_getfinfo }, { "setfinfo", cs_setfinfo }, { "fsopen", cs_fsopen }, { "openrf", cs_openrf },
+    { "create", cs_create }, { "fsdelete", cs_fsdelete }, { "rename", cs_rename }, { "hopen", cs_hopen },
+    { "fsmakefsspec", cs_fsmakefsspec }, { "opendeskacc", cs_opendeskacc }, { "opendriver", cs_opendriver },
+    { "newwindow", cs_newwindow }, { "newcwindow", cs_newcwindow }, { "setwtitle", cs_setwtitle },
+    { "getwtitle", cs_getwtitle }, { "newcontrol", cs_newcontrol },
+    { "appendmenu", cs_appendmenu }, { "debugstr", cs_debugstr }, { "drawstring", cs_drawstring },
+    { "getcontroltitle", cs_getcontroltitle }, { "getdialogitemtext", cs_getdialogitemtext },
+    { "getindstring", cs_getindstring }, { "getmenuitemtext", cs_getmenuitemtext },
+    { "insertmenuitem", cs_insertmenuitem }, { "newmenu", cs_newmenu }, { "numtostring", cs_numtostring },
+    { "paramtext", cs_paramtext }, { "setcontroltitle", cs_setcontroltitle },
+    { "setdialogitemtext", cs_setdialogitemtext }, { "setmenuitemtext", cs_setmenuitemtext },
+    { "stringtonum", cs_stringtonum }, { "stringwidth", cs_stringwidth }, { "upperstring", cs_upperstring },
+    /* Display Manager modes */
+    { "DMGetDisplayMode", dm_GetDisplayMode }, { "DMCheckDisplayMode", dm_CheckDisplayMode },
+    { "DMNewDisplayModeList", dm_NewDisplayModeList }, { "DMGetIndexedDisplayModeFromList", dm_notFound },
+    { "DMDisposeList", g_noErr }, { "DMSuspendConfigure", g_noErr }, { "DMResumeConfigure", g_noErr },
+    /* Assorted */
+    { "TESetClickLoop", g_TESetClickLoop }, { "InlineGetHandleSize", g_InlineGetHandleSize },
+    { "GZSaveHnd", g_GZSaveHnd }, { "LMGetSysFontSize", g_LMGetSysFontSize }, { "LMSetSysFontSize", g_LMSetSysFontSize },
+    { "LMGetGNEFilter", g_LMGetGNEFilter }, { "LMSetGNEFilter", g_LMSetGNEFilter },
+    { "IUEqualPString", g_IUEqualPString }, { "IUCompPString", g_IUCompPString },
+    { "GetComponentVersion", g_GetComponentVersion },
+    { "HoldMemory", g_noErr }, { "UnholdMemory", g_noErr }, { "LockMemory", g_noErr }, { "UnlockMemory", g_noErr },
+    { "LockMemoryContiguous", g_noErr },
+    /* The Text Services Manager, with no input methods */
+    { "InitTSMAwareApplication", g_noErr }, { "CloseTSMAwareApplication", g_noErr },
+    { "NewTSMDocument", g_NewTSMDocument }, { "DeleteTSMDocument", g_noErr }, { "ActivateTSMDocument", g_noErr },
+    { "DeactivateTSMDocument", g_noErr }, { "FixTSMDocument", g_noErr }, { "TSMEvent", g_false },
+    { "TSMMenuSelect", g_false }, { "SetTSMCursor", g_false }, { "UseInputWindow", g_noErr },
+    /* Serial ports */
+    { "SerReset", g_noErr }, { "SerHShake", g_noErr }, { "SerSetBuf", g_noErr }, { "SerSetBrk", g_noErr },
+    { "SerClrBrk", g_noErr }, { "SerGetBuf", g_SerGetBuf }, { "SerStatus", g_SerStatus },
+    /* The Communications Toolbox */
+    { "InitCTBUtilities", g_noErr }, { "InitCM", g_cmNoTools }, { "InitCRM", g_noErr }, { "InitTM", g_cmNoTools },
+    { "InitFT", g_cmNoTools }, { "CRMSearch", g_zero_handle }, { "CMNew", g_zero_handle },
+    { "CMGetProcID", g_cmNoTools },
+    /* AppleTalk and the PPC Toolbox's network side */
+    { "GetMyZone", g_noAppleTalk }, { "PPCBrowser", g_noAppleTalk }, { "IPCListPortsSync", g_noAppleTalk },
+    { "NBPSetNTE", g_nothing }, { "NBPSetEntity", g_nothing }, { "NBPExtract", g_noAppleTalk },
+    { "PRegisterName", g_noAppleTalk }, { "PLookupName", g_noAppleTalk }, { "POpenATPSkt", g_noAppleTalk },
+    { "PGetRequest", g_noAppleTalk }, { "PSendResponse", g_noAppleTalk },
     /* Display Manager */
     { "DMGetFirstScreenDevice", dm_GetFirstScreenDevice }, { "DMGetNextScreenDevice", dm_GetNextScreenDevice },
     { "DMGetDisplayIDByGDevice", dm_GetDisplayIDByGDevice }, { "DMGetGDeviceByDisplayID", dm_GetGDeviceByDisplayID },
