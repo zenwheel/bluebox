@@ -66,9 +66,15 @@ sh scripts/make-app.sh          # makes build/Blue Box.app
 
 Opening it shows the shell. Dropping archives or disk images on its icon
 imports them. Copy it to `/Applications` before using `install`, because the
-application bundles that `install` makes refer to it where it is. Inside the
-app the command-line tool is `Blue Box.app/Contents/MacOS/bluebox`. QuickTime
+application bundles that `install` makes refer to it where it is. QuickTime
 movies still need VLC.app installed.
+
+The command-line tool is the app's own program. Link it onto your `PATH` to
+use it from Terminal (with no arguments it opens the shell):
+
+```sh
+sudo ln -s "/Applications/Blue Box.app/Contents/MacOS/bluebox" /usr/local/bin/bluebox
+```
 
 ## Running classic applications
 
