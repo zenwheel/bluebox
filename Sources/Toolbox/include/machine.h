@@ -291,7 +291,14 @@ void machine_set_page_defaults(const machine_page_setup *ps);
 
 /* ---- Native controls (the native appearance) ---- */
 
-enum { MACHINE_CONTROL_BUTTON, MACHINE_CONTROL_CHECKBOX, MACHINE_CONTROL_RADIO, MACHINE_CONTROL_SCROLLBAR };
+enum {
+    MACHINE_CONTROL_BUTTON,
+    MACHINE_CONTROL_CHECKBOX,
+    MACHINE_CONTROL_RADIO,
+    MACHINE_CONTROL_SCROLLBAR,
+    MACHINE_CONTROL_POPUP,     /* a pop-up menu's box: title is the current item */
+    MACHINE_CONTROL_EDITFRAME, /* the frame round an edit-text item; on: it has the focus */
+};
 typedef struct {
     int kind;
     int width, height;

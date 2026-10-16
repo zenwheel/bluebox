@@ -496,6 +496,22 @@ static void popup_draw(gaddr ch)
         GrafPort_set_txFace(port, (cvariant(ch) & 8) ? face : 0);
     }
 
+    /* With the macOS appearance, macOS's pop-up button. */
+    gaddr mh0 = popup_menu(ch);
+    if (mh0) {
+        gaddr s = tb_NewPtr(256, false, true);
+        tb_GetMenuItemText(mh0, cvalue(ch), s);
+        uint8_t buf[256];
+        int len = rd8(s);
+        gget(buf, s + 1, (uint32_t)len);
+        tb_DisposePtr(s);
+        if (native_draw_popup(box, buf, len, chilite(ch) == inPopUpMenu, chilite(ch) == 255)) {
+            tb_DisposePtr(rr);
+            restore_font(f, sz, face);
+            return;
+        }
+    }
+
     /* The box with its drop shadow, the current item and the triangle. */
     qrect frame = { box.top, box.left, (int16_t)(box.bottom - 1), (int16_t)(box.right - 1) };
     qrect_put(rr, frame);

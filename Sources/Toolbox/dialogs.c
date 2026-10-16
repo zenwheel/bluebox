@@ -426,11 +426,13 @@ static void draw_item(gaddr d, int n)
         draw_text_item(h, r, true);
     } else if (type == editText) {
         qrect f = { (int16_t)(r.top - 3), (int16_t)(r.left - 3), (int16_t)(r.bottom + 3), (int16_t)(r.right + 3) };
-        gaddr fp = tb_NewPtr(8, false, false);
-        qrect_put(fp, f);
-        tb_PenNormal();
-        tb_FrameRect(fp);
-        tb_DisposePtr(fp);
+        if (!native_draw_edit_frame(f, n == edit_item(d))) {
+            gaddr fp = tb_NewPtr(8, false, false);
+            qrect_put(fp, f);
+            tb_PenNormal();
+            tb_FrameRect(fp);
+            tb_DisposePtr(fp);
+        }
         if (n == edit_item(d) && edit_te(d))
             tb_TEUpdate(rp, edit_te(d));
         else

@@ -80,6 +80,23 @@ public enum NativeControls {
             b.isEnabled = !rq.disabled
             b.highlight(rq.pressed)
             return b
+        case Int(MACHINE_CONTROL_POPUP):
+            let p = NSPopUpButton(frame: bounds, pullsDown: false)
+            p.controlSize = bounds.height < 20 ? .small : .regular
+            p.addItem(withTitle: title(rq))
+            p.isEnabled = !rq.disabled
+            p.highlight(rq.pressed)
+            return p
+        case Int(MACHINE_CONTROL_EDITFRAME):
+            // The bezel alone: the classic text is drawn inside it.
+            let t = NSTextField(frame: bounds)
+            t.isBezeled = true
+            t.bezelStyle = .squareBezel
+            t.isEditable = false
+            t.drawsBackground = true
+            t.backgroundColor = .white
+            t.stringValue = ""
+            return t
         default:
             let s = NSScroller(frame: bounds)
             s.scrollerStyle = .legacy

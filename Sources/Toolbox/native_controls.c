@@ -88,6 +88,32 @@ bool native_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool
     return show(&rq, r);
 }
 
+/* A pop-up menu's box, showing the current item. */
+bool native_draw_popup(qrect r, const uint8_t *item, int n, bool pressed, bool disabled)
+{
+    if (!native_on())
+        return false;
+    machine_control_request rq;
+    memset(&rq, 0, sizeof rq);
+    rq.kind = MACHINE_CONTROL_POPUP;
+    rq.pressed = pressed;
+    rq.disabled = disabled;
+    macroman_to_utf8(item, (size_t)n, rq.title, sizeof rq.title);
+    return show(&rq, r);
+}
+
+/* The frame round an edit-text item (r is the frame, 3 pixels outside the text). */
+bool native_draw_edit_frame(qrect r, bool focused)
+{
+    if (!native_on())
+        return false;
+    machine_control_request rq;
+    memset(&rq, 0, sizeof rq);
+    rq.kind = MACHINE_CONTROL_EDITFRAME;
+    rq.on = focused;
+    return show(&rq, r);
+}
+
 bool native_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled)
 {
     if (!native_on())
