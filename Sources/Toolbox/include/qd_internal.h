@@ -173,6 +173,7 @@ void qd_port_bits(gaddr port, uint32_t *fg, uint32_t *bk);
 void qd_port_set_index(gaddr port, bool fore, uint32_t index);
 void qd_port_forget(gaddr port);
 void qd_port_pattern(gaddr port, int which, uint8_t out[8]);
+void qd_port_op_color(gaddr port, uint16_t out[3]);
 
 /* Fill a region with an 8x8 1-bit pattern using a pattern transfer mode
  * (patCopy..notPatBic = 8..15), in the current port's colours. */

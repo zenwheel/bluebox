@@ -1001,6 +1001,23 @@ static uint32_t transfer(const pixdst *s, const pixdst *d, uint32_t sv, uint32_t
     }
 }
 
+/* The arithmetic modes on one colour component: source s, destination d,
+ * OpColor component op. */
+enum { blend = 32, addPin, addOver, subPin, transparent, addMax, subOver, adMin };
+
+static uint16_t arith(int mode, uint32_t s, uint32_t d, uint32_t op)
+{
+    switch (mode) {
+    case blend: return (uint16_t)((s * op + d * (65535 - op)) / 65535);
+    case addPin: return (uint16_t)(s + d > op ? op : s + d);
+    case addOver: return (uint16_t)(s + d);
+    case subPin: return (uint16_t)((int32_t)d - (int32_t)s < (int32_t)op ? op : d - s);
+    case addMax: return (uint16_t)(s > d ? s : d);
+    case subOver: return (uint16_t)(d - s);
+    default: return (uint16_t)(s < d ? s : d); /* adMin */
+    }
+}
+
 static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, const hrgn *mask)
 {
     /* Callers pass a PixMap via its handle's master pointer or directly; a
@@ -1048,8 +1065,18 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
         return;
     }
     int m = mode & 7;
-    if (mode >= 32) /* arithmetic and dither modes: a plain copy */
-        m = srcCopy;
+    int arith_mode = mode & 0x3F; /* less ditherCopy (64), which copies */
+    uint16_t op_color[3], bk_rgb[3] = { 0xFFFF, 0xFFFF, 0xFFFF };
+    if (arith_mode >= blend && arith_mode <= adMin) {
+        qd_port_op_color(port, op_color);
+        if (port && qd_port_is_color(port))
+            for (int i = 0; i < 3; i++)
+                bk_rgb[i] = rd16(port + CGrafPort_rgbBkColor_off + (uint32_t)i * 2);
+    } else {
+        arith_mode = 0;
+        if (mode >= 32)
+            m = srcCopy;
+    }
     /* Indexed colour sources: each source value converted once. */
     uint32_t *lut_conv = NULL;
     uint8_t *lut_white = NULL;
@@ -1103,6 +1130,20 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
                         sv = get_px(&s, sx, sy);
                     }
                     int col = x - d.bounds.left, row = y - d.bounds.top;
+                    if (arith_mode) {
+                        uint16_t sc[3], dc[3];
+                        qd_px_rgb(s.depth, s.ctab, sv, sc);
+                        if (arith_mode == transparent) {
+                            if (memcmp(sc, bk_rgb, sizeof sc))
+                                put_px(&d, col, row, qd_rgb_px(d.depth, d.ctab, sc));
+                            continue;
+                        }
+                        qd_px_rgb(d.depth, d.ctab, get_px(&d, col, row), dc);
+                        for (int c = 0; c < 3; c++)
+                            dc[c] = arith(arith_mode, sc[c], dc[c], op_color[c]);
+                        put_px(&d, col, row, qd_rgb_px(d.depth, d.ctab, dc));
+                        continue;
+                    }
                     if (lut_conv) {
                         uint32_t conv = lut_conv[sv], v;
                         bool white = lut_white[sv];

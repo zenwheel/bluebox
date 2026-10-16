@@ -642,7 +642,25 @@ void tb_GetBackColor(gaddr c)
     }
 }
 
-void tb_OpColor(gaddr c) {}
+/* The colour blend and the pinned modes use: GrafVars' rgbOpColor. */
+void tb_OpColor(gaddr c)
+{
+    gaddr port = qd_port();
+    if (!port || !qd_port_is_color(port))
+        return;
+    gaddr gv = rd32(port + CGrafPort_grafVars_off);
+    if (gv && rd32(gv))
+        gmemcpy(rd32(gv), c, 6);
+}
+
+void qd_port_op_color(gaddr port, uint16_t out[3])
+{
+    out[0] = out[1] = out[2] = 0;
+    gaddr gv = port && qd_port_is_color(port) ? rd32(port + CGrafPort_grafVars_off) : 0;
+    if (gv && rd32(gv))
+        for (int i = 0; i < 3; i++)
+            out[i] = rd16(rd32(gv) + (uint32_t)i * 2);
+}
 void tb_HiliteColor(gaddr c) {}
 int16_t tb_QDError(void) { return 0; }
 

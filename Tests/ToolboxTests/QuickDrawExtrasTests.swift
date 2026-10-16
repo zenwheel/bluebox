@@ -79,6 +79,43 @@ extension BlueBox {
             #expect(color(31, 31) == [0, 0, 0])
         }
 
+        /// CopyBits' arithmetic modes combine source and destination colours.
+        @Test func arithmeticTransferModes() {
+            let dstWorld = offscreen()
+            let dst = rd32(dstWorld + 2) // the GWorld's pixel map handle
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 32, rect(0, 0, 4, 4), 0, 0, 0) == 0)
+            let src = rd32(rd32(gw) + 2)
+            func fill(_ world: UInt32, _ c: UInt32) {
+                tb_SetGWorld(world, 0)
+                tb_RGBForeColor(c)
+                tb_PaintRect(rect(0, 0, 4, 4))
+            }
+            func copy(_ mode: Int16) {
+                tb_SetGWorld(dstWorld, 0)
+                tb_RGBForeColor(rgb(0, 0, 0))
+                tb_RGBBackColor(rgb(0xFFFF, 0xFFFF, 0xFFFF))
+                tb_CopyBits(rd32(src), rd32(dst), rect(0, 0, 4, 4), rect(0, 0, 4, 4), mode, 0)
+            }
+            func hi(_ c: [UInt16]) -> [UInt16] { c.map { $0 >> 8 } }
+            fill(rd32(gw), rgb(0, 0x8000, 0))
+            fill(dstWorld, rgb(0x8000, 0, 0))
+            copy(34) // addOver
+            #expect(hi(color(1, 1)) == [0x80, 0x80, 0])
+            fill(dstWorld, rgb(0x8000, 0, 0))
+            tb_SetGWorld(dstWorld, 0)
+            tb_OpColor(rgb(0x8000, 0x8000, 0x8000))
+            copy(32) // blend, half and half
+            #expect(hi(color(1, 1)) == [0x40, 0x40, 0])
+            fill(dstWorld, rgb(0x8000, 0, 0))
+            copy(37) // addMax
+            #expect(hi(color(1, 1)) == [0x80, 0x80, 0])
+            fill(rd32(gw), rgb(0xFFFF, 0xFFFF, 0xFFFF))
+            fill(dstWorld, rgb(0x8000, 0, 0))
+            copy(36) // transparent: the source is all background colour
+            #expect(hi(color(1, 1)) == [0x80, 0, 0])
+        }
+
         @Test func polygonsPaintTheirInside() {
             _ = offscreen()
             let poly = tb_OpenPoly()
