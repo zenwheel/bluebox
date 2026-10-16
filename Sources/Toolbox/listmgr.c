@@ -851,13 +851,22 @@ void tb_LSize(int16_t width, int16_t height, gaddr list)
     set_visible(list, vis.top, vis.left);
 }
 
+/* LRect (IM IV-274): the rectangle of any cell in the visible range, data
+ * or not (a click in an empty list measures its cells so), clipped to
+ * rView; empty for a cell scrolled out of view. */
 void tb_LRect(gaddr cellrect, uint32_t cell, gaddr list)
 {
-    if (index_of(list, cell) < 0) {
+    qrect vis = visible_of(list);
+    if (pt_v(cell) < vis.top || pt_v(cell) >= vis.bottom || pt_h(cell) < vis.left || pt_h(cell) >= vis.right) {
         qrect_put(cellrect, (qrect){ 0, 0, 0, 0 });
         return;
     }
-    qrect_put(cellrect, cell_rect(list, cell));
+    qrect r = cell_rect(list, cell), v = view_of(list);
+    if (r.bottom > v.bottom)
+        r.bottom = v.bottom;
+    if (r.right > v.right)
+        r.right = v.right;
+    qrect_put(cellrect, r);
 }
 
 /* ---------------------------------------------------------------------- */
