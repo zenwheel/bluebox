@@ -1607,6 +1607,22 @@ static void glue_BackPixPat(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_BeginFullScreen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    gaddr a_eraseColor = (gaddr)cpu_pop32(c);
+    gaddr a_newWindow = (gaddr)cpu_pop32(c);
+    gaddr a_desiredHeight = (gaddr)cpu_pop32(c);
+    gaddr a_desiredWidth = (gaddr)cpu_pop32(c);
+    int32_t a_whichGD = (int32_t)cpu_pop32(c);
+    gaddr a_restoreState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_BeginFullScreen(a_restoreState, a_whichGD, a_desiredWidth, a_desiredHeight, a_newWindow, a_eraseColor, a_flags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_BeginUpdate(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3031,6 +3047,17 @@ static void glue_EnableItem(cpu68k *c, uint16_t trapword)
     int16_t a_item = (int16_t)cpu_pop16(c);
     gaddr a_mh = (gaddr)cpu_pop32(c);
     tb_EnableItem(a_mh, a_item);
+    cpu_push32(c, ret);
+}
+
+static void glue_EndFullScreen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    int32_t a_fullState = (int32_t)cpu_pop32(c);
+    int16_t r = tb_EndFullScreen(a_fullState, a_flags);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5437,6 +5464,15 @@ static void glue_GetSysBeepVolume(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_levelp = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetSysBeepVolume(a_levelp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetSysDirection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_GetSysDirection();
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -9076,6 +9112,18 @@ static void glue_PMgrVersion(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PPostEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_qelp = (gaddr)cpu_pop32(c);
+    int32_t a_evmsg = (int32_t)cpu_pop32(c);
+    int16_t a_evcode = (int16_t)cpu_pop16(c);
+    int16_t r = tb_PPostEvent(a_evcode, a_evmsg, a_qelp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_PackBits(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11662,6 +11710,15 @@ static void glue_SetSysBeepVolume(cpu68k *c, uint16_t trapword)
     int32_t a_level = (int32_t)cpu_pop32(c);
     int16_t r = tb_SetSysBeepVolume(a_level);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetSysDirection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_just = (int16_t)cpu_pop16(c);
+    tb_SetSysDirection(a_just);
     cpu_push32(c, ret);
 }
 
@@ -15388,8 +15445,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x22Fu, "GetMediaPropertyAtom", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x231u, "QTSetAtomID", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x232u, "QTGetAtomTypeAndID", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x233u, "BeginFullScreen", CONV_STACK, 28, 2, 0},
-    {0xAAAA, (int32_t)0x234u, "EndFullScreen", CONV_STACK, 8, 2, 0},
+    {0xAAAA, (int32_t)0x233u, "BeginFullScreen", CONV_STACK, 28, 2, glue_BeginFullScreen},
+    {0xAAAA, (int32_t)0x234u, "EndFullScreen", CONV_STACK, 8, 2, glue_EndFullScreen},
     {0xAAAA, (int32_t)0x235u, "GetMediaSampleReferences", CONV_STACK, 32, 2, 0},
     {0xAAAA, (int32_t)0x239u, "NewSpriteWorld", CONV_STACK, 20, 2, 0},
     {0xAAAA, (int32_t)0x23Au, "DisposeSpriteWorld", CONV_STACK, 4, 0, 0},

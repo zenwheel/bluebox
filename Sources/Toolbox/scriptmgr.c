@@ -401,3 +401,7 @@ void tb_LongDateToSeconds(gaddr ldatep, gaddr secs_outp)
 }
 
 int16_t tb_InitDateCache(gaddr theCache) { return noErr; }
+
+/* The system's line direction: TESysJust. */
+int16_t tb_GetSysDirection(void) { return (int16_t)rd16(LM_TESysJust); }
+void tb_SetSysDirection(int16_t just) { wr16(LM_TESysJust, (uint16_t)just); }

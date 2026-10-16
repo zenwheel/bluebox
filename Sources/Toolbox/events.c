@@ -563,6 +563,15 @@ int16_t tb_PostEvent(int16_t evcode, int32_t evmsg)
     return noErr;
 }
 
+/* PPostEvent: the same, answering the queue element (the queue's last). */
+int16_t tb_PPostEvent(int16_t evcode, int32_t evmsg, gaddr qelp)
+{
+    int16_t err = tb_PostEvent(evcode, evmsg);
+    if (qelp)
+        wr32(qelp, rd32(LM_EventQueue + 6));
+    return err;
+}
+
 void tb_SetEventMask(int16_t evmask) { wr16(LM_SysEvtMask, (uint16_t)evmask); }
 
 int8_t tb_Button(void)

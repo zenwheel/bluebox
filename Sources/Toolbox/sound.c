@@ -368,7 +368,11 @@ static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
 
 static void pump_double(channel *c)
 {
-    while (c->db && !c->paused && now_ns() + DB_LEAD_NS >= c->busy_until) {
+    /* A few buffers a time: one with no frames takes no time, and the
+     * program must get to run between doubleBack calls, as between
+     * interrupts. */
+    int rounds = 0;
+    while (c->db && !c->paused && now_ns() + DB_LEAD_NS >= c->busy_until && rounds++ < 4) {
         gaddr h = c->db;
         gaddr buf = rd32(h + SndDoubleBufferHeader_dbhBufferPtr_off + (uint32_t)c->db_index * 4);
         uint32_t flags = rd32(buf + SndDoubleBuffer_dbFlags_off);
@@ -419,11 +423,13 @@ int16_t tb_SndPlayDoubleBuffer(gaddr chan, gaddr params)
     return noErr;
 }
 
-/* Run queued commands whose time has come. */
+/* Run queued commands whose time has come: those queued before this pump
+ * (a callback that queues another callBackCmd gets it at the next). */
 static void pump(channel *c)
 {
     pump_double(c);
-    while (!c->paused && c->head != c->tail && now_ns() >= c->busy_until) {
+    int end = c->tail;
+    while (!c->paused && c->head != end && c->head != c->tail && now_ns() >= c->busy_until) {
         sndcmd cmd = c->q[c->head];
         c->head = (c->head + 1) % QUEUE_LEN;
         exec(c, cmd, 0);

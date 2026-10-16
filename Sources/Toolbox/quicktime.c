@@ -1451,3 +1451,62 @@ void quicktime_reset(void)
     mc_component = 0;
     movies_error = sticky_error = 0;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Full screen */
+
+/* BeginFullScreen: the screen keeps its size (which is the answer), and a
+ * window covering it, if one is asked for, is filled with the erase colour
+ * (black by default).  The state is that window. */
+int16_t tb_BeginFullScreen(gaddr restoreState, int32_t whichGD, gaddr desiredWidth, gaddr desiredHeight,
+                           gaddr newWindow, gaddr eraseColor, int32_t flags)
+{
+    (void)whichGD;
+    if (desiredWidth)
+        wr16(desiredWidth, (uint16_t)g_screen_width);
+    if (desiredHeight)
+        wr16(desiredHeight, (uint16_t)g_screen_height);
+    if (flags & 8) /* fullScreenPreflightSize: only the size */
+        return noErr;
+    gaddr state = tb_NewPtr(8, true, false);
+    if (!state)
+        return memFullErr;
+    if (newWindow) {
+        gaddr r = tb_NewPtr(8 + 2 + 6, true, false);
+        wr16(r + 4, (uint16_t)g_screen_height);
+        wr16(r + 6, (uint16_t)g_screen_width);
+        gaddr title = r + 8, black = r + 10;
+        gaddr w = tb_NewCWindow(0, r, title, true, 2 /* plainDBox */, 0xFFFFFFFFu, false, 0);
+        if (w) {
+            gaddr saved = tb_NewPtr(4, false, false);
+            tb_GetPort(saved);
+            tb_SetPort(w);
+            tb_RGBBackColor(eraseColor ? eraseColor : black);
+            gaddr all = tb_NewPtr(8, true, false);
+            wr16(all + 4, (uint16_t)g_screen_height);
+            wr16(all + 6, (uint16_t)g_screen_width);
+            tb_EraseRect(all);
+            tb_DisposePtr(all);
+            tb_SetPort(rd32(saved));
+            tb_DisposePtr(saved);
+        }
+        tb_DisposePtr(r);
+        wr32(newWindow, w);
+        wr32(state, w);
+    }
+    if (restoreState)
+        wr32(restoreState, state);
+    return noErr;
+}
+
+int16_t tb_EndFullScreen(int32_t fullState, int32_t flags)
+{
+    (void)flags;
+    gaddr state = (gaddr)fullState;
+    if (state) {
+        if (rd32(state))
+            tb_DisposeWindow(rd32(state));
+        tb_DisposePtr(state);
+    }
+    return noErr;
+}

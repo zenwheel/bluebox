@@ -5617,6 +5617,15 @@ static void ppcglue_NMRemove(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PPostEvent(ppc_cpu *c)
+{
+    int16_t a_evcode = (int16_t)c->gpr[3];
+    int32_t a_evmsg = (int32_t)c->gpr[4];
+    gaddr a_qelp = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPostEvent(a_evcode, a_evmsg, a_qelp);
+    c->pc = c->lr;
+}
+
 static void ppcglue_PostEvent(ppc_cpu *c)
 {
     int16_t a_evcode = (int16_t)c->gpr[3];
@@ -8085,6 +8094,19 @@ static void ppcglue_DrawJust(ppc_cpu *c)
     int16_t a_length = (int16_t)c->gpr[4];
     int16_t a_slop = (int16_t)c->gpr[5];
     tb_DrawJust(a_textbufp, a_length, a_slop);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSysDirection(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetSysDirection();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSysDirection(ppc_cpu *c)
+{
+    int16_t a_just = (int16_t)c->gpr[3];
+    tb_SetSysDirection(a_just);
     c->pc = c->lr;
 }
 
@@ -11037,6 +11059,27 @@ static void ppcglue_SetMoviePlayHints(ppc_cpu *c)
     int32_t a_flags = (int32_t)c->gpr[4];
     int32_t a_flagsMask = (int32_t)c->gpr[5];
     tb_SetMoviePlayHints(a_theMovie, a_flags, a_flagsMask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_BeginFullScreen(ppc_cpu *c)
+{
+    gaddr a_restoreState = (gaddr)c->gpr[3];
+    int32_t a_whichGD = (int32_t)c->gpr[4];
+    gaddr a_desiredWidth = (gaddr)c->gpr[5];
+    gaddr a_desiredHeight = (gaddr)c->gpr[6];
+    gaddr a_newWindow = (gaddr)c->gpr[7];
+    gaddr a_eraseColor = (gaddr)c->gpr[8];
+    int32_t a_flags = (int32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BeginFullScreen(a_restoreState, a_whichGD, a_desiredWidth, a_desiredHeight, a_newWindow, a_eraseColor, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EndFullScreen(ppc_cpu *c)
+{
+    int32_t a_fullState = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EndFullScreen(a_fullState, a_flags);
     c->pc = c->lr;
 }
 
@@ -17950,39 +17993,6 @@ static void ppctrap_GetTrackLoadSettings(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_BeginFullScreen(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x233u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_EndFullScreen(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x234u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_AddMovieExecuteWiredActionsProc(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -22412,7 +22422,7 @@ const ppc_export ppc_exports[] = {
     {"BackColor", ppcglue_BackColor},
     {"BackPat", ppcglue_BackPat},
     {"BackPixPat", ppcglue_BackPixPat},
-    {"BeginFullScreen", ppctrap_BeginFullScreen},
+    {"BeginFullScreen", ppcglue_BeginFullScreen},
     {"BeginMediaEdits", ppctrap_BeginMediaEdits},
     {"BeginUpdate", ppcglue_BeginUpdate},
     {"BitAnd", ppcglue_BitAnd},
@@ -22653,7 +22663,7 @@ const ppc_export ppc_exports[] = {
     {"EmptyRect", ppcglue_EmptyRect},
     {"EmptyRgn", ppcglue_EmptyRgn},
     {"EnableItem", ppcglue_EnableItem},
-    {"EndFullScreen", ppctrap_EndFullScreen},
+    {"EndFullScreen", ppcglue_EndFullScreen},
     {"EndMediaEdits", ppctrap_EndMediaEdits},
     {"EndUpdate", ppcglue_EndUpdate},
     {"Enqueue", ppcglue_Enqueue},
@@ -23031,6 +23041,7 @@ const ppc_export ppc_exports[] = {
     {"GetSubTable", ppcglue_GetSubTable},
     {"GetSuiteLabel", ppcglue_GetSuiteLabel},
     {"GetSysBeepVolume", ppcglue_GetSysBeepVolume},
+    {"GetSysDirection", ppcglue_GetSysDirection},
     {"GetThreadCurrentTaskRef", ppcglue_GetThreadCurrentTaskRef},
     {"GetThreadState", ppcglue_GetThreadState},
     {"GetThreadStateGivenTaskRef", ppcglue_GetThreadStateGivenTaskRef},
@@ -24168,6 +24179,7 @@ const ppc_export ppc_exports[] = {
     {"PBWriteAsync", ppcglue_PBWriteAsync},
     {"PBWriteSync", ppcglue_PBWriteSync},
     {"PMgrVersion", ppcglue_PMgrVersion},
+    {"PPostEvent", ppcglue_PPostEvent},
     {"PackBits", ppcglue_PackBits},
     {"PaintArc", ppcglue_PaintArc},
     {"PaintBehind", ppcglue_PaintBehind},
@@ -24670,6 +24682,7 @@ const ppc_export ppc_exports[] = {
     {"SetString", ppcglue_SetString},
     {"SetSuiteLabel", ppcglue_SetSuiteLabel},
     {"SetSysBeepVolume", ppcglue_SetSysBeepVolume},
+    {"SetSysDirection", ppcglue_SetSysDirection},
     {"SetThreadReadyGivenTaskRef", ppcglue_SetThreadReadyGivenTaskRef},
     {"SetThreadScheduler", ppcglue_SetThreadScheduler},
     {"SetThreadState", ppcglue_SetThreadState},

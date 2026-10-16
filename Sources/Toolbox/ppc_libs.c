@@ -1132,7 +1132,78 @@ static void ic_ICStart(ppc_cpu *c)
 }
 static void ic_prefNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-666); }
 
+/* The Display Manager: the one screen, which keeps its mode. */
+static void dm_GetFirstScreenDevice(ppc_cpu *c) { RETURN(rd32(LM_DeviceList)); }
+static void dm_GetNextScreenDevice(ppc_cpu *c) { RETURN(R(0) && rd32(R(0)) ? rd32(rd32(R(0)) + 30) : 0); }
+static void dm_GetDisplayIDByGDevice(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), 1);
+    RETURN(0);
+}
+static void dm_GetGDeviceByDisplayID(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), rd32(LM_MainDevice));
+    RETURN(0);
+}
+static void dm_GetDeskRegion(ppc_cpu *c)
+{
+    if (R(0))
+        wr32(R(0), rd32(LM_GrayRgn));
+    RETURN(0);
+}
+static void dm_paramErr(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-50); }
+
+/* C-string forms of the comparisons. */
+static gaddr temp_pstring(gaddr cstr)
+{
+    gaddr p = tb_NewPtr(256, false, true);
+    if (p)
+        c_to_p(cstr, p);
+    return p;
+}
+static void c_compare(ppc_cpu *c, uint16_t trap, bool equal)
+{
+    gaddr a = temp_pstring(R(0)), b = temp_pstring(R(1));
+    uint32_t r = compare_trap(trap, a, b, R(2) & 0xFF, R(3) & 0xFF);
+    tb_DisposePtr(a);
+    tb_DisposePtr(b);
+    RETURN(equal ? (uint32_t)(r == 0) : (uint32_t)(int32_t)(int16_t)r);
+}
+static void g_equalstring(ppc_cpu *c) { c_compare(c, 0xA03C, true); }
+static void g_relstring(ppc_cpu *c) { c_compare(c, 0xA050, false); }
+
+/* The Sound Manager's version: 3.2.1. */
+static void g_SVersion(ppc_cpu *c) { RETURN(0x03218000); }
+/* No AppleTalk: the port isn't configured. */
+static void g_portNotCf(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
+/* FindServiceWindow(where, *window): no input method windows. */
+static void g_FindServiceWindow(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), 0);
+    RETURN(0);
+}
+static void g_GetVideoDefault(ppc_cpu *c)
+{
+    if (R(0))
+        gmemset(R(0), 0, 4);
+    c->pc = c->lr;
+}
+
 const ppc_export lib_exports[] = {
+    /* Display Manager */
+    { "DMGetFirstScreenDevice", dm_GetFirstScreenDevice }, { "DMGetNextScreenDevice", dm_GetNextScreenDevice },
+    { "DMGetDisplayIDByGDevice", dm_GetDisplayIDByGDevice }, { "DMGetGDeviceByDisplayID", dm_GetGDeviceByDisplayID },
+    { "DMGetDeskRegion", dm_GetDeskRegion }, { "DMRegisterNotifyProc", g_noErr }, { "DMRemoveNotifyProc", g_noErr },
+    { "DMBeginConfigureDisplays", g_noErr }, { "DMEndConfigureDisplays", g_noErr },
+    { "DMSetDisplayMode", dm_paramErr }, { "DMSetMainDisplay", dm_paramErr },
+    /* Odds and ends */
+    { "equalstring", g_equalstring }, { "relstring", g_relstring }, { "SVersion", g_SVersion },
+    { "MIDIVersion", g_noErr }, { "InstallExceptionHandler", g_noErr }, { "FindServiceWindow", g_FindServiceWindow },
+    { "GetVideoDefault", g_GetVideoDefault }, { "MPPOpen", g_portNotCf }, { "PPCInit", g_noErr },
+    { "OpenXPP", g_portNotCf }, { "ATPLoad", g_portNotCf }, { "MPPClose", g_noErr },
     /* ObjectSupportLib */
     { "AEObjectInit", g_noErr }, { "AESetObjectCallbacks", g_noErr }, { "AEInstallObjectAccessor", g_noErr },
     { "AERemoveObjectAccessor", g_noErr }, { "AEGetObjectAccessor", os_accessorNotFound },

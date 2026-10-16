@@ -130,6 +130,8 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
         else
             wr32(sp + 24 + 4 * (uint32_t)i, args[i]);
     }
+    LOGF(LOG_TRAPS, "PowerPC call: %08X (code %08X, TOC %08X), %d arguments, r3 %08X\n", tvector, rd32(tvector),
+         rd32(tvector + 4), nargs, nargs ? args[0] : 0);
     g_ppc.gpr[1] = sp;
     g_ppc.pc = rd32(tvector);
     g_ppc.gpr[2] = rd32(tvector + 4);
