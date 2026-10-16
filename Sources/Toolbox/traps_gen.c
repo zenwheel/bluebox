@@ -1982,6 +1982,15 @@ static void glue_ClearMenuBar(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ClearMovieChanged(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    tb_ClearMovieChanged(a_theMovie);
+    cpu_push32(c, ret);
+}
+
 static void glue_ClearMoviesStickyError(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3212,6 +3221,17 @@ static void glue_FSMakeFSSpec(cpu68k *c, uint16_t trapword)
     int32_t a_dir_id = (int32_t)cpu_pop32(c);
     int16_t a_vRefNum = (int16_t)cpu_pop16(c);
     int16_t r = tb_FSMakeFSSpec(a_vRefNum, a_dir_id, a_file_name, a_spec);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSpCatMove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSpCatMove(a_src, a_dst);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -5948,6 +5968,16 @@ static void glue_HasDepth(cpu68k *c, uint16_t trapword)
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     int16_t r = tb_HasDepth(a_arg0, a_arg1, a_arg2, a_arg3);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HasMovieChanged(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int8_t r = tb_HasMovieChanged(a_theMovie);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -14545,7 +14575,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA52, (int32_t)0x9u, "FSpSetFLock", CONV_STACK, 4, 2, 0},
     {0xAA52, (int32_t)0xAu, "FSpRstFLock", CONV_STACK, 4, 2, 0},
     {0xAA52, (int32_t)0xBu, "FSpRename", CONV_STACK, 8, 2, glue_FSpRename},
-    {0xAA52, (int32_t)0xCu, "FSpCatMove", CONV_STACK, 8, 2, 0},
+    {0xAA52, (int32_t)0xCu, "FSpCatMove", CONV_STACK, 8, 2, glue_FSpCatMove},
     {0xAA52, (int32_t)0xDu, "FSpOpenResFile", CONV_STACK, 6, 2, glue_FSpOpenResFile},
     {0xAA52, (int32_t)0xEu, "FSpCreateResFile", CONV_STACK, 14, 0, glue_FSpCreateResFile},
     {0xAA52, (int32_t)0xFu, "FSpExchangeFiles", CONV_STACK, 8, 2, 0},
@@ -15186,7 +15216,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0xD5u, "CloseMovieFile", CONV_STACK, 2, 2, glue_CloseMovieFile},
     {0xAAAA, (int32_t)0xD7u, "AddMovieResource", CONV_STACK, 14, 2, 0},
     {0xAAAA, (int32_t)0xD8u, "UpdateMovieResource", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0xD9u, "HasMovieChanged", CONV_STACK, 4, 2, 0},
+    {0xAAAA, (int32_t)0xD9u, "HasMovieChanged", CONV_STACK, 4, 2, glue_HasMovieChanged},
     {0xAAAA, (int32_t)0xDDu, "IsMovieDone", CONV_STACK, 4, 2, glue_IsMovieDone},
     {0xAAAA, (int32_t)0xDEu, "ClearMoviesStickyError", CONV_STACK, 0, 0, glue_ClearMoviesStickyError},
     {0xAAAA, (int32_t)0xE1u, "ClearMovieSelection", CONV_STACK, 4, 0, 0},
@@ -15227,7 +15257,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x10Eu, "GetMovieNextInterestingTime", CONV_STACK, 28, 0, glue_GetMovieNextInterestingTime},
     {0xAAAA, (int32_t)0x111u, "GetTrackBoundsRgn", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x112u, "GetTrackDisplayBoundsRgn", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0x113u, "ClearMovieChanged", CONV_STACK, 4, 0, 0},
+    {0xAAAA, (int32_t)0x113u, "ClearMovieChanged", CONV_STACK, 4, 0, glue_ClearMovieChanged},
     {0xAAAA, (int32_t)0x115u, "GetTrackMatte", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x116u, "SetTrackMatte", CONV_STACK, 8, 0, 0},
     {0xAAAA, (int32_t)0x117u, "GetMovieIndTrack", CONV_STACK, 8, 4, glue_GetMovieIndTrack},

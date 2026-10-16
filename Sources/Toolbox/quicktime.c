@@ -753,6 +753,10 @@ void tb_SetMovieActive(gaddr h, int8_t active)
         m->active = active != 0;
 }
 
+/* Movies are not edited here, so none has changed since it was saved. */
+int8_t tb_HasMovieChanged(int32_t h) { return 0; }
+void tb_ClearMovieChanged(int32_t h) {}
+
 int8_t tb_GetMovieActive(int32_t h)
 {
     movie *m = movie_of((gaddr)h);

@@ -1849,6 +1849,22 @@ int16_t tb_PBCatMove(gaddr pb, bool async)
     return noErr;
 }
 
+/* Move a file or folder into the folder the destination FSSpec names. */
+int16_t tb_FSpCatMove(gaddr src, gaddr dst)
+{
+    if (rd16(src + FSSpec_vRefNum_off) != rd16(dst + FSSpec_vRefNum_off))
+        return badMovErr; /* only within a volume, as PBCatMove */
+    gaddr pb = tb_NewPtr(CInfoPBRec_SIZEOF, false, true);
+    wr32(pb + IOParam_ioNamePtr_off, src + FSSpec_name_off);
+    wr16(pb + IOParam_ioVRefNum_off, rd16(src + FSSpec_vRefNum_off));
+    wr32(pb + HFileParam_ioDirID_off, rd32(src + FSSpec_parID_off));
+    wr32(pb + 28, dst + FSSpec_name_off);         /* ioNewName */
+    wr32(pb + 36, rd32(dst + FSSpec_parID_off)); /* ioNewDirID */
+    int16_t err = tb_PBCatMove(pb, false);
+    tb_DisposePtr(pb);
+    return err;
+}
+
 int16_t tb_PBGetFCBInfo(gaddr pb, bool async)
 {
     /* Every open access path, resource files included, from the FCB table. */
