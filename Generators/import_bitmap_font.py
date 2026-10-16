@@ -6,6 +6,10 @@ rsrcfork, which the build itself does not):
 
     import_bitmap_font.py nfnt <AppleDouble ._file> <NFNT id> <out.bdf>
         a classic Mac bitmap strike, as it is (all 256 MacRoman codes)
+    import_bitmap_font.py sf2 <font.sf2> 0 <out.bdf> [keepf0=1] [name=value...]
+        a Squeak strike2 font (AccuFonts), as it is; glyph $F0, where
+        AccuFonts keep their copyright notice as a bitmap (MacRoman's Apple
+        logo), is left out unless keepf0=1
     import_bitmap_font.py ttf <font.ttf> <pixels> <out.bdf> [name=value...]
         a TrueType font drawn in black and white at one pixel size, for
         faces whose outlines sit on the pixel grid (ChicagoFLF at 12,
@@ -92,6 +96,66 @@ def from_nfnt(sidecar, rid):
     return ascent, descent, glyphs
 
 
+def sf2_decode_int(b, o):
+    v = b[o]
+    if v <= 223:
+        return v, o + 1
+    if v <= 254:
+        return (v - 224) * 256 + b[o + 1], o + 2
+    return struct.unpack(">I", b[o + 1:o + 5])[0], o + 5
+
+
+def from_sf2(path, keep_f0=False):
+    """A Squeak strike2 font: header, x table, then a Form (depth, extent,
+    offset, bitmap words, raw or compressed)."""
+    b = open(path, "rb").read()
+    typ, first, last, _maxw, ascent, descent, _size, _emph = struct.unpack(">8i", b[:32])
+    if typ != 2:
+        raise SystemExit(f"{path}: not a strike2 font")
+    n = last + 3 - first
+    xt = struct.unpack(f">{n}i", b[32:32 + 4 * n])
+    o = 32 + 4 * n
+    depth = b[o]
+    w, h = struct.unpack(">2H", b[o + 1:o + 5])
+    o += 9
+    per_row = (w * depth + 31) // 32
+    words = []
+    if b[o] == 0x80:  # compressed: byte count, then word count and runs
+        ln, p = sf2_decode_int(b, o + 1)
+        data = b[p:p + ln]
+        _count, q = sf2_decode_int(data, 0)
+        while q < len(data) and len(words) < per_row * h:
+            code, q = sf2_decode_int(data, q)
+            run, op = code >> 2, code & 3
+            if op == 0:
+                words += [0] * run
+            elif op == 1:
+                words += [data[q] * 0x01010101] * run
+                q += 1
+            elif op == 2:
+                words += [struct.unpack(">I", data[q:q + 4])[0]] * run
+                q += 4
+            else:
+                words += list(struct.unpack(f">{run}I", data[q:q + 4 * run]))
+                q += 4 * run
+    else:
+        ln = struct.unpack(">i", b[o:o + 4])[0]
+        words = list(struct.unpack(f">{ln}I", b[o + 4:o + 4 + 4 * ln]))
+    words += [0] * (per_row * h - len(words))
+    rows = ["".join("#" if (words[y * per_row + x // 32] >> (31 - x % 32)) & 1 else "." for x in range(w))
+            for y in range(h)]
+    glyphs = {}
+    for c in range(first, last + 1):
+        x0, x1 = xt[c - first], xt[c - first + 1]
+        if x1 <= x0 and c != 0x20:
+            continue
+        if c == 0xF0 and not keep_f0:
+            continue
+        left, top, img = trim([r[x0:x1] for r in rows], 0, -ascent)
+        glyphs[c] = (x1 - x0, left, top, img)
+    return ascent, descent, glyphs
+
+
 def from_ttf(path, px):
     from PIL import Image, ImageDraw, ImageFont
     font = ImageFont.truetype(path, px)
@@ -121,12 +185,14 @@ def from_ttf(path, px):
 
 
 def main():
-    if len(sys.argv) < 5 or sys.argv[1] not in ("nfnt", "ttf"):
+    if len(sys.argv) < 5 or sys.argv[1] not in ("nfnt", "ttf", "sf2"):
         raise SystemExit(__doc__)
     kind, src, num, out = sys.argv[1:5]
     opts = dict(a.split("=", 1) for a in sys.argv[5:])
     if kind == "nfnt":
         ascent, descent, glyphs = from_nfnt(src, int(num))
+    elif kind == "sf2":
+        ascent, descent, glyphs = from_sf2(src, opts.pop("keepf0", "0") == "1")
     else:
         ascent, descent, glyphs = from_ttf(src, int(num))
     ascent = int(opts.get("ascent", ascent))
