@@ -173,6 +173,8 @@ extension BlueBox {
             guestPString("FREAKSHOW:Readme", at: name)
             #expect(tb_FSMakeFSSpec(0, 0, name, spec) == 0)
             #expect(Int16(bitPattern: rd16(spec)) == -2)
+            // A full path ignores the directory given with it, even one that doesn't exist.
+            #expect(tb_FSMakeFSSpec(-2, 65546, name, spec) == 0)
         }
     }
 }

@@ -434,7 +434,16 @@ static int32_t base_dir(int16_t vref, int32_t dirid, bool hfs)
  * Returns noErr, with *is_dir set if it names a directory. */
 static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char *out, size_t outsize)
 {
-    int32_t dir = base_dir(vref, dirid, hfs);
+    /* A full pathname ("Volume:...") names its own place: the refnum and
+     * directory are ignored, whatever they hold. */
+    bool full = false;
+    if (namep && rd8(namep) && rd8(namep + 1) != ':') {
+        uint8_t nm[256];
+        int nn = rd8(namep);
+        gget(nm, namep + 1, (uint32_t)nn);
+        full = memchr(nm, ':', (size_t)nn) != NULL;
+    }
+    int32_t dir = full ? ROOT_ID : base_dir(vref, dirid, hfs);
     if (!dir)
         return nsvErr;
     char path[PATH_MAX];
