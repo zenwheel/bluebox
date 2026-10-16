@@ -877,6 +877,16 @@ static int implied_type(const char *path, uint8_t finfo[16])
         { "c", "TEXT", "ttxt", true },   { "h", "TEXT", "ttxt", true },    { "s", "TEXT", "ttxt", true },
         { "html", "TEXT", "ttxt", true }, { "csv", "TEXT", "ttxt", true }, { "log", "TEXT", "ttxt", true },
         { "pict", "PICT", "ttxt", false }, { "pct", "PICT", "ttxt", false },
+        /* The rest as Internet Config's standard mappings give them. */
+        { "mod", "STrk", "SNPL", false }, { "xm", "XM  ", "SNPL", false }, { "s3m", "S3M ", "SNPL", false },
+        { "mid", "Midi", "TVOD", false }, { "midi", "Midi", "TVOD", false },
+        { "aif", "AIFF", "TVOD", false }, { "aiff", "AIFF", "TVOD", false }, { "aifc", "AIFC", "TVOD", false },
+        { "wav", "WAVE", "TVOD", false }, { "au", "ULAW", "TVOD", false }, { "snd", "ULAW", "TVOD", false },
+        { "mp3", "MPG3", "TVOD", false }, { "mov", "MooV", "TVOD", false }, { "qt", "MooV", "TVOD", false },
+        { "mpg", "MPEG", "TVOD", false }, { "mpeg", "MPEG", "TVOD", false },
+        { "gif", "GIFf", "ogle", false }, { "jpg", "JPEG", "ogle", false }, { "jpeg", "JPEG", "ogle", false },
+        { "png", "PNGf", "ogle", false }, { "tif", "TIFF", "ogle", false }, { "tiff", "TIFF", "ogle", false },
+        { "bmp", "BMPp", "ogle", false },
     };
     for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) {
         if (strcasecmp(dot + 1, map[i].ext))

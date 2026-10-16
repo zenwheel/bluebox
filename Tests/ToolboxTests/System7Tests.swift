@@ -347,6 +347,15 @@ extension BlueBox {
             #expect(rd32(finfo) == fourCC("TEXT"))
         }
 
+        /// A plain host file's type comes from its extension, so Open
+        /// dialogs that list only their own types (a .mod player) show it.
+        @Test func extensionsGiveTypes() {
+            let dir = launchTestApp()
+            #expect(fm_type_of_path(hostFile("song.MOD", "M.K.", in: dir).path) == fourCC("STrk"))
+            #expect(fm_type_of_path(hostFile("tune.mid", "MThd", in: dir).path) == fourCC("Midi"))
+            #expect(fm_type_of_path(hostFile("readme.txt", "x", in: dir).path) == fourCC("TEXT"))
+        }
+
         @Test func otherTypesKeepTheirSidecar() {
             let dir = launchTestApp()
             let path = dir.appendingPathComponent("stationery.txt").path
