@@ -426,6 +426,208 @@ void wdef0_native(cpu68k *c, uint16_t tw)
 }
 
 /* ---------------------------------------------------------------------- */
+/* WDEF 124: floating windows (procIDs 1985 to 1999), as in Mac OS 8: a
+ * narrow title bar on top, or on the left (variant bit 8), with a close
+ * box, and a zoom box (bit 4) and grow box (bit 2) when asked for.  The
+ * theme's floating samples draw them when a scheme is in use (variant
+ * 0x100 | var there). */
+
+#define FLOAT_BAR 11
+
+static bool float_side(int var) { return (var & 8) != 0; }
+static bool float_zoom(int var) { return (var & 4) != 0; }
+static bool float_grow(int var) { return (var & 2) != 0; }
+
+/* The title bar, in global coordinates. */
+static qrect float_bar(qrect c, int var)
+{
+    if (float_side(var))
+        return (qrect){ (int16_t)(c.top - 1), (int16_t)(c.left - FLOAT_BAR - 1), (int16_t)(c.bottom + 1),
+                        (int16_t)(c.left - 1) };
+    return (qrect){ (int16_t)(c.top - FLOAT_BAR - 1), (int16_t)(c.left - 1), (int16_t)(c.top - 1),
+                    (int16_t)(c.right + 1) };
+}
+
+/* The close (first) and zoom (second) boxes: 7 pixels square, at the start
+ * and the end of the title bar. */
+static qrect float_box(qrect bar, int var, bool zoom)
+{
+    if (float_side(var)) {
+        int v = zoom ? bar.bottom - 10 : bar.top + 3;
+        return (qrect){ (int16_t)v, (int16_t)(bar.left + 3), (int16_t)(v + 7), (int16_t)(bar.left + 10) };
+    }
+    int h = zoom ? bar.right - 10 : bar.left + 3;
+    return (qrect){ (int16_t)(bar.top + 3), (int16_t)h, (int16_t)(bar.top + 10), (int16_t)(h + 7) };
+}
+
+static void wdef124_calc(gaddr w, int var)
+{
+    qrect c = global_content(w);
+    hrgn s, k;
+    hrgn_init(&s);
+    hrgn_init(&k);
+    hrgn_rect(&k, c);
+    if (!theme_window_region(w, 0x100 | var, c, &s)) {
+        qrect b = float_bar(c, var);
+        /* Frame and title bar, and a one-pixel shadow. */
+        qrect f = { (int16_t)(float_side(var) ? c.top - 1 : b.top), (int16_t)(float_side(var) ? b.left : c.left - 1),
+                    (int16_t)(c.bottom + 2), (int16_t)(c.right + 2) };
+        hrgn_rect(&s, f);
+    }
+    rgn_write(WindowRecord_strucRgn(w), &s);
+    rgn_write(WindowRecord_contRgn(w), &k);
+    hrgn_free(&s);
+    hrgn_free(&k);
+}
+
+static void float_title_text(gaddr w, qrect bar)
+{
+    gaddr th = WindowRecord_titleHandle(w);
+    if (!th || !rd32(th) || !rd8(rd32(th)))
+        return;
+    gaddr port = qd_port();
+    GrafPort_set_txFont(port, 3); /* Geneva 9, as Mac OS 8's floating windows */
+    GrafPort_set_txSize(port, 9);
+    GrafPort_set_txFace(port, 0);
+    GrafPort_set_txMode(port, 1);
+    gaddr s = rd32(th);
+    int n = rd8(s);
+    uint8_t buf[256];
+    gget(buf, s + 1, (uint32_t)n);
+    int tw = qd_text_width(port, buf, n);
+    int avail = bar.right - bar.left - 30;
+    if (tw > avail)
+        return;
+    int x = bar.left + (bar.right - bar.left - tw) / 2;
+    gaddr r = tb_NewPtr(8, false, false);
+    set_rect(r, bar.top + 1, x - 4, bar.bottom, x + tw + 4);
+    tb_EraseRect(r);
+    tb_DisposePtr(r);
+    tb_MoveTo((int16_t)x, (int16_t)(bar.top + 9));
+    tb_DrawText(s + 1, 0, (int16_t)n);
+}
+
+static void wdef124_draw(gaddr w, int var, int32_t param)
+{
+    if (!wvisible(w))
+        return;
+    qrect c = global_content(w);
+    bool hilited = WindowRecord_hilited(w) != 0, goaway = WindowRecord_goAwayFlag(w) != 0;
+    if (theme_draw_window(w, 0x100 | var, c, hilited, goaway, float_zoom(var), param))
+        return;
+    qrect b = float_bar(c, var);
+    gaddr r = tb_NewPtr(8, false, false);
+    tb_PenNormal();
+    if (param == wInGoAway || param == wInZoomIn || param == wInZoomOut) {
+        qrect x = float_box(b, var, param != wInGoAway);
+        set_rect(r, x.top + 1, x.left + 1, x.bottom - 1, x.right - 1);
+        tb_InvertRect(r);
+        tb_DisposePtr(r);
+        return;
+    }
+    /* Frame round title bar and content, the bar's edge, and the shadow. */
+    qrect f = { (int16_t)(float_side(var) ? c.top - 1 : b.top), (int16_t)(float_side(var) ? b.left : c.left - 1),
+                (int16_t)(c.bottom + 1), (int16_t)(c.right + 1) };
+    set_rect(r, f.top, f.left, f.bottom, f.right);
+    tb_FrameRect(r);
+    tb_MoveTo((int16_t)(f.right), (int16_t)(f.top + 1));
+    tb_LineTo((int16_t)(f.right), (int16_t)(f.bottom));
+    tb_LineTo((int16_t)(f.left + 1), (int16_t)(f.bottom));
+    set_rect(r, b.top + 1, b.left + 1, float_side(var) ? b.bottom - 1 : b.bottom, float_side(var) ? b.right : b.right - 1);
+    tb_EraseRect(r);
+    if (float_side(var)) {
+        tb_MoveTo(b.right, b.top);
+        tb_LineTo(b.right, (int16_t)(b.bottom - 1));
+    } else {
+        tb_MoveTo(b.left, b.bottom);
+        tb_LineTo((int16_t)(b.right - 1), b.bottom);
+    }
+    if (hilited) {
+        /* Stripes: every other row (column for a side bar), as in the
+         * document windows' title bars. */
+        if (float_side(var))
+            for (int x = b.left + 2; x < b.right - 1; x += 2) {
+                tb_MoveTo((int16_t)x, (int16_t)(b.top + 2));
+                tb_LineTo((int16_t)x, (int16_t)(b.bottom - 3));
+            }
+        else
+            for (int y = b.top + 2; y < b.bottom - 1; y += 2) {
+                tb_MoveTo((int16_t)(b.left + 2), (int16_t)y);
+                tb_LineTo((int16_t)(b.right - 3), (int16_t)y);
+            }
+        for (int k = 0; k < 2; k++) {
+            if (k == 0 ? !goaway : !float_zoom(var))
+                continue;
+            qrect x = float_box(b, var, k == 1);
+            set_rect(r, x.top - 1, x.left - 1, x.bottom + 1, x.right + 1);
+            tb_EraseRect(r);
+            set_rect(r, x.top, x.left, x.bottom, x.right);
+            tb_FrameRect(r);
+            if (k == 1) {
+                set_rect(r, x.top, x.left, x.top + 4, x.left + 4);
+                tb_FrameRect(r);
+            }
+        }
+    }
+    if (!float_side(var))
+        float_title_text(w, b);
+    tb_DisposePtr(r);
+}
+
+static int32_t wdef124_hit(gaddr w, int var, uint32_t pt)
+{
+    qrect c = global_content(w);
+    int h = pt_h(pt), v = pt_v(pt);
+    bool hil = WindowRecord_hilited(w) != 0;
+    if (h >= c.left && h < c.right && v >= c.top && v < c.bottom) {
+        if (float_grow(var) && hil && h >= c.right - 15 && v >= c.bottom - 15)
+            return wInGrow;
+        return wInContent;
+    }
+    int part = theme_active() ? theme_window_hit(w, 0x100 | var, c, h, v) : -1;
+    if (part >= 0) {
+        if (part == 1 && hil && WindowRecord_goAwayFlag(w))
+            return wInGoAway;
+        if (part == 2 && hil && float_zoom(var))
+            return wInZoomIn;
+        return part == 0 ? wNoHit : wInDrag;
+    }
+    qrect b = float_bar(c, var);
+    if (h < b.left || h >= b.right || v < b.top || v >= b.bottom)
+        return wNoHit;
+    for (int k = 0; k < 2 && hil; k++) {
+        if (k == 0 ? !WindowRecord_goAwayFlag(w) : !float_zoom(var))
+            continue;
+        qrect x = float_box(b, var, k == 1);
+        if (h >= x.left && h < x.right && v >= x.top && v < x.bottom)
+            return k == 0 ? wInGoAway : wInZoomIn;
+    }
+    return wInDrag;
+}
+
+void wdef124_native(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int32_t param = (int32_t)cpu_pop32(c);
+    int16_t msg = (int16_t)cpu_pop16(c);
+    gaddr w = cpu_pop32(c);
+    int16_t var = (int16_t)cpu_pop16(c);
+    int32_t result = 0;
+    switch (msg) {
+    case wDraw: wdef124_draw(w, var, param); break;
+    case wHit: result = wdef124_hit(w, var, (uint32_t)param); break;
+    case wCalcRgns: wdef124_calc(w, var); break;
+    case wDrawGIcon:
+        if (float_grow(var))
+            wdef_grow_icon(w, 0); /* the document window's grow box */
+        break;
+    default: break;
+    }
+    wr32(c->a[7], (uint32_t)result);
+    cpu_push32(c, ret);
+}
+
+/* ---------------------------------------------------------------------- */
 /* Visibility and painting */
 
 static void gray_rgn(hrgn *out) { rgn_read(rd32(LM_GrayRgn), out); }

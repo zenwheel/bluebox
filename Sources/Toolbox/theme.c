@@ -357,8 +357,13 @@ static bool kind_for(int var, window_kind *k)
         *k = (window_kind){ -14323, -14324, -14324, 0 };
         return true;
     default:
-        return false;
+        break;
     }
+    if (var & 0x100) { /* WDEF 124's floating windows: title on top, or at the side */
+        *k = var & 8 ? (window_kind){ -14295, -14296, -14296, -14290 } : (window_kind){ -14303, -14304, -14304, -14298 };
+        return true;
+    }
+    return false;
 }
 
 /* Lay out one side's segments along a length.  Writes (src0, src1, dst0,
@@ -682,13 +687,14 @@ bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, boo
     if (f.wd.has_part[3])
         draw_widget(&f, w, 3, false, false, &clip); /* no collapse (WindowShade) yet */
     gaddr th = WindowRecord_titleHandle(w);
-    if (f.wd.has_part[4] && th && rd32(th) && rd8(rd32(th))) {
+    bool floating = var & 0x100;
+    if (f.wd.has_part[4] && th && rd32(th) && rd8(rd32(th)) && !(floating && (var & 8))) {
         int n = rd8(rd32(th));
         uint8_t s[256];
         gget(s, rd32(th) + 1, (uint32_t)n);
         gaddr port = qd_port();
-        GrafPort_set_txFont(port, 0);
-        GrafPort_set_txSize(port, 12);
+        GrafPort_set_txFont(port, floating ? 3 : 0);
+        GrafPort_set_txSize(port, floating ? 9 : 12);
         GrafPort_set_txFace(port, 0);
         GrafPort_set_txMode(port, 1);
         qrect tr = widget_rect(&f, 4);

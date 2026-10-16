@@ -289,3 +289,41 @@ extension BlueBox {
     }
 }
 }
+
+extension BlueBox {
+    /// Floating windows (WDEF 124, procIDs 1985 to 1999).
+    @Suite struct FloatingWindows {
+        func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
+            let p = tb_NewPtr(8, false, true)
+            for (i, v) in [t, l, b, r].enumerated() { wr16(p + UInt32(i * 2), UInt16(bitPattern: Int16(v))) }
+            return p
+        }
+
+        func bbox(_ rgn: UInt32) -> [Int] { (0..<4).map { Int(Int16(bitPattern: rd16(rd32(rgn) + 2 + UInt32($0 * 2)))) } }
+
+        func find(_ h: Int, _ v: Int) -> Int16 {
+            let wp = tb_NewPtr(4, false, true)
+            return tb_FindWindow(UInt32(v) << 16 | UInt32(h), wp)
+        }
+
+        @Test func floatingWindowsHaveANarrowTitleBar() {
+            launchTestApp()
+            _ = initToolbox()
+            let title = tb_NewPtr(16, false, true)
+            guestPString("Tools", at: title)
+            // floatZoomProc (1989): title bar on top, close and zoom boxes.
+            let w = tb_NewCWindow(0, rect(100, 100, 200, 160), title, 1, 1989, 0xFFFF_FFFF, 1, 0)
+            #expect(bbox(WindowRecord_strucRgn(w)) == [88, 99, 202, 162])
+            #expect(find(105, 94) == 6)    // inGoAway
+            #expect(find(154, 94) == 7)    // inZoomIn
+            #expect(find(130, 94) == 4)    // inDrag: the title bar
+            #expect(find(130, 150) == 3)   // inContent
+            if let path = ProcessInfo.processInfo.environment["BLUEBOX_TEST_SHOT"] { _ = machine_screenshot(path) }
+            // floatSideProc (1993): the bar on the left.
+            let s = tb_NewCWindow(0, rect(100, 300, 200, 360), title, 1, 1993, 0xFFFF_FFFF, 1, 0)
+            #expect(bbox(WindowRecord_strucRgn(s)) == [99, 288, 202, 362])
+            tb_DisposeWindow(s)
+            tb_DisposeWindow(w)
+        }
+    }
+}
