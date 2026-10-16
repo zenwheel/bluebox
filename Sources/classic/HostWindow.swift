@@ -9,6 +9,9 @@ import AppKit
 import ClassicHost
 import Toolbox
 
+/// Host points per Mac pixel: 1, 1.5 or 2 (--scale, or the app's setting).
+nonisolated(unsafe) var displayScale: CGFloat = 1
+
 final class ScreenView: NSView {
     private var timer: Timer?
     private var rgba = [UInt32]()
@@ -240,26 +243,33 @@ func nameProcess(_ name: String) {
 
     /// The cursor's own 16x16 image: black, white or clear by data and mask
     /// (data outside the mask, which inverts, shown black).
+    /// At the display scale, in whole device pixels (nearest neighbour), so it
+    /// matches the windows it points at.
     private func classicImage() -> NSCursor {
-        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 16, pixelsHigh: 16, bitsPerSample: 8,
+        let points = 16 * displayScale
+        let n = Int((points * 2).rounded()) // device pixels on a Retina display
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: n, pixelsHigh: n, bitsPerSample: 8,
                                    samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                   colorSpaceName: .deviceRGB, bytesPerRow: 64, bitsPerPixel: 32)!
+                                   colorSpaceName: .deviceRGB, bytesPerRow: n * 4, bitsPerPixel: 32)!
         let px = rep.bitmapData!
         let data = withUnsafeBytes(of: state.data) { Array($0) }
         let mask = withUnsafeBytes(of: state.mask) { Array($0) }
-        for y in 0..<16 {
-            for x in 0..<16 {
+        for py in 0..<n {
+            for pxl in 0..<n {
+                let x = pxl * 16 / n, y = py * 16 / n
                 let bit = UInt8(0x80 >> (x % 8)), i = y * 2 + x / 8
                 let d = data[i] & bit != 0, m = mask[i] & bit != 0
-                let o = (y * 16 + x) * 4
+                let o = (py * n + pxl) * 4
                 let v: UInt8 = d ? 0 : 255
                 px[o] = v; px[o + 1] = v; px[o + 2] = v
                 px[o + 3] = d || m ? 255 : 0
             }
         }
-        let image = NSImage(size: NSSize(width: 16, height: 16))
+        rep.size = NSSize(width: points, height: points)
+        let image = NSImage(size: rep.size)
         image.addRepresentation(rep)
-        return NSCursor(image: image, hotSpot: NSPoint(x: CGFloat(state.hot_h), y: CGFloat(state.hot_v)))
+        return NSCursor(image: image, hotSpot: NSPoint(x: CGFloat(state.hot_h) * displayScale,
+                                                       y: CGFloat(state.hot_v) * displayScale))
     }
 }
 
@@ -294,7 +304,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         launchEvents.finishLaunching()
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)
-        let size = NSSize(width: CGFloat(w), height: CGFloat(h))
+        let size = NSSize(width: CGFloat(w) * displayScale, height: CGFloat(h) * displayScale)
         window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable],
                           backing: .buffered, defer: false)
         window.title = title

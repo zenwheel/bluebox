@@ -46,6 +46,8 @@ func usage() -> Never {
       --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
                      application can still switch depth itself with SetDepth)
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
+          --scale S  host points per Mac pixel: 1, 1.5 or 2 (default 1, or the app's or the
+                     default setting), so classic interfaces are bigger on modern displays
           --screenshot P  write the screen to PNG file P when the run ends
           --print-to F  print to PDF file F instead of the print panel (headless runs)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
@@ -64,11 +66,14 @@ func usage() -> Never {
           Make a macOS application bundle for a classic application (default folder
           ~/Applications/Classic) with its Finder icon; documents dropped on it open
           in the application.
-      classic set <app> [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default] [--library dir]
+      classic set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
+                [scale 1|1.5|2|default] [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. classic set "Star Chaos" depth 8 for a
           game that wants 256 colours, or cpu 68020 for one that misbehaves on a
-          68040.  With no setting given, show them.
+          68040.  --default sets them for every application without its own
+          (classic set --default scale 2 doubles every classic window).  With no
+          setting given, show them.
       classic apps [--library dir]
           List the applications in the library and those installed on the classic
           Mac's disk (\(defaultDisk())).  run and install take
@@ -249,6 +254,7 @@ func runCommand(_ args: [String]) {
     var screenWindow = false
     var screenshot: String?
     var screenDepth: Int32?
+    var scaleOption: Double?
     var cpuModel: Int32?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
@@ -285,6 +291,12 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             printTo = args[i]
+        case "--scale":
+            i += 1
+            guard i < args.count, let v = Double(args[i]), [1, 1.5, 2].contains(v) else {
+                fail("--scale expects 1, 1.5 or 2")
+            }
+            scaleOption = v
         case "--depth":
             i += 1
             guard i < args.count, let d = Int32(args[i]), [1, 2, 4, 8, 16, 32].contains(d) else {
@@ -351,11 +363,15 @@ func runCommand(_ args: [String]) {
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
     if interactive { reexecInNamedBundle(app: app) }
+    if interactive {
+        let scale = scaleOption ?? settings(for: app)?.scale ?? defaultSettings()?.scale ?? 1
+        MainActor.assumeIsolated { displayScale = CGFloat(scale) }
+    }
     if interactive && !screenWindow {
         // Rootless: the Mac screen covers the host display's visible area.
         MainActor.assumeIsolated {
-            let vf = rootlessScreenFrame()
-            machine_set_screen(Int32(vf.width), Int32(vf.height + classicMenuBarHeight))
+            let (w, h) = rootlessMacScreenSize()
+            machine_set_screen(w, h)
         }
     }
     #endif

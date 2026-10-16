@@ -2,9 +2,9 @@
 // macOS window, and the classic menu bar is the native menu bar.
 //
 // The Mac screen is a hidden framebuffer the size of the host display's
-// visible area, plus the classic menu bar's 20 pixels, which are never shown.
-// Mac global (x, y) maps to host screen (visibleFrame.minX + x,
-// visibleFrame.maxY - (y - 20)).
+// visible area divided by the display scale, plus the classic menu bar's 20
+// pixels, which are never shown.  Mac global (x, y) maps to host screen
+// (visibleFrame.minX + x * scale, visibleFrame.maxY - (y - 20) * scale).
 
 #if canImport(AppKit)
 import AppKit
@@ -18,14 +18,23 @@ let classicMenuBarHeight: CGFloat = 20
     (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 748)
 }
 
+/// The Mac screen's size for the host's visible area at the display scale:
+/// the classic menu bar's 20 pixels on top, which are never shown.
+@MainActor func rootlessMacScreenSize() -> (Int32, Int32) {
+    let vf = rootlessScreenFrame()
+    return (Int32((vf.width / displayScale).rounded(.down)),
+            Int32((vf.height / displayScale).rounded(.down) + classicMenuBarHeight))
+}
+
 @MainActor func macToHost(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
     let vf = rootlessScreenFrame()
-    return NSPoint(x: vf.minX + x, y: vf.maxY - (y - classicMenuBarHeight))
+    return NSPoint(x: vf.minX + x * displayScale, y: vf.maxY - (y - classicMenuBarHeight) * displayScale)
 }
 
 @MainActor func hostToMac(_ p: NSPoint) -> (Int32, Int32) {
     let vf = rootlessScreenFrame()
-    return (Int32((p.x - vf.minX).rounded(.down)), Int32((vf.maxY - p.y + classicMenuBarHeight).rounded(.down)))
+    return (Int32(((p.x - vf.minX) / displayScale).rounded(.down)),
+            Int32(((vf.maxY - p.y) / displayScale + classicMenuBarHeight).rounded(.down)))
 }
 
 final class MacWindow: NSWindow {
@@ -122,7 +131,9 @@ final class TransientView: NSView {
         }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        menuLayer.frame = CGRect(x: CGFloat(left), y: CGFloat(top) - classicMenuBarHeight, width: CGFloat(w), height: CGFloat(h))
+        let s = displayScale
+        menuLayer.frame = CGRect(x: CGFloat(left) * s, y: (CGFloat(top) - classicMenuBarHeight) * s,
+                                 width: CGFloat(w) * s, height: CGFloat(h) * s)
         menuLayer.contents = image
         CATransaction.commit()
     }
@@ -245,7 +256,8 @@ final class TransientView: NSView {
         for mw in current {
             let width = Int(mw.right) - Int(mw.left), height = Int(mw.bottom) - Int(mw.top)
             let origin = macToHost(CGFloat(mw.left), CGFloat(mw.bottom))
-            let frame = NSRect(x: origin.x, y: origin.y, width: CGFloat(width), height: CGFloat(height))
+            let frame = NSRect(x: origin.x, y: origin.y, width: CGFloat(width) * displayScale,
+                               height: CGFloat(height) * displayScale)
             let native = mw.flags & UInt8(MACHINE_WINDOW_NATIVE) != 0
             if let existing = windows[mw.id], existing.native != native {
                 existing.orderOut(nil)
@@ -360,13 +372,15 @@ final class TransientView: NSView {
         // Resizes outside a live drag (window tiling, scripts) as well.
         guard !applyingFrame, let w = notification.object as? MacWindow, w.native, !w.inLiveResize else { return }
         let content = w.contentRect(forFrameRect: w.frame)
-        action(w, Int32(MACHINE_ACTION_RESIZE), Int32(content.width), Int32(content.height))
+        action(w, Int32(MACHINE_ACTION_RESIZE), Int32((content.width / displayScale).rounded()),
+               Int32((content.height / displayScale).rounded()))
     }
 
     func windowDidEndLiveResize(_ notification: Notification) {
         guard let w = notification.object as? MacWindow, w.native else { return }
         let content = w.contentRect(forFrameRect: w.frame)
-        action(w, Int32(MACHINE_ACTION_RESIZE), Int32(content.width), Int32(content.height))
+        action(w, Int32(MACHINE_ACTION_RESIZE), Int32((content.width / displayScale).rounded()),
+               Int32((content.height / displayScale).rounded()))
     }
 
     func syncMenus() {

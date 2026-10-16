@@ -6,11 +6,19 @@ import Foundation
 struct AppSettings: Codable {
     var depth: Int?
     var cpu: Int?
-    var isEmpty: Bool { depth == nil && cpu == nil }
+    var scale: Double? /* host points per Mac pixel */
+    var isEmpty: Bool { depth == nil && cpu == nil && scale == nil }
     var summary: String {
-        "depth \(depth.map(String.init) ?? "default (32)"), cpu \(cpu.map(String.init) ?? "default (68040)")"
+        "depth \(depth.map(String.init) ?? "default (32)"), cpu \(cpu.map(String.init) ?? "default (68040)"), "
+            + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default")"
     }
 }
+
+/// The settings every application gets unless its own say otherwise, kept
+/// under this key (classic set --default ...).
+let defaultSettingsKey = "*"
+
+func defaultSettings() -> AppSettings? { loadSettings(defaultLibrary())[defaultSettingsKey] }
 
 func settingsPath(_ library: String) -> String {
     (library as NSString).appendingPathComponent("Settings.json")
@@ -37,7 +45,8 @@ func settingsKey(_ app: String) -> String { (app as NSString).lastPathComponent 
 
 func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[settingsKey(app)] }
 
-/// classic set <app> [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
+/// classic set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
+///     [scale 1|1.5|2|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -46,7 +55,7 @@ func setCommand(_ args: [String]) {
         rest.removeSubrange(i...i + 1)
     }
     guard let app = rest.first else { usage() }
-    let key = settingsKey(app)
+    let key = app == "--default" ? defaultSettingsKey : settingsKey(app)
     var all = loadSettings(library)
     var s = all[key] ?? AppSettings()
     var pairs = Array(rest.dropFirst())
@@ -74,8 +83,16 @@ func setCommand(_ args: [String]) {
             } else {
                 fail("cpu expects 68020, 68040 or default")
             }
+        case "scale":
+            if value == "default" {
+                s.scale = nil
+            } else if let v = Double(value), [1, 1.5, 2].contains(v) {
+                s.scale = v
+            } else {
+                fail("scale expects 1, 1.5, 2 or default")
+            }
         default:
-            fail("unknown setting \(name) (settings: depth, cpu)")
+            fail("unknown setting \(name) (settings: depth, cpu, scale)")
         }
     }
     if !pairs.isEmpty { usage() }
