@@ -14,9 +14,9 @@ Classic Mono, Classic Heavy).
 | Monaco | 9, 10, 12 | ProFont 2.2 (Mac bitmaps with €) | Tobias Jung's ProFont distribution | MIT (`profont/LICENSE`) |
 | Geneva | 9 | Geneva 9, with characters it lacks from Geneva 9.1 | Kelsey Higham (FontStruct) | CC BY 3.0 and SIL OFL 1.1 (`geneva9/`) |
 | Geneva | 12 | bmpGeneva12, with characters it lacks from Kurrajong | uniqueidentity (FontStruct) | CC BY-SA 3.0 (`geneva12/`) |
-| Geneva | 10, 14, 18, 24 | Kurrajong | Systemless | SIL OFL 1.1 |
+| Geneva | 10, 14, 18, 24 | Accujen (AccuFonts), with characters it lacks from Kurrajong | Doug Easterbrook, Arts Management Systems Ltd. | AccuFont licence (`accufonts/AccuFontLicense.txt`) |
 | Charcoal | 12 | Charcoal 12 | Jeremy Sachs (FontStruct) | CC BY-SA 3.0 (`charcoal12/`) |
-| New York | 12, 14, 18 | Ironbark | Systemless | SIL OFL 1.1 |
+| New York | 9, 10, 12, 14, 18, 24 | Accuny (AccuFonts), with characters it lacks from Ironbark at 12, 14 and 18 | Doug Easterbrook, Arts Management Systems Ltd. | AccuFont licence |
 | menu symbols | | | Systemless | SIL OFL 1.1 |
 
 Each third-party face is kept as a BDF strike whose `ENCODING` values are
@@ -59,6 +59,22 @@ original files (which are not kept here):
   drawn at 16 pixels with Charcoal 12's metrics (ascent 12, descent 3,
   leading 1, as Mac OS 8's Charcoal has at 12 points). It covers Basic Latin;
   the generator synthesises the rest.
+
+- `accufonts/Accujen10.bdf` … `Accuny24.bdf`: the AccuFonts strikes (Squeak
+  strike2 `.sf2` files) of `AccuFonts.4.sar` from SqueakMap
+  (<http://map.squeak.org/accountbyid/092daeeb-7a37-427f-8afb-66bf2db74f98/files/AccuFonts.4.sar>,
+  SHA-256 `9abc3b5ad9b85996f1fe51549852278ae716246cfe73bc3ff769f3829cc09809`),
+  converted as they are with `import_bitmap_font.py sf2`. Their glyph $F0, where
+  AccuFonts keep a bitmap of their copyright notice (MacRoman's Apple logo), is
+  left out. The faces keep their AccuFont names here, as their licence asks
+  (`accufonts/AccuFontLicense.txt`): use in derivative software is allowed, and
+  the acknowledgement reads:
+
+  > Doug Easterbrook
+  > Arts Management Systems Ltd.
+  > mailto:doug@artsman.com
+  > http://www.artsman.com
+  > Phone (403) 215-5701    Fax (403) 215-5704
 
 The CC BY-SA faces' derived strikes (the BDFs and the NFNTs built from them)
 are under CC BY-SA 3.0 too, crediting their authors as above.

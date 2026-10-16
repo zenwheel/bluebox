@@ -1,0 +1,15 @@
+"Copyright Arts Management Systems, Ltd."
+
+© Arts Management Systems Ltd.
+
+ The fonts distributed as part of this base image are derived from fonts copyright Arts Management Systems, Ltd. Use of the fonts in derivative software products is allowed. 
+
+ The fonts should retain their AccuFont names.
+
+ The acknowledgement should read: 
+
+>Doug Easterbrook
+>Arts Management Systems Ltd.
+>mailto:doug@artsman.com
+>http://www.artsman.com
+>Phone (403) 215-5701    Fax (403) 215-5704

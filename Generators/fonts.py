@@ -28,10 +28,13 @@ FAMILIES = [
     # family id, our name, [(source, size)]: a Systemless face by name, or a
     # BDF strike by its path under Resources/Fonts
     (0, "Classic System", [("chicago9", 9), ("chicagoflf/ChicagoFLF-12.bdf", 12)]),
-    (2, "Classic Serif", [("newyork12", 12), ("newyork14", 14), ("newyork18", 18)]),
-    (3, "Classic Sans", [("geneva9/Geneva-9.bdf+geneva9/Geneva-9.1.bdf", 9), ("geneva10", 10),
-                         ("geneva12/bmpGeneva12.bdf+geneva12", 12), ("geneva14", 14),
-                         ("geneva18", 18), ("geneva24", 24)]),
+    (2, "Classic Serif", [("accufonts/Accuny09.bdf", 9), ("accufonts/Accuny10.bdf", 10),
+                          ("accufonts/Accuny12.bdf+newyork12", 12), ("accufonts/Accuny14.bdf+newyork14", 14),
+                          ("accufonts/Accuny18.bdf+newyork18", 18), ("accufonts/Accuny24.bdf", 24)]),
+    (3, "Classic Sans", [("geneva9/Geneva-9.bdf+geneva9/Geneva-9.1.bdf", 9),
+                         ("accufonts/Accujen10.bdf+geneva10", 10),
+                         ("geneva12/bmpGeneva12.bdf+geneva12", 12), ("accufonts/Accujen14.bdf+geneva14", 14),
+                         ("accufonts/Accujen18.bdf+geneva18", 18), ("accufonts/Accujen24.bdf+geneva24", 24)]),
     (4, "Classic Mono", [("profont/ProFont-9.bdf", 9), ("profont/ProFont-10.bdf", 10),
                          ("profont/ProFont-12.bdf", 12)]),
     # Mac OS 8's system font, by its family number there.
@@ -603,7 +606,9 @@ def main():
              " * Bitmap artwork: Systemless (SIL OFL 1.1, Copyright (c) 2026 Ben Letchford),\n"
              " * ProFont (MIT), ChicagoFLF (public domain), Geneva 9 (CC BY 3.0) and Geneva 9.1\n"
              " * (SIL OFL 1.1) by Kelsey Higham, bmpGeneva12 by uniqueidentity and Charcoal 12\n"
-             " * by Jeremy Sachs (CC BY-SA 3.0); see Resources/Fonts/README.md. */\n\n"
+             " * by Jeremy Sachs (CC BY-SA 3.0), and the AccuFonts Accujen (Geneva 10-24) and\n"
+             " * Accuny (New York) by Doug Easterbrook, Arts Management Systems Ltd.\n"
+             " * (mailto:doug@artsman.com, http://www.artsman.com); see Resources/Fonts/README.md. */\n\n"
              "#include \"sysfonts.h\"\n\n"]
     table = []
     for fam, name, faces in FAMILIES:
