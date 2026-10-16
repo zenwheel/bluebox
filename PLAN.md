@@ -587,15 +587,22 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
     - Hand-written glue in `ppc_glue.c` and `ppc_libs.c`.
   - MathLib, StdCLib (strings, memory, sprintf, setjmp, qsort), the Component Manager and movie controller calls, the Display Manager basics, and stubs for TSM, the Communications Toolbox, AppleTalk, ObjectSupportLib and Internet Config.
   - Gestalt answers as a PowerPC G3 with System 7.6.1 for PowerPC applications.
-- **Census:** of the 225 PowerPC and fat applications in the corpus, run as PowerPC, 146 reach their event loop (`--ppc`).
+- **Also done:**
+  - DrawSprocket of our own (`drawsprocket.c`): a back buffer GWorld at the size and depth asked for, centred in a black window over the whole screen, with the menu bar hidden.
+  - InputSprocket on the keyboard (`inputsprocket.c`): needs are mapped to keys by label or name.
+  - Display Manager mode lists.
+  - Struct results through r3.
+  - Gestalt as a G3 running 7.6.1, with Sound Manager 3.2.1.
+- **Census:** of the 225 PowerPC and fat applications in the corpus, run as PowerPC, 163 reach their event loop (`--ppc`).
+  - Of the 157 fat ones, 110+ reach it either way, and only a handful only as 68k.
 - **Next:**
-  - **DrawSprocket of our own** (`DrawSprocketLib` as one of our libraries, contexts on our screen, with back buffers, gamma fades and the mouse). Games ship Apple's DrawSprocketLib, which loads but finds no display modes through our minimal Display Manager (Squirrel Kombat, SpaceDeubza).
-  - InputSprocket.
+  - Make PowerPC the default for fat applications once the last 68k-only cases are understood (Shockwave Demo, Internet Explorer 5, Portfolio Browser).
+  - Report Mac OS 8.1 to applications that require it. That depends on M9's Appearance Manager and Navigation Services, because Setback, Spades, sixtyforce and Sound Studio check for them.
+  - StarCraft's display check: Storm enumerates modes and still refuses 640×480×8.
   - Open Transport's libraries (M9).
   - The rest of the missing imports, ranked by the PowerPC census (`imports` column).
-  - A fat application still defaults to 68k; switch the default once the PowerPC side holds up as well.
   - SimpleText PPC and HyperCard PPC against the exit criteria.
-  - A PowerPC oracle (SheepShaver with a New World ROM) for comparing runs.
+  - A PowerPC oracle (SheepShaver with a New World ROM).
 - **Known:** Star Chaos and Smashing Windows II run wild in a VBL task. Space Debris spends its headless budget mixing sound in its double-buffer callback (the headless clock gives 100 ns an instruction).
 
 ### M9: Open Transport and the Mac OS 8/9 surface
