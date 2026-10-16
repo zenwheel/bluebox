@@ -192,6 +192,17 @@ static bool read_items(int16_t ditl_id, machine_alert *a)
     return true;
 }
 
+bool dialog_host_alerts(void) { return alert_fn != NULL; }
+
+/* Ask the host to show an alert; false if there is no host to ask. */
+bool dialog_host_alert(machine_alert *a, int *result)
+{
+    if (!alert_fn)
+        return false;
+    *result = alert_fn(a, alert_ctx);
+    return true;
+}
+
 static int16_t run_alert(int16_t id, int kind)
 {
     gaddr alrt = tb_GetResource((int32_t)fourcc("ALRT"), id);

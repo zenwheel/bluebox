@@ -534,7 +534,8 @@ func installFileHandler() {
         let types = withUnsafeBytes(of: rq.types) { raw in
             Set(raw.bindMemory(to: UInt32.self).prefix(Int(rq.ntypes)))
         }
-        let items = withUnsafeBytes(of: rq.items) { raw in
+        // The items' image pointers stay valid while the emulator waits here.
+        nonisolated(unsafe) let items = withUnsafeBytes(of: rq.items) { raw in
             Array(raw.bindMemory(to: machine_file_item.self).prefix(Int(rq.nitems)))
         }
         var chosen: String?
@@ -747,6 +748,10 @@ final class ClassicItemsView: NSView {
             let iv = NSImageView(image: Self.icon(it))
             iv.imageScaling = .scaleNone
             view = iv
+        case Int(MACHINE_ITEM_IMAGE):
+            let iv = NSImageView(image: Self.image(it) ?? NSImage())
+            iv.imageScaling = .scaleNone
+            view = iv
         default:
             view = NSTextField(wrappingLabelWithString: title)
         }
@@ -756,10 +761,27 @@ final class ClassicItemsView: NSView {
     }
 
     /// Show the states the app's hook left the items in.
+    /// What the app draws in a user item (RGBA from the emulator).
+    static func image(_ it: machine_file_item) -> NSImage? {
+        guard let pixels = it.image, it.image_width > 0, it.image_height > 0,
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(it.image_width),
+                                         pixelsHigh: Int(it.image_height), bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: Int(it.image_width) * 4, bitsPerPixel: 32),
+              let dest = rep.bitmapData else { return nil }
+        dest.update(from: pixels, count: Int(it.image_width) * Int(it.image_height) * 4)
+        let img = NSImage(size: NSSize(width: Int(it.image_width), height: Int(it.image_height)))
+        img.addRepresentation(rep)
+        return img
+    }
+
     func refresh(_ items: [machine_file_item]) {
         for it in items {
             guard let v = controls[it.item] else { continue }
             v.isHidden = !it.visible
+            if it.kind == Int32(MACHINE_ITEM_IMAGE), let iv = v as? NSImageView, let img = Self.image(it) {
+                iv.image = img
+            }
             if let b = v as? NSButton {
                 b.state = it.value != 0 ? .on : .off
                 b.isEnabled = it.enabled

@@ -194,7 +194,7 @@ typedef struct {
 /* An item the app added to its Standard File dialog (shown by the host
  * next to its panel).  Rectangles are the app's own dialog coordinates. */
 enum { MACHINE_ITEM_BUTTON, MACHINE_ITEM_CHECKBOX, MACHINE_ITEM_RADIO, MACHINE_ITEM_TEXT, MACHINE_ITEM_EDIT,
-       MACHINE_ITEM_ICON };
+       MACHINE_ITEM_ICON, MACHINE_ITEM_IMAGE };
 typedef struct {
     int16_t item;
     int kind;
@@ -204,6 +204,10 @@ typedef struct {
     mprect rect;
     uint8_t icon[256];           /* ICON: 32x32, 1 bit (128 bytes); icon_mask: second half */
     bool has_icon;
+    /* IMAGE: what the app draws in a user item (its own icons and labels),
+     * RGBA, the dialog's white made clear; valid until the next request. */
+    const uint8_t *image;
+    int image_width, image_height;
 } machine_file_item;
 
 typedef struct {

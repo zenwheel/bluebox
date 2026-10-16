@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -562,11 +563,19 @@ void tb_DrawDialog(gaddr d)
 {
     gaddr saved = qd_port();
     tb_SetPort(d);
+    /* In item order, controls among the rest, as the Dialog Manager draws
+     * them: a later item over an earlier one (SimpleText's save dialog
+     * puts its icons over wide, untitled radio buttons). */
     int n = item_count(d);
-    for (int i = 1; i <= n; i++)
-        if (!(item_type(d, i) & ctrlItem))
+    for (int i = 1; i <= n; i++) {
+        if (item_type(d, i) & ctrlItem) {
+            gaddr c = item_handle(d, i);
+            if (c && rd32(c))
+                tb_Draw1Control(c);
+        } else {
             draw_item(d, i);
-    tb_DrawControls(d);
+        }
+    }
     draw_default_ring(d);
     tb_SetPort(saved);
 }
@@ -614,12 +623,21 @@ int8_t tb_IsDialogEvent(gaddr evt)
     return what == keyDown || what == autoKey || what == nullEvent;
 }
 
+static bool host_alert_instead(gaddr d, gaddr itemp);
+
 int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
 {
     int what = (int16_t)rd16(evt);
     gaddr d = (what == updateEvt || what == activateEvt) ? rd32(evt + EventRecord_message_off) : tb_FrontWindow();
     if (!is_dialog(d))
         return 0;
+    /* A program's own loop for a movable modal alert (SimpleText's "Save
+     * changes?"): the host's alert answers it. */
+    if (d == tb_FrontWindow() && host_alert_instead(d, itemp)) {
+        if (dpp)
+            wr32(dpp, d);
+        return 1;
+    }
     if (dpp)
         wr32(dpp, d);
     gaddr saved = qd_port();
@@ -811,6 +829,101 @@ static bool depth_request(gaddr d)
     return n && depth_alert(msg);
 }
 
+bool dialog_host_alert(machine_alert *a, int *result);
+bool dialog_host_alerts(void);
+
+/* A dialog that is an alert in all but name ("Save changes before
+ * closing?"): static text, push buttons, perhaps a stop, note or caution
+ * icon, and user items with nothing to draw or that only ring a button.
+ * The host shows it as one of its own alerts. */
+static bool as_host_alert(gaddr d, machine_alert *a)
+{
+    memset(a, 0, sizeof *a);
+    a->kind = MACHINE_ALERT_PLAIN;
+    int n = item_count(d);
+    size_t tn = 0;
+    for (int i = 1; i <= n; i++) {
+        int type = item_type(d, i) & 0x7F;
+        gaddr h = item_handle(d, i);
+        qrect r = item_rect(d, i);
+        if (r.left >= 8192) /* hidden */
+            continue;
+        if (type == (ctrlItem | btnCtrl)) {
+            if (a->nbuttons >= (int)(sizeof a->buttons / sizeof a->buttons[0]))
+                return false;
+            machine_alert_button *b = &a->buttons[a->nbuttons++];
+            b->item = (int16_t)i;
+            gaddr title = tb_NewPtr(256, false, true);
+            tb_GetControlTitle(h, title);
+            uint8_t text[256];
+            gget(text, title + 1, rd8(title));
+            append_text(b->title, 0, sizeof b->title, text, rd8(title));
+            tb_DisposePtr(title);
+        } else if (type == statText) {
+            if (!h || !rd32(h))
+                continue;
+            uint32_t len = (uint32_t)tb_GetHandleSize(h);
+            uint8_t text[1024];
+            if (len > sizeof text)
+                len = sizeof text;
+            gget(text, rd32(h), len);
+            if (!len)
+                continue;
+            if (tn)
+                tn = append_text(a->message, tn, sizeof a->message, (const uint8_t *)"\r\r", 2);
+            tn = append_text(a->message, tn, sizeof a->message, text, len);
+        } else if (type == iconItem) {
+            int id = (int16_t)rd16(item_at(d, i) + 14);
+            a->kind = id == 0 ? MACHINE_ALERT_STOP : id == 1 ? MACHINE_ALERT_NOTE
+                    : id == 2 ? MACHINE_ALERT_CAUTION : MACHINE_ALERT_PLAIN;
+        } else if (type == userItem) {
+            /* A ring around a button, or nothing to draw. */
+            bool ring = false;
+            for (int k = 1; k <= n && !ring; k++) {
+                qrect b = item_rect(d, k);
+                ring = (item_type(d, k) & 0x7F) == (ctrlItem | btnCtrl) && r.left <= b.left && r.top <= b.top &&
+                       r.right >= b.right && r.bottom >= b.bottom;
+            }
+            if (h && !ring)
+                return false;
+        } else if (type == 1) {
+            continue; /* a help item */
+        } else {
+            return false;
+        }
+    }
+    if (!tn || a->nbuttons < 1)
+        return false;
+    int16_t def = (int16_t)rd16(d + DialogRecord_aDefItem_off);
+    a->default_item = def;
+    for (int i = 0; i < a->nbuttons; i++)
+        a->buttons[i].is_default = a->buttons[i].item == def;
+    return true;
+}
+
+/* For a visible dialog box (not a modeless window) that is an alert in all
+ * but name: the host shows it, the dialog out of sight meanwhile, and the
+ * button chosen is the item hit. */
+static bool host_alert_instead(gaddr d, gaddr itemp)
+{
+    if (!dialog_host_alerts()) /* headless: the dialog as it is */
+        return false;
+    int variant = tb_GetWVariant(d);
+    if (!rd8(d + WindowRecord_visible_off) || !(variant == 1 || variant == 2 || variant == 3 || variant == 5))
+        return false;
+    machine_alert a;
+    int chosen;
+    if (!as_host_alert(d, &a))
+        return false;
+    tb_HideWindow(d);
+    if (!dialog_host_alert(&a, &chosen)) {
+        tb_ShowWindow(d);
+        return false;
+    }
+    wr16(itemp, (uint16_t)(chosen > 0 ? chosen : a.default_item));
+    return true;
+}
+
 void tb_ModalDialog(gaddr filter, gaddr itemp)
 {
     gaddr d = tb_FrontWindow();
@@ -822,6 +935,8 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
         wr16(itemp, 1);
         return;
     }
+    if (host_alert_instead(d, itemp))
+        return;
     gaddr evt = tb_NewPtr(EventRecord_SIZEOF, false, true);
     gaddr dp = tb_NewPtr(4, false, true);
     while (!g_cpu->halted) {

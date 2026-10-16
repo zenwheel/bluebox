@@ -9,6 +9,7 @@
  */
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -61,7 +62,7 @@ static void utf8_from_pstr(gaddr p, char *out, size_t outsize)
 }
 
 enum { sfHookFirstCall = -1, sfHookLastCall = -2 };
-enum { ctrlItem = 4, statText = 8, editText = 16, iconItem = 32, itemDisable = 128 };
+enum { userItem = 0, ctrlItem = 4, statText = 8, editText = 16, iconItem = 32, itemDisable = 128 };
 #define SF_REFCON 0x73746466 /* 'stdf': the main dialog */
 
 static int16_t call_hook(int16_t item)
@@ -81,6 +82,94 @@ static int16_t call_hook(int16_t item)
     return (int16_t)cpu_pop16(c);
 }
 
+/* The dialog as the program draws it, its user items included: drawn
+ * once into an offscreen pixel map (the dialog itself stays hidden), RGBA,
+ * with a copy cut out for each user item the host shows. */
+static uint8_t *drawn;      /* RGBA, the dialog's port rectangle */
+static int drawn_w, drawn_h;
+static uint8_t *cutouts[16];
+
+static void draw_offscreen(gaddr d)
+{
+    free(drawn);
+    drawn = NULL;
+    qrect pr = qrect_get(d + GrafPort_portRect_off);
+    int w = pr.right - pr.left, h = pr.bottom - pr.top;
+    if (w <= 0 || h <= 0 || w > 2048 || h > 2048)
+        return;
+    gaddr r = tb_NewPtr(8, false, true), gwp = tb_NewPtr(4, false, true);
+    qrect_put(r, pr);
+    if (tb_NewGWorld(gwp, 32, r, 0, 0, 0) || !rd32(gwp)) {
+        tb_DisposePtr(r);
+        tb_DisposePtr(gwp);
+        return;
+    }
+    gaddr gw = rd32(gwp);
+    gaddr pmh = tb_GetGWorldPixMap(gw);
+    tb_LockPixels(pmh);
+    /* The dialog's port draws into the GWorld's pixels for a moment. */
+    gaddr saved_pm = rd32(d + 2), saved_vis = rd32(d + 24), saved_clip = rd32(d + 28);
+    gaddr vis = tb_NewRgn(), clip = tb_NewRgn();
+    tb_RectRgn(vis, r);
+    tb_RectRgn(clip, r);
+    wr32(d + 2, pmh);
+    wr32(d + 24, vis);
+    wr32(d + 28, clip);
+    gaddr saved_port = qd_port();
+    tb_SetPort(d);
+    tb_EraseRect(r);
+    tb_DrawDialog(d);
+    tb_SetPort(saved_port);
+    wr32(d + 2, saved_pm);
+    wr32(d + 24, saved_vis);
+    wr32(d + 28, saved_clip);
+    tb_DisposeRgn(vis);
+    tb_DisposeRgn(clip);
+    /* xRGB, big-endian, rows of rowBytes: to RGBA, white clear. */
+    gaddr pm = rd32(pmh);
+    gaddr base = rd32(pm + PixMap_baseAddr_off);
+    uint32_t row = rd16(pm + PixMap_rowBytes_off) & 0x3FFF;
+    drawn = malloc((size_t)w * (size_t)h * 4);
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) {
+            uint32_t px = rd32(base + (uint32_t)y * row + (uint32_t)x * 4);
+            uint8_t *o = drawn + ((size_t)y * (size_t)w + (size_t)x) * 4;
+            o[0] = (uint8_t)(px >> 16);
+            o[1] = (uint8_t)(px >> 8);
+            o[2] = (uint8_t)px;
+            o[3] = (px & 0xFFFFFF) == 0xFFFFFF ? 0 : 255;
+        }
+    drawn_w = w;
+    drawn_h = h;
+    tb_DisposeGWorld(gw);
+    tb_DisposePtr(r);
+    tb_DisposePtr(gwp);
+}
+
+/* A user item's part of the drawing; NULL if it drew nothing there. */
+static uint8_t *cutout(int slot, qrect q, qrect port)
+{
+    free(cutouts[slot]);
+    cutouts[slot] = NULL;
+    int x0 = q.left - port.left, y0 = q.top - port.top, w = q.right - q.left, h = q.bottom - q.top;
+    if (!drawn || w <= 0 || h <= 0 || x0 < 0 || y0 < 0 || x0 + w > drawn_w || y0 + h > drawn_h)
+        return NULL;
+    uint8_t *c = malloc((size_t)w * (size_t)h * 4);
+    bool any = false;
+    for (int y = 0; y < h; y++) {
+        memcpy(c + (size_t)y * (size_t)w * 4, drawn + ((size_t)(y0 + y) * (size_t)drawn_w + (size_t)x0) * 4,
+               (size_t)w * 4);
+        for (int x = 0; x < w && !any; x++)
+            any = c[((size_t)y * (size_t)w + (size_t)x) * 4 + 3] != 0;
+    }
+    if (!any) {
+        free(c);
+        return NULL;
+    }
+    cutouts[slot] = c;
+    return c;
+}
+
 static int session_items(machine_file_item *out, int max)
 {
     if (!session.dialog)
@@ -89,6 +178,16 @@ static int session_items(machine_file_item *out, int max)
     gaddr type = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true);
     gaddr text = tb_NewPtr(256, false, true);
     int n = 0, count = (int16_t)rd16(rd32(rd32(d + DialogRecord_items_off))) + 1;
+    /* User items with something to draw (SimpleText's document and
+     * stationery icons beside its radio buttons): the dialog is drawn. */
+    bool user_items = false;
+    for (int i = session.first_extra; i <= count && !user_items; i++) {
+        tb_GetDialogItem(d, (int16_t)i, type, h, r);
+        user_items = (rd16(type) & 0x7F) == userItem && rd32(h) && qrect_get(r).left < 8192;
+    }
+    if (user_items)
+        draw_offscreen(d);
+    qrect port = qrect_get(d + GrafPort_portRect_off);
     for (int i = session.first_extra; i <= count && n < max; i++) {
         tb_GetDialogItem(d, (int16_t)i, type, h, r);
         int t = rd16(type), base = t & 0x7F;
@@ -115,6 +214,15 @@ static int session_items(machine_file_item *out, int max)
         } else if (base == statText || base == editText) {
             it->kind = base == statText ? MACHINE_ITEM_TEXT : MACHINE_ITEM_EDIT;
             tb_GetDialogItemText(hh, text);
+        } else if (base == userItem && hh && user_items && n < 16) {
+            uint8_t *img = cutout(n, q, port);
+            if (!img)
+                continue;
+            it->kind = MACHINE_ITEM_IMAGE;
+            it->image = img;
+            it->image_width = q.right - q.left;
+            it->image_height = q.bottom - q.top;
+            wr8(text, 0);
         } else if (base == iconItem && hh && rd32(hh)) {
             it->kind = MACHINE_ITEM_ICON;
             gget(it->icon, rd32(hh), 128);
@@ -124,7 +232,7 @@ static int session_items(machine_file_item *out, int max)
         } else {
             continue;
         }
-        if (it->kind != MACHINE_ITEM_ICON)
+        if (it->kind != MACHINE_ITEM_ICON && it->kind != MACHINE_ITEM_IMAGE)
             utf8_from_pstr(text, it->title, sizeof it->title);
         n++;
     }
