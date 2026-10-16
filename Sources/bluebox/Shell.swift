@@ -361,6 +361,18 @@ struct ShellView: View {
                     }
                 }
             }
+            // Double-clicking an application launches it; its context menu
+            // launches it or shows it in the Finder.
+            .contextMenu(forSelectionType: ShellItem.self) { items in
+                if case .app(let app)? = items.first {
+                    Button("Launch") { model.launch(app) }
+                    Button("Show in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: app.path)])
+                    }
+                }
+            } primaryAction: { items in
+                if case .app(let app)? = items.first { model.launch(app) }
+            }
             .safeAreaInset(edge: .bottom) {
                 // The window has no toolbar, so importing is at the foot of the list.
                 HStack {
