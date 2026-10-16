@@ -325,5 +325,27 @@ extension BlueBox {
             tb_DisposeWindow(s)
             tb_DisposeWindow(w)
         }
+
+        /// Two clicks in a title bar without moving it collapse the window to
+        /// its title bar (WindowShade), and two more expand it.
+        @Test func doubleClickingTheTitleBarCollapses() {
+            launchTestApp()
+            _ = initToolbox()
+            let title = tb_NewPtr(16, false, true)
+            guestPString("Doc", at: title)
+            let w = tb_NewCWindow(0, rect(100, 100, 200, 300), title, 1, 0, 0xFFFF_FFFF, 1, 0)
+            #expect(bbox(WindowRecord_strucRgn(w)) == [81, 99, 202, 302])
+            let pt = UInt32(90) << 16 | 200
+            let bounds = rect(20, 0, 700, 1000)
+            tb_DragWindow(w, pt, bounds)
+            tb_DragWindow(w, pt, bounds)
+            #expect(bbox(WindowRecord_strucRgn(w)) == [81, 99, 101, 302])  // the title bar and its shadow
+            #expect(rd16(rd32(WindowRecord_contRgn(w))) == 10 && bbox(WindowRecord_contRgn(w)) == [0, 0, 0, 0])
+            #expect(find(200, 150) == 0)                                     // nothing where the content was
+            tb_DragWindow(w, pt, bounds)
+            tb_DragWindow(w, pt, bounds)
+            #expect(bbox(WindowRecord_strucRgn(w)) == [81, 99, 202, 302])
+            tb_DisposeWindow(w)
+        }
     }
 }

@@ -343,6 +343,13 @@ typedef struct {
 
 static bool kind_for(int var, window_kind *k)
 {
+    if (var & 0x200) { /* collapsed: the title bar alone */
+        if (var & 0x100)
+            *k = var & 8 ? (window_kind){ -14291, -14292, -14292, -14290 } : (window_kind){ -14299, -14300, -14300, -14298 };
+        else
+            *k = (window_kind){ -14331, -14332, -14332, -14330 };
+        return true;
+    }
     switch (var) {
     case 0: case 4: case 8: case 12: /* document windows */
         *k = (window_kind){ -14335, -14336, -14336, -14330 };
@@ -685,7 +692,9 @@ bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, boo
     if (f.wd.has_part[2])
         draw_widget(&f, w, 2, zoom, is_down(w, 2), &clip);
     if (f.wd.has_part[3])
-        draw_widget(&f, w, 3, false, false, &clip); /* no collapse (WindowShade) yet */
+        draw_widget(&f, w, 3, !(var & 0x100) ? (var & 0xFF) == 0 || (var & 0xFF) == 4 || (var & 0xFF) == 8 ||
+                                                     (var & 0xFF) == 12 : true,
+                    false, &clip); /* the collapse box */
     gaddr th = WindowRecord_titleHandle(w);
     bool floating = var & 0x100;
     if (f.wd.has_part[4] && th && rd32(th) && rd8(rd32(th)) && !(floating && (var & 8))) {

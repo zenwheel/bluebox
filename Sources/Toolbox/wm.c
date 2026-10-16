@@ -17,7 +17,7 @@
 #include "tb_internal.h"
 
 enum { wDraw = 0, wHit, wCalcRgns, wNew, wDispose, wGrow, wDrawGIcon };
-enum { wNoHit = 0, wInContent, wInDrag, wInGrow, wInGoAway, wInZoomIn, wInZoomOut };
+enum { wNoHit = 0, wInContent, wInDrag, wInGrow, wInGoAway, wInZoomIn, wInZoomOut, wInCollapseBox = 9 };
 enum { inDesk = 0, inMenuBar, inSysWindow, inContent, inDrag, inGrow, inGoAway, inZoomIn, inZoomOut };
 enum { userKind = 8, dialogKind = 2 };
 enum { patCopy = 8, patXor = 10 };
@@ -49,8 +49,11 @@ static void set_varcode(gaddr w, int16_t v)
         }
 }
 
+static void set_collapsed(gaddr w, bool on);
+
 static void forget_varcode(gaddr w)
 {
+    set_collapsed(w, false);
     for (int i = 0; i < 256; i++)
         if (varcodes[i].w == w)
             varcodes[i].w = 0;
@@ -61,6 +64,45 @@ static gaddr wmgr_port(void) { return rd32(LM_WMgrPort); }
 static bool wvisible(gaddr w) { return WindowRecord_visible(w) != 0; }
 
 /* Global offset of a window port: local = global + (dh, dv). */
+/* Collapsed windows (WindowShade, Mac OS 8's collapse box): only their
+ * title bar shows; the definition lays them out with no content. */
+static gaddr collapsed[64];
+static int ncollapsed;
+
+static bool is_collapsed(gaddr w)
+{
+    for (int i = 0; i < ncollapsed; i++)
+        if (collapsed[i] == w)
+            return true;
+    return false;
+}
+
+static void set_collapsed(gaddr w, bool on)
+{
+    for (int i = 0; i < ncollapsed; i++)
+        if (collapsed[i] == w) {
+            if (!on)
+                collapsed[i] = collapsed[--ncollapsed];
+            return;
+        }
+    if (on && ncollapsed < 64)
+        collapsed[ncollapsed++] = w;
+}
+
+void wdef0_native(cpu68k *c, uint16_t tw);
+void wdef124_native(cpu68k *c, uint16_t tw);
+
+/* Which of our definitions draws the window: 0, 124, or -1 for the
+ * application's own (which knows nothing of collapsing). */
+static int our_wdef(gaddr w)
+{
+    gaddr h = WindowRecord_windowDefProc(w);
+    if (!h || !rd32(h) || rd16(rd32(h)) != CPU_NATIVE_OP)
+        return -1;
+    native_fn fn = native_fn_at(rd16(rd32(h) + 2));
+    return fn == wdef0_native ? 0 : fn == wdef124_native ? 124 : -1;
+}
+
 static void port_offset(gaddr w, int *dh, int *dv)
 {
     pixdst d = qd_port_pixels(w);
@@ -197,16 +239,32 @@ uint8_t wm_window_flags(gaddr w)
 
 static void title_rect(qrect c, qrect *t) { *t = (qrect){ (int16_t)(c.top - TITLE_HEIGHT), c.left, (int16_t)(c.top - 1), c.right }; }
 
+/* A collapsed document window: no content, the title bar's bottom edge
+ * where the content's top was (the theme's samples take a zero height). */
+static bool doc_variant(int var) { return var == 0 || var == 4 || var == 8 || var == 12; }
+
+static bool collapse_content(gaddr w, int var, qrect *c, qrect *ct)
+{
+    *ct = *c;
+    if (!is_collapsed(w) || !doc_variant(var) || native_frame(var))
+        return false;
+    c->bottom = (int16_t)(c->top - 1);
+    ct->bottom = ct->top;
+    return true;
+}
+
 static void wdef_calc(gaddr w, int var)
 {
-    qrect c = global_content(w);
+    qrect c = global_content(w), ct;
+    bool coll = collapse_content(w, var, &c, &ct);
     hrgn s, k;
     hrgn_init(&s);
     hrgn_init(&k);
-    hrgn_rect(&k, c);
+    if (!coll)
+        hrgn_rect(&k, c);
     if (native_frame(var)) {
         hrgn_rect(&s, c); /* the host draws the frame */
-    } else if (theme_window_region(w, var, c, &s)) {
+    } else if (theme_window_region(w, coll ? var | 0x200 : var, ct, &s)) {
         /* the theme's frame shape */
     } else if (var == 1) { /* dBoxProc: 8-pixel border */
         hrgn_rect(&s, (qrect){ (int16_t)(c.top - 8), (int16_t)(c.left - 8), (int16_t)(c.bottom + 8), (int16_t)(c.right + 8) });
@@ -258,10 +316,12 @@ static void wdef_draw(gaddr w, int var, int32_t param)
 {
     if (!wvisible(w))
         return;
-    qrect c = global_content(w);
+    qrect c = global_content(w), ct;
+    bool coll = collapse_content(w, var, &c, &ct);
     bool hilited = WindowRecord_hilited(w) != 0;
     if (native_frame(var) ||
-        theme_draw_window(w, var, c, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var), param))
+        theme_draw_window(w, coll ? var | 0x200 : var, ct, hilited, WindowRecord_goAwayFlag(w) != 0, has_zoom(var),
+                          param))
         return;
     gaddr r = tb_NewPtr(8, false, false);
     tb_PenNormal();
@@ -346,20 +406,23 @@ static void wdef_draw(gaddr w, int var, int32_t param)
 
 static int32_t wdef_hit(gaddr w, int var, uint32_t pt)
 {
-    qrect c = global_content(w);
+    qrect c = global_content(w), ct;
+    bool coll = collapse_content(w, var, &c, &ct);
     int h = pt_h(pt), v = pt_v(pt);
     if (h >= c.left && h < c.right && v >= c.top && v < c.bottom) {
         if (has_grow(var) && WindowRecord_hilited(w) && h >= c.right - 15 && v >= c.bottom - 15)
             return wInGrow;
         return wInContent;
     }
-    int part = theme_active() ? theme_window_hit(w, var, c, h, v) : -1;
+    int part = theme_active() ? theme_window_hit(w, coll ? var | 0x200 : var, ct, h, v) : -1;
     if (part >= 0) {
         bool hil = WindowRecord_hilited(w) != 0;
         if (part == 1 && hil && WindowRecord_goAwayFlag(w))
             return wInGoAway;
         if (part == 2 && hil && has_zoom(var))
             return wInZoomIn;
+        if (part == 3 && doc_variant(var))
+            return wInCollapseBox;
         if (part == 0)
             return wNoHit;
         return is_dialog_variant(var) ? wNoHit : wInDrag; /* the frame drags documents and movable dialogs */
@@ -382,7 +445,7 @@ static int32_t wdef_hit(gaddr w, int var, uint32_t pt)
 
 static void wdef_grow_icon(gaddr w, int var)
 {
-    if (!has_grow(var) || !wvisible(w))
+    if (!has_grow(var) || !wvisible(w) || is_collapsed(w))
         return;
     qrect c = qrect_get(w + GrafPort_portRect_off);
     if (native_frame(var) || theme_draw_grow(c, WindowRecord_hilited(w) != 0))
@@ -460,14 +523,33 @@ static qrect float_box(qrect bar, int var, bool zoom)
     return (qrect){ (int16_t)(bar.top + 3), (int16_t)h, (int16_t)(bar.top + 10), (int16_t)(h + 7) };
 }
 
+/* A collapsed floating window keeps only its title bar: no content height,
+ * or for a side title no content width. */
+static int float_collapse(gaddr w, int var, qrect *c, qrect *ct)
+{
+    *ct = *c;
+    if (!is_collapsed(w))
+        return 0x100 | var;
+    if (float_side(var)) {
+        c->right = (int16_t)(c->left - 1);
+        ct->right = ct->left;
+    } else {
+        c->bottom = (int16_t)(c->top - 1);
+        ct->bottom = ct->top;
+    }
+    return 0x300 | var;
+}
+
 static void wdef124_calc(gaddr w, int var)
 {
-    qrect c = global_content(w);
+    qrect c = global_content(w), ct;
+    int tvar = float_collapse(w, var, &c, &ct);
     hrgn s, k;
     hrgn_init(&s);
     hrgn_init(&k);
-    hrgn_rect(&k, c);
-    if (!theme_window_region(w, 0x100 | var, c, &s)) {
+    if (!is_collapsed(w))
+        hrgn_rect(&k, c);
+    if (!theme_window_region(w, tvar, ct, &s)) {
         qrect b = float_bar(c, var);
         /* Frame and title bar, and a one-pixel shadow. */
         qrect f = { (int16_t)(float_side(var) ? c.top - 1 : b.top), (int16_t)(float_side(var) ? b.left : c.left - 1),
@@ -511,9 +593,10 @@ static void wdef124_draw(gaddr w, int var, int32_t param)
 {
     if (!wvisible(w))
         return;
-    qrect c = global_content(w);
+    qrect c = global_content(w), ct;
+    int tvar = float_collapse(w, var, &c, &ct);
     bool hilited = WindowRecord_hilited(w) != 0, goaway = WindowRecord_goAwayFlag(w) != 0;
-    if (theme_draw_window(w, 0x100 | var, c, hilited, goaway, float_zoom(var), param))
+    if (theme_draw_window(w, tvar, ct, hilited, goaway, float_zoom(var), param))
         return;
     qrect b = float_bar(c, var);
     gaddr r = tb_NewPtr(8, false, false);
@@ -576,7 +659,8 @@ static void wdef124_draw(gaddr w, int var, int32_t param)
 
 static int32_t wdef124_hit(gaddr w, int var, uint32_t pt)
 {
-    qrect c = global_content(w);
+    qrect c = global_content(w), ct;
+    int tvar = float_collapse(w, var, &c, &ct);
     int h = pt_h(pt), v = pt_v(pt);
     bool hil = WindowRecord_hilited(w) != 0;
     if (h >= c.left && h < c.right && v >= c.top && v < c.bottom) {
@@ -584,12 +668,14 @@ static int32_t wdef124_hit(gaddr w, int var, uint32_t pt)
             return wInGrow;
         return wInContent;
     }
-    int part = theme_active() ? theme_window_hit(w, 0x100 | var, c, h, v) : -1;
+    int part = theme_active() ? theme_window_hit(w, tvar, ct, h, v) : -1;
     if (part >= 0) {
         if (part == 1 && hil && WindowRecord_goAwayFlag(w))
             return wInGoAway;
         if (part == 2 && hil && float_zoom(var))
             return wInZoomIn;
+        if (part == 3)
+            return wInCollapseBox;
         return part == 0 ? wNoHit : wInDrag;
     }
     qrect b = float_bar(c, var);
@@ -618,7 +704,7 @@ void wdef124_native(cpu68k *c, uint16_t tw)
     case wHit: result = wdef124_hit(w, var, (uint32_t)param); break;
     case wCalcRgns: wdef124_calc(w, var); break;
     case wDrawGIcon:
-        if (float_grow(var))
+        if (float_grow(var) && !is_collapsed(w))
             wdef_grow_icon(w, 0); /* the document window's grow box */
         break;
     default: break;
@@ -1151,6 +1237,37 @@ gaddr tb_GetWindowPic(gaddr w) { return WindowRecord_windowPic(w); }
 /* ---------------------------------------------------------------------- */
 /* Finding windows */
 
+/* Collapse or expand a window of ours: the frame is laid out again, what
+ * it uncovered repainted, and expanded content updated. */
+static void toggle_collapse(gaddr w)
+{
+    if (our_wdef(w) < 0)
+        return;
+    hrgn old;
+    hrgn_init(&old);
+    rgn_read(WindowRecord_strucRgn(w), &old);
+    bool on = !is_collapsed(w);
+    set_collapsed(w, on);
+    call_wdef(w, wCalcRgns, 0);
+    hrgn now;
+    hrgn_init(&now);
+    rgn_read(WindowRecord_strucRgn(w), &now);
+    hrgn_op(&old, &old, &now, RGN_UNION);
+    repaint(&old);
+    if (!on) {
+        gaddr saved = qd_port();
+        tb_SetPort(w);
+        tb_InvalRect(w + GrafPort_portRect_off);
+        tb_SetPort(saved);
+    }
+    hrgn_free(&old);
+    hrgn_free(&now);
+}
+
+uint32_t ev_press_count(void);
+bool ev_still_down(void);
+void ev_wait_tick(void);
+
 int16_t tb_FindWindow(uint32_t p, gaddr wpp)
 {
     wr32(wpp, 0);
@@ -1175,6 +1292,18 @@ int16_t tb_FindWindow(uint32_t p, gaddr wpp)
         wr32(wpp, w);
         if (WindowRecord_windowKind(w) < 0)
             return inSysWindow;
+        if (hit == wInCollapseBox) {
+            /* Handled here, once per press (programs also call FindWindow
+             * to set the cursor): a click in the collapse box. */
+            static uint32_t last_press;
+            uint32_t press = ev_press_count();
+            if (ev_still_down() && press != last_press) {
+                last_press = press;
+                toggle_collapse(w);
+            }
+            wr32(wpp, 0);
+            return inDesk;
+        }
         switch (hit) {
         case wInContent: return inContent;
         case wInDrag: return inDrag;
@@ -1472,11 +1601,28 @@ void tb_DragWindow(gaddr wp, uint32_t p, gaddr rp)
         tb_SelectWindow(wp);
         return;
     }
+    /* A second click in the title bar without moving it collapses or
+     * expands the window (WindowShade). */
+    static gaddr last_w;
+    static uint32_t last_ticks, last_p;
+    uint32_t now = rd32(LM_Ticks);
+    if (wp == last_w && now - last_ticks <= rd32(LM_DoubleTime) && abs(pt_h(p) - pt_h(last_p)) <= 4 &&
+        abs(pt_v(p) - pt_v(last_p)) <= 4 && our_wdef(wp) >= 0) {
+        last_w = 0;
+        while (ev_still_down())
+            ev_wait_tick();
+        toggle_collapse(wp);
+        tb_SelectWindow(wp);
+        return;
+    }
     gaddr slop = tb_NewPtr(8, false, false);
     qrect_put(slop, qrect_get(rp));
     int32_t d = tb_DragGrayRgn(WindowRecord_strucRgn(wp), p, rp, slop, 0, 0);
     tb_DisposePtr(slop);
     int16_t dh = pt_h((uint32_t)d), dv = pt_v((uint32_t)d);
+    last_w = dh || dv ? 0 : wp;
+    last_ticks = now;
+    last_p = p;
     if (dh || dv) {
         qrect c = global_content(wp);
         tb_MoveWindow(wp, (int16_t)(c.left + dh), (int16_t)(c.top + dv), 0);

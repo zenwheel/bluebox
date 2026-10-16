@@ -53,6 +53,8 @@ uint32_t native_register(native_fn fn, const char *name, uint16_t trapword)
     return a;
 }
 
+native_fn native_fn_at(int index) { return index >= 0 && (unsigned)index < native_count ? natives[index].fn : NULL; }
+
 int native_index_for(uint32_t addr)
 {
     if (addr < STUB_BASE || addr >= STUB_BASE + native_count * STUB_SIZE || (addr - STUB_BASE) % STUB_SIZE)
