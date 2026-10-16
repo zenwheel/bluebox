@@ -531,6 +531,8 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String]) t
     let root = uniquePath(dir + "/" + hostName(volName.isEmpty ? "Untitled" : volName))
     let fm = FileManager.default
     try fm.createDirectory(atPath: root, withIntermediateDirectories: true)
+    // The folder stands for the volume: runs mount it under its name.
+    try? Data((volName.isEmpty ? "Untitled" : volName).utf8).write(to: URL(fileURLWithPath: root + "/.classic-volume"))
 
     // Folder paths by directory ID; the root folder (ID 2) is the volume itself.
     var dirs: [UInt32: String] = [2: root]
@@ -615,6 +617,7 @@ private func extractMounted(_ path: String, into dir: String) throws -> String {
     let volName = fm.displayName(atPath: mount)
     let root = uniquePath(dir + "/" + (volName.isEmpty ? "Untitled" : volName))
     try fm.createDirectory(atPath: root, withIntermediateDirectories: true)
+    try? Data((volName.isEmpty ? "Untitled" : volName).utf8).write(to: URL(fileURLWithPath: root + "/.classic-volume"))
     guard let walker = fm.enumerator(atPath: mount) else { return root }
     for case let rel as String in walker {
         let src = mount + "/" + rel, dst = root + "/" + rel

@@ -77,6 +77,71 @@ static void host_times(const char *path, uint32_t *created, uint32_t *modified)
 static char root_path[PATH_MAX]; /* the volume's folder */
 static char vol_name[32]; /* MacRoman */
 
+/* Further volumes: folders mounted as volumes of their own (a CD or disk
+ * the application came on, whose programs look for their files at its
+ * root).  Directory IDs stay global; a mounted root's ID is reported as 2
+ * on its volume, and 2 (or no directory) on its refnum means that root. */
+#define MAX_MOUNTS 8
+typedef struct {
+    int16_t vref;
+    char name[32]; /* MacRoman, Pascal */
+    char root[PATH_MAX];
+    int32_t root_id;
+} mount;
+static mount mounts[MAX_MOUNTS];
+static int nmounts;
+static char pending_mount[MAX_MOUNTS][PATH_MAX], pending_name[MAX_MOUNTS][64];
+static int npending;
+
+void machine_mount_folder(const char *path, const char *name)
+{
+    if (npending >= MAX_MOUNTS)
+        return;
+    snprintf(pending_mount[npending], PATH_MAX, "%s", path);
+    snprintf(pending_name[npending], 64, "%s", name ? name : "");
+    npending++;
+}
+
+static mount *mount_of_vref(int16_t vref)
+{
+    for (int i = 0; i < nmounts; i++)
+        if (mounts[i].vref == vref)
+            return &mounts[i];
+    return NULL;
+}
+
+static mount *mount_of_id(int32_t id)
+{
+    for (int i = 0; i < nmounts; i++)
+        if (mounts[i].root_id == id)
+            return &mounts[i];
+    return NULL;
+}
+
+/* The mounted volume a host path is on, or NULL for the main volume. */
+static mount *mount_of_path(const char *host)
+{
+    mount *best = NULL;
+    size_t best_len = 0;
+    for (int i = 0; i < nmounts; i++) {
+        size_t n = strlen(mounts[i].root);
+        if (!strncmp(host, mounts[i].root, n) && (host[n] == '/' || host[n] == 0) && n > best_len) {
+            best = &mounts[i];
+            best_len = n;
+        }
+    }
+    return best;
+}
+
+/* A directory ID as its volume reports it: a mounted root is 2. */
+static int32_t out_id(int32_t id) { return mount_of_id(id) ? ROOT_ID : id; }
+static bool is_root_id(int32_t id) { return id == ROOT_ID || mount_of_id(id); }
+static int16_t vref_of_path(const char *host)
+{
+    mount *m = mount_of_path(host);
+    return m ? m->vref : VREF;
+}
+
 /* The folder at the volume's root standing for the host's "/". */
 static const char host_folder[] = "Host";
 
@@ -344,6 +409,14 @@ static int32_t parent_id_of(const char *host)
 /* Directory a (vRefNum, dirID) pair names, or 0. */
 static int32_t base_dir(int16_t vref, int32_t dirid, bool hfs)
 {
+    mount *m = mount_of_vref(vref);
+    if (m) {
+        if (hfs && dirid && dirid != 1 && dirid != ROOT_ID)
+            return dirid;
+        if (!dirid && default_vref == vref)
+            return default_dir;
+        return m->root_id;
+    }
     if (hfs && dirid)
         return dirid == 1 ? ROOT_ID : dirid;
     if (vref == 0)
@@ -381,6 +454,9 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
         while (i < n && name[i] != ':')
             i++;
         snprintf(path, sizeof path, "%s", root_path);
+        for (int k = 0; k < nmounts; k++) /* a mounted volume's name */
+            if (mounts[k].name[0] == i && !mac_char_cmp(name, (const uint8_t *)mounts[k].name + 1, i))
+                snprintf(path, sizeof path, "%s", mounts[k].root);
         i++;
     } else if (name[0] == ':') {
         i = 1;
@@ -393,7 +469,7 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
         if (len == 0) { /* "::" goes up, no further than the volume's root */
             if (!strcmp(path, "/")) {
                 snprintf(path, sizeof path, "%s", root_path);
-            } else if (strcmp(path, root_path)) {
+            } else if (strcmp(path, root_path) && !(mount_of_path(path) && !strcmp(mount_of_path(path)->root, path))) {
                 char *slash = strrchr(path, '/');
                 if (slash && slash != path)
                     *slash = 0;
@@ -588,7 +664,25 @@ static void guest_tables_init(void)
     wr16(v + VCB_vcbVRefNum_off, (uint16_t)VREF);
     wr16(LM_VCBQHdr, 0);
     wr32(LM_VCBQHdr + 2, v);
-    wr32(LM_VCBQHdr + 6, v);
+    /* The mounted volumes follow, each its own VCB on its own drive. */
+    gaddr last = v;
+    for (int i = 0; i < nmounts; i++) {
+        gaddr mv = mm_new_ptr_in(zone, VCB_SIZEOF, true);
+        if (!mv)
+            break;
+        gmemcpy(mv, v, VCB_SIZEOF);
+        wr32(mv, 0);
+        host_times(mounts[i].root, &vc, &vm);
+        wr32(mv + VCB_vcbCrDate_off, vc);
+        wr32(mv + VCB_vcbLsMod_off, vm);
+        wr16(mv + VCB_vcbAtrb_off, 0x8080); /* locked */
+        gput(mv + VCB_vcbVN_off, mounts[i].name, (uint32_t)mounts[i].name[0] + 1);
+        wr16(mv + VCB_vcbDrvNum_off, (uint16_t)(2 + i));
+        wr16(mv + VCB_vcbVRefNum_off, (uint16_t)mounts[i].vref);
+        wr32(last, mv); /* qLink */
+        last = mv;
+    }
+    wr32(LM_VCBQHdr + 6, last);
     wr32(LM_DefVCBPtr, v);
     /* The drive queue: drive 1 holds the volume.  Four flag bytes precede
      * the element: not write-protected, a fixed disk, installed, one side. */
@@ -682,8 +776,25 @@ void fm_init(const char *app_dir)
     char sys[PATH_MAX];
     if (realpath(system_folder_path(), sys) && !on_volume(sys))
         fm_grant(sys, true); /* set elsewhere (machine_set_system_folder) */
-    default_vref = VREF;
+    /* Folders mounted as volumes of their own (machine_mount_folder). */
+    nmounts = 0;
+    for (int i = 0; i < npending && nmounts < MAX_MOUNTS; i++) {
+        mount *m = &mounts[nmounts];
+        if (!realpath(pending_mount[i], m->root))
+            continue;
+        fm_grant(m->root, true);
+        m->vref = (int16_t)(-2 - nmounts);
+        m->root_id = dir_id_for(rel_of(m->root));
+        uint8_t mac[64];
+        size_t n = utf8_to_macroman(pending_name[i][0] ? pending_name[i] : strrchr(m->root, '/') + 1, mac, 27);
+        m->name[0] = (char)n;
+        memcpy(m->name + 1, mac, n);
+        nmounts++;
+    }
+    npending = 0; /* for this launch */
     default_dir = dir_id_for(rel_of(app));
+    mount *am = mount_of_path(app);
+    default_vref = am ? am->vref : VREF;
     static const char name[] = "Macintosh HD";
     vol_name[0] = (char)(sizeof name - 1);
     memcpy(vol_name + 1, name, sizeof name - 1);
@@ -719,8 +830,8 @@ void fm_spec_for_path(const char *path, gaddr spec)
     char *slash = strrchr(parent, '/');
     if (slash)
         *slash = 0;
-    wr16(spec + FSSpec_vRefNum_off, (uint16_t)VREF);
-    wr32(spec + FSSpec_parID_off, (uint32_t)dir_id_for(rel_of(parent)));
+    wr16(spec + FSSpec_vRefNum_off, (uint16_t)vref_of_path(full));
+    wr32(spec + FSSpec_parID_off, (uint32_t)out_id(dir_id_for(rel_of(parent))));
     put_name_fwd(spec + FSSpec_name_off, full);
 }
 
@@ -1307,7 +1418,7 @@ static void fill_file_info(gaddr pb, const char *path, bool cat)
     wr32(pb + FileParam_ioFlMdDat_off, m);
     if (cat) {
         wr32(pb + HFileInfo_ioFlBkDat_off, 0);
-        wr32(pb + HFileInfo_ioFlParID_off, (uint32_t)parent_id_of(path));
+        wr32(pb + HFileInfo_ioFlParID_off, (uint32_t)out_id(parent_id_of(path)));
         wr32(pb + HFileInfo_ioFlClpSiz_off, 0);
     }
     if (ok)
@@ -1384,22 +1495,79 @@ int16_t tb_PBHSetFInfo(gaddr pb, bool async) { return set_finfo(pb, true, false)
 /* ---------------------------------------------------------------------- */
 /* Volumes */
 
+static mount *default_mount(void);
+
+/* Which volume a GetVInfo call names: by index (1 the main volume, then
+ * the mounted ones), by name (index < 0, "Name:" or "Name"), or by refnum
+ * (0 the default, a working directory its folder's).  *m is NULL for the
+ * main volume; false if there is no such volume. */
+static bool vinfo_volume(int16_t idx, int16_t vref, gaddr namep, mount **m)
+{
+    *m = NULL;
+    if (idx > 0) {
+        if (idx == 1)
+            return true;
+        if (idx - 2 < nmounts) {
+            *m = &mounts[idx - 2];
+            return true;
+        }
+        return false;
+    }
+    if (idx < 0 && namep && rd8(namep)) {
+        uint8_t name[256];
+        int n = rd8(namep);
+        gget(name, namep + 1, (uint32_t)n);
+        const uint8_t *colon = memchr(name, ':', (size_t)n);
+        if (colon)
+            n = (int)(colon - name);
+        if (n) {
+            if (vol_name[0] == n && !mac_char_cmp(name, (const uint8_t *)vol_name + 1, n))
+                return true;
+            for (int k = 0; k < nmounts; k++)
+                if (mounts[k].name[0] == n && !mac_char_cmp(name, (const uint8_t *)mounts[k].name + 1, n)) {
+                    *m = &mounts[k];
+                    return true;
+                }
+            return false;
+        }
+    }
+    if (vref == 0) {
+        *m = default_mount();
+        return true;
+    }
+    if (vref == VREF || vref == 1)
+        return true;
+    if ((*m = mount_of_vref(vref)))
+        return true;
+    if (vref <= -32000 && vref > -32000 - MAX_WDS) {
+        int32_t d = base_dir(vref, 0, false);
+        char dpath[PATH_MAX];
+        if (!d || !host_of_dir(d, dpath, sizeof dpath))
+            return false;
+        *m = mount_of_path(dpath);
+        return true;
+    }
+    return false;
+}
+
 static int16_t get_vinfo(gaddr pb, bool hfs)
 {
     int16_t idx = (int16_t)rd16(pb + VolumeParam_ioVolIndex_off);
     int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
-    if (idx > 1 || (idx <= 0 && vref != 0 && vref != VREF && vref != 1 && !(vref <= -32000 && vref > -32000 - MAX_WDS)))
-        return nsvErr;
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
+    mount *m;
+    if (!vinfo_volume(idx, vref, namep, &m))
+        return nsvErr;
+    const char *root = m ? m->root : root_path;
     if (namep)
-        gput(namep, vol_name, (uint32_t)vol_name[0] + 1);
-    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)VREF);
+        gput(namep, m ? m->name : vol_name, (uint32_t)(m ? m->name[0] : vol_name[0]) + 1);
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)(m ? m->vref : VREF));
     uint32_t vc, vm;
-    host_times(root_path, &vc, &vm);
+    host_times(root, &vc, &vm);
     wr32(pb + VolumeParam_ioVCrDate_off, vc);
     wr32(pb + HVolumeParam_ioVLsMod_off, vm);
-    wr16(pb + VolumeParam_ioVAtrb_off, 0);
-    wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries(root_path));
+    wr16(pb + VolumeParam_ioVAtrb_off, m ? 0x8080 : 0); /* mounted: locked, as a CD is */
+    wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries(root));
     wr16(pb + HVolumeParam_ioVBitMap_off, 0);
     wr16(pb + HVolumeParam_ioVAllocPtr_off, 0);
     /* 65535 blocks of 32K: about 2 GB, the largest an HFS volume reports. */
@@ -1411,7 +1579,7 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     wr16(pb + VolumeParam_ioVFrBlk_off, 0xC000);
     if (hfs) {
         wr16(pb + HVolumeParam_ioVSigWord_off, 0x4244);
-        wr16(pb + HVolumeParam_ioVDrvInfo_off, 1);
+        wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)(m ? 2 + (m - mounts) : 1));
         wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)-5);
         wr16(pb + HVolumeParam_ioVFSID_off, 0);
         wr32(pb + HVolumeParam_ioVBkUp_off, 0);
@@ -1437,11 +1605,19 @@ static int16_t default_wd(void)
     return wd ? wd : default_vref;
 }
 
+/* The volume the default directory is on (NULL: the main one). */
+static mount *default_mount(void)
+{
+    char dpath[PATH_MAX];
+    return host_of_dir(default_dir, dpath, sizeof dpath) ? mount_of_path(dpath) : NULL;
+}
+
 int16_t tb_PBGetVol(gaddr pb, bool async)
 {
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
+    mount *dm = default_mount();
     if (namep)
-        gput(namep, vol_name, (uint32_t)vol_name[0] + 1);
+        gput(namep, dm ? dm->name : vol_name, (uint32_t)(dm ? dm->name[0] : vol_name[0]) + 1);
     wr16(pb + IOParam_ioVRefNum_off, (uint16_t)default_wd());
     return noErr;
 }
@@ -1449,8 +1625,9 @@ int16_t tb_PBGetVol(gaddr pb, bool async)
 int16_t tb_PBHGetVol(gaddr pb, bool async)
 {
     tb_PBGetVol(pb, async);
-    wr16(pb + WDPBRec_ioWDVRefNum_off, (uint16_t)VREF);
-    wr32(pb + WDPBRec_ioWDDirID_off, (uint32_t)default_dir);
+    mount *dm = default_mount();
+    wr16(pb + WDPBRec_ioWDVRefNum_off, (uint16_t)(dm ? dm->vref : VREF));
+    wr32(pb + WDPBRec_ioWDDirID_off, (uint32_t)out_id(default_dir));
     wr32(pb + WDPBRec_ioWDProcID_off, 0);
     return noErr;
 }
@@ -1479,6 +1656,8 @@ static int16_t wd_for(int32_t id)
 {
     if (id == ROOT_ID)
         return VREF;
+    if (mount_of_id(id))
+        return mount_of_id(id)->vref;
     for (int i = 0; i < MAX_WDS; i++)
         if (wds[i].used && wds[i].dirid == id)
             return (int16_t)(-32000 - i);
@@ -1522,12 +1701,14 @@ int16_t tb_PBGetWDInfo(gaddr pb, bool async)
     int32_t d = base_dir(v, 0, false);
     if (!d)
         return nsvErr;
-    wr16(pb + WDPBRec_ioWDVRefNum_off, (uint16_t)VREF);
-    wr32(pb + WDPBRec_ioWDDirID_off, (uint32_t)d);
+    char dpath[PATH_MAX];
+    mount *dm = host_of_dir(d, dpath, sizeof dpath) ? mount_of_path(dpath) : NULL;
+    wr16(pb + WDPBRec_ioWDVRefNum_off, (uint16_t)(dm ? dm->vref : VREF));
+    wr32(pb + WDPBRec_ioWDDirID_off, (uint32_t)out_id(d));
     wr32(pb + WDPBRec_ioWDProcID_off, 0);
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
     if (namep)
-        gput(namep, vol_name, (uint32_t)vol_name[0] + 1);
+        gput(namep, dm ? dm->name : vol_name, (uint32_t)(dm ? dm->name[0] : vol_name[0]) + 1);
     return noErr;
 }
 
@@ -1556,6 +1737,8 @@ static int16_t get_cat_info(gaddr pb, char *path)
         if (namep) {
             if (d == ROOT_ID)
                 gput(namep, vol_name, (uint32_t)vol_name[0] + 1);
+            else if (mount_of_id(d))
+                gput(namep, mount_of_id(d)->name, (uint32_t)mount_of_id(d)->name[0] + 1);
             else
                 put_name(namep, path);
         }
@@ -1577,7 +1760,7 @@ static void cat_info_of_path(gaddr pb, const char *path)
         int32_t id = dir_id_for(rel_of(path));
         wr8(pb + DirInfo_ioFlAttrib_off, 0x10);
         gmemset(pb + DirInfo_ioDrUsrWds_off, 0, 16);
-        wr32(pb + DirInfo_ioDrDirID_off, (uint32_t)id);
+        wr32(pb + DirInfo_ioDrDirID_off, (uint32_t)out_id(id));
         wr16(pb + DirInfo_ioDrNmFls_off, (uint16_t)count_entries(path));
         uint32_t dc, dm;
         host_times(path, &dc, &dm);
@@ -1585,7 +1768,7 @@ static void cat_info_of_path(gaddr pb, const char *path)
         wr32(pb + DirInfo_ioDrMdDat_off, dm);
         wr32(pb + DirInfo_ioDrBkDat_off, 0);
         gmemset(pb + DirInfo_ioDrFndrInfo_off, 0, 16);
-        wr32(pb + DirInfo_ioDrParID_off, id == ROOT_ID ? 1 : (uint32_t)parent_id_of(path));
+        wr32(pb + DirInfo_ioDrParID_off, is_root_id(id) ? 1 : (uint32_t)out_id(parent_id_of(path)));
     } else {
         fill_file_info(pb, path, true);
         wr32(pb + HFileInfo_ioDirID_off, rd32(pb + FileParam_ioFlNum_off));
@@ -1677,9 +1860,12 @@ int16_t tb_PBGetFCBInfo(gaddr pb, bool async)
     wr32(pb + FCBPBRec_ioFCBEOF_off, rd32(f + 8));
     wr32(pb + FCBPBRec_ioFCBPLen_off, rd32(f + 12));
     wr32(pb + FCBPBRec_ioFCBCrPs_off, rd32(f + 16));
-    wr16(pb + FCBPBRec_ioFCBVRefNum_off, (uint16_t)VREF);
+    int32_t par = (int32_t)rd32(f + 58);
+    char ppath[PATH_MAX];
+    mount *fm_ = host_of_dir(par, ppath, sizeof ppath) ? mount_of_path(ppath) : NULL;
+    wr16(pb + FCBPBRec_ioFCBVRefNum_off, (uint16_t)(fm_ ? fm_->vref : VREF));
     wr32(pb + FCBPBRec_ioFCBClpSiz_off, 0);
-    wr32(pb + FCBPBRec_ioFCBParID_off, rd32(f + 58));
+    wr32(pb + FCBPBRec_ioFCBParID_off, (uint32_t)out_id(par));
     return noErr;
 }
 
@@ -1703,8 +1889,15 @@ int16_t tb_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id, gaddr file_name, gaddr 
     bool at_root = !strcmp(path, "/");
     if (slash && !at_root)
         *slash = 0;
-    wr16(spec + FSSpec_vRefNum_off, (uint16_t)VREF);
-    wr32(spec + FSSpec_parID_off, at_root ? 1 : (uint32_t)dir_id_for(rel_of(parent)));
+    mount *pm = mount_of_path(path);
+    if (pm && !strcmp(pm->root, path)) { /* a mounted volume's root */
+        wr16(spec + FSSpec_vRefNum_off, (uint16_t)pm->vref);
+        wr32(spec + FSSpec_parID_off, 1);
+        gput(spec + FSSpec_name_off, pm->name, (uint32_t)pm->name[0] + 1);
+        return noErr;
+    }
+    wr16(spec + FSSpec_vRefNum_off, (uint16_t)vref_of_path(path));
+    wr32(spec + FSSpec_parID_off, at_root ? 1 : (uint32_t)out_id(dir_id_for(rel_of(parent))));
     if (at_root)
         gput(spec + FSSpec_name_off, vol_name, (uint32_t)vol_name[0] + 1);
     else

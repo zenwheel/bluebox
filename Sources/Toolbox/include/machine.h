@@ -15,6 +15,9 @@ typedef enum {
 bool machine_boot(bool census);
 /* Load an application (AppleDouble data-fork path) and prepare to run it. */
 bool machine_launch(const char *app_path, char *err, size_t errlen);
+/* Before launching: a host folder becomes a volume of its own, named name
+ * (UTF-8; the folder's name if empty), as the disk an application came on. */
+void machine_mount_folder(const char *path, const char *name);
 /* Run up to max_instructions. */
 run_status machine_run(uint64_t max_instructions);
 const char *machine_halt_reason(void);

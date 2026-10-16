@@ -461,6 +461,7 @@ func runCommand(_ args: [String]) {
         }
     }
     launchDocs.forEach { free($0) }
+    if let (root, name) = volumeRoot(containing: app) { machine_mount_folder(root, name) }
     guard machine_launch(app, &err, err.count) else { fail(str(err)) }
     // As the Finder does: open the documents, or just open the application.
     // An interactive host waits, since the Finder may still hand it documents.
@@ -541,6 +542,29 @@ func runCommand(_ args: [String]) {
         }
     }
     exit(status == RUN_HALTED && String(cString: machine_halt_reason()).hasPrefix("ExitToShell") ? 0 : 1)
+}
+
+/// The folder that was the root of the disk an application came on, and the
+/// disk's name: the import marks the folders it makes from disk images
+/// (.classic-volume holds the name); a folder with a volume's Desktop
+/// database is one too.  Programs from CDs look for their files at the
+/// root of their own volume.
+func volumeRoot(containing app: String) -> (String, String)? {
+    let fm = FileManager.default
+    var dir = (app as NSString).deletingLastPathComponent
+    let library = defaultLibrary()
+    while dir.count > 1 && dir != library {
+        let marker = (dir as NSString).appendingPathComponent(".classic-volume")
+        if let data = fm.contents(atPath: marker) {
+            let name = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            return (dir, name.isEmpty ? (dir as NSString).lastPathComponent : name)
+        }
+        if ["Desktop DB", "Desktop DF"].contains(where: { fm.fileExists(atPath: (dir as NSString).appendingPathComponent($0)) }) {
+            return (dir, (dir as NSString).lastPathComponent)
+        }
+        dir = (dir as NSString).deletingLastPathComponent
+    }
+    return nil
 }
 
 /// The application `run` started, when an alert asking for another depth

@@ -145,3 +145,34 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    /// A folder mounted as a volume of its own, as an application's CD.
+    @Suite struct MountedVolumes {
+        @Test func theApplicationsDiskIsAVolume() {
+            let dir = tempDir()
+            FileManager.default.createFile(atPath: dir.appendingPathComponent("Readme").path, contents: Data("hi".utf8))
+            machine_mount_folder(dir.path, "FREAKSHOW")
+            launchTestApp()
+            _ = initToolbox()
+            // Index 2 is the mounted volume, with its own refnum and name.
+            let pb = tb_NewPtr(Int32(HVolumeParam_SIZEOF), false, true)
+            let name = tb_NewPtr(256, false, true)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+            wr16(pb + UInt32(VolumeParam_ioVolIndex_off), 2)
+            #expect(tb_PBHGetVInfo(pb, false) == 0)
+            let vref = Int16(bitPattern: rd16(pb + UInt32(IOParam_ioVRefNum_off)))
+            #expect(vref == -2)
+            #expect(pstring(at: name) == "FREAKSHOW")
+            // Its root is directory 2; a file there has parent 2 on that volume.
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            guestPString("Readme", at: name)
+            #expect(tb_FSMakeFSSpec(vref, 2, name, spec) == 0)
+            #expect(Int16(bitPattern: rd16(spec)) == -2 && rd32(spec + 2) == 2)
+            // A full path by the volume's name.
+            guestPString("FREAKSHOW:Readme", at: name)
+            #expect(tb_FSMakeFSSpec(0, 0, name, spec) == 0)
+            #expect(Int16(bitPattern: rd16(spec)) == -2)
+        }
+    }
+}
