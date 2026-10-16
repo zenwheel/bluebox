@@ -191,26 +191,84 @@ static gaddr find_tag(gaddr rec, int16_t tag, uint16_t *len)
     return 0;
 }
 
-static bool target_host(gaddr alias, char *host, size_t hostsize)
+/* Blue Box was called Classic, and its data folder moved with the name: a
+ * path into the old folder is tried again in the new one. */
+static bool renamed_path(const char *in, char *out, size_t outsize)
 {
+    const char *home = getenv("HOME");
+    if (!home)
+        return false;
+    char old_dir[PATH_MAX], new_dir[PATH_MAX];
+#ifdef __APPLE__
+    snprintf(old_dir, sizeof old_dir, "%s/Library/Application Support/Classic/", home);
+    snprintf(new_dir, sizeof new_dir, "%s/Library/Application Support/Blue Box/", home);
+#else
+    const char *data = getenv("XDG_DATA_HOME");
+    char base[PATH_MAX];
+    snprintf(base, sizeof base, "%s", data && *data ? data : "");
+    if (!*base)
+        snprintf(base, sizeof base, "%s/.local/share", home);
+    snprintf(old_dir, sizeof old_dir, "%s/classic/", base);
+    snprintf(new_dir, sizeof new_dir, "%s/bluebox/", base);
+#endif
+    size_t n = strlen(old_dir);
+    if (strncmp(in, old_dir, n))
+        return false;
+    snprintf(out, outsize, "%s%s", new_dir, in + n);
+    struct stat st;
+    return stat(out, &st) == 0;
+}
+
+/* The host path an alias names: its host path if that is still there
+ * (exact where Mac names are ambiguous), else where its Mac path now leads
+ * (the disk moved: the Classic folder became Blue Box's), *moved set. */
+static bool target_host_moved(gaddr alias, char *host, size_t hostsize, bool *moved)
+{
+    if (moved)
+        *moved = false;
     if (!alias || !rd32(alias))
         return false;
     gaddr rec = rd32(alias);
     uint16_t len;
     gaddr p = find_tag(rec, tagHostPath, &len);
+    bool have_host = false;
     if (p && len < hostsize) {
         gget(host, p, len);
         host[len] = 0;
-        return true;
+        struct stat st;
+        if (stat(host, &st) == 0)
+            return true;
+        char renamed[PATH_MAX];
+        if (renamed_path(host, renamed, sizeof renamed)) {
+            snprintf(host, hostsize, "%s", renamed);
+            if (moved)
+                *moved = true;
+            return true;
+        }
+        have_host = true;
     }
     p = find_tag(rec, tagAbsolutePath, &len);
     if (!p)
-        return false;
+        return have_host; /* gone, but that is where it was */
     uint8_t path[1024];
     if (len > sizeof path)
-        return false;
+        return have_host;
     gget(path, p, len);
-    return fm_host_of_mac_path(path, len, host, hostsize);
+    char now[PATH_MAX];
+    if (!fm_host_of_mac_path(path, len, now, sizeof now))
+        return have_host;
+    struct stat st;
+    if (have_host && stat(now, &st) != 0)
+        return true; /* neither is there: keep the exact one */
+    snprintf(host, hostsize, "%s", now);
+    if (moved)
+        *moved = have_host;
+    return true;
+}
+
+static bool target_host(gaddr alias, char *host, size_t hostsize)
+{
+    return target_host_moved(alias, host, hostsize, NULL);
 }
 
 /* The host path of an alias record held in guest memory (not a handle). */
@@ -230,9 +288,12 @@ int16_t tb_ResolveAlias(gaddr fromFile, gaddr alias, gaddr target, gaddr wasChan
     if (wasChanged)
         wr8(wasChanged, 0);
     char host[PATH_MAX];
-    if (!target_host(alias, host, sizeof host))
+    bool moved;
+    if (!target_host_moved(alias, host, sizeof host, &moved))
         return paramErrA;
     fm_spec_for_path(host, target);
+    if (moved && wasChanged)
+        wr8(wasChanged, 1); /* the program may update the record (UpdateAlias) */
     struct stat st;
     return stat(host, &st) == 0 ? noErr : fnfErrA;
 }

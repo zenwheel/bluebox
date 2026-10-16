@@ -70,7 +70,11 @@ enum ShellItem: Hashable {
     @Published var settings: [String: AppSettings] = [:]
     @Published var systemItems: [SystemItem] = []
     @Published var running: [String: Process] = [:] /* by application path */
-    @Published var recent: [String] = UserDefaults.standard.stringArray(forKey: "recent") ?? []
+    /// Recently launched applications (paths saved before the rename from
+    /// Classic follow the moved data folder).
+    @Published var recent: [String] = (UserDefaults.standard.stringArray(forKey: "recent") ?? [])
+        .map { $0.replacingOccurrences(of: "/Application Support/Classic/", with: "/Application Support/Blue Box/") }
+        .filter { FileManager.default.fileExists(atPath: $0) }
     private var watchers: [DispatchSourceFileSystemObject] = []
     private var iconCache: [String: NSImage] = [:]
     let library = defaultLibrary()

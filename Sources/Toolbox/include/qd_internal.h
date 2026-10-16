@@ -169,6 +169,9 @@ const int16_t *hrgn_row(const hrgn *r, int y, int *n);
 void qd_set_fg_override(const uint16_t *rgb);
 /* The port's foreground and background as pixel values for its depth. */
 void qd_port_bits(gaddr port, uint32_t *fg, uint32_t *bk);
+/* PmForeColor/PmBackColor: draw with this index of the screen's table. */
+void qd_port_set_index(gaddr port, bool fore, uint32_t index);
+void qd_port_forget(gaddr port);
 void qd_port_pattern(gaddr port, int which, uint8_t out[8]);
 
 /* Fill a region with an 8x8 1-bit pattern using a pattern transfer mode

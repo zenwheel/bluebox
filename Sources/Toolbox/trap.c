@@ -716,6 +716,11 @@ void trap_init(void)
         if (entry != unimpl_stub)
             wr32(jumps[i].lm, entry);
     }
+    /* $AB03: no routine, but its presence is how programs from before
+     * Gestalt (Prince of Persia) learn that 32-Bit QuickDraw is there: its
+     * address differs from Unimplemented's.  Called, it does nothing. */
+    if (rd32(TB_TRAP_TABLE + 0x303u * 4) == unimpl_stub)
+        wr32(TB_TRAP_TABLE + 0x303u * 4, native_register(noop_native, "QD32Present", 0xAB03));
     uint32_t keytrans = native_register(key_trans_native, "KeyTrans", 0);
     wr32(LM_Key1Trans, keytrans);
     wr32(LM_Key2Trans, keytrans);

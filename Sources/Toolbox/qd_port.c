@@ -216,6 +216,7 @@ void tb_OpenPort(gaddr p)
 void tb_ClosePort(gaddr p)
 {
     port_list_remove(p);
+    qd_port_forget(p);
     qd_screen_port_closed(p);
     tb_DisposeRgn(GrafPort_visRgn(p));
     tb_DisposeRgn(GrafPort_clipRgn(p));
@@ -463,6 +464,63 @@ void qd_set_fg_override(const uint16_t *rgb)
 }
 
 /* The port's foreground and background as pixel values at its depth. */
+/* Colours given by index (PmForeColor and PmBackColor for a palette entry
+ * that owns a slot of the screen's table): the index, while the port's
+ * colour is still the one it was set with. */
+#define MAX_INDEXED 64
+static struct {
+    gaddr port;
+    bool fore;
+    uint16_t rgb[3];
+    uint32_t index;
+} indexed[MAX_INDEXED];
+
+void qd_port_set_index(gaddr port, bool fore, uint32_t index)
+{
+    if (!qd_port_is_color(port))
+        return;
+    int slot = -1;
+    for (int i = 0; i < MAX_INDEXED; i++) {
+        if (indexed[i].port == port && indexed[i].fore == fore) {
+            slot = i;
+            break;
+        }
+        if (slot < 0 && !indexed[i].port)
+            slot = i;
+    }
+    if (slot < 0)
+        slot = (int)(port % MAX_INDEXED);
+    gaddr c = port + (fore ? CGrafPort_rgbFgColor_off : CGrafPort_rgbBkColor_off);
+    indexed[slot].port = port;
+    indexed[slot].fore = fore;
+    for (int k = 0; k < 3; k++)
+        indexed[slot].rgb[k] = rd16(c + (uint32_t)k * 2);
+    indexed[slot].index = index;
+    if (fore)
+        GrafPort_set_fgColor(port, (int32_t)index);
+    else
+        GrafPort_set_bkColor(port, (int32_t)index);
+}
+
+void qd_port_forget(gaddr port)
+{
+    for (int i = 0; i < MAX_INDEXED; i++)
+        if (indexed[i].port == port)
+            indexed[i].port = 0;
+}
+
+static bool index_for(gaddr port, bool fore, const uint16_t rgb[3], uint32_t *index)
+{
+    for (int i = 0; i < MAX_INDEXED; i++)
+        if (indexed[i].port == port && indexed[i].fore == fore) {
+            if (memcmp(indexed[i].rgb, rgb, sizeof indexed[i].rgb))
+                return false;
+            *index = indexed[i].index;
+            return true;
+        }
+    return false;
+}
+
 void qd_port_bits(gaddr port, uint32_t *fg, uint32_t *bk)
 {
     uint16_t f[3], b[3];
@@ -484,6 +542,14 @@ void qd_port_bits(gaddr port, uint32_t *fg, uint32_t *bk)
     }
     *fg = qd_rgb_px(d.depth, d.ctab, f);
     *bk = qd_rgb_px(d.depth, d.ctab, b);
+    /* Palette slots: on the indexed screen (or anything sharing its table). */
+    uint32_t idx;
+    if (qd_port_is_color(port) && d.depth <= 8 && d.ctab && d.ctab == qd_screen_ctab()) {
+        if (!fg_override && index_for(port, true, f, &idx))
+            *fg = idx;
+        if (index_for(port, false, b, &idx))
+            *bk = idx;
+    }
 }
 
 void tb_ForeColor(int32_t c)
@@ -515,7 +581,10 @@ void tb_RGBForeColor(gaddr c)
     gaddr p = qd_port();
     if (qd_port_is_color(p)) {
         gmemcpy(p + CGrafPort_rgbFgColor_off, c, 6);
-        GrafPort_set_fgColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? 1 : 0);
+        uint16_t rgb[3] = { rd16(c), rd16(c + 2), rd16(c + 4) };
+        pixdst d = qd_port_pixels(p); /* fgColor: the pixel value, as Color2Index gives it */
+        GrafPort_set_fgColor(p, d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0)
+                                             : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb));
     } else {
         GrafPort_set_fgColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? blackColor : whiteColor);
     }
@@ -526,7 +595,10 @@ void tb_RGBBackColor(gaddr c)
     gaddr p = qd_port();
     if (qd_port_is_color(p)) {
         gmemcpy(p + CGrafPort_rgbBkColor_off, c, 6);
-        GrafPort_set_bkColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? 1 : 0);
+        uint16_t rgb[3] = { rd16(c), rd16(c + 2), rd16(c + 4) };
+        pixdst d = qd_port_pixels(p);
+        GrafPort_set_bkColor(p, d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0)
+                                             : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb));
     } else {
         GrafPort_set_bkColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? blackColor : whiteColor);
     }

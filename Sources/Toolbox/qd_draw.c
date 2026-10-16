@@ -967,7 +967,10 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
         int nv = 1 << s.depth;
         lut_conv = malloc(sizeof *lut_conv * (size_t)nv);
         lut_white = malloc((size_t)nv);
-        bool same_table = s.depth == d.depth && s.ctab == d.ctab && !(m & 4);
+        /* Tables with the same seed are the same colours: indices copy as
+         * they are (how programs put palette slots' indices on the screen). */
+        bool same_seed = s.ctab && d.ctab && rd32(s.ctab) && rd32(d.ctab) && rd32(rd32(s.ctab)) == rd32(rd32(d.ctab));
+        bool same_table = s.depth == d.depth && (s.ctab == d.ctab || same_seed) && !(m & 4);
         for (int v = 0; v < nv; v++) {
             uint16_t rgb[3];
             qd_px_rgb(s.depth, s.ctab, (uint32_t)v, rgb);

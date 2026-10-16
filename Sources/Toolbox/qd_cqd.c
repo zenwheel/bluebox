@@ -549,8 +549,17 @@ void tb_FillCPoly(gaddr poly, gaddr pp)
 }
 
 /* ---------------------------------------------------------------------- */
-/* Palette Manager: palettes are kept and their colours used for drawing;
- * the 8-bit screen's table stays the standard one. */
+/* Palette Manager.  On an indexed screen (2 to 8 bits), activating a
+ * window's palette gives its animated entries (and tolerant ones with no
+ * close colour) slots of their own in the screen's colour table; PmForeColor
+ * and PmBackColor draw with a slot's index, and AnimatePalette and
+ * AnimateEntry change the slot's colour, so what was drawn with it changes
+ * at once (fades, colour cycling).  Courteous entries draw with the nearest
+ * colour.  On a direct screen, palettes only supply colours. */
+
+enum { pmTolerant = 0x0002, pmAnimated = 0x0004, pmExplicit = 0x0008 };
+static gaddr device_table(void);
+static void bump_seed(gaddr ct);
 
 #define MAX_WINDOW_PALETTES 64
 static struct {
@@ -561,6 +570,129 @@ void tb_InitPalettes(void) { memset(window_pal, 0, sizeof window_pal); }
 
 static gaddr entry(gaddr pal, int i) { return rd32(pal) + Palette_pmInfo_off + (uint32_t)i * ColorInfo_SIZEOF; }
 static int entries(gaddr pal) { return pal && rd32(pal) ? (int16_t)rd16(rd32(pal) + Palette_pmEntries_off) : 0; }
+
+/* Slots of the screen's table that palette entries own: a reservation is
+ * kept in the entry's ciPrivate as (generation << 16 | index + 1), so a new
+ * table (a depth change, RestoreDeviceClut) ends them all. */
+static bool claimed[256];
+static gaddr claimed_for; /* the table the slots belong to */
+static uint16_t generation = 1;
+
+static int table_size(gaddr ct) { return ct && rd32(ct) ? (int16_t)rd16(rd32(ct) + 6) + 1 : 0; }
+
+/* The screen's table, if the screen is indexed; reservations follow it. */
+static gaddr indexed_table(void)
+{
+    if (qd_screen_depth() > 8 || qd_screen_depth() < 2)
+        return 0;
+    gaddr dt = device_table();
+    if (dt != claimed_for) {
+        memset(claimed, 0, sizeof claimed);
+        claimed_for = dt;
+        generation++;
+    }
+    return dt;
+}
+
+/* The slot an entry owns, or -1. */
+static int slot_of(gaddr pal, int i)
+{
+    uint32_t v = rd32(entry(pal, i) + ColorInfo_ciPrivate_off);
+    if (!indexed_table() || (v >> 16) != generation || !(v & 0xFFFF))
+        return -1;
+    return (int)(v & 0xFFFF) - 1;
+}
+
+static void set_slot_color(gaddr dt, int idx, gaddr rgb)
+{
+    gmemcpy(rd32(dt) + 8 + (uint32_t)idx * 8 + 2, rgb, 6);
+}
+
+/* Give an entry a slot: its own index if explicit, else a free one from the
+ * top; never the first (white) or last (black). */
+static int claim_slot(gaddr pal, int i, bool explicit_)
+{
+    gaddr dt = indexed_table();
+    int n = table_size(dt);
+    if (n < 4)
+        return -1;
+    int idx = -1;
+    if (explicit_) {
+        idx = i % n;
+        if (idx == 0 || idx == n - 1)
+            return -1;
+    } else {
+        for (int k = n - 2; k >= 1; k--)
+            if (!claimed[k]) {
+                idx = k;
+                break;
+            }
+    }
+    if (idx < 0)
+        return -1;
+    claimed[idx] = true;
+    wr32(entry(pal, i) + ColorInfo_ciPrivate_off, (uint32_t)generation << 16 | (uint32_t)(idx + 1));
+    return idx;
+}
+
+static void release_slots(gaddr pal)
+{
+    for (int i = 0; i < entries(pal); i++) {
+        int idx = slot_of(pal, i);
+        if (idx >= 0)
+            claimed[idx] = false;
+        wr32(entry(pal, i) + ColorInfo_ciPrivate_off, 0);
+    }
+}
+
+/* How far apart two colours are, as the Palette Manager's tolerance
+ * measures it: the largest component difference. */
+static uint16_t color_distance(gaddr a, gaddr b)
+{
+    uint16_t d = 0;
+    for (int k = 0; k < 3; k++) {
+        int x = (int)rd16(a + (uint32_t)k * 2) - (int)rd16(b + (uint32_t)k * 2);
+        if (x < 0)
+            x = -x;
+        if (x > d)
+            d = (uint16_t)x;
+    }
+    return d;
+}
+
+static void activate(gaddr pal)
+{
+    gaddr dt = indexed_table();
+    if (!pal || !rd32(pal) || !dt)
+        return;
+    bool changed = false;
+    for (int i = 0; i < entries(pal); i++) {
+        gaddr e = entry(pal, i);
+        uint16_t usage = rd16(e + ColorInfo_ciUsage_off);
+        int idx = slot_of(pal, i);
+        if (usage & pmAnimated) {
+            if (idx < 0)
+                idx = claim_slot(pal, i, usage & pmExplicit);
+        } else if (usage & pmTolerant) {
+            if (idx < 0) {
+                uint16_t best = 0xFFFF;
+                for (int k = 0; k < table_size(dt); k++) {
+                    uint16_t d = color_distance(rd32(dt) + 8 + (uint32_t)k * 8 + 2, e + ColorInfo_ciRGB_off);
+                    if (d < best)
+                        best = d;
+                }
+                if (best > rd16(e + ColorInfo_ciTolerance_off))
+                    idx = claim_slot(pal, i, usage & pmExplicit);
+            }
+        }
+        if (idx >= 0) {
+            set_slot_color(dt, idx, e + ColorInfo_ciRGB_off);
+            changed = true;
+        }
+    }
+    if (changed)
+        bump_seed(dt);
+}
 
 gaddr tb_NewPalette(int16_t n, gaddr srcColors, int16_t usage, int16_t tolerance)
 {
@@ -587,11 +719,15 @@ gaddr tb_GetNewPalette(int16_t id)
         return 0;
     uint32_t h = r;
     tb_HandToHand(&h);
+    for (int i = 0; i < entries(h); i++)
+        wr32(entry(h, i) + ColorInfo_ciPrivate_off, 0);
     return h;
 }
 
 void tb_DisposePalette(gaddr pal)
 {
+    if (pal && rd32(pal))
+        release_slots(pal);
     for (int i = 0; i < MAX_WINDOW_PALETTES; i++)
         if (window_pal[i].pal == pal)
             window_pal[i].w = window_pal[i].pal = 0;
@@ -599,8 +735,29 @@ void tb_DisposePalette(gaddr pal)
         tb_DisposeHandle(pal);
 }
 
-void tb_ActivatePalette(gaddr w) {}
-void tb_RestoreDeviceClut(gaddr gdh) {}
+void tb_ActivatePalette(gaddr w)
+{
+    gaddr pal = tb_GetPalette(w);
+    activate(pal ? pal : tb_GetPalette(0xFFFFFFFFu));
+}
+
+/* The standard table again, and no slots owned. */
+void tb_RestoreDeviceClut(gaddr gdh)
+{
+    gaddr dt = indexed_table();
+    if (!dt)
+        return;
+    int depth = qd_screen_depth(), n = table_size(dt);
+    for (int k = 0; k < n; k++) {
+        uint16_t rgb[3];
+        qd_px_rgb(depth, 0, (uint32_t)k, rgb);
+        for (int c = 0; c < 3; c++)
+            wr16(rd32(dt) + 8 + (uint32_t)k * 8 + 2 + (uint32_t)c * 2, rgb[c]);
+    }
+    memset(claimed, 0, sizeof claimed);
+    generation++;
+    bump_seed(dt);
+}
 
 void tb_NSetPalette(gaddr w, gaddr pal, int16_t updates)
 {
@@ -608,8 +765,10 @@ void tb_NSetPalette(gaddr w, gaddr pal, int16_t updates)
         if (window_pal[i].w == w || !window_pal[i].w) {
             window_pal[i].w = w;
             window_pal[i].pal = pal;
-            return;
+            break;
         }
+    if (updates && w && w != 0xFFFFFFFFu && w == rd32(LM_WindowList))
+        activate(pal); /* the front window's palette takes effect */
 }
 
 void tb_SetPalette(gaddr w, gaddr pal, int8_t updates) { tb_NSetPalette(w, pal, updates ? -1 : 0); }
@@ -628,19 +787,27 @@ static gaddr current_palette(void)
     return p ? p : tb_GetPalette(0xFFFFFFFFu); /* the application's default */
 }
 
-static void pm_color(int16_t i, void (*set)(gaddr))
+static void pm_color(int16_t i, bool fore)
 {
     gaddr pal = current_palette();
     if (i < 0 || i >= entries(pal))
         return;
     gaddr c = tb_NewPtr(6, false, false);
     gmemcpy(c, entry(pal, i) + ColorInfo_ciRGB_off, 6);
-    set(c);
+    if (fore)
+        tb_RGBForeColor(c);
+    else
+        tb_RGBBackColor(c);
     tb_DisposePtr(c);
+    /* An entry with a slot of its own draws with that index (and the port's
+     * fgColor or bkColor says so, which programs read back). */
+    int idx = slot_of(pal, i);
+    if (idx >= 0)
+        qd_port_set_index(qd_port(), fore, (uint32_t)idx);
 }
 
-void tb_PmForeColor(int16_t i) { pm_color(i, tb_RGBForeColor); }
-void tb_PmBackColor(int16_t i) { pm_color(i, tb_RGBBackColor); }
+void tb_PmForeColor(int16_t i) { pm_color(i, true); }
+void tb_PmBackColor(int16_t i) { pm_color(i, false); }
 
 void tb_GetEntryColor(gaddr pal, int16_t i, gaddr c)
 {
@@ -674,16 +841,41 @@ void tb_SetEntryUsage(gaddr pal, int16_t i, int16_t usage, int16_t tolerance)
         wr16(entry(pal, i) + ColorInfo_ciTolerance_off, (uint16_t)tolerance);
 }
 
-void tb_AnimateEntry(gaddr w, int16_t i, gaddr c) { tb_SetEntryColor(tb_GetPalette(w), i, c); }
+/* A new colour for an entry, and for its slot on the screen if it has one. */
+static bool animate_entry(gaddr pal, int i, gaddr rgb)
+{
+    if (i < 0 || i >= entries(pal))
+        return false;
+    gmemcpy(entry(pal, i) + ColorInfo_ciRGB_off, rgb, 6);
+    int idx = slot_of(pal, i);
+    if (idx < 0 || !(rd16(entry(pal, i) + ColorInfo_ciUsage_off) & pmAnimated))
+        return false;
+    set_slot_color(device_table(), idx, rgb);
+    return true;
+}
+
+static gaddr palette_of_window(gaddr w)
+{
+    gaddr pal = tb_GetPalette(w);
+    return pal ? pal : tb_GetPalette(0xFFFFFFFFu);
+}
+
+void tb_AnimateEntry(gaddr w, int16_t i, gaddr c)
+{
+    if (animate_entry(palette_of_window(w), i, c))
+        bump_seed(device_table());
+}
 
 void tb_AnimatePalette(gaddr w, gaddr ctab, int16_t index, int16_t dst, int16_t n)
 {
-    gaddr pal = tb_GetPalette(w);
-    for (int k = 0; k < n; k++) {
-        gaddr src = rd32(ctab) + 8 + (uint32_t)(index + k) * 8 + 2;
-        if (dst + k < entries(pal))
-            gmemcpy(entry(pal, dst + k) + ColorInfo_ciRGB_off, src, 6);
-    }
+    gaddr pal = palette_of_window(w);
+    if (!ctab || !rd32(ctab))
+        return;
+    bool changed = false;
+    for (int k = 0; k < n && index + k < table_size(ctab); k++)
+        changed |= animate_entry(pal, dst + k, rd32(ctab) + 8 + (uint32_t)(index + k) * 8 + 2);
+    if (changed)
+        bump_seed(device_table());
 }
 
 void tb_CopyPalette(gaddr src, gaddr dst, int16_t src_start, int16_t dst_start, int16_t n)
