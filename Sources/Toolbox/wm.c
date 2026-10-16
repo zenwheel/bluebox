@@ -1124,7 +1124,19 @@ static gaddr get_new_window(int16_t id, gaddr storage, gaddr behind, bool color)
 }
 
 gaddr tb_GetNewWindow(int16_t wid, gaddr wst, gaddr behind) { return get_new_window(wid, wst, behind, false); }
-gaddr tb_GetNewCWindow(int16_t wid, gaddr wst, gaddr behind) { return get_new_window(wid, wst, behind, true); }
+/* GetNewCWindow: a colour window, given the 'pltt' palette of its own ID if
+ * there is one, as the Palette Manager does (Graphing Calculator's colours
+ * are entries of its pltt 128). */
+gaddr tb_GetNewCWindow(int16_t wid, gaddr wst, gaddr behind)
+{
+    gaddr w = get_new_window(wid, wst, behind, true);
+    if (w) {
+        gaddr pal = tb_GetNewPalette(wid);
+        if (pal)
+            tb_SetPalette(w, pal, true);
+    }
+    return w;
+}
 
 void tb_CloseWindow(gaddr w)
 {
