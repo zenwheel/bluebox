@@ -44,6 +44,13 @@ void machine_set_screen_depth(int depth);
 /* 68040 (with FPU, the default) or 68020 (no FPU). Before machine_boot. */
 void machine_set_cpu(int model);
 bool machine_halted(void);
+/* With depth alerts on, an alert saying the program needs another screen
+ * depth ends the run instead of showing ("asks for depth N"), and
+ * machine_wanted_depth() gives N, for the host to start it again at. */
+void machine_set_depth_alerts(bool on);
+int machine_wanted_depth(void);
+/* The depths an alert's text says a program runs at, as bits 1 << depth. */
+uint64_t machine_alert_depths(const char *message);
 /* Write the screen to a PNG file. */
 bool machine_screenshot(const char *path);
 bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h);

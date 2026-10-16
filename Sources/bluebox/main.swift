@@ -43,8 +43,10 @@ func usage() -> Never {
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
-      --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
-                     application can still switch depth itself with SetDepth)
+          --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
+                     application can still switch depth itself with SetDepth).  Without either, a
+                     game known to need another depth gets it, and one whose alert asks for
+                     another is started again at that depth, kept as its setting
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
           --scale S  host points per Mac pixel: 1, 1.5 or 2 (default 1, or the app's or the
                      default setting), so classic interfaces are bigger on modern displays
@@ -384,8 +386,11 @@ func runCommand(_ args: [String]) {
     // The application's settings over the defaults; a program known to
     // refuse the default depth gets one it accepts.
     var saved = (settings(for: app) ?? AppSettings()).over(defaultSettings())
-    if screenDepth == nil, settings(for: app)?.depth == nil, let d = requiredDepth(application: app, over: saved.depth) {
-        saved.depth = d
+    if screenDepth == nil, settings(for: app)?.depth == nil {
+        if let d = requiredDepth(application: app, over: saved.depth) { saved.depth = d }
+        // Nobody chose this depth for it: if it says it needs another, it
+        // runs again at that one.
+        depthRelaunch = (app, !census && screenshot == nil && printTo == nil)
     }
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
@@ -433,6 +438,7 @@ func runCommand(_ args: [String]) {
         machine_set_screen_depth(Int32(d))
     }
     if let m = cpuModel ?? saved.cpu.map(Int32.init) { machine_set_cpu(m) }
+    machine_set_depth_alerts(depthRelaunch != nil)
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }
@@ -497,6 +503,7 @@ func runCommand(_ args: [String]) {
     let status = machine_run(budget)
 
     let count = machine_instruction_count()
+    relaunchAtWantedDepth()
     if status == RUN_HALTED {
         print("stopped: \(String(cString: machine_halt_reason())) after \(count) instructions")
     } else {
@@ -529,6 +536,33 @@ func runCommand(_ args: [String]) {
         }
     }
     exit(status == RUN_HALTED && String(cString: machine_halt_reason()).hasPrefix("ExitToShell") ? 0 : 1)
+}
+
+/// The application `run` started, when an alert asking for another depth
+/// starts it again, and whether that depth is kept as its setting.
+nonisolated(unsafe) var depthRelaunch: (app: String, save: Bool)?
+
+/// After the machine stops: if the program asked for another screen depth
+/// (machine_wanted_depth), keep that as its setting and start it again at
+/// that depth, in this process.  Returns only if it didn't ask.
+func relaunchAtWantedDepth() {
+    let depth = Int(machine_wanted_depth())
+    guard depth > 0, let (app, save) = depthRelaunch, let me = Bundle.main.executablePath else { return }
+    let name = (app as NSString).lastPathComponent
+    if save {
+        var all = loadSettings(defaultLibrary())
+        var s = all[settingsKey(app)] ?? AppSettings()
+        s.depth = depth
+        all[settingsKey(app)] = s
+        saveSettings(all, library: defaultLibrary())
+    }
+    print("relaunch: \(name) asked for depth \(depth)\(save ? " (now its setting)" : "")")
+    fflush(stdout)
+    // --depth also keeps the second run from asking again.
+    let args = [me] + CommandLine.arguments.dropFirst() + ["--depth", String(depth)]
+    var cargs = args.map { strdup($0) } + [nil]
+    execv(me, &cargs)
+    cargs.forEach { free($0) }
 }
 
 /// Turn a run argument into an AppleDouble application path, ingesting

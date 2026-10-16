@@ -5,6 +5,7 @@
  * DITL resources with ParamText substituted.  Without a host the default
  * button is chosen (and the message logged).
  */
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -16,6 +17,78 @@ enum { itemButton = 4, itemStatText = 8, itemDisabled = 0x80 };
 static gaddr resume_proc;
 static machine_alert_fn alert_fn;
 static void *alert_ctx;
+static bool depth_alerts;
+static int wanted_depth;
+
+void machine_set_depth_alerts(bool on) { depth_alerts = on; }
+int machine_wanted_depth(void) { return wanted_depth; }
+
+/* The depths an alert says a program runs at ("requires 256 colors", "set
+ * your monitor to 16 colors (4 bit)", "only runs in Black and White, 4
+ * color mode ..."), as a set of 1 << depth; 0 when it isn't about depth. */
+uint64_t machine_alert_depths(const char *message)
+{
+    char m[1024];
+    size_t n = 0;
+    for (const char *p = message; *p && n < sizeof m - 1; p++)
+        m[n++] = (char)tolower((unsigned char)*p);
+    m[n] = 0;
+    static const char *const asks[] = { "requir", "need", "must", "only", "set ", "switch", "at least",
+                                        "find", "please", NULL };
+    bool asking = false;
+    for (int i = 0; asks[i]; i++)
+        asking |= strstr(m, asks[i]) != NULL;
+    if (!asking)
+        return 0;
+    static const struct { const char *text; int depth; } words[] = {
+        { "256", 8 }, { "8-bit", 8 }, { "8 bit", 8 },
+        { "16 colo", 4 }, { "16-colo", 4 }, { "16 gr", 4 }, { "16 shade", 4 }, { "4-bit", 4 }, { "4 bit", 4 },
+        { "4 colo", 2 }, { "4-colo", 2 }, { "4 gr", 2 }, { "2-bit", 2 }, { "2 bit", 2 },
+        { "thousands", 16 }, { "16-bit", 16 }, { "16 bit", 16 },
+        { "millions", 32 }, { "24-bit", 32 }, { "24 bit", 32 }, { "32-bit", 32 }, { "32 bit", 32 },
+        { "black and white", 1 }, { "black & white", 1 }, { "b&w", 1 }, { "monochrome", 1 },
+        { "2-colo", 1 }, { "2 colo", 1 }, { "1-bit", 1 }, { "1 bit", 1 },
+    };
+    uint64_t set = 0;
+    for (size_t i = 0; i < sizeof words / sizeof words[0]; i++) {
+        for (const char *p = strstr(m, words[i].text); p; p = strstr(p + 1, words[i].text)) {
+            const char *after = p + strlen(words[i].text);
+            while (*after == ' ' || *after == '-')
+                after++;
+            /* "32 Bit QuickDraw", "32-bit addressing": not a depth. */
+            if (!strncmp(after, "quickdraw", 9) || !strncmp(after, "address", 7) || !strncmp(after, "clean", 5))
+                continue;
+            /* "16 colors" is not "6 colors"; "256" not "56". */
+            if (p > m && isdigit((unsigned char)p[-1]))
+                continue;
+            set |= 1ull << words[i].depth;
+        }
+    }
+    return set;
+}
+
+/* A program that refuses the screen's depth before anyone has seen it
+ * run: when the host allows, the run ends here, without the alert, and
+ * the host starts it again at the depth it asked for (the highest of
+ * those it names up to 256 colours, as games mostly mean).  Returns
+ * whether it did. */
+static bool depth_alert(const char *message)
+{
+    if (!depth_alerts)
+        return false;
+    uint64_t set = machine_alert_depths(message);
+    if (!set || (set & (1ull << qd_screen_depth())))
+        return false;
+    int pick = 0;
+    for (int d = 1; d <= 32; d <<= 1) {
+        if ((set & (1ull << d)) && (d <= 8 || !(set & 0x1FF)))
+            pick = d;
+    }
+    wanted_depth = pick;
+    LOGF(LOG_UNIMPL, "alert asks for depth %d: %s\n", pick, message);
+    cpu_halt(g_cpu, "asks for depth %d", pick);
+    return true;
+}
 
 void machine_set_alert_handler(machine_alert_fn fn, void *ctx)
 {
@@ -155,6 +228,8 @@ static int16_t run_alert(int16_t id, int kind)
             a.buttons[i].is_default = true;
     }
     int16_t result = default_item;
+    if (depth_alert(a.message))
+        return result;
     if (alert_fn) {
         int r = alert_fn(&a, alert_ctx);
         if (r > 0)

@@ -50,9 +50,7 @@ let knownDepthRequirements: [UInt32: DepthRequirement] = [
     0x4B49_5249: DepthRequirement(allowed: [8], preferred: 8),          /* KIRI S.C. Out */
     0x5375_B972: DepthRequirement(allowed: [8], preferred: 8),          /* Suπr SS II */
     0x5257_B93D: DepthRequirement(allowed: [8], preferred: 8),          /* RWπ= Slider */
-    0x536B_3364: DepthRequirement(allowed: [8], preferred: 8),          /* Sk3d Sokoban 3D */
     0xC66E_4CBA: DepthRequirement(allowed: [8], preferred: 8),          /* ∆nL∫ Space Gypsy */
-    0x5350_4852: DepthRequirement(allowed: [8], preferred: 8),          /* SPHR Spheres */
     0x6368_5453: DepthRequirement(allowed: [8], preferred: 8),          /* chTS Star Flick */
     0x4D4B_444E: DepthRequirement(allowed: [8], preferred: 8),          /* MKDN SuperColumns */
 ]

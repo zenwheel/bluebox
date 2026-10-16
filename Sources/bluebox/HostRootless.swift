@@ -188,6 +188,7 @@ final class TransientView: NSView {
 
     func tick() {
         if machine_halted() {
+            relaunchAtWantedDepth()
             NSApp.terminate(nil)
             return
         }

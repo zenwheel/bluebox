@@ -26,7 +26,10 @@ final class ScreenView: NSView {
             MainActor.assumeIsolated {
                 self?.refreshIfChanged()
                 CursorSync.shared.tick()
-                if machine_halted() { NSApp.terminate(nil) }
+                if machine_halted() {
+                    relaunchAtWantedDepth()
+                    NSApp.terminate(nil)
+                }
             }
         }
     }
