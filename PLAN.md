@@ -374,7 +374,7 @@ the trap census.
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
 - Next:
   - OpenPicture recording (pictures made by apps, e.g. for the clipboard)
-  - colour pixel patterns drawn in colour (they draw through their 1-bit form today); 2-, 4- and 16-bit screens for `SetDepth`
+  - Color QuickDraw, what is left: colour pixel patterns drawn in colour (they draw through their 1-bit form today); the arithmetic transfer modes (`blend`, `addPin`, `addOver`, `subPin`, `transparent`, `addMax`, `subOver`, `adMin`) and `ditherCopy`, which copy plainly today; `OpColor`; colour cursors shown by the host (they load, the host pointer stays black and white); custom `ModalDialog` depth requests (only `Alert`s are read for "needs 256 colours")
   - MACE 3:1 and 6:1 sound decoding (it plays silence of the right length)
   - QuickTime: Music tracks (QuickTime Music Architecture: notes for its synthesizer, which VLC cannot render), sprite and text tracks, editing, the Image Compression Manager's own calls
   - Gestalt reporting the 68881 we emulate (and a 68040 for applications that require one, e.g. ShatterBat), once FPU and 68040 coverage is validated against the oracle
