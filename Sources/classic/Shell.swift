@@ -23,9 +23,42 @@ struct ShellApp: Identifiable, Hashable {
     var name: String { (path as NSString).lastPathComponent }
 }
 
-/// A sidebar entry: the defaults, or one application.
+/// Something an installer put in the classic System Folder.
+struct SystemItem: Identifiable, Hashable {
+    let path: String
+    let folder: String /* Control Panels, Extensions ... */
+    let type: String
+    let creator: String
+    let architecture: String
+    var id: String { path }
+    var name: String { (path as NSString).lastPathComponent }
+    var isApplication: Bool { type == "APPL" }
+    /// What it is, in words.
+    var kind: String {
+        switch type {
+        case "APPL": return "application"
+        case "cdev": return "control panel"
+        case "INIT": return "extension"
+        case "appe": return "background application"
+        case "FFIL", "tfil": return "font suitcase"
+        case "ffil": return "font"
+        case "PRER", "PRES": return "printer driver"
+        case "RDEV": return "Chooser extension"
+        case "thng": return "component"
+        case "shlb": return "shared library"
+        case "dfil": return "desk accessory"
+        default: return "\(type) file"
+        }
+    }
+}
+
+/// The System Folder's folders the shell shows and watches.
+let watchedSystemFolders = ["Apple Menu Items", "Control Panels", "Extensions", "Startup Items", "Fonts"]
+
+/// A sidebar entry: the defaults, the System Folder, or one application.
 enum ShellItem: Hashable {
     case defaults
+    case systemFolder
     case app(ShellApp)
 }
 
@@ -35,6 +68,10 @@ enum ShellItem: Hashable {
     @Published var importing: [String] = []
     @Published var messages: [String] = []
     @Published var settings: [String: AppSettings] = [:]
+    @Published var systemItems: [SystemItem] = []
+    @Published var running: [String: Process] = [:] /* by application path */
+    @Published var recent: [String] = UserDefaults.standard.stringArray(forKey: "recent") ?? []
+    private var watchers: [DispatchSourceFileSystemObject] = []
     private var iconCache: [String: NSImage] = [:]
     let library = defaultLibrary()
 
@@ -47,7 +84,29 @@ enum ShellItem: Hashable {
         return image
     }
 
-    init() { refresh() }
+    init() {
+        refresh()
+        watchSystemFolder()
+    }
+
+    var systemFolder: String { defaultDisk() + "/System Folder" }
+
+    /// Refresh when an installer (or anything else) changes the System
+    /// Folder's folders.
+    private func watchSystemFolder() {
+        for name in watchedSystemFolders {
+            let fd = open(systemFolder + "/" + name, O_EVTONLY)
+            guard fd >= 0 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .rename, .delete],
+                                                                   queue: .main)
+            source.setEventHandler { [weak self] in
+                MainActor.assumeIsolated { self?.refresh() }
+            }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            watchers.append(source)
+        }
+    }
 
     /// Scan the library and the disk again (after an import or an install).
     func refresh() {
@@ -63,6 +122,16 @@ enum ShellItem: Hashable {
         }
         apps = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         themes = classicThemes(in: library).map { ($0 as NSString).lastPathComponent }.sorted()
+        var items: [SystemItem] = []
+        for folder in watchedSystemFolders {
+            let root = systemFolder + "/" + folder
+            guard FileManager.default.fileExists(atPath: root) else { continue }
+            for f in scan(root) {
+                items.append(SystemItem(path: f.path, folder: folder, type: fourCCString(f.type),
+                                        creator: fourCCString(f.creator), architecture: f.architecture))
+            }
+        }
+        systemItems = items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         settings = loadSettings(library)
     }
 
@@ -76,11 +145,30 @@ enum ShellItem: Hashable {
 
     /// Run an application as `classic run` does from a terminal: a process of
     /// its own, with its own Dock icon and rootless windows.
-    func launch(_ app: ShellApp) {
+    func launch(_ app: ShellApp) { launch(path: app.path) }
+
+    func launch(path: String) {
+        let name = (path as NSString).lastPathComponent
+        if let p = running[path], p.isRunning {
+            messages.append("\(name) is already running")
+            return
+        }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
-        p.arguments = ["run", app.path]
-        do { try p.run() } catch { messages.append("Could not launch \(app.name): \(error.localizedDescription)") }
+        p.arguments = ["run", path]
+        p.terminationHandler = { [weak self] _ in
+            Task { @MainActor in self?.running[path] = nil }
+        }
+        do {
+            try p.run()
+            running[path] = p
+            recent.removeAll { $0 == path }
+            recent.insert(path, at: 0)
+            recent = Array(recent.prefix(8))
+            UserDefaults.standard.set(recent, forKey: "recent")
+        } catch {
+            messages.append("Could not launch \(name): \(error.localizedDescription)")
+        }
     }
 
     /// Import dropped or chosen files into the library, off the main thread.
@@ -118,7 +206,13 @@ func classicThemes(in library: String) -> [String] {
 
 struct ShellView: View {
     @ObservedObject var model: ShellModel
-    @State private var selection: ShellItem? = .defaults
+    /// The page shown first (CLASSIC_SHELL_PAGE=system for snapshots).
+    @State private var selection: ShellItem? = {
+        switch ProcessInfo.processInfo.environment["CLASSIC_SHELL_PAGE"] {
+        case "system": return .systemFolder
+        default: return .defaults
+        }
+    }()
     @State private var dropTargeted = false
 
     var body: some View {
@@ -126,6 +220,7 @@ struct ShellView: View {
             List(selection: $selection) {
                 Section("Settings") {
                     Label("Defaults", systemImage: "slider.horizontal.3").tag(ShellItem.defaults)
+                    Label("System Folder", systemImage: "folder.badge.gearshape").tag(ShellItem.systemFolder)
                 }
                 ForEach(["Library", "Macintosh HD"], id: \.self) { place in
                     let here = model.apps.filter { $0.place == place }
@@ -136,7 +231,13 @@ struct ShellView: View {
                                     Image(nsImage: model.icon(app)).resizable().interpolation(.none)
                                         .frame(width: 16, height: 16)
                                     VStack(alignment: .leading, spacing: 0) {
-                                        Text(app.name)
+                                        HStack(spacing: 4) {
+                                            Text(app.name)
+                                            if model.running[app.path] != nil {
+                                                Circle().fill(Color.green).frame(width: 6, height: 6)
+                                                    .help("Running")
+                                            }
+                                        }
                                         if !app.folder.isEmpty {
                                             Text(app.folder).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                         }
@@ -153,6 +254,7 @@ struct ShellView: View {
             VStack(spacing: 0) {
                 switch selection {
                 case .app(let app): AppPage(model: model, app: app)
+                case .systemFolder: SystemFolderPage(model: model)
                 default: DefaultsPage(model: model)
                 }
                 StatusBar(model: model)
@@ -227,6 +329,42 @@ struct DefaultsPage: View {
     }
 }
 
+struct SystemFolderPage: View {
+    @ObservedObject var model: ShellModel
+    var body: some View {
+        Form {
+            Section {
+                Text("What installers have put in the classic Mac's System Folder. Applications in Apple Menu Items "
+                     + "can be launched here; control panels and extensions are listed, and run once the "
+                     + "environment supports them.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(watchedSystemFolders, id: \.self) { folder in
+                let items = model.systemItems.filter { $0.folder == folder }
+                Section(folder) {
+                    if items.isEmpty {
+                        Text("Empty").foregroundStyle(.secondary)
+                    }
+                    ForEach(items) { item in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(item.name)
+                                Text("\(item.kind) · \(item.type)/\(item.creator)").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if item.isApplication {
+                                Button("Launch") { model.launch(path: item.path) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("System Folder")
+    }
+}
+
 struct AppPage: View {
     @ObservedObject var model: ShellModel
     let app: ShellApp
@@ -241,6 +379,9 @@ struct AppPage: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
+                    if model.running[app.path] != nil {
+                        Text("Running").foregroundStyle(.secondary)
+                    }
                     Button("Launch") { model.launch(app) }.keyboardShortcut(.defaultAction)
                 }
             }
@@ -343,15 +484,81 @@ struct HighlightPicker: View {
 
 // MARK: - The application
 
-@MainActor final class ShellDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class ShellDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var window: NSWindow?
+    var statusItem: NSStatusItem?
     let model = ShellModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        showWindow()
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Classic")
+        let menu = NSMenu()
+        menu.delegate = self
+        item.menu = menu
+        statusItem = item
+    }
+
+    /// The status item's menu, built as it opens: running and recent
+    /// applications, the window, quitting.
+    private func header(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let running = model.running.keys.sorted()
+        if !running.isEmpty {
+            menu.addItem(header("Running"))
+            for path in running {
+                let item = NSMenuItem(title: (path as NSString).lastPathComponent, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+            menu.addItem(.separator())
+        }
+        if !model.recent.isEmpty {
+            menu.addItem(header("Recent"))
+            for path in model.recent {
+                let item = NSMenuItem(title: (path as NSString).lastPathComponent, action: #selector(launchRecent(_:)),
+                                      keyEquivalent: "")
+                item.target = self
+                item.representedObject = path
+                menu.addItem(item)
+            }
+            menu.addItem(.separator())
+        }
+        let open = NSMenuItem(title: "Open Classic", action: #selector(openWindow(_:)), keyEquivalent: "")
+        open.target = self
+        menu.addItem(open)
+        menu.addItem(NSMenuItem(title: "Quit Classic", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
+    }
+
+    @objc func launchRecent(_ sender: NSMenuItem) {
+        if let path = sender.representedObject as? String { model.launch(path: path) }
+    }
+
+    @objc func openWindow(_ sender: Any?) { showWindow() }
+
+    /// Clicking the Dock icon brings the window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { showWindow() }
+        return true
+    }
+
+    private func showWindow() {
+        if let window {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 560),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
         w.title = "Classic"
+        w.isReleasedWhenClosed = false
         w.contentView = NSHostingView(rootView: ShellView(model: model))
         w.center()
         w.setFrameAutosaveName("ClassicShell")
@@ -370,7 +577,8 @@ struct HighlightPicker: View {
         }
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// The status item keeps the shell in the background, like the Finder.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     /// Files dropped on the Dock icon are imported too.
     func application(_ application: NSApplication, open urls: [URL]) { model.importFiles(urls) }
