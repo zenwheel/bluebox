@@ -43,6 +43,8 @@ func usage() -> Never {
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
+          --ppc      run a fat application's PowerPC code (PowerPC-only ones always run it)
+          --68k      run a fat application's 68k code (the default for now)
           --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
                      application can still switch depth itself with SetDepth).  Without --depth,
                      a game known to need another depth gets it (unless it has a depth setting),
@@ -272,6 +274,7 @@ func runCommand(_ args: [String]) {
     var screenWindow = false
     var screenshot: String?
     var screenDepth: Int32?
+    var preferPPC = false
     var scaleOption: Double?
     var redrawCheck: String?
     var cpuModel: Int32?
@@ -322,6 +325,8 @@ func runCommand(_ args: [String]) {
                 fail("--scale expects 1, 1.5 or 2")
             }
             scaleOption = v
+        case "--ppc": preferPPC = true
+        case "--68k": preferPPC = false
         case "--depth":
             i += 1
             guard i < args.count, let d = Int32(args[i]), [1, 2, 4, 8, 16, 32].contains(d) else {
@@ -444,6 +449,7 @@ func runCommand(_ args: [String]) {
     }
     if let m = cpuModel ?? saved.cpu.map(Int32.init) { machine_set_cpu(m) }
     machine_set_depth_alerts(depthRelaunch != nil)
+    machine_set_prefer_ppc(preferPPC)
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }
@@ -641,7 +647,7 @@ func resolveApplication(_ given: String, named: String?) -> String {
         fail("\(error)")
     }
     let apps = scan(entry).filter { $0.isApplication }
-    var candidates = apps.filter { $0.hasCODE }
+    var candidates = apps.filter { $0.hasCODE || $0.hasCfrg } /* 68k, PowerPC or both */
     if let named {
         candidates = candidates.filter {
             ($0.path as NSString).lastPathComponent.range(of: named, options: .caseInsensitive) != nil
@@ -649,12 +655,7 @@ func resolveApplication(_ given: String, named: String?) -> String {
     }
     if candidates.count == 1 { return candidates[0].path }
     if candidates.isEmpty {
-        let ppc = apps.filter { $0.hasCfrg && !$0.hasCODE }
-        if !ppc.isEmpty {
-            fail("only PowerPC applications in \(entry) (68k only for now): " +
-                 ppc.map { ($0.path as NSString).lastPathComponent }.joined(separator: ", "))
-        }
-        fail(named == nil ? "no 68k application found in \(entry)" : "no application matching \"\(named!)\" in \(entry)")
+        fail(named == nil ? "no application found in \(entry)" : "no application matching \"\(named!)\" in \(entry)")
     }
     eprint("several applications in \(entry); choose one with --app:\n")
     for a in candidates { eprint("  \((a.path as NSString).lastPathComponent)\n") }

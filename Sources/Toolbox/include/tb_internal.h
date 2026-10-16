@@ -248,4 +248,11 @@ bool fm_open_apple_menu_item(const uint8_t *name, int n);
 void speech_pump(void);
 void speech_reset(void);
 
+/* Code Fragment Manager (cfm.c): PowerPC applications. */
+struct ppc_cpu;
+extern struct ppc_cpu g_ppc;
+extern bool g_ppc_mode;
+bool cfm_has_ppc(void);
+bool cfm_launch(const char *app_path, char *err, size_t errlen);
+
 #endif

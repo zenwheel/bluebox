@@ -72,6 +72,7 @@ uint32_t hook_call(gaddr fn, uint32_t d0, uint32_t a0, uint32_t sp);
 
 /* Trap word of the routine currently executing (e.g. HFS bit 0x200). */
 uint16_t trap_current_word(void);
+void trap_set_current_word(uint16_t w); /* calls that come from PowerPC code: no trap */
 
 /* The CPU hooks. */
 void trap_aline(cpu68k *c, uint16_t op);

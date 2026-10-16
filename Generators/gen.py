@@ -473,6 +473,102 @@ def gen_glue(name, sig):
     return "".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# PowerPC: InterfaceLib's exports, each a glue taking its arguments in the
+# PowerPC calling convention (r3 to r10, then the caller's parameter area at
+# 24(r1)), calling tb_<name> and returning the result in r3.
+
+def ppc_variant_bits(variant, reg):
+    """The value a trap-bit argument takes in a named variant (NewPtrClear, PBReadAsync)."""
+    bit = reg[len("TrapBit<"):-1]
+    if bit in ("SYSBIT",):
+        return "Sys" in variant
+    if bit in ("CLRBIT", "0x200"):
+        return "Clear" in variant or "Imm" in variant
+    if bit == "0x400":
+        return "Async" in variant or ("Sys" in variant and "Sync" not in variant)
+    return False
+
+
+def gen_ppc_glue(name, fn, sig, variant):
+    """Glue for one exported name (the function or one of its variants)."""
+    if any(c[0] == "reg" and (c[1].startswith("Out<") or c[1].startswith("InOut<")) for _, c in sig["args"]):
+        return None
+    fixed = variant is not None
+    cname = f"ppcglue_{variant or name}"
+    lines = [f"static void {cname}(ppc_cpu *c)\n{{\n"]
+    call_args = []
+    slot = 0
+    for name_, cls in sig["args"]:
+        kind, reg, ti = cls
+        if kind == "reg" and reg.startswith("TrapBit") and fixed:
+            call_args.append("true" if ppc_variant_bits(variant, reg) else "false")
+            continue
+        ct = "bool" if (kind == "reg" and reg.startswith("TrapBit")) else ctype_for(ti)
+        src = f"c->gpr[{3 + slot}]" if slot < 8 else f"rd32(c->gpr[1] + {24 + 4 * slot})"
+        if ct == "bool":
+            lines.append(f"    bool a_{name_} = {src} != 0;\n")
+        else:
+            lines.append(f"    {ct} a_{name_} = ({ct}){src};\n")
+        call_args.append("a_" + name_)
+        slot += 1
+    rt = c_return(sig)
+    call = f"tb_{name}({', '.join(call_args)})"
+    if rt == "void":
+        lines.append(f"    {call};\n")
+    elif rt == "bool":
+        lines.append(f"    c->gpr[3] = {call} ? 1 : 0;\n")
+    else:
+        ti = sig["rti"]
+        if ti.signed and ti.size < 4:
+            lines.append(f"    c->gpr[3] = (uint32_t)(int32_t)({rt}){call};\n")
+        else:
+            lines.append(f"    c->gpr[3] = (uint32_t){call};\n")
+    lines.append("    c->pc = c->lr;\n}\n\n")
+    return cname, "".join(lines)
+
+
+def gen_ppc(impl, sigs):
+    out = [HEADER, "#include <stdbool.h>\n#include <stdint.h>\n#include <string.h>\n\n",
+           '#include "ppc.h"\n#include "ppc_bridge.h"\n#include "tb_protos_gen.h"\n\n']
+    table = []
+    for fn in functions:
+        name = fn["name"]
+        if name not in impl or name not in sigs:
+            continue
+        sig = sigs[name]
+        variants = list(fn.get("variants") or [])
+        # PB calls with an async trap bit: InterfaceLib has PBxxxSync and PBxxxAsync.
+        if not variants and any(c[0] == "reg" and c[1] == "TrapBit<0x400>" for _, c in sig["args"]) \
+                and name.startswith("PB"):
+            variants = [name, name + "Sync", name + "Async"]
+        names = [None] if not variants else variants
+        has_bits = any(c[0] == "reg" and c[1].startswith("TrapBit") for _, c in sig["args"])
+        if variants and name not in variants:
+            names = [None] + variants
+        for v in names:
+            if v is None and has_bits and variants:
+                v_eff = None  # the base name takes the bits as arguments
+            else:
+                v_eff = v
+            r = gen_ppc_glue(name, fn, sig, v_eff)
+            if r is None:
+                continue
+            cname, text = r
+            export = v_eff or name
+            if any(e == export for e, _ in table):
+                continue
+            out.append(text)
+            table.append((export, cname))
+    table.sort()
+    out.append("const ppc_export ppc_exports[] = {\n")
+    for export, cname in table:
+        out.append(f'    {{"{export}", {cname}}},\n')
+    out.append("};\nconst unsigned ppc_export_count = sizeof ppc_exports / sizeof ppc_exports[0];\n")
+    write(os.path.join(OUT_TOOLBOX, "ppc_glue_gen.c"), "".join(out))
+    return len(table)
+
+
 def gen_traps():
     impl = implemented_names()
     os_names = {}
@@ -566,6 +662,8 @@ def gen_traps():
 
     write(os.path.join(OUT_TOOLBOX, "include", "tb_protos_gen.h"), "".join(protos))
     write(os.path.join(OUT_TOOLBOX, "traps_gen.c"), "".join(c))
+    n_ppc = gen_ppc(impl, sigs)
+    print(f"  PowerPC exports: {n_ppc}")
     missing = sorted(n for n in impl if n not in sigs)
     for n in missing:
         print(f"  tb_{n}: no definition with a usable signature", file=sys.stderr)

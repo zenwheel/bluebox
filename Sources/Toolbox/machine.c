@@ -10,6 +10,7 @@
 #include "tb_internal.h"
 #include "sysres_gen.h"
 #include "machine.h"
+#include "ppc.h"
 
 cpu68k *g_cpu;
 char g_app_dir[1024];
@@ -366,6 +367,9 @@ static void build_app_parms(void)
     tb_DisposePtr(name);
 }
 
+static bool prefer_ppc;
+void machine_set_prefer_ppc(bool on) { prefer_ppc = on; }
+
 bool machine_launch(const char *app_path, char *err, size_t errlen)
 {
     mac_file mf;
@@ -409,6 +413,12 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     g_app_size_flags = size && rd32(size) ? rd16(rd32(size)) : 0;
     build_app_parms();
 
+    /* PowerPC: an application with no 68k code, or any with a PowerPC
+     * fragment when PowerPC is preferred. */
+    g_ppc_mode = false;
+    bool has_68k = tb_Get1Resource((int32_t)fourcc("CODE"), 0) != 0;
+    if (cfm_has_ppc() && (!has_68k || prefer_ppc))
+        return cfm_launch(app_path, err, errlen);
     uint32_t a5;
     uint32_t entry = seg_launch(rn, &a5, err, errlen);
     if (!entry)
@@ -451,7 +461,16 @@ run_status machine_run(uint64_t max)
     uint64_t done = 0;
     while (!cpu.halted && done < max) {
         uint64_t n = max - done < slice ? max - done : slice;
-        done += cpu_run(&cpu, n);
+        if (g_ppc_mode) {
+            /* The 68k CPU's count stays the machine's clock. */
+            uint64_t ran = ppc_run(&g_ppc, n);
+            cpu.icount += ran;
+            done += ran;
+            if (g_ppc.halted && !cpu.halted)
+                cpu_halt(&cpu, "%s", g_ppc.halt_reason);
+        } else {
+            done += cpu_run(&cpu, n);
+        }
         machine_advance_ticks();
         events_script_pump(cpu.icount);
         events_sync_lowmem();

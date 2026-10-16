@@ -15,6 +15,8 @@ typedef enum {
 bool machine_boot(bool census);
 /* Load an application (AppleDouble data-fork path) and prepare to run it. */
 bool machine_launch(const char *app_path, char *err, size_t errlen);
+/* Run a fat application's PowerPC code rather than its 68k code. */
+void machine_set_prefer_ppc(bool on);
 /* Before launching: a host folder becomes a volume of its own, named name
  * (UTF-8; the folder's name if empty), as the disk an application came on. */
 void machine_mount_folder(const char *path, const char *name);

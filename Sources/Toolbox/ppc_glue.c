@@ -1,0 +1,337 @@
+/*
+ * InterfaceLib exports that are glue, not traps: the high-level File
+ * Manager calls (FSOpen, FSRead, HOpen ...) that 68k programs link in and
+ * that call the PB routines underneath.  PowerPC programs import them.
+ */
+#include <string.h>
+
+#include "machine.h"
+#include "ppc_bridge.h"
+#include "tb_internal.h"
+
+/* A parameter block in the system heap, cleared for each call. */
+static gaddr pb_scratch(void)
+{
+    static gaddr pb;
+    if (!pb)
+        pb = tb_NewPtr(128, true, true);
+    gmemset(pb, 0, 128);
+    return pb;
+}
+
+#define R(n) (c->gpr[3 + (n)])
+#define RET(v) do { c->gpr[3] = (uint32_t)(int32_t)(int16_t)(v); c->pc = c->lr; } while (0)
+
+static void out16(gaddr p, uint32_t v) { if (p) wr16(p, (uint16_t)v); }
+static void out32(gaddr p, uint32_t v) { if (p) wr32(p, v); }
+
+/* FSOpen(fileName, vRefNum, *refNum) */
+static void g_FSOpen(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    int16_t e = tb_PBOpen(pb, false);
+    out16(R(2), rd16(pb + IOParam_ioRefNum_off));
+    RET(e);
+}
+
+/* OpenRF(fileName, vRefNum, *refNum) */
+static void g_OpenRF(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    int16_t e = tb_PBOpenRF(pb, false);
+    out16(R(2), rd16(pb + IOParam_ioRefNum_off));
+    RET(e);
+}
+
+/* HOpen / HOpenDF / HOpenRF(vRefNum, dirID, fileName, permission, *refNum) */
+static void h_open(ppc_cpu *c, int16_t (*fn)(gaddr, bool))
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    wr8(pb + IOParam_ioPermssn_off, (uint8_t)R(3));
+    int16_t e = fn(pb, false);
+    out16(R(4), rd16(pb + IOParam_ioRefNum_off));
+    RET(e);
+}
+static void g_HOpen(ppc_cpu *c) { h_open(c, tb_PBHOpen); }
+static void g_HOpenDF(ppc_cpu *c) { h_open(c, tb_PBHOpenDF); }
+static void g_HOpenRF(ppc_cpu *c) { h_open(c, tb_PBHOpenRF); }
+
+/* FSClose(refNum) */
+static void g_FSClose(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioRefNum_off, (uint16_t)R(0));
+    RET(tb_PBClose(pb, false));
+}
+
+/* FSRead / FSWrite(refNum, *count, buffPtr) */
+static void rw(ppc_cpu *c, bool write)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioRefNum_off, (uint16_t)R(0));
+    wr32(pb + IOParam_ioReqCount_off, R(1) ? rd32(R(1)) : 0);
+    wr32(pb + IOParam_ioBuffer_off, R(2));
+    wr16(pb + IOParam_ioPosMode_off, 0); /* fsAtMark */
+    int16_t e = write ? tb_PBWrite(pb, false) : tb_PBRead(pb, false);
+    out32(R(1), rd32(pb + IOParam_ioActCount_off));
+    RET(e);
+}
+static void g_FSRead(ppc_cpu *c) { rw(c, false); }
+static void g_FSWrite(ppc_cpu *c) { rw(c, true); }
+
+/* GetEOF(refNum, *logEOF), GetFPos(refNum, *filePos) */
+static void get_mark(ppc_cpu *c, int16_t (*fn)(gaddr, bool), uint32_t field)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioRefNum_off, (uint16_t)R(0));
+    int16_t e = fn(pb, false);
+    out32(R(1), rd32(pb + field));
+    RET(e);
+}
+static void g_GetEOF(ppc_cpu *c) { get_mark(c, tb_PBGetEOF, IOParam_ioMisc_off); }
+static void g_GetFPos(ppc_cpu *c) { get_mark(c, tb_PBGetFPos, IOParam_ioPosOffset_off); }
+
+/* SetEOF(refNum, logEOF) */
+static void g_SetEOF(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioRefNum_off, (uint16_t)R(0));
+    wr32(pb + IOParam_ioMisc_off, R(1));
+    RET(tb_PBSetEOF(pb, false));
+}
+
+/* SetFPos(refNum, posMode, posOff) */
+static void g_SetFPos(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioRefNum_off, (uint16_t)R(0));
+    wr16(pb + IOParam_ioPosMode_off, (uint16_t)R(1));
+    wr32(pb + IOParam_ioPosOffset_off, R(2));
+    RET(tb_PBSetFPos(pb, false));
+}
+
+/* Allocate(refNum, *count) */
+static void g_Allocate(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioRefNum_off, (uint16_t)R(0));
+    wr32(pb + IOParam_ioReqCount_off, R(1) ? rd32(R(1)) : 0);
+    int16_t e = tb_PBAllocate(pb, false);
+    out32(R(1), rd32(pb + IOParam_ioActCount_off));
+    RET(e);
+}
+
+/* GetVRefNum(refNum, *vRefNum): the volume of an open file. */
+static void g_GetVRefNum(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioRefNum_off, (uint16_t)R(0));
+    int16_t e = tb_PBGetFCBInfo(pb, false);
+    out16(R(1), rd16(pb + FCBPBRec_ioFCBVRefNum_off));
+    RET(e);
+}
+
+/* GetVol(volName, *vRefNum), SetVol(volName, vRefNum), FlushVol(volName, vRefNum) */
+static void g_GetVol(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    int16_t e = tb_PBGetVol(pb, false);
+    out16(R(1), rd16(pb + IOParam_ioVRefNum_off));
+    RET(e);
+}
+
+static void g_SetVol(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    RET(tb_PBSetVol(pb, false));
+}
+
+static void g_FlushVol(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    RET(tb_PBFlushVol(pb, false));
+}
+
+/* HGetVol(volName, *vRefNum, *dirID), HSetVol(volName, vRefNum, dirID) */
+static void g_HGetVol(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    int16_t e = tb_PBHGetVol(pb, false);
+    out16(R(1), rd16(pb + WDPBRec_ioWDVRefNum_off));
+    out32(R(2), rd32(pb + WDPBRec_ioWDDirID_off));
+    RET(e);
+}
+
+static void g_HSetVol(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    wr32(pb + WDPBRec_ioWDDirID_off, R(2));
+    RET(tb_PBHSetVol(pb, false));
+}
+
+/* Create(fileName, vRefNum, creator, fileType): the file, then its Finder info. */
+static int16_t set_type(gaddr pb, uint32_t creator, uint32_t type, bool hfs)
+{
+    int16_t e = hfs ? tb_PBHGetFInfo(pb, false) : tb_PBGetFInfo(pb, false);
+    if (e)
+        return e;
+    wr32(pb + FileParam_ioFlFndrInfo_off, type);
+    wr32(pb + FileParam_ioFlFndrInfo_off + 4, creator);
+    return hfs ? tb_PBHSetFInfo(pb, false) : tb_PBSetFInfo(pb, false);
+}
+
+static void g_Create(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    int16_t e = tb_PBCreate(pb, false);
+    if (!e)
+        e = set_type(pb, R(2), R(3), false);
+    RET(e);
+}
+
+/* HCreate(vRefNum, dirID, fileName, creator, fileType) */
+static void g_HCreate(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    int16_t e = tb_PBHCreate(pb, false);
+    if (!e)
+        e = set_type(pb, R(3), R(4), true);
+    RET(e);
+}
+
+/* FSDelete(fileName, vRefNum), HDelete(vRefNum, dirID, fileName) */
+static void g_FSDelete(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    RET(tb_PBDelete(pb, false));
+}
+
+static void g_HDelete(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    RET(tb_PBHDelete(pb, false));
+}
+
+/* Rename(oldName, vRefNum, newName), HRename(vRefNum, dirID, oldName, newName) */
+static void g_Rename(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    wr32(pb + IOParam_ioMisc_off, R(2));
+    RET(tb_PBRename(pb, false));
+}
+
+static void g_HRename(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    wr32(pb + IOParam_ioMisc_off, R(3));
+    RET(tb_PBHRename(pb, false));
+}
+
+/* GetFInfo / SetFInfo(fileName, vRefNum, *fndrInfo) */
+static void g_GetFInfo(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    int16_t e = tb_PBGetFInfo(pb, false);
+    if (!e && R(2))
+        gmemcpy(R(2), pb + FileParam_ioFlFndrInfo_off, 16);
+    RET(e);
+}
+
+static void g_SetFInfo(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr32(pb + IOParam_ioNamePtr_off, R(0));
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(1));
+    int16_t e = tb_PBGetFInfo(pb, false);
+    if (!e && R(2)) {
+        gmemcpy(pb + FileParam_ioFlFndrInfo_off, R(2), 16);
+        e = tb_PBSetFInfo(pb, false);
+    }
+    RET(e);
+}
+
+/* HGetFInfo / HSetFInfo(vRefNum, dirID, fileName, *fndrInfo) */
+static void g_HGetFInfo(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    int16_t e = tb_PBHGetFInfo(pb, false);
+    if (!e && R(3))
+        gmemcpy(R(3), pb + FileParam_ioFlFndrInfo_off, 16);
+    RET(e);
+}
+
+static void g_HSetFInfo(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    int16_t e = tb_PBHGetFInfo(pb, false);
+    if (!e && R(3)) {
+        gmemcpy(pb + FileParam_ioFlFndrInfo_off, R(3), 16);
+        e = tb_PBHSetFInfo(pb, false);
+    }
+    RET(e);
+}
+
+/* DirCreate(vRefNum, parentDirID, directoryName, *createdDirID) */
+static void g_DirCreate(ppc_cpu *c)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    int16_t e = tb_PBDirCreate(pb, false);
+    out32(R(3), rd32(pb + HFileParam_ioDirID_off));
+    RET(e);
+}
+
+/* Sorted by name. */
+const ppc_export ppc_glue_exports[] = {
+    { "Allocate", g_Allocate },   { "Create", g_Create },       { "DirCreate", g_DirCreate },
+    { "FSClose", g_FSClose },     { "FSDelete", g_FSDelete },   { "FSOpen", g_FSOpen },
+    { "FSRead", g_FSRead },       { "FSWrite", g_FSWrite },     { "FlushVol", g_FlushVol },
+    { "GetEOF", g_GetEOF },       { "GetFInfo", g_GetFInfo },   { "GetFPos", g_GetFPos },
+    { "GetVRefNum", g_GetVRefNum }, { "GetVol", g_GetVol },     { "HCreate", g_HCreate },
+    { "HDelete", g_HDelete },     { "HGetFInfo", g_HGetFInfo }, { "HGetVol", g_HGetVol },
+    { "HOpen", g_HOpen },         { "HOpenDF", g_HOpenDF },     { "HOpenRF", g_HOpenRF },
+    { "HRename", g_HRename },     { "HSetFInfo", g_HSetFInfo }, { "HSetVol", g_HSetVol },
+    { "OpenRF", g_OpenRF },       { "Rename", g_Rename },       { "SetEOF", g_SetEOF },
+    { "SetFInfo", g_SetFInfo },   { "SetFPos", g_SetFPos },     { "SetVol", g_SetVol },
+};
+const unsigned ppc_glue_export_count = sizeof ppc_glue_exports / sizeof ppc_glue_exports[0];

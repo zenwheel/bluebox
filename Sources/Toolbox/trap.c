@@ -13,6 +13,7 @@ bool g_trap_census;
 static uint16_t last_trapword; /* the trap word of the routine running now */
 
 uint16_t trap_current_word(void) { return last_trapword; }
+void trap_set_current_word(uint16_t w) { last_trapword = w; }
 
 /* ---------------------------------------------------------------------- */
 /* Natives and their ROM stubs */

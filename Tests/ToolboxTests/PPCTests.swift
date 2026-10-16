@@ -2,6 +2,7 @@ import CCore
 import CPUPPC
 import Foundation
 import Testing
+import Toolbox
 
 extension BlueBox {
     /// The PowerPC interpreter against hand-checked cases (Tests/PPC/gen_tests.py).
@@ -57,6 +58,35 @@ extension BlueBox {
                 let got = reg(c, k)
                 #expect(got == v, "\(name) \(k): \(got.map { String($0, radix: 16) } ?? "?") != \(String(v, radix: 16))")
             }
+        }
+    }
+}
+
+extension BlueBox {
+    /// A PowerPC application built by Retro68 (Tests/Probes/PPC/build.sh): its
+    /// fragment loads, its InterfaceLib calls work, and its integer and
+    /// floating-point results match the host's (computed from the same
+    /// source with fused multiply-add, as GCC does for PowerPC).  Skipped
+    /// when the probe hasn't been built.
+    @Suite struct PowerPCApplication {
+        @Test func ppcHelloRunsAndComputes() throws {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent()
+            let built = root.appendingPathComponent(".cache/ppc-probes/PPCHello")
+            let data = built.appendingPathComponent("PPCHello.ad"), sidecar = built.appendingPathComponent("%PPCHello.ad")
+            guard FileManager.default.fileExists(atPath: sidecar.path) else { return }
+            // A copy of the AppleDouble pair in a folder of its own.
+            let dir = tempDir()
+            let app = dir.appendingPathComponent("PPCHello")
+            try FileManager.default.copyItem(at: data, to: app)
+            try FileManager.default.copyItem(at: sidecar, to: dir.appendingPathComponent("._PPCHello"))
+            bootMachine()
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(app.path, &err, err.count), "\(String(cString: err))")
+            _ = machine_run(5_000_000)
+            #expect(String(cString: machine_halt_reason()).hasPrefix("ExitToShell"))
+            let results = try String(contentsOf: dir.appendingPathComponent("PPC Results"), encoding: .macOSRoman)
+            #expect(results == "int BBEA2171 82AFE3EB 1959EDC1\rfloat 411FBE77 8195B1A6 47284222 00000000\r")
         }
     }
 }
