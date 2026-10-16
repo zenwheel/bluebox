@@ -51,6 +51,9 @@ void gestalt_init(void)
     gestalt_set(fourcc("fpu "), m040 ? 3 : 0); /* the 68040's own FPU, or none */
     gestalt_set(fourcc("mmu "), 0);
     gestalt_set(fourcc("qd  "), 0x0230);      /* gestalt32BitQD13: 32-Bit QuickDraw 1.3 */
+    /* gestaltQuickdrawFeatures: colour, deep GWorlds, direct pixel maps,
+     * grayish text-or. */
+    gestalt_set(fourcc("qdrw"), 0x0F);
     gestalt_set(fourcc("addr"), 0x7);         /* 32-bit addressing, sys zone, capable */
     gestalt_set(fourcc("ram "), g_mem_report_cap);
     gestalt_set(fourcc("qtim"), 0x02508000); /* QuickTime 2.5 (movies play as zero length) */
@@ -75,7 +78,10 @@ void gestalt_init(void)
     gestalt_set(fourcc("stdf"), 0x1);         /* Standard File 5.8 calls */
     gestalt_set(fourcc("icon"), 0x1);         /* Icon Utilities present */
     gestalt_set(fourcc("tmgr"), 3);           /* extended Time Manager */
-    gestalt_set(fourcc("snd "), 0x3);         /* stereo, stereo mixing */
+    /* Sound Manager 3 output: stereo, stereo mixing, the Sound I/O
+     * Manager, 16-bit sound I/O, SndPlayDoubleBuffer, several channels,
+     * 16-bit audio (no recording devices). */
+    gestalt_set(fourcc("snd "), 0x1C8B);
     gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
 }
 
