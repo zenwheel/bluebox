@@ -111,17 +111,24 @@ enum ShellItem: Hashable {
     /// Scan the library and the disk again (after an import or an install).
     func refresh() {
         var found: [ShellApp] = []
+        // Theme archives (Kaleidoscope schemes) often carry an application of
+        // their own; their entries are themes, not applications to list.
+        let themePaths = classicThemes(in: library)
+        let themeEntries = Set(themePaths.map { String($0.dropFirst(library.count + 1)).split(separator: "/").first.map(String.init) ?? "" })
         for (root, place) in [(library, "Library"), (defaultDisk(), "Macintosh HD")] {
             guard FileManager.default.fileExists(atPath: root) else { continue }
             for a in scan(root).filter({ $0.isApplication }) {
                 let rel = String(a.path.dropFirst(root.count + 1))
                 if rel.hasPrefix("System Folder/") && !rel.hasPrefix("System Folder/Apple Menu Items/") { continue }
+                if place == "Library", let entry = rel.split(separator: "/").first, themeEntries.contains(String(entry)) {
+                    continue
+                }
                 found.append(ShellApp(path: a.path, place: place, folder: (rel as NSString).deletingLastPathComponent,
                                       architecture: a.architecture))
             }
         }
         apps = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        themes = classicThemes(in: library).map { ($0 as NSString).lastPathComponent }.sorted()
+        themes = themePaths.map { ($0 as NSString).lastPathComponent }.sorted()
         var items: [SystemItem] = []
         for folder in watchedSystemFolders {
             let root = systemFolder + "/" + folder
@@ -171,6 +178,30 @@ enum ShellItem: Hashable {
         }
     }
 
+    /// Move an application (its data file and its AppleDouble sidecar) to
+    /// the macOS Trash, from where it can be put back, and forget its
+    /// settings.
+    func delete(_ app: ShellApp) {
+        let fm = FileManager.default
+        var trashed = false
+        for path in [app.path, sidecarPath(app.path)] where fm.fileExists(atPath: path) {
+            do {
+                try fm.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
+                trashed = true
+            } catch {
+                messages.append("Could not move \((path as NSString).lastPathComponent) to the Trash: \(error.localizedDescription)")
+            }
+        }
+        if trashed {
+            settings[settingsKey(app.path)] = nil
+            saveSettings(settings, library: library)
+            recent.removeAll { $0 == app.path }
+            UserDefaults.standard.set(recent, forKey: "recent")
+            messages.append("Moved \(app.name) to the Trash")
+        }
+        refresh()
+    }
+
     /// Import dropped or chosen files into the library, off the main thread.
     func importFiles(_ urls: [URL]) {
         let lib = library
@@ -206,7 +237,8 @@ func classicThemes(in library: String) -> [String] {
 
 struct ShellView: View {
     @ObservedObject var model: ShellModel
-    /// The page shown first (BLUEBOX_SHELL_PAGE=system for snapshots).
+    /// The page shown first (BLUEBOX_SHELL_PAGE=system, or app for the first
+    /// application's, for snapshots).
     @State private var selection: ShellItem? = {
         switch ProcessInfo.processInfo.environment["BLUEBOX_SHELL_PAGE"] {
         case "system": return .systemFolder
@@ -279,6 +311,15 @@ struct ShellView: View {
             return true
         }
         .overlay(dropTargeted ? RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor, lineWidth: 3) : nil)
+        .onAppear {
+            if ProcessInfo.processInfo.environment["BLUEBOX_SHELL_PAGE"] == "app", let first = model.apps.first {
+                selection = .app(first)
+            }
+        }
+        .onChange(of: model.apps) { apps in
+            // A deleted application's page goes with it.
+            if case .app(let app) = selection, !apps.contains(app) { selection = .defaults }
+        }
         .frame(minWidth: 720, minHeight: 440)
     }
 
@@ -368,6 +409,7 @@ struct SystemFolderPage: View {
 struct AppPage: View {
     @ObservedObject var model: ShellModel
     let app: ShellApp
+    @State private var confirmDelete = false
     var body: some View {
         Form {
             Section {
@@ -382,6 +424,9 @@ struct AppPage: View {
                     if model.running[app.path] != nil {
                         Text("Running").foregroundStyle(.secondary)
                     }
+                    Button("Delete…", role: .destructive) { confirmDelete = true }
+                        .disabled(model.running[app.path] != nil)
+                        .help(model.running[app.path] != nil ? "Quit it first" : "Move it to the Trash")
                     Button("Launch") { model.launch(app) }.keyboardShortcut(.defaultAction)
                 }
             }
@@ -389,6 +434,13 @@ struct AppPage: View {
         }
         .formStyle(.grouped)
         .navigationTitle(app.name)
+        .confirmationDialog("Move \(app.name) to the Trash?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Move to Trash", role: .destructive) { model.delete(app) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(app.place)\(app.folder.isEmpty ? "" : " › " + app.folder). Its settings are forgotten; "
+                 + "you can put it back from the Trash.")
+        }
     }
 }
 

@@ -50,7 +50,8 @@ func usage() -> Never {
                      default setting), so classic interfaces are bigger on modern displays
           --screenshot P  write the screen to PNG file P when the run ends
           --redraw-check P  when the run ends waiting, repaint everything, let the program
-                     redraw (5 million instructions) and compare: the differences go to
+                     redraw (5 million instructions) and compare, leaving out pixels
+                     that change on their own: the differences go to
                      PNG file P, with P-before.png and P-after.png (screens where
                      incremental drawing missed something)
           --print-to F  print to PDF file F instead of the print panel (headless runs)
@@ -730,17 +731,36 @@ func redrawCheckReport(_ out: String) {
     var w: Int32 = 0, h: Int32 = 0
     machine_screen_size(&w, &h)
     let n = Int(w) * Int(h)
-    var before = [UInt32](repeating: 0, count: n), after = before
-    before.withUnsafeMutableBytes { machine_screen_rgba(0, 0, w, h, $0.baseAddress!.assumingMemoryBound(to: UInt8.self)) }
+    func grab() -> [UInt32] {
+        var px = [UInt32](repeating: 0, count: n)
+        px.withUnsafeMutableBytes { machine_screen_rgba(0, 0, w, h, $0.baseAddress!.assumingMemoryBound(to: UInt8.self)) }
+        return px
+    }
+    func runOn() {
+        machine_continue(5_000_000)
+        _ = machine_run(5_000_000)
+    }
+    // Pixels that change on their own (animation, a blinking caret) over two
+    // intervals left alone are not counted.
+    let s0 = grab()
+    runOn()
+    let s1 = grab()
+    runOn()
+    let before = grab()
+    var moving = [Bool](repeating: false, count: n)
+    var nmoving = 0
+    for i in 0..<n where s0[i] != s1[i] || s1[i] != before[i] {
+        moving[i] = true
+        nmoving += 1
+    }
     machine_redraw_all()
-    machine_continue(5_000_000)
-    _ = machine_run(5_000_000)
-    after.withUnsafeMutableBytes { machine_screen_rgba(0, 0, w, h, $0.baseAddress!.assumingMemoryBound(to: UInt8.self)) }
+    runOn()
+    let after = grab()
     var differ = 0
     var minX = Int(w), minY = Int(h), maxX = -1, maxY = -1
     var diff = after
     for i in 0..<n {
-        if before[i] != after[i] {
+        if before[i] != after[i] && !moving[i] {
             differ += 1
             let x = i % Int(w), y = i / Int(w)
             minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
@@ -751,11 +771,12 @@ func redrawCheckReport(_ out: String) {
             diff[i] = UInt32(b[0] / 3 + 170) | UInt32(b[1] / 3 + 170) << 8 | UInt32(b[2] / 3 + 170) << 16 | 0xFF00_0000
         }
     }
+    let note = nmoving > 0 ? " (\(nmoving) changing on their own, not counted)" : ""
     if differ == 0 {
-        print("redraw check: identical")
+        print("redraw check: identical\(note)")
         return
     }
-    print("redraw check: \(differ) pixels differ in \(minX),\(minY)-\(maxX + 1),\(maxY + 1); before and after in \(out)")
+    print("redraw check: \(differ) pixels differ\(note) in \(minX),\(minY)-\(maxX + 1),\(maxY + 1); before and after in \(out)")
     diff.withUnsafeBytes { _ = machine_write_png(out, $0.baseAddress!.assumingMemoryBound(to: UInt8.self), w, h) }
     let base = (out as NSString).deletingPathExtension
     before.withUnsafeBytes { _ = machine_write_png(base + "-before.png", $0.baseAddress!.assumingMemoryBound(to: UInt8.self), w, h) }
