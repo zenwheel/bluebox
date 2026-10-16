@@ -410,6 +410,13 @@ static int32_t parent_id_of(const char *host)
 static int32_t base_dir(int16_t vref, int32_t dirid, bool hfs)
 {
     mount *m = mount_of_vref(vref);
+    if (!m && vref <= -32000 && vref > -32000 - MAX_WDS && hfs && (dirid == 1 || dirid == ROOT_ID)) {
+        /* A working directory's root is its own volume's. */
+        int i = -32000 - vref;
+        char wpath[PATH_MAX];
+        if (wds[i].used && host_of_dir(wds[i].dirid, wpath, sizeof wpath))
+            m = mount_of_path(wpath);
+    }
     if (m) {
         if (hfs && dirid && dirid != 1 && dirid != ROOT_ID)
             return dirid;
@@ -1568,6 +1575,7 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     if (!vinfo_volume(idx, vref, namep, &m))
         return nsvErr;
     const char *root = m ? m->root : root_path;
+    LOGF(LOG_TRAPS, "  GetVInfo index %d vref %d -> %s\n", idx, vref, m ? m->root : root_path);
     if (namep)
         gput(namep, m ? m->name : vol_name, (uint32_t)(m ? m->name[0] : vol_name[0]) + 1);
     wr16(pb + IOParam_ioVRefNum_off, (uint16_t)(m ? m->vref : VREF));
@@ -1875,6 +1883,8 @@ int16_t tb_PBGetFCBInfo(gaddr pb, bool async)
     wr16(pb + FCBPBRec_ioFCBVRefNum_off, (uint16_t)(fm_ ? fm_->vref : VREF));
     wr32(pb + FCBPBRec_ioFCBClpSiz_off, 0);
     wr32(pb + FCBPBRec_ioFCBParID_off, (uint32_t)out_id(par));
+    LOGF(LOG_TRAPS, "  PBGetFCBInfo refnum %d -> vref %d parID %d name %.*s\n", rn, (int16_t)rd16(pb + FCBPBRec_ioFCBVRefNum_off),
+         out_id(par), rd8(f + 62), (const char *)gptr(f + 63));
     return noErr;
 }
 

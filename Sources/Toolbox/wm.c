@@ -1320,10 +1320,21 @@ int16_t tb_FindWindow(uint32_t p, gaddr wpp)
 /* ---------------------------------------------------------------------- */
 /* Update regions */
 
+/* Whether a port is a window (in the window list). */
+static bool is_window(gaddr p)
+{
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
+        if (w == p)
+            return true;
+    return false;
+}
+
 static void port_window_update(gaddr r_local_rgn_or_rect, bool is_rect, bool add)
 {
     gaddr w = qd_port();
-    if (!w)
+    /* A port that is not a window has no update region (the Window
+     * Manager's own port, an offscreen one): nothing to do. */
+    if (!w || !is_window(w))
         return;
     hrgn a, u;
     hrgn_init(&a);
@@ -1512,8 +1523,12 @@ void tb_SizeWindow(gaddr w, int16_t width, int16_t height, int8_t flag)
     rgn_read(WindowRecord_strucRgn(w), &now);
     hrgn_op(&old, &old, &now, RGN_UNION);
     repaint(&old);
-    if (!flag) /* caller handles updating the new content itself */
+    if (!flag) { /* caller handles updating the new content itself */
+        gaddr cur = qd_port();
+        tb_SetPort(w);
         tb_ValidRect(w + GrafPort_portRect_off);
+        tb_SetPort(cur);
+    }
     hrgn_free(&old);
     hrgn_free(&now);
 }

@@ -33,8 +33,8 @@ uint64_t machine_alert_depths(const char *message)
     for (const char *p = message; *p && n < sizeof m - 1; p++)
         m[n++] = (char)tolower((unsigned char)*p);
     m[n] = 0;
-    static const char *const asks[] = { "requir", "need", "must", "only", "set ", "switch", "at least",
-                                        "find", "please", NULL };
+    static const char *const asks[] = { "requir", "need", "must", "only", "set ", "switch", "at least", "find",
+                                        "please", "greater than", "more than", "too ", "depth", NULL };
     bool asking = false;
     for (int i = 0; asks[i]; i++)
         asking |= strstr(m, asks[i]) != NULL;
