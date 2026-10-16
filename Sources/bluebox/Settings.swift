@@ -1,4 +1,5 @@
 import Foundation
+import ForkStore
 
 /// Per-application settings kept in the library (Settings.json), keyed by
 /// the application's file name.  `bluebox run` applies them unless the
@@ -22,6 +23,54 @@ struct AppSettings: Codable {
         return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, scale: scale ?? f.scale,
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight)
     }
+}
+
+/// Depths a program will run at, and the one to give it when the chosen
+/// depth is not among them.
+struct DepthRequirement {
+    let allowed: [Int]
+    let preferred: Int
+}
+
+/// Programs, by creator, that refuse to run at depths they were not written
+/// for ("Please set your monitor to 256 colors") and quit: a real Mac's
+/// user switched the Monitors control panel first.  Applied only when the
+/// application has no depth setting of its own and the default is not one
+/// it accepts.
+let knownDepthRequirements: [UInt32: DepthRequirement] = [
+    0x506F_C450: DepthRequirement(allowed: [1, 2, 4, 8], preferred: 8), /* PoƒP Prince of Persia */
+    0x7344_3039: DepthRequirement(allowed: [4], preferred: 4),          /* sD09 Glypha II */
+    0x474C_6564: DepthRequirement(allowed: [1, 4], preferred: 4),       /* GLed Glider 4 Room Editor */
+    0x5370_6532: DepthRequirement(allowed: [1, 4, 8], preferred: 8),    /* Spe2 Spectre 1.1 */
+    0x5370_6563: DepthRequirement(allowed: [1, 4, 8], preferred: 8),    /* Spec Spectre 1.0 */
+    0x534D_554E: DepthRequirement(allowed: [1, 2, 4, 8], preferred: 8), /* SMUN Super Munchers */
+    0xA7BF_C2A2: DepthRequirement(allowed: [8], preferred: 8),          /* ßø¬¢ Solarian II */
+    0x4449_4132: DepthRequirement(allowed: [8], preferred: 8),          /* DIA2 Diamonds */
+    0x264D_696C: DepthRequirement(allowed: [8], preferred: 8),          /* &Mil Mille Bornes */
+    0x4B49_5249: DepthRequirement(allowed: [8], preferred: 8),          /* KIRI S.C. Out */
+    0x5375_B972: DepthRequirement(allowed: [8], preferred: 8),          /* Suπr SS II */
+    0x5257_B93D: DepthRequirement(allowed: [8], preferred: 8),          /* RWπ= Slider */
+    0x536B_3364: DepthRequirement(allowed: [8], preferred: 8),          /* Sk3d Sokoban 3D */
+    0xC66E_4CBA: DepthRequirement(allowed: [8], preferred: 8),          /* ∆nL∫ Space Gypsy */
+    0x5350_4852: DepthRequirement(allowed: [8], preferred: 8),          /* SPHR Spheres */
+    0x6368_5453: DepthRequirement(allowed: [8], preferred: 8),          /* chTS Star Flick */
+    0x4D4B_444E: DepthRequirement(allowed: [8], preferred: 8),          /* MKDN SuperColumns */
+]
+
+/// The depth a program with this creator needs when `depth` (nil: the
+/// built-in 32) is not one it runs at, or nil.
+func requiredDepth(creator: UInt32, over depth: Int?) -> Int? {
+    guard let r = knownDepthRequirements[creator], !r.allowed.contains(depth ?? 32) else { return nil }
+    return r.preferred
+}
+
+func requiredDepth(application path: String, over depth: Int?) -> Int? {
+    var mf = mac_file()
+    var err = [CChar](repeating: 0, count: 256)
+    guard appledouble_read(path, &mf, &err, err.count) else { return nil }
+    let creator = mac_file_creator(&mf)
+    mac_file_free(&mf)
+    return requiredDepth(creator: creator, over: depth)
 }
 
 /// An RGB highlight colour from "#RRGGBB" as 16-bit components.

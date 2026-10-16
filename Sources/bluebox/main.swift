@@ -381,10 +381,15 @@ func runCommand(_ args: [String]) {
     guard var app else { usage() }
     app = resolveApplication(app, named: appName)
 
+    // The application's settings over the defaults; a program known to
+    // refuse the default depth gets one it accepts.
+    var saved = (settings(for: app) ?? AppSettings()).over(defaultSettings())
+    if screenDepth == nil, settings(for: app)?.depth == nil, let d = requiredDepth(application: app, over: saved.depth) {
+        saved.depth = d
+    }
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
     if interactive { reexecInNamedBundle(app: app) }
-    let saved = (settings(for: app) ?? AppSettings()).over(defaultSettings())
     if interactive {
         let scale = scaleOption ?? saved.scale ?? 1
         MainActor.assumeIsolated { displayScale = CGFloat(scale) }

@@ -19,6 +19,7 @@ struct ShellApp: Identifiable, Hashable {
     let place: String        /* "Library" or "Macintosh HD" */
     let folder: String       /* the folder it is in, relative to its place */
     let architecture: String
+    let creator: UInt32
     var id: String { path }
     var name: String { (path as NSString).lastPathComponent }
 }
@@ -128,7 +129,7 @@ enum ShellItem: Hashable {
                     continue
                 }
                 found.append(ShellApp(path: a.path, place: place, folder: (rel as NSString).deletingLastPathComponent,
-                                      architecture: a.architecture))
+                                      architecture: a.architecture, creator: a.creator))
             }
         }
         apps = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -415,6 +416,17 @@ struct AppPage: View {
     @ObservedObject var model: ShellModel
     let app: ShellApp
     @State private var confirmDelete = false
+
+    private var neededDepth: Int? {
+        requiredDepth(creator: app.creator, over: model.settings[defaultSettingsKey]?.depth)
+    }
+    /// What unset settings come to: the defaults, with the depth a program
+    /// known to refuse the default one is given instead.
+    private var fallback: AppSettings {
+        var f = model.settings[defaultSettingsKey] ?? AppSettings()
+        if let d = neededDepth { f.depth = d }
+        return f
+    }
     var body: some View {
         Form {
             Section {
@@ -436,7 +448,7 @@ struct AppPage: View {
                 }
             }
             SettingsForm(settings: model.settingsBinding(settingsKey(app.path)), themes: model.themes, isDefault: false,
-                         fallback: model.settings[defaultSettingsKey] ?? AppSettings())
+                         fallback: fallback, depthNote: neededDepth == nil ? nil : "which it needs")
         }
         .formStyle(.grouped)
         .navigationTitle(app.name)
@@ -459,6 +471,8 @@ struct SettingsForm: View {
     /// What an unset setting comes to: the defaults' values (for an
     /// application), or nothing (the built-in values, for the defaults).
     let fallback: AppSettings
+    /// Why the inherited depth is what it is, when not simply the default's.
+    var depthNote: String? = nil
 
     private var inherit: String { isDefault ? "Built-in" : "Default" }
 
@@ -469,7 +483,8 @@ struct SettingsForm: View {
                 ForEach([1.0, 1.5, 2.0], id: \.self) { v in Text(scaleName(v)).tag(Double?.some(v)) }
             }
             Picker("Screen depth", selection: $settings.depth) {
-                Text("\(inherit) (\(depthName(fallback.depth ?? 32).lowercased()))").tag(Int?.none)
+                Text("\(inherit) (\(depthName(fallback.depth ?? 32).lowercased())\(depthNote.map { ", " + $0 } ?? ""))")
+                    .tag(Int?.none)
                 ForEach([1, 2, 4, 8, 16, 32], id: \.self) { d in
                     Text(depthName(d)).tag(Int?.some(d))
                 }
