@@ -597,6 +597,9 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - Drawing problems seen in the census (2026-10-13), to investigate:
   - StarGuardian reaches "Click on rabbit to continue" but draws no rabbit. It copies its pictures with `CopyBits` from bitmaps it builds itself from its data fork.
   - Sword of Ages (a World Builder game) opens its windows, but their content shows the desktop pattern rather than the scene.
+- Census changes from 2026-10-16 to look at:
+  - Squirt Derby! used to quit after loading (a read whose result it checked was never set); now it spends over 60 million instructions in SANE (Pack4) setting up, with a blank window. Find out whether that is its real start-up or a loop.
+  - Space Madness Demo used to time out; it now gets further and stops on an illegal instruction ($7F7F at $431618).
 
 **Exit:** a defined game corpus runs at full original speed or better, including QuickTime playback from M4 at full frame rate.
 
