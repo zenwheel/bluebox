@@ -13,8 +13,8 @@
  * Supported: 'snd ' formats 1 and 2; standard and extended sound headers
  * (8-bit unsigned and 16-bit signed, mono and stereo); compressed headers
  * in IMA 4:1 and the uncompressed 'twos'/'sowt'/'raw ' formats; square-wave
- * and wave-table notes; SysBeep.  MACE plays silence of the right length
- * for now.
+ * and wave-table notes; SysBeep.  MACE 3:1 and 6:1 decode through the
+ * MACE target (FFmpeg's decoder, LGPL).
  */
 #include <math.h>
 #include <pthread.h>
@@ -23,6 +23,7 @@
 #include <time.h>
 
 #include "machine.h"
+#include "mace.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -264,10 +265,26 @@ static void play_header(channel *c, gaddr h)
         free(pcm);
         return;
     }
-    /* MACE and others: keep the timing, play silence. */
-    uint32_t samples = rd16(h + 56) == 3 ? frames * 6 : rd16(h + 56) == 4 ? frames * 12 : frames;
-    int16_t *pcm = calloc(samples * nch ? samples * nch : 1, sizeof *pcm);
-    emit(c, pcm, (int)samples, (int)nch, rate);
+    /* MACE 3:1 and 6:1 (compressionID 3 and 4, or the format): a frame is
+     * a packet of 6 samples, 2 bytes (MACE 3) or 1 byte (MACE 6) per
+     * channel. */
+    int cid = (int16_t)rd16(h + 56);
+    bool mace3 = cid == 3 || format == fourcc("MAC3"), mace6 = cid == 4 || format == fourcc("MAC6");
+    if (mace3 || mace6) {
+        uint32_t bytes = frames * (mace3 ? 2 : 1) * nch;
+        uint8_t *in = malloc(bytes ? bytes : 1);
+        gget(in, data, bytes);
+        size_t cap = (size_t)bytes * (mace3 ? 3 : 6) / nch + 6;
+        int16_t *pcm = calloc(cap * nch, sizeof *pcm);
+        size_t n = mace_decode(in, bytes, (int)nch, mace3, pcm);
+        emit(c, pcm, (int)n, (int)nch, rate);
+        free(pcm);
+        free(in);
+        return;
+    }
+    /* Others: keep the timing, play silence. */
+    int16_t *pcm = calloc(frames * nch ? frames * nch : 1, sizeof *pcm);
+    emit(c, pcm, (int)frames, (int)nch, rate);
     free(pcm);
 }
 

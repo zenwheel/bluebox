@@ -2,9 +2,22 @@ import CCore
 import CPU68K
 import Foundation
 import Testing
+import MACE
 import Toolbox
 
 extension BlueBox {
+    /// MACE decoding (the LGPL target): six samples per packet, a packet
+    /// being two bytes of MACE 3:1 or one of MACE 6:1 per channel.
+    @Suite struct MACEDecoding {
+        @Test func framesPerPacket() {
+            let packets = [UInt8](repeating: 0x55, count: 64)
+            var out = [Int16](repeating: 0, count: 64 * 6 * 2)
+            #expect(mace_decode(packets, 64, 1, true, &out) == 64 / 2 * 6)    // MACE 3, mono
+            #expect(mace_decode(packets, 64, 1, false, &out) == 64 * 6)       // MACE 6, mono
+            #expect(mace_decode(packets, 64, 2, false, &out) == 64 / 2 * 6)   // MACE 6, stereo
+        }
+    }
+
     @Suite struct SoundManager {
         nonisolated(unsafe) static var played: [(frames: Int32, channels: Int32, rate: Double)] = []
         nonisolated(unsafe) static var callbacks = 0

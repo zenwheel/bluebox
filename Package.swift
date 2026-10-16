@@ -22,7 +22,9 @@ let package = Package(
         // AppleDouble, MacBinary, resource fork parsing and decompression (host side).
         .target(name: "ForkStore", cSettings: warnings),
         // Trap dispatch and the Toolbox managers.
-        .target(name: "Toolbox", dependencies: ["CCore", "CPU68K", "ForkStore"], cSettings: warnings),
+        // MACE 3:1 and 6:1 decoding, from FFmpeg: this target alone is LGPL 2.1+.
+        .target(name: "MACE"),
+        .target(name: "Toolbox", dependencies: ["CCore", "CPU68K", "ForkStore", "MACE"], cSettings: warnings),
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
         .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
         // Command-line tool: run, import, install, apps, rsrc.
@@ -32,7 +34,7 @@ let package = Package(
                 cSettings: warnings),
         // Tests touch C globals (one guest arena per process) and run serialized.
         .testTarget(name: "ToolboxTests",
-                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CCore", "CPUTestSupport", "BlueBoxHost"],
+                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CCore", "CPUTestSupport", "BlueBoxHost", "MACE"],
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ],
     cLanguageStandard: .c17
