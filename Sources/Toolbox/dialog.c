@@ -72,7 +72,7 @@ uint64_t machine_alert_depths(const char *message)
  * the host starts it again at the depth it asked for (the highest of
  * those it names up to 256 colours, as games mostly mean).  Returns
  * whether it did. */
-static bool depth_alert(const char *message)
+bool depth_alert(const char *message)
 {
     if (!depth_alerts)
         return false;
@@ -142,7 +142,7 @@ void tb_ParamText(gaddr p0, gaddr p1, gaddr p2, gaddr p3)
 }
 
 /* Append MacRoman text, replacing ^0..^3 with the ParamText strings. */
-static size_t append_text(char *out, size_t n, size_t cap, const uint8_t *s, size_t len)
+size_t append_text(char *out, size_t n, size_t cap, const uint8_t *s, size_t len)
 {
     for (size_t i = 0; i < len && n + 1 < cap; i++) {
         if (s[i] == '^' && i + 1 < len && s[i + 1] >= '0' && s[i + 1] <= '3') {

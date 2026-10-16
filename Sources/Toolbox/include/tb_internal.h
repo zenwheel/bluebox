@@ -228,4 +228,10 @@ int16_t alias_new_for_host(const char *host, gaddr alias_out);
 /* The application's SIZE flags (isHighLevelEventAware is 0x0040). */
 extern uint16_t g_app_size_flags;
 
+/* Dialog Manager (dialog.c): text with ^0..^3 replaced by the ParamText
+ * strings; a message asking for another screen depth ends the run when
+ * the host allows (true when it did). */
+size_t append_text(char *out, size_t n, size_t cap, const uint8_t *s, size_t len);
+bool depth_alert(const char *message);
+
 #endif

@@ -690,11 +690,44 @@ int16_t tb_SetDialogCancelItem(gaddr d, int16_t n)
 
 int16_t tb_SetDialogTracksCursor(gaddr d, int8_t tracks) { return noErr; }
 
+/* A program's own dialog saying it needs another screen depth, checked the
+ * first time ModalDialog runs it. */
+static bool depth_request(gaddr d)
+{
+    static gaddr checked;
+    if (d == checked)
+        return false;
+    checked = d;
+    char msg[1024];
+    size_t n = 0;
+    msg[0] = 0;
+    for (int i = 1; i <= item_count(d); i++) {
+        if ((item_type(d, i) & 0x7F) != statText)
+            continue;
+        gaddr h = item_handle(d, i);
+        if (!h || !rd32(h))
+            continue;
+        uint32_t len = (uint32_t)tb_GetHandleSize(h);
+        uint8_t text[512];
+        if (len > sizeof text)
+            len = sizeof text;
+        gget(text, rd32(h), len);
+        if (n)
+            n = append_text(msg, n, sizeof msg, (const uint8_t *)" ", 1);
+        n = append_text(msg, n, sizeof msg, text, len);
+    }
+    return n && depth_alert(msg);
+}
+
 void tb_ModalDialog(gaddr filter, gaddr itemp)
 {
     gaddr d = tb_FrontWindow();
     if (!is_dialog(d)) {
         wr16(itemp, 0);
+        return;
+    }
+    if (depth_request(d)) {
+        wr16(itemp, 1);
         return;
     }
     gaddr evt = tb_NewPtr(EventRecord_SIZEOF, false, true);
