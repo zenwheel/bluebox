@@ -27,6 +27,7 @@ struct ppc_cpu {
     uint32_t cr, lr, ctr, xer, fpscr;
     uint32_t pc;
     uint32_t op_pc;           /* address of the instruction being executed */
+    uint32_t prev_pc;         /* and of the one before it */
     uint32_t op;              /* the instruction */
     uint64_t icount;          /* instructions executed */
     uint32_t reserve_addr;    /* lwarx / stwcx. */

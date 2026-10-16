@@ -12,9 +12,11 @@
  * transition vector whose code is one NATIVE word.  An import nobody
  * provides binds to a stub that stops with its name when called.
  */
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "forks.h"
 #include "machine.h"
@@ -72,7 +74,11 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
     natives[index].fn(c);
 }
 
+static gaddr native_tvector(void (*fn)(ppc_cpu *), const char *name);
+
 /* A transition vector (code, TOC) whose code calls fn. */
+gaddr cfm_native_tvector(void (*fn)(ppc_cpu *), const char *name) { return native_tvector(fn, name); }
+
 static gaddr native_tvector(void (*fn)(ppc_cpu *), const char *name)
 {
     for (int i = 0; i < nnatives; i++)
@@ -124,6 +130,15 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < sizeof manual_exports / sizeof manual_exports[0]; i++)
         if (!strcmp(manual_exports[i].name, name))
             return manual_exports[i].fn;
+    for (unsigned i = 0; i < lib_export_count; i++)
+        if (!strcmp(lib_exports[i].name, name))
+            return lib_exports[i].fn;
+    for (unsigned i = 0; i < cfm_export_count; i++)
+        if (!strcmp(cfm_exports[i].name, name))
+            return cfm_exports[i].fn;
+    for (unsigned i = 0; i < mm_export_count; i++)
+        if (!strcmp(mm_exports[i].name, name))
+            return mm_exports[i].fn;
     for (unsigned i = 0; i < ppc_glue_export_count; i++)
         if (!strcmp(ppc_glue_exports[i].name, name))
             return ppc_glue_exports[i].fn;
@@ -219,142 +234,245 @@ static bool unpack_pattern(const uint8_t *p, const uint8_t *end, gaddr out, uint
     return true;
 }
 
-/* Run a section's relocation instructions. */
-static bool relocate(const uint8_t *instr, uint32_t count, const section *sections, int nsections, int target,
-                     const gaddr *imports, uint32_t nimports, char *err, size_t errlen)
+/* Relocations: the loader's instructions for one section, run as a little
+ * machine (Inside Macintosh: PowerPC System Software, 8-41).  The repeat
+ * instructions run the preceding instructions again, so the interpreter
+ * works on ranges of the instruction stream. */
+typedef struct {
+    const uint8_t *instr;
+    const section *sections;
+    int nsections;
+    const gaddr *imports;
+    uint32_t nimports;
+    gaddr target_base, reloc, sect_c, sect_d;
+    uint32_t import_index;
+    char *err;
+    size_t errlen;
+    int depth;
+} reloc_state;
+
+static gaddr import_at(reloc_state *s, uint32_t index) { return index < s->nimports ? s->imports[index] : 0; }
+static gaddr section_base(reloc_state *s, uint32_t index)
 {
-    gaddr reloc = sections[target].base;
-    gaddr sect_c = nsections > 0 ? sections[0].base : 0, sect_d = nsections > 1 ? sections[1].base : 0;
-    uint32_t import_index = 0;
-    uint32_t i = 0;
-    /* For repeats: where each instruction started. */
-    uint32_t *starts = malloc(sizeof *starts * (count + 1));
-#define ADD(v) do { wr32(reloc, rd32(reloc) + (v)); reloc += 4; } while (0)
-    while (i < count) {
-        starts[i] = i;
-        uint16_t w = be16(instr + i * 2);
+    return (int)index < s->nsections ? s->sections[index].base : 0;
+}
+
+static bool reloc_run(reloc_state *s, uint32_t from, uint32_t to)
+{
+#define ADD(v) do { wr32(s->reloc, rd32(s->reloc) + (v)); s->reloc += 4; } while (0)
+    uint32_t i = from;
+    while (i < to) {
         uint32_t here = i;
+        uint16_t w = be16(s->instr + i * 2);
         i++;
         if ((w & 0xC000) == 0x0000) { /* RelocBySectDWithSkip */
-            uint32_t skip = (w >> 6) & 0xFF, n = w & 0x3F;
-            reloc += skip * 4;
-            for (uint32_t k = 0; k < n; k++)
-                ADD(sect_d);
+            s->reloc += ((w >> 6) & 0xFF) * 4;
+            for (uint32_t k = 0, n = w & 0x3F; k < n; k++)
+                ADD(s->sect_d);
         } else if ((w & 0xE000) == 0x4000) { /* the run group */
             uint32_t sub = (w >> 9) & 0xF, run = (w & 0x1FF) + 1;
             for (uint32_t k = 0; k < run; k++) {
                 switch (sub) {
-                case 0: ADD(sect_c); break;                          /* RelocBySectC */
-                case 1: ADD(sect_d); break;                          /* RelocBySectD */
-                case 2: ADD(sect_c); ADD(sect_d); reloc += 4; break; /* RelocTVector12 */
-                case 3: ADD(sect_c); ADD(sect_d); break;             /* RelocTVector8 */
-                case 4: ADD(sect_d); reloc += 4; break;              /* RelocVTable8 */
-                case 5:                                              /* RelocImportRun */
-                    ADD(import_index < nimports ? imports[import_index] : 0);
-                    import_index++;
-                    break;
+                case 0: ADD(s->sect_c); break;                             /* RelocBySectC */
+                case 1: ADD(s->sect_d); break;                             /* RelocBySectD */
+                case 2: ADD(s->sect_c); ADD(s->sect_d); s->reloc += 4; break; /* RelocTVector12 */
+                case 3: ADD(s->sect_c); ADD(s->sect_d); break;             /* RelocTVector8 */
+                case 4: ADD(s->sect_d); s->reloc += 4; break;              /* RelocVTable8 */
+                case 5: ADD(import_at(s, s->import_index)); s->import_index++; break; /* RelocImportRun */
                 default:
-                    snprintf(err, errlen, "relocation run subopcode %u", sub);
-                    free(starts);
+                    snprintf(s->err, s->errlen, "relocation run subopcode %u", sub);
                     return false;
                 }
             }
         } else if ((w & 0xE000) == 0x6000) { /* the small index group */
             uint32_t sub = (w >> 9) & 0xF, index = w & 0x1FF;
             switch (sub) {
-            case 0: /* RelocSmByImport */
-                ADD(index < nimports ? imports[index] : 0);
-                import_index = index + 1;
-                break;
-            case 1: sect_c = (int)index < nsections ? sections[index].base : 0; break; /* RelocSmSetSectC */
-            case 2: sect_d = (int)index < nsections ? sections[index].base : 0; break; /* RelocSmSetSectD */
-            case 3: ADD((int)index < nsections ? sections[index].base : 0); break;     /* RelocSmBySection */
+            case 0: ADD(import_at(s, index)); s->import_index = index + 1; break; /* RelocSmByImport */
+            case 1: s->sect_c = section_base(s, index); break;                  /* RelocSmSetSectC */
+            case 2: s->sect_d = section_base(s, index); break;                  /* RelocSmSetSectD */
+            case 3: ADD(section_base(s, index)); break;                         /* RelocSmBySection */
             default:
-                snprintf(err, errlen, "relocation index subopcode %u", sub);
-                free(starts);
+                snprintf(s->err, s->errlen, "relocation index subopcode %u", sub);
                 return false;
             }
         } else if ((w & 0xF000) == 0x8000) { /* RelocIncrPosition */
-            reloc += (w & 0x0FFF) + 1;
-        } else if ((w & 0xF000) == 0x9000) { /* RelocSmRepeat */
-            uint32_t blocks = ((w >> 8) & 0xF) + 1, times = (w & 0xFF) + 1;
-            /* Repeat the previous `blocks` instructions `times` times. */
-            uint32_t from = here >= blocks ? here - blocks : 0;
-            for (uint32_t t = 0; t < times; t++) {
-                for (uint32_t k = from; k < here; k++) {
-                    uint16_t rw = be16(instr + k * 2);
-                    /* Only the simple forms are repeated in practice. */
-                    if ((rw & 0xC000) == 0x0000) {
-                        uint32_t skip = (rw >> 6) & 0xFF, n = rw & 0x3F;
-                        reloc += skip * 4;
-                        for (uint32_t q = 0; q < n; q++)
-                            ADD(sect_d);
-                    } else if ((rw & 0xE000) == 0x4000) {
-                        uint32_t sub = (rw >> 9) & 0xF, run = (rw & 0x1FF) + 1;
-                        for (uint32_t q = 0; q < run; q++) {
-                            if (sub == 0) ADD(sect_c);
-                            else if (sub == 1) ADD(sect_d);
-                            else if (sub == 2) { ADD(sect_c); ADD(sect_d); reloc += 4; }
-                            else if (sub == 3) { ADD(sect_c); ADD(sect_d); }
-                            else if (sub == 4) { ADD(sect_d); reloc += 4; }
-                            else { ADD(import_index < nimports ? imports[import_index] : 0); import_index++; }
-                        }
-                    } else if ((rw & 0xF000) == 0x8000) {
-                        reloc += (rw & 0x0FFF) + 1;
-                    } else if ((rw & 0xE000) == 0x6000 && ((rw >> 9) & 0xF) == 0) {
-                        uint32_t idx = rw & 0x1FF;
-                        ADD(idx < nimports ? imports[idx] : 0);
-                        import_index = idx + 1;
-                    }
-                }
+            s->reloc += (w & 0x0FFF) + 1;
+        } else if ((w & 0xF000) == 0x9000 || (w & 0xFC00) == 0xB000) {
+            /* RelocSmRepeat / RelocLgRepeat: the preceding `blocks` halfwords,
+             * `times` more times. */
+            uint32_t blocks, times;
+            if ((w & 0xF000) == 0x9000) {
+                blocks = ((w >> 8) & 0xF) + 1;
+                times = (w & 0xFF) + 1;
+            } else {
+                blocks = ((w >> 6) & 0xF) + 1;
+                times = ((uint32_t)(w & 0x3F) << 16) | be16(s->instr + i * 2);
+                i++;
             }
+            if (blocks > here || s->depth > 8) {
+                snprintf(s->err, s->errlen, "relocation repeat out of range");
+                return false;
+            }
+            s->depth++;
+            for (uint32_t t = 0; t < times; t++)
+                if (!reloc_run(s, here - blocks, here))
+                    return false;
+            s->depth--;
         } else if ((w & 0xFC00) == 0xA000) { /* RelocSetPosition */
-            uint32_t off = ((uint32_t)(w & 0x3FF) << 16) | be16(instr + i * 2);
+            uint32_t off = ((uint32_t)(w & 0x3FF) << 16) | be16(s->instr + i * 2);
             i++;
-            reloc = sections[target].base + off;
+            s->reloc = s->target_base + off;
         } else if ((w & 0xFC00) == 0xA400) { /* RelocLgByImport */
-            uint32_t index = ((uint32_t)(w & 0x3FF) << 16) | be16(instr + i * 2);
+            uint32_t index = ((uint32_t)(w & 0x3FF) << 16) | be16(s->instr + i * 2);
             i++;
-            ADD(index < nimports ? imports[index] : 0);
-            import_index = index + 1;
-        } else if ((w & 0xFC00) == 0xB000) { /* RelocLgRepeat */
-            uint32_t blocks = ((w >> 6) & 0xF) + 1;
-            uint32_t times = ((uint32_t)(w & 0x3F) << 16) | be16(instr + i * 2);
-            i++;
-            (void)blocks;
-            (void)times;
-            snprintf(err, errlen, "RelocLgRepeat is not handled yet");
-            free(starts);
-            return false;
+            ADD(import_at(s, index));
+            s->import_index = index + 1;
         } else if ((w & 0xFC00) == 0xB400) { /* RelocLgSetOrBySection */
             uint32_t sub = (w >> 6) & 0xF;
-            uint32_t index = ((uint32_t)(w & 0x3F) << 16) | be16(instr + i * 2);
+            uint32_t index = ((uint32_t)(w & 0x3F) << 16) | be16(s->instr + i * 2);
             i++;
-            gaddr base = (int)index < nsections ? sections[index].base : 0;
+            gaddr base = section_base(s, index);
             if (sub == 0)
                 ADD(base);
             else if (sub == 1)
-                sect_c = base;
+                s->sect_c = base;
             else if (sub == 2)
-                sect_d = base;
+                s->sect_d = base;
         } else {
-            snprintf(err, errlen, "relocation opcode %04X", w);
-            free(starts);
+            snprintf(s->err, s->errlen, "relocation opcode %04X", w);
             return false;
         }
     }
 #undef ADD
-    free(starts);
     return true;
 }
 
-typedef struct {
-    gaddr main_tv, init_tv;
-} pef_result;
+/* The imports nothing provides, "Library:symbol" separated by spaces, for
+ * the census; data imports are marked with a star. */
+static char *missing_imports;
+static size_t missing_len, missing_count;
 
-static bool pef_load(const uint8_t *pef, size_t len, pef_result *out, char *err, size_t errlen)
+static void note_missing(const char *lib, const char *sym, bool data)
 {
-    memset(out, 0, sizeof *out);
+    size_t n = strlen(lib) + strlen(sym) + 3;
+    char *grown = realloc(missing_imports, missing_len + n + 1);
+    if (!grown)
+        return;
+    missing_imports = grown;
+    snprintf(missing_imports + missing_len, n + 1, "%s%s:%s%s", missing_len ? " " : "", lib, sym, data ? "*" : "");
+    missing_len += strlen(missing_imports + missing_len);
+    missing_count++;
+}
+
+unsigned machine_ppc_missing(const char **names)
+{
+    *names = missing_imports ? missing_imports : "";
+    return (unsigned)missing_count;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Fragments */
+
+enum { kImportLibraryCFrag = 0, kApplicationCFrag = 1 };
+enum { kMemoryCFragLocator = 0, kDataForkCFragLocator = 1, kResourceCFragLocator = 2 };
+enum {
+    cfragNoSymbolErr = -2802,
+    cfragNoLibraryErr = -2804,
+    cfragFragmentFormatErr = -2806,
+    cfragConnectionIDErr = -2801,
+};
+enum { kCodeCFragSymbol = 0, kDataCFragSymbol = 1, kTVectorCFragSymbol = 2 };
+
+typedef struct {
+    char *name;
+    gaddr addr;
+    uint8_t cls;
+} frag_export;
+
+typedef struct {
+    char name[64];       /* the fragment's name (MacRoman), "" for the application */
+    char path[1024];     /* the file it came from */
+    uint32_t offset, length;
+    gaddr main_tv, init_tv, term_tv;
+    frag_export *exports;
+    uint32_t nexports;
+    bool native;         /* a library we provide (InterfaceLib ...): no PEF */
+    bool loading;
+} fragment;
+
+#define MAX_FRAGMENTS 64
+static fragment frags[MAX_FRAGMENTS];
+static int nfrags;
+static char app_dir[1024], app_file[1024];
+/* Init routines still to run at launch, in order (fragment indices). */
+static int init_queue[MAX_FRAGMENTS];
+static int ninit, init_next;
+
+/* Libraries whose exports are ours. */
+static const char *const native_libraries[] = {
+    "InterfaceLib", "MathLib", "StdCLib", "QuickTimeLib", "DragLib", "ThreadsLib", "AppearanceLib",
+    "PrivateInterfaceLib", "ObjectSupportLib", "AppleScriptLib", "TranslationLib", "ControlStripLib",
+    "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib",
+};
+
+static bool core_library(const char *name)
+{
+    return !strcmp(name, "InterfaceLib") || !strcmp(name, "MathLib") || !strcmp(name, "StdCLib");
+}
+
+static bool is_native_library(const char *name)
+{
+    for (unsigned i = 0; i < sizeof native_libraries / sizeof native_libraries[0]; i++)
+        if (!strcmp(native_libraries[i], name))
+            return true;
+    return false;
+}
+
+static void pname_to_c(const uint8_t *p, char *out, size_t outsize)
+{
+    size_t n = p[0] < outsize - 1 ? p[0] : outsize - 1;
+    memcpy(out, p + 1, n);
+    out[n] = 0;
+}
+
+/* Data imports we provide: a block of zeros of their own each (the C
+ * library's globals, mostly).  Named, so every importer gets the same. */
+static struct { char name[64]; gaddr addr; } data_blocks[128];
+static int ndata_blocks;
+
+static gaddr data_import(const char *name)
+{
+    for (int i = 0; i < ndata_blocks; i++)
+        if (!strcmp(data_blocks[i].name, name))
+            return data_blocks[i].addr;
+    gaddr a = ppc_data_export(name);
+    if (!a)
+        a = tb_NewPtr(256, false, true);
+    if (ndata_blocks < (int)(sizeof data_blocks / sizeof data_blocks[0])) {
+        snprintf(data_blocks[ndata_blocks].name, sizeof data_blocks[0].name, "%s", name);
+        data_blocks[ndata_blocks++].addr = a;
+    }
+    return a;
+}
+
+static bool frag_find_export(const fragment *f, const char *name, gaddr *addr, uint8_t *cls)
+{
+    for (uint32_t i = 0; i < f->nexports; i++)
+        if (!strcmp(f->exports[i].name, name)) {
+            *addr = f->exports[i].addr;
+            if (cls)
+                *cls = f->exports[i].cls;
+            return true;
+        }
+    return false;
+}
+
+static int library_named(const char *name, char *err, size_t errlen);
+
+/* Load a PEF container into fragment f: sections, imports (loading the
+ * libraries it needs), relocations, exports. */
+static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, size_t errlen)
+{
     if (len < 40 || memcmp(pef, "Joy!peff", 8)) {
         snprintf(err, errlen, "not a PEF container");
         return false;
@@ -394,7 +512,9 @@ static bool pef_load(const uint8_t *pef, size_t len, pef_result *out, char *err,
             return false;
         }
         base = (base + 15) & ~15u;
+        gmemset(base, 0, total);
         sections[s] = (section){ base, total, kind };
+        LOGF(LOG_SEG, "cfm: section %d (kind %d) at %08X, %u bytes\n", s, kind, base, total);
         if (kind == kPatternData)
             unpack_pattern(pef + off, pef + off + packed, base, unpacked);
         else
@@ -406,11 +526,14 @@ static bool pef_load(const uint8_t *pef, size_t len, pef_result *out, char *err,
         return false;
     }
     int32_t main_sect = (int32_t)be32(loader), init_sect = (int32_t)be32(loader + 8);
-    uint32_t main_off = be32(loader + 4), init_off = be32(loader + 12);
+    int32_t term_sect = (int32_t)be32(loader + 16);
+    uint32_t main_off = be32(loader + 4), init_off = be32(loader + 12), term_off = be32(loader + 20);
     uint32_t nlibs = be32(loader + 24), nsyms = be32(loader + 28), nreloc = be32(loader + 32);
     uint32_t reloc_off = be32(loader + 36), strings = be32(loader + 40);
+    uint32_t hash_off = be32(loader + 44), hash_power = be32(loader + 48), nexports = be32(loader + 52);
 
-    /* Imports: a transition vector (or 0, for missing weak ones) each. */
+    /* Imports: an address each (a transition vector or data), or 0 for
+     * missing weak ones. */
     gaddr *imports = calloc(nsyms ? nsyms : 1, sizeof *imports);
     const uint8_t *libs = loader + 56, *syms = libs + nlibs * 24;
     for (uint32_t l = 0; l < nlibs; l++) {
@@ -418,19 +541,48 @@ static bool pef_load(const uint8_t *pef, size_t len, pef_result *out, char *err,
         const char *lname = (const char *)loader + strings + be32(lib);
         uint32_t count = be32(lib + 12), first = be32(lib + 16);
         bool weak_lib = (lib[20] & 0x40) != 0;
+        char lerr[256];
+        int li = library_named(lname, lerr, sizeof lerr);
+        const fragment *from = li >= 0 && !frags[li].native ? &frags[li] : NULL;
+        if (li < 0)
+            LOGF(weak_lib ? LOG_SEG : LOG_UNIMPL, "cfm: library %s: %s\n", lname, lerr);
         for (uint32_t k = first; k < first + count && k < nsyms; k++) {
             uint32_t w = be32(syms + k * 4);
             const char *sname = (const char *)loader + strings + (w & 0xFFFFFF);
             bool weak = (w >> 24) & 0x80;
             int cls = (w >> 24) & 0x0F;
-            void (*fn)(ppc_cpu *) = cls == 2 ? export_fn(sname) : NULL;
-            if (fn) {
-                imports[k] = native_tvector(fn, sname);
-            } else if (weak || weak_lib) {
+            gaddr addr = 0;
+            if (from) {
+                if (frag_find_export(from, sname, &addr, NULL)) {
+                    imports[k] = addr;
+                    continue;
+                }
+            } else if (li >= 0 || !weak_lib) {
+                void (*fn)(ppc_cpu *) = cls == kTVectorCFragSymbol || cls == kCodeCFragSymbol ? export_fn(sname) : NULL;
+                if (fn) {
+                    imports[k] = native_tvector(fn, sname);
+                    continue;
+                }
+                if (cls == kDataCFragSymbol && li >= 0 && (addr = ppc_data_export(sname)) != 0) {
+                    imports[k] = data_import(sname);
+                    continue;
+                }
+            }
+            /* A weak symbol, or one from a weakly linked library that isn't
+             * there, is 0.  But InterfaceLib, MathLib and StdCLib are always
+             * there with everything Mac OS 9 had in them, so what they lack
+             * here is ours to add: a stub that says so. */
+            if ((weak || weak_lib) && (li < 0 || !core_library(lname))) {
                 imports[k] = 0;
+                LOGF(LOG_SEG, "cfm: weak %s from %s: not there\n", sname, lname);
+            } else if (cls == kDataCFragSymbol) {
+                imports[k] = data_import(sname);
+                LOGF(LOG_UNIMPL, "cfm: data %s from %s not provided\n", sname, lname);
+                note_missing(lname, sname, true);
             } else {
                 imports[k] = native_tvector(unimplemented_import, sname);
                 LOGF(LOG_UNIMPL, "cfm: %s from %s not provided\n", sname, lname);
+                note_missing(lname, sname, false);
             }
         }
     }
@@ -442,62 +594,319 @@ static bool pef_load(const uint8_t *pef, size_t len, pef_result *out, char *err,
         uint32_t count = be32(rh + 4), first = be32(rh + 8);
         if (target >= ninst || !sections[target].base)
             continue;
-        if (!relocate(loader + reloc_off + first, count, sections, ninst, target, imports, nsyms, err, errlen)) {
+        reloc_state st = {
+            .instr = loader + reloc_off + first,
+            .sections = sections,
+            .nsections = ninst,
+            .imports = imports,
+            .nimports = nsyms,
+            .target_base = sections[target].base,
+            .reloc = sections[target].base,
+            .sect_c = ninst > 0 ? sections[0].base : 0,
+            .sect_d = ninst > 1 ? sections[1].base : 0,
+            .err = err,
+            .errlen = errlen,
+        };
+        if (!reloc_run(&st, 0, count)) {
             free(imports);
             free(sections);
             return false;
         }
     }
-    if (main_sect >= 0 && main_sect < ninst)
-        out->main_tv = sections[main_sect].base + main_off;
-    if (init_sect >= 0 && init_sect < ninst)
-        out->init_tv = sections[init_sect].base + init_off;
+    /* Exports: the key table gives each name's length, the symbol table
+     * its class, name and place. */
+    const uint8_t *keys = loader + hash_off + (4u << hash_power);
+    const uint8_t *esyms = keys + nexports * 4;
+    f->exports = calloc(nexports ? nexports : 1, sizeof *f->exports);
+    f->nexports = 0;
+    for (uint32_t i = 0; i < nexports; i++) {
+        uint32_t namelen = be32(keys + i * 4) >> 16;
+        const uint8_t *e = esyms + i * 10;
+        uint32_t cn = be32(e), value = be32(e + 4);
+        int16_t sect = (int16_t)be16(e + 8);
+        gaddr addr;
+        if (sect >= 0 && sect < ninst)
+            addr = sections[sect].base + value;
+        else if (sect == -2)
+            addr = value; /* absolute */
+        else if (sect == -3 && value < nsyms)
+            addr = imports[value]; /* re-exported import */
+        else
+            continue;
+        frag_export *x = &f->exports[f->nexports++];
+        x->name = strndup((const char *)loader + strings + (cn & 0xFFFFFF), namelen);
+        x->addr = addr;
+        x->cls = (uint8_t)(cn >> 24) & 0x0F;
+    }
+    f->main_tv = main_sect >= 0 && main_sect < ninst ? sections[main_sect].base + main_off : 0;
+    f->init_tv = init_sect >= 0 && init_sect < ninst ? sections[init_sect].base + init_off : 0;
+    f->term_tv = term_sect >= 0 && term_sect < ninst ? sections[term_sect].base + term_off : 0;
     free(imports);
     free(sections);
     return true;
 }
 
-/* ---------------------------------------------------------------------- */
-/* Launching */
+/* A cfrg 0 resource's members: calls fn for each PowerPC one until it
+ * returns true. */
+typedef struct {
+    int usage, where;
+    uint32_t offset, length;
+    uint32_t rtype;
+    int16_t rid;
+    char name[64];
+} cfrg_member;
 
-/* The PowerPC fragment of an application, from its 'cfrg' 0: the bytes of
- * the data fork it names.  NULL if there is none. */
-static uint8_t *ppc_fragment(const char *app_path, size_t *len)
+static bool cfrg_each(const uint8_t *p, size_t len, bool (*fn)(const cfrg_member *, void *), void *ctx)
 {
-    gaddr h = tb_Get1Resource((int32_t)fourcc("cfrg"), 0);
-    if (!h || !rd32(h) || tb_GetHandleSize(h) < 32)
-        return NULL;
-    gaddr p = rd32(h);
-    uint32_t n = rd32(p + 28);
-    gaddr m = p + 32;
-    for (uint32_t i = 0; i < n; i++) {
-        uint32_t arch = rd32(m);
-        uint8_t usage = rd8(m + 22), where = rd8(m + 23);
-        uint32_t off = rd32(m + 24), flen = rd32(m + 28);
-        uint16_t size = rd16(m + 40);
-        if (arch == 0x70777063u /* pwpc */ && usage == 1 /* application */ && where == 1 /* data fork */) {
-            mac_file mf;
-            char err[256];
-            if (!appledouble_read(app_path, &mf, err, sizeof err))
-                return NULL;
-            if (off > mf.data_len) {
-                mac_file_free(&mf);
-                return NULL;
-            }
-            size_t avail = mf.data_len - off;
-            size_t take = flen && flen < avail ? flen : avail;
-            uint8_t *bytes = malloc(take ? take : 1);
-            memcpy(bytes, mf.data + off, take);
-            mac_file_free(&mf);
-            *len = take;
-            return bytes;
+    if (len < 32)
+        return false;
+    uint32_t n = be32(p + 28);
+    size_t at = 32;
+    for (uint32_t i = 0; i < n && at + 43 <= len; i++) {
+        const uint8_t *m = p + at;
+        uint16_t size = be16(m + 40);
+        if (be32(m) == 0x70777063u /* pwpc */) {
+            /* A fragment in a resource has the resource's type and ID
+             * where one in the data fork has its offset and length. */
+            cfrg_member cm = { .usage = m[22], .where = m[23], .offset = be32(m + 24), .length = be32(m + 28),
+                               .rtype = be32(m + 24), .rid = (int16_t)be32(m + 28) };
+            pname_to_c(m + 42, cm.name, sizeof cm.name);
+            if (fn(&cm, ctx))
+                return true;
         }
         if (!size)
             break;
-        m += size;
+        at += size;
     }
-    return NULL;
+    return false;
 }
+
+/* The bytes of a fragment in a file (host memory, malloc'd). */
+static uint8_t *member_bytes(const mac_file *mf, const cfrg_member *m, size_t *len)
+{
+    const uint8_t *src = NULL;
+    size_t avail = 0;
+    if (m->where == kDataForkCFragLocator) {
+        if (m->offset > mf->data_len)
+            return NULL;
+        src = mf->data + m->offset;
+        avail = mf->data_len - m->offset;
+    } else if (m->where == kResourceCFragLocator) {
+        rsrc_index idx;
+        char err[128];
+        if (!mf->rsrc || !rsrc_parse(mf->rsrc, mf->rsrc_len, &idx, err, sizeof err))
+            return NULL;
+        for (size_t i = 0; i < idx.count && !src; i++)
+            if (idx.entries[i].type == m->rtype && idx.entries[i].id == m->rid) {
+                src = rsrc_data(mf->rsrc, &idx, &idx.entries[i]);
+                avail = idx.entries[i].data_len;
+            }
+        rsrc_index_free(&idx);
+        if (!src)
+            return NULL;
+        uint8_t *plain;
+        size_t plain_len;
+        if (rsrc_is_compressed(src, avail) && rsrc_decompress(src, avail, &plain, &plain_len, err, sizeof err)) {
+            *len = plain_len;
+            return plain;
+        }
+    } else {
+        return NULL;
+    }
+    size_t take = m->where == kDataForkCFragLocator && m->length && m->length < avail ? m->length : avail;
+    uint8_t *bytes = malloc(take ? take : 1);
+    memcpy(bytes, src, take);
+    *len = take;
+    return bytes;
+}
+
+typedef struct {
+    const char *want; /* library name, or NULL for the application */
+    cfrg_member found;
+    bool ok;
+} member_search;
+
+static bool match_member(const cfrg_member *m, void *ctx)
+{
+    member_search *s = ctx;
+    bool hit = s->want ? (m->usage == kImportLibraryCFrag && !strcmp(m->name, s->want))
+                       : m->usage == kApplicationCFrag;
+    if (hit) {
+        s->found = *m;
+        s->ok = true;
+    }
+    return hit;
+}
+
+/* The cfrg 0 resource of a file (host memory, malloc'd). */
+static uint8_t *file_cfrg(const mac_file *mf, size_t *len)
+{
+    rsrc_index idx;
+    char err[128];
+    if (!mf->rsrc || !rsrc_parse(mf->rsrc, mf->rsrc_len, &idx, err, sizeof err))
+        return NULL;
+    uint8_t *out = NULL;
+    for (size_t i = 0; i < idx.count && !out; i++)
+        if (idx.entries[i].type == 0x63667267u /* cfrg */ && idx.entries[i].id == 0) {
+            *len = idx.entries[i].data_len;
+            out = malloc(*len ? *len : 1);
+            memcpy(out, rsrc_data(mf->rsrc, &idx, &idx.entries[i]), *len);
+        }
+    rsrc_index_free(&idx);
+    return out;
+}
+
+/* Load the fragment `want` (NULL: the application's) from a file into a
+ * new fragment slot; returns its index or -1. */
+static int load_from_file(const char *path, const char *want, char *err, size_t errlen)
+{
+    mac_file mf;
+    if (!appledouble_read(path, &mf, err, errlen))
+        return -1;
+    size_t clen;
+    uint8_t *cfrg = file_cfrg(&mf, &clen);
+    member_search s = { .want = want };
+    if (cfrg)
+        cfrg_each(cfrg, clen, match_member, &s);
+    free(cfrg);
+    if (!s.ok) {
+        mac_file_free(&mf);
+        snprintf(err, errlen, "no fragment %s in %s", want ? want : "(application)", path);
+        return -1;
+    }
+    size_t len = 0;
+    uint8_t *pef = NULL;
+    if (s.found.where == kResourceCFragLocator && !strcmp(path, app_file)) {
+        /* The application's own resource: through the Resource Manager,
+         * which runs the application's own decompressor if it has one. */
+        gaddr h = tb_GetResource((int32_t)s.found.rtype, s.found.rid);
+        if (h && rd32(h)) {
+            len = (size_t)tb_GetHandleSize(h);
+            pef = malloc(len ? len : 1);
+            gget(pef, rd32(h), (uint32_t)len);
+        }
+    }
+    if (!pef)
+        pef = member_bytes(&mf, &s.found, &len);
+    mac_file_free(&mf);
+    if (!pef || nfrags >= MAX_FRAGMENTS) {
+        free(pef);
+        snprintf(err, errlen, "can't read fragment %s", s.found.name);
+        return -1;
+    }
+    const char *dump = getenv("BLUEBOX_DUMP_FRAGMENTS"); /* a folder: each fragment's PEF, for study */
+    if (dump) {
+        char out[1200];
+        snprintf(out, sizeof out, "%s/%s.pef", dump, want ? s.found.name : "application");
+        FILE *fp = fopen(out, "wb");
+        if (fp) {
+            fwrite(pef, 1, len, fp);
+            fclose(fp);
+        }
+    }
+    int i = nfrags++;
+    fragment *f = &frags[i];
+    memset(f, 0, sizeof *f);
+    snprintf(f->name, sizeof f->name, "%s", want ? s.found.name : "");
+    snprintf(f->path, sizeof f->path, "%s", path);
+    f->offset = s.found.where == kDataForkCFragLocator ? s.found.offset : 0;
+    f->length = (uint32_t)len;
+    f->loading = true;
+    bool ok = pef_load(pef, len, f, err, errlen);
+    free(pef);
+    f->loading = false;
+    if (!ok) {
+        nfrags--;
+        return -1;
+    }
+    if (f->init_tv && ninit < MAX_FRAGMENTS)
+        init_queue[ninit++] = i;
+    LOGF(LOG_SEG, "cfm: loaded %s from %s (main %08X, init %08X)\n", f->name[0] ? f->name : "application", path,
+         f->main_tv, f->init_tv);
+    return i;
+}
+
+/* Does this file hold an import library of this name? */
+static bool file_has_library(const char *path, const char *name)
+{
+    mac_file mf;
+    char err[128];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return false;
+    size_t clen;
+    uint8_t *cfrg = file_cfrg(&mf, &clen);
+    mac_file_free(&mf);
+    member_search s = { .want = name };
+    if (cfrg)
+        cfrg_each(cfrg, clen, match_member, &s);
+    free(cfrg);
+    return s.ok;
+}
+
+/* Look for a library file in a folder (and the folders in it, one level). */
+static bool find_library_file(const char *dir, const char *name, int depth, char *out, size_t outsize)
+{
+    DIR *d = opendir(dir);
+    if (!d)
+        return false;
+    struct dirent *e;
+    bool found = false;
+    char sub[64][256];
+    int nsub = 0;
+    while (!found && (e = readdir(d))) {
+        if (e->d_name[0] == '.')
+            continue;
+        char path[1024];
+        snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
+        struct stat st;
+        if (stat(path, &st))
+            continue;
+        if (S_ISDIR(st.st_mode)) {
+            if (nsub < 64)
+                snprintf(sub[nsub++], sizeof sub[0], "%s", e->d_name);
+            continue;
+        }
+        if (file_has_library(path, name)) {
+            snprintf(out, outsize, "%s", path);
+            found = true;
+        }
+    }
+    closedir(d);
+    for (int i = 0; i < nsub && !found && depth > 0; i++) {
+        char path[1024];
+        snprintf(path, sizeof path, "%s/%s", dir, sub[i]);
+        found = find_library_file(path, name, depth - 1, out, outsize);
+    }
+    return found;
+}
+
+/* The fragment index of a library, loading it if need be: one already
+ * loaded, one of ours, one in the application's file, one in its folder. */
+static int library_named(const char *name, char *err, size_t errlen)
+{
+    for (int i = 0; i < nfrags; i++)
+        if (!strcmp(frags[i].name, name))
+            return i;
+    if (is_native_library(name)) {
+        if (nfrags >= MAX_FRAGMENTS)
+            return -1;
+        fragment *f = &frags[nfrags];
+        memset(f, 0, sizeof *f);
+        snprintf(f->name, sizeof f->name, "%s", name);
+        f->native = true;
+        return nfrags++;
+    }
+    if (frags[0].path[0] && file_has_library(frags[0].path, name))
+        return load_from_file(frags[0].path, name, err, errlen);
+    char path[1024];
+    if (app_dir[0] && find_library_file(app_dir, name, 2, path, sizeof path))
+        return load_from_file(path, name, err, errlen);
+    snprintf(err, errlen, "library %s not found", name);
+    return -1;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Launching */
 
 bool cfm_has_ppc(void)
 {
@@ -508,7 +917,7 @@ bool cfm_has_ppc(void)
     uint32_t n = rd32(p + 28);
     gaddr m = p + 32;
     for (uint32_t i = 0; i < n; i++) {
-        if (rd32(m) == 0x70777063u && rd8(m + 22) == 1)
+        if (rd32(m) == 0x70777063u && rd8(m + 22) == kApplicationCFrag)
             return true;
         uint16_t size = rd16(m + 40);
         if (!size)
@@ -518,11 +927,41 @@ bool cfm_has_ppc(void)
     return false;
 }
 
-static gaddr main_tv, done_code;
-
-/* After the init routine: main, returning to main_returned. */
-static void start_main(ppc_cpu *c)
+/* The CFragInitBlock for a fragment: its locator (an FSSpec of its file)
+ * and name. */
+static gaddr init_block(const fragment *f)
 {
+    gaddr b = tb_NewPtr(64, false, true);
+    gaddr spec = tb_NewPtr(80, false, true);
+    gaddr name = tb_NewPtr(64, false, true);
+    if (!b || !spec || !name)
+        return b;
+    if (f->path[0])
+        fm_spec_for_path(f->path, spec);
+    size_t n = strlen(f->name);
+    wr8(name, (uint8_t)n);
+    gput(name + 1, f->name, n);
+    wr32(b + 12, kDataForkCFragLocator);
+    wr32(b + 16, spec);
+    wr32(b + 20, f->offset);
+    wr32(b + 24, f->length);
+    wr32(b + 28, name);
+    return b;
+}
+
+static gaddr main_tv, done_code, chain_code;
+
+/* The init routines, one after another (each returns here), then main. */
+static void run_next_init(ppc_cpu *c)
+{
+    if (init_next < ninit) {
+        const fragment *f = &frags[init_queue[init_next++]];
+        c->pc = rd32(f->init_tv);
+        c->gpr[2] = rd32(f->init_tv + 4);
+        c->gpr[3] = init_block(f);
+        c->lr = chain_code;
+        return;
+    }
     c->pc = rd32(main_tv);
     c->gpr[2] = rd32(main_tv + 4);
     c->lr = done_code;
@@ -538,31 +977,37 @@ static void main_returned(ppc_cpu *c)
 
 bool cfm_launch(const char *app_path, char *err, size_t errlen)
 {
-    size_t len;
-    uint8_t *pef = ppc_fragment(app_path, &len);
-    if (!pef) {
-        snprintf(err, errlen, "no PowerPC fragment in the data fork");
-        return false;
-    }
     nnatives = 0;
     glue_area = 0;
-    pef_result r;
-    bool ok = pef_load(pef, len, &r, err, errlen);
-    free(pef);
-    if (!ok)
+    missing_len = missing_count = 0;
+    nfrags = ninit = init_next = ndata_blocks = 0;
+    snprintf(app_dir, sizeof app_dir, "%s", app_path);
+    snprintf(app_file, sizeof app_file, "%s", app_path);
+    char *slash = strrchr(app_dir, '/');
+    if (slash)
+        *slash = 0;
+    else
+        app_dir[0] = 0;
+    /* The application is fragment 0 (named "", so no import finds it). */
+    frags[0].path[0] = 0;
+    int a = load_from_file(app_path, NULL, err, errlen);
+    if (a < 0)
         return false;
-    if (!r.main_tv) {
+    if (!frags[a].main_tv) {
         snprintf(err, errlen, "the fragment has no main routine");
         return false;
     }
-    main_tv = r.main_tv;
+    main_tv = frags[a].main_tv;
 
     /* An A5 world for the QuickDraw globals' address (InitGraf keeps it at
-     * 0(A5)) and the 68k side's application globals. */
-    gaddr a5world = tb_NewPtr(1024, false, true);
-    gaddr a5 = a5world + 512;
+     * 0(A5)), where a 68k application's would be, with the 68k stack (for
+     * the traps and 68k callbacks PowerPC code calls) below it. */
+    gaddr a5 = (GA_A5WORLD_TOP - 1024) & ~15u;
+    gmemset(a5 - 1024, 0, 2048);
     wr32(LM_CurrentA5, a5);
+    wr32(LM_CurStackBase, a5);
     g_cpu->a[5] = a5;
+    g_cpu->a[7] = a5 - 64;
 
     /* A stack of its own: 1 MB, the back chain ending in 0. */
     const uint32_t stack_size = 1024 * 1024;
@@ -575,23 +1020,211 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
     g_ppc.native = dispatch_native;
     g_ppc.gpr[1] = (stack + stack_size - 64) & ~15u;
     wr32(g_ppc.gpr[1], 0);
-    gaddr done = native_tvector(main_returned, "main returned");
-    done_code = rd32(done);
-    g_ppc.lr = done_code;
-    if (r.init_tv) {
-        /* init(CFragInitBlock *): the block is left empty for now. */
-        gaddr block = tb_NewPtr(64, false, true);
-        gaddr then = native_tvector(start_main, "start main");
-        g_ppc.pc = rd32(r.init_tv);
-        g_ppc.gpr[2] = rd32(r.init_tv + 4);
-        g_ppc.gpr[3] = block;
-        g_ppc.lr = rd32(then);
-    } else {
-        g_ppc.pc = rd32(main_tv);
-        g_ppc.gpr[2] = rd32(main_tv + 4);
-    }
+    done_code = rd32(native_tvector(main_returned, "main returned"));
+    chain_code = rd32(native_tvector(run_next_init, "next init"));
+    run_next_init(&g_ppc);
     g_ppc_mode = true;
-    LOGF(LOG_SEG, "cfm: PowerPC fragment, main %08X (code %08X, TOC %08X)\n", main_tv, rd32(main_tv),
-         rd32(main_tv + 4));
+    LOGF(LOG_SEG, "cfm: PowerPC fragment, main %08X (code %08X, TOC %08X), %d fragments\n", main_tv,
+         rd32(main_tv), rd32(main_tv + 4), nfrags);
     return true;
 }
+
+/* ---------------------------------------------------------------------- */
+/* The Code Fragment Manager's calls (connection IDs are fragment index + 1) */
+
+static fragment *connection(uint32_t id) { return id >= 1 && id <= (uint32_t)nfrags ? &frags[id - 1] : NULL; }
+
+/* Run the init routines of fragments loaded since `from` (now, nested). */
+static void run_new_inits(int from)
+{
+    for (int q = from; q < ninit; q++) {
+        const fragment *f = &frags[init_queue[q]];
+        uint32_t block = init_block(f);
+        ppc_call(f->init_tv, &block, 1);
+    }
+    init_next = ninit;
+}
+
+static void connect_result(ppc_cpu *c, int i, gaddr conn_p, gaddr main_p, gaddr err_p, const char *err)
+{
+    if (i < 0) {
+        if (err_p) {
+            size_t n = strlen(err) > 255 ? 255 : strlen(err);
+            wr8(err_p, (uint8_t)n);
+            gput(err_p + 1, err, n);
+        }
+        c->gpr[3] = (uint32_t)(int32_t)cfragNoLibraryErr;
+        return;
+    }
+    if (conn_p)
+        wr32(conn_p, (uint32_t)i + 1);
+    if (main_p)
+        wr32(main_p, frags[i].main_tv);
+    if (err_p)
+        wr8(err_p, 0);
+    c->gpr[3] = 0;
+}
+
+/* GetSharedLibrary(libName, archType, loadFlags, *connID, *mainAddr, errMessage) */
+static void ppc_GetSharedLibrary(ppc_cpu *c)
+{
+    char name[64], err[256];
+    pname_to_c(gptr(c->gpr[3]), name, sizeof name);
+    int before = ninit;
+    int i = library_named(name, err, sizeof err);
+    run_new_inits(before);
+    connect_result(c, i, c->gpr[6], c->gpr[7], c->gpr[8], err);
+    c->pc = c->lr;
+}
+
+/* GetDiskFragment(fileSpec, offset, length, fragName, loadFlags, *connID, *mainAddr, errMessage) */
+static void ppc_GetDiskFragment(ppc_cpu *c)
+{
+    gaddr spec = c->gpr[3];
+    char path[1024], err[256] = "file not found";
+    int i = -1;
+    if (fm_host_path((int16_t)rd16(spec), (int32_t)rd32(spec + 2), spec + 6, true, path, sizeof path)) {
+        mac_file mf;
+        if (appledouble_read(path, &mf, err, sizeof err)) {
+            /* The fragment at offset (the whole data fork if none). */
+            uint32_t off = c->gpr[4], len = c->gpr[5];
+            size_t avail = off <= mf.data_len ? mf.data_len - off : 0;
+            size_t take = len && len < avail ? len : avail;
+            if (take >= 40 && nfrags < MAX_FRAGMENTS) {
+                fragment *f = &frags[nfrags];
+                memset(f, 0, sizeof *f);
+                if (c->gpr[6])
+                    pname_to_c(gptr(c->gpr[6]), f->name, sizeof f->name);
+                if (!f->name[0])
+                    snprintf(f->name, sizeof f->name, "%s#%d", path, nfrags);
+                snprintf(f->path, sizeof f->path, "%s", path);
+                f->offset = off;
+                f->length = (uint32_t)take;
+                int before = ninit, idx = nfrags++;
+                if (pef_load(mf.data + off, take, f, err, sizeof err)) {
+                    if (f->init_tv && ninit < MAX_FRAGMENTS)
+                        init_queue[ninit++] = idx;
+                    i = idx;
+                } else {
+                    nfrags--;
+                }
+                run_new_inits(before);
+            } else {
+                snprintf(err, sizeof err, "no fragment there");
+            }
+            mac_file_free(&mf);
+        }
+    }
+    connect_result(c, i, c->gpr[8], c->gpr[9], c->gpr[10], err);
+    if (i < 0)
+        c->gpr[3] = (uint32_t)(int32_t)cfragFragmentFormatErr;
+    c->pc = c->lr;
+}
+
+/* GetMemFragment(memAddr, length, fragName, loadFlags, *connID, *mainAddr, errMessage) */
+static void ppc_GetMemFragment(ppc_cpu *c)
+{
+    char err[256] = "bad fragment";
+    int i = -1;
+    uint32_t len = c->gpr[4];
+    if (len >= 40 && nfrags < MAX_FRAGMENTS) {
+        uint8_t *bytes = malloc(len);
+        gget(bytes, c->gpr[3], len);
+        fragment *f = &frags[nfrags];
+        memset(f, 0, sizeof *f);
+        if (c->gpr[5])
+            pname_to_c(gptr(c->gpr[5]), f->name, sizeof f->name);
+        int before = ninit, idx = nfrags++;
+        if (pef_load(bytes, len, f, err, sizeof err)) {
+            if (f->init_tv && ninit < MAX_FRAGMENTS)
+                init_queue[ninit++] = idx;
+            i = idx;
+        } else {
+            nfrags--;
+        }
+        free(bytes);
+        run_new_inits(before);
+    }
+    connect_result(c, i, c->gpr[7], c->gpr[8], c->gpr[9], err);
+    if (i < 0)
+        c->gpr[3] = (uint32_t)(int32_t)cfragFragmentFormatErr;
+    c->pc = c->lr;
+}
+
+/* FindSymbol(connID, symName, *symAddr, *symClass) */
+static void ppc_FindSymbol(ppc_cpu *c)
+{
+    fragment *f = connection(c->gpr[3]);
+    char name[256];
+    pname_to_c(gptr(c->gpr[4]), name, sizeof name);
+    gaddr addr = 0;
+    uint8_t cls = kTVectorCFragSymbol;
+    bool ok = false;
+    if (f && !f->native) {
+        ok = frag_find_export(f, name, &addr, &cls);
+    } else if (f) {
+        void (*fn)(ppc_cpu *) = export_fn(name);
+        if (fn) {
+            addr = native_tvector(fn, name);
+            ok = addr != 0;
+        }
+    }
+    if (c->gpr[5])
+        wr32(c->gpr[5], ok ? addr : 0);
+    if (c->gpr[6])
+        wr8(c->gpr[6], cls);
+    c->gpr[3] = !f ? (uint32_t)(int32_t)cfragConnectionIDErr : ok ? 0 : (uint32_t)(int32_t)cfragNoSymbolErr;
+    c->pc = c->lr;
+}
+
+/* CountSymbols(connID, *symCount) */
+static void ppc_CountSymbols(ppc_cpu *c)
+{
+    fragment *f = connection(c->gpr[3]);
+    if (c->gpr[4])
+        wr32(c->gpr[4], f ? f->nexports : 0);
+    c->gpr[3] = f ? 0 : (uint32_t)(int32_t)cfragConnectionIDErr;
+    c->pc = c->lr;
+}
+
+/* GetIndSymbol(connID, symIndex (1-based), symName, *symAddr, *symClass) */
+static void ppc_GetIndSymbol(ppc_cpu *c)
+{
+    fragment *f = connection(c->gpr[3]);
+    uint32_t i = c->gpr[4];
+    if (!f || i < 1 || i > f->nexports) {
+        c->gpr[3] = (uint32_t)(int32_t)(f ? cfragNoSymbolErr : cfragConnectionIDErr);
+        c->pc = c->lr;
+        return;
+    }
+    const frag_export *x = &f->exports[i - 1];
+    if (c->gpr[5]) {
+        size_t n = strlen(x->name) > 255 ? 255 : strlen(x->name);
+        wr8(c->gpr[5], (uint8_t)n);
+        gput(c->gpr[5] + 1, x->name, n);
+    }
+    if (c->gpr[6])
+        wr32(c->gpr[6], x->addr);
+    if (c->gpr[7])
+        wr8(c->gpr[7], x->cls);
+    c->gpr[3] = 0;
+    c->pc = c->lr;
+}
+
+/* CloseConnection(*connID): the fragment stays. */
+static void ppc_CloseConnection(ppc_cpu *c)
+{
+    c->gpr[3] = 0;
+    c->pc = c->lr;
+}
+
+const ppc_export cfm_exports[] = {
+    { "CloseConnection", ppc_CloseConnection },
+    { "CountSymbols", ppc_CountSymbols },
+    { "FindSymbol", ppc_FindSymbol },
+    { "GetDiskFragment", ppc_GetDiskFragment },
+    { "GetIndSymbol", ppc_GetIndSymbol },
+    { "GetMemFragment", ppc_GetMemFragment },
+    { "GetSharedLibrary", ppc_GetSharedLibrary },
+};
+const unsigned cfm_export_count = sizeof cfm_exports / sizeof cfm_exports[0];

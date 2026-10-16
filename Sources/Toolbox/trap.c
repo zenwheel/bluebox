@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "machine.h"
 #include "lowmem_gen.h"
 #include "tb_internal.h"
 
@@ -449,6 +450,7 @@ static uint32_t guest_return_stub;
 static uint64_t icount_cap; /* 0: none */
 
 void machine_set_instruction_limit(uint64_t total) { icount_cap = total; }
+uint64_t trap_instruction_limit(void) { return icount_cap; }
 
 /* A null event with no host attached: time passes as if the app had run,
  * so an app waiting for input (often in a Toolbox loop such as ModalDialog
@@ -505,8 +507,12 @@ void guest_call_regs(gaddr fn)
         c->pc = fn;
         while (!c->halted && returned_depth != depth) {
             cpu_step(c);
-            if (icount_cap && c->icount >= icount_cap)
-                cpu_halt(c, "instruction limit reached in a call from the Toolbox (pc %08X)", c->pc);
+            if (icount_cap && c->icount >= icount_cap) {
+                if (machine_waiting_for_input()) /* an event loop inside a callback */
+                    cpu_halt(c, "instruction limit reached waiting for input");
+                else
+                    cpu_halt(c, "instruction limit reached in a call from the Toolbox (pc %08X)", c->pc);
+            }
         }
         returned_depth = 0;
         call_depth--;
@@ -722,6 +728,7 @@ void trap_init(void)
     /* $AB03: no routine, but its presence is how programs from before
      * Gestalt (Prince of Persia) learn that 32-Bit QuickDraw is there: its
      * address differs from Unimplemented's.  Called, it does nothing. */
+    mixedmode_init();
     if (rd32(TB_TRAP_TABLE + 0x303u * 4) == unimpl_stub)
         wr32(TB_TRAP_TABLE + 0x303u * 4, native_register(noop_native, "QD32Present", 0xAB03));
     uint32_t keytrans = native_register(key_trans_native, "KeyTrans", 0);

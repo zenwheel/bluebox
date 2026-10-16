@@ -541,4 +541,11 @@ void machine_describe_cpu(char *buf, size_t len)
              cpu.pc, cpu.sr, (unsigned long long)cpu.icount, cpu.d[0], cpu.d[1], cpu.d[2], cpu.d[3], cpu.d[4],
              cpu.d[5], cpu.d[6], cpu.d[7], cpu.a[0], cpu.a[1], cpu.a[2], cpu.a[3], cpu.a[4], cpu.a[5], cpu.a[6],
              cpu.a[7]);
+    if (g_ppc_mode) {
+        size_t at = strlen(buf);
+        at += (size_t)snprintf(buf + at, len - at, "\nPowerPC pc %08X lr %08X ctr %08X cr %08X", g_ppc.pc, g_ppc.lr,
+                               g_ppc.ctr, g_ppc.cr);
+        for (int i = 0; i < 32 && at < len; i++)
+            at += (size_t)snprintf(buf + at, len - at, "%sr%-2d %08X", i % 8 ? " " : "\n", i, g_ppc.gpr[i]);
+    }
 }

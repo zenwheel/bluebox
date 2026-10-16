@@ -70,6 +70,9 @@ void guest_call_regs(gaddr fn);
  * restored afterwards.  Returns the D0 it left. */
 uint32_t hook_call(gaddr fn, uint32_t d0, uint32_t a0, uint32_t sp);
 
+/* The machine's instruction limit (0: none). */
+uint64_t trap_instruction_limit(void);
+
 /* Trap word of the routine currently executing (e.g. HFS bit 0x200). */
 uint16_t trap_current_word(void);
 void trap_set_current_word(uint16_t w); /* calls that come from PowerPC code: no trap */

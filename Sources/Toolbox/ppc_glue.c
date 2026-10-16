@@ -9,6 +9,83 @@
 #include "ppc_bridge.h"
 #include "tb_internal.h"
 
+/* ---- Running 68k traps ---- */
+
+#define TRAP_DEPTH 32
+static struct { uint32_t d[8], a[8]; uint16_t sr; } saved[TRAP_DEPTH];
+static int trap_depth;
+static gaddr trap_code; /* a trap word and an RTS for each depth */
+
+void ppc_trap_begin(void)
+{
+    if (trap_depth < TRAP_DEPTH) {
+        memcpy(saved[trap_depth].d, g_cpu->d, sizeof g_cpu->d);
+        memcpy(saved[trap_depth].a, g_cpu->a, sizeof g_cpu->a);
+        saved[trap_depth].sr = g_cpu->sr;
+    }
+    trap_depth++;
+}
+
+void ppc_trap_set(int reg, uint32_t value)
+{
+    if (reg < 8)
+        g_cpu->d[reg] = value;
+    else
+        g_cpu->a[reg - 8] = value;
+}
+
+uint32_t ppc_trap_get(int reg) { return reg < 8 ? g_cpu->d[reg] : g_cpu->a[reg - 8]; }
+
+void ppc_trap_push(int size, uint32_t value)
+{
+    if (size == 4)
+        cpu_push32(g_cpu, value);
+    else if (size == 1)
+        cpu_push16(g_cpu, (uint16_t)((value & 0xFF) << 8));
+    else
+        cpu_push16(g_cpu, (uint16_t)value);
+}
+
+void ppc_trap(uint16_t trapword)
+{
+    if (!trap_code)
+        trap_code = tb_NewPtr(TRAP_DEPTH * 4, true, true);
+    int depth = trap_depth > 0 ? trap_depth - 1 : 0;
+    if (depth >= TRAP_DEPTH) {
+        ppc_halt(&g_ppc, "PowerPC glue nested too deeply (trap %04X)", trapword);
+        return;
+    }
+    gaddr code = trap_code + (gaddr)depth * 4;
+    wr16(code, trapword);
+    wr16(code + 2, 0x4E75); /* RTS */
+    guest_call_regs(code);
+    if (g_cpu->halted && !g_ppc.halted)
+        ppc_halt(&g_ppc, "%s", g_cpu->halt_reason);
+}
+
+uint32_t ppc_trap_result(int size)
+{
+    gaddr sp = g_cpu->a[7];
+    return size == 4 ? rd32(sp) : size == 1 ? (uint32_t)(rd16(sp) >> 8) : rd16(sp);
+}
+
+void ppc_trap_end(void)
+{
+    trap_depth--;
+    if (trap_depth < TRAP_DEPTH) {
+        memcpy(g_cpu->d, saved[trap_depth].d, sizeof g_cpu->d);
+        memcpy(g_cpu->a, saved[trap_depth].a, sizeof g_cpu->a);
+        g_cpu->sr = saved[trap_depth].sr;
+    }
+}
+
+void ppc_copy(gaddr dst, gaddr src, uint32_t n)
+{
+    if (dst && src)
+        for (uint32_t i = 0; i < n; i++)
+            wr8(dst + i, rd8(src + i));
+}
+
 /* A parameter block in the system heap, cleared for each call. */
 static gaddr pb_scratch(void)
 {

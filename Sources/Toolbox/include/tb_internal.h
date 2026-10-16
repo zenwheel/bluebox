@@ -254,5 +254,14 @@ extern struct ppc_cpu g_ppc;
 extern bool g_ppc_mode;
 bool cfm_has_ppc(void);
 bool cfm_launch(const char *app_path, char *err, size_t errlen);
+/* A transition vector whose code runs fn natively. */
+gaddr cfm_native_tvector(void (*fn)(struct ppc_cpu *), const char *name);
+
+/* Mixed Mode (mixedmode.c). */
+void mixedmode_init(void);
+bool mm_is_descriptor(gaddr p);
+/* Run the PowerPC routine of a transition vector with these arguments;
+ * returns its r3. */
+uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs);
 
 #endif

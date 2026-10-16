@@ -748,3 +748,9 @@ int16_t tb_StringToExtended(gaddr string, gaddr formatp, gaddr partsp, gaddr xp)
     ext_put(xp, negative ? -v : v);
     return any ? fFormatOK : 1; /* fBestGuess */
 }
+
+/* For MathLib (ppc_libs.c). */
+double sane_ext_get(gaddr p) { return ext_get(p); }
+void sane_ext_put(gaddr p, double v) { ext_put(p, v); }
+double sane_dec_get(gaddr d) { return dec_get(d); }
+void sane_dec_put(gaddr d, gaddr form, double v) { dec_put(d, form, v); }

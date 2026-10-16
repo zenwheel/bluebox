@@ -430,6 +430,9 @@ typedef struct {
 } census_row;
 /* Fills rows (up to max); returns the number of distinct routines seen. */
 unsigned machine_census(census_row *rows, unsigned max);
+/* PowerPC imports nothing provides: their count, and "Library:symbol"
+ * names separated by spaces (data imports carry a trailing "*"). */
+unsigned machine_ppc_missing(const char **names);
 
 /* Dump the register state to a buffer (for diagnostics). */
 void machine_describe_cpu(char *buf, size_t len);

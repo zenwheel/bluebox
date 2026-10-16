@@ -530,7 +530,7 @@ func runCommand(_ args: [String]) {
         redrawCheckReport(redrawCheck)
     }
 
-    var regs = [CChar](repeating: 0, count: 512)
+    var regs = [CChar](repeating: 0, count: 1024)
     machine_describe_cpu(&regs, regs.count)
     print(str(regs))
 
@@ -546,6 +546,11 @@ func runCommand(_ args: [String]) {
             let trap = String(r.trap, radix: 16, uppercase: true)
             print("  \(mark) \(trap)\(sel)  \(String(cString: r.name))  ×\(r.calls)")
         }
+    }
+    var missingNames: UnsafePointer<CChar>?
+    let missingImports = machine_ppc_missing(&missingNames)
+    if missingImports > 0, let missingNames {
+        print("\nPowerPC imports missing: \(missingImports): \(String(cString: missingNames))")
     }
     exit(status == RUN_HALTED && String(cString: machine_halt_reason()).hasPrefix("ExitToShell") ? 0 : 1)
 }

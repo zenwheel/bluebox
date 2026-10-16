@@ -528,6 +528,142 @@ def gen_ppc_glue(name, fn, sig, variant):
     return cname, "".join(lines)
 
 
+REG_INDEX = {"D0": 0, "D1": 1, "D2": 2, "A0": 8, "A1": 9, "A2": 10}
+
+
+def selector_value(fn):
+    sel = fn.get("selector")
+    return int(sel, 0) if isinstance(sel, str) else int(sel)
+
+
+def gen_ppc_trapcall(name, fn, sig, variant):
+    """Glue for an export with no tb_ function to call: it runs the 68k trap
+    itself (any patch on it included), the arguments pushed or in registers
+    as the 68k interface has them."""
+    for _, (kind, reg, ti) in sig["args"]:
+        if ti.scalar and ti.size not in (1, 2, 4):
+            return None
+    if sig["rti"] is not None and sig["rti"].scalar and sig["rti"].size not in (1, 2, 4):
+        return None
+    disp = dispatchers.get(fn.get("dispatcher")) if fn.get("dispatcher") else None
+    if fn.get("dispatcher"):
+        if disp is None or fn.get("selector") is None:
+            return None
+        trap = trap_num(disp)
+        loc = disp["selector-location"].rstrip("`")
+        sel = selector_value(fn)
+    else:
+        trap = trap_num(fn)
+        loc, sel = None, None
+    if trap is None:
+        return None
+    if loc == "TrapBits":
+        trap = (trap & ~0x0600) | ((sel & 3) << 9)
+    cname = f"ppctrap_{variant or name}"
+    lines = [f"static void {cname}(ppc_cpu *c)\n{{\n", "    ppc_trap_begin();\n"]
+    bits = []
+    outs = []
+    slot = 0
+    if sig["conv"] == "stack" and sig["retbytes"]:
+        lines.append(f"    ppc_trap_push({sig['retbytes']}, 0);\n")
+    if loc in ("D0W", "D0L") or (loc or "").startswith("D0<"):
+        lines.append(f"    ppc_trap_set(0, 0x{sel & 0xFFFFFFFF:X}u);\n")
+    for name_, (kind, reg, ti) in sig["args"]:
+        if kind == "reg" and reg.startswith("TrapBit"):
+            bit = reg[len("TrapBit<"):-1]
+            bit = TRAPBITS.get(bit, bit)
+            if variant is not None:
+                if ppc_variant_bits(variant, reg):
+                    bits.append(f"{bit}")
+                continue
+            src = f"c->gpr[{3 + slot}]" if slot < 8 else f"rd32(c->gpr[1] + {24 + 4 * slot})"
+            bits.append(f"({src} ? {bit} : 0)")
+            slot += 1
+            continue
+        src = f"c->gpr[{3 + slot}]" if slot < 8 else f"rd32(c->gpr[1] + {24 + 4 * slot})"
+        slot += 1
+        if kind == "stack":
+            size = 1 if ti.size == 1 and not ti.ptr else stack_slot(ti)
+            lines.append(f"    ppc_trap_push({size}, {src});\n")
+        elif reg.startswith("Out<") or reg.startswith("InOut<"):
+            r = REG_INDEX[reg[reg.index("<") + 1:-1]]
+            lines.append(f"    gaddr o_{name_} = {src};\n")
+            if reg.startswith("InOut"):
+                lines.append(f"    ppc_trap_set({r}, o_{name_} ? rd32(o_{name_}) : 0);\n")
+            outs.append((r, "o_" + name_))
+        elif reg == "D0LowWord":
+            lines.append(f"    ppc_trap_set(0, (ppc_trap_get(0) & 0xFFFF0000u) | ({src} & 0xFFFF));\n")
+        elif reg == "D0HighWord":
+            lines.append(f"    ppc_trap_set(0, (ppc_trap_get(0) & 0xFFFF) | ({src} << 16));\n")
+        else:
+            v = src
+            if ti.scalar and ti.signed and ti.size < 4:
+                v = f"(uint32_t)(int32_t)(int{ti.size * 8}_t){src}"
+            lines.append(f"    ppc_trap_set({REG_INDEX[reg]}, {v});\n")
+    if loc in ("StackW", "StackWLookahead<0xFF>", "StackWMasked<0xFF>"):
+        lines.append(f"    ppc_trap_push(2, 0x{sel & 0xFFFF:X});\n")
+    elif loc == "StackL":
+        lines.append(f"    ppc_trap_push(4, 0x{sel & 0xFFFFFFFF:X}u);\n")
+    tw = f"0x{trap:04X}" + "".join(f" | {b}" for b in bits)
+    lines.append(f"    ppc_trap((uint16_t)({tw}));\n")
+    for r, o in outs:
+        lines.append(f"    if ({o}) wr32({o}, ppc_trap_get({r}));\n")
+    ti = sig["rti"]
+    if ti is not None:
+        if sig["conv"] == "stack":
+            v = f"ppc_trap_result({1 if ti.size == 1 and not ti.ptr else stack_slot(ti)})"
+        elif sig["retreg"] == "D0Minus1Boolean":
+            v = "ppc_trap_get(0) == 0"
+        else:
+            v = f"ppc_trap_get({REG_INDEX.get(sig['retreg'] or 'D0', 0)})"
+        if ti.scalar and ti.size < 4:
+            t = f"int{ti.size * 8}_t" if ti.signed else f"uint{ti.size * 8}_t"
+            v = f"(uint32_t)({'(int32_t)' if ti.signed else ''}({t})({v}))"
+        lines.append(f"    uint32_t r = {v};\n")
+    lines.append("    ppc_trap_end();\n")
+    if ti is not None:
+        lines.append("    c->gpr[3] = r;\n")
+    lines.append("    c->pc = c->lr;\n}\n\n")
+    return cname, "".join(lines)
+
+
+def gen_ppc_lowmem():
+    """LMGetX / LMSetX for each low-memory global: scalars by value, records
+    through a pointer, arrays (strings) by address."""
+    out, table, seen = [], [], set()
+    for v in lowmems:
+        name = v["name"]
+        if name in seen or not re.match(r"^[A-Z]", name):
+            continue
+        seen.add(name)
+        addr = v["address"]
+        addr = int(addr, 0) if isinstance(addr, str) else int(addr)
+        try:
+            ti = type_info(v["type"])
+        except (KeyError, ValueError):
+            continue
+        get, set_ = f"ppclm_get_{name}", f"ppclm_set_{name}"
+        if (ti.scalar or ti.ptr) and ti.size in (1, 2, 4):
+            rd = {1: "rd8", 2: "rd16", 4: "rd32"}[ti.size]
+            wr = {1: "wr8", 2: "wr16", 4: "wr32"}[ti.size]
+            val = f"{rd}(0x{addr:X})"
+            if ti.signed and ti.size < 4:
+                val = f"(uint32_t)(int32_t)(int{ti.size * 8}_t){val}"
+            out.append(f"static void {get}(ppc_cpu *c) {{ c->gpr[3] = {val}; c->pc = c->lr; }}\n")
+            out.append(f"static void {set_}(ppc_cpu *c) {{ {wr}(0x{addr:X}, (uint{ti.size * 8}_t)c->gpr[3]); c->pc = c->lr; }}\n")
+        elif ti.struct:
+            out.append(f"static void {get}(ppc_cpu *c) {{ ppc_copy(c->gpr[3], 0x{addr:X}, {ti.size}); c->pc = c->lr; }}\n")
+            out.append(f"static void {set_}(ppc_cpu *c) {{ ppc_copy(0x{addr:X}, c->gpr[3], {ti.size}); c->pc = c->lr; }}\n")
+        elif not ti.scalar:
+            out.append(f"static void {get}(ppc_cpu *c) {{ c->gpr[3] = 0x{addr:X}; c->pc = c->lr; }}\n")
+            out.append(f"static void {set_}(ppc_cpu *c) {{ ppc_copy(0x{addr:X}, c->gpr[3], {ti.size}); c->pc = c->lr; }}\n")
+        else:
+            continue
+        table.append((f"LMGet{name}", get))
+        table.append((f"LMSet{name}", set_))
+    return out, table
+
+
 def gen_ppc(impl, sigs):
     out = [HEADER, "#include <stdbool.h>\n#include <stdint.h>\n#include <string.h>\n\n",
            '#include "ppc.h"\n#include "ppc_bridge.h"\n#include "tb_protos_gen.h"\n\n']
@@ -560,6 +696,37 @@ def gen_ppc(impl, sigs):
                 continue
             out.append(text)
             table.append((export, cname))
+    # The rest of the traps: glue running the 68k trap.
+    exported = {e for e, _ in table}
+    for fn in functions:
+        name = fn["name"]
+        if name not in sigs or (trap_num(fn) is None and not fn.get("dispatcher")):
+            continue
+        sig = sigs[name]
+        variants = list(fn.get("variants") or [])
+        if not variants and any(c[0] == "reg" and c[1] == "TrapBit<0x400>" for _, c in sig["args"]) \
+                and name.startswith("PB"):
+            variants = [name, name + "Sync", name + "Async"]
+        names = variants if variants else [None]
+        if variants and name not in variants:
+            names = [None] + variants
+        for v in names:
+            export = v or name
+            if export in exported:
+                continue
+            r = gen_ppc_trapcall(name, fn, sig, v)
+            if r is None:
+                continue
+            cname, text = r
+            out.append(text)
+            table.append((export, cname))
+            exported.add(export)
+    lm_out, lm_table = gen_ppc_lowmem()
+    out.extend(lm_out)
+    for export, cname in lm_table:
+        if export not in exported:
+            table.append((export, cname))
+            exported.add(export)
     table.sort()
     out.append("const ppc_export ppc_exports[] = {\n")
     for export, cname in table:

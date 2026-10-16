@@ -45,7 +45,11 @@ void ppc_halt(ppc_cpu *c, const char *fmt, ...)
 
 static void illegal(ppc_cpu *c)
 {
-    ppc_halt(c, "illegal PowerPC instruction %08X at %08X", c->op, c->op_pc);
+    if (c->op_pc != c->prev_pc + 4)
+        ppc_halt(c, "illegal PowerPC instruction %08X at %08X (came from %08X, lr %08X)", c->op, c->op_pc,
+                 c->prev_pc, c->lr);
+    else
+        ppc_halt(c, "illegal PowerPC instruction %08X at %08X", c->op, c->op_pc);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -701,6 +705,7 @@ void ppc_step(ppc_cpu *c)
     if (c->trace)
         c->trace(c);
     uint32_t op = rd32(c->pc);
+    c->prev_pc = c->op_pc;
     c->op_pc = c->pc;
     c->op = op;
     c->pc += 4;
