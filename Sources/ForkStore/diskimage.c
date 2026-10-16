@@ -69,8 +69,11 @@ static const uint8_t *find_resource(const mac_file *f, uint32_t type, size_t *le
 
 static bool hfs_sig_at(const uint8_t *d, size_t len, size_t off)
 {
-    /* 'BD' = HFS; 0xD2D7 = MFS (recognised, not yet readable) */
-    return len >= off + 1024 + 2 && be16(d + off + 1024) == 0x4244;
+    /* 'BD' = HFS, 'H+' = HFS+, 'HX' = HFSX; 0xD2D7 = MFS (recognised, not yet readable) */
+    if (len < off + 1024 + 2)
+        return false;
+    uint16_t sig = be16(d + off + 1024);
+    return sig == 0x4244 || sig == 0x482B || sig == 0x4858;
 }
 
 static bool apm_at(const uint8_t *d, size_t len)
@@ -168,6 +171,20 @@ static bool apm_hfs(const uint8_t *d, size_t n, size_t *off, size_t *plen)
             *plen = (size_t)be32(p + 12) * 512;
             return *off < n;
         }
+    }
+    return false;
+}
+
+bool diskimage_locate_raw(const uint8_t *d, size_t n, size_t *off, size_t *len)
+{
+    *off = 0;
+    *len = n;
+    if (hfs_sig_at(d, n, 0))
+        return true;
+    if (apm_at(d, n) && apm_hfs(d, n, off, len)) {
+        if (*off + *len > n)
+            *len = n - *off;
+        return true;
     }
     return false;
 }

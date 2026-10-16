@@ -174,4 +174,59 @@ struct ForkStoreTests {
         var out = [UInt8](repeating: 0, count: 16)
         #expect(adc_decompress(input, input.count, &out, out.count) == -1)
     }
+
+    #if os(macOS)
+    /// An HFS+ volume made by macOS (hdiutil) read by our own reader: a
+    /// file's data and resource forks and Finder info, a folder, and a name
+    /// macOS stores decomposed ("Café") coming out as one MacRoman é.
+    @Test func hfsPlusVolume() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let src = dir.appendingPathComponent("src")
+        let folder = src.appendingPathComponent("Folder")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("Café")
+        try Data("data fork".utf8).write(to: file)
+        try Data("resource fork".utf8).write(to: URL(fileURLWithPath: file.path + "/..namedfork/rsrc"))
+        var info = [UInt8](repeating: 0, count: 32)
+        info.replaceSubrange(0..<8, with: Array("TEXTttxt".utf8))
+        #expect(setxattr(file.path, "com.apple.FinderInfo", info, 32, 0, 0) == 0)
+        let image = dir.appendingPathComponent("vol.cdr").path
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        p.arguments = ["create", "-quiet", "-fs", "HFS+", "-layout", "NONE", "-volname", "Plus", "-format", "UDTO",
+                       "-srcfolder", src.path, image]
+        try p.run()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { return } // no hdiutil here: nothing to test
+        var bytes = [UInt8](try Data(contentsOf: URL(fileURLWithPath: image)))
+        var err = [CChar](repeating: 0, count: 256)
+        let v = try #require(bytes.withUnsafeMutableBufferPointer { hfs_open($0.baseAddress, $0.count, &err, err.count) })
+        defer { hfs_close(v) }
+        var entries: UnsafeMutablePointer<hfs_entry>?
+        var count = 0
+        #expect(hfs_list(v, &entries, &count, &err, err.count))
+        defer { free(entries) }
+        let all = Array(UnsafeBufferPointer(start: entries, count: count))
+        func name(_ e: hfs_entry) -> [UInt8] {
+            var e = e
+            return withUnsafeBytes(of: &e.name) { Array($0[1..<(1 + Int($0[0]))]) }
+        }
+        let volName = hfs_volume_name(v)!
+        #expect(Array(UnsafeBufferPointer(start: volName + 1, count: Int(volName[0]))) == Array("Plus".utf8))
+        let dirEntry = try #require(all.first { $0.is_dir && name($0) == Array("Folder".utf8) })
+        let cafe: [UInt8] = Array("Caf".utf8) + [0x8E] // é in MacRoman
+        var fileEntry = try #require(all.first { !$0.is_dir && name($0) == cafe })
+        #expect(fileEntry.parent == dirEntry.cnid)
+        let type = withUnsafeBytes(of: &fileEntry.finder_info) { Array($0[0..<8]) }
+        #expect(type == Array("TEXTttxt".utf8))
+        var data: UnsafeMutablePointer<UInt8>?, rsrc: UnsafeMutablePointer<UInt8>?
+        var dlen = 0, rlen = 0
+        #expect(hfs_read_fork(v, &fileEntry, false, &data, &dlen, &err, err.count))
+        #expect(hfs_read_fork(v, &fileEntry, true, &rsrc, &rlen, &err, err.count))
+        defer { free(data); free(rsrc) }
+        #expect(Array(UnsafeBufferPointer(start: data, count: dlen)) == Array("data fork".utf8))
+        #expect(Array(UnsafeBufferPointer(start: rsrc, count: rlen)) == Array("resource fork".utf8))
+    }
+    #endif
 }

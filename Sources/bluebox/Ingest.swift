@@ -281,6 +281,9 @@ private func normalise(_ dir: String, depth: Int, notes: inout [String]) throws 
             do {
                 let vol = try extractDiskImage(path, into: dir, notes: &notes)
                 notes.append("\(name): extracted volume \"\((vol as NSString).lastPathComponent)\"")
+                // The volume replaces the image (a copy: the original stays where it was).
+                try? fm.removeItem(atPath: path)
+                try? fm.removeItem(atPath: sidecarPath(path))
                 try normalise(vol, depth: depth + 1, notes: &notes)
             } catch {
                 notes.append("\(name): not extracted (\(error))")
@@ -509,19 +512,43 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String]) t
         defer { try? FileManager.default.removeItem(atPath: raw) }
         return try extractDiskImage(raw, into: dir, notes: &notes)
     }
-    #if os(macOS)
-    if isHFSPlus(path) { return try extractMounted(path, into: dir) }
-    #endif
-    var f = mac_file()
     var err = [CChar](repeating: 0, count: 256)
-    guard appledouble_read(path, &f, &err, err.count) else { throw IngestError.unreadable(path) }
-    defer { mac_file_free(&f) }
+    // A raw image (a bare volume, or behind a partition map) is read where
+    // it lies, mapped from the file: a CD or hard disk image can be
+    // gigabytes.  Other kinds are decoded into memory.
+    var mapped: UnsafeMutableRawPointer?
+    var mappedLen = 0
+    defer { if let mapped { munmap(mapped, mappedLen) } }
     var vol: UnsafeMutablePointer<UInt8>?
     var vlen = 0
-    guard diskimage_decode(&f, &vol, &vlen, &err, err.count) else {
-        throw IngestError.diskImage(path, cError(err))
+    var owned = false
+    let fd = open(path, O_RDONLY)
+    if fd >= 0 {
+        var st = stat()
+        if fstat(fd, &st) == 0, st.st_size > 1536,
+           let m = mmap(nil, Int(st.st_size), PROT_READ, MAP_PRIVATE, fd, 0), m != MAP_FAILED {
+            var off = 0, len = 0
+            if diskimage_locate_raw(m.assumingMemoryBound(to: UInt8.self), Int(st.st_size), &off, &len) {
+                mapped = m
+                mappedLen = Int(st.st_size)
+                vol = m.assumingMemoryBound(to: UInt8.self) + off
+                vlen = len
+            } else {
+                munmap(m, Int(st.st_size))
+            }
+        }
+        close(fd)
     }
-    defer { free(vol) }
+    if vol == nil {
+        var f = mac_file()
+        guard appledouble_read(path, &f, &err, err.count) else { throw IngestError.unreadable(path) }
+        defer { mac_file_free(&f) }
+        guard diskimage_decode(&f, &vol, &vlen, &err, err.count) else {
+            throw IngestError.diskImage(path, cError(err))
+        }
+        owned = true
+    }
+    defer { if owned { free(vol) } }
     guard let v = hfs_open(vol, vlen, &err, err.count) else { throw IngestError.diskImage(path, cError(err)) }
     defer { hfs_close(v) }
     var entries: UnsafeMutablePointer<hfs_entry>?
@@ -583,78 +610,4 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String]) t
     return root
 }
 
-// MARK: - HFS+ (macOS: through the system's own driver)
 
-/// An HFS+ or HFSX volume, bare or as the first partition after a driver map.
-func isHFSPlus(_ path: String) -> Bool {
-    guard let h = FileHandle(forReadingAtPath: path) else { return false }
-    defer { try? h.close() }
-    let head = h.readData(ofLength: 1026)
-    guard head.count == 1026 else { return false }
-    let sig = head[1024..<1026]
-    return sig == Data("H+".utf8) || sig == Data("HX".utf8)
-}
-
-#if os(macOS)
-/// Mount the image read-only and copy its files out as AppleDouble.
-private func extractMounted(_ path: String, into dir: String) throws -> String {
-    let mount = NSTemporaryDirectory() + "bluebox-mount-\(UUID().uuidString)"
-    try FileManager.default.createDirectory(atPath: mount, withIntermediateDirectories: true)
-    func hdiutil(_ args: [String]) -> Int32 {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-        p.arguments = args
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
-        guard (try? p.run()) != nil else { return -1 }
-        p.waitUntilExit()
-        return p.terminationStatus
-    }
-    guard hdiutil(["attach", "-readonly", "-nobrowse", "-noverify", "-noautoopen", "-mountpoint", mount, "-imagekey",
-                   "diskimage-class=CRawDiskImage", path]) == 0 else {
-        throw IngestError.diskImage(path, "could not mount the HFS+ volume")
-    }
-    defer {
-        _ = hdiutil(["detach", mount, "-quiet", "-force"])
-        try? FileManager.default.removeItem(atPath: mount)
-    }
-    let fm = FileManager.default
-    let volName = fm.displayName(atPath: mount)
-    let root = uniquePath(dir + "/" + (volName.isEmpty ? "Untitled" : volName))
-    try fm.createDirectory(atPath: root, withIntermediateDirectories: true)
-    try? Data((volName.isEmpty ? "Untitled" : volName).utf8).write(to: URL(fileURLWithPath: root + "/.classic-volume"))
-    guard let walker = fm.enumerator(atPath: mount) else { return root }
-    for case let rel as String in walker {
-        let src = mount + "/" + rel, dst = root + "/" + rel
-        if rel.split(separator: "/").contains(where: { $0.hasPrefix(".") }) { continue }
-        var isDir: ObjCBool = false
-        guard fm.fileExists(atPath: src, isDirectory: &isDir) else { continue }
-        if isDir.boolValue {
-            try fm.createDirectory(atPath: dst, withIntermediateDirectories: true)
-            continue
-        }
-        var data = (try? Data(contentsOf: URL(fileURLWithPath: src))) ?? Data()
-        var rsrc = (try? Data(contentsOf: URL(fileURLWithPath: src + "/..namedfork/rsrc"))) ?? Data()
-        var info = [UInt8](repeating: 0, count: 32)
-        let n = getxattr(src, "com.apple.FinderInfo", &info, 32, 0, 0)
-        var mf = mac_file()
-        try data.withUnsafeMutableBytes { d in
-            try rsrc.withUnsafeMutableBytes { r in
-                mf.data = d.baseAddress?.assumingMemoryBound(to: UInt8.self)
-                mf.data_len = d.count
-                mf.rsrc = r.baseAddress?.assumingMemoryBound(to: UInt8.self)
-                mf.rsrc_len = r.count
-                if n > 0 {
-                    withUnsafeMutableBytes(of: &mf.finder_info) { $0.copyBytes(from: info) }
-                    mf.has_finder_info = true
-                }
-                var err = [CChar](repeating: 0, count: 256)
-                if !appledouble_write(dst, &mf, &err, err.count) {
-                    throw IngestError.diskImage(path, str(err))
-                }
-            }
-        }
-    }
-    return root
-}
-#endif

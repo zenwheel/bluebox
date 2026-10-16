@@ -367,7 +367,7 @@ the trap census.
   - colour: an 8-bit screen with the standard colour table; drawing, text and CopyBits at any depth
   - themes: `--appearance <scheme>` draws windows and controls from Kaleidoscope schemes (2.x: sliced sample windows from 'wnd#' layouts, widget down states, grow boxes, scroll bars, thumbs, push buttons, checkboxes and radio buttons; 1.x: scheme stripes and grow boxes on classic geometry) on a 32-bit screen; `bluebox themes` lists imported schemes
   - native style: `--appearance native` gives document windows macOS frames (close, zoom, move and resize reach the app as its own window events) and draws push buttons, checkboxes, radio buttons and scroll bars with AppKit
-  - import: .zip archives, .dmg (UDIF) images, and HFS+ volumes (mounted read-only through the host on macOS)
+  - import: .zip archives, .dmg (UDIF) images, and HFS+ volumes (our own reader since 2026-10-16)
   - Component Manager (ComponentDispatch): components applications register from code or `thng` resources, instance calls, `CallComponentFunction`, capture and the rest; we register none of our own, so codec searches find nothing. Cursor Device Manager (no extra devices) and Slot Manager (no cards). `StringToFormatRec`, `ExtendedToString` and `StringToExtended` for common number formats
   - `MethodDispatch` (A9F8): the ROM's MPW Object Pascal method dispatcher, run as the same 68000 routine reading the class table and error routine from 0xBEC/0xBE8 (Skat; Photoshop 1.0 gets to its first dialog)
   - Applications' own `dcmp` decompressors run in place, the compressed data at the end of the destination buffer
@@ -675,7 +675,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - menu bar in each window, `xdg_popup` menus
   - pasteboard, native file dialogs
 - **Linux launching:** `bluebox install` on Linux produces a `.desktop` file, a PNG icon and shared-mime-info XML.
-- **Our own HFS+ reader** (macOS imports mount HFS+ through the host).
+- ~~**Our own HFS+ reader**~~ done 2026-10-16 (`Sources/ForkStore/hfs.c`: HFS+ and HFSX, bare or in an HFS wrapper, behind a partition map; Unicode names to MacRoman; hard links).
 - **CI:** Linux CI, headless probe runs on both platforms.
 
 **Exit:** the applications that run on macOS run on Linux under both Wayland and X11, installed as desktop applications.
