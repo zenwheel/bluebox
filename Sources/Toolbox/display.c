@@ -206,6 +206,9 @@ int machine_menus(machine_menu *out, int max)
  * app is given the menu-bar click right away, so it adjusts its menus
  * before they are shown, and MenuSelect waits for the host menu to close. */
 static int32_t pending_choice;
+/* Clicks posted for a pending choice, and when the last one was. */
+static int choice_clicks;
+static uint32_t choice_click_ticks;
 static pthread_cond_t track_cond = PTHREAD_COND_INITIALIZER;
 static bool tracking, in_select, track_done;
 
@@ -219,6 +222,10 @@ void machine_choose_menu(int16_t menu_id, int16_t item)
     if (waiting) {
         track_done = true;
         pthread_cond_broadcast(&track_cond);
+    }
+    if (!waiting) {
+        choice_clicks = 1;
+        choice_click_ticks = rd32(LM_Ticks);
     }
     pthread_mutex_unlock(&lock);
     /* Otherwise the app sees a click in its menu bar and calls MenuSelect. */
@@ -276,6 +283,7 @@ int32_t display_take_menu_choice(void)
     pthread_mutex_lock(&lock);
     int32_t c = pending_choice;
     pending_choice = 0;
+    choice_clicks = 0;
     pthread_mutex_unlock(&lock);
     return c;
 }
@@ -310,6 +318,23 @@ bool display_menu_tracking_wait(void)
 /* Called by the Event Manager on the emulator thread: a safe point. */
 void display_sync(void)
 {
+    /* A choice still waiting for MenuSelect: the click may only have shown
+     * a hidden menu bar (Prince of Persia's), as a first click does on a
+     * Mac; click again, a few times at most. */
+    pthread_mutex_lock(&lock);
+    bool again = pending_choice && !tracking && choice_clicks > 0 && choice_clicks < 4 &&
+                 rd32(LM_Ticks) - choice_click_ticks >= 10;
+    if (again) {
+        choice_clicks++;
+        choice_click_ticks = rd32(LM_Ticks);
+    } else if (pending_choice && !tracking && choice_clicks >= 4 && rd32(LM_Ticks) - choice_click_ticks >= 10) {
+        pending_choice = 0; /* nobody took it */
+        choice_clicks = 0;
+    }
+    pthread_mutex_unlock(&lock);
+    if (again)
+        ev_post_menubar_click();
+
     if (wins_dirty) {
         wins_dirty = false;
         publish_windows();
