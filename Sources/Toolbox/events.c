@@ -227,6 +227,16 @@ void machine_post_mouse(int x, int y, int button)
     pthread_mutex_unlock(&lock);
 }
 
+/* The host stopped seeing the keyboard (it went to the background): keys
+ * held then are released, or the program sees them held from then on. */
+void machine_release_keys(void)
+{
+    pthread_mutex_lock(&lock);
+    memset(keymap, 0, sizeof keymap);
+    key_mods = 0;
+    pthread_mutex_unlock(&lock);
+}
+
 void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, int repeat)
 {
     pthread_mutex_lock(&lock);

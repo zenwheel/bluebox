@@ -65,7 +65,8 @@ func usage() -> Never {
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1),
                      keydown:K and keyup:K (K a character, space, return, tab,
                      escape, delete or an arrow: left, right, up, down), and
-                     the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2
+                     the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
+                     in a window, wait:N is N/1000 ms and snap:F.png saves the screen
       bluebox import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
           files to the library as AppleDouble.  Archives need unar (The Unarchiver).

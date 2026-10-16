@@ -515,7 +515,7 @@ final class TransientView: NSView {
                 case .keyUp:
                     machine_post_key(ScreenView.charCode(event), Int32(event.keyCode), mods, 0, 0)
                 default:
-                    machine_post_key(-1, Int32(event.keyCode), mods, 1, 0)
+                    ScreenView.postModifier(event)
                 }
                 return true
             }
@@ -533,6 +533,10 @@ func postScriptLive(_ script: [String]) {
         }
         if let (menu, item) = menuStep(step) {
             machine_choose_menu(menu, item)
+            continue
+        }
+        if step.hasPrefix("snap:") {
+            _ = machine_screenshot(String(step.dropFirst(5)))
             continue
         }
         if let colon = step.firstIndex(of: ":"), ["keydown", "keyup"].contains(String(step[..<colon])) {

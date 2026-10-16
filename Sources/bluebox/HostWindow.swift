@@ -139,8 +139,19 @@ final class ScreenView: NSView {
         machine_post_key(Self.charCode(event), Int32(event.keyCode), Self.modifiers(event.modifierFlags), 0, 0)
     }
 
-    override func flagsChanged(with event: NSEvent) {
-        machine_post_key(-1, Int32(event.keyCode), Self.modifiers(event.modifierFlags), 1, 0)
+    override func flagsChanged(with event: NSEvent) { Self.postModifier(event) }
+
+    /// A modifier key pressed or released (flagsChanged says only that its
+    /// state changed): down while its flag is set.  The right-hand keys are
+    /// the left-hand ones in the KeyMap, as programs test those (Shift 56).
+    static func postModifier(_ event: NSEvent) {
+        let keys: [UInt16: (Int32, NSEvent.ModifierFlags)] = [
+            56: (56, .shift), 60: (56, .shift), 58: (58, .option), 61: (58, .option),
+            59: (59, .control), 62: (59, .control), 55: (55, .command), 54: (55, .command), 57: (57, .capsLock),
+        ]
+        guard let (code, flag) = keys[event.keyCode] else { return }
+        let down: Int32 = event.modifierFlags.contains(flag) ? 1 : 0
+        machine_post_key(-1, code, modifiers(event.modifierFlags), down, 0)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -800,7 +811,10 @@ final class ClassicItemsView: NSView {
         machine_post_suspend_resume(true, changed)
     }
 
-    func willResignActive() { machine_post_suspend_resume(false, false) }
+    func willResignActive() {
+        machine_release_keys()
+        machine_post_suspend_resume(false, false)
+    }
 }
 #endif
 

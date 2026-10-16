@@ -67,6 +67,7 @@ void machine_set_log(unsigned mask);
 /* Host input (thread-safe).  Coordinates are global screen pixels;
  * button: 1 down, 0 up, -1 unchanged. */
 void machine_post_mouse(int x, int y, int button);
+void machine_release_keys(void); /* all keys up: the host lost the keyboard */
 void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, int repeat);
 /* Scripted input for headless runs: kind 0 a key (a = character, b =
  * modifiers), 1 the mouse (a, b = position, c = button: 1 down, 0 up,
