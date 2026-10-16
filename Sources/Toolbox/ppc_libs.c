@@ -393,6 +393,146 @@ static void s_tolower(ppc_cpu *c)
     int32_t ch = (int32_t)R(0);
     RETURN(ch >= 'A' && ch <= 'Z' ? ch + 32 : ch);
 }
+/* The character classes (ASCII; the rest of MacRoman is none of them). */
+#define CTYPE(name, test) \
+    static void s_##name(ppc_cpu *c) { int32_t ch = (int32_t)R(0); RETURN(ch >= 0 && ch < 128 && (test) ? 1 : 0); }
+CTYPE(isalnum, (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))
+CTYPE(isalpha, (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))
+CTYPE(isdigit, ch >= '0' && ch <= '9')
+CTYPE(isxdigit, (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f'))
+CTYPE(isspace, ch == ' ' || (ch >= 9 && ch <= 13))
+CTYPE(isupper, ch >= 'A' && ch <= 'Z')
+CTYPE(islower, ch >= 'a' && ch <= 'z')
+CTYPE(ispunct, ch > 32 && ch < 127 && !((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')))
+CTYPE(isprint, ch >= 32 && ch < 127)
+CTYPE(isgraph, ch > 32 && ch < 127)
+CTYPE(iscntrl, ch < 32 || ch == 127)
+CTYPE(isascii, 1)
+#undef CTYPE
+
+/* sscanf(s, format, ...): integers, floating point, strings and characters
+ * into the pointers that follow; the count of conversions. */
+static void s_sscanf(ppc_cpu *c)
+{
+    char in[1024];
+    size_t n = 0;
+    for (gaddr p = R(0); n < sizeof in - 1 && rd8(p); p++)
+        in[n++] = (char)rd8(p);
+    in[n] = 0;
+    const char *at = in;
+    unsigned w = 2, done = 0;
+    for (gaddr f = R(1); rd8(f); f++) {
+        char fc = (char)rd8(f);
+        if (fc == ' ' || (fc >= 9 && fc <= 13)) {
+            while (*at == ' ' || (*at >= 9 && *at <= 13))
+                at++;
+            continue;
+        }
+        if (fc != '%') {
+            if (*at != fc)
+                break;
+            at++;
+            continue;
+        }
+        f++;
+        bool skip = false, longer = false, shorter = false;
+        int width = 0;
+        if (rd8(f) == '*')
+            skip = true, f++;
+        while (rd8(f) >= '0' && rd8(f) <= '9')
+            width = width * 10 + (rd8(f++) - '0');
+        while (rd8(f) == 'l' || rd8(f) == 'h' || rd8(f) == 'L') {
+            if (rd8(f) == 'h')
+                shorter = true;
+            else
+                longer = true;
+            f++;
+        }
+        char conv = (char)rd8(f);
+        if (conv == '%') {
+            if (*at != '%')
+                break;
+            at++;
+            continue;
+        }
+        if (conv == 'n') {
+            if (!skip)
+                wr32(arg_word(c, w++), (uint32_t)(at - in));
+            continue;
+        }
+        if (conv != 'c')
+            while (*at == ' ' || (*at >= 9 && *at <= 13))
+                at++;
+        if (!*at)
+            break;
+        char *end = NULL;
+        if (conv == 'd' || conv == 'i' || conv == 'u' || conv == 'x' || conv == 'X' || conv == 'o') {
+            int base = conv == 'x' || conv == 'X' ? 16 : conv == 'o' ? 8 : conv == 'i' ? 0 : 10;
+            long v = strtol(at, &end, base);
+            if (end == at)
+                break;
+            if (!skip) {
+                gaddr dst = arg_word(c, w++);
+                if (shorter)
+                    wr16(dst, (uint16_t)v);
+                else
+                    wr32(dst, (uint32_t)v);
+                done++;
+            }
+        } else if (conv == 'f' || conv == 'e' || conv == 'g' || conv == 'E' || conv == 'G') {
+            double v = strtod(at, &end);
+            if (end == at)
+                break;
+            if (!skip) {
+                gaddr dst = arg_word(c, w++);
+                if (longer)
+                    wr_double(dst, v);
+                else {
+                    float fv = (float)v;
+                    uint32_t bits;
+                    memcpy(&bits, &fv, 4);
+                    wr32(dst, bits);
+                }
+                done++;
+            }
+        } else if (conv == 's') {
+            const char *b = at;
+            while (*at && *at != ' ' && !(*at >= 9 && *at <= 13) && (!width || at - b < width))
+                at++;
+            if (!skip) {
+                gaddr dst = arg_word(c, w++);
+                gput(dst, b, (uint32_t)(at - b));
+                wr8(dst + (gaddr)(at - b), 0);
+                done++;
+            }
+            continue;
+        } else if (conv == 'c') {
+            int k = width ? width : 1;
+            if (!skip) {
+                gaddr dst = arg_word(c, w++);
+                for (int i = 0; i < k && at[i]; i++)
+                    wr8(dst + (gaddr)i, (uint8_t)at[i]);
+                done++;
+            }
+            for (int i = 0; i < k && *at; i++)
+                at++;
+            continue;
+        } else {
+            break;
+        }
+        at = end;
+    }
+    RETURN(done);
+}
+
+/* The cursor devices' calls: no devices besides the mouse. */
+static void g_CrsrDevNextDevice(ppc_cpu *c)
+{
+    if (R(0))
+        wr32(R(0), 0);
+    RETURN(0);
+}
+
 static uint32_t rand_state = 1;
 static void s_rand(ppc_cpu *c)
 {
@@ -1757,6 +1897,11 @@ const ppc_export lib_exports[] = {
     { "__isnan", m_isnand }, { "__isnand", m_isnand }, { "__isnanf", m_isnand }, { "__isnormald", m_isnormald },
     { "__signbitd", m_signbitd },
     /* StdCLib */
+    { "isalnum", s_isalnum }, { "isalpha", s_isalpha }, { "isdigit", s_isdigit }, { "isxdigit", s_isxdigit },
+    { "isspace", s_isspace }, { "isupper", s_isupper }, { "islower", s_islower }, { "ispunct", s_ispunct },
+    { "isprint", s_isprint }, { "isgraph", s_isgraph }, { "iscntrl", s_iscntrl }, { "isascii", s_isascii },
+    { "sscanf", s_sscanf }, { "CrsrDevNextDevice", g_CrsrDevNextDevice }, { "CrsrDevMoveTo", g_noErr },
+    { "CrsrDevMove", g_noErr }, { "EnableIdle", g_nothing }, { "DisableIdle", g_nothing },
     { "abs", s_abs }, { "atof", s_atof }, { "atoi", s_atoi }, { "atol", s_atoi }, { "calloc", s_calloc },
     { "clock", s_clock }, { "exit", s_exit }, { "abort", s_exit }, { "_exit", s_exit }, { "fflush", s_fflush },
     { "fprintf", s_fprintf }, { "free", s_free }, { "getenv", s_getenv }, { "labs", s_abs },
@@ -1841,6 +1986,12 @@ gaddr ppc_data_export(const char *name)
     }
     if (!strcmp(name, "CallComponentUPP"))
         return mm_call_component_upp();
+    if (!strcmp(name, "_DBL_EPSILON") || !strcmp(name, "_DBL_MIN") || !strcmp(name, "_DBL_MAX")) {
+        gaddr p = tb_NewPtr(8, true, true);
+        wr_double(p, !strcmp(name, "_DBL_EPSILON") ? 2.220446049250313e-16
+                     : !strcmp(name, "_DBL_MIN") ? 2.2250738585072014e-308 : 1.7976931348623157e308);
+        return p;
+    }
     if (!strcmp(name, "pi")) {
         gaddr p = tb_NewPtr(8, true, true);
         wr_double(p, M_PI);
