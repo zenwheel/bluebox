@@ -255,6 +255,9 @@ extern bool g_ppc_mode;
 bool cfm_has_ppc(void);
 void gestalt_powerpc(void);
 bool cfm_launch(const char *app_path, char *err, size_t errlen);
+/* Load a PEF container in memory (an accelerated code resource's) once;
+ * returns its main transition vector, or 0. */
+gaddr cfm_prepare_container(gaddr pef);
 /* A transition vector whose code runs fn natively. */
 gaddr cfm_native_tvector(void (*fn)(struct ppc_cpu *), const char *name);
 

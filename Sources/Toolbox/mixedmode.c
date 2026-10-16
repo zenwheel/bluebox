@@ -68,8 +68,20 @@ static bool mm_routine(gaddr rd, int want, uint32_t *procinfo, int *isa, gaddr *
     *procinfo = rd32(rr + RR_PROCINFO);
     *isa = rd8(rr + RR_ISA) & 0x0F;
     *proc = rd32(rr + RR_PROC);
-    if (rd16(rr + RR_FLAGS) & 1) /* kProcDescriptorIsRelative */
+    uint16_t flags = rd16(rr + RR_FLAGS);
+    if (flags & 1) /* kProcDescriptorIsRelative */
         *proc += rd;
+    if ((flags & 2) && *isa == kPowerPCISA) {
+        /* kFragmentNeedsPreparing: the routine is a PEF container (an
+         * accelerated code resource's); its main is the routine.  The
+         * record keeps the result, as Mixed Mode's did. */
+        gaddr tv = cfm_prepare_container(*proc);
+        if (tv) {
+            wr32(rr + RR_PROC, tv);
+            wr16(rr + RR_FLAGS, (uint16_t)(flags & ~3u));
+        }
+        *proc = tv;
+    }
     return *proc != 0;
 }
 

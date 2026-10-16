@@ -168,6 +168,7 @@ typedef struct {
     gaddr base;
     uint32_t size;
     int kind;
+    uint32_t delta; /* base less the section's default address: what relocations add */
 } section;
 
 /* Pattern-initialized data's variable-length count: 7 bits a byte, the
@@ -252,9 +253,10 @@ typedef struct {
 } reloc_state;
 
 static gaddr import_at(reloc_state *s, uint32_t index) { return index < s->nimports ? s->imports[index] : 0; }
+/* What a relocation by a section adds: its address less its default one. */
 static gaddr section_base(reloc_state *s, uint32_t index)
 {
-    return (int)index < s->nsections ? s->sections[index].base : 0;
+    return (int)index < s->nsections ? s->sections[index].delta : 0;
 }
 
 static bool reloc_run(reloc_state *s, uint32_t from, uint32_t to)
@@ -397,6 +399,7 @@ typedef struct {
     frag_export *exports;
     uint32_t nexports;
     bool native;         /* a library we provide (InterfaceLib ...): no PEF */
+    gaddr memory;        /* a code resource's container, prepared from memory */
     bool loading;
 } fragment;
 
@@ -413,7 +416,7 @@ static const char *const native_libraries[] = {
     "InterfaceLib", "MathLib", "StdCLib", "QuickTimeLib", "DragLib", "ThreadsLib", "AppearanceLib",
     "PrivateInterfaceLib", "ObjectSupportLib", "AppleScriptLib", "TranslationLib", "ControlStripLib",
     "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
-    "InternetConfigLib", "ICAp;InternetConfigLib",
+    "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr",
 };
 
 static bool core_library(const char *name)
@@ -514,7 +517,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
         }
         base = (base + 15) & ~15u;
         gmemset(base, 0, total);
-        sections[s] = (section){ base, total, kind };
+        sections[s] = (section){ base, total, kind, base - be32(h + 4) };
         LOGF(LOG_SEG, "cfm: section %d (kind %d) at %08X, %u bytes\n", s, kind, base, total);
         if (kind == kPatternData)
             unpack_pattern(pef + off, pef + off + packed, base, unpacked);
@@ -603,8 +606,8 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
             .nimports = nsyms,
             .target_base = sections[target].base,
             .reloc = sections[target].base,
-            .sect_c = ninst > 0 ? sections[0].base : 0,
-            .sect_d = ninst > 1 ? sections[1].base : 0,
+            .sect_c = ninst > 0 ? sections[0].delta : 0,
+            .sect_d = ninst > 1 ? sections[1].delta : 0,
             .err = err,
             .errlen = errlen,
         };
@@ -1151,6 +1154,51 @@ static void ppc_GetMemFragment(ppc_cpu *c)
     if (i < 0)
         c->gpr[3] = (uint32_t)(int32_t)cfragFragmentFormatErr;
     c->pc = c->lr;
+}
+
+/* The length of a PEF container from its section headers. */
+static uint32_t container_length(gaddr pef)
+{
+    uint32_t end = 40 + 28u * rd16(pef + 32);
+    for (int s = 0; s < rd16(pef + 32); s++) {
+        gaddr h = pef + 40 + 28 * (gaddr)s;
+        uint32_t e = rd32(h + 20) + rd32(h + 16);
+        if (e > end)
+            end = e;
+    }
+    return end;
+}
+
+/* Prepare a fragment in memory (an accelerated code resource's): load it
+ * once, run its init routine, and return its main's transition vector. */
+gaddr cfm_prepare_container(gaddr pef)
+{
+    for (int i = 0; i < nfrags; i++)
+        if (frags[i].memory == pef)
+            return frags[i].main_tv;
+    if (rd32(pef) != 0x4A6F7921u /* Joy! */ || nfrags >= MAX_FRAGMENTS)
+        return 0;
+    uint32_t len = container_length(pef);
+    uint8_t *bytes = malloc(len);
+    gget(bytes, pef, len);
+    fragment *f = &frags[nfrags];
+    memset(f, 0, sizeof *f);
+    snprintf(f->name, sizeof f->name, "(code resource at %08X)", pef);
+    f->memory = pef;
+    char err[256];
+    int before = ninit, idx = nfrags++;
+    bool ok = pef_load(bytes, len, f, err, sizeof err);
+    free(bytes);
+    if (!ok) {
+        LOGF(LOG_UNIMPL, "cfm: code resource at %08X: %s\n", pef, err);
+        nfrags--;
+        return 0;
+    }
+    if (f->init_tv && ninit < MAX_FRAGMENTS)
+        init_queue[ninit++] = idx;
+    run_new_inits(before);
+    LOGF(LOG_SEG, "cfm: prepared the code resource at %08X: main %08X\n", pef, f->main_tv);
+    return f->main_tv;
 }
 
 /* FindSymbol(connID, symName, *symAddr, *symClass) */
