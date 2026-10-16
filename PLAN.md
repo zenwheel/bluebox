@@ -616,6 +616,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - Toolbox-owned objects stay in the guest arena behind opaque references. Bulk data is passed by host pointer.
 - Generated from the same definitions as the 68k and PPC glue.
 - Swift and C sample apps. Native apps use the same install path (`.app` bundle and `.desktop` file).
+- **Native code inside the environment (arm64 and x86_64):** besides standalone native apps, native code compiled for the host's own architecture can run *in* a Blue Box session next to 68k and PowerPC code: a native application loaded like a classic one (its own "fragment" architecture beside `CODE` and `cfrg`, so the shell lists it with 68k, PPC and fat apps), and native plug-ins, code resources and shared libraries that classic programs call (as CFM did for PowerPC). Calls between native and emulated code go through the same Mixed Mode routine descriptors and generated glue; the Toolbox calls they make are direct host calls with no emulation. This is also the path for rewriting slow parts of classic programs (an XCMD, a codec, an MDEF) natively.
 - Later option: WebAssembly (64-bit memory) as a portable, sandboxed format calling the Toolbox through imports.
 
 **Exit:** a native sample app (a text editor and a drawing app) uses the classic UI, speech and printing, and allocates more than 4 GB.
