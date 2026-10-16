@@ -378,9 +378,9 @@ the trap census.
   - Gestalt reports the processor and FPU of the chosen model (a 68040 with its FPU by default, a 68020 without one)
   - floating windows (WDEF 124, procIDs 1985 to 1999, top or side title bars) and collapsing (WindowShade: two clicks in a title bar, or a scheme's collapse box), both drawn from Kaleidoscope 2 schemes' samples too
   - native style: scroll bars hit and dragged where macOS draws the knob (no arrows), pop-up menus as macOS's pop-up buttons, edit-text items in macOS's bezel
-  - Standard File: file filters (old, System 7 and yourDataPtr forms) decide what the open panel offers; SFPGetFile/SFPPutFile dialog hooks in their original convention; hooks get null events while the panel is up
+  - Standard File: file filters (old, System 7 and yourDataPtr forms) decide what the open panel offers; SFPGetFile/SFPPutFile dialog hooks in their original convention; hooks and CustomGetFile/CustomPutFile dialog filters get null events while the panel is up (an item the filter answers goes to the hook)
 - Moved on: MACE decoding to M4 (the Sound Manager; it needs a decoder we can license with the project); QuickTime's music, sprite and text tracks, editing and the Image Compression Manager's own calls to M4; Mac OS 8.5 Appearance themes and the Appearance controls (sliders, tabs, themed pop-ups), scheme menus in screen mode and scheme desktop patterns to M9 with the Appearance Manager; an HFS+ reader of our own to M12. A theme for installed bundles is the application's appearance setting.
-- Left: a CustomGetFile `filterProc` (the panel is the host's, so it has no classic events to filter).
+- Left: CustomGetFile's `filterProc` sees only null events (the panel is the host's, so there are no keystrokes or clicks to filter); a program that needs more would need the classic Standard File dialog of our own.
 
 ### M2: The import pipeline
 

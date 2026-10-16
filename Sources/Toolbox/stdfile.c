@@ -27,6 +27,7 @@ static struct {
     gaddr dialog, hook, data;
     int first_extra;
     bool old_hook; /* SFPGetFile/SFPPutFile: DlgHook(item, dialog) */
+    gaddr filter_proc; /* the dialog's event filter: ModalFilterYDProc */
 } session;
 
 /* The application's file filter for an open panel: FileFilterProc(pb), or
@@ -142,8 +143,34 @@ enum { sfHookNullEvent = 100 };
 
 void machine_file_idle(void)
 {
-    if (session.dialog)
-        call_hook(sfHookNullEvent);
+    if (!session.dialog)
+        return;
+    /* The dialog's filter sees a null event first, as from ModalDialog; an
+     * item it answers goes to the hook as a click would. */
+    if (session.filter_proc) {
+        cpu68k *c = g_cpu;
+        gaddr ev = tb_NewPtr(EventRecord_SIZEOF, false, true), item = tb_NewPtr(2, false, true);
+        wr32(ev + EventRecord_when_off, rd32(LM_Ticks));
+        wr32(ev + EventRecord_where_off, rd32(LM_MouseLocation));
+        cpu_push16(c, 0);
+        cpu_push32(c, session.dialog);
+        cpu_push32(c, ev);
+        cpu_push32(c, item);
+        cpu_push32(c, session.data);
+        gaddr saved = qd_port();
+        tb_SetPort(session.dialog);
+        guest_call(session.filter_proc);
+        tb_SetPort(saved);
+        bool handled = (cpu_pop16(c) & 0xFF00) != 0;
+        int16_t hit = (int16_t)rd16(item);
+        tb_DisposePtr(item);
+        tb_DisposePtr(ev);
+        if (handled && hit >= session.first_extra) {
+            call_hook(hit);
+            return;
+        }
+    }
+    call_hook(sfHookNullEvent);
 }
 
 int machine_file_item_hit(int16_t item, const char *text)
@@ -174,11 +201,17 @@ int machine_file_item_hit(int16_t item, const char *text)
 /* Build the app's dialog, hidden, for a custom call with a hook.  Its own
  * items follow the standard dialog's: 9 or 12 in System 7's, 10 in the
  * original ones. */
-static void begin_session(int16_t dlgid, gaddr hook, gaddr data, bool save, bool old)
+static void begin_session(int16_t dlgid, gaddr hook, gaddr data, bool save, bool old, gaddr filter_proc)
 {
     memset(&session, 0, sizeof session);
-    if (!dlgid || !hook)
+    if (!hook && !filter_proc)
         return;
+    /* System 7's calls without a dialog of the program's own get the
+     * standard one, for the hook and filter to be given. */
+    if (!dlgid && old)
+        return;
+    if (!dlgid)
+        dlgid = save ? -6043 : -6042;
     gaddr d = dialog_from_resource(dlgid, 0, 0, 0, SF_REFCON, true);
     if (!d)
         return;
@@ -186,6 +219,7 @@ static void begin_session(int16_t dlgid, gaddr hook, gaddr data, bool save, bool
     session.hook = hook;
     session.data = data;
     session.old_hook = old;
+    session.filter_proc = filter_proc;
     session.first_extra = old ? 11 : save ? 13 : 10;
     call_hook(sfHookFirstCall);
 }
@@ -326,7 +360,7 @@ void tb_StandardPutFile(gaddr prompt, gaddr defaultname, gaddr replyp)
 void tb_CustomGetFile(gaddr filefilter, int16_t numtypes, gaddr typelist, gaddr replyp, int16_t dlgid, uint32_t where,
                       gaddr dlghook, gaddr filterproc, gaddr activeList, gaddr activateproc, gaddr yourdatap)
 {
-    begin_session(dlgid, dlghook, yourdatap, false, false);
+    begin_session(dlgid, dlghook, yourdatap, false, false, filterproc);
     set_filter(filefilter, yourdatap, true);
     tb_StandardGetFile(filefilter, numtypes, typelist, replyp);
     end_session();
@@ -335,7 +369,7 @@ void tb_CustomGetFile(gaddr filefilter, int16_t numtypes, gaddr typelist, gaddr 
 void tb_CustomPutFile(gaddr prompt, gaddr defaultName, gaddr replyp, int16_t dlgid, uint32_t where, gaddr dlghook,
                       gaddr filterproc, gaddr activeList, gaddr activateproc, gaddr yourdatap)
 {
-    begin_session(dlgid, dlghook, yourdatap, true, false);
+    begin_session(dlgid, dlghook, yourdatap, true, false, filterproc);
     tb_StandardPutFile(prompt, defaultName, replyp);
     end_session();
 }
@@ -357,7 +391,7 @@ void tb_SFPutFile(uint32_t p, gaddr prompt, gaddr name, gaddr dh, gaddr rep)
 void tb_SFPGetFile(uint32_t p, gaddr prompt, gaddr filef, int16_t numt, gaddr tl, gaddr dh, gaddr rep, int16_t dig,
                    gaddr fp)
 {
-    begin_session(dig, dh, 0, false, true);
+    begin_session(dig, dh, 0, false, true, 0);
     tb_SFGetFile(p, prompt, filef, numt, tl, dh, rep);
     end_session();
 }
@@ -394,7 +428,7 @@ int16_t tb_AddFilePreview(int16_t refnum, int32_t type, int32_t data) { return n
 
 void tb_SFPPutFile(uint32_t p, gaddr prompt, gaddr name, gaddr dh, gaddr rep, int16_t dig, gaddr fp)
 {
-    begin_session(dig, dh, 0, true, true);
+    begin_session(dig, dh, 0, true, true, 0);
     tb_SFPutFile(p, prompt, name, dh, rep);
     end_session();
 }

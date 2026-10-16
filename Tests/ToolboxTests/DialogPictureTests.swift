@@ -369,6 +369,46 @@ extension BlueBox {
             #expect(rd8(reply) == 0)
         }
 
+        nonisolated(unsafe) static var filterEvents: [Int16] = []
+
+        /// The filter: ModalFilterYD(dialog, event, itemHit, data): BOOLEAN.
+        /// Records the event's kind and answers item 10.
+        static let filter: native_fn = { c, _ in
+            guard let c else { return }
+            let ret = cpu_pop32(c)
+            _ = cpu_pop32(c)                               // data
+            let item = cpu_pop32(c)
+            let event = cpu_pop32(c)
+            _ = cpu_pop32(c)                               // dialog
+            StandardFileExtras.filterEvents.append(Int16(bitPattern: rd16(event)))
+            wr16(item, 10)
+            wr16(c.pointee.a.7, 0x0100)                    // true
+            cpu_push32(c, ret)
+        }
+
+        /// CustomGetFile's dialog filter gets null events while the panel is
+        /// up, and an item it answers reaches the hook.
+        @Test func dialogFiltersGetNullEvents() {
+            var items = (1...9).map { _ in ditlItem(0, (0, 0, 10, 10), []) }
+            items.append(ditlItem(5, (200, 20, 216, 180), pstr("Show all")))
+            launchTestApp([TestResource(type: "DLOG", id: 301, data: dlog(items: 301, visible: false)),
+                           TestResource(type: "DITL", id: 301, data: ditl(items))])
+            _ = initToolbox()
+            Self.hookItems = []
+            Self.filterEvents = []
+            let hook = native_register(Self.hook, "test hook", 0)
+            let filter = native_register(Self.filter, "test filter", 0)
+            machine_set_file_handler({ _, _, _, _ in
+                machine_file_idle()
+                return false
+            }, nil)
+            defer { machine_set_file_handler(nil, nil) }
+            let reply = tb_NewPtr(Int32(StandardFileReply_SIZEOF), false, true)
+            tb_CustomGetFile(0, -1, 0, reply, 301, 0xFFFF_FFFF, hook, filter, 0, 0, 0)
+            #expect(Self.filterEvents == [0])                 // a null event
+            #expect(Self.hookItems == [-1, 10, -2])           // first call, the filter's item, last call
+        }
+
         func writeFile(_ dir: URL, _ name: String, type: String) -> String {
             let path = dir.appendingPathComponent(name).path
             var f = mac_file()
