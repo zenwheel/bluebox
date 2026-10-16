@@ -34,7 +34,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "mace.h"
+#include "mace_decoder.h"
 
 #define FFMIN(a, b) ((a) > (b) ? (b) : (a))
 

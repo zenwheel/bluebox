@@ -208,6 +208,17 @@ enum ShellItem: Hashable {
     }
 
     /// Import dropped or chosen files into the library, off the main thread.
+    /// Ask for files to import (the File menu, the sidebar, the status item).
+    func chooseImport() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.prompt = "Import"
+        panel.message = "Choose archives (.sit, .sea, .cpt, .hqx, .bin) or disk images (.img, .dsk, .toast, .iso) to import"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK { importFiles(panel.urls) }
+    }
+
     func importFiles(_ urls: [URL]) {
         let lib = library
         for url in urls {
@@ -286,6 +297,19 @@ struct ShellView: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                // The window has no toolbar, so importing is at the foot of the list.
+                HStack {
+                    Button { model.chooseImport() } label: { Label("Import…", systemImage: "square.and.arrow.down") }
+                        .help("Import archives, disk images or MacBinary files into the library")
+                    Spacer()
+                    Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                        .help("Look for changes in the library")
+                }
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
         } detail: {
             VStack(spacing: 0) {
@@ -295,15 +319,6 @@ struct ShellView: View {
                 default: DefaultsPage(model: model)
                 }
                 StatusBar(model: model)
-            }
-        }
-        .toolbar {
-            ToolbarItem {
-                Button { chooseImport() } label: { Label("Import…", systemImage: "square.and.arrow.down") }
-                    .help("Import archives, disk images or MacBinary files into the library")
-            }
-            ToolbarItem {
-                Button { model.refresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
             }
         }
         .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
@@ -328,13 +343,6 @@ struct ShellView: View {
         .frame(minWidth: 720, minHeight: 440)
     }
 
-    private func chooseImport() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.message = "Choose archives (.sit, .sea, .cpt, .hqx, .bin) or disk images to import"
-        if panel.runModal() == .OK { model.importFiles(panel.urls) }
-    }
 }
 
 struct StatusBar: View {
@@ -620,6 +628,9 @@ struct HighlightPicker: View {
         let open = NSMenuItem(title: "Open Blue Box", action: #selector(openWindow(_:)), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
+        let importItem = NSMenuItem(title: "Import…", action: #selector(importFiles(_:)), keyEquivalent: "")
+        importItem.target = self
+        menu.addItem(importItem)
         menu.addItem(NSMenuItem(title: "Quit Blue Box", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
     }
 
@@ -628,6 +639,8 @@ struct HighlightPicker: View {
     }
 
     @objc func openWindow(_ sender: Any?) { showWindow() }
+    @objc func importFiles(_ sender: Any?) { model.chooseImport() }
+    @objc func refreshLibrary(_ sender: Any?) { model.refresh() }
 
     /// Clicking the Dock icon brings the window back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -690,6 +703,15 @@ func shellCommand(_ args: [String]) -> Never {
     let appMenu = NSMenu()
     appMenu.addItem(withTitle: "Quit Blue Box", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     appItem.submenu = appMenu
+    let fileItem = NSMenuItem()
+    main.addItem(fileItem)
+    let file = NSMenu(title: "File")
+    // Sent up the responder chain to the application's delegate.
+    file.addItem(withTitle: "Import…", action: #selector(ShellDelegate.importFiles(_:)), keyEquivalent: "o")
+    file.addItem(withTitle: "Refresh Library", action: #selector(ShellDelegate.refreshLibrary(_:)), keyEquivalent: "r")
+    file.addItem(.separator())
+    file.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+    fileItem.submenu = file
     let editItem = NSMenuItem()
     main.addItem(editItem)
     let edit = NSMenu(title: "Edit")

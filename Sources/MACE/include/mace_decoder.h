@@ -1,8 +1,8 @@
 /*
  * MACE 3:1 and 6:1 decoding (LGPL 2.1 or later: see ../COPYING.LGPLv2.1).
  */
-#ifndef MACE_H
-#define MACE_H
+#ifndef MACE_DECODER_H
+#define MACE_DECODER_H
 
 #include <stdbool.h>
 #include <stddef.h>

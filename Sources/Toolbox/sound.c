@@ -23,7 +23,7 @@
 #include <time.h>
 
 #include "machine.h"
-#include "mace.h"
+#include "mace_decoder.h"
 #include "tb_internal.h"
 #include "trap.h"
 

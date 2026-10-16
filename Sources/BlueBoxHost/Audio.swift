@@ -56,7 +56,8 @@ public final class ClassicAudio: @unchecked Sendable {
             // sample rate); start it again with the next sound.
             NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine,
                                                    queue: nil) { [weak self] _ in
-                self?.queue.async { self?.restartPlayers() }
+                guard let self else { return }
+                self.queue.async { [weak self] in self?.restartPlayers() }
             }
         }
         var entry = players[channel]

@@ -953,7 +953,7 @@ static gaddr init_block(const fragment *f)
         fm_spec_for_path(f->path, spec);
     size_t n = strlen(f->name);
     wr8(name, (uint8_t)n);
-    gput(name + 1, f->name, n);
+    gput(name + 1, f->name, (uint32_t)n);
     wr32(b + 12, kDataForkCFragLocator);
     wr32(b + 16, spec);
     wr32(b + 20, f->offset);
@@ -1075,7 +1075,7 @@ static void connect_result(ppc_cpu *c, int i, gaddr conn_p, gaddr main_p, gaddr 
         if (err_p) {
             size_t n = strlen(err) > 255 ? 255 : strlen(err);
             wr8(err_p, (uint8_t)n);
-            gput(err_p + 1, err, n);
+            gput(err_p + 1, err, (uint32_t)n);
         }
         c->gpr[3] = (uint32_t)(int32_t)cfragNoLibraryErr;
         return;
@@ -1270,7 +1270,7 @@ static void ppc_GetIndSymbol(ppc_cpu *c)
     if (c->gpr[5]) {
         size_t n = strlen(x->name) > 255 ? 255 : strlen(x->name);
         wr8(c->gpr[5], (uint8_t)n);
-        gput(c->gpr[5] + 1, x->name, n);
+        gput(c->gpr[5] + 1, x->name, (uint32_t)n);
     }
     if (c->gpr[6])
         wr32(c->gpr[6], x->addr);
