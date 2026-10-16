@@ -137,6 +137,14 @@ static bool intl_bytes(gaddr h, int id, uint8_t *out, size_t n)
     return true;
 }
 
+/* IsMetric: the current itl0's metricSys (255 for metric). */
+int8_t tb_IsMetric(void)
+{
+    uint8_t itl0[32];
+    intl_bytes(0, 0, itl0, sizeof itl0);
+    return itl0[29] == 255;
+}
+
 static void put_result(gaddr p, const char *s)
 {
     size_t n = strlen(s);

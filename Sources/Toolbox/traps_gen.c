@@ -6474,6 +6474,15 @@ static void glue_IsDialogEvent(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsMetric(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t r = tb_IsMetric();
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_IsMovieDone(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7376,6 +7385,17 @@ static void glue_MakeRGBPat(cpu68k *c, uint16_t trapword)
     gaddr a_colorp = (gaddr)cpu_pop32(c);
     gaddr a_ph = (gaddr)cpu_pop32(c);
     tb_MakeRGBPat(a_ph, a_colorp);
+    cpu_push32(c, ret);
+}
+
+static void glue_MapPoly(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dstr = (gaddr)cpu_pop32(c);
+    gaddr a_srcr = (gaddr)cpu_pop32(c);
+    gaddr a_poly = (gaddr)cpu_pop32(c);
+    tb_MapPoly(a_poly, a_srcr, a_dstr);
     cpu_push32(c, ret);
 }
 
@@ -10665,6 +10685,16 @@ static void glue_SetControlAction(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetControlColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_ctab = (gaddr)cpu_pop32(c);
+    gaddr a_ctl = (gaddr)cpu_pop32(c);
+    tb_SetControlColor(a_ctl, a_ctab);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetControlMaximum(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13758,7 +13788,7 @@ const trap_sig trap_sigs[] = {
     {0xA8F9, -1, "MapPt", CONV_STACK, 12, 0, glue_MapPt},
     {0xA8FA, -1, "MapRect", CONV_STACK, 12, 0, glue_MapRect},
     {0xA8FB, -1, "MapRgn", CONV_STACK, 12, 0, glue_MapRgn},
-    {0xA8FC, -1, "MapPoly", CONV_STACK, 12, 0, 0},
+    {0xA8FC, -1, "MapPoly", CONV_STACK, 12, 0, glue_MapPoly},
     {0xA8FE, -1, "InitFonts", CONV_STACK, 0, 0, glue_InitFonts},
     {0xA8FF, -1, "GetFontName", CONV_STACK, 6, 0, glue_GetFontName},
     {0xA900, -1, "GetFNum", CONV_STACK, 8, 0, glue_GetFNum},
@@ -14069,7 +14099,7 @@ const trap_sig trap_sigs[] = {
     {0xAA40, -1, "QDError", CONV_STACK, 0, 2, glue_QDError},
     {0xAA41, -1, "SetWinColor", CONV_STACK, 8, 0, glue_SetWinColor},
     {0xAA42, -1, "GetAuxWin", CONV_STACK, 8, 2, glue_GetAuxWin},
-    {0xAA43, -1, "SetControlColor", CONV_STACK, 8, 0, 0},
+    {0xAA43, -1, "SetControlColor", CONV_STACK, 8, 0, glue_SetControlColor},
     {0xAA44, -1, "GetAuxiliaryControlRecord", CONV_STACK, 8, 2, glue_GetAuxiliaryControlRecord},
     {0xAA45, -1, "NewCWindow", CONV_STACK, 26, 4, glue_NewCWindow},
     {0xAA46, -1, "GetNewCWindow", CONV_STACK, 10, 4, glue_GetNewCWindow},
@@ -14596,7 +14626,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9EC, (int32_t)0x20u, "ROMlib_FrandX", CONV_STACK, 4, 0, 0},
     {0xA9ED, (int32_t)0x0u, "IUDateString", CONV_STACK, 10, 0, glue_IUDateString},
     {0xA9ED, (int32_t)0x2u, "IUTimeString", CONV_STACK, 10, 0, glue_IUTimeString},
-    {0xA9ED, (int32_t)0x4u, "IsMetric", CONV_STACK, 0, 2, 0},
+    {0xA9ED, (int32_t)0x4u, "IsMetric", CONV_STACK, 0, 2, glue_IsMetric},
     {0xA9ED, (int32_t)0x6u, "GetIntlResource", CONV_STACK, 2, 4, glue_GetIntlResource},
     {0xA9ED, (int32_t)0x8u, "SetIntlResource", CONV_STACK, 8, 0, 0},
     {0xA9ED, (int32_t)0xAu, "IUMagString", CONV_STACK, 12, 2, glue_IUMagString},

@@ -112,6 +112,18 @@ void tb_MapPt(gaddr pt, gaddr srcr, gaddr dstr)
     wr16(pt + 2, (uint16_t)map1((int16_t)rd16(pt + 2), s.left, s.right, d.left, d.right));
 }
 
+/* A polygon's bounding box and every point, mapped. */
+void tb_MapPoly(gaddr poly, gaddr srcr, gaddr dstr)
+{
+    if (!poly || !rd32(poly))
+        return;
+    gaddr p = rd32(poly);
+    int n = ((int)rd16(p) - 10) / 4;
+    tb_MapRect(p + 2, srcr, dstr);
+    for (int i = 0; i < n; i++)
+        tb_MapPt(p + 10 + (uint32_t)i * 4, srcr, dstr);
+}
+
 void tb_MapRect(gaddr r, gaddr srcr, gaddr dstr)
 {
     tb_MapPt(r, srcr, dstr);

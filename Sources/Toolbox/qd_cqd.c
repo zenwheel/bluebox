@@ -1018,13 +1018,44 @@ void tb_ResizePalette(gaddr pal, int16_t size)
 /* ---------------------------------------------------------------------- */
 /* Auxiliary records: the standard colours */
 
-int8_t tb_GetAuxiliaryControlRecord(gaddr c, gaddr acHndl)
+/* One per control, made when first asked for; SetControlColor's table is
+ * kept in it (controls still draw in the standard colours). */
+static struct {
+    gaddr control, aux;
+} auxes[128];
+
+static gaddr aux_for(gaddr c)
 {
+    int free_slot = -1;
+    for (int i = 0; i < 128; i++) {
+        if (auxes[i].control == c && auxes[i].aux && rd32(auxes[i].aux))
+            return auxes[i].aux;
+        if (free_slot < 0 && (!auxes[i].control || !auxes[i].aux || !rd32(auxes[i].aux)))
+            free_slot = i;
+    }
     gaddr h = tb_NewHandle(AuxCtlRec_SIZEOF, false, true);
     wr32(rd32(h) + AuxCtlRec_acOwner_off, c);
     wr32(rd32(h) + AuxCtlRec_acCTable_off, tb_GetCTable(1));
-    wr32(acHndl, h);
+    if (free_slot < 0)
+        free_slot = (int)(c % 128);
+    auxes[free_slot].control = c;
+    auxes[free_slot].aux = h;
+    return h;
+}
+
+int8_t tb_GetAuxiliaryControlRecord(gaddr c, gaddr acHndl)
+{
+    wr32(acHndl, aux_for(c));
     return 1;
+}
+
+void tb_SetControlColor(gaddr ctl, gaddr ctab)
+{
+    if (!ctl)
+        return;
+    gaddr h = aux_for(ctl);
+    if (h && rd32(h))
+        wr32(rd32(h) + AuxCtlRec_acCTable_off, ctab);
 }
 
 
