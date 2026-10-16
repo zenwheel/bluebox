@@ -79,6 +79,50 @@ extension BlueBox {
             #expect(color(31, 31) == [0, 0, 0])
         }
 
+        /// A 2x2 8-bit pixel pattern: index 0 green, 1 blue, in a checkerboard.
+        func checkerPattern() -> UInt32 {
+            let pp = tb_NewPixPat()
+            let pm = rd32(rd32(pp) + UInt32(PixPat_patMap_off))
+            wr16(rd32(pm) + UInt32(PixMap_rowBytes_off), 0x8002)
+            for (i, v) in [0, 0, 2, 2].enumerated() { wr16(rd32(pm) + UInt32(PixMap_bounds_off) + UInt32(i * 2), UInt16(v)) }
+            wr16(rd32(pm) + UInt32(PixMap_pixelSize_off), 8)
+            let ctab = tb_NewHandle(8 + 2 * 8, false, true)
+            wr16(rd32(ctab) + 6, 1)
+            for (i, c) in [[0, 0xFFFF, 0], [0, 0, 0xFFFF]].enumerated() {
+                let e = rd32(ctab) + 8 + UInt32(i * 8)
+                wr16(e, UInt16(i)); wr16(e + 2, UInt16(c[0])); wr16(e + 4, UInt16(c[1])); wr16(e + 6, UInt16(c[2]))
+            }
+            wr32(rd32(pm) + UInt32(PixMap_pmTable_off), ctab)
+            let data = rd32(rd32(pp) + UInt32(PixPat_patData_off))
+            tb_SetHandleSize(data, 4)
+            for (i, v) in [0, 1, 1, 0].enumerated() { wr8(rd32(data) + UInt32(i), UInt8(v)) }
+            return pp
+        }
+
+        /// Colour patterns are recorded in pictures with their colours.
+        @Test func picturesKeepColourPatterns() {
+            _ = offscreen()
+            let red = tb_NewPixPat()
+            tb_MakeRGBPat(red, rgb(0xFFFF, 0, 0))
+            let pic = tb_OpenPicture(rect(0, 0, 40, 40))
+            tb_PenPixPat(red)
+            tb_PaintRect(rect(0, 0, 10, 10))
+            tb_FillCRect(rect(20, 20, 30, 30), checkerPattern())
+            tb_ClosePicture()
+            let black = tb_NewPtr(8, false, true)
+            for i in 0..<8 { wr8(black + UInt32(i), 0xFF) }
+            tb_PenPat(black)
+            tb_RGBForeColor(rgb(0xFFFF, 0xFFFF, 0xFFFF))
+            tb_PaintRect(rect(0, 0, 40, 40))       // white, through the pen
+            tb_RGBForeColor(rgb(0, 0, 0))
+            #expect(color(5, 5) == [0xFFFF, 0xFFFF, 0xFFFF])
+            tb_DrawPicture(pic, rect(0, 0, 40, 40))
+            #expect(color(5, 5) == [0xFFFF, 0, 0])
+            #expect(color(20, 20) == [0, 0xFFFF, 0])
+            #expect(color(21, 20) == [0, 0, 0xFFFF])
+            tb_KillPicture(pic)
+        }
+
         /// CopyBits' arithmetic modes combine source and destination colours.
         @Test func arithmeticTransferModes() {
             let dstWorld = offscreen()

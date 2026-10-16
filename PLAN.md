@@ -373,14 +373,14 @@ the trap census.
   - Applications' own `dcmp` decompressors run in place, the compressed data at the end of the destination buffer
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
   - pictures recorded: between `OpenPicture`/`OpenCPicture` and `ClosePicture` drawing in the port is written to the picture as version 2 opcodes (shapes with every verb, polygons, regions, lines, text, CopyBits as BitsRect/PackBitsRect/DirectBitsRect with masks, comments), each with the state it depends on; the pen is hidden meanwhile, and a hidden pen draws nothing
-  - Color QuickDraw: pixel patterns in their own colours ('ppat' resources, MakeRGBPat, in pictures too); CopyBits' arithmetic modes and `OpColor`; colour cursors shown in colour by the host
+  - Color QuickDraw: pixel patterns in their own colours ('ppat' resources, MakeRGBPat; pictures play and record them); CopyBits' arithmetic modes and `OpColor`; colour cursors shown in colour by the host
   - depths: games known to refuse millions of colours get a depth they accept (a table by creator); an `Alert` or `ModalDialog` saying a program needs another depth ends the run, and `bluebox run` starts it again at that depth, kept as its setting
   - Gestalt reports the processor and FPU of the chosen model (a 68040 with its FPU by default, a 68020 without one)
   - floating windows (WDEF 124, procIDs 1985 to 1999, top or side title bars) and collapsing (WindowShade: two clicks in a title bar, or a scheme's collapse box), both drawn from Kaleidoscope 2 schemes' samples too
   - native style: scroll bars hit and dragged where macOS draws the knob (no arrows), pop-up menus as macOS's pop-up buttons, edit-text items in macOS's bezel
   - Standard File: file filters (old, System 7 and yourDataPtr forms) decide what the open panel offers; SFPGetFile/SFPPutFile dialog hooks in their original convention; hooks get null events while the panel is up
 - Moved on: MACE decoding to M4 (the Sound Manager; it needs a decoder we can license with the project); QuickTime's music, sprite and text tracks, editing and the Image Compression Manager's own calls to M4; Mac OS 8.5 Appearance themes and the Appearance controls (sliders, tabs, themed pop-ups), scheme menus in screen mode and scheme desktop patterns to M9 with the Appearance Manager; an HFS+ reader of our own to M12. A theme for installed bundles is the application's appearance setting.
-- Left: a CustomGetFile `filterProc` (the panel is the host's, so it has no classic events to filter); recording colour patterns into pictures (they record their black-and-white version).
+- Left: a CustomGetFile `filterProc` (the panel is the host's, so it has no classic events to filter).
 
 ### M2: The import pipeline
 

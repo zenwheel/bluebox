@@ -28,6 +28,8 @@ static struct {
     uint16_t fg[3], bk[3];
     uint32_t fg_old, bk_old;
     unsigned have; /* S_ bits: written at least once */
+    uint8_t *pixpat[3]; /* the colour patterns last written (pen, back, fill) */
+    uint32_t pixpat_len[3];
 } st;
 
 enum {
@@ -38,6 +40,8 @@ enum {
 static void forget(gaddr pic)
 {
     free(st.clip);
+    for (int i = 0; i < 3; i++)
+        free(st.pixpat[i]);
     memset(&st, 0, sizeof st);
     st.pic = pic;
     st.open_clip = true;
@@ -194,6 +198,125 @@ static void write_word(gaddr h, int code, unsigned bit, int *last, int v)
     put16(h, v);
 }
 
+/* A colour pattern as a picture's PixPat: type 2 with its colour, or
+ * type 1 with an 8-bit pixel map of its colours (rows as literal PackBits
+ * runs).  Returns the bytes (malloc'd), or NULL to use its black-and-white
+ * version (a type 0 pattern, or one too big or with too many colours). */
+static uint8_t *pixpat_bytes(gaddr pp, uint32_t *len)
+{
+    if (!pp || !rd32(pp))
+        return NULL;
+    int type = (int16_t)rd16(rd32(pp) + PixPat_patType_off);
+    int w, hh;
+    uint16_t (*rgb)[3];
+    if (type == 0 || !qd_pixpat_image(pp, &w, &hh, &rgb))
+        return NULL;
+    uint8_t pat1[8];
+    gget(pat1, rd32(pp) + PixPat_pat1Data_off, 8);
+    if (type == 2) {
+        uint8_t *b = malloc(16);
+        b[0] = 0;
+        b[1] = 2;
+        memcpy(b + 2, pat1, 8);
+        for (int i = 0; i < 3; i++) {
+            b[10 + i * 2] = (uint8_t)(rgb[0][i] >> 8);
+            b[11 + i * 2] = (uint8_t)rgb[0][i];
+        }
+        free(rgb);
+        *len = 16;
+        return b;
+    }
+    int rb = (w + 1) & ~1;
+    if (rb > 128) {
+        free(rgb);
+        return NULL;
+    }
+    /* The distinct colours, as the colour table. */
+    uint16_t table[256][3];
+    int n = 0;
+    uint8_t *idx = malloc((size_t)w * (size_t)hh);
+    for (int i = 0; i < w * hh; i++) {
+        int k = 0;
+        while (k < n && memcmp(table[k], rgb[i], 6))
+            k++;
+        if (k == n) {
+            if (n == 256) {
+                free(idx);
+                free(rgb);
+                return NULL;
+            }
+            memcpy(table[n++], rgb[i], 6);
+        }
+        idx[i] = (uint8_t)k;
+    }
+    free(rgb);
+    size_t cap = 10 + 4 + 2 + 8 + 2 + 36 + 8 + (size_t)n * 8 + (size_t)hh * ((size_t)rb + 2);
+    uint8_t *b = calloc(cap, 1), *o = b;
+#define P16(v) (o[0] = (uint8_t)((v) >> 8), o[1] = (uint8_t)(v), o += 2)
+#define P32(v) (P16((uint32_t)(v) >> 16), P16((uint32_t)(v) & 0xFFFF))
+    P16(1);
+    memcpy(o, pat1, 8);
+    o += 8;
+    P32(0);                              /* baseAddr */
+    P16(0x8000 | rb);
+    P16(0); P16(0); P16(hh); P16(w);     /* bounds */
+    P16(0);                              /* pmVersion */
+    P16(0); P32(0);                      /* packType, packSize */
+    P32(72u << 16); P32(72u << 16);      /* hRes, vRes */
+    P16(0); P16(8); P16(1); P16(8);      /* pixelType, pixelSize, cmpCount, cmpSize */
+    P32(0); P32(0); P32(0);              /* planeBytes, pmTable, pmReserved */
+    P32(0); P16(0); P16(n - 1);          /* ctSeed, ctFlags, ctSize */
+    for (int k = 0; k < n; k++) {
+        P16(k);
+        P16(table[k][0]);
+        P16(table[k][1]);
+        P16(table[k][2]);
+    }
+    for (int y = 0; y < hh; y++) {
+        uint8_t *row = o;
+        if (rb >= 8) {
+            *o++ = (uint8_t)(rb + 1); /* the row's byte count, then one literal run */
+            *o++ = (uint8_t)(rb - 1);
+        }
+        for (int x = 0; x < rb; x++)
+            *o++ = x < w ? idx[y * w + x] : 0;
+        (void)row;
+    }
+#undef P16
+#undef P32
+    free(idx);
+    *len = (uint32_t)(o - b);
+    return b;
+}
+
+/* Write a colour pattern (PnPixPat, BkPixPat, FillPixPat) when it changed;
+ * false when the pattern has no colours of its own. */
+static bool write_pixpat(gaddr h, int slot, gaddr pp)
+{
+    static const int codes[3] = { 0x0013, 0x0012, 0x0014 };
+    static const unsigned old_bits[3] = { S_PNPAT, S_BKPAT, S_FILLPAT };
+    uint32_t len;
+    uint8_t *b = pixpat_bytes(pp, &len);
+    if (!b) {
+        free(st.pixpat[slot]);
+        st.pixpat[slot] = NULL;
+        return false;
+    }
+    st.have &= ~old_bits[slot]; /* an old-style pattern after this is written again */
+    if (st.pixpat[slot] && st.pixpat_len[slot] == len && !memcmp(st.pixpat[slot], b, len)) {
+        free(b);
+        return true;
+    }
+    free(st.pixpat[slot]);
+    st.pixpat[slot] = b;
+    st.pixpat_len[slot] = len;
+    op(h, codes[slot]);
+    put(h, b, len);
+    return true;
+}
+
+static gaddr port_pixpat_of(gaddr port, uint32_t off) { return qd_port_is_color(port) ? rd32(port + off) : 0; }
+
 static void write_pen(gaddr h, gaddr port)
 {
     uint32_t size = rd32(port + GrafPort_pnSize_off);
@@ -204,6 +327,8 @@ static void write_pen(gaddr h, gaddr port)
         put32(h, size);
     }
     write_word(h, 0x0008, S_PNMODE, &st.pn_mode, GrafPort_pnMode(port));
+    if (write_pixpat(h, 0, port_pixpat_of(port, CGrafPort_pnPixPat_off)))
+        return;
     uint8_t p[8];
     qd_port_pattern(port, 0, p);
     write_pat(h, 0x0009, S_PNPAT, st.pn_pat, p);
@@ -229,10 +354,14 @@ void qd_pic_shape(gaddr port, int opbase, int verb, qrect r, int a, int b, gaddr
         write_pen(h, port);
         break;
     case 2:
+        if (write_pixpat(h, 1, port_pixpat_of(port, CGrafPort_bkPixPat_off)))
+            break;
         qd_port_pattern(port, 1, p);
         write_pat(h, 0x0002, S_BKPAT, st.bk_pat, p);
         break;
     case 4:
+        if (write_pixpat(h, 2, qd_fill_pixpat))
+            break;
         write_pat(h, 0x000A, S_FILLPAT, st.fill_pat, fill);
         break;
     default:
