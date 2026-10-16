@@ -8244,6 +8244,15 @@ static void glue_PBCatMove(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBCatSearch(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCatSearch(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBClose(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14159,7 +14168,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x15u, "PBDeleteFileIDRef", CONV_REG, 0, 0, glue_PBDeleteFileIDRef},
     {0xA060, (int32_t)0x16u, "PBResolveFileIDRef", CONV_REG, 0, 0, glue_PBResolveFileIDRef},
     {0xA060, (int32_t)0x17u, "PBExchangeFiles", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x18u, "PBCatSearch", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x18u, "PBCatSearch", CONV_REG, 0, 0, glue_PBCatSearch},
     {0xA060, (int32_t)0x1Au, "PBOpenDF", CONV_REG, 0, 0, glue_PBOpenDF},
     {0xA060, (int32_t)0x1Au, "PBHOpenDF", CONV_REG, 0, 0, glue_PBHOpenDF},
     {0xA060, (int32_t)0x20u, "PBDTGetPath", CONV_REG, 0, 0, glue_PBDTGetPath},

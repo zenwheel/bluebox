@@ -716,6 +716,7 @@ int16_t tb_OpenResFile(gaddr fn);
 void tb_OpenRgn(void);
 int16_t tb_PBAllocate(gaddr pb, bool async);
 int16_t tb_PBCatMove(gaddr pb, bool async);
+int16_t tb_PBCatSearch(gaddr pb, bool async);
 int16_t tb_PBClose(gaddr pb, bool async);
 int16_t tb_PBCloseWD(gaddr pb, bool async);
 int16_t tb_PBControl(gaddr pbp, bool a);

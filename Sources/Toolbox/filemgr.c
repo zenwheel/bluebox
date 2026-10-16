@@ -1531,6 +1531,8 @@ int16_t tb_PBGetWDInfo(gaddr pb, bool async)
     return noErr;
 }
 
+static void cat_info_of_path(gaddr pb, const char *path);
+
 static int16_t get_cat_info(gaddr pb, char *path)
 {
     int16_t idx = (int16_t)rd16(pb + FileParam_ioFDirIndex_off);
@@ -1564,6 +1566,13 @@ static int16_t get_cat_info(gaddr pb, char *path)
         if (!exists(path))
             return fnfErrF;
     }
+    cat_info_of_path(pb, path);
+    return noErr;
+}
+
+/* A catalog record (CInfoPBRec) for a host path. */
+static void cat_info_of_path(gaddr pb, const char *path)
+{
     if (is_dir(path)) {
         int32_t id = dir_id_for(rel_of(path));
         wr8(pb + DirInfo_ioFlAttrib_off, 0x10);
@@ -1581,7 +1590,6 @@ static int16_t get_cat_info(gaddr pb, char *path)
         fill_file_info(pb, path, true);
         wr32(pb + HFileInfo_ioDirID_off, rd32(pb + FileParam_ioFlNum_off));
     }
-    return noErr;
 }
 
 int16_t tb_PBGetCatInfo(gaddr pb, bool async)
@@ -2269,6 +2277,146 @@ bool fm_app_for_document(const char *doc, char *app, size_t appsize)
             return true;
         }
     return false;
+}
+
+/* ---------------------------------------------------------------------- */
+/* PBCatSearch: the volume's files and folders matching ioSearchInfo1 (values)
+ * and ioSearchInfo2 (masks and upper bounds) under ioSearchBits, up to
+ * ioReqMatchCount at a time; ioCatPosition says where the next call goes on,
+ * and eofErr ends the search.  The Host folder (the whole host disk) is
+ * not searched. */
+
+enum {
+    fsSBPartialName = 1, fsSBFullName = 2, fsSBFlAttrib = 4, fsSBFlFndrInfo = 8, fsSBFlLgLen = 32,
+    fsSBFlPyLen = 64, fsSBFlRLgLen = 128, fsSBFlRPyLen = 256, fsSBFlCrDat = 512, fsSBFlMdDat = 1024,
+    fsSBFlBkDat = 2048, fsSBFlXFndrInfo = 4096, fsSBFlParID = 8192, fsSBNegate = 16384,
+    fsSBDrNmFls = 16, fsSBDrUsrWds = 8,
+};
+enum { CS_MatchPtr = 24, CS_ReqCount = 28, CS_ActCount = 32, CS_Bits = 36, CS_Info1 = 40, CS_Info2 = 44,
+       CS_Position = 52 };
+enum { CI_Attrib = 30, CI_FndrInfo = 32, CI_LgLen = 54, CI_PyLen = 58, CI_RLgLen = 64, CI_RPyLen = 68,
+       CI_CrDat = 72, CI_MdDat = 76, CI_BkDat = 80, CI_XFndrInfo = 84, CI_ParID = 100, CI_DrNmFls = 52 };
+
+static bool in_range(gaddr rec, gaddr lo, gaddr hi, uint32_t off)
+{
+    uint32_t v = rd32(rec + off);
+    return v >= rd32(lo + off) && v <= rd32(hi + off);
+}
+
+static bool masked_equal(gaddr rec, gaddr val, gaddr mask, uint32_t off, uint32_t n)
+{
+    for (uint32_t i = 0; i < n; i++)
+        if ((rd8(rec + off + i) ^ rd8(val + off + i)) & rd8(mask + off + i))
+            return false;
+    return true;
+}
+
+static bool cat_matches(gaddr rec, const uint8_t *name, int nlen, gaddr i1, gaddr i2, uint32_t bits)
+{
+    bool folder = rd8(rec + CI_Attrib) & 0x10;
+    bool ok = true;
+    if (bits & (fsSBPartialName | fsSBFullName)) {
+        gaddr np = rd32(i1 + IOParam_ioNamePtr_off);
+        int want = np ? rd8(np) : 0;
+        uint8_t w[256];
+        if (np)
+            gget(w, np + 1, (uint32_t)want);
+        if (bits & fsSBFullName) {
+            ok = want == nlen && !mac_char_cmp(w, name, nlen);
+        } else {
+            ok = false;
+            for (int k = 0; k + want <= nlen && !ok; k++)
+                ok = !mac_char_cmp(w, name + k, want);
+        }
+    }
+    if (ok && (bits & fsSBFlAttrib))
+        ok = !((rd8(rec + CI_Attrib) ^ rd8(i1 + CI_Attrib)) & rd8(i2 + CI_Attrib));
+    if (ok && (bits & fsSBFlFndrInfo))
+        ok = masked_equal(rec, i1, i2, CI_FndrInfo, 16);
+    if (ok && (bits & fsSBFlXFndrInfo))
+        ok = masked_equal(rec, i1, i2, CI_XFndrInfo, 16);
+    if (!folder) {
+        if (ok && (bits & fsSBFlLgLen))
+            ok = in_range(rec, i1, i2, CI_LgLen);
+        if (ok && (bits & fsSBFlPyLen))
+            ok = in_range(rec, i1, i2, CI_PyLen);
+        if (ok && (bits & fsSBFlRLgLen))
+            ok = in_range(rec, i1, i2, CI_RLgLen);
+        if (ok && (bits & fsSBFlRPyLen))
+            ok = in_range(rec, i1, i2, CI_RPyLen);
+    } else if (ok && (bits & fsSBDrNmFls)) {
+        uint16_t v = rd16(rec + CI_DrNmFls);
+        ok = v >= rd16(i1 + CI_DrNmFls) && v <= rd16(i2 + CI_DrNmFls);
+    }
+    if (ok && (bits & fsSBFlCrDat))
+        ok = in_range(rec, i1, i2, CI_CrDat);
+    if (ok && (bits & fsSBFlMdDat))
+        ok = in_range(rec, i1, i2, CI_MdDat);
+    if (ok && (bits & fsSBFlBkDat))
+        ok = in_range(rec, i1, i2, CI_BkDat);
+    if (ok && (bits & fsSBFlParID))
+        ok = in_range(rec, i1, i2, CI_ParID);
+    return (bits & fsSBNegate) ? !ok : ok;
+}
+
+typedef struct {
+    gaddr pb, rec, i1, i2, matches, name;
+    uint32_t bits, want, found, skip, seen;
+} cat_search;
+
+/* Depth first over a folder: false once enough matches are found. */
+static bool search_dir(cat_search *cs, const char *dir, int depth)
+{
+    DIR *d = opendir(dir);
+    if (!d || depth > 64) {
+        if (d)
+            closedir(d);
+        return true;
+    }
+    struct dirent *e;
+    bool go_on = true;
+    while (go_on && (e = readdir(d))) {
+        if (e->d_name[0] == '.')
+            continue; /* dot files and AppleDouble sidecars */
+        char path[PATH_MAX];
+        snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
+        if (cs->seen++ >= cs->skip) {
+            gmemset(cs->rec, 0, 108);
+            cat_info_of_path(cs->rec, path);
+            put_name(cs->name, path);
+            uint8_t name[256];
+            int n = rd8(cs->name);
+            gget(name, cs->name + 1, (uint32_t)n);
+            if (cat_matches(cs->rec, name, n, cs->i1, cs->i2, cs->bits)) {
+                fm_spec_for_path(path, cs->matches + cs->found * FSSpec_SIZEOF);
+                cs->found++;
+                if (cs->found >= cs->want)
+                    go_on = false;
+            }
+        }
+        if (go_on && is_dir(path))
+            go_on = search_dir(cs, path, depth + 1);
+    }
+    closedir(d);
+    return go_on;
+}
+
+int16_t tb_PBCatSearch(gaddr pb, bool async)
+{
+    gaddr matches = rd32(pb + CS_MatchPtr), i1 = rd32(pb + CS_Info1), i2 = rd32(pb + CS_Info2);
+    uint32_t want = rd32(pb + CS_ReqCount);
+    wr32(pb + CS_ActCount, 0);
+    if (!matches || !i1 || !i2 || !want)
+        return paramErr;
+    cat_search cs = { .pb = pb, .rec = tb_NewPtr(108, false, true), .i1 = i1, .i2 = i2, .matches = matches,
+                      .name = tb_NewPtr(256, false, true), .bits = rd32(pb + CS_Bits), .want = want,
+                      .skip = rd32(pb + CS_Position) };
+    bool done = search_dir(&cs, root_path, 0);
+    tb_DisposePtr(cs.rec);
+    tb_DisposePtr(cs.name);
+    wr32(pb + CS_ActCount, cs.found);
+    wr32(pb + CS_Position, cs.seen); /* entries looked at: where the next call starts */
+    return done ? eofErr : noErr;
 }
 
 /* ---------------------------------------------------------------------- */
