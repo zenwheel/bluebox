@@ -2369,6 +2369,30 @@ static void ppcglue_SetDialogTracksCursor(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_AppendDITL(ppc_cpu *c)
+{
+    gaddr a_arg0 = (gaddr)c->gpr[3];
+    gaddr a_arg1 = (gaddr)c->gpr[4];
+    int16_t a_arg2 = (int16_t)c->gpr[5];
+    tb_AppendDITL(a_arg0, a_arg1, a_arg2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShortenDITL(ppc_cpu *c)
+{
+    gaddr a_arg0 = (gaddr)c->gpr[3];
+    int16_t a_arg1 = (int16_t)c->gpr[4];
+    tb_ShortenDITL(a_arg0, a_arg1);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountDITL(ppc_cpu *c)
+{
+    gaddr a_arg0 = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountDITL(a_arg0);
+    c->pc = c->lr;
+}
+
 static void ppcglue_DILoad(ppc_cpu *c)
 {
     tb_DILoad();
@@ -22376,6 +22400,7 @@ const ppc_export ppc_exports[] = {
     {"AngleFromSlope", ppcglue_AngleFromSlope},
     {"AnimateEntry", ppcglue_AnimateEntry},
     {"AnimatePalette", ppcglue_AnimatePalette},
+    {"AppendDITL", ppcglue_AppendDITL},
     {"AppendMenu", ppcglue_AppendMenu},
     {"AppendResMenu", ppcglue_AppendResMenu},
     {"AssociateSection", ppctrap_AssociateSection},
@@ -22499,6 +22524,7 @@ const ppc_export ppc_exports[] = {
     {"Count1Resources", ppcglue_Count1Resources},
     {"Count1Types", ppcglue_Count1Types},
     {"CountADBs", ppctrap_CountADBs},
+    {"CountDITL", ppcglue_CountDITL},
     {"CountDragItemFlavors", ppctrap_CountDragItemFlavors},
     {"CountDragItems", ppctrap_CountDragItems},
     {"CountImageDescriptionExtensionType", ppctrap_CountImageDescriptionExtensionType},
@@ -24683,6 +24709,7 @@ const ppc_export ppc_exports[] = {
     {"SetupAIFFHeader", ppctrap_SetupAIFFHeader},
     {"SetupSndHeader", ppctrap_SetupSndHeader},
     {"ShieldCursor", ppcglue_ShieldCursor},
+    {"ShortenDITL", ppcglue_ShortenDITL},
     {"ShowControl", ppcglue_ShowControl},
     {"ShowCursor", ppcglue_ShowCursor},
     {"ShowDialogItem", ppcglue_ShowDialogItem},

@@ -1373,6 +1373,15 @@ static void g_DeleteGestaltValue(ppc_cpu *c)
     gestalt_delete(R(0));
     RETURN(0);
 }
+/* The alert sound's 'snd ' ID (Sound control panel): kept, not used. */
+static int16_t alert_beep_id = 1;
+static void g_GetAlertBeepResID(ppc_cpu *c) { RETURN((int32_t)alert_beep_id); }
+static void g_SetAlertBeepResID(ppc_cpu *c)
+{
+    alert_beep_id = (int16_t)R(0);
+    c->pc = c->lr;
+}
+
 /* YieldToAnyThread(): YieldToThread(kNoThreadID). */
 static void g_YieldToAnyThread(ppc_cpu *c)
 {
@@ -1617,6 +1626,7 @@ const ppc_export lib_exports[] = {
     { "fsmakefsspec", cs_fsmakefsspec }, { "opendeskacc", cs_opendeskacc }, { "opendriver", cs_opendriver },
     { "newwindow", cs_newwindow }, { "newcwindow", cs_newcwindow }, { "setwtitle", cs_setwtitle },
     { "getwtitle", cs_getwtitle }, { "newcontrol", cs_newcontrol },
+    { "GetAlertBeepResID", g_GetAlertBeepResID }, { "SetAlertBeepResID", g_SetAlertBeepResID },
     { "YieldToAnyThread", g_YieldToAnyThread }, { "NewGestaltValue", g_NewGestaltValue }, { "ReplaceGestaltValue", g_ReplaceGestaltValue },
     { "SetGestaltValue", g_SetGestaltValue }, { "DeleteGestaltValue", g_DeleteGestaltValue },
     { "openresfile", cs_openresfile }, { "createresfile", cs_createresfile },
@@ -1780,7 +1790,7 @@ const ppc_export lib_exports[] = {
     { "GetApplLimit", g_GetApplLimit }, { "GetGrayRgn", g_GetGrayRgn }, { "GetAppFont", g_GetAppFont },
     { "GetSysFont", g_GetSysFont }, { "GetDefFontSize", g_GetDefFontSize }, { "GetTime", g_GetTime },
     { "Microseconds", g_Microseconds }, { "ReadLocation", g_ReadLocation }, { "Control", g_Control },
-    { "Status", g_Status }, { "KillIO", g_KillIO }, { "CountDITL", g_CountDITL },
+    { "Status", g_Status }, { "KillIO", g_KillIO },
     { "StdFilterProc", g_StdFilterProc },
     { "X2Frac", g_X2Frac }, { "_BreakPoint", g_nothing }, { "c2pstr", g_c2pstr },
     { "c2pstrcpy", g_c2pstrcpy }, { "p2cstr", g_p2cstr }, { "p2cstrcpy", g_p2cstrcpy },

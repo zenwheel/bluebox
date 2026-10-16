@@ -2197,6 +2197,8 @@ static const char *disk_path(void)
 
 /* The System Folder is on the volume.  One kept beside it by earlier
  * versions moves in. */
+const char *fm_system_folder_host(void);
+
 static const char *system_folder_path(void)
 {
     if (!sys_folder[0]) {
@@ -2778,3 +2780,7 @@ bool fm_open_apple_menu_item(const uint8_t *name, int n)
         return false;
     return process_launch(full, NULL, 0);
 }
+
+/* The host folder of the System Folder (for the Code Fragment Manager's
+ * search of its Extensions). */
+const char *fm_system_folder_host(void) { return system_folder_path(); }

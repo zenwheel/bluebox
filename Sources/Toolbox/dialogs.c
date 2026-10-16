@@ -122,11 +122,13 @@ static void activate_edit(gaddr d, int n, int start, int end)
 /* ---------------------------------------------------------------------- */
 /* Creating and disposing */
 
-static void make_items(gaddr d)
+/* Make the items from `from` on: controls, text handles, icons, pictures;
+ * the first edit text item (if none is active yet) gets the TERec. */
+static void make_items_from(gaddr d, int from)
 {
     int n = item_count(d);
     int first_edit = 0;
-    for (int i = 1; i <= n; i++) {
+    for (int i = from; i <= n; i++) {
         gaddr it = item_at(d, i);
         int type = rd8(it + 12) & 0x7F, len = rd8(it + 13);
         gaddr made = 0;
@@ -164,9 +166,11 @@ static void make_items(gaddr d)
         }
         wr32(item_at(d, i), made); /* user items keep their (nil) procedure */
     }
-    wr16(d + DialogRecord_editField_off, (uint16_t)-1);
-    wr32(d + DialogRecord_textH_off, 0);
-    if (first_edit) {
+    if (from == 1) {
+        wr16(d + DialogRecord_editField_off, (uint16_t)-1);
+        wr32(d + DialogRecord_textH_off, 0);
+    }
+    if (first_edit && !rd32(d + DialogRecord_textH_off)) {
         gaddr r = tb_NewPtr(8, false, false);
         qrect_put(r, item_rect(d, first_edit));
         gaddr saved = qd_port();
@@ -179,6 +183,92 @@ static void make_items(gaddr d)
         activate_edit(d, first_edit, 0, 32767);
     }
 }
+
+static void make_items(gaddr d) { make_items_from(d, 1); }
+
+/* The size of an item list's items, after its count word. */
+static uint32_t ditl_items_size(gaddr p)
+{
+    int n = (int16_t)rd16(p) + 1;
+    gaddr at = p + 2;
+    for (int i = 0; i < n; i++)
+        at += ITEM_HEADER + ((rd8(at + 13) + 1u) & ~1u);
+    return at - (p + 2);
+}
+
+/* AppendDITL(dialog, theDITL, method): the list's items added after the
+ * dialog's, placed over the dialog (overlayDITL 0), to the right of it
+ * (appendDITLRight 1, the window growing to hold them), below it
+ * (appendDITLBottom 2), or relative to item -method's top left corner. */
+void tb_AppendDITL(gaddr d, gaddr ditl, int16_t method)
+{
+    gaddr items = items_handle(d);
+    if (!d || !items || !rd32(items) || !ditl || !rd32(ditl))
+        return;
+    int old = item_count(d), added = (int16_t)rd16(rd32(ditl)) + 1;
+    qrect port = qrect_get(d + GrafPort_portRect_off);
+    int dh = 0, dv = 0;
+    if (method == 1)
+        dh = port.right;
+    else if (method == 2)
+        dv = port.bottom;
+    else if (method < 0 && -method <= old) {
+        qrect r = item_rect(d, -method);
+        dh = r.left;
+        dv = r.top;
+    }
+    uint32_t have = (uint32_t)tb_GetHandleSize(items), more = ditl_items_size(rd32(ditl));
+    tb_SetHandleSize(items, (int32_t)(have + more));
+    if (rd16(LM_MemErr))
+        return;
+    gmemcpy(rd32(items) + have, rd32(ditl) + 2, more);
+    wr16(rd32(items), (uint16_t)(old + added - 1));
+    int right = port.right, bottom = port.bottom;
+    for (int i = old + 1; i <= old + added; i++) {
+        gaddr it = item_at(d, i);
+        qrect r = qrect_get(it + 4);
+        r.left += dh;
+        r.right += dh;
+        r.top += dv;
+        r.bottom += dv;
+        qrect_put(it + 4, r);
+        if (r.right + 8 > right)
+            right = r.right + 8;
+        if (r.bottom + 8 > bottom)
+            bottom = r.bottom + 8;
+    }
+    make_items_from(d, old + 1);
+    if (method == 1 || method == 2)
+        tb_SizeWindow(d, (int16_t)(right - port.left), (int16_t)(bottom - port.top), true);
+}
+
+/* ShortenDITL(dialog, numberItems): the last items go. */
+void tb_ShortenDITL(gaddr d, int16_t count)
+{
+    int n = item_count(d);
+    if (count <= 0 || !n)
+        return;
+    if (count > n)
+        count = (int16_t)n;
+    int keep = n - count;
+    for (int i = keep + 1; i <= n; i++) {
+        int type = item_type(d, i) & 0x7F;
+        gaddr h = item_handle(d, i);
+        if ((type & ctrlItem) && h)
+            tb_DisposeControl(h);
+        else if ((type == statText || type == editText) && h)
+            tb_DisposeHandle(h);
+        if (edit_item(d) == i) {
+            wr16(d + DialogRecord_editField_off, (uint16_t)-1);
+        }
+    }
+    gaddr items = items_handle(d);
+    gaddr end = keep ? item_at(d, keep) + ITEM_HEADER + ((rd8(item_at(d, keep) + 13) + 1u) & ~1u) : rd32(items) + 2;
+    tb_SetHandleSize(items, (int32_t)(end - rd32(items)));
+    wr16(rd32(items), (uint16_t)(keep - 1));
+}
+
+int16_t tb_CountDITL(gaddr d) { return (int16_t)item_count(d); }
 
 gaddr tb_NewDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag, int32_t rc,
                    gaddr items)

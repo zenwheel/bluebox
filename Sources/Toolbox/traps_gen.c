@@ -1560,6 +1560,17 @@ static void glue_AnimatePalette(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AppendDITL(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_arg2 = (int16_t)cpu_pop16(c);
+    gaddr a_arg1 = (gaddr)cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    tb_AppendDITL(a_arg0, a_arg1, a_arg2);
+    cpu_push32(c, ret);
+}
+
 static void glue_AppendMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2280,6 +2291,16 @@ static void glue_Count1Types(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_Count1Types();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CountDITL(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CountDITL(a_arg0);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -11972,6 +11993,16 @@ static void glue_ShieldCursor(cpu68k *c, uint16_t trapword)
     uint32_t a_p = (uint32_t)cpu_pop32(c);
     gaddr a_rp = (gaddr)cpu_pop32(c);
     tb_ShieldCursor(a_rp, a_p);
+    cpu_push32(c, ret);
+}
+
+static void glue_ShortenDITL(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_arg1 = (int16_t)cpu_pop16(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    tb_ShortenDITL(a_arg0, a_arg1);
     cpu_push32(c, ret);
 }
 

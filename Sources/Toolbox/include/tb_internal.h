@@ -254,6 +254,7 @@ extern struct ppc_cpu g_ppc;
 extern bool g_ppc_mode;
 bool cfm_has_ppc(void);
 void gestalt_powerpc(void);
+const char *fm_system_folder_host(void);
 bool gestalt_exists(uint32_t selector);
 void gestalt_delete(uint32_t selector);
 void wm_hide_menu_bar(bool hide);

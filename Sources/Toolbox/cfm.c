@@ -761,9 +761,14 @@ static uint8_t *file_cfrg(const mac_file *mf, size_t *len)
     uint8_t *out = NULL;
     for (size_t i = 0; i < idx.count && !out; i++)
         if (idx.entries[i].type == 0x63667267u /* cfrg */ && idx.entries[i].id == 0) {
-            *len = idx.entries[i].data_len;
-            out = malloc(*len ? *len : 1);
-            memcpy(out, rsrc_data(mf->rsrc, &idx, &idx.entries[i]), *len);
+            const uint8_t *data = rsrc_data(mf->rsrc, &idx, &idx.entries[i]);
+            size_t n = idx.entries[i].data_len;
+            /* A compressed one (Graphing Calculator's) comes out plain. */
+            if (rsrc_is_compressed(data, n) && rsrc_decompress(data, n, &out, len, err, sizeof err))
+                continue;
+            *len = n;
+            out = malloc(n ? n : 1);
+            memcpy(out, data, n);
         }
     rsrc_index_free(&idx);
     return out;
@@ -913,6 +918,12 @@ static int library_named(const char *name, char *err, size_t errlen)
         return load_from_file(frags[0].path, name, err, errlen);
     char path[1024];
     if (app_dir[0] && find_library_file(app_dir, name, 2, path, sizeof path))
+        return load_from_file(path, name, err, errlen);
+    /* Then the Extensions folder, as the Code Fragment Manager searched it
+     * (with folders in it: Microsoft's "MS Library Folder"). */
+    char ext[1100];
+    snprintf(ext, sizeof ext, "%s/Extensions", fm_system_folder_host());
+    if (find_library_file(ext, name, 2, path, sizeof path))
         return load_from_file(path, name, err, errlen);
     snprintf(err, errlen, "library %s not found", name);
     return -1;
