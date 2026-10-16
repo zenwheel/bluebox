@@ -227,6 +227,21 @@ void raw_LowerText(cpu68k *c, uint16_t tw)
     c->d[0] = 0;
 }
 
+/* LowercaseText, UppercaseText, StripDiacritics and UppercaseStripDiacritics:
+ * one ScriptUtil entry, the selector $400 for upper case and $800 for
+ * stripping marks (Roman script rules for every script). */
+void tb_TextUtilFunctions(gaddr textp, int16_t len, int16_t script, int16_t selector)
+{
+    for (int i = 0; i < len; i++) {
+        uint8_t ch = rd8(textp + (uint32_t)i);
+        if (selector & 0x0800)
+            ch = strip_mark(ch);
+        if ((selector & 0x0C00) != 0x0800)
+            ch = (selector & 0x0400) ? upper_mac(ch) : lower_mac(ch);
+        wr8(textp + (uint32_t)i, ch);
+    }
+}
+
 /* Extended parameter RAM: 256 bytes, kept for the session.  A0 the buffer,
  * D0 = count << 16 | first address. */
 static uint8_t xpram[256];

@@ -658,3 +658,19 @@
         register: A0
     trap: 0xA082
     returnreg: D0
+
+# LowercaseText and its siblings push their sub-selector last, after the
+# text, length and script (multiversal lists it first).
+- function:
+    name: TextUtilFunctions
+    args:
+      - name: textp
+        type: Ptr
+      - name: len
+        type: INTEGER
+      - name: script
+        type: ScriptCode
+      - name: selector
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0x800AFFB6

@@ -1174,6 +1174,7 @@ void tb_TextFace(int16_t thef);
 void tb_TextFont(int16_t f);
 void tb_TextMode(int16_t m);
 void tb_TextSize(int16_t s);
+void tb_TextUtilFunctions(gaddr textp, int16_t len, int16_t script, int16_t selector);
 int16_t tb_TextWidth(gaddr tb, int16_t fb, int16_t bc);
 int16_t tb_ThreadBeginCritical(void);
 int16_t tb_ThreadCurrentStackSpace(int32_t thread, gaddr freeStack);

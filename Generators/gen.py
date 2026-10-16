@@ -86,6 +86,10 @@ def load():
                 elif kind == "lowmem":
                     lowmems.append(v)
                 elif kind == "function":
+                    # A later definition (Generators/defs) replaces one of
+                    # the same name and selector.
+                    functions[:] = [f for f in functions
+                                    if not (f.get("name") == v.get("name") and f.get("selector") == v.get("selector"))]
                     functions.append(v)
                 elif kind == "dispatcher":
                     dispatchers[v["name"]] = v

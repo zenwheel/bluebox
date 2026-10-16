@@ -12925,6 +12925,18 @@ static void glue_TextSize(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TextUtilFunctions(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_selector = (int16_t)cpu_pop16(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    int16_t a_len = (int16_t)cpu_pop16(c);
+    gaddr a_textp = (gaddr)cpu_pop32(c);
+    tb_TextUtilFunctions(a_textp, a_len, a_script, a_selector);
+    cpu_push32(c, ret);
+}
+
 static void glue_TextWidth(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15177,7 +15189,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x8008001Eu, "DrawJust", CONV_STACK, 8, 0, glue_DrawJust},
     {0xA8B5, (int32_t)0x8008FFF0u, "LongSecondsToDate", CONV_STACK, 8, 0, glue_LongSecondsToDate},
     {0xA8B5, (int32_t)0x8008FFF2u, "LongDateToSeconds", CONV_STACK, 8, 0, glue_LongDateToSeconds},
-    {0xA8B5, (int32_t)0x800AFFB6u, "TextUtilFunctions", CONV_STACK, 10, 0, 0},
+    {0xA8B5, (int32_t)0x800AFFB6u, "TextUtilFunctions", CONV_STACK, 10, 0, glue_TextUtilFunctions},
     {0xA8B5, (int32_t)0x800C0020u, "MeasureJust", CONV_STACK, 12, 0, glue_MeasureJust},
     {0xA8B5, (int32_t)0x800E001Cu, "HiliteText", CONV_STACK, 12, 0, glue_HiliteText},
     {0xA8B5, (int32_t)0x8012001Au, "FindWord", CONV_STACK, 18, 0, glue_FindWord},
