@@ -7,11 +7,28 @@ struct AppSettings: Codable {
     var depth: Int?
     var cpu: Int?
     var scale: Double? /* host points per Mac pixel */
-    var isEmpty: Bool { depth == nil && cpu == nil && scale == nil }
+    var appearance: String? /* bw, native, or a theme's name */
+    var highlight: String? /* host (the host's selection colour) or #RRGGBB */
+    var isEmpty: Bool { depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil }
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), cpu \(cpu.map(String.init) ?? "default (68040)"), "
-            + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default")"
+            + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
+            + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)")"
     }
+
+    /// These settings, with any left unset taken from `fallback`.
+    func over(_ fallback: AppSettings?) -> AppSettings {
+        guard let f = fallback else { return self }
+        return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, scale: scale ?? f.scale,
+                           appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight)
+    }
+}
+
+/// An RGB highlight colour from "#RRGGBB" as 16-bit components.
+func parseHighlight(_ s: String) -> (UInt16, UInt16, UInt16)? {
+    guard s.hasPrefix("#"), s.count == 7, let v = UInt32(s.dropFirst(), radix: 16) else { return nil }
+    func c(_ shift: UInt32) -> UInt16 { UInt16((v >> shift) & 0xFF) * 0x101 }
+    return (c(16), c(8), c(0))
 }
 
 /// The settings every application gets unless its own say otherwise, kept
@@ -46,7 +63,7 @@ func settingsKey(_ app: String) -> String { (app as NSString).lastPathComponent 
 func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[settingsKey(app)] }
 
 /// classic set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
-///     [scale 1|1.5|2|default]
+///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -91,8 +108,18 @@ func setCommand(_ args: [String]) {
             } else {
                 fail("scale expects 1, 1.5, 2 or default")
             }
+        case "appearance":
+            s.appearance = value == "default" ? nil : value
+        case "highlight":
+            if value == "default" {
+                s.highlight = nil
+            } else if value == "host" || parseHighlight(value) != nil {
+                s.highlight = value
+            } else {
+                fail("highlight expects host, #RRGGBB or default")
+            }
         default:
-            fail("unknown setting \(name) (settings: depth, cpu, scale)")
+            fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight)")
         }
     }
     if !pairs.isEmpty { usage() }

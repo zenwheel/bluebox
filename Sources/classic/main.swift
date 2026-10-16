@@ -74,6 +74,10 @@ func usage() -> Never {
           68040.  --default sets them for every application without its own
           (classic set --default scale 2 doubles every classic window).  With no
           setting given, show them.
+      classic shell
+          Open the Classic shell: the library's applications to launch, with their
+          settings and the defaults for every application; drop archives on its
+          window (or its Dock icon) to import them.
       classic apps [--library dir]
           List the applications in the library and those installed on the classic
           Mac's disk (\(defaultDisk())).  run and install take
@@ -258,6 +262,7 @@ func runCommand(_ args: [String]) {
     var cpuModel: Int32?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
+    var appearanceGiven = false
     var themePath: String?
     var i = 0
     while i < args.count {
@@ -277,6 +282,7 @@ func runCommand(_ args: [String]) {
         case "--appearance":
             i += 1
             guard i < args.count else { usage() }
+            appearanceGiven = true
             switch args[i] {
             case "bw", "classic": appearance = Int32(MACHINE_APPEARANCE_BW)
             case "native": appearance = Int32(MACHINE_APPEARANCE_NATIVE)
@@ -363,9 +369,23 @@ func runCommand(_ args: [String]) {
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
     if interactive { reexecInNamedBundle(app: app) }
+    let saved = (settings(for: app) ?? AppSettings()).over(defaultSettings())
     if interactive {
-        let scale = scaleOption ?? settings(for: app)?.scale ?? defaultSettings()?.scale ?? 1
+        let scale = scaleOption ?? saved.scale ?? 1
         MainActor.assumeIsolated { displayScale = CGFloat(scale) }
+    }
+    if !appearanceGiven, let a = saved.appearance {
+        switch a {
+        case "bw", "classic": appearance = Int32(MACHINE_APPEARANCE_BW)
+        case "native": appearance = Int32(MACHINE_APPEARANCE_NATIVE)
+        default:
+            if let path = findTheme(a) {
+                themePath = path
+                appearance = Int32(MACHINE_APPEARANCE_THEME)
+            } else {
+                eprint("classic: no theme \"\(a)\" (from the settings); using the default appearance\n")
+            }
+        }
     }
     if interactive && !screenWindow {
         // Rootless: the Mac screen covers the host display's visible area.
@@ -377,7 +397,11 @@ func runCommand(_ args: [String]) {
     #endif
     machine_set_appearance(appearance)
     #if canImport(AppKit)
-    if interactive { MainActor.assumeIsolated { useHostSelectionColor() } }
+    if let rgb = saved.highlight.flatMap(parseHighlight) {
+        machine_set_hilite_color(rgb.0, rgb.1, rgb.2)
+    } else if interactive {
+        MainActor.assumeIsolated { useHostSelectionColor() }
+    }
     #endif
     if let themePath {
         var terr = [CChar](repeating: 0, count: 256)
@@ -385,10 +409,10 @@ func runCommand(_ args: [String]) {
     }
     if let screenDepth {
         machine_set_screen_depth(screenDepth)
-    } else if let d = settings(for: app)?.depth {
+    } else if let d = saved.depth {
         machine_set_screen_depth(Int32(d))
     }
-    if let m = cpuModel ?? settings(for: app)?.cpu.map(Int32.init) { machine_set_cpu(m) }
+    if let m = cpuModel ?? saved.cpu.map(Int32.init) { machine_set_cpu(m) }
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }
@@ -696,6 +720,9 @@ switch command {
 case "run": runCommand(rest)
 case "import": importCommand(rest)
 case "apps": appsCommand(rest)
+#if canImport(AppKit)
+case "shell": shellCommand(rest)
+#endif
 case "set": setCommand(rest)
 case "rsrc": rsrcCommand(rest)
 case "themes": themesCommand(rest)
