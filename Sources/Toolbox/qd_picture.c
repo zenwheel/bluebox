@@ -781,8 +781,10 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
         r.p = p + 14;
         if (rd16(r.p) == 0x0C00) {
             int16_t version = (int16_t)rd16(r.p + 2);
-            if (version == -2) /* extended version 2: native resolution frame */
-                m.src = qrect_get(r.p + 2 + 16);
+            /* Extended version 2: after version, reserved, hRes and vRes,
+             * the frame at the picture's own resolution. */
+            if (version == -2)
+                m.src = qrect_get(r.p + 2 + 12);
         }
     } else if (rd8(p + 10) == 0x11 && rd8(p + 11) == 0x01) {
         r.p = p + 12;

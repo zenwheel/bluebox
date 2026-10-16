@@ -163,6 +163,22 @@ extension BlueBox {
             #expect(!pixel(bits, 1, 1))    // corner outside the oval
         }
 
+        /// An extended version 2 picture (header version -2) draws in the
+        /// coordinates of its native-resolution frame.
+        @Test func extendedVersionTwoUsesItsNativeFrame() {
+            launchTestApp()
+            let bits = offscreen()
+            // frame 0,0,32,32 at 72 dpi; header -2, 144 dpi, native frame 0,0,64,64;
+            // paintRect 32,32,64,64 (the lower right quarter); end.
+            let pic = picture(cat(be16(0), be16(0), be16(0), be16(32), be16(32), be16(0x0011), be16(0x02FF),
+                                  be16(0x0C00), be16(0xFFFE), be16(0), be32(0x0090_0000), be32(0x0090_0000),
+                                  be16(0), be16(0), be16(64), be16(64), be32(0),
+                                  be16(0x0031), be16(32), be16(32), be16(64), be16(64), be16(0x00FF)))
+            draw(pic, [0, 0, 32, 32])
+            #expect(pixel(bits, 20, 20))
+            #expect(!pixel(bits, 10, 10))
+        }
+
         @Test func packedBitmapsAreDecoded() {
             launchTestApp()
             let bits = offscreen()
