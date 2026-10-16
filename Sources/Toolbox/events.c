@@ -6,6 +6,7 @@
  * then queued input, then update events, then null events.
  */
 #include <pthread.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -66,7 +67,13 @@ static void enqueue(int16_t what, uint32_t message)
     pthread_cond_broadcast(&arrived);
 }
 
-void machine_attach_host(bool attached) { host_attached = attached; }
+void events_start_stall_log(void);
+void machine_attach_host(bool attached)
+{
+    host_attached = attached;
+    if (attached)
+        events_start_stall_log();
+}
 
 /* ---- Scripted input (headless runs) ----
  * Each step is due at an instruction count and is applied between
@@ -365,8 +372,11 @@ static event null_event(void)
 }
 
 /* Take (or peek at) the next event matching mask. */
+static void note_poll(void);
+
 static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
 {
+    note_poll();
     pthread_mutex_lock(&lock);
     event e = null_event();
     bool found = false;
@@ -589,8 +599,69 @@ void tb_GetMouse(gaddr p)
     wr16(p + 2, (uint16_t)h);
 }
 
+/* ---------------------------------------------------------------------- */
+/* Stall log (BLUEBOX_STALL_LOG=file, with a host): when the program has not
+ * asked for events or the keyboard for half a second, what the emulator is
+ * doing is written every quarter second until it does again (the PC, the
+ * trap running, whether in an interrupt task, the instruction count). */
+
+static volatile uint64_t last_poll_ns;
+static FILE *stall_log;
+
+static uint64_t mono_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+}
+
+static void note_poll(void) { last_poll_ns = mono_ns(); }
+
+bool time_in_interrupt(void);
+const char *trap_name(uint16_t tw);
+
+static void *stall_watch(void *arg)
+{
+    bool stalled = false;
+    uint64_t since = 0;
+    for (;;) {
+        usleep(250000);
+        uint64_t now = mono_ns(), last = last_poll_ns;
+        if (!last || !g_cpu)
+            continue;
+        if (now - last > 500000000u) {
+            if (!stalled) {
+                stalled = true;
+                since = last;
+                fprintf(stall_log, "stall: no event or key poll for 0.5 s\n");
+            }
+            uint16_t tw = trap_current_word();
+            fprintf(stall_log, "  +%.2fs pc %08X trap %s%s icount %llu\n", (double)(now - since) / 1e9, g_cpu->pc,
+                    tw ? trap_name(tw) : "-", time_in_interrupt() ? " (in an interrupt task)" : "",
+                    (unsigned long long)g_cpu->icount);
+            fflush(stall_log);
+        } else if (stalled) {
+            stalled = false;
+            fprintf(stall_log, "stall over after %.2fs\n", (double)(last - since) / 1e9);
+            fflush(stall_log);
+        }
+    }
+    return arg;
+}
+
+void events_start_stall_log(void)
+{
+    const char *path = getenv("BLUEBOX_STALL_LOG");
+    if (!path || stall_log || !(stall_log = fopen(path, "w")))
+        return;
+    pthread_t t;
+    pthread_create(&t, NULL, stall_watch, NULL);
+    pthread_detach(t);
+}
+
 void tb_GetKeys(gaddr keys)
 {
+    note_poll();
     pthread_mutex_lock(&lock);
     gput(keys, keymap, 16);
     pthread_mutex_unlock(&lock);

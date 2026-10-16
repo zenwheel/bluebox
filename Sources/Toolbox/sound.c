@@ -500,6 +500,32 @@ int16_t tb_SndDisposeChannel(gaddr chan, int8_t quitnow)
     return noErr;
 }
 
+/* Wait until the channel's queue has room for one command, as the Sound
+ * Manager does for SndDoCommand without noWait: not for the whole queue to
+ * play (a music driver keeps seconds of notes queued ahead; waiting those
+ * out stalled the program, Prince of Persia every half minute). */
+static void wait_for_room(channel *c)
+{
+    for (;;) {
+        /* Interrupts go on while the program waits: a driver's VBL task may
+         * be what resumes or feeds the channel. */
+        time_pump();
+        pump(c);
+        if ((c->tail + 1) % QUEUE_LEN != c->head)
+            return;
+        if (!events_host_attached()) {
+            /* Headless, the clock follows instructions: on to when the
+             * command playing now ends. */
+            uint64_t t = now_ns();
+            machine_skip_time(c->busy_until > t ? c->busy_until - t : 1000000);
+        } else {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+        machine_advance_ticks();
+    }
+}
+
 int16_t tb_SndDoCommand(gaddr chan, gaddr cmdp, int8_t nowait)
 {
     channel *c = find(chan);
@@ -507,7 +533,7 @@ int16_t tb_SndDoCommand(gaddr chan, gaddr cmdp, int8_t nowait)
         return badChannel;
     int16_t err = enqueue(c, read_cmd(cmdp));
     if (err == queueFull && !nowait) {
-        drain(c);
+        wait_for_room(c);
         err = enqueue(c, read_cmd(cmdp));
     }
     return err;

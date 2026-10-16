@@ -160,7 +160,7 @@ func menuStep(_ step: String) -> (Int16, Int16)? {
 }
 
 /// US key codes for scripted keys: characters, and named keys.
-private let scriptKeyCodes: [String: Int32] = {
+let scriptKeyCodes: [String: Int32] = {
     var codes: [String: Int32] = [:]
     let rows: [(String, [Int32])] = [
         ("asdfhgzxcv", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
@@ -178,6 +178,13 @@ private let scriptKeyCodes: [String: Int32] = {
     }
     return codes
 }()
+
+/// The character a scripted key name types.
+func scriptKeyChar(_ name: String) -> Int32 {
+    name.count == 1 ? Int32(name.utf8.first!) :
+        ["return": 13, "tab": 9, "space": 32, "delete": 8, "escape": 27, "left": 28, "right": 29,
+         "up": 30, "down": 31][name] ?? 0
+}
 
 /// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item,
 /// keydown:K and keyup:K (K a character or return, tab, space, delete, escape,
@@ -222,9 +229,7 @@ func queueScript(_ script: [String], start: UInt64) {
         if let colon = step.firstIndex(of: ":"), ["keydown", "keyup"].contains(String(step[..<colon])) {
             let name = String(step[step.index(after: colon)...])
             guard let code = scriptKeyCodes[name] else { fail("unknown key: \(step)") }
-            let ch: Int32 = name.count == 1 ? Int32(name.utf8.first!) :
-                ["return": 13, "tab": 9, "space": 32, "delete": 8, "escape": 27, "left": 28, "right": 29,
-                 "up": 30, "down": 31][name] ?? 0
+            let ch = scriptKeyChar(name)
             add(step.hasPrefix("keydown") ? 3 : 4, ch, 0, code, after: 50_000)
             continue
         }

@@ -33,6 +33,7 @@ static struct {
 static gaddr vbls[MAX_TASKS];
 static uint32_t vbl_ticks; /* Ticks when VBL tasks last ran */
 static bool in_interrupt;
+bool time_in_interrupt(void) { return in_interrupt; }
 
 static uint64_t now(void) { return machine_time_ns(); }
 

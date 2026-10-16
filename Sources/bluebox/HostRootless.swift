@@ -534,6 +534,13 @@ func postScriptLive(_ script: [String]) {
             machine_choose_menu(menu, item)
             continue
         }
+        if let colon = step.firstIndex(of: ":"), ["keydown", "keyup"].contains(String(step[..<colon])) {
+            let name = String(step[step.index(after: colon)...])
+            if let code = scriptKeyCodes[name] {
+                machine_post_key(scriptKeyChar(name), code, 0, step.hasPrefix("keydown") ? 1 : 0, 0)
+            }
+            continue
+        }
         if let colon = step.firstIndex(of: ":"), let button = ["click": 2, "down": 1, "up": 0, "move": -1][step[..<colon]] {
             let xy = step[step.index(after: colon)...].split(separator: "/").compactMap { Int32($0) }
             guard xy.count == 2 else { continue }
