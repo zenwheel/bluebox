@@ -600,6 +600,13 @@ static void repaint_all(void)
     hrgn_free(&all);
 }
 
+
+/* Repaint the whole screen as if everything had been uncovered: desktop and
+ * frames drawn, and every window's content erased and queued for update
+ * (the redraw check: what the program then draws should match what was
+ * there). */
+void machine_redraw_all(void) { repaint_all(); }
+
 /* ---------------------------------------------------------------------- */
 /* Activation */
 

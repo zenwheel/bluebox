@@ -49,6 +49,10 @@ func usage() -> Never {
           --scale S  host points per Mac pixel: 1, 1.5 or 2 (default 1, or the app's or the
                      default setting), so classic interfaces are bigger on modern displays
           --screenshot P  write the screen to PNG file P when the run ends
+          --redraw-check P  when the run ends waiting, repaint everything, let the program
+                     redraw (5 million instructions) and compare: the differences go to
+                     PNG file P, with P-before.png and P-after.png (screens where
+                     incremental drawing missed something)
           --print-to F  print to PDF file F instead of the print panel (headless runs)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
                      Kaleidoscope scheme file, an archive of schemes (.sit etc.,
@@ -259,6 +263,7 @@ func runCommand(_ args: [String]) {
     var screenshot: String?
     var screenDepth: Int32?
     var scaleOption: Double?
+    var redrawCheck: String?
     var cpuModel: Int32?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
@@ -297,6 +302,10 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             printTo = args[i]
+        case "--redraw-check":
+            i += 1
+            guard i < args.count else { usage() }
+            redrawCheck = args[i]
         case "--scale":
             i += 1
             guard i < args.count, let v = Double(args[i]), [1, 1.5, 2].contains(v) else {
@@ -486,6 +495,9 @@ func runCommand(_ args: [String]) {
 
     if let screenshot {
         if machine_screenshot(screenshot) { print("screenshot: \(screenshot)") } else { eprint("could not write \(screenshot)\n") }
+    }
+    if let redrawCheck, machine_waiting_for_input() || status == RUN_LIMIT {
+        redrawCheckReport(redrawCheck)
     }
 
     var regs = [CChar](repeating: 0, count: 512)
@@ -709,6 +721,45 @@ extension String {
     func padding(_ width: Int) -> String {
         count >= width ? self : self + String(repeating: " ", count: width - count)
     }
+}
+
+/// The redraw check: what is on the screen now, against what the program
+/// draws after everything is uncovered and updated again.  Programs that
+/// animate differ anyway; static screens should not.
+func redrawCheckReport(_ out: String) {
+    var w: Int32 = 0, h: Int32 = 0
+    machine_screen_size(&w, &h)
+    let n = Int(w) * Int(h)
+    var before = [UInt32](repeating: 0, count: n), after = before
+    before.withUnsafeMutableBytes { machine_screen_rgba(0, 0, w, h, $0.baseAddress!.assumingMemoryBound(to: UInt8.self)) }
+    machine_redraw_all()
+    machine_continue(5_000_000)
+    _ = machine_run(5_000_000)
+    after.withUnsafeMutableBytes { machine_screen_rgba(0, 0, w, h, $0.baseAddress!.assumingMemoryBound(to: UInt8.self)) }
+    var differ = 0
+    var minX = Int(w), minY = Int(h), maxX = -1, maxY = -1
+    var diff = after
+    for i in 0..<n {
+        if before[i] != after[i] {
+            differ += 1
+            let x = i % Int(w), y = i / Int(w)
+            minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+            diff[i] = 0xFF0000FF // red (RGBA bytes, little-endian)
+        } else {
+            // Dimmed: the unchanged screen for context.
+            let b = withUnsafeBytes(of: after[i]) { Array($0) }
+            diff[i] = UInt32(b[0] / 3 + 170) | UInt32(b[1] / 3 + 170) << 8 | UInt32(b[2] / 3 + 170) << 16 | 0xFF00_0000
+        }
+    }
+    if differ == 0 {
+        print("redraw check: identical")
+        return
+    }
+    print("redraw check: \(differ) pixels differ in \(minX),\(minY)-\(maxX + 1),\(maxY + 1); before and after in \(out)")
+    diff.withUnsafeBytes { _ = machine_write_png(out, $0.baseAddress!.assumingMemoryBound(to: UInt8.self), w, h) }
+    let base = (out as NSString).deletingPathExtension
+    before.withUnsafeBytes { _ = machine_write_png(base + "-before.png", $0.baseAddress!.assumingMemoryBound(to: UInt8.self), w, h) }
+    after.withUnsafeBytes { _ = machine_write_png(base + "-after.png", $0.baseAddress!.assumingMemoryBound(to: UInt8.self), w, h) }
 }
 
 // MARK: - Main

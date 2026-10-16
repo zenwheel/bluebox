@@ -300,18 +300,27 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
 bool machine_screenshot(const char *path)
 {
     int w = g_screen_width, h = g_screen_height;
+    uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
+    if (!rgba)
+        return false;
+    machine_screen_rgba(0, 0, w, h, rgba);
+    bool ok = machine_write_png(path, rgba, w, h);
+    free(rgba);
+    return ok;
+}
+
+/* An RGBA image (alpha ignored) as an uncompressed PNG. */
+bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h)
+{
     size_t raw_row = (size_t)w * 3 + 1; /* filter byte + RGB */
     size_t raw_len = raw_row * (size_t)h;
     uint8_t *raw = malloc(raw_len);
-    uint8_t *rgba = malloc((size_t)w * 4);
     for (int y = 0; y < h; y++) {
         uint8_t *row = raw + (size_t)y * raw_row;
         row[0] = 0;
-        machine_screen_rgba(0, y, w, 1, rgba);
         for (int x = 0; x < w; x++)
-            memcpy(row + 1 + x * 3, rgba + x * 4, 3);
+            memcpy(row + 1 + x * 3, rgba + ((size_t)y * (size_t)w + (size_t)x) * 4, 3);
     }
-    free(rgba);
     /* zlib stream of stored blocks. */
     size_t nblocks = raw_len / 65535 + 1;
     size_t zlen = 2 + raw_len + nblocks * 5 + 4;

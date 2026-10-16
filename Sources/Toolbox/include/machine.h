@@ -46,6 +46,11 @@ void machine_set_cpu(int model);
 bool machine_halted(void);
 /* Write the screen to a PNG file. */
 bool machine_screenshot(const char *path);
+bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h);
+/* The redraw check: repaint everything (every window's content erased and
+ * queued for update), and go on running after the instruction limit. */
+void machine_redraw_all(void);
+void machine_continue(uint64_t more);
 
 /* Override a Gestalt selector (before launch). */
 void gestalt_set(uint32_t selector, uint32_t value);

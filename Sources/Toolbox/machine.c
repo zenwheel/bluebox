@@ -457,6 +457,15 @@ run_status machine_run(uint64_t max)
 }
 
 const char *machine_halt_reason(void) { return cpu.halt_reason; }
+
+/* Go on after the instruction limit stopped a run: more instructions, the
+ * same machine (the redraw check). */
+void machine_continue(uint64_t more)
+{
+    cpu.halted = false;
+    cpu.halt_reason[0] = 0;
+    machine_set_instruction_limit(cpu.icount + more);
+}
 bool machine_halted(void) { return cpu.halted; }
 uint64_t machine_instruction_count(void) { return cpu.icount; }
 uint32_t machine_pc(void) { return cpu.pc; }
