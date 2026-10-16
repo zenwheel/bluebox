@@ -172,7 +172,9 @@ static bool open_system_file(void)
         { fourcc("itl0"), 0, NULL, RES_SYS_HEAP, itl0, sizeof itl0 },
         { fourcc("itl1"), 0, NULL, RES_SYS_HEAP, itl1, sizeof itl1 },
     };
-    size_t n = 8;
+    size_t n = 0;
+    while (n < 512 && specs[n].type) /* the entries above */
+        n++;
     /* Standard cursors and alert icons (Generators/sysres.py). */
     for (unsigned i = 0; i < sysres_count && n < 512; i++)
         specs[n++] = (rsrc_spec){ sysres[i].type, sysres[i].id, NULL, RES_SYS_HEAP | RES_PURGEABLE, sysres[i].data,
