@@ -101,6 +101,40 @@ func shellTree(_ apps: [ShellApp], prefix: String = "") -> [ShellNode] {
         + (nodes + folderNodes.filter { $0.app != nil }).sorted(by: byName)
 }
 
+/// The tree's rows: folders that open and close (remembered), and
+/// applications tagged for the sidebar's selection.
+struct ShellNodeRows: View {
+    @ObservedObject var model: ShellModel
+    let nodes: [ShellNode]
+
+    var body: some View {
+        ForEach(nodes) { node in
+            if let app = node.app {
+                HStack {
+                    Image(nsImage: model.icon(app)).resizable().interpolation(.none)
+                        .frame(width: 16, height: 16)
+                    Text(app.name)
+                    if model.running[app.path] != nil {
+                        Circle().fill(Color.green).frame(width: 6, height: 6).help("Running")
+                    }
+                }
+                .help(app.folder.isEmpty ? app.name : app.folder + "/" + app.name)
+                .tag(ShellItem.app(app))
+            } else {
+                DisclosureGroup(isExpanded: Binding(
+                    get: { model.expanded.contains(node.id) },
+                    set: { open in
+                        if open { model.expanded.insert(node.id) } else { model.expanded.remove(node.id) }
+                    })) {
+                    ShellNodeRows(model: model, nodes: node.children ?? [])
+                } label: {
+                    Label(node.name, systemImage: "folder").lineLimit(1)
+                }
+            }
+        }
+    }
+}
+
 enum ShellItem: Hashable {
     case defaults
     case systemFolder
@@ -109,6 +143,10 @@ enum ShellItem: Hashable {
 
 @MainActor final class ShellModel: ObservableObject {
     @Published var apps: [ShellApp] = []
+    /// The sidebar's open folders, kept between runs.
+    @Published var expanded: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "expanded") ?? []) {
+        didSet { UserDefaults.standard.set(Array(expanded), forKey: "expanded") }
+    }
     @Published var themes: [String] = []
     @Published var importing: [String] = []
     @Published var messages: [String] = []
@@ -318,22 +356,7 @@ struct ShellView: View {
                     let here = model.apps.filter { $0.place == place }
                     if !here.isEmpty {
                         Section(place) {
-                            OutlineGroup(shellTree(here), children: \.children) { node in
-                                if let app = node.app {
-                                    HStack {
-                                        Image(nsImage: model.icon(app)).resizable().interpolation(.none)
-                                            .frame(width: 16, height: 16)
-                                        Text(app.name)
-                                        if model.running[app.path] != nil {
-                                            Circle().fill(Color.green).frame(width: 6, height: 6).help("Running")
-                                        }
-                                    }
-                                    .help(app.folder.isEmpty ? app.name : app.folder + "/" + app.name)
-                                    .tag(ShellItem.app(app))
-                                } else {
-                                    Label(node.name, systemImage: "folder").lineLimit(1)
-                                }
-                            }
+                            ShellNodeRows(model: model, nodes: shellTree(here))
                         }
                     }
                 }
