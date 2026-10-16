@@ -116,6 +116,41 @@ extension BlueBox {
             #expect(hi(color(1, 1)) == [0x80, 0, 0])
         }
 
+        /// A colour cursor reaches the host with its colours.
+        @Test func colourCursorsKeepTheirColours() {
+            _ = offscreen()
+            // CCrsr (96 bytes), then a PixMap (50), 16 rows of 8-bit pixels
+            // (rowBytes 16), and a two-entry colour table: offsets, as in a
+            // 'crsr' resource.
+            let mapOff = 96, dataOff = 96 + 50, ctOff = 96 + 50 + 256
+            let h = tb_NewHandle(Int32(ctOff + 8 + 16), false, true)
+            let c = rd32(h)
+            wr16(c, 0x8001)
+            wr32(c + 2, UInt32(mapOff))
+            wr32(c + 6, UInt32(dataOff))
+            for i in 0..<32 { wr8(c + 52 + UInt32(i), 0xFF) } // mask: every pixel
+            wr16(c + 84, 3); wr16(c + 86, 4)                  // hot spot v, h
+            let pm = c + UInt32(mapOff)
+            wr16(pm + UInt32(PixMap_rowBytes_off), 0x8010)
+            wr16(pm + UInt32(PixMap_bounds_off) + 4, 16); wr16(pm + UInt32(PixMap_bounds_off) + 6, 16)
+            wr16(pm + UInt32(PixMap_pixelSize_off), 8)
+            wr32(pm + UInt32(PixMap_pmTable_off), UInt32(ctOff))
+            wr8(c + UInt32(dataOff) + 1, 1)                    // pixel (1, 0) is entry 1
+            let ct = c + UInt32(ctOff)
+            wr16(ct + 6, 1)
+            wr16(ct + 8, 0); wr16(ct + 10, 0); wr16(ct + 12, 0xFFFF); wr16(ct + 14, 0)        // 0: green
+            wr16(ct + 16, 1); wr16(ct + 18, 0xFFFF); wr16(ct + 20, 0); wr16(ct + 22, 0)       // 1: red
+            tb_SetCCursor(h)
+            var state = machine_cursor()
+            _ = machine_cursor_state(&state)
+            #expect(state.color)
+            #expect(state.hot_h == 4 && state.hot_v == 3)
+            let px = withUnsafeBytes(of: state.rgba) { Array($0) }
+            #expect(Array(px[0..<4]) == [0, 255, 0, 255])
+            #expect(Array(px[4..<8]) == [255, 0, 0, 255])
+            tb_InitCursor()
+        }
+
         @Test func polygonsPaintTheirInside() {
             _ = offscreen()
             let poly = tb_OpenPoly()

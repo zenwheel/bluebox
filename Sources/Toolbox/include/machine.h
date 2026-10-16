@@ -138,6 +138,8 @@ typedef struct {
     uint8_t data[32], mask[32];
     int16_t hot_h, hot_v;
     uint32_t obscures;
+    bool color;          /* a colour cursor: rgba holds its image */
+    uint8_t rgba[16 * 16 * 4];
 } machine_cursor;
 uint32_t machine_cursor_state(machine_cursor *out);
 

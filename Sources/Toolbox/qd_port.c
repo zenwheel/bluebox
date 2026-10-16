@@ -745,8 +745,80 @@ static void set_image(gaddr data, gaddr mask, gaddr hot)
             arrow = false;
     cursor.arrow = arrow && cursor.hot_v == 1 && cursor.hot_h == 1;
     cursor.kind = cursor.arrow ? MACHINE_CURSOR_ARROW : standard_kind(&cursor);
+    cursor.color = false;
     cursor_version++;
     pthread_mutex_unlock(&cursor_lock);
+}
+
+/* A CCrsr's pixel map and pixels: handles, or (in a 'crsr' resource as
+ * GetCCursor copies it) offsets from the record's start. */
+static gaddr crsr_part(gaddr c, uint32_t field, uint32_t size)
+{
+    uint32_t v = rd32(c + field);
+    if (!v)
+        return 0;
+    if (v < size)
+        return c + v;
+    return rd32(v);
+}
+
+/* The colours of a colour cursor (crsrType $8001) as RGBA: its pixels where
+ * the mask is set; where it isn't, black for pixels that invert, else clear. */
+static bool color_image(gaddr c, uint32_t size, uint8_t rgba[16 * 16 * 4])
+{
+    if (rd16(c) != 0x8001)
+        return false;
+    gaddr pm = crsr_part(c, 2, size), data = crsr_part(c, 6, size);
+    if (!pm || !data)
+        return false;
+    int depth = (int16_t)rd16(pm + PixMap_pixelSize_off);
+    uint32_t rb = rd16(pm + PixMap_rowBytes_off) & 0x3FFF;
+    if (depth < 1 || depth > 32 || !rb)
+        return false;
+    uint32_t ct = rd32(pm + PixMap_pmTable_off);
+    gaddr ctab_ptr = ct && ct < size ? c + ct : ct ? rd32(ct) : 0;
+    for (int y = 0; y < 16; y++)
+        for (int x = 0; x < 16; x++) {
+            uint8_t *o = rgba + (y * 16 + x) * 4;
+            int i = y * 2 + x / 8, bit = 0x80 >> (x % 8);
+            bool m = rd8(c + 52 + (uint32_t)i) & bit, d = rd8(c + 20 + (uint32_t)i) & bit;
+            if (!m) {
+                o[0] = o[1] = o[2] = 0;
+                o[3] = d ? 255 : 0;
+                continue;
+            }
+            gaddr row = data + (uint32_t)y * rb;
+            uint32_t v;
+            if (depth == 32)
+                v = rd32(row + (uint32_t)x * 4);
+            else if (depth == 16)
+                v = rd16(row + (uint32_t)x * 2);
+            else {
+                int b = x * depth;
+                v = (uint32_t)(rd8(row + (uint32_t)(b >> 3)) >> (8 - depth - (b & 7))) & ((1u << depth) - 1);
+            }
+            uint16_t rgb[3] = { 0, 0, 0 };
+            if (depth >= 16) {
+                qd_px_rgb(depth, 0, v, rgb);
+            } else if (ctab_ptr) {
+                /* The colour table's entries: value, r, g, b. */
+                int n = rd16(ctab_ptr + 6) + 1;
+                for (int k = 0; k < n; k++) {
+                    gaddr e = ctab_ptr + 8 + (uint32_t)k * 8;
+                    if (rd16(e) == v || (rd16(ctab_ptr + 4) & 0x8000 && k == (int)v)) {
+                        rgb[0] = rd16(e + 2);
+                        rgb[1] = rd16(e + 4);
+                        rgb[2] = rd16(e + 6);
+                        break;
+                    }
+                }
+            }
+            o[0] = (uint8_t)(rgb[0] >> 8);
+            o[1] = (uint8_t)(rgb[1] >> 8);
+            o[2] = (uint8_t)(rgb[2] >> 8);
+            o[3] = 255;
+        }
+    return true;
 }
 
 void tb_InitCursor(void)
@@ -754,6 +826,7 @@ void tb_InitCursor(void)
     pthread_mutex_lock(&cursor_lock);
     cursor.arrow = true;
     cursor.kind = MACHINE_CURSOR_ARROW;
+    cursor.color = false;
     cursor_level = 0;
     shield_depth = 0;
     cursor_changed();
@@ -767,11 +840,24 @@ void tb_SetCursor(gaddr cp)
         set_image(cp, cp + 32, cp + 64);
 }
 
-/* CCrsr: its black-and-white version (crsr1Data, crsrMask, crsrHotSpot). */
-void cursor_set_color(gaddr c)
+/* CCrsr: its black-and-white version (crsr1Data, crsrMask, crsrHotSpot),
+ * and its colours. */
+void cursor_set_color(gaddr ch)
 {
-    if (c)
-        set_image(c + 20, c + 52, c + 84);
+    gaddr c = ch ? rd32(ch) : 0;
+    if (!c)
+        return;
+    set_image(c + 20, c + 52, c + 84);
+    uint8_t rgba[sizeof cursor.rgba];
+    if (!color_image(c, (uint32_t)tb_GetHandleSize(ch), rgba))
+        return;
+    pthread_mutex_lock(&cursor_lock);
+    memcpy(cursor.rgba, rgba, sizeof rgba);
+    cursor.color = true;
+    cursor.arrow = false;
+    cursor.kind = MACHINE_CURSOR_CUSTOM;
+    cursor_version++;
+    pthread_mutex_unlock(&cursor_lock);
 }
 
 void tb_HideCursor(void)

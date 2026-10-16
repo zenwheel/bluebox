@@ -225,8 +225,9 @@ func nameProcess(_ name: String) {
                 obscures = state.obscures
                 NSCursor.setHiddenUntilMouseMoves(true)
             }
-            let key = [Int(state.kind), Int(state.hot_h), Int(state.hot_v)]
+            var key = [Int(state.kind), Int(state.hot_h), Int(state.hot_v)]
                 + withUnsafeBytes(of: state.data) { $0.map(Int.init) } + withUnsafeBytes(of: state.mask) { $0.map(Int.init) }
+            if state.color { key += withUnsafeBytes(of: state.rgba) { $0.map(Int.init) } }
             if key != imageKey {
                 imageKey = key
                 setImage()
@@ -256,7 +257,8 @@ func nameProcess(_ name: String) {
     }
 
     /// The cursor's own 16x16 image: black, white or clear by data and mask
-    /// (data outside the mask, which inverts, shown black).
+    /// (data outside the mask, which inverts, shown black), or a colour
+    /// cursor's colours.
     /// At the display scale, in whole device pixels (nearest neighbour), so it
     /// matches the windows it points at.
     private func classicImage() -> NSCursor {
@@ -268,9 +270,15 @@ func nameProcess(_ name: String) {
         let px = rep.bitmapData!
         let data = withUnsafeBytes(of: state.data) { Array($0) }
         let mask = withUnsafeBytes(of: state.mask) { Array($0) }
+        let rgba = state.color ? withUnsafeBytes(of: state.rgba) { Array($0) } : nil
         for py in 0..<n {
             for pxl in 0..<n {
                 let x = pxl * 16 / n, y = py * 16 / n
+                if let rgba {
+                    let o = (py * n + pxl) * 4, s = (y * 16 + x) * 4
+                    for k in 0..<4 { px[o + k] = rgba[s + k] }
+                    continue
+                }
                 let bit = UInt8(0x80 >> (x % 8)), i = y * 2 + x / 8
                 let d = data[i] & bit != 0, m = mask[i] & bit != 0
                 let o = (py * n + pxl) * 4

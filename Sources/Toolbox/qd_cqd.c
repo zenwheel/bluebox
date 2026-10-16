@@ -434,7 +434,7 @@ void cursor_set_color(gaddr c);
 void tb_SetCCursor(gaddr c)
 {
     if (c && rd32(c))
-        cursor_set_color(rd32(c));
+        cursor_set_color(c);
 }
 void tb_DisposeCCursor(gaddr c)
 {
