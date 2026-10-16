@@ -254,6 +254,7 @@ extern struct ppc_cpu g_ppc;
 extern bool g_ppc_mode;
 bool cfm_has_ppc(void);
 void gestalt_powerpc(void);
+void wm_hide_menu_bar(bool hide);
 bool cfm_launch(const char *app_path, char *err, size_t errlen);
 /* Load a PEF container in memory (an accelerated code resource's) once;
  * returns its main transition vector, or 0. */

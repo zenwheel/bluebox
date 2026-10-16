@@ -33,6 +33,9 @@ extern const unsigned lib_export_count;
 void (*cfm_export_fn(const char *name))(ppc_cpu *);
 /* The address of an exported data symbol (allocated on first use), or 0. */
 gaddr ppc_data_export(const char *name);
+/* DrawSprocket (drawsprocket.c). */
+extern const ppc_export dsp_exports[];
+extern const unsigned dsp_export_count;
 /* Mixed Mode (mixedmode.c). */
 extern const ppc_export mm_exports[];
 extern const unsigned mm_export_count;

@@ -130,6 +130,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < sizeof manual_exports / sizeof manual_exports[0]; i++)
         if (!strcmp(manual_exports[i].name, name))
             return manual_exports[i].fn;
+    for (unsigned i = 0; i < dsp_export_count; i++)
+        if (!strcmp(dsp_exports[i].name, name))
+            return dsp_exports[i].fn;
     for (unsigned i = 0; i < lib_export_count; i++)
         if (!strcmp(lib_exports[i].name, name))
             return lib_exports[i].fn;
@@ -418,7 +421,7 @@ static const char *const native_libraries[] = {
     "InterfaceLib", "MathLib", "StdCLib", "QuickTimeLib", "DragLib", "ThreadsLib", "AppearanceLib",
     "PrivateInterfaceLib", "ObjectSupportLib", "AppleScriptLib", "TranslationLib", "ControlStripLib",
     "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
-    "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib",
+    "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib",
 };
 
 static bool core_library(const char *name)

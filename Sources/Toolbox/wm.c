@@ -718,6 +718,50 @@ void wdef124_native(cpu68k *c, uint16_t tw)
 
 static void gray_rgn(hrgn *out) { rgn_read(rd32(LM_GrayRgn), out); }
 
+/* The desktop (GrayRgn): the screen below a menu bar this high, with
+ * rounded corners; all of it with none. */
+static void set_desk(int mbar)
+{
+    hrgn gray, bar;
+    hrgn_init(&gray);
+    hrgn_init(&bar);
+    if (mbar) {
+        qd_rrect_region(&gray, (qrect){ 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width }, 16, 16);
+        hrgn_rect(&bar, (qrect){ 0, 0, (int16_t)mbar, (int16_t)g_screen_width });
+        hrgn_op(&gray, &gray, &bar, RGN_DIFF);
+    } else {
+        hrgn_rect(&gray, (qrect){ 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width });
+    }
+    gaddr gh = rd32(LM_GrayRgn);
+    if (!gh) {
+        gh = tb_NewHandle(10, true, false);
+        wr32(LM_GrayRgn, gh);
+    }
+    rgn_write(gh, &gray);
+    hrgn_free(&gray);
+    hrgn_free(&bar);
+}
+
+/* The menu bar hidden, as a full-screen game has it (MBarHeight 0, the
+ * desk the whole screen), and shown again at the height it had. */
+void wm_hide_menu_bar(bool hide)
+{
+    static int16_t saved_height;
+    if (hide) {
+        if (!rd16(LM_MBarHeight))
+            return;
+        saved_height = (int16_t)rd16(LM_MBarHeight);
+        wr16(LM_MBarHeight, 0);
+        set_desk(0);
+    } else {
+        if (!saved_height || rd16(LM_MBarHeight))
+            return;
+        wr16(LM_MBarHeight, (uint16_t)saved_height);
+        set_desk(saved_height);
+        tb_DrawMenuBar();
+    }
+}
+
 void display_windows_changed(void);
 
 /* Recompute every window's visRgn (local coordinates). */
@@ -1895,19 +1939,12 @@ void tb_InitWindows(void)
     int mbar = (int16_t)rd16(LM_MBarHeight) ? (int16_t)rd16(LM_MBarHeight) : 20;
     wr16(LM_MBarHeight, (uint16_t)mbar);
 
-    /* Desktop: the screen below the menu bar, with rounded corners. */
+    set_desk(mbar);
     hrgn gray, bar;
     hrgn_init(&gray);
     hrgn_init(&bar);
-    qd_rrect_region(&gray, (qrect){ 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width }, 16, 16);
+    gray_rgn(&gray);
     hrgn_rect(&bar, (qrect){ 0, 0, (int16_t)mbar, (int16_t)g_screen_width });
-    hrgn_op(&gray, &gray, &bar, RGN_DIFF);
-    gaddr gh = rd32(LM_GrayRgn);
-    if (!gh) {
-        gh = tb_NewHandle(10, true, false);
-        wr32(LM_GrayRgn, gh);
-    }
-    rgn_write(gh, &gray);
 
     /* Paint: black screen corners, white menu bar, gray desk. */
     gaddr saved = qd_port();
