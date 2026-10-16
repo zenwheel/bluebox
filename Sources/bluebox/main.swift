@@ -44,9 +44,10 @@ func usage() -> Never {
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
           --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
-                     application can still switch depth itself with SetDepth).  Without either, a
-                     game known to need another depth gets it, and one whose alert asks for
-                     another is started again at that depth, kept as its setting
+                     application can still switch depth itself with SetDepth).  Without --depth,
+                     a game known to need another depth gets it (unless it has a depth setting),
+                     and one whose alert asks for another is started again at that depth, which
+                     replaces its setting
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
           --scale S  host points per Mac pixel: 1, 1.5 or 2 (default 1, or the app's or the
                      default setting), so classic interfaces are bigger on modern displays
@@ -387,10 +388,13 @@ func runCommand(_ args: [String]) {
     // The application's settings over the defaults; a program known to
     // refuse the default depth gets one it accepts.
     var saved = (settings(for: app) ?? AppSettings()).over(defaultSettings())
-    if screenDepth == nil, settings(for: app)?.depth == nil {
-        if let d = requiredDepth(application: app, over: saved.depth) { saved.depth = d }
-        // Nobody chose this depth for it: if it says it needs another, it
-        // runs again at that one.
+    if screenDepth == nil {
+        if settings(for: app)?.depth == nil, let d = requiredDepth(application: app, over: saved.depth) {
+            saved.depth = d
+        }
+        // Not given on the command line: if it says it needs another depth
+        // (even one set for it, which it cannot run at), it runs again at
+        // that one, kept as its setting.
         depthRelaunch = (app, !census && screenshot == nil && printTo == nil)
     }
     #if canImport(AppKit)
