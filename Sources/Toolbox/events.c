@@ -466,6 +466,7 @@ static void note_repeated_update(gaddr evt)
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
     sound_pump();
+    speech_pump();
     time_pump();
     notify_pump();
     machine_advance_ticks();
@@ -495,6 +496,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
 {
     machine_advance_ticks();
     sound_pump();
+    speech_pump();
     time_pump();
     notify_pump();
     display_sync();

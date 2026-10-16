@@ -295,6 +295,34 @@ void machine_set_print_handlers(machine_print_fn print, machine_page_setup_fn pa
 /* The host's default paper, used for new print records. */
 void machine_set_page_defaults(const machine_page_setup *ps);
 
+/* ---- Speech (the Speech Manager's host side) ---- */
+
+enum {
+    MACHINE_SPEECH_SPEAK,    /* speak text (UTF-8, with classic embedded commands) */
+    MACHINE_SPEECH_STOP,
+    MACHINE_SPEECH_PAUSE,
+    MACHINE_SPEECH_CONTINUE,
+    MACHINE_SPEECH_DISPOSE,  /* the channel is gone */
+    MACHINE_SPEECH_PHONEMES, /* text to phonemes, into result */
+};
+typedef struct {
+    int channel, op;
+    const char *voice;       /* a classic voice name: Fred, Kathy, Zarvox ... */
+    double rate;             /* words per minute */
+    double pitch;            /* base pitch, as SetSpeechPitch's (about 30 to 65) */
+    double modulation, volume;
+    const char *text;
+    bool phonemes;           /* the text is phonemes ([[inpt PHON]]) */
+    char *result;            /* MACHINE_SPEECH_PHONEMES: the phonemes, UTF-8 */
+    size_t result_size;
+} machine_speech_request;
+/* Called on the emulator thread; must not block for the utterance. */
+typedef void (*machine_speech_fn)(const machine_speech_request *rq, void *ctx);
+void machine_set_speech_handler(machine_speech_fn fn, void *ctx);
+/* From the host, on any thread: kind 0 done, 1 word (a = offset in the
+ * text, b = length), 2 sync (a = message), 3 phoneme (a = opcode). */
+void machine_speech_event(int channel, int kind, int32_t a, int32_t b);
+
 /* ---- Native controls (the native appearance) ---- */
 
 enum {

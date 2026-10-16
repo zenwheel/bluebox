@@ -244,4 +244,8 @@ bool depth_alert(const char *message);
 int fm_apple_menu_items(char (*names)[256], int max);
 bool fm_open_apple_menu_item(const uint8_t *name, int n);
 
+/* Speech Manager (speech.c): callbacks at safe points; a fresh machine. */
+void speech_pump(void);
+void speech_reset(void);
+
 #endif

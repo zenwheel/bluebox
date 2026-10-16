@@ -266,6 +266,7 @@ bool machine_boot(bool census)
     wr32(LM_TheZone, GA_APPHEAP);
     events_reset();
     display_reset();
+    speech_reset();
     aem_reset();
     aem_reset_handlers();
     dialogs_reset();

@@ -368,6 +368,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()
     NativeControls.install()
+    ClassicSpeech.shared.install()
     NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
