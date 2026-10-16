@@ -602,6 +602,9 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - Drawing problems seen in the census (2026-10-13), to investigate:
   - StarGuardian reaches "Click on rabbit to continue" but draws no rabbit. It copies its pictures with `CopyBits` from bitmaps it builds itself from its data fork.
   - Sword of Ages (a World Builder game) opens its windows, but their content shows the desktop pattern rather than the scene.
+- Redraw check (`--redraw-check`, 2026-10-16) over the 665 applications that reach their event loop: 409 redraw identically, 254 differ, 211 of them on screens that do not change on their own. Many are programs that draw once and never handle updates (DOCMaker's font dialog: a real Mac blanks those too), so each needs judging against the oracle. Candidates worth a look first: Greg's Browser's column headers keep their inactive (grey) look after the window activates; the lavender sliver above its list's selected row; SimStapler, Sim Tape Dispenser, SuperBike, RoboWar, MacPaint 2.0 (small, static differences).
+- DOCMaker documents (SKELETON GOODIES and others): PICT 2001 (8-bit PackBitsRect, 489×519, 188 KB) is drawn with DrawPicture but nothing shows.
+- Prince of Persia in colour (256 colours): the user sees it hang periodically and not respond to keys, where the black-and-white version did; not reproduced headless (its intro plays; music runs from an MDRV driver's VBL tasks).
 - Census changes from 2026-10-16 to look at:
   - Squirt Derby! used to quit after loading (a read whose result it checked was never set); now it spends over 60 million instructions in SANE (Pack4) setting up, with a blank window. Find out whether that is its real start-up or a loop.
   - Space Madness Demo used to time out; it now gets further and stops on an illegal instruction ($7F7F at $431618).
