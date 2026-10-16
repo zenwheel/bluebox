@@ -647,6 +647,14 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Status (2026-10-12):** the core, the headless runner and the census build and run on Linux; there is no windowed host yet.
 
+### M13: Apple menu items of our own
+
+**Goal:** the everyday Apple menu items, written from scratch to look and behave like Apple's classic ones (no Apple code or resources), so every run's Apple menu has them without a System disk.
+
+- Calculator, Chooser (printers through the host, AppleTalk zones once M5 is in), Jigsaw Puzzle (the classic map puzzle, and a picture from the clipboard), Key Caps (the current font and keyboard layout, Option and dead keys), Note Pad and Scrapbook (kept in the per-user System Folder, Scrapbook through the Scrap Manager), SimpleSound (alert sounds, recording once Sound Input works), Stickies, Alarm Clock.
+- Built as desk accessories or small applications with our own Toolbox calls (68k code from our toolchain, or the native SDK of M11), installed in the System Folder's Apple Menu Items, where the Apple menu lists them and opens them.
+- Their look checked against the oracle: window kinds, fonts, icons and behaviour as in System 7.5.
+
 ## 6. Risks
 
 | Risk | Mitigation |
