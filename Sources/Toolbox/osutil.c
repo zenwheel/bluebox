@@ -102,7 +102,19 @@ void tb_SetTrapAddress(gaddr addr, uint16_t n, bool newTraps, bool tool)
 /* ---- Desk accessories (none are installed) ---- */
 
 int8_t tb_SystemEdit(int16_t editcmd) { return 0; } /* not handled: the app does it */
-int16_t tb_OpenDeskAcc(gaddr acc) { return 0; }
+/* A desk accessory by name: one in the Apple Menu Items folder opens as
+ * the Finder would open it (applications launch). */
+int16_t tb_OpenDeskAcc(gaddr acc)
+{
+    uint8_t name[256];
+    int n = rd8(acc);
+    gget(name, acc + 1, (uint32_t)n);
+    if (n && name[0] == 0) { /* desk accessories' names start with a NUL */
+        memmove(name, name + 1, (size_t)--n);
+    }
+    fm_open_apple_menu_item(name, n);
+    return 0;
+}
 void tb_CloseDeskAcc(int16_t rn) {}
 void tb_SystemMenu(int32_t menu) {}
 

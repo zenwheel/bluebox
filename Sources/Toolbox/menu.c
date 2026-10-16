@@ -305,6 +305,19 @@ static void res_menu(gaddr mh, int32_t restype, int after)
         if (!dup && count < 512)
             strcpy(names[count++], s);
     }
+    /* The Apple menu (desk accessories) lists the Apple Menu Items folder
+     * too, as in System 7. */
+    if ((uint32_t)restype == fourcc("DRVR")) {
+        static char items[64][256];
+        int n = fm_apple_menu_items(items, 64);
+        for (int k = 0; k < n && count < 512; k++) {
+            bool dup = false;
+            for (int j = 0; j < count && !dup; j++)
+                dup = !strcmp(names[j], items[k]);
+            if (!dup)
+                strcpy(names[count++], items[k]);
+        }
+    }
     wr8(LM_ResLoad, saved);
     tb_DisposePtr(name);
     tb_DisposePtr(id);

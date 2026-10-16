@@ -2704,3 +2704,51 @@ bool fm_refnum_host_path(int16_t refnum, char *out, size_t outsize)
     snprintf(out, outsize, "%s", f->path);
     return true;
 }
+
+/* ---------------------------------------------------------------------- */
+/* The Apple Menu Items folder, for the Apple menu (AppendResMenu 'DRVR')
+ * and OpenDeskAcc */
+
+/* Its items' Mac names (MacRoman, C strings), sorted; returns the count. */
+int fm_apple_menu_items(char (*names)[256], int max)
+{
+    char given[PATH_MAX], dir[PATH_MAX];
+    snprintf(given, sizeof given, "%s/Apple Menu Items", system_folder_path());
+    if (!realpath(given, dir)) /* grants are by real path */
+        return 0;
+    char **entries = NULL;
+    int n = list_entries(dir, false, &entries), count = 0;
+    for (int i = 0; i < n; i++) {
+        if (count < max) {
+            uint8_t mac[64];
+            int len = host_to_mac(entries[i], mac);
+            memcpy(names[count], mac, (size_t)len);
+            names[count][len] = 0;
+            count++;
+        }
+        free(entries[i]);
+    }
+    free(entries);
+    return count;
+}
+
+uint32_t fm_type_of_path(const char *path);
+bool process_launch(const char *app, const char *const *docs, int ndocs);
+
+/* Open an Apple Menu Items entry by its Mac name: an application is
+ * launched, in a run of its own.  False if it is not there or not an
+ * application (documents, control panels and desk accessories wait for
+ * the environment to run them). */
+bool fm_open_apple_menu_item(const uint8_t *name, int n)
+{
+    char dir[PATH_MAX], path[PATH_MAX];
+    snprintf(dir, sizeof dir, "%s/Apple Menu Items", system_folder_path());
+    host_component(dir, name, n, path, sizeof path);
+    char full[PATH_MAX];
+    snprintf(full, sizeof full, "%s/%s", dir, path);
+    if (!exists(full))
+        return false;
+    if (fm_type_of_path(full) != 0x4150504Cu) /* APPL */
+        return false;
+    return process_launch(full, NULL, 0);
+}

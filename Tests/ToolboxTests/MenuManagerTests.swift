@@ -1,4 +1,5 @@
 import CCore
+import ForkStore
 import Foundation
 import Testing
 import Toolbox
@@ -15,6 +16,38 @@ extension BlueBox {
             let t = tb_NewPtr(256, false, true)
             tb_GetMenuItemText(m, i, t)
             return pstring(at: t)
+        }
+
+        nonisolated(unsafe) static var launched: [String] = []
+
+        /// The Apple menu lists the Apple Menu Items folder, and choosing an
+        /// application there launches it.
+        @Test func appleMenuItems() {
+            let folder = (testSystemFolder as NSString).appendingPathComponent("Apple Menu Items")
+            try? FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+            let path = (folder as NSString).appendingPathComponent("Puzzle")
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            withUnsafeMutableBytes(of: &f.finder_info) { raw in for (i, b) in "APPL".utf8.enumerated() { raw[i] = b } }
+            f.has_finder_info = true
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+            defer { try? FileManager.default.removeItem(atPath: folder) }
+            launchTestApp()
+            _ = initToolbox()
+            let m = tb_NewMenu(1, pstr("\u{14}"))
+            tb_AppendResMenu(m, 0x4452_5652) // 'DRVR'
+            let names = (1...max(1, Int(tb_CountMItems(m)))).map { itemText(m, Int16($0)) }
+            #expect(names.contains("Puzzle"), "\(names)")
+            Self.launched = []
+            machine_set_launch_handler({ p, _, _, _ in
+                MenuManager.launched.append(String(cString: p!))
+                return true
+            }, nil)
+            defer { machine_set_launch_handler(nil, nil) }
+            _ = tb_OpenDeskAcc(pstr("Puzzle"))
+            #expect(Self.launched.count == 1 && Self.launched[0].hasSuffix("Apple Menu Items/Puzzle"))
         }
 
         @Test func insertDeleteAndStyle() {

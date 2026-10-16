@@ -240,4 +240,8 @@ extern uint16_t g_app_size_flags;
 size_t append_text(char *out, size_t n, size_t cap, const uint8_t *s, size_t len);
 bool depth_alert(const char *message);
 
+/* The Apple Menu Items folder (filemgr.c). */
+int fm_apple_menu_items(char (*names)[256], int max);
+bool fm_open_apple_menu_item(const uint8_t *name, int n);
+
 #endif
