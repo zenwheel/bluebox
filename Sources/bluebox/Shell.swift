@@ -363,7 +363,8 @@ struct DefaultsPage: View {
                 Text("Every classic application gets these unless its own settings say otherwise.")
                     .foregroundStyle(.secondary)
             }
-            SettingsForm(settings: model.settingsBinding(defaultSettingsKey), themes: model.themes, isDefault: true)
+            SettingsForm(settings: model.settingsBinding(defaultSettingsKey), themes: model.themes, isDefault: true,
+                         fallback: AppSettings())
         }
         .formStyle(.grouped)
         .navigationTitle("Defaults")
@@ -430,7 +431,8 @@ struct AppPage: View {
                     Button("Launch") { model.launch(app) }.keyboardShortcut(.defaultAction)
                 }
             }
-            SettingsForm(settings: model.settingsBinding(settingsKey(app.path)), themes: model.themes, isDefault: false)
+            SettingsForm(settings: model.settingsBinding(settingsKey(app.path)), themes: model.themes, isDefault: false,
+                         fallback: model.settings[defaultSettingsKey] ?? AppSettings())
         }
         .formStyle(.grouped)
         .navigationTitle(app.name)
@@ -450,39 +452,52 @@ struct SettingsForm: View {
     @Binding var settings: AppSettings
     let themes: [String]
     let isDefault: Bool
+    /// What an unset setting comes to: the defaults' values (for an
+    /// application), or nothing (the built-in values, for the defaults).
+    let fallback: AppSettings
 
     private var inherit: String { isDefault ? "Built-in" : "Default" }
 
     var body: some View {
         Section("Display") {
             Picker("Scale", selection: $settings.scale) {
-                Text("\(inherit) (1×)").tag(Double?.none)
-                Text("1× (one point per Mac pixel)").tag(Double?.some(1))
-                Text("1.5×").tag(Double?.some(1.5))
-                Text("2×").tag(Double?.some(2))
+                Text("\(inherit) (\(scaleName(fallback.scale ?? 1)))").tag(Double?.none)
+                ForEach([1.0, 1.5, 2.0], id: \.self) { v in Text(scaleName(v)).tag(Double?.some(v)) }
             }
             Picker("Screen depth", selection: $settings.depth) {
-                Text("\(inherit) (millions of colours)").tag(Int?.none)
+                Text("\(inherit) (\(depthName(fallback.depth ?? 32).lowercased()))").tag(Int?.none)
                 ForEach([1, 2, 4, 8, 16, 32], id: \.self) { d in
                     Text(depthName(d)).tag(Int?.some(d))
                 }
             }
             Picker("Appearance", selection: $settings.appearance) {
-                Text("\(inherit) (black and white)").tag(String?.none)
+                Text("\(inherit) (\(appearanceName(fallback.appearance ?? "bw").lowercased()))").tag(String?.none)
                 Text("Black and white").tag(String?.some("bw"))
                 Text("macOS window frames").tag(String?.some("native"))
                 ForEach(themes, id: \.self) { t in Text("Theme: \(t)").tag(String?.some(t)) }
             }
-            HighlightPicker(highlight: $settings.highlight, inherit: inherit)
+            HighlightPicker(highlight: $settings.highlight, inherit: inherit,
+                            inheritedName: highlightName(fallback.highlight ?? "host"))
         }
         Section("Machine") {
             Picker("Processor", selection: $settings.cpu) {
-                Text("\(inherit) (68040 with FPU)").tag(Int?.none)
-                Text("68040 with FPU").tag(Int?.some(68040))
-                Text("68020 without FPU").tag(Int?.some(68020))
+                Text("\(inherit) (\(cpuName(fallback.cpu ?? 68040)))").tag(Int?.none)
+                Text(cpuName(68040)).tag(Int?.some(68040))
+                Text(cpuName(68020)).tag(Int?.some(68020))
             }
         }
     }
+
+    private func scaleName(_ v: Double) -> String { v == 1.5 ? "1.5×" : "\(Int(v))×" }
+    private func cpuName(_ m: Int) -> String { m == 68020 ? "68020 without FPU" : "68040 with FPU" }
+    private func appearanceName(_ a: String) -> String {
+        switch a {
+        case "bw", "classic": return "Black and white"
+        case "native": return "macOS window frames"
+        default: return "Theme: \(a)"
+        }
+    }
+    private func highlightName(_ h: String) -> String { h == "host" ? "macOS's selection colour" : h }
 
     private func depthName(_ d: Int) -> String {
         switch d {
@@ -500,6 +515,7 @@ struct SettingsForm: View {
 struct HighlightPicker: View {
     @Binding var highlight: String?
     let inherit: String
+    let inheritedName: String
 
     private enum Kind: Hashable { case inherit, host, custom }
 
@@ -512,7 +528,7 @@ struct HighlightPicker: View {
             case .custom: if kind != .custom { highlight = "#CCCCFF" }
             }
         })) {
-            Text("\(inherit) (macOS's selection colour)").tag(Kind.inherit)
+            Text("\(inherit) (\(inheritedName))").tag(Kind.inherit)
             Text("macOS's selection colour").tag(Kind.host)
             Text("Custom").tag(Kind.custom)
         }
