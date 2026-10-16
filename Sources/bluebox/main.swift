@@ -44,7 +44,7 @@ func usage() -> Never {
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
           --ppc      run a fat application's PowerPC code (PowerPC-only ones always run it)
-          --68k      run a fat application's 68k code (the default for now)
+          --68k      run a fat application's 68k code (the default unless its cpu setting is ppc)
           --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
                      application can still switch depth itself with SetDepth).  Without --depth,
                      a game known to need another depth gets it (unless it has a depth setting),
@@ -77,7 +77,7 @@ func usage() -> Never {
           Make a macOS application bundle for a classic application (default folder
           ~/Applications/Blue Box) with its Finder icon; documents dropped on it open
           in the application.
-      bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
+      bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
                 [scale 1|1.5|2|default] [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
@@ -274,7 +274,7 @@ func runCommand(_ args: [String]) {
     var screenWindow = false
     var screenshot: String?
     var screenDepth: Int32?
-    var preferPPC = false
+    var preferPPC: Bool? /* nil: the application's setting */
     var scaleOption: Double?
     var redrawCheck: String?
     var cpuModel: Int32?
@@ -447,9 +447,12 @@ func runCommand(_ args: [String]) {
     } else if let d = saved.depth {
         machine_set_screen_depth(Int32(d))
     }
-    if let m = cpuModel ?? saved.cpu.map(Int32.init) { machine_set_cpu(m) }
+    // The processor: a 68k model, or PowerPC (750) for a fat application's
+    // PowerPC code (a 68k application then gets the default 68040).
+    let processor = cpuModel ?? saved.cpu.map(Int32.init)
+    if let m = processor, m != Int32(powerPCSetting) { machine_set_cpu(m) }
     machine_set_depth_alerts(depthRelaunch != nil)
-    machine_set_prefer_ppc(preferPPC)
+    machine_set_prefer_ppc(preferPPC ?? (processor == Int32(powerPCSetting)))
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }

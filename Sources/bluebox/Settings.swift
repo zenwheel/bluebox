@@ -4,6 +4,9 @@ import ForkStore
 /// Per-application settings kept in the library (Settings.json), keyed by
 /// the application's file name.  `bluebox run` applies them unless the
 /// command line says otherwise; installed bundles run through it too.
+/// The cpu setting that means a fat application runs its PowerPC code.
+let powerPCSetting = 750
+
 struct AppSettings: Codable {
     var depth: Int?
     var cpu: Int?
@@ -12,7 +15,8 @@ struct AppSettings: Codable {
     var highlight: String? /* host (the host's selection colour) or #RRGGBB */
     var isEmpty: Bool { depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil }
     var summary: String {
-        "depth \(depth.map(String.init) ?? "default (32)"), cpu \(cpu.map(String.init) ?? "default (68040)"), "
+        "depth \(depth.map(String.init) ?? "default (32)"), "
+            + "cpu \(cpu.map { $0 == powerPCSetting ? "ppc" : String($0) } ?? "default (68040)"), "
             + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
             + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)")"
     }
@@ -109,7 +113,7 @@ func settingsKey(_ app: String) -> String { (app as NSString).lastPathComponent 
 
 func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[settingsKey(app)] }
 
-/// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
+/// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 func setCommand(_ args: [String]) {
     var rest = args
@@ -142,10 +146,12 @@ func setCommand(_ args: [String]) {
         case "cpu":
             if value == "default" {
                 s.cpu = nil
+            } else if value == "ppc" || value == "powerpc" {
+                s.cpu = powerPCSetting /* a fat application runs its PowerPC code */
             } else if let m = Int(value), [68020, 68040].contains(m) {
                 s.cpu = m
             } else {
-                fail("cpu expects 68020, 68040 or default")
+                fail("cpu expects 68020, 68040, ppc or default")
             }
         case "scale":
             if value == "default" {

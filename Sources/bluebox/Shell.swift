@@ -511,12 +511,15 @@ struct SettingsForm: View {
                 Text("\(inherit) (\(cpuName(fallback.cpu ?? 68040)))").tag(Int?.none)
                 Text(cpuName(68040)).tag(Int?.some(68040))
                 Text(cpuName(68020)).tag(Int?.some(68020))
+                Text(cpuName(powerPCSetting)).tag(Int?.some(powerPCSetting))
             }
         }
     }
 
     private func scaleName(_ v: Double) -> String { v == 1.5 ? "1.5×" : "\(Int(v))×" }
-    private func cpuName(_ m: Int) -> String { m == 68020 ? "68020 without FPU" : "68040 with FPU" }
+    private func cpuName(_ m: Int) -> String {
+        m == powerPCSetting ? "PowerPC (fat applications)" : m == 68020 ? "68020 without FPU" : "68040 with FPU"
+    }
     private func appearanceName(_ a: String) -> String {
         switch a {
         case "bw", "classic": return "Black and white"
