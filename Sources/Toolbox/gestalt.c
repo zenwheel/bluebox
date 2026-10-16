@@ -86,6 +86,19 @@ void gestalt_init(void)
     gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
 }
 
+/* A PowerPC application: a PowerPC Mac's answers (a G3 with System 7.6.1,
+ * the Code Fragment Manager, Mixed Mode, QuickTime's PowerPC library). */
+void gestalt_powerpc(void)
+{
+    gestalt_set(fourcc("sysa"), 2);      /* gestaltPowerPC */
+    gestalt_set(fourcc("sysv"), 0x0761);
+    gestalt_set(fourcc("qtrs"), 0x1);    /* gestaltPPCQuickTimeLibPresent */
+    gestalt_set(fourcc("cput"), 0x0108); /* gestaltCPU750 */
+    gestalt_set(fourcc("cfrg"), 0x1);    /* gestaltCFMPresent */
+    gestalt_set(fourcc("mixd"), 0x1);    /* gestaltPowerPCAware */
+    gestalt_set(fourcc("fpu "), 0);
+}
+
 static int16_t gestalt_lookup(int32_t selector, uint32_t *responsep)
 {
     for (unsigned i = 0; i < count; i++) {

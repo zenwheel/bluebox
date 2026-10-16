@@ -58,6 +58,7 @@ void trap_init(void);
 uint32_t native_register(native_fn fn, const char *name, uint16_t trapword);
 /* Native index of a stub address, or -1. */
 native_fn native_fn_at(int index); /* the function of a native, or NULL */
+const char *native_name_at(int index); /* and its name */
 int native_index_for(uint32_t addr);
 
 /* Call a Pascal-convention routine (guest code, or one of our stubs) whose

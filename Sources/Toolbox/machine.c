@@ -493,7 +493,7 @@ void machine_continue(uint64_t more)
 }
 bool machine_halted(void) { return cpu.halted; }
 uint64_t machine_instruction_count(void) { return cpu.icount; }
-uint32_t machine_pc(void) { return cpu.pc; }
+uint32_t machine_pc(void) { return g_ppc_mode ? g_ppc.pc : cpu.pc; }
 
 static void trace_cpu(cpu68k *c)
 {

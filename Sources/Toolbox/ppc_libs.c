@@ -985,7 +985,211 @@ static void g_GetDCtlEntry(ppc_cpu *c)
     RETURN(table && ref < 0 ? rd32(table + 4 * (gaddr)(-ref - 1)) : 0);
 }
 
+/* The Component Manager: _ComponentDispatch with the selector in D0,
+ * Pascal arguments (sizes 4 or 2, as a string) and result (0, 2, 4). */
+typedef struct {
+    uint8_t selector;
+    const char *args;
+    int result;
+} component_call;
+
+static void component_manager(ppc_cpu *c, const component_call *k)
+{
+    ppc_trap_begin();
+    if (k->result)
+        ppc_trap_push(k->result, 0);
+    for (int i = 0; k->args[i]; i++)
+        ppc_trap_push(k->args[i] - '0', R(i));
+    ppc_trap_set(0, k->selector);
+    ppc_trap(0xA82A);
+    uint32_t r = k->result ? ppc_trap_result(k->result) : 0;
+    ppc_trap_end();
+    if (k->result == 2)
+        r = (uint32_t)(int32_t)(int16_t)r;
+    RETURN(r);
+}
+
+#define COMPONENT(name, sel, args, result) \
+    static void cm_##name(ppc_cpu *c) { static const component_call k = { sel, args, result }; component_manager(c, &k); }
+COMPONENT(RegisterComponent, 0x01, "444244", 4)
+COMPONENT(UnregisterComponent, 0x02, "4", 2)
+COMPONENT(CountComponents, 0x03, "4", 4)
+COMPONENT(FindNextComponent, 0x04, "44", 4)
+COMPONENT(GetComponentInfo, 0x05, "44444", 2)
+COMPONENT(GetComponentListModSeed, 0x06, "", 4)
+COMPONENT(OpenComponent, 0x07, "4", 4)
+COMPONENT(CloseComponent, 0x08, "4", 2)
+COMPONENT(GetComponentInstanceError, 0x0A, "4", 2)
+COMPONENT(SetComponentInstanceError, 0x0B, "42", 0)
+COMPONENT(GetComponentInstanceStorage, 0x0C, "4", 4)
+COMPONENT(SetComponentInstanceStorage, 0x0D, "44", 0)
+COMPONENT(GetComponentInstanceA5, 0x0E, "4", 4)
+COMPONENT(SetComponentInstanceA5, 0x0F, "44", 0)
+COMPONENT(GetComponentRefcon, 0x10, "4", 4)
+COMPONENT(SetComponentRefcon, 0x11, "44", 0)
+COMPONENT(RegisterComponentResource, 0x12, "42", 4)
+COMPONENT(CountComponentInstances, 0x13, "4", 4)
+COMPONENT(RegisterComponentResourceFile, 0x14, "22", 4)
+COMPONENT(OpenComponentResFile, 0x15, "4", 2)
+COMPONENT(CloseComponentResFile, 0x18, "2", 2)
+COMPONENT(CaptureComponent, 0x1C, "44", 4)
+COMPONENT(UncaptureComponent, 0x1D, "4", 2)
+COMPONENT(SetDefaultComponent, 0x1E, "42", 2)
+COMPONENT(ResolveComponentAlias, 0x20, "4", 4)
+COMPONENT(OpenDefaultComponent, 0x21, "44", 4)
+COMPONENT(DelegateComponentCall, 0x24, "44", 4)
+COMPONENT(GetComponentIconSuite, 0x29, "44", 2)
+COMPONENT(GetComponentTypeModSeed, 0x2C, "4", 4)
+COMPONENT(OpenAComponent, 0x2D, "44", 2)
+COMPONENT(OpenADefaultComponent, 0x2E, "444", 2)
+COMPONENT(OpenAComponentResFile, 0x2F, "44", 2)
+COMPONENT(GetComponentResource, 0x35, "4424", 2)
+COMPONENT(GetComponentIndString, 0x36, "4422", 2)
+#undef COMPONENT
+
+/* Component calls (ComponentCallNow): the instance and the parameters
+ * (sizes 4, 2, or 1 for a Boolean or char pushed as a word), then the
+ * parameter size and selector; _ComponentDispatch with D0 = 0. */
+static void instance_call(ppc_cpu *c, int16_t what, const char *args)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, R(0));
+    uint32_t size = 0;
+    for (int i = 0; args[i]; i++) {
+        int n = args[i] - '0';
+        ppc_trap_push(n, R(1 + i));
+        size += n == 4 ? 4 : 2;
+    }
+    ppc_trap_push(4, size << 16 | (uint16_t)what);
+    ppc_trap_set(0, 0);
+    ppc_trap(0xA82A);
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    RETURN(r);
+}
+
+#define CCALL(name, what, args) static void cc_##name(ppc_cpu *c) { instance_call(c, what, args); }
+CCALL(MCSetMovie, 2, "444")
+CCALL(MCRemoveAMovie, 3, "4")
+CCALL(MCGetIndMovie, 5, "2")
+CCALL(MCRemoveAllMovies, 6, "")
+CCALL(MCIsPlayerEvent, 7, "4")
+CCALL(MCSetActionFilter, 8, "4")
+CCALL(MCDoAction, 9, "24")
+CCALL(MCSetControllerAttached, 10, "1")
+CCALL(MCIsControllerAttached, 11, "")
+CCALL(MCSetControllerPort, 12, "4")
+CCALL(MCGetControllerPort, 13, "")
+CCALL(MCSetVisible, 14, "1")
+CCALL(MCGetVisible, 15, "")
+CCALL(MCGetControllerBoundsRect, 16, "4")
+CCALL(MCSetControllerBoundsRect, 17, "4")
+CCALL(MCGetControllerBoundsRgn, 18, "")
+CCALL(MCGetWindowRgn, 19, "4")
+CCALL(MCMovieChanged, 20, "4")
+CCALL(MCSetDuration, 21, "4")
+CCALL(MCGetCurrentTime, 22, "4")
+CCALL(MCNewAttachedController, 23, "444")
+CCALL(MCDraw, 24, "4")
+CCALL(MCActivate, 25, "41")
+CCALL(MCIdle, 26, "")
+CCALL(MCKey, 27, "14")
+CCALL(MCClick, 28, "4444")
+CCALL(MCEnableEditing, 29, "1")
+CCALL(MCIsEditingEnabled, 30, "")
+CCALL(MCCopy, 31, "")
+CCALL(MCCut, 32, "")
+CCALL(MCPaste, 33, "4")
+CCALL(MCClear, 34, "")
+CCALL(MCUndo, 35, "")
+CCALL(MCPositionController, 36, "444")
+CCALL(MCGetControllerInfo, 37, "4")
+CCALL(MCSetClip, 40, "44")
+CCALL(MCGetClip, 41, "44")
+CCALL(MCDrawBadge, 42, "44")
+CCALL(MCSetUpEditMenu, 43, "44")
+CCALL(MCGetMenuString, 44, "424")
+CCALL(MCSetActionFilterWithRefCon, 45, "44")
+CCALL(MCPtInController, 46, "44")
+CCALL(MCInvalidate, 47, "44")
+CCALL(MCAdjustCursor, 48, "444")
+CCALL(MCGetInterfaceElement, 49, "44")
+#undef CCALL
+
+/* ObjectSupportLib: the object model's resolution isn't there, so
+ * accessors install and resolving answers errAEEventNotHandled. */
+static void os_notHandled(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1708); }
+static void os_accessorNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1723); }
+static void os_coercionFail(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1700); }
+
+/* Internet Config: an instance with no preferences in it. */
+static void ic_ICStart(ppc_cpu *c)
+{
+    if (R(0))
+        wr32(R(0), 0x49430001); /* any non-zero instance */
+    RETURN(0);
+}
+static void ic_prefNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-666); }
+
 const ppc_export lib_exports[] = {
+    /* ObjectSupportLib */
+    { "AEObjectInit", g_noErr }, { "AESetObjectCallbacks", g_noErr }, { "AEInstallObjectAccessor", g_noErr },
+    { "AERemoveObjectAccessor", g_noErr }, { "AEGetObjectAccessor", os_accessorNotFound },
+    { "AEResolve", os_notHandled }, { "AECallObjectAccessor", os_notHandled }, { "AEDisposeToken", g_noErr },
+    { "CreateObjSpecifier", os_coercionFail }, { "CreateOffsetDescriptor", os_coercionFail },
+    { "CreateCompDescriptor", os_coercionFail }, { "CreateLogicalDescriptor", os_coercionFail },
+    { "CreateRangeDescriptor", os_coercionFail },
+    /* Internet Config */
+    { "ICStart", ic_ICStart }, { "ICStop", g_noErr }, { "ICFindConfigFile", g_noErr },
+    { "ICFindUserConfigFile", g_noErr }, { "ICGeneralFindConfigFile", g_noErr }, { "ICChooseConfig", g_noErr },
+    { "ICBegin", g_noErr }, { "ICEnd", g_noErr }, { "ICGetPref", ic_prefNotFound },
+    { "ICFindPrefHandle", ic_prefNotFound }, { "ICGetPrefHandle", ic_prefNotFound },
+    { "ICSetPref", g_noErr }, { "ICSetPrefHandle", g_noErr }, { "ICCountPref", g_noErr },
+    { "ICLaunchURL", ic_prefNotFound }, { "ICMapFilename", ic_prefNotFound }, { "ICMapTypeCreator", ic_prefNotFound },
+    { "ICGetSeed", g_noErr }, { "ICGetVersion", g_noErr }, { "ICGetConfigName", g_noErr },
+    /* Movie controllers */
+    { "MCActivate", cc_MCActivate }, { "MCAdjustCursor", cc_MCAdjustCursor }, { "MCClear", cc_MCClear },
+    { "MCClick", cc_MCClick }, { "MCCopy", cc_MCCopy }, { "MCCut", cc_MCCut }, { "MCDoAction", cc_MCDoAction },
+    { "MCDraw", cc_MCDraw }, { "MCDrawBadge", cc_MCDrawBadge }, { "MCEnableEditing", cc_MCEnableEditing },
+    { "MCGetClip", cc_MCGetClip }, { "MCGetControllerBoundsRect", cc_MCGetControllerBoundsRect },
+    { "MCGetControllerBoundsRgn", cc_MCGetControllerBoundsRgn }, { "MCGetControllerInfo", cc_MCGetControllerInfo },
+    { "MCGetControllerPort", cc_MCGetControllerPort }, { "MCGetCurrentTime", cc_MCGetCurrentTime },
+    { "MCGetIndMovie", cc_MCGetIndMovie }, { "MCGetInterfaceElement", cc_MCGetInterfaceElement },
+    { "MCGetMenuString", cc_MCGetMenuString }, { "MCGetVisible", cc_MCGetVisible },
+    { "MCGetWindowRgn", cc_MCGetWindowRgn }, { "MCIdle", cc_MCIdle }, { "MCInvalidate", cc_MCInvalidate },
+    { "MCIsControllerAttached", cc_MCIsControllerAttached }, { "MCIsEditingEnabled", cc_MCIsEditingEnabled },
+    { "MCIsPlayerEvent", cc_MCIsPlayerEvent }, { "MCKey", cc_MCKey }, { "MCMovieChanged", cc_MCMovieChanged },
+    { "MCNewAttachedController", cc_MCNewAttachedController }, { "MCPaste", cc_MCPaste },
+    { "MCPositionController", cc_MCPositionController }, { "MCPtInController", cc_MCPtInController },
+    { "MCRemoveAMovie", cc_MCRemoveAMovie }, { "MCRemoveAllMovies", cc_MCRemoveAllMovies },
+    { "MCRemoveMovie", cc_MCRemoveAllMovies }, { "MCSetActionFilter", cc_MCSetActionFilter },
+    { "MCSetActionFilterWithRefCon", cc_MCSetActionFilterWithRefCon }, { "MCSetClip", cc_MCSetClip },
+    { "MCSetControllerAttached", cc_MCSetControllerAttached },
+    { "MCSetControllerBoundsRect", cc_MCSetControllerBoundsRect }, { "MCSetControllerPort", cc_MCSetControllerPort },
+    { "MCSetDuration", cc_MCSetDuration }, { "MCSetMovie", cc_MCSetMovie }, { "MCSetUpEditMenu", cc_MCSetUpEditMenu },
+    { "MCSetVisible", cc_MCSetVisible }, { "MCUndo", cc_MCUndo },
+    /* Component Manager */
+    { "CaptureComponent", cm_CaptureComponent }, { "CloseComponent", cm_CloseComponent },
+    { "CloseComponentResFile", cm_CloseComponentResFile }, { "CountComponentInstances", cm_CountComponentInstances },
+    { "CountComponents", cm_CountComponents }, { "DelegateComponentCall", cm_DelegateComponentCall },
+    { "FindNextComponent", cm_FindNextComponent }, { "GetComponentIconSuite", cm_GetComponentIconSuite },
+    { "GetComponentIndString", cm_GetComponentIndString }, { "GetComponentInfo", cm_GetComponentInfo },
+    { "GetComponentInstanceA5", cm_GetComponentInstanceA5 },
+    { "GetComponentInstanceError", cm_GetComponentInstanceError },
+    { "GetComponentInstanceStorage", cm_GetComponentInstanceStorage },
+    { "GetComponentListModSeed", cm_GetComponentListModSeed }, { "GetComponentRefcon", cm_GetComponentRefcon },
+    { "GetComponentResource", cm_GetComponentResource }, { "GetComponentTypeModSeed", cm_GetComponentTypeModSeed },
+    { "OpenAComponent", cm_OpenAComponent }, { "OpenAComponentResFile", cm_OpenAComponentResFile },
+    { "OpenADefaultComponent", cm_OpenADefaultComponent }, { "OpenComponent", cm_OpenComponent },
+    { "OpenComponentResFile", cm_OpenComponentResFile }, { "OpenDefaultComponent", cm_OpenDefaultComponent },
+    { "RegisterComponent", cm_RegisterComponent }, { "RegisterComponentResource", cm_RegisterComponentResource },
+    { "RegisterComponentResourceFile", cm_RegisterComponentResourceFile },
+    { "ResolveComponentAlias", cm_ResolveComponentAlias }, { "SetComponentInstanceA5", cm_SetComponentInstanceA5 },
+    { "SetComponentInstanceError", cm_SetComponentInstanceError },
+    { "SetComponentInstanceStorage", cm_SetComponentInstanceStorage },
+    { "SetComponentRefcon", cm_SetComponentRefcon }, { "SetDefaultComponent", cm_SetDefaultComponent },
+    { "UncaptureComponent", cm_UncaptureComponent }, { "UnregisterComponent", cm_UnregisterComponent },
     /* MathLib */
     { "acos", m_acos }, { "acosh", m_acosh }, { "annuity", m_annuity }, { "asin", m_asin },
     { "asinh", m_asinh }, { "atan", m_atan }, { "atan2", m_atan2 }, { "atanh", m_atanh },
@@ -1090,6 +1294,8 @@ gaddr ppc_data_export(const char *name)
         wr32(p, ctype_table());
         return p;
     }
+    if (!strcmp(name, "CallComponentUPP"))
+        return mm_call_component_upp();
     if (!strcmp(name, "pi")) {
         gaddr p = tb_NewPtr(8, true, true);
         wr_double(p, M_PI);

@@ -338,7 +338,8 @@ void raw_DrvrInstall(cpu68k *c, uint16_t tw) { c->d[0] = 0; }
 
 /* CursorDeviceDispatch (AADB): the Cursor Device Manager, selector in D0.
  * There are no extra cursor devices: enumeration ends at once, NewDevice
- * fails, and calls on a device succeed without effect. */
+ * makes a record that nothing moves, and calls on a device succeed
+ * without effect. */
 void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw)
 {
     static const uint8_t param_bytes[13] = { 12, 12, 4, 4, 4, 12, 6, 8, 8, 8, 4, 4, 4 };
@@ -349,8 +350,15 @@ void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw)
     int16_t err = noErr;
     if (sel == 0xA)       /* CursorDeviceNextDevice */
         wr32(first, 0);
-    else if (sel == 0xB)  /* CursorDeviceNewDevice */
-        err = memFullErr;
+    else if (sel == 0xB) { /* CursorDeviceNewDevice: a CursorDevice record */
+        gaddr dev = tb_NewPtr(64, true, true);
+        if (dev) {
+            wr16(dev + 20, 1); /* buttons */
+            wr32(first, dev);
+        } else {
+            err = memFullErr;
+        }
+    }
     c->a[7] += n;
     wr16(c->a[7], (uint16_t)err);
     cpu_push32(c, ret);

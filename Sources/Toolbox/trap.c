@@ -55,6 +55,8 @@ uint32_t native_register(native_fn fn, const char *name, uint16_t trapword)
     return a;
 }
 
+const char *native_name_at(int index) { return index >= 0 && (unsigned)index < native_count ? natives[index].name : NULL; }
+
 native_fn native_fn_at(int index) { return index >= 0 && (unsigned)index < native_count ? natives[index].fn : NULL; }
 
 int native_index_for(uint32_t addr)

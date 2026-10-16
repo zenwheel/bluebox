@@ -412,7 +412,8 @@ static int ninit, init_next;
 static const char *const native_libraries[] = {
     "InterfaceLib", "MathLib", "StdCLib", "QuickTimeLib", "DragLib", "ThreadsLib", "AppearanceLib",
     "PrivateInterfaceLib", "ObjectSupportLib", "AppleScriptLib", "TranslationLib", "ControlStripLib",
-    "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib",
+    "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
+    "InternetConfigLib", "ICAp;InternetConfigLib",
 };
 
 static bool core_library(const char *name)
@@ -988,6 +989,7 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
         *slash = 0;
     else
         app_dir[0] = 0;
+    gestalt_powerpc();
     /* The application is fragment 0 (named "", so no import finds it). */
     frags[0].path[0] = 0;
     int a = load_from_file(app_path, NULL, err, errlen);

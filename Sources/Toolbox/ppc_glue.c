@@ -14,7 +14,7 @@
 #define TRAP_DEPTH 32
 static struct { uint32_t d[8], a[8]; uint16_t sr; } saved[TRAP_DEPTH];
 static int trap_depth;
-static gaddr trap_code; /* a trap word and an RTS for each depth */
+static gaddr trap_code; /* a trap word and a native for each depth */
 
 void ppc_trap_begin(void)
 {
@@ -46,21 +46,53 @@ void ppc_trap_push(int size, uint32_t value)
         cpu_push16(g_cpu, (uint16_t)value);
 }
 
+/* The trap runs inline, as in 68k code: the trap word, then a native that
+ * marks the depth done, so nothing comes between the arguments and the
+ * trap (a stack-based trap's arguments are right above its return). */
+static bool trap_finished[TRAP_DEPTH];
+static uint16_t done_index;
+
+static void trap_done_native(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    uint32_t depth = (c->op_pc - 2 - trap_code) / 8;
+    if (depth < TRAP_DEPTH)
+        trap_finished[depth] = true;
+}
+
 void ppc_trap(uint16_t trapword)
 {
-    if (!trap_code)
-        trap_code = tb_NewPtr(TRAP_DEPTH * 4, true, true);
+    if (!trap_code) {
+        trap_code = tb_NewPtr(TRAP_DEPTH * 8, true, true);
+        done_index = (uint16_t)native_index_for(native_register(trap_done_native, "PowerPCTrapDone", 0));
+    }
     int depth = trap_depth > 0 ? trap_depth - 1 : 0;
     if (depth >= TRAP_DEPTH) {
         ppc_halt(&g_ppc, "PowerPC glue nested too deeply (trap %04X)", trapword);
         return;
     }
-    gaddr code = trap_code + (gaddr)depth * 4;
+    gaddr code = trap_code + (gaddr)depth * 8;
     wr16(code, trapword);
-    wr16(code + 2, 0x4E75); /* RTS */
-    guest_call_regs(code);
-    if (g_cpu->halted && !g_ppc.halted)
-        ppc_halt(&g_ppc, "%s", g_cpu->halt_reason);
+    wr16(code + 2, CPU_NATIVE_OP);
+    wr16(code + 4, done_index);
+    wr16(code + 6, 0x4E71); /* NOP */
+    cpu68k *c = g_cpu;
+    uint32_t saved_pc = c->pc;
+    trap_finished[depth] = false;
+    c->pc = code;
+    uint64_t cap = trap_instruction_limit();
+    while (!c->halted && !trap_finished[depth]) {
+        cpu_step(c);
+        if (cap && c->icount >= cap && !trap_finished[depth]) {
+            if (machine_waiting_for_input())
+                cpu_halt(c, "instruction limit reached waiting for input");
+            else
+                cpu_halt(c, "instruction limit reached in a call from the Toolbox (pc %08X)", c->pc);
+        }
+    }
+    c->pc = saved_pc;
+    if (c->halted && !g_ppc.halted)
+        ppc_halt(&g_ppc, "%s", c->halt_reason);
 }
 
 uint32_t ppc_trap_result(int size)

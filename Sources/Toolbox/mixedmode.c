@@ -28,7 +28,17 @@
 #include "trap.h"
 
 enum { kM68kISA = 0, kPowerPCISA = 1 };
-enum { kPascalStackBased = 0, kCStackBased = 1, kRegisterBased = 2, kThinkCStackBased = 5 };
+enum { kPascalStackBased = 0, kCStackBased = 1, kRegisterBased = 2, kThinkCStackBased = 5,
+       kD0DispatchedPascalStackBased = 8, kD0DispatchedCStackBased = 9, kD1DispatchedPascalStackBased = 12,
+       kStackDispatchedPascalStackBased = 14 };
+
+/* The dispatched conventions: a selector (its size in bits 6-7) before the
+ * parameters, which start at bit 8. */
+static bool dispatched(int conv)
+{
+    return conv == kD0DispatchedPascalStackBased || conv == kD0DispatchedCStackBased ||
+           conv == kD1DispatchedPascalStackBased || conv == kStackDispatchedPascalStackBased;
+}
 enum { RD_SIZE = 12, RR_SIZE = 20 };
 
 /* Descriptor fields */
@@ -277,8 +287,34 @@ static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int narg
 {
     int conv = (int)(pi & 0xF), rcode = (int)((pi >> 4) & 3);
     uint32_t r = 0;
+    LOGF(LOG_TRAPS, "Mixed Mode: 68k routine %08X (%s), procInfo %08X, %d arguments (%08X %08X)\n", code,
+         native_name_at(native_index_for(code)) ? native_name_at(native_index_for(code)) : "guest code", pi, nargs,
+         nargs > 0 ? args[0] : 0, nargs > 1 ? args[1] : 0);
     ppc_trap_begin();
-    if (conv == kPascalStackBased) {
+    if (dispatched(conv) && nargs >= 1) {
+        /* The selector in D0 or D1 or pushed last; Pascal or C parameters. */
+        int scode = (int)((pi >> 6) & 3);
+        uint32_t sel = args[0];
+        bool pascal = conv != kD0DispatchedCStackBased;
+        if (pascal && rcode)
+            ppc_trap_push(rcode == 3 ? 4 : 2, 0);
+        if (pascal) {
+            for (int i = 1; i < nargs; i++) {
+                int code_i = (int)((pi >> (8 + 2 * (i - 1))) & 3);
+                ppc_trap_push(code_i == 3 ? 4 : code_i == 1 ? 1 : 2, args[i]);
+            }
+        } else {
+            for (int i = nargs - 1; i >= 1; i--)
+                ppc_trap_push(4, args[i]);
+        }
+        if (conv == kStackDispatchedPascalStackBased)
+            ppc_trap_push(scode == 3 ? 4 : 2, sel);
+        else
+            ppc_trap_set(conv == kD1DispatchedPascalStackBased ? 1 : 0, sel);
+        guest_call_regs(code);
+        if (rcode)
+            r = widen(rcode, pascal ? ppc_trap_result(rcode == 3 ? 4 : rcode == 1 ? 1 : 2) : g_cpu->d[0]);
+    } else if (conv == kPascalStackBased) {
         if (rcode)
             ppc_trap_push(rcode == 3 ? 4 : 2, 0);
         for (int i = 0; i < nargs && i < 13; i++) {
@@ -318,6 +354,11 @@ static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int narg
 static int arg_count(uint32_t pi)
 {
     int conv = (int)(pi & 0xF), n = 0;
+    if (dispatched(conv)) {
+        while (n < 12 && ((pi >> (8 + 2 * n)) & 3))
+            n++;
+        return n + 1; /* and the selector */
+    }
     if (conv == kRegisterBased) {
         while (n < 4 && ((pi >> (11 + 5 * n)) & 3))
             n++;
@@ -411,6 +452,40 @@ const ppc_export mm_exports[] = {
     { "NewRoutineDescriptor", ppc_NewRoutineDescriptor },
 };
 const unsigned mm_export_count = sizeof mm_exports / sizeof mm_exports[0];
+
+/* ---------------------------------------------------------------------- */
+/* CallComponentUPP: InterfaceLib's descriptor for calling components.
+ * PowerPC glue passes it a ComponentParameters block, which is the stack
+ * image of a 68k component call (flags, parameter size, selector, the
+ * parameters, the instance): copied onto the 68k stack, it goes to
+ * _ComponentDispatch as an inline call's would. */
+static void call_component_68k(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    uint32_t ret = cpu_pop32(c);
+    gaddr params = cpu_pop32(c);
+    gaddr result_at = c->a[7]; /* the caller's result space */
+    uint32_t n = 4u + rd8(params + 1) + 4u;
+    c->a[7] -= n;
+    gmemcpy(c->a[7], params, n);
+    ppc_trap_begin();
+    ppc_trap(0xA82A);
+    ppc_trap_end();
+    c->a[7] = result_at;
+    cpu_push32(c, ret);
+}
+
+gaddr mm_call_component_upp(void)
+{
+    gaddr var = tb_NewPtr(4, true, true);
+    gaddr rd = new_descriptor(1);
+    if (var && rd) {
+        /* pascal long CallComponent(ComponentParameters *) */
+        set_record(rd, 0, native_register(call_component_68k, "CallComponent", 0), 0x3F0, kM68kISA);
+        wr32(var, rd);
+    }
+    return var;
+}
 
 void mixedmode_init(void)
 {
