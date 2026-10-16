@@ -6,7 +6,7 @@
 
 #if canImport(AppKit)
 import AppKit
-import ClassicHost
+import BlueBoxHost
 import Toolbox
 
 /// Host points per Mac pixel: 1, 1.5 or 2 (--scale, or the app's setting).
@@ -417,7 +417,7 @@ func installAlertHandler() {
                 if buttons.isEmpty { alert.addButton(withTitle: "OK") }
                 let response = alert.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
                 if response >= 0 && response < buttons.count { chosen = Int32(buttons[response].item) }
-                if ProcessInfo.processInfo.environment["CLASSIC_DEBUG_HOST"] != nil {
+                if ProcessInfo.processInfo.environment["BLUEBOX_DEBUG_HOST"] != nil {
                     eprint("alert \"\(message)\" -> response \(response), item \(chosen)\n")
                 }
             }
@@ -827,7 +827,7 @@ import UserNotifications
         if id < 0 {
             if let req = attention.removeValue(forKey: -id) { NSApp.cancelUserAttentionRequest(req) }
             if attention.isEmpty { NSApp.dockTile.badgeLabel = nil }
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["classic-\(-id)"])
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["bluebox-\(-id)"])
             return
         }
         if flags & Int(MACHINE_NOTIFY_MARK) != 0 { NSApp.dockTile.badgeLabel = "◆" }
@@ -837,7 +837,7 @@ import UserNotifications
             let content = UNMutableNotificationContent()
             content.title = ProcessInfo.processInfo.processName
             content.body = message
-            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "classic-\(id)", content: content,
+            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "bluebox-\(id)", content: content,
                                                                          trigger: nil))
         } else {
             let alert = NSAlert()

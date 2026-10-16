@@ -53,15 +53,34 @@ func fourCCValue(_ s: String) -> UInt32 {
 }
 
 /// Where ingested software goes unless the caller says otherwise.
-func defaultLibrary() -> String {
+/// Blue Box was called Classic: its folder (Application Support/Classic,
+/// or ~/.local/share/classic) moves to the new name the first time, with
+/// everything in it, if the new one is not there yet.
+func migrateDataFolder() {
     let env = ProcessInfo.processInfo.environment
-    if let lib = env["CLASSIC_LIBRARY"], !lib.isEmpty { return lib }
     let home = env["HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.path
     #if os(macOS)
-    return home + "/Library/Application Support/Classic/Library"
+    let old = home + "/Library/Application Support/Classic", new = home + "/Library/Application Support/Blue Box"
     #else
     let data = env["XDG_DATA_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? home + "/.local/share"
-    return data + "/classic/library"
+    let old = data + "/classic", new = data + "/bluebox"
+    #endif
+    let fm = FileManager.default
+    if fm.fileExists(atPath: old) && !fm.fileExists(atPath: new) {
+        try? fm.moveItem(atPath: old, toPath: new)
+    }
+}
+
+func defaultLibrary() -> String {
+    let env = ProcessInfo.processInfo.environment
+    if let lib = env["BLUEBOX_LIBRARY"], !lib.isEmpty { return lib }
+    migrateDataFolder()
+    let home = env["HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.path
+    #if os(macOS)
+    return home + "/Library/Application Support/Blue Box/Library"
+    #else
+    let data = env["XDG_DATA_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? home + "/.local/share"
+    return data + "/bluebox/library"
     #endif
 }
 
@@ -71,10 +90,10 @@ func defaultDisk() -> String {
     let env = ProcessInfo.processInfo.environment
     let home = env["HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.path
     #if os(macOS)
-    return home + "/Library/Application Support/Classic/Macintosh HD"
+    return home + "/Library/Application Support/Blue Box/Macintosh HD"
     #else
     let data = env["XDG_DATA_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? home + "/.local/share"
-    return data + "/classic/Macintosh HD"
+    return data + "/bluebox/Macintosh HD"
     #endif
 }
 
@@ -459,7 +478,7 @@ func isUDIF(_ path: String) -> Bool {
 
 /// Convert a UDIF image to a raw one (hdiutil on macOS, dmg2img elsewhere).
 private func rawFromUDIF(_ path: String) throws -> String {
-    let out = NSTemporaryDirectory() + "classic-udif-\(UUID().uuidString).img"
+    let out = NSTemporaryDirectory() + "bluebox-udif-\(UUID().uuidString).img"
     let p = Process()
     #if os(macOS)
     p.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
@@ -572,7 +591,7 @@ func isHFSPlus(_ path: String) -> Bool {
 #if os(macOS)
 /// Mount the image read-only and copy its files out as AppleDouble.
 private func extractMounted(_ path: String, into dir: String) throws -> String {
-    let mount = NSTemporaryDirectory() + "classic-mount-\(UUID().uuidString)"
+    let mount = NSTemporaryDirectory() + "bluebox-mount-\(UUID().uuidString)"
     try FileManager.default.createDirectory(atPath: mount, withIntermediateDirectories: true)
     func hdiutil(_ args: [String]) -> Int32 {
         let p = Process()

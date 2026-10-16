@@ -2,7 +2,7 @@
  * File Manager over host folders.
  *
  * One volume, "Macintosh HD" (vRefNum -1, drive 1), is a folder of its own
- * under the user's Library (Application Support/Classic/Macintosh HD, or
+ * under the user's Library (Application Support/Blue Box/Macintosh HD, or
  * the XDG data directory elsewhere): installers and applications write
  * there freely, and the System Folder lives in it.  The host's files appear
  * in a folder at its root, "Host", but only where access was granted: the
@@ -1928,18 +1928,18 @@ static bool make_dirs(const char *path)
     return mkdir(p, 0755) == 0 || is_dir(p);
 }
 
-/* Our folder in the user's data: Application Support/Classic on macOS. */
+/* Our folder in the user's data: Application Support/Blue Box on macOS. */
 static void data_folder(char *out, size_t outsize)
 {
     const char *home = getenv("HOME");
 #ifdef __APPLE__
-    snprintf(out, outsize, "%s/Library/Application Support/Classic", home ? home : "/tmp");
+    snprintf(out, outsize, "%s/Library/Application Support/Blue Box", home ? home : "/tmp");
 #else
     const char *data = getenv("XDG_DATA_HOME");
     if (data && *data)
-        snprintf(out, outsize, "%s/classic", data);
+        snprintf(out, outsize, "%s/bluebox", data);
     else
-        snprintf(out, outsize, "%s/.local/share/classic", home ? home : "/tmp");
+        snprintf(out, outsize, "%s/.local/share/bluebox", home ? home : "/tmp");
 #endif
 }
 

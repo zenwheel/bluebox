@@ -5,7 +5,7 @@ import ForkStore
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     /// Hand-assembled 68k programs exercising the trap dispatcher.
     @Suite struct TrapDispatch {
         init() { bootMachine() }

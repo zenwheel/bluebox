@@ -137,7 +137,7 @@ void machine_window_action(uint32_t id, int action, int a, int b, int x, int y)
     pending.waiting = true;
     pending.taken = false;
     pthread_mutex_unlock(&action_lock);
-    if (getenv("CLASSIC_DEBUG_HOST"))
+    if (getenv("BLUEBOX_DEBUG_HOST"))
         fprintf(stderr, "window action %d on %08X (%d, %d) click %d,%d\n", action, id, a, b, x, y);
     ev_post_click_at(x, y);
 }

@@ -4,7 +4,7 @@ import ForkStore
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     @Suite struct ResourceManager {
         let refnum: Int16
 

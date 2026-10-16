@@ -1,4 +1,6 @@
-# Classic: a Mac Toolbox environment for modern macOS and Linux
+# Blue Box: a Mac Toolbox environment for modern macOS and Linux
+
+(Formerly "Classic"; renamed Blue Box on 2026-10-16. The command is `bluebox`, and its data lives in `~/Library/Application Support/Blue Box`, moved there from the old `Classic` folder automatically.)
 
 Run unmodified classic Mac OS applications (System 7.1 – Mac OS 9.2 era, 68k and PowerPC)
 as individual host applications on macOS and Linux, on top of a clean-room reimplementation
@@ -15,7 +17,7 @@ per-app quirks list is the reality, and the test oracle keeps us honest about th
 | Area | Decision |
 |---|---|
 | Host platforms | macOS and Linux. No iPadOS. |
-| Binaries | Run existing 68k and PPC binaries unmodified. No source toolchain for classic apps. |
+| Binaries | Run existing 68k and PPC binaries unmodified. No source toolchain for bluebox apps. |
 | Process model | One classic app per host process, launched from the host OS. No inter-app communication except via host clipboard and files. No Finder. |
 | Core language | C17 for the CPU cores, memory model, trap dispatch, and the whole Toolbox. |
 | Host language | Swift for the macOS host and the CLI. Python for code generation (and possibly import/install tooling). |
@@ -166,7 +168,7 @@ Settings are resolved in layers, each overriding the one before:
 3. Per-app profile, stored in the app bundle or `.desktop` settings and in the catalog. Auto-detected settings land here too.
 4. Command-line overrides:
    ```
-   classic run --gestalt sysv=0x0755 --lowmem DoubleTime=20 --speech=avspeech <app> [docs…]
+   bluebox run --gestalt sysv=0x0755 --lowmem DoubleTime=20 --speech=avspeech <app> [docs…]
    ```
 
 The machine always presents ordinary Mac OS (7.x, 8 or 9 per app), never A/UX: A/UX 4.0 never shipped, and apps that detect A/UX (`'a/ux'`) tend to refuse to run or take A/UX-only paths. An `'a/ux'` override exists for experiments. A selector of our own (like the Classic environment's `'bbox'` marker) lets new software detect this environment and its host features.
@@ -190,8 +192,8 @@ Gestalt selectors can be overridden (`sysv`, `mach`, `cpu `, `fpu `, `qd  `, `sy
 
 ### 2.8 Launching from the host
 
-- `classic run <app> [docs…]` is the direct and development entry point.
-- `classic install <app>` wraps a classic app as a host app.
+- `bluebox run <app> [docs…]` is the direct and development entry point.
+- `bluebox install <app>` wraps a classic app as a host app.
   - **macOS:** a `.app` bundle.
     - A stub executable runs the shared runtime.
     - The classic app sits in the bundle in AppleDouble form, or the bundle references it in the library.
@@ -273,7 +275,7 @@ the trap census.
 - AppleDouble reader. Resource Manager read side: open a resource fork, resource map in the guest heap, `GetResource` and friends, and the resource chain.
 - Memory Manager: system and application zones, pointers, handles, master pointers, flags, compaction and the growing application heap.
 - Segment Loader: `CODE 0` jump table, A5 world, `_LoadSeg`, `_UnloadSeg`.
-- `classic run <app>` in headless mode with a trap trace log.
+- `bluebox run <app>` in headless mode with a trap trace log.
 - Oracle setup: Basilisk II fork with trap tracing, the probe app build (Retro68), the diff tool, and the trap census for TeachText, SimpleText (68k), ResEdit and HyperCard 2.1.
 
 **Exit:** TeachText's code runs through its init sequence in headless mode, and the trace shows every trap it calls; the unimplemented ones are flagged. The memory and resource probes match the oracle.
@@ -303,7 +305,7 @@ the trap census.
   - native move and resize
   - `NSMenu` menu bar
   - damage-tracked presentation
-- **Launching:** Apple Events for `oapp`/`odoc`/`quit`, and `classic install` producing a macOS `.app` bundle with icon and document types.
+- **Launching:** Apple Events for `oapp`/`odoc`/`quit`, and `bluebox install` producing a macOS `.app` bundle with icon and document types.
 - **Compatibility System file:** the first build of the resource file (defprocs, cursors, `KCHR`, standard strings and alerts, fonts).
 
 **Exit:** TeachText is installed as a macOS app. Double-clicking a `.txt` file opens it in rootless windows; editing, copy/paste with host apps, Save As and quitting with the unsaved-changes prompt all work. All probes for the managers in this milestone match the oracle.
@@ -317,7 +319,7 @@ the trap census.
   - File Manager over host folders (AppleDouble, both forks, working directories, FSSpec calls)
   - Toolbox Utilities; placeholder Help and Printing Managers
   - screen-in-a-window host on AppKit
-  - `classic install`: a macOS `.app` per classic app (Finder icon from `BNDL`/`FREF`/`icl8`, document types from its `FREF`s, an sh launcher); Finder and Dock opens become Open Documents events
+  - `bluebox install`: a macOS `.app` per classic app (Finder icon from `BNDL`/`FREF`/`icl8`, document types from its `FREF`s, an sh launcher); Finder and Dock opens become Open Documents events
   - high-level events: apps whose `SIZE` says so get `odoc`/`oapp` through `AcceptHighLevelEvent` in the System 7 wire format (TeachText parses it itself); Alias Manager
   - alerts as native `NSAlert`s (`ALRT`/`DITL`, `ParamText`, stages)
   - MacRoman 0x80–0xFF in the bitmap fonts: accented letters, dashes, quotes, ellipsis and ligatures composed from each face's own glyphs; the symbols (© ® ™ ° ± † § ¶ £ ¥ € ƒ, the spacing accents, ≠ ≤ ≥ ≈ ∞ √ ∑ ∏ ∂ ∆ ∫ π Ω ‰ ◊ …) drawn to each face's metrics; only the Apple logo is missing
@@ -335,7 +337,7 @@ the trap census.
   - `LoadSeg` patches the calling entry too (Director projectors keep their own copy of the jump table); `NewPixPat` allocates its pixel map and data
   - `CopyDeepMask`, `SeedCFill`, `CalcCMask`, `SetPortPix`; `CouldDialog`/`FreeDialog`; mounting and ejecting are refused (one volume, always mounted); the Edition Manager starts and has nothing to publish or subscribe to
   - Fonts answer to the classic names and numbers a System 7 Mac had (Chicago, New York, Geneva, Monaco, Times, Helvetica, Courier, Symbol); the ones we have no face for draw with the nearest of ours. Sound status calls write at most the record's size.
-  - The screen is 32 bits by default; `SetDepth` switches it while an application runs (1, 8 or 32 bits: the device, screenBits and every port on the screen follow, and everything is redrawn), and `HasDepth` answers for those depths. Games that want 256 colours without asking get it from a per-application setting, `classic set <app> depth 8`, kept in the library's Settings.json and used by every run, installed bundles included
+  - The screen is 32 bits by default; `SetDepth` switches it while an application runs (1, 8 or 32 bits: the device, screenBits and every port on the screen follow, and everything is redrawn), and `HasDepth` answers for those depths. Games that want 256 colours without asking get it from a per-application setting, `bluebox set <app> depth 8`, kept in the library's Settings.json and used by every run, installed bundles included
   - CurStackBase is exactly A5 less the globals (it was rounded to 4, and MPW's runtime unpacking DATA 0 into the globals then never stopped); `--depth 1|8|32`; `Palette2CTab`/`CTab2Palette`; `DrvrInstall` accepted
   - OS traps whose HFS variant has separate glue (`PBOpenRF`/`PBHOpenRF` …) are told apart by the $0200 bit; previously the H version got every call. `InitWindows` leaves the Window Manager port current. Dialogs are colour windows, as in System 7 with Color QuickDraw. `SetScanOverride`/`GetScanOverride`. Files stored only as a sidecar exist. (ResEdit 2.1.3 and SuperPaint 2.0 start.)
   - `Fix2X`/`Frac2X`/`X2Fix`/`X2Frac`, `Microseconds`, `GetVideoDefault`; Pack7's `Str2Dec`/`CStr2Dec`/`Dec2Str`; colour fills for every shape (`FillCPoly` …, through the pattern's 1-bit form); `GetWVariant`
@@ -355,7 +357,7 @@ the trap census.
   - Headless runs stop at the instruction limit even while waiting in the Toolbox (`ModalDialog` without a filter)
   - Time Manager (`InsTime`, `InsXTime`, `PrimeTime`, `RmvTime`, drift-free extended tasks) and VBL tasks (`VInstall`, `SlotVInstall`), run as interrupts between emulation slices and at Event Manager safe points, honouring the interrupt mask
   - SANE: FP68K (Pack4) and Elems68K (Pack5) natively, in host doubles (53-bit rather than 64-bit extended precision); all formats incl. comp and 96-bit extended, decimal conversion, environment and exception flags
-  - System Folder: a per-user host folder (`~/Library/Application Support/Classic/System Folder`, `$XDG_DATA_HOME/classic/System Folder` elsewhere) given by `FindFolder`, `SysEnvirons` and `BootDrive`; `PBHGetVolParms`, `PBOpenDF`
+  - System Folder: a per-user host folder (`~/Library/Application Support/Blue Box/System Folder`, `$XDG_DATA_HOME/classic/System Folder` elsewhere) given by `FindFolder`, `SysEnvirons` and `BootDrive`; `PBHGetVolParms`, `PBOpenDF`
   - Resource Manager write side: `CreateResFile`/`HCreateResFile`/`FSpCreateResFile`, `AddResource`, `RemoveResource`, `ChangedResource`, `WriteResource`, `UpdateResFile`, `SetResInfo`/`SetResAttrs`, partial reads and writes; files are written on update, close and ExitToShell (the application and fonts keep changes in memory)
   - Color QuickDraw extras: colour tables and `Color2Index`/`Index2Color`, `NewPixMap`/`CopyPixMap`, devices, offscreen GWorlds at 1–32 bits, `GetCPixel`/`SetCPixel`, colour icons (`cicn`), colour cursors (loaded; the host pointer stays), pixel patterns through their 1-bit form, the Palette Manager (palettes kept per window, `PmForeColor`/`PmBackColor`, animation updates the entries), auxiliary control records
   - host clipboard: text in both directions at suspend and resume, as System 7 apps expect (TEToScrap/TEFromScrap)
@@ -363,7 +365,7 @@ the trap census.
   - Standard File extras: the app's own items (TeachText's Document / Stationery) as an accessory view in the native panel, run through the app's dialog hook in a hidden classic dialog
   - QuickDraw pictures: DrawPicture for version 1 and 2 (shapes, polygons, regions, text, patterns, all bitmap and pixmap opcodes); pictures and bitmaps print as images
   - colour: an 8-bit screen with the standard colour table; drawing, text and CopyBits at any depth
-  - themes: `--appearance <scheme>` draws windows and controls from Kaleidoscope schemes (2.x: sliced sample windows from 'wnd#' layouts, widget down states, grow boxes, scroll bars, thumbs, push buttons, checkboxes and radio buttons; 1.x: scheme stripes and grow boxes on classic geometry) on a 32-bit screen; `classic themes` lists imported schemes
+  - themes: `--appearance <scheme>` draws windows and controls from Kaleidoscope schemes (2.x: sliced sample windows from 'wnd#' layouts, widget down states, grow boxes, scroll bars, thumbs, push buttons, checkboxes and radio buttons; 1.x: scheme stripes and grow boxes on classic geometry) on a 32-bit screen; `bluebox themes` lists imported schemes
   - native style: `--appearance native` gives document windows macOS frames (close, zoom, move and resize reach the app as its own window events) and draws push buttons, checkboxes, radio buttons and scroll bars with AppKit
   - import: .zip archives, .dmg (UDIF) images, and HFS+ volumes (mounted read-only through the host on macOS)
   - Component Manager (ComponentDispatch): components applications register from code or `thng` resources, instance calls, `CallComponentFunction`, capture and the rest; we register none of our own, so codec searches find nothing. Cursor Device Manager (no extra devices) and Slot Manager (no cards). `StringToFormatRec`, `ExtendedToString` and `StringToExtended` for common number formats
@@ -386,29 +388,29 @@ the trap census.
 **Goal:** classic software can be brought in from archives and disk images.
 
 - **HFS images:** read-only reader for HFS images (DiskCopy 4.2, raw, NDIF/UDIF with ADC, hybrid ISO), which can also be mounted as volumes.
-- **`classic import <file|url>`:**
+- **`bluebox import <file|url>`:**
   - archives (`.sit`, `.sea`, `.hqx`, `.bin`, `.cpt`) unpacked with `unar`, keeping forks
   - disk images through our HFS reader
   - everything written to AppleDouble and catalogued, with applications detected (`APPL`, 68k vs PPC)
   - works on files and URLs the user supplies; no crawler
-- **`classic heal`:** converts xattr-only resource forks to AppleDouble.
+- **`bluebox heal`:** converts xattr-only resource forks to AppleDouble.
 
 **Exit:** a TeachText `.sit` archive downloaded from Macintosh Garden imports, installs and runs on macOS. HFS floppy images mount read-only.
 
-**Status (2026-10-12):** the import pipeline was pulled forward and works. `classic import` and `classic run` take MacBinary, StuffIt (1.x, 5, `.sea`), Compact Pro and BinHex files (archives through `unar`). They also take DiskCopy 4.2, Disk Copy 6 NDIF (raw and ADC), raw HFS and partitioned CD images, recursing through nesting (e.g. MacBinary → StuffIt → disk image). Still to do: HFS+, MFS, UDIF `.dmg`, `.moof` flux images. (Linux parity moved to M12, after everything else.)
+**Status (2026-10-12):** the import pipeline was pulled forward and works. `bluebox import` and `bluebox run` take MacBinary, StuffIt (1.x, 5, `.sea`), Compact Pro and BinHex files (archives through `unar`). They also take DiskCopy 4.2, Disk Copy 6 NDIF (raw and ADC), raw HFS and partitioned CD images, recursing through nesting (e.g. MacBinary → StuffIt → disk image). Still to do: HFS+, MFS, UDIF `.dmg`, `.moof` flux images. (Linux parity moved to M12, after everything else.)
 
-### M2b: The Classic shell (launcher, library and settings)
+### M2b: The Blue Box shell (launcher, library and settings)
 
 **Goal:** one host application is the home of the environment: it launches classic applications, brings new ones in, and holds the settings that are not per run.
 
-- **Launcher and library:** browses the library and the classic Mac's disk, launches applications (each still its own rootless process, as `classic run` starts them), and shows recent and installed ones. `classic install` bundles remain available.
+- **Launcher and library:** browses the library and the classic Mac's disk, launches applications (each still its own rootless process, as `bluebox run` starts them), and shows recent and installed ones. `bluebox install` bundles remain available.
 - **Import:** drop archives, disk images or folders onto the shell (or its Dock icon) to import them, with progress, the applications found, and the option to run an installer.
 - **Watching the System Folder:** the shell notices what installers put into the classic Mac's System Folder and acts on it:
   - Control Panels and Apple Menu Items become launchable items (the Apple menu of every run lists Apple Menu Items, as on a real Mac);
   - Startup Items can run when the shell starts;
   - Extensions and fonts: fonts join the font list; extensions (INITs) are listed with whether the environment supports what they patch, and supported ones load at boot;
   - Preferences files are kept with the disk.
-- **Settings**, in one place (the environment profile behind them stays a file `classic` reads):
+- **Settings**, in one place (the environment profile behind them stays a file `bluebox` reads):
   - per application: screen depth, CPU, appearance or theme, memory size
   - the highlight colour (HiliteRGB): by default the host's selection colour, read at launch
   - networking (M5): AppleTalk on or off, the LocalTalk-over-UDP group, the EtherTalk interface, MacTCP on or off
@@ -420,7 +422,7 @@ the trap census.
 
 **Exit:** a user imports an installer archive by dropping it on the shell, runs the installer, and then launches the installed application and one of the control panels it added from the shell; changing a per-application setting there takes effect on its next launch.
 
-**Progress (2026-10-16):** `classic shell` (Sources/classic/Shell.swift) has the window and the scaffolding: a sidebar of Defaults, the System Folder and every application (library and disk, with Finder icons); an application's page launches it and edits its settings; the Defaults page edits the settings every application gets (`classic set --default`); archives dropped on the window or Dock icon, or chosen with Import, are imported in the background; the System Folder's folders are watched and listed by kind; running and recent applications show, and a status item keeps the shell in the background. Settings so far: scale, depth, appearance (black and white, macOS frames, or a theme), highlight colour (macOS's, or a chosen one), processor. Each is one `AppSettings` field and one picker, so later options (Appearance Manager, networking, serial ports, fonts, memory size) slot in the same way.
+**Progress (2026-10-16):** `bluebox shell` (Sources/bluebox/Shell.swift) has the window and the scaffolding: a sidebar of Defaults, the System Folder and every application (library and disk, with Finder icons); an application's page launches it and edits its settings; the Defaults page edits the settings every application gets (`bluebox set --default`); archives dropped on the window or Dock icon, or chosen with Import, are imported in the background; the System Folder's folders are watched and listed by kind; running and recent applications show, and a status item keeps the shell in the background. Settings so far: scale, depth, appearance (black and white, macOS frames, or a theme), highlight colour (macOS's, or a chosen one), processor. Each is one `AppSettings` field and one picker, so later options (Appearance Manager, networking, serial ports, fonts, memory size) slot in the same way.
 Still to do: launching control panels and running Startup Items (needs the environment to run `cdev`s and `appe`s), loading supported extensions, Apple menu contents in every run, fonts added through the shell, library and disk locations, granted folders, the installer flow of the exit test.
 
 ### M3: MacinTalk, SimpleText (68k) and printing
@@ -478,7 +480,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **QuickTime (Movie Toolbox):**
   - `EnterMovies`, movie files and `moov` atoms, `NewMovieFromFile`, `StartMovie`/`MoviesTask`, time bases, tracks and media, and the standard movie controller
   - the Image Compression Manager, including compressed `PICT`s (`DecompressImage`, JPEG in `PICT`)
-  - **codecs:** our own C decoders for the classic set (Raw, Apple Video `rpza`, Animation `rle `, Graphics `smc `, Cinepak, Photo-JPEG). Host frameworks have dropped several of these (macOS removed Cinepak), so we can't rely on them for old codecs; AVFoundation or GStreamer handle newer ones.
+  - **codecs:** our own C decoders for the bluebox set (Raw, Apple Video `rpza`, Animation `rle `, Graphics `smc `, Cinepak, Photo-JPEG). Host frameworks have dropped several of these (macOS removed Cinepak), so we can't rely on them for old codecs; AVFoundation or GStreamer handle newer ones.
   - frames are decoded into GWorlds and drawn through `CopyBits`, so rootless windows and screen mode both work
 - **QuickDraw GX:**
   - graphics: shapes, styles, inks, transforms, the view port and view device model, and drawing through CoreGraphics or cairo
@@ -537,7 +539,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Raw fork access:** `OpenRF` with `FSRead` on raw fork bytes, which must be byte-exact.
 - **Automatic screen-in-a-window detection** (§2.4): framebuffer `mprotect` and the fault handler, the trigger heuristics, the runtime switch, and saving the decision to the profile.
 - **Profile system complete:** the layered profile, CLI overrides, the Gestalt and low-mem whitelist, and values derived from the host.
-- **`classic inspect`:** a host-side resource browser with export (`PICT`/icons → PNG, `snd` → WAV, `STR#`/`TEXT` → UTF-8).
+- **`bluebox inspect`:** a host-side resource browser with export (`PICT`/icons → PNG, `snd` → WAV, `STR#`/`TEXT` → UTF-8).
 
 **Exit:** ResEdit opens a copy of TeachText, edits a `STR#`, a `DLOG` and an icon, saves, and the modified TeachText runs. Fuzzed resource maps never crash the runtime. A test app that writes directly to the screen switches to screen mode on its own.
 
@@ -580,7 +582,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - Navigation Services (native dialogs when no hooks)
   - Contextual Menu Manager, Window Manager 2.0 additions, Control Manager 2.0
   - Thread Manager: cooperative threads are done (2026-10-13). Preemptive threads are still scheduled cooperatively, and a custom scheduler (`SetThreadScheduler`) is recorded but not consulted.
-- **Drag Manager ↔ host drag and drop:** files and text in and out of classic apps.
+- **Drag Manager ↔ host drag and drop:** files and text in and out of bluebox apps.
 - **Open Transport** (it comes after M8 because its API is delivered as Code Fragment Manager shared libraries, CFM-68K on 68k Macs):
   - endpoints, providers and notifiers; TCP, UDP and DNS on host sockets
   - AppleTalk through OT (ADSP, ATP, DDP, NBP) on the M5 AppleTalk stack, so OT-era games and apps share the same network
@@ -595,7 +597,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 **Goal:** heavy apps and games run at a usable speed.
 
 - **JIT** for 68k and PPC on macOS (`MAP_JIT`) and Linux.
-- **Persistent translation cache** keyed by a hash of each code resource or fragment, with an ahead-of-time "pre-translate" option in `classic install`. The interpreter remains the fallback.
+- **Persistent translation cache** keyed by a hash of each code resource or fragment, with an ahead-of-time "pre-translate" option in `bluebox install`. The interpreter remains the fallback.
 - **Games:** InputSprocket → host gamepads, DrawSprocket → screen mode, and Sound input.
 - Drawing problems seen in the census (2026-10-13), to investigate:
   - StarGuardian reaches "Click on rabbit to continue" but draws no rabbit. It copies its pictures with `CopyBits` from bitmaps it builds itself from its data fork.
@@ -629,7 +631,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - moves and resizes through `gdk_toplevel_begin_move`/`gdk_toplevel_begin_resize`
   - menu bar in each window, `xdg_popup` menus
   - pasteboard, native file dialogs
-- **Linux launching:** `classic install` on Linux produces a `.desktop` file, a PNG icon and shared-mime-info XML.
+- **Linux launching:** `bluebox install` on Linux produces a `.desktop` file, a PNG icon and shared-mime-info XML.
 - **Our own HFS+ reader** (macOS imports mount HFS+ through the host).
 - **CI:** Linux CI, headless probe runs on both platforms.
 

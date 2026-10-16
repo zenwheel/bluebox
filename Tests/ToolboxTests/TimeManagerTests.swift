@@ -4,7 +4,7 @@ import Foundation
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     @Suite struct TimeManager {
         init() { bootMachine() }
 

@@ -1,14 +1,14 @@
-// `classic install`: wrap a library application in a macOS .app bundle so it
+// `bluebox install`: wrap a library application in a macOS .app bundle so it
 // has its own Dock icon, can be launched from the Finder, and accepts
 // documents dropped on it.
 //
-// The bundle's executable is a small sh script that execs `classic run`
+// The bundle's executable is a small sh script that execs `bluebox run`
 // with the application, so the process Launch Services started is ours.
 
 #if canImport(AppKit)
 import AppKit
 import Foundation
-import ClassicHost
+import BlueBoxHost
 import ForkStore
 
 let bundleAppKey = "ClassicApplicationPath"
@@ -55,7 +55,7 @@ private func infoPlist(app: String, name: String, executable: String, bundle: Fi
     var info: [String: Any] = [
         "CFBundleDevelopmentRegion": "en",
         "CFBundleExecutable": executable,
-        "CFBundleIdentifier": "local.classic.\(slug)",
+        "CFBundleIdentifier": "local.bluebox.\(slug)",
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": name,
         "CFBundleDisplayName": name,
@@ -100,14 +100,14 @@ private func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of
 private func launcherScript(classic: String, app: String) -> String {
     """
     #!/bin/sh
-    # Made by classic install.
+    # Made by bluebox install.
     exec \(shellQuote(classic)) run \(shellQuote(app)) "$@"
 
     """
 }
 
 func defaultInstallFolder() -> String {
-    (NSHomeDirectory() as NSString).appendingPathComponent("Applications/Classic")
+    (NSHomeDirectory() as NSString).appendingPathComponent("Applications/Blue Box")
 }
 
 func installCommand(_ args: [String]) {
@@ -142,7 +142,7 @@ func installCommand(_ args: [String]) {
     if fm.fileExists(atPath: bundlePath) {
         let existing = NSDictionary(contentsOfFile: bundlePath + "/Contents/Info.plist")
         guard force || existing?[bundleAppKey] != nil else {
-            fail("\(bundlePath) exists and was not made by classic install (use --force to replace it)")
+            fail("\(bundlePath) exists and was not made by bluebox install (use --force to replace it)")
         }
         do { try fm.removeItem(atPath: bundlePath) } catch { fail("cannot replace \(bundlePath): \(error)") }
     }
@@ -198,22 +198,24 @@ func installCommand(_ args: [String]) {
 /// Finder icon, kept with the library.  Returns only if that fails.
 func reexecInNamedBundle(app: String) {
     let env = ProcessInfo.processInfo.environment
-    // Started by Launch Services from a `classic install` bundle: the Dock
+    // Started by Launch Services from a `bluebox install` bundle: the Dock
     // already has that bundle's name (and it may hold documents to open).
     let launcher = env["__CFBundleIdentifier"] ?? ""
-    if launcher.hasPrefix("local.classic.") && !launcher.hasPrefix("local.classic.run.") { return }
-    guard Bundle.main.bundleIdentifier == nil, env["CLASSIC_NO_BUNDLE"] == nil,
+    for prefix in ["local.bluebox.", "local.classic."] where launcher.hasPrefix(prefix) && !launcher.hasPrefix(prefix + "run.") {
+        return // (local.classic: a bundle installed before the rename)
+    }
+    guard Bundle.main.bundleIdentifier == nil, env["BLUEBOX_NO_BUNDLE"] == nil,
           let me = Bundle.main.executableURL?.resolvingSymlinksInPath().path else { return }
     let name = (app as NSString).lastPathComponent
     let file = name.replacingOccurrences(of: "/", with: ":")
     let support = ((defaultLibrary() as NSString).deletingLastPathComponent as NSString)
     let bundle = support.appendingPathComponent("Bundles/\(file).app")
-    let exe = bundle + "/Contents/MacOS/classic"
+    let exe = bundle + "/Contents/MacOS/bluebox"
     let fm = FileManager.default
     let slug = name.lowercased().map { $0.isLetter || $0.isNumber ? String($0) : "-" }.joined()
     var info: [String: Any] = [
-        "CFBundleExecutable": "classic",
-        "CFBundleIdentifier": "local.classic.run.\(slug)",
+        "CFBundleExecutable": "bluebox",
+        "CFBundleIdentifier": "local.bluebox.run.\(slug)",
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": name,
         "CFBundleDisplayName": name,

@@ -4,7 +4,7 @@ import Foundation
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     @Suite struct QuickDrawExtras {
         func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
             let p = tb_NewPtr(8, false, true)

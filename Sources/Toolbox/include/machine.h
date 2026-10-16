@@ -339,11 +339,11 @@ void machine_set_launch_documents(const char *const *paths, int n);
 
 /* The host folder that stands in for the System Folder (Preferences and
  * the other FindFolder folders live inside it).  The default is
- * ~/Library/Application Support/Classic/System Folder on macOS and
+ * ~/Library/Application Support/Blue Box/System Folder on macOS and
  * $XDG_DATA_HOME/classic/System Folder elsewhere. */
 void machine_set_system_folder(const char *path);
 /* The folder that is the Mac's volume ("Macintosh HD"); by default
- * Application Support/Classic/Macintosh HD.  Before machine_launch. */
+ * Application Support/Blue Box/Macintosh HD.  Before machine_launch. */
 void machine_set_disk(const char *path);
 
 /* A hard cap on instructions executed, also inside routines the Toolbox

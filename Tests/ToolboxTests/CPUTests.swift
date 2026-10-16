@@ -2,7 +2,7 @@ import CPUTestSupport
 import Foundation
 import Testing
 
-extension Classic {
+extension BlueBox {
     /// Runs the SingleStepTests 68000 vectors, if Tests/fetch-cpu-tests.sh has fetched them.
     @Suite struct CPUSingleStepTests {
         static let cacheDir: URL = URL(fileURLWithPath: #filePath)

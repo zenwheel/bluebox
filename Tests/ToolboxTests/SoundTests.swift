@@ -4,7 +4,7 @@ import Foundation
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     @Suite struct SoundManager {
         nonisolated(unsafe) static var played: [(frames: Int32, channels: Int32, rate: Double)] = []
         nonisolated(unsafe) static var callbacks = 0
@@ -150,7 +150,7 @@ extension Classic {
     }
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct StringsAndScripts {
         func compare(_ a: String, _ b: String, trap: UInt16, _ fn: (UnsafeMutablePointer<cpu68k>?, UInt16) -> Void) -> Int32 {
             let pa = tb_NewPtr(64, false, true), pb = tb_NewPtr(64, false, true)
@@ -203,7 +203,7 @@ extension Classic {
     }
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct NotificationManager {
         nonisolated(unsafe) static var posted: [(Int32, String, Int32)] = []
         nonisolated(unsafe) static var responses = 0
@@ -265,7 +265,7 @@ extension Classic {
     }
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct QuickTimeStart {
         /// QuickTime is there; a movie that cannot be opened is reported, and
         /// asking about no movie says it is done, so applications carry on.

@@ -21,7 +21,7 @@ private func testMoov() -> [UInt8] {
     return atom("moov", cat(mvhd, trak))
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct QuickTime {
         /// A flattened movie file: its description, tracks and timing (the
         /// clock follows instructions headless, and there is no decoding).
@@ -76,8 +76,8 @@ extension Classic {
             p.waitUntilExit()
             #expect(p.terminationStatus == 0)
             _ = initToolbox()
-            setenv("CLASSIC_QUICKTIME_HEADLESS", "1", 1)
-            defer { unsetenv("CLASSIC_QUICKTIME_HEADLESS") }
+            setenv("BLUEBOX_QUICKTIME_HEADLESS", "1", 1)
+            defer { unsetenv("BLUEBOX_QUICKTIME_HEADLESS") }
             let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
             fm_spec_for_path(path, spec)
             let rn = tb_NewPtr(2, false, true)

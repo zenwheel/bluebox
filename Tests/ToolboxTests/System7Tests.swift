@@ -20,7 +20,7 @@ private func guestString(_ s: String) -> UInt32 {
     return p
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct Fonts {
         @Test func applicationFontIsGeneva() {
             launchTestApp()
@@ -432,7 +432,7 @@ extension Classic {
     }
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct AppleEventBuilding {
         @Test func listsRecordsAndSendingToOurselves() {
             launchTestApp()

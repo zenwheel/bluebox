@@ -1,4 +1,4 @@
-import ClassicHost
+import BlueBoxHost
 import Foundation
 import Testing
 #if canImport(AppKit)
@@ -118,7 +118,7 @@ import PDFKit
 import Toolbox
 
 /// The Printing Manager records a page; the host renders it as PDF.
-extension Classic {
+extension BlueBox {
     @Suite struct Printing {
         nonisolated(unsafe) static var ops: [(kind: Int32, verb: Int32, text: String, font: Int16, rect: mprect)] = []
         nonisolated(unsafe) static var pdf = Data()

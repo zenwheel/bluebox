@@ -22,7 +22,7 @@ func dlog(items: Int16, visible: Bool = true) -> [UInt8] {
 
 private func pstr(_ s: String) -> [UInt8] { Array(s.utf8) }
 
-extension Classic {
+extension BlueBox {
     @Suite struct DialogManager {
         static let items = ditl([
             ditlItem(4, (160, 220, 180, 290), pstr("OK")),             // 1 button
@@ -282,7 +282,7 @@ extension Classic {
     }
 }
 
-extension Classic {
+extension BlueBox {
     /// The 8-bit screen and the colour appearances.
     @Suite struct ColourScreen {
         func rgba(_ x: Int32, _ y: Int32) -> [UInt8] {
@@ -316,7 +316,7 @@ extension Classic {
     }
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct Clipboard {
         nonisolated(unsafe) static var exported: String?
 
@@ -357,7 +357,7 @@ func cicnData(w: Int, h: Int, _ pixel: (Int, Int) -> UInt8) -> [UInt8] {
     return d
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct Themes {
         /// A tiny scheme: a 40x30 sample document window, red frame, content (10,5)-(25,35).
         static func scheme() -> URL {

@@ -1,16 +1,16 @@
-// The Classic shell (classic shell): one window that is the home of the
+// The Blue Box shell (bluebox shell): one window that is the home of the
 // environment.  A sidebar lists the default settings and every application
 // in the library and on the classic Mac's disk; an application's page
-// launches it (its own `classic run` process, as from the command line)
+// launches it (its own `bluebox run` process, as from the command line)
 // and holds its settings.  Archives dropped on the window are imported.
 //
 // Settings live in the library's Settings.json (Settings.swift), which
-// `classic run` reads; each control here edits one field of AppSettings,
+// `bluebox run` reads; each control here edits one field of AppSettings,
 // so a new option is a field there and a control in SettingsForm.
 
 #if canImport(AppKit)
 import AppKit
-import ClassicHost
+import BlueBoxHost
 import SwiftUI
 
 /// An application the shell can launch.
@@ -143,7 +143,7 @@ enum ShellItem: Hashable {
                 })
     }
 
-    /// Run an application as `classic run` does from a terminal: a process of
+    /// Run an application as `bluebox run` does from a terminal: a process of
     /// its own, with its own Dock icon and rootless windows.
     func launch(_ app: ShellApp) { launch(path: app.path) }
 
@@ -206,9 +206,9 @@ func classicThemes(in library: String) -> [String] {
 
 struct ShellView: View {
     @ObservedObject var model: ShellModel
-    /// The page shown first (CLASSIC_SHELL_PAGE=system for snapshots).
+    /// The page shown first (BLUEBOX_SHELL_PAGE=system for snapshots).
     @State private var selection: ShellItem? = {
-        switch ProcessInfo.processInfo.environment["CLASSIC_SHELL_PAGE"] {
+        switch ProcessInfo.processInfo.environment["BLUEBOX_SHELL_PAGE"] {
         case "system": return .systemFolder
         default: return .defaults
         }
@@ -492,7 +492,7 @@ struct HighlightPicker: View {
     func applicationDidFinishLaunching(_ notification: Notification) {
         showWindow()
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Classic")
+        item.button?.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Blue Box")
         let menu = NSMenu()
         menu.delegate = self
         item.menu = menu
@@ -530,10 +530,10 @@ struct HighlightPicker: View {
             }
             menu.addItem(.separator())
         }
-        let open = NSMenuItem(title: "Open Classic", action: #selector(openWindow(_:)), keyEquivalent: "")
+        let open = NSMenuItem(title: "Open Blue Box", action: #selector(openWindow(_:)), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
-        menu.addItem(NSMenuItem(title: "Quit Classic", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Quit Blue Box", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
     }
 
     @objc func launchRecent(_ sender: NSMenuItem) {
@@ -557,16 +557,16 @@ struct HighlightPicker: View {
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 560),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
-        w.title = "Classic"
+        w.title = "Blue Box"
         w.isReleasedWhenClosed = false
         w.contentView = NSHostingView(rootView: ShellView(model: model))
         w.center()
-        w.setFrameAutosaveName("ClassicShell")
+        w.setFrameAutosaveName("BlueBoxShell")
         w.makeKeyAndOrderFront(nil)
         window = w
         NSApp.activate(ignoringOtherApps: true)
         // For tests and documentation: draw the window to a PNG and quit.
-        if let out = ProcessInfo.processInfo.environment["CLASSIC_SHELL_SNAPSHOT"] {
+        if let out = ProcessInfo.processInfo.environment["BLUEBOX_SHELL_SNAPSHOT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 if let view = w.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                     view.cacheDisplay(in: view.bounds, to: rep)
@@ -601,7 +601,7 @@ func shellCommand(_ args: [String]) -> Never {
     let appItem = NSMenuItem()
     main.addItem(appItem)
     let appMenu = NSMenu()
-    appMenu.addItem(withTitle: "Quit Classic", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    appMenu.addItem(withTitle: "Quit Blue Box", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     appItem.submenu = appMenu
     let editItem = NSMenuItem()
     main.addItem(editItem)

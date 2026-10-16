@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     @Suite struct MenuManager {
         func pstr(_ s: String) -> UInt32 {
             let p = tb_NewPtr(256, false, true)
@@ -51,7 +51,7 @@ extension Classic {
     }
 }
 
-extension Classic {
+extension BlueBox {
     @Suite struct FontMenu {
         @Test func fontMenuShowsClassicNames() {
             launchTestApp()

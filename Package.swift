@@ -9,10 +9,10 @@ let warnings: [CSetting] = [
 ]
 
 let package = Package(
-    name: "classic",
+    name: "bluebox",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "classic", targets: ["classic"]),
+        .executable(name: "bluebox", targets: ["bluebox"]),
     ],
     targets: [
         // Guest memory arena, logging, generated low-memory and struct definitions.
@@ -24,15 +24,15 @@ let package = Package(
         // Trap dispatch and the Toolbox managers.
         .target(name: "Toolbox", dependencies: ["CCore", "CPU68K", "ForkStore"], cSettings: warnings),
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
-        .target(name: "ClassicHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
+        .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
         // Command-line tool: run, import, install, apps, rsrc.
-        .executableTarget(name: "classic", dependencies: ["ClassicHost", "Toolbox", "ForkStore", "CCore"]),
+        .executableTarget(name: "bluebox", dependencies: ["BlueBoxHost", "Toolbox", "ForkStore", "CCore"]),
         // Runner for the SingleStepTests CPU vectors (test-only).
         .target(name: "CPUTestSupport", dependencies: ["CPU68K", "CCore"], path: "Tests/CPUTestSupport",
                 cSettings: warnings),
         // Tests touch C globals (one guest arena per process) and run serialized.
         .testTarget(name: "ToolboxTests",
-                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CCore", "CPUTestSupport", "ClassicHost"],
+                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CCore", "CPUTestSupport", "BlueBoxHost"],
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ],
     cLanguageStandard: .c17

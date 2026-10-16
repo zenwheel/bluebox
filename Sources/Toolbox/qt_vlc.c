@@ -2,7 +2,7 @@
  * Movie decoding through libvlc, loaded at run time.
  *
  * Nothing links against VLC: libvlc is opened with dlopen when a movie is
- * first played (CLASSIC_LIBVLC, then VLC.app, then the usual library
+ * first played (BLUEBOX_LIBVLC, then VLC.app, then the usual library
  * paths), so the project builds and runs without it, and movies then play
  * as their bare timing.  libvlc decodes into a buffer of ours (32-bit RGB)
  * and plays the sound itself; the Movie Toolbox draws the latest frame when
@@ -55,7 +55,7 @@ enum { stateEnded = 6, stateError = 7 };
 
 static void *open_library(void)
 {
-    const char *env = getenv("CLASSIC_LIBVLC");
+    const char *env = getenv("BLUEBOX_LIBVLC");
     if (env && *env)
         return dlopen(env, RTLD_NOW | RTLD_LOCAL);
     const char *home = getenv("HOME");

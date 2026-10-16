@@ -1,7 +1,7 @@
 import Foundation
 
 /// Per-application settings kept in the library (Settings.json), keyed by
-/// the application's file name.  `classic run` applies them unless the
+/// the application's file name.  `bluebox run` applies them unless the
 /// command line says otherwise; installed bundles run through it too.
 struct AppSettings: Codable {
     var depth: Int?
@@ -32,7 +32,7 @@ func parseHighlight(_ s: String) -> (UInt16, UInt16, UInt16)? {
 }
 
 /// The settings every application gets unless its own say otherwise, kept
-/// under this key (classic set --default ...).
+/// under this key (bluebox set --default ...).
 let defaultSettingsKey = "*"
 
 func defaultSettings() -> AppSettings? { loadSettings(defaultLibrary())[defaultSettingsKey] }
@@ -62,7 +62,7 @@ func settingsKey(_ app: String) -> String { (app as NSString).lastPathComponent 
 
 func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[settingsKey(app)] }
 
-/// classic set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
+/// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 func setCommand(_ args: [String]) {
     var rest = args

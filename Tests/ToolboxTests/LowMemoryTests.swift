@@ -4,7 +4,7 @@ import Foundation
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     /// Low-memory globals that programs read or call directly.
     @Suite struct LowMemory {
         init() { bootMachine() }

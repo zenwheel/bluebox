@@ -128,7 +128,7 @@ static track *track_of(gaddr t)
 }
 
 /* Pictures and sound only with a person to see and hear them. */
-static bool use_vlc(void) { return events_host_attached() || getenv("CLASSIC_QUICKTIME_HEADLESS"); }
+static bool use_vlc(void) { return events_host_attached() || getenv("BLUEBOX_QUICKTIME_HEADLESS"); }
 
 /* ---- Atoms ---- */
 
@@ -361,7 +361,7 @@ static char *flatten(const char *data_path, uint8_t *moov, uint32_t len)
 {
     const char *tmp = getenv("TMPDIR");
     char *path = malloc(1024);
-    snprintf(path, 1024, "%s/classic-movie-%d-%d.mov", tmp && *tmp ? tmp : "/tmp", (int)getpid(), ++temp_count);
+    snprintf(path, 1024, "%s/bluebox-movie-%d-%d.mov", tmp && *tmp ? tmp : "/tmp", (int)getpid(), ++temp_count);
     FILE *in = fopen(data_path, "rb"), *out = fopen(path, "wb");
     bool ok = in && out;
     struct stat st;

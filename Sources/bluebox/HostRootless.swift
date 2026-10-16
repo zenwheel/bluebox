@@ -8,7 +8,7 @@
 
 #if canImport(AppKit)
 import AppKit
-import ClassicHost
+import BlueBoxHost
 import Toolbox
 
 let classicMenuBarHeight: CGFloat = 20
@@ -245,7 +245,7 @@ final class TransientView: NSView {
         var list = [machine_window](repeating: machine_window(), count: 64)
         let n = Int(machine_windows(&list, 64))
         let current = Array(list[0..<n])
-        if ProcessInfo.processInfo.environment["CLASSIC_DEBUG_HOST"] != nil {
+        if ProcessInfo.processInfo.environment["BLUEBOX_DEBUG_HOST"] != nil {
             FileHandle.standardError.write("rootless: version \(version), \(n) windows: \(current.map { "\($0.id) \($0.left),\($0.top)-\($0.right),\($0.bottom)" })\n".data(using: .utf8)!)
         }
         let ids = Set(current.map(\.id))

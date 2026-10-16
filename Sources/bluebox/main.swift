@@ -1,9 +1,9 @@
 // classic: command-line entry point.
 //
-//   classic run <app> [--census] [--max N] [--log traps,unimpl,seg,rsrc,mem,cpu]
+//   bluebox run <app> [--census] [--max N] [--log traps,unimpl,seg,rsrc,mem,cpu]
 //                     [--gestalt sel=value]...
-//   classic import <macbinary-file> <dest-dir>
-//   classic rsrc <file>
+//   bluebox import <macbinary-file> <dest-dir>
+//   bluebox rsrc <file>
 
 #if canImport(Darwin)
 import Darwin
@@ -13,7 +13,7 @@ import Glibc
 import CCore
 import Foundation
 import ForkStore
-import ClassicHost
+import BlueBoxHost
 import Toolbox
 
 /// Write to standard error (fd 2; glibc's `stderr` global is not concurrency-safe).
@@ -23,14 +23,14 @@ func eprint(_ s: String) {
 }
 
 func fail(_ message: String) -> Never {
-    eprint("classic: \(message)\n")
+    eprint("bluebox: \(message)\n")
     exit(1)
 }
 
 func usage() -> Never {
     eprint("""
     usage:
-      classic run <app-or-archive> [document...] [--app name] [--census] [--max N] [--log list] [--gestalt sel=value]...
+      bluebox run <app-or-archive> [document...] [--app name] [--census] [--max N] [--log list] [--gestalt sel=value]...
           Run a classic application.  The argument may be an AppleDouble application
           (data file + ._ sidecar) or a .bin/.sit/.sea/.cpt/.hqx file, which is first
           added to the library; --app picks one when the archive holds several.
@@ -57,42 +57,42 @@ func usage() -> Never {
           --appearance A  bw (default); native (macOS window frames); or a theme: a
                      Kaleidoscope scheme file, an archive of schemes (.sit etc.,
                      "archive.sit:Name" picks one), or the name of an imported
-                     scheme (classic themes lists them); themes use a 32-bit screen
+                     scheme (bluebox themes lists them); themes use a 32-bit screen
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1),
                      keydown:K and keyup:K (K a character, space, return, tab,
                      escape, delete or an arrow: left, right, up, down), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2
-      classic import <file>... [--library dir] [--force]
+      bluebox import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
           files to the library as AppleDouble.  Archives need unar (The Unarchiver).
-      classic install <app-or-archive> [--app name] [--to folder] [--force]
+      bluebox install <app-or-archive> [--app name] [--to folder] [--force]
           Make a macOS application bundle for a classic application (default folder
-          ~/Applications/Classic) with its Finder icon; documents dropped on it open
+          ~/Applications/Blue Box) with its Finder icon; documents dropped on it open
           in the application.
-      classic set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
+      bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|default]
                 [scale 1|1.5|2|default] [--library dir]
           Remember settings for an application (by file name), used by every run,
-          including installed bundles: e.g. classic set "Star Chaos" depth 8 for a
+          including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
           game that wants 256 colours, or cpu 68020 for one that misbehaves on a
           68040.  --default sets them for every application without its own
-          (classic set --default scale 2 doubles every classic window).  With no
+          (bluebox set --default scale 2 doubles every classic window).  With no
           setting given, show them.
-      classic shell
-          Open the Classic shell: the library's applications to launch, with their
+      bluebox shell
+          Open the Blue Box shell: the library's applications to launch, with their
           settings and the defaults for every application; drop archives on its
           window (or its Dock icon) to import them.
-      classic apps [--library dir]
+      bluebox apps [--library dir]
           List the applications in the library and those installed on the classic
           Mac's disk (\(defaultDisk())).  run and install take
           an application as listed ("Macintosh HD/Folder/App") or by its name.
-      classic themes [--library dir]
+      bluebox themes [--library dir]
           List the themes (Kaleidoscope schemes) in the library.
-      classic rsrc <file>
+      bluebox rsrc <file>
           List the resources in a file (AppleDouble or MacBinary).
 
       The library defaults to \(defaultLibrary())
-      (override with CLASSIC_LIBRARY or --library).
+      (override with BLUEBOX_LIBRARY or --library).
 
     """)
     exit(2)
@@ -293,7 +293,7 @@ func runCommand(_ args: [String]) {
             case "native": appearance = Int32(MACHINE_APPEARANCE_NATIVE)
             default:
                 guard let path = findTheme(args[i]) else {
-                    fail("no theme \"\(args[i])\": give a scheme file, or import one and use its name (classic themes)")
+                    fail("no theme \"\(args[i])\": give a scheme file, or import one and use its name (bluebox themes)")
                 }
                 themePath = path
                 appearance = Int32(MACHINE_APPEARANCE_THEME)
@@ -392,7 +392,7 @@ func runCommand(_ args: [String]) {
                 themePath = path
                 appearance = Int32(MACHINE_APPEARANCE_THEME)
             } else {
-                eprint("classic: no theme \"\(a)\" (from the settings); using the default appearance\n")
+                eprint("bluebox: no theme \"\(a)\" (from the settings); using the default appearance\n")
             }
         }
     }
@@ -522,7 +522,7 @@ func runCommand(_ args: [String]) {
 
 /// Turn a run argument into an AppleDouble application path, ingesting
 /// MacBinary and archives into the library first.
-/// What `classic apps` lists can be given back as it was printed
+/// What `bluebox apps` lists can be given back as it was printed
 /// ("Macintosh HD/Folder/App", or a path inside the library), or just as an
 /// application's name, when no such file exists here.
 func findListedApplication(_ spec: String) -> String? {
@@ -622,7 +622,7 @@ func importCommand(_ args: [String]) {
             for n in notes { print("  note: \(n)") }
             printEntry(entry)
         } catch {
-            eprint("classic: \(file): \(error)\n")
+            eprint("bluebox: \(file): \(error)\n")
             failed = true
         }
     }
@@ -693,7 +693,7 @@ func themesCommand(_ args: [String]) {
     var library = defaultLibrary()
     if args.count == 2 && args[0] == "--library" { library = args[1] } else if !args.isEmpty { usage() }
     let found = themes(in: library)
-    if found.isEmpty { print("no themes in \(library); import a Kaleidoscope scheme archive with classic import") }
+    if found.isEmpty { print("no themes in \(library); import a Kaleidoscope scheme archive with bluebox import") }
     for t in found { print("\((t as NSString).lastPathComponent)  (\(String(t.dropFirst(library.count + 1))))") }
 }
 
@@ -764,6 +764,7 @@ func redrawCheckReport(_ out: String) {
 
 // MARK: - Main
 
+migrateDataFolder()
 let argv = Array(CommandLine.arguments.dropFirst())
 guard let command = argv.first else { usage() }
 let rest = Array(argv.dropFirst())

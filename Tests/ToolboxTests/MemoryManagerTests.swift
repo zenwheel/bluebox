@@ -2,7 +2,7 @@ import CCore
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     @Suite struct MemoryManager {
         let appZone: UInt32
         let sysZone: UInt32

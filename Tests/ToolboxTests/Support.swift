@@ -7,7 +7,7 @@ import Toolbox
 
 /// Every test that touches the guest arena or the machine runs inside this
 /// suite, one at a time: there is a single address space per process.
-@Suite(.serialized) enum Classic {}
+@Suite(.serialized) enum BlueBox {}
 
 func fourCC(_ s: String) -> UInt32 {
     Array(s.utf8).reduce(0) { ($0 << 8) | UInt32($1) }
@@ -93,7 +93,7 @@ func memErr() -> Int16 { Int16(bitPattern: rd16(UInt32(LM_MemErr))) }
 func resErr() -> Int16 { Int16(bitPattern: rd16(UInt32(LM_ResErr))) }
 
 func tempDir() -> URL {
-    let url = FileManager.default.temporaryDirectory.appendingPathComponent("classic-tests-\(UUID().uuidString)")
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("bluebox-tests-\(UUID().uuidString)")
     try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
 }

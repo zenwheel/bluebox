@@ -4,7 +4,7 @@ import Foundation
 import Testing
 import Toolbox
 
-extension Classic {
+extension BlueBox {
     /// SANE through its traps, as compiled code calls it.
     @Suite struct SANE {
         init() { bootMachine() }
