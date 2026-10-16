@@ -19,6 +19,8 @@ let package = Package(
         .target(name: "CCore", cSettings: warnings),
         // 68020 interpreter.
         .target(name: "CPU68K", dependencies: ["CCore"], cSettings: warnings),
+        // PowerPC interpreter (32-bit user mode).
+        .target(name: "CPUPPC", dependencies: ["CCore"], cSettings: warnings),
         // AppleDouble, MacBinary, resource fork parsing and decompression (host side).
         .target(name: "ForkStore", cSettings: warnings),
         // Trap dispatch and the Toolbox managers.
@@ -34,7 +36,7 @@ let package = Package(
                 cSettings: warnings),
         // Tests touch C globals (one guest arena per process) and run serialized.
         .testTarget(name: "ToolboxTests",
-                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CCore", "CPUTestSupport", "BlueBoxHost", "MACE"],
+                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CPUPPC", "CCore", "CPUTestSupport", "BlueBoxHost", "MACE"],
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ],
     cLanguageStandard: .c17
