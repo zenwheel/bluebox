@@ -608,6 +608,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - Prince of Persia in colour (256 colours): the user sees it hang periodically and not respond to keys, where the black-and-white version did; not reproduced headless (its intro plays; music runs from an MDRV driver's VBL tasks).
 - Census changes from 2026-10-16 to look at:
   - Star Chaos 2.0.1 stopped on "Out of memory" before Gestalt reported 32-Bit QuickDraw; now it gets further, disposes the window its CPU speed test made (kept in a global, A5+$EC6), and later calls MoveWindow and SizeWindow on a window variable (A5−2858) still holding that disposed window. The WDEF's region writes land in its CODE 1 and it stops on an F-line. Find what clears that variable on a real Mac (a flag at A5−2114 decides between reusing and recreating it).
+  - Squark (Squark Game) now loads its segments (it reopens itself read-only and closes that copy) and then draws through an offscreen pixel map of its own making (NewPtr, not NewGWorld) that is empty (base address 0, no bounds) and jumps into freed memory soon after. Find what it builds the pixel map from.
   - Squirt Derby! used to quit after loading (a read whose result it checked was never set); now it spends over 60 million instructions in SANE (Pack4) setting up, with a blank window. Find out whether that is its real start-up or a loop.
   - Space Madness Demo used to time out; it now gets further and stops on an illegal instruction ($7F7F at $431618).
 

@@ -886,10 +886,13 @@ void tb_CloseResFile(int16_t rn)
 }
 
 
-static int16_t open_path(const char *path)
+/* Open a file's resource fork.  Already open: the Resource Manager returns
+ * the existing refnum, except for a read-only open (fsRdPerm), which gets
+ * an access path and map of its own (Squark opens itself read-only and
+ * closes that again: the application's own map must stay). */
+static int16_t open_path_perm(const char *path, int perm)
 {
-    /* Already open?  The Resource Manager returns the existing refnum. */
-    for (int i = 0; i < MAX_RESFILES; i++)
+    for (int i = 0; i < MAX_RESFILES && perm != 1; i++)
         if (files[i].used && files[i].path && !strcmp(files[i].path, path)) {
             set_res_err(noErr);
             return files[i].refnum;
@@ -906,6 +909,8 @@ static int16_t open_path(const char *path)
         set_res_err(-39); /* eofErr: no resource fork */
     return rn;
 }
+
+static int16_t open_path(const char *path) { return open_path_perm(path, 0); }
 
 static int16_t open_named(gaddr fn)
 {
@@ -924,7 +929,7 @@ int16_t tb_HOpenResFile(int16_t vref, int32_t dirid, gaddr file_name, int8_t per
         set_res_err(-35);
         return -1;
     }
-    return open_path(path);
+    return open_path_perm(path, perm);
 }
 
 int16_t tb_FSpOpenResFile(gaddr spec, int8_t perms)
@@ -940,7 +945,7 @@ int16_t tb_OpenRFPerm(gaddr fn, int16_t vref, uint8_t perm)
         set_res_err(-35);
         return -1;
     }
-    return open_path(path);
+    return open_path_perm(path, perm);
 }
 
 void rm_init(void)
