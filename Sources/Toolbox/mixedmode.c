@@ -383,6 +383,21 @@ static int arg_count(uint32_t pi)
     return n;
 }
 
+/* Call a universal procedure pointer from native code: a descriptor's
+ * PowerPC routine, or 68k code (a descriptor's or a bare pointer). */
+uint32_t mm_call(gaddr upp, uint32_t pi, const uint32_t *args, int nargs)
+{
+    gaddr code = upp;
+    if (mm_is_descriptor(upp)) {
+        int isa;
+        if (!mm_routine(upp, g_ppc_mode ? kPowerPCISA : kM68kISA, &pi, &isa, &code))
+            return 0;
+        if (isa == kPowerPCISA)
+            return ppc_call(code, args, nargs);
+    }
+    return code ? call_68k(code, pi, args, nargs) : 0;
+}
+
 /* CallUniversalProc(theProc, procInfo, ...) */
 static void ppc_CallUniversalProc(ppc_cpu *c)
 {

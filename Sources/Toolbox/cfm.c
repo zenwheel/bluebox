@@ -71,6 +71,7 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
         return;
     }
     trap_set_current_word(0); /* not a trap: no HFS or async bits */
+    LOGF(LOG_TRAPS, "%08X PowerPC %s\n", c->lr, natives[index].name);
     natives[index].fn(c);
 }
 
@@ -130,6 +131,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < sizeof manual_exports / sizeof manual_exports[0]; i++)
         if (!strcmp(manual_exports[i].name, name))
             return manual_exports[i].fn;
+    for (unsigned i = 0; i < isp_export_count; i++)
+        if (!strcmp(isp_exports[i].name, name))
+            return isp_exports[i].fn;
     for (unsigned i = 0; i < dsp_export_count; i++)
         if (!strcmp(dsp_exports[i].name, name))
             return dsp_exports[i].fn;
@@ -421,7 +425,7 @@ static const char *const native_libraries[] = {
     "InterfaceLib", "MathLib", "StdCLib", "QuickTimeLib", "DragLib", "ThreadsLib", "AppearanceLib",
     "PrivateInterfaceLib", "ObjectSupportLib", "AppleScriptLib", "TranslationLib", "ControlStripLib",
     "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
-    "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib",
+    "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib", "InputSprocketLib",
 };
 
 static bool core_library(const char *name)
@@ -990,6 +994,7 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
     glue_area = 0;
     missing_len = missing_count = 0;
     nfrags = ninit = init_next = ndata_blocks = 0;
+    inputsprocket_reset();
     snprintf(app_dir, sizeof app_dir, "%s", app_path);
     snprintf(app_file, sizeof app_file, "%s", app_path);
     char *slash = strrchr(app_dir, '/');

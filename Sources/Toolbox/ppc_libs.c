@@ -17,6 +17,7 @@
 
 #include "machine.h"
 #include "ppc_bridge.h"
+#include "qd_internal.h"
 #include "tb_internal.h"
 
 double sane_ext_get(gaddr p);
@@ -1395,16 +1396,103 @@ static void dm_CheckDisplayMode(ppc_cpu *c)
         wr8(R(5), R(1) == 0x80);
     RETURN(0);
 }
-/* DMNewDisplayModeList(displayID, flags, info, *count, *list): one mode. */
+/* Display mode lists: the sizes up to the screen's (a smaller display is
+ * centred, as DrawSprocket does it), each at 8, 16 and 32 bits.  A list is
+ * a guest block holding its count. */
+static const struct { int16_t w, h; } mode_sizes[] = { { 640, 480 }, { 800, 600 }, { 832, 624 }, { 1024, 768 },
+                                                       { 1152, 870 }, { 1280, 1024 } };
+
+static int mode_count(int *sizes)
+{
+    int n = 0;
+    for (unsigned i = 0; i < sizeof mode_sizes / sizeof mode_sizes[0]; i++)
+        if (mode_sizes[i].w <= g_screen_width && mode_sizes[i].h <= g_screen_height)
+            sizes[n++] = (int)i;
+    return n;
+}
+
+/* DMNewDisplayModeList(displayID, flags, info, *count, *list) */
 static void dm_NewDisplayModeList(ppc_cpu *c)
 {
+    int sizes[8];
+    int n = mode_count(sizes);
+    gaddr list = tb_NewPtr(4, true, true);
+    wr32(list, (uint32_t)n);
     if (R(3))
-        wr32(R(3), 0);
+        wr32(R(3), (uint32_t)n);
     if (R(4))
-        wr32(R(4), 0);
+        wr32(R(4), list);
     RETURN(0);
 }
-static void dm_notFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-6229); }
+
+/* DMGetIndexedDisplayModeFromList(list, index, flags, iterator, userData):
+ * the iterator gets a DMDisplayModeListEntryRec describing the mode. */
+static void dm_GetIndexedDisplayModeFromList(ppc_cpu *c)
+{
+    int sizes[8];
+    int n = mode_count(sizes);
+    uint32_t index = R(1);
+    if (index >= (uint32_t)n) {
+        RETURN((uint32_t)(int32_t)-6229); /* kDMModeNotFoundErr */
+        return;
+    }
+    int w = mode_sizes[sizes[index]].w, h = mode_sizes[sizes[index]].h;
+    static const int depths[3] = { 8, 16, 32 };
+    /* entry 28, name 256, timing 80, depth block 20, 3 depth infos 20 each,
+     * 3 switch infos 16 each, 3 VPBlocks 42 each, resolution 32 */
+    gaddr m = tb_NewPtr(28 + 256 + 80 + 20 + 3 * (20 + 16 + 42) + 32, true, true);
+    gaddr entry = m, name = m + 28, timing = name + 256, block = timing + 80, infos = block + 20;
+    gaddr switches = infos + 3 * 20, vps = switches + 3 * 16;
+    char text[32];
+    int len = snprintf(text, sizeof text, "%d x %d", w, h);
+    wr8(name, (uint8_t)len);
+    gput(name + 1, text, (uint32_t)len);
+    wr32(timing + 4, 0x3);      /* timingInfoAttributes: kModeValid, kModeSafe */
+    wr32(block, 3);             /* depthBlockCount */
+    wr32(block + 4, infos);     /* depthVPBlock */
+    for (int i = 0; i < 3; i++) {
+        gaddr info = infos + 20 * (gaddr)i, sw = switches + 16 * (gaddr)i, vp = vps + 42 * (gaddr)i;
+        int d = depths[i];
+        wr32(info, sw);
+        wr32(info + 4, vp);
+        wr16(sw, (uint16_t)(0x80 + i + 3)); /* csMode */
+        wr32(sw + 2, 0x80 + index);          /* csData: the display mode */
+        wr16(vp + 4, (uint16_t)(w * d / 8));
+        wr16(vp + 10, (uint16_t)h);
+        wr16(vp + 12, (uint16_t)w);
+        wr32(vp + 22, 72u << 16);
+        wr32(vp + 26, 72u << 16);
+        wr16(vp + 30, d > 8 ? 16 : 0); /* RGBDirect or indexed */
+        wr16(vp + 32, (uint16_t)d);
+        wr16(vp + 34, d > 8 ? 3 : 1);
+        wr16(vp + 36, (uint16_t)(d == 16 ? 5 : d == 32 ? 8 : d));
+    }
+    /* VDResolutionInfoRec: previous mode, mode, width, height, refresh
+     * rate, deepest depth mode, flags. */
+    gaddr res = vps + 3 * 42;
+    wr32(res + 4, 0x80 + index);
+    wr32(res + 8, (uint32_t)w);
+    wr32(res + 12, (uint32_t)h);
+    wr32(res + 16, 60u << 16);
+    wr16(res + 20, 0x85);
+    /* DMDisplayModeListEntryRec: flags, name, resolution, timing, depths, version */
+    wr32(entry, 0);
+    wr32(entry + 4, name);
+    wr32(entry + 8, res);
+    wr32(entry + 12, timing);
+    wr32(entry + 16, block);
+    /* pascal void (void *userData, DMListIndexType index, DMDisplayModeListEntryPtr) */
+    uint32_t args[3] = { R(4), index, entry };
+    mm_call(R(3), 0x00000FC0, args, 3);
+    tb_DisposePtr(m);
+    RETURN(0);
+}
+static void dm_DisposeList(ppc_cpu *c)
+{
+    if (R(0))
+        tb_DisposePtr(R(0));
+    RETURN(0);
+}
 
 /* TextEdit's click loop is a field. */
 static void g_TESetClickLoop(ppc_cpu *c)
@@ -1470,8 +1558,8 @@ const ppc_export lib_exports[] = {
     { "stringtonum", cs_stringtonum }, { "stringwidth", cs_stringwidth }, { "upperstring", cs_upperstring },
     /* Display Manager modes */
     { "DMGetDisplayMode", dm_GetDisplayMode }, { "DMCheckDisplayMode", dm_CheckDisplayMode },
-    { "DMNewDisplayModeList", dm_NewDisplayModeList }, { "DMGetIndexedDisplayModeFromList", dm_notFound },
-    { "DMDisposeList", g_noErr }, { "DMSuspendConfigure", g_noErr }, { "DMResumeConfigure", g_noErr },
+    { "DMNewDisplayModeList", dm_NewDisplayModeList }, { "DMGetIndexedDisplayModeFromList", dm_GetIndexedDisplayModeFromList },
+    { "DMDisposeList", dm_DisposeList }, { "DMSuspendConfigure", g_noErr }, { "DMResumeConfigure", g_noErr },
     /* Assorted */
     { "TESetClickLoop", g_TESetClickLoop }, { "InlineGetHandleSize", g_InlineGetHandleSize },
     { "GZSaveHnd", g_GZSaveHnd }, { "LMGetSysFontSize", g_LMGetSysFontSize }, { "LMSetSysFontSize", g_LMSetSysFontSize },

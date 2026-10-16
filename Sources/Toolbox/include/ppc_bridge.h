@@ -36,6 +36,10 @@ gaddr ppc_data_export(const char *name);
 /* DrawSprocket (drawsprocket.c). */
 extern const ppc_export dsp_exports[];
 extern const unsigned dsp_export_count;
+/* InputSprocket (inputsprocket.c). */
+extern const ppc_export isp_exports[];
+extern const unsigned isp_export_count;
+void inputsprocket_reset(void);
 /* Mixed Mode (mixedmode.c). */
 extern const ppc_export mm_exports[];
 extern const unsigned mm_export_count;

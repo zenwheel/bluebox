@@ -94,6 +94,8 @@ void gestalt_powerpc(void)
     gestalt_set(fourcc("sysv"), 0x0761);
     gestalt_set(fourcc("qtrs"), 0x1);    /* gestaltPPCQuickTimeLibPresent */
     gestalt_set(fourcc("dplv"), 0x00020000); /* the Display Manager, 2.0 */
+    gestalt_set(fourcc("dply"), 0x1);    /* gestaltDisplayMgrPresent */
+    gestalt_set(fourcc("thds"), 0x7);    /* and gestaltThreadsLibraryPresent */
     gestalt_set(fourcc("cput"), 0x0108); /* gestaltCPU750 */
     gestalt_set(fourcc("cfrg"), 0x1);    /* gestaltCFMPresent */
     gestalt_set(fourcc("mixd"), 0x1);    /* gestaltPowerPCAware */
