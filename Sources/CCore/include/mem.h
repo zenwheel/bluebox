@@ -28,7 +28,9 @@ enum {
     /* The heap, stack and A5 world stay below 2 GB: applications do signed
      * arithmetic on addresses (free memory as ApplLimit - HeapEnd …). */
     GA_APPLLIMIT     = 0x7F000000u, /* application heap may grow to here */
-    GA_A5WORLD_TOP   = 0x80000000u, /* A5 world ends here; stack below it */
+    /* Not at 2 GB itself: far-model jump tables end at A5 + their size,
+     * which signed comparisons must still see as positive. */
+    GA_A5WORLD_TOP   = 0x7FF00000u, /* A5 world ends here; stack below it */
     GA_ROM           = 0xF0000000u, /* fake ROM: header + native stubs */
     GA_ROM_SIZE      = 0x00100000u,
     GA_SCREEN        = 0xF8000000u, /* framebuffer */
