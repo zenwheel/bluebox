@@ -1565,8 +1565,10 @@ void tb_InitWindows(void)
     hrgn_free(&gray);
     hrgn_free(&bar);
     wr8(LM_WWExist, 0);
-    /* As in the ROM, the Window Manager port is left current. */
-    tb_SetPort(wp);
+    /* As in the ROM, the Window Manager port is left current: with Color
+       QuickDraw the colour one, whose pixel map programs read the screen's
+       depth from (Sokoban 3D: GetGWorld, GetGWorldPixMap). */
+    tb_SetPort(rd32(LM_WMgrCPort));
 }
 
 int16_t tb_GetWVariant(gaddr w) { return w ? varcode(w) : 0; }

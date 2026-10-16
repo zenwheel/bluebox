@@ -96,8 +96,9 @@ void qd_screen_init(int width, int height)
     gaddr gdh = tb_NewHandle(GDevice_SIZEOF, true, true);
     gaddr gd = rd32(gdh);
     /* screenActive, screenDevice, allInit, mainScreen, ramInit (it has a
-     * driver: games look for one to switch modes through) */
-    GDevice_set_gdFlags(gd, (int16_t)((1 << 15) | (1 << 13) | (1 << 12) | (1 << 11) | (1 << 10)));
+     * driver: games look for one to switch modes through), gdDevType (a
+     * colour device, not set to greys: Spheres) */
+    GDevice_set_gdFlags(gd, (int16_t)((1 << 15) | (1 << 13) | (1 << 12) | (1 << 11) | (1 << 10) | 1));
     GDevice_set_gdPMap(gd, pmh);
     qrect_put(gd + GDevice_gdRect_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
     GDevice_set_gdResPref(gd, 3);

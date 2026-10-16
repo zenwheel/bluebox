@@ -307,7 +307,16 @@ int32_t tb_GetPixelsState(gaddr pm) { return 0x80; /* pixelsLocked */ }
 void tb_SetPixelsState(gaddr pm, int32_t state) {}
 gaddr tb_GetPixBaseAddr(gaddr pm) { return pm && rd32(pm) ? PixMap_baseAddr(rd32(pm)) : 0; }
 int8_t tb_PixMap32Bit(gaddr pm) { return 0; }
-gaddr tb_GetGWorldPixMap(gaddr port) { return rd32(port + CGrafPort_portPixMap_off); }
+gaddr tb_GetGWorldPixMap(gaddr port)
+{
+    /* No port: GetGWorld before InitGraf (Sokoban 3D, checking the depth)
+       left nothing current; the screen is what a launched program finds. */
+    if (!port) {
+        gaddr gd = rd32(LM_TheGDevice);
+        return gd && rd32(gd) ? GDevice_gdPMap(rd32(gd)) : 0;
+    }
+    return rd32(port + CGrafPort_portPixMap_off);
+}
 void tb_PortChanged(gaddr port) {}
 void tb_PixPatChanged(gaddr ppat) {}
 
