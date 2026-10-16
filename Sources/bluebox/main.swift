@@ -865,7 +865,12 @@ func redrawCheckReport(_ out: String) {
 // MARK: - Main
 
 migrateDataFolder()
-let argv = Array(CommandLine.arguments.dropFirst())
+// Launch Services once added a process serial number argument.
+let argv = Array(CommandLine.arguments.dropFirst()).filter { !$0.hasPrefix("-psn_") }
+#if canImport(AppKit)
+// Blue Box.app opened from the Finder or the Dock: the shell.
+if argv.isEmpty && Bundle.main.bundleIdentifier == shellBundleIdentifier { shellCommand([]) }
+#endif
 guard let command = argv.first else { usage() }
 let rest = Array(argv.dropFirst())
 switch command {

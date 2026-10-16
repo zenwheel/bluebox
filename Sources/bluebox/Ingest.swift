@@ -198,8 +198,13 @@ func classify(_ path: String) -> InputKind {
 // MARK: - Extraction
 
 private func findUnar() -> String? {
+    // Blue Box.app carries its own beside the program (scripts/make-app.sh).
+    var dirs: [String] = []
+    if let me = Bundle.main.executableURL?.resolvingSymlinksInPath().deletingLastPathComponent().path {
+        dirs.append(me)
+    }
     let paths = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init)
-    for dir in paths + ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
+    for dir in dirs + paths + ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
         let p = dir + "/unar"
         if FileManager.default.isExecutableFile(atPath: p) { return p }
     }

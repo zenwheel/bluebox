@@ -196,6 +196,10 @@ func installCommand(_ args: [String]) {
 /// outside a bundle starts itself again from a small bundle of the
 /// application's name: a link to this program, an Info.plist and the
 /// Finder icon, kept with the library.  Returns only if that fails.
+/// Blue Box.app's bundle identifier (scripts/make-app.sh).  Not under
+/// "local.bluebox.", which marks an installed application's bundle.
+let shellBundleIdentifier = "local.bluebox-shell"
+
 func reexecInNamedBundle(app: String) {
     let env = ProcessInfo.processInfo.environment
     // Started by Launch Services from a `bluebox install` bundle: the Dock
@@ -204,7 +208,10 @@ func reexecInNamedBundle(app: String) {
     for prefix in ["local.bluebox.", "local.classic."] where launcher.hasPrefix(prefix) && !launcher.hasPrefix(prefix + "run.") {
         return // (local.classic: a bundle installed before the rename)
     }
-    guard Bundle.main.bundleIdentifier == nil, env["BLUEBOX_NO_BUNDLE"] == nil,
+    // Outside a bundle, or inside Blue Box.app (whose name the Dock would
+    // show for every application).
+    guard Bundle.main.bundleIdentifier == nil || Bundle.main.bundleIdentifier == shellBundleIdentifier,
+          env["BLUEBOX_NO_BUNDLE"] == nil,
           let me = Bundle.main.executableURL?.resolvingSymlinksInPath().path else { return }
     let name = (app as NSString).lastPathComponent
     let file = name.replacingOccurrences(of: "/", with: ":")

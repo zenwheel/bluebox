@@ -52,6 +52,24 @@ makes refer to it by its path, so don't move it afterwards.
 sudo install -m 755 .build/release/bluebox /usr/local/bin/bluebox
 ```
 
+### As a Mac application
+
+```sh
+sh scripts/make-app.sh          # makes build/Blue Box.app
+```
+
+`Blue Box.app` holds everything it needs:
+
+- the program, with its fonts built in;
+- The Unarchiver's `unar`, when it's installed here (Homebrew), so archives import without it;
+- its icon and the licences.
+
+Opening it shows the shell. Dropping archives or disk images on its icon
+imports them. Copy it to `/Applications` before using `install`, because the
+application bundles that `install` makes refer to it where it is. Inside the
+app the command-line tool is `Blue Box.app/Contents/MacOS/bluebox`. QuickTime
+movies still need VLC.app installed.
+
 ## Running classic applications
 
 Classic software usually comes as an archive or a disk image. Import it into
