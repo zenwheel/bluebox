@@ -1,9 +1,11 @@
 /*
  * Standard File Package.
  *
- * The host shows its own open and save panels.  Dialog hooks, filters and
- * custom items are not run; replies are filled as the classic package would.
- * Without a host every request is cancelled.
+ * The host shows its own open and save panels.  An application's own
+ * dialog items are shown in the panel and clicks on them go to its dialog
+ * hook (System 7 and the original calling conventions); its file filter
+ * decides which files the panel offers.  Replies are filled as the classic
+ * package would.  Without a host every request is cancelled.
  */
 #include <limits.h>
 #include <stdio.h>
@@ -24,7 +26,15 @@ uint32_t fm_type_of_path(const char *path);
 static struct {
     gaddr dialog, hook, data;
     int first_extra;
+    bool old_hook; /* SFPGetFile/SFPPutFile: DlgHook(item, dialog) */
 } session;
+
+/* The application's file filter for an open panel: FileFilterProc(pb), or
+ * with yourDataPtr for CustomGetFile.  True hides the file. */
+static struct {
+    gaddr proc, data;
+    bool yd;
+} filter;
 
 static machine_file_fn file_fn;
 static void *file_ctx;
@@ -61,7 +71,8 @@ static int16_t call_hook(int16_t item)
     cpu_push16(c, 0);
     cpu_push16(c, (uint16_t)item);
     cpu_push32(c, session.dialog);
-    cpu_push32(c, session.data);
+    if (!session.old_hook)
+        cpu_push32(c, session.data);
     gaddr saved = qd_port();
     tb_SetPort(session.dialog);
     guest_call(session.hook);
@@ -150,8 +161,10 @@ int machine_file_item_hit(int16_t item, const char *text)
     return r == 1 || r == 2 ? r : 0;
 }
 
-/* Build the app's dialog, hidden, for a custom call with a hook. */
-static void begin_session(int16_t dlgid, gaddr hook, gaddr data, bool save)
+/* Build the app's dialog, hidden, for a custom call with a hook.  Its own
+ * items follow the standard dialog's: 9 or 12 in System 7's, 10 in the
+ * original ones. */
+static void begin_session(int16_t dlgid, gaddr hook, gaddr data, bool save, bool old)
 {
     memset(&session, 0, sizeof session);
     if (!dlgid || !hook)
@@ -162,8 +175,46 @@ static void begin_session(int16_t dlgid, gaddr hook, gaddr data, bool save)
     session.dialog = d;
     session.hook = hook;
     session.data = data;
-    session.first_extra = save ? 13 : 10; /* the standard items come first */
+    session.old_hook = old;
+    session.first_extra = old ? 11 : save ? 13 : 10;
     call_hook(sfHookFirstCall);
+}
+
+static void set_filter(gaddr proc, gaddr data, bool yd)
+{
+    filter.proc = proc;
+    filter.data = data;
+    filter.yd = yd;
+}
+
+/* Asked by the host (with the emulator waiting in the panel call) for each
+ * file the panel would show: whether the application's filter hides it.
+ * The filter gets the file's catalog information, as from PBGetCatInfo. */
+bool machine_file_filtered(const char *path)
+{
+    if (!filter.proc)
+        return false;
+    gaddr pb = tb_NewPtr(CInfoPBRec_SIZEOF, false, true), spec = tb_NewPtr(FSSpec_SIZEOF, false, true);
+    gaddr name = tb_NewPtr(256, false, true);
+    fm_spec_for_path(path, spec);
+    gmemcpy(name, spec + FSSpec_name_off, 64);
+    wr32(pb + HFileInfo_ioNamePtr_off, name);
+    wr16(pb + HFileInfo_ioVRefNum_off, rd16(spec + FSSpec_vRefNum_off));
+    wr32(pb + HFileInfo_ioDirID_off, rd32(spec + FSSpec_parID_off));
+    bool hide = false;
+    if (tb_PBGetCatInfo(pb, false) == 0) {
+        cpu68k *c = g_cpu;
+        cpu_push16(c, 0);
+        cpu_push32(c, pb);
+        if (filter.yd)
+            cpu_push32(c, filter.data);
+        guest_call(filter.proc);
+        hide = (cpu_pop16(c) & 0xFF00) != 0;
+    }
+    tb_DisposePtr(name);
+    tb_DisposePtr(spec);
+    tb_DisposePtr(pb);
+    return hide;
 }
 
 static void end_session(void)
@@ -250,7 +301,10 @@ static void fill_old_reply(gaddr reply, bool good, const char *path, bool save)
 void tb_StandardGetFile(gaddr filef, int16_t numt, gaddr tl, gaddr replyp)
 {
     char path[PATH_MAX];
+    if (!filter.proc)
+        set_filter(filef, 0, false);
     fill_reply(replyp, ask(false, 0, 0, tl, numt, path, sizeof path), path, false);
+    set_filter(0, 0, false);
 }
 
 void tb_StandardPutFile(gaddr prompt, gaddr defaultname, gaddr replyp)
@@ -262,7 +316,8 @@ void tb_StandardPutFile(gaddr prompt, gaddr defaultname, gaddr replyp)
 void tb_CustomGetFile(gaddr filefilter, int16_t numtypes, gaddr typelist, gaddr replyp, int16_t dlgid, uint32_t where,
                       gaddr dlghook, gaddr filterproc, gaddr activeList, gaddr activateproc, gaddr yourdatap)
 {
-    begin_session(dlgid, dlghook, yourdatap, false);
+    begin_session(dlgid, dlghook, yourdatap, false, false);
+    set_filter(filefilter, yourdatap, true);
     tb_StandardGetFile(filefilter, numtypes, typelist, replyp);
     end_session();
 }
@@ -270,7 +325,7 @@ void tb_CustomGetFile(gaddr filefilter, int16_t numtypes, gaddr typelist, gaddr 
 void tb_CustomPutFile(gaddr prompt, gaddr defaultName, gaddr replyp, int16_t dlgid, uint32_t where, gaddr dlghook,
                       gaddr filterproc, gaddr activeList, gaddr activateproc, gaddr yourdatap)
 {
-    begin_session(dlgid, dlghook, yourdatap, true);
+    begin_session(dlgid, dlghook, yourdatap, true, false);
     tb_StandardPutFile(prompt, defaultName, replyp);
     end_session();
 }
@@ -278,7 +333,9 @@ void tb_CustomPutFile(gaddr prompt, gaddr defaultName, gaddr replyp, int16_t dlg
 void tb_SFGetFile(uint32_t p, gaddr prompt, gaddr filef, int16_t numt, gaddr tl, gaddr dh, gaddr rep)
 {
     char path[PATH_MAX];
+    set_filter(filef, 0, false);
     fill_old_reply(rep, ask(false, prompt, 0, tl, numt, path, sizeof path), path, false);
+    set_filter(0, 0, false);
 }
 
 void tb_SFPutFile(uint32_t p, gaddr prompt, gaddr name, gaddr dh, gaddr rep)
@@ -290,7 +347,9 @@ void tb_SFPutFile(uint32_t p, gaddr prompt, gaddr name, gaddr dh, gaddr rep)
 void tb_SFPGetFile(uint32_t p, gaddr prompt, gaddr filef, int16_t numt, gaddr tl, gaddr dh, gaddr rep, int16_t dig,
                    gaddr fp)
 {
+    begin_session(dig, dh, 0, false, true);
     tb_SFGetFile(p, prompt, filef, numt, tl, dh, rep);
+    end_session();
 }
 
 /* QuickTime's open dialogs with a preview pane: the same dialogs. */
@@ -325,5 +384,7 @@ int16_t tb_AddFilePreview(int16_t refnum, int32_t type, int32_t data) { return n
 
 void tb_SFPPutFile(uint32_t p, gaddr prompt, gaddr name, gaddr dh, gaddr rep, int16_t dig, gaddr fp)
 {
+    begin_session(dig, dh, 0, true, true);
     tb_SFPutFile(p, prompt, name, dh, rep);
+    end_session();
 }

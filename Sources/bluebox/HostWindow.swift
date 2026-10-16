@@ -456,11 +456,12 @@ final class ClassicTypeFilter: NSObject, NSOpenSavePanelDelegate {
     init(types: Set<UInt32>) { self.types = types }
 
     func panel(_ sender: Any, shouldEnable url: URL) -> Bool {
-        if types.isEmpty { return true }
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue,
            url.pathExtension != "app" { return true }
-        return types.contains(machine_file_type(url.path))
+        if !types.isEmpty && !types.contains(machine_file_type(url.path)) { return false }
+        // The application's own file filter, if it has one.
+        return !machine_file_filtered(url.path)
     }
 }
 

@@ -368,8 +368,57 @@ extension BlueBox {
             #expect(Self.hookItems == [-1, 13, 13, -2])      // first call, two clicks, last call
             #expect(rd8(reply) == 0)
         }
+
+        func writeFile(_ dir: URL, _ name: String, type: String) -> String {
+            let path = dir.appendingPathComponent(name).path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            var info = [UInt8](repeating: 0, count: 32)
+            for (i, b) in type.utf8.enumerated() { info[i] = b }
+            withUnsafeMutableBytes(of: &f.finder_info) { raw in for i in 0..<32 { raw[i] = info[i] } }
+            f.has_finder_info = true
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+            return path
+        }
+
+        /// The application's file filter decides what an open panel offers:
+        /// here it hides TEXT files.
+        @Test func fileFiltersHideFiles() {
+            let dir = launchTestApp()
+            _ = initToolbox()
+            let text = writeFile(dir, "Notes", type: "TEXT"), pict = writeFile(dir, "Drawing", type: "PICT")
+            // FileFilter(pb): BOOLEAN, true for ioFlFndrInfo.fdType 'TEXT'.
+            let words: [UInt16] = [
+                0x225F,                                  // MOVEA.L (SP)+,A1   return address
+                0x205F,                                  // MOVEA.L (SP)+,A0   pb
+                0x0CA8, 0x5445, 0x5854, 0x0020,          // CMPI.L #'TEXT',32(A0)
+                0x57C0,                                  // SEQ D0
+                0x1E80,                                  // MOVE.B D0,(SP)
+                0x4ED1,                                  // JMP (A1)
+            ]
+            let code = tb_NewPtr(Int32(words.count * 2), false, true)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            g_cpu!.pointee.a.7 = tb_NewPtr(65536, false, true) + 65536 - 16
+            defer { machine_set_file_handler(nil, nil) }
+            var paths = [text, pict]
+            withUnsafeMutablePointer(to: &paths) { ptr in
+                machine_set_file_handler({ _, _, _, ctx in
+                    let paths = ctx!.assumingMemoryBound(to: [String].self).pointee
+                    FilterResults.values = paths.map { machine_file_filtered($0) }
+                    return false
+                }, ptr)
+                let reply = tb_NewPtr(Int32(StandardFileReply_SIZEOF), false, true)
+                tb_StandardGetFile(code, -1, 0, reply)
+            }
+            #expect(FilterResults.values == [true, false])
+            #expect(!machine_file_filtered(text))           // only while the panel is up
+        }
     }
 }
+
+enum FilterResults { nonisolated(unsafe) static var values: [Bool] = [] }
 
 extension BlueBox {
     /// The 8-bit screen and the colour appearances.

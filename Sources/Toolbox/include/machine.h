@@ -214,6 +214,9 @@ typedef struct {
 
 /* Called on the emulator thread; blocks until the user answers.  Returns
  * false if cancelled, else the chosen host path. */
+/* For each file an open panel would offer: whether the application's file
+ * filter hides it (call while the emulator waits in the panel request). */
+bool machine_file_filtered(const char *path);
 typedef bool (*machine_file_fn)(const machine_file_request *rq, char *path, size_t pathsize, void *ctx);
 void machine_set_file_handler(machine_file_fn fn, void *ctx);
 /* While the panel is up (callable from the host's main thread): the user
