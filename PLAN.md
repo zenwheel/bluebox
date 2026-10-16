@@ -456,6 +456,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - SimpleText's Speak All and the classic voices work on macOS with both macOS backends, and on Linux with speech-dispatcher plus eSpeak NG.
   - A probe that switches voices, rates and embedded commands mid-utterance produces the expected sequence of callbacks.
 
+**Status (2026-10-16):** the Speech Manager is in (Sources/Toolbox/speech.c): every call above but `SpeechBusySystemWide` beyond this process and real dictionaries; channels speak through NSSpeechSynthesizer on macOS (Sources/BlueBoxHost/Speech.swift), which takes the classic embedded commands and has most MacinTalk voices by name (Agnes and Victoria fall back to the default unless downloaded); words, sync, phoneme and done callbacks are delivered at safe points; headless runs finish utterances at once. SimpleText's Speak All speaks. Still to do: the `avspeech` fallback, the `record` backend for oracle probes, `speechd` on Linux (M12), and checking callback order against the oracle.
+
 #### SimpleText and printing
 
 - **Styled TextEdit:** `TEStyleNew`, `styl`/`TEXT` documents and `soup`, plus Drag Manager basics for dragging text within a window.
