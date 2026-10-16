@@ -564,7 +564,11 @@ func installFileHandler() {
                     panel.accessoryView = accessory
                     if let open = panel as? NSOpenPanel { open.isAccessoryViewDisclosed = true }
                 }
+                // The application's hook gets null events meanwhile.
+                let idle = Timer(timeInterval: 0.5, repeats: true) { _ in machine_file_idle() }
+                RunLoop.main.add(idle, forMode: .modalPanel)
                 if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
+                idle.invalidate()
                 _ = filter
             }
         }

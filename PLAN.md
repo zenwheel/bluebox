@@ -310,7 +310,7 @@ the trap census.
 
 **Exit:** TeachText is installed as a macOS app. Double-clicking a `.txt` file opens it in rootless windows; editing, copy/paste with host apps, Save As and quitting with the unsaved-changes prompt all work. All probes for the managers in this milestone match the oracle.
 
-**Status (2026-10-12):** TeachText runs rootless on macOS: each classic window is a borderless macOS window showing its slice of the hidden framebuffer through the window's shape mask, ordered as on the Mac, and the classic menu bar is the native `NSMenu` (host choices go through `MenuSelect`, after the app adjusts its menus). `--screen-window` shows the whole classic screen in one window instead; headless runs take screenshots (`--screenshot`) and scripted input (`--keys`).
+**Status (2026-10-16): complete**; what remains of its list moved to later milestones (below). **(2026-10-12):** TeachText runs rootless on macOS: each classic window is a borderless macOS window showing its slice of the hidden framebuffer through the window's shape mask, ordered as on the Mac, and the classic menu bar is the native `NSMenu` (host choices go through `MenuSelect`, after the app adjusts its menus). `--screen-window` shows the whole classic screen in one window instead; headless runs take screenshots (`--screenshot`) and scripted input (`--keys`).
 - Done:
   - QuickDraw: regions, 1-bit drawing, text, `CopyBits`, `ScrollRect`
   - Font Manager, with bitmap fonts in the built System file
@@ -372,16 +372,15 @@ the trap census.
   - `MethodDispatch` (A9F8): the ROM's MPW Object Pascal method dispatcher, run as the same 68000 routine reading the class table and error routine from 0xBEC/0xBE8 (Skat; Photoshop 1.0 gets to its first dialog)
   - Applications' own `dcmp` decompressors run in place, the compressed data at the end of the destination buffer
   - printing: Page Setup is the host page layout panel; the printing port records each page as shapes and text runs, rendered to vector PDF (text in outline fonts, LaserWriter substitutions, runs fitted to classic widths) and printed through the host print panel; `--print-to F.pdf` for headless runs
-- Next:
-  - OpenPicture recording (pictures made by apps, e.g. for the clipboard)
-  - Color QuickDraw, what is left: colour pixel patterns drawn in colour (they draw through their 1-bit form today); the arithmetic transfer modes (`blend`, `addPin`, `addOver`, `subPin`, `transparent`, `addMax`, `subOver`, `adMin`) and `ditherCopy`, which copy plainly today; `OpColor`; colour cursors shown by the host (they load, the host pointer stays black and white); custom `ModalDialog` depth requests (only `Alert`s are read for "needs 256 colours")
-  - MACE 3:1 and 6:1 sound decoding (it plays silence of the right length)
-  - QuickTime: Music tracks (QuickTime Music Architecture: notes for its synthesizer, which VLC cannot render), sprite and text tracks, editing, the Image Compression Manager's own calls
-  - Gestalt reporting the 68881 we emulate (and a 68040 for applications that require one, e.g. ShatterBat), once FPU and 68040 coverage is validated against the oracle
-  - themes: utility and floating windows, collapse (WindowShade), popups, sliders, tabs, menus in screen mode, scheme desktop patterns; Mac OS 8.5 Appearance themes; a theme setting for installed bundles
-  - native style: map the native scroll knob's position and size onto the classic thumb for dragging; native popups and edit-text frames
-  - HFS+ volumes read natively (imports mount them through the host on macOS today; Linux needs our own reader)
-  - the remaining Standard File hooks (old SFPGetFile/SFPPutFile hooks, null-event and filter procs)
+  - pictures recorded: between `OpenPicture`/`OpenCPicture` and `ClosePicture` drawing in the port is written to the picture as version 2 opcodes (shapes with every verb, polygons, regions, lines, text, CopyBits as BitsRect/PackBitsRect/DirectBitsRect with masks, comments), each with the state it depends on; the pen is hidden meanwhile, and a hidden pen draws nothing
+  - Color QuickDraw: pixel patterns in their own colours ('ppat' resources, MakeRGBPat, in pictures too); CopyBits' arithmetic modes and `OpColor`; colour cursors shown in colour by the host
+  - depths: games known to refuse millions of colours get a depth they accept (a table by creator); an `Alert` or `ModalDialog` saying a program needs another depth ends the run, and `bluebox run` starts it again at that depth, kept as its setting
+  - Gestalt reports the processor and FPU of the chosen model (a 68040 with its FPU by default, a 68020 without one)
+  - floating windows (WDEF 124, procIDs 1985 to 1999, top or side title bars) and collapsing (WindowShade: two clicks in a title bar, or a scheme's collapse box), both drawn from Kaleidoscope 2 schemes' samples too
+  - native style: scroll bars hit and dragged where macOS draws the knob (no arrows), pop-up menus as macOS's pop-up buttons, edit-text items in macOS's bezel
+  - Standard File: file filters (old, System 7 and yourDataPtr forms) decide what the open panel offers; SFPGetFile/SFPPutFile dialog hooks in their original convention; hooks get null events while the panel is up
+- Moved on: MACE decoding to M4 (the Sound Manager; it needs a decoder we can license with the project); QuickTime's music, sprite and text tracks, editing and the Image Compression Manager's own calls to M4; Mac OS 8.5 Appearance themes and the Appearance controls (sliders, tabs, themed pop-ups), scheme menus in screen mode and scheme desktop patterns to M9 with the Appearance Manager; an HFS+ reader of our own to M12. A theme for installed bundles is the application's appearance setting.
+- Left: a CustomGetFile `filterProc` (the panel is the host's, so it has no classic events to filter); recording colour patterns into pictures (they record their black-and-white version).
 
 ### M2: The import pipeline
 
@@ -482,6 +481,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - the Image Compression Manager, including compressed `PICT`s (`DecompressImage`, JPEG in `PICT`)
   - **codecs:** our own C decoders for the bluebox set (Raw, Apple Video `rpza`, Animation `rle `, Graphics `smc `, Cinepak, Photo-JPEG). Host frameworks have dropped several of these (macOS removed Cinepak), so we can't rely on them for old codecs; AVFoundation or GStreamer handle newer ones.
   - frames are decoded into GWorlds and drawn through `CopyBits`, so rootless windows and screen mode both work
+  - from M1: music tracks (the QuickTime Music Architecture's notes, which VLC cannot render), sprite and text tracks, editing, and the Image Compression Manager's own calls
 - **QuickDraw GX:**
   - graphics: shapes, styles, inks, transforms, the view port and view device model, and drawing through CoreGraphics or cairo
   - typography: GX fonts and layout through the host text stack
@@ -577,6 +577,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 - **8/9-era managers:**
   - Appearance Manager (themes: Platinum by default, System 7 look optional)
+    - from M1: Mac OS 8.5 Appearance themes; the Appearance controls (sliders, tabs, themed pop-ups); Kaleidoscope schemes' menus in screen mode and desktop patterns
     - Revisit the stopgap from 2026-10-13: `HiliteRGB` is set at boot from the host's selection colour (`useHostSelectionColor` in `HostWindow.swift`, `machine_set_hilite_color`). With the Appearance Manager, the theme's highlight brushes (`kThemeBrushPrimaryHighlightColor` and the selection brushes) should take the host's accent and selection colours, and `HiliteRGB` follow the theme (and change when the host's colours change, not only at launch).
     - Test case: Greg's Browser's list definition (LDEF 128) highlights a selected row only when Gestalt `appr` reports the Appearance Manager: it then calls `SetThemeBackground`/`SetThemeTextColor` (ThemeDispatch `$AA74`, selectors 2 and 3) and erases the row in `HiliteRGB`. Without it (System 7, today) it draws no selection at all. Its focus frame (an `InvertRgn` around the list) sometimes shows on an inactive list, which needs checking against activate events.
   - Navigation Services (native dialogs when no hooks)

@@ -136,6 +136,16 @@ static int session_items(machine_file_item *out, int max)
 
 int machine_file_items(machine_file_item *out, int max) { return session_items(out, max); }
 
+/* While the panel is up: the dialog hook's null event (sfHookNullEvent),
+ * for programs that do something periodically meanwhile. */
+enum { sfHookNullEvent = 100 };
+
+void machine_file_idle(void)
+{
+    if (session.dialog)
+        call_hook(sfHookNullEvent);
+}
+
 int machine_file_item_hit(int16_t item, const char *text)
 {
     if (!session.dialog)
