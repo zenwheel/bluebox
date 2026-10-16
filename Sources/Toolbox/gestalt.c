@@ -50,7 +50,7 @@ void gestalt_init(void)
     gestalt_set(fourcc("proc"), m040 ? 5 : 3); /* 68040 or 68020 */
     gestalt_set(fourcc("fpu "), m040 ? 3 : 0); /* the 68040's own FPU, or none */
     gestalt_set(fourcc("mmu "), 0);
-    gestalt_set(fourcc("qd  "), 0x0130);      /* 32-bit QuickDraw 1.3 */
+    gestalt_set(fourcc("qd  "), 0x0230);      /* gestalt32BitQD13: 32-Bit QuickDraw 1.3 */
     gestalt_set(fourcc("addr"), 0x7);         /* 32-bit addressing, sys zone, capable */
     gestalt_set(fourcc("ram "), g_mem_report_cap);
     gestalt_set(fourcc("qtim"), 0x02508000); /* QuickTime 2.5 (movies play as zero length) */
