@@ -33,6 +33,11 @@ The program is `.build/release/bluebox`. To run the tests:
 swift test
 ```
 
+To start over, `swift package clean` removes the build products and
+`swift package reset` removes all of `.build`. The generated sources
+(`*_gen.c`) are checked in; `uv run --with pyyaml python Generators/gen.py`
+regenerates them from `Defs/`.
+
 These are optional and found at run time:
 
 - **[The Unarchiver](https://theunarchiver.com)'s `unar`** (`brew install unar`) imports StuffIt, Compact Pro and other archives. MacBinary, BinHex and disk images need nothing extra.
