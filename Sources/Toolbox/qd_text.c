@@ -433,6 +433,8 @@ void tb_GetFNum(gaddr fnam, gaddr fnum)
 
 int8_t tb_RealFont(int16_t fnum, int16_t sz)
 {
+    if (sz == 0) /* size 0 is the default size, as TextSize 0 is: the system font's */
+        sz = rd16(LM_SysFontSiz) ? (int16_t)rd16(LM_SysFontSiz) : 12;
     int k = classic_index(fnum);
     if (k >= 0 && classic_fonts[k].drawn_as != fnum && !tb_GetResource((int32_t)fourcc("FOND"), fnum))
         fnum = classic_fonts[k].drawn_as;
