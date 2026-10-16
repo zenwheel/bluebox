@@ -57,6 +57,50 @@ struct SystemItem: Identifiable, Hashable {
 let watchedSystemFolders = ["Apple Menu Items", "Control Panels", "Extensions", "Startup Items", "Fonts"]
 
 /// A sidebar entry: the defaults, the System Folder, or one application.
+/// The sidebar's tree: a folder, or an application.
+struct ShellNode: Identifiable, Hashable {
+    let id: String
+    let name: String
+    var app: ShellApp?
+    var children: [ShellNode]? /* nil for an application */
+}
+
+/// The applications of one place as their folders hold them.  A folder that
+/// holds only one application is that application; a folder that holds
+/// only one folder joins it ("Journeyman.toast_.zip/Journeyman").
+func shellTree(_ apps: [ShellApp], prefix: String = "") -> [ShellNode] {
+    var folders: [String: [ShellApp]] = [:]
+    var nodes: [ShellNode] = []
+    for app in apps {
+        let rest = prefix.isEmpty ? app.folder : String(app.folder.dropFirst(prefix.count + 1))
+        if rest.isEmpty {
+            nodes.append(ShellNode(id: app.path, name: app.name, app: app, children: nil))
+        } else {
+            let first = String(rest.split(separator: "/", maxSplits: 1)[0])
+            folders[first, default: []].append(app)
+        }
+    }
+    var folderNodes: [ShellNode] = []
+    for (name, inside) in folders {
+        let path = prefix.isEmpty ? name : prefix + "/" + name
+        var label = name
+        var children = shellTree(inside, prefix: path)
+        while children.count == 1, let only = children.first, only.app == nil, let deeper = only.children {
+            label += "/" + only.name
+            children = deeper
+        }
+        if children.count == 1, let only = children.first, only.app != nil {
+            folderNodes.append(only)
+        } else {
+            folderNodes.append(ShellNode(id: "folder:" + (inside.first?.place ?? "") + "/" + path, name: label,
+                                         app: nil, children: children))
+        }
+    }
+    let byName: (ShellNode, ShellNode) -> Bool = { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    return folderNodes.filter { $0.app == nil }.sorted(by: byName)
+        + (nodes + folderNodes.filter { $0.app != nil }).sorted(by: byName)
+}
+
 enum ShellItem: Hashable {
     case defaults
     case systemFolder
@@ -274,24 +318,21 @@ struct ShellView: View {
                     let here = model.apps.filter { $0.place == place }
                     if !here.isEmpty {
                         Section(place) {
-                            ForEach(here) { app in
-                                HStack {
-                                    Image(nsImage: model.icon(app)).resizable().interpolation(.none)
-                                        .frame(width: 16, height: 16)
-                                    VStack(alignment: .leading, spacing: 0) {
-                                        HStack(spacing: 4) {
-                                            Text(app.name)
-                                            if model.running[app.path] != nil {
-                                                Circle().fill(Color.green).frame(width: 6, height: 6)
-                                                    .help("Running")
-                                            }
-                                        }
-                                        if !app.folder.isEmpty {
-                                            Text(app.folder).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            OutlineGroup(shellTree(here), children: \.children) { node in
+                                if let app = node.app {
+                                    HStack {
+                                        Image(nsImage: model.icon(app)).resizable().interpolation(.none)
+                                            .frame(width: 16, height: 16)
+                                        Text(app.name)
+                                        if model.running[app.path] != nil {
+                                            Circle().fill(Color.green).frame(width: 6, height: 6).help("Running")
                                         }
                                     }
+                                    .help(app.folder.isEmpty ? app.name : app.folder + "/" + app.name)
+                                    .tag(ShellItem.app(app))
+                                } else {
+                                    Label(node.name, systemImage: "folder").lineLimit(1)
                                 }
-                                .tag(ShellItem.app(app))
                             }
                         }
                     }
@@ -691,6 +732,7 @@ func shellCommand(_ args: [String]) -> Never {
     MainActor.assumeIsolated {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
+        app.applicationIconImage = blueBoxIconImage()
         let delegate = ShellDelegate()
         app.delegate = delegate
         app.mainMenu = shellMenu()

@@ -44,7 +44,7 @@ cp "$root/Sources/MACE/COPYING.LGPLv2.1" "$app/Contents/Resources/MACE COPYING.L
 
 # The icon.
 iconset=$(mktemp -d)/BlueBox.iconset
-swift "$root/scripts/make-icon.swift" "$iconset"
+"$bin" make-iconset "$iconset"
 iconutil -c icns -o "$app/Contents/Resources/BlueBox.icns" "$iconset"
 rm -rf "$(dirname "$iconset")"
 

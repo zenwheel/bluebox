@@ -888,6 +888,7 @@ case "rsrc": rsrcCommand(rest)
 case "themes": themesCommand(rest)
 #if canImport(AppKit)
 case "install": installCommand(rest)
+case "make-iconset": makeIconsetCommand(rest)
 #endif
 default: usage()
 }

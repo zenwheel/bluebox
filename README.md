@@ -62,7 +62,7 @@ sh scripts/make-app.sh          # makes build/Blue Box.app
 
 - the program, with its fonts built in;
 - The Unarchiver's `unar`, when it's installed here (Homebrew), so archives import without it;
-- its icon and the licences.
+- its icon (drawn by `bluebox make-iconset`) and the licences.
 
 Opening it shows the shell. Dropping archives or disk images on its icon
 imports them. Copy it to `/Applications` before using `install`, because the
