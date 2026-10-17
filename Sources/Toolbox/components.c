@@ -4,9 +4,9 @@
  * The selector is in D0; selector 0 is a call to a component instance, whose
  * glue pushed a ComponentParameters record (flags, paramSize, what, then the
  * arguments) on top of the instance and the result.  Components are those an
- * application registers itself, from code or from 'thng' resources; we
- * provide none of our own, so asking for a QuickTime codec or the like finds
- * nothing.
+ * application registers itself, from code or from 'thng' resources, and
+ * one of our own: Internet Config, with no preferences in it.  Asking for a
+ * QuickTime codec or the like finds nothing.
  */
 #include <string.h>
 
@@ -526,9 +526,96 @@ void components_set_storage(uint32_t ci, gaddr storage)
 
 void components_close(uint32_t ci) { close_component(ci); }
 
+/* ---- Internet Config ('PREF' 'ICAp') ----
+ * Programs that require Internet Config open it themselves (Internet
+ * Explorer).  It holds no preferences: every lookup finds nothing, so
+ * programs use their own defaults. */
+
+enum {
+    kICCStart = 0, kICCStop = 1, kICCFindConfigFile = 2, kICCSpecifyConfigFile = 3, kICCGetSeed = 4,
+    kICCBegin = 5, kICCGetPref = 6, kICCSetPref = 7, kICCCountPref = 8, kICCGetIndPref = 9, kICCEnd = 10,
+    kICCDefaultFileName = 11,
+    kICCDeletePref = 12, kICCGetPerm = 13, kICCFindUserConfigFile = 14, kICCGetPrefHandle = 26,
+    kICCFindPrefHandle = 36,
+    icPrefNotFoundErr = -666,
+};
+
+static void ic_file_name(gaddr str)
+{
+    static const char name[] = "Internet Preferences";
+    wr8(str, sizeof name - 1);
+    gput(str + 1, name, sizeof name - 1);
+}
+
+/* An empty Internet Preferences file (a resource file) in the Preferences
+ * folder, or a resource fork for one made without: programs open it
+ * themselves and call it damaged when it has none (Internet Explorer). */
+static void ic_make_file(void)
+{
+    gaddr tmp = tb_NewPtr(2 + 4 + 64 + FSSpec_SIZEOF, false, true);
+    if (!tmp)
+        return;
+    gaddr vref = tmp, dir = tmp + 2, name = tmp + 6, spec = tmp + 70;
+    ic_file_name(name);
+    int16_t e = tb_FindFolder(-32768, (int32_t)fourcc("pref"), 1, vref, dir);
+    if (!e)
+        e = tb_FSMakeFSSpec((int16_t)rd16(vref), (int32_t)rd32(dir), name, spec);
+    if (!e || e == fnfErr) /* adds a resource fork to a file with none; leaves one with a fork alone */
+        tb_FSpCreateResFile(spec, (int32_t)fourcc("ICAp"), (int32_t)fourcc("ICAp"), 0);
+    tb_DisposePtr(tmp);
+}
+
+/* pascal ComponentResult (ComponentParameters *params, Handle storage) */
+static void ic_component(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    uint32_t ret = cpu_pop32(c);
+    cpu_pop32(c); /* storage */
+    gaddr params = cpu_pop32(c);
+    int16_t what = (int16_t)rd16(params + 2);
+    gaddr last = rd32(params + 4); /* the last argument (a pointer, for the calls answering in one) */
+    int32_t r = noErr;
+    switch (what) {
+    case -3: /* kComponentCanDoSelect */
+        r = rd16(params + 4) <= kICCFindPrefHandle || (int16_t)rd16(params + 4) < 0;
+        break;
+    case -4: /* kComponentVersionSelect */
+        r = 0x00020000;
+        break;
+    case kICCGetSeed:
+        if (last)
+            wr32(last, 1);
+        break;
+    case kICCCountPref:
+        if (last)
+            wr32(last, 0);
+        break;
+    case kICCDefaultFileName: /* the preferences file's name (Str63) */
+        if (last)
+            ic_file_name(last);
+        break;
+    case kICCFindConfigFile: /* as Internet Config does, make the file when there is none */
+        ic_make_file();
+        break;
+    case kICCGetPerm:
+        if (last)
+            wr8(last, 0); /* icNoPerm */
+        break;
+    case kICCGetPref: case kICCGetIndPref: case kICCGetPrefHandle: case kICCFindPrefHandle: case kICCDeletePref:
+        r = icPrefNotFoundErr;
+        break;
+    default: /* open, close, start, stop, begin, end, finding the configuration ... */
+        break;
+    }
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 /* Forget everything registered: a new run. */
 void components_reset(void)
 {
     memset(comps, 0, sizeof comps);
     memset(insts, 0, sizeof insts);
+    register_component(fourcc("PREF"), fourcc("ICAp"), fourcc("JPQE"), 0,
+                       native_register(ic_component, "InternetConfig", 0), 0, 0, 0, -1);
 }

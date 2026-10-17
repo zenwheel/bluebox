@@ -10,11 +10,14 @@
  * a float, two for a double), the rest at 24(r1) on; results in r3 or f1.
  */
 #include <math.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
+#include "forks.h"
 #include "machine.h"
 #include "ppc_bridge.h"
 #include "qd_internal.h"
@@ -1263,6 +1266,26 @@ CCALL(MCGetInterfaceElement, 49, "44")
 static void os_notHandled(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1708); }
 static void os_accessorNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1723); }
 static void os_coercionFail(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1700); }
+/* GetDefaultUser(&userRef, name): Sharing Setup's owner, the host
+ * account's full name (Netscape Navigator names its profile after it). */
+static void g_GetDefaultUser(ppc_cpu *c)
+{
+    const struct passwd *pw = getpwuid(getuid());
+    const char *name = pw && pw->pw_gecos && *pw->pw_gecos ? pw->pw_gecos : pw ? pw->pw_name : "User";
+    uint8_t mac[256];
+    size_t n = utf8_to_macroman(name, mac, strlen(name));
+    if (n > 31)
+        n = 31;
+    if (R(3))
+        wr16(R(3), 0);
+    if (R(4)) {
+        wr8(R(4), (uint8_t)n);
+        gput(R(4) + 1, mac, (uint32_t)n);
+    }
+    RETURN(0);
+}
+
+static void os_AEResolve(ppc_cpu *c) { RETURN((uint32_t)(int32_t)tb_AEResolve(R(3), (int16_t)R(4), R(5))); }
 
 /* Internet Config: an instance with no preferences in it. */
 static void ic_ICStart(ppc_cpu *c)
@@ -1821,7 +1844,7 @@ const ppc_export lib_exports[] = {
     /* ObjectSupportLib */
     { "AEObjectInit", g_noErr }, { "AESetObjectCallbacks", g_noErr }, { "AEInstallObjectAccessor", g_noErr },
     { "AERemoveObjectAccessor", g_noErr }, { "AEGetObjectAccessor", os_accessorNotFound },
-    { "AEResolve", os_notHandled }, { "AECallObjectAccessor", os_notHandled }, { "AEDisposeToken", g_noErr },
+    { "AEResolve", os_AEResolve }, { "GetDefaultUser", g_GetDefaultUser }, { "AECallObjectAccessor", os_notHandled }, { "AEDisposeToken", g_noErr },
     { "CreateObjSpecifier", os_coercionFail }, { "CreateOffsetDescriptor", os_coercionFail },
     { "CreateCompDescriptor", os_coercionFail }, { "CreateLogicalDescriptor", os_coercionFail },
     { "CreateRangeDescriptor", os_coercionFail },

@@ -74,6 +74,7 @@ void gestalt_init(void)
     gestalt_set(fourcc("addr"), 0x7);         /* 32-bit addressing, sys zone, capable */
     gestalt_set(fourcc("ram "), g_mem_report_cap);
     gestalt_set(fourcc("qtim"), 0x02508000); /* QuickTime 2.5 (movies play as zero length) */
+    gestalt_set(fourcc("cpnt"), 0x00030000); /* the Component Manager, as QuickTime 2.5 has it */
     gestalt_set(fourcc("lram"), g_mem_report_cap);
     gestalt_set(fourcc("vm  "), 0);
     gestalt_set(fourcc("rsrc"), 0x3);         /* Resource Manager: partial, has GetResourceSizeOnDisk */

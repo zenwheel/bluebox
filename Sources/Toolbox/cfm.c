@@ -576,7 +576,9 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
                     imports[k] = native_tvector(fn, sname);
                     continue;
                 }
-                if (cls == kDataCFragSymbol && li >= 0 && (addr = ppc_data_export(sname)) != 0) {
+                /* Our data exports, whatever class the importer gave them
+                 * (CallComponentUPP comes as a transition vector in some). */
+                if (!fn && li >= 0 && (addr = ppc_data_export(sname)) != 0) {
                     imports[k] = data_import(sname);
                     continue;
                 }

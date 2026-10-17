@@ -1186,9 +1186,14 @@ int16_t tb_AESetObjectCallbacks(gaddr compare, gaddr count, gaddr dispose, gaddr
     return noErr;
 }
 
+/* A null specifier is the application itself, whose token is null too
+ * (programs resolve their events' direct object, absent from oapp, this
+ * way: Netscape Navigator). */
 int16_t tb_AEResolve(gaddr spec, int16_t flags, gaddr token)
 {
     set_desc(token, T("null"), 0);
+    if (!spec || desc_type(spec) == T("null"))
+        return noErr;
     return -1728; /* errAENoSuchObject */
 }
 
