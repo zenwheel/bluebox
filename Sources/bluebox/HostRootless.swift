@@ -55,8 +55,12 @@ final class MacWindowView: NSView {
     override var wantsUpdateLayer: Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: CursorSync.shared.cursor) }
 
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { FileDrops.operation(sender) }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool { FileDrops.perform(sender) }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
+        registerForDraggedTypes([.fileURL])
         wantsLayer = true
         layer?.magnificationFilter = .nearest
         layer?.contentsGravity = .resize

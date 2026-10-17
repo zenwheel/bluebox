@@ -240,6 +240,15 @@ static void run_completions(void)
     }
 }
 
+/* Whether a Time Manager or VBL task is waiting to run. */
+bool time_busy(void)
+{
+    for (int i = 0; i < MAX_TASKS; i++)
+        if ((timers[i].tm && timers[i].active) || vbls[i])
+            return true;
+    return false;
+}
+
 void time_pump(void)
 {
     cpu68k *c = g_cpu;

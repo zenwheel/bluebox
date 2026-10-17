@@ -940,7 +940,8 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
     gaddr evt = tb_NewPtr(EventRecord_SIZEOF, false, true);
     gaddr dp = tb_NewPtr(4, false, true);
     while (!g_cpu->halted) {
-        bool got = tb_WaitNextEvent(-1, evt, 6, 0) != 0;
+        /* Every event but high-level ones, which wait for the application. */
+        bool got = tb_WaitNextEvent((int16_t)(0xFFFF & ~0x0400), evt, 6, 0) != 0;
         if (filter) {
             cpu68k *c = g_cpu;
             cpu_push16(c, 0);

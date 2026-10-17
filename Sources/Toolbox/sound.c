@@ -439,6 +439,16 @@ static void pump(channel *c)
 static bool in_pump;
 
 /* Called at safe points (Event Manager, TickCount, SystemTask). */
+/* Whether a channel is open: its completions and double-buffer refills
+ * come at interrupt time, which must go on while the program waits. */
+bool sound_busy(void)
+{
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (chans[i].chan)
+            return true;
+    return false;
+}
+
 void sound_pump(void)
 {
     if (in_pump)

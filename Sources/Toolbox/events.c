@@ -507,23 +507,48 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
         return 1;
     }
     if (host_attached && sleep > 0) {
-        /* Sleep until input arrives or the time is up. */
-        uint32_t c0, i0;
-        bool hle = (mask & 0x0400) && aem_next_event(&c0, &i0, false);
-        pthread_mutex_lock(&lock);
-        if (qhead == qtail && !hle) {
-            struct timespec ts;
-            clock_gettime(CLOCK_REALTIME, &ts);
-            long long ns = (long long)(sleep > 600 ? 600 : sleep) * 1000000000LL / 60;
-            ts.tv_sec += (time_t)(ns / 1000000000LL);
-            ts.tv_nsec += (long)(ns % 1000000000LL);
-            if (ts.tv_nsec >= 1000000000) {
-                ts.tv_sec++;
-                ts.tv_nsec -= 1000000000;
+        /* Sleep until input arrives or the time is up.  Interrupt-time
+         * work (sound refills, Time Manager and VBL tasks) goes on while
+         * the program sleeps, as it did on a Mac: then the wait is cut into
+         * slices with the work done between them. */
+        uint64_t total_ns = (uint64_t)(sleep > 600 ? 600 : sleep) * 1000000000ULL / 60;
+        struct timespec start;
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        for (;;) {
+            bool busy = sound_busy() || time_busy();
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            uint64_t spent = (uint64_t)(now.tv_sec - start.tv_sec) * 1000000000ULL + (uint64_t)(now.tv_nsec - start.tv_nsec);
+            if (spent >= total_ns)
+                break;
+            uint64_t ns = total_ns - spent;
+            if (busy && ns > 5000000)
+                ns = 5000000; /* 5 ms */
+            uint32_t c0, i0;
+            bool hle = (mask & 0x0400) && aem_next_event(&c0, &i0, false);
+            pthread_mutex_lock(&lock);
+            bool waiting = qhead == qtail && !hle;
+            if (waiting) {
+                struct timespec ts;
+                clock_gettime(CLOCK_REALTIME, &ts);
+                ts.tv_sec += (time_t)(ns / 1000000000ULL);
+                ts.tv_nsec += (long)(ns % 1000000000ULL);
+                if (ts.tv_nsec >= 1000000000) {
+                    ts.tv_sec++;
+                    ts.tv_nsec -= 1000000000;
+                }
+                pthread_cond_timedwait(&arrived, &lock, &ts);
+                waiting = qhead == qtail;
             }
-            pthread_cond_timedwait(&arrived, &lock, &ts);
+            pthread_mutex_unlock(&lock);
+            if (!waiting || !busy)
+                break;
+            machine_advance_ticks();
+            sound_pump();
+            time_pump();
+            if (g_cpu->halted)
+                return 0;
         }
-        pthread_mutex_unlock(&lock);
         machine_advance_ticks();
         return next_event(mask, evp, true, false);
     }

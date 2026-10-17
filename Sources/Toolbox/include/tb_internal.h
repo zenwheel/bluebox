@@ -131,6 +131,8 @@ void raw_Elems68K(cpu68k *c, uint16_t tw);
 void sane_reset(void);
 /* Time Manager and VBL tasks due now (interrupt time). */
 void time_pump(void);
+bool time_busy(void);  /* a Time Manager or VBL task waiting */
+bool sound_busy(void); /* a sound channel open */
 /* Let the application see and change a host file (and its neighbours) or,
  * with tree, a folder and its contents (filemgr.c). */
 void fm_grant(const char *path, bool tree);

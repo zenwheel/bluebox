@@ -20,8 +20,12 @@ final class ScreenView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: CursorSync.shared.cursor) }
 
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { FileDrops.operation(sender) }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool { FileDrops.perform(sender) }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
+        registerForDraggedTypes([.fileURL])
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refreshIfChanged()
@@ -164,6 +168,33 @@ final class ScreenView: NSView {
     }
 }
 
+/// An Open Documents event for these files; false if none is a file.
+@discardableResult
+func sendOpenDocuments(_ urls: [URL]) -> Bool {
+    let paths = urls.filter(\.isFileURL).map(\.path)
+    guard !paths.isEmpty else { return false }
+    var cpaths = paths.map { strdup($0) }
+    cpaths.withUnsafeMutableBufferPointer { buf in
+        buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) {
+            machine_open_documents($0, Int32(buf.count), false)
+        }
+    }
+    cpaths.forEach { free($0) }
+    return true
+}
+
+/// Files dropped on a classic window open in the application, as dropping
+/// them on its icon in the Finder did (an Open Documents event): a playlist
+/// takes songs this way, a viewer opens pictures.
+@MainActor enum FileDrops {
+    static func urls(_ info: NSDraggingInfo) -> [URL] {
+        (info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+            as? [URL]) ?? []
+    }
+    static func operation(_ info: NSDraggingInfo) -> NSDragOperation { urls(info).isEmpty ? [] : .copy }
+    static func perform(_ info: NSDraggingInfo) -> Bool { sendOpenDocuments(urls(info)) }
+}
+
 /// Documents opened from the Finder or Dock become Open Documents events.
 /// The first event is Open Application only if nothing was opened at launch,
 /// as with the System 7 Finder.
@@ -172,16 +203,8 @@ struct LaunchEvents {
     private var openedAtLaunch = false
 
     mutating func open(_ urls: [URL]) {
-        let paths = urls.filter(\.isFileURL).map(\.path)
-        guard !paths.isEmpty else { return }
+        guard sendOpenDocuments(urls) else { return }
         if !launched { openedAtLaunch = true }
-        var cpaths = paths.map { strdup($0) }
-        cpaths.withUnsafeMutableBufferPointer { buf in
-            buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) {
-                machine_open_documents($0, Int32(buf.count), false)
-            }
-        }
-        cpaths.forEach { free($0) }
     }
 
     mutating func finishLaunching() {
