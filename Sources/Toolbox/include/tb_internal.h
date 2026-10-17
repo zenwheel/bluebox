@@ -277,4 +277,31 @@ gaddr mm_call_component_upp(void);
  * returns its r3. */
 uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs);
 
+/* What a running thread keeps besides its registers: how deep it is in
+ * calls to guest code and in traps run for PowerPC code. */
+typedef struct {
+    int call_depth, returned_depth;
+    uint16_t current_trap, last_trapword;
+} trap_ctx;
+void trap_ctx_save(trap_ctx *t);
+void trap_ctx_load(const trap_ctx *t);
+
+#define TRAP_DEPTH 32
+typedef struct {
+    uint32_t d[8], a[8];
+    uint16_t sr;
+} ppc_trap_regs;
+typedef struct {
+    int depth;
+    ppc_trap_regs saved[TRAP_DEPTH];
+    bool finished[TRAP_DEPTH];
+} ppc_trap_ctx;
+void ppc_trap_ctx_save(ppc_trap_ctx *t);
+void ppc_trap_ctx_load(const ppc_trap_ctx *t);
+/* Open Transport (opentransport.c). */
+void opentransport_reset(void);
+void opentransport_poll(void);
+bool mm_ctx_returned(void);
+void mm_ctx_set_returned(bool r);
+
 #endif

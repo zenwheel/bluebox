@@ -1,19 +1,29 @@
 /*
  * Thread Manager (ThreadDispatch, $ABF2): cooperative threads.
  *
- * Each thread has a stack of its own in the application heap and, while it
- * is not running, its registers saved here.  A thread gives up the
- * processor only in a Thread Manager call (YieldToThread, SetThreadState,
- * DisposeThread, or returning from its entry routine); the switch happens as
- * that call returns, once its glue has finished with the stack, so a saved
- * thread's A7 always points at the return address of the call it made.
+ * Each thread runs on a host thread of its own, and only one runs at a
+ * time: a Thread Manager call that switches threads (YieldToThread,
+ * SetThreadState, DisposeThread, or the entry routine returning) saves the
+ * running thread's registers and nesting (calls into guest code, traps run
+ * for PowerPC code), loads the next thread's, hands it the baton and waits
+ * for its own turn.  So a thread may switch from any depth: inside 68k or
+ * PowerPC code, inside a callback, inside a trap a PowerPC program called.
  *
+ * Each thread has a stack of its own in the application heap: the 68k
+ * part at its top and, for PowerPC programs, the PowerPC part below.
  * Preemptive threads are scheduled as cooperative ones: they run when
  * another thread yields, and not at interrupt time.  A custom scheduler set
  * with SetThreadScheduler is recorded but not consulted.
  */
+#include <pthread.h>
+#include <setjmp.h>
+#include <stdio.h>
+#include <time.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "machine.h"
+#include "ppc.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -25,6 +35,26 @@ enum { threadTooManyReqsErr = -617, threadNotFoundErr = -618, threadProtocolErr 
 
 #define MAX_THREADS 64
 #define DEFAULT_STACK 0x6000u
+#define STACK_68K 0x4000u          /* the 68k part of a PowerPC program's thread stack */
+#define HOST_STACK (16u << 20)     /* emulation nests deeply on the host's stack */
+
+/* What a thread keeps while another runs. */
+typedef struct {
+    cpu68k cpu;
+    ppc_cpu ppc;
+    trap_ctx trap;
+    ppc_trap_ctx ppc_trap;
+    bool ppc_returned;
+} exec_ctx;
+
+/* The host thread a guest thread runs on: it may go on only when told. */
+typedef struct {
+    pthread_t th;
+    pthread_cond_t cv;
+    bool run;
+    bool started;
+    jmp_buf top;   /* where a thread that disposes of itself leaves from */
+} host_thread;
 
 typedef struct {
     bool used;
@@ -33,32 +63,48 @@ typedef struct {
     int32_t style;
     gaddr stack;   /* NewPtr'd stack (0 for the application's) */
     uint32_t stack_size;
+    gaddr entry, param;
     gaddr result;  /* where the entry routine's result goes */
     gaddr terminator, term_param;
     gaddr switch_in, switch_in_param, switch_out, switch_out_param;
-    uint32_t d[8], a[8];
-    uint16_t sr;
+    exec_ctx *ctx;
+    host_thread *host;
 } thread;
 
 static thread threads[MAX_THREADS];
 static int current; /* index of the running thread */
-static int pending = -1; /* the thread to switch to as the call returns */
 static uint32_t next_id;
 static int pool[3]; /* premade threads by style */
-static gaddr exit_stub;
+static pthread_mutex_t baton = PTHREAD_MUTEX_INITIALIZER;
+static host_thread app_host;
+static void (*main_pump)(void);
 
-static void thread_exit_native(cpu68k *c, uint16_t tw);
+void machine_set_main_thread_pump(void (*fn)(void)) { main_pump = fn; }
+
+static void free_thread(thread *t)
+{
+    /* A host thread still waiting (its guest thread never finished) keeps
+     * its record: it is never told to go on. */
+    if (t->ctx)
+        free(t->ctx);
+    t->ctx = NULL;
+}
 
 void threads_reset(void)
 {
+    for (int i = 1; i < MAX_THREADS; i++)
+        free_thread(&threads[i]);
     memset(threads, 0, sizeof threads);
+    if (!app_host.started) {
+        pthread_cond_init(&app_host.cv, NULL);
+        app_host.started = true;
+    }
+    app_host.run = true;
     threads[0] = (thread){ .used = true, .id = kApplicationThreadID, .state = kRunningThreadState,
-                           .style = kCooperativeThread };
+                           .style = kCooperativeThread, .ctx = NULL, .host = &app_host };
     current = 0;
-    pending = -1;
     next_id = kApplicationThreadID + 1;
     memset(pool, 0, sizeof pool);
-    exit_stub = native_register(thread_exit_native, "ThreadExit", 0); /* natives start afresh at each boot */
 }
 
 static int find(int32_t id)
@@ -82,46 +128,151 @@ static int next_ready(void)
     return -1;
 }
 
-static void schedule(int to)
-{
-    if (to >= 0 && to != current)
-        pending = to;
-}
+/* PowerPC programs give ThreadsLib their routines as transition vectors;
+ * routine descriptors and 68k programs' routines are 68k calls. */
+static bool native_ppc(gaddr fn) { return g_ppc_mode && !mm_is_descriptor(fn); }
 
 /* Call a switcher or terminator: pascal (ThreadID, void *). */
 static void call_proc(gaddr fn, uint32_t id, gaddr param)
 {
     if (!fn)
         return;
+    if (native_ppc(fn)) {
+        uint32_t args[2] = { id, param };
+        ppc_call(fn, args, 2);
+        return;
+    }
     cpu68k *c = g_cpu;
     cpu_push32(c, id);
     cpu_push32(c, param);
     guest_call(fn);
 }
 
-/* At the end of a Thread Manager call (and of a thread): switch threads. */
-void threads_switch_if_pending(cpu68k *c)
+/* ---- Saving and loading a thread's state ---- */
+
+static void save_ctx(exec_ctx *x)
 {
-    if (pending < 0 || c->halted)
+    x->cpu = *g_cpu;
+    x->ppc = g_ppc;
+    trap_ctx_save(&x->trap);
+    ppc_trap_ctx_save(&x->ppc_trap);
+    x->ppc_returned = mm_ctx_returned();
+}
+
+/* The registers and nesting; the instruction count, the machine's halt and
+ * the hooks stay as they are. */
+static void load_ctx(const exec_ctx *x)
+{
+    cpu68k *c = g_cpu;
+    memcpy(c->d, x->cpu.d, sizeof c->d);
+    memcpy(c->a, x->cpu.a, sizeof c->a);
+    c->pc = x->cpu.pc;
+    c->sr = x->cpu.sr;
+    c->usp = x->cpu.usp;
+    c->isp = x->cpu.isp;
+    memcpy(c->fp, x->cpu.fp, sizeof c->fp);
+    c->fpcr = x->cpu.fpcr;
+    c->fpsr = x->cpu.fpsr;
+    c->fpiar = x->cpu.fpiar;
+    c->op_pc = x->cpu.op_pc;
+    c->op = x->cpu.op;
+    c->stopped = x->cpu.stopped;
+    ppc_cpu *p = &g_ppc;
+    memcpy(p->gpr, x->ppc.gpr, sizeof p->gpr);
+    memcpy(p->fpr, x->ppc.fpr, sizeof p->fpr);
+    p->cr = x->ppc.cr;
+    p->lr = x->ppc.lr;
+    p->ctr = x->ppc.ctr;
+    p->xer = x->ppc.xer;
+    p->fpscr = x->ppc.fpscr;
+    p->pc = x->ppc.pc;
+    p->op_pc = x->ppc.op_pc;
+    p->prev_pc = x->ppc.prev_pc;
+    p->op = x->ppc.op;
+    p->reserve_addr = x->ppc.reserve_addr;
+    p->reserved = x->ppc.reserved;
+    p->halted = x->ppc.halted; /* a nested PowerPC call's own stop */
+    memcpy(p->halt_reason, x->ppc.halt_reason, sizeof p->halt_reason);
+    trap_ctx_load(&x->trap);
+    ppc_trap_ctx_load(&x->ppc_trap);
+    mm_ctx_set_returned(x->ppc_returned);
+}
+
+/* ---- Handing over ---- */
+
+static void *host_main(void *arg);
+
+/* Wait (holding the baton lock) until this host thread may go on.  The
+ * process's main thread keeps serving the host meanwhile: host code that
+ * a guest thread calls may wait for it. */
+static bool on_main_thread(void)
+{
+#ifdef __APPLE__
+    return pthread_main_np() != 0;
+#else
+    return false;
+#endif
+}
+
+static void wait_turn(host_thread *h)
+{
+    bool serve = main_pump && on_main_thread();
+    while (!h->run) {
+        if (serve) {
+            struct timespec ts = { 0, 2000000 };
+            pthread_mutex_unlock(&baton);
+            main_pump();
+            nanosleep(&ts, NULL);
+            pthread_mutex_lock(&baton);
+        } else {
+            pthread_cond_wait(&h->cv, &baton);
+        }
+    }
+}
+
+/* Run thread `to` instead of the current one.  Unless the current one is
+ * leaving (it has finished), it waits here for its next turn. */
+static void switch_to(int to, bool leaving)
+{
+    int from = current;
+    thread *f = &threads[from], *t = &threads[to];
+    host_thread *mine = f->host;
+    if (to == from)
         return;
-    int to = pending;
-    pending = -1;
-    thread *from = &threads[current];
-    if (from->used) {
-        call_proc(from->switch_out, from->id, from->switch_out_param);
-        memcpy(from->d, c->d, sizeof from->d);
-        memcpy(from->a, c->a, sizeof from->a);
-        from->sr = c->sr;
-        if (from->state == kRunningThreadState)
-            from->state = kReadyThreadState;
+    if (!leaving) {
+        call_proc(f->switch_out, f->id, f->switch_out_param);
+        if (!f->ctx)
+            f->ctx = calloc(1, sizeof *f->ctx);
+        save_ctx(f->ctx);
+        if (f->state == kRunningThreadState)
+            f->state = kReadyThreadState;
     }
     current = to;
-    thread *t = &threads[to];
     t->state = kRunningThreadState;
-    memcpy(c->d, t->d, sizeof t->d);
-    memcpy(c->a, t->a, sizeof t->a);
-    c->sr = t->sr;
+    if (t->ctx)
+        load_ctx(t->ctx);
     call_proc(t->switch_in, t->id, t->switch_in_param);
+
+    pthread_mutex_lock(&baton);
+    if (!leaving)
+        mine->run = false;
+    host_thread *h = t->host;
+    h->run = true;
+    if (!h->started) {
+        h->started = true;
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setstacksize(&attr, HOST_STACK);
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        if (pthread_create(&h->th, &attr, host_main, t) != 0)
+            cpu_halt(g_cpu, "Thread Manager: no host thread for thread %u", t->id);
+        pthread_attr_destroy(&attr);
+    } else {
+        pthread_cond_signal(&h->cv);
+    }
+    if (!leaving)
+        wait_turn(mine);
+    pthread_mutex_unlock(&baton);
 }
 
 static void finish_thread(int i, uint32_t result_value, bool store)
@@ -130,24 +281,57 @@ static void finish_thread(int i, uint32_t result_value, bool store)
     if (store && t->result)
         wr32(t->result, result_value);
     call_proc(t->terminator, t->id, t->term_param);
-    gaddr stack = t->stack;
     t->used = false;
     t->state = kStoppedThreadState;
-    if (stack)
-        tb_DisposePtr(stack); /* not touched again: the switch replaces A7 */
 }
 
-/* A thread's entry routine returned here: its result is on the stack. */
-static void thread_exit_native(cpu68k *c, uint16_t tw)
+/* After a thread has finished: the next one, or the application's. */
+static int successor(void)
 {
-    int i = current;
-    finish_thread(i, rd32(c->a[7]), true);
+    if (g_cpu->halted)
+        return 0; /* the machine is stopping: the application thread unwinds */
     int to = next_ready();
-    if (to < 0)
+    if (to < 0) {
         to = 0; /* the application thread is always there */
-    threads[0].state = threads[0].state == kStoppedThreadState && to == 0 ? kReadyThreadState : threads[0].state;
-    pending = to;
-    threads_switch_if_pending(c);
+        if (threads[0].state == kStoppedThreadState)
+            threads[0].state = kReadyThreadState;
+    }
+    return to;
+}
+
+/* A thread's host thread: its turn comes with its registers loaded (its
+ * stack set up by NewThread); it calls the entry routine, as pascal
+ * void *entry(void *param), and leaves when that returns. */
+static void *host_main(void *arg)
+{
+    thread *t = arg;
+    host_thread *h = t->host;
+    pthread_mutex_lock(&baton);
+    wait_turn(h);
+    pthread_mutex_unlock(&baton);
+    int i = (int)(t - threads);
+    gaddr stack = t->stack;
+    if (!setjmp(h->top)) {
+        cpu68k *c = g_cpu;
+        uint32_t result;
+        if (native_ppc(t->entry)) {
+            result = ppc_call(t->entry, &t->param, 1);
+        } else {
+            cpu_push32(c, 0); /* the result */
+            cpu_push32(c, t->param);
+            guest_call(t->entry);
+            result = cpu_pop32(c);
+        }
+        if (!c->halted && threads[i].used)
+            finish_thread(i, result, true);
+    }
+    /* Ended by its entry routine's return, by disposing of itself, or by
+     * the machine stopping. */
+    if (stack && !g_cpu->halted)
+        tb_DisposePtr(stack);
+    free_thread(&threads[i]);
+    switch_to(successor(), true);
+    return NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -184,7 +368,7 @@ int16_t tb_ThreadCurrentStackSpace(int32_t id, gaddr freep)
     int i = find(id);
     if (i < 0)
         return threadNotFoundErr;
-    uint32_t sp = i == current ? g_cpu->a[7] : threads[i].a[7];
+    uint32_t sp = i == current ? g_cpu->a[7] : threads[i].ctx ? threads[i].ctx->cpu.a[7] : 0;
     uint32_t space = threads[i].stack ? sp - threads[i].stack : (uint32_t)tb_StackSpace();
     if (freep)
         wr32(freep, space);
@@ -210,23 +394,37 @@ int16_t tb_NewThread(int32_t style, gaddr entry, gaddr param, int32_t stack_size
     if (i == MAX_THREADS)
         return threadTooManyReqsErr;
     uint32_t size = stack_size > 0 ? (uint32_t)stack_size : DEFAULT_STACK;
+    if (g_ppc_mode)
+        size += STACK_68K;
     gaddr stack = tb_NewPtr((int32_t)size, false, false);
-    if (!stack)
+    exec_ctx *x = calloc(1, sizeof *x);
+    host_thread *h = calloc(1, sizeof *h);
+    if (!stack || !x || !h) {
+        if (stack)
+            tb_DisposePtr(stack);
+        free(x);
+        free(h);
         return memFullErr;
-    cpu68k *c = g_cpu;
+    }
+    pthread_cond_init(&h->cv, NULL);
     thread *t = &threads[i];
     *t = (thread){ .used = true, .id = next_id++, .style = style, .stack = stack, .stack_size = size,
-                   .result = resultp, .state = (options & kNewSuspend) ? kStoppedThreadState : kReadyThreadState };
-    /* Its first switch returns into the entry routine, called as pascal
-     * void *entry(void *param), which returns to the exit stub. */
-    gaddr sp = (stack + size) & ~3u;
-    sp -= 4; wr32(sp, 0);         /* the function result */
-    sp -= 4; wr32(sp, param);
-    sp -= 4; wr32(sp, exit_stub); /* entry's return address */
-    sp -= 4; wr32(sp, entry);     /* where the switch "returns" */
-    memcpy(t->a, c->a, sizeof t->a); /* A5 and the rest as the creator's */
-    t->a[7] = sp;
-    t->sr = c->sr;
+                   .entry = entry, .param = param, .result = resultp, .ctx = x, .host = h,
+                   .state = (options & kNewSuspend) ? kStoppedThreadState : kReadyThreadState };
+    /* It starts with the creator's registers (A5 and the rest), its own
+     * stacks, and nothing nested. */
+    save_ctx(x);
+    gaddr top = (stack + size) & ~15u;
+    x->cpu.a[7] = top - 16;
+    if (g_ppc_mode) {
+        gaddr r1 = (top - STACK_68K - 64) & ~15u;
+        wr32(r1, 0); /* the back chain ends here */
+        x->ppc.gpr[1] = r1;
+    }
+    x->ppc.halted = false;
+    memset(&x->trap, 0, sizeof x->trap);
+    memset(&x->ppc_trap, 0, sizeof x->ppc_trap);
+    x->ppc_returned = false;
     if (madep)
         wr32(madep, t->id);
     return noErr;
@@ -272,23 +470,22 @@ int16_t tb_DisposeThread(int32_t id, gaddr result, int8_t recycle)
     finish_thread(i, result, true);
     if (recycle && (style == kCooperativeThread || style == kPreemptiveThread))
         pool[style]++;
-    if (i == current) { /* a thread ending itself does not return */
-        int to = next_ready();
-        if (to < 0)
-            to = 0;
-        threads[0].state = threads[0].state == kStoppedThreadState && to == 0 ? kReadyThreadState : threads[0].state;
-        pending = to;
-    }
+    if (i == current)          /* a thread ending itself does not return: */
+        longjmp(threads[i].host->top, 1); /* its host thread leaves */
+    /* Another thread: its host thread waits for good. */
+    if (threads[i].stack)
+        tb_DisposePtr(threads[i].stack);
+    free_thread(&threads[i]);
     return noErr;
 }
 
 int16_t tb_YieldToThread(int32_t suggested)
 {
     int i = suggested == kNoThreadID ? -1 : find(suggested);
-    if (i >= 0 && i != current && threads[i].state == kReadyThreadState)
-        schedule(i);
-    else
-        schedule(next_ready());
+    if (!(i >= 0 && i != current && threads[i].state == kReadyThreadState))
+        i = next_ready();
+    if (i >= 0)
+        switch_to(i, false);
     return noErr;
 }
 
@@ -319,7 +516,7 @@ int16_t tb_SetThreadState(int32_t id, int16_t state, int32_t suggested)
     if (i != current) {
         if (state == kRunningThreadState) { /* run it now */
             threads[i].state = kReadyThreadState;
-            schedule(i);
+            switch_to(i, false);
         } else {
             threads[i].state = state;
         }
@@ -332,7 +529,7 @@ int16_t tb_SetThreadState(int32_t id, int16_t state, int32_t suggested)
         if (to < 0)
             return threadProtocolErr; /* nothing else could run */
         threads[current].state = kStoppedThreadState;
-        schedule(to);
+        switch_to(to, false);
     }
     return noErr;
 }

@@ -11,8 +11,7 @@
 
 /* ---- Running 68k traps ---- */
 
-#define TRAP_DEPTH 32
-static struct { uint32_t d[8], a[8]; uint16_t sr; } saved[TRAP_DEPTH];
+static ppc_trap_regs saved[TRAP_DEPTH];
 static int trap_depth;
 static gaddr trap_code; /* a trap word and a native for each depth */
 
@@ -51,6 +50,22 @@ void ppc_trap_push(int size, uint32_t value)
  * trap (a stack-based trap's arguments are right above its return). */
 static bool trap_finished[TRAP_DEPTH];
 static uint16_t done_index;
+
+/* The nesting of traps run for PowerPC code belongs to the thread running
+ * them: the Thread Manager switches it with the registers. */
+void ppc_trap_ctx_save(ppc_trap_ctx *t)
+{
+    t->depth = trap_depth;
+    memcpy(t->saved, saved, sizeof saved);
+    memcpy(t->finished, trap_finished, sizeof trap_finished);
+}
+
+void ppc_trap_ctx_load(const ppc_trap_ctx *t)
+{
+    trap_depth = t->depth;
+    memcpy(saved, t->saved, sizeof saved);
+    memcpy(trap_finished, t->finished, sizeof trap_finished);
+}
 
 static void trap_done_native(cpu68k *c, uint16_t tw)
 {

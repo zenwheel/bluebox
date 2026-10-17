@@ -66,8 +66,6 @@ int native_index_for(uint32_t addr)
     return (int)((addr - STUB_BASE) / STUB_SIZE);
 }
 
-void threads_switch_if_pending(cpu68k *c);
-
 void trap_native(cpu68k *c, uint16_t index)
 {
     if (index >= native_count) {
@@ -83,7 +81,6 @@ void trap_native(cpu68k *c, uint16_t index)
     last_trapword = tw;
     n->fn(c, tw);
     last_trapword = saved;
-    threads_switch_if_pending(c); /* before the stub's RTS */
 }
 
 /* ---------------------------------------------------------------------- */
@@ -345,7 +342,6 @@ static void aline_vector_native(cpu68k *c, uint16_t tw)
 
 void io_complete_later(gaddr pb, int16_t result);
 void key_trans_native(cpu68k *c, uint16_t tw);
-void threads_switch_if_pending(cpu68k *c);
 
 /* The File and Device Manager traps, whose argument is a parameter block
  * (InitQueue, $A016, has none). */
@@ -377,7 +373,6 @@ void trap_aline(cpu68k *c, uint16_t op)
             natives[n].fn(c, op);
             last_trapword = saved;
             current_trap = 0;
-            threads_switch_if_pending(c); /* a Thread Manager call returns in another thread */
             if (tb_reg_traps[op & 0x3FF]) {
                 /* Register-based routines with Toolbox numbers (HandToHand,
                  * PtrToHand ...) leave the condition codes from D0.W, as
@@ -489,6 +484,24 @@ void machine_pass_tick(void)
         cpu_halt(c, "instruction limit reached");
 }
 static int call_depth, returned_depth;
+
+/* The nesting of calls into guest code belongs to the thread making them:
+ * the Thread Manager switches it with the registers. */
+void trap_ctx_save(trap_ctx *t)
+{
+    t->call_depth = call_depth;
+    t->returned_depth = returned_depth;
+    t->current_trap = current_trap;
+    t->last_trapword = last_trapword;
+}
+
+void trap_ctx_load(const trap_ctx *t)
+{
+    call_depth = t->call_depth;
+    returned_depth = t->returned_depth;
+    current_trap = t->current_trap;
+    last_trapword = t->last_trapword;
+}
 
 static void guest_return_native(cpu68k *c, uint16_t tw) { returned_depth = call_depth; }
 

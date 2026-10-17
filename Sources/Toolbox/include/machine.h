@@ -357,6 +357,13 @@ typedef struct {
 typedef bool (*machine_control_fn)(machine_control_request *rq, uint8_t *rgba, void *ctx);
 void machine_set_control_renderer(machine_control_fn fn, void *ctx);
 
+/* ---- Threads ----
+ * Guest threads run on host threads of their own, one at a time.  While
+ * the process's main thread (a headless run) waits for its turn it calls
+ * this every few milliseconds, to serve work other threads hand it (the
+ * main dispatch queue). */
+void machine_set_main_thread_pump(void (*fn)(void));
+
 /* ---- Launching other applications ----
  * LaunchApplication: start the classic application at `path` (a host path)
  * as a separate run.  Returns false if it could not be started. */

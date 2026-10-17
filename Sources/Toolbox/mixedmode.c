@@ -110,6 +110,9 @@ static void set_record(gaddr rd, int i, gaddr proc, uint32_t procinfo, int isa)
 
 static bool ppc_returned;
 
+bool mm_ctx_returned(void) { return ppc_returned; }
+void mm_ctx_set_returned(bool r) { ppc_returned = r; }
+
 static void ppc_return_native(ppc_cpu *c)
 {
     ppc_returned = true;
@@ -140,6 +143,12 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
     uint64_t cap = trap_instruction_limit();
     while (!g_ppc.halted && !g_cpu->halted) {
         g_cpu->icount += ppc_run(&g_ppc, 20000);
+        /* Interrupt-time work goes on inside callbacks and threads too:
+         * a program may wait there for a task or a notifier to set a flag. */
+        if (!g_ppc.halted) {
+            machine_advance_ticks();
+            time_pump();
+        }
         if (cap && g_cpu->icount >= cap && !g_ppc.halted) {
             if (machine_waiting_for_input()) /* an event loop inside a callback */
                 ppc_halt(&g_ppc, "instruction limit reached waiting for input");

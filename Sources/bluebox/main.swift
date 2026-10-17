@@ -512,6 +512,12 @@ func runCommand(_ args: [String]) {
         return true
     }, nil)
 
+    // Guest threads run on host threads of their own; host code they call
+    // may wait for the main thread, which runs the machine here.
+    #if os(macOS)
+    machine_set_main_thread_pump { _ = CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0, true) }
+    #endif
+
     let budget = maxInstructions
     machine_set_instruction_limit(machine_instruction_count() + maxInstructions)
     queueScript(keyScript, start: machine_instruction_count())
