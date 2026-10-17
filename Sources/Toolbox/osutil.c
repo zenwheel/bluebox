@@ -412,17 +412,20 @@ int16_t tb_Dequeue(gaddr e, gaddr h)
 
 /* ---- ADB Manager ----
  * Two devices, as on a desktop Mac: an extended keyboard at address 2 and
- * a mouse at address 3.  Input comes through the Event Manager; a program
- * that installs a service routine for the mouse (SetADBInfo) also gets its
- * movement as ADB delivered it, register 0 polled at interrupt time, and
- * ADBOp answers Talk commands (Apeiron reads the mouse this way). */
+ * a mouse at address 3.  Input comes through the Event Manager; each device
+ * also has a service routine of its own, which does nothing, so a program
+ * that installs one in front of it (SetADBInfo) can pass the data on as it
+ * should.  The mouse's movement goes to the installed routine as ADB's
+ * auto-polling delivered it, register 0 at interrupt time (Apeiron steers
+ * by it), and ADBOp answers Talk commands with the devices' registers. */
 
 static const struct { int8_t type, addr, handler; } adb_devices[] = { { 2, 2, 2 }, { 1, 3, 1 } };
 enum { adb_count = 2 };
 static gaddr adb_service[adb_count], adb_data[adb_count];
+static gaddr adb_own_service; /* the devices' own routine: it does nothing */
+static gaddr adb_buffer;      /* a register's bytes for a service routine */
 static uint32_t adb_last_mouse; /* raw mouse location at the last poll */
 static bool adb_last_button;
-static gaddr adb_buffer;        /* a register's bytes for a service routine */
 
 static int adb_index(int addr)
 {
@@ -488,12 +491,15 @@ static void adb_talk(int k, int reg, gaddr buf)
         b[0] = (uint8_t)(0x60 | adb_devices[k].addr);
         b[1] = (uint8_t)adb_devices[k].handler;
     } else if (reg == 0 && adb_devices[k].type == 1) {
+        /* The movement since the last packet, as much as a packet holds;
+         * the rest goes in the next. */
         uint32_t m = rd32(LM_MouseLocation);
         int dv = (int16_t)(m >> 16) - (int16_t)(adb_last_mouse >> 16);
         int dh = (int16_t)m - (int16_t)adb_last_mouse;
-        adb_last_mouse = m;
         dv = dv < -64 ? -64 : dv > 63 ? 63 : dv;
         dh = dh < -64 ? -64 : dh > 63 ? 63 : dh;
+        adb_last_mouse = (uint32_t)(uint16_t)((int16_t)(adb_last_mouse >> 16) + dv) << 16 |
+                         (uint16_t)((int16_t)adb_last_mouse + dh);
         bool down = tb_Button();
         adb_last_button = down;
         b[0] = (uint8_t)((down ? 0 : 0x80) | (dv & 0x7F));
@@ -541,10 +547,12 @@ static void adbop_native(cpu68k *c, uint16_t tw)
         adb_call(fn, buf, data, cmd);
 }
 
-/* Interrupt time: the mouse's movement to its service routine. */
+static void adb_own_native(cpu68k *c, uint16_t tw) { (void)c; (void)tw; }
+
+/* Interrupt time: the mouse's movement to the routine a program installed. */
 void adb_pump(void)
 {
-    if (!adb_service[1])
+    if (!adb_service[1] || adb_service[1] == adb_own_service)
         return;
     uint32_t m = rd32(LM_MouseLocation);
     bool down = tb_Button();
@@ -552,14 +560,21 @@ void adb_pump(void)
         return;
     if (!adb_buffer)
         adb_buffer = tb_NewPtr(8, true, true); /* system heap */
-    adb_talk(1, 0, adb_buffer);
-    adb_call(adb_service[1], adb_buffer, adb_data[1], 0x3C);
+    /* Talk register 0 from address 3, packet by packet until the movement
+     * is all delivered (a few a time, as the mouse reported every tick). */
+    for (int i = 0; i < 8 && (rd32(LM_MouseLocation) != adb_last_mouse || tb_Button() != adb_last_button); i++) {
+        adb_talk(1, 0, adb_buffer);
+        adb_call(adb_service[1], adb_buffer, adb_data[1], 0x3C);
+    }
 }
 
 void adb_install(void)
 {
-    memset(adb_service, 0, sizeof adb_service);
-    memset(adb_data, 0, sizeof adb_data);
+    adb_own_service = native_register(adb_own_native, "ADBService", 0);
+    for (int k = 0; k < adb_count; k++) {
+        adb_service[k] = adb_own_service;
+        adb_data[k] = 0;
+    }
     adb_buffer = 0;
     adb_last_mouse = rd32(LM_MouseLocation);
     adb_last_button = false;

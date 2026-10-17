@@ -157,6 +157,10 @@ final class TransientView: NSView {
     var script: [String] = []
     var windows: [UInt32: MacWindow] = [:]
     var windowsVersion: UInt32 = .max
+    /// A program that covers the whole screen with a window (a full-screen
+    /// game) may then draw on the screen outside its windows: from then on
+    /// the whole screen is shown, in one window, as on a Mac.
+    var screenWindow: MacWindow?
     var menusVersion: UInt32 = .max
     var lastMouse = NSPoint(x: -1, y: -1)
     var timer: Timer?
@@ -204,6 +208,7 @@ final class TransientView: NSView {
         }
         syncWindows()
         for w in windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }
+        (screenWindow?.contentView as? MacWindowView)?.refresh(force: false)
         syncTransient()
         syncMenus()
         CursorSync.shared.tick()
@@ -252,6 +257,17 @@ final class TransientView: NSView {
         let current = Array(list[0..<n])
         if ProcessInfo.processInfo.environment["BLUEBOX_DEBUG_HOST"] != nil {
             FileHandle.standardError.write("rootless: version \(version), \(n) windows: \(current.map { "\($0.id) \($0.left),\($0.top)-\($0.right),\($0.bottom)" })\n".data(using: .utf8)!)
+        }
+        var sw: Int32 = 0, sh: Int32 = 0
+        machine_screen_size(&sw, &sh)
+        if screenWindow == nil,
+           current.contains(where: { $0.left <= 0 && $0.top <= 0 && Int32($0.right) >= sw && Int32($0.bottom) >= sh }) {
+            showWholeScreen(Int(sw), Int(sh))
+        }
+        if screenWindow != nil {
+            for w in windows.values { w.orderOut(nil) }
+            windows.removeAll()
+            return
         }
         let ids = Set(current.map(\.id))
         for (id, w) in windows where !ids.contains(id) {
@@ -322,6 +338,24 @@ final class TransientView: NSView {
         // Stack them in Mac order: back first, so the front ends up on top.
         for mw in current.reversed() { windows[mw.id]?.orderFront(nil) }
         if let front = current.first, let w = windows[front.id], NSApp.isActive { w.makeKey() }
+    }
+
+    func showWholeScreen(_ width: Int, _ height: Int) {
+        let origin = macToHost(0, CGFloat(height))
+        let frame = NSRect(x: origin.x, y: origin.y, width: CGFloat(width) * displayScale,
+                           height: CGFloat(height) * displayScale)
+        let window = MacWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.hasShadow = false
+        window.isReleasedWhenClosed = false
+        window.acceptsMouseMovedEvents = true
+        let view = MacWindowView(frame: NSRect(origin: .zero, size: frame.size))
+        view.macBounds = (0, 0, Int16(height), Int16(width))
+        view.mask = [UInt8](repeating: 1, count: width * height)
+        window.contentView = view
+        view.refresh(force: true)
+        window.orderFront(nil)
+        if NSApp.isActive { window.makeKey() }
+        screenWindow = window
     }
 
     // MARK: Menus

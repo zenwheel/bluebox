@@ -134,7 +134,7 @@ void time_pump(void);
 bool time_busy(void);  /* a Time Manager or VBL task waiting */
 bool sound_busy(void); /* a sound channel open */
 void adb_install(void); /* the ADB Manager's ADBOp, at boot */
-void adb_pump(void);    /* the mouse to a service routine, at interrupt time */
+void adb_pump(void);    /* the mouse to a program's service routine, at interrupt time */
 /* Let the application see and change a host file (and its neighbours) or,
  * with tree, a folder and its contents (filemgr.c). */
 void fm_grant(const char *path, bool tree);
