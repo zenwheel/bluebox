@@ -387,6 +387,7 @@ static void note_poll(void);
 static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
 {
     note_poll();
+    opentransport_poll(); /* network events to the programs' notifiers */
     pthread_mutex_lock(&lock);
     event e = null_event();
     bool found = false;

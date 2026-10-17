@@ -274,6 +274,7 @@ bool machine_boot(bool census)
     sound_reset();
     components_reset();
     quicktime_reset();
+    opentransport_reset();
     notify_reset();
 
     qd_screen_init(screen_w, screen_h);

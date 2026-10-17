@@ -137,6 +137,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < dsp_export_count; i++)
         if (!strcmp(dsp_exports[i].name, name))
             return dsp_exports[i].fn;
+    for (unsigned i = 0; i < ot_export_count; i++)
+        if (!strcmp(ot_exports[i].name, name))
+            return ot_exports[i].fn;
     for (unsigned i = 0; i < lib_export_count; i++)
         if (!strcmp(lib_exports[i].name, name))
             return lib_exports[i].fn;
@@ -426,6 +429,8 @@ static const char *const native_libraries[] = {
     "PrivateInterfaceLib", "ObjectSupportLib", "AppleScriptLib", "TranslationLib", "ControlStripLib",
     "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
     "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib", "InputSprocketLib",
+    "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
+    "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib",
 };
 
 static bool core_library(const char *name)

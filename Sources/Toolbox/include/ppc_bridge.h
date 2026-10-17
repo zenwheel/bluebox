@@ -40,6 +40,9 @@ extern const unsigned dsp_export_count;
 extern const ppc_export isp_exports[];
 extern const unsigned isp_export_count;
 void inputsprocket_reset(void);
+/* Open Transport (opentransport.c). */
+extern const ppc_export ot_exports[];
+extern const unsigned ot_export_count;
 /* Mixed Mode (mixedmode.c). */
 extern const ppc_export mm_exports[];
 extern const unsigned mm_export_count;

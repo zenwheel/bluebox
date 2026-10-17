@@ -250,6 +250,7 @@ void time_pump(void)
     run_deferred();
     sound_pump(); /* sound completion ran at interrupt time too */
     midi_pump();
+    opentransport_poll(); /* Open Transport's notifiers, at deferred task time */
     uint64_t t = now();
     for (int i = 0; i < MAX_TASKS; i++) {
         if (!timers[i].tm || !timers[i].active || timers[i].due > t)
