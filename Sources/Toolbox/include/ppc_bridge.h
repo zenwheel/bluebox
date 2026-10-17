@@ -43,6 +43,7 @@ void inputsprocket_reset(void);
 /* Open Transport (opentransport.c). */
 extern const ppc_export ot_exports[];
 extern const unsigned ot_export_count;
+void ot_unsupported(ppc_cpu *c); /* the rest of Open Transport: kOTNotSupportedErr */
 /* Mixed Mode (mixedmode.c). */
 extern const ppc_export mm_exports[];
 extern const unsigned mm_export_count;

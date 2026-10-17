@@ -8664,6 +8664,24 @@ static void ppcglue_GetSoundHeaderOffset(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SndGetInfo(ppc_cpu *c)
+{
+    gaddr a_chan = (gaddr)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_infoPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SndGetInfo(a_chan, a_selector, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SndSetInfo(ppc_cpu *c)
+{
+    gaddr a_chan = (gaddr)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_infoPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SndSetInfo(a_chan, a_selector, a_infoPtr);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndPlay(ppc_cpu *c)
 {
     gaddr a_chanp = (gaddr)c->gpr[3];
@@ -14287,36 +14305,6 @@ static void ppctrap_GetSoundPreference(ppc_cpu *c)
     ppc_trap_begin();
     ppc_trap_push(2, 0);
     ppc_trap_set(0, 0x6380018u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA800));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SndGetInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x63C0018u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA800));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SndSetInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6400018u);
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap_push(4, c->gpr[5]);
@@ -24735,7 +24723,7 @@ const ppc_export ppc_exports[] = {
     {"SndDisposeChannel", ppcglue_SndDisposeChannel},
     {"SndDoCommand", ppcglue_SndDoCommand},
     {"SndDoImmediate", ppcglue_SndDoImmediate},
-    {"SndGetInfo", ppctrap_SndGetInfo},
+    {"SndGetInfo", ppcglue_SndGetInfo},
     {"SndGetSysBeepState", ppcglue_SndGetSysBeepState},
     {"SndManagerStatus", ppcglue_SndManagerStatus},
     {"SndNewChannel", ppcglue_SndNewChannel},
@@ -24744,7 +24732,7 @@ const ppc_export ppc_exports[] = {
     {"SndPlayDoubleBuffer", ppcglue_SndPlayDoubleBuffer},
     {"SndRecord", ppcglue_SndRecord},
     {"SndRecordToFile", ppcglue_SndRecordToFile},
-    {"SndSetInfo", ppctrap_SndSetInfo},
+    {"SndSetInfo", ppcglue_SndSetInfo},
     {"SndSetSysBeepState", ppcglue_SndSetSysBeepState},
     {"SndSoundManagerVersion", ppcglue_SndSoundManagerVersion},
     {"SndStartFilePlay", ppcglue_SndStartFilePlay},

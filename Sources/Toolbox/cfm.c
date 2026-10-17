@@ -592,6 +592,12 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
              * there, is 0.  But InterfaceLib, MathLib and StdCLib are always
              * there with everything Mac OS 9 had in them, so what they lack
              * here is ours to add: a stub that says so. */
+            if (li >= 0 && !strncmp(lname, "OT", 2)) {
+                /* Open Transport's other calls say they're not supported. */
+                imports[k] = native_tvector(ot_unsupported, sname);
+                LOGF(LOG_UNIMPL, "cfm: %s from %s: not supported\n", sname, lname);
+                continue;
+            }
             if ((weak || weak_lib) && (li < 0 || !core_library(lname))) {
                 imports[k] = 0;
                 LOGF(LOG_SEG, "cfm: weak %s from %s: not there\n", sname, lname);

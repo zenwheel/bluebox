@@ -669,6 +669,12 @@ int16_t tb_SndManagerStatus(int16_t length, gaddr statusp)
 
 /* 3.0 with System 7.1; a PowerPC Mac's System 7.6.1 had 3.2.1. */
 int32_t tb_SndSoundManagerVersion(void) { return g_ppc_mode ? 0x03218000 : 0x03008000; }
+
+/* A channel's settings by selector (Sound Manager 3.1): ours know none,
+ * so reading one is siUnknownInfoType, and setting one (a pre-mixer
+ * component, 'prmx', for Speed Demon) is taken and has no effect. */
+int16_t tb_SndGetInfo(gaddr chan, int32_t selector, gaddr infoPtr) { return -231; }
+int16_t tb_SndSetInfo(gaddr chan, int32_t selector, gaddr infoPtr) { return noErr; }
 int32_t tb_MACEVersion(void) { return 0x03008000; }
 int32_t tb_SPBVersion(void) { return 0x03008000; }
 

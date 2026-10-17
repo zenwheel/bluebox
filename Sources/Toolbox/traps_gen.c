@@ -12200,6 +12200,18 @@ static void glue_SndDoImmediate(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SndGetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    gaddr a_chan = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndGetInfo(a_chan, a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SndGetSysBeepState(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12288,6 +12300,18 @@ static void glue_SndRecordToFile(cpu68k *c, uint16_t trapword)
     uint32_t a_corner = (uint32_t)cpu_pop32(c);
     gaddr a_filterp = (gaddr)cpu_pop32(c);
     int16_t r = tb_SndRecordToFile(a_filterp, a_corner, a_quality, a_refnum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SndSetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    gaddr a_chan = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SndSetInfo(a_chan, a_selector, a_infoPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -15847,8 +15871,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x6380014u, "SPBGetDeviceInfo", CONV_STACK, 12, 2, glue_SPBGetDeviceInfo},
     {0xA800, (int32_t)0x6380018u, "GetSoundPreference", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x63C0014u, "SPBSetDeviceInfo", CONV_STACK, 12, 2, glue_SPBSetDeviceInfo},
-    {0xA800, (int32_t)0x63C0018u, "SndGetInfo", CONV_STACK, 12, 2, 0},
-    {0xA800, (int32_t)0x6400018u, "SndSetInfo", CONV_STACK, 12, 2, 0},
+    {0xA800, (int32_t)0x63C0018u, "SndGetInfo", CONV_STACK, 12, 2, glue_SndGetInfo},
+    {0xA800, (int32_t)0x6400018u, "SndSetInfo", CONV_STACK, 12, 2, glue_SndSetInfo},
     {0xA800, (int32_t)0x654000Cu, "SetSpeechInfo", CONV_STACK, 12, 2, glue_SetSpeechInfo},
     {0xA800, (int32_t)0x658000Cu, "GetSpeechInfo", CONV_STACK, 12, 2, glue_GetSpeechInfo},
     {0xA800, (int32_t)0x7080014u, "SndRecordToFile", CONV_STACK, 14, 2, glue_SndRecordToFile},

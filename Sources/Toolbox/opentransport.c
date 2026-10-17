@@ -1113,6 +1113,189 @@ static void ot_Idle(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* Lists: OTLIFO and OTLink are a pointer each (fHead, fNext). */
+static void ot_LIFOEnqueue(ppc_cpu *c)
+{
+    if (R(0) && R(1)) {
+        wr32(R(1), rd32(R(0)));
+        wr32(R(0), R(1));
+    }
+    c->pc = c->lr;
+}
+static void ot_LIFODequeue(ppc_cpu *c)
+{
+    gaddr h = R(0) ? rd32(R(0)) : 0;
+    if (h)
+        wr32(R(0), rd32(h));
+    RETURN(h);
+}
+static void ot_LIFOStealList(ppc_cpu *c)
+{
+    gaddr h = R(0) ? rd32(R(0)) : 0;
+    if (R(0))
+        wr32(R(0), 0);
+    RETURN(h);
+}
+static void ot_ReverseList(ppc_cpu *c)
+{
+    gaddr l = R(0), prev = 0;
+    while (l) {
+        gaddr next = rd32(l);
+        wr32(l, prev);
+        prev = l;
+        l = next;
+    }
+    RETURN(prev);
+}
+
+/* Atomic operations: one thread runs at a time.  Bits count from the low
+ * end of the byte, as BSET's do. */
+static void ot_AtomicSetBit(ppc_cpu *c)
+{
+    uint8_t v = R(0) ? rd8(R(0)) : 0, m = (uint8_t)(1u << (R(1) & 7));
+    if (R(0))
+        wr8(R(0), v | m);
+    RETURN((v & m) != 0);
+}
+static void ot_AtomicClearBit(ppc_cpu *c)
+{
+    uint8_t v = R(0) ? rd8(R(0)) : 0, m = (uint8_t)(1u << (R(1) & 7));
+    if (R(0))
+        wr8(R(0), v & (uint8_t)~m);
+    RETURN((v & m) != 0);
+}
+static void ot_AtomicTestBit(ppc_cpu *c) { RETURN(R(0) && (rd8(R(0)) >> (R(1) & 7)) & 1); }
+static void ot_AtomicAdd32(ppc_cpu *c) /* (delta, SInt32 *): the new value */
+{
+    uint32_t v = R(1) ? rd32(R(1)) + R(0) : 0;
+    if (R(1))
+        wr32(R(1), v);
+    RETURN(v);
+}
+static void ot_AtomicAdd16(ppc_cpu *c)
+{
+    uint32_t v = R(1) ? (uint32_t)(int16_t)(rd16(R(1)) + R(0)) : 0;
+    if (R(1))
+        wr16(R(1), (uint16_t)v);
+    RETURN(v);
+}
+static void ot_AtomicAdd8(ppc_cpu *c)
+{
+    uint32_t v = R(1) ? (uint32_t)(int8_t)(rd8(R(1)) + R(0)) : 0;
+    if (R(1))
+        wr8(R(1), (uint8_t)v);
+    RETURN(v);
+}
+static void ot_CompareAndSwap32(ppc_cpu *c) /* (old, new, UInt32 *) */
+{
+    bool same = R(2) && rd32(R(2)) == R(0);
+    if (same)
+        wr32(R(2), R(1));
+    RETURN(same);
+}
+static void ot_TimeStampInMilliseconds(ppc_cpu *c) { RETURN((uint32_t)(stamp(R(0)) / 1000)); }
+static void ot_Delay(ppc_cpu *c) { c->pc = c->lr; }
+
+/* OTBuffer: fLink, fLink2, fNext, fData, fLen ... (we never hand them out,
+ * but programs may walk ones they made). */
+static void ot_BufferDataSize(ppc_cpu *c)
+{
+    uint32_t n = 0;
+    for (gaddr b = R(0); b; b = rd32(b + 8))
+        n += rd32(b + 16);
+    RETURN(n);
+}
+/* OTReadBuffer(OTBufferInfo *, dest, OTByteCount *len): from fBuffer at fOffset */
+static void ot_ReadBuffer(ppc_cpu *c)
+{
+    gaddr info = R(0), dest = R(1), lenp = R(2);
+    uint32_t want = lenp ? rd32(lenp) : 0, got = 0;
+    gaddr b = info ? rd32(info) : 0;
+    uint32_t off = info ? rd32(info + 4) : 0;
+    while (b && got < want) {
+        uint32_t len = rd32(b + 16);
+        if (off >= len) {
+            b = rd32(b + 8);
+            off = 0;
+            continue;
+        }
+        uint32_t n = len - off < want - got ? len - off : want - got;
+        gmemcpy(dest + got, rd32(b + 12) + off, n);
+        got += n;
+        off += n;
+    }
+    if (info) {
+        wr32(info, b);
+        wr32(info + 4, off);
+    }
+    if (lenp)
+        wr32(lenp, got);
+    c->pc = c->lr;
+}
+
+/* OTAlloc(ref, structType, fields, &err): an XTI structure with buffers. */
+enum { T_BIND = 1, T_OPTMGMT, T_CALL, T_DIS, T_UNITDATA, T_UDERROR, T_INFO, T_REPLYDATA, T_REQUESTDATA };
+static void alloc_netbuf(gaddr nb, uint32_t size)
+{
+    gaddr b = tb_NewPtr((int32_t)size, false, true);
+    wr32(nb, b ? size : 0);
+    wr32(nb + 4, 0);
+    wr32(nb + 8, b);
+}
+static void ot_Alloc(ppc_cpu *c)
+{
+    uint32_t type = R(1), fields = R(2);
+    static const uint32_t sizes[] = { 0, 16, 16, 40, 20, 36, 28, 32 };
+    if (type < 1 || type > 7) {
+        if (R(3))
+            wr32(R(3), (uint32_t)kOTNotSupportedErr);
+        RETURN(0);
+        return;
+    }
+    gaddr t = tb_NewPtr((int32_t)sizes[type], true, true);
+    bool addr = fields & 1, opt = fields & 2, udata = fields & 4;
+    if (t) {
+        switch (type) {
+        case T_BIND: if (addr) alloc_netbuf(t, 16); break;
+        case T_OPTMGMT: if (opt) alloc_netbuf(t, 1024); break;
+        case T_CALL: case T_UNITDATA: case T_UDERROR:
+            if (addr) alloc_netbuf(t, 16);
+            if (opt) alloc_netbuf(t + 12, 1024);
+            if (udata && type != T_UDERROR) alloc_netbuf(t + 24, 1024);
+            break;
+        case T_DIS: if (udata) alloc_netbuf(t, 1024); break;
+        default: break;
+        }
+    }
+    if (R(3))
+        wr32(R(3), t ? 0 : (uint32_t)kOTOutOfMemoryErr);
+    RETURN(t);
+}
+static void ot_Free(ppc_cpu *c) /* (ptr, structType) */
+{
+    gaddr t = R(0);
+    uint32_t type = R(1);
+    if (t) {
+        int nbufs = type == T_CALL || type == T_UNITDATA || type == T_UDERROR ? 3 : type == T_INFO ? 0 : 1;
+        for (int i = 0; i < nbufs; i++)
+            if (rd32(t + 12 * (uint32_t)i + 8))
+                tb_DisposePtr(rd32(t + 12 * (uint32_t)i + 8));
+        tb_DisposePtr(t);
+    }
+    RETURN(kOTNoError);
+}
+/* OTOpenMapper(config, oflag, &err): no name registration here */
+static void ot_OpenMapper(ppc_cpu *c)
+{
+    if (R(2))
+        wr32(R(2), (uint32_t)kOTNotSupportedErr);
+    RETURN(0);
+}
+static void ot_false(ppc_cpu *c) { RETURN(0); }
+
+/* Any other Open Transport call: not supported. */
+void ot_unsupported(ppc_cpu *c) { RETURN((uint32_t)kOTNotSupportedErr); }
+
 const ppc_export ot_exports[] = {
     /* OTClientUtilLib */
     { "InitOpenTransport", ot_noErr }, { "InitOpenTransportPriv", ot_noErr },
@@ -1153,5 +1336,17 @@ const ppc_export ot_exports[] = {
     { "OTStrLength", ot_StrLength }, { "OTGetTimeStamp", ot_GetTimeStamp },
     { "OTElapsedMilliseconds", ot_ElapsedMilliseconds }, { "OTElapsedMicroseconds", ot_ElapsedMicroseconds },
     { "OTEnterNotifier", ot_EnterNotifier }, { "OTLeaveNotifier", ot_void }, { "OTIdle", ot_Idle },
+    { "OTAllocMemPriv", ot_AllocMem }, { "OTFreeMemPriv", ot_FreeMem }, { "OTAllocMemInContext", ot_AllocMem },
+    { "OTFreeMemInContext", ot_FreeMem }, { "OTLIFOEnqueue", ot_LIFOEnqueue }, { "OTLIFODequeue", ot_LIFODequeue },
+    { "OTLIFOStealList", ot_LIFOStealList }, { "OTReverseList", ot_ReverseList },
+    { "OTAtomicSetBit", ot_AtomicSetBit }, { "OTAtomicClearBit", ot_AtomicClearBit },
+    { "OTAtomicTestBit", ot_AtomicTestBit }, { "OTAtomicAdd32", ot_AtomicAdd32 }, { "OTAtomicAdd16", ot_AtomicAdd16 },
+    { "OTAtomicAdd8", ot_AtomicAdd8 }, { "OTCompareAndSwap32", ot_CompareAndSwap32 },
+    { "OTCompareAndSwapPtr", ot_CompareAndSwap32 }, { "OTTimeStampInMilliseconds", ot_TimeStampInMilliseconds },
+    { "OTDelay", ot_Delay }, { "OTBufferDataSize", ot_BufferDataSize }, { "OTReadBuffer", ot_ReadBuffer },
+    { "OTReleaseBuffer", ot_void }, { "OTAlloc", ot_Alloc }, { "OTAllocPriv", ot_Alloc },
+    { "OTAllocInContext", ot_Alloc }, { "OTFree", ot_Free }, { "OTOpenMapper", ot_OpenMapper },
+    { "OTOpenMapperPriv", ot_OpenMapper }, { "OTOpenMapperInContext", ot_OpenMapper },
+    { "OTFindPortByRef", ot_false }, { "OTIoctl", ot_unsupported },
 };
 const unsigned ot_export_count = sizeof ot_exports / sizeof ot_exports[0];
