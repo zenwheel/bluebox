@@ -100,6 +100,9 @@ void qd_port_clip(gaddr port, hrgn *out);
 /* The screen's depth (1 or 8) and colour table. */
 int qd_screen_depth(void);
 gaddr qd_screen_ctab(void);
+/* The routines that change the screen's colours (SetEntries, the Palette
+ * Manager) load the video hardware's colours from its table. */
+void qd_screen_load_clut(gaddr ctab);
 /* Pixel value <-> RGB for a depth and colour table. */
 void qd_px_rgb(int depth, gaddr ctab, uint32_t v, uint16_t rgb[3]);
 uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3]);

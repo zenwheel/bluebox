@@ -503,6 +503,28 @@ extension BlueBox {
             #expect(red[0] > 150 && red[1] < 80 && red[2] < 80)
         }
 
+        /// Colours written into the screen's table (for an inverse table to
+        /// draw with) are not shown until SetEntries puts them on the screen.
+        @Test func theScreenShowsColoursSetEntriesGaveIt() {
+            machine_set_screen_depth(8)
+            defer { machine_set_screen_depth(1) }
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [100, 100, 120, 140].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            tb_PaintRect(r)
+            let ct = rd32(PixMap_pmTable(rd32(GDevice_gdPMap(rd32(tb_GetMainDevice())))))
+            let black = ct + 8 + 255 * 8
+            wr16(black + 2, 0xFFFF)
+            tb_MakeITable(0, 0, 0)
+            wr32(ct, UInt32(bitPattern: tb_GetCTSeed()))
+            #expect(rgba(110, 110) == [0, 0, 0])
+            let spec = tb_NewPtr(8, false, true)
+            wr16(spec + 2, 0xFFFF)
+            tb_SetEntries(255, 0, spec)
+            #expect(rgba(110, 110) == [255, 0, 0])
+        }
+
         @Test func blackAndWhiteStaysOneBit() {
             launchTestApp()
             #expect(PixMap_pixelSize(rd32(GDevice_gdPMap(rd32(tb_GetMainDevice())))) == 1)

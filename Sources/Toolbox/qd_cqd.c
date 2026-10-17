@@ -1189,7 +1189,7 @@ void tb_SetControlColor(gaddr ctl, gaddr ctab)
 
 /* ---------------------------------------------------------------------- */
 /* Device colour tables: SetEntries changes the screen's colours (palette
- * animation); the new seed makes the display pick them up. */
+ * animation): a new seed, and the display's colours. */
 
 static gaddr device_table(void)
 {
@@ -1201,6 +1201,7 @@ static void bump_seed(gaddr ct)
 {
     if (ct && rd32(ct))
         wr32(rd32(ct), rd32(rd32(ct)) + 1);
+    qd_screen_load_clut(ct);
 }
 
 int32_t tb_GetCTSeed(void)

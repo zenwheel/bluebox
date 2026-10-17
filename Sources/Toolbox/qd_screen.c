@@ -23,6 +23,24 @@ gaddr qd_screen_ctab(void) { return screen_depth == 1 ? 0 : screen_ctab; }
 
 uint32_t qd_screen_row_bytes(void) { return screen_row_bytes; }
 
+/* The video hardware's colours, from the device's table only when a routine
+ * changes the screen's colours: a program may write colours of its own into
+ * the table to build an inverse table for drawing, then fade them in with
+ * SetEntries (Apeiron's splash), and the screen never shows them before. */
+static uint8_t clut[256][3];
+
+void qd_screen_load_clut(gaddr ctab)
+{
+    if (!ctab || ctab != screen_ctab || screen_depth <= 1 || screen_depth > 8 || !rd32(ctab))
+        return;
+    for (int i = 0; i < (1 << screen_depth); i++) {
+        uint16_t c[3];
+        qd_px_rgb(screen_depth, ctab, (uint32_t)i, c);
+        for (int k = 0; k < 3; k++)
+            clut[i][k] = (uint8_t)(c[k] >> 8);
+    }
+}
+
 /* A color table handle: entries as (value, r, g, b). */
 static gaddr make_ctab(const uint16_t (*rgb)[3], int n, int32_t seed)
 {
@@ -69,6 +87,7 @@ static void describe_screen(gaddr gd, gaddr pm)
         screen_ctab = screen_depth == 1 ? make_ctab(bw, 2, 1) : make_ctab(std, n, screen_depth);
     }
     PixMap_set_pmTable(pm, screen_ctab);
+    qd_screen_load_clut(screen_ctab);
     GDevice_set_gdType(gd, screen_depth >= 16 ? 2 : 0); /* direct or CLUT device */
     wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
 }
@@ -251,25 +270,6 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
 {
     pixdst d = { GA_SCREEN, screen_row_bytes, { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width },
                  screen_depth, qd_screen_ctab() };
-    static uint8_t lut[256][3];
-    static gaddr lut_for;
-    static uint32_t lut_seed;
-    static int lut_depth;
-    if (screen_depth > 1 && screen_depth <= 8) {
-        uint32_t seed = rd32(rd32(screen_ctab));
-        if (lut_for != screen_ctab || lut_seed != seed || lut_depth != screen_depth) {
-            lut_depth = screen_depth;
-            for (int i = 0; i < (1 << screen_depth); i++) {
-                uint16_t c[3];
-                qd_px_rgb(screen_depth, screen_ctab, (uint32_t)i, c);
-                lut[i][0] = (uint8_t)(c[0] >> 8);
-                lut[i][1] = (uint8_t)(c[1] >> 8);
-                lut[i][2] = (uint8_t)(c[2] >> 8);
-            }
-            lut_for = screen_ctab;
-            lut_seed = seed;
-        }
-    }
     for (int r = 0; r < h; r++) {
         uint8_t *o = out + (size_t)r * (size_t)w * 4;
         int sy = y + r;
@@ -291,9 +291,9 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
                 o[1] = (uint8_t)(g5 << 3 | g5 >> 2);
                 o[2] = (uint8_t)(b5 << 3 | b5 >> 2);
             } else if (screen_depth > 1) {
-                o[0] = lut[v][0];
-                o[1] = lut[v][1];
-                o[2] = lut[v][2];
+                o[0] = clut[v][0];
+                o[1] = clut[v][1];
+                o[2] = clut[v][2];
             } else {
                 o[0] = o[1] = o[2] = v ? 0 : 255;
             }
