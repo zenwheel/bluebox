@@ -43,6 +43,52 @@ static void fill_span_1bpp(const pixdst *d, int row, int c0, int c1, uint8_t pat
     }
 }
 
+static uint16_t arith(int mode, uint32_t s, uint32_t d, uint32_t op);
+
+/* The pen in an arithmetic mode (blend, addOver ... adMin) on a colour
+ * port: the pattern picks the foreground or background colour as the
+ * source, combined with each pixel as CopyBits combines them (programs
+ * tint and dim this way: Netscape Navigator's buttons).  transparent
+ * leaves the background bits alone. */
+static bool fill_region_arith(gaddr port, const hrgn *r, const pixdst *d, const uint8_t pat[8], int mode)
+{
+    int am = mode & 0x3F;
+    if (am < 32 || am > 39 || d->depth == 1 || !qd_port_is_color(port))
+        return false;
+    uint16_t fg[3], bk[3], op[3];
+    for (int k = 0; k < 3; k++) {
+        fg[k] = rd16(port + CGrafPort_rgbFgColor_off + (uint32_t)k * 2);
+        bk[k] = rd16(port + CGrafPort_rgbBkColor_off + (uint32_t)k * 2);
+    }
+    qd_port_op_color(port, op);
+    for (int i = 0; i < r->nbands; i++) {
+        const rband *b = &r->bands[i];
+        for (int y = b->top; y < b->bottom; y++) {
+            int row = y - d->bounds.top;
+            uint8_t p = pat[row & 7];
+            for (int k = 0; k < b->n; k += 2) {
+                int c0 = b->x[k] - d->bounds.left, c1 = b->x[k + 1] - d->bounds.left;
+                for (int c = c0; c < c1; c++) {
+                    int s = (p >> (7 - (c & 7))) & 1;
+                    if (am == 36 && !s) /* transparent */
+                        continue;
+                    const uint16_t *src = s ? fg : bk;
+                    uint16_t dc[3];
+                    if (am == 36) {
+                        memcpy(dc, src, sizeof dc);
+                    } else {
+                        qd_px_rgb(d->depth, d->ctab, get_px(d, c, row), dc);
+                        for (int q = 0; q < 3; q++)
+                            dc[q] = arith(am, src[q], dc[q], op[q]);
+                    }
+                    put_px(d, c, row, qd_rgb_px(d->depth, d->ctab, dc));
+                }
+            }
+        }
+    }
+    return true;
+}
+
 void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mode)
 {
     if (qd_region_recording())
@@ -52,6 +98,10 @@ void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mod
     qd_port_clip(port, &r);
     hrgn_op(&r, shape, &r, RGN_SECT);
     pixdst d = qd_port_pixels(port);
+    if (fill_region_arith(port, &r, &d, pat, mode)) {
+        hrgn_free(&r);
+        return;
+    }
     uint32_t fg, bk, inv = px_mask(d.depth);
     qd_port_bits(port, &fg, &bk);
     for (int i = 0; i < r.nbands; i++) {
@@ -395,6 +445,13 @@ static void do_verb(int verb, const hrgn *shape, const hrgn *frame, gaddr pat)
         if (verb == V_FILL)
             gget(p, pat, 8);
         qd_pic_shape(port, pic_opbase(), verb, geom.r, geom.a, geom.b, geom.poly ? geom.poly : geom.rgn, p);
+    }
+    /* Recording a region, a framed shape bounds it: what it encloses goes
+     * in (exclusive-or with the rest), and nothing is drawn, the pen being
+     * hidden while a region is open. */
+    if (verb == V_FRAME && qd_region_recording()) {
+        qd_region_record(shape);
+        return;
     }
     /* A hidden pen draws nothing (a picture being recorded hides it). */
     if (GrafPort_pnVis(port) < 0)

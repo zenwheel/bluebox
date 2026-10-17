@@ -226,8 +226,10 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
         tb_DisposeHandle(PixMap_pmTable(pm));
     PixMap_set_pmTable(pm, ct);
     qrect_put(port + GrafPort_portRect_off, r);
+    /* The visRgn is the world's rectangle; the clipRgn stays as it was (wide
+     * open in a new world, as OpenCPort leaves it): programs intersect it
+     * with rectangles in coordinates of their own after SetOrigin. */
     tb_RectRgn(GrafPort_visRgn(port), port + GrafPort_portRect_off);
-    tb_RectRgn(GrafPort_clipRgn(port), port + GrafPort_portRect_off);
     return true;
 }
 
@@ -338,6 +340,7 @@ int32_t tb_UpdateGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsR
         depth == PixMap_pixelSize(pm)) {
         qrect_put(pm + PixMap_bounds_off, r);
         qrect_put(port + GrafPort_portRect_off, r);
+        tb_RectRgn(GrafPort_visRgn(port), port + GrafPort_portRect_off);
         return 0;
     }
     gaddr old = PixMap_baseAddr(pm);
@@ -772,7 +775,18 @@ static struct {
     gaddr w, pal;
 } window_pal[MAX_WINDOW_PALETTES];
 
+static gaddr default_palette(void);
+static bool default_tried; /* the application's 'pltt' 0 looked for */
+static gaddr system_palette;
+
 void tb_InitPalettes(void) { memset(window_pal, 0, sizeof window_pal); }
+
+void qd_palettes_reset(void)
+{
+    memset(window_pal, 0, sizeof window_pal);
+    default_tried = false;
+    system_palette = 0;
+}
 
 static gaddr entry(gaddr pal, int i) { return rd32(pal) + Palette_pmInfo_off + (uint32_t)i * ColorInfo_SIZEOF; }
 static int entries(gaddr pal) { return pal && rd32(pal) ? (int16_t)rd16(rd32(pal) + Palette_pmEntries_off) : 0; }
@@ -944,7 +958,7 @@ void tb_DisposePalette(gaddr pal)
 void tb_ActivatePalette(gaddr w)
 {
     gaddr pal = tb_GetPalette(w);
-    activate(pal ? pal : tb_GetPalette(0xFFFFFFFFu));
+    activate(pal ? pal : default_palette());
 }
 
 /* The standard table again, and no slots owned. */
@@ -987,10 +1001,36 @@ gaddr tb_GetPalette(gaddr w)
     return 0;
 }
 
+/* The palette of windows without one: the application's default ('pltt'
+ * 0, taken when first needed), or else the system's (the standard colour
+ * table's colours). */
+static gaddr default_palette(void)
+{
+    gaddr p = tb_GetPalette(0xFFFFFFFFu);
+    if (p)
+        return p;
+    if (!default_tried) {
+        default_tried = true;
+        p = tb_GetNewPalette(0);
+        if (p) {
+            tb_NSetPalette(0xFFFFFFFFu, p, 0);
+            return p;
+        }
+    }
+    if (!system_palette) {
+        gaddr ct = tb_GetCTable(8);
+        if (ct) {
+            system_palette = tb_NewPalette(256, ct, 0, 0);
+            tb_DisposeCTable(ct);
+        }
+    }
+    return system_palette;
+}
+
 static gaddr current_palette(void)
 {
     gaddr p = tb_GetPalette(qd_port());
-    return p ? p : tb_GetPalette(0xFFFFFFFFu); /* the application's default */
+    return p ? p : default_palette();
 }
 
 static void pm_color(int16_t i, bool fore)

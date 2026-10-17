@@ -1414,6 +1414,9 @@ void tb_InvalRgn(gaddr r) { port_window_update(r, false, true); }
 void tb_ValidRect(gaddr r) { port_window_update(r, true, false); }
 void tb_ValidRgn(gaddr r) { port_window_update(r, false, false); }
 
+static gaddr update_window; /* the window between BeginUpdate and EndUpdate */
+static int update_dh, update_dv; /* and its port's origin then */
+
 void tb_BeginUpdate(gaddr w)
 {
     /* visRgn := visRgn ∩ updateRgn (local); the old visRgn is saved. */
@@ -1423,6 +1426,8 @@ void tb_BeginUpdate(gaddr w)
         wr32(LM_SaveVisRgn, save);
     }
     tb_CopyRgn(GrafPort_visRgn(w), save);
+    update_window = w;
+    port_offset(w, &update_dh, &update_dv);
     hrgn v, u;
     hrgn_init(&v);
     hrgn_init(&u);
@@ -1438,11 +1443,20 @@ void tb_BeginUpdate(gaddr w)
     hrgn_free(&u);
 }
 
+/* The visRgn as it was, in the coordinates the port has now: programs
+ * that scroll with SetOrigin may end the update at another origin
+ * (Netscape Navigator). */
 void tb_EndUpdate(gaddr w)
 {
     gaddr save = rd32(LM_SaveVisRgn);
-    if (save)
-        tb_CopyRgn(save, GrafPort_visRgn(w));
+    if (!save)
+        return;
+    tb_CopyRgn(save, GrafPort_visRgn(w));
+    int dh, dv;
+    port_offset(w, &dh, &dv);
+    if (w == update_window && (dh != update_dh || dv != update_dv))
+        tb_OffsetRgn(GrafPort_visRgn(w), (int16_t)(dh - update_dh), (int16_t)(dv - update_dv));
+    update_window = 0;
 }
 
 int8_t tb_CheckUpdate(gaddr ev)

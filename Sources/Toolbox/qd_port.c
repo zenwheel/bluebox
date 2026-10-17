@@ -573,25 +573,51 @@ void qd_port_bits(gaddr port, uint32_t *fg, uint32_t *bk)
     }
 }
 
+/* A colour port's colour: its RGB, and in fgColor or bkColor the pixel
+ * value, as Color2Index gives it (CopyBits colorizes by these). */
+static int32_t port_pixel(gaddr p, const uint16_t rgb[3])
+{
+    pixdst d = qd_port_pixels(p);
+    uint32_t v;
+    if (d.depth > 1 && qd_search_color(d.base, rgb, &v))
+        return (int32_t)v;
+    return d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0) : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb);
+}
+
+static void set_fore(gaddr p, const uint16_t rgb[3])
+{
+    rgb_put(p + CGrafPort_rgbFgColor_off, rgb[0], rgb[1], rgb[2]);
+    GrafPort_set_fgColor(p, port_pixel(p, rgb));
+}
+
+static void set_back(gaddr p, const uint16_t rgb[3])
+{
+    rgb_put(p + CGrafPort_rgbBkColor_off, rgb[0], rgb[1], rgb[2]);
+    GrafPort_set_bkColor(p, port_pixel(p, rgb));
+}
+
+/* The old-style colours: in a colour port, as their RGB colours. */
 void tb_ForeColor(int32_t c)
 {
     gaddr p = qd_port();
-    GrafPort_set_fgColor(p, c);
     if (qd_port_is_color(p)) {
         uint16_t rgb[3];
         old_color_rgb(c, rgb);
-        rgb_put(p + CGrafPort_rgbFgColor_off, rgb[0], rgb[1], rgb[2]);
+        set_fore(p, rgb);
+    } else {
+        GrafPort_set_fgColor(p, c);
     }
 }
 
 void tb_BackColor(int32_t c)
 {
     gaddr p = qd_port();
-    GrafPort_set_bkColor(p, c);
     if (qd_port_is_color(p)) {
         uint16_t rgb[3];
         old_color_rgb(c, rgb);
-        rgb_put(p + CGrafPort_rgbBkColor_off, rgb[0], rgb[1], rgb[2]);
+        set_back(p, rgb);
+    } else {
+        GrafPort_set_bkColor(p, c);
     }
 }
 
@@ -600,37 +626,21 @@ void tb_ColorBit(int16_t b) { GrafPort_set_colrBit(qd_port(), b); }
 void tb_RGBForeColor(gaddr c)
 {
     gaddr p = qd_port();
-    if (qd_port_is_color(p)) {
-        gmemcpy(p + CGrafPort_rgbFgColor_off, c, 6);
-        uint16_t rgb[3] = { rd16(c), rd16(c + 2), rd16(c + 4) };
-        pixdst d = qd_port_pixels(p); /* fgColor: the pixel value, as Color2Index gives it */
-        uint32_t v;
-        if (d.depth > 1 && qd_search_color(d.base, rgb, &v))
-            GrafPort_set_fgColor(p, (int32_t)v);
-        else
-            GrafPort_set_fgColor(p, d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0)
-                                                 : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb));
-    } else {
-        GrafPort_set_fgColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? blackColor : whiteColor);
-    }
+    uint16_t rgb[3] = { rd16(c), rd16(c + 2), rd16(c + 4) };
+    if (qd_port_is_color(p))
+        set_fore(p, rgb);
+    else
+        GrafPort_set_fgColor(p, rgb_dark(rgb[0], rgb[1], rgb[2]) ? blackColor : whiteColor);
 }
 
 void tb_RGBBackColor(gaddr c)
 {
     gaddr p = qd_port();
-    if (qd_port_is_color(p)) {
-        gmemcpy(p + CGrafPort_rgbBkColor_off, c, 6);
-        uint16_t rgb[3] = { rd16(c), rd16(c + 2), rd16(c + 4) };
-        pixdst d = qd_port_pixels(p);
-        uint32_t v;
-        if (d.depth > 1 && qd_search_color(d.base, rgb, &v))
-            GrafPort_set_bkColor(p, (int32_t)v);
-        else
-            GrafPort_set_bkColor(p, d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0)
-                                                 : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb));
-    } else {
-        GrafPort_set_bkColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? blackColor : whiteColor);
-    }
+    uint16_t rgb[3] = { rd16(c), rd16(c + 2), rd16(c + 4) };
+    if (qd_port_is_color(p))
+        set_back(p, rgb);
+    else
+        GrafPort_set_bkColor(p, rgb_dark(rgb[0], rgb[1], rgb[2]) ? blackColor : whiteColor);
 }
 
 void tb_GetForeColor(gaddr c)
