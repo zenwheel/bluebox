@@ -4,7 +4,8 @@
  * and auxiliary control and window records.
  *
  * The screen is the only real device; GWorlds are colour ports over their
- * own pixel memory, at any depth our drawing code handles (1-32 bits).
+ * own pixel memory, at any depth our drawing code handles (1-32 bits), each
+ * with an offscreen device of its own.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -43,7 +44,10 @@ int32_t tb_Color2Index(gaddr c)
 {
     gaddr pm = device_pixmap();
     uint16_t rgb[3];
+    uint32_t v;
     rgb_get(c, rgb);
+    if (qd_search_color(PixMap_baseAddr(pm), rgb, &v))
+        return (int32_t)v;
     return (int32_t)qd_rgb_px(PixMap_pixelSize(pm), PixMap_pmTable(pm), rgb);
 }
 
@@ -227,6 +231,76 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
     return true;
 }
 
+/* Each GWorld's device: an offscreen GDevice sharing the world's pixmap
+ * (unless it was made with noNewDevice), which SetGWorld makes current, so
+ * Color2Index and the like answer for the world's depth and colours. */
+enum { noNewDevice = 1 << 1 };
+static struct gworld_dev {
+    gaddr port, gdh;
+    bool own;
+} *gworlds;
+static size_t ngworlds;
+
+void qd_gworlds_reset(void)
+{
+    free(gworlds);
+    gworlds = NULL;
+    ngworlds = 0;
+}
+
+static struct gworld_dev *gworld_of(gaddr port)
+{
+    for (size_t i = 0; port && i < ngworlds; i++)
+        if (gworlds[i].port == port)
+            return &gworlds[i];
+    return NULL;
+}
+
+static void describe_offscreen_device(gaddr gdh, gaddr port)
+{
+    gaddr gd = rd32(gdh), pmh = rd32(port + CGrafPort_portPixMap_off);
+    GDevice_set_gdPMap(gd, pmh);
+    GDevice_set_gdType(gd, PixMap_pixelSize(rd32(pmh)) > 8 ? 2 : 0); /* direct or CLUT */
+    gmemcpy(gd + GDevice_gdRect_off, rd32(pmh) + PixMap_bounds_off, 8);
+    qd_device_itable(gdh);
+}
+
+static void add_gworld(gaddr port, gaddr aGDevice, int32_t flags)
+{
+    struct gworld_dev *n = realloc(gworlds, (ngworlds + 1) * sizeof *gworlds);
+    if (!n)
+        return;
+    gworlds = n;
+    struct gworld_dev *g = &gworlds[ngworlds++];
+    g->port = port;
+    g->own = !(flags & noNewDevice);
+    if (g->own) {
+        g->gdh = tb_NewHandle(GDevice_SIZEOF, true, true);
+        gaddr gd = rd32(g->gdh);
+        GDevice_set_gdRefNum(gd, 0);
+        GDevice_set_gdFlags(gd, (int16_t)((1 << 13) | (1 << 10) | 1)); /* noDriver, ramInit, gdDevType */
+        GDevice_set_gdResPref(gd, 4); /* inverse tables of 4 bits a component */
+        describe_offscreen_device(g->gdh, port);
+    } else {
+        g->gdh = aGDevice ? aGDevice : rd32(LM_MainDevice);
+    }
+}
+
+static void remove_gworld(gaddr port)
+{
+    struct gworld_dev *g = gworld_of(port);
+    if (!g)
+        return;
+    if (rd32(LM_TheGDevice) == g->gdh)
+        wr32(LM_TheGDevice, rd32(LM_MainDevice));
+    if (g->own) {
+        if (rd32(rd32(g->gdh) + GDevice_gdITable_off))
+            tb_DisposeHandle(rd32(rd32(g->gdh) + GDevice_gdITable_off));
+        tb_DisposeHandle(g->gdh); /* its pixmap is the world's */
+    }
+    *g = gworlds[--ngworlds];
+}
+
 int16_t tb_NewGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect, gaddr cTable, gaddr aGDevice,
                      int32_t flags)
 {
@@ -245,6 +319,10 @@ int16_t tb_NewGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect
         return memFullErr;
     }
     tb_SetPort(saved);
+    /* A GWorld's port says so: portVersion $C001 (programs choose how to
+     * draw by it: Graphing Calculator's surfaces). */
+    wr16(port + CGrafPort_portVersion_off, 0xC001);
+    add_gworld(port, aGDevice, flags);
     wr32(offscreenGWorld, port);
     return noErr;
 }
@@ -266,6 +344,9 @@ int32_t tb_UpdateGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsR
     if (!set_pixels(port, r, depth, cTable))
         return memFullErr;
     tb_DisposePtr(old);
+    struct gworld_dev *g = gworld_of(port);
+    if (g && g->own)
+        describe_offscreen_device(g->gdh, port);
     return 1 << 2; /* reallocPix */
 }
 
@@ -279,6 +360,7 @@ void tb_DisposeGWorld(gaddr port)
         tb_DisposeHandle(PixMap_pmTable(pm));
     if (qd_port() == port)
         tb_SetPort(rd32(LM_WMgrPort));
+    remove_gworld(port);
     tb_CloseCPort(port);
     tb_DisposePtr(bits);
     tb_DisposePtr(port);
@@ -292,10 +374,15 @@ void tb_GetGWorld(gaddr port, gaddr gdh)
         wr32(gdh, rd32(LM_TheGDevice));
 }
 
+/* A GWorld brings its own device and gdh is ignored; for another port gdh
+ * becomes current. */
 void tb_SetGWorld(gaddr port, gaddr gdh)
 {
     tb_SetPort(port);
-    if (gdh)
+    struct gworld_dev *g = gworld_of(port);
+    if (g)
+        wr32(LM_TheGDevice, g->gdh);
+    else if (gdh)
         wr32(LM_TheGDevice, gdh);
 }
 
@@ -677,6 +764,7 @@ void tb_FillCPoly(gaddr poly, gaddr pp)
 
 enum { pmTolerant = 0x0002, pmAnimated = 0x0004, pmExplicit = 0x0008 };
 static gaddr device_table(void);
+static gaddr current_device(void);
 static void bump_seed(gaddr ct);
 
 #define MAX_WINDOW_PALETTES 64
@@ -1097,6 +1185,8 @@ void tb_SetEntries(int16_t start, int16_t count, gaddr specs)
         gmemcpy(rd32(ct) + 8 + (uint32_t)index * 8 + 2, s + 2, 6);
     }
     bump_seed(ct);
+    if (rd32(rd32(current_device()) + GDevice_gdITable_off))
+        qd_device_itable(current_device());
 }
 
 void tb_SaveEntries(gaddr src, gaddr result, gaddr selection)
@@ -1130,10 +1220,134 @@ void tb_RestoreEntries(gaddr src, gaddr dst, gaddr selection)
 void tb_ProtectEntry(int16_t index, int8_t protect) {}
 void tb_ReserveEntry(int16_t index, int8_t reserve) {}
 void tb_SetClientID(int16_t id) {}
-void tb_MakeITable(gaddr ctab, gaddr itab, int16_t res) {}
-void tb_AddSearch(gaddr proc) {}
+/* An inverse table: iTabSeed (the colour table's seed), iTabRes, then for
+ * every colour cut to res bits a component (red highest) the index of
+ * the nearest entry.  Programs that set pixels themselves look colours up
+ * in their device's (Graphing Calculator's surfaces). */
+void tb_MakeITable(gaddr ctab, gaddr itab, int16_t res)
+{
+    gaddr gdh = current_device();
+    if (!ctab && gdh)
+        ctab = PixMap_pmTable(rd32(GDevice_gdPMap(rd32(gdh))));
+    if (!itab && gdh)
+        itab = rd32(rd32(gdh) + GDevice_gdITable_off);
+    if (!ctab || !rd32(ctab) || !itab)
+        return;
+    if (res < 3 || res > 5)
+        res = 4;
+    int n = (int16_t)rd16(rd32(ctab) + 6) + 1;
+    int depth = n <= 2 ? 1 : n <= 4 ? 2 : n <= 16 ? 4 : 8;
+    uint32_t cells = 1u << (3 * res);
+    tb_SetHandleSize(itab, (int32_t)(6 + cells));
+    if (tb_GetHandleSize(itab) < (int32_t)(6 + cells))
+        return;
+    gaddr t = rd32(itab);
+    wr32(t, rd32(rd32(ctab)));
+    wr16(t + 4, (uint16_t)res);
+    uint32_t mask = (1u << res) - 1;
+    for (uint32_t i = 0; i < cells; i++) {
+        uint16_t rgb[3];
+        for (int k = 0; k < 3; k++) {
+            uint32_t q = (i >> (res * (2 - k))) & mask; /* the cell's value, spread over 16 bits */
+            rgb[k] = (uint16_t)(q * 0xFFFFu / mask);
+        }
+        wr8(t + 6 + i, (uint8_t)qd_rgb_px(depth, ctab, rgb));
+    }
+}
+
+/* Give an indexed device an inverse table for its colour table. */
+void qd_device_itable(gaddr gdh)
+{
+    if (!gdh || !rd32(gdh))
+        return;
+    gaddr pmh = GDevice_gdPMap(rd32(gdh));
+    if (!pmh || !rd32(pmh) || PixMap_pixelSize(rd32(pmh)) > 8 || !PixMap_pmTable(rd32(pmh)))
+        return;
+    gaddr itab = rd32(rd32(gdh) + GDevice_gdITable_off);
+    if (!itab) {
+        itab = tb_NewHandle(6, true, true);
+        if (!itab)
+            return;
+        wr32(rd32(gdh) + GDevice_gdITable_off, itab);
+    }
+    int16_t res = (int16_t)rd16(rd32(gdh) + GDevice_gdResPref_off);
+    tb_MakeITable(PixMap_pmTable(rd32(pmh)), itab, res < 3 ? 4 : res);
+}
 void tb_AddComp(gaddr proc) {}
-void tb_DelSearch(gaddr proc) {}
+
+/* ---- Search procedures ----
+ * The current device's chain of SProcRecs (nxtSrch, srchProc), newest
+ * first.  Each is asked for the pixel value of a colour before the colour
+ * table is searched: programs use them to map colours of their own (codes
+ * for shades, Graphing Calculator) to entries they chose. */
+
+static gaddr current_device(void)
+{
+    gaddr gd = rd32(LM_TheGDevice);
+    return gd && rd32(gd) ? gd : rd32(LM_MainDevice);
+}
+
+void tb_AddSearch(gaddr proc)
+{
+    gaddr gdh = current_device();
+    gaddr h = tb_NewHandle(8, false, true);
+    if (!gdh || !h)
+        return;
+    wr32(rd32(h), rd32(rd32(gdh) + GDevice_gdSearchProc_off));
+    wr32(rd32(h) + 4, proc);
+    wr32(rd32(gdh) + GDevice_gdSearchProc_off, h);
+}
+
+void tb_DelSearch(gaddr proc)
+{
+    gaddr gdh = current_device();
+    if (!gdh)
+        return;
+    gaddr link = rd32(gdh) + GDevice_gdSearchProc_off;
+    for (gaddr h = rd32(link); h && rd32(h); link = rd32(h), h = rd32(link)) {
+        if (rd32(rd32(h) + 4) == proc) {
+            wr32(link, rd32(rd32(h)));
+            tb_DisposeHandle(h);
+            return;
+        }
+    }
+}
+
+/* The current device's search procedures' pixel value for a colour, when
+ * one answers and the pixels drawn into (base) are the device's own. */
+bool qd_search_color(gaddr base, const uint16_t rgb[3], uint32_t *out)
+{
+    static bool busy; /* a search procedure that draws maps its colours plainly */
+    gaddr gdh = current_device();
+    if (busy || !gdh)
+        return false;
+    gaddr h = rd32(rd32(gdh) + GDevice_gdSearchProc_off);
+    gaddr pmh = GDevice_gdPMap(rd32(gdh));
+    if (!h || !pmh || !rd32(pmh) || PixMap_baseAddr(rd32(pmh)) != base)
+        return false;
+    cpu68k *c = g_cpu;
+    busy = true;
+    bool found = false;
+    for (; h && rd32(h) && !found && !c->halted; h = rd32(rd32(h))) {
+        /* FUNCTION (VAR rgb: RGBColor; VAR position: LONGINT): BOOLEAN */
+        c->a[7] -= 12;
+        gaddr rgbp = c->a[7], posp = c->a[7] + 8;
+        wr16(rgbp, rgb[0]);
+        wr16(rgbp + 2, rgb[1]);
+        wr16(rgbp + 4, rgb[2]);
+        wr32(posp, 0);
+        cpu_push16(c, 0);
+        cpu_push32(c, rgbp);
+        cpu_push32(c, posp);
+        guest_call(rd32(rd32(h) + 4));
+        found = (cpu_pop16(c) >> 8) != 0;
+        if (found)
+            *out = rd32(posp);
+        c->a[7] += 12;
+    }
+    busy = false;
+    return found;
+}
 void tb_DelComp(gaddr proc) {}
 void tb_AllocCursor(void) {}
 
@@ -1242,7 +1456,11 @@ int8_t tb_GetGray(gaddr gdh, gaddr back, gaddr fore)
 /* ---------------------------------------------------------------------- */
 /* The rest of QDExtensions */
 
-gaddr tb_GetGWorldDevice(gaddr port) { return rd32(LM_MainDevice); }
+gaddr tb_GetGWorldDevice(gaddr port)
+{
+    struct gworld_dev *g = gworld_of(port);
+    return g ? g->gdh : rd32(LM_MainDevice);
+}
 int8_t tb_QDDone(gaddr port) { return 1; }  /* drawing is never pending */
 int32_t tb_OffscreenVersion(void) { return 0x130; }
 

@@ -226,6 +226,11 @@ int qd_text_width(gaddr port, const uint8_t *text, int len);
 
 /* Screen. */
 void qd_screen_init(int width, int height);
+void qd_gworlds_reset(void);
+void qd_device_itable(gaddr gdh); /* an indexed device's inverse table, made again */
+/* The pixel value the current device's search procedures give a colour
+ * drawn into pixels at base (false when none answers). */
+bool qd_search_color(gaddr base, const uint16_t rgb[3], uint32_t *out); /* forget the GWorlds of a previous launch */
 extern int g_screen_width, g_screen_height;
 
 /* Standard patterns. */

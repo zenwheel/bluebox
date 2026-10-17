@@ -108,7 +108,9 @@ void qd_screen_init(int width, int height)
     wr32(LM_MainDevice, gdh);
     wr32(LM_DeviceList, gdh);
     wr32(LM_TheGDevice, gdh);
+    qd_device_itable(gdh);
     nports = 0;
+    qd_gworlds_reset();
 }
 
 /* ---- Changing depth ---- */
@@ -157,6 +159,7 @@ bool qd_screen_set_depth(int depth)
     gaddr gd = rd32(rd32(LM_MainDevice));
     gaddr pm = rd32(GDevice_gdPMap(gd));
     describe_screen(gd, pm);
+    qd_device_itable(rd32(LM_MainDevice));
     gaddr sb = qd_screen_bits();
     if (sb && BitMap_baseAddr(sb) == GA_SCREEN)
         BitMap_set_rowBytes(sb, (int16_t)screen_row_bytes);

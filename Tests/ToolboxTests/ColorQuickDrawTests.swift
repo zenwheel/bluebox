@@ -40,6 +40,31 @@ extension BlueBox {
             tb_DisposeGWorld(port)
         }
 
+        /// An 8-bit GWorld brings its own device: while it is current,
+        /// Color2Index gives indices into its table, not 32-bit pixels.
+        @Test func gworldHasItsOwnDevice() {
+            launchTestApp()
+            _ = initToolbox()
+            let screen = tb_NewPtr(4, false, true), dev = tb_NewPtr(4, false, true)
+            tb_GetGWorld(screen, dev)
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 8, rect(0, 0, 10, 10), 0, 0, 0) == 0)
+            let port = rd32(gw)
+            tb_SetGWorld(port, 0)
+            let gdh = tb_GetGDevice()
+            #expect(gdh != rd32(dev) && gdh == tb_GetGWorldDevice(port))
+            #expect(PixMap_pixelSize(rd32(GDevice_gdPMap(rd32(gdh)))) == 8)
+            #expect(tb_Color2Index(rgb(0xFFFF, 0, 0)) == 35)
+            #expect(rd16(port + UInt32(CGrafPort_portVersion_off)) == 0xC001) // a GWorld says so
+            // Its inverse table: red cut to 4 bits a component is cell $F00.
+            let itab = rd32(rd32(gdh) + UInt32(GDevice_gdITable_off))
+            #expect(itab != 0 && rd16(rd32(itab) + 4) == 4)
+            #expect(rd8(rd32(itab) + 6 + 0xF00) == 35)
+            tb_SetGWorld(rd32(screen), rd32(dev))
+            #expect(tb_GetGDevice() == rd32(dev))
+            tb_DisposeGWorld(port)
+        }
+
         @Test func colorTablesAndIndices() {
             launchTestApp()
             _ = initToolbox()

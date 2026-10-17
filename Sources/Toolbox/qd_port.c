@@ -556,6 +556,13 @@ void qd_port_bits(gaddr port, uint32_t *fg, uint32_t *bk)
     }
     *fg = qd_rgb_px(d.depth, d.ctab, f);
     *bk = qd_rgb_px(d.depth, d.ctab, b);
+    if (qd_port_is_color(port)) {
+        uint32_t v;
+        if (!fg_override && qd_search_color(d.base, f, &v))
+            *fg = v;
+        if (qd_search_color(d.base, b, &v))
+            *bk = v;
+    }
     /* Palette slots: on the indexed screen (or anything sharing its table). */
     uint32_t idx;
     if (qd_port_is_color(port) && d.depth <= 8 && d.ctab && d.ctab == qd_screen_ctab()) {
@@ -597,8 +604,12 @@ void tb_RGBForeColor(gaddr c)
         gmemcpy(p + CGrafPort_rgbFgColor_off, c, 6);
         uint16_t rgb[3] = { rd16(c), rd16(c + 2), rd16(c + 4) };
         pixdst d = qd_port_pixels(p); /* fgColor: the pixel value, as Color2Index gives it */
-        GrafPort_set_fgColor(p, d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0)
-                                             : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb));
+        uint32_t v;
+        if (d.depth > 1 && qd_search_color(d.base, rgb, &v))
+            GrafPort_set_fgColor(p, (int32_t)v);
+        else
+            GrafPort_set_fgColor(p, d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0)
+                                                 : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb));
     } else {
         GrafPort_set_fgColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? blackColor : whiteColor);
     }
@@ -611,8 +622,12 @@ void tb_RGBBackColor(gaddr c)
         gmemcpy(p + CGrafPort_rgbBkColor_off, c, 6);
         uint16_t rgb[3] = { rd16(c), rd16(c + 2), rd16(c + 4) };
         pixdst d = qd_port_pixels(p);
-        GrafPort_set_bkColor(p, d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0)
-                                             : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb));
+        uint32_t v;
+        if (d.depth > 1 && qd_search_color(d.base, rgb, &v))
+            GrafPort_set_bkColor(p, (int32_t)v);
+        else
+            GrafPort_set_bkColor(p, d.depth == 1 ? (rgb_dark(rgb[0], rgb[1], rgb[2]) ? 1 : 0)
+                                                 : (int32_t)qd_rgb_px(d.depth, d.ctab, rgb));
     } else {
         GrafPort_set_bkColor(p, rgb_dark(rd16(c), rd16(c + 2), rd16(c + 4)) ? blackColor : whiteColor);
     }
