@@ -744,6 +744,7 @@ void trap_init(void)
      * Gestalt (Prince of Persia) learn that 32-Bit QuickDraw is there: its
      * address differs from Unimplemented's.  Called, it does nothing. */
     mixedmode_init();
+    adb_install();
     if (rd32(TB_TRAP_TABLE + 0x303u * 4) == unimpl_stub)
         wr32(TB_TRAP_TABLE + 0x303u * 4, native_register(noop_native, "QD32Present", 0xAB03));
     uint32_t keytrans = native_register(key_trans_native, "KeyTrans", 0);

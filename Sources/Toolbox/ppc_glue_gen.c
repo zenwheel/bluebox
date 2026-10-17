@@ -7,6 +7,42 @@
 #include "ppc_bridge.h"
 #include "tb_protos_gen.h"
 
+static void ppcglue_ADBReInit(ppc_cpu *c)
+{
+    tb_ADBReInit();
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountADBs(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountADBs();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIndADB(ppc_cpu *c)
+{
+    gaddr a_adbp = (gaddr)c->gpr[3];
+    int16_t a_index = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIndADB(a_adbp, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetADBInfo(ppc_cpu *c)
+{
+    gaddr a_adbp = (gaddr)c->gpr[3];
+    int16_t a_address = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetADBInfo(a_adbp, a_address);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetADBInfo(ppc_cpu *c)
+{
+    gaddr a_adbp = (gaddr)c->gpr[3];
+    int16_t a_address = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetADBInfo(a_adbp, a_address);
+    c->pc = c->lr;
+}
+
 static void ppcglue_FindFolder(ppc_cpu *c)
 {
     int16_t a_vRefNum = (int16_t)c->gpr[3];
@@ -3628,6 +3664,14 @@ static void ppcglue_FSMakeFSSpec(ppc_cpu *c)
     gaddr a_file_name = (gaddr)c->gpr[5];
     gaddr a_spec = (gaddr)c->gpr[6];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSMakeFSSpec(a_vRefNum, a_dir_id, a_file_name, a_spec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSpExchangeFiles(ppc_cpu *c)
+{
+    gaddr a_src = (gaddr)c->gpr[3];
+    gaddr a_dst = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSpExchangeFiles(a_src, a_dst);
     c->pc = c->lr;
 }
 
@@ -11292,60 +11336,6 @@ static void ppcglue_AddFilePreview(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_ADBReInit(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap((uint16_t)(0xA07B));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_CountADBs(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap((uint16_t)(0xA077));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetIndADB(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap_set(0, (uint32_t)(int32_t)(int16_t)c->gpr[4]);
-    ppc_trap((uint16_t)(0xA078));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetADBInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap_set(0, (uint32_t)(int32_t)(int16_t)c->gpr[4]);
-    ppc_trap((uint16_t)(0xA079));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetADBInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap_set(0, (uint32_t)(int32_t)(int16_t)c->gpr[4]);
-    ppc_trap((uint16_t)(0xA07A));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_StringToNum(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -12905,20 +12895,6 @@ static void ppctrap_PBHMoveRenameAsync(ppc_cpu *c)
     ppc_trap_set(8, c->gpr[3]);
     ppc_trap((uint16_t)(0xA060 | 0x400));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FSpExchangeFiles(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA52));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
     c->pc = c->lr;
@@ -22297,7 +22273,7 @@ static void ppclm_set_AuxWinHead(ppc_cpu *c) { wr32(0xCD0, (uint32_t)c->gpr[3]);
 static void ppclm_get_DeskCPat(ppc_cpu *c) { c->gpr[3] = rd32(0xCD8); c->pc = c->lr; }
 static void ppclm_set_DeskCPat(ppc_cpu *c) { wr32(0xCD8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 const ppc_export ppc_exports[] = {
-    {"ADBReInit", ppctrap_ADBReInit},
+    {"ADBReInit", ppcglue_ADBReInit},
     {"AECallObjectAccessor", ppcglue_AECallObjectAccessor},
     {"AECoerceDesc", ppcglue_AECoerceDesc},
     {"AECoercePtr", ppcglue_AECoercePtr},
@@ -22511,7 +22487,7 @@ const ppc_export ppc_exports[] = {
     {"CouldDialog", ppcglue_CouldDialog},
     {"Count1Resources", ppcglue_Count1Resources},
     {"Count1Types", ppcglue_Count1Types},
-    {"CountADBs", ppctrap_CountADBs},
+    {"CountADBs", ppcglue_CountADBs},
     {"CountDITL", ppcglue_CountDITL},
     {"CountDragItemFlavors", ppctrap_CountDragItemFlavors},
     {"CountDragItems", ppctrap_CountDragItems},
@@ -22672,7 +22648,7 @@ const ppc_export ppc_exports[] = {
     {"FSpCreateResFile", ppcglue_FSpCreateResFile},
     {"FSpDelete", ppcglue_FSpDelete},
     {"FSpDirCreate", ppcglue_FSpDirCreate},
-    {"FSpExchangeFiles", ppctrap_FSpExchangeFiles},
+    {"FSpExchangeFiles", ppcglue_FSpExchangeFiles},
     {"FSpGetFInfo", ppcglue_FSpGetFInfo},
     {"FSpOpenDF", ppcglue_FSpOpenDF},
     {"FSpOpenRF", ppcglue_FSpOpenRF},
@@ -22750,7 +22726,7 @@ const ppc_export ppc_exports[] = {
     {"Get1IndType", ppcglue_Get1IndType},
     {"Get1NamedResource", ppcglue_Get1NamedResource},
     {"Get1Resource", ppcglue_Get1Resource},
-    {"GetADBInfo", ppctrap_GetADBInfo},
+    {"GetADBInfo", ppcglue_GetADBInfo},
     {"GetAlertStage", ppcglue_GetAlertStage},
     {"GetAliasInfo", ppcglue_GetAliasInfo},
     {"GetAppParms", ppcglue_GetAppParms},
@@ -22843,7 +22819,7 @@ const ppc_export ppc_exports[] = {
     {"GetIconSuite", ppcglue_GetIconSuite},
     {"GetImageDescriptionCTable", ppctrap_GetImageDescriptionCTable},
     {"GetImageDescriptionExtension", ppctrap_GetImageDescriptionExtension},
-    {"GetIndADB", ppctrap_GetIndADB},
+    {"GetIndADB", ppcglue_GetIndADB},
     {"GetIndPattern", ppcglue_GetIndPattern},
     {"GetIndResource", ppcglue_GetIndResource},
     {"GetIndSymbol", ppctrap_GetIndSymbol},
@@ -24490,7 +24466,7 @@ const ppc_export ppc_exports[] = {
     {"SelectMovieAlternates", ppctrap_SelectMovieAlternates},
     {"SelectWindow", ppcglue_SelectWindow},
     {"SendBehind", ppcglue_SendBehind},
-    {"SetADBInfo", ppctrap_SetADBInfo},
+    {"SetADBInfo", ppcglue_SetADBInfo},
     {"SetApplBase", ppcglue_SetApplBase},
     {"SetApplLimit", ppcglue_SetApplLimit},
     {"SetAutoTrackAlternatesEnabled", ppctrap_SetAutoTrackAlternatesEnabled},

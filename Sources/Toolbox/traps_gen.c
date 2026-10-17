@@ -719,6 +719,14 @@ const char *const tb_trap_names[1024] = {
     [0x3FF] = "DebugStr",
 };
 
+static void glue_ADBReInit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_ADBReInit();
+    cpu_push32(c, ret);
+}
+
 static void glue_AECallObjectAccessor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2295,6 +2303,13 @@ static void glue_Count1Types(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CountADBs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_CountADBs();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_CountDITL(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3341,6 +3356,17 @@ static void glue_FSpDirCreate(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FSpExchangeFiles(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSpExchangeFiles(a_src, a_dst);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FSpGetFInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4012,6 +4038,15 @@ static void glue_Get1Resource(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetADBInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_adbp = (gaddr)c->a[0];
+    int16_t a_address = (int16_t)c->d[0];
+    int16_t r = tb_GetADBInfo(a_adbp, a_address);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_GetAlertStage(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4521,6 +4556,15 @@ static void glue_GetIconSuite(cpu68k *c, uint16_t trapword)
     int16_t r = tb_GetIconSuite(a_suite, a_res_id, a_selector);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_GetIndADB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_adbp = (gaddr)c->a[0];
+    int16_t a_index = (int16_t)c->d[0];
+    int16_t r = tb_GetIndADB(a_adbp, a_index);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_GetIndPattern(cpu68k *c, uint16_t trapword)
@@ -10930,6 +10974,15 @@ static void glue_SendBehind(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetADBInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_adbp = (gaddr)c->a[0];
+    int16_t a_address = (int16_t)c->d[0];
+    int16_t r = tb_SetADBInfo(a_adbp, a_address);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_SetApplBase(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14048,11 +14101,11 @@ const trap_sig trap_sigs[] = {
     {0xA06A, -1, "HSetState", CONV_REG, 0, 0, glue_HSetState},
     {0xA06F, -1, "SlotVInstall", CONV_REG, 0, 0, glue_SlotVInstall},
     {0xA070, -1, "SlotVRemove", CONV_REG, 0, 0, glue_SlotVRemove},
-    {0xA077, -1, "CountADBs", CONV_REG, 0, 0, 0},
-    {0xA078, -1, "GetIndADB", CONV_REG, 0, 0, 0},
-    {0xA079, -1, "GetADBInfo", CONV_REG, 0, 0, 0},
-    {0xA07A, -1, "SetADBInfo", CONV_REG, 0, 0, 0},
-    {0xA07B, -1, "ADBReInit", CONV_STACK, 0, 0, 0},
+    {0xA077, -1, "CountADBs", CONV_REG, 0, 0, glue_CountADBs},
+    {0xA078, -1, "GetIndADB", CONV_REG, 0, 0, glue_GetIndADB},
+    {0xA079, -1, "GetADBInfo", CONV_REG, 0, 0, glue_GetADBInfo},
+    {0xA07A, -1, "SetADBInfo", CONV_REG, 0, 0, glue_SetADBInfo},
+    {0xA07B, -1, "ADBReInit", CONV_STACK, 0, 0, glue_ADBReInit},
     {0xA082, -1, "DTInstall", CONV_REG, 0, 0, glue_DTInstall},
     {0xA090, -1, "SysEnvirons", CONV_REG, 0, 0, glue_SysEnvirons},
     {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, 0},
@@ -14785,7 +14838,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA52, (int32_t)0xCu, "FSpCatMove", CONV_STACK, 8, 2, glue_FSpCatMove},
     {0xAA52, (int32_t)0xDu, "FSpOpenResFile", CONV_STACK, 6, 2, glue_FSpOpenResFile},
     {0xAA52, (int32_t)0xEu, "FSpCreateResFile", CONV_STACK, 14, 0, glue_FSpCreateResFile},
-    {0xAA52, (int32_t)0xFu, "FSpExchangeFiles", CONV_STACK, 8, 2, 0},
+    {0xAA52, (int32_t)0xFu, "FSpExchangeFiles", CONV_STACK, 8, 2, glue_FSpExchangeFiles},
     {0xABC9, (int32_t)0x207u, "NewIconSuite", CONV_STACK, 4, 2, glue_NewIconSuite},
     {0xABC9, (int32_t)0x217u, "GetSuiteLabel", CONV_STACK, 4, 2, glue_GetSuiteLabel},
     {0xABC9, (int32_t)0x302u, "DisposeIconSuite", CONV_STACK, 6, 2, glue_DisposeIconSuite},

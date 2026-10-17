@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "mem.h"
 
+void tb_ADBReInit(void);
 int16_t tb_AECallObjectAccessor(int32_t desiredClass, gaddr containerToken, int32_t containerClass, int32_t keyForm, gaddr keyData, gaddr theToken);
 int16_t tb_AECoerceDesc(gaddr desc, int32_t result_type, gaddr desc_out);
 int16_t tb_AECoercePtr(int32_t data_type, gaddr data, int32_t data_size, int32_t result_type, gaddr desc_out);
@@ -145,6 +146,7 @@ void tb_CouldAlert(int16_t id);
 void tb_CouldDialog(int16_t id);
 int16_t tb_Count1Resources(int32_t typ);
 int16_t tb_Count1Types(void);
+int16_t tb_CountADBs(void);
 int16_t tb_CountDITL(gaddr arg0);
 int16_t tb_CountMItems(gaddr mh);
 int16_t tb_CountResources(int32_t typ);
@@ -248,6 +250,7 @@ int16_t tb_FSpCreate(gaddr spec, int32_t creator, int32_t file_type, int16_t scr
 void tb_FSpCreateResFile(gaddr spec, int32_t creator, int32_t file_type, int16_t script);
 int16_t tb_FSpDelete(gaddr spec);
 int16_t tb_FSpDirCreate(gaddr spec, int16_t script, gaddr created_dir_id);
+int16_t tb_FSpExchangeFiles(gaddr src, gaddr dst);
 int16_t tb_FSpGetFInfo(gaddr spec, gaddr fndr_info);
 int16_t tb_FSpOpenDF(gaddr spec, int8_t perms, gaddr refNum_out);
 int16_t tb_FSpOpenRF(gaddr spec, int8_t perms, gaddr refNum_out);
@@ -312,6 +315,7 @@ gaddr tb_Get1IndResource(int32_t typ, int16_t i);
 void tb_Get1IndType(gaddr typ, int16_t indx);
 gaddr tb_Get1NamedResource(int32_t typ, gaddr s);
 gaddr tb_Get1Resource(int32_t typ, int16_t id);
+int16_t tb_GetADBInfo(gaddr adbp, int16_t address);
 int16_t tb_GetAlertStage(void);
 int16_t tb_GetAliasInfo(gaddr alias, int16_t index, gaddr theString);
 void tb_GetAppParms(gaddr namep, gaddr rnp, gaddr aphandp);
@@ -362,6 +366,7 @@ int32_t tb_GetHandleSize(gaddr h);
 gaddr tb_GetIcon(int16_t icon_id);
 int16_t tb_GetIconFromSuite(gaddr icon_data, gaddr suite, int32_t type);
 int16_t tb_GetIconSuite(gaddr suite, int16_t res_id, uint32_t selector);
+int16_t tb_GetIndADB(gaddr adbp, int16_t index);
 void tb_GetIndPattern(gaddr op, int16_t plistid, int16_t index);
 gaddr tb_GetIndResource(int32_t typ, int16_t indx);
 void tb_GetIndType(gaddr typ, int16_t indx);
@@ -978,6 +983,7 @@ void tb_SeedFill(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t hei
 void tb_SelectDialogItemText(gaddr dp, int16_t itemno, int16_t start, int16_t stop);
 void tb_SelectWindow(gaddr w);
 void tb_SendBehind(gaddr w, gaddr behind);
+int16_t tb_SetADBInfo(gaddr adbp, int16_t address);
 void tb_SetApplBase(gaddr newbase);
 void tb_SetApplLimit(gaddr newlimit);
 void tb_SetCCursor(gaddr arg0);

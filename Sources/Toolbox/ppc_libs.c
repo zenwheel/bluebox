@@ -1266,6 +1266,54 @@ CCALL(MCGetInterfaceElement, 49, "44")
 static void os_notHandled(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1708); }
 static void os_accessorNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1723); }
 static void os_coercionFail(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1700); }
+/* FindWordBreaks(text, len, offset, leadingEdge, breaks, offsets, script):
+ * FindWord's, the script aside. */
+static void g_FindWordBreaks(ppc_cpu *c)
+{
+    tb_FindWord(R(0), (int16_t)R(1), (int16_t)R(2), (int8_t)R(3), R(4), R(5));
+    c->pc = c->lr;
+}
+
+/* UppercaseStripDiacritics(text, len, script): in place. */
+static void g_UppercaseStripDiacritics(ppc_cpu *c)
+{
+    int16_t n = (int16_t)R(1);
+    for (int16_t i = 0; i < n && R(0); i++)
+        wr8(R(0) + (uint32_t)i, (uint8_t)mac_char_key(rd8(R(0) + (uint32_t)i), false, true));
+    c->pc = c->lr;
+}
+
+/* PBControlImmed(pb): a Control call, done at once like the others. */
+static void g_PBControlImmed(ppc_cpu *c) { RETURN((uint32_t)(int32_t)tb_PBControl(R(0), false)); }
+
+/* TruncText(width, textPtr, short *length, truncWhere): the text cut to
+ * fit width with an ellipsis, as TruncString cuts a Pascal string. */
+static void g_TruncText(ppc_cpu *c)
+{
+    gaddr text = R(1), lenp = R(2);
+    int16_t len = lenp ? (int16_t)rd16(lenp) : 0;
+    if (len <= 0 || !text) {
+        RETURN(0);
+        return;
+    }
+    if (len > 255)
+        len = 255;
+    gaddr tmp = tb_NewPtr(256, false, false);
+    if (!tmp) {
+        RETURN((uint32_t)-1);
+        return;
+    }
+    wr8(tmp, (uint8_t)len);
+    gmemcpy(tmp + 1, text, (uint32_t)len);
+    int16_t r = tb_TruncString((int16_t)R(0), tmp, (int16_t)R(3));
+    if (r > 0) {
+        gmemcpy(text, tmp + 1, rd8(tmp));
+        wr16(lenp, rd8(tmp));
+    }
+    tb_DisposePtr(tmp);
+    RETURN((uint32_t)(int32_t)r);
+}
+
 /* GetDefaultUser(&userRef, name): Sharing Setup's owner, the host
  * account's full name (Netscape Navigator names its profile after it). */
 static void g_GetDefaultUser(ppc_cpu *c)
@@ -1844,7 +1892,9 @@ const ppc_export lib_exports[] = {
     /* ObjectSupportLib */
     { "AEObjectInit", g_noErr }, { "AESetObjectCallbacks", g_noErr }, { "AEInstallObjectAccessor", g_noErr },
     { "AERemoveObjectAccessor", g_noErr }, { "AEGetObjectAccessor", os_accessorNotFound },
-    { "AEResolve", os_AEResolve }, { "GetDefaultUser", g_GetDefaultUser }, { "AECallObjectAccessor", os_notHandled }, { "AEDisposeToken", g_noErr },
+    { "AEResolve", os_AEResolve }, { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },
+    { "FindWordBreaks", g_FindWordBreaks }, { "UppercaseStripDiacritics", g_UppercaseStripDiacritics },
+    { "PBControlImmed", g_PBControlImmed }, { "AECallObjectAccessor", os_notHandled }, { "AEDisposeToken", g_noErr },
     { "CreateObjSpecifier", os_coercionFail }, { "CreateOffsetDescriptor", os_coercionFail },
     { "CreateCompDescriptor", os_coercionFail }, { "CreateLogicalDescriptor", os_coercionFail },
     { "CreateRangeDescriptor", os_coercionFail },

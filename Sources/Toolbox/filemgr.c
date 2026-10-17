@@ -2027,6 +2027,36 @@ int16_t tb_FSpRename(gaddr spec, gaddr new_name)
     return err ? err : rename_path(path, new_name);
 }
 
+/* FSpExchangeFiles(src, dst): the two files trade contents, both forks and
+ * the dates; each keeps its name and Finder info (programs save to a new
+ * file and exchange it with the old: Internet Explorer). */
+int16_t tb_FSpExchangeFiles(gaddr src, gaddr dst)
+{
+    char a[PATH_MAX], b[PATH_MAX];
+    int16_t err = pb_path(spec_pb(src), true, a, sizeof a);
+    if (!err)
+        err = pb_path(spec_pb(dst), true, b, sizeof b);
+    if (err)
+        return err;
+    mac_file fa, fb;
+    char msg[256];
+    if (!appledouble_read(a, &fa, msg, sizeof msg))
+        return fnfErr;
+    if (!appledouble_read(b, &fb, msg, sizeof msg)) {
+        mac_file_free(&fa);
+        return fnfErr;
+    }
+    mac_file na = fb, nb = fa; /* contents and dates traded */
+    memcpy(na.finder_info, fa.finder_info, sizeof na.finder_info);
+    na.has_finder_info = fa.has_finder_info;
+    memcpy(nb.finder_info, fb.finder_info, sizeof nb.finder_info);
+    nb.has_finder_info = fb.has_finder_info;
+    bool ok = appledouble_write(a, &na, msg, sizeof msg) && appledouble_write(b, &nb, msg, sizeof msg);
+    mac_file_free(&fa);
+    mac_file_free(&fb);
+    return ok ? noErr : ioErr;
+}
+
 int16_t tb_FSpDirCreate(gaddr spec, int16_t script, gaddr created_dir_id)
 {
     gaddr pb = spec_pb(spec);

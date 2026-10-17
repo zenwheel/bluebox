@@ -1,8 +1,11 @@
 /* OS Utilities, trap table access and other small routines. */
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
+#include "m68k.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 /* ---- Time ---- */
 
@@ -405,4 +408,160 @@ int16_t tb_Dequeue(gaddr e, gaddr h)
         return noErr;
     }
     return qErr;
+}
+
+/* ---- ADB Manager ----
+ * Two devices, as on a desktop Mac: an extended keyboard at address 2 and
+ * a mouse at address 3.  Input comes through the Event Manager; a program
+ * that installs a service routine for the mouse (SetADBInfo) also gets its
+ * movement as ADB delivered it, register 0 polled at interrupt time, and
+ * ADBOp answers Talk commands (Apeiron reads the mouse this way). */
+
+static const struct { int8_t type, addr, handler; } adb_devices[] = { { 2, 2, 2 }, { 1, 3, 1 } };
+enum { adb_count = 2 };
+static gaddr adb_service[adb_count], adb_data[adb_count];
+static uint32_t adb_last_mouse; /* raw mouse location at the last poll */
+static bool adb_last_button;
+static gaddr adb_buffer;        /* a register's bytes for a service routine */
+
+static int adb_index(int addr)
+{
+    for (int k = 0; k < adb_count; k++)
+        if (adb_devices[k].addr == (addr & 0xF))
+            return k;
+    return -1;
+}
+
+static void adb_fill(gaddr adbp, int k)
+{
+    if (!adbp)
+        return;
+    wr8(adbp, (uint8_t)adb_devices[k].type);
+    wr8(adbp + 1, (uint8_t)adb_devices[k].addr);
+    wr32(adbp + 2, adb_service[k]);
+    wr32(adbp + 6, adb_data[k]);
+}
+
+int16_t tb_CountADBs(void) { return adb_count; }
+
+/* The index'th device (from 1): its ADB address, or an error. */
+int16_t tb_GetIndADB(gaddr adbp, int16_t index)
+{
+    if (index < 1 || index > adb_count)
+        return -1;
+    adb_fill(adbp, index - 1);
+    return adb_devices[index - 1].addr;
+}
+
+int16_t tb_GetADBInfo(gaddr adbp, int16_t address)
+{
+    int k = adb_index(address);
+    if (k < 0)
+        return -1;
+    adb_fill(adbp, k);
+    return noErr;
+}
+
+/* ADBSetInfoBlock: siServiceRtPtr, siDataAreaAddr */
+int16_t tb_SetADBInfo(gaddr adbp, int16_t address)
+{
+    int k = adb_index(address);
+    if (k < 0)
+        return -1;
+    adb_service[k] = adbp ? rd32(adbp) : 0;
+    adb_data[k] = adbp ? rd32(adbp + 4) : 0;
+    if (adb_devices[k].type == 1) { /* movement from now on */
+        adb_last_mouse = rd32(LM_MouseLocation);
+        adb_last_button = tb_Button();
+    }
+    return noErr;
+}
+
+void tb_ADBReInit(void) {}
+
+/* A device register's bytes, as a Pascal string, into buf. */
+static void adb_talk(int k, int reg, gaddr buf)
+{
+    uint8_t b[2] = { 0xFF, 0xFF };
+    int n = 2;
+    if (reg == 3) {
+        b[0] = (uint8_t)(0x60 | adb_devices[k].addr);
+        b[1] = (uint8_t)adb_devices[k].handler;
+    } else if (reg == 0 && adb_devices[k].type == 1) {
+        uint32_t m = rd32(LM_MouseLocation);
+        int dv = (int16_t)(m >> 16) - (int16_t)(adb_last_mouse >> 16);
+        int dh = (int16_t)m - (int16_t)adb_last_mouse;
+        adb_last_mouse = m;
+        dv = dv < -64 ? -64 : dv > 63 ? 63 : dv;
+        dh = dh < -64 ? -64 : dh > 63 ? 63 : dh;
+        bool down = tb_Button();
+        adb_last_button = down;
+        b[0] = (uint8_t)((down ? 0 : 0x80) | (dv & 0x7F));
+        b[1] = (uint8_t)(0x80 | (dh & 0x7F));
+    }
+    if (!buf)
+        return;
+    wr8(buf, (uint8_t)n);
+    gput(buf + 1, b, (uint32_t)n);
+}
+
+/* A service or completion routine, as the ADB interrupt called it: A0 the
+ * buffer, A1 the routine, A2 its data area, D0 the command; registers
+ * preserved. */
+static void adb_call(gaddr fn, gaddr buf, gaddr data, uint8_t cmd)
+{
+    cpu68k *c = g_cpu;
+    uint32_t d[8], a[8];
+    uint16_t sr = c->sr;
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    c->a[0] = buf;
+    c->a[1] = fn;
+    c->a[2] = data;
+    c->d[0] = cmd;
+    guest_call_regs(fn);
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    c->sr = sr;
+}
+
+/* _ADBOp: A0 = ADBOpBlock (dataBuffPtr, opServiceRtPtr, opDataAreaPtr),
+ * D0.B = command (address << 4, then Talk 3 / Listen 2 / Flush, register). */
+static void adbop_native(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    gaddr pb = c->a[0];
+    uint8_t cmd = (uint8_t)c->d[0];
+    int k = adb_index(cmd >> 4), kind = (cmd >> 2) & 3, reg = cmd & 3;
+    gaddr buf = pb ? rd32(pb) : 0, fn = pb ? rd32(pb + 4) : 0, data = pb ? rd32(pb + 8) : 0;
+    if (k >= 0 && kind == 3)
+        adb_talk(k, reg, buf);
+    c->d[0] = noErr;
+    if (fn)
+        adb_call(fn, buf, data, cmd);
+}
+
+/* Interrupt time: the mouse's movement to its service routine. */
+void adb_pump(void)
+{
+    if (!adb_service[1])
+        return;
+    uint32_t m = rd32(LM_MouseLocation);
+    bool down = tb_Button();
+    if (m == adb_last_mouse && down == adb_last_button)
+        return;
+    if (!adb_buffer)
+        adb_buffer = tb_NewPtr(8, true, true); /* system heap */
+    adb_talk(1, 0, adb_buffer);
+    adb_call(adb_service[1], adb_buffer, adb_data[1], 0x3C);
+}
+
+void adb_install(void)
+{
+    memset(adb_service, 0, sizeof adb_service);
+    memset(adb_data, 0, sizeof adb_data);
+    adb_buffer = 0;
+    adb_last_mouse = rd32(LM_MouseLocation);
+    adb_last_button = false;
+    wr32(OS_TRAP_TABLE + 0x7Cu * 4, native_register(adbop_native, "ADBOp", 0xA07C));
 }

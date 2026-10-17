@@ -101,6 +101,8 @@ static int16_t system_font_width(const uint8_t *s, int n);
 
 void tb_CalcMenuSize(gaddr mh)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     display_menus_changed();
     int items = tb_CountMItems(mh);
     int w = 0;
@@ -153,6 +155,8 @@ gaddr tb_GetMenu(int16_t rid)
 
 void tb_DisposeMenu(gaddr mh)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     if (tb_HGetState(mh) & 0x20)
         tb_ReleaseResource(mh);
     else
@@ -220,6 +224,8 @@ static void append_items(gaddr mh, const uint8_t *s, int n, int after)
 
 void tb_InsertMenuItem(gaddr mh, gaddr str, int16_t after)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     uint8_t buf[256];
     int n = rd8(str);
     gget(buf, str + 1, (uint32_t)n);
@@ -228,6 +234,8 @@ void tb_InsertMenuItem(gaddr mh, gaddr str, int16_t after)
 
 void tb_DeleteMenuItem(gaddr mh, int16_t item)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     int count = tb_CountMItems(mh);
     if (item < 1 || item > count)
         return;
@@ -247,6 +255,8 @@ void tb_DeleteMenuItem(gaddr mh, int16_t item)
 
 void tb_AppendMenu(gaddr mh, gaddr str)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     uint8_t buf[256];
     int n = rd8(str);
     gget(buf, str + 1, (uint32_t)n);
@@ -481,6 +491,8 @@ void tb_InitMenus(void)
 
 void tb_InsertMenu(gaddr mh, int16_t before)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     display_menus_changed();
     gaddr l = mlist();
     int n = nmenus();
@@ -1088,6 +1100,8 @@ void tb_InitProcMenu(int16_t mbid) { tb_InitMenus(); }
 
 void tb_EnableItem(gaddr mh, int16_t item)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     display_menus_changed();
     gaddr p = menu_ptr(mh);
     if (item <= 31)
@@ -1096,6 +1110,8 @@ void tb_EnableItem(gaddr mh, int16_t item)
 
 void tb_DisableItem(gaddr mh, int16_t item)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     display_menus_changed();
     gaddr p = menu_ptr(mh);
     if (item <= 31)
@@ -1112,6 +1128,8 @@ void tb_CheckItem(gaddr mh, int16_t item, int8_t cflag) { tb_SetItemMark(mh, ite
 
 void tb_SetItemMark(gaddr mh, int16_t item, int16_t mark)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     display_menus_changed();
     gaddr f = item_field(mh, item, 2);
     if (f)
@@ -1120,12 +1138,16 @@ void tb_SetItemMark(gaddr mh, int16_t item, int16_t mark)
 
 void tb_GetItemMark(gaddr mh, int16_t item, gaddr markp)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     gaddr f = item_field(mh, item, 2);
     wr16(markp, f ? rd8(f) : 0);
 }
 
 void tb_SetItemIcon(gaddr mh, int16_t item, uint8_t icon)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     gaddr f = item_field(mh, item, 0);
     if (f)
         wr8(f, icon);
@@ -1133,12 +1155,16 @@ void tb_SetItemIcon(gaddr mh, int16_t item, uint8_t icon)
 
 void tb_GetItemIcon(gaddr mh, int16_t item, gaddr iconp)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     gaddr f = item_field(mh, item, 0);
     wr16(iconp, f ? rd8(f) : 0);
 }
 
 void tb_SetItemStyle(gaddr mh, int16_t item, int16_t style)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     display_menus_changed();
     gaddr f = item_field(mh, item, 3);
     if (f)
@@ -1147,6 +1173,8 @@ void tb_SetItemStyle(gaddr mh, int16_t item, int16_t style)
 
 void tb_GetItemStyle(gaddr mh, int16_t item, gaddr stylep)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     /* A word with the style in the low byte, as the ROM wrote it (MPW's
      * glue for C callers keeps only that byte). */
     gaddr f = item_field(mh, item, 3);
@@ -1155,6 +1183,8 @@ void tb_GetItemStyle(gaddr mh, int16_t item, gaddr stylep)
 
 void tb_SetItemCmd(gaddr mh, int16_t item, int16_t cmd)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     display_menus_changed();
     gaddr f = item_field(mh, item, 1);
     if (f)
@@ -1163,12 +1193,16 @@ void tb_SetItemCmd(gaddr mh, int16_t item, int16_t cmd)
 
 void tb_GetItemCmd(gaddr mh, int16_t item, gaddr cmdp)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     gaddr f = item_field(mh, item, 1);
     wr16(cmdp, f ? rd8(f) : 0);
 }
 
 void tb_GetMenuItemText(gaddr mh, int16_t item, gaddr str)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     gaddr it = item_addr(mh, item);
     if (it)
         gmemcpy(str, it, (uint32_t)rd8(it) + 1);
@@ -1178,6 +1212,8 @@ void tb_GetMenuItemText(gaddr mh, int16_t item, gaddr str)
 
 void tb_SetMenuItemText(gaddr mh, int16_t item, gaddr str)
 {
+    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
+        return;
     display_menus_changed();
     gaddr it = item_addr(mh, item);
     if (!it)
