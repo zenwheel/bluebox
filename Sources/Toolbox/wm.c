@@ -295,6 +295,8 @@ static void draw_title(gaddr w, qrect t, bool clear_behind)
     GrafPort_set_txMode(port, 1);
     gaddr s = rd32(th);
     int n = rd8(s);
+    if (n == 0)
+        return; /* untitled: the stripes go all the way across */
     uint8_t buf[256];
     gget(buf, s + 1, (uint32_t)n);
     int tw = qd_text_width(port, buf, n);
@@ -574,6 +576,8 @@ static void float_title_text(gaddr w, qrect bar)
     GrafPort_set_txMode(port, 1);
     gaddr s = rd32(th);
     int n = rd8(s);
+    if (n == 0)
+        return; /* untitled: the stripes go all the way across */
     uint8_t buf[256];
     gget(buf, s + 1, (uint32_t)n);
     int tw = qd_text_width(port, buf, n);
