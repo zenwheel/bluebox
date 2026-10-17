@@ -195,7 +195,7 @@ static void dispatch_native(cpu68k *c, uint16_t tw)
         sel = (int32_t)(c->d[0] & mask);
     }
     else if (!strcmp(loc, "TrapBits"))
-        sel = (tw >> 9) & 3;
+        sel = tw & 0x600; /* as the table gives them: Gestalt 0, NewGestalt $200, ReplaceGestalt $400 */
     else if (!strcmp(loc, "StackW") || !strncmp(loc, "StackWMasked", 12)) {
         sel = (int16_t)rd16(c->a[7] + 4);
         if (!strncmp(loc, "StackWMasked", 12))

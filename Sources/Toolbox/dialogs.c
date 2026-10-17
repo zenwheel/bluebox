@@ -576,6 +576,16 @@ void tb_DrawDialog(gaddr d)
             draw_item(d, i);
         }
     }
+    /* Controls the program added with NewControl, outside the item list,
+     * are the dialog's too (DrawControls draws them all): Installer VISE's
+     * Install Location pop-up. */
+    for (gaddr c = WindowRecord_controlList(d); c && rd32(c); c = ControlRecord_nextControl(rd32(c))) {
+        bool item = false;
+        for (int i = 1; i <= n && !item; i++)
+            item = (item_type(d, i) & ctrlItem) && item_handle(d, i) == c;
+        if (!item)
+            tb_Draw1Control(c);
+    }
     draw_default_ring(d);
     tb_SetPort(saved);
 }
