@@ -96,16 +96,43 @@ static void coalesce(gaddr z, gaddr b)
     rover_merged(z, b, ps);
 }
 
-/* Which zone owns this address? */
+/* Zones a program made with InitZone, usually inside a block of the
+ * application zone (NCSA Mosaic gives each text field one).  An address in
+ * such a zone belongs to it, not to the zone around it.  An entry lasts
+ * while the zone's header keeps the limit it was made with and the block
+ * holding it isn't disposed of. */
+enum { MAX_SUBZONES = 64 };
+static struct { gaddr z, lim; } subzones[MAX_SUBZONES];
+static int nsubzones;
+
+static void forget_subzones(gaddr from, gaddr to)
+{
+    int k = 0;
+    for (int i = 0; i < nsubzones; i++)
+        if (subzones[i].z >= to || subzones[i].lim + HDR <= from)
+            subzones[k++] = subzones[i];
+    nsubzones = k;
+}
+
+static bool in_zone(gaddr z, gaddr addr) { return z && addr >= z && addr < z_lim(z) + HDR; }
+
+/* Which zone owns this address?  The innermost one that holds it. */
 static gaddr zone_of(gaddr addr)
 {
-    gaddr s = sys_zone(), a = appl_zone();
-    if (s && addr >= s && addr < z_lim(s) + HDR)
+    gaddr best = 0;
+    for (int i = 0; i < nsubzones; i++)
+        if (z_lim(subzones[i].z) == subzones[i].lim && in_zone(subzones[i].z, addr) && subzones[i].z > best)
+            best = subzones[i].z;
+    if (best)
+        return best;
+    gaddr s = sys_zone(), a = appl_zone(), t = cur_zone();
+    if (in_zone(t, addr) && t != s && t != a && (in_zone(s, t) || in_zone(a, t)))
+        return t; /* the current zone, nested in another */
+    if (in_zone(s, addr))
         return s;
-    if (a && addr >= a && addr < z_lim(a) + HDR)
+    if (in_zone(a, addr))
         return a;
-    gaddr t = cur_zone();
-    if (t && addr >= t && addr < z_lim(t) + HDR)
+    if (in_zone(t, addr))
         return t;
     return 0;
 }
@@ -155,6 +182,7 @@ void mm_init_zone(gaddr z, gaddr limit, uint16_t more_masters)
     limit &= ~3u;
     gmemset(z, 0, Zone_SIZEOF);
     gaddr lim = limit - HDR;
+    forget_subzones(z, limit);
     Zone_set_bkLim(z, lim);
     Zone_set_moreMast(z, more_masters ? more_masters : 32);
     gaddr first = z_first(z);
@@ -421,6 +449,7 @@ void tb_DisposePtr(gaddr p)
         set_mem_err(memWZErr);
         return;
     }
+    forget_subzones(b, b + b_psize(b));
     b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
     set_mem_err(noErr);
 }
@@ -982,7 +1011,12 @@ void raw_InitZone(cpu68k *c, uint16_t tw)
     gaddr start = rd32(pb), limit = rd32(pb + 4);
     uint16_t more = rd16(pb + 8);
     gaddr grow = rd32(pb + 10);
+    bool inner = zone_of(start) != 0;
     mm_init_zone(start, limit, more);
+    if (inner && nsubzones < MAX_SUBZONES) {
+        subzones[nsubzones].z = start;
+        subzones[nsubzones++].lim = z_lim(start);
+    }
     Zone_set_gzProc(start, grow);
     wr32(LM_TheZone, start);
     set_mem_err(noErr);

@@ -136,6 +136,33 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// A zone made with InitZone inside a block of the application zone
+        /// (NCSA Mosaic's text fields): its handles belong to it, and resizing
+        /// one leaves the application zone alone.
+        @Test func zonesInsideBlocksOwnTheirHandles() {
+            let sub = tb_NewPtr(356, false, true)
+            let args = tb_NewPtr(14, false, true)
+            wr32(args, sub)
+            wr32(args + 4, sub + 356)
+            wr16(args + 8, 4)
+            var c = cpu68k()
+            c.a.0 = args
+            raw_InitZone(&c, 0xA019)
+            #expect(rd32(UInt32(LM_TheZone)) == sub)
+            let h = tb_NewHandle(16, false, false)
+            #expect(h > sub && h < sub + 356)
+            tb_SetZone(appZone)
+            #expect(tb_HandleZone(h) == sub)
+            let rover = rd32(appZone + UInt32(Zone_allocPtr_off))
+            tb_SetHandleSize(h, 20)
+            #expect(memErr() == 0 && tb_GetHandleSize(h) == 20)
+            #expect(rd32(appZone + UInt32(Zone_allocPtr_off)) == rover)
+            #expect(mm_check_zone(sub))
+            #expect(mm_check_zone(appZone))
+            tb_DisposePtr(sub)
+            #expect(mm_check_zone(appZone))
+        }
+
         @Test func badHandlesSetErrors() {
             tb_HLock(0)
             #expect(memErr() == -109) // nilHandleErr
