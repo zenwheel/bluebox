@@ -416,6 +416,11 @@ void machine_set_system_folder(const char *path);
 /* The folder that is the Mac's volume ("Macintosh HD"); by default
  * Application Support/Blue Box/Macintosh HD.  Before machine_launch. */
 void machine_set_disk(const char *path);
+/* What a serial port (0 the modem port, 1 the printer port) connects to:
+ * "modem" or "modem:PORT" (a Hayes modem on TCP, answering calls to PORT),
+ * "tcp:HOST:PORT", "listen:PORT", "pty", a host device path, or "none".
+ * Before boot; false if the spec isn't one of these. */
+bool machine_set_serial(int port, const char *spec);
 
 /* A hard cap on instructions executed, also inside routines the Toolbox
  * calls back (filters, hooks); 0 for none.  For headless runs. */

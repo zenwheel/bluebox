@@ -11,7 +11,9 @@
 
 #include "tb_internal.h"
 
-static const native_driver *const drivers[] = { &mactcp_driver };
+static const native_driver *const drivers[] = {
+    &mactcp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
+};
 enum { NDRIVERS = sizeof drivers / sizeof drivers[0] };
 
 static const native_driver *driver_for(int16_t refnum)

@@ -261,6 +261,7 @@ void time_pump(void)
     midi_pump();
     opentransport_poll(); /* Open Transport's notifiers, at deferred task time */
     mactcp_poll();        /* MacTCP's calls in progress and its notification routines */
+    serial_poll();        /* serial reads waiting for their bytes */
     adb_pump();
     uint64_t t = now();
     for (int i = 0; i < MAX_TASKS; i++) {

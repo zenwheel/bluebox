@@ -51,6 +51,11 @@ func usage() -> Never {
                      and one whose alert asks for another is started again at that depth, which
                      replaces its setting
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
+          --modem-port S, --printer-port S  what a serial port connects to: modem (a
+                     Hayes modem, the modem port's default: ATDT host:port dials over
+                     TCP), modem:PORT (one that also answers calls to PORT),
+                     tcp:HOST:PORT, listen:PORT, pty, a device such as
+                     /dev/cu.usbserial, or none (the printer port's default)
           --scale S  host points per Mac pixel: 1, 1.5 or 2 (default 1, or the app's or the
                      default setting), so classic interfaces are bigger on modern displays
           --screenshot P  write the screen to PNG file P when the run ends
@@ -344,6 +349,12 @@ func runCommand(_ args: [String]) {
                 fail("--cpu expects 68020 or 68040")
             }
             cpuModel = m
+        case "--modem-port", "--printer-port":
+            let port: Int32 = args[i] == "--modem-port" ? 0 : 1
+            i += 1
+            guard i < args.count, machine_set_serial(port, args[i]) else {
+                fail("\(args[i - 1]) expects modem, modem:PORT, tcp:HOST:PORT, listen:PORT, pty, a device or none")
+            }
         case "--screenshot":
             i += 1
             guard i < args.count else { usage() }

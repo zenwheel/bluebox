@@ -1848,18 +1848,48 @@ static void g_NewTSMDocument(ppc_cpu *c)
     RETURN(0);
 }
 /* The serial driver's calls, on a port that is always idle. */
-static void g_SerGetBuf(ppc_cpu *c)
+/* The Serial Manager: Control and Status calls on the driver, csParam
+ * filled before and read after. */
+static gaddr ser_pb(ppc_cpu *c, int16_t code)
 {
-    if (R(1))
-        wr32(R(1), 0);
-    RETURN(0);
+    gaddr pb = tb_NewPtr(CntrlParam_SIZEOF, false, true);
+    wr16(pb + CntrlParam_ioCRefNum_off, (uint16_t)R(0));
+    wr16(pb + CntrlParam_csCode_off, (uint16_t)code);
+    return pb;
 }
-static void g_SerStatus(ppc_cpu *c)
+static void ser_call(ppc_cpu *c, gaddr pb, bool status, gaddr out, uint32_t n)
 {
-    if (R(1))
-        gmemset(R(1), 0, 6);
-    RETURN(0);
+    int16_t r = status ? tb_PBStatus(pb, false) : tb_PBControl(pb, false);
+    if (out && !r)
+        gmemcpy(out, pb + CntrlParam_csParam_off, n);
+    tb_DisposePtr(pb);
+    RETURN((int32_t)r);
 }
+static void g_SerReset(ppc_cpu *c)
+{
+    gaddr pb = ser_pb(c, 8);
+    wr16(pb + CntrlParam_csParam_off, (uint16_t)R(1));
+    ser_call(c, pb, false, 0, 0);
+}
+static void g_SerSetBuf(ppc_cpu *c)
+{
+    gaddr pb = ser_pb(c, 9);
+    wr32(pb + CntrlParam_csParam_off, R(1));
+    wr16(pb + CntrlParam_csParam_off + 4, (uint16_t)R(2));
+    ser_call(c, pb, false, 0, 0);
+}
+static void g_SerHShake(ppc_cpu *c)
+{
+    gaddr pb = ser_pb(c, 10);
+    if (R(1))
+        gmemcpy(pb + CntrlParam_csParam_off, R(1), 8);
+    ser_call(c, pb, false, 0, 0);
+}
+static void g_SerSetBrk(ppc_cpu *c) { ser_call(c, ser_pb(c, 12), false, 0, 0); }
+static void g_SerClrBrk(ppc_cpu *c) { ser_call(c, ser_pb(c, 11), false, 0, 0); }
+static void g_SerGetBuf(ppc_cpu *c) { ser_call(c, ser_pb(c, 2), true, R(1), 4); }
+static void g_SerStatus(ppc_cpu *c) { ser_call(c, ser_pb(c, 8), true, R(1), 6); }
+static void g_CRMSearch(ppc_cpu *c) { RETURN(serial_crm_search(R(0))); }
 /* The Communications Toolbox: no tools. */
 static void g_cmNoTools(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-2); }
 static void g_zero_handle(ppc_cpu *c) { RETURN(0); }
@@ -1908,11 +1938,11 @@ const ppc_export lib_exports[] = {
     { "DeactivateTSMDocument", g_noErr }, { "FixTSMDocument", g_noErr }, { "TSMEvent", g_false },
     { "TSMMenuSelect", g_false }, { "SetTSMCursor", g_false }, { "UseInputWindow", g_noErr },
     /* Serial ports */
-    { "SerReset", g_noErr }, { "SerHShake", g_noErr }, { "SerSetBuf", g_noErr }, { "SerSetBrk", g_noErr },
-    { "SerClrBrk", g_noErr }, { "SerGetBuf", g_SerGetBuf }, { "SerStatus", g_SerStatus },
+    { "SerReset", g_SerReset }, { "SerHShake", g_SerHShake }, { "SerSetBuf", g_SerSetBuf }, { "SerSetBrk", g_SerSetBrk },
+    { "SerClrBrk", g_SerClrBrk }, { "SerGetBuf", g_SerGetBuf }, { "SerStatus", g_SerStatus },
     /* The Communications Toolbox */
     { "InitCTBUtilities", g_noErr }, { "InitCM", g_cmNoTools }, { "InitCRM", g_noErr }, { "InitTM", g_cmNoTools },
-    { "InitFT", g_cmNoTools }, { "CRMSearch", g_zero_handle }, { "CMNew", g_zero_handle },
+    { "InitFT", g_cmNoTools }, { "CRMSearch", g_CRMSearch }, { "CMNew", g_zero_handle },
     { "CMGetProcID", g_cmNoTools },
     /* AppleTalk and the PPC Toolbox's network side */
     { "GetMyZone", g_noAppleTalk }, { "PPCBrowser", g_noAppleTalk }, { "IPCListPortsSync", g_noAppleTalk },

@@ -278,6 +278,7 @@ bool machine_boot(bool census)
     quicktime_reset();
     opentransport_reset();
     mactcp_reset();
+    serial_reset();
     ppc_glue_reset();
     notify_reset();
 

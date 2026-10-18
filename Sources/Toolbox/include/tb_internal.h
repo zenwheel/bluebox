@@ -288,6 +288,11 @@ extern const native_driver mactcp_driver;
 void mactcp_poll(void);
 void mactcp_reset(void);
 void mactcp_install_resolver(void);
+/* The Serial Driver (serial.c): .AIn, .AOut, .BIn and .BOut. */
+extern const native_driver serial_drivers[4];
+void serial_poll(void);
+void serial_reset(void);
+gaddr serial_crm_search(gaddr req); /* the Communications Resource Manager's CRMSearch */
 void ppc_glue_reset(void); /* ppc_glue.c */
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);
