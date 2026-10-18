@@ -159,6 +159,35 @@ extension BlueBox {
             #expect(tb_GetPalette(w) == 0)
         }
 
+        /// CalcMask: the outline and what it encloses.  SeedFill: the white
+        /// area around the seed.  A source that is nearly all white floods
+        /// every pixel (Slabbers' sprites overran the fill's stack).
+        @Test func calcMaskAndSeedFill() {
+            launchTestApp()
+            _ = initToolbox()
+            let rows = 12, rb: Int16 = 2
+            let src = tb_NewPtr(Int32(rows * 2), false, true)
+            let dst = tb_NewPtr(Int32(rows * 2), false, true)
+            // A ring: rows 2 and 9 from bit 2 to bit 9, columns 2 and 9 between.
+            for y in 2...9 {
+                let v: UInt16 = (y == 2 || y == 9) ? 0x3FC0 : 0x2040
+                wr16(src + UInt32(y * 2), v)
+            }
+            tb_CalcMask(src, dst, rb, rb, Int16(rows), 1)
+            #expect(rd16(dst) == 0)                  // outside the ring
+            #expect(rd16(dst + 5 * 2) == 0x3FC0)     // the ring and its inside
+            #expect(rd16(dst + 2 * 2) == 0x3FC0)
+            tb_SeedFill(src, dst, rb, rb, Int16(rows), 1, 5, 5)
+            #expect(rd16(dst + 5 * 2) == 0x1F80)     // inside the ring only
+            #expect(rd16(dst) == 0)
+            // All white: nothing in the mask, everything filled.
+            gmemset(src, 0, UInt32(rows * 2))
+            tb_CalcMask(src, dst, rb, rb, Int16(rows), 1)
+            #expect((0..<rows).allSatisfy { rd16(dst + UInt32($0 * 2)) == 0 })
+            tb_SeedFill(src, dst, rb, rb, Int16(rows), 1, 0, 0)
+            #expect((0..<rows).allSatisfy { rd16(dst + UInt32($0 * 2)) == 0xFFFF })
+        }
+
         @Test func auxiliaryControlRecord() {
             launchTestApp()
             _ = initToolbox()

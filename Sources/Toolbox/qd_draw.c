@@ -1557,35 +1557,52 @@ void tb_ScrollRect(gaddr rp, int16_t dh, int16_t dv, gaddr updatergn)
     hrgn_free(&update);
 }
 
+/* The white pixels of a bitmap (rows of srcr bytes, w by h) reachable
+ * from the starting points, marked.  Pixels are marked as they are pushed,
+ * so each is on the stack once at most. */
+static void bit_flood(gaddr srcp, int16_t srcr, int w, int h, uint8_t *mark, const int *starts, int nstarts)
+{
+    int *stack = malloc((size_t)w * (size_t)h * 2 * sizeof *stack);
+    int sp = 0;
+#define PUSH(px, py)                                                                                     \
+    do {                                                                                                 \
+        int x_ = (px), y_ = (py);                                                                        \
+        if (x_ >= 0 && y_ >= 0 && x_ < w && y_ < h && !mark[y_ * w + x_] &&                              \
+            !((rd8(srcp + (uint32_t)(y_ * srcr + (x_ >> 3))) >> (7 - (x_ & 7))) & 1)) {                  \
+            mark[y_ * w + x_] = 1;                                                                       \
+            stack[sp++] = x_;                                                                            \
+            stack[sp++] = y_;                                                                            \
+        }                                                                                                \
+    } while (0)
+    for (int i = 0; i < nstarts; i++)
+        PUSH(starts[2 * i], starts[2 * i + 1]);
+    while (sp) {
+        int y = stack[--sp], x = stack[--sp];
+        PUSH(x + 1, y);
+        PUSH(x - 1, y);
+        PUSH(x, y + 1);
+        PUSH(x, y - 1);
+    }
+#undef PUSH
+    free(stack);
+}
+
 void tb_SeedFill(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t height, int16_t width, int16_t seedh,
                  int16_t seedv)
 {
     /* Flood fill of white pixels from the seed; destination gets the filled area. */
     int w = width * 16, h = height;
+    if (w <= 0 || h <= 0)
+        return;
     uint8_t *vis = calloc((size_t)w * (size_t)h, 1);
-    int *stack = malloc((size_t)w * (size_t)h * 2 * sizeof *stack);
-    int sp = 0;
-    stack[sp++] = seedh;
-    stack[sp++] = seedv;
-    while (sp) {
-        int y = stack[--sp], x = stack[--sp];
-        if (x < 0 || y < 0 || x >= w || y >= h || vis[y * w + x])
-            continue;
-        if ((rd8(srcp + (uint32_t)(y * srcr + (x >> 3))) >> (7 - (x & 7))) & 1)
-            continue;
-        vis[y * w + x] = 1;
-        stack[sp++] = x + 1; stack[sp++] = y;
-        stack[sp++] = x - 1; stack[sp++] = y;
-        stack[sp++] = x; stack[sp++] = y + 1;
-        stack[sp++] = x; stack[sp++] = y - 1;
-    }
+    int seed[2] = { seedh, seedv };
+    bit_flood(srcp, srcr, w, h, vis, seed, 1);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             gaddr a = dstp + (uint32_t)(y * dstr + (x >> 3));
             uint8_t m = (uint8_t)(0x80 >> (x & 7));
             wr8(a, vis[y * w + x] ? (uint8_t)(rd8(a) | m) : (uint8_t)(rd8(a) & ~m));
         }
-    free(stack);
     free(vis);
 }
 
@@ -1593,36 +1610,27 @@ void tb_CalcMask(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t hei
 {
     /* Mask = everything not reachable from the edges through white pixels. */
     int w = width * 16, h = height;
+    if (w <= 0 || h <= 0)
+        return;
     uint8_t *outside = calloc((size_t)w * (size_t)h, 1);
-    int *stack = malloc((size_t)(w * h * 2 + 4 * (w + h)) * sizeof *stack);
-    int sp = 0;
+    int *edge = malloc((size_t)(4 * (w + h)) * sizeof *edge);
+    int n = 0;
     for (int x = 0; x < w; x++) {
-        stack[sp++] = x; stack[sp++] = 0;
-        stack[sp++] = x; stack[sp++] = h - 1;
+        edge[2 * n] = x; edge[2 * n++ + 1] = 0;
+        edge[2 * n] = x; edge[2 * n++ + 1] = h - 1;
     }
     for (int y = 0; y < h; y++) {
-        stack[sp++] = 0; stack[sp++] = y;
-        stack[sp++] = w - 1; stack[sp++] = y;
+        edge[2 * n] = 0; edge[2 * n++ + 1] = y;
+        edge[2 * n] = w - 1; edge[2 * n++ + 1] = y;
     }
-    while (sp) {
-        int y = stack[--sp], x = stack[--sp];
-        if (x < 0 || y < 0 || x >= w || y >= h || outside[y * w + x])
-            continue;
-        if ((rd8(srcp + (uint32_t)(y * srcr + (x >> 3))) >> (7 - (x & 7))) & 1)
-            continue;
-        outside[y * w + x] = 1;
-        stack[sp++] = x + 1; stack[sp++] = y;
-        stack[sp++] = x - 1; stack[sp++] = y;
-        stack[sp++] = x; stack[sp++] = y + 1;
-        stack[sp++] = x; stack[sp++] = y - 1;
-    }
+    bit_flood(srcp, srcr, w, h, outside, edge, n);
+    free(edge);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             gaddr a = dstp + (uint32_t)(y * dstr + (x >> 3));
             uint8_t m = (uint8_t)(0x80 >> (x & 7));
             wr8(a, outside[y * w + x] ? (uint8_t)(rd8(a) & ~m) : (uint8_t)(rd8(a) | m));
         }
-    free(stack);
     free(outside);
 }
 
