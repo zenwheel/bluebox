@@ -25,6 +25,24 @@ extension BlueBox {
             return (0..<n).map { rd8(rd32(h) + UInt32($0)) }
         }
 
+        /// A resource file's reference number reads its fork through the
+        /// File Manager (installers read their compressed resources so).
+        @Test func resourceFileReadsThroughTheFileManager() {
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            let buf = tb_NewPtr(16, false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: refnum))
+            wr32(pb + UInt32(IOParam_ioBuffer_off), buf)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), 16)
+            wr16(pb + UInt32(IOParam_ioPosMode_off), 1) // fsFromStart
+            wr32(pb + UInt32(IOParam_ioPosOffset_off), 0)
+            #expect(tb_PBRead(pb, false) == 0)
+            #expect(rd32(pb + UInt32(IOParam_ioActCount_off)) == 16)
+            let map = rd32(rd32(0xA50)) // TopMapHndl: its map starts with the fork's header
+            #expect((0..<16).allSatisfy { rd8(buf + UInt32($0)) == rd8(map + UInt32($0)) })
+            #expect(tb_PBGetEOF(pb, false) == 0)
+            #expect(rd32(pb + UInt32(IOParam_ioMisc_off)) > 16)
+        }
+
         @Test func openedFileBecomesCurrentAndTopOfChain() {
             #expect(refnum > 0)
             #expect(tb_CurResFile() == refnum)

@@ -190,6 +190,46 @@ static fcb *fcb_for(int16_t rn)
     return i >= 0 && i < MAX_FCBS && fcbs[i].used ? &fcbs[i] : NULL;
 }
 
+/* A resource file the Resource Manager opened is an open resource fork
+ * too: its reference number reads the fork through the File Manager, as on
+ * a Mac (installers read their own compressed resources so, from the
+ * offsets in the resource map).  Read-only views, each with its own mark. */
+static struct {
+    int16_t rn;
+    const uint8_t *data;
+    fcb f;
+} rsrc_views[8];
+
+static fcb *fcb_readable(int16_t rn)
+{
+    fcb *f = fcb_for(rn);
+    const uint8_t *data;
+    uint32_t len;
+    if (f || !rm_fork_of(rn, &data, &len))
+        return f;
+    int slot = 0;
+    for (int i = 0; i < 8; i++) {
+        if (rsrc_views[i].rn == rn) {
+            slot = i;
+            break;
+        }
+        if (!rsrc_views[i].rn)
+            slot = i;
+    }
+    if (rsrc_views[slot].rn != rn || rsrc_views[slot].data != data) {
+        memset(&rsrc_views[slot], 0, sizeof rsrc_views[slot]);
+        rsrc_views[slot].rn = rn;
+        rsrc_views[slot].data = data;
+    }
+    f = &rsrc_views[slot].f;
+    f->used = f->rsrc = true;
+    f->buf = (uint8_t *)data;
+    f->len = f->cap = len;
+    if (f->pos > len)
+        f->pos = len;
+    return f;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Names and paths */
 
@@ -1141,7 +1181,7 @@ static int16_t set_mark(fcb *f, int mode, int32_t off)
 
 static int16_t pb_read(gaddr pb, bool async)
 {
-    fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    fcb *f = fcb_readable((int16_t)rd16(pb + IOParam_ioRefNum_off));
     wr32(pb + IOParam_ioActCount_off, 0);
     if (!f)
         return rfNumErr;
@@ -1210,7 +1250,7 @@ static int16_t pb_write(gaddr pb, bool async)
 
 int16_t tb_PBGetEOF(gaddr pb, bool async)
 {
-    fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    fcb *f = fcb_readable((int16_t)rd16(pb + IOParam_ioRefNum_off));
     if (!f)
         return rfNumErr;
     wr32(pb + IOParam_ioMisc_off, f->len);
@@ -1238,7 +1278,7 @@ static int16_t pb_set_eof(gaddr pb, bool async)
 
 int16_t tb_PBGetFPos(gaddr pb, bool async)
 {
-    fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    fcb *f = fcb_readable((int16_t)rd16(pb + IOParam_ioRefNum_off));
     if (!f)
         return rfNumErr;
     wr32(pb + IOParam_ioReqCount_off, 0);
@@ -1250,7 +1290,7 @@ int16_t tb_PBGetFPos(gaddr pb, bool async)
 
 static int16_t pb_set_fpos(gaddr pb, bool async)
 {
-    fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    fcb *f = fcb_readable((int16_t)rd16(pb + IOParam_ioRefNum_off));
     if (!f)
         return rfNumErr;
     int16_t err = set_mark(f, rd16(pb + IOParam_ioPosMode_off), (int32_t)rd32(pb + IOParam_ioPosOffset_off));

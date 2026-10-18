@@ -115,6 +115,16 @@ static resfile *file_for(int16_t rn)
     return NULL;
 }
 
+bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len)
+{
+    resfile *f = file_for(rn);
+    if (!f || !f->fork)
+        return false;
+    *data = f->fork;
+    *len = f->len;
+    return true;
+}
+
 static resfile *file_for_map(gaddr maph)
 {
     for (int i = 0; i < MAX_RESFILES; i++)
