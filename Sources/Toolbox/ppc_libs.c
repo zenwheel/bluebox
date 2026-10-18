@@ -1306,6 +1306,20 @@ static void g_GetSoundOutputInfo(ppc_cpu *c)
     RETURN((uint32_t)(int32_t)err);
 }
 
+/* The Script Manager's older names: GetScript and SetScript are
+ * Get/SetScriptVariable, GetEnvirons and SetEnvirons the Script Manager
+ * variables (the same traps and selectors). */
+static void g_GetScript(ppc_cpu *c) { RETURN((uint32_t)tb_GetScriptVariable((int16_t)R(0), (int16_t)R(1))); }
+static void g_SetScript(ppc_cpu *c)
+{
+    RETURN((uint32_t)(int32_t)tb_SetScriptVariable((int16_t)R(0), (int16_t)R(1), (int32_t)R(2)));
+}
+static void g_GetEnvirons(ppc_cpu *c) { RETURN((uint32_t)tb_GetScriptManagerVariable((int16_t)R(0))); }
+static void g_SetEnvirons(ppc_cpu *c)
+{
+    RETURN((uint32_t)(int32_t)tb_SetScriptManagerVariable((int16_t)R(0), (int32_t)R(1)));
+}
+
 /* StandardAlert(type, error, explanation, param, &itemHit) (AppearanceLib) */
 static void g_StandardAlert(ppc_cpu *c)
 {
@@ -1920,7 +1934,9 @@ const ppc_export lib_exports[] = {
     { "AEObjectInit", g_noErr }, { "AESetObjectCallbacks", g_noErr }, { "AEInstallObjectAccessor", g_noErr },
     { "AERemoveObjectAccessor", g_noErr }, { "AEGetObjectAccessor", os_accessorNotFound },
     { "AEResolve", os_AEResolve }, { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },
-    { "GetSoundOutputInfo", g_GetSoundOutputInfo }, { "StandardAlert", g_StandardAlert }, { "SetSoundOutputInfo", g_SetSoundOutputInfo },
+    { "GetSoundOutputInfo", g_GetSoundOutputInfo }, { "StandardAlert", g_StandardAlert },
+    { "GetScript", g_GetScript }, { "SetScript", g_SetScript }, { "GetEnvirons", g_GetEnvirons },
+    { "SetEnvirons", g_SetEnvirons }, { "SetSoundOutputInfo", g_SetSoundOutputInfo },
     { "FindWordBreaks", g_FindWordBreaks }, { "UppercaseStripDiacritics", g_UppercaseStripDiacritics },
     { "PBControlImmed", g_PBControlImmed }, { "AECallObjectAccessor", os_notHandled }, { "AEDisposeToken", g_noErr },
     { "CreateObjSpecifier", os_coercionFail }, { "CreateOffsetDescriptor", os_coercionFail },
