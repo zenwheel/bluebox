@@ -74,12 +74,17 @@ static int width_of(gaddr teh, int from, int n)
 /* ---------------------------------------------------------------------- */
 /* Line breaking */
 
-static void set_line_count(gaddr teh, int n)
+/* The line count, as many as the record has room for; returns it. */
+static int set_line_count(gaddr teh, int n)
 {
     int32_t need = (int32_t)(TERec_lineStarts_off + (uint32_t)(n + 1) * 2);
-    if (tb_GetHandleSize(teh) < need)
+    if (tb_GetHandleSize(teh) < need) {
         tb_SetHandleSize(teh, need + MAX_LINES_GROW * 2);
+        if (tb_GetHandleSize(teh) < need) /* no room: as many lines as fit */
+            n = (int)((tb_GetHandleSize(teh) - (int32_t)TERec_lineStarts_off) / 2) - 1;
+    }
     set16(teh, TERec_nLines_off, (int16_t)n);
+    return n;
 }
 
 void tb_TECalText(gaddr teh)
@@ -126,7 +131,7 @@ void tb_TECalText(gaddr teh)
         lines = n - 1;
     if (len == 0)
         lines = 1;
-    set_line_count(teh, lines);
+    lines = set_line_count(teh, lines);
     for (int i = 0; i < n && i <= lines; i++)
         set16(teh, TERec_lineStarts_off + (uint32_t)i * 2, (int16_t)starts[i]);
     set16(teh, TERec_lineStarts_off + (uint32_t)lines * 2, (int16_t)len);
@@ -506,8 +511,14 @@ static void replace(gaddr teh, const uint8_t *bytes, int n)
     int newlen = len - (b - a) + n;
     if (newlen > 32767)
         return; /* TextEdit's limit */
-    if (n > b - a)
+    if (n > b - a) {
+        /* A locked text handle may not grow (no room after it): then the
+         * text stays as it is, as TextEdit left it, rather than spilling
+         * over the next block (NCSA Mosaic's URL field). */
         tb_SetHandleSize(h, newlen);
+        if (tb_GetHandleSize(h) < newlen)
+            return;
+    }
     gaddr p = rd32(h);
     gmemcpy(p + (uint32_t)(a + n), p + (uint32_t)b, (uint32_t)(len - b));
     if (n)
