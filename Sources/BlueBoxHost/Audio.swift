@@ -16,12 +16,24 @@ public final class ClassicAudio: @unchecked Sendable {
 
     private let engine = AVAudioEngine()
     private let queue = DispatchQueue(label: "bluebox.audio")
-    /* Touched only on `queue`. */
-    private var players: [Int32: (node: AVAudioPlayerNode, format: AVAudioFormat)] = [:]
+    /* Touched only on `queue`.  scheduled: seconds of sound given to the
+     * player since it last started. */
+    private var players: [Int32: (node: AVAudioPlayerNode, format: AVAudioFormat, scheduled: Double)] = [:]
+    /// More waiting to play than this when the next sound comes is sound
+    /// that fell behind: the machine paces its channels by its clock and
+    /// keeps at most about a tenth of a second ahead.
+    private let maxBacklog = 0.5
     private var observing = false
 
     /// Route the machine's sound to the host.
     public func install() {
+        // The engine running before the first sound: sound that came while
+        // it started (which can take a while) would otherwise all wait for
+        // it, and the program's sound would stay that far behind.
+        queue.async {
+            _ = self.engine.mainMixerNode
+            if !self.engine.isRunning { try? self.engine.start() }
+        }
         machine_set_sound_handler({ channel, pcm, frames, channels, rate, volume, _ in
             ClassicAudio.shared.play(channel: channel, pcm: pcm, frames: Int(frames), channels: Int(channels),
                                      rate: rate, volume: volume)
@@ -31,7 +43,10 @@ public final class ClassicAudio: @unchecked Sendable {
     private func play(channel: Int32, pcm: UnsafePointer<Int16>?, frames: Int, channels: Int, rate: Double,
                       volume: Float) {
         guard let pcm else {
-            queue.async { self.players[channel]?.node.stop() }
+            queue.async {
+                self.players[channel]?.node.stop()
+                self.players[channel]?.scheduled = 0
+            }
             return
         }
         guard frames > 0, channels >= 1, channels <= 2,
@@ -69,15 +84,33 @@ public final class ClassicAudio: @unchecked Sendable {
             let node = AVAudioPlayerNode()
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: format)
-            entry = (node, format)
+            entry = (node, format, 0)
             players[channel] = entry
         }
         if !engine.isRunning {
             do { try engine.start() } catch { return }
         }
-        entry!.node.volume = volume
-        entry!.node.scheduleBuffer(buffer, completionHandler: nil)
-        if !entry!.node.isPlaying { entry!.node.play() }
+        let node = entry!.node
+        // Sound that piled up while the player could not keep up (the
+        // output device starting, which can take seconds) would otherwise
+        // stay ahead of everything after it: a game's sound ten seconds
+        // late.  Drop it and go on from this buffer.
+        if backlog(node, scheduled: entry!.scheduled) > maxBacklog {
+            node.stop()
+            entry!.scheduled = 0
+        }
+        node.volume = volume
+        node.scheduleBuffer(buffer, completionHandler: nil)
+        entry!.scheduled += Double(buffer.frameLength) / format.sampleRate
+        players[channel] = entry
+        if !node.isPlaying { node.play() }
+    }
+
+    /// Seconds given to the player that it has not played yet.
+    private func backlog(_ node: AVAudioPlayerNode, scheduled: Double) -> Double {
+        guard node.isPlaying, let now = node.lastRenderTime, let played = node.playerTime(forNodeTime: now),
+              played.sampleRate > 0 else { return scheduled }
+        return scheduled - Double(played.sampleTime) / played.sampleRate
     }
 
     private func restartPlayers() {
