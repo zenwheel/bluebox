@@ -263,6 +263,31 @@ void gestalt_powerpc(void);
 const char *fm_system_folder_host(void);
 /* The Appearance Manager's StandardAlert (dialog.c). */
 int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gaddr param, gaddr item_hit);
+/* Native drivers (drivers.c): opened by name, called by negative refnum. */
+enum { DRIVER_CONTROL, DRIVER_STATUS, DRIVER_READ, DRIVER_WRITE, DRIVER_CLOSE, DRIVER_KILLIO };
+typedef struct {
+    const char *name; /* ".IPP" */
+    int16_t unit;     /* reference number -1 - unit */
+    int16_t (*open)(gaddr pb);
+    int16_t (*close)(gaddr pb);
+    int16_t (*control)(gaddr pb, bool async);
+    int16_t (*status)(gaddr pb, bool async);
+    int16_t (*read)(gaddr pb, bool async);
+    int16_t (*write)(gaddr pb, bool async);
+    int16_t (*kill_io)(gaddr pb);
+} native_driver;
+/* A driver call's result while it runs on (asynchronous calls only): the
+ * driver completes it, with its ioCompletion, later. */
+enum { ioInProgress = 1 };
+bool driver_open(gaddr pb, int16_t *err); /* false: no driver of that name */
+bool driver_refnum(int16_t refnum);
+int16_t driver_call(gaddr pb, bool async, int kind);
+/* MacTCP (mactcp.c): the .IPP driver, its Domain Name Resolver, and the
+ * polling that moves its streams on at interrupt time. */
+extern const native_driver mactcp_driver;
+void mactcp_poll(void);
+void mactcp_reset(void);
+void mactcp_install_resolver(void);
 void ppc_glue_reset(void); /* ppc_glue.c */
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);

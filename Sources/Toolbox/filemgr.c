@@ -1090,9 +1090,11 @@ static bool hfs_call(void) { return (trap_current_word() & 0x0200) != 0; }
 static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
 {
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
-    /* Driver names start with '.': no drivers are installed. */
-    if (!rsrc && namep && rd8(namep) && rd8(namep + 1) == '.')
-        return fnfErrF;
+    /* Driver names start with '.': our own drivers, or none. */
+    if (!rsrc && namep && rd8(namep) && rd8(namep + 1) == '.') {
+        int16_t derr;
+        return driver_open(pb, &derr) ? derr : fnfErrF;
+    }
     char path[PATH_MAX];
     int16_t err = resolve((int16_t)rd16(pb + IOParam_ioVRefNum_off), hfs ? (int32_t)rd32(pb + HFileParam_ioDirID_off) : 0,
                           namep, hfs, path, sizeof path);
@@ -1147,6 +1149,8 @@ int16_t tb_PBHOpenDF(gaddr pb, bool async) { return open_fork(pb, false, true); 
 
 int16_t tb_PBClose(gaddr pb, bool async)
 {
+    if (driver_refnum((int16_t)rd16(pb + IOParam_ioRefNum_off)))
+        return driver_call(pb, async, DRIVER_CLOSE);
     fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
     if (!f)
         return rfNumErr;
@@ -1961,9 +1965,18 @@ int16_t tb_PBGetFCBInfo(gaddr pb, bool async)
 }
 
 /* Device Manager calls on files or absent drivers. */
-int16_t tb_PBControl(gaddr pbp, bool a) { return controlErr; }
-int16_t tb_PBStatus(gaddr pbp, bool a) { return statusErr; }
-int16_t tb_PBKillIO(gaddr pbp, bool a) { return noErr; }
+int16_t tb_PBControl(gaddr pbp, bool a)
+{
+    return driver_refnum((int16_t)rd16(pbp + IOParam_ioRefNum_off)) ? driver_call(pbp, a, DRIVER_CONTROL) : controlErr;
+}
+int16_t tb_PBStatus(gaddr pbp, bool a)
+{
+    return driver_refnum((int16_t)rd16(pbp + IOParam_ioRefNum_off)) ? driver_call(pbp, a, DRIVER_STATUS) : statusErr;
+}
+int16_t tb_PBKillIO(gaddr pbp, bool a)
+{
+    return driver_refnum((int16_t)rd16(pbp + IOParam_ioRefNum_off)) ? driver_call(pbp, a, DRIVER_KILLIO) : noErr;
+}
 
 /* ---------------------------------------------------------------------- */
 /* FSSpec calls (HighLevelFSDispatch) */
@@ -2395,6 +2408,8 @@ int16_t tb_PBOpenDF(gaddr pb, bool async) { return open_fork(pb, false, hfs_call
 
 int16_t tb_PBRead(gaddr pb, bool async)
 {
+    if (driver_refnum((int16_t)rd16(pb + IOParam_ioRefNum_off)))
+        return driver_call(pb, async, DRIVER_READ);
     int16_t err = pb_read(pb, async);
     fcb_sync((int16_t)rd16(pb + IOParam_ioRefNum_off));
     return err;
@@ -2402,6 +2417,8 @@ int16_t tb_PBRead(gaddr pb, bool async)
 
 int16_t tb_PBWrite(gaddr pb, bool async)
 {
+    if (driver_refnum((int16_t)rd16(pb + IOParam_ioRefNum_off)))
+        return driver_call(pb, async, DRIVER_WRITE);
     int16_t err = pb_write(pb, async);
     fcb_sync((int16_t)rd16(pb + IOParam_ioRefNum_off));
     return err;

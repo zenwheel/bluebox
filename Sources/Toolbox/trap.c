@@ -417,8 +417,13 @@ void trap_aline(cpu68k *c, uint16_t op)
         current_trap = 0;
         if (param_block_trap(op) && a0 && !c->halted) {
             wr16(a0 + 16, (uint16_t)c->d[0]); /* ioResult */
-            if ((op & 0x0400) && rd32(a0 + 12)) /* async, with an ioCompletion */
+            /* async, with an ioCompletion; a driver call still in progress
+             * is completed by the driver */
+            if ((op & 0x0400) && rd32(a0 + 12) && (int16_t)c->d[0] != ioInProgress)
                 io_complete_later(a0, (int16_t)c->d[0]);
+            /* Queued: the call itself succeeds; ioResult says it runs on. */
+            if ((op & 0x0400) && (int16_t)c->d[0] == ioInProgress)
+                c->d[0] = noErr;
         }
         c->a[1] = a1;
         c->d[1] = d1;
