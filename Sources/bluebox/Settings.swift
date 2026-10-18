@@ -57,6 +57,8 @@ let knownDepthRequirements: [UInt32: DepthRequirement] = [
     0xC66E_4CBA: DepthRequirement(allowed: [8], preferred: 8),          /* ∆nL∫ Space Gypsy */
     0x6368_5453: DepthRequirement(allowed: [8], preferred: 8),          /* chTS Star Flick */
     0x4D4B_444E: DepthRequirement(allowed: [8], preferred: 8),          /* MKDN SuperColumns */
+    /* SAIL Sail Away: depth × 3600 in 16-bit arithmetic overflows (TRAPV) above 8 bits */
+    0x5341_494C: DepthRequirement(allowed: [1, 2, 4, 8], preferred: 8),
 ]
 
 /// The depth a program with this creator needs when `depth` (nil: the
