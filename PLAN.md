@@ -593,7 +593,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - Display Manager mode lists.
   - Struct results through r3.
   - Gestalt as a G3 running 7.6.1, with Sound Manager 3.2.1.
-- **Census:** of the 225 PowerPC and fat applications in the corpus, run as PowerPC, 163 reach their event loop (`--ppc`).
+- **Census:** of the 225 PowerPC and fat applications in the corpus, run as PowerPC, 167 reach their event loop (`--ppc`); of the 1,036 68k ones, 780 (2026-10-18). The corpus, the lists and the scripts are kept outside the repository (macOS's /tmp cleaner took an earlier copy); `run_census.sh <dir> <binary> <name>` runs both.
   - Of the 157 fat ones, 110+ reach it either way, and only a handful only as 68k.
 - **Next:**
   - Make PowerPC the default for fat applications once the last 68k-only cases are understood (Shockwave Demo, Internet Explorer 5, Portfolio Browser).
@@ -635,7 +635,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Persistent translation cache** keyed by a hash of each code resource or fragment, with an ahead-of-time "pre-translate" option in `bluebox install`. The interpreter remains the fallback.
 - **Games:** InputSprocket → host gamepads, DrawSprocket → screen mode, and Sound input.
 - Drawing problems seen in the census (2026-10-13), to investigate:
-  - StarGuardian reaches "Click on rabbit to continue" but draws no rabbit. It copies its pictures with `CopyBits` from bitmaps it builds itself from its data fork.
+  - StarGuardian reaches "Click on rabbit to continue" but draws no rabbit. It is a HyperCard 2.x standalone (Stack Translators, Button Tasks): the card bitmap it copies to the screen (1-bit, 512×304) is blank, though every read of its data fork succeeds (2026-10-18), so HyperCard's own decoding of the card picture goes wrong. Belongs with M7.
   - Sword of Ages (a World Builder game) opens its windows, but their content shows the desktop pattern rather than the scene.
 - Redraw check (`--redraw-check`, 2026-10-16) over the 665 applications that reach their event loop: 409 redraw identically, 254 differ, 211 of them on screens that do not change on their own. Many are programs that draw once and never handle updates (DOCMaker's font dialog: a real Mac blanks those too), so each needs judging against the oracle. Candidates worth a look first: Greg's Browser's column headers keep their inactive (grey) look after the window activates; the lavender sliver above its list's selected row; SimStapler, Sim Tape Dispenser, SuperBike, RoboWar, MacPaint 2.0 (small, static differences).
 - DOCMaker documents (SKELETON GOODIES and others): their pictures (extended version 2 headers) show since the native frame is read from the right place (2026-10-16).
@@ -645,8 +645,15 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - Squark (Squark Game) now loads its segments (it reopens itself read-only and closes that copy) and then draws through an offscreen pixel map of its own making (NewPtr, not NewGWorld) that is empty (base address 0, no bounds) and jumps into freed memory soon after. Find what it builds the pixel map from.
   - Bad Day on the Midway (the 68k projector in the CD's installer folder) finds its disc's files now (the CD mounts as a volume; full pathnames resolve), but still says "Cannot find the BAD DAY ON THE MIDWAY cd-rom" after enumerating BADDAY: find what it checks (the volume's driver, PBControl to it, the drive queue, the real volume name).
   - Prince of Persia 2 (the PoP Collection CD) now runs at 256 colours (its requirement alert relaunches it), mounts its CD and loads its resources, then stops with "Error = 10351 in OpenMohawkRsrcVerify()" right after PBGetFCBInfo and PBGetVInfo on Data:MIDISnd.dat. Find what the Mohawk engine verifies.
-  - Squirt Derby! used to quit after loading (a read whose result it checked was never set); now it spends over 60 million instructions in SANE (Pack4) setting up, with a blank window. Find out whether that is its real start-up or a loop.
+  - Squirt Derby! used to quit after loading (a read whose result it checked was never set); now it spends over 60 million instructions in SANE (Pack4) setting up, with a blank window. At 600 million it has made only 790 SANE calls and is walking a chain of garbage pointers in its own code ($50D5xx, registers like $B4B4004E, $FFFBFFFC): find where the chain comes from.
   - Space Madness Demo used to time out; it now gets further and stops on an illegal instruction ($7F7F at $431618).
+- Census follow-ups from 2026-10-18 (fixed that day: StuffIt InstallerMaker installers reading their own resources through the File Manager, Solitaire Till Dawn's Gestalt OS check and its splash dialog erased by a hidden window, Slabbers' CalcMask overrun, Steel Fighters' GetSoundOutputInfo, Spot Box's StandardAlert, Shockwave's NumVersion result, ZTerm's phone book, Sail Away and Space Joust needing 256 colours, the Star Trek demo's cache sized from too much memory):
+  - Microsoft Word 5.0 now reads its own resource fork and gets past the error window it used to stop at, then calls OSDispatch (as $AC8F, auto-pop) with selector 2, which is none of the Process Manager's we know. Find what that selector is.
+  - PopChar Pro's installer (in the SNES9X folder) checksums its resources (Get1IndResource, GetResourceSizeOnDisk, ReadPartialResource for each, a 'Pver' resource holding the sums) and says it was modified. Our sizes match the fork; find which sum differs, or whether that copy really was altered.
+  - Safari 1.0 jumps to $101 after about 78 million instructions, just after SANE calls and a BlockMove, having read a sound into a block sized from PurgeSpace.
+  - Shards (four versions) and the Warlock: Total Distortion demos only show their windows after several hundred million instructions headless (intros timed by TickCount); Shards' first window is small, in the top-left corner, with its picture cut off. Check against the oracle.
+  - Shufflepuck Café 1.0 stops on an illegal instruction ($4C84, a MOVEM with a data register) at $4011DA: it jumped into data.
+  - AppleScript applets (the Stupid AppleScript Games, ScanTastic's scripts) quit at once without the AppleScript component, as they would on a Mac without AppleScript.
 
 **Exit:** a defined game corpus runs at full original speed or better, including QuickTime playback from M4 at full frame rate.
 
