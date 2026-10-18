@@ -35,6 +35,8 @@ func usage() -> Never {
           (data file + ._ sidecar) or a .bin/.sit/.sea/.cpt/.hqx file, which is first
           added to the library; --app picks one when the archive holds several.
           --headless run without a window (the default on Linux for now)
+          --realtime a headless run's clock follows real time, not the instructions
+                     run (for networked programs talking to other copies)
           --screen-window  show the whole classic screen in one window instead of
                      rootless windows (implied by --screen)
           --census   keep going past unimplemented traps and report every trap used
@@ -51,6 +53,9 @@ func usage() -> Never {
                      and one whose alert asks for another is started again at that depth, which
                      replaces its setting
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
+          --appletalk A  AppleTalk on LocalTalk over UDP: local (the default; copies
+                     on this host play each other), lan (the local network, other
+                     emulators and routers that speak LToUDP) or off
           --modem-port S, --printer-port S  what a serial port connects to: modem (a
                      Hayes modem, the modem port's default: ATDT host:port dials over
                      TCP), modem:PORT (one that also answers calls to PORT),
@@ -298,6 +303,7 @@ func runCommand(_ args: [String]) {
         switch a {
         case "--census": census = true
         case "--headless": headless = true
+        case "--realtime": machine_set_realtime(true)
         case "--screen-window": screenWindow = true
         case "--fonts":
             i += 1
@@ -349,6 +355,9 @@ func runCommand(_ args: [String]) {
                 fail("--cpu expects 68020 or 68040")
             }
             cpuModel = m
+        case "--appletalk":
+            i += 1
+            guard i < args.count, machine_set_appletalk(args[i]) else { fail("--appletalk expects local, lan or off") }
         case "--modem-port", "--printer-port":
             let port: Int32 = args[i] == "--modem-port" ? 0 : 1
             i += 1

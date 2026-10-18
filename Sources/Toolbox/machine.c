@@ -279,6 +279,7 @@ bool machine_boot(bool census)
     opentransport_reset();
     mactcp_reset();
     serial_reset();
+    appletalk_reset();
     ppc_glue_reset();
     notify_reset();
 
@@ -468,9 +469,12 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
  * Delay moves it forward either way. */
 bool events_host_attached(void);
 
+static bool realtime;
+void machine_set_realtime(bool on) { realtime = on; }
+
 uint64_t machine_time_ns(void)
 {
-    if (!events_host_attached())
+    if (!events_host_attached() && !realtime)
         return cpu.icount * 100u + skipped_ns;
     return now_ns() - ticks_base_ns + skipped_ns;
 }

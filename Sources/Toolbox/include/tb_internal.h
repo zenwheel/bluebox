@@ -288,6 +288,11 @@ extern const native_driver mactcp_driver;
 void mactcp_poll(void);
 void mactcp_reset(void);
 void mactcp_install_resolver(void);
+/* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */
+extern const native_driver mpp_driver;
+void appletalk_poll(void);
+void appletalk_reset(void);
+bool appletalk_enabled(void);
 /* The Serial Driver (serial.c): .AIn, .AOut, .BIn and .BOut. */
 extern const native_driver serial_drivers[4];
 void serial_poll(void);

@@ -421,6 +421,13 @@ void machine_set_disk(const char *path);
  * "tcp:HOST:PORT", "listen:PORT", "pty", a host device path, or "none".
  * Before boot; false if the spec isn't one of these. */
 bool machine_set_serial(int port, const char *spec);
+/* AppleTalk on LocalTalk over UDP: "local" (the default: copies on this
+ * host only), "lan" (the local network) or "off".  Before boot. */
+bool machine_set_appletalk(const char *how);
+/* A headless run's clock: by default its time follows the instructions
+ * run (10 million a second), so runs repeat exactly; real time instead
+ * for programs that talk to other programs over the network. */
+void machine_set_realtime(bool on);
 
 /* A hard cap on instructions executed, also inside routines the Toolbox
  * calls back (filters, hooks); 0 for none.  For headless runs. */
