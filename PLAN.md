@@ -654,6 +654,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - Shards (four versions) and the Warlock: Total Distortion demos only show their windows after several hundred million instructions headless (intros timed by TickCount); Shards' first window is small, in the top-left corner, with its picture cut off. Check against the oracle.
   - Shufflepuck Café 1.0 stops on an illegal instruction ($4C84, a MOVEM with a data register) at $4011DA: it jumped into data.
   - AppleScript applets (the Stupid AppleScript Games, ScanTastic's scripts) quit at once without the AppleScript component, as they would on a Mac without AppleScript.
+  - The Star Trek demo asks for 256 colours (windowed runs relaunch at 8 bits), then shows a black screen for 600 million instructions headless, reading its data file (PBSetFPos and PBRead in turn) after much SANE work, with a VBL task running: find out whether it is still loading or stuck.
 
 **Exit:** a defined game corpus runs at full original speed or better, including QuickTime playback from M4 at full frame rate.
 
