@@ -351,6 +351,9 @@ static bool param_block_trap(uint16_t op)
     return (t <= 0x18 && t != 0x16) || (t >= 0x41 && t <= 0x45) || t == 0x60;
 }
 
+/* Calls from native code into the guest under way, and the one returned. */
+static int call_depth, returned_depth;
+
 void trap_aline(cpu68k *c, uint16_t op)
 {
     if (rd32(0x28) != aline_vector_stub) {
@@ -385,6 +388,8 @@ void trap_aline(cpu68k *c, uint16_t op)
             }
             if (!c->halted)
                 c->pc = cpu_pop32(c);
+            if (call_depth == 0)
+                display_trap_done();
         } else {
             c->pc = entry;
         }
@@ -483,7 +488,6 @@ void machine_pass_tick(void)
     if (icount_cap && c->icount >= icount_cap)
         cpu_halt(c, "instruction limit reached");
 }
-static int call_depth, returned_depth;
 
 /* The nesting of calls into guest code belongs to the thread making them:
  * the Thread Manager switches it with the registers. */

@@ -37,6 +37,19 @@ static bool wins_dirty = true;
 
 void display_windows_changed(void) { wins_dirty = true; }
 
+static void publish_windows(void);
+
+/* After a Toolbox trap called from the program itself, also a safe point:
+ * a program that shows a window and then draws and waits without asking
+ * for events (a splash screen polling TickCount, Apeiron's) is seen. */
+void display_trap_done(void)
+{
+    if (wins_dirty) {
+        wins_dirty = false;
+        publish_windows();
+    }
+}
+
 static void publish_windows(void)
 {
     win_snap fresh[64];

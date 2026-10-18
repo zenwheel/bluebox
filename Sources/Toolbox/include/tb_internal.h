@@ -148,6 +148,8 @@ void components_reset(void);
 void quicktime_reset(void);
 /* Mouse button and location into low memory (events.c). */
 void events_sync_lowmem(void);
+/* After a Toolbox trap from the program, not a callback (display.c). */
+void display_trap_done(void);
 /* A pop-up menu's area while it is up (display.c), for rootless hosts. */
 void display_set_transient(bool on, int16_t top, int16_t left, int16_t bottom, int16_t right);
 /* Scripted input (events.c): apply the steps due by `now`; the next one's time. */
