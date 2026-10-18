@@ -75,6 +75,10 @@ static void trap_done_native(cpu68k *c, uint16_t tw)
         trap_finished[depth] = true;
 }
 
+/* A new run: the trap code went with the old heap, its native with the old
+ * table of natives. */
+void ppc_glue_reset(void) { trap_code = 0; }
+
 void ppc_trap(uint16_t trapword)
 {
     if (!trap_code) {
