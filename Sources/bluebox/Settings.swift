@@ -59,6 +59,9 @@ let knownDepthRequirements: [UInt32: DepthRequirement] = [
     0x4D4B_444E: DepthRequirement(allowed: [8], preferred: 8),          /* MKDN SuperColumns */
     /* SAIL Sail Away: depth × 3600 in 16-bit arithmetic overflows (TRAPV) above 8 bits */
     0x5341_494C: DepthRequirement(allowed: [1, 2, 4, 8], preferred: 8),
+    /* ScJs Space Joust: depth × screen width in 16-bit arithmetic wraps at 32 bits on a
+     * 1024-wide screen, and its offscreen bitmap then points at low memory */
+    0x5363_4A73: DepthRequirement(allowed: [1, 2, 4, 8, 16], preferred: 8),
 ]
 
 /// The depth a program with this creator needs when `depth` (nil: the
