@@ -523,9 +523,8 @@ def gen_ppc_glue(name, fn, sig, variant):
     if rt == "void":
         lines.append(f"    {call};\n")
     elif struct_result:
-        wr = "wr32" if sig["rti"].size == 4 else "wr16"
         lines.append(f"    gaddr result = c->gpr[3];\n    {rt} r = {call};\n")
-        lines.append(f"    if (result) {wr}(result, r);\n")
+        lines.append(f"    ppc_struct_result(c, result, (uint32_t)r, {sig['rti'].size});\n")
     elif rt == "bool":
         lines.append(f"    c->gpr[3] = {call} ? 1 : 0;\n")
     else:
@@ -648,8 +647,7 @@ def gen_ppc_trapcall(name, fn, sig, variant):
         lines.append(f"    uint32_t r = {v};\n")
     lines.append("    ppc_trap_end();\n")
     if ti is not None and struct_result:
-        wr = "wr32" if ti.size == 4 else "wr16"
-        lines.append(f"    if (c->gpr[3]) {wr}(c->gpr[3], r);\n")
+        lines.append(f"    ppc_struct_result(c, c->gpr[3], r, {ti.size});\n")
     elif ti is not None:
         lines.append("    c->gpr[3] = r;\n")
     lines.append("    c->pc = c->lr;\n}\n\n")

@@ -69,6 +69,25 @@ extension BlueBox {
     /// source with fused multiply-add, as GCC does for PowerPC).  Skipped
     /// when the probe hasn't been built.
     @Suite struct PowerPCApplication {
+        /// A NumVersion result goes through r3 when it points into the
+        /// caller's stack, and comes back in r3 either way.
+        @Test func smallStructResultsBothWays() {
+            bootMachine()
+            var c = ppc_cpu()
+            ppc_init(&c)
+            func setGPR(_ n: Int, _ v: UInt32) {
+                withUnsafeMutableBytes(of: &c.gpr) { $0.storeBytes(of: v, toByteOffset: n * 4, as: UInt32.self) }
+            }
+            func gpr(_ n: Int) -> UInt32 { withUnsafeBytes(of: c.gpr) { $0.load(fromByteOffset: n * 4, as: UInt32.self) } }
+            setGPR(1, 0x6000_0100)
+            wr32(0x6000_0140, 0)
+            ppc_struct_result(&c, 0x6000_0140, 0x0321_8000, 4)
+            #expect(rd32(0x6000_0140) == 0x0321_8000 && gpr(3) == 0x0321_8000)
+            let low = rd32(0)
+            ppc_struct_result(&c, 1, 0x0321_8000, 4) // not a pointer: r3 only
+            #expect(rd32(0) == low && gpr(3) == 0x0321_8000)
+        }
+
         @Test func ppcHelloRunsAndComputes() throws {
             let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .deletingLastPathComponent()

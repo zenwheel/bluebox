@@ -116,6 +116,17 @@ uint32_t ppc_trap_result(int size)
     return size == 4 ? rd32(sp) : size == 1 ? (uint32_t)(rd16(sp) >> 8) : rd16(sp);
 }
 
+void ppc_struct_result(ppc_cpu *c, gaddr result, uint32_t value, int size)
+{
+    if (!(result & 1) && result >= c->gpr[1] && result - c->gpr[1] < 0x100000) {
+        if (size == 4)
+            wr32(result, value);
+        else
+            wr16(result, (uint16_t)value);
+    }
+    c->gpr[3] = value;
+}
+
 void ppc_trap_end(void)
 {
     trap_depth--;

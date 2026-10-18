@@ -8470,7 +8470,7 @@ static void ppcglue_SndSoundManagerVersion(ppc_cpu *c)
 {
     gaddr result = c->gpr[3];
     int32_t r = tb_SndSoundManagerVersion();
-    if (result) wr32(result, r);
+    ppc_struct_result(c, result, (uint32_t)r, 4);
     c->pc = c->lr;
 }
 
@@ -8478,7 +8478,7 @@ static void ppcglue_MACEVersion(ppc_cpu *c)
 {
     gaddr result = c->gpr[3];
     int32_t r = tb_MACEVersion();
-    if (result) wr32(result, r);
+    ppc_struct_result(c, result, (uint32_t)r, 4);
     c->pc = c->lr;
 }
 
@@ -8486,7 +8486,7 @@ static void ppcglue_SPBVersion(ppc_cpu *c)
 {
     gaddr result = c->gpr[3];
     int32_t r = tb_SPBVersion();
-    if (result) wr32(result, r);
+    ppc_struct_result(c, result, (uint32_t)r, 4);
     c->pc = c->lr;
 }
 
@@ -8818,7 +8818,7 @@ static void ppcglue_SpeechManagerVersion(ppc_cpu *c)
 {
     gaddr result = c->gpr[3];
     int32_t r = tb_SpeechManagerVersion();
-    if (result) wr32(result, r);
+    ppc_struct_result(c, result, (uint32_t)r, 4);
     c->pc = c->lr;
 }
 

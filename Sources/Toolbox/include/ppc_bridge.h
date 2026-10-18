@@ -60,6 +60,11 @@ void ppc_trap_push(int size, uint32_t value);
 void ppc_trap(uint16_t trapword);
 uint32_t ppc_trap_result(int size);
 void ppc_trap_end(void);
+/* A small struct result (NumVersion, Point): written through the pointer a
+ * caller passed in r3 (result, r3 on entry), when it points into the
+ * caller's stack as such a buffer does, and also left in r3 itself, where
+ * other compilers' callers take a four-byte struct (Shockwave). */
+void ppc_struct_result(ppc_cpu *c, gaddr result, uint32_t value, int size);
 /* Copy n bytes of guest memory (a NULL destination or source copies nothing). */
 void ppc_copy(gaddr dst, gaddr src, uint32_t n);
 
