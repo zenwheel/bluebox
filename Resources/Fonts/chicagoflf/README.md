@@ -17,12 +17,17 @@ sites' own and are not from the author. The font file's name table carries
 white at 12 pixels (see `../README.md`). Later builds (2.100, from FontForge)
 move symbols to Unicode positions and are not the one used here.
 
-Changes from that drawing, where the rasteriser put glyphs a row off the
-baseline:
+Changes from that drawing, so that text lines up as Chicago's did (glyph
+positions and the strike's metrics only; the shapes are ChicagoFLF's):
 
-- 'g' sat a row higher than 'p', 'q' and 'y', its bowl above the other
-  lowercase letters and its tail barely below the baseline; its box now
-  starts two rows below the baseline, as theirs do.
 - 'A', 'f', '%', '£', '‰' and the letters ä ã å ë ï ñ ö õ ü Ø ø œ Â Ê Î Ô Û
   stood a row above the baseline; they now sit on it.
-- '_' stood a row above the baseline; it is now just below it.
+- 'g', 'j' and 'y' have a tail three rows deep, a row of stem longer; 'g'
+  had also sat a row high.
+- '$', '[' and ']' reach a row below the baseline; `\`, '}', '_', '¿' and
+  '¡' and the quotation marks, '°', '¢', '®', '©', '™', 'ª', 'º', '«' and
+  '»' moved a row to where Chicago had them.
+- One pixel of leading between lines (X_CLASSIC_LEADING), as Chicago 12 has.
+
+The real Chicago is Apple's and is not part of Blue Box; `bluebox fonts
+import` brings it in from the user's own System disk image instead.
