@@ -24,10 +24,11 @@ enum { ST_LOCK = 0x80, ST_PURGE = 0x40, ST_RSRC = 0x20 };
 enum { HDR = 12, MIN_BLOCK = 16 };
 
 /* What the Memory Manager reports at most (free space, Gestalt's RAM):
- * 256 MB, a big machine of the time.  Programs add these up in signed
- * longs (SpookHouse adds its own pool to PurgeSpace's contiguous space and
- * a gigabyte overflowed). */
-uint32_t g_mem_report_cap = 1u << 28;
+ * 128 MB, about what the Quadra 800 we answer as could hold (136 MB).
+ * Programs add these up in signed longs (SpookHouse adds its own pool to
+ * PurgeSpace's contiguous space and a gigabyte overflowed), and the Star
+ * Trek demo sized its cache from 256 MB to nothing. */
+uint32_t g_mem_report_cap = 1u << 27;
 static gaddr appl_max_limit; /* 0 = application zone does not grow */
 
 /* ---------------------------------------------------------------------- */
