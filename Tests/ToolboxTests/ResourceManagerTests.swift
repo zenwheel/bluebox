@@ -41,6 +41,7 @@ extension BlueBox {
             #expect((0..<16).allSatisfy { rd8(buf + UInt32($0)) == rd8(map + UInt32($0)) })
             #expect(tb_PBGetEOF(pb, false) == 0)
             #expect(rd32(pb + UInt32(IOParam_ioMisc_off)) > 16)
+            #expect(tb_PBFlushFile(pb, false) == 0) // ZTerm flushes its phone book so
         }
 
         @Test func openedFileBecomesCurrentAndTopOfChain() {

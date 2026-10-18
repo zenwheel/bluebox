@@ -322,9 +322,16 @@ static void g_HSetVol(ppc_cpu *c)
 /* Create(fileName, vRefNum, creator, fileType): the file, then its Finder info. */
 static int16_t set_type(gaddr pb, uint32_t creator, uint32_t type, bool hfs)
 {
+    /* GetFInfo leaves the file's number where the directory ID was (they
+     * share the field): the directory goes back before SetFInfo, or ZTerm's
+     * new phone book is "not found". */
+    uint32_t dir = rd32(pb + HFileParam_ioDirID_off);
+    wr16(pb + FileParam_ioFDirIndex_off, 0);
     int16_t e = hfs ? tb_PBHGetFInfo(pb, false) : tb_PBGetFInfo(pb, false);
     if (e)
         return e;
+    if (hfs)
+        wr32(pb + HFileParam_ioDirID_off, dir);
     wr32(pb + FileParam_ioFlFndrInfo_off, type);
     wr32(pb + FileParam_ioFlFndrInfo_off + 4, creator);
     return hfs ? tb_PBHSetFInfo(pb, false) : tb_PBSetFInfo(pb, false);

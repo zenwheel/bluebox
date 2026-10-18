@@ -1306,8 +1306,14 @@ static int16_t pb_allocate(gaddr pb, bool async)
 
 int16_t tb_PBFlushFile(gaddr pb, bool async)
 {
-    fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
-    return f ? save_fork(f) : rfNumErr;
+    int16_t rn = (int16_t)rd16(pb + IOParam_ioRefNum_off);
+    fcb *f = fcb_for(rn);
+    if (f)
+        return save_fork(f);
+    /* A resource file: the Resource Manager writes it (UpdateResFile). */
+    const uint8_t *data;
+    uint32_t len;
+    return rm_fork_of(rn, &data, &len) ? noErr : rfNumErr;
 }
 
 int16_t tb_PBFlushVol(gaddr pb, bool async)
