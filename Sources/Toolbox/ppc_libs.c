@@ -1288,6 +1288,27 @@ static void g_PBControlImmed(ppc_cpu *c) { RETURN((uint32_t)(int32_t)tb_PBContro
 
 /* TruncText(width, textPtr, short *length, truncWhere): the text cut to
  * fit width with an ellipsis, as TruncString cuts a Pascal string. */
+/* GetSoundOutputInfo(outputDevice, selector, infoPtr): the sound output
+ * device's settings, as the Sound Manager 3 output component reports them
+ * (SndGetInfo's selectors, for the device rather than a channel). */
+static void g_GetSoundOutputInfo(ppc_cpu *c)
+{
+    gaddr info = R(2);
+    int16_t err = noErr;
+    switch (R(1)) {
+    case 0x73726174: wr32(info, 0xAC440000u); break; /* 'srat': 44100 Hz, UnsignedFixed */
+    case 0x7373697A: wr16(info, 16); break;          /* 'ssiz': 16-bit samples */
+    case 0x6368616E: wr16(info, 2); break;           /* 'chan': stereo */
+    case 0x766F6C75: wr32(info, 0x01000100); break;  /* 'volu': full, both sides */
+    case 0x71756C74: wr32(info, 0x00000004); break;  /* 'qual': the best interpolation */
+    default: err = -231;                             /* siUnknownInfoType */
+    }
+    RETURN((uint32_t)(int32_t)err);
+}
+
+/* SetSoundOutputInfo: settings are the host's; accepted and kept nowhere. */
+static void g_SetSoundOutputInfo(ppc_cpu *c) { RETURN(noErr); }
+
 static void g_TruncText(ppc_cpu *c)
 {
     gaddr text = R(1), lenp = R(2);
@@ -1893,6 +1914,7 @@ const ppc_export lib_exports[] = {
     { "AEObjectInit", g_noErr }, { "AESetObjectCallbacks", g_noErr }, { "AEInstallObjectAccessor", g_noErr },
     { "AERemoveObjectAccessor", g_noErr }, { "AEGetObjectAccessor", os_accessorNotFound },
     { "AEResolve", os_AEResolve }, { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },
+    { "GetSoundOutputInfo", g_GetSoundOutputInfo }, { "SetSoundOutputInfo", g_SetSoundOutputInfo },
     { "FindWordBreaks", g_FindWordBreaks }, { "UppercaseStripDiacritics", g_UppercaseStripDiacritics },
     { "PBControlImmed", g_PBControlImmed }, { "AECallObjectAccessor", os_notHandled }, { "AEDisposeToken", g_noErr },
     { "CreateObjSpecifier", os_coercionFail }, { "CreateOffsetDescriptor", os_coercionFail },
