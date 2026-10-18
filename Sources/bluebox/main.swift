@@ -97,6 +97,11 @@ func usage() -> Never {
           List the themes (Kaleidoscope schemes) in the library.
       bluebox rsrc <file>
           List the resources in a file (AppleDouble or MacBinary).
+      bluebox fonts [import <disk image>...]
+          List the fonts in Blue Box's Fonts folder (\(fontsFolder())), or
+          copy the fonts of a System disk image's System Folder there (raw,
+          DiskCopy or .dmg, or any of these gzipped): every run opens them,
+          so the real classic fonts take the place of Blue Box's look-alikes.
 
       The library defaults to \(defaultLibrary())
       (override with BLUEBOX_LIBRARY or --library).
@@ -892,6 +897,7 @@ case "shell": shellCommand(rest)
 case "set": setCommand(rest)
 case "rsrc": rsrcCommand(rest)
 case "themes": themesCommand(rest)
+case "fonts": fontsCommand(rest)
 #if canImport(AppKit)
 case "install": installCommand(rest)
 case "make-iconset": makeIconsetCommand(rest)

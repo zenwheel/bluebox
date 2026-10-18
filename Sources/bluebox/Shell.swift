@@ -301,6 +301,34 @@ enum ShellItem: Hashable {
         if panel.runModal() == .OK { importFiles(panel.urls) }
     }
 
+    /// File > Import Fonts from Disk Image…: the fonts of a System disk image
+    /// (the user's own) into Blue Box's Fonts folder, for every run after.
+    func chooseFontImport() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.prompt = "Import Fonts"
+        panel.message = "Choose a System disk image (.img, .dsk, .dmg, or gzipped) to take its fonts from"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let path = url.path
+        let name = (path as NSString).lastPathComponent
+        importing.append(name)
+        Task.detached {
+            let result: String
+            do {
+                let added = try importFonts(fromImage: path)
+                result = "Fonts from \(name): \(added.joined(separator: ", ")) (used from the next launch)"
+            } catch {
+                result = "Could not import fonts from \(name): \(error)"
+            }
+            await MainActor.run {
+                self.importing.removeAll { $0 == name }
+                self.messages.append(result)
+            }
+        }
+    }
+
     func importFiles(_ urls: [URL]) {
         let lib = library
         for url in urls {
@@ -719,6 +747,7 @@ struct HighlightPicker: View {
 
     @objc func openWindow(_ sender: Any?) { showWindow() }
     @objc func importFiles(_ sender: Any?) { model.chooseImport() }
+    @objc func importFonts(_ sender: Any?) { model.chooseFontImport() }
     @objc func refreshLibrary(_ sender: Any?) { model.refresh() }
 
     /// Clicking the Dock icon brings the window back.
@@ -788,6 +817,8 @@ func shellCommand(_ args: [String]) -> Never {
     let file = NSMenu(title: "File")
     // Sent up the responder chain to the application's delegate.
     file.addItem(withTitle: "Import…", action: #selector(ShellDelegate.importFiles(_:)), keyEquivalent: "o")
+    file.addItem(withTitle: "Import Fonts from Disk Image…", action: #selector(ShellDelegate.importFonts(_:)),
+                 keyEquivalent: "")
     file.addItem(withTitle: "Refresh Library", action: #selector(ShellDelegate.refreshLibrary(_:)), keyEquivalent: "r")
     file.addItem(.separator())
     file.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")

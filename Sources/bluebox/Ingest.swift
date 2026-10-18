@@ -238,7 +238,7 @@ private func hostName(_ macName: String) -> String {
     macName.replacingOccurrences(of: "/", with: ":")
 }
 
-private func writeAppleDouble(_ f: inout mac_file, to path: String) throws {
+func writeAppleDouble(_ f: inout mac_file, to path: String) throws {
     var err = [CChar](repeating: 0, count: 256)
     if !appledouble_write(path, &f, &err, err.count) {
         throw IngestError.unreadable(String(decoding: err.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self))
@@ -506,11 +506,14 @@ private func rawFromUDIF(_ path: String) throws -> String {
     return produced
 }
 
-func extractDiskImage(_ path: String, into dir: String, notes: inout [String]) throws -> String {
+/// The volume of a disk image as a folder in dir; only the files whose path
+/// in the volume ("System Folder/Fonts/Chicago") `keep` accepts, if given.
+func extractDiskImage(_ path: String, into dir: String, notes: inout [String],
+                      keep: ((String) -> Bool)? = nil) throws -> String {
     if isUDIF(path) {
         let raw = try rawFromUDIF(path)
         defer { try? FileManager.default.removeItem(atPath: raw) }
-        return try extractDiskImage(raw, into: dir, notes: &notes)
+        return try extractDiskImage(raw, into: dir, notes: &notes, keep: keep)
     }
     var err = [CChar](repeating: 0, count: 256)
     // A raw image (a bare volume, or behind a partition map) is read where
@@ -584,6 +587,9 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String]) t
         var e = entries[i]
         guard let parent = folder(e.parent) else { continue }
         let nameBytes = pascal(&e.name)
+        if let keep, !keep(String((parent + "/" + hostName(macRoman(nameBytes))).dropFirst(root.count + 1))) {
+            continue
+        }
         var mf = mac_file()
         var data: UnsafeMutablePointer<UInt8>?, rsrc: UnsafeMutablePointer<UInt8>?
         var dlen = 0, rlen = 0

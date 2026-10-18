@@ -1,4 +1,6 @@
 /* Booting the environment and launching an application. */
+#include <dirent.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -371,6 +373,33 @@ static void build_app_parms(void)
 static bool prefer_ppc;
 void machine_set_prefer_ppc(bool on) { prefer_ppc = on; }
 
+static int cmp_names(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
+
+/* The font files in the System Folder's Fonts folder (the user's own, from
+ * a System disk image: `bluebox fonts import`), opened as the System's
+ * Fonts folder is at startup: their families come before ours. */
+static void open_user_fonts(void)
+{
+    char dir[PATH_MAX];
+    snprintf(dir, sizeof dir, "%s/Fonts", fm_system_folder_host());
+    DIR *d = opendir(dir);
+    if (!d)
+        return;
+    char *names[256];
+    int n = 0;
+    for (struct dirent *e; (e = readdir(d)) && n < 256;)
+        if (e->d_name[0] != '.')
+            names[n++] = strdup(e->d_name);
+    closedir(d);
+    qsort(names, (size_t)n, sizeof *names, cmp_names);
+    for (int i = 0; i < n; i++) {
+        char path[PATH_MAX], ignored[256];
+        snprintf(path, sizeof path, "%s/%s", dir, names[i]);
+        machine_add_resource_file(path, ignored, sizeof ignored); /* not a font file: skipped */
+        free(names[i]);
+    }
+}
+
 bool machine_launch(const char *app_path, char *err, size_t errlen)
 {
     mac_file mf;
@@ -390,6 +419,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
         strcpy(g_app_dir, ".");
 
     fm_init(g_app_dir);
+    open_user_fonts();
     snprintf(g_app_path, sizeof g_app_path, "%s", app_path);
     g_app_creator = mac_file_creator(&mf);
 
