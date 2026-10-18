@@ -1246,7 +1246,8 @@ void tb_SendBehind(gaddr w, gaddr behind)
     unlink_window(w);
     link_behind(w, behind);
     update_active();
-    repaint(&s);
+    if (wvisible(w))
+        repaint(&s);
     hrgn_free(&s);
 }
 
@@ -1596,7 +1597,8 @@ void tb_SizeWindow(gaddr w, int16_t width, int16_t height, int8_t flag)
     hrgn_init(&now);
     rgn_read(WindowRecord_strucRgn(w), &now);
     hrgn_op(&old, &old, &now, RGN_UNION);
-    repaint(&old);
+    if (wvisible(w)) /* a hidden window changes nothing on the screen */
+        repaint(&old);
     if (!flag) { /* caller handles updating the new content itself */
         gaddr cur = qd_port();
         tb_SetPort(w);

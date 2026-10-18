@@ -525,6 +525,24 @@ extension BlueBox {
             #expect(rgba(110, 110) == [255, 0, 0])
         }
 
+        /// Moving or sizing a hidden window leaves the windows under it as
+        /// they were (Solitaire Till Dawn sizes its game window while its
+        /// splash dialog shows, and never redraws the dialog).
+        @Test func hiddenWindowsChangeNothingOnScreen() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [60, 60, 260, 360].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let shown = tb_NewWindow(0, r, 0, 1, 2, 0xFFFF_FFFF, 0, 0) // a plain box
+            tb_SetPort(shown)
+            tb_PaintRect(shown + UInt32(GrafPort_portRect_off))
+            #expect(rgba(150, 150) == [0, 0, 0])
+            let hidden = tb_NewWindow(0, r, 0, 0, 2, 0xFFFF_FFFF, 0, 0)
+            tb_SizeWindow(hidden, 400, 300, 1)
+            tb_SendBehind(hidden, 0)
+            #expect(rgba(150, 150) == [0, 0, 0])
+        }
+
         @Test func blackAndWhiteStaysOneBit() {
             launchTestApp()
             #expect(PixMap_pixelSize(rd32(GDevice_gdPMap(rd32(tb_GetMainDevice())))) == 1)
