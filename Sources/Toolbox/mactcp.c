@@ -708,6 +708,7 @@ void mactcp_poll(void)
         if (r == ioInProgress)
             continue;
         ops[i].used = false;
+        LOGF(LOG_TRAPS, "  .IPP csCode %d completes -> %d\n", ops[i].code, r);
         complete(ops[i].pb, r);
     }
     for (int s = 0; s < MAX_STREAMS; s++) {
@@ -745,11 +746,16 @@ static gaddr stub; /* the resolver's entry */
 
 void mactcp_reset(void)
 {
+    static bool booted; /* before the first boot the table's fds are 0, not ours */
     for (int i = 0; i < MAX_STREAMS; i++) {
-        close_fd(&streams[i].fd);
-        close_fd(&streams[i].lfd);
+        if (booted) {
+            close_fd(&streams[i].fd);
+            close_fd(&streams[i].lfd);
+        }
+        streams[i].fd = streams[i].lfd = -1;
         streams[i].used = false;
     }
+    booted = true;
     memset(ops, 0, sizeof ops);
     nanswers = 0;
     polling = false;

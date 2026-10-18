@@ -51,11 +51,8 @@ bool driver_open(gaddr pb, int16_t *err)
 
 bool driver_refnum(int16_t refnum) { return driver_for(refnum) != NULL; }
 
-int16_t driver_call(gaddr pb, bool async, int kind)
+static int16_t call(const native_driver *d, gaddr pb, bool async, int kind)
 {
-    const native_driver *d = driver_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
-    if (!d)
-        return -51; /* rfNumErr */
     switch (kind) {
     case DRIVER_CONTROL: return d->control ? d->control(pb, async) : -17;  /* controlErr */
     case DRIVER_STATUS: return d->status ? d->status(pb, async) : -18;     /* statusErr */
@@ -65,4 +62,15 @@ int16_t driver_call(gaddr pb, bool async, int kind)
     case DRIVER_KILLIO: return d->kill_io ? d->kill_io(pb) : noErr;
     default: return -51;
     }
+}
+
+int16_t driver_call(gaddr pb, bool async, int kind)
+{
+    const native_driver *d = driver_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    if (!d)
+        return -51; /* rfNumErr */
+    int16_t r = call(d, pb, async, kind);
+    if (kind == DRIVER_CONTROL || kind == DRIVER_STATUS)
+        LOGF(LOG_TRAPS, "  %s csCode %d -> %d\n", d->name, (int16_t)rd16(pb + CntrlParam_csCode_off), r);
+    return r;
 }
