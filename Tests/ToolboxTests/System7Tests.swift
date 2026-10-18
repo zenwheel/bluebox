@@ -216,6 +216,28 @@ extension BlueBox {
             #expect(Self.seen?.message.contains("^0") == false)
         }
 
+        /// StandardAlert: the error and explanation, and the buttons its
+        /// parameter block asks for (-1 for a standard title).
+        @Test func standardAlertGoesToTheHost() {
+            launchTestApp()
+            install()
+            defer { machine_set_alert_handler(nil, nil) }
+            let param = tb_NewPtr(24, false, true)
+            wr32(param + 6, 0xFFFF_FFFF)                 // defaultText: "OK"
+            wr32(param + 10, 0xFFFF_FFFF)                // cancelText: "Cancel"
+            wr16(param + 18, 1)                          // defaultButton
+            let hit = tb_NewPtr(2, false, true)
+            Self.answer = 2
+            #expect(dialog_standard_alert(2, guestString("Disk full"), guestString("Try again."), param, hit) == 0)
+            #expect(rd16(hit) == 2)
+            #expect(Self.seen?.buttons == ["OK", "Cancel"])
+            #expect(Self.seen?.message.contains("Disk full") == true)
+            #expect(Self.seen?.message.contains("Try again.") == true)
+            Self.answer = 0
+            #expect(dialog_standard_alert(0, guestString("Oops"), 0, 0, hit) == 0)
+            #expect(Self.seen?.buttons == ["OK"] && rd16(hit) == 1)
+        }
+
         @Test func withoutAHostTheDefaultButtonIsChosen() {
             // Stage bits 0x8 make item 2 the default.
             launchTestApp(Self.alertResources(stages: 0xDDDD))

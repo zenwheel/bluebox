@@ -252,6 +252,69 @@ static int16_t run_alert(int16_t id, int kind)
     return result;
 }
 
+/* StandardAlert (the Appearance Manager's): the error and its explanation,
+ * with the buttons an AlertStdAlertParamRec (mac68k layout) asks for, or
+ * just OK.  The item hit: 1 OK, 2 Cancel, 3 the other button. */
+int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gaddr param, gaddr item_hit)
+{
+    static const int kinds[] = { MACHINE_ALERT_STOP, MACHINE_ALERT_NOTE, MACHINE_ALERT_CAUTION, MACHINE_ALERT_PLAIN };
+    machine_alert a;
+    memset(&a, 0, sizeof a);
+    a.kind = type >= 0 && type <= 3 ? kinds[type] : MACHINE_ALERT_PLAIN;
+    size_t n = 0;
+    if (error && rd8(error)) {
+        uint8_t t[256];
+        gget(t, error + 1, rd8(error));
+        n = append_text(a.message, n, sizeof a.message, t, rd8(error));
+    }
+    if (explanation && rd8(explanation)) {
+        uint8_t t[256];
+        gget(t, explanation + 1, rd8(explanation));
+        if (n)
+            n = append_text(a.message, n, sizeof a.message, (const uint8_t *)"\r\r", 2);
+        n = append_text(a.message, n, sizeof a.message, t, rd8(explanation));
+    }
+    static const char *const standard[] = { "OK", "Cancel", "Don\xD5t Save" }; /* MacRoman apostrophe */
+    int16_t default_item = 1;
+    for (int k = 0; k < 3; k++) {
+        gaddr title = k == 0 ? 0xFFFFFFFFu : 0;
+        if (param)
+            title = rd32(param + 6 + (uint32_t)k * 4); /* defaultText, cancelText, otherText */
+        if (!title)
+            continue;
+        machine_alert_button *b = &a.buttons[a.nbuttons++];
+        b->item = (int16_t)(k + 1);
+        if (title == 0xFFFFFFFFu) {
+            append_text(b->title, 0, sizeof b->title, (const uint8_t *)standard[k], strlen(standard[k]));
+        } else {
+            uint8_t t[256];
+            gget(t, title + 1, rd8(title));
+            append_text(b->title, 0, sizeof b->title, t, rd8(title));
+        }
+    }
+    if (!a.nbuttons) { /* none asked for: OK */
+        a.buttons[a.nbuttons].item = 1;
+        append_text(a.buttons[a.nbuttons++].title, 0, sizeof a.buttons[0].title, (const uint8_t *)"OK", 2);
+    }
+    if (param && rd16(param + 18))
+        default_item = (int16_t)rd16(param + 18);
+    a.default_item = default_item;
+    for (int i = 0; i < a.nbuttons; i++)
+        a.buttons[i].is_default = a.buttons[i].item == default_item;
+    int16_t result = default_item;
+    if (alert_fn) {
+        int r = alert_fn(&a, alert_ctx);
+        if (r > 0)
+            result = (int16_t)r;
+    } else {
+        LOGF(LOG_UNIMPL, "alert standard: %s\n", a.message);
+        machine_idle();
+    }
+    if (item_hit)
+        wr16(item_hit, (uint16_t)result);
+    return noErr;
+}
+
 int16_t tb_Alert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_PLAIN); }
 int16_t tb_StopAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_STOP); }
 int16_t tb_NoteAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_NOTE); }

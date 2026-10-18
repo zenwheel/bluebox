@@ -261,6 +261,8 @@ extern bool g_ppc_mode;
 bool cfm_has_ppc(void);
 void gestalt_powerpc(void);
 const char *fm_system_folder_host(void);
+/* The Appearance Manager's StandardAlert (dialog.c). */
+int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gaddr param, gaddr item_hit);
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);
 bool gestalt_exists(uint32_t selector);
