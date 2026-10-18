@@ -698,6 +698,21 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - Built as desk accessories or small applications with our own Toolbox calls (68k code from our toolchain, or the native SDK of M11), installed in the System Folder's Apple Menu Items, where the Apple menu lists them and opens them.
 - Their look checked against the oracle: window kinds, fonts, icons and behaviour as in System 7.5.
 
+### M14: AppleScript
+
+**Goal:** AppleScript works as it did in System 7.5–9: applets and droplets run, Script Editor compiles, runs and records, and scripts drive classic applications through Apple Events (and, through a bridge, the host).
+
+- **The Open Scripting Architecture:** the generic scripting component and the AppleScript component (`osa `/`ascr`) through the Component Manager: `OSACompile`, `OSAExecute`, `OSACompileExecute`, `OSALoad`/`OSAStore`, `OSADisplay`, `OSAScriptError`, contexts, `OSASetActiveProc`, the send and create procs, and `OSADoScript`; `OSAGetSource` for decompiling.
+- **The language, our own implementation:** a parser and interpreter for AppleScript 1.x syntax (tell blocks, handlers, script objects, properties, lists and records, coercions, `considering`/`ignoring`, `try`/`on error`, `with timeout`, `using terms from`), with the dictionary terms of each target application read from its `aete` resource (and the System's and the scripting additions' `aeut`/`aete`), and object specifiers built with the Object Support Library's conventions.
+- **Compiled scripts:** the `scpt` format that applets, droplets and Script Editor files store (resource `scpt` 128 in a file of type `APPL` and creator `aplt`/`dplt`, or `osas` files), read and written so that scripts compiled on a real Mac run here and scripts compiled here run on a Mac. The format is undocumented: work it out against the oracle (compile known sources in AppleScript 1.1 and 1.3 and compare), decompiling where a script's source text is not kept.
+- **Applets and droplets:** the applet shell (open, run, idle and quit handlers, the startup screen, Stay Open), and the `odoc` handler for dropped files, so the AppleScript applets in the corpus (the Stupid AppleScript Games, ScanTastic's scripts) run instead of quitting.
+- **Scripting additions:** the Standard Additions people relied on (`display dialog`, `choose file`, `the clipboard`, `current date`, `do shell script` mapped to nothing or to a host bridge by choice), implemented natively rather than loading Apple's `osax` files; third-party `osax` code resources loaded and called like other code resources.
+- **Recording:** Apple Event recording (`kAEStartRecording`, the recording event handler) so Script Editor's Record button works with recordable applications.
+- **Host bridge (optional, off by default):** a scripting addition, or `tell application` to a host app, sent through the host's own scripting (osascript on macOS), for classic scripts that want to reach the modern system.
+- **Gestalt and folders:** `ascv` (AppleScript version), the Scripting Additions folder, and the Scripts folder's items in the Apple menu.
+
+**Exit:** the corpus's AppleScript applets run; Script Editor (from a System 7.5 disk image) compiles, runs, records and saves a script that drives the Finder-free parts of a scriptable application (SimpleText or Scriptable Text Editor); a script compiled on the oracle runs here with the same result, and one compiled here runs on the oracle.
+
 ## 6. Risks
 
 | Risk | Mitigation |
