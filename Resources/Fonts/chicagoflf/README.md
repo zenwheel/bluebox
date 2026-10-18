@@ -17,6 +17,12 @@ sites' own and are not from the author. The font file's name table carries
 white at 12 pixels (see `../README.md`). Later builds (2.100, from FontForge)
 move symbols to Unicode positions and are not the one used here.
 
-One change from that drawing: 'g' sat a pixel higher than 'p', 'q' and
-'y', its bowl above the other lowercase letters and its tail barely below
-the baseline. Its box now starts two rows below the baseline, as theirs do.
+Changes from that drawing, where the rasteriser put glyphs a row off the
+baseline:
+
+- 'g' sat a row higher than 'p', 'q' and 'y', its bowl above the other
+  lowercase letters and its tail barely below the baseline; its box now
+  starts two rows below the baseline, as theirs do.
+- 'A', 'f', '%', '£', '‰' and the letters ä ã å ë ï ñ ö õ ü Ø ø œ Â Ê Î Ô Û
+  stood a row above the baseline; they now sit on it.
+- '_' stood a row above the baseline; it is now just below it.
