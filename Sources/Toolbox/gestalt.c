@@ -81,11 +81,16 @@ void gestalt_init(void)
     gestalt_set(fourcc("rom "), 0x077D);      /* ROM version */
     gestalt_set(fourcc("romv"), 0x077D);
     gestalt_set(fourcc("kbd "), 4);           /* Apple Extended Keyboard */
-    gestalt_set(fourcc("os  "), 0x2);         /* Process Manager present (launch control) */
+    /* gestaltOSAttr: growable system zone, LaunchApplication that can
+     * return, full file specs, launch control, temporary memory (real and
+     * tracked); no PPC Toolbox or debugger support.  Solitaire Till Dawn
+     * took the old lone bit for an older System. */
+    gestalt_set(fourcc("os  "), 0x7F);
     gestalt_set(fourcc("evnt"), 0x1);         /* Apple Event Manager present */
     /* What else System 7.1 answered, for the managers we provide. */
     gestalt_set(fourcc("vers"), 1);           /* Gestalt itself */
     gestalt_set(fourcc("scri"), 0x0710);      /* Script Manager */
+    gestalt_set(fourcc("scr#"), 1);           /* one script system: Roman */
     gestalt_set(fourcc("te  "), 5);           /* TextEdit (gestaltTE5) */
     gestalt_set(fourcc("hdwr"), 0x009B);      /* VIA1, VIA2, ASC, SCC, SCSI */
     gestalt_set(fourcc("edtn"), 0x1);         /* Edition Manager present */
