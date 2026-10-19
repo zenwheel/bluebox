@@ -495,6 +495,14 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** the 68k QuickTime 2.x Movie Player plays a Cinepak movie with sound, in rootless mode and in screen mode; HyperCard-free test apps play `snd` resources; a GX sample application draws shapes and styled text on screen and prints them to PDF.
 
+**Status (2026-10-19):** QuickTime and the Sound Manager are in; GX is deferred.
+- Codecs of our own (Sources/Toolbox/qt_codec*.c): Cinepak (colour, grey, palettized), Animation (every depth), Graphics, Apple Video, None, and Photo-JPEG through the host's image decoder; sound from 8-bit raw, `twos`/`sowt`, IMA 4:1 and MACE. Between them they cover nearly every movie track in the corpus (Cinepak 244, Animation 214, None 173, Graphics 73, Apple Video 18; left: 23 music tracks, 1 Sorenson, a few with damaged descriptions).
+- Movies whose tracks we decode play through qt_native.c (sample tables, edit lists, key frames, sound queued a second ahead on a channel of the movie's own), headless runs included, so tests and screenshots see real frames; VLC remains the fallback for anything else. SimpleText opens and plays Cinepak, Graphics and Apple Video movies (it opens them with FSpOpenResFile, which NewMovieFromFile now accepts, and asks for active movies).
+- The Image Compression Manager decompresses: DecompressImage, FDecompressImage, sequences, image description colour tables, codec info, and compressed pictures (`$8200` in DrawPicture).
+- Not yet checked by ear or eye on the host: movie sound through the host audio, and playback in rootless and screen mode (the Movie Player exit test needs the user). Movie Player itself isn't in the corpus outside the QuickTime installers.
+- Left: music tracks (QTMA notes: AVAudioUnitSampler's General MIDI bank would do), sprite and text tracks, editing, compression. SimpleText can't open data-fork-only movies: with no resource fork its FSpOpenResFile fails and it passes -1 to NewMovieFromFile (what QuickTime did with that needs the oracle).
+- QuickDraw GX: the corpus has one GX program, ShareDraw 2.01, which uses GX for printing (jobs, format and print dialogs, `GXConvertPICTToShape`, 47 calls in all) and runs and prints through QuickDraw without it. Reporting GX makes it go the GX way from its first call, so a partial GX would make it worse. Deferred until a program needs it; the interfaces are known (graphics: C-convention calls through `A832`, selector in D0; printing: Pascal through `ABFE`, long selector in D0; Collection Manager `ABF6`), and the generator would need C-convention dispatch for `A832`.
+
 ### M5: Classic networking (AppleTalk and MacTCP)
 
 **Goal:** AppleTalk network games such as Spectre find and play each other, and MacTCP applications reach the internet.
