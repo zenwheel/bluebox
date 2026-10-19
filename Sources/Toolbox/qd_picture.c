@@ -642,7 +642,15 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0x15: case 0x16: r16(r); break;
         case 0x1A: case 0x1B: case 0x1D: case 0x1F: {
             uint16_t c[3] = { (uint16_t)r16(r), (uint16_t)r16(r), (uint16_t)r16(r) };
-            if (op == 0x1A || op == 0x1B) {
+            if ((op == 0x1A || op == 0x1B) && qd_port_is_color(qd_port())) {
+                /* RGBFgCol, RGBBkCol: the colour itself in a colour port */
+                gaddr rgb = tb_NewPtr(6, false, false);
+                wr16(rgb, c[0]);
+                wr16(rgb + 2, c[1]);
+                wr16(rgb + 4, c[2]);
+                (op == 0x1A ? tb_RGBForeColor : tb_RGBBackColor)(rgb);
+                tb_DisposePtr(rgb);
+            } else if (op == 0x1A || op == 0x1B) { /* an old port: black or white */
                 int dark = (c[0] * 30 + c[1] * 59 + c[2] * 11) / 100 < 0x8000;
                 int32_t old = dark ? 33 /* blackColor */ : 30 /* whiteColor */;
                 if (op == 0x1A) tb_ForeColor(old); else tb_BackColor(old);

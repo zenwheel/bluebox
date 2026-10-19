@@ -40,6 +40,30 @@ extension BlueBox {
             tb_DisposeGWorld(port)
         }
 
+        /// A picture recorded in colour plays back in colour (RGBFgCol).
+        @Test func picturesKeepTheirColours() {
+            launchTestApp()
+            _ = initToolbox()
+            let screen = tb_NewPtr(4, false, true), dev = tb_NewPtr(4, false, true)
+            tb_GetGWorld(screen, dev)
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 32, rect(0, 0, 20, 20), 0, 0, 0) == 0)
+            let port = rd32(gw)
+            tb_SetGWorld(port, 0)
+            let pic = tb_OpenPicture(rect(0, 0, 20, 20))
+            tb_RGBForeColor(rgb(0xFFFF, 0, 0))
+            tb_PaintRect(rect(2, 2, 10, 10))
+            tb_ClosePicture()
+            tb_RGBForeColor(rgb(0, 0, 0))
+            tb_EraseRect(rect(0, 0, 20, 20))
+            tb_DrawPicture(pic, rect(0, 0, 20, 20))
+            let back = rgb(0, 0, 0)
+            tb_GetCPixel(5, 5, back)
+            #expect(rd16(back) == 0xFFFF && rd16(back + 2) == 0 && rd16(back + 4) == 0)
+            tb_SetGWorld(rd32(screen), rd32(dev))
+            tb_DisposeGWorld(port)
+        }
+
         /// An 8-bit GWorld brings its own device: while it is current,
         /// Color2Index gives indices into its table, not 32-bit pixels.
         @Test func gworldHasItsOwnDevice() {
