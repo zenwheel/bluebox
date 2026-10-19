@@ -11242,6 +11242,302 @@ static void ppcglue_TEGetHiliteRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_QTPrivateCall273(ppc_cpu *c)
+{
+    gaddr a_data = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTPrivateCall273(a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTPrivateCall274(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int8_t a_flag = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTPrivateCall274(a_container, a_flag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMatrixType(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMatrixType(a_m);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyMatrix(ppc_cpu *c)
+{
+    gaddr a_m1 = (gaddr)c->gpr[3];
+    gaddr a_m2 = (gaddr)c->gpr[4];
+    tb_CopyMatrix(a_m1, a_m2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EqualMatrix(ppc_cpu *c)
+{
+    gaddr a_m1 = (gaddr)c->gpr[3];
+    gaddr a_m2 = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_EqualMatrix(a_m1, a_m2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetIdentityMatrix(ppc_cpu *c)
+{
+    gaddr a_matrix = (gaddr)c->gpr[3];
+    tb_SetIdentityMatrix(a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TranslateMatrix(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    int32_t a_deltaH = (int32_t)c->gpr[4];
+    int32_t a_deltaV = (int32_t)c->gpr[5];
+    tb_TranslateMatrix(a_m, a_deltaH, a_deltaV);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RotateMatrix(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    int32_t a_degrees = (int32_t)c->gpr[4];
+    int32_t a_aboutX = (int32_t)c->gpr[5];
+    int32_t a_aboutY = (int32_t)c->gpr[6];
+    tb_RotateMatrix(a_m, a_degrees, a_aboutX, a_aboutY);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ScaleMatrix(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    int32_t a_scaleX = (int32_t)c->gpr[4];
+    int32_t a_scaleY = (int32_t)c->gpr[5];
+    int32_t a_aboutX = (int32_t)c->gpr[6];
+    int32_t a_aboutY = (int32_t)c->gpr[7];
+    tb_ScaleMatrix(a_m, a_scaleX, a_scaleY, a_aboutX, a_aboutY);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SkewMatrix(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    int32_t a_skewX = (int32_t)c->gpr[4];
+    int32_t a_skewY = (int32_t)c->gpr[5];
+    int32_t a_aboutX = (int32_t)c->gpr[6];
+    int32_t a_aboutY = (int32_t)c->gpr[7];
+    tb_SkewMatrix(a_m, a_skewX, a_skewY, a_aboutX, a_aboutY);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TransformFixedPoints(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    gaddr a_fpt = (gaddr)c->gpr[4];
+    int32_t a_count = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TransformFixedPoints(a_m, a_fpt, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TransformPoints(ppc_cpu *c)
+{
+    gaddr a_mp = (gaddr)c->gpr[3];
+    gaddr a_pt1 = (gaddr)c->gpr[4];
+    int32_t a_count = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TransformPoints(a_mp, a_pt1, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TransformFixedRect(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    gaddr a_fr = (gaddr)c->gpr[4];
+    gaddr a_fpp = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_TransformFixedRect(a_m, a_fr, a_fpp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TransformRect(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    gaddr a_r = (gaddr)c->gpr[4];
+    gaddr a_fpp = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_TransformRect(a_m, a_r, a_fpp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InverseMatrix(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    gaddr a_im = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_InverseMatrix(a_m, a_im);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ConcatMatrix(ppc_cpu *c)
+{
+    gaddr a_a = (gaddr)c->gpr[3];
+    gaddr a_b = (gaddr)c->gpr[4];
+    tb_ConcatMatrix(a_a, a_b);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RectMatrix(ppc_cpu *c)
+{
+    gaddr a_matrix = (gaddr)c->gpr[3];
+    gaddr a_srcRect = (gaddr)c->gpr[4];
+    gaddr a_dstRect = (gaddr)c->gpr[5];
+    tb_RectMatrix(a_matrix, a_srcRect, a_dstRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MapMatrix(ppc_cpu *c)
+{
+    gaddr a_matrix = (gaddr)c->gpr[3];
+    gaddr a_fromRect = (gaddr)c->gpr[4];
+    gaddr a_toRect = (gaddr)c->gpr[5];
+    tb_MapMatrix(a_matrix, a_fromRect, a_toRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompAdd(ppc_cpu *c)
+{
+    gaddr a_src = (gaddr)c->gpr[3];
+    gaddr a_dst = (gaddr)c->gpr[4];
+    tb_CompAdd(a_src, a_dst);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompSub(ppc_cpu *c)
+{
+    gaddr a_src = (gaddr)c->gpr[3];
+    gaddr a_dst = (gaddr)c->gpr[4];
+    tb_CompSub(a_src, a_dst);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompNeg(ppc_cpu *c)
+{
+    gaddr a_dst = (gaddr)c->gpr[3];
+    tb_CompNeg(a_dst);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompShift(ppc_cpu *c)
+{
+    gaddr a_src = (gaddr)c->gpr[3];
+    int16_t a_shift = (int16_t)c->gpr[4];
+    tb_CompShift(a_src, a_shift);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompMul(ppc_cpu *c)
+{
+    int32_t a_src1 = (int32_t)c->gpr[3];
+    int32_t a_src2 = (int32_t)c->gpr[4];
+    gaddr a_dst = (gaddr)c->gpr[5];
+    tb_CompMul(a_src1, a_src2, a_dst);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompDiv(ppc_cpu *c)
+{
+    gaddr a_numerator = (gaddr)c->gpr[3];
+    int32_t a_denominator = (int32_t)c->gpr[4];
+    gaddr a_remainder = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CompDiv(a_numerator, a_denominator, a_remainder);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompFixMul(ppc_cpu *c)
+{
+    gaddr a_compSrc = (gaddr)c->gpr[3];
+    int32_t a_fixSrc = (int32_t)c->gpr[4];
+    gaddr a_compDst = (gaddr)c->gpr[5];
+    tb_CompFixMul(a_compSrc, a_fixSrc, a_compDst);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompMulDiv(ppc_cpu *c)
+{
+    gaddr a_co = (gaddr)c->gpr[3];
+    int32_t a_mul = (int32_t)c->gpr[4];
+    int32_t a_divisor = (int32_t)c->gpr[5];
+    tb_CompMulDiv(a_co, a_mul, a_divisor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompMulDivTrunc(ppc_cpu *c)
+{
+    gaddr a_co = (gaddr)c->gpr[3];
+    int32_t a_mul = (int32_t)c->gpr[4];
+    int32_t a_divisor = (int32_t)c->gpr[5];
+    gaddr a_remainder = (gaddr)c->gpr[6];
+    tb_CompMulDivTrunc(a_co, a_mul, a_divisor, a_remainder);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompCompare(ppc_cpu *c)
+{
+    gaddr a_a = (gaddr)c->gpr[3];
+    gaddr a_minusb = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_CompCompare(a_a, a_minusb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompSquareRoot(ppc_cpu *c)
+{
+    gaddr a_src = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_CompSquareRoot(a_src);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FixMulDiv(ppc_cpu *c)
+{
+    int32_t a_src = (int32_t)c->gpr[3];
+    int32_t a_mul = (int32_t)c->gpr[4];
+    int32_t a_divisor = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_FixMulDiv(a_src, a_mul, a_divisor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UnsignedFixMulDiv(ppc_cpu *c)
+{
+    int32_t a_src = (int32_t)c->gpr[3];
+    int32_t a_mul = (int32_t)c->gpr[4];
+    int32_t a_divisor = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_UnsignedFixMulDiv(a_src, a_mul, a_divisor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FracSinCos(ppc_cpu *c)
+{
+    int32_t a_degree = (int32_t)c->gpr[3];
+    gaddr a_cosOut = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_FracSinCos(a_degree, a_cosOut);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FixExp2(ppc_cpu *c)
+{
+    int32_t a_src = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_FixExp2(a_src);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FixLog2(ppc_cpu *c)
+{
+    int32_t a_src = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_FixLog2(a_src);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FixPow(ppc_cpu *c)
+{
+    int32_t a_base = (int32_t)c->gpr[3];
+    int32_t a_exp = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_FixPow(a_base, a_exp);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GXNewGraphicsClient(ppc_cpu *c)
 {
     gaddr a_memoryStart = (gaddr)c->gpr[3];
@@ -23880,6 +24176,17 @@ const ppc_export ppc_exports[] = {
     {"ColorBit", ppcglue_ColorBit},
     {"Comp3to1", ppctrap_Comp3to1},
     {"Comp6to1", ppctrap_Comp6to1},
+    {"CompAdd", ppcglue_CompAdd},
+    {"CompCompare", ppcglue_CompCompare},
+    {"CompDiv", ppcglue_CompDiv},
+    {"CompFixMul", ppcglue_CompFixMul},
+    {"CompMul", ppcglue_CompMul},
+    {"CompMulDiv", ppcglue_CompMulDiv},
+    {"CompMulDivTrunc", ppcglue_CompMulDivTrunc},
+    {"CompNeg", ppcglue_CompNeg},
+    {"CompShift", ppcglue_CompShift},
+    {"CompSquareRoot", ppcglue_CompSquareRoot},
+    {"CompSub", ppcglue_CompSub},
     {"CompactMem", ppcglue_CompactMem},
     {"CompactMemSys", ppcglue_CompactMemSys},
     {"CompressImage", ppcglue_CompressImage},
@@ -23887,6 +24194,7 @@ const ppc_export ppc_exports[] = {
     {"CompressPictureFile", ppctrap_CompressPictureFile},
     {"CompressSequenceBegin", ppcglue_CompressSequenceBegin},
     {"CompressSequenceFrame", ppcglue_CompressSequenceFrame},
+    {"ConcatMatrix", ppcglue_ConcatMatrix},
     {"ContinueSpeech", ppcglue_ContinueSpeech},
     {"ConvertFileToMovieFile", ppctrap_ConvertFileToMovieFile},
     {"ConvertImage", ppctrap_ConvertImage},
@@ -23897,6 +24205,7 @@ const ppc_export ppc_exports[] = {
     {"CopyCollection", ppctrap_CopyCollection},
     {"CopyDeepMask", ppcglue_CopyDeepMask},
     {"CopyMask", ppcglue_CopyMask},
+    {"CopyMatrix", ppcglue_CopyMatrix},
     {"CopyMediaUserData", ppctrap_CopyMediaUserData},
     {"CopyMovieSelection", ppcglue_CopyMovieSelection},
     {"CopyMovieSettings", ppctrap_CopyMovieSettings},
@@ -24050,6 +24359,7 @@ const ppc_export ppc_exports[] = {
     {"Enqueue", ppcglue_Enqueue},
     {"EnterMovies", ppcglue_EnterMovies},
     {"Entry2Index", ppcglue_Entry2Index},
+    {"EqualMatrix", ppcglue_EqualMatrix},
     {"EqualPt", ppcglue_EqualPt},
     {"EqualRect", ppcglue_EqualRect},
     {"EqualRgn", ppcglue_EqualRgn},
@@ -24116,7 +24426,11 @@ const ppc_export ppc_exports[] = {
     {"Fix2SmallFract", ppcglue_Fix2SmallFract},
     {"FixATan2", ppcglue_FixATan2},
     {"FixDiv", ppcglue_FixDiv},
+    {"FixExp2", ppcglue_FixExp2},
+    {"FixLog2", ppcglue_FixLog2},
     {"FixMul", ppcglue_FixMul},
+    {"FixMulDiv", ppcglue_FixMulDiv},
+    {"FixPow", ppcglue_FixPow},
     {"FixRatio", ppcglue_FixRatio},
     {"FixRound", ppcglue_FixRound},
     {"FlashMenuBar", ppcglue_FlashMenuBar},
@@ -24139,6 +24453,7 @@ const ppc_export ppc_exports[] = {
     {"FracDiv", ppcglue_FracDiv},
     {"FracMul", ppcglue_FracMul},
     {"FracSin", ppcglue_FracSin},
+    {"FracSinCos", ppcglue_FracSinCos},
     {"FracSqrt", ppcglue_FracSqrt},
     {"FrameArc", ppcglue_FrameArc},
     {"FrameOval", ppcglue_FrameOval},
@@ -24422,6 +24737,7 @@ const ppc_export ppc_exports[] = {
     {"GetMCInfo", ppcglue_GetMCInfo},
     {"GetMainDevice", ppcglue_GetMainDevice},
     {"GetMaskTable", ppctrap_GetMaskTable},
+    {"GetMatrixType", ppcglue_GetMatrixType},
     {"GetMaxCompressionSize", ppcglue_GetMaxCompressionSize},
     {"GetMaxDevice", ppcglue_GetMaxDevice},
     {"GetMaxLoadedTimeInMovie", ppctrap_GetMaxLoadedTimeInMovie},
@@ -24775,6 +25091,7 @@ const ppc_export ppc_exports[] = {
     {"InvalidateMovieRegion", ppctrap_InvalidateMovieRegion},
     {"InvalidateSprite", ppctrap_InvalidateSprite},
     {"InvalidateSpriteWorld", ppctrap_InvalidateSpriteWorld},
+    {"InverseMatrix", ppcglue_InverseMatrix},
     {"InvertArc", ppcglue_InvertArc},
     {"InvertColor", ppcglue_InvertColor},
     {"InvertOval", ppcglue_InvertOval},
@@ -25351,6 +25668,7 @@ const ppc_export ppc_exports[] = {
     {"MakeThumbnailFromPixMap", ppctrap_MakeThumbnailFromPixMap},
     {"MakeTrackTimeTable", ppctrap_MakeTrackTimeTable},
     {"MakeVoiceSpec", ppcglue_MakeVoiceSpec},
+    {"MapMatrix", ppcglue_MapMatrix},
     {"MapPoly", ppcglue_MapPoly},
     {"MapPt", ppcglue_MapPt},
     {"MapRect", ppcglue_MapRect},
@@ -25882,6 +26200,8 @@ const ppc_export ppc_exports[] = {
     {"QTNewTween", ppctrap_QTNewTween},
     {"QTNextChildAnyType", ppctrap_QTNextChildAnyType},
     {"QTParseTextHREF", ppctrap_QTParseTextHREF},
+    {"QTPrivateCall273", ppcglue_QTPrivateCall273},
+    {"QTPrivateCall274", ppcglue_QTPrivateCall274},
     {"QTRegisterAccessKey", ppctrap_QTRegisterAccessKey},
     {"QTRemoveAtom", ppctrap_QTRemoveAtom},
     {"QTRemoveChildren", ppctrap_QTRemoveChildren},
@@ -25978,6 +26298,7 @@ const ppc_export ppc_exports[] = {
     {"RectInIconMethod", ppctrap_RectInIconMethod},
     {"RectInIconSuite", ppcglue_RectInIconSuite},
     {"RectInRgn", ppcglue_RectInRgn},
+    {"RectMatrix", ppcglue_RectMatrix},
     {"RectRgn", ppcglue_RectRgn},
     {"RegisterSection", ppcglue_RegisterSection},
     {"ReleaseResource", ppcglue_ReleaseResource},
@@ -26013,6 +26334,7 @@ const ppc_export ppc_exports[] = {
     {"RestoreMixedModeState", ppctrap_RestoreMixedModeState},
     {"RetrievePictInfo", ppctrap_RetrievePictInfo},
     {"RmvTime", ppcglue_RmvTime},
+    {"RotateMatrix", ppcglue_RotateMatrix},
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"SFGetFile", ppcglue_SFGetFile},
@@ -26044,6 +26366,7 @@ const ppc_export ppc_exports[] = {
     {"SaveFore", ppcglue_SaveFore},
     {"SaveMixedModeState", ppctrap_SaveMixedModeState},
     {"SaveOld", ppcglue_SaveOld},
+    {"ScaleMatrix", ppcglue_ScaleMatrix},
     {"ScaleMovieSegment", ppctrap_ScaleMovieSegment},
     {"ScalePt", ppcglue_ScalePt},
     {"ScaleTrackSegment", ppctrap_ScaleTrackSegment},
@@ -26132,6 +26455,7 @@ const ppc_export ppc_exports[] = {
     {"SetHandleSize", ppcglue_SetHandleSize},
     {"SetIconCacheData", ppctrap_SetIconCacheData},
     {"SetIconCacheProc", ppctrap_SetIconCacheProc},
+    {"SetIdentityMatrix", ppcglue_SetIdentityMatrix},
     {"SetImageDescriptionCTable", ppctrap_SetImageDescriptionCTable},
     {"SetIndexedCollectionItemInfo", ppctrap_SetIndexedCollectionItemInfo},
     {"SetIntlResource", ppctrap_SetIntlResource},
@@ -26287,6 +26611,7 @@ const ppc_export ppc_exports[] = {
     {"ShutDwnStart", ppctrap_ShutDwnStart},
     {"SizeControl", ppcglue_SizeControl},
     {"SizeWindow", ppcglue_SizeWindow},
+    {"SkewMatrix", ppcglue_SkewMatrix},
     {"SlopeFromAngle", ppcglue_SlopeFromAngle},
     {"SlotVInstall", ppcglue_SlotVInstall},
     {"SlotVRemove", ppcglue_SlotVRemove},
@@ -26437,7 +26762,12 @@ const ppc_export ppc_exports[] = {
     {"TrackDrag", ppcglue_TrackDrag},
     {"TrackGoAway", ppcglue_TrackGoAway},
     {"TrackTimeToMediaTime", ppctrap_TrackTimeToMediaTime},
+    {"TransformFixedPoints", ppcglue_TransformFixedPoints},
+    {"TransformFixedRect", ppcglue_TransformFixedRect},
+    {"TransformPoints", ppcglue_TransformPoints},
+    {"TransformRect", ppcglue_TransformRect},
     {"TransformRgn", ppctrap_TransformRgn},
+    {"TranslateMatrix", ppcglue_TranslateMatrix},
     {"Transliterate", ppcglue_Transliterate},
     {"TransliterateText", ppcglue_TransliterateText},
     {"TrimImage", ppctrap_TrimImage},
@@ -26453,6 +26783,7 @@ const ppc_export ppc_exports[] = {
     {"UnloadSeg", ppctrap_UnloadSeg},
     {"UnlockPixels", ppcglue_UnlockPixels},
     {"UnpackBits", ppcglue_UnpackBits},
+    {"UnsignedFixMulDiv", ppcglue_UnsignedFixMulDiv},
     {"UnsignedFixedMulDiv", ppctrap_UnsignedFixedMulDiv},
     {"UpdateAlias", ppcglue_UpdateAlias},
     {"UpdateControls", ppcglue_UpdateControls},

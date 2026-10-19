@@ -686,3 +686,415 @@
         type: TEHandle
     dispatcher: TEDispatch
     selector: 0x000F
+
+# A private QuickTime 2.5 call MoviePlayer 2.5 makes at startup (selector
+# 0x273, not in Apple's interfaces): one pointer (it gets an atom container,
+# apparently QuickTime's preferences), an OSErr.
+- function:
+    name: QTPrivateCall273
+    return: OSErr
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: QuickTime
+    selector: 0x0273
+
+# Its partner (0x274): the atom container 0x273 gave and a flag, an OSErr.
+- function:
+    name: QTPrivateCall274
+    return: OSErr
+    args:
+      - name: container
+        type: long
+      - name: flag
+        type: Boolean
+    dispatcher: QuickTime
+    selector: 0x0274
+
+# QuickTime's matrix and fixed-point utilities ($ABC2, moveq selector in D0;
+# Pascal calls).  Signatures from Apple's ImageCompression.h.
+
+- dispatcher:
+    name: MatrixDispatch
+    trap: 0xABC2
+    selector-location: D0W
+
+- function:
+    name: GetMatrixType
+    return: short
+    args:
+      - name: m
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x14
+
+- function:
+    name: CopyMatrix
+    args:
+      - name: m1
+        type: Ptr
+      - name: m2
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x20
+
+- function:
+    name: EqualMatrix
+    return: Boolean
+    args:
+      - name: m1
+        type: Ptr
+      - name: m2
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x21
+
+- function:
+    name: SetIdentityMatrix
+    args:
+      - name: matrix
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x15
+
+- function:
+    name: TranslateMatrix
+    args:
+      - name: m
+        type: Ptr
+      - name: deltaH
+        type: Fixed
+      - name: deltaV
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x19
+
+- function:
+    name: RotateMatrix
+    args:
+      - name: m
+        type: Ptr
+      - name: degrees
+        type: Fixed
+      - name: aboutX
+        type: Fixed
+      - name: aboutY
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x16
+
+- function:
+    name: ScaleMatrix
+    args:
+      - name: m
+        type: Ptr
+      - name: scaleX
+        type: Fixed
+      - name: scaleY
+        type: Fixed
+      - name: aboutX
+        type: Fixed
+      - name: aboutY
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x17
+
+- function:
+    name: SkewMatrix
+    args:
+      - name: m
+        type: Ptr
+      - name: skewX
+        type: Fixed
+      - name: skewY
+        type: Fixed
+      - name: aboutX
+        type: Fixed
+      - name: aboutY
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x18
+
+- function:
+    name: TransformFixedPoints
+    return: OSErr
+    args:
+      - name: m
+        type: Ptr
+      - name: fpt
+        type: Ptr
+      - name: count
+        type: long
+    dispatcher: MatrixDispatch
+    selector: 0x22
+
+- function:
+    name: TransformPoints
+    return: OSErr
+    args:
+      - name: mp
+        type: Ptr
+      - name: pt1
+        type: Ptr
+      - name: count
+        type: long
+    dispatcher: MatrixDispatch
+    selector: 0x23
+
+- function:
+    name: TransformFixedRect
+    return: Boolean
+    args:
+      - name: m
+        type: Ptr
+      - name: fr
+        type: Ptr
+      - name: fpp
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x24
+
+- function:
+    name: TransformRect
+    return: Boolean
+    args:
+      - name: m
+        type: Ptr
+      - name: r
+        type: Ptr
+      - name: fpp
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x25
+
+- function:
+    name: InverseMatrix
+    return: Boolean
+    args:
+      - name: m
+        type: Ptr
+      - name: im
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x1C
+
+- function:
+    name: ConcatMatrix
+    args:
+      - name: a
+        type: Ptr
+      - name: b
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x1B
+
+- function:
+    name: RectMatrix
+    args:
+      - name: matrix
+        type: Ptr
+      - name: srcRect
+        type: Ptr
+      - name: dstRect
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x1E
+
+- function:
+    name: MapMatrix
+    args:
+      - name: matrix
+        type: Ptr
+      - name: fromRect
+        type: Ptr
+      - name: toRect
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x1D
+
+- function:
+    name: CompAdd
+    args:
+      - name: src
+        type: Ptr
+      - name: dst
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x01
+
+- function:
+    name: CompSub
+    args:
+      - name: src
+        type: Ptr
+      - name: dst
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x02
+
+- function:
+    name: CompNeg
+    args:
+      - name: dst
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x03
+
+- function:
+    name: CompShift
+    args:
+      - name: src
+        type: Ptr
+      - name: shift
+        type: short
+    dispatcher: MatrixDispatch
+    selector: 0x04
+
+- function:
+    name: CompMul
+    args:
+      - name: src1
+        type: long
+      - name: src2
+        type: long
+      - name: dst
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x05
+
+- function:
+    name: CompDiv
+    return: long
+    args:
+      - name: numerator
+        type: Ptr
+      - name: denominator
+        type: long
+      - name: remainder
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x06
+
+- function:
+    name: CompFixMul
+    args:
+      - name: compSrc
+        type: Ptr
+      - name: fixSrc
+        type: Fixed
+      - name: compDst
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x07
+
+- function:
+    name: CompMulDiv
+    args:
+      - name: co
+        type: Ptr
+      - name: mul
+        type: long
+      - name: divisor
+        type: long
+    dispatcher: MatrixDispatch
+    selector: 0x08
+
+- function:
+    name: CompMulDivTrunc
+    args:
+      - name: co
+        type: Ptr
+      - name: mul
+        type: long
+      - name: divisor
+        type: long
+      - name: remainder
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x0C
+
+- function:
+    name: CompCompare
+    return: long
+    args:
+      - name: a
+        type: Ptr
+      - name: minusb
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x09
+
+- function:
+    name: CompSquareRoot
+    return: unsigned long
+    args:
+      - name: src
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x11
+
+- function:
+    name: FixMulDiv
+    return: Fixed
+    args:
+      - name: src
+        type: Fixed
+      - name: mul
+        type: Fixed
+      - name: divisor
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x0A
+
+- function:
+    name: UnsignedFixMulDiv
+    return: Fixed
+    args:
+      - name: src
+        type: Fixed
+      - name: mul
+        type: Fixed
+      - name: divisor
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x0D
+
+- function:
+    name: FracSinCos
+    return: long
+    args:
+      - name: degree
+        type: Fixed
+      - name: cosOut
+        type: Ptr
+    dispatcher: MatrixDispatch
+    selector: 0x0B
+
+- function:
+    name: FixExp2
+    return: Fixed
+    args:
+      - name: src
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x0E
+
+- function:
+    name: FixLog2
+    return: Fixed
+    args:
+      - name: src
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x0F
+
+- function:
+    name: FixPow
+    return: Fixed
+    args:
+      - name: base
+        type: Fixed
+      - name: exp
+        type: Fixed
+    dispatcher: MatrixDispatch
+    selector: 0x10

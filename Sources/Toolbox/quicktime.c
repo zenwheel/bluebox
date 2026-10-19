@@ -1303,6 +1303,18 @@ static bool undo_edit(movie *m)
     return true;
 }
 
+/* Private calls of QuickTime 2.5's MoviePlayer at startup, apparently
+ * QuickTime's own preferences: 0x273 gives an atom container (none here),
+ * 0x274 takes one back with a flag. */
+int16_t tb_QTPrivateCall273(gaddr data)
+{
+    if (data)
+        wr32(data, 0);
+    return noErr;
+}
+
+int16_t tb_QTPrivateCall274(int32_t container, int8_t flag) { return noErr; }
+
 int8_t tb_GetMovieActive(int32_t h)
 {
     movie *m = movie_of((gaddr)h);

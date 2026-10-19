@@ -712,6 +712,7 @@ const char *const tb_trap_names[1024] = {
     [0x2A3] = "ImageCompressionDispatch",
     [0x2AA] = "QuickTime",
     [0x31D] = "QDExtensions",
+    [0x3C2] = "MatrixDispatch",
     [0x3C9] = "IconDispatch",
     [0x3CA] = "DeviceLoop",
     [0x3EB] = "DisplayDispatch",
@@ -2288,6 +2289,123 @@ static void glue_ColorBit(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CompAdd(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    tb_CompAdd(a_src, a_dst);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompCompare(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_minusb = (gaddr)cpu_pop32(c);
+    gaddr a_a = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CompCompare(a_a, a_minusb);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompDiv(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_remainder = (gaddr)cpu_pop32(c);
+    int32_t a_denominator = (int32_t)cpu_pop32(c);
+    gaddr a_numerator = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CompDiv(a_numerator, a_denominator, a_remainder);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompFixMul(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_compDst = (gaddr)cpu_pop32(c);
+    int32_t a_fixSrc = (int32_t)cpu_pop32(c);
+    gaddr a_compSrc = (gaddr)cpu_pop32(c);
+    tb_CompFixMul(a_compSrc, a_fixSrc, a_compDst);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompMul(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    int32_t a_src2 = (int32_t)cpu_pop32(c);
+    int32_t a_src1 = (int32_t)cpu_pop32(c);
+    tb_CompMul(a_src1, a_src2, a_dst);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompMulDiv(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_divisor = (int32_t)cpu_pop32(c);
+    int32_t a_mul = (int32_t)cpu_pop32(c);
+    gaddr a_co = (gaddr)cpu_pop32(c);
+    tb_CompMulDiv(a_co, a_mul, a_divisor);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompMulDivTrunc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_remainder = (gaddr)cpu_pop32(c);
+    int32_t a_divisor = (int32_t)cpu_pop32(c);
+    int32_t a_mul = (int32_t)cpu_pop32(c);
+    gaddr a_co = (gaddr)cpu_pop32(c);
+    tb_CompMulDivTrunc(a_co, a_mul, a_divisor, a_remainder);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompNeg(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    tb_CompNeg(a_dst);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompShift(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_shift = (int16_t)cpu_pop16(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    tb_CompShift(a_src, a_shift);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompSquareRoot(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    uint32_t r = tb_CompSquareRoot(a_src);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompSub(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    tb_CompSub(a_src, a_dst);
+    cpu_push32(c, ret);
+}
+
 static void glue_CompactMem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2365,6 +2483,16 @@ static void glue_CompressSequenceFrame(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ConcatMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_b = (gaddr)cpu_pop32(c);
+    gaddr a_a = (gaddr)cpu_pop32(c);
+    tb_ConcatMatrix(a_a, a_b);
+    cpu_push32(c, ret);
+}
+
 static void glue_ContinueSpeech(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2416,6 +2544,16 @@ static void glue_CopyMask(cpu68k *c, uint16_t trapword)
     gaddr a_mskbp = (gaddr)cpu_pop32(c);
     gaddr a_srcbp = (gaddr)cpu_pop32(c);
     tb_CopyMask(a_srcbp, a_mskbp, a_dstbp, a_srcrp, a_mskrp, a_dstrp);
+    cpu_push32(c, ret);
+}
+
+static void glue_CopyMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_m2 = (gaddr)cpu_pop32(c);
+    gaddr a_m1 = (gaddr)cpu_pop32(c);
+    tb_CopyMatrix(a_m1, a_m2);
     cpu_push32(c, ret);
 }
 
@@ -3561,6 +3699,17 @@ static void glue_Entry2Index(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_EqualMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_m2 = (gaddr)cpu_pop32(c);
+    gaddr a_m1 = (gaddr)cpu_pop32(c);
+    int8_t r = tb_EqualMatrix(a_m1, a_m2);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_EqualPt(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4208,6 +4357,26 @@ static void glue_FixDiv(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FixExp2(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int32_t r = tb_FixExp2(a_src);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FixLog2(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int32_t r = tb_FixLog2(a_src);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FixMul(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4215,6 +4384,29 @@ static void glue_FixMul(cpu68k *c, uint16_t trapword)
     int32_t a_b = (int32_t)cpu_pop32(c);
     int32_t a_a = (int32_t)cpu_pop32(c);
     int32_t r = tb_FixMul(a_a, a_b);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FixMulDiv(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_divisor = (int32_t)cpu_pop32(c);
+    int32_t a_mul = (int32_t)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int32_t r = tb_FixMulDiv(a_src, a_mul, a_divisor);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FixPow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_exp = (int32_t)cpu_pop32(c);
+    int32_t a_base = (int32_t)cpu_pop32(c);
+    int32_t r = tb_FixPow(a_base, a_exp);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -4364,6 +4556,17 @@ static void glue_FracSin(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t a_x = (int32_t)cpu_pop32(c);
     int32_t r = tb_FracSin(a_x);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FracSinCos(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_cosOut = (gaddr)cpu_pop32(c);
+    int32_t a_degree = (int32_t)cpu_pop32(c);
+    int32_t r = tb_FracSinCos(a_degree, a_cosOut);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -6138,6 +6341,16 @@ static void glue_GetMainDevice(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_GetMainDevice();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMatrixType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMatrixType(a_m);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8166,6 +8379,17 @@ static void glue_InvalRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InverseMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_im = (gaddr)cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    int8_t r = tb_InverseMatrix(a_m, a_im);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_InvertArc(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9188,6 +9412,17 @@ static void glue_MakeVoiceSpec(cpu68k *c, uint16_t trapword)
     int32_t a_creator = (int32_t)cpu_pop32(c);
     int16_t r = tb_MakeVoiceSpec(a_creator, a_id, a_voice);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MapMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_toRect = (gaddr)cpu_pop32(c);
+    gaddr a_fromRect = (gaddr)cpu_pop32(c);
+    gaddr a_matrix = (gaddr)cpu_pop32(c);
+    tb_MapMatrix(a_matrix, a_fromRect, a_toRect);
     cpu_push32(c, ret);
 }
 
@@ -11660,6 +11895,27 @@ static void glue_QDError(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_QTPrivateCall273(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int16_t r = tb_QTPrivateCall273(a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTPrivateCall274(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_flag = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTPrivateCall274(a_container, a_flag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RGB2CMY(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11877,6 +12133,17 @@ static void glue_RectInRgn(cpu68k *c, uint16_t trapword)
     gaddr a_rp = (gaddr)cpu_pop32(c);
     int8_t r = tb_RectInRgn(a_rp, a_rh);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_RectMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dstRect = (gaddr)cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    gaddr a_matrix = (gaddr)cpu_pop32(c);
+    tb_RectMatrix(a_matrix, a_srcRect, a_dstRect);
     cpu_push32(c, ret);
 }
 
@@ -12105,6 +12372,18 @@ static void glue_RmvTime(cpu68k *c, uint16_t trapword)
     (void)trapword;
     gaddr a_taskp = (gaddr)c->a[0];
     tb_RmvTime(a_taskp);
+}
+
+static void glue_RotateMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aboutY = (int32_t)cpu_pop32(c);
+    int32_t a_aboutX = (int32_t)cpu_pop32(c);
+    int32_t a_degrees = (int32_t)cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    tb_RotateMatrix(a_m, a_degrees, a_aboutX, a_aboutY);
+    cpu_push32(c, ret);
 }
 
 static void glue_RsrcZoneInit(cpu68k *c, uint16_t trapword)
@@ -12433,6 +12712,19 @@ static void glue_SaveOld(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_SaveOld(a_w);
+    cpu_push32(c, ret);
+}
+
+static void glue_ScaleMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aboutY = (int32_t)cpu_pop32(c);
+    int32_t a_aboutX = (int32_t)cpu_pop32(c);
+    int32_t a_scaleY = (int32_t)cpu_pop32(c);
+    int32_t a_scaleX = (int32_t)cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    tb_ScaleMatrix(a_m, a_scaleX, a_scaleY, a_aboutX, a_aboutY);
     cpu_push32(c, ret);
 }
 
@@ -13220,6 +13512,15 @@ static void glue_SetHandleSize(cpu68k *c, uint16_t trapword)
     int32_t a_newsize = (int32_t)c->d[0];
     tb_SetHandleSize(a_h, a_newsize);
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
+}
+
+static void glue_SetIdentityMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_matrix = (gaddr)cpu_pop32(c);
+    tb_SetIdentityMatrix(a_matrix);
+    cpu_push32(c, ret);
 }
 
 static void glue_SetItemCmd(cpu68k *c, uint16_t trapword)
@@ -14035,6 +14336,19 @@ static void glue_SizeWindow(cpu68k *c, uint16_t trapword)
     int16_t a_width = (int16_t)cpu_pop16(c);
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_SizeWindow(a_w, a_width, a_height, a_flag);
+    cpu_push32(c, ret);
+}
+
+static void glue_SkewMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aboutY = (int32_t)cpu_pop32(c);
+    int32_t a_aboutX = (int32_t)cpu_pop32(c);
+    int32_t a_skewY = (int32_t)cpu_pop32(c);
+    int32_t a_skewX = (int32_t)cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    tb_SkewMatrix(a_m, a_skewX, a_skewY, a_aboutX, a_aboutY);
     cpu_push32(c, ret);
 }
 
@@ -15522,6 +15836,65 @@ static void glue_TrackGoAway(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TransformFixedPoints(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_count = (int32_t)cpu_pop32(c);
+    gaddr a_fpt = (gaddr)cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TransformFixedPoints(a_m, a_fpt, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TransformFixedRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fpp = (gaddr)cpu_pop32(c);
+    gaddr a_fr = (gaddr)cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    int8_t r = tb_TransformFixedRect(a_m, a_fr, a_fpp);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_TransformPoints(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_count = (int32_t)cpu_pop32(c);
+    gaddr a_pt1 = (gaddr)cpu_pop32(c);
+    gaddr a_mp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TransformPoints(a_mp, a_pt1, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TransformRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fpp = (gaddr)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    int8_t r = tb_TransformRect(a_m, a_r, a_fpp);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_TranslateMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_deltaV = (int32_t)cpu_pop32(c);
+    int32_t a_deltaH = (int32_t)cpu_pop32(c);
+    gaddr a_m = (gaddr)cpu_pop32(c);
+    tb_TranslateMatrix(a_m, a_deltaH, a_deltaV);
+    cpu_push32(c, ret);
+}
+
 static void glue_Transliterate(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15639,6 +16012,18 @@ static void glue_UnpackBits(cpu68k *c, uint16_t trapword)
     gaddr a_dp = (gaddr)cpu_pop32(c);
     gaddr a_sp = (gaddr)cpu_pop32(c);
     tb_UnpackBits(a_sp, a_dp, a_len);
+    cpu_push32(c, ret);
+}
+
+static void glue_UnsignedFixMulDiv(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_divisor = (int32_t)cpu_pop32(c);
+    int32_t a_mul = (int32_t)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int32_t r = tb_UnsignedFixMulDiv(a_src, a_mul, a_divisor);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -17550,6 +17935,39 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x9Fu, "CDSequenceEquivalentImageDescriptionS", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0xA0u, "ReplaceDSequenceImageDescription", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0xA3u, "QTGetPixelFormatDepthForImageDescription", CONV_STACK, 4, 2, 0},
+    {0xABC2, (int32_t)0x1u, "CompAdd", CONV_STACK, 8, 0, glue_CompAdd},
+    {0xABC2, (int32_t)0x2u, "CompSub", CONV_STACK, 8, 0, glue_CompSub},
+    {0xABC2, (int32_t)0x3u, "CompNeg", CONV_STACK, 4, 0, glue_CompNeg},
+    {0xABC2, (int32_t)0x4u, "CompShift", CONV_STACK, 6, 0, glue_CompShift},
+    {0xABC2, (int32_t)0x5u, "CompMul", CONV_STACK, 12, 0, glue_CompMul},
+    {0xABC2, (int32_t)0x6u, "CompDiv", CONV_STACK, 12, 4, glue_CompDiv},
+    {0xABC2, (int32_t)0x7u, "CompFixMul", CONV_STACK, 12, 0, glue_CompFixMul},
+    {0xABC2, (int32_t)0x8u, "CompMulDiv", CONV_STACK, 12, 0, glue_CompMulDiv},
+    {0xABC2, (int32_t)0x9u, "CompCompare", CONV_STACK, 8, 4, glue_CompCompare},
+    {0xABC2, (int32_t)0xAu, "FixMulDiv", CONV_STACK, 12, 4, glue_FixMulDiv},
+    {0xABC2, (int32_t)0xBu, "FracSinCos", CONV_STACK, 8, 4, glue_FracSinCos},
+    {0xABC2, (int32_t)0xCu, "CompMulDivTrunc", CONV_STACK, 16, 0, glue_CompMulDivTrunc},
+    {0xABC2, (int32_t)0xDu, "UnsignedFixMulDiv", CONV_STACK, 12, 4, glue_UnsignedFixMulDiv},
+    {0xABC2, (int32_t)0xEu, "FixExp2", CONV_STACK, 4, 4, glue_FixExp2},
+    {0xABC2, (int32_t)0xFu, "FixLog2", CONV_STACK, 4, 4, glue_FixLog2},
+    {0xABC2, (int32_t)0x10u, "FixPow", CONV_STACK, 8, 4, glue_FixPow},
+    {0xABC2, (int32_t)0x11u, "CompSquareRoot", CONV_STACK, 4, 4, glue_CompSquareRoot},
+    {0xABC2, (int32_t)0x14u, "GetMatrixType", CONV_STACK, 4, 2, glue_GetMatrixType},
+    {0xABC2, (int32_t)0x15u, "SetIdentityMatrix", CONV_STACK, 4, 0, glue_SetIdentityMatrix},
+    {0xABC2, (int32_t)0x16u, "RotateMatrix", CONV_STACK, 16, 0, glue_RotateMatrix},
+    {0xABC2, (int32_t)0x17u, "ScaleMatrix", CONV_STACK, 20, 0, glue_ScaleMatrix},
+    {0xABC2, (int32_t)0x18u, "SkewMatrix", CONV_STACK, 20, 0, glue_SkewMatrix},
+    {0xABC2, (int32_t)0x19u, "TranslateMatrix", CONV_STACK, 12, 0, glue_TranslateMatrix},
+    {0xABC2, (int32_t)0x1Bu, "ConcatMatrix", CONV_STACK, 8, 0, glue_ConcatMatrix},
+    {0xABC2, (int32_t)0x1Cu, "InverseMatrix", CONV_STACK, 8, 2, glue_InverseMatrix},
+    {0xABC2, (int32_t)0x1Du, "MapMatrix", CONV_STACK, 12, 0, glue_MapMatrix},
+    {0xABC2, (int32_t)0x1Eu, "RectMatrix", CONV_STACK, 12, 0, glue_RectMatrix},
+    {0xABC2, (int32_t)0x20u, "CopyMatrix", CONV_STACK, 8, 0, glue_CopyMatrix},
+    {0xABC2, (int32_t)0x21u, "EqualMatrix", CONV_STACK, 8, 2, glue_EqualMatrix},
+    {0xABC2, (int32_t)0x22u, "TransformFixedPoints", CONV_STACK, 12, 2, glue_TransformFixedPoints},
+    {0xABC2, (int32_t)0x23u, "TransformPoints", CONV_STACK, 12, 2, glue_TransformPoints},
+    {0xABC2, (int32_t)0x24u, "TransformFixedRect", CONV_STACK, 12, 2, glue_TransformFixedRect},
+    {0xABC2, (int32_t)0x25u, "TransformRect", CONV_STACK, 12, 2, glue_TransformRect},
     {0xAA59, (int32_t)0x0u, "NewRoutineDescriptor", CONV_STACK, 10, 4, 0},
     {0xAA59, (int32_t)0x1u, "DisposeRoutineDescriptor", CONV_STACK, 4, 0, 0},
     {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, 0},
@@ -18206,6 +18624,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x24Au, "SetMediaInputMap", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x263u, "GetTrackDisplayMatrix", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x269u, "ChooseMovieClock", CONV_STACK, 8, 0, 0},
+    {0xAAAA, (int32_t)0x273u, "QTPrivateCall273", CONV_STACK, 4, 2, glue_QTPrivateCall273},
+    {0xAAAA, (int32_t)0x274u, "QTPrivateCall274", CONV_STACK, 6, 2, glue_QTPrivateCall274},
     {0xAAAA, (int32_t)0x27Au, "ITextAddString", CONV_STACK, 14, 2, 0},
     {0xAAAA, (int32_t)0x27Bu, "ITextRemoveString", CONV_STACK, 14, 2, 0},
     {0xAAAA, (int32_t)0x27Cu, "ITextGetString", CONV_STACK, 18, 2, 0},
@@ -18529,6 +18949,7 @@ const dispatcher_info dispatchers[] = {
     {0xAA52, "HighLevelFSDispatch", "D0<0xF>"},
     {0xABC9, "IconDispatch", "D0W"},
     {0xAAA3, "ImageCompressionDispatch", "D0W"},
+    {0xABC2, "MatrixDispatch", "D0W"},
     {0xAA59, "MixedModeDispatch", "D0W"},
     {0xA88F, "OSDispatch", "StackW"},
     {0xA9E7, "Pack0", "StackW"},
