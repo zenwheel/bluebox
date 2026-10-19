@@ -12,7 +12,7 @@
 #include "tb_internal.h"
 
 static const native_driver *const drivers[] = {
-    &sound_driver, &mactcp_driver, &mpp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
+    &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
 };
 enum { NDRIVERS = sizeof drivers / sizeof drivers[0] };
 

@@ -1,4 +1,5 @@
 import CCore
+import Darwin
 import Testing
 import Toolbox
 
@@ -104,6 +105,101 @@ extension BlueBox {
             #expect(rd16(out) == 95)
             #expect(String(decoding: (0..<5).map { rd8(buf + UInt32($0)) }, as: UTF8.self) == "hello")
             #expect(rd8(vars + 1 + 2) == 1 && rd8(vars + 1 + 3 + 4) == 77) // short DDP, type 77, in the RHA
+        }
+
+        func open(_ name: String) -> Int16 {
+            let pb = tb_NewPtr(80, false, true), np = tb_NewPtr(8, false, true)
+            guestPString(name, at: np)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), np)
+            #expect(tb_PBOpen(pb, false) == 0)
+            return Int16(bitPattern: rd16(pb + UInt32(IOParam_ioRefNum_off)))
+        }
+
+        func call(_ ref: Int16, _ code: Int, _ pb: UInt32, async: Bool = false) -> Int16 {
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: ref))
+            wr16(pb + UInt32(CntrlParam_csCode_off), UInt16(code))
+            return driver_call(pb, async, Int32(DRIVER_CONTROL))
+        }
+
+        func poll(until done: () -> Bool) {
+            for _ in 0..<200 where !done() {
+                usleep(2000)
+                appletalk_poll()
+            }
+        }
+
+        /// An ATP transaction to our own node: a request, the responder's
+        /// GetRequest hearing it, and two responses filling the BDS.
+        @Test func atpTransaction() {
+            #expect(machine_set_appletalk("local"))
+            launchTestApp()
+            let stack = tb_NewPtr(65536, false, true)
+            g_cpu!.pointee.a.7 = stack + 65536 - 16
+            let mpp = open(".MPP"), atp = open(".ATP")
+            #expect(atp == -11)
+            let pb = tb_NewPtr(80, false, true)
+            wr8(pb + 28, 1)
+            #expect(call(mpp, 256, pb) == 0) // setSelfSend
+            let node = rd8(rd32(UInt32(LM_ABusVars)))
+
+            gmemset(pb, 0, 80)
+            #expect(call(atp, 254, pb) == 0) // openATPSkt
+            let skt = rd8(pb + 28)
+
+            let get = tb_NewPtr(80, false, true), reqbuf = tb_NewPtr(16, false, true)
+            wr8(get + 28, skt)
+            wr16(get + 34, 16)
+            wr32(get + 36, reqbuf)
+            #expect(call(atp, 253, get, async: true) == 1) // getRequest
+
+            let req = tb_NewPtr(80, false, true), data = tb_NewPtr(8, false, true)
+            let bds = tb_NewPtr(12 * 2, false, true), b0 = tb_NewPtr(16, false, true), b1 = tb_NewPtr(16, false, true)
+            for (i, b) in [b0, b1].enumerated() {
+                wr16(bds + UInt32(i * 12), 16)
+                wr32(bds + UInt32(i * 12 + 2), b)
+            }
+            for (i, c) in "hi".utf8.enumerated() { wr8(data + UInt32(i), c) }
+            wr8(req + 29, 32) // exactly once
+            wr8(req + 32, node)
+            wr8(req + 33, skt)
+            wr16(req + 34, 2)
+            wr32(req + 36, data)
+            wr32(req + 40, bds)
+            wr8(req + 44, 2) // numOfBuffs
+            wr8(req + 45, 1) // timeout, seconds
+            wr8(req + 47, 3) // retries
+            wr32(req + 18, 0x1234_5678)
+            #expect(call(atp, 255, req, async: true) == 1) // sendRequest
+            poll { rd16(get + 16) != 1 }
+            #expect(rd16(get + 16) == 0)
+            #expect(rd16(get + 34) == 2 && rd8(reqbuf) == 0x68 && rd8(reqbuf + 1) == 0x69)
+            #expect(rd32(get + 18) == 0x1234_5678 && rd8(get + 29) == 32)
+
+            let rsp = tb_NewPtr(80, false, true), rbds = tb_NewPtr(24, false, true)
+            for (i, text) in ["one", "two!"].enumerated() {
+                let p = tb_NewPtr(8, false, true)
+                for (k, c) in text.utf8.enumerated() { wr8(p + UInt32(k), c) }
+                wr32(rbds + UInt32(i * 12 + 2), p)
+                wr16(rbds + UInt32(i * 12 + 6), UInt16(text.utf8.count))
+            }
+            wr8(rsp + 28, skt)
+            wr8(rsp + 29, 16) // EOM
+            wr32(rsp + 30, rd32(get + 30))
+            wr32(rsp + 40, rbds)
+            wr8(rsp + 45, 2) // bdsSize
+            wr16(rsp + 46, rd16(get + 46))
+            #expect(call(atp, 252, rsp) == 0) // sendResponse
+            poll { rd16(req + 16) != 1 }
+            #expect(rd16(req + 16) == 0)
+            #expect(rd8(req + 46) == 2) // numOfResps
+            #expect(rd16(bds + 6) == 3 && rd16(bds + 18) == 4)
+            #expect(rd8(b1 + 3) == 0x21)
+
+            let xpp = open(".XPP"), zone = tb_NewPtr(40, false, true), x = tb_NewPtr(80, false, true)
+            wr16(x + 28, 7) // zipGetMyZone
+            wr32(x + 34, zone)
+            #expect(call(xpp, 246, x) == 0)
+            #expect(pstring(at: zone) == "*")
         }
     }
 }

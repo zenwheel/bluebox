@@ -882,7 +882,7 @@ struct PortPicker: View {
         if s.hasPrefix("listen:") { return .listen }
         if s == "pty" { return .pty }
         if s.hasPrefix("/") { return .device }
-        return .none
+        return Kind.none /* "nothing", not unset */
     }
 
     private var value: String {
@@ -975,7 +975,8 @@ struct NetworkInterface {
             getnameinfo(sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST)
             let name = String(cString: i.ifa_name)
             if !out.contains(where: { $0.name == name }) {
-                out.append(NetworkInterface(name: name, address: String(cString: host)))
+                let bytes = host.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+                out.append(NetworkInterface(name: name, address: String(decoding: bytes, as: UTF8.self)))
             }
         }
         return out

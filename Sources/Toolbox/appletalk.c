@@ -67,6 +67,7 @@ static uint8_t node;
 static bool opened, selfsend, booted;
 static gaddr listeners[256];
 static bool sockets[256];
+static at_handler handlers[256]; /* sockets of ours (ATP's): datagrams go to C */
 static gaddr vars, readers;     /* RHA, and ReadPacket/ReadRest */
 static gaddr names[64];         /* registered names table entries */
 static int nnames;
@@ -526,8 +527,23 @@ static void deliver(const uint8_t *f, int n)
     if (len < 0 || 3 + hl + len > n)
         len = n - 3 - hl;
     const uint8_t *data = f + 3 + hl;
+    uint8_t sskt = f[2] == LLAP_DDP_SHORT ? f[3 + 3] : f[3 + 11];
     if (dskt == NIS_SOCKET && type == DDP_NBP) {
         nbp_receive(data, len, snode);
+        return;
+    }
+    /* AEP: the echoer on socket 4 sends a request back as a reply. */
+    if (dskt == 4 && type == 4) {
+        if (len > 0 && data[0] == 1) {
+            uint8_t echo[MAX_DATA];
+            memcpy(echo, data, (size_t)len);
+            echo[0] = 2;
+            send_ddp(0, snode, sskt, 4, 4, echo, len);
+        }
+        return;
+    }
+    if (sockets[dskt] && handlers[dskt]) {
+        handlers[dskt](dskt, snode, sskt, type, data, len);
         return;
     }
     gaddr fn = listeners[dskt];
@@ -556,6 +572,41 @@ static void deliver(const uint8_t *f, int n)
     cur = NULL;
     cur_left = 0;
 }
+
+void at_send_ddp(uint8_t dnode, uint8_t dskt, uint8_t sskt, uint8_t type, const uint8_t *data, int n)
+{
+    send_ddp(0, dnode, dskt, sskt, type, data, n);
+}
+
+/* A socket of ours: `want` (1-254), or 0 for any dynamic one; 0 if none. */
+int at_open_socket(int want, at_handler h)
+{
+    int s = want;
+    if (!s) {
+        for (s = 128; s < 255 && sockets[s]; s++)
+            ;
+        if (s == 255)
+            return 0;
+    } else if (s < 1 || s > 254 || sockets[s]) {
+        return 0;
+    }
+    sockets[s] = true;
+    listeners[s] = 0;
+    handlers[s] = h;
+    return s;
+}
+
+void at_close_socket(int s)
+{
+    if (s > 0 && s < 255) {
+        sockets[s] = false;
+        handlers[s] = 0;
+    }
+}
+
+uint8_t at_node(void) { return node; }
+bool at_opened(void) { return opened; }
+void at_complete(gaddr pb, int16_t r) { complete(pb, r); }
 
 static void send_ddp(uint16_t net, uint8_t dnode, uint8_t dskt, uint8_t sskt, uint8_t type, const uint8_t *data, int n)
 {
@@ -658,6 +709,7 @@ void appletalk_poll(void)
     last = t;
     polling = true;
     pump();
+    atp_poll();
     for (int i = 0; i < (int)(sizeof ops / sizeof ops[0]); i++) {
         nbp_op *o = &ops[i];
         if (!o->used)
@@ -769,6 +821,7 @@ static int16_t mpp_control(gaddr pb, bool async)
             return ddpSktErr;
         }
         sockets[s] = true;
+        handlers[s] = 0;
         listeners[s] = rd32(pb + PB_LISTENER);
         LOGF(LOG_TRAPS, "  DDP socket %d opened, listener %08X\n", s, listeners[s]);
         wr8(pb + PB_SOCKET, (uint8_t)s);
@@ -838,6 +891,9 @@ static int16_t mpp_control(gaddr pb, bool async)
     }
 }
 
+static int16_t mpp_open(gaddr pb);
+int16_t at_open(void) { return mpp_open(0); }
+
 static int16_t mpp_open(gaddr pb)
 {
     if (opened)
@@ -862,6 +918,31 @@ const native_driver mpp_driver = { ".MPP", 9, mpp_open, NULL, mpp_control, NULL,
 
 /* ---------------------------------------------------------------------- */
 /* Setup */
+
+/* The LAP Manager: LAPMgrPtr ($B18) points to it and programs call
+ * LAPMgrCall (2 on) with a selector in D0, chiefly to add and remove
+ * AppleTalk Transition Queue entries (LAddAEQ 23, LRmvAEQ 24).  The queue
+ * is kept, and since AppleTalk here never closes, no transition is sent
+ * through it. */
+enum { LAPMgrPtr = 0x0B18, LAddAEQ = 23, LRmvAEQ = 24 };
+static gaddr transition_queue[16];
+static int ntransition;
+
+static void lap_manager(cpu68k *c, uint16_t tw)
+{
+    int sel = (int)(c->d[0] & 0xFF);
+    gaddr entry = c->a[0];
+    if (sel == LAddAEQ && ntransition < (int)(sizeof transition_queue / sizeof transition_queue[0]))
+        transition_queue[ntransition++] = entry;
+    else if (sel == LRmvAEQ)
+        for (int i = 0; i < ntransition; i++)
+            if (transition_queue[i] == entry) {
+                memmove(transition_queue + i, transition_queue + i + 1, sizeof transition_queue[0] * (size_t)(--ntransition - i));
+                break;
+            }
+    LOGF(LOG_TRAPS, "  LAP Manager selector %d\n", sel);
+    c->d[0] = 0;
+}
 
 bool machine_set_appletalk(const char *how)
 {
@@ -892,6 +973,8 @@ void appletalk_reset(void)
     node = 0;
     nnames = nself = 0;
     memset(sockets, 0, sizeof sockets);
+    memset(handlers, 0, sizeof handlers);
+    atp_reset();
     memset(listeners, 0, sizeof listeners);
     memset(ops, 0, sizeof ops);
     polling = false;
@@ -909,4 +992,10 @@ void appletalk_reset(void)
     wr8(LM_PortBUse, 0xFF);
     if (mode)
         gestalt_set(fourcc("atlk"), 58); /* AppleTalk 58, as System 7.5 had */
+    ntransition = 0;
+    gaddr lap = tb_NewPtr(8, true, true);
+    wr16(lap, 0x4E75);      /* RTS: the manager's own entry */
+    wr16(lap + 2, 0x4EF9);  /* LAPMgrCall: JMP to us */
+    wr32(lap + 4, native_register(lap_manager, "LAPManager", 0));
+    wr32(LAPMgrPtr, lap);
 }
