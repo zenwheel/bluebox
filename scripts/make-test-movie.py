@@ -17,6 +17,10 @@ classic version-0 atoms a QuickTime 2.x Mac reads; time scale 600):
                 moving diagonally on a higher layer; one key frame and
                 override samples ten times a second.  Over it, keyed text
                 with a drop shadow.  Sprite tracks need QuickTime 2.1.
+  Sprites (key frames).mov
+                The same with every sample a whole scene (images and all
+                sprites), for QuickTimes that play sprite tracks without
+                override samples.
 
 On a Mac the files want type 'MooV' and creator 'TVOD' (MoviePlayer).
 """
@@ -275,7 +279,7 @@ def ball(colour):
     return raw32(24, 24, pixel)
 
 
-def sprites_movie(path):
+def sprites_movie(path, every_key=False):
     w, h = 200, 150
     background = raw16(w, h, lambda x, y: (30 + y // 2, 40 + y, 90 + y))
     square = raw32(16, 16, lambda x, y: (250, 220, 40) if 2 <= x < 14 and 2 <= y < 14 else (120, 80, 0))
@@ -290,16 +294,21 @@ def sprites_movie(path):
     def square_at(i):
         return 170 - i * 4, 10 + i * 3
 
-    bx, by = ball_at(0)
-    sx, sy = square_at(0)
-    key = qt_container([
-        sprite_atom(1, 0, 0, True, 32767, 1, (ditherCopy, BLACK)),
-        sprite_atom(2, bx, by, True, 2, 2, keyed),
-        sprite_atom(3, sx, sy, True, 1, 4, (srcCopy, BLACK)),
-        qt_atom(b"dflt", 1, [qt_atom(b"imct", 1, images)]),
-    ])
-    samples = [key]
+    def key_frame(i):
+        bx, by = ball_at(i)
+        sx, sy = square_at(i)
+        return qt_container([
+            sprite_atom(1, 0, 0, True, 32767, 1, (ditherCopy, BLACK)),
+            sprite_atom(2, bx, by, True, 2, 3 if i >= steps // 2 else 2, keyed),
+            sprite_atom(3, sx, sy, True, 1, 4, (srcCopy, BLACK)),
+            qt_atom(b"dflt", 1, [qt_atom(b"imct", 1, images)]),
+        ])
+
+    samples = [key_frame(0)]
     for i in range(1, steps):
+        if every_key:  # every sample a whole scene, images and all
+            samples.append(key_frame(i))
+            continue
         bx, by = ball_at(i)
         sx, sy = square_at(i)
         samples.append(qt_container([sprite_atom(2, bx, by, image=3 if i >= steps // 2 else 2),
@@ -309,7 +318,7 @@ def sprites_movie(path):
     kKeyFrameAndSingleOverride = 1 << 1
     desc = be32(28) + b"sprt" + bytes(6) + be16(1) + be32(0) + be32(0) + be32(kKeyFrameAndSingleOverride)
     sprites = Track(b"sprt", "Apple Sprite Media Handler", w, h, samples, [SCALE // 10] * steps, desc, gmhd(),
-                    keys=[1])
+                    keys=list(range(1, steps + 1)) if every_key else [1])
     th = 30
     words = [text_sample([("Sprites over a stage", GENEVA, BOLD, 12, YELLOW)]),
              text_sample([("...and the ball turns blue", GENEVA, BOLD, 12, YELLOW)])]
@@ -326,7 +335,8 @@ def main():
     os.makedirs(out, exist_ok=True)
     captions_movie(os.path.join(out, "Captions.mov"))
     sprites_movie(os.path.join(out, "Sprites.mov"))
-    for name in ("Captions.mov", "Sprites.mov"):
+    sprites_movie(os.path.join(out, "Sprites (key frames).mov"), every_key=True)
+    for name in ("Captions.mov", "Sprites.mov", "Sprites (key frames).mov"):
         print(os.path.join(out, name), os.path.getsize(os.path.join(out, name)), "bytes")
 
 
