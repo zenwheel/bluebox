@@ -69,6 +69,26 @@ struct ForkStoreTests {
     }
     #endif
 
+    /// A Disk Copy 6 image whose data fork begins like a bare volume (its
+    /// first chunk stored as it is) is still taken for what it is.
+    @Test func ndifImagesAreKnownByTheirChunkMap() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("Disk.img").path
+        var data = [UInt8](repeating: 0, count: 2048)
+        data[1024] = 0x42; data[1025] = 0x44                       // 'BD' at 1024
+        var rsrc = buildFork([TestResource(type: "bcem", id: 128, name: "Disk", data: [UInt8](repeating: 0, count: 0x80))])
+        var f = mac_file()
+        data.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = $0.count }
+        rsrc.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+        var err = [CChar](repeating: 0, count: 256)
+        #expect(appledouble_write(path, &f, &err, err.count))
+        #expect(diskimage_is_ndif(path))
+        let plain = dir.appendingPathComponent("Plain.img").path
+        try Data(data).write(to: URL(fileURLWithPath: plain))
+        #expect(!diskimage_is_ndif(plain))
+    }
+
     @Test func macBinaryII() throws {
         let data: [UInt8] = [1, 2, 3]
         let rsrc: [UInt8] = buildFork([TestResource(type: "abcd", id: 1, data: [9])])

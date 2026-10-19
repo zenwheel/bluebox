@@ -52,6 +52,9 @@ char *appledouble_sidecar_path(const char *path);
 /* Read both forks.  Without a sidecar, the file's own Finder info and
  * resource fork (macOS extended attributes), else an empty resource fork. */
 bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen);
+/* Everything but the data fork (left empty): the Finder info and the
+ * resource fork, from the sidecar or the file's own. */
+bool appledouble_read_meta(const char *path, mac_file *out);
 /* The file's own Finder info (macOS), and whether it has any typed Finder
  * info or resource fork of its own. */
 bool appledouble_native_finder_info(const char *path, uint8_t out[32]);

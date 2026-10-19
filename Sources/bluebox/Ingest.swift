@@ -525,7 +525,7 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String],
     var vol: UnsafeMutablePointer<UInt8>?
     var vlen = 0
     var owned = false
-    let fd = open(path, O_RDONLY)
+    let fd = diskimage_is_ndif(path) ? -1 : open(path, O_RDONLY)
     if fd >= 0 {
         var st = stat()
         if fstat(fd, &st) == 0, st.st_size > 1536,

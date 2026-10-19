@@ -23,6 +23,10 @@ typedef enum {
 } disk_kind;
 
 disk_kind diskimage_detect(const mac_file *f);
+/* Whether a file is a Disk Copy 6 image (its chunk map, 'bcem', in its
+ * resource fork): its data fork can begin like a bare volume, the first
+ * chunk stored as it is, and still be compressed after. */
+bool diskimage_is_ndif(const char *path);
 /* A raw image's volume (bare, or the first HFS partition of a partition
  * map), found in place: its offset and length.  False if it isn't one. */
 bool diskimage_locate_raw(const uint8_t *d, size_t n, size_t *off, size_t *len);

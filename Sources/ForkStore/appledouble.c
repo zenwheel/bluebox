@@ -176,6 +176,33 @@ bool appledouble_has_native(const char *path)
 #endif
 }
 
+bool appledouble_read_meta(const char *path, mac_file *out)
+{
+    memset(out, 0, sizeof *out);
+    char *side = appledouble_sidecar_path(path);
+    uint8_t *sbuf;
+    size_t slen;
+    bool have_side = side && read_file(side, &sbuf, &slen);
+    free(side);
+    bool ok = true;
+    if (have_side) {
+        char err[64];
+        ok = appledouble_decode(sbuf, slen, out, err, sizeof err);
+        free(sbuf);
+    } else {
+        native_forks(path, out);
+    }
+    out->data = malloc(1);
+    out->data_len = 0;
+    if (!out->rsrc) {
+        out->rsrc = malloc(1);
+        out->rsrc_len = 0;
+    }
+    if (!ok)
+        mac_file_free(out);
+    return ok;
+}
+
 bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen)
 {
     memset(out, 0, sizeof *out);

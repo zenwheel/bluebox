@@ -175,6 +175,17 @@ static bool apm_hfs(const uint8_t *d, size_t n, size_t *off, size_t *plen)
     return false;
 }
 
+bool diskimage_is_ndif(const char *path)
+{
+    mac_file f;
+    if (!appledouble_read_meta(path, &f))
+        return false;
+    size_t n;
+    bool ndif = find_resource(&f, 0x6263656D /* 'bcem' */, &n) != NULL;
+    mac_file_free(&f);
+    return ndif;
+}
+
 bool diskimage_locate_raw(const uint8_t *d, size_t n, size_t *off, size_t *len)
 {
     *off = 0;
