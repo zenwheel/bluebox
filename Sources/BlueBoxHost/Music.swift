@@ -39,7 +39,7 @@ public final class ClassicMusic: @unchecked Sendable {
         let gen = generation[id, default: 0]
         let start = DispatchTime.now()
         for e in events {
-            let send = { [weak self] in
+            let send: @Sendable () -> Void = { [weak self] in
                 guard let self, self.generation[id, default: 0] == gen else { return }
                 synth.sendMIDIEvent(e.status, data1: e.data1, data2: e.data2)
             }

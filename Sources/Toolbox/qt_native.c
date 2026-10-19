@@ -282,7 +282,7 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
     if (!stbl)
         return false;
     const uint8_t *se = stbl + sl;
-    uint32_t dl, tl, cl, zl, ol, kl;
+    uint32_t dl, tl, cl, zl, ol;
     const uint8_t *stsd = child(stbl, se, "stsd", &dl), *stts = child(stbl, se, "stts", &tl),
                   *stsc = child(stbl, se, "stsc", &cl), *stsz = child(stbl, se, "stsz", &zl);
     const uint8_t *stco = child(stbl, se, "stco", &ol);
