@@ -102,7 +102,8 @@ func usage() -> Never {
           in the application.
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
                 [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
-                [modem-port S|default] [printer-port S|default] [--library dir]
+                [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
+                [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
           game that wants 256 colours, or cpu 68020 for one that misbehaves on a
@@ -551,7 +552,7 @@ func runCommand(_ args: [String]) {
         cpaths.forEach { free($0) }
     }
     #if canImport(AppKit)
-    if let printTo { installPrintToFile(printTo) }
+    if let printTo { installPrintToFile(printTo) } else { printFolder = saved.printFolder.flatMap { $0.isEmpty ? nil : $0 } }
     if !headlessFileAnswers.isEmpty {
         // Open and save dialogs answered in turn, without a panel.
         machine_set_file_handler({ _, pathOut, pathSize, _ in

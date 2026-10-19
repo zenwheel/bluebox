@@ -640,6 +640,11 @@ func installPrintHandlers() {
         onMain {
             MainActor.assumeIsolated {
                 let title = NSApp.windows.first(where: { $0.isKeyWindow })?.title ?? ProcessInfo.processInfo.processName
+                if let folder = printFolder { // the print-folder setting: no panel
+                    let url = pdfDestination(folder, title: title)
+                    ok = (try? pdf.write(to: url)) != nil
+                    return
+                }
                 if saveAsPDF { // the classic job dialog's Save as PDF
                     let panel = NSSavePanel()
                     panel.allowedContentTypes = [.pdf]
@@ -681,15 +686,37 @@ func installPrintHandlers() {
 
 /// Where headless runs write printed pages (--print-to).
 nonisolated(unsafe) var printToPath: String?
+/// The print-folder setting: printed pages saved there as PDF, no print panel.
+nonisolated(unsafe) var printFolder: String?
+
+/// A PDF's destination: the path given, or a new file named after the
+/// document and the time when the path is a folder.
+func pdfDestination(_ path: String, title: String) -> URL {
+    var isDir: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+        return URL(fileURLWithPath: path)
+    }
+    let stamp = DateFormatter()
+    stamp.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+    let base = "\(title.replacingOccurrences(of: "/", with: "-")) \(stamp.string(from: Date()))"
+    var url = URL(fileURLWithPath: path).appendingPathComponent(base + ".pdf")
+    var n = 2
+    while FileManager.default.fileExists(atPath: url.path) {
+        url = URL(fileURLWithPath: path).appendingPathComponent("\(base) \(n).pdf")
+        n += 1
+    }
+    return url
+}
 
 /// Headless printing: the job is written as a PDF file, no panels.
 func installPrintToFile(_ path: String) {
     printToPath = path
     machine_set_print_handlers({ job, _ in
         guard let job, let path = printToPath else { return false }
+        let url = pdfDestination(path, title: ProcessInfo.processInfo.processName)
         do {
-            try ClassicPrint.pdf(job).write(to: URL(fileURLWithPath: path))
-            print("printed \(job.pointee.npages) page(s) to \(path)")
+            try ClassicPrint.pdf(job).write(to: url)
+            print("printed \(job.pointee.npages) page(s) to \(url.path)")
             return true
         } catch {
             eprint("could not write \(path): \(error)\n")

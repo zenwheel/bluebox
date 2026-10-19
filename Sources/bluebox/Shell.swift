@@ -644,6 +644,9 @@ struct SettingsForm: View {
             PortPicker(label: "Printer port", spec: $settings.printerPort, inherit: inherit,
                        inherited: fallback.printerPort ?? "none")
         }
+        Section("Printing") {
+            PrintFolderPicker(folder: $settings.printFolder, inherit: inherit, inherited: fallback.printFolder)
+        }
     }
 
     private func appletalkName(_ a: String) -> String {
@@ -987,5 +990,47 @@ struct NetworkInterface {
             }
         }
         return out
+    }
+}
+
+/// Printing: the print panel, or every job saved as a PDF in a folder.
+struct PrintFolderPicker: View {
+    @Binding var folder: String?
+    let inherit: String
+    let inherited: String?
+
+    private enum Kind: Hashable { case inherit, panel, folder }
+    private static let panel = ""
+
+    var body: some View {
+        // An empty string stands for "the print panel" overriding an inherited folder.
+        let kind: Kind = folder == nil ? .inherit : folder == Self.panel ? .panel : .folder
+        Picker("Printed pages", selection: Binding(get: { kind }, set: { k in
+            switch k {
+            case .inherit: folder = nil
+            case .panel: folder = Self.panel
+            case .folder: if kind != .folder { choose() }
+            }
+        })) {
+            Text("\(inherit) (\(inherited.map { "saved in " + name($0) } ?? "the print panel"))").tag(Kind.inherit)
+            Text("The print panel").tag(Kind.panel)
+            Text(kind == .folder ? "Saved as PDF in \(name(folder!))" : "Saved as PDF in a folder…").tag(Kind.folder)
+        }
+        .help("Saving to a folder skips the print panel: each printed document becomes a PDF there, named "
+              + "after its window and the time.")
+        if kind == .folder {
+            Button("Choose Folder…") { choose() }
+        }
+    }
+
+    private func name(_ path: String) -> String { (path as NSString).abbreviatingWithTildeInPath }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url { folder = url.path }
     }
 }

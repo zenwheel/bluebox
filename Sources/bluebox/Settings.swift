@@ -16,9 +16,10 @@ struct AppSettings: Codable {
     var appletalk: String? /* local, lan, lan:IF (an interface, e.g. en0), bridge:IF (EtherTalk) or off */
     var modemPort: String? /* what the modem port connects to (machine_set_serial's specs) */
     var printerPort: String?
+    var printFolder: String? /* printed pages saved there as PDF files, without the print panel ("": the panel) */
     var isEmpty: Bool {
         depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
-            && modemPort == nil && printerPort == nil
+            && modemPort == nil && printerPort == nil && printFolder == nil
     }
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), "
@@ -26,7 +27,8 @@ struct AppSettings: Codable {
             + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
             + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)"), "
             + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
-            + "printer-port \(printerPort ?? "default (none)")"
+            + "printer-port \(printerPort ?? "default (none)"), "
+            + "print-folder \(printFolder.map { $0.isEmpty ? "panel" : $0 } ?? "default (the print panel)")"
     }
 
     /// These settings, with any left unset taken from `fallback`.
@@ -35,7 +37,7 @@ struct AppSettings: Codable {
         return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, scale: scale ?? f.scale,
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
                            appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
-                           printerPort: printerPort ?? f.printerPort)
+                           printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder)
     }
 }
 
@@ -131,6 +133,7 @@ func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 ///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
+///     [print-folder <folder>|panel|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -202,9 +205,22 @@ func setCommand(_ args: [String]) {
                 fail("\(name) expects modem, modem:PORT, tcp:HOST:PORT, listen:PORT, pty, a device, none or default")
             }
             if name == "modem-port" { s.modemPort = spec } else { s.printerPort = spec }
+        case "print-folder":
+            if value == "default" {
+                s.printFolder = nil
+            } else if value == "panel" {
+                s.printFolder = ""
+            } else {
+                var isDir: ObjCBool = false
+                let path = (value as NSString).expandingTildeInPath
+                guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+                    fail("print-folder expects an existing folder, panel or default")
+                }
+                s.printFolder = (path as NSString).standardizingPath
+            }
         default:
             fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, "
-                 + "modem-port, printer-port)")
+                 + "modem-port, printer-port, print-folder)")
         }
     }
     if !pairs.isEmpty { usage() }
