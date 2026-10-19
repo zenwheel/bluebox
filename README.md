@@ -33,15 +33,26 @@ The program is `.build/release/bluebox`. To run the tests:
 swift test
 ```
 
-To start over, `swift package clean` removes the build products and
-`swift package reset` removes all of `.build`. The generated sources
-(`*_gen.c`) are checked in; `uv run --with pyyaml python Generators/gen.py`
-regenerates them from `Defs/`.
+The generated sources (`*_gen.c`) are checked in;
+`uv run --with pyyaml python Generators/gen.py` regenerates them from `Defs/`
+and `Generators/defs/`.
+
+### Cleaning
+
+```sh
+swift package clean      # removes the build products in .build, keeping the package cache
+swift package reset      # removes all of .build: the next build starts from nothing
+rm -rf build             # removes build/Blue Box.app (scripts/make-app.sh makes it again)
+```
+
+A build that behaves oddly after switching branches or Xcode versions
+usually needs only `swift package clean`; `swift package reset` is for when
+that isn't enough.
 
 These are optional and found at run time:
 
 - **[The Unarchiver](https://theunarchiver.com)'s `unar`** (`brew install unar`) imports StuffIt, Compact Pro and other archives. MacBinary, BinHex and disk images need nothing extra.
-- **[VLC](https://www.videolan.org/vlc/)** in `/Applications` plays QuickTime movies.
+- **[VLC](https://www.videolan.org/vlc/)** in `/Applications` plays the QuickTime movies Blue Box's own decoders don't (Sorenson Video, QDesign Music and the like); Cinepak, Animation, Graphics, Apple Video, Photo-JPEG and their sounds need nothing extra.
 
 ## Installing
 
