@@ -1896,6 +1896,150 @@ static void g_zero_handle(ppc_cpu *c) { RETURN(0); }
 /* The AppleTalk calls: AppleTalk isn't there. */
 static void g_noAppleTalk(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
 
+/* AppleTalk's preferred calls: (pb, async) as a Control call on .MPP or
+ * .ATP.  Without the trap layer, an answer given at once is written to
+ * ioResult and an asynchronous call's completion routine queued here. */
+static void at_call(ppc_cpu *c, int16_t refnum, int16_t code)
+{
+    gaddr pb = R(0);
+    bool async = R(1) != 0;
+    wr16(pb + IOParam_ioRefNum_off, (uint16_t)refnum);
+    wr16(pb + CntrlParam_csCode_off, (uint16_t)code);
+    int16_t r = tb_PBControl(pb, async);
+    if (r == ioInProgress) {
+        RETURN(0);
+        return;
+    }
+    wr16(pb + IOParam_ioResult_off, (uint16_t)r);
+    if (async && rd32(pb + IOParam_ioCompletion_off))
+        io_complete_later(pb, r);
+    RETURN((int32_t)r);
+}
+#define MPP_CALL(name, code) static void g_##name(ppc_cpu *c) { at_call(c, -10, code); }
+#define ATP_CALL(name, code) static void g_##name(ppc_cpu *c) { at_call(c, -11, code); }
+MPP_CALL(POpenSkt, 248) MPP_CALL(PCloseSkt, 247) MPP_CALL(PWriteDDP, 246) MPP_CALL(PRegisterName, 253)
+MPP_CALL(PLookupName, 251) MPP_CALL(PConfirmName, 250) MPP_CALL(PRemoveName, 252) MPP_CALL(PKillNBP, 254)
+MPP_CALL(PSetSelfSend, 256) MPP_CALL(PGetAppleTalkInfo, 258) MPP_CALL(PATalkClosePrep, 259)
+ATP_CALL(POpenATPSkt, 254) ATP_CALL(PCloseATPSkt, 250) ATP_CALL(PSendRequest, 255) ATP_CALL(PNSendRequest, 248)
+ATP_CALL(PGetRequest, 253) ATP_CALL(PSendResponse, 252) ATP_CALL(PAddResponse, 251) ATP_CALL(PRelTCB, 256)
+ATP_CALL(PRelRspCB, 249) ATP_CALL(PKillSendReq, 258) ATP_CALL(PKillGetReq, 257)
+
+/* A Str32 packed after another (NBP's entity names). */
+static uint32_t put_str32(gaddr dst, gaddr s)
+{
+    uint32_t n = s ? rd8(s) : 0;
+    if (n > 32)
+        n = 32;
+    wr8(dst, (uint8_t)n);
+    if (n)
+        gmemcpy(dst + 1, s + 1, n);
+    return n + 1;
+}
+
+/* NBPSetEntity(buffer, object, type, zone) */
+static void g_NBPSetEntity(ppc_cpu *c)
+{
+    gaddr p = R(0);
+    p += put_str32(p, R(1));
+    p += put_str32(p, R(2));
+    put_str32(p, R(3));
+    RETURN(0);
+}
+
+/* NBPSetNTE(ntePtr, object, type, zone, socket): a names table entry,
+ * the entity after its link, address and enumerator. */
+static void g_NBPSetNTE(ppc_cpu *c)
+{
+    gaddr nte = R(0);
+    gmemset(nte, 0, 9);
+    wr8(nte + 7, (uint8_t)R(4));
+    gaddr p = nte + 9;
+    p += put_str32(p, R(1));
+    p += put_str32(p, R(2));
+    put_str32(p, R(3));
+    RETURN(0);
+}
+
+/* NBPExtract(buffer, numInBuf, whichOne, EntityName *, AddrBlock *): the
+ * whichOne'th tuple of a lookup's answers. */
+static void g_NBPExtract(ppc_cpu *c)
+{
+    gaddr p = R(0);
+    int count = (int16_t)R(1), which = (int16_t)R(2);
+    if (which < 1 || which > count) {
+        RETURN((int32_t)-3104); /* extractErr */
+        return;
+    }
+    for (int i = 1; i < which; i++) {
+        p += 5;
+        for (int k = 0; k < 3; k++)
+            p += 1 + (uint32_t)rd8(p);
+    }
+    if (R(4))
+        wr32(R(4), rd32(p));
+    p += 5;
+    for (int k = 0; k < 3; k++) { /* EntityName: three Str32 fields of 34 bytes */
+        if (R(3))
+            put_str32(R(3) + (uint32_t)k * 34, p);
+        p += 1 + (uint32_t)rd8(p);
+    }
+    RETURN(0);
+}
+
+/* BuildDDPwds(wds, header, data, AddrBlock dest, type, length): the
+ * header's pointer (an odd address: the buffer's second byte) with the
+ * destination and type in it, then the data, then the end. */
+static void g_BuildDDPwds(ppc_cpu *c)
+{
+    gaddr wds = R(0), hdr = R(1) + 1, dest = R(3);
+    gmemset(hdr, 0, 16);
+    wr16(hdr + 7, (uint16_t)(dest >> 16));
+    wr8(hdr + 11, (uint8_t)(dest >> 8));
+    wr8(hdr + 13, (uint8_t)dest);
+    wr8(hdr + 15, (uint8_t)R(4));
+    wr16(wds, 0);
+    wr32(wds + 2, hdr);
+    wr16(wds + 6, (uint16_t)R(5));
+    wr32(wds + 8, R(2));
+    wr16(wds + 12, 0);
+    RETURN(0);
+}
+
+/* BuildBDSBuffer(buffer, bds, size, count): the buffer cut into count
+ * elements of up to 578 bytes; returns how many. */
+static void g_BuildBDSBuffer(ppc_cpu *c)
+{
+    gaddr buf = R(0), bds = R(1);
+    int left = (int16_t)R(2), n = (int16_t)R(3), i = 0;
+    for (; i < n && i < 8 && left > 0; i++) {
+        int k = left > 578 ? 578 : left;
+        gaddr e = bds + (uint32_t)i * 12;
+        wr16(e, (uint16_t)k);
+        wr32(e + 2, buf);
+        wr16(e + 6, 0);
+        wr32(e + 8, 0);
+        buf += (uint32_t)k;
+        left -= k;
+    }
+    RETURN(i);
+}
+
+/* GetNodeAddress(short *node, short *net) */
+static void g_GetNodeAddress(ppc_cpu *c)
+{
+    if (!at_opened()) {
+        RETURN((int32_t)-28); /* notOpenErr */
+        return;
+    }
+    if (R(0))
+        wr16(R(0), at_node());
+    if (R(1))
+        wr16(R(1), 0);
+    RETURN(0);
+}
+static void g_IsMPPOpen(ppc_cpu *c) { RETURN(at_opened() ? 1 : 0); }
+static void g_MPPOpen(ppc_cpu *c) { RETURN((int32_t)at_open()); }
+
 const ppc_export lib_exports[] = {
     /* Wide arithmetic */
     { "WideAdd", w_WideAdd }, { "WideBitShift", w_WideBitShift }, { "WideCompare", w_WideCompare },
@@ -1946,9 +2090,17 @@ const ppc_export lib_exports[] = {
     { "CMGetProcID", g_cmNoTools },
     /* AppleTalk and the PPC Toolbox's network side */
     { "GetMyZone", g_noAppleTalk }, { "PPCBrowser", g_noAppleTalk }, { "IPCListPortsSync", g_noAppleTalk },
-    { "NBPSetNTE", g_nothing }, { "NBPSetEntity", g_nothing }, { "NBPExtract", g_noAppleTalk },
-    { "PRegisterName", g_noAppleTalk }, { "PLookupName", g_noAppleTalk }, { "POpenATPSkt", g_noAppleTalk },
-    { "PGetRequest", g_noAppleTalk }, { "PSendResponse", g_noAppleTalk },
+    { "NBPSetNTE", g_NBPSetNTE }, { "NBPSetEntity", g_NBPSetEntity }, { "NBPExtract", g_NBPExtract },
+    { "BuildDDPwds", g_BuildDDPwds }, { "BuildBDSBuffer", g_BuildBDSBuffer }, { "GetNodeAddress", g_GetNodeAddress },
+    { "IsMPPOpen", g_IsMPPOpen }, { "IsATPOpen", g_IsMPPOpen }, { "MPPOpen", g_MPPOpen },
+    { "POpenSkt", g_POpenSkt }, { "PCloseSkt", g_PCloseSkt }, { "PWriteDDP", g_PWriteDDP },
+    { "PRegisterName", g_PRegisterName }, { "PLookupName", g_PLookupName }, { "PConfirmName", g_PConfirmName },
+    { "PRemoveName", g_PRemoveName }, { "PKillNBP", g_PKillNBP }, { "PSetSelfSend", g_PSetSelfSend },
+    { "PGetAppleTalkInfo", g_PGetAppleTalkInfo }, { "PATalkClosePrep", g_PATalkClosePrep },
+    { "POpenATPSkt", g_POpenATPSkt }, { "PCloseATPSkt", g_PCloseATPSkt }, { "PSendRequest", g_PSendRequest },
+    { "PNSendRequest", g_PNSendRequest }, { "PGetRequest", g_PGetRequest }, { "PSendResponse", g_PSendResponse },
+    { "PAddResponse", g_PAddResponse }, { "PRelTCB", g_PRelTCB }, { "PRelRspCB", g_PRelRspCB },
+    { "PKillSendReq", g_PKillSendReq }, { "PKillGetReq", g_PKillGetReq },
     /* Display Manager */
     { "DMGetFirstScreenDevice", dm_GetFirstScreenDevice }, { "DMGetNextScreenDevice", dm_GetNextScreenDevice },
     { "DMGetDisplayIDByGDevice", dm_GetDisplayIDByGDevice }, { "DMGetGDeviceByDisplayID", dm_GetGDeviceByDisplayID },
