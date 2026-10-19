@@ -170,6 +170,87 @@ extension BlueBox {
         }
     }
 
+    /// Styled TextEdit: runs, the style table, the null style, line
+    /// heights and style scraps, in Apple's structures.
+    @Suite struct StyledTextEdit {
+        func newStyled() -> UInt32 {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 0, 300, 400].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            return tb_TEStyleNew(r, r)
+        }
+        func insert(_ s: String, _ te: UInt32) {
+            let p = tb_NewPtr(Int32(s.utf8.count), false, false)
+            for (i, b) in s.utf8.enumerated() { wr8(p + UInt32(i), b) }
+            tb_TEInsert(p, Int32(s.utf8.count), te)
+        }
+        func style(face: UInt8 = 0, size: Int16 = 0) -> UInt32 {
+            let ts = tb_NewPtr(Int32(TextStyle_SIZEOF), false, true)
+            wr8(ts + 2, face)
+            wr16(ts + 4, UInt16(bitPattern: size))
+            return ts
+        }
+        func faceAt(_ off: Int16, _ te: UInt32) -> UInt8 {
+            let ts = tb_NewPtr(Int32(TextStyle_SIZEOF), false, true)
+            tb_TEGetStyle(off, ts, 0, 0, te)
+            return rd8(ts + 2)
+        }
+        func runs(_ te: UInt32) -> Int { Int(rd16(rd32(tb_TEGetStyleHandle(te)))) }
+
+        @Test func runsFollowStylesAndEdits() {
+            let te = newStyled()
+            #expect(Int16(bitPattern: rd16(rd32(te) + UInt32(TERec_txSize_off))) == -1)
+            insert("Hello world", te)
+            tb_TESetSelect(0, 5, te)
+            tb_TESetStyle(2 | 32, style(face: 1), 0, te) // doFace + doToggle: bold
+            #expect(runs(te) == 2)
+            #expect(faceAt(0, te) == 1 && faceAt(4, te) == 1 && faceAt(5, te) == 0)
+            #expect(tb_TENumStyles(0, 11, te) == 2)
+            tb_TESetStyle(2 | 32, style(face: 1), 0, te) // toggled off again
+            #expect(runs(te) == 1 && faceAt(0, te) == 0)
+            tb_TESetStyle(2 | 32, style(face: 1), 0, te)
+
+            // Typing after the bold word takes its style.
+            tb_TESetSelect(5, 5, te)
+            tb_TEKey(0x58, te) // X
+            #expect(runs(te) == 2 && faceAt(5, te) == 1 && faceAt(6, te) == 0)
+
+            // The null style: set with nothing selected, typed text has it.
+            let len = Int16(bitPattern: rd16(rd32(te) + UInt32(TERec_teLength_off)))
+            tb_TESetSelect(Int32(len), Int32(len), te)
+            let plainHeight = tb_TEGetHeight(1, 1, te)
+            tb_TESetStyle(4, style(size: 24), 0, te) // doSize
+            tb_TEKey(0x21, te) // !
+            #expect(runs(te) == 3)
+            let ts = tb_NewPtr(Int32(TextStyle_SIZEOF), false, true)
+            tb_TEGetStyle(len, ts, 0, 0, te)
+            #expect(rd16(ts + 4) == 24)
+            #expect(plainHeight > 0 && tb_TEGetHeight(1, 1, te) >= plainHeight)
+
+            // Deleting across runs.
+            tb_TESetSelect(3, 8, te)
+            tb_TEDelete(te)
+            let sr = rd32(tb_TEGetStyleHandle(te))
+            let n = Int(rd16(sr)), newLen = rd16(rd32(te) + UInt32(TERec_teLength_off))
+            #expect(rd16(sr + 20 + UInt32(n) * 4) == newLen + 1) // the end marker
+            #expect(faceAt(0, te) == 1 && faceAt(3, te) == 0)
+
+            // A style scrap of everything, into another record.
+            tb_TESetSelect(0, Int32(newLen), te)
+            let scrap = tb_TEGetStyleScrapHandle(te)
+            #expect(Int(rd16(rd32(scrap))) == runs(te))
+            let r2 = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 0, 300, 400].enumerated() { wr16(r2 + UInt32(i * 2), UInt16(v)) }
+            let te2 = tb_TEStyleNew(r2, r2)
+            let text = tb_TEGetText(te)
+            tb_HLock(text)
+            tb_TEStyleInsert(rd32(text), Int32(newLen), scrap, te2)
+            #expect(runs(te2) == runs(te))
+            #expect(faceAt(0, te2) == 1 && faceAt(3, te2) == 0)
+        }
+    }
+
     @Suite struct Alerts {
         /// ALRT 128 with DITL 128: OK (1), Cancel (2), and text with ^0.
         static func alertResources(stages: UInt16 = 0x5555) -> [TestResource] {
