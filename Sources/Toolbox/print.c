@@ -152,9 +152,204 @@ int8_t tb_PrJobDialog(gaddr h)
     return 1;
 }
 
-gaddr tb_PrJobInit(gaddr h) { return 0; }
-gaddr tb_PrStlInit(gaddr h) { return 0; }
-int8_t tb_PrDlgMain(gaddr h, gaddr initfptr) { return h && (tb_PrJobDialog(h) != 0); }
+/* ---------------------------------------------------------------------- */
+/* The classic dialogs, for programs that add to them
+ *
+ * PrJobInit and PrStlInit build a TPrDlg (a DialogRecord, then pFltrProc
+ * 170, pItemProc 174, hPrintUsr 178, fDoIt 182, fDone 183, lUser1-3 184),
+ * which the program extends (AppendDITL, its own item procedure calling
+ * ours) before PrDlgMain runs it.  The job dialog's Print and Save as PDF
+ * lead to the host's print panel or a save panel once the pages are drawn;
+ * the style dialog's Page Setup button opens the host's page layout panel.
+ */
+enum { TPrDlg_SIZE = 196, pFltrProc_off = 170, pItemProc_off = 174, hPrintUsr_off = 178, fDoIt_off = 182,
+       fDone_off = 183 };
+enum { ctrlItemButton = 4, statTextItem = 8 };
+
+typedef struct {
+    int16_t top, left, bottom, right;
+    uint8_t type;
+    const char *text; /* MacRoman */
+} ditem;
+
+static gaddr job_item_stub, style_item_stub;
+static bool save_pdf; /* the job dialog's Save as PDF */
+
+/* A DITL handle holding the items. */
+static gaddr make_ditl(const ditem *items, int n)
+{
+    uint32_t size = 2;
+    for (int i = 0; i < n; i++)
+        size += 14 + (uint32_t)((strlen(items[i].text) + 1) & ~1u);
+    gaddr h = tb_NewHandle((int32_t)size, false, true);
+    if (!h)
+        return 0;
+    gaddr p = rd32(h);
+    wr16(p, (uint16_t)(n - 1));
+    p += 2;
+    for (int i = 0; i < n; i++) {
+        size_t len = strlen(items[i].text);
+        wr32(p, 0);
+        qrect_put(p + 4, (qrect){ items[i].top, items[i].left, items[i].bottom, items[i].right });
+        wr8(p + 12, items[i].type);
+        wr8(p + 13, (uint8_t)len);
+        gput(p + 14, items[i].text, (uint32_t)len);
+        p += 14 + (uint32_t)((len + 1) & ~1u);
+    }
+    return h;
+}
+
+static gaddr new_print_dialog(gaddr h, int height, int width, const ditem *items, int n, gaddr item_stub)
+{
+    tb_PrValidate(h);
+    gaddr ditl = make_ditl(items, n);
+    gaddr d = tb_NewPtr(TPrDlg_SIZE, false, true), r = tb_NewPtr(10, false, true);
+    if (!ditl || !d || !r)
+        return 0;
+    int top = (g_screen_height - height) / 3, left = (g_screen_width - width) / 2;
+    qrect_put(r, (qrect){ (int16_t)top, (int16_t)left, (int16_t)(top + height), (int16_t)(left + width) });
+    wr8(r + 8, 0); /* no title */
+    tb_NewDialog(d, r, r + 8, 0, 1 /* dBoxProc */, 0xFFFFFFFFu, 0, 0, ditl);
+    tb_DisposePtr(r);
+    wr32(d + pFltrProc_off, 0);
+    wr32(d + pItemProc_off, item_stub);
+    wr32(d + hPrintUsr_off, h);
+    wr8(d + fDoIt_off, 0);
+    wr8(d + fDone_off, 0);
+    return d;
+}
+
+/* pascal void PItemProc(DialogPtr theDialog, short item) */
+static void job_item(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int16_t item = (int16_t)cpu_pop16(c);
+    gaddr d = cpu_pop32(c);
+    if (item >= 1 && item <= 3) {
+        wr8(d + fDoIt_off, item != 2 ? 1 : 0);
+        wr8(d + fDone_off, 1);
+        save_pdf = item == 3;
+    }
+    cpu_push32(c, ret);
+}
+
+static void describe_paper(gaddr d)
+{
+    machine_page_setup ps;
+    get_setup(rd32(rd32(d + hPrintUsr_off)), &ps);
+    char text[96];
+    snprintf(text, sizeof text, "Paper: %.4g x %.4g in, %s", ps.paper_width / 72, ps.paper_height / 72,
+             ps.landscape ? "landscape" : "portrait");
+    gaddr s = tb_NewPtr(256, false, true), type = tb_NewPtr(2, false, true), item = tb_NewPtr(4, false, true),
+          r = tb_NewPtr(8, false, true);
+    wr8(s, (uint8_t)strlen(text));
+    gput(s + 1, text, (uint32_t)strlen(text));
+    tb_GetDialogItem(d, 4, type, item, r);
+    if (rd32(item))
+        tb_SetDialogItemText(rd32(item), s);
+    tb_DisposePtr(s);
+    tb_DisposePtr(type);
+    tb_DisposePtr(item);
+    tb_DisposePtr(r);
+}
+
+static void style_item(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int16_t item = (int16_t)cpu_pop16(c);
+    gaddr d = cpu_pop32(c);
+    if (item == 1 || item == 2) {
+        wr8(d + fDoIt_off, item == 1 ? 1 : 0);
+        wr8(d + fDone_off, 1);
+    } else if (item == 3 && page_setup_fn) {
+        gaddr h = rd32(d + hPrintUsr_off);
+        machine_page_setup ps;
+        get_setup(rd32(h), &ps);
+        if (page_setup_fn(&ps, print_ctx)) {
+            put_setup(rd32(h), &ps, res_of(rd32(h), 4), res_of(rd32(h), 6));
+            describe_paper(d);
+        }
+    }
+    cpu_push32(c, ret);
+}
+
+void print_reset(void) { job_item_stub = style_item_stub = 0; }
+
+gaddr tb_PrJobInit(gaddr h)
+{
+    static const ditem items[] = {
+        { 88, 290, 108, 370, ctrlItemButton, "Print\xC9" },
+        { 88, 200, 108, 280, ctrlItemButton, "Cancel" },
+        { 88, 16, 108, 136, ctrlItemButton, "Save as PDF\xC9" },
+        { 12, 16, 76, 370, statTextItem, "The printer, the number of copies and the pages to print are chosen "
+                                          "in the next panel." },
+    };
+    if (!job_item_stub)
+        job_item_stub = native_register(job_item, "PrJobItemProc", 0);
+    save_pdf = false;
+    set_print_error(noErr);
+    return new_print_dialog(h, 120, 386, items, 4, job_item_stub);
+}
+
+gaddr tb_PrStlInit(gaddr h)
+{
+    static const ditem items[] = {
+        { 88, 290, 108, 370, ctrlItemButton, "OK" },
+        { 88, 200, 108, 280, ctrlItemButton, "Cancel" },
+        { 88, 16, 108, 136, ctrlItemButton, "Page Setup\xC9" },
+        { 12, 16, 76, 370, statTextItem, "" },
+    };
+    if (!style_item_stub)
+        style_item_stub = native_register(style_item, "PrStlItemProc", 0);
+    set_print_error(noErr);
+    gaddr d = new_print_dialog(h, 120, 386, items, 4, style_item_stub);
+    if (d)
+        describe_paper(d);
+    return d;
+}
+
+/* Run a TPrDlg the init function (the program's, or PrJobInit) built. */
+int8_t tb_PrDlgMain(gaddr h, gaddr initfptr)
+{
+    if (!h)
+        return 0;
+    tb_PrValidate(h);
+    gaddr d;
+    if (initfptr) { /* pascal TPPrDlg init(THPrint) */
+        cpu_push32(g_cpu, 0);
+        cpu_push32(g_cpu, h);
+        guest_call(initfptr);
+        d = cpu_pop32(g_cpu);
+    } else
+        d = tb_PrJobInit(h);
+    if (!d)
+        return 0;
+    gaddr saved = qd_port();
+    tb_ShowWindow(d);
+    tb_SelectWindow(d);
+    tb_SetPort(d);
+    gaddr itemp = tb_NewPtr(2, false, true);
+    wr8(d + fDone_off, 0);
+    while (!rd8(d + fDone_off) && !g_cpu->halted) {
+        tb_ModalDialog(rd32(d + pFltrProc_off), itemp);
+        cpu_push32(g_cpu, d);
+        cpu_push16(g_cpu, rd16(itemp));
+        guest_call(rd32(d + pItemProc_off));
+    }
+    tb_DisposePtr(itemp);
+    bool doit = rd8(d + fDoIt_off) != 0;
+    tb_CloseDialog(d);
+    tb_DisposePtr(d);
+    tb_SetPort(saved);
+    if (doit && rd32(h)) { /* all pages, one copy: the host's panel chooses */
+        gaddr p = rd32(h);
+        wr16(p + 62, 1);
+        wr16(p + 64, 9999);
+        wr16(p + 66, 1);
+    }
+    set_print_error(noErr);
+    return doit ? 1 : 0;
+}
 /* PrGeneral: the resolutions a LaserWriter offers (the pages are drawn at
  * the chosen one and scaled back to points in the PDF), draft bits (no
  * difference here) and the orientation.  The blocks start iOpCode 0,
@@ -274,12 +469,14 @@ void tb_PrCloseDoc(gaddr port)
         job.copies = rd16(p + 66);
         job.vres = res_of(p, 4);
         job.hres = res_of(p, 6);
+        job.save_pdf = save_pdf;
         if (print_fn)
             print_fn(&job, print_ctx);
         else
             LOGF(LOG_UNIMPL, "Printing Manager: no host, %d page(s) not printed\n", n);
     }
     qd_rec_end();
+    save_pdf = false;
     tb_ClosePort(port);
     if (job_owns_port)
         tb_DisposePtr(port);

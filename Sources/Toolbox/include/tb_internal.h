@@ -158,6 +158,7 @@ uint16_t ev_modifiers(void);
 void ev_wait_tick(void);
 gaddr wm_window_at(uint32_t p);
 void drag_reset(void); /* Drag Manager (drag.c): a fresh machine */
+void print_reset(void); /* Printing Manager (print.c) */
 /* The mouse's own motion for ADB packets (events.c). */
 bool ev_take_motion(int *dh, int *dv, int limit);
 bool ev_motion_pending(void);

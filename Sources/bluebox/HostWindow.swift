@@ -635,9 +635,19 @@ func installPrintHandlers() {
     machine_set_print_handlers({ job, _ in
         guard let job else { return false }
         let pdf = ClassicPrint.pdf(job)
+        let saveAsPDF = job.pointee.save_pdf
         var ok = false
         onMain {
             MainActor.assumeIsolated {
+                let title = NSApp.windows.first(where: { $0.isKeyWindow })?.title ?? ProcessInfo.processInfo.processName
+                if saveAsPDF { // the classic job dialog's Save as PDF
+                    let panel = NSSavePanel()
+                    panel.allowedContentTypes = [.pdf]
+                    panel.nameFieldStringValue = title + ".pdf"
+                    guard panel.runModal() == .OK, let url = panel.url else { return }
+                    ok = (try? pdf.write(to: url)) != nil
+                    return
+                }
                 guard let doc = PDFDocument(data: pdf) else { return }
                 let info = sessionPrintInfo.copy() as! NSPrintInfo
                 info.topMargin = 0
@@ -645,7 +655,7 @@ func installPrintHandlers() {
                 info.leftMargin = 0
                 info.rightMargin = 0
                 guard let op = doc.printOperation(for: info, scalingMode: .pageScaleNone, autoRotate: false) else { return }
-                op.jobTitle = NSApp.windows.first(where: { $0.isKeyWindow })?.title ?? ProcessInfo.processInfo.processName
+                op.jobTitle = title
                 op.showsPrintPanel = true
                 op.showsProgressPanel = true
                 ok = op.run()

@@ -223,6 +223,29 @@ extension BlueBox {
             #expect(rd16(blk + 2) == 2)                           // opNotImpl
         }
 
+        @Test func jobDialogCanBeExtended() {
+            launchTestApp()
+            _ = initToolbox()
+            let h = tb_NewHandle(120, false, true)
+            tb_PrintDefault(h)
+            let d = tb_PrJobInit(h)
+            #expect(d != 0)
+            #expect(tb_CountDITL(d) == 4)                         // Print, Cancel, Save as PDF, the note
+            #expect(rd32(d + 178) == h)                           // hPrintUsr
+            let itemProc = rd32(d + 174)
+            #expect(itemProc != 0)
+            cpu_push32(g_cpu, d)                                  // the program's item procedure calls ours
+            cpu_push16(g_cpu, 2)                                  // Cancel
+            guest_call(itemProc)
+            #expect(rd8(d + 183) == 1 && rd8(d + 182) == 0)       // fDone, not fDoIt
+            wr8(d + 183, 0)
+            cpu_push32(g_cpu, d)
+            cpu_push16(g_cpu, 1)                                  // Print
+            guest_call(itemProc)
+            #expect(rd8(d + 183) == 1 && rd8(d + 182) == 1)
+            tb_CloseDialog(d)
+        }
+
         @Test func pageSetupChangesThePrintRecord() {
             launchTestApp()
             machine_set_print_handlers(nil, { ps, _ in
