@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "qt_music.h"
+
 typedef struct qt_native qt_native;
 
 /* A player for a movie from its whole 'moov' atom, its samples read from
@@ -16,6 +18,7 @@ qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_pa
 void qt_native_close(qt_native *p);
 bool qt_native_has_video(const qt_native *p);
 bool qt_native_has_sound(const qt_native *p);
+bool qt_native_has_music(const qt_native *p);
 
 /* The picture at movie time ms, if it differs from the one *serial names:
  * copied to *rgba (realloc'd, *w * *h * 4 bytes) and *serial updated. */
@@ -23,5 +26,9 @@ bool qt_native_frame(qt_native *p, int64_t ms, uint32_t *serial, uint8_t **rgba,
 /* The sound of movie time [from_ms, to_ms) as 16-bit PCM (*pcm malloc'd,
  * interleaved); returns the frames.  Consecutive stretches join exactly. */
 uint32_t qt_native_sound(qt_native *p, int64_t from_ms, int64_t to_ms, int16_t **pcm, int *channels, double *rate);
+
+/* A music track's MIDI events in movie time [from_ms, to_ms) (their time
+ * fields in ms): *first, and the count. */
+size_t qt_native_music(qt_native *p, int64_t from_ms, int64_t to_ms, const qt_midi_event **first);
 
 #endif

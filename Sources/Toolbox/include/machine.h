@@ -403,6 +403,16 @@ typedef void (*machine_sound_fn)(int channel, const int16_t *pcm, int frames, in
                                  void *ctx);
 void machine_set_sound_handler(machine_sound_fn fn, void *ctx);
 
+/* MIDI for the host's General MIDI synthesizer (QuickTime music tracks):
+ * each message to be played delay_ms from now, on a synthesizer of the
+ * caller's id; n 0 means silence it at once (all notes off). */
+typedef struct {
+    int32_t delay_ms;
+    uint8_t status, data1, data2;
+} machine_midi_event;
+typedef void (*machine_midi_fn)(int id, const machine_midi_event *events, int n, void *ctx);
+void machine_set_midi_handler(machine_midi_fn fn, void *ctx);
+
 /* ---- Images ---- */
 
 /* Decode a still image the host's frameworks read (JPEG for QuickTime's

@@ -80,6 +80,8 @@ typedef struct {
     qt_native *native;   /* our decoders, when they cover the movie */
     int64_t sound_ms;    /* native sound sent to the host up to here */
     bool sound_on;
+    int64_t music_ms;    /* and the music track's MIDI */
+    bool music_on;
     uint8_t *frame;
     int fw, fh;
     bool frame_indexed;
@@ -472,6 +474,13 @@ static int16_t open_movie(const char *path, int16_t *resid, uint32_t data_offset
     }
     if (!moov)
         return set_error(noMovieFound);
+    /* A compressed header ('cmov', QuickTime 3) has no 'mvhd' QuickTime 2.5
+     * could read: such movies don't open, as on a real Mac of the time. */
+    uint32_t n;
+    if (!find_atom(moov + 8, moov + len, "mvhd", &n)) {
+        free(moov);
+        return set_error(invalidMovie);
+    }
     movie *m = new_movie();
     if (!m) {
         free(moov);
@@ -545,6 +554,49 @@ static void stop_sound(movie *m)
     if (m->sound_on)
         sound_host_stop(sound_id(m));
     m->sound_on = false;
+    if (m->music_on)
+        sound_host_midi(sound_id(m), NULL, 0); /* all notes off */
+    m->music_on = false;
+}
+
+/* A music track's MIDI, sent a quarter second ahead (normal speed only).
+ * Notes the movie's volume makes quieter go out softer. */
+static void feed_music(movie *m)
+{
+    if (!m->native || !qt_native_has_music(m->native) || !m->playing || m->rate != 0x10000 || m->volume <= 0)
+        return;
+    int64_t now = movie_ms(m);
+    if (!m->music_on || m->music_ms < now - 100 || m->music_ms > now + 1000) { /* starting, behind, or rewound */
+        if (m->music_on)
+            sound_host_midi(sound_id(m), NULL, 0);
+        m->music_ms = now;
+        m->music_on = true;
+        /* each part's instrument, from the start of the tune */
+        const qt_midi_event *e;
+        size_t n = qt_native_music(m->native, INT64_MIN, now, &e);
+        machine_midi_event setup[64];
+        int k = 0;
+        for (size_t i = 0; i < n && k < 64; i++)
+            if ((e[i].status & 0xF0) == 0xC0 || (e[i].status & 0xF0) == 0xB0)
+                setup[k++] = (machine_midi_event){ 0, e[i].status, e[i].data1, e[i].data2 };
+        if (k)
+            sound_host_midi(sound_id(m), setup, k);
+    }
+    int64_t to = now + 250;
+    const qt_midi_event *e;
+    size_t n = qt_native_music(m->native, m->music_ms, to, &e);
+    if (n) {
+        machine_midi_event *out = malloc(n * sizeof *out);
+        for (size_t i = 0; i < n; i++) {
+            uint8_t d2 = e[i].data2;
+            if ((e[i].status & 0xF0) == 0x90 && m->volume < 0x100)
+                d2 = (uint8_t)(d2 * m->volume / 0x100);
+            out[i] = (machine_midi_event){ (int32_t)(e[i].time - now), e[i].status, e[i].data1, d2 };
+        }
+        sound_host_midi(sound_id(m), out, (int)n);
+        free(out);
+    }
+    m->music_ms = to;
 }
 
 /* Keep a second of sound queued ahead of the clock (normal speed only). */
@@ -611,6 +663,7 @@ static void start(movie *m, int32_t rate)
     m->start_ns = machine_time_ns();
     m->playing = true;
     feed_sound(m);
+    feed_music(m);
 }
 
 static void seek(movie *m, int64_t ms)
@@ -676,6 +729,7 @@ static void task(movie *m)
         return;
     draw_frame(m, false);
     feed_sound(m);
+    feed_music(m);
     if (movie_done(m)) {
         if (m->looping) {
             m->base_ms = 0;
@@ -729,8 +783,11 @@ int16_t tb_NewMovieFromFile(gaddr moviep, int16_t refnum, gaddr resid, gaddr res
     if (changed)
         wr8(changed, 0);
     /* OpenMovieFile's reference number, or a resource file's (SimpleText
-     * opens movies with FSpOpenResFile). */
-    if (!fm_refnum_host_path(refnum, path, sizeof path) && !rm_host_path(refnum, path, sizeof path)) {
+     * opens movies with FSpOpenResFile).  For a flattened movie, with no
+     * resource fork to open, SimpleText passes -1; QuickTime takes it from
+     * the file just opened (as a real Mac plays such movies). */
+    if (!fm_refnum_host_path(refnum, path, sizeof path) && !rm_host_path(refnum, path, sizeof path) &&
+        !(refnum == -1 && fm_last_data_fork(path, sizeof path))) {
         wr32(moviep, 0);
         return set_error(-51 /* rfNumErr */);
     }

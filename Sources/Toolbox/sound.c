@@ -124,6 +124,21 @@ static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rat
     }
 }
 
+static machine_midi_fn midi_fn;
+static void *midi_ctx;
+
+void machine_set_midi_handler(machine_midi_fn fn, void *ctx)
+{
+    midi_fn = fn;
+    midi_ctx = ctx;
+}
+
+void sound_host_midi(int id, const machine_midi_event *events, int n)
+{
+    if (midi_fn)
+        midi_fn(id, events, n, midi_ctx);
+}
+
 /* Sound for the host from elsewhere (movies), on channels of their own. */
 void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume)
 {

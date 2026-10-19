@@ -8,6 +8,7 @@
 #include "m68k.h"
 #include "log.h"
 #include "lowmem_gen.h"
+#include "machine.h"
 #include "mem.h"
 #include "structs_gen.h"
 #include "tb_protos_gen.h"
@@ -141,6 +142,7 @@ void adb_pump(void);    /* the mouse to a program's service routine, at interrup
  * with tree, a folder and its contents (filemgr.c). */
 void fm_grant(const char *path, bool tree);
 bool fm_refnum_host_path(int16_t refnum, char *out, size_t outsize);
+bool fm_last_data_fork(char *out, size_t outsize); /* the data fork opened last */
 /* Components of our own (components.c). */
 uint32_t components_register_native(uint32_t type, uint32_t subtype, uint32_t manufacturer, gaddr entry);
 uint32_t components_open(uint32_t component);
@@ -212,6 +214,8 @@ void sound_reset(void);
 /* PCM straight to the host on a channel id of the caller's (movies). */
 void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume);
 void sound_host_stop(int id);
+/* MIDI to the host's synthesizer id (n 0: silence it). */
+void sound_host_midi(int id, const machine_midi_event *events, int n);
 
 /* ---- Appearance ---- */
 

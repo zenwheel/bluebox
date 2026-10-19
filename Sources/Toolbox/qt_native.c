@@ -5,6 +5,10 @@
  * data.  The Movie Toolbox (quicktime.c) keeps the movie's clock and asks
  * for the frame at a time and for the sound of a stretch of time.
  *
+ * A music track's samples are read whole when the movie opens and turned
+ * into MIDI events (qt_music.c), which the Movie Toolbox sends to the host's
+ * General MIDI synthesizer a little ahead of the clock.
+ *
  * Sample tables: stsd (descriptions), stts (durations), stss (key frames),
  * stsc (samples per chunk), stsz (sizes), stco/co64 (chunk offsets).  Sound
  * samples are frames, and a chunk's bytes follow from its frame count and
@@ -15,6 +19,7 @@
 #include <string.h>
 
 #include "qt_codec.h"
+#include "qt_music.h"
 #include "qt_native.h"
 
 #define MAX_DESCS 8
@@ -41,6 +46,9 @@ typedef struct {
     qt_video_format vf[MAX_DESCS];
     uint32_t palettes[MAX_DESCS][256];
     int ndescs;
+    /* music: the tune header (the description's events) */
+    uint8_t *tune_header;
+    uint32_t tune_header_len;
     /* sound: chunks of frames */
     qt_sound_format sf;
     uint32_t nchunks;
@@ -52,7 +60,9 @@ typedef struct {
 struct qt_native {
     FILE *fp;
     int32_t scale;                  /* the movie's */
-    trak video, sound;
+    trak video, sound, music;
+    qt_midi_event *midi;            /* the music track's events, times in movie ms */
+    size_t nmidi;
     qt_vdec *dec;
     int dec_desc;
     int64_t decoded;                /* the last sample decoded into frame, -1 none */
@@ -101,6 +111,7 @@ static void free_trak(trak *t)
     free(t->chunk_offset);
     free(t->chunk_first);
     free(t->chunk_frames);
+    free(t->tune_header);
     memset(t, 0, sizeof *t);
 }
 
@@ -157,6 +168,24 @@ static bool sound_desc(trak *t, const uint8_t *stsd, uint32_t len)
     return qt_adec_supported(&t->sf);
 }
 
+/* A music description: size, 'musi', reserved, data reference, flags, then
+ * the tune header's events. */
+static bool music_desc(trak *t, const uint8_t *stsd, uint32_t len)
+{
+    if (len < 8 + 20 || be32(stsd + 4) < 1)
+        return false;
+    const uint8_t *p = stsd + 8;
+    uint32_t sz = be32(p);
+    if (sz < 20 || sz > len - 8 || memcmp(p + 4, "musi", 4))
+        return false;
+    t->tune_header_len = sz - 20;
+    t->tune_header = malloc(t->tune_header_len ? t->tune_header_len : 1);
+    if (!t->tune_header)
+        return false;
+    memcpy(t->tune_header, p + 20, t->tune_header_len);
+    return true;
+}
+
 static int32_t mdhd_scale(const uint8_t *mdhd, uint32_t len, int64_t *duration)
 {
     if (len >= 32 && mdhd[0] == 1) {
@@ -170,8 +199,11 @@ static int32_t mdhd_scale(const uint8_t *mdhd, uint32_t len, int64_t *duration)
 }
 
 /* The track's tables; false if anything needed is missing or damaged. */
-static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, bool video)
+enum { SOUND, VIDEO, MUSIC };
+
+static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
 {
+    bool video = kind != SOUND; /* video and music: tables of whole samples */
     uint32_t n;
     static const char *const mdhd_path[] = { "mdia", "mdhd" };
     const uint8_t *mdhd = path(tr, len, mdhd_path, 2, &n);
@@ -210,7 +242,7 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, bool video)
     }
     if (!stsd || !stts || !stsc || !stco || tl < 8 || cl < 8 || ol < 8)
         return false;
-    if (video ? !video_descs(t, stsd, dl) : !sound_desc(t, stsd, dl))
+    if (kind == VIDEO ? !video_descs(t, stsd, dl) : kind == MUSIC ? !music_desc(t, stsd, dl) : !sound_desc(t, stsd, dl))
         return false;
     uint32_t nchunks = be32(stco + 4), nsc = be32(stsc + 4), ntts = be32(stts + 4);
     if (nchunks > (ol - 8) / (co64 ? 8 : 4) || nsc > (cl - 8) / 12 || ntts > (tl - 8) / 8 || !nchunks || !nsc)
@@ -318,6 +350,8 @@ static void self_contained_check(const uint8_t *tr, uint32_t len, bool *ok)
     }
 }
 
+static bool read_music(qt_native *p);
+
 qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_path, int32_t movie_scale,
                           const uint32_t *screen_palette, int screen_depth)
 {
@@ -343,14 +377,18 @@ qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_pa
             uint32_t type = hdlr && hn >= 12 ? be32(hdlr + 8) : 0;
             if (enabled && type == four("vide") && !p->video.present) {
                 self_contained_check(t + 8, tn - 8, &ok);
-                if (!read_trak(&p->video, t + 8, tn - 8, true))
+                if (!read_trak(&p->video, t + 8, tn - 8, VIDEO))
                     ok = false;
             } else if (enabled && type == four("soun") && !p->sound.present) {
                 self_contained_check(t + 8, tn - 8, &ok);
-                if (!read_trak(&p->sound, t + 8, tn - 8, false))
+                if (!read_trak(&p->sound, t + 8, tn - 8, SOUND))
+                    ok = false;
+            } else if (enabled && type == four("musi") && !p->music.present) {
+                self_contained_check(t + 8, tn - 8, &ok);
+                if (!read_trak(&p->music, t + 8, tn - 8, MUSIC))
                     ok = false;
             } else if (enabled && type != four("tmcd") && type != 0) {
-                ok = false; /* music, text, sprites, MPEG: not ours */
+                ok = false; /* text, sprites, MPEG: not ours */
             }
         }
         t += tn;
@@ -365,13 +403,51 @@ qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_pa
             f->palette = p->video.palettes[i];
         }
     }
-    if (ok && (p->video.present || p->sound.present))
+    if (ok && (p->video.present || p->sound.present || p->music.present))
         p->fp = fopen(data_path, "rb");
+    if (ok && p->fp && p->music.present)
+        ok = read_music(p);
     if (!ok || !p->fp) {
         qt_native_close(p);
         return NULL;
     }
     return p;
+}
+
+static uint8_t *read_at(FILE *fp, uint64_t off, uint32_t size);
+
+/* Movie time (ms) of a moment of the track's media (the first edit that
+ * shows media, or none). */
+static int64_t media_to_ms(const trak *t, int32_t movie_scale, int64_t media)
+{
+    for (int i = 0; i < t->nedits; i++)
+        if (t->edits[i].media_time >= 0)
+            return t->edits[i].movie_start * 1000 / movie_scale + (media - t->edits[i].media_time) * 1000 / t->scale;
+    return media * 1000 / t->scale;
+}
+
+/* The whole music track as MIDI events, in movie time. */
+static bool read_music(qt_native *p)
+{
+    trak *t = &p->music;
+    qt_music_sample *s = calloc(t->nsamples ? t->nsamples : 1, sizeof *s);
+    if (!s)
+        return false;
+    bool ok = true;
+    for (uint32_t k = 0; k < t->nsamples && ok; k++) {
+        s[k].data = read_at(p->fp, t->offset[k], t->size[k]);
+        s[k].len = t->size[k];
+        s[k].time = t->time[k];
+        ok = s[k].data != NULL;
+    }
+    if (ok)
+        p->midi = qt_music_events(t->tune_header, t->tune_header_len, s, t->nsamples, &p->nmidi);
+    for (uint32_t k = 0; k < t->nsamples; k++)
+        free((void *)s[k].data);
+    free(s);
+    for (size_t i = 0; i < p->nmidi; i++)
+        p->midi[i].time = media_to_ms(t, p->scale, p->midi[i].time);
+    return ok;
 }
 
 void qt_native_close(qt_native *p)
@@ -383,12 +459,33 @@ void qt_native_close(qt_native *p)
     qt_vdec_free(p->dec);
     free_trak(&p->video);
     free_trak(&p->sound);
+    free_trak(&p->music);
+    free(p->midi);
     free(p->frame);
     free(p);
 }
 
 bool qt_native_has_video(const qt_native *p) { return p && p->video.present; }
 bool qt_native_has_sound(const qt_native *p) { return p && p->sound.present; }
+bool qt_native_has_music(const qt_native *p) { return p && p->music.present; }
+
+/* The music's events in movie time [from_ms, to_ms): *first and the count. */
+size_t qt_native_music(qt_native *p, int64_t from_ms, int64_t to_ms, const qt_midi_event **first)
+{
+    size_t lo = 0, hi = p->nmidi;
+    while (lo < hi) { /* the first at or after from_ms */
+        size_t mid = (lo + hi) / 2;
+        if (p->midi[mid].time < from_ms)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    size_t end = lo;
+    while (end < p->nmidi && p->midi[end].time < to_ms)
+        end++;
+    *first = p->midi + lo;
+    return end - lo;
+}
 
 /* Movie time (ms) to the track's media time; -1 in an empty edit or past the end. */
 static int64_t media_time(const trak *t, int32_t movie_scale, int64_t ms)
