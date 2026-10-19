@@ -341,12 +341,17 @@ void ev_post_menubar_click(void)
 }
 
 /* Let time pass while native code waits on the user. */
+/* A tick in a Toolbox tracking loop (menus, controls, dragging): the
+ * interrupt-time work that goes on under it on a Mac goes on here too,
+ * sound refills among it (SoundTrecker plays on while a menu is down). */
 void ev_wait_tick(void)
 {
     machine_advance_ticks();
+    sound_pump();
+    time_pump();
     if (!host_attached) {
         /* Headless, a tick of the instruction clock passes, so scripted
-         * input arrives: a Toolbox tracking loop runs no guest code. */
+         * input arrives. */
         machine_pass_tick();
         return;
     }

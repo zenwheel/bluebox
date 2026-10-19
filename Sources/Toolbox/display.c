@@ -315,11 +315,25 @@ bool display_menu_tracking_wait(void)
     pthread_mutex_lock(&lock);
     in_select = true;
     pthread_cond_broadcast(&track_cond);
+    /* While the menu is down, interrupt-time work goes on in 5 ms slices,
+     * as on a Mac: sound refills (SoundTrecker's double buffers), Time
+     * Manager and VBL tasks, the network.  A minute with no answer ends it. */
+    struct timespec give_up;
+    deadline_after_ms(&give_up, 60000);
     while (!track_done) {
         struct timespec ts;
-        deadline_after_ms(&ts, 60000);
-        if (pthread_cond_timedwait(&track_cond, &lock, &ts))
+        deadline_after_ms(&ts, 5);
+        if (pthread_cond_timedwait(&track_cond, &lock, &ts) == 0 || track_done)
+            continue;
+        struct timespec now;
+        clock_gettime(CLOCK_REALTIME, &now);
+        if (now.tv_sec > give_up.tv_sec || (now.tv_sec == give_up.tv_sec && now.tv_nsec >= give_up.tv_nsec))
             break;
+        pthread_mutex_unlock(&lock);
+        machine_advance_ticks();
+        sound_pump();
+        time_pump();
+        pthread_mutex_lock(&lock);
     }
     tracking = in_select = track_done = false;
     pthread_mutex_unlock(&lock);
