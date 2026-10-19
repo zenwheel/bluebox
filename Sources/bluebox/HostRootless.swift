@@ -185,11 +185,10 @@ final class TransientView: NSView {
     // MTemp and sets CrsrNew, recentring it each frame to measure the
     // mouse's motion, as Ingemar's skiing game and Apeiron do) is reading
     // relative motion: it gets the mouse's own motion, added to wherever it
-    // put the cursor, and the host's pointer is moved to follow it.  A
-    // program that has the whole screen gets that too, and the macOS menu
-    // bar and Dock are hidden behind a black backdrop so stray clicks can't
-    // reach them.  The pointer is captured only while we are the active app
-    // and the program is doing either; Command-Tab lets go.
+    // put the cursor; the host's pointer catches up when the capture ends.
+    // A program that has the whole screen gets the macOS menu bar and Dock
+    // hidden behind a black backdrop, so stray clicks can't reach them.
+    // Both only while we are the active app; Command-Tab lets go.
 
     var captured = false
     var hidingChrome = false
@@ -202,12 +201,17 @@ final class TransientView: NSView {
         let warps = machine_mouse_state(&x, &y, &relative)
         let active = NSApp.isActive && openMenus == 0 && transientWindow == nil
         setChromeHidden(active && screenWindow != nil)
-        setCaptured(active && (screenWindow != nil || relative))
-        // The program moved the cursor: the host's pointer goes there.
+        let wasCaptured = captured
+        setCaptured(active && relative)
+        // The program moved the cursor: the host's pointer goes there, but
+        // not while captured: macOS counts a warp in the next motion it
+        // reports, which would come back to the program as a move the other
+        // way (each recentring undone, so a game never steers straight).
+        // When the capture ends the pointer catches up.
         if warps != programWarps {
             programWarps = warps
-            if active { warpHostPointer(to: x, y) }
-        } else if captured {
+            if active && !captured { warpHostPointer(to: x, y) }
+        } else if wasCaptured && !captured {
             warpHostPointer(to: x, y)
         }
     }
