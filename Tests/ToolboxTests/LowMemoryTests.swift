@@ -105,6 +105,37 @@ extension BlueBox {
             #expect(x == 0 && y > 382)
         }
 
+        /// An ADB mouse service routine (Apeiron's) hears the mouse's own
+        /// motion, not the program's moves of the cursor.
+        @Test func adbPacketsCarryMotionNotCursorMoves() {
+            setStack()
+            let out = tb_NewPtr(8, false, true), code = tb_NewPtr(32, false, true)
+            let words: [UInt16] = [0x13E8, 1, UInt16(out >> 16), UInt16(out & 0xFFFF),           // MOVE.B 1(A0),out
+                                   0x13E8, 2, UInt16((out + 1) >> 16), UInt16((out + 1) & 0xFFFF), // MOVE.B 2(A0),out+1
+                                   0x5279, UInt16((out + 2) >> 16), UInt16((out + 2) & 0xFFFF),     // ADDQ.W #1,out+2
+                                   0x4E75]
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let info = tb_NewPtr(8, false, true)
+            wr32(info, code)
+            machine_post_mouse(100, 100, -1)
+            events_sync_lowmem()
+            #expect(tb_SetADBInfo(info, 3) == 0)
+            // The program recentres the cursor: no packet.
+            let center: UInt32 = 384 << 16 | 512
+            wr32(UInt32(LM_MouseLocation), center)
+            wr32(UInt32(LM_MTemp), center)
+            wr8(0x8CE, 0xFF)
+            events_sync_lowmem()
+            adb_pump()
+            #expect(rd16(out + 2) == 0)
+            // The mouse moves 5 right: one packet saying so.
+            machine_post_mouse_delta(5, 0)
+            events_sync_lowmem()
+            adb_pump()
+            #expect(rd16(out + 2) == 1)
+            #expect(rd8(out) == 0x80 && rd8(out + 1) == 0x85)
+        }
+
         /// Key1Trans translates a key code (D2) with modifiers (D1) to a character.
         @Test func keyTransVectors() {
             setStack()

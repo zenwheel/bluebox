@@ -42,6 +42,11 @@ static uint32_t written_pt;
 static uint32_t warps;
 static uint64_t last_warp_ns;
 static double frac_h, frac_v; /* captured motion's fractions of a pixel */
+/* The mouse's own motion not yet reported to an ADB service routine:
+ * from the host, never from the program moving the cursor (a program
+ * reading ADB packets and recentring the cursor, as Apeiron does, would
+ * otherwise see each recentring as the mouse moving back). */
+static int motion_h, motion_v;
 #define LM_CrsrNew 0x08CEu    /* Byte: nonzero when the cursor must be redrawn at RawMouse */
 static bool button_down;
 static uint32_t presses, key_presses; /* counted, so a quick click is never missed */
@@ -248,6 +253,8 @@ bool aem_next_event(uint32_t *cls, uint32_t *id, bool remove);
 void machine_post_mouse(int x, int y, int button)
 {
     pthread_mutex_lock(&lock);
+    motion_h += x - mouse_h;
+    motion_v += y - mouse_v;
     mouse_h = (int16_t)x;
     mouse_v = (int16_t)y;
     if (button >= 0 && (button != 0) != button_down) {
@@ -273,6 +280,8 @@ void machine_post_mouse_delta(double dx, double dy)
     int ih = (int)frac_h, iv = (int)frac_v;
     frac_h -= ih;
     frac_v -= iv;
+    motion_h += ih; /* all of it, at the screen's edge too, as a mouse reports */
+    motion_v += iv;
     int nh = mouse_h + ih, nv = mouse_v + iv;
     nh = nh < 0 ? 0 : nh >= w ? w - 1 : nh;
     nv = nv < 0 ? 0 : nv >= h ? h - 1 : nv;
@@ -280,6 +289,32 @@ void machine_post_mouse_delta(double dx, double dy)
     mouse_v = (int16_t)nv;
     pthread_cond_broadcast(&arrived);
     pthread_mutex_unlock(&lock);
+}
+
+/* Up to `limit` of the mouse's unreported motion each way (the rest stays
+ * for the next packet); limit 0 takes it all.  False if there is none. */
+bool ev_take_motion(int *dh, int *dv, int limit)
+{
+    pthread_mutex_lock(&lock);
+    int h = motion_h, v = motion_v;
+    if (limit) {
+        h = h < -limit ? -limit : h > limit - 1 ? limit - 1 : h;
+        v = v < -limit ? -limit : v > limit - 1 ? limit - 1 : v;
+    }
+    motion_h -= h;
+    motion_v -= v;
+    pthread_mutex_unlock(&lock);
+    *dh = h;
+    *dv = v;
+    return h || v;
+}
+
+bool ev_motion_pending(void)
+{
+    pthread_mutex_lock(&lock);
+    bool p = motion_h || motion_v;
+    pthread_mutex_unlock(&lock);
+    return p;
 }
 
 /* Where the mouse is, how many times the program has moved it, and

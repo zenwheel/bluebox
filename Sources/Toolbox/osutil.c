@@ -441,7 +441,6 @@ enum { adb_count = 2 };
 static gaddr adb_service[adb_count], adb_data[adb_count];
 static gaddr adb_own_service; /* the devices' own routine: it does nothing */
 static gaddr adb_buffer;      /* a register's bytes for a service routine */
-static uint32_t adb_last_mouse; /* raw mouse location at the last poll */
 static bool adb_last_button;
 
 static int adb_index(int addr)
@@ -491,7 +490,8 @@ int16_t tb_SetADBInfo(gaddr adbp, int16_t address)
     adb_service[k] = adbp ? rd32(adbp) : 0;
     adb_data[k] = adbp ? rd32(adbp + 4) : 0;
     if (adb_devices[k].type == 1) { /* movement from now on */
-        adb_last_mouse = rd32(LM_MouseLocation);
+        int dh, dv;
+        ev_take_motion(&dh, &dv, 0);
         adb_last_button = tb_Button();
     }
     return noErr;
@@ -508,15 +508,11 @@ static void adb_talk(int k, int reg, gaddr buf)
         b[0] = (uint8_t)(0x60 | adb_devices[k].addr);
         b[1] = (uint8_t)adb_devices[k].handler;
     } else if (reg == 0 && adb_devices[k].type == 1) {
-        /* The movement since the last packet, as much as a packet holds;
-         * the rest goes in the next. */
-        uint32_t m = rd32(LM_MouseLocation);
-        int dv = (int16_t)(m >> 16) - (int16_t)(adb_last_mouse >> 16);
-        int dh = (int16_t)m - (int16_t)adb_last_mouse;
-        dv = dv < -64 ? -64 : dv > 63 ? 63 : dv;
-        dh = dh < -64 ? -64 : dh > 63 ? 63 : dh;
-        adb_last_mouse = (uint32_t)(uint16_t)((int16_t)(adb_last_mouse >> 16) + dv) << 16 |
-                         (uint16_t)((int16_t)adb_last_mouse + dh);
+        /* The mouse's motion since the last packet (not the cursor's: a
+         * program moving the cursor is no motion), as much as a packet
+         * holds; the rest goes in the next. */
+        int dh, dv;
+        ev_take_motion(&dh, &dv, 64);
         bool down = tb_Button();
         adb_last_button = down;
         b[0] = (uint8_t)((down ? 0 : 0x80) | (dv & 0x7F));
@@ -571,15 +567,14 @@ void adb_pump(void)
 {
     if (!adb_service[1] || adb_service[1] == adb_own_service)
         return;
-    uint32_t m = rd32(LM_MouseLocation);
     bool down = tb_Button();
-    if (m == adb_last_mouse && down == adb_last_button)
+    if (!ev_motion_pending() && down == adb_last_button)
         return;
     if (!adb_buffer)
         adb_buffer = tb_NewPtr(8, true, true); /* system heap */
     /* Talk register 0 from address 3, packet by packet until the movement
      * is all delivered (a few a time, as the mouse reported every tick). */
-    for (int i = 0; i < 8 && (rd32(LM_MouseLocation) != adb_last_mouse || tb_Button() != adb_last_button); i++) {
+    for (int i = 0; i < 8 && (ev_motion_pending() || tb_Button() != adb_last_button); i++) {
         adb_talk(1, 0, adb_buffer);
         adb_call(adb_service[1], adb_buffer, adb_data[1], 0x3C);
     }
@@ -593,7 +588,7 @@ void adb_install(void)
         adb_data[k] = 0;
     }
     adb_buffer = 0;
-    adb_last_mouse = rd32(LM_MouseLocation);
+    { int dh, dv; ev_take_motion(&dh, &dv, 0); } /* motion from now on */
     adb_last_button = false;
     wr32(OS_TRAP_TABLE + 0x7Cu * 4, native_register(adbop_native, "ADBOp", 0xA07C));
 }

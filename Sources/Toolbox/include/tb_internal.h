@@ -150,6 +150,9 @@ void components_reset(void);
 void quicktime_reset(void);
 /* Mouse button and location into low memory (events.c). */
 void events_sync_lowmem(void);
+/* The mouse's own motion for ADB packets (events.c). */
+bool ev_take_motion(int *dh, int *dv, int limit);
+bool ev_motion_pending(void);
 /* After a Toolbox trap from the program, not a callback (display.c). */
 void display_trap_done(void);
 /* A pop-up menu's area while it is up (display.c), for rootless hosts. */
