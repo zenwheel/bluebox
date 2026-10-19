@@ -345,7 +345,13 @@ private func sourceStamp(_ source: String) -> String {
     let size = (attrs[.size] as? NSNumber)?.int64Value ?? -1
     let mtime = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
     return "\(URL(fileURLWithPath: source).standardizedFileURL.path)\n\(size)\n\(Int64(mtime))\n"
+        + "importer \(importerVersion)\n"
 }
+
+/// Raised when importing extracts more than it did (a disk image or archive
+/// kind newly understood, a decoding fixed): entries made before are made
+/// again the next time their source is imported.
+let importerVersion = 2
 
 /// Ingest a file into the library.  Re-ingesting an unchanged source reuses
 /// the existing entry.  Returns the entry folder and any notes.
@@ -382,7 +388,10 @@ func ingest(_ source: String, library: String, force: Bool = false) throws -> (e
         try? fm.removeItem(atPath: entry)
         throw error
     }
-    fm.createFile(atPath: stampPath, contents: Data(stamp.utf8))
+    // Something left unextracted is tried again next time.
+    if !notes.contains(where: { $0.contains("not extracted") || $0.contains("not decoded") }) {
+        fm.createFile(atPath: stampPath, contents: Data(stamp.utf8))
+    }
     return (entry, notes)
 }
 
