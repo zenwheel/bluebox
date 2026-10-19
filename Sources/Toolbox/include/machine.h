@@ -20,6 +20,11 @@ void machine_set_prefer_ppc(bool on);
 /* Before launching: a host folder becomes a volume of its own, named name
  * (UTF-8; the folder's name if empty), as the disk an application came on. */
 void machine_mount_folder(const char *path, const char *name);
+/* An AppleShare volume, mirrored: "tcp:[user[:password]@]host[:port]/Volume"
+ * or "atalk:[user[:password]@]Server:AFPServer[@zone]/Volume" (AppleTalk on).
+ * Connected when first looked into; false if the specification is wrong. */
+bool machine_mount_appleshare(const char *spec, char *err, size_t errlen);
+void machine_close_appleshares(void); /* logged out, forgotten */
 /* Run up to max_instructions. */
 run_status machine_run(uint64_t max_instructions);
 const char *machine_halt_reason(void);

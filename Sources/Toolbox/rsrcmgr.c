@@ -925,6 +925,7 @@ static int16_t open_path_perm(const char *path, int perm)
         }
     mac_file mf;
     char err[256];
+    as_ensure_file(path);
     if (!appledouble_read(path, &mf, err, sizeof err)) {
         set_res_err(fnfErr);
         return -1;
@@ -1193,6 +1194,7 @@ static bool write_host_fork(const char *path, const uint8_t *fork, uint32_t len)
 {
     mac_file mf;
     char err[256];
+    as_ensure_file(path);
     if (!appledouble_read(path, &mf, err, sizeof err))
         memset(&mf, 0, sizeof mf);
     free(mf.rsrc);
@@ -1203,6 +1205,8 @@ static bool write_host_fork(const char *path, const uint8_t *fork, uint32_t len)
     if (!ok)
         log_printf("rsrc: %s: %s\n", path, err);
     mac_file_free(&mf);
+    if (ok)
+        as_file_changed(path); /* to the server, on an AppleShare volume */
     return ok;
 }
 
@@ -1423,6 +1427,7 @@ static void create_res_file(const char *path, uint32_t type, uint32_t creator, b
 {
     mac_file mf;
     char err[256];
+    as_ensure_file(path);
     bool exists = appledouble_read(path, &mf, err, sizeof err);
     if (exists && mf.rsrc_len) {
         mac_file_free(&mf);

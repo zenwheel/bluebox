@@ -55,6 +55,7 @@ typedef struct {
     int retries;    /* -1: for ever */
     uint8_t req[8 + ATP_DATA];
     int reqlen;
+    atp_reply *host; /* host code's (atp_host_request): the responses go here, not to a BDS */
 } request;
 
 typedef struct {
@@ -89,6 +90,8 @@ static seen seens[MAX_SEEN];
 static int nseen;
 static bool atp_sockets[256];
 static uint32_t filters[256]; /* OpenATPSkt's address filter: net, node, socket (0 any) */
+static atp_request_fn host_fns[256]; /* host code's sockets: requests to a function */
+static void *host_ctx[256];
 static uint16_t next_tid;
 
 static uint64_t now_ms(void)
@@ -124,6 +127,11 @@ static void end_request(request *q, int16_t r)
     if (q->own_skt) {
         atp_sockets[q->skt] = false;
         at_close_socket(q->skt);
+    }
+    if (q->host) {
+        q->host->count = q->got;
+        q->host->result = r;
+        return;
     }
     wr8(q->pb + P_NUMRESPS, (uint8_t)q->got);
     finish(q->pb, r);
@@ -170,6 +178,13 @@ static void got_request(uint8_t skt, uint8_t node, uint8_t rskt, const uint8_t *
     }
     if (find_seen(skt, node, rskt, tid) || !filter_ok(skt, node, rskt))
         return; /* delivered, its answer to come */
+    if (host_fns[skt]) {
+        if (nseen == MAX_SEEN)
+            memmove(seens, seens + 1, sizeof seens[0] * (size_t)--nseen);
+        seens[nseen++] = (seen){ skt, node, rskt, tid, (p[0] & XO) != 0, now_ms() };
+        host_fns[skt](host_ctx[skt], skt, node, rskt, tid, user_of(p), p + 8, len - 8);
+        return;
+    }
     for (int i = 0; i < MAX_GETS; i++) {
         getter *g = &getters[i];
         if (!g->used || g->skt != skt)
@@ -208,14 +223,20 @@ static void got_response(uint8_t skt, uint8_t node, uint8_t rskt, const uint8_t 
         int seq = p[1];
         if (seq >= q->nbufs || !(q->bitmap & (1 << seq)))
             return;
-        gaddr e = rd32(q->pb + P_BDS) + (uint32_t)seq * BDS_SIZE;
-        int n = len - 8, room = (int16_t)rd16(e);
-        if (n > room)
-            n = room;
-        if (n > 0)
-            gput(rd32(e + 2), p + 8, (uint32_t)n);
-        wr16(e + 6, (uint16_t)n);
-        wr32(e + 8, user_of(p));
+        if (q->host) {
+            memcpy(q->host->data[seq], p + 8, (size_t)(len - 8));
+            q->host->len[seq] = len - 8;
+            q->host->user[seq] = user_of(p);
+        } else {
+            gaddr e = rd32(q->pb + P_BDS) + (uint32_t)seq * BDS_SIZE;
+            int n = len - 8, room = (int16_t)rd16(e);
+            if (n > room)
+                n = room;
+            if (n > 0)
+                gput(rd32(e + 2), p + 8, (uint32_t)n);
+            wr16(e + 6, (uint16_t)n);
+            wr32(e + 8, user_of(p));
+        }
         q->bitmap &= (uint8_t)~(1 << seq);
         if (seq + 1 > q->got)
             q->got = seq + 1;
@@ -291,6 +312,7 @@ void atp_reset(void)
     memset(getters, 0, sizeof getters);
     memset(rsps, 0, sizeof rsps);
     memset(atp_sockets, 0, sizeof atp_sockets);
+    memset(host_fns, 0, sizeof host_fns);
     nseen = 0;
 }
 
@@ -364,6 +386,34 @@ static int16_t start_request(gaddr pb, bool async, bool own)
     return wait_for(pb, async);
 }
 
+/* A transaction's responses (count of them, the last with EOM), kept for
+ * repeats of the request when it was exactly-once. */
+static void respond(uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint8_t eom, int count,
+                    const uint8_t (*data)[ATP_DATA], const int *lens, const uint32_t *users)
+{
+    seen *s = find_seen(skt, node, rskt, tid);
+    response *keep = NULL;
+    if (s && s->xo)
+        for (int i = 0; i < MAX_RSPS && !keep; i++)
+            if (!rsps[i].used)
+                keep = &rsps[i];
+    if (keep) {
+        memset(keep, 0, sizeof *keep);
+        *keep = (response){ true, skt, node, rskt, tid, count, { { 0 } }, { 0 }, now_ms() + 30000 };
+    }
+    for (int i = 0; i < count; i++) {
+        uint8_t pkt[8 + ATP_DATA];
+        int n = lens[i] < 0 ? 0 : lens[i] > ATP_DATA ? ATP_DATA : lens[i];
+        put_header(pkt, (uint8_t)(TRESP | (i == count - 1 ? eom : 0)), (uint8_t)i, tid, users ? users[i] : 0);
+        memcpy(pkt + 8, data[i], (size_t)n);
+        at_send_ddp(node, rskt, skt, DDP_ATP, pkt, 8 + n);
+        if (keep) {
+            memcpy(keep->pkt[i], pkt, (size_t)(8 + n));
+            keep->len[i] = 8 + n;
+        }
+    }
+}
+
 static int16_t send_response(gaddr pb, bool add)
 {
     int skt = rd8(pb + P_SOCKET);
@@ -384,30 +434,18 @@ static int16_t send_response(gaddr pb, bool add)
     int count = rd8(pb + P_BDSSIZE);
     if (count < 1 || count > 8)
         return badBuffNum;
-    seen *s = find_seen((uint8_t)skt, node, rskt, tid);
-    response *keep = NULL;
-    if (s && s->xo)
-        for (int i = 0; i < MAX_RSPS && !keep; i++)
-            if (!rsps[i].used)
-                keep = &rsps[i];
-    if (keep) {
-        memset(keep, 0, sizeof *keep);
-        *keep = (response){ true, (uint8_t)skt, node, rskt, tid, count, { { 0 } }, { 0 }, now_ms() + 30000 };
-    }
+    static uint8_t data[8][ATP_DATA];
+    int lens[8];
+    uint32_t users[8];
     gaddr bds = rd32(pb + P_BDS);
     for (int i = 0; i < count; i++) {
         gaddr e = bds + (uint32_t)i * BDS_SIZE;
-        uint8_t pkt[8 + ATP_DATA];
         int n = (int16_t)rd16(e + 6);
-        n = n < 0 ? 0 : n > ATP_DATA ? ATP_DATA : n;
-        put_header(pkt, (uint8_t)(TRESP | (i == count - 1 ? eom : 0)), (uint8_t)i, tid, rd32(e + 8));
-        gget(pkt + 8, rd32(e + 2), (uint32_t)n);
-        at_send_ddp(node, rskt, (uint8_t)skt, DDP_ATP, pkt, 8 + n);
-        if (keep) {
-            memcpy(keep->pkt[i], pkt, (size_t)(8 + n));
-            keep->len[i] = 8 + n;
-        }
+        lens[i] = n = n < 0 ? 0 : n > ATP_DATA ? ATP_DATA : n;
+        users[i] = rd32(e + 8);
+        gget(data[i], rd32(e + 2), (uint32_t)n);
     }
+    respond((uint8_t)skt, node, rskt, tid, eom, count, (const uint8_t(*)[ATP_DATA])data, lens, users);
     return noErr;
 }
 
@@ -539,3 +577,99 @@ static int16_t xpp_control(gaddr pb, bool async)
 static int16_t xpp_open(gaddr pb) { return at_open(); }
 
 const native_driver xpp_driver = { ".XPP", 40, xpp_open, NULL, xpp_control, NULL, NULL, NULL, NULL };
+
+/* ---------------------------------------------------------------------- */
+/* ATP for host code (ASP in asp.c): a socket whose requests go to a C
+ * function, transactions waited for while the stack runs (as the
+ * driver's synchronous calls wait), and responses sent from C. */
+
+int atp_host_open(atp_request_fn fn, void *ctx)
+{
+    if (at_open() != noErr)
+        return 0;
+    int s = at_open_socket(0, atp_in);
+    if (!s)
+        return 0;
+    atp_sockets[s] = true;
+    filters[s] = 0;
+    host_fns[s] = fn;
+    host_ctx[s] = ctx;
+    return s;
+}
+
+void atp_host_close(int s)
+{
+    if (s <= 0 || s > 254 || !atp_sockets[s])
+        return;
+    for (int i = 0; i < MAX_REQS; i++)
+        if (reqs[i].used && reqs[i].skt == s)
+            end_request(&reqs[i], reqAborted);
+    for (int i = 0; i < MAX_RSPS; i++)
+        if (rsps[i].skt == s)
+            rsps[i].used = false;
+    atp_sockets[s] = false;
+    host_fns[s] = NULL;
+    at_close_socket(s);
+}
+
+int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+                         int nresp, int timeout_ms, int retries, atp_reply *out)
+{
+    if (skt <= 0 || skt > 254 || !atp_sockets[skt])
+        return badATPSkt;
+    if (nresp < 1 || nresp > 8 || len < 0 || len > ATP_DATA)
+        return badBuffNum;
+    request *q = NULL;
+    for (int i = 0; i < MAX_REQS && !q; i++)
+        if (!reqs[i].used)
+            q = &reqs[i];
+    if (!q)
+        return tooManyReqs;
+    memset(q, 0, sizeof *q);
+    memset(out, 0, sizeof *out);
+    out->result = ioInProgress;
+    q->used = true;
+    q->host = out;
+    q->skt = (uint8_t)skt;
+    q->node = node;
+    q->dskt = dskt;
+    q->tid = ++next_tid;
+    q->nbufs = nresp;
+    q->bitmap = (uint8_t)((1 << nresp) - 1);
+    q->xo = xo;
+    q->timeout = (uint64_t)(timeout_ms > 0 ? timeout_ms : 1000);
+    q->retries = retries;
+    put_header(q->req, (uint8_t)(TREQ | (xo ? XO : 0)), q->bitmap, q->tid, user);
+    if (len)
+        memcpy(q->req + 8, data, (size_t)len);
+    q->reqlen = 8 + len;
+    send_request(q);
+    q->next = now_ms() + q->timeout;
+    /* A deadline of its own too, should the poll not be running. */
+    uint64_t give_up = now_ms() + q->timeout * (uint64_t)(retries < 0 ? 1000 : retries + 2);
+    while (out->result == ioInProgress) {
+        struct timespec ts = { 0, 1000000 };
+        nanosleep(&ts, NULL);
+        appletalk_poll();
+        if (out->result == ioInProgress && now_ms() > give_up && q->used && q->host == out)
+            end_request(q, reqFailed);
+    }
+    return out->result;
+}
+
+void atp_host_respond(int skt, uint8_t node, uint8_t rskt, uint16_t tid, int count, const uint8_t (*data)[578],
+                      const int *lens, const uint32_t *users)
+{
+    if (skt > 0 && skt < 255 && atp_sockets[skt] && count >= 1 && count <= 8)
+        respond((uint8_t)skt, node, rskt, tid, EOM, count, data, lens, users);
+}
+
+void atp_host_send_once(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len)
+{
+    uint8_t pkt[8 + ATP_DATA];
+    len = len < 0 ? 0 : len > ATP_DATA ? ATP_DATA : len;
+    put_header(pkt, TREQ, 1, ++next_tid, user);
+    if (len)
+        memcpy(pkt + 8, data, (size_t)len);
+    at_send_ddp(node, dskt, (uint8_t)skt, DDP_ATP, pkt, 8 + len);
+}

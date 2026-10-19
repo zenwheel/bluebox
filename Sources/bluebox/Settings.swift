@@ -17,9 +17,10 @@ struct AppSettings: Codable {
     var modemPort: String? /* what the modem port connects to (machine_set_serial's specs) */
     var printerPort: String?
     var printFolder: String? /* printed pages saved there as PDF files, without the print panel ("": the panel) */
+    var appleShare: String? /* an AppleShare volume to mount (machine_mount_appleshare's spec; "": none) */
     var isEmpty: Bool {
         depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
-            && modemPort == nil && printerPort == nil && printFolder == nil
+            && modemPort == nil && printerPort == nil && printFolder == nil && appleShare == nil
     }
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), "
@@ -28,7 +29,8 @@ struct AppSettings: Codable {
             + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)"), "
             + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
             + "printer-port \(printerPort ?? "default (none)"), "
-            + "print-folder \(printFolder.map { $0.isEmpty ? "panel" : $0 } ?? "default (the print panel)")"
+            + "print-folder \(printFolder.map { $0.isEmpty ? "panel" : $0 } ?? "default (the print panel)"), "
+            + "appleshare \(appleShare.map { $0.isEmpty ? "none" : $0 } ?? "default (none)")"
     }
 
     /// These settings, with any left unset taken from `fallback`.
@@ -37,7 +39,8 @@ struct AppSettings: Codable {
         return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, scale: scale ?? f.scale,
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
                            appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
-                           printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder)
+                           printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
+                           appleShare: appleShare ?? f.appleShare)
     }
 }
 
@@ -133,7 +136,7 @@ func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 ///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
-///     [print-folder <folder>|panel|default]
+///     [print-folder <folder>|panel|default] [appleshare <spec>|none|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -218,9 +221,19 @@ func setCommand(_ args: [String]) {
                 }
                 s.printFolder = (path as NSString).standardizingPath
             }
+        case "appleshare":
+            if value == "default" {
+                s.appleShare = nil
+            } else if value == "none" {
+                s.appleShare = ""
+            } else if value.hasPrefix("tcp:") || value.hasPrefix("atalk:"), value.contains("/") {
+                s.appleShare = value
+            } else {
+                fail("appleshare expects tcp:[user[:pass]@]host/Volume, atalk:[user[:pass]@]Server:AFPServer[@zone]/Volume, none or default")
+            }
         default:
             fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, "
-                 + "modem-port, printer-port, print-folder)")
+                 + "modem-port, printer-port, print-folder, appleshare)")
         }
     }
     if !pairs.isEmpty { usage() }

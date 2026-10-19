@@ -643,6 +643,13 @@ struct SettingsForm: View {
                        inherited: fallback.modemPort ?? "modem")
             PortPicker(label: "Printer port", spec: $settings.printerPort, inherit: inherit,
                        inherited: fallback.printerPort ?? "none")
+            TextField("AppleShare volume", text: Binding(get: { settings.appleShare ?? "" }, set: {
+                let v = $0.trimmingCharacters(in: .whitespaces)
+                settings.appleShare = v.isEmpty ? nil : v
+            }), prompt: Text(fallback.appleShare.map { $0.isEmpty ? "none" : $0 } ?? "tcp:host/Volume or atalk:Server:AFPServer@*/Volume"))
+            .help("A file server's volume, mounted as a disk while the program runs: tcp:host/Volume reaches it over "
+                  + "TCP/IP, atalk:Server:AFPServer@*/Volume over AppleTalk (with AppleTalk on). Add user:password@ "
+                  + "before the server to log in; without it you are a guest.")
         }
         Section("Printing") {
             PrintFolderPicker(folder: $settings.printFolder, inherit: inherit, inherited: fallback.printFolder)

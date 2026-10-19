@@ -283,6 +283,7 @@ static int mac_char_cmp(const uint8_t *a, const uint8_t *b, int n)
  * was shortened to it; else the plain conversion (for new files). */
 static void host_component(const char *dir, const uint8_t *mac, int n, char *out, size_t outsize)
 {
+    as_ensure_dir(dir[0] ? dir : "/"); /* an AppleShare folder looked into: from the server */
     mac_to_host(mac, n, out, outsize);
     char full[PATH_MAX];
     struct stat st;
@@ -602,6 +603,7 @@ static int list_entries(const char *dir, bool files_only, char ***out)
     char **names = NULL;
     int count = 0, cap = 0;
     bool root = !strcmp(dir, root_path), host_root = !strcmp(dir, "/");
+    as_ensure_dir(dir);
     DIR *d = opendir(dir);
     struct dirent *e;
     while (d && (e = readdir(d))) {
@@ -1023,6 +1025,7 @@ static int16_t load_fork(fcb *f)
 {
     mac_file mf;
     char err[256];
+    as_ensure_file(f->path); /* an AppleShare placeholder: its forks from the server */
     if (!appledouble_read(f->path, &mf, err, sizeof err))
         return fnfErrF;
     uint8_t *src = f->rsrc ? mf.rsrc : mf.data;
@@ -1078,6 +1081,8 @@ static int16_t save_fork(fcb *f)
     bool ok = appledouble_write(f->path, &mf, err, sizeof err);
     mac_file_free(&mf);
     f->dirty = false;
+    if (ok)
+        as_file_changed(f->path); /* to the server, on an AppleShare volume */
     return ok ? noErr : ioErrF;
 }
 
@@ -1378,7 +1383,10 @@ static int16_t create_file(const char *path)
         return fp && fclose(fp) == 0 ? noErr : ioErrF;
     }
     char err[256];
-    return appledouble_write(path, &mf, err, sizeof err) ? noErr : ioErrF;
+    if (!appledouble_write(path, &mf, err, sizeof err))
+        return ioErrF;
+    as_file_changed(path);
+    return noErr;
 }
 
 static int16_t pb_path(gaddr pb, bool hfs, char *path, size_t n)
@@ -1417,12 +1425,19 @@ static int16_t delete_path(const char *path)
         return wPrErr;
     if (is_open(path))
         return fBsyErr;
-    if (is_dir(path))
-        return rmdir(path) == 0 ? noErr : fBsyErr;
+    if (is_dir(path)) {
+        if (rmdir(path) != 0)
+            return fBsyErr;
+        as_deleted(path);
+        return noErr;
+    }
     char *side = appledouble_sidecar_path(path);
     unlink(side);
     free(side);
-    return unlink(path) == 0 ? noErr : ioErrF;
+    if (unlink(path) != 0)
+        return ioErrF;
+    as_deleted(path);
+    return noErr;
 }
 
 int16_t tb_PBDelete(gaddr pb, bool async)
@@ -1461,6 +1476,7 @@ static int16_t rename_path(const char *from, gaddr newname)
     rename(s1, s2);
     free(s1);
     free(s2);
+    as_moved(from, to);
     return noErr;
 }
 
@@ -1592,6 +1608,8 @@ static int16_t set_finfo(gaddr pb, bool hfs, bool cat)
     }
     bool ok = appledouble_write(path, &mf, e, sizeof e);
     mac_file_free(&mf);
+    if (ok)
+        as_file_changed(path);
     return ok ? noErr : ioErrF;
 }
 
@@ -1908,6 +1926,7 @@ int16_t tb_PBDirCreate(gaddr pb, bool async)
         return wPrErr;
     if (mkdir(path, 0755) != 0)
         return ioErrF;
+    as_dir_created(path);
     wr32(pb + HFileParam_ioDirID_off, (uint32_t)dir_id_for(rel_of(path)));
     return noErr;
 }
@@ -1936,6 +1955,7 @@ int16_t tb_PBCatMove(gaddr pb, bool async)
     rename(s1, s2);
     free(s1);
     free(s2);
+    as_moved(from, dest);
     return noErr;
 }
 
@@ -2143,6 +2163,10 @@ int16_t tb_FSpExchangeFiles(gaddr src, gaddr dst)
     bool ok = appledouble_write(a, &na, msg, sizeof msg) && appledouble_write(b, &nb, msg, sizeof msg);
     mac_file_free(&fa);
     mac_file_free(&fb);
+    if (ok) {
+        as_file_changed(a);
+        as_file_changed(b);
+    }
     return ok ? noErr : ioErr;
 }
 
@@ -2735,6 +2759,7 @@ typedef struct {
 /* Depth first over a folder: false once enough matches are found. */
 static bool search_dir(cat_search *cs, const char *dir, int depth)
 {
+    as_ensure_dir(dir);
     DIR *d = opendir(dir);
     if (!d || depth > 64) {
         if (d)

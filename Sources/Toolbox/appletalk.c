@@ -359,20 +359,31 @@ static int tuple_of(uint8_t *out, gaddr nte, const entity *e)
     return 5 + put_entity(out + 5, e);
 }
 
-static void lookup_request(nbp_op *o, uint8_t dnode)
+static void send_lookup(uint8_t id, const entity *e, uint8_t dnode)
 {
-    gaddr pb = o->pb;
-    entity e;
-    guest_entity(&e, rd32(pb + PB_ENTITY) + (o->kind == OP_REGISTER ? 9 : 0)); /* a names table entry's entity */
     uint8_t t[5 + 99];
     t[0] = (uint8_t)(net >> 8);
     t[1] = (uint8_t)net;
     t[2] = node;
     t[3] = NIS_SOCKET;
     t[4] = 0;
-    int len = 5 + put_entity(t + 5, &e);
-    nbp_send(NBP_LKUP, o->id, dnode, NIS_SOCKET, t, 1, len);
+    int len = 5 + put_entity(t + 5, e);
+    nbp_send(NBP_LKUP, id, dnode, NIS_SOCKET, t, 1, len);
 }
+
+static void lookup_request(nbp_op *o, uint8_t dnode)
+{
+    entity e;
+    guest_entity(&e, rd32(o->pb + PB_ENTITY) + (o->kind == OP_REGISTER ? 9 : 0)); /* a names table entry's entity */
+    send_lookup(o->id, &e, dnode);
+}
+
+/* A lookup by host code (at_nbp_lookup): the first tuple answering it. */
+static struct {
+    bool used, found;
+    uint8_t id;
+    uint8_t tuple[5];
+} host_lookup;
 
 static void complete(gaddr pb, int16_t r)
 {
@@ -463,6 +474,10 @@ static void nbp_receive(const uint8_t *pkt, int n, uint8_t snode)
     }
     if (fn != NBP_LKUP_REPLY)
         return;
+    if (host_lookup.used && host_lookup.id == id && count && left >= 5 && !host_lookup.found) {
+        memcpy(host_lookup.tuple, t, 5);
+        host_lookup.found = true;
+    }
     for (int j = 0; j < (int)(sizeof ops / sizeof ops[0]); j++) {
         nbp_op *o = &ops[j];
         if (!o->used || o->id != id)
@@ -801,6 +816,48 @@ static int16_t nbp_call(gaddr pb, int kind, bool async)
     return r;
 }
 
+/* An NBP lookup from host code (asp.c): the first entity to answer, after
+ * up to `tries` broadcasts `interval_ms` apart, or nbpNotFound.  The
+ * stack runs meanwhile, as in a synchronous LookupName. */
+int16_t at_nbp_lookup(const char *obj, const char *type, const char *zone, int tries, int interval_ms,
+                      uint16_t *net_out, uint8_t *node_out, uint8_t *skt_out)
+{
+    if (!opened || host_lookup.used)
+        return -98; /* portNotCf */
+    entity e;
+    const char *parts[3] = { obj, type, zone && zone[0] ? zone : "*" };
+    uint8_t *dst[3] = { e.obj, e.type, e.zone };
+    for (int i = 0; i < 3; i++) {
+        size_t n = strlen(parts[i]);
+        n = n > 32 ? 32 : n;
+        dst[i][0] = (uint8_t)n;
+        memcpy(dst[i] + 1, parts[i], n);
+    }
+    host_lookup.used = true;
+    host_lookup.found = false;
+    host_lookup.id = ++nbp_id;
+    uint64_t next = 0;
+    for (int sent = 0; !host_lookup.found;) {
+        uint64_t t = now_ms();
+        if (t >= next) {
+            if (sent++ == tries)
+                break;
+            send_lookup(host_lookup.id, &e, 255);
+            next = t + (uint64_t)interval_ms;
+        }
+        struct pollfd pf = { fd, POLLIN, 0 };
+        poll(&pf, fd >= 0 ? 1 : 0, 2);
+        appletalk_poll();
+    }
+    host_lookup.used = false;
+    if (!host_lookup.found)
+        return nbpNotFound;
+    *net_out = (uint16_t)(host_lookup.tuple[0] << 8 | host_lookup.tuple[1]);
+    *node_out = host_lookup.tuple[2];
+    *skt_out = host_lookup.tuple[3];
+    return noErr;
+}
+
 /* ---------------------------------------------------------------------- */
 /* The driver */
 
@@ -1002,6 +1059,7 @@ void appletalk_reset(void)
     adsp_reset();
     memset(listeners, 0, sizeof listeners);
     memset(ops, 0, sizeof ops);
+    memset(&host_lookup, 0, sizeof host_lookup);
     polling = false;
     vars = tb_NewPtr(VARS_SIZE, true, true);
     /* ReadPacket at A4, ReadRest at A4+2: branches to jumps to natives */

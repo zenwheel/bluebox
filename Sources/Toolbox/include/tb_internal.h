@@ -143,6 +143,15 @@ void adb_pump(void);    /* the mouse to a program's service routine, at interrup
 void fm_grant(const char *path, bool tree);
 bool fm_refnum_host_path(int16_t refnum, char *out, size_t outsize);
 bool fm_last_data_fork(char *out, size_t outsize); /* the data fork opened last */
+/* AppleShare volumes mirrored into cache folders (appleshare.c): a folder
+ * filled from the server before it is looked into, and changes sent back. */
+void as_ensure_dir(const char *host_dir);
+void as_ensure_file(const char *path); /* a placeholder's forks fetched before they are read */
+void as_file_changed(const char *path);
+void as_dir_created(const char *path);
+void as_deleted(const char *path);
+void as_moved(const char *from, const char *to);
+void as_idle(void); /* at event calls: idle sessions kept open */
 /* Components of our own (components.c). */
 uint32_t components_register_native(uint32_t type, uint32_t subtype, uint32_t manufacturer, gaddr entry);
 uint32_t components_open(uint32_t component);
@@ -330,6 +339,25 @@ void at_close_socket(int s);
 void at_send_ddp(uint8_t dnode, uint8_t dskt, uint8_t sskt, uint8_t type, const uint8_t *data, int n);
 void at_complete(gaddr pb, int16_t r);
 void atp_poll(void);
+/* For host code (ASP, asp.c): an NBP lookup, and ATP from C. */
+int16_t at_nbp_lookup(const char *obj, const char *type, const char *zone, int tries, int interval_ms,
+                      uint16_t *net, uint8_t *node, uint8_t *skt);
+typedef struct {
+    int16_t result; /* ioInProgress while waiting */
+    int count;      /* responses: the highest sequence number got, plus 1 */
+    uint8_t data[8][578];
+    int len[8];
+    uint32_t user[8];
+} atp_reply;
+typedef void (*atp_request_fn)(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user,
+                               const uint8_t *data, int len);
+int atp_host_open(atp_request_fn fn, void *ctx); /* a dynamic socket, or 0 */
+void atp_host_close(int skt);
+int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+                         int nresp, int timeout_ms, int retries, atp_reply *out);
+void atp_host_respond(int skt, uint8_t node, uint8_t rskt, uint16_t tid, int count, const uint8_t (*data)[578],
+                      const int *lens, const uint32_t *users);
+void atp_host_send_once(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len);
 /* EtherTalk (ethertalk.c), for --appletalk bridge:IF. */
 bool et_open(const char *ifname);
 int et_fd(void);

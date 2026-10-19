@@ -27,6 +27,8 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
+/// --appleshare: AppleShare volumes to mount.
+nonisolated(unsafe) var appleShares: [String] = []
 /// --file-answer's paths, taken in turn by open and save dialogs.
 nonisolated(unsafe) var headlessFileAnswers: [String] = []
 /// --speech: system (NSSpeechSynthesizer), avspeech (AVSpeechSynthesizer) or record:FILE.
@@ -81,6 +83,9 @@ func usage() -> Never {
           --speech S  speech through system (NSSpeechSynthesizer, the default), avspeech
                      (AVSpeechSynthesizer, also used when the system one is missing)
                      or record:FILE (requests logged, callbacks at once, no sound)
+          --appleshare S  mount an AppleShare volume (repeatable): tcp:[user[:pass]@]host/Volume
+                     (AFP over TCP) or atalk:[user[:pass]@]Server:AFPServer[@zone]/Volume
+                     (over AppleTalk, which --appletalk must turn on)
           --file-answer P  answer the next open or save dialog with host path P,
                      without a panel (headless runs; repeatable, in order)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
@@ -103,6 +108,7 @@ func usage() -> Never {
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
                 [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
+                [appleshare S|none|default]
                 [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
@@ -359,6 +365,10 @@ func runCommand(_ args: [String]) {
             } else if !["system", "avspeech"].contains(speechBackend) {
                 fail("--speech expects system, avspeech or record:FILE")
             }
+        case "--appleshare":
+            i += 1
+            guard i < args.count else { usage() }
+            appleShares.append(args[i])
         case "--file-answer":
             i += 1
             guard i < args.count else { usage() }
@@ -539,6 +549,12 @@ func runCommand(_ args: [String]) {
     }
     launchDocs.forEach { free($0) }
     if let (root, name) = volumeRoot(containing: app) { machine_mount_folder(root, name) }
+    if appleShares.isEmpty, let s = saved.appleShare, !s.isEmpty { appleShares = [s] }
+    if !appleShares.isEmpty { atexit { machine_close_appleshares() } }
+    for spec in appleShares {
+        var aerr = [CChar](repeating: 0, count: 256)
+        guard machine_mount_appleshare(spec, &aerr, aerr.count) else { fail(str(aerr)) }
+    }
     guard machine_launch(app, &err, err.count) else { fail(str(err)) }
     // As the Finder does: open the documents, or just open the application.
     // An interactive host waits, since the Finder may still hand it documents.
