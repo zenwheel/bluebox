@@ -3,7 +3,9 @@
  * (qt_codec.c): DecompressImage and FDecompressImage, decompression
  * sequences (a decoder and its frame kept between frames), image
  * descriptions' colour tables, and compressed pictures (opcode $8200,
- * through qd_picture.c).  Compression is not offered.
+ * through qd_picture.c).  Compression is in qt_icm_compress.c; this file
+ * also answers for both sides: the codecs' information, and ending a
+ * sequence of either kind.
  *
  * ImageDescription: idSize 0, cType 4, ..., width 32, height 34, hRes 36,
  * vRes 40, dataSize 44, frameCount 48, name 50, depth 82, clutID 84, and a
@@ -202,6 +204,7 @@ void icm_reset(void)
             free(seqs[i].frame);
         }
     memset(seqs, 0, sizeof seqs);
+    icm_compress_reset();
 }
 
 int16_t tb_DecompressSequenceBegin(gaddr seqID, int32_t desc, int32_t port, int32_t gdh, gaddr srcRect,
@@ -297,7 +300,7 @@ int16_t tb_CDSequenceEnd(int32_t seqID)
 {
     sequence *s = seq_of(seqID);
     if (!s)
-        return paramErr;
+        return icm_csequence_end(seqID) ? noErr : paramErr;
     qt_vdec_free(s->dec);
     free(s->frame);
     memset(s, 0, sizeof *s);
@@ -305,7 +308,7 @@ int16_t tb_CDSequenceEnd(int32_t seqID)
 }
 
 int16_t tb_CDSequenceBusy(int32_t seqID) { return 0; }
-int16_t tb_CDSequenceFlush(int32_t seqID) { return seq_of(seqID) ? noErr : paramErr; }
+int16_t tb_CDSequenceFlush(int32_t seqID) { return seq_of(seqID) || icm_csequence_exists(seqID) ? noErr : paramErr; }
 
 int16_t tb_SetDSequenceMatrix(int32_t seqID, int32_t matrix)
 {
@@ -416,21 +419,30 @@ static const struct {
     { 0x72707A61, "Video" },   { 0x72617720, "None" },      { 0x6A706567, "Photo - JPEG" },
 };
 
+static bool decodes(uint32_t type)
+{
+    return qt_vdec_supported(type, 24) || qt_vdec_supported(type, 8) || qt_vdec_supported(type, 16);
+}
+
+static bool encodes(uint32_t type) { return qt_venc_supported(type, 24) || qt_venc_supported(type, 8); }
+
 static const char *codec_name(uint32_t type)
 {
     for (size_t i = 0; i < sizeof codec_names / sizeof *codec_names; i++)
-        if (codec_names[i].type == type && qt_vdec_supported(type, 24) + qt_vdec_supported(type, 8) +
-                                                  qt_vdec_supported(type, 16) > 0)
+        if (codec_names[i].type == type && (decodes(type) || encodes(type)))
             return codec_names[i].name;
     return NULL;
 }
 
 /* CodecInfo: typeName 0 (Str31), version 32, revisionLevel 34, vendor 36,
  * decompressFlags 40, compressFlags 44, formatFlags 48, accuracies 52-53,
- * speeds 54-57, compressionLevel 58, minimum height and width 60-63. */
+ * speeds 54-57, compressionLevel 58, minimum height and width 60-63.  The
+ * flags' low bits are the depths 1, 2, 4, 8, 16 and 32 done; bit 10 of
+ * compressFlags temporal compression. */
 int16_t tb_GetCodecInfo(gaddr info, int32_t cType, int32_t codec)
 {
-    const char *name = codec_name((uint32_t)cType);
+    uint32_t type = (uint32_t)cType;
+    const char *name = codec_name(type);
     if (!name || !info)
         return noCodecErr;
     gmemset(info, 0, 72);
@@ -439,20 +451,32 @@ int16_t tb_GetCodecInfo(gaddr info, int32_t cType, int32_t codec)
     gput(info + 1, name, (uint32_t)n);
     wr16(info + 32, 1);
     wr32(info + 36, 0x6170706C); /* 'appl' */
-    wr32(info + 40, 0x00000FFF);   /* decompresses to every depth */
+    if (decodes(type))
+        wr32(info + 40, 0x00000FFF); /* decompresses to every depth */
+    if (encodes(type)) {
+        uint32_t flags = 0;
+        static const int depths[6] = { 1, 2, 4, 8, 16, 32 };
+        for (int i = 0; i < 6; i++)
+            if (qt_venc_supported(type, depths[i]) || (depths[i] == 32 && qt_venc_supported(type, 24)))
+                flags |= 1u << i;
+        if (qt_venc_temporal(type))
+            flags |= 1u << 10;
+        wr32(info + 44, flags);
+        wr8(info + 53, 128);
+    }
     wr32(info + 48, 0x00000FFF);
-    wr8(info + 53, 128);
+    wr8(info + 52, 128);
     return noErr;
 }
 
 int16_t tb_FindCodec(int32_t cType, int32_t specCodec, gaddr compressor, gaddr decompressor)
 {
-    bool have = codec_name((uint32_t)cType) != NULL;
+    uint32_t type = (uint32_t)cType;
     if (compressor)
-        wr32(compressor, 0);
+        wr32(compressor, encodes(type) ? type : 0);
     if (decompressor)
-        wr32(decompressor, have ? (uint32_t)cType : 0);
-    return have ? noErr : noCodecErr;
+        wr32(decompressor, decodes(type) ? type : 0);
+    return decodes(type) || encodes(type) ? noErr : noCodecErr;
 }
 
 /* Alignment for the fastest drawing: any place is as fast here. */

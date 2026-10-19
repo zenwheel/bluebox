@@ -430,7 +430,7 @@ static const char *const native_libraries[] = {
     "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
     "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib", "InputSprocketLib",
     "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
-    "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib",
+    "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "QuickDrawGXLib", "CollectionsLib",
 };
 
 static bool core_library(const char *name)

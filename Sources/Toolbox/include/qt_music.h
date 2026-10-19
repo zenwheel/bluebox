@@ -23,4 +23,8 @@ typedef struct {
 qt_midi_event *qt_music_events(const uint8_t *header, size_t header_len, const qt_music_sample *samples,
                                size_t nsamples, size_t *count);
 
+/* The MIDI message for a QuickTime controller (its value 8.8 fixed) on a
+ * channel: 3, or 0 when there is none. */
+int qt_music_controller(int channel, uint32_t controller, int16_t value, uint8_t msg[3]);
+
 #endif

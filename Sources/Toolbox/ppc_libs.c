@@ -1259,6 +1259,67 @@ CCALL(MCPtInController, 46, "44")
 CCALL(MCInvalidate, 47, "44")
 CCALL(MCAdjustCursor, 48, "444")
 CCALL(MCGetInterfaceElement, 49, "44")
+/* The QuickTime Music Architecture's tune player and note allocator (qt_tune.c). */
+CCALL(TuneSetHeader, 4, "4")
+CCALL(TuneGetTimeBase, 5, "4")
+CCALL(TuneSetTimeScale, 6, "4")
+CCALL(TuneGetTimeScale, 7, "4")
+CCALL(TuneGetIndexedNoteChannel, 8, "44")
+CCALL(TuneQueue, 10, "4444444")
+CCALL(TuneInstant, 11, "44")
+CCALL(TuneGetStatus, 12, "4")
+CCALL(TuneStop, 13, "4")
+CCALL(TuneSetVolume, 16, "4")
+CCALL(TuneGetVolume, 17, "")
+CCALL(TunePreroll, 18, "")
+CCALL(TuneUnroll, 19, "")
+CCALL(TuneSetNoteChannels, 20, "4444")
+CCALL(TuneSetPartTranspose, 21, "444")
+CCALL(TuneGetNoteAllocator, 23, "")
+CCALL(TuneSetSofter, 24, "4")
+CCALL(TuneTask, 25, "")
+CCALL(TuneSetBalance, 26, "4")
+CCALL(TuneSetSoundLocalization, 27, "4")
+CCALL(TuneSetHeaderWithSize, 28, "44")
+CCALL(TuneSetPartMix, 29, "4444")
+CCALL(TuneGetPartMix, 30, "4444")
+CCALL(NARegisterMusicDevice, 0, "444")
+CCALL(NAUnregisterMusicDevice, 1, "4")
+CCALL(NAGetRegisteredMusicDevice, 2, "44444")
+CCALL(NASaveMusicConfiguration, 3, "")
+CCALL(NANewNoteChannel, 4, "44")
+CCALL(NADisposeNoteChannel, 5, "4")
+CCALL(NAGetNoteChannelInfo, 6, "444")
+CCALL(NAPrerollNoteChannel, 7, "4")
+CCALL(NAUnrollNoteChannel, 8, "4")
+CCALL(NASetNoteChannelVolume, 11, "44")
+CCALL(NAResetNoteChannel, 12, "4")
+CCALL(NAPlayNote, 13, "444")
+CCALL(NASetController, 14, "444")
+CCALL(NASetKnob, 15, "444")
+CCALL(NAFindNoteChannelTone, 16, "444")
+CCALL(NASetInstrumentNumber, 17, "44")
+CCALL(NAPickInstrument, 18, "4444444")
+CCALL(NAPickArrangement, 19, "444444")
+CCALL(NASetDefaultMIDIInput, 21, "4")
+CCALL(NAGetDefaultMIDIInput, 22, "4")
+CCALL(NAUseDefaultMIDIInput, 25, "444")
+CCALL(NALoseDefaultMIDIInput, 26, "")
+CCALL(NAStuffToneDescription, 27, "44")
+CCALL(NACopyrightDialog, 28, "4444444")
+CCALL(NAGetIndNoteChannel, 31, "444")
+CCALL(NAGetMIDIPorts, 33, "44")
+CCALL(NAGetNoteRequest, 34, "44")
+CCALL(NASendMIDI, 35, "44")
+CCALL(NAPickEditInstrument, 36, "444444")
+CCALL(NANewNoteChannelFromAtomicInstrument, 37, "444")
+CCALL(NASetAtomicInstrument, 38, "444")
+CCALL(NAGetKnob, 40, "444")
+CCALL(NATask, 41, "")
+CCALL(NASetNoteChannelBalance, 42, "44")
+CCALL(NASetInstrumentNumberInterruptSafe, 43, "44")
+CCALL(NASetNoteChannelSoundLocalization, 44, "44")
+CCALL(NAGetController, 45, "444")
 #undef CCALL
 
 /* ObjectSupportLib: the object model's resolution isn't there, so
@@ -2153,6 +2214,40 @@ const ppc_export lib_exports[] = {
     { "MCSetControllerBoundsRect", cc_MCSetControllerBoundsRect }, { "MCSetControllerPort", cc_MCSetControllerPort },
     { "MCSetDuration", cc_MCSetDuration }, { "MCSetMovie", cc_MCSetMovie }, { "MCSetUpEditMenu", cc_MCSetUpEditMenu },
     { "MCSetVisible", cc_MCSetVisible }, { "MCUndo", cc_MCUndo },
+    /* Tune player and note allocator */
+    { "NACopyrightDialog", cc_NACopyrightDialog }, { "NADisposeNoteChannel", cc_NADisposeNoteChannel },
+    { "NAFindNoteChannelTone", cc_NAFindNoteChannelTone }, { "NAGetController", cc_NAGetController },
+    { "NAGetDefaultMIDIInput", cc_NAGetDefaultMIDIInput }, { "NAGetIndNoteChannel", cc_NAGetIndNoteChannel },
+    { "NAGetKnob", cc_NAGetKnob }, { "NAGetMIDIPorts", cc_NAGetMIDIPorts },
+    { "NAGetNoteChannelInfo", cc_NAGetNoteChannelInfo }, { "NAGetNoteRequest", cc_NAGetNoteRequest },
+    { "NAGetRegisteredMusicDevice", cc_NAGetRegisteredMusicDevice },
+    { "NALoseDefaultMIDIInput", cc_NALoseDefaultMIDIInput }, { "NANewNoteChannel", cc_NANewNoteChannel },
+    { "NANewNoteChannelFromAtomicInstrument", cc_NANewNoteChannelFromAtomicInstrument },
+    { "NAPickArrangement", cc_NAPickArrangement }, { "NAPickEditInstrument", cc_NAPickEditInstrument },
+    { "NAPickInstrument", cc_NAPickInstrument }, { "NAPlayNote", cc_NAPlayNote },
+    { "NAPrerollNoteChannel", cc_NAPrerollNoteChannel }, { "NARegisterMusicDevice", cc_NARegisterMusicDevice },
+    { "NAResetNoteChannel", cc_NAResetNoteChannel }, { "NASaveMusicConfiguration", cc_NASaveMusicConfiguration },
+    { "NASendMIDI", cc_NASendMIDI }, { "NASetAtomicInstrument", cc_NASetAtomicInstrument },
+    { "NASetController", cc_NASetController }, { "NASetDefaultMIDIInput", cc_NASetDefaultMIDIInput },
+    { "NASetInstrument", cc_NASetInstrumentNumber }, { "NASetInstrumentNumber", cc_NASetInstrumentNumber },
+    { "NASetInstrumentNumberInterruptSafe", cc_NASetInstrumentNumberInterruptSafe }, { "NASetKnob", cc_NASetKnob },
+    { "NASetNoteChannelBalance", cc_NASetNoteChannelBalance },
+    { "NASetNoteChannelInstrument", cc_NASetInstrumentNumber },
+    { "NASetNoteChannelSoundLocalization", cc_NASetNoteChannelSoundLocalization },
+    { "NASetNoteChannelVolume", cc_NASetNoteChannelVolume }, { "NAStuffToneDescription", cc_NAStuffToneDescription },
+    { "NATask", cc_NATask }, { "NAUnregisterMusicDevice", cc_NAUnregisterMusicDevice },
+    { "NAUnrollNoteChannel", cc_NAUnrollNoteChannel }, { "NAUseDefaultMIDIInput", cc_NAUseDefaultMIDIInput },
+    { "TuneGetIndexedNoteChannel", cc_TuneGetIndexedNoteChannel },
+    { "TuneGetNoteAllocator", cc_TuneGetNoteAllocator }, { "TuneGetPartMix", cc_TuneGetPartMix },
+    { "TuneGetStatus", cc_TuneGetStatus }, { "TuneGetTimeBase", cc_TuneGetTimeBase },
+    { "TuneGetTimeScale", cc_TuneGetTimeScale }, { "TuneGetVolume", cc_TuneGetVolume },
+    { "TuneInstant", cc_TuneInstant }, { "TunePreroll", cc_TunePreroll }, { "TuneQueue", cc_TuneQueue },
+    { "TuneSetBalance", cc_TuneSetBalance }, { "TuneSetHeader", cc_TuneSetHeader },
+    { "TuneSetHeaderWithSize", cc_TuneSetHeaderWithSize }, { "TuneSetNoteChannels", cc_TuneSetNoteChannels },
+    { "TuneSetPartMix", cc_TuneSetPartMix }, { "TuneSetPartTranspose", cc_TuneSetPartTranspose },
+    { "TuneSetSofter", cc_TuneSetSofter }, { "TuneSetSoundLocalization", cc_TuneSetSoundLocalization },
+    { "TuneSetTimeScale", cc_TuneSetTimeScale }, { "TuneSetVolume", cc_TuneSetVolume }, { "TuneStop", cc_TuneStop },
+    { "TuneTask", cc_TuneTask }, { "TuneUnroll", cc_TuneUnroll },
     /* Component Manager */
     { "CaptureComponent", cm_CaptureComponent }, { "CloseComponent", cm_CloseComponent },
     { "CloseComponentResFile", cm_CloseComponentResFile }, { "CountComponentInstances", cm_CountComponentInstances },

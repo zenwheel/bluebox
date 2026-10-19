@@ -24,6 +24,7 @@
 
 #include "machine.h"
 #include "mace_decoder.h"
+#include "qt_tune.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -487,6 +488,7 @@ void sound_pump(void)
         if (chans[i].chan)
             pump(&chans[i]);
     sd_pump();
+    qt_tune_pump();
     in_pump = false;
 }
 

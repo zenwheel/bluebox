@@ -150,6 +150,7 @@ const char *const tb_trap_names[1024] = {
     [0x02E] = "Pack12",
     [0x030] = "Pack14",
     [0x031] = "Pack15",
+    [0x032] = "GXGraphicsDispatch",
     [0x034] = "SetFScaleDisable",
     [0x035] = "FontMetrics",
     [0x036] = "GetMaskTable",
@@ -716,6 +717,8 @@ const char *const tb_trap_names[1024] = {
     [0x3EB] = "DisplayDispatch",
     [0x3ED] = "DragDispatch",
     [0x3F2] = "ThreadDispatch",
+    [0x3F6] = "CollectionDispatch",
+    [0x3FE] = "GXPrintingDispatch",
     [0x3FF] = "DebugStr",
 };
 
@@ -1442,6 +1445,20 @@ static void glue_ActivatePalette(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddCollectionItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t a_itemSize = (int32_t)cpu_pop32(c);
+    int32_t a_id = (int32_t)cpu_pop32(c);
+    int32_t a_tag = (int32_t)cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AddCollectionItem(a_c, a_tag, a_id, a_itemSize, a_itemData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AddComp(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1486,6 +1503,19 @@ static void glue_AddIconToSuite(cpu68k *c, uint16_t trapword)
     gaddr a_suite = (gaddr)cpu_pop32(c);
     gaddr a_icon_data = (gaddr)cpu_pop32(c);
     int16_t r = tb_AddIconToSuite(a_icon_data, a_suite, a_type);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AddMovieResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_resName = (int32_t)cpu_pop32(c);
+    gaddr a_resId = (gaddr)cpu_pop32(c);
+    int16_t a_resRefNum = (int16_t)cpu_pop16(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AddMovieResource(a_theMovie, a_resRefNum, a_resId, a_resName);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -2105,6 +2135,15 @@ static void glue_ClearMovieChanged(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ClearMovieSelection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    tb_ClearMovieSelection(a_theMovie);
+    cpu_push32(c, ret);
+}
+
 static void glue_ClearMoviesStickyError(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2258,6 +2297,74 @@ static void glue_CompactMem(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)r;
 }
 
+static void glue_CompressImage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    int32_t a_quality = (int32_t)cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CompressImage(a_src, a_srcRect, a_quality, a_cType, a_desc, a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompressPicture(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    int32_t a_quality = (int32_t)cpu_pop32(c);
+    int32_t a_dstPicture = (int32_t)cpu_pop32(c);
+    int32_t a_srcPicture = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CompressPicture(a_srcPicture, a_dstPicture, a_quality, a_cType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompressSequenceBegin(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    int16_t a_flags = (int16_t)cpu_pop16(c);
+    int32_t a_ctable = (int32_t)cpu_pop32(c);
+    int32_t a_keyFrameRate = (int32_t)cpu_pop32(c);
+    int32_t a_temporalQuality = (int32_t)cpu_pop32(c);
+    int32_t a_spatialQuality = (int32_t)cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    int16_t a_colorDepth = (int16_t)cpu_pop16(c);
+    gaddr a_prevRect = (gaddr)cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_prev = (int32_t)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    gaddr a_seqID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CompressSequenceBegin(a_seqID, a_src, a_prev, a_srcRect, a_prevRect, a_colorDepth, a_cType, a_codec, a_spatialQuality, a_temporalQuality, a_keyFrameRate, a_ctable, a_flags, a_desc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompressSequenceFrame(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_asyncCompletionProc = (int32_t)cpu_pop32(c);
+    gaddr a_similarity = (gaddr)cpu_pop32(c);
+    gaddr a_dataSize = (gaddr)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int16_t a_flags = (int16_t)cpu_pop16(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CompressSequenceFrame(a_seqID, a_src, a_srcRect, a_flags, a_data, a_dataSize, a_similarity, a_asyncCompletionProc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ContinueSpeech(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2309,6 +2416,16 @@ static void glue_CopyMask(cpu68k *c, uint16_t trapword)
     gaddr a_mskbp = (gaddr)cpu_pop32(c);
     gaddr a_srcbp = (gaddr)cpu_pop32(c);
     tb_CopyMask(a_srcbp, a_mskbp, a_dstbp, a_srcrp, a_mskrp, a_dstrp);
+    cpu_push32(c, ret);
+}
+
+static void glue_CopyMovieSelection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int32_t r = tb_CopyMovieSelection(a_theMovie);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2397,6 +2514,16 @@ static void glue_CountADBs(cpu68k *c, uint16_t trapword)
     (void)trapword;
     int16_t r = tb_CountADBs();
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_CountCollectionItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CountCollectionItems(a_c);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_CountDITL(cpu68k *c, uint16_t trapword)
@@ -2554,6 +2681,16 @@ static void glue_CustomPutFile(cpu68k *c, uint16_t trapword)
     gaddr a_defaultName = (gaddr)cpu_pop32(c);
     gaddr a_prompt = (gaddr)cpu_pop32(c);
     tb_CustomPutFile(a_prompt, a_defaultName, a_replyp, a_dlgid, a_where, a_dlghook, a_filterproc, a_activeList, a_activateproc, a_yourdatap);
+    cpu_push32(c, ret);
+}
+
+static void glue_CutMovieSelection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int32_t r = tb_CutMovieSelection(a_theMovie);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2808,6 +2945,18 @@ static void glue_DeleteMenuItem(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DeleteMovieSegment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_duration = (int32_t)cpu_pop32(c);
+    int32_t a_startTime = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DeleteMovieSegment(a_theMovie, a_startTime, a_duration);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DeltaPoint(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2938,6 +3087,15 @@ static void glue_DisposeCodecNameList(cpu68k *c, uint16_t trapword)
     int32_t a_list = (int32_t)cpu_pop32(c);
     int16_t r = tb_DisposeCodecNameList(a_list);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DisposeCollection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    tb_DisposeCollection(a_c);
     cpu_push32(c, ret);
 }
 
@@ -3531,6 +3689,47 @@ static void glue_ExtendedToString(cpu68k *c, uint16_t trapword)
     gaddr a_formatp = (gaddr)cpu_pop32(c);
     gaddr a_xp = (gaddr)cpu_pop32(c);
     int16_t r = tb_ExtendedToString(a_xp, a_formatp, a_partsp, a_string);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FCompressImage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    int32_t a_progressProc = (int32_t)cpu_pop32(c);
+    int32_t a_flushProc = (int32_t)cpu_pop32(c);
+    int32_t a_bufferSize = (int32_t)cpu_pop32(c);
+    int16_t a_flags = (int16_t)cpu_pop16(c);
+    int32_t a_ctable = (int32_t)cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    int32_t a_quality = (int32_t)cpu_pop32(c);
+    int16_t a_colorDepth = (int16_t)cpu_pop16(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FCompressImage(a_src, a_srcRect, a_colorDepth, a_quality, a_cType, a_codec, a_ctable, a_flags, a_bufferSize, a_flushProc, a_progressProc, a_desc, a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FCompressPicture(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    int32_t a_progressProc = (int32_t)cpu_pop32(c);
+    int16_t a_compressAgain = (int16_t)cpu_pop16(c);
+    int16_t a_doDither = (int16_t)cpu_pop16(c);
+    int32_t a_quality = (int32_t)cpu_pop32(c);
+    int32_t a_ctable = (int32_t)cpu_pop32(c);
+    int16_t a_colorDepth = (int16_t)cpu_pop16(c);
+    int32_t a_dstPicture = (int32_t)cpu_pop32(c);
+    int32_t a_srcPicture = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FCompressPicture(a_srcPicture, a_dstPicture, a_colorDepth, a_ctable, a_quality, a_doDither, a_compressAgain, a_progressProc, a_cType, a_codec);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -4281,6 +4480,590 @@ static void glue_GDeviceChanged(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GXConvertPICTToShape(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pict = (gaddr)rd32(c->a[7] + 4);
+    int32_t a_options = (int32_t)rd32(c->a[7] + 8);
+    gaddr a_srcRect = (gaddr)rd32(c->a[7] + 12);
+    gaddr a_dstRect = (gaddr)rd32(c->a[7] + 16);
+    uint32_t a_styleStretch = (uint32_t)rd32(c->a[7] + 20);
+    int32_t a_destination = (int32_t)rd32(c->a[7] + 24);
+    gaddr a_stats = (gaddr)rd32(c->a[7] + 28);
+    int32_t r = tb_GXConvertPICTToShape(a_pict, a_options, a_srcRect, a_dstRect, a_styleStretch, a_destination, a_stats);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXDisposeGraphicsClient(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_client = (int32_t)rd32(c->a[7] + 4);
+    tb_GXDisposeGraphicsClient(a_client);
+}
+
+static void glue_GXDisposeJob(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GXDisposeJob(a_aJob);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXDisposeShape(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    tb_GXDisposeShape(a_target);
+}
+
+static void glue_GXDisposeViewPort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    tb_GXDisposeViewPort(a_target);
+}
+
+static void glue_GXDrawShape(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_source = (int32_t)rd32(c->a[7] + 4);
+    tb_GXDrawShape(a_source);
+}
+
+static void glue_GXEnterGraphics(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    tb_GXEnterGraphics();
+}
+
+static void glue_GXExitGraphics(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    tb_GXExitGraphics();
+}
+
+static void glue_GXExitPrinting(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_GXExitPrinting();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXFinishJob(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theJob = (int32_t)cpu_pop32(c);
+    tb_GXFinishJob(a_theJob);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXFlattenJobToHdl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_aHdl = (gaddr)cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    gaddr r = tb_GXFlattenJobToHdl(a_aJob, a_aHdl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetFormatDimensions(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_paperSize = (gaddr)cpu_pop32(c);
+    gaddr a_pageSize = (gaddr)cpu_pop32(c);
+    int32_t a_aFormat = (int32_t)cpu_pop32(c);
+    tb_GXGetFormatDimensions(a_aFormat, a_pageSize, a_paperSize);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetGraphicsClient(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t r = tb_GXGetGraphicsClient();
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXGetGraphicsError(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_stickyError = (gaddr)rd32(c->a[7] + 4);
+    int32_t r = tb_GXGetGraphicsError(a_stickyError);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXGetJobCollection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    gaddr r = tb_GXGetJobCollection(a_aJob);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetJobError(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GXGetJobError(a_aJob);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetJobFormat(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_whichFormat = (int32_t)cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GXGetJobFormat(a_aJob, a_whichFormat);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetJobPageRange(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_lastPage = (gaddr)cpu_pop32(c);
+    gaddr a_firstPage = (gaddr)cpu_pop32(c);
+    int32_t a_theJob = (int32_t)cpu_pop32(c);
+    tb_GXGetJobPageRange(a_theJob, a_firstPage, a_lastPage);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetJobPrinter(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GXGetJobPrinter(a_aJob);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetJobRefCon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    gaddr r = tb_GXGetJobRefCon(a_aJob);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetPrinterDriverType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aPrinter = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GXGetPrinterDriverType(a_aPrinter);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetPrinterName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_printerName = (gaddr)cpu_pop32(c);
+    int32_t a_aPrinter = (int32_t)cpu_pop32(c);
+    tb_GXGetPrinterName(a_aPrinter, a_printerName);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXGetShapeBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_source = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_index = (int32_t)rd32(c->a[7] + 8);
+    gaddr a_bounds = (gaddr)rd32(c->a[7] + 12);
+    gaddr r = tb_GXGetShapeBounds(a_source, a_index, a_bounds);
+    c->d[0] = (uint32_t)r;
+    c->a[0] = (uint32_t)r;
+}
+
+static void glue_GXGetShapeFill(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_source = (int32_t)rd32(c->a[7] + 4);
+    int32_t r = tb_GXGetShapeFill(a_source);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXGetShapeMapping(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_source = (int32_t)rd32(c->a[7] + 4);
+    gaddr a_map = (gaddr)rd32(c->a[7] + 8);
+    gaddr r = tb_GXGetShapeMapping(a_source, a_map);
+    c->d[0] = (uint32_t)r;
+    c->a[0] = (uint32_t)r;
+}
+
+static void glue_GXGetShapeType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_source = (int32_t)rd32(c->a[7] + 4);
+    int32_t r = tb_GXGetShapeType(a_source);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXGetShapeViewPorts(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_source = (int32_t)rd32(c->a[7] + 4);
+    gaddr a_list = (gaddr)rd32(c->a[7] + 8);
+    int32_t r = tb_GXGetShapeViewPorts(a_source, a_list);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXGetViewPortAttributes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_source = (int32_t)rd32(c->a[7] + 4);
+    int32_t r = tb_GXGetViewPortAttributes(a_source);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXIdleJob(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    tb_GXIdleJob(a_aJob);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXInitPrinting(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_GXInitPrinting();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXInstallApplicationOverride(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_override = (gaddr)cpu_pop32(c);
+    int16_t a_messageID = (int16_t)cpu_pop16(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    tb_GXInstallApplicationOverride(a_aJob, a_messageID, a_override);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXInstallQDTranslator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_port = (gaddr)rd32(c->a[7] + 4);
+    int32_t a_options = (int32_t)rd32(c->a[7] + 8);
+    gaddr a_srcRect = (gaddr)rd32(c->a[7] + 12);
+    gaddr a_dstRect = (gaddr)rd32(c->a[7] + 16);
+    uint32_t a_styleStrech = (uint32_t)rd32(c->a[7] + 20);
+    gaddr a_userFunction = (gaddr)rd32(c->a[7] + 24);
+    gaddr a_reference = (gaddr)rd32(c->a[7] + 28);
+    tb_GXInstallQDTranslator(a_port, a_options, a_srcRect, a_dstRect, a_styleStrech, a_userFunction, a_reference);
+}
+
+static void glue_GXJobDefaultFormatDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_anEditMenuRec = (gaddr)cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GXJobDefaultFormatDialog(a_aJob, a_anEditMenuRec);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXJobPrintDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_anEditMenuRec = (gaddr)cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GXJobPrintDialog(a_aJob, a_anEditMenuRec);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXMapShape(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    gaddr a_map = (gaddr)rd32(c->a[7] + 8);
+    tb_GXMapShape(a_target, a_map);
+}
+
+static void glue_GXMoveShape(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_deltaX = (int32_t)rd32(c->a[7] + 8);
+    int32_t a_deltaY = (int32_t)rd32(c->a[7] + 12);
+    tb_GXMoveShape(a_target, a_deltaX, a_deltaY);
+}
+
+static void glue_GXNewGraphicsClient(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_memoryStart = (gaddr)rd32(c->a[7] + 4);
+    int32_t a_memoryLength = (int32_t)rd32(c->a[7] + 8);
+    int32_t a_attributes = (int32_t)rd32(c->a[7] + 12);
+    int32_t r = tb_GXNewGraphicsClient(a_memoryStart, a_memoryLength, a_attributes);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXNewJob(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_aJob = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GXNewJob(a_aJob);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXNewPicture(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_count = (int32_t)rd32(c->a[7] + 4);
+    gaddr a_shapes = (gaddr)rd32(c->a[7] + 8);
+    gaddr a_styles = (gaddr)rd32(c->a[7] + 12);
+    gaddr a_inks = (gaddr)rd32(c->a[7] + 16);
+    gaddr a_transforms = (gaddr)rd32(c->a[7] + 20);
+    int32_t r = tb_GXNewPicture(a_count, a_shapes, a_styles, a_inks, a_transforms);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXNewRectangle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_data = (gaddr)rd32(c->a[7] + 4);
+    int32_t r = tb_GXNewRectangle(a_data);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXNewShape(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_aType = (int32_t)rd32(c->a[7] + 4);
+    int32_t r = tb_GXNewShape(a_aType);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXNewViewGroup(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t r = tb_GXNewViewGroup();
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXNewViewPort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_group = (int32_t)rd32(c->a[7] + 4);
+    int32_t r = tb_GXNewViewPort(a_group);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXNewWindowViewPort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_qdWindow = (gaddr)rd32(c->a[7] + 4);
+    int32_t r = tb_GXNewWindowViewPort(a_qdWindow);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXPrintPage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_thePage = (int32_t)cpu_pop32(c);
+    int32_t a_theFormat = (int32_t)cpu_pop32(c);
+    int32_t a_pageNumber = (int32_t)cpu_pop32(c);
+    int32_t a_theJob = (int32_t)cpu_pop32(c);
+    tb_GXPrintPage(a_theJob, a_pageNumber, a_theFormat, a_thePage);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXRemoveQDTranslator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_port = (gaddr)rd32(c->a[7] + 4);
+    gaddr a_statistic = (gaddr)rd32(c->a[7] + 8);
+    int32_t r = tb_GXRemoveQDTranslator(a_port, a_statistic);
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_GXRotateShape(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_degrees = (int32_t)rd32(c->a[7] + 8);
+    int32_t a_xOffset = (int32_t)rd32(c->a[7] + 12);
+    int32_t a_yOffset = (int32_t)rd32(c->a[7] + 16);
+    tb_GXRotateShape(a_target, a_degrees, a_xOffset, a_yOffset);
+}
+
+static void glue_GXSelectJobOutputPrinter(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_printerName = (gaddr)cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    tb_GXSelectJobOutputPrinter(a_aJob, a_printerName);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXSetGraphicsClient(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_client = (int32_t)rd32(c->a[7] + 4);
+    tb_GXSetGraphicsClient(a_client);
+}
+
+static void glue_GXSetJobRefCon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    tb_GXSetJobRefCon(a_aJob, a_refCon);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXSetPictureParts(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_index = (int32_t)rd32(c->a[7] + 8);
+    int32_t a_oldCount = (int32_t)rd32(c->a[7] + 12);
+    int32_t a_newCount = (int32_t)rd32(c->a[7] + 16);
+    gaddr a_shapes = (gaddr)rd32(c->a[7] + 20);
+    gaddr a_styles = (gaddr)rd32(c->a[7] + 24);
+    gaddr a_inks = (gaddr)rd32(c->a[7] + 28);
+    gaddr a_transforms = (gaddr)rd32(c->a[7] + 32);
+    tb_GXSetPictureParts(a_target, a_index, a_oldCount, a_newCount, a_shapes, a_styles, a_inks, a_transforms);
+}
+
+static void glue_GXSetShapeBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    gaddr a_newBounds = (gaddr)rd32(c->a[7] + 8);
+    tb_GXSetShapeBounds(a_target, a_newBounds);
+}
+
+static void glue_GXSetShapeColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    gaddr a_data = (gaddr)rd32(c->a[7] + 8);
+    tb_GXSetShapeColor(a_target, a_data);
+}
+
+static void glue_GXSetShapeFill(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_newFill = (int32_t)rd32(c->a[7] + 8);
+    tb_GXSetShapeFill(a_target, a_newFill);
+}
+
+static void glue_GXSetShapeInk(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_newInk = (int32_t)rd32(c->a[7] + 8);
+    tb_GXSetShapeInk(a_target, a_newInk);
+}
+
+static void glue_GXSetShapeMapping(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    gaddr a_map = (gaddr)rd32(c->a[7] + 8);
+    tb_GXSetShapeMapping(a_target, a_map);
+}
+
+static void glue_GXSetShapePen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_pen = (int32_t)rd32(c->a[7] + 8);
+    tb_GXSetShapePen(a_target, a_pen);
+}
+
+static void glue_GXSetShapeViewPorts(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_count = (int32_t)rd32(c->a[7] + 8);
+    gaddr a_list = (gaddr)rd32(c->a[7] + 12);
+    tb_GXSetShapeViewPorts(a_target, a_count, a_list);
+}
+
+static void glue_GXSetViewPortClip(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_clip = (int32_t)rd32(c->a[7] + 8);
+    tb_GXSetViewPortClip(a_target, a_clip);
+}
+
+static void glue_GXSetViewPortParent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_target = (int32_t)rd32(c->a[7] + 4);
+    int32_t a_parent = (int32_t)rd32(c->a[7] + 8);
+    tb_GXSetViewPortParent(a_target, a_parent);
+}
+
+static void glue_GXStartJob(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_pageCount = (int32_t)cpu_pop32(c);
+    gaddr a_docName = (gaddr)cpu_pop32(c);
+    int32_t a_theJob = (int32_t)cpu_pop32(c);
+    tb_GXStartJob(a_theJob, a_docName, a_pageCount);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXUnflattenJobFromHdl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_aHdl = (gaddr)cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GXUnflattenJobFromHdl(a_aJob, a_aHdl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GXUpdateJob(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_aJob = (int32_t)cpu_pop32(c);
+    int8_t r = tb_GXUpdateJob(a_aJob);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_Gestalt(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4437,6 +5220,62 @@ static void glue_GetCPixel(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetCSequenceDataRateParams(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_params = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCSequenceDataRateParams(a_seqID, a_params);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCSequenceFrameNumber(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_frameNumber = (gaddr)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCSequenceFrameNumber(a_seqID, a_frameNumber);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCSequenceKeyFrameRate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_keyFrameRate = (gaddr)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCSequenceKeyFrameRate(a_seqID, a_keyFrameRate);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCSequenceMaxCompressionSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_size = (gaddr)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCSequenceMaxCompressionSize(a_seqID, a_src, a_size);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCSequencePrevBuffer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_gworld = (gaddr)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCSequencePrevBuffer(a_seqID, a_gworld);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetCTSeed(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4506,6 +5345,35 @@ static void glue_GetCodecNameList(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetCollectionItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    int32_t a_id = (int32_t)cpu_pop32(c);
+    int32_t a_tag = (int32_t)cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetCollectionItem(a_c, a_tag, a_id, a_itemSize, a_itemData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCollectionItemInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_attributes = (gaddr)cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    gaddr a_index = (gaddr)cpu_pop32(c);
+    int32_t a_id = (int32_t)cpu_pop32(c);
+    int32_t a_tag = (int32_t)cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetCollectionItemInfo(a_c, a_tag, a_id, a_index, a_itemSize, a_attributes);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetColor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4529,6 +5397,23 @@ static void glue_GetCompressedImageSize(cpu68k *c, uint16_t trapword)
     int32_t a_data = (int32_t)cpu_pop32(c);
     int32_t a_desc = (int32_t)cpu_pop32(c);
     int16_t r = tb_GetCompressedImageSize(a_desc, a_data, a_bufferSize, a_dataProc, a_dataSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCompressionTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_compressTime = (gaddr)cpu_pop32(c);
+    gaddr a_temporalQuality = (gaddr)cpu_pop32(c);
+    gaddr a_spatialQuality = (gaddr)cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    int16_t a_colorDepth = (int16_t)cpu_pop16(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCompressionTime(a_src, a_srcRect, a_colorDepth, a_cType, a_codec, a_spatialQuality, a_temporalQuality, a_compressTime);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -5101,6 +5986,34 @@ static void glue_GetIndVoice(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetIndexedCollectionItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetIndexedCollectionItem(a_c, a_index, a_itemSize, a_itemData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetIndexedCollectionItemInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_attributes = (gaddr)cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    gaddr a_id = (gaddr)cpu_pop32(c);
+    gaddr a_tag = (gaddr)cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetIndexedCollectionItemInfo(a_c, a_index, a_tag, a_id, a_itemSize, a_attributes);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetIntlResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5225,6 +6138,22 @@ static void glue_GetMainDevice(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_GetMainDevice();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMaxCompressionSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_size = (gaddr)cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    int32_t a_quality = (int32_t)cpu_pop32(c);
+    int16_t a_colorDepth = (int16_t)cpu_pop16(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetMaxCompressionSize(a_src, a_srcRect, a_colorDepth, a_quality, a_cType, a_codec, a_size);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5470,6 +6399,17 @@ static void glue_GetMovieRate(cpu68k *c, uint16_t trapword)
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int32_t r = tb_GetMovieRate(a_theMovie);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMovieSelection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_selectionDuration = (gaddr)cpu_pop32(c);
+    gaddr a_selectionTime = (gaddr)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    tb_GetMovieSelection(a_theMovie, a_selectionTime, a_selectionDuration);
     cpu_push32(c, ret);
 }
 
@@ -7087,6 +8027,18 @@ static void glue_InsXTime(cpu68k *c, uint16_t trapword)
     tb_InsXTime(a_taskp);
 }
 
+static void glue_InsertEmptyMovieSegment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dstDuration = (int32_t)cpu_pop32(c);
+    int32_t a_dstIn = (int32_t)cpu_pop32(c);
+    int32_t a_dstMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_InsertEmptyMovieSegment(a_dstMovie, a_dstIn, a_dstDuration);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InsertMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7105,6 +8057,20 @@ static void glue_InsertMenuItem(cpu68k *c, uint16_t trapword)
     gaddr a_str = (gaddr)cpu_pop32(c);
     gaddr a_mh = (gaddr)cpu_pop32(c);
     tb_InsertMenuItem(a_mh, a_str, a_after);
+    cpu_push32(c, ret);
+}
+
+static void glue_InsertMovieSegment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dstIn = (int32_t)cpu_pop32(c);
+    int32_t a_srcDuration = (int32_t)cpu_pop32(c);
+    int32_t a_srcIn = (int32_t)cpu_pop32(c);
+    int32_t a_dstMovie = (int32_t)cpu_pop32(c);
+    int32_t a_srcMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_InsertMovieSegment(a_srcMovie, a_dstMovie, a_srcIn, a_srcDuration, a_dstIn);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8192,6 +9158,17 @@ static void glue_MakeITable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MakeImageDescriptionForPixMap(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idh = (gaddr)cpu_pop32(c);
+    int32_t a_pixmap = (int32_t)cpu_pop32(c);
+    int16_t r = tb_MakeImageDescriptionForPixMap(a_pixmap, a_idh);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MakeRGBPat(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8553,6 +9530,15 @@ static void glue_NewCWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewCollection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_NewCollection();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewColorDialog(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8754,6 +9740,16 @@ static void glue_NewMovieFromHandle(cpu68k *c, uint16_t trapword)
     gaddr a_theMovie = (gaddr)cpu_pop32(c);
     int16_t r = tb_NewMovieFromHandle(a_theMovie, a_h, a_newMovieFlags, a_dataRefWasChanged);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewMovieFromScrap(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_newMovieFlags = (int32_t)cpu_pop32(c);
+    int32_t r = tb_NewMovieFromScrap(a_newMovieFlags);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9922,6 +10918,16 @@ static void glue_ParseTable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PasteMovieSelection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_src = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    tb_PasteMovieSelection(a_theMovie, a_src);
+    cpu_push32(c, ret);
+}
+
 static void glue_PauseSpeechAt(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10612,6 +11618,17 @@ static void glue_PurgeSpace(cpu68k *c, uint16_t trapword)
     c->a[0] = a_contigp;
 }
 
+static void glue_PutMovieOnScrap(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_movieScrapFlags = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_PutMovieOnScrap(a_theMovie, a_movieScrapFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_PutScrap(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10894,6 +11911,18 @@ static void glue_ReleaseResource(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RemoveCollectionItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_id = (int32_t)cpu_pop32(c);
+    int32_t a_tag = (int32_t)cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RemoveCollectionItem(a_c, a_tag, a_id);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RemoveReceiveHandler(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10934,6 +11963,19 @@ static void glue_ReplaceGestalt(cpu68k *c, uint16_t trapword)
     int16_t r = tb_ReplaceGestalt(a_selector, a_selFunc, &a_oldSelFuncp);
     c->a[0] = a_oldSelFuncp;
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_ReplaceIndexedCollectionItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t a_itemSize = (int32_t)cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ReplaceIndexedCollectionItem(a_c, a_index, a_itemSize, a_itemData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_ReplaceText(cpu68k *c, uint16_t trapword)
@@ -11573,6 +12615,86 @@ static void glue_SetCPixel(cpu68k *c, uint16_t trapword)
     int16_t a_v = (int16_t)cpu_pop16(c);
     int16_t a_h = (int16_t)cpu_pop16(c);
     tb_SetCPixel(a_h, a_v, a_colorp);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetCSequenceDataRateParams(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_params = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetCSequenceDataRateParams(a_seqID, a_params);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetCSequenceFlushProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_bufferSize = (int32_t)cpu_pop32(c);
+    int32_t a_flushProc = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetCSequenceFlushProc(a_seqID, a_flushProc, a_bufferSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetCSequenceFrameNumber(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_frameNumber = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetCSequenceFrameNumber(a_seqID, a_frameNumber);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetCSequenceKeyFrameRate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_keyFrameRate = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetCSequenceKeyFrameRate(a_seqID, a_keyFrameRate);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetCSequencePreferredPacketSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_preferredPacketSizeInBytes = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetCSequencePreferredPacketSize(a_seqID, a_preferredPacketSizeInBytes);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetCSequencePrev(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_prevRect = (gaddr)cpu_pop32(c);
+    int32_t a_prev = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetCSequencePrev(a_seqID, a_prev, a_prevRect);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetCSequenceQuality(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_temporalQuality = (int32_t)cpu_pop32(c);
+    int32_t a_spatialQuality = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetCSequenceQuality(a_seqID, a_spatialQuality, a_temporalQuality);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -12282,6 +13404,17 @@ static void glue_SetMovieRate(cpu68k *c, uint16_t trapword)
     int32_t a_rate = (int32_t)cpu_pop32(c);
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     tb_SetMovieRate(a_theMovie, a_rate);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMovieSelection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_selectionDuration = (int32_t)cpu_pop32(c);
+    int32_t a_selectionTime = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    tb_SetMovieSelection(a_theMovie, a_selectionTime, a_selectionDuration);
     cpu_push32(c, ret);
 }
 
@@ -14578,6 +15711,19 @@ static void glue_UpdateMovie(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UpdateMovieResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_resName = (int32_t)cpu_pop32(c);
+    int16_t a_resId = (int16_t)cpu_pop16(c);
+    int16_t a_resRefNum = (int16_t)cpu_pop16(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_UpdateMovieResource(a_theMovie, a_resRefNum, a_resId, a_resName);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UpdateResFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15556,6 +16702,45 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA5A, (int32_t)0x5u, "FindSymbol", CONV_STACK, 16, 2, 0},
     {0xAA5A, (int32_t)0x6u, "CountSymbols", CONV_STACK, 8, 2, 0},
     {0xAA5A, (int32_t)0x7u, "GetIndSymbol", CONV_STACK, 20, 2, 0},
+    {0xABF6, (int32_t)0x0u, "NewCollection", CONV_STACK, 0, 4, glue_NewCollection},
+    {0xABF6, (int32_t)0x1u, "DisposeCollection", CONV_STACK, 4, 0, glue_DisposeCollection},
+    {0xABF6, (int32_t)0x2u, "CloneCollection", CONV_STACK, 4, 4, 0},
+    {0xABF6, (int32_t)0x3u, "CountCollectionOwners", CONV_STACK, 4, 4, 0},
+    {0xABF6, (int32_t)0x4u, "CopyCollection", CONV_STACK, 8, 4, 0},
+    {0xABF6, (int32_t)0x5u, "GetCollectionDefaultAttributes", CONV_STACK, 4, 4, 0},
+    {0xABF6, (int32_t)0x6u, "SetCollectionDefaultAttributes", CONV_STACK, 12, 0, 0},
+    {0xABF6, (int32_t)0x7u, "CountCollectionItems", CONV_STACK, 4, 4, glue_CountCollectionItems},
+    {0xABF6, (int32_t)0x8u, "AddCollectionItem", CONV_STACK, 20, 2, glue_AddCollectionItem},
+    {0xABF6, (int32_t)0x9u, "GetCollectionItem", CONV_STACK, 20, 2, glue_GetCollectionItem},
+    {0xABF6, (int32_t)0xAu, "RemoveCollectionItem", CONV_STACK, 12, 2, glue_RemoveCollectionItem},
+    {0xABF6, (int32_t)0xBu, "SetCollectionItemInfo", CONV_STACK, 20, 2, 0},
+    {0xABF6, (int32_t)0xCu, "GetCollectionItemInfo", CONV_STACK, 24, 2, glue_GetCollectionItemInfo},
+    {0xABF6, (int32_t)0xDu, "ReplaceIndexedCollectionItem", CONV_STACK, 16, 2, glue_ReplaceIndexedCollectionItem},
+    {0xABF6, (int32_t)0xEu, "GetIndexedCollectionItem", CONV_STACK, 16, 2, glue_GetIndexedCollectionItem},
+    {0xABF6, (int32_t)0xFu, "RemoveIndexedCollectionItem", CONV_STACK, 8, 2, 0},
+    {0xABF6, (int32_t)0x10u, "SetIndexedCollectionItemInfo", CONV_STACK, 16, 2, 0},
+    {0xABF6, (int32_t)0x11u, "GetIndexedCollectionItemInfo", CONV_STACK, 24, 2, glue_GetIndexedCollectionItemInfo},
+    {0xABF6, (int32_t)0x12u, "CollectionTagExists", CONV_STACK, 8, 2, 0},
+    {0xABF6, (int32_t)0x13u, "CountCollectionTags", CONV_STACK, 4, 4, 0},
+    {0xABF6, (int32_t)0x14u, "GetIndexedCollectionTag", CONV_STACK, 12, 2, 0},
+    {0xABF6, (int32_t)0x15u, "CountTaggedCollectionItems", CONV_STACK, 8, 4, 0},
+    {0xABF6, (int32_t)0x16u, "GetTaggedCollectionItem", CONV_STACK, 20, 2, 0},
+    {0xABF6, (int32_t)0x17u, "GetTaggedCollectionItemInfo", CONV_STACK, 28, 2, 0},
+    {0xABF6, (int32_t)0x18u, "PurgeCollection", CONV_STACK, 12, 0, 0},
+    {0xABF6, (int32_t)0x19u, "PurgeCollectionTag", CONV_STACK, 8, 0, 0},
+    {0xABF6, (int32_t)0x1Au, "EmptyCollection", CONV_STACK, 4, 0, 0},
+    {0xABF6, (int32_t)0x1Bu, "FlattenCollection", CONV_STACK, 12, 2, 0},
+    {0xABF6, (int32_t)0x1Cu, "FlattenPartialCollection", CONV_STACK, 20, 2, 0},
+    {0xABF6, (int32_t)0x1Du, "UnflattenCollection", CONV_STACK, 12, 2, 0},
+    {0xABF6, (int32_t)0x1Eu, "GetCollectionExceptionProc", CONV_STACK, 4, 4, 0},
+    {0xABF6, (int32_t)0x1Fu, "SetCollectionExceptionProc", CONV_STACK, 8, 0, 0},
+    {0xABF6, (int32_t)0x20u, "GetNewCollection", CONV_STACK, 2, 4, 0},
+    {0xABF6, (int32_t)0x21u, "AddCollectionItemHdl", CONV_STACK, 16, 2, 0},
+    {0xABF6, (int32_t)0x22u, "GetCollectionItemHdl", CONV_STACK, 16, 2, 0},
+    {0xABF6, (int32_t)0x23u, "ReplaceIndexedCollectionItemHdl", CONV_STACK, 12, 2, 0},
+    {0xABF6, (int32_t)0x24u, "GetIndexedCollectionItemHdl", CONV_STACK, 12, 2, 0},
+    {0xABF6, (int32_t)0x25u, "FlattenCollectionToHdl", CONV_STACK, 8, 2, 0},
+    {0xABF6, (int32_t)0x26u, "UnflattenCollectionFromHdl", CONV_STACK, 8, 2, 0},
     {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
     {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},
     {0xAA68, (int32_t)0x305u, "SetDialogCancelItem", CONV_STACK, 6, 2, glue_SetDialogCancelItem},
@@ -15651,6 +16836,528 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA854, (int32_t)0xAu, "SetPreserveGlyph", CONV_STACK, 2, 0, glue_SetPreserveGlyph},
     {0xA854, (int32_t)0xBu, "GetPreserveGlyph", CONV_STACK, 0, 2, glue_GetPreserveGlyph},
     {0xA854, (int32_t)0xCu, "FlushFonts", CONV_STACK, 0, 2, glue_FlushFonts},
+    {0xA832, (int32_t)0x59u, "GXNewGraphicsClient", CONV_REG, 12, 0, glue_GXNewGraphicsClient},
+    {0xA832, (int32_t)0x5Au, "GXGetGraphicsClient", CONV_REG, 0, 0, glue_GXGetGraphicsClient},
+    {0xA832, (int32_t)0x5Bu, "GXSetGraphicsClient", CONV_REG, 4, 0, glue_GXSetGraphicsClient},
+    {0xA832, (int32_t)0x5Cu, "GXDisposeGraphicsClient", CONV_REG, 4, 0, glue_GXDisposeGraphicsClient},
+    {0xA832, (int32_t)0x5Eu, "GXGetGraphicsClients", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x5Fu, "GXEnterGraphics", CONV_REG, 0, 0, glue_GXEnterGraphics},
+    {0xA832, (int32_t)0x60u, "GXExitGraphics", CONV_REG, 0, 0, glue_GXExitGraphics},
+    {0xA832, (int32_t)0x61u, "GXGetGraphicsError", CONV_REG, 4, 0, glue_GXGetGraphicsError},
+    {0xA832, (int32_t)0x62u, "GXGetGraphicsNotice", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x63u, "GXGetGraphicsWarning", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x64u, "GXPostGraphicsError", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x65u, "GXPostGraphicsNotice", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x66u, "GXPostGraphicsWarning", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x67u, "GXGetUserGraphicsError", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x68u, "GXGetUserGraphicsNotice", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x69u, "GXGetUserGraphicsWarning", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x6Au, "GXSetUserGraphicsError", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x6Bu, "GXSetUserGraphicsNotice", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x6Cu, "GXSetUserGraphicsWarning", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x6Du, "GXIgnoreGraphicsNotice", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x6Eu, "GXPopGraphicsNotice", CONV_REG, 0, 0, 0},
+    {0xA832, (int32_t)0x6Fu, "GXIgnoreGraphicsWarning", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x70u, "GXPopGraphicsWarning", CONV_REG, 0, 0, 0},
+    {0xA832, (int32_t)0x71u, "GXNewShapeVector", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x72u, "GXSetShapeVector", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x73u, "GXNewBitmap", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x74u, "GXNewCurve", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x75u, "GXNewGlyphs", CONV_REG, 28, 0, 0},
+    {0xA832, (int32_t)0x76u, "GXNewLine", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x77u, "GXNewPaths", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x78u, "GXNewPicture", CONV_REG, 20, 0, glue_GXNewPicture},
+    {0xA832, (int32_t)0x79u, "GXNewPoint", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x7Au, "GXNewPolygons", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x7Bu, "GXNewRectangle", CONV_REG, 4, 0, glue_GXNewRectangle},
+    {0xA832, (int32_t)0x7Cu, "GXNewText", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x7Du, "GXGetBitmap", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x7Eu, "GXGetCurve", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x7Fu, "GXGetGlyphs", CONV_REG, 36, 0, 0},
+    {0xA832, (int32_t)0x80u, "GXGetLine", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x81u, "GXGetPaths", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x82u, "GXGetPicture", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x83u, "GXGetPoint", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x84u, "GXGetPolygons", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x85u, "GXGetRectangle", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x86u, "GXGetText", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x87u, "GXSetBitmap", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x88u, "GXSetCurve", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x89u, "GXSetGlyphs", CONV_REG, 32, 0, 0},
+    {0xA832, (int32_t)0x8Au, "GXSetLine", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x8Bu, "GXSetPaths", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x8Cu, "GXSetPicture", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x8Du, "GXSetPoint", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x8Eu, "GXSetPolygons", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x8Fu, "GXSetRectangle", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x90u, "GXSetText", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x91u, "GXDrawBitmap", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x92u, "GXDrawCurve", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x93u, "GXDrawGlyphs", CONV_REG, 28, 0, 0},
+    {0xA832, (int32_t)0x94u, "GXDrawLine", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x95u, "GXDrawPaths", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x96u, "GXDrawPicture", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x97u, "GXDrawPoint", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x98u, "GXDrawPolygons", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x99u, "GXDrawRectangle", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x9Au, "GXDrawText", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x9Bu, "GXNewColorProfile", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x9Cu, "GXNewColorSet", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x9Du, "GXNewInk", CONV_REG, 0, 0, 0},
+    {0xA832, (int32_t)0x9Eu, "GXNewShape", CONV_REG, 4, 0, glue_GXNewShape},
+    {0xA832, (int32_t)0x9Fu, "GXNewStyle", CONV_REG, 0, 0, 0},
+    {0xA832, (int32_t)0xA0u, "GXNewTag", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0xA1u, "GXNewTransform", CONV_REG, 0, 0, 0},
+    {0xA832, (int32_t)0xA2u, "GXNewViewDevice", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xA3u, "GXNewViewGroup", CONV_REG, 0, 0, glue_GXNewViewGroup},
+    {0xA832, (int32_t)0xA4u, "GXNewViewPort", CONV_REG, 4, 0, glue_GXNewViewPort},
+    {0xA832, (int32_t)0xA5u, "GXDisposeColorProfile", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xA6u, "GXDisposeColorSet", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xA7u, "GXDisposeInk", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xA8u, "GXDisposeShape", CONV_REG, 4, 0, glue_GXDisposeShape},
+    {0xA832, (int32_t)0xA9u, "GXDisposeStyle", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xAAu, "GXDisposeTag", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xABu, "GXDisposeTransform", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xACu, "GXDisposeViewDevice", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xADu, "GXDisposeViewGroup", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xAEu, "GXDisposeViewPort", CONV_REG, 4, 0, glue_GXDisposeViewPort},
+    {0xA832, (int32_t)0xAFu, "GXCloneColorProfile", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xB0u, "GXCloneColorSet", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xB1u, "GXCloneInk", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xB2u, "GXCloneShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xB3u, "GXCloneStyle", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xB4u, "GXCloneTag", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xB5u, "GXCloneTransform", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xB6u, "GXCopyToColorProfile", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xB7u, "GXCopyToColorSet", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xB8u, "GXCopyToInk", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xB9u, "GXCopyToShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xBAu, "GXCopyToStyle", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xBBu, "GXCopyToTag", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xBCu, "GXCopyToTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xBDu, "GXCopyToViewDevice", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xBEu, "GXCopyToViewPort", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xBFu, "GXEqualColorProfile", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC0u, "GXEqualColorSet", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC1u, "GXEqualInk", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC2u, "GXEqualShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC3u, "GXEqualStyle", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC4u, "GXEqualTag", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC5u, "GXEqualTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC6u, "GXEqualViewDevice", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC7u, "GXEqualViewPort", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xC8u, "GXResetInk", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xC9u, "GXResetShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xCAu, "GXResetStyle", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xCBu, "GXResetTransform", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xCCu, "GXLoadColorProfile", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xCDu, "GXLoadColorSet", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xCEu, "GXLoadInk", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xCFu, "GXLoadShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD0u, "GXLoadStyle", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD1u, "GXLoadTag", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD2u, "GXLoadTransform", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD3u, "GXUnloadColorProfile", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD4u, "GXUnloadColorSet", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD5u, "GXUnloadInk", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD6u, "GXUnloadShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD7u, "GXUnloadStyle", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD8u, "GXUnloadTag", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xD9u, "GXUnloadTransform", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xDAu, "GXCacheShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xDBu, "GXCopyDeepToShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xDCu, "GXDrawShape", CONV_REG, 4, 0, glue_GXDrawShape},
+    {0xA832, (int32_t)0xDDu, "GXDisposeShapeCache", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xDEu, "GXGetDefaultColorProfile", CONV_REG, 0, 0, 0},
+    {0xA832, (int32_t)0xDFu, "GXGetDefaultShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xE0u, "GXGetDefaultColorSet", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xE1u, "GXSetDefaultShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xE2u, "GXSetDefaultColorSet", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xE3u, "GXGetTag", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0xE4u, "GXSetTag", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0xE5u, "GXGetShapeBounds", CONV_REG, 12, 0, glue_GXGetShapeBounds},
+    {0xA832, (int32_t)0xE6u, "GXGetShapeFill", CONV_REG, 4, 0, glue_GXGetShapeFill},
+    {0xA832, (int32_t)0xE7u, "GXGetShapeInk", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xE8u, "GXGetShapePixel", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0xE9u, "GXGetShapeStyle", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xEAu, "GXGetShapeTransform", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xEBu, "GXGetShapeType", CONV_REG, 4, 0, glue_GXGetShapeType},
+    {0xA832, (int32_t)0xECu, "GXGetShapeTypographicBounds", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xEDu, "GXGetBitmapParts", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xEEu, "GXGetStyleFontMetrics", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0xEFu, "GXGetShapeFontMetrics", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0xF0u, "GXSetShapeBounds", CONV_REG, 8, 0, glue_GXSetShapeBounds},
+    {0xA832, (int32_t)0xF1u, "GXSetShapeFill", CONV_REG, 8, 0, glue_GXSetShapeFill},
+    {0xA832, (int32_t)0xF2u, "GXSetShapeInk", CONV_REG, 8, 0, glue_GXSetShapeInk},
+    {0xA832, (int32_t)0xF3u, "GXSetShapePixel", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0xF4u, "GXSetShapeStyle", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xF5u, "GXSetShapeTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xF6u, "GXSetShapeType", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xF7u, "GXSetBitmapParts", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0xF8u, "GXSetShapeGeometry", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xF9u, "GXGetShapeCurveError", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xFAu, "GXGetShapeDash", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xFBu, "GXGetShapeCap", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xFCu, "GXGetShapeFace", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0xFDu, "GXGetShapeFont", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0xFEu, "GXGetShapeJoin", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x100u, "GXGetShapePattern", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x101u, "GXGetShapePen", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x102u, "GXGetShapeEncoding", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x103u, "GXGetShapeTextSize", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x104u, "GXGetShapeFontVariations", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x105u, "GXGetShapeFontVariationSuite", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x106u, "GXGetStyleCurveError", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x107u, "GXGetStyleDash", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x108u, "GXGetStyleCap", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x109u, "GXGetStyleFace", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x10Au, "GXGetStyleFont", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x10Bu, "GXGetStyleJoin", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x10Du, "GXGetStylePattern", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x10Eu, "GXGetStylePen", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x10Fu, "GXGetStyleEncoding", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x110u, "GXGetStyleTextSize", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x111u, "GXGetStyleFontVariations", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x112u, "GXGetStyleFontVariationSuite", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x113u, "GXSetShapeCurveError", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x114u, "GXSetShapeDash", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x115u, "GXSetShapeCap", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x116u, "GXSetShapeFace", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x117u, "GXSetShapeFont", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x118u, "GXSetShapeJoin", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x11Au, "GXSetShapePattern", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x11Bu, "GXSetShapePen", CONV_REG, 8, 0, glue_GXSetShapePen},
+    {0xA832, (int32_t)0x11Cu, "GXSetShapeEncoding", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x11Du, "GXSetShapeTextSize", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x11Eu, "GXSetShapeFontVariations", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x11Fu, "GXSetStyleCurveError", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x120u, "GXSetStyleDash", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x121u, "GXSetStyleCap", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x122u, "GXSetStyleFace", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x123u, "GXSetStyleFont", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x124u, "GXSetStyleJoin", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x126u, "GXSetStylePattern", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x127u, "GXSetStylePen", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x128u, "GXSetStyleEncoding", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x129u, "GXSetStyleTextSize", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x12Au, "GXSetStyleFontVariations", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x12Bu, "GXGetShapeColor", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x12Cu, "GXGetShapeTransfer", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x12Du, "GXGetInkColor", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x12Eu, "GXGetInkTransfer", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x12Fu, "GXSetShapeColor", CONV_REG, 8, 0, glue_GXSetShapeColor},
+    {0xA832, (int32_t)0x130u, "GXSetShapeTransfer", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x131u, "GXSetInkColor", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x132u, "GXSetInkTransfer", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x133u, "GXGetShapeClip", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x134u, "GXGetShapeMapping", CONV_REG, 8, 0, glue_GXGetShapeMapping},
+    {0xA832, (int32_t)0x135u, "GXGetShapeHitTest", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x136u, "GXGetShapeViewPorts", CONV_REG, 8, 0, glue_GXGetShapeViewPorts},
+    {0xA832, (int32_t)0x137u, "GXGetTransformClip", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x138u, "GXGetTransformMapping", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x139u, "GXGetTransformHitTest", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x13Au, "GXGetTransformViewPorts", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x13Bu, "GXSetShapeClip", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x13Cu, "GXSetShapeMapping", CONV_REG, 8, 0, glue_GXSetShapeMapping},
+    {0xA832, (int32_t)0x13Du, "GXSetShapeHitTest", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x13Eu, "GXSetShapeViewPorts", CONV_REG, 12, 0, glue_GXSetShapeViewPorts},
+    {0xA832, (int32_t)0x13Fu, "GXSetTransformClip", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x140u, "GXSetTransformMapping", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x141u, "GXSetTransformHitTest", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x142u, "GXSetTransformViewPorts", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x143u, "GXGetColorSet", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x144u, "GXGetColorProfile", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x145u, "GXSetColorSet", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x146u, "GXSetColorProfile", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x147u, "GXGetViewDeviceBitmap", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x148u, "GXGetViewDeviceClip", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x149u, "GXGetViewDeviceMapping", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x14Au, "GXGetViewDeviceViewGroup", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x14Bu, "GXSetViewDeviceBitmap", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x14Cu, "GXSetViewDeviceClip", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x14Du, "GXSetViewDeviceMapping", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x14Eu, "GXSetViewDeviceViewGroup", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x14Fu, "GXGetViewPortChildren", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x150u, "GXGetViewPortClip", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x151u, "GXGetViewPortDither", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x152u, "GXGetViewPortHalftone", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x153u, "GXGetViewPortMapping", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x154u, "GXGetViewPortParent", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x155u, "GXGetViewPortViewGroup", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x156u, "GXSetViewPortChildren", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x157u, "GXSetViewPortClip", CONV_REG, 8, 0, glue_GXSetViewPortClip},
+    {0xA832, (int32_t)0x158u, "GXSetViewPortDither", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x159u, "GXSetViewPortHalftone", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x15Au, "GXSetViewPortMapping", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x15Bu, "GXSetViewPortParent", CONV_REG, 8, 0, glue_GXSetViewPortParent},
+    {0xA832, (int32_t)0x15Cu, "GXSetViewPortViewGroup", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x15Du, "GXGetColorProfileTags", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x15Eu, "GXGetColorSetTags", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x15Fu, "GXGetInkTags", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x160u, "GXGetShapeTags", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x161u, "GXGetStyleTags", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x162u, "GXGetTransformTags", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x163u, "GXGetViewDeviceTags", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x164u, "GXGetViewPortTags", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x165u, "GXSetColorProfileTags", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x166u, "GXSetColorSetTags", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x167u, "GXSetInkTags", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x168u, "GXSetShapeTags", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x169u, "GXSetStyleTags", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x16Au, "GXSetTransformTags", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x16Bu, "GXSetViewDeviceTags", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x16Cu, "GXSetViewPortTags", CONV_REG, 24, 0, 0},
+    {0xA832, (int32_t)0x16Du, "GXGetInkAttributes", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x16Eu, "GXGetShapeAttributes", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x16Fu, "GXGetShapeInkAttributes", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x170u, "GXGetShapeStyleAttributes", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x171u, "GXGetStyleAttributes", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x172u, "GXGetShapeTextAttributes", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x173u, "GXGetStyleTextAttributes", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x174u, "GXGetViewDeviceAttributes", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x175u, "GXGetViewPortAttributes", CONV_REG, 4, 0, glue_GXGetViewPortAttributes},
+    {0xA832, (int32_t)0x176u, "GXSetInkAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x177u, "GXSetShapeAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x178u, "GXSetShapeInkAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x179u, "GXSetShapeStyleAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x17Au, "GXSetStyleAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x17Bu, "GXSetShapeTextAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x17Cu, "GXSetStyleTextAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x17Du, "GXSetViewDeviceAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x17Eu, "GXSetViewPortAttributes", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x17Fu, "GXGetColorProfileOwners", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x180u, "GXGetColorSetOwners", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x181u, "GXGetInkOwners", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x182u, "GXGetShapeOwners", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x183u, "GXGetStyleOwners", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x184u, "GXGetTagOwners", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x185u, "GXGetTransformOwners", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x186u, "GXLockShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x187u, "GXLockTag", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x188u, "GXUnlockShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x189u, "GXUnlockTag", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x18Au, "GXGetShapeStructure", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x18Bu, "GXGetTagStructure", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x18Cu, "GXGetColorDistance", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x18Du, "GXShapeLengthToPoint", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x18Eu, "GXGetShapeArea", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x18Fu, "GXGetShapeCacheSize", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x190u, "GXGetShapeCenter", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x191u, "GXGetShapeDirection", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x192u, "GXGetShapeIndex", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x193u, "GXGetShapeLength", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x194u, "GXGetShapeSize", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x195u, "GXCountShapeContours", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x196u, "GXCountShapePoints", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x197u, "GXGetShapeDashPositions", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x198u, "GXGetShapeDeviceArea", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x199u, "GXGetShapeDeviceBounds", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x19Au, "GXGetShapeDeviceColors", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x19Bu, "GXGetShapeGlobalBounds", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x19Cu, "GXGetShapeGlobalViewDevices", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x19Du, "GXGetShapeGlobalViewPorts", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x19Eu, "GXGetShapeLocalBounds", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x19Fu, "GXGetShapePatternPositions", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1A0u, "GXGetShapeLocalFontMetrics", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1A1u, "GXGetShapeDeviceFontMetrics", CONV_REG, 28, 0, 0},
+    {0xA832, (int32_t)0x1A2u, "GXGetViewGroupViewDevices", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1A3u, "GXGetViewGroupViewPorts", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1A4u, "GXGetViewPortGlobalMapping", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1A5u, "GXGetViewPortViewDevices", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1A6u, "GXHitTestPicture", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1A7u, "GXIntersectRectangle", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x1A8u, "GXUnionRectangle", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x1A9u, "GXTouchesRectanglePoint", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1AAu, "GXTouchesShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1ABu, "GXTouchesBoundsShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1ACu, "GXContainsRectangle", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1ADu, "GXContainsShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1AEu, "GXContainsBoundsShape", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x1AFu, "GXConvertColor", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1B0u, "GXCombineColor", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1B1u, "GXCheckColor", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1B2u, "GXCheckBitmapColor", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1B3u, "GXGetHalftoneDeviceAngle", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1B4u, "GXGetColorSetParts", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1B5u, "GXGetGlyphParts", CONV_REG, 44, 0, 0},
+    {0xA832, (int32_t)0x1B6u, "GXGetPathParts", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1B7u, "GXGetPictureParts", CONV_REG, 28, 0, 0},
+    {0xA832, (int32_t)0x1B8u, "GXGetPolygonParts", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1B9u, "GXGetShapeParts", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1BAu, "GXGetTextParts", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1BBu, "GXSetColorSetParts", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1BCu, "GXSetGlyphParts", CONV_REG, 40, 0, 0},
+    {0xA832, (int32_t)0x1BDu, "GXSetPathParts", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1BEu, "GXSetPictureParts", CONV_REG, 32, 0, glue_GXSetPictureParts},
+    {0xA832, (int32_t)0x1BFu, "GXSetPolygonParts", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1C0u, "GXSetShapeParts", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1C1u, "GXSetTextParts", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1C2u, "GXGetShapePoints", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1C3u, "GXSetShapePoints", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1C4u, "GXGetGlyphPositions", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1C5u, "GXGetGlyphTangents", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1C6u, "GXSetGlyphPositions", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1C7u, "GXSetGlyphTangents", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1C8u, "GXGetGlyphMetrics", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1C9u, "GXDifferenceShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1CAu, "GXExcludeShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1CBu, "GXIntersectShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1CCu, "GXMapShape", CONV_REG, 8, 0, glue_GXMapShape},
+    {0xA832, (int32_t)0x1CDu, "GXMoveShape", CONV_REG, 12, 0, glue_GXMoveShape},
+    {0xA832, (int32_t)0x1CEu, "GXMoveShapeTo", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x1CFu, "GXReverseDifferenceShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1D0u, "GXRotateShape", CONV_REG, 16, 0, glue_GXRotateShape},
+    {0xA832, (int32_t)0x1D1u, "GXScaleShape", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1D2u, "GXSkewShape", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1D3u, "GXUnionShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1D4u, "GXDifferenceTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1D5u, "GXExcludeTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1D6u, "GXIntersectTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1D7u, "GXMapTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1D8u, "GXMoveTransform", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x1D9u, "GXMoveTransformTo", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x1DAu, "GXReverseDifferenceTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1DBu, "GXRotateTransform", CONV_REG, 16, 0, 0},
+    {0xA832, (int32_t)0x1DCu, "GXScaleTransform", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1DDu, "GXSkewTransform", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1DEu, "GXUnionTransform", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1DFu, "GXBreakShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1E0u, "GXChangedShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x1E1u, "GXHitTestShape", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x1E2u, "GXHitTestDevice", CONV_REG, 20, 0, 0},
+    {0xA832, (int32_t)0x1E3u, "GXInsetShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1E4u, "GXInvertShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x1E5u, "GXPrimitiveShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x1E6u, "GXReduceShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1E7u, "GXReverseShape", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1E8u, "GXSimplifyShape", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x1E9u, "GXLockColorProfile", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x1EAu, "GXUnlockColorProfile", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x1EBu, "GXGetColorProfileStructure", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x1ECu, "GXFlattenShape", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x1EDu, "GXUnflattenShape", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x236u, "GXNewWindowViewPort", CONV_REG, 4, 0, glue_GXNewWindowViewPort},
+    {0xA832, (int32_t)0x237u, "GXGetWindowViewPort", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x238u, "GXGetViewPortWindow", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x23Bu, "GXConvertQDPoint", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x23Cu, "GXGetGlobalMouse", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x23Du, "GXGetViewPortMouse", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x23Eu, "GXSetViewPortFilter", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x23Fu, "GXInstallQDTranslator", CONV_REG, 28, 0, glue_GXInstallQDTranslator},
+    {0xA832, (int32_t)0x240u, "GXRemoveQDTranslator", CONV_REG, 8, 0, glue_GXRemoveQDTranslator},
+    {0xA832, (int32_t)0x241u, "GXConvertPICTToShape", CONV_REG, 28, 0, glue_GXConvertPICTToShape},
+    {0xA832, (int32_t)0x242u, "GXConvertQDFont", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x243u, "GXGetConvertQDFont", CONV_REG, 0, 0, 0},
+    {0xA832, (int32_t)0x244u, "GXSetConvertQDFont", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x245u, "GXGetGraphicsPollingHandler", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x246u, "GXSetGraphicsPollingHandler", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x25Eu, "GXGetViewPortFilter", CONV_REG, 8, 0, 0},
+    {0xA832, (int32_t)0x273u, "GXGetViewPortHalftoneMatrix", CONV_REG, 12, 0, 0},
+    {0xA832, (int32_t)0x276u, "GXGetShapeClipType", CONV_REG, 4, 0, 0},
+    {0xA832, (int32_t)0x277u, "GXGetTransformClipType", CONV_REG, 4, 0, 0},
+    {0xABFE, (int32_t)0x0u, "GXInitPrinting", CONV_STACK, 0, 2, glue_GXInitPrinting},
+    {0xABFE, (int32_t)0x1u, "GXExitPrinting", CONV_STACK, 0, 2, glue_GXExitPrinting},
+    {0xABFE, (int32_t)0x2u, "GXNewJob", CONV_STACK, 4, 2, glue_GXNewJob},
+    {0xABFE, (int32_t)0x3u, "GXDisposeJob", CONV_STACK, 4, 2, glue_GXDisposeJob},
+    {0xABFE, (int32_t)0x4u, "GXFlattenJob", CONV_STACK, 12, 0, 0},
+    {0xABFE, (int32_t)0x5u, "GXUnflattenJob", CONV_STACK, 12, 4, 0},
+    {0xABFE, (int32_t)0x6u, "GXFlattenJobToHdl", CONV_STACK, 8, 4, glue_GXFlattenJobToHdl},
+    {0xABFE, (int32_t)0x7u, "GXUnflattenJobFromHdl", CONV_STACK, 8, 4, glue_GXUnflattenJobFromHdl},
+    {0xABFE, (int32_t)0x8u, "GXInstallApplicationOverride", CONV_STACK, 10, 0, glue_GXInstallApplicationOverride},
+    {0xABFE, (int32_t)0x9u, "GXNewFormat", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0xAu, "GXDisposeFormat", CONV_STACK, 4, 0, 0},
+    {0xABFE, (int32_t)0xBu, "GXNewPaperType", CONV_STACK, 16, 4, 0},
+    {0xABFE, (int32_t)0xCu, "GXDisposePaperType", CONV_STACK, 4, 0, 0},
+    {0xABFE, (int32_t)0xDu, "GXGetNewPaperType", CONV_STACK, 6, 4, 0},
+    {0xABFE, (int32_t)0xEu, "GXGetJobError", CONV_STACK, 4, 2, glue_GXGetJobError},
+    {0xABFE, (int32_t)0xFu, "GXSetJobError", CONV_STACK, 6, 0, 0},
+    {0xABFE, (int32_t)0x10u, "GXJobDefaultFormatDialog", CONV_STACK, 8, 4, glue_GXJobDefaultFormatDialog},
+    {0xABFE, (int32_t)0x11u, "GXJobPrintDialog", CONV_STACK, 8, 4, glue_GXJobPrintDialog},
+    {0xABFE, (int32_t)0x12u, "GXFormatDialog", CONV_STACK, 12, 4, 0},
+    {0xABFE, (int32_t)0x13u, "GXGetJobFormat", CONV_STACK, 8, 4, glue_GXGetJobFormat},
+    {0xABFE, (int32_t)0x14u, "GXGetFormatJob", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x15u, "GXGetFormatPaperType", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x16u, "GXGetFormatDimensions", CONV_STACK, 12, 0, glue_GXGetFormatDimensions},
+    {0xABFE, (int32_t)0x17u, "GXGetJobPageRange", CONV_STACK, 12, 0, glue_GXGetJobPageRange},
+    {0xABFE, (int32_t)0x18u, "GXStartJob", CONV_STACK, 12, 0, glue_GXStartJob},
+    {0xABFE, (int32_t)0x19u, "GXPrintPage", CONV_STACK, 16, 0, glue_GXPrintPage},
+    {0xABFE, (int32_t)0x1Au, "GXStartPage", CONV_STACK, 20, 2, 0},
+    {0xABFE, (int32_t)0x1Bu, "GXFinishPage", CONV_STACK, 4, 0, 0},
+    {0xABFE, (int32_t)0x1Cu, "GXFinishJob", CONV_STACK, 4, 0, glue_GXFinishJob},
+    {0xABFE, (int32_t)0x1Du, "GXGetJobCollection", CONV_STACK, 4, 4, glue_GXGetJobCollection},
+    {0xABFE, (int32_t)0x1Eu, "GXGetJobRefCon", CONV_STACK, 4, 4, glue_GXGetJobRefCon},
+    {0xABFE, (int32_t)0x1Fu, "GXSetJobRefCon", CONV_STACK, 8, 0, glue_GXSetJobRefCon},
+    {0xABFE, (int32_t)0x20u, "GXCopyJob", CONV_STACK, 8, 4, 0},
+    {0xABFE, (int32_t)0x21u, "GXSelectJobFormattingPrinter", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x22u, "GXSelectJobOutputPrinter", CONV_STACK, 8, 0, glue_GXSelectJobOutputPrinter},
+    {0xABFE, (int32_t)0x23u, "GXForEachJobFormatDo", CONV_STACK, 12, 0, 0},
+    {0xABFE, (int32_t)0x24u, "GXCountJobFormats", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x25u, "GXUpdateJob", CONV_STACK, 4, 2, glue_GXUpdateJob},
+    {0xABFE, (int32_t)0x27u, "GXGetJobFormattingPrinter", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x28u, "GXGetJobOutputPrinter", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x29u, "GXGetJobPrinter", CONV_STACK, 4, 4, glue_GXGetJobPrinter},
+    {0xABFE, (int32_t)0x2Au, "GXGetPrinterJob", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x2Bu, "GXForEachPrinterViewDeviceDo", CONV_STACK, 12, 0, 0},
+    {0xABFE, (int32_t)0x2Cu, "GXCountPrinterViewDevices", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x2Du, "GXGetPrinterViewDevice", CONV_STACK, 8, 4, 0},
+    {0xABFE, (int32_t)0x2Eu, "GXSelectPrinterViewDevice", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x2Fu, "GXGetPrinterName", CONV_STACK, 8, 0, glue_GXGetPrinterName},
+    {0xABFE, (int32_t)0x30u, "GXGetPrinterType", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x31u, "GXGetPrinterDriverName", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x32u, "GXGetPrinterDriverType", CONV_STACK, 4, 4, glue_GXGetPrinterDriverType},
+    {0xABFE, (int32_t)0x33u, "GXGetFormatCollection", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x34u, "GXChangedFormat", CONV_STACK, 4, 0, 0},
+    {0xABFE, (int32_t)0x35u, "GXCopyFormat", CONV_STACK, 8, 4, 0},
+    {0xABFE, (int32_t)0x36u, "GXCloneFormat", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x37u, "GXCountFormatOwners", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x38u, "GXGetFormatMapping", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x39u, "GXGetFormatForm", CONV_STACK, 8, 4, 0},
+    {0xABFE, (int32_t)0x3Au, "GXSetFormatForm", CONV_STACK, 12, 0, 0},
+    {0xABFE, (int32_t)0x3Bu, "GXSetAvailableJobFormatModes", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x3Cu, "GXGetPreferredJobFormatMode", CONV_STACK, 8, 4, 0},
+    {0xABFE, (int32_t)0x3Du, "GXGetJobFormatMode", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x3Eu, "GXSetJobFormatMode", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x3Fu, "GXJobFormatModeQuery", CONV_STACK, 16, 0, 0},
+    {0xABFE, (int32_t)0x40u, "GXEnableJobScalingPanel", CONV_STACK, 6, 0, 0},
+    {0xABFE, (int32_t)0x41u, "GXGetJobPanelDimensions", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x42u, "GXCountJobPaperTypes", CONV_STACK, 6, 4, 0},
+    {0xABFE, (int32_t)0x43u, "GXGetJobPaperType", CONV_STACK, 14, 4, 0},
+    {0xABFE, (int32_t)0x44u, "GXForEachJobPaperTypeDo", CONV_STACK, 14, 0, 0},
+    {0xABFE, (int32_t)0x45u, "GXCopyPaperType", CONV_STACK, 8, 4, 0},
+    {0xABFE, (int32_t)0x46u, "GXGetPaperTypeName", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x47u, "GXGetPaperTypeDimensions", CONV_STACK, 12, 0, 0},
+    {0xABFE, (int32_t)0x48u, "GXGetPaperTypeJob", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x49u, "GXGetPaperTypeCollection", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x4Au, "GXOpenPrintFile", CONV_STACK, 10, 4, 0},
+    {0xABFE, (int32_t)0x4Bu, "GXClosePrintFile", CONV_STACK, 4, 0, 0},
+    {0xABFE, (int32_t)0x4Cu, "GXGetPrintFileJob", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x4Du, "GXCountPrintFilePages", CONV_STACK, 4, 4, 0},
+    {0xABFE, (int32_t)0x4Eu, "GXReadPrintFilePage", CONV_STACK, 24, 0, 0},
+    {0xABFE, (int32_t)0x4Fu, "GXReplacePrintFilePage", CONV_STACK, 16, 0, 0},
+    {0xABFE, (int32_t)0x50u, "GXInsertPrintFilePage", CONV_STACK, 16, 0, 0},
+    {0xABFE, (int32_t)0x51u, "GXDeletePrintFilePageRange", CONV_STACK, 12, 0, 0},
+    {0xABFE, (int32_t)0x52u, "GXSavePrintFile", CONV_STACK, 8, 0, 0},
+    {0xABFE, (int32_t)0x53u, "GXFindPrinterProfile", CONV_STACK, 16, 4, 0},
+    {0xABFE, (int32_t)0x54u, "GXFindFormatProfile", CONV_STACK, 16, 4, 0},
+    {0xABFE, (int32_t)0x55u, "GXSetPrinterProfile", CONV_STACK, 12, 0, 0},
+    {0xABFE, (int32_t)0x56u, "GXSetFormatProfile", CONV_STACK, 12, 0, 0},
+    {0xABFE, (int32_t)0x57u, "GXIdleJob", CONV_STACK, 4, 0, glue_GXIdleJob},
+    {0xABFE, (int32_t)0x10001u, "GXGetJob", CONV_STACK, 0, 4, 0},
+    {0xABFE, (int32_t)0x10002u, "GXGetMessageHandlerResFile", CONV_STACK, 0, 2, 0},
+    {0xABFE, (int32_t)0x10003u, "GXSpoolingAborted", CONV_STACK, 0, 2, 0},
+    {0xABFE, (int32_t)0x10004u, "GXJobIdle", CONV_STACK, 0, 2, 0},
+    {0xABFE, (int32_t)0x10005u, "GXReportStatus", CONV_STACK, 8, 2, 0},
+    {0xABFE, (int32_t)0x10006u, "GXAlertTheUser", CONV_STACK, 4, 2, 0},
+    {0xABFE, (int32_t)0x10007u, "GXSetupDialogPanel", CONV_STACK, 4, 2, 0},
+    {0xABFE, (int32_t)0x10008u, "GXCountTrays", CONV_STACK, 4, 2, 0},
+    {0xABFE, (int32_t)0x10009u, "GXGetTrayName", CONV_STACK, 8, 2, 0},
+    {0xABFE, (int32_t)0x1000Au, "GXSetTrayPaperType", CONV_STACK, 8, 2, 0},
+    {0xABFE, (int32_t)0x1000Bu, "GXGetTrayPaperType", CONV_STACK, 8, 2, 0},
+    {0xABFE, (int32_t)0x1000Cu, "GXGetTrayMapping", CONV_STACK, 4, 2, 0},
+    {0xABFE, (int32_t)0x1000Du, "GXCleanupStartJob", CONV_STACK, 0, 0, 0},
+    {0xABFE, (int32_t)0x1000Eu, "GXCleanupStartPage", CONV_STACK, 0, 0, 0},
+    {0xABFE, (int32_t)0x1000Fu, "GXCleanupOpenConnection", CONV_STACK, 0, 0, 0},
+    {0xABFE, (int32_t)0x10010u, "GXCleanupStartSendPage", CONV_STACK, 0, 0, 0},
     {0xA1AD, (int32_t)0x0u, "Gestalt", CONV_REG, 0, 0, glue_Gestalt},
     {0xA1AD, (int32_t)0x200u, "NewGestalt", CONV_REG, 0, 0, glue_NewGestalt},
     {0xA1AD, (int32_t)0x400u, "ReplaceGestalt", CONV_REG, 0, 0, glue_ReplaceGestalt},
@@ -15702,14 +17409,14 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x0u, "CodecManagerVersion", CONV_STACK, 4, 2, glue_CodecManagerVersion},
     {0xAAA3, (int32_t)0x1u, "GetCodecNameList", CONV_STACK, 6, 2, glue_GetCodecNameList},
     {0xAAA3, (int32_t)0x3u, "GetCodecInfo", CONV_STACK, 12, 2, glue_GetCodecInfo},
-    {0xAAA3, (int32_t)0x4u, "GetMaxCompressionSize", CONV_STACK, 26, 2, 0},
-    {0xAAA3, (int32_t)0x5u, "GetCompressionTime", CONV_STACK, 30, 2, 0},
-    {0xAAA3, (int32_t)0x6u, "CompressImage", CONV_STACK, 24, 2, 0},
-    {0xAAA3, (int32_t)0x7u, "FCompressImage", CONV_STACK, 48, 2, 0},
+    {0xAAA3, (int32_t)0x4u, "GetMaxCompressionSize", CONV_STACK, 26, 2, glue_GetMaxCompressionSize},
+    {0xAAA3, (int32_t)0x5u, "GetCompressionTime", CONV_STACK, 30, 2, glue_GetCompressionTime},
+    {0xAAA3, (int32_t)0x6u, "CompressImage", CONV_STACK, 24, 2, glue_CompressImage},
+    {0xAAA3, (int32_t)0x7u, "FCompressImage", CONV_STACK, 48, 2, glue_FCompressImage},
     {0xAAA3, (int32_t)0x8u, "DecompressImage", CONV_STACK, 26, 2, glue_DecompressImage},
     {0xAAA3, (int32_t)0x9u, "FDecompressImage", CONV_STACK, 54, 2, glue_FDecompressImage},
-    {0xAAA3, (int32_t)0xAu, "CompressSequenceBegin", CONV_STACK, 52, 2, 0},
-    {0xAAA3, (int32_t)0xBu, "CompressSequenceFrame", CONV_STACK, 30, 2, 0},
+    {0xAAA3, (int32_t)0xAu, "CompressSequenceBegin", CONV_STACK, 52, 2, glue_CompressSequenceBegin},
+    {0xAAA3, (int32_t)0xBu, "CompressSequenceFrame", CONV_STACK, 30, 2, glue_CompressSequenceFrame},
     {0xAAA3, (int32_t)0xCu, "StdPix", CONV_STACK, 28, 0, 0},
     {0xAAA3, (int32_t)0xDu, "DecompressSequenceBegin", CONV_STACK, 40, 2, glue_DecompressSequenceBegin},
     {0xAAA3, (int32_t)0xEu, "DecompressSequenceFrame", CONV_STACK, 18, 2, glue_DecompressSequenceFrame},
@@ -15721,9 +17428,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x14u, "SetDSequenceDataProc", CONV_STACK, 12, 2, glue_SetDSequenceDataProc},
     {0xAAA3, (int32_t)0x15u, "GetDSequenceImageBuffer", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x16u, "GetDSequenceScreenBuffer", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x17u, "SetCSequenceQuality", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x18u, "SetCSequencePrev", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x19u, "GetCSequencePrevBuffer", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x17u, "SetCSequenceQuality", CONV_STACK, 12, 2, glue_SetCSequenceQuality},
+    {0xAAA3, (int32_t)0x18u, "SetCSequencePrev", CONV_STACK, 12, 2, glue_SetCSequencePrev},
+    {0xAAA3, (int32_t)0x19u, "GetCSequencePrevBuffer", CONV_STACK, 8, 2, glue_GetCSequencePrevBuffer},
     {0xAAA3, (int32_t)0x1Au, "CDSequenceBusy", CONV_STACK, 4, 2, glue_CDSequenceBusy},
     {0xAAA3, (int32_t)0x1Bu, "CDSequenceEnd", CONV_STACK, 4, 2, glue_CDSequenceEnd},
     {0xAAA3, (int32_t)0x1Cu, "GetCompressedImageSize", CONV_STACK, 20, 2, glue_GetCompressedImageSize},
@@ -15733,8 +17440,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x20u, "GetImageDescriptionExtension", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0x21u, "AddImageDescriptionExtension", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x23u, "FindCodec", CONV_STACK, 16, 2, glue_FindCodec},
-    {0xAAA3, (int32_t)0x24u, "CompressPicture", CONV_STACK, 16, 2, 0},
-    {0xAAA3, (int32_t)0x25u, "FCompressPicture", CONV_STACK, 34, 2, 0},
+    {0xAAA3, (int32_t)0x24u, "CompressPicture", CONV_STACK, 16, 2, glue_CompressPicture},
+    {0xAAA3, (int32_t)0x25u, "FCompressPicture", CONV_STACK, 34, 2, glue_FCompressPicture},
     {0xAAA3, (int32_t)0x26u, "CompressPictureFile", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x27u, "FCompressPictureFile", CONV_STACK, 30, 2, 0},
     {0xAAA3, (int32_t)0x28u, "GetPictureFileHeader", CONV_STACK, 10, 2, 0},
@@ -15746,10 +17453,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x2Eu, "DrawTrimmedPicture", CONV_STACK, 18, 2, 0},
     {0xAAA3, (int32_t)0x2Fu, "DrawTrimmedPictureFile", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0x30u, "ConvertImage", CONV_STACK, 38, 2, 0},
-    {0xAAA3, (int32_t)0x33u, "SetCSequenceFlushProc", CONV_STACK, 12, 2, 0},
+    {0xAAA3, (int32_t)0x33u, "SetCSequenceFlushProc", CONV_STACK, 12, 2, glue_SetCSequenceFlushProc},
     {0xAAA3, (int32_t)0x34u, "SetDSequenceAccuracy", CONV_STACK, 8, 2, glue_SetDSequenceAccuracy},
     {0xAAA3, (int32_t)0x35u, "SetDSequenceSrcRect", CONV_STACK, 8, 2, glue_SetDSequenceSrcRect},
-    {0xAAA3, (int32_t)0x36u, "SetCSequenceKeyFrameRate", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x36u, "SetCSequenceKeyFrameRate", CONV_STACK, 8, 2, glue_SetCSequenceKeyFrameRate},
     {0xAAA3, (int32_t)0x37u, "GetCompressedPixMapInfo", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x38u, "SetCompressedPixMapInfo", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x39u, "TransformRgn", CONV_STACK, 8, 2, 0},
@@ -15763,16 +17470,16 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x45u, "MakeFilePreview", CONV_STACK, 6, 2, glue_MakeFilePreview},
     {0xAAA3, (int32_t)0x46u, "AddFilePreview", CONV_STACK, 10, 2, glue_AddFilePreview},
     {0xAAA3, (int32_t)0x47u, "DecompressSequenceFrameS", CONV_STACK, 22, 2, glue_DecompressSequenceFrameS},
-    {0xAAA3, (int32_t)0x4Bu, "GetCSequenceKeyFrameRate", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x4Bu, "GetCSequenceKeyFrameRate", CONV_STACK, 8, 2, glue_GetCSequenceKeyFrameRate},
     {0xAAA3, (int32_t)0x4Cu, "AlignScreenRect", CONV_STACK, 8, 0, glue_AlignScreenRect},
     {0xAAA3, (int32_t)0x4Du, "AlignWindow", CONV_STACK, 14, 0, glue_AlignWindow},
     {0xAAA3, (int32_t)0x4Eu, "DragAlignedWindow", CONV_STACK, 20, 0, glue_DragAlignedWindow},
     {0xAAA3, (int32_t)0x4Fu, "DragAlignedGrayRgn", CONV_STACK, 30, 4, 0},
-    {0xAAA3, (int32_t)0x50u, "SetCSequenceDataRateParams", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x51u, "SetCSequenceFrameNumber", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x50u, "SetCSequenceDataRateParams", CONV_STACK, 8, 2, glue_SetCSequenceDataRateParams},
+    {0xAAA3, (int32_t)0x51u, "SetCSequenceFrameNumber", CONV_STACK, 8, 2, glue_SetCSequenceFrameNumber},
     {0xAAA3, (int32_t)0x52u, "NewImageGWorld", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x53u, "GetCSequenceDataRateParams", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x54u, "GetCSequenceFrameNumber", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x53u, "GetCSequenceDataRateParams", CONV_STACK, 8, 2, glue_GetCSequenceDataRateParams},
+    {0xAAA3, (int32_t)0x54u, "GetCSequenceFrameNumber", CONV_STACK, 8, 2, glue_GetCSequenceFrameNumber},
     {0xAAA3, (int32_t)0x55u, "GetBestDeviceRect", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x56u, "SetSequenceProgressProc", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x57u, "SetDSequenceFlags", CONV_STACK, 12, 2, glue_SetDSequenceFlags},
@@ -15801,13 +17508,13 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x71u, "ImageTranscodeFrame", CONV_STACK, 20, 2, 0},
     {0xAAA3, (int32_t)0x72u, "ImageTranscodeDisposeFrameData", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x73u, "CDSequenceInvalidate", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x74u, "GetCSequenceMaxCompressionSize", CONV_STACK, 12, 2, 0},
+    {0xAAA3, (int32_t)0x74u, "GetCSequenceMaxCompressionSize", CONV_STACK, 12, 2, glue_GetCSequenceMaxCompressionSize},
     {0xAAA3, (int32_t)0x75u, "ImageFieldSequenceExtractCombine", CONV_STACK, 32, 2, 0},
     {0xAAA3, (int32_t)0x76u, "ImageFieldSequenceEnd", CONV_STACK, 4, 2, 0},
     {0xAAA3, (int32_t)0x77u, "GetGraphicsImporterForDataRef", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x78u, "SetCSequencePreferredPacketSize", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x78u, "SetCSequencePreferredPacketSize", CONV_STACK, 8, 2, glue_SetCSequencePreferredPacketSize},
     {0xAAA3, (int32_t)0x79u, "CDSequenceSetTimeBase", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x7Au, "MakeImageDescriptionForPixMap", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x7Au, "MakeImageDescriptionForPixMap", CONV_STACK, 8, 2, glue_MakeImageDescriptionForPixMap},
     {0xAAA3, (int32_t)0x7Bu, "CDSequenceSetSourceDataQueue", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x7Cu, "ICMSequenceLockBits", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x7Du, "ICMSequenceUnlockBits", CONV_STACK, 8, 2, 0},
@@ -16202,8 +17909,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x34u, "SetMoviePreviewTime", CONV_STACK, 12, 0, 0},
     {0xAAAA, (int32_t)0x35u, "GetMoviePosterTime", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x36u, "SetMoviePosterTime", CONV_STACK, 8, 0, 0},
-    {0xAAAA, (int32_t)0x37u, "GetMovieSelection", CONV_STACK, 12, 0, 0},
-    {0xAAAA, (int32_t)0x38u, "SetMovieSelection", CONV_STACK, 12, 0, 0},
+    {0xAAAA, (int32_t)0x37u, "GetMovieSelection", CONV_STACK, 12, 0, glue_GetMovieSelection},
+    {0xAAAA, (int32_t)0x38u, "SetMovieSelection", CONV_STACK, 12, 0, glue_SetMovieSelection},
     {0xAAAA, (int32_t)0x39u, "GetMovieTime", CONV_STACK, 8, 4, glue_GetMovieTime},
     {0xAAAA, (int32_t)0x3Cu, "SetMovieTime", CONV_STACK, 8, 0, glue_SetMovieTime},
     {0xAAAA, (int32_t)0x3Du, "SetMovieTimeValue", CONV_STACK, 8, 0, glue_SetMovieTimeValue},
@@ -16258,16 +17965,16 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x7Eu, "GetMediaSample", CONV_STACK, 48, 2, 0},
     {0xAAAA, (int32_t)0x7Fu, "GetMediaSampleReference", CONV_STACK, 44, 2, 0},
     {0xAAAA, (int32_t)0x85u, "InsertTrackSegment", CONV_STACK, 20, 2, 0},
-    {0xAAAA, (int32_t)0x86u, "InsertMovieSegment", CONV_STACK, 20, 2, 0},
+    {0xAAAA, (int32_t)0x86u, "InsertMovieSegment", CONV_STACK, 20, 2, glue_InsertMovieSegment},
     {0xAAAA, (int32_t)0x87u, "InsertEmptyTrackSegment", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x88u, "InsertEmptyMovieSegment", CONV_STACK, 12, 2, 0},
+    {0xAAAA, (int32_t)0x88u, "InsertEmptyMovieSegment", CONV_STACK, 12, 2, glue_InsertEmptyMovieSegment},
     {0xAAAA, (int32_t)0x89u, "DeleteTrackSegment", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x8Au, "DeleteMovieSegment", CONV_STACK, 12, 2, 0},
+    {0xAAAA, (int32_t)0x8Au, "DeleteMovieSegment", CONV_STACK, 12, 2, glue_DeleteMovieSegment},
     {0xAAAA, (int32_t)0x8Bu, "ScaleTrackSegment", CONV_STACK, 16, 2, 0},
     {0xAAAA, (int32_t)0x8Cu, "ScaleMovieSegment", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x8Du, "CutMovieSelection", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0x8Eu, "CopyMovieSelection", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0x8Fu, "PasteMovieSelection", CONV_STACK, 8, 0, 0},
+    {0xAAAA, (int32_t)0x8Du, "CutMovieSelection", CONV_STACK, 4, 4, glue_CutMovieSelection},
+    {0xAAAA, (int32_t)0x8Eu, "CopyMovieSelection", CONV_STACK, 4, 4, glue_CopyMovieSelection},
+    {0xAAAA, (int32_t)0x8Fu, "PasteMovieSelection", CONV_STACK, 8, 0, glue_PasteMovieSelection},
     {0xAAAA, (int32_t)0x96u, "TrackTimeToMediaTime", CONV_STACK, 8, 4, 0},
     {0xAAAA, (int32_t)0x98u, "GetMovieDataSize", CONV_STACK, 12, 4, glue_GetMovieDataSize},
     {0xAAAA, (int32_t)0x99u, "GetMediaDataSize", CONV_STACK, 12, 4, 0},
@@ -16304,12 +18011,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0xCCu, "IsScrapMovie", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0xD0u, "GetTrackMovie", CONV_STACK, 4, 4, glue_GetTrackMovie},
     {0xAAAA, (int32_t)0xD5u, "CloseMovieFile", CONV_STACK, 2, 2, glue_CloseMovieFile},
-    {0xAAAA, (int32_t)0xD7u, "AddMovieResource", CONV_STACK, 14, 2, 0},
-    {0xAAAA, (int32_t)0xD8u, "UpdateMovieResource", CONV_STACK, 12, 2, 0},
+    {0xAAAA, (int32_t)0xD7u, "AddMovieResource", CONV_STACK, 14, 2, glue_AddMovieResource},
+    {0xAAAA, (int32_t)0xD8u, "UpdateMovieResource", CONV_STACK, 12, 2, glue_UpdateMovieResource},
     {0xAAAA, (int32_t)0xD9u, "HasMovieChanged", CONV_STACK, 4, 2, glue_HasMovieChanged},
     {0xAAAA, (int32_t)0xDDu, "IsMovieDone", CONV_STACK, 4, 2, glue_IsMovieDone},
     {0xAAAA, (int32_t)0xDEu, "ClearMoviesStickyError", CONV_STACK, 0, 0, glue_ClearMoviesStickyError},
-    {0xAAAA, (int32_t)0xE1u, "ClearMovieSelection", CONV_STACK, 4, 0, 0},
+    {0xAAAA, (int32_t)0xE1u, "ClearMovieSelection", CONV_STACK, 4, 0, glue_ClearMovieSelection},
     {0xAAAA, (int32_t)0xE2u, "GetTrackNextInterestingTime", CONV_STACK, 22, 0, 0},
     {0xAAAA, (int32_t)0xEBu, "NewCallBack", CONV_STACK, 6, 4, 0},
     {0xAAAA, (int32_t)0xECu, "DisposeCallBack", CONV_STACK, 4, 0, 0},
@@ -16399,8 +18106,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x188u, "NewMovieTrack", CONV_STACK, 14, 4, 0},
     {0xAAAA, (int32_t)0x18Au, "NewMovieController", CONV_STACK, 12, 4, glue_NewMovieController},
     {0xAAAA, (int32_t)0x18Bu, "DisposeMovieController", CONV_STACK, 4, 0, glue_DisposeMovieController},
-    {0xAAAA, (int32_t)0x18Cu, "PutMovieOnScrap", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x18Du, "NewMovieFromScrap", CONV_STACK, 4, 4, 0},
+    {0xAAAA, (int32_t)0x18Cu, "PutMovieOnScrap", CONV_STACK, 8, 2, glue_PutMovieOnScrap},
+    {0xAAAA, (int32_t)0x18Du, "NewMovieFromScrap", CONV_STACK, 4, 4, glue_NewMovieFromScrap},
     {0xAAAA, (int32_t)0x18Eu, "NewTrackMedia", CONV_STACK, 20, 4, 0},
     {0xAAAA, (int32_t)0x190u, "SetMediaHandler", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x191u, "CreateMovieFile", CONV_STACK, 22, 2, 0},
@@ -16810,11 +18517,14 @@ const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[
 const dispatcher_info dispatchers[] = {
     {0xA823, "AliasDispatch", "D0W"},
     {0xAA5A, "CodeFragmentDispatch", "StackW"},
+    {0xABF6, "CollectionDispatch", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
     {0xABEB, "DisplayDispatch", "D0W"},
     {0xABED, "DragDispatch", "D0W"},
     {0xA060, "FSDispatch", "D0W"},
     {0xA854, "FontDispatch", "D0<0xF>"},
+    {0xA832, "GXGraphicsDispatch", "D0W"},
+    {0xABFE, "GXPrintingDispatch", "D0L"},
     {0xA1AD, "GestaltDispatch", "TrapBits"},
     {0xAA52, "HighLevelFSDispatch", "D0<0xF>"},
     {0xABC9, "IconDispatch", "D0W"},

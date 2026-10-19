@@ -96,24 +96,36 @@ static void note_request(tune *t, uint32_t index, const uint8_t *nr, size_t len,
 
 static uint8_t clamp7(int v) { return (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v); }
 
-static void control(tune *t, uint32_t index, uint32_t controller, int16_t value, int64_t at)
+int qt_music_controller(int channel, uint32_t controller, int16_t value, uint8_t msg[3])
 {
-    part *p = part_of(t, index);
-    uint8_t st = (uint8_t)(0xB0 | p->channel);
+    uint8_t st = (uint8_t)(0xB0 | (channel & 15));
     if (controller == 32) { /* pitch bend: semitones, 8.8; the synthesizer's range is two */
         int bend = 8192 + value * 8192 / (2 * 256);
         bend = bend < 0 ? 0 : bend > 16383 ? 16383 : bend;
-        emit(t, at, (uint8_t)(0xE0 | p->channel), (uint8_t)(bend & 127), (uint8_t)(bend >> 7), 0);
+        msg[0] = (uint8_t)(0xE0 | (channel & 15));
+        msg[1] = (uint8_t)(bend & 127);
+        msg[2] = (uint8_t)(bend >> 7);
     } else if (controller == 10) {
         /* pan: 0 the default, 1.0 left to 2.0 right; tunes converted from
          * MIDI files carry MIDI's 0-127 instead */
         int pan = value <= 0 ? 64 : value >= 256 && value <= 512 ? (value - 256) * 127 / 256 : value >> 8;
-        emit(t, at, st, 10, clamp7(pan), 0);
+        msg[0] = st, msg[1] = 10, msg[2] = clamp7(pan);
     } else if (controller == 64) { /* sustain: on when positive */
-        emit(t, at, st, 64, value > 0 ? 127 : 0, 0);
+        msg[0] = st, msg[1] = 64, msg[2] = value > 0 ? 127 : 0;
     } else if (controller < 128) {
-        emit(t, at, st, (uint8_t)controller, clamp7(value >> 8), 0);
+        msg[0] = st, msg[1] = (uint8_t)controller, msg[2] = clamp7(value >> 8);
+    } else {
+        return 0;
     }
+    return 3;
+}
+
+static void control(tune *t, uint32_t index, uint32_t controller, int16_t value, int64_t at)
+{
+    part *p = part_of(t, index);
+    uint8_t m[3];
+    if (qt_music_controller(p->channel, controller, value, m))
+        emit(t, at, m[0], m[1], m[2], 0);
 }
 
 static void note(tune *t, uint32_t index, int pitch, int velocity, int64_t at, int64_t duration)

@@ -23,6 +23,49 @@ import Toolbox
         return atom("trak", tkhd + atom("mdia", mdhd + hdlr + atom("minf", stbl)))
     }
 
+    /// Editing the same movie's description: the second second moved in
+    /// front of the first, then the copy at the end cleared.
+    @Test func editsReorderTheMedia() throws {
+        let red: [UInt8] = [255, 255, 0, 0], blue: [UInt8] = [255, 0, 0, 255]
+        let data = Array(repeating: red, count: 4).flatMap { $0 } + Array(repeating: blue, count: 4).flatMap { $0 }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("bluebox-qtedit-\(getpid()).mov")
+        try Data(data).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let video = trak(handler: "vide", scale: 600, duration: 1200,
+                         stsd: be32(86) + Array("raw ".utf8) + [0, 0, 0, 0, 0, 0] + be16(1) + [UInt8](repeating: 0, count: 16)
+                             + be16(2) + be16(2) + be32(72 << 16) + be32(72 << 16) + be32(0) + be16(1)
+                             + [UInt8](repeating: 0, count: 32) + be16(32) + be16(0xFFFF),
+                         stts: [(2, 600)], stsc: [(1, 1)], stsz: be32(16) + be32(2), chunks: [0, 16])
+        let mvhd = full("mvhd", be32(0) + be32(0) + be32(600) + be32(1200) + [UInt8](repeating: 0, count: 80))
+        var moov = atom("moov", mvhd + video)
+        var e = qt_edits(), part = qt_edits()
+        #expect(moov.withUnsafeBufferPointer { qt_edits_read($0.baseAddress, UInt32($0.count), &e) })
+        #expect(qt_edits_duration(&e) == 1200)
+        #expect(qt_edits_copy(&e, 600, 600, &part))                // the blue second
+        #expect(qt_edits_insert(&e, &part, 0, 600, 0))              // in front: blue, red, blue
+        #expect(qt_edits_duration(&e) == 1800)
+        #expect(qt_edits_delete(&e, 1200, 600))                     // blue, red
+        var n: UInt32 = 0
+        let written = moov.withUnsafeBufferPointer { qt_edits_write($0.baseAddress, UInt32($0.count), &e, &n) }
+        qt_edits_free(&e)
+        qt_edits_free(&part)
+        moov = Array(UnsafeBufferPointer(start: written, count: Int(n)))
+        free(written)
+        let p = try #require(moov.withUnsafeBufferPointer {
+            qt_native_open($0.baseAddress, UInt32($0.count), url.path, 600, nil, 0)
+        })
+        defer { qt_native_close(p) }
+        var serial: UInt32 = 0, w: Int32 = 0, h: Int32 = 0
+        var rgba: UnsafeMutablePointer<UInt8>?
+        defer { free(rgba) }
+        #expect(qt_native_frame(p, 500, &serial, &rgba, &w, &h) && rgba![2] == 255)    // blue first
+        #expect(qt_native_frame(p, 1500, &serial, &rgba, &w, &h) && rgba![0] == 255)   // then red
+        var again = qt_edits()
+        #expect(moov.withUnsafeBufferPointer { qt_edits_read($0.baseAddress, UInt32($0.count), &again) })
+        #expect(qt_edits_duration(&again) == 1200)                  // the durations were rewritten
+        qt_edits_free(&again)
+    }
+
     @Test func framesAndSoundFollowTheClock() throws {
         // The data file: frame 1 (red), frame 2 (blue), then the sound's two chunks.
         let red: [UInt8] = [255, 255, 0, 0], blue: [UInt8] = [255, 0, 0, 255]

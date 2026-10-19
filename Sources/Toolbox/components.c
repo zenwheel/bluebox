@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "m68k.h"
+#include "qt_tune.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -618,4 +619,5 @@ void components_reset(void)
     memset(insts, 0, sizeof insts);
     register_component(fourcc("PREF"), fourcc("ICAp"), fourcc("JPQE"), 0,
                        native_register(ic_component, "InternetConfig", 0), 0, 0, 0, -1);
+    qt_tune_register(); /* QuickTime's tune player and note allocator */
 }

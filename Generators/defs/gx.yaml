@@ -1,0 +1,6235 @@
+# QuickDraw GX (graphics: C calls through $A832, the selector in D0;
+# printing: Pascal calls through $ABFE, a long selector in D0) and the
+# Collection Manager ($ABF6, moveq selector).  Signatures from Apple's
+# GXGraphics.h, GXEnvironment.h, GXPrinting.h and Collections.h (Universal
+# Interfaces 3.x), the GX object types taken as longs.
+
+- dispatcher:
+    name: GXGraphicsDispatch
+    trap: 0xA832
+    selector-location: D0W
+    convention: C
+
+- dispatcher:
+    name: GXPrintingDispatch
+    trap: 0xABFE
+    selector-location: D0L
+
+- dispatcher:
+    name: CollectionDispatch
+    trap: 0xABF6
+    selector-location: D0W
+
+- function:
+    name: GXNewGraphicsClient
+    return: long
+    args:
+      - name: memoryStart
+        type: Ptr
+      - name: memoryLength
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x59
+
+- function:
+    name: GXGetGraphicsClient
+    return: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x5A
+
+- function:
+    name: GXSetGraphicsClient
+    args:
+      - name: client
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x5B
+
+- function:
+    name: GXDisposeGraphicsClient
+    args:
+      - name: client
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x5C
+
+- function:
+    name: GXGetGraphicsClients
+    return: long
+    args:
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: clients
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x5E
+
+- function:
+    name: GXEnterGraphics
+    dispatcher: GXGraphicsDispatch
+    selector: 0x5F
+
+- function:
+    name: GXExitGraphics
+    dispatcher: GXGraphicsDispatch
+    selector: 0x60
+
+- function:
+    name: GXGetGraphicsError
+    return: long
+    args:
+      - name: stickyError
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x61
+
+- function:
+    name: GXGetGraphicsNotice
+    return: long
+    args:
+      - name: stickyNotice
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x62
+
+- function:
+    name: GXGetGraphicsWarning
+    return: long
+    args:
+      - name: stickyWarning
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x63
+
+- function:
+    name: GXPostGraphicsError
+    args:
+      - name: error
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x64
+
+- function:
+    name: GXPostGraphicsWarning
+    args:
+      - name: warning
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x66
+
+- function:
+    name: GXGetUserGraphicsError
+    return: Ptr
+    args:
+      - name: reference
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x67
+
+- function:
+    name: GXGetUserGraphicsNotice
+    return: Ptr
+    args:
+      - name: reference
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x68
+
+- function:
+    name: GXGetUserGraphicsWarning
+    return: Ptr
+    args:
+      - name: reference
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x69
+
+- function:
+    name: GXSetUserGraphicsError
+    args:
+      - name: userFunction
+        type: Ptr
+      - name: reference
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x6A
+
+- function:
+    name: GXSetUserGraphicsNotice
+    args:
+      - name: userFunction
+        type: Ptr
+      - name: reference
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x6B
+
+- function:
+    name: GXSetUserGraphicsWarning
+    args:
+      - name: userFunction
+        type: Ptr
+      - name: reference
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x6C
+
+- function:
+    name: GXIgnoreGraphicsWarning
+    args:
+      - name: warning
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x6F
+
+- function:
+    name: GXPopGraphicsWarning
+    dispatcher: GXGraphicsDispatch
+    selector: 0x70
+
+- function:
+    name: GXNewShapeVector
+    return: long
+    args:
+      - name: aType
+        type: long
+      - name: vector
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x71
+
+- function:
+    name: GXSetShapeVector
+    args:
+      - name: target
+        type: long
+      - name: vector
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x72
+
+- function:
+    name: GXNewBitmap
+    return: long
+    args:
+      - name: data
+        type: Ptr
+      - name: position
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x73
+
+- function:
+    name: GXNewCurve
+    return: long
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x74
+
+- function:
+    name: GXNewGlyphs
+    return: long
+    args:
+      - name: charCount
+        type: long
+      - name: text
+        type: Ptr
+      - name: positions
+        type: Ptr
+      - name: advance
+        type: Ptr
+      - name: tangents
+        type: Ptr
+      - name: styleRuns
+        type: Ptr
+      - name: glyphStyles
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x75
+
+- function:
+    name: GXNewLine
+    return: long
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x76
+
+- function:
+    name: GXNewPaths
+    return: long
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x77
+
+- function:
+    name: GXNewPicture
+    return: long
+    args:
+      - name: count
+        type: long
+      - name: shapes
+        type: Ptr
+      - name: styles
+        type: Ptr
+      - name: inks
+        type: Ptr
+      - name: transforms
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x78
+
+- function:
+    name: GXNewPoint
+    return: long
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x79
+
+- function:
+    name: GXNewPolygons
+    return: long
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x7A
+
+- function:
+    name: GXNewRectangle
+    return: long
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x7B
+
+- function:
+    name: GXNewText
+    return: long
+    args:
+      - name: charCount
+        type: long
+      - name: text
+        type: Ptr
+      - name: position
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x7C
+
+- function:
+    name: GXGetBitmap
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+      - name: position
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x7D
+
+- function:
+    name: GXGetCurve
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x7E
+
+- function:
+    name: GXGetGlyphs
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: charCount
+        type: Ptr
+      - name: text
+        type: Ptr
+      - name: positions
+        type: Ptr
+      - name: advance
+        type: Ptr
+      - name: tangents
+        type: Ptr
+      - name: runCount
+        type: Ptr
+      - name: styleRuns
+        type: Ptr
+      - name: glyphStyles
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x7F
+
+- function:
+    name: GXGetLine
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x80
+
+- function:
+    name: GXGetPaths
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x81
+
+- function:
+    name: GXGetPicture
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: shapes
+        type: Ptr
+      - name: styles
+        type: Ptr
+      - name: inks
+        type: Ptr
+      - name: transforms
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x82
+
+- function:
+    name: GXGetPoint
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x83
+
+- function:
+    name: GXGetPolygons
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x84
+
+- function:
+    name: GXGetRectangle
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x85
+
+- function:
+    name: GXGetText
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: charCount
+        type: Ptr
+      - name: text
+        type: Ptr
+      - name: position
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x86
+
+- function:
+    name: GXSetBitmap
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+      - name: position
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x87
+
+- function:
+    name: GXSetCurve
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x88
+
+- function:
+    name: GXSetGlyphs
+    args:
+      - name: target
+        type: long
+      - name: charCount
+        type: long
+      - name: text
+        type: Ptr
+      - name: positions
+        type: Ptr
+      - name: advance
+        type: Ptr
+      - name: tangents
+        type: Ptr
+      - name: styleRuns
+        type: Ptr
+      - name: glyphStyles
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x89
+
+- function:
+    name: GXSetLine
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x8A
+
+- function:
+    name: GXSetPaths
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x8B
+
+- function:
+    name: GXSetPicture
+    args:
+      - name: target
+        type: long
+      - name: count
+        type: long
+      - name: shapes
+        type: Ptr
+      - name: styles
+        type: Ptr
+      - name: inks
+        type: Ptr
+      - name: transforms
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x8C
+
+- function:
+    name: GXSetPoint
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x8D
+
+- function:
+    name: GXSetPolygons
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x8E
+
+- function:
+    name: GXSetRectangle
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x8F
+
+- function:
+    name: GXSetText
+    args:
+      - name: target
+        type: long
+      - name: charCount
+        type: long
+      - name: text
+        type: Ptr
+      - name: position
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x90
+
+- function:
+    name: GXDrawBitmap
+    args:
+      - name: data
+        type: Ptr
+      - name: position
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x91
+
+- function:
+    name: GXDrawCurve
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x92
+
+- function:
+    name: GXDrawGlyphs
+    args:
+      - name: charCount
+        type: long
+      - name: text
+        type: Ptr
+      - name: positions
+        type: Ptr
+      - name: advance
+        type: Ptr
+      - name: tangents
+        type: Ptr
+      - name: styleRuns
+        type: Ptr
+      - name: glyphStyles
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x93
+
+- function:
+    name: GXDrawLine
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x94
+
+- function:
+    name: GXDrawPaths
+    args:
+      - name: data
+        type: Ptr
+      - name: fill
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x95
+
+- function:
+    name: GXDrawPicture
+    args:
+      - name: count
+        type: long
+      - name: shapes
+        type: Ptr
+      - name: styles
+        type: Ptr
+      - name: inks
+        type: Ptr
+      - name: transforms
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x96
+
+- function:
+    name: GXDrawPoint
+    args:
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x97
+
+- function:
+    name: GXDrawPolygons
+    args:
+      - name: data
+        type: Ptr
+      - name: fill
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x98
+
+- function:
+    name: GXDrawRectangle
+    args:
+      - name: data
+        type: Ptr
+      - name: fill
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x99
+
+- function:
+    name: GXDrawText
+    args:
+      - name: charCount
+        type: long
+      - name: text
+        type: Ptr
+      - name: position
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x9A
+
+- function:
+    name: GXNewColorProfile
+    return: long
+    args:
+      - name: size
+        type: long
+      - name: colorProfileData
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x9B
+
+- function:
+    name: GXNewColorSet
+    return: long
+    args:
+      - name: space
+        type: long
+      - name: count
+        type: long
+      - name: colors
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x9C
+
+- function:
+    name: GXNewInk
+    return: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x9D
+
+- function:
+    name: GXNewShape
+    return: long
+    args:
+      - name: aType
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x9E
+
+- function:
+    name: GXNewStyle
+    return: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x9F
+
+- function:
+    name: GXNewTag
+    return: long
+    args:
+      - name: tagType
+        type: long
+      - name: length
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA0
+
+- function:
+    name: GXNewTransform
+    return: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA1
+
+- function:
+    name: GXNewViewDevice
+    return: long
+    args:
+      - name: group
+        type: long
+      - name: bitmapShape
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA2
+
+- function:
+    name: GXNewViewGroup
+    return: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA3
+
+- function:
+    name: GXNewViewPort
+    return: long
+    args:
+      - name: group
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA4
+
+- function:
+    name: GXDisposeColorProfile
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA5
+
+- function:
+    name: GXDisposeColorSet
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA6
+
+- function:
+    name: GXDisposeInk
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA7
+
+- function:
+    name: GXDisposeShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA8
+
+- function:
+    name: GXDisposeStyle
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xA9
+
+- function:
+    name: GXDisposeTag
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xAA
+
+- function:
+    name: GXDisposeTransform
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xAB
+
+- function:
+    name: GXDisposeViewDevice
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xAC
+
+- function:
+    name: GXDisposeViewGroup
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xAD
+
+- function:
+    name: GXDisposeViewPort
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xAE
+
+- function:
+    name: GXCloneColorProfile
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xAF
+
+- function:
+    name: GXCloneColorSet
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB0
+
+- function:
+    name: GXCloneInk
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB1
+
+- function:
+    name: GXCloneShape
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB2
+
+- function:
+    name: GXCloneStyle
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB3
+
+- function:
+    name: GXCloneTag
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB4
+
+- function:
+    name: GXCloneTransform
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB5
+
+- function:
+    name: GXCopyToColorProfile
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB6
+
+- function:
+    name: GXCopyToColorSet
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB7
+
+- function:
+    name: GXCopyToInk
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB8
+
+- function:
+    name: GXCopyToShape
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xB9
+
+- function:
+    name: GXCopyToStyle
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xBA
+
+- function:
+    name: GXCopyToTag
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xBB
+
+- function:
+    name: GXCopyToTransform
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xBC
+
+- function:
+    name: GXCopyToViewDevice
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xBD
+
+- function:
+    name: GXCopyToViewPort
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xBE
+
+- function:
+    name: GXEqualColorProfile
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xBF
+
+- function:
+    name: GXEqualColorSet
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC0
+
+- function:
+    name: GXEqualInk
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC1
+
+- function:
+    name: GXEqualShape
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC2
+
+- function:
+    name: GXEqualStyle
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC3
+
+- function:
+    name: GXEqualTag
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC4
+
+- function:
+    name: GXEqualTransform
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC5
+
+- function:
+    name: GXEqualViewDevice
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC6
+
+- function:
+    name: GXEqualViewPort
+    return: Boolean
+    args:
+      - name: one
+        type: long
+      - name: two
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC7
+
+- function:
+    name: GXResetInk
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC8
+
+- function:
+    name: GXResetShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xC9
+
+- function:
+    name: GXResetStyle
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xCA
+
+- function:
+    name: GXResetTransform
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xCB
+
+- function:
+    name: GXLoadColorProfile
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xCC
+
+- function:
+    name: GXLoadColorSet
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xCD
+
+- function:
+    name: GXLoadInk
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xCE
+
+- function:
+    name: GXLoadShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xCF
+
+- function:
+    name: GXLoadStyle
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD0
+
+- function:
+    name: GXLoadTag
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD1
+
+- function:
+    name: GXLoadTransform
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD2
+
+- function:
+    name: GXUnloadColorProfile
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD3
+
+- function:
+    name: GXUnloadColorSet
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD4
+
+- function:
+    name: GXUnloadInk
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD5
+
+- function:
+    name: GXUnloadShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD6
+
+- function:
+    name: GXUnloadStyle
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD7
+
+- function:
+    name: GXUnloadTag
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD8
+
+- function:
+    name: GXUnloadTransform
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xD9
+
+- function:
+    name: GXCacheShape
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xDA
+
+- function:
+    name: GXCopyDeepToShape
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xDB
+
+- function:
+    name: GXDrawShape
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xDC
+
+- function:
+    name: GXDisposeShapeCache
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xDD
+
+- function:
+    name: GXGetDefaultColorProfile
+    return: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xDE
+
+- function:
+    name: GXGetDefaultShape
+    return: long
+    args:
+      - name: aType
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xDF
+
+- function:
+    name: GXGetDefaultColorSet
+    return: long
+    args:
+      - name: pixelDepth
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE0
+
+- function:
+    name: GXSetDefaultShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE1
+
+- function:
+    name: GXSetDefaultColorSet
+    args:
+      - name: target
+        type: long
+      - name: pixelDepth
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE2
+
+- function:
+    name: GXGetTag
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: Ptr
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE3
+
+- function:
+    name: GXSetTag
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: length
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE4
+
+- function:
+    name: GXGetShapeBounds
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: bounds
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE5
+
+- function:
+    name: GXGetShapeFill
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE6
+
+- function:
+    name: GXGetShapeInk
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE7
+
+- function:
+    name: GXGetShapePixel
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: x
+        type: long
+      - name: y
+        type: long
+      - name: data
+        type: Ptr
+      - name: index
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE8
+
+- function:
+    name: GXGetShapeStyle
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xE9
+
+- function:
+    name: GXGetShapeTransform
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xEA
+
+- function:
+    name: GXGetShapeType
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xEB
+
+- function:
+    name: GXGetShapeTypographicBounds
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: bounds
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xEC
+
+- function:
+    name: GXGetBitmapParts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: bounds
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xED
+
+- function:
+    name: GXGetStyleFontMetrics
+    args:
+      - name: sourceStyle
+        type: long
+      - name: before
+        type: Ptr
+      - name: after
+        type: Ptr
+      - name: caretAngle
+        type: Ptr
+      - name: caretOffset
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xEE
+
+- function:
+    name: GXGetShapeFontMetrics
+    args:
+      - name: source
+        type: long
+      - name: before
+        type: Ptr
+      - name: after
+        type: Ptr
+      - name: caretAngle
+        type: Ptr
+      - name: caretOffset
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xEF
+
+- function:
+    name: GXSetShapeBounds
+    args:
+      - name: target
+        type: long
+      - name: newBounds
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF0
+
+- function:
+    name: GXSetShapeFill
+    args:
+      - name: target
+        type: long
+      - name: newFill
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF1
+
+- function:
+    name: GXSetShapeInk
+    args:
+      - name: target
+        type: long
+      - name: newInk
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF2
+
+- function:
+    name: GXSetShapePixel
+    args:
+      - name: target
+        type: long
+      - name: x
+        type: long
+      - name: y
+        type: long
+      - name: newColor
+        type: Ptr
+      - name: newIndex
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF3
+
+- function:
+    name: GXSetShapeStyle
+    args:
+      - name: target
+        type: long
+      - name: newStyle
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF4
+
+- function:
+    name: GXSetShapeTransform
+    args:
+      - name: target
+        type: long
+      - name: newTransform
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF5
+
+- function:
+    name: GXSetShapeType
+    args:
+      - name: target
+        type: long
+      - name: newType
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF6
+
+- function:
+    name: GXSetBitmapParts
+    args:
+      - name: target
+        type: long
+      - name: bounds
+        type: Ptr
+      - name: bitmapShape
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF7
+
+- function:
+    name: GXSetShapeGeometry
+    args:
+      - name: target
+        type: long
+      - name: geometry
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF8
+
+- function:
+    name: GXGetShapeCurveError
+    return: Fixed
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xF9
+
+- function:
+    name: GXGetShapeDash
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: dash
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xFA
+
+- function:
+    name: GXGetShapeCap
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: cap
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xFB
+
+- function:
+    name: GXGetShapeFace
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: face
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xFC
+
+- function:
+    name: GXGetShapeFont
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0xFD
+
+- function:
+    name: GXGetShapeJoin
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: join
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0xFE
+
+- function:
+    name: GXGetShapePattern
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: pattern
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x100
+
+- function:
+    name: GXGetShapePen
+    return: Fixed
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x101
+
+- function:
+    name: GXGetShapeEncoding
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: script
+        type: Ptr
+      - name: language
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x102
+
+- function:
+    name: GXGetShapeTextSize
+    return: Fixed
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x103
+
+- function:
+    name: GXGetShapeFontVariations
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: variations
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x104
+
+- function:
+    name: GXGetShapeFontVariationSuite
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: variations
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x105
+
+- function:
+    name: GXGetStyleCurveError
+    return: Fixed
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x106
+
+- function:
+    name: GXGetStyleDash
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: dash
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x107
+
+- function:
+    name: GXGetStyleCap
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: cap
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x108
+
+- function:
+    name: GXGetStyleFace
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: face
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x109
+
+- function:
+    name: GXGetStyleFont
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x10A
+
+- function:
+    name: GXGetStyleJoin
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: join
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x10B
+
+- function:
+    name: GXGetStylePattern
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: pattern
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x10D
+
+- function:
+    name: GXGetStylePen
+    return: Fixed
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x10E
+
+- function:
+    name: GXGetStyleEncoding
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: script
+        type: Ptr
+      - name: language
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x10F
+
+- function:
+    name: GXGetStyleTextSize
+    return: Fixed
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x110
+
+- function:
+    name: GXGetStyleFontVariations
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: variations
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x111
+
+- function:
+    name: GXGetStyleFontVariationSuite
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: variations
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x112
+
+- function:
+    name: GXSetShapeCurveError
+    args:
+      - name: target
+        type: long
+      - name: error
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x113
+
+- function:
+    name: GXSetShapeDash
+    args:
+      - name: target
+        type: long
+      - name: dash
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x114
+
+- function:
+    name: GXSetShapeCap
+    args:
+      - name: target
+        type: long
+      - name: cap
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x115
+
+- function:
+    name: GXSetShapeFace
+    args:
+      - name: target
+        type: long
+      - name: face
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x116
+
+- function:
+    name: GXSetShapeFont
+    args:
+      - name: target
+        type: long
+      - name: aFont
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x117
+
+- function:
+    name: GXSetShapeJoin
+    args:
+      - name: target
+        type: long
+      - name: join
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x118
+
+- function:
+    name: GXSetShapePattern
+    args:
+      - name: target
+        type: long
+      - name: pattern
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x11A
+
+- function:
+    name: GXSetShapePen
+    args:
+      - name: target
+        type: long
+      - name: pen
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x11B
+
+- function:
+    name: GXSetShapeEncoding
+    args:
+      - name: target
+        type: long
+      - name: platform
+        type: long
+      - name: script
+        type: long
+      - name: language
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x11C
+
+- function:
+    name: GXSetShapeTextSize
+    args:
+      - name: target
+        type: long
+      - name: size
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x11D
+
+- function:
+    name: GXSetShapeFontVariations
+    args:
+      - name: target
+        type: long
+      - name: count
+        type: long
+      - name: variations
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x11E
+
+- function:
+    name: GXSetStyleCurveError
+    args:
+      - name: target
+        type: long
+      - name: error
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x11F
+
+- function:
+    name: GXSetStyleDash
+    args:
+      - name: target
+        type: long
+      - name: dash
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x120
+
+- function:
+    name: GXSetStyleCap
+    args:
+      - name: target
+        type: long
+      - name: cap
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x121
+
+- function:
+    name: GXSetStyleFace
+    args:
+      - name: target
+        type: long
+      - name: face
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x122
+
+- function:
+    name: GXSetStyleFont
+    args:
+      - name: target
+        type: long
+      - name: aFont
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x123
+
+- function:
+    name: GXSetStyleJoin
+    args:
+      - name: target
+        type: long
+      - name: join
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x124
+
+- function:
+    name: GXSetStylePattern
+    args:
+      - name: target
+        type: long
+      - name: pattern
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x126
+
+- function:
+    name: GXSetStylePen
+    args:
+      - name: target
+        type: long
+      - name: pen
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x127
+
+- function:
+    name: GXSetStyleEncoding
+    args:
+      - name: target
+        type: long
+      - name: platform
+        type: long
+      - name: script
+        type: long
+      - name: language
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x128
+
+- function:
+    name: GXSetStyleTextSize
+    args:
+      - name: target
+        type: long
+      - name: size
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x129
+
+- function:
+    name: GXSetStyleFontVariations
+    args:
+      - name: target
+        type: long
+      - name: count
+        type: long
+      - name: variations
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x12A
+
+- function:
+    name: GXGetShapeColor
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x12B
+
+- function:
+    name: GXGetShapeTransfer
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x12C
+
+- function:
+    name: GXGetInkColor
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x12D
+
+- function:
+    name: GXGetInkTransfer
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x12E
+
+- function:
+    name: GXSetShapeColor
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x12F
+
+- function:
+    name: GXSetShapeTransfer
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x130
+
+- function:
+    name: GXSetInkColor
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x131
+
+- function:
+    name: GXSetInkTransfer
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x132
+
+- function:
+    name: GXGetShapeClip
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x133
+
+- function:
+    name: GXGetShapeClipType
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x276
+
+- function:
+    name: GXGetShapeMapping
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x134
+
+- function:
+    name: GXGetShapeHitTest
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tolerance
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x135
+
+- function:
+    name: GXGetShapeViewPorts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x136
+
+- function:
+    name: GXGetTransformClip
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x137
+
+- function:
+    name: GXGetTransformClipType
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x277
+
+- function:
+    name: GXGetTransformMapping
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x138
+
+- function:
+    name: GXGetTransformHitTest
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tolerance
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x139
+
+- function:
+    name: GXGetTransformViewPorts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x13A
+
+- function:
+    name: GXSetShapeClip
+    args:
+      - name: target
+        type: long
+      - name: clip
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x13B
+
+- function:
+    name: GXSetShapeMapping
+    args:
+      - name: target
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x13C
+
+- function:
+    name: GXSetShapeHitTest
+    args:
+      - name: target
+        type: long
+      - name: mask
+        type: long
+      - name: tolerance
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x13D
+
+- function:
+    name: GXSetShapeViewPorts
+    args:
+      - name: target
+        type: long
+      - name: count
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x13E
+
+- function:
+    name: GXSetTransformClip
+    args:
+      - name: target
+        type: long
+      - name: clip
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x13F
+
+- function:
+    name: GXSetTransformMapping
+    args:
+      - name: target
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x140
+
+- function:
+    name: GXSetTransformHitTest
+    args:
+      - name: target
+        type: long
+      - name: mask
+        type: long
+      - name: tolerance
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x141
+
+- function:
+    name: GXSetTransformViewPorts
+    args:
+      - name: target
+        type: long
+      - name: count
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x142
+
+- function:
+    name: GXGetColorSet
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: space
+        type: Ptr
+      - name: colors
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x143
+
+- function:
+    name: GXGetColorProfile
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: colorProfileData
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x144
+
+- function:
+    name: GXSetColorSet
+    args:
+      - name: target
+        type: long
+      - name: space
+        type: long
+      - name: count
+        type: long
+      - name: colors
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x145
+
+- function:
+    name: GXSetColorProfile
+    args:
+      - name: target
+        type: long
+      - name: size
+        type: long
+      - name: colorProfileData
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x146
+
+- function:
+    name: GXGetViewDeviceBitmap
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x147
+
+- function:
+    name: GXGetViewDeviceClip
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x148
+
+- function:
+    name: GXGetViewDeviceMapping
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x149
+
+- function:
+    name: GXGetViewDeviceViewGroup
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x14A
+
+- function:
+    name: GXSetViewDeviceBitmap
+    args:
+      - name: target
+        type: long
+      - name: bitmapShape
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x14B
+
+- function:
+    name: GXSetViewDeviceClip
+    args:
+      - name: target
+        type: long
+      - name: clip
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x14C
+
+- function:
+    name: GXSetViewDeviceMapping
+    args:
+      - name: target
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x14D
+
+- function:
+    name: GXSetViewDeviceViewGroup
+    args:
+      - name: target
+        type: long
+      - name: group
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x14E
+
+- function:
+    name: GXGetViewPortChildren
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x14F
+
+- function:
+    name: GXGetViewPortClip
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x150
+
+- function:
+    name: GXGetViewPortDither
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x151
+
+- function:
+    name: GXGetViewPortHalftone
+    return: Boolean
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x152
+
+- function:
+    name: GXGetViewPortMapping
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x153
+
+- function:
+    name: GXGetViewPortParent
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x154
+
+- function:
+    name: GXGetViewPortViewGroup
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x155
+
+- function:
+    name: GXGetViewPortHalftoneMatrix
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: sourceDevice
+        type: long
+      - name: theMatrix
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x273
+
+- function:
+    name: GXSetViewPortChildren
+    args:
+      - name: target
+        type: long
+      - name: count
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x156
+
+- function:
+    name: GXSetViewPortClip
+    args:
+      - name: target
+        type: long
+      - name: clip
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x157
+
+- function:
+    name: GXSetViewPortDither
+    args:
+      - name: target
+        type: long
+      - name: level
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x158
+
+- function:
+    name: GXSetViewPortHalftone
+    args:
+      - name: target
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x159
+
+- function:
+    name: GXSetViewPortMapping
+    args:
+      - name: target
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x15A
+
+- function:
+    name: GXSetViewPortParent
+    args:
+      - name: target
+        type: long
+      - name: parent
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x15B
+
+- function:
+    name: GXSetViewPortViewGroup
+    args:
+      - name: target
+        type: long
+      - name: group
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x15C
+
+- function:
+    name: GXGetColorProfileTags
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x15D
+
+- function:
+    name: GXGetColorSetTags
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x15E
+
+- function:
+    name: GXGetInkTags
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x15F
+
+- function:
+    name: GXGetShapeTags
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x160
+
+- function:
+    name: GXGetStyleTags
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x161
+
+- function:
+    name: GXGetTransformTags
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x162
+
+- function:
+    name: GXGetViewDeviceTags
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x163
+
+- function:
+    name: GXGetViewPortTags
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x164
+
+- function:
+    name: GXSetColorProfileTags
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x165
+
+- function:
+    name: GXSetColorSetTags
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x166
+
+- function:
+    name: GXSetInkTags
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x167
+
+- function:
+    name: GXSetShapeTags
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x168
+
+- function:
+    name: GXSetStyleTags
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x169
+
+- function:
+    name: GXSetTransformTags
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x16A
+
+- function:
+    name: GXSetViewDeviceTags
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x16B
+
+- function:
+    name: GXSetViewPortTags
+    args:
+      - name: target
+        type: long
+      - name: tagType
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: items
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x16C
+
+- function:
+    name: GXGetInkAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x16D
+
+- function:
+    name: GXGetShapeAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x16E
+
+- function:
+    name: GXGetShapeInkAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x16F
+
+- function:
+    name: GXGetShapeStyleAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x170
+
+- function:
+    name: GXGetStyleAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x171
+
+- function:
+    name: GXGetShapeTextAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x172
+
+- function:
+    name: GXGetStyleTextAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x173
+
+- function:
+    name: GXGetViewDeviceAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x174
+
+- function:
+    name: GXGetViewPortAttributes
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x175
+
+- function:
+    name: GXSetInkAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x176
+
+- function:
+    name: GXSetShapeAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x177
+
+- function:
+    name: GXSetShapeInkAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x178
+
+- function:
+    name: GXSetShapeStyleAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x179
+
+- function:
+    name: GXSetStyleAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x17A
+
+- function:
+    name: GXSetShapeTextAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x17B
+
+- function:
+    name: GXSetStyleTextAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x17C
+
+- function:
+    name: GXSetViewDeviceAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x17D
+
+- function:
+    name: GXSetViewPortAttributes
+    args:
+      - name: target
+        type: long
+      - name: attributes
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x17E
+
+- function:
+    name: GXGetColorProfileOwners
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x17F
+
+- function:
+    name: GXGetColorSetOwners
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x180
+
+- function:
+    name: GXGetInkOwners
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x181
+
+- function:
+    name: GXGetShapeOwners
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x182
+
+- function:
+    name: GXGetStyleOwners
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x183
+
+- function:
+    name: GXGetTagOwners
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x184
+
+- function:
+    name: GXGetTransformOwners
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x185
+
+- function:
+    name: GXLockShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x186
+
+- function:
+    name: GXLockTag
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x187
+
+- function:
+    name: GXUnlockShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x188
+
+- function:
+    name: GXUnlockTag
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x189
+
+- function:
+    name: GXGetShapeStructure
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: length
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x18A
+
+- function:
+    name: GXGetTagStructure
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: length
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x18B
+
+- function:
+    name: GXGetColorDistance
+    return: Fixed
+    args:
+      - name: target
+        type: Ptr
+      - name: source
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x18C
+
+- function:
+    name: GXShapeLengthToPoint
+    return: Ptr
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: length
+        type: Fixed
+      - name: location
+        type: Ptr
+      - name: tangent
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x18D
+
+- function:
+    name: GXGetShapeArea
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: area
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x18E
+
+- function:
+    name: GXGetShapeCacheSize
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x18F
+
+- function:
+    name: GXGetShapeCenter
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: center
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x190
+
+- function:
+    name: GXGetShapeDirection
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: contour
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x191
+
+- function:
+    name: GXGetShapeIndex
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: contour
+        type: long
+      - name: vector
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x192
+
+- function:
+    name: GXGetShapeLength
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: length
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x193
+
+- function:
+    name: GXGetShapeSize
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x194
+
+- function:
+    name: GXCountShapeContours
+    return: long
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x195
+
+- function:
+    name: GXCountShapePoints
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: contour
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x196
+
+- function:
+    name: GXGetShapeDashPositions
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: dashMappings
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x197
+
+- function:
+    name: GXGetShapeDeviceArea
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: port
+        type: long
+      - name: device
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x198
+
+- function:
+    name: GXGetShapeDeviceBounds
+    return: Boolean
+    args:
+      - name: source
+        type: long
+      - name: port
+        type: long
+      - name: device
+        type: long
+      - name: bounds
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x199
+
+- function:
+    name: GXGetShapeDeviceColors
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: port
+        type: long
+      - name: device
+        type: long
+      - name: width
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x19A
+
+- function:
+    name: GXGetShapeGlobalBounds
+    return: Boolean
+    args:
+      - name: source
+        type: long
+      - name: port
+        type: long
+      - name: group
+        type: long
+      - name: bounds
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x19B
+
+- function:
+    name: GXGetShapeGlobalViewDevices
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: port
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x19C
+
+- function:
+    name: GXGetShapeGlobalViewPorts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x19D
+
+- function:
+    name: GXGetShapeLocalBounds
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: bounds
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x19E
+
+- function:
+    name: GXGetShapePatternPositions
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: positions
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x19F
+
+- function:
+    name: GXGetShapeLocalFontMetrics
+    args:
+      - name: sourceShape
+        type: long
+      - name: before
+        type: Ptr
+      - name: after
+        type: Ptr
+      - name: caretAngle
+        type: Ptr
+      - name: caretOffset
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A0
+
+- function:
+    name: GXGetShapeDeviceFontMetrics
+    args:
+      - name: sourceShape
+        type: long
+      - name: port
+        type: long
+      - name: device
+        type: long
+      - name: before
+        type: Ptr
+      - name: after
+        type: Ptr
+      - name: caretAngle
+        type: Ptr
+      - name: caretOffset
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A1
+
+- function:
+    name: GXGetViewGroupViewDevices
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A2
+
+- function:
+    name: GXGetViewGroupViewPorts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A3
+
+- function:
+    name: GXGetViewPortGlobalMapping
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A4
+
+- function:
+    name: GXGetViewPortViewDevices
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: list
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A5
+
+- function:
+    name: GXHitTestPicture
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: test
+        type: Ptr
+      - name: result
+        type: Ptr
+      - name: level
+        type: long
+      - name: depth
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A6
+
+- function:
+    name: GXIntersectRectangle
+    return: Boolean
+    args:
+      - name: target
+        type: Ptr
+      - name: source
+        type: Ptr
+      - name: operand
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A7
+
+- function:
+    name: GXUnionRectangle
+    return: Ptr
+    args:
+      - name: target
+        type: Ptr
+      - name: source
+        type: Ptr
+      - name: operand
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A8
+
+- function:
+    name: GXTouchesRectanglePoint
+    return: Boolean
+    args:
+      - name: target
+        type: Ptr
+      - name: test
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1A9
+
+- function:
+    name: GXTouchesShape
+    return: Boolean
+    args:
+      - name: target
+        type: long
+      - name: test
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1AA
+
+- function:
+    name: GXTouchesBoundsShape
+    return: Boolean
+    args:
+      - name: target
+        type: Ptr
+      - name: test
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1AB
+
+- function:
+    name: GXContainsRectangle
+    return: Boolean
+    args:
+      - name: container
+        type: Ptr
+      - name: test
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1AC
+
+- function:
+    name: GXContainsShape
+    return: Boolean
+    args:
+      - name: container
+        type: long
+      - name: test
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1AD
+
+- function:
+    name: GXContainsBoundsShape
+    return: Boolean
+    args:
+      - name: container
+        type: Ptr
+      - name: test
+        type: long
+      - name: index
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1AE
+
+- function:
+    name: GXConvertColor
+    return: Ptr
+    args:
+      - name: target
+        type: Ptr
+      - name: space
+        type: long
+      - name: aSet
+        type: long
+      - name: profile
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1AF
+
+- function:
+    name: GXCombineColor
+    return: Ptr
+    args:
+      - name: target
+        type: Ptr
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B0
+
+- function:
+    name: GXCheckColor
+    return: Boolean
+    args:
+      - name: source
+        type: Ptr
+      - name: space
+        type: long
+      - name: aSet
+        type: long
+      - name: profile
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B1
+
+- function:
+    name: GXCheckBitmapColor
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: area
+        type: Ptr
+      - name: space
+        type: long
+      - name: aSet
+        type: long
+      - name: profile
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B2
+
+- function:
+    name: GXGetHalftoneDeviceAngle
+    return: Fixed
+    args:
+      - name: source
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B3
+
+- function:
+    name: GXGetColorSetParts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: space
+        type: Ptr
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B4
+
+- function:
+    name: GXGetGlyphParts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: charCount
+        type: long
+      - name: byteLength
+        type: Ptr
+      - name: text
+        type: Ptr
+      - name: positions
+        type: Ptr
+      - name: advanceBits
+        type: Ptr
+      - name: tangents
+        type: Ptr
+      - name: runCount
+        type: Ptr
+      - name: styleRuns
+        type: Ptr
+      - name: styles
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B5
+
+- function:
+    name: GXGetPathParts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B6
+
+- function:
+    name: GXGetPictureParts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: shapes
+        type: Ptr
+      - name: styles
+        type: Ptr
+      - name: inks
+        type: Ptr
+      - name: transforms
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B7
+
+- function:
+    name: GXGetPolygonParts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B8
+
+- function:
+    name: GXGetShapeParts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: destination
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1B9
+
+- function:
+    name: GXGetTextParts
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: charCount
+        type: long
+      - name: text
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1BA
+
+- function:
+    name: GXSetColorSetParts
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1BB
+
+- function:
+    name: GXSetGlyphParts
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: oldCharCount
+        type: long
+      - name: newCharCount
+        type: long
+      - name: text
+        type: Ptr
+      - name: positions
+        type: Ptr
+      - name: advanceBits
+        type: Ptr
+      - name: tangents
+        type: Ptr
+      - name: styleRuns
+        type: Ptr
+      - name: styles
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1BC
+
+- function:
+    name: GXSetPathParts
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: data
+        type: Ptr
+      - name: flags
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1BD
+
+- function:
+    name: GXSetPictureParts
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: oldCount
+        type: long
+      - name: newCount
+        type: long
+      - name: shapes
+        type: Ptr
+      - name: styles
+        type: Ptr
+      - name: inks
+        type: Ptr
+      - name: transforms
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1BE
+
+- function:
+    name: GXSetPolygonParts
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: data
+        type: Ptr
+      - name: flags
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1BF
+
+- function:
+    name: GXSetShapeParts
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: insert
+        type: long
+      - name: flags
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C0
+
+- function:
+    name: GXSetTextParts
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: oldCharCount
+        type: long
+      - name: newCharCount
+        type: long
+      - name: text
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C1
+
+- function:
+    name: GXGetShapePoints
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C2
+
+- function:
+    name: GXSetShapePoints
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: count
+        type: long
+      - name: data
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C3
+
+- function:
+    name: GXGetGlyphPositions
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: charCount
+        type: long
+      - name: advance
+        type: Ptr
+      - name: positions
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C4
+
+- function:
+    name: GXGetGlyphTangents
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: index
+        type: long
+      - name: charCount
+        type: long
+      - name: tangents
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C5
+
+- function:
+    name: GXSetGlyphPositions
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: charCount
+        type: long
+      - name: advance
+        type: Ptr
+      - name: positions
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C6
+
+- function:
+    name: GXSetGlyphTangents
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+      - name: charCount
+        type: long
+      - name: tangents
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C7
+
+- function:
+    name: GXGetGlyphMetrics
+    return: long
+    args:
+      - name: source
+        type: long
+      - name: glyphOrigins
+        type: Ptr
+      - name: boundingBoxes
+        type: Ptr
+      - name: sideBearings
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C8
+
+- function:
+    name: GXDifferenceShape
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1C9
+
+- function:
+    name: GXExcludeShape
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1CA
+
+- function:
+    name: GXIntersectShape
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1CB
+
+- function:
+    name: GXMapShape
+    args:
+      - name: target
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1CC
+
+- function:
+    name: GXMoveShape
+    args:
+      - name: target
+        type: long
+      - name: deltaX
+        type: Fixed
+      - name: deltaY
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1CD
+
+- function:
+    name: GXMoveShapeTo
+    args:
+      - name: target
+        type: long
+      - name: x
+        type: Fixed
+      - name: y
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1CE
+
+- function:
+    name: GXReverseDifferenceShape
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1CF
+
+- function:
+    name: GXRotateShape
+    args:
+      - name: target
+        type: long
+      - name: degrees
+        type: Fixed
+      - name: xOffset
+        type: Fixed
+      - name: yOffset
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D0
+
+- function:
+    name: GXScaleShape
+    args:
+      - name: target
+        type: long
+      - name: hScale
+        type: Fixed
+      - name: vScale
+        type: Fixed
+      - name: xOffset
+        type: Fixed
+      - name: yOffset
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D1
+
+- function:
+    name: GXSkewShape
+    args:
+      - name: target
+        type: long
+      - name: xSkew
+        type: Fixed
+      - name: ySkew
+        type: Fixed
+      - name: xOffset
+        type: Fixed
+      - name: yOffset
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D2
+
+- function:
+    name: GXUnionShape
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D3
+
+- function:
+    name: GXDifferenceTransform
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D4
+
+- function:
+    name: GXExcludeTransform
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D5
+
+- function:
+    name: GXIntersectTransform
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D6
+
+- function:
+    name: GXMapTransform
+    args:
+      - name: target
+        type: long
+      - name: map
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D7
+
+- function:
+    name: GXMoveTransform
+    args:
+      - name: target
+        type: long
+      - name: deltaX
+        type: Fixed
+      - name: deltaY
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D8
+
+- function:
+    name: GXMoveTransformTo
+    args:
+      - name: target
+        type: long
+      - name: x
+        type: Fixed
+      - name: y
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1D9
+
+- function:
+    name: GXReverseDifferenceTransform
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1DA
+
+- function:
+    name: GXRotateTransform
+    args:
+      - name: target
+        type: long
+      - name: degrees
+        type: Fixed
+      - name: xOffset
+        type: Fixed
+      - name: yOffset
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1DB
+
+- function:
+    name: GXScaleTransform
+    args:
+      - name: target
+        type: long
+      - name: hScale
+        type: Fixed
+      - name: vScale
+        type: Fixed
+      - name: xOffset
+        type: Fixed
+      - name: yOffset
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1DC
+
+- function:
+    name: GXSkewTransform
+    args:
+      - name: target
+        type: long
+      - name: xSkew
+        type: Fixed
+      - name: ySkew
+        type: Fixed
+      - name: xOffset
+        type: Fixed
+      - name: yOffset
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1DD
+
+- function:
+    name: GXUnionTransform
+    args:
+      - name: target
+        type: long
+      - name: operand
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1DE
+
+- function:
+    name: GXBreakShape
+    args:
+      - name: target
+        type: long
+      - name: index
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1DF
+
+- function:
+    name: GXChangedShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E0
+
+- function:
+    name: GXHitTestShape
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: test
+        type: Ptr
+      - name: result
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E1
+
+- function:
+    name: GXHitTestDevice
+    return: long
+    args:
+      - name: target
+        type: long
+      - name: port
+        type: long
+      - name: device
+        type: long
+      - name: test
+        type: Ptr
+      - name: tolerance
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E2
+
+- function:
+    name: GXInsetShape
+    args:
+      - name: target
+        type: long
+      - name: inset
+        type: Fixed
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E3
+
+- function:
+    name: GXInvertShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E4
+
+- function:
+    name: GXPrimitiveShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E5
+
+- function:
+    name: GXReduceShape
+    args:
+      - name: target
+        type: long
+      - name: contour
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E6
+
+- function:
+    name: GXReverseShape
+    args:
+      - name: target
+        type: long
+      - name: contour
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E7
+
+- function:
+    name: GXSimplifyShape
+    args:
+      - name: target
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E8
+
+- function:
+    name: GXLockColorProfile
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1E9
+
+- function:
+    name: GXUnlockColorProfile
+    args:
+      - name: source
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1EA
+
+- function:
+    name: GXGetColorProfileStructure
+    return: Ptr
+    args:
+      - name: source
+        type: long
+      - name: length
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1EB
+
+- function:
+    name: GXFlattenShape
+    args:
+      - name: source
+        type: long
+      - name: flags
+        type: long
+      - name: block
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1EC
+
+- function:
+    name: GXUnflattenShape
+    return: long
+    args:
+      - name: block
+        type: Ptr
+      - name: count
+        type: long
+      - name: portList
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x1ED
+
+- function:
+    name: GXPostGraphicsNotice
+    args:
+      - name: notice
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x65
+
+- function:
+    name: GXIgnoreGraphicsNotice
+    args:
+      - name: notice
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x6D
+
+- function:
+    name: GXPopGraphicsNotice
+    dispatcher: GXGraphicsDispatch
+    selector: 0x6E
+
+- function:
+    name: GXGetGraphicsPollingHandler
+    return: Ptr
+    args:
+      - name: reference
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x245
+
+- function:
+    name: GXSetGraphicsPollingHandler
+    args:
+      - name: handler
+        type: Ptr
+      - name: reference
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x246
+
+- function:
+    name: GXNewWindowViewPort
+    return: long
+    args:
+      - name: qdWindow
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x236
+
+- function:
+    name: GXGetWindowViewPort
+    return: long
+    args:
+      - name: qdWindow
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x237
+
+- function:
+    name: GXGetViewPortWindow
+    return: Ptr
+    args:
+      - name: portOrder
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x238
+
+- function:
+    name: GXConvertQDPoint
+    args:
+      - name: shortPt
+        type: Ptr
+      - name: portOrder
+        type: long
+      - name: fixedPt
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x23B
+
+- function:
+    name: GXGetGlobalMouse
+    args:
+      - name: globalPt
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x23C
+
+- function:
+    name: GXGetViewPortMouse
+    args:
+      - name: portOrder
+        type: long
+      - name: localPt
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x23D
+
+- function:
+    name: GXGetViewPortFilter
+    return: Ptr
+    args:
+      - name: portOrder
+        type: long
+      - name: refCon
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x25E
+
+- function:
+    name: GXSetViewPortFilter
+    args:
+      - name: portOrder
+        type: long
+      - name: filter
+        type: Ptr
+      - name: refCon
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x23E
+
+- function:
+    name: GXInstallQDTranslator
+    args:
+      - name: port
+        type: Ptr
+      - name: options
+        type: long
+      - name: srcRect
+        type: Ptr
+      - name: dstRect
+        type: Ptr
+      - name: styleStrech
+        type: Point
+      - name: userFunction
+        type: Ptr
+      - name: reference
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x23F
+
+- function:
+    name: GXRemoveQDTranslator
+    return: long
+    args:
+      - name: port
+        type: Ptr
+      - name: statistic
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x240
+
+- function:
+    name: GXConvertPICTToShape
+    return: long
+    args:
+      - name: pict
+        type: Ptr
+      - name: options
+        type: long
+      - name: srcRect
+        type: Ptr
+      - name: dstRect
+        type: Ptr
+      - name: styleStretch
+        type: Point
+      - name: destination
+        type: long
+      - name: stats
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x241
+
+- function:
+    name: GXConvertQDFont
+    return: long
+    args:
+      - name: theStyle
+        type: long
+      - name: txFont
+        type: long
+      - name: txFace
+        type: long
+    dispatcher: GXGraphicsDispatch
+    selector: 0x242
+
+- function:
+    name: GXGetConvertQDFont
+    return: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x243
+
+- function:
+    name: GXSetConvertQDFont
+    args:
+      - name: userFunction
+        type: Ptr
+    dispatcher: GXGraphicsDispatch
+    selector: 0x244
+
+- function:
+    name: GXInitPrinting
+    return: OSErr
+    dispatcher: GXPrintingDispatch
+    selector: 0x0
+
+- function:
+    name: GXExitPrinting
+    return: OSErr
+    dispatcher: GXPrintingDispatch
+    selector: 0x1
+
+- function:
+    name: GXGetJobError
+    return: OSErr
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0xE
+
+- function:
+    name: GXSetJobError
+    args:
+      - name: aJob
+        type: long
+      - name: anErr
+        type: OSErr
+    dispatcher: GXPrintingDispatch
+    selector: 0xF
+
+- function:
+    name: GXNewJob
+    return: OSErr
+    args:
+      - name: aJob
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x2
+
+- function:
+    name: GXDisposeJob
+    return: OSErr
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x3
+
+- function:
+    name: GXFlattenJob
+    args:
+      - name: aJob
+        type: long
+      - name: flattenProc
+        type: Ptr
+      - name: aVoid
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x4
+
+- function:
+    name: GXUnflattenJob
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: flattenProc
+        type: Ptr
+      - name: aVoid
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x5
+
+- function:
+    name: GXFlattenJobToHdl
+    return: Ptr
+    args:
+      - name: aJob
+        type: long
+      - name: aHdl
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x6
+
+- function:
+    name: GXUnflattenJobFromHdl
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: aHdl
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x7
+
+- function:
+    name: GXInstallApplicationOverride
+    args:
+      - name: aJob
+        type: long
+      - name: messageID
+        type: short
+      - name: override
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x8
+
+- function:
+    name: GXGetJobCollection
+    return: Ptr
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x1D
+
+- function:
+    name: GXGetJobRefCon
+    return: Ptr
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x1E
+
+- function:
+    name: GXSetJobRefCon
+    args:
+      - name: aJob
+        type: long
+      - name: refCon
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x1F
+
+- function:
+    name: GXCopyJob
+    return: long
+    args:
+      - name: srcJob
+        type: long
+      - name: dstJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x20
+
+- function:
+    name: GXSelectJobFormattingPrinter
+    args:
+      - name: aJob
+        type: long
+      - name: printerName
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x21
+
+- function:
+    name: GXSelectJobOutputPrinter
+    args:
+      - name: aJob
+        type: long
+      - name: printerName
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x22
+
+- function:
+    name: GXForEachJobFormatDo
+    args:
+      - name: aJob
+        type: long
+      - name: formatProc
+        type: Ptr
+      - name: refCon
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x23
+
+- function:
+    name: GXCountJobFormats
+    return: long
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x24
+
+- function:
+    name: GXUpdateJob
+    return: Boolean
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x25
+
+- function:
+    name: GXIdleJob
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x57
+
+- function:
+    name: GXSetAvailableJobFormatModes
+    args:
+      - name: aJob
+        type: long
+      - name: formatModeTable
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x3B
+
+- function:
+    name: GXGetPreferredJobFormatMode
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: directOnly
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x3C
+
+- function:
+    name: GXGetJobFormatMode
+    return: long
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x3D
+
+- function:
+    name: GXSetJobFormatMode
+    args:
+      - name: aJob
+        type: long
+      - name: formatMode
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x3E
+
+- function:
+    name: GXJobFormatModeQuery
+    args:
+      - name: aJob
+        type: long
+      - name: aQueryType
+        type: long
+      - name: srcData
+        type: Ptr
+      - name: dstData
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x3F
+
+- function:
+    name: GXNewFormat
+    return: long
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x9
+
+- function:
+    name: GXDisposeFormat
+    args:
+      - name: aFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0xA
+
+- function:
+    name: GXGetJobFormat
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: whichFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x13
+
+- function:
+    name: GXGetFormatJob
+    return: long
+    args:
+      - name: aFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x14
+
+- function:
+    name: GXGetFormatPaperType
+    return: long
+    args:
+      - name: aFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x15
+
+- function:
+    name: GXGetFormatDimensions
+    args:
+      - name: aFormat
+        type: long
+      - name: pageSize
+        type: Ptr
+      - name: paperSize
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x16
+
+- function:
+    name: GXGetFormatCollection
+    return: Ptr
+    args:
+      - name: aFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x33
+
+- function:
+    name: GXChangedFormat
+    args:
+      - name: aFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x34
+
+- function:
+    name: GXCopyFormat
+    return: long
+    args:
+      - name: srcFormat
+        type: long
+      - name: dstFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x35
+
+- function:
+    name: GXCloneFormat
+    return: long
+    args:
+      - name: aFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x36
+
+- function:
+    name: GXCountFormatOwners
+    return: long
+    args:
+      - name: aFormat
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x37
+
+- function:
+    name: GXGetFormatMapping
+    args:
+      - name: aFormat
+        type: long
+      - name: fmtMapping
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x38
+
+- function:
+    name: GXGetFormatForm
+    return: long
+    args:
+      - name: aFormat
+        type: long
+      - name: mask
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x39
+
+- function:
+    name: GXSetFormatForm
+    args:
+      - name: aFormat
+        type: long
+      - name: form
+        type: long
+      - name: mask
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x3A
+
+- function:
+    name: GXNewPaperType
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: name
+        type: Ptr
+      - name: pageSize
+        type: Ptr
+      - name: paperSize
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0xB
+
+- function:
+    name: GXDisposePaperType
+    args:
+      - name: aPaperType
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0xC
+
+- function:
+    name: GXGetNewPaperType
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: resID
+        type: short
+    dispatcher: GXPrintingDispatch
+    selector: 0xD
+
+- function:
+    name: GXCountJobPaperTypes
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: forFormatDevice
+        type: Boolean
+    dispatcher: GXPrintingDispatch
+    selector: 0x42
+
+- function:
+    name: GXGetJobPaperType
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: whichPaperType
+        type: long
+      - name: forFormatDevice
+        type: Boolean
+      - name: aPaperType
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x43
+
+- function:
+    name: GXForEachJobPaperTypeDo
+    args:
+      - name: aJob
+        type: long
+      - name: aProc
+        type: Ptr
+      - name: refCon
+        type: Ptr
+      - name: forFormattingPrinter
+        type: Boolean
+    dispatcher: GXPrintingDispatch
+    selector: 0x44
+
+- function:
+    name: GXCopyPaperType
+    return: long
+    args:
+      - name: srcPaperType
+        type: long
+      - name: dstPaperType
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x45
+
+- function:
+    name: GXGetPaperTypeName
+    args:
+      - name: aPaperType
+        type: long
+      - name: papertypeName
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x46
+
+- function:
+    name: GXGetPaperTypeDimensions
+    args:
+      - name: aPaperType
+        type: long
+      - name: pageSize
+        type: Ptr
+      - name: paperSize
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x47
+
+- function:
+    name: GXGetPaperTypeJob
+    return: long
+    args:
+      - name: aPaperType
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x48
+
+- function:
+    name: GXGetPaperTypeCollection
+    return: Ptr
+    args:
+      - name: aPaperType
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x49
+
+- function:
+    name: GXGetJobFormattingPrinter
+    return: long
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x27
+
+- function:
+    name: GXGetJobOutputPrinter
+    return: long
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x28
+
+- function:
+    name: GXGetJobPrinter
+    return: long
+    args:
+      - name: aJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x29
+
+- function:
+    name: GXGetPrinterJob
+    return: long
+    args:
+      - name: aPrinter
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x2A
+
+- function:
+    name: GXForEachPrinterViewDeviceDo
+    args:
+      - name: aPrinter
+        type: long
+      - name: aProc
+        type: Ptr
+      - name: refCon
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x2B
+
+- function:
+    name: GXCountPrinterViewDevices
+    return: long
+    args:
+      - name: aPrinter
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x2C
+
+- function:
+    name: GXGetPrinterViewDevice
+    return: long
+    args:
+      - name: aPrinter
+        type: long
+      - name: whichViewDevice
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x2D
+
+- function:
+    name: GXSelectPrinterViewDevice
+    args:
+      - name: aPrinter
+        type: long
+      - name: whichViewDevice
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x2E
+
+- function:
+    name: GXGetPrinterName
+    args:
+      - name: aPrinter
+        type: long
+      - name: printerName
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x2F
+
+- function:
+    name: GXGetPrinterType
+    return: OSType
+    args:
+      - name: aPrinter
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x30
+
+- function:
+    name: GXGetPrinterDriverName
+    args:
+      - name: aPrinter
+        type: long
+      - name: driverName
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x31
+
+- function:
+    name: GXGetPrinterDriverType
+    return: OSType
+    args:
+      - name: aPrinter
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x32
+
+- function:
+    name: GXJobDefaultFormatDialog
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: anEditMenuRec
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x10
+
+- function:
+    name: GXJobPrintDialog
+    return: long
+    args:
+      - name: aJob
+        type: long
+      - name: anEditMenuRec
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x11
+
+- function:
+    name: GXFormatDialog
+    return: long
+    args:
+      - name: aFormat
+        type: long
+      - name: anEditMenuRec
+        type: Ptr
+      - name: title
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x12
+
+- function:
+    name: GXEnableJobScalingPanel
+    args:
+      - name: aJob
+        type: long
+      - name: enabled
+        type: Boolean
+    dispatcher: GXPrintingDispatch
+    selector: 0x40
+
+- function:
+    name: GXGetJobPanelDimensions
+    args:
+      - name: aJob
+        type: long
+      - name: panelArea
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x41
+
+- function:
+    name: GXGetJobPageRange
+    args:
+      - name: theJob
+        type: long
+      - name: firstPage
+        type: Ptr
+      - name: lastPage
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x17
+
+- function:
+    name: GXStartJob
+    args:
+      - name: theJob
+        type: long
+      - name: docName
+        type: Ptr
+      - name: pageCount
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x18
+
+- function:
+    name: GXPrintPage
+    args:
+      - name: theJob
+        type: long
+      - name: pageNumber
+        type: long
+      - name: theFormat
+        type: long
+      - name: thePage
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x19
+
+- function:
+    name: GXStartPage
+    return: Boolean
+    args:
+      - name: theJob
+        type: long
+      - name: pageNumber
+        type: long
+      - name: theFormat
+        type: long
+      - name: numViewPorts
+        type: long
+      - name: viewPortList
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x1A
+
+- function:
+    name: GXFinishPage
+    args:
+      - name: theJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x1B
+
+- function:
+    name: GXFinishJob
+    args:
+      - name: theJob
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x1C
+
+- function:
+    name: GXOpenPrintFile
+    return: long
+    args:
+      - name: theJob
+        type: long
+      - name: anFSSpec
+        type: Ptr
+      - name: permission
+        type: char
+    dispatcher: GXPrintingDispatch
+    selector: 0x4A
+
+- function:
+    name: GXClosePrintFile
+    args:
+      - name: aPrintFile
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x4B
+
+- function:
+    name: GXGetPrintFileJob
+    return: long
+    args:
+      - name: aPrintFile
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x4C
+
+- function:
+    name: GXCountPrintFilePages
+    return: long
+    args:
+      - name: aPrintFile
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x4D
+
+- function:
+    name: GXReadPrintFilePage
+    args:
+      - name: aPrintFile
+        type: long
+      - name: pageNumber
+        type: long
+      - name: numViewPorts
+        type: long
+      - name: viewPortList
+        type: Ptr
+      - name: pgFormat
+        type: Ptr
+      - name: pgShape
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x4E
+
+- function:
+    name: GXReplacePrintFilePage
+    args:
+      - name: aPrintFile
+        type: long
+      - name: pageNumber
+        type: long
+      - name: aFormat
+        type: long
+      - name: aShape
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x4F
+
+- function:
+    name: GXInsertPrintFilePage
+    args:
+      - name: aPrintFile
+        type: long
+      - name: atPageNumber
+        type: long
+      - name: pgFormat
+        type: long
+      - name: pgShape
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x50
+
+- function:
+    name: GXDeletePrintFilePageRange
+    args:
+      - name: aPrintFile
+        type: long
+      - name: fromPageNumber
+        type: long
+      - name: toPageNumber
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x51
+
+- function:
+    name: GXSavePrintFile
+    args:
+      - name: aPrintFile
+        type: long
+      - name: anFSSpec
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x52
+
+- function:
+    name: GXFindPrinterProfile
+    return: long
+    args:
+      - name: aPrinter
+        type: long
+      - name: searchData
+        type: Ptr
+      - name: index
+        type: long
+      - name: returnedProfile
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x53
+
+- function:
+    name: GXFindFormatProfile
+    return: long
+    args:
+      - name: aFormat
+        type: long
+      - name: searchData
+        type: Ptr
+      - name: index
+        type: long
+      - name: returnedProfile
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x54
+
+- function:
+    name: GXSetPrinterProfile
+    args:
+      - name: aPrinter
+        type: long
+      - name: oldProfile
+        type: long
+      - name: newProfile
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x55
+
+- function:
+    name: GXSetFormatProfile
+    args:
+      - name: aFormat
+        type: long
+      - name: oldProfile
+        type: long
+      - name: newProfile
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x56
+
+- function:
+    name: GXGetJob
+    return: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x10001
+
+- function:
+    name: GXGetMessageHandlerResFile
+    return: short
+    dispatcher: GXPrintingDispatch
+    selector: 0x10002
+
+- function:
+    name: GXSpoolingAborted
+    return: Boolean
+    dispatcher: GXPrintingDispatch
+    selector: 0x10003
+
+- function:
+    name: GXJobIdle
+    return: OSErr
+    dispatcher: GXPrintingDispatch
+    selector: 0x10004
+
+- function:
+    name: GXReportStatus
+    return: OSErr
+    args:
+      - name: statusID
+        type: long
+      - name: statusIndex
+        type: unsigned long
+    dispatcher: GXPrintingDispatch
+    selector: 0x10005
+
+- function:
+    name: GXAlertTheUser
+    return: OSErr
+    args:
+      - name: statusRec
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x10006
+
+- function:
+    name: GXSetupDialogPanel
+    return: OSErr
+    args:
+      - name: panelRec
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x10007
+
+- function:
+    name: GXCountTrays
+    return: OSErr
+    args:
+      - name: numTrays
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x10008
+
+- function:
+    name: GXGetTrayName
+    return: OSErr
+    args:
+      - name: trayNumber
+        type: long
+      - name: trayName
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x10009
+
+- function:
+    name: GXSetTrayPaperType
+    return: OSErr
+    args:
+      - name: whichTray
+        type: long
+      - name: aPapertype
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x1000A
+
+- function:
+    name: GXGetTrayPaperType
+    return: OSErr
+    args:
+      - name: whichTray
+        type: long
+      - name: aPapertype
+        type: long
+    dispatcher: GXPrintingDispatch
+    selector: 0x1000B
+
+- function:
+    name: GXGetTrayMapping
+    return: OSErr
+    args:
+      - name: trayMapping
+        type: Ptr
+    dispatcher: GXPrintingDispatch
+    selector: 0x1000C
+
+- function:
+    name: GXCleanupStartJob
+    dispatcher: GXPrintingDispatch
+    selector: 0x1000D
+
+- function:
+    name: GXCleanupStartPage
+    dispatcher: GXPrintingDispatch
+    selector: 0x1000E
+
+- function:
+    name: GXCleanupOpenConnection
+    dispatcher: GXPrintingDispatch
+    selector: 0x1000F
+
+- function:
+    name: GXCleanupStartSendPage
+    dispatcher: GXPrintingDispatch
+    selector: 0x10010
+
+- function:
+    name: NewCollection
+    return: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x0
+
+- function:
+    name: DisposeCollection
+    args:
+      - name: c
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x1
+
+- function:
+    name: CloneCollection
+    return: Ptr
+    args:
+      - name: c
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x2
+
+- function:
+    name: CountCollectionOwners
+    return: long
+    args:
+      - name: c
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x3
+
+- function:
+    name: CopyCollection
+    return: Ptr
+    args:
+      - name: srcCollection
+        type: Ptr
+      - name: dstCollection
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x4
+
+- function:
+    name: GetCollectionDefaultAttributes
+    return: long
+    args:
+      - name: c
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x5
+
+- function:
+    name: SetCollectionDefaultAttributes
+    args:
+      - name: c
+        type: Ptr
+      - name: whichAttributes
+        type: long
+      - name: newAttributes
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0x6
+
+- function:
+    name: CountCollectionItems
+    return: long
+    args:
+      - name: c
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x7
+
+- function:
+    name: AddCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+      - name: id
+        type: long
+      - name: itemSize
+        type: long
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x8
+
+- function:
+    name: GetCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+      - name: id
+        type: long
+      - name: itemSize
+        type: Ptr
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x9
+
+- function:
+    name: RemoveCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+      - name: id
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0xA
+
+- function:
+    name: SetCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+      - name: id
+        type: long
+      - name: whichAttributes
+        type: long
+      - name: newAttributes
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0xB
+
+- function:
+    name: GetCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+      - name: id
+        type: long
+      - name: index
+        type: Ptr
+      - name: itemSize
+        type: Ptr
+      - name: attributes
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0xC
+
+- function:
+    name: ReplaceIndexedCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: index
+        type: long
+      - name: itemSize
+        type: long
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0xD
+
+- function:
+    name: GetIndexedCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: index
+        type: long
+      - name: itemSize
+        type: Ptr
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0xE
+
+- function:
+    name: RemoveIndexedCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: index
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0xF
+
+- function:
+    name: SetIndexedCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: index
+        type: long
+      - name: whichAttributes
+        type: long
+      - name: newAttributes
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0x10
+
+- function:
+    name: GetIndexedCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: index
+        type: long
+      - name: tag
+        type: Ptr
+      - name: id
+        type: Ptr
+      - name: itemSize
+        type: Ptr
+      - name: attributes
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x11
+
+- function:
+    name: CollectionTagExists
+    return: Boolean
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0x12
+
+- function:
+    name: CountCollectionTags
+    return: long
+    args:
+      - name: c
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x13
+
+- function:
+    name: GetIndexedCollectionTag
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: tagIndex
+        type: long
+      - name: tag
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x14
+
+- function:
+    name: CountTaggedCollectionItems
+    return: long
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0x15
+
+- function:
+    name: GetTaggedCollectionItem
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+      - name: whichItem
+        type: long
+      - name: itemSize
+        type: Ptr
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x16
+
+- function:
+    name: GetTaggedCollectionItemInfo
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+      - name: whichItem
+        type: long
+      - name: id
+        type: Ptr
+      - name: index
+        type: Ptr
+      - name: itemSize
+        type: Ptr
+      - name: attributes
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x17
+
+- function:
+    name: PurgeCollection
+    args:
+      - name: c
+        type: Ptr
+      - name: whichAttributes
+        type: long
+      - name: matchingAttributes
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0x18
+
+- function:
+    name: PurgeCollectionTag
+    args:
+      - name: c
+        type: Ptr
+      - name: tag
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0x19
+
+- function:
+    name: EmptyCollection
+    args:
+      - name: c
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x1A
+
+- function:
+    name: FlattenCollection
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: flattenProc
+        type: Ptr
+      - name: refCon
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x1B
+
+- function:
+    name: FlattenPartialCollection
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: flattenProc
+        type: Ptr
+      - name: refCon
+        type: Ptr
+      - name: whichAttributes
+        type: long
+      - name: matchingAttributes
+        type: long
+    dispatcher: CollectionDispatch
+    selector: 0x1C
+
+- function:
+    name: UnflattenCollection
+    return: OSErr
+    args:
+      - name: c
+        type: Ptr
+      - name: flattenProc
+        type: Ptr
+      - name: refCon
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x1D
+
+- function:
+    name: GetCollectionExceptionProc
+    return: Ptr
+    args:
+      - name: c
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x1E
+
+- function:
+    name: SetCollectionExceptionProc
+    args:
+      - name: c
+        type: Ptr
+      - name: exceptionProc
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x1F
+
+- function:
+    name: GetNewCollection
+    return: Ptr
+    args:
+      - name: collectionID
+        type: short
+    dispatcher: CollectionDispatch
+    selector: 0x20
+
+- function:
+    name: AddCollectionItemHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Ptr
+      - name: tag
+        type: long
+      - name: id
+        type: long
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x21
+
+- function:
+    name: GetCollectionItemHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Ptr
+      - name: tag
+        type: long
+      - name: id
+        type: long
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x22
+
+- function:
+    name: ReplaceIndexedCollectionItemHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Ptr
+      - name: index
+        type: long
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x23
+
+- function:
+    name: GetIndexedCollectionItemHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Ptr
+      - name: index
+        type: long
+      - name: itemData
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x24
+
+- function:
+    name: FlattenCollectionToHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Ptr
+      - name: flattened
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x25
+
+- function:
+    name: UnflattenCollectionFromHdl
+    return: OSErr
+    args:
+      - name: aCollection
+        type: Ptr
+      - name: flattened
+        type: Ptr
+    dispatcher: CollectionDispatch
+    selector: 0x26

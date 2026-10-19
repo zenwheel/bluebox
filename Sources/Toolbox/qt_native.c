@@ -9,6 +9,11 @@
  * into MIDI events (qt_music.c), which the Movie Toolbox sends to the host's
  * General MIDI synthesizer a little ahead of the clock.
  *
+ * Text and sprite tracks (qt_text.c, qt_sprite.c) draw into pictures of
+ * their own, which are composited with the video frame in the movie's
+ * frame: each track's box (its tkhd size) through its matrix, the higher
+ * layers behind.  A movie with them is as big as its tracks reach.
+ *
  * Sample tables: stsd (descriptions), stts (durations), stss (key frames),
  * stsc (samples per chunk), stsz (sizes), stco/co64 (chunk offsets).  Sound
  * samples are frames, and a chunk's bytes follow from its frame count and
@@ -21,8 +26,11 @@
 #include "qt_codec.h"
 #include "qt_music.h"
 #include "qt_native.h"
+#include "qt_sprite.h"
+#include "qt_text.h"
 
 #define MAX_DESCS 8
+#define MAX_VISUAL 8
 
 typedef struct {
     int64_t movie_start, movie_len; /* in the movie's time scale */
@@ -49,6 +57,9 @@ typedef struct {
     /* music: the tune header (the description's events) */
     uint8_t *tune_header;
     uint32_t tune_header_len;
+    /* text and sprites: the first sample description, whole */
+    uint8_t *raw_desc;
+    uint32_t raw_desc_len;
     /* sound: chunks of frames */
     qt_sound_format sf;
     uint32_t nchunks;
@@ -57,10 +68,33 @@ typedef struct {
     uint32_t *chunk_frames;
 } trak;
 
+/* A track that draws: where its picture goes in the movie's frame. */
+typedef struct {
+    int kind;                       /* VIDEO, TEXT or SPRITE */
+    trak *t;
+    int16_t layer;
+    double a, b, c, d, tx, ty;      /* the track's matrix */
+    int tw, th;                     /* its size */
+    qt_text *text;
+    qt_sprite *sprite;
+    int64_t shown;                  /* the sample in the picture, -1 none */
+    int64_t key, applied;           /* sprites: the key frame read, the last override applied */
+    uint8_t *rgba;                  /* text and sprites: tw x th */
+    bool drawn;
+} visual;
+
 struct qt_native {
     FILE *fp;
     int32_t scale;                  /* the movie's */
     trak video, sound, music;
+    trak extra[MAX_VISUAL];         /* text and sprite tracks */
+    int nextra;
+    visual vis[MAX_VISUAL + 1];     /* with the video track, in file order */
+    int nvis;
+    bool composite;                 /* text or sprites: frames are composited */
+    bool composed;
+    uint8_t *canvas;
+    int cw, ch;
     qt_midi_event *midi;            /* the music track's events, times in movie ms */
     size_t nmidi;
     qt_vdec *dec;
@@ -112,6 +146,7 @@ static void free_trak(trak *t)
     free(t->chunk_first);
     free(t->chunk_frames);
     free(t->tune_header);
+    free(t->raw_desc);
     memset(t, 0, sizeof *t);
 }
 
@@ -199,7 +234,23 @@ static int32_t mdhd_scale(const uint8_t *mdhd, uint32_t len, int64_t *duration)
 }
 
 /* The track's tables; false if anything needed is missing or damaged. */
-enum { SOUND, VIDEO, MUSIC };
+enum { SOUND, VIDEO, MUSIC, TEXT, SPRITE };
+
+/* The first sample description, whole (from its size field). */
+static bool raw_desc(trak *t, const uint8_t *stsd, uint32_t len)
+{
+    if (len < 8 + 16 || be32(stsd + 4) < 1)
+        return false;
+    uint32_t sz = be32(stsd + 8);
+    if (sz < 16 || sz > len - 8)
+        return false;
+    t->raw_desc = malloc(sz);
+    if (!t->raw_desc)
+        return false;
+    memcpy(t->raw_desc, stsd + 8, sz);
+    t->raw_desc_len = sz;
+    return true;
+}
 
 static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
 {
@@ -242,7 +293,11 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
     }
     if (!stsd || !stts || !stsc || !stco || tl < 8 || cl < 8 || ol < 8)
         return false;
-    if (kind == VIDEO ? !video_descs(t, stsd, dl) : kind == MUSIC ? !music_desc(t, stsd, dl) : !sound_desc(t, stsd, dl))
+    bool described = kind == VIDEO   ? video_descs(t, stsd, dl)
+                     : kind == MUSIC ? music_desc(t, stsd, dl)
+                     : kind == SOUND ? sound_desc(t, stsd, dl)
+                                     : raw_desc(t, stsd, dl);
+    if (!described)
         return false;
     uint32_t nchunks = be32(stco + 4), nsc = be32(stsc + 4), ntts = be32(stts + 4);
     if (nchunks > (ol - 8) / (co64 ? 8 : 4) || nsc > (cl - 8) / 12 || ntts > (tl - 8) / 8 || !nchunks || !nsc)
@@ -352,6 +407,80 @@ static void self_contained_check(const uint8_t *tr, uint32_t len, bool *ok)
 
 static bool read_music(qt_native *p);
 
+/* The track's layer, matrix and size from its header. */
+static void place(visual *v, const uint8_t *tkhd, uint32_t n)
+{
+    v->a = v->d = 1;
+    if (!tkhd || n < 84)
+        return;
+    int at = tkhd[0] == 1 ? 12 : 0;
+    if ((uint32_t)at + 84 > n)
+        return;
+    v->layer = (int16_t)be16(tkhd + 32 + at);
+    const uint8_t *m = tkhd + 40 + at;
+    v->a = (int32_t)be32(m) / 65536.0;
+    v->b = (int32_t)be32(m + 4) / 65536.0;
+    v->c = (int32_t)be32(m + 12) / 65536.0;
+    v->d = (int32_t)be32(m + 16) / 65536.0;
+    v->tx = (int32_t)be32(m + 24) / 65536.0;
+    v->ty = (int32_t)be32(m + 28) / 65536.0;
+    if (!v->a && !v->b && !v->c && !v->d) /* no matrix at all: as the identity */
+        v->a = v->d = 1;
+    v->tw = (int)(be32(tkhd + 76 + at) >> 16);
+    v->th = (int)(be32(tkhd + 80 + at) >> 16);
+}
+
+/* A track's box in the movie: (0, 0, tw, th) through its matrix. */
+static void box_of(const visual *v, double *x0, double *y0, double *x1, double *y1)
+{
+    *x0 = *y0 = 1e9;
+    *x1 = *y1 = -1e9;
+    for (int k = 0; k < 4; k++) {
+        double x = k & 1 ? v->tw : 0, y = k & 2 ? v->th : 0;
+        double X = v->a * x + v->c * y + v->tx, Y = v->b * x + v->d * y + v->ty;
+        *x0 = X < *x0 ? X : *x0;
+        *x1 = X > *x1 ? X : *x1;
+        *y0 = Y < *y0 ? Y : *y0;
+        *y1 = Y > *y1 ? Y : *y1;
+    }
+}
+
+/* The visual tracks' pictures and the frame they make. */
+static bool set_up_composite(qt_native *p)
+{
+    double right = 1, bottom = 1;
+    for (int i = 0; i < p->nvis; i++) {
+        visual *v = &p->vis[i];
+        v->shown = v->key = v->applied = -1;
+        if (v->kind == VIDEO && (v->tw <= 0 || v->th <= 0)) {
+            v->tw = p->video.vf[0].width;
+            v->th = p->video.vf[0].height;
+        }
+        if (v->kind == TEXT && (v->tw <= 0 || v->th <= 0) && v->t->raw_desc_len >= 38) {
+            v->tw = (int16_t)be16(v->t->raw_desc + 36); /* the default text box's right and bottom */
+            v->th = (int16_t)be16(v->t->raw_desc + 34);
+        }
+        if (v->tw <= 0 || v->th <= 0 || v->tw > 4096 || v->th > 4096)
+            return false;
+        if (v->kind == TEXT && !(v->text = qt_text_new(v->t->raw_desc, v->t->raw_desc_len, v->tw, v->th)))
+            return false;
+        if (v->kind == SPRITE && !(v->sprite = qt_sprite_new(v->t->raw_desc, v->t->raw_desc_len, v->tw, v->th)))
+            return false;
+        if (v->kind != VIDEO && !(v->rgba = calloc((size_t)v->tw * (size_t)v->th, 4)))
+            return false;
+        double x0, y0, x1, y1;
+        box_of(v, &x0, &y0, &x1, &y1);
+        right = x1 > right ? x1 : right;
+        bottom = y1 > bottom ? y1 : bottom;
+    }
+    p->cw = (int)(right + 0.5);
+    p->ch = (int)(bottom + 0.5);
+    if (p->cw > 4096 || p->ch > 4096)
+        return false;
+    p->canvas = calloc((size_t)p->cw * (size_t)p->ch, 4);
+    return p->canvas != NULL;
+}
+
 qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_path, int32_t movie_scale,
                           const uint32_t *screen_palette, int screen_depth)
 {
@@ -379,6 +508,10 @@ qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_pa
                 self_contained_check(t + 8, tn - 8, &ok);
                 if (!read_trak(&p->video, t + 8, tn - 8, VIDEO))
                     ok = false;
+                visual *v = &p->vis[p->nvis++];
+                v->kind = VIDEO;
+                v->t = &p->video;
+                place(v, tkhd, kn);
             } else if (enabled && type == four("soun") && !p->sound.present) {
                 self_contained_check(t + 8, tn - 8, &ok);
                 if (!read_trak(&p->sound, t + 8, tn - 8, SOUND))
@@ -387,6 +520,17 @@ qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_pa
                 self_contained_check(t + 8, tn - 8, &ok);
                 if (!read_trak(&p->music, t + 8, tn - 8, MUSIC))
                     ok = false;
+            } else if (enabled && (type == four("text") || type == four("sprt")) && p->nextra < MAX_VISUAL) {
+                self_contained_check(t + 8, tn - 8, &ok);
+                trak *x = &p->extra[p->nextra++];
+                int kind = type == four("text") ? TEXT : SPRITE;
+                if (!read_trak(x, t + 8, tn - 8, kind))
+                    ok = false;
+                visual *v = &p->vis[p->nvis++];
+                v->kind = kind;
+                v->t = x;
+                place(v, tkhd, kn);
+                p->composite = true;
             } else if (enabled && type != four("tmcd") && type != 0) {
                 ok = false; /* text, sprites, MPEG: not ours */
             }
@@ -403,7 +547,9 @@ qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_pa
             f->palette = p->video.palettes[i];
         }
     }
-    if (ok && (p->video.present || p->sound.present || p->music.present))
+    if (ok && p->composite)
+        ok = set_up_composite(p);
+    if (ok && (p->video.present || p->sound.present || p->music.present || p->nextra))
         p->fp = fopen(data_path, "rb");
     if (ok && p->fp && p->music.present)
         ok = read_music(p);
@@ -460,12 +606,20 @@ void qt_native_close(qt_native *p)
     free_trak(&p->video);
     free_trak(&p->sound);
     free_trak(&p->music);
+    for (int i = 0; i < p->nvis; i++) {
+        qt_text_free(p->vis[i].text);
+        qt_sprite_free(p->vis[i].sprite);
+        free(p->vis[i].rgba);
+    }
+    for (int i = 0; i < p->nextra; i++)
+        free_trak(&p->extra[i]);
+    free(p->canvas);
     free(p->midi);
     free(p->frame);
     free(p);
 }
 
-bool qt_native_has_video(const qt_native *p) { return p && p->video.present; }
+bool qt_native_has_video(const qt_native *p) { return p && (p->video.present || p->composite); }
 bool qt_native_has_sound(const qt_native *p) { return p && p->sound.present; }
 bool qt_native_has_music(const qt_native *p) { return p && p->music.present; }
 
@@ -560,38 +714,205 @@ static bool decode_sample(qt_native *p, int64_t k)
     return ok;
 }
 
+/* Decode on to video sample want. */
+static void video_to(qt_native *p, int64_t want)
+{
+    trak *t = &p->video;
+    /* From the last key frame at or before it, unless decoding on from
+     * the current picture gets there without passing one. */
+    int64_t from = want;
+    while (from > 0 && !t->key[from])
+        from--;
+    if (p->decoded >= 0 && p->decoded < want && p->decoded >= from)
+        from = p->decoded + 1;
+    for (int64_t k = from; k <= want; k++)
+        decode_sample(p, k);
+    p->decoded = want;
+}
+
+/* The sample of a text or sprite track showing at ms, or -1. */
+static int64_t showing(const qt_native *p, const trak *t, int64_t ms)
+{
+    int64_t mt = media_time(t, p->scale, ms);
+    if (mt < 0 || !t->nsamples || (t->media_duration > 0 && mt >= t->media_duration))
+        return -1;
+    return sample_at(t, mt);
+}
+
+static void text_to(qt_native *p, visual *v, int64_t want)
+{
+    v->drawn = false;
+    if (want < 0)
+        return;
+    uint8_t *data = read_at(p->fp, v->t->offset[want], v->t->size[want]);
+    if (data)
+        v->drawn = qt_text_draw(v->text, data, v->t->size[want], v->rgba);
+    free(data);
+}
+
+static void sprite_apply(qt_native *p, visual *v, int64_t k)
+{
+    uint8_t *data = read_at(p->fp, v->t->offset[k], v->t->size[k]);
+    if (data)
+        qt_sprite_override(v->sprite, data, v->t->size[k]);
+    free(data);
+}
+
+static void sprite_to(qt_native *p, visual *v, int64_t want)
+{
+    v->drawn = false;
+    if (want < 0)
+        return;
+    trak *t = v->t;
+    /* The key frame: the last sync sample at or before it that has the
+     * shared images. */
+    int64_t k = want;
+    while (k > 0 && !t->key[k])
+        k--;
+    if (k != v->key) {
+        for (;;) {
+            uint8_t *data = read_at(p->fp, t->offset[k], t->size[k]);
+            bool is_key = data && qt_sprite_key(v->sprite, data, t->size[k]);
+            free(data);
+            if (is_key || k == 0)
+                break;
+            for (k--; k > 0 && !t->key[k]; k--)
+                ;
+        }
+        v->key = v->applied = k;
+    }
+    if (qt_sprite_all_overrides(v->sprite)) {
+        if (v->applied > want || v->applied < k) {
+            qt_sprite_reset(v->sprite);
+            v->applied = k;
+        }
+        for (int64_t j = v->applied + 1; j <= want; j++)
+            sprite_apply(p, v, j);
+        v->applied = want;
+    } else {
+        qt_sprite_reset(v->sprite);
+        if (want != k)
+            sprite_apply(p, v, want);
+    }
+    v->drawn = qt_sprite_draw(v->sprite, v->rgba);
+}
+
+/* A picture (sw x sh) into box (x0, y0)-(x1, y1) of the frame, nearest
+ * pixel, leaving the frame where the picture's alpha is 0. */
+static void blit(qt_native *p, const uint8_t *src, int sw, int sh, double x0, double y0, double x1, double y1)
+{
+    if (x1 - x0 < 0.5 || y1 - y0 < 0.5)
+        return;
+    int c0 = (int)(x0 + 0.5), c1 = (int)(x1 + 0.5), r0 = (int)(y0 + 0.5), r1 = (int)(y1 + 0.5);
+    for (int row = r0 < 0 ? 0 : r0; row < r1 && row < p->ch; row++) {
+        int sy = (int)((row + 0.5 - y0) * sh / (y1 - y0));
+        if (sy < 0 || sy >= sh)
+            continue;
+        for (int col = c0 < 0 ? 0 : c0; col < c1 && col < p->cw; col++) {
+            int sx = (int)((col + 0.5 - x0) * sw / (x1 - x0));
+            if (sx < 0 || sx >= sw)
+                continue;
+            const uint8_t *s = src + ((size_t)sy * (size_t)sw + (size_t)sx) * 4;
+            if (s[3])
+                memcpy(p->canvas + ((size_t)row * (size_t)p->cw + (size_t)col) * 4, s, 4);
+        }
+    }
+}
+
+/* The frame: white, then the tracks from the highest layer to the lowest
+ * (later tracks in front within a layer). */
+static void compose(qt_native *p)
+{
+    memset(p->canvas, 255, (size_t)p->cw * (size_t)p->ch * 4);
+    int order[MAX_VISUAL + 1];
+    for (int i = 0; i < p->nvis; i++)
+        order[i] = i;
+    for (int i = 1; i < p->nvis; i++)
+        for (int j = i; j > 0 && p->vis[order[j - 1]].layer < p->vis[order[j]].layer; j--) {
+            int t = order[j];
+            order[j] = order[j - 1];
+            order[j - 1] = t;
+        }
+    for (int i = 0; i < p->nvis; i++) {
+        visual *v = &p->vis[order[i]];
+        double x0, y0, x1, y1;
+        box_of(v, &x0, &y0, &x1, &y1);
+        if (v->kind == VIDEO && p->frame && p->decoded >= 0)
+            blit(p, p->frame, p->fw, p->fh, x0, y0, x1, y1);
+        else if (v->kind != VIDEO && v->drawn)
+            blit(p, v->rgba, v->tw, v->th, x0, y0, x1, y1);
+    }
+}
+
+static bool composite_frame(qt_native *p, int64_t ms)
+{
+    bool changed = !p->composed;
+    for (int i = 0; i < p->nvis; i++) {
+        visual *v = &p->vis[i];
+        if (v->kind == VIDEO) {
+            int64_t mt = media_time(v->t, p->scale, ms);
+            if (mt < 0) /* an empty edit keeps the last picture */
+                continue;
+            int64_t want = sample_at(v->t, mt);
+            if (want != p->decoded) {
+                video_to(p, want);
+                changed = true;
+            }
+            continue;
+        }
+        int64_t want = showing(p, v->t, ms);
+        if (want == v->shown && p->composed)
+            continue;
+        if (v->kind == TEXT)
+            text_to(p, v, want);
+        else
+            sprite_to(p, v, want);
+        v->shown = want;
+        changed = true;
+    }
+    if (changed) {
+        compose(p);
+        p->composed = true;
+        p->serial++;
+    }
+    return true;
+}
+
 bool qt_native_frame(qt_native *p, int64_t ms, uint32_t *serial, uint8_t **rgba, int *w, int *h)
 {
     trak *t = &p->video;
-    if (!t->present)
-        return false;
-    int64_t mt = media_time(t, p->scale, ms);
-    if (mt < 0) /* an empty edit keeps the last picture */
-        return false;
-    int64_t want = sample_at(t, mt);
-    if (want != p->decoded) {
-        /* From the last key frame at or before it, unless decoding on from
-         * the current picture gets there without passing one. */
-        int64_t from = want;
-        while (from > 0 && !t->key[from])
-            from--;
-        if (p->decoded >= 0 && p->decoded < want && p->decoded >= from)
-            from = p->decoded + 1;
-        for (int64_t k = from; k <= want; k++)
-            decode_sample(p, k);
-        p->decoded = want;
-        p->serial++;
+    const uint8_t *frame;
+    int fw, fh;
+    if (p->composite) {
+        composite_frame(p, ms);
+        frame = p->canvas;
+        fw = p->cw;
+        fh = p->ch;
+    } else {
+        if (!t->present)
+            return false;
+        int64_t mt = media_time(t, p->scale, ms);
+        if (mt < 0) /* an empty edit keeps the last picture */
+            return false;
+        int64_t want = sample_at(t, mt);
+        if (want != p->decoded) {
+            video_to(p, want);
+            p->serial++;
+        }
+        frame = p->frame;
+        fw = p->fw;
+        fh = p->fh;
     }
-    if (!p->frame || *serial == p->serial)
+    if (!frame || *serial == p->serial)
         return false;
-    size_t n = (size_t)p->fw * (size_t)p->fh * 4;
-    if (*w != p->fw || *h != p->fh || !*rgba) {
+    size_t n = (size_t)fw * (size_t)fh * 4;
+    if (*w != fw || *h != fh || !*rgba) {
         free(*rgba);
         *rgba = malloc(n);
     }
-    memcpy(*rgba, p->frame, n);
-    *w = p->fw;
-    *h = p->fh;
+    memcpy(*rgba, frame, n);
+    *w = fw;
+    *h = fh;
     *serial = p->serial;
     return true;
 }

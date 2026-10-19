@@ -419,6 +419,11 @@ void machine_set_midi_handler(machine_midi_fn fn, void *ctx);
  * Photo-JPEG codec) into RGBA rows (*rgba malloc'd, *w by *h). */
 typedef bool (*machine_image_fn)(const uint8_t *data, size_t len, uint8_t **rgba, int *w, int *h, void *ctx);
 void machine_set_image_decoder(machine_image_fn fn, void *ctx);
+/* Encode RGBA rows (w by h) as a baseline JPEG at a quality from 0 to 1
+ * (*out malloc'd, *len bytes), for Photo-JPEG compression. */
+typedef bool (*machine_image_encode_fn)(const uint8_t *rgba, int w, int h, double quality, uint8_t **out, size_t *len,
+                                        void *ctx);
+void machine_set_image_encoder(machine_image_encode_fn fn, void *ctx);
 
 /* ---- Clipboard ---- */
 

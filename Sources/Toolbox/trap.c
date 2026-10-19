@@ -171,7 +171,8 @@ static void census_skip(cpu68k *c, const trap_sig *s)
  * rather than stopping the application. */
 static bool answers_zero(const char *dispatcher)
 {
-    return !strcmp(dispatcher, "QuickTime") || !strcmp(dispatcher, "ImageCompressionDispatch");
+    return !strcmp(dispatcher, "QuickTime") || !strcmp(dispatcher, "ImageCompressionDispatch") ||
+           !strncmp(dispatcher, "GX", 2) || !strcmp(dispatcher, "CollectionDispatch");
 }
 
 static void dispatch_native(cpu68k *c, uint16_t tw)

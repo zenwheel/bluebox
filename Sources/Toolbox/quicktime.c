@@ -30,6 +30,7 @@
 #include "forks.h"
 #include "m68k.h"
 #include "qd_internal.h"
+#include "qt_edit.h"
 #include "qt_native.h"
 #include "qt_vlc.h"
 #include "tb_internal.h"
@@ -79,6 +80,11 @@ typedef struct {
     uint64_t start_ns;
     qt_vlc_player *player;
     qt_native *native;   /* our decoders, when they cover the movie */
+    uint8_t *moov;       /* the description, edited in place of the file's */
+    uint32_t moov_len;
+    char *data_path;     /* the file holding the samples */
+    int32_t sel_start, sel_duration; /* the selection, movie time units */
+    bool changed;        /* edited since opened or last saved */
     int64_t sound_ms;    /* native sound sent to the host up to here */
     bool sound_on;
     int64_t music_ms;    /* and the music track's MIDI */
@@ -216,11 +222,18 @@ static bool describe(movie *m, uint8_t *moov, uint32_t len)
             track *tr = &m->tracks[m->ntracks++];
             uint32_t k;
             uint8_t *tkhd = find_atom(t + 8, t + tn, "tkhd", &k);
+            int right = 0, bottom = 0; /* as far as the track's matrix puts it */
             if (tkhd && k >= 92) {
                 int off = tkhd[8] == 1 ? 96 : 84;
                 if ((uint32_t)off + 8 <= k) {
                     tr->width = (int16_t)(be32(tkhd + off) >> 16);
                     tr->height = (int16_t)(be32(tkhd + off + 4) >> 16);
+                    const uint8_t *mx = tkhd + off - 36;
+                    int64_t sx = (int32_t)be32(mx), sy = (int32_t)be32(mx + 16);
+                    if (!sx && !sy) /* no matrix at all: as the identity */
+                        sx = sy = 0x10000;
+                    right = (int)((tr->width * sx + (int32_t)be32(mx + 24) + 0x8000) >> 16);
+                    bottom = (int)((tr->height * sy + (int32_t)be32(mx + 28) + 0x8000) >> 16);
                 }
             }
             uint8_t *mdia = find_atom(t + 8, t + tn, "mdia", &k);
@@ -228,12 +241,13 @@ static bool describe(movie *m, uint8_t *moov, uint32_t len)
             uint8_t *hdlr = mdia ? find_atom(mdia + 8, mdia + k, "hdlr", &hk) : NULL;
             if (hdlr && hk >= 20)
                 tr->type = be32(hdlr + 16);
-            if (tr->type == fourcc("vide")) {
+            if (tr->type == fourcc("vide"))
                 index_depth(m, mdia, k);
-                if (tr->width > w)
-                    w = tr->width;
-                if (tr->height > h)
-                    h = tr->height;
+            if (tr->type == fourcc("vide") || tr->type == fourcc("text") || tr->type == fourcc("sprt")) {
+                if (right > w)
+                    w = right;
+                if (bottom > h)
+                    h = bottom;
             }
         }
         t += tn;
@@ -471,6 +485,8 @@ static void free_movie(movie *m)
 {
     stop_sound(m);
     qt_native_close(m->native);
+    free(m->moov);
+    free(m->data_path);
     if (m->player)
         qt_vlc_close(m->player);
     if (m->temp_file && m->play_path)
@@ -483,6 +499,25 @@ static void free_movie(movie *m)
     if (m->handle)
         tb_DisposeHandle(m->handle);
     m->used = false;
+}
+
+/* Our decoders for the movie's description (none: VLC, or timing alone).
+ * Palettized video without colours of its own takes the screen's. */
+static void open_native(movie *m)
+{
+    qt_native_close(m->native);
+    m->native = NULL;
+    if (!m->moov || !m->data_path)
+        return;
+    uint32_t screen[256];
+    pixdst d = qd_port_pixels(m->port);
+    int sd = d.depth <= 8 ? d.depth : 0;
+    for (int v = 0; sd && v < (1 << sd); v++) {
+        uint16_t c[3];
+        qd_px_rgb(sd, d.ctab, (uint32_t)v, c);
+        screen[v] = (uint32_t)(c[0] >> 8) << 16 | (uint32_t)(c[1] >> 8) << 8 | (c[2] >> 8);
+    }
+    m->native = qt_native_open(m->moov, m->moov_len, m->data_path, m->scale, sd ? screen : NULL, sd);
 }
 
 /* A movie from a host file: the description from the resource fork (resid,
@@ -515,26 +550,24 @@ static int16_t open_movie(const char *path, int16_t *resid, uint32_t data_offset
     for (int k = 0; k < m->ntracks; k++) {
         m->tracks[k].handle = tb_NewHandle(4, false, true);
     }
-    /* Palettized video without colours of its own takes the screen's. */
-    uint32_t screen[256];
-    pixdst d = qd_port_pixels(m->port);
-    int sd = d.depth <= 8 ? d.depth : 0;
-    for (int v = 0; sd && v < (1 << sd); v++) {
-        uint16_t c[3];
-        qd_px_rgb(sd, d.ctab, (uint32_t)v, c);
-        screen[v] = (uint32_t)(c[0] >> 8) << 16 | (uint32_t)(c[1] >> 8) << 8 | (c[2] >> 8);
-    }
-    m->native = qt_native_open(moov, len, path, m->scale, sd ? screen : NULL, sd);
+    m->moov = moov;
+    m->moov_len = len;
+    m->data_path = strdup(path);
+    open_native(m);
     LOGF(LOG_TRAPS, "  movie %s: %s\n", path, m->native ? "our decoders" : "VLC");
     if (m->native) {
         m->play_path = NULL;
     } else if (flattened) {
         m->play_path = strdup(path);
-    } else {
-        m->play_path = flatten(path, moov, len);
+    } else { /* (flatten moves the copy's chunk offsets) */
+        uint8_t *copy = malloc(len);
+        if (copy) {
+            memcpy(copy, moov, len);
+            m->play_path = flatten(path, copy, len);
+            free(copy);
+        }
         m->temp_file = m->play_path != NULL;
     }
-    free(moov);
     if (resid)
         *resid = id;
     wr32(moviep, m->handle);
@@ -919,9 +952,356 @@ void tb_SetMovieActive(gaddr h, int8_t active)
         m->active = active != 0;
 }
 
-/* Movies are not edited here, so none has changed since it was saved. */
-int8_t tb_HasMovieChanged(int32_t h) { return 0; }
-void tb_ClearMovieChanged(int32_t h) {}
+/* ---- Editing ----
+ *
+ * Edits change the movie's description, each track's edit list (qt_edit.c),
+ * and the movie plays from it again: the samples stay where they are.
+ * Pasting takes another movie's media only when it is in the same file
+ * (a movie and copies made from it); saving writes the description as the
+ * file's 'moov' resource.
+ */
+
+enum { invalidDuration = -2014, invalidTime = -2015 };
+
+static bool read_edits(const movie *m, qt_edits *e) { return m->moov && qt_edits_read(m->moov, m->moov_len, e); }
+
+/* Keep the description before an edit, for undo. */
+static uint8_t *undo_moov;
+static uint32_t undo_len;
+static gaddr undo_movie;
+
+static void remember(movie *m)
+{
+    free(undo_moov);
+    undo_moov = malloc(m->moov_len);
+    if (undo_moov)
+        memcpy(undo_moov, m->moov, m->moov_len);
+    undo_len = m->moov_len;
+    undo_movie = m->handle;
+}
+
+/* The movie with a new description: its length, and its player on it. */
+static void take_moov(movie *m, uint8_t *moov, uint32_t len)
+{
+    free(m->moov);
+    m->moov = moov;
+    m->moov_len = len;
+    qt_edits e;
+    if (qt_edits_read(moov, len, &e)) {
+        m->duration = (int32_t)qt_edits_duration(&e);
+        qt_edits_free(&e);
+    }
+    stop_sound(m);
+    open_native(m);
+    m->serial = 0;
+    m->changed = true;
+    if (m->base_ms > duration_ms(m))
+        m->base_ms = duration_ms(m);
+}
+
+static bool edited(movie *m, qt_edits *e)
+{
+    uint32_t n;
+    uint8_t *nm = qt_edits_write(m->moov, m->moov_len, e, &n);
+    if (!nm)
+        return false;
+    take_moov(m, nm, n);
+    return true;
+}
+
+/* A new movie of another's edits (the same file and tracks). */
+static movie *movie_from_edits(movie *from, qt_edits *e)
+{
+    uint32_t n;
+    uint8_t *nm = qt_edits_write(from->moov, from->moov_len, e, &n);
+    movie *m = nm ? new_movie() : NULL;
+    if (!m) {
+        free(nm);
+        return NULL;
+    }
+    describe(m, nm, n);
+    m->scale = from->scale;
+    m->duration = (int32_t)qt_edits_duration(e);
+    m->box = m->natural;
+    for (int k = 0; k < m->ntracks; k++)
+        m->tracks[k].handle = tb_NewHandle(4, false, true);
+    m->moov = nm;
+    m->moov_len = n;
+    m->data_path = from->data_path ? strdup(from->data_path) : NULL;
+    open_native(m);
+    return m;
+}
+
+void tb_GetMovieSelection(int32_t theMovie, gaddr selectionTime, gaddr selectionDuration)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (selectionTime)
+        wr32(selectionTime, m ? (uint32_t)m->sel_start : 0);
+    if (selectionDuration)
+        wr32(selectionDuration, m ? (uint32_t)m->sel_duration : 0);
+}
+
+void tb_SetMovieSelection(int32_t theMovie, int32_t selectionTime, int32_t selectionDuration)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (!m)
+        return;
+    if (selectionDuration < 0) { /* a negative duration selects backwards */
+        selectionTime += selectionDuration;
+        selectionDuration = -selectionDuration;
+    }
+    m->sel_start = selectionTime < 0 ? 0 : selectionTime > m->duration ? m->duration : selectionTime;
+    m->sel_duration = m->sel_start + selectionDuration > m->duration ? m->duration - m->sel_start : selectionDuration;
+}
+
+int32_t tb_CopyMovieSelection(int32_t theMovie)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    qt_edits e, part;
+    if (!m || !read_edits(m, &e)) {
+        set_error(invalidMovie);
+        return 0;
+    }
+    bool ok = qt_edits_copy(&e, m->sel_start, m->sel_duration, &part);
+    movie *c = ok ? movie_from_edits(m, &part) : NULL;
+    qt_edits_free(&e);
+    qt_edits_free(&part);
+    set_error(c ? noErr : memFullErr);
+    return c ? (int32_t)c->handle : 0;
+}
+
+static bool delete_segment(movie *m, int64_t from, int64_t len)
+{
+    qt_edits e;
+    if (!read_edits(m, &e))
+        return false;
+    bool ok = qt_edits_delete(&e, from, len) && edited(m, &e);
+    qt_edits_free(&e);
+    return ok;
+}
+
+int32_t tb_CutMovieSelection(int32_t theMovie)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    int32_t copy = tb_CopyMovieSelection(theMovie);
+    if (copy && m && m->sel_duration > 0) {
+        remember(m);
+        delete_segment(m, m->sel_start, m->sel_duration);
+        m->sel_duration = 0;
+    }
+    return copy;
+}
+
+void tb_ClearMovieSelection(int32_t theMovie)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (!m || m->sel_duration <= 0)
+        return;
+    remember(m);
+    set_error(delete_segment(m, m->sel_start, m->sel_duration) ? noErr : invalidMovie);
+    m->sel_duration = 0;
+}
+
+static int16_t insert_segment(movie *src, movie *dst, int64_t src_in, int64_t len, int64_t dst_in)
+{
+    if (!src || !dst)
+        return invalidMovie;
+    if (!src->data_path || !dst->data_path || strcmp(src->data_path, dst->data_path)) {
+        LOGF(LOG_UNIMPL, "QuickTime: pasting a movie from another file is not done\n");
+        return paramErr;
+    }
+    qt_edits s, d;
+    if (!read_edits(src, &s))
+        return invalidMovie;
+    if (!read_edits(dst, &d)) {
+        qt_edits_free(&s);
+        return invalidMovie;
+    }
+    bool ok = qt_edits_insert(&d, &s, src_in, len, dst_in) && edited(dst, &d);
+    qt_edits_free(&s);
+    qt_edits_free(&d);
+    return ok ? noErr : memFullErr;
+}
+
+void tb_PasteMovieSelection(int32_t theMovie, int32_t src)
+{
+    movie *m = movie_of((gaddr)theMovie), *s = movie_of((gaddr)src);
+    if (!m || !s) {
+        set_error(invalidMovie);
+        return;
+    }
+    remember(m);
+    if (m->sel_duration > 0)
+        delete_segment(m, m->sel_start, m->sel_duration);
+    int16_t err = insert_segment(s, m, 0, s->duration, m->sel_start);
+    if (!err)
+        m->sel_duration = (int32_t)((int64_t)s->duration * m->scale / s->scale);
+    set_error(err);
+}
+
+int16_t tb_InsertMovieSegment(int32_t srcMovie, int32_t dstMovie, int32_t srcIn, int32_t srcDuration, int32_t dstIn)
+{
+    movie *d = movie_of((gaddr)dstMovie);
+    if (d)
+        remember(d);
+    return set_error(insert_segment(movie_of((gaddr)srcMovie), d, srcIn, srcDuration, dstIn));
+}
+
+int16_t tb_InsertEmptyMovieSegment(int32_t dstMovie, int32_t dstIn, int32_t dstDuration)
+{
+    movie *m = movie_of((gaddr)dstMovie);
+    qt_edits e;
+    if (!m || !read_edits(m, &e))
+        return set_error(invalidMovie);
+    remember(m);
+    bool ok = qt_edits_insert_empty(&e, dstIn, dstDuration) && edited(m, &e);
+    qt_edits_free(&e);
+    return set_error(ok ? noErr : memFullErr);
+}
+
+int16_t tb_DeleteMovieSegment(int32_t theMovie, int32_t startTime, int32_t duration)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (!m)
+        return set_error(invalidMovie);
+    if (startTime < 0 || startTime > m->duration)
+        return set_error(invalidTime);
+    if (duration < 0)
+        return set_error(invalidDuration);
+    remember(m);
+    return set_error(delete_segment(m, startTime, duration) ? noErr : invalidMovie);
+}
+
+/* The movie scrap: the last movie put there, kept here; the desk scrap
+ * gets its description as 'moov'. */
+static uint8_t *scrap_moov;
+static uint32_t scrap_len;
+static char *scrap_path;
+
+int16_t tb_PutMovieOnScrap(int32_t theMovie, int32_t movieScrapFlags)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (!m || !m->moov)
+        return set_error(invalidMovie);
+    free(scrap_moov);
+    free(scrap_path);
+    scrap_moov = malloc(m->moov_len);
+    if (!scrap_moov)
+        return set_error(memFullErr);
+    memcpy(scrap_moov, m->moov, m->moov_len);
+    scrap_len = m->moov_len;
+    scrap_path = m->data_path ? strdup(m->data_path) : NULL;
+    if (!(movieScrapFlags & 1)) /* movieScrapDontZeroScrap */
+        tb_ZeroScrap();
+    gaddr p = tb_NewPtr((int32_t)m->moov_len, false, false);
+    if (p) {
+        gput(p, m->moov, m->moov_len);
+        tb_PutScrap((int32_t)m->moov_len, 0x6D6F6F76, p);
+        tb_DisposePtr(p);
+    }
+    return set_error(noErr);
+}
+
+int32_t tb_NewMovieFromScrap(int32_t newMovieFlags)
+{
+    if (!scrap_moov) {
+        set_error(noMovieFound);
+        return 0;
+    }
+    movie *m = new_movie();
+    if (!m) {
+        set_error(memFullErr);
+        return 0;
+    }
+    describe(m, scrap_moov, scrap_len);
+    m->box = m->natural;
+    for (int k = 0; k < m->ntracks; k++)
+        m->tracks[k].handle = tb_NewHandle(4, false, true);
+    m->moov = malloc(scrap_len);
+    if (m->moov) {
+        memcpy(m->moov, scrap_moov, scrap_len);
+        m->moov_len = scrap_len;
+    }
+    m->data_path = scrap_path ? strdup(scrap_path) : NULL;
+    m->active = (newMovieFlags & newMovieActive) != 0;
+    open_native(m);
+    set_error(noErr);
+    return (int32_t)m->handle;
+}
+
+int8_t tb_HasMovieChanged(int32_t h)
+{
+    movie *m = movie_of((gaddr)h);
+    return m && m->changed;
+}
+
+void tb_ClearMovieChanged(int32_t h)
+{
+    movie *m = movie_of((gaddr)h);
+    if (m)
+        m->changed = false;
+}
+
+/* The description saved as the file's 'moov' resource (the whole atom). */
+static int16_t save_moov(movie *m, int16_t resRefNum, int16_t id, gaddr name)
+{
+    if (!m || !m->moov)
+        return set_error(invalidMovie);
+    int16_t saved = tb_CurResFile();
+    tb_UseResFile(resRefNum);
+    if (tb_CurResFile() != resRefNum) {
+        tb_UseResFile(saved);
+        return set_error(-51 /* rfNumErr */);
+    }
+    gaddr h = tb_Get1Resource(0x6D6F6F76, id);
+    if (h) {
+        tb_SetHandleSize(h, (int32_t)m->moov_len);
+        gput(rd32(h), m->moov, m->moov_len);
+        tb_ChangedResource(h);
+    } else {
+        h = tb_NewHandle((int32_t)m->moov_len, false, false);
+        if (h) {
+            gput(rd32(h), m->moov, m->moov_len);
+            gaddr empty = tb_NewPtr(1, false, true);
+            tb_AddResource(h, 0x6D6F6F76, id, name ? name : empty);
+            tb_DisposePtr(empty);
+        }
+    }
+    int16_t err = tb_ResError();
+    tb_UpdateResFile(resRefNum);
+    tb_UseResFile(saved);
+    if (!err)
+        m->changed = false;
+    return set_error(err);
+}
+
+int16_t tb_UpdateMovieResource(int32_t theMovie, int16_t resRefNum, int16_t resId, int32_t resName)
+{
+    return save_moov(movie_of((gaddr)theMovie), resRefNum, resId ? resId : 128, (gaddr)resName);
+}
+
+int16_t tb_AddMovieResource(int32_t theMovie, int16_t resRefNum, gaddr resId, int32_t resName)
+{
+    int16_t saved = tb_CurResFile();
+    tb_UseResFile(resRefNum);
+    int16_t id = resId && rd16(resId) ? (int16_t)rd16(resId) : tb_Unique1ID(0x6D6F6F76);
+    tb_UseResFile(saved);
+    if (resId)
+        wr16(resId, (uint16_t)id);
+    return save_moov(movie_of((gaddr)theMovie), resRefNum, id, (gaddr)resName);
+}
+
+/* Undo of the last edit (the controller's). */
+static bool undo_edit(movie *m)
+{
+    if (!m || !undo_moov || undo_movie != m->handle)
+        return false;
+    uint8_t *mv = undo_moov;
+    uint32_t len = undo_len;
+    undo_moov = NULL;
+    take_moov(m, mv, len);
+    return true;
+}
 
 int8_t tb_GetMovieActive(int32_t h)
 {
@@ -1259,6 +1639,7 @@ typedef struct {
     int32_t filter_refcon;
     int drawn_x;       /* where the slider's thumb was drawn (-1: none) */
     int drawn_playing; /* and the button, 1 pause or 0 play (-1: not drawn) */
+    bool editing;      /* MCEnableEditing */
 } controller;
 
 static controller controllers[MAX_CONTROLLERS];
@@ -1337,10 +1718,16 @@ static void draw_bar(controller *c)
         }
     }
     c->drawn_playing = m && m->playing;
-    /* The time slider. */
+    /* The time slider, the selection a thick stretch of it. */
     int left = b.left + 18, right = b.right - 6;
     tb_MoveTo((int16_t)left, (int16_t)(b.top + 8));
     tb_LineTo((int16_t)right, (int16_t)(b.top + 8));
+    if (m && m->sel_duration > 0 && m->duration > 0 && right > left) {
+        int x0 = left + (int)((int64_t)(right - left) * m->sel_start / m->duration);
+        int x1 = left + (int)((int64_t)(right - left) * (m->sel_start + m->sel_duration) / m->duration);
+        qrect_put(r, (qrect){ (int16_t)(b.top + 6), (int16_t)x0, (int16_t)(b.top + 11), (int16_t)(x1 > x0 ? x1 : x0 + 1) });
+        tb_PaintRect(r);
+    }
     c->drawn_x = thumb_x(c, m);
     if (c->drawn_x >= 0) {
         qrect_put(r, thumb_rect(c, c->drawn_x));
@@ -1359,7 +1746,7 @@ static void update_bar(controller *c)
     if (!c->visible || !c->attached)
         return;
     int x = thumb_x(c, m), playing = m && m->playing;
-    if (playing != c->drawn_playing || c->drawn_x < 0 || x < 0) {
+    if (playing != c->drawn_playing || c->drawn_x < 0 || x < 0 || (m && m->sel_duration > 0)) {
         draw_bar(c);
         return;
     }
@@ -1420,7 +1807,10 @@ static void mc_play(controller *c, int32_t rate)
 
 /* A click at a local point: the button plays and pauses, the slider moves
  * through the movie, and a click in the movie plays or pauses it. */
-static bool mc_click(controller *c, uint32_t pt)
+static bool mc_click_with(controller *c, uint32_t pt, bool shift);
+static bool mc_click(controller *c, uint32_t pt) { return mc_click_with(c, pt, false); }
+
+static bool mc_click_with(controller *c, uint32_t pt, bool shift)
 {
     movie *m = movie_of(c->movie);
     if (!m)
@@ -1435,7 +1825,20 @@ static bool mc_click(controller *c, uint32_t pt)
         int left = b.left + 18, right = b.right - 6;
         if (right > left) {
             int64_t ms = duration_ms(m) * (h < left ? 0 : h > right ? right - left : h - left) / (right - left);
-            seek(m, ms);
+            if (shift && c->editing) { /* the selection from the current time (or its far end) to here */
+                int64_t at = ms * m->scale / 1000, now = movie_ms(m) * m->scale / 1000;
+                int64_t anchor = m->sel_duration > 0
+                                     ? (llabs(at - m->sel_start) > llabs(at - (m->sel_start + m->sel_duration))
+                                            ? m->sel_start
+                                            : m->sel_start + m->sel_duration)
+                                     : now;
+                tb_SetMovieSelection((int32_t)m->handle, (int32_t)(at < anchor ? at : anchor),
+                                     (int32_t)llabs(at - anchor));
+            } else {
+                seek(m, ms);
+                if (c->editing)
+                    tb_SetMovieSelection((int32_t)m->handle, (int32_t)(ms * m->scale / 1000), 0);
+            }
         }
     } else {
         mc_play(c, m->playing ? 0 : (m->pref_rate ? m->pref_rate : 0x10000));
@@ -1513,7 +1916,7 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
                 tb_SetPort(c->port);
                 tb_GlobalToLocal(pt);
                 tb_SetPort(saved);
-                if (!filter(c, mcActionMouseDown, e) && mc_click(c, rd32(pt)))
+                if (!filter(c, mcActionMouseDown, e) && mc_click_with(c, rd32(pt), rd16(e + 14) & 0x0200))
                     result = 1;
                 tb_DisposePtr(pt);
             } else if ((ew == 3 || ew == 5) && c->active && (rd32(e + 2) & 0xFF) == ' ') { /* space */
@@ -1591,7 +1994,68 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
                 result = 1;
             }
             break;
-        case 28: result = mc_click(c, rd32(a + 8)); break; /* MCClick(w, where, when, mods) */
+        case 28: result = mc_click_with(c, rd32(a + 8), rd32(a) & 0x0200); break; /* MCClick(w, where, when, mods) */
+        case 29: c->editing = (rd16(a) >> 8) != 0; break; /* MCEnableEditing */
+        case 30: result = c->editing; break;               /* MCIsEditingEnabled */
+        case 31: result = c->editing ? tb_CopyMovieSelection((int32_t)c->movie) : 0; break; /* MCCopy */
+        case 32:                                           /* MCCut */
+            result = c->editing ? tb_CutMovieSelection((int32_t)c->movie) : 0;
+            draw_bar(c);
+            break;
+        case 33: {                                         /* MCPaste(srcMovie): nil, the scrap's */
+            if (!c->editing)
+                break;
+            int32_t src = (int32_t)rd32(a), temp = 0;
+            if (!src)
+                src = temp = tb_NewMovieFromScrap(0);
+            if (src)
+                tb_PasteMovieSelection((int32_t)c->movie, src);
+            if (temp)
+                tb_DisposeMovie((gaddr)temp);
+            if (m)
+                draw_frame(m, true);
+            draw_bar(c);
+            break;
+        }
+        case 34:                                           /* MCClear */
+            if (c->editing)
+                tb_ClearMovieSelection((int32_t)c->movie);
+            if (m)
+                draw_frame(m, true);
+            draw_bar(c);
+            break;
+        case 35:                                           /* MCUndo */
+            if (c->editing && undo_edit(m)) {
+                draw_frame(m, true);
+                draw_bar(c);
+            }
+            break;
+        case 43: {                                         /* MCSetUpEditMenu(modifiers, mh) */
+            gaddr mh = rd32(a);
+            bool sel = m && m->sel_duration > 0 && c->editing;
+            if (mh) {
+                bool on[7] = { false, c->editing && undo_moov && m && undo_movie == m->handle, false, sel, sel,
+                               c->editing && scrap_moov, sel };
+                for (int i = 1; i <= 6; i++)
+                    if (i != 2) {
+                        if (on[i])
+                            tb_EnableItem(mh, (int16_t)i);
+                        else
+                            tb_DisableItem(mh, (int16_t)i);
+                    }
+            }
+            break;
+        }
+        case 44: {                                         /* MCGetMenuString(modifiers, item, string) */
+            gaddr s = rd32(a);
+            int16_t item = (int16_t)rd16(a + 4);
+            const char *t = item == 1 ? "Undo" : item == 3 ? "Cut" : item == 4 ? "Copy" : item == 5 ? "Paste" : "Clear";
+            if (s) {
+                wr8(s, (uint8_t)strlen(t));
+                gput(s + 1, t, (uint32_t)strlen(t));
+            }
+            break;
+        }
         case 36: {                                        /* MCPositionController(movieRect, ctrlRect, flags) */
             gaddr mr = rd32(a + 8);
             if (mr)
@@ -1733,22 +2197,3 @@ int16_t tb_EndFullScreen(int32_t fullState, int32_t flags)
     return noErr;
 }
 
-/* GetCodecNameList(*list, showAll): the codecs installed, none listed yet
- * (CodecNameSpecList: a count, then 44-byte entries). */
-int16_t tb_GetCodecNameList(gaddr listp, int16_t showAll)
-{
-    (void)showAll;
-    gaddr list = tb_NewPtr(2 + 44, false, true);
-    if (!list)
-        return memFullErr;
-    if (listp)
-        wr32(listp, list);
-    return noErr;
-}
-
-int16_t tb_DisposeCodecNameList(int32_t list)
-{
-    if (list)
-        tb_DisposePtr((gaddr)list);
-    return noErr;
-}

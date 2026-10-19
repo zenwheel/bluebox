@@ -396,7 +396,24 @@ def gen_glue(name, sig):
     lines = [f"static void glue_{name}(cpu68k *c, uint16_t trapword)\n{{\n",
              "    (void)trapword;\n"]
     call_args = []
-    if sig["conv"] == "stack":
+    if sig["conv"] == "c":
+        # C (QuickDraw GX): the caller pushes the arguments last first, each
+        # widened to a long, and pops them itself; the result is in D0 (and
+        # A0 for a pointer, as either is where C compilers looked).
+        for i, (name_, cls) in enumerate(sig["args"]):
+            ct = ctype_for(cls[2])
+            lines.append(f"    {ct} a_{name_} = ({ct})rd32(c->a[7] + {4 + 4 * i});\n")
+        call_args = ["a_" + n for n, _ in sig["args"]]
+        rt = c_return(sig)
+        call = f"tb_{name}({', '.join(call_args)})"
+        if rt == "void":
+            lines.append(f"    {call};\n")
+        else:
+            lines.append(f"    {rt} r = {call};\n")
+            lines.append("    c->d[0] = (uint32_t)r;\n")
+            if sig["rti"].ptr:
+                lines.append("    c->a[0] = (uint32_t)r;\n")
+    elif sig["conv"] == "stack":
         lines.append("    uint32_t ret = cpu_pop32(c);\n")
         # Pascal pushes left to right, so the last argument is on top.
         for name_, cls in reversed(sig["args"]):
@@ -727,7 +744,9 @@ def gen_ppc(impl, sigs):
     exported = {e for e, _ in table}
     for fn in functions:
         name = fn["name"]
-        if name not in sigs or (trap_num(fn) is None and not fn.get("dispatcher")):
+        # (C-convention routines are not run as 68k traps from PowerPC: only
+        # the implemented ones, called directly above, are exported.)
+        if name not in sigs or sigs[name]["conv"] == "c" or (trap_num(fn) is None and not fn.get("dispatcher")):
             continue
         sig = sigs[name]
         variants = list(fn.get("variants") or [])
@@ -776,6 +795,9 @@ def gen_traps():
         name = fn["name"]
         try:
             sigs[name] = signature(fn)
+            d = dispatchers.get(fn.get("dispatcher") or "")
+            if d and d.get("convention") == "C":
+                sigs[name].update(conv="c", retbytes=0)
         except (KeyError, ValueError) as e:
             errors.append((name, str(e)))
         if fn.get("dispatcher"):

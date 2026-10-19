@@ -8,6 +8,7 @@
 
 #include "forks.h"
 #include "qd_internal.h"
+#include "qt_codec.h"
 #include "sysfonts.h"
 #include "tb_internal.h"
 #include "sysres_gen.h"
@@ -273,11 +274,13 @@ bool machine_boot(bool census)
     drag_reset();
     print_reset();
     icm_reset();
+    gx_reset();
     aem_reset();
     aem_reset_handlers();
     dialogs_reset();
     sound_reset();
     components_reset();
+    icm_components_reset(); /* the Standard Image Compression component */
     quicktime_reset();
     opentransport_reset();
     mactcp_reset();

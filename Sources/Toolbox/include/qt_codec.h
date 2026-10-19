@@ -51,6 +51,38 @@ extern const qt_video_codec qt_codec_smc;   /* Graphics */
 extern const qt_video_codec qt_codec_rpza;  /* Apple Video (Road Pizza) */
 extern const qt_video_codec qt_codec_raw;   /* None */
 
+/* ---- Video compression (qt_encode.c) ----
+ *
+ * A frame to compress is width * height pixel values at the codec depth:
+ * colour indices at 1-8 bits and 33-40 (grey), xRGB 1-5-5-5 at 16,
+ * 0x00RRGGBB at 24 and 32.  Formats: 'raw ', 'rle ', 'jpeg' (with the
+ * host's encoder).  Quality is a CodecQ (0 to 0x400, lossless).
+ */
+typedef struct {
+    uint32_t format;
+    int width, height, depth;
+    int32_t quality;
+} qt_venc_format;
+
+bool qt_venc_supported(uint32_t format, int depth);
+/* Whether the format codes frames as changes to the one before. */
+bool qt_venc_temporal(uint32_t format);
+/* The most bytes a frame can take. */
+size_t qt_venc_max_size(const qt_venc_format *f);
+/* Compress one frame into *out (malloc'd); prev, when not NULL, is the
+ * frame before for a difference frame.  Returns the size, 0 on failure. */
+size_t qt_venc_encode(const qt_venc_format *f, const uint32_t *px, const uint32_t *prev, uint8_t **out);
+
+/* ---- The Image Compression Manager's compression side (qt_icm_compress.c) ---- */
+
+void icm_compress_reset(void);
+/* CDSequenceEnd for a compression sequence: false if seqID is not one. */
+bool icm_csequence_end(int32_t seqID);
+bool icm_csequence_exists(int32_t seqID);
+/* The Standard Image Compression dialog component ('scdi', qt_scdi.c),
+ * registered again after the Component Manager is reset. */
+void icm_components_reset(void);
+
 /* ---- Sound ----
  *
  * A sound track's samples as 16-bit PCM, interleaved when stereo.
