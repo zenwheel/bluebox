@@ -333,6 +333,9 @@ void machine_set_speech_handler(machine_speech_fn fn, void *ctx);
 /* From the host, on any thread: kind 0 done, 1 word (a = offset in the
  * text, b = length), 2 sync (a = message), 3 phoneme (a = opcode). */
 void machine_speech_event(int channel, int kind, int32_t a, int32_t b);
+/* The record backend: requests logged to path ("-" for stderr), words,
+ * syncs and done delivered at once, no sound.  For tests and probes. */
+bool machine_set_speech_record(const char *path);
 
 /* ---- Native controls (the native appearance) ---- */
 

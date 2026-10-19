@@ -29,6 +29,8 @@ func fail(_ message: String) -> Never {
 
 /// --file-answer's paths, taken in turn by open and save dialogs.
 nonisolated(unsafe) var headlessFileAnswers: [String] = []
+/// --speech: system (NSSpeechSynthesizer), avspeech (AVSpeechSynthesizer) or record:FILE.
+nonisolated(unsafe) var speechBackend = "system"
 
 func usage() -> Never {
     eprint("""
@@ -76,6 +78,9 @@ func usage() -> Never {
                      PNG file P, with P-before.png and P-after.png (screens where
                      incremental drawing missed something)
           --print-to F  print to PDF file F instead of the print panel (headless runs)
+          --speech S  speech through system (NSSpeechSynthesizer, the default), avspeech
+                     (AVSpeechSynthesizer, also used when the system one is missing)
+                     or record:FILE (requests logged, callbacks at once, no sound)
           --file-answer P  answer the next open or save dialog with host path P,
                      without a panel (headless runs; repeatable, in order)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
@@ -342,6 +347,17 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             printTo = args[i]
+        case "--speech":
+            i += 1
+            guard i < args.count else { usage() }
+            speechBackend = args[i]
+            if speechBackend.hasPrefix("record:") {
+                guard machine_set_speech_record(String(speechBackend.dropFirst(7))) else {
+                    fail("--speech: can't write \(speechBackend.dropFirst(7))")
+                }
+            } else if !["system", "avspeech"].contains(speechBackend) {
+                fail("--speech expects system, avspeech or record:FILE")
+            }
         case "--file-answer":
             i += 1
             guard i < args.count else { usage() }

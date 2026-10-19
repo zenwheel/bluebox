@@ -391,7 +391,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()
     NativeControls.install()
-    ClassicSpeech.shared.install()
+    if !speechBackend.hasPrefix("record:") { ClassicSpeech.shared.install(avspeech: speechBackend == "avspeech") }
     NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate

@@ -10,6 +10,7 @@
 
 #if canImport(AppKit)
 import AppKit
+import AVFoundation
 import Toolbox
 
 public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchecked Sendable {
@@ -19,8 +20,13 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
     private var synths: [Int32: NSSpeechSynthesizer] = [:]
     private var channelOf: [ObjectIdentifier: Int32] = [:]
 
+    /// AVSpeechSynthesizer instead (--speech avspeech, or no NSSpeechSynthesizer voices).
+    private var useAV = false
+    private let av = AVSpeech()
+
     /// Route the machine's speech to the host.
-    public func install() {
+    public func install(avspeech: Bool = false) {
+        useAV = avspeech || NSSpeechSynthesizer.availableVoices.isEmpty
         machine_set_speech_handler({ rqp, _ in
             guard let rq = rqp?.pointee else { return }
             let op = Int(rq.op)
@@ -44,8 +50,13 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
             let (rate, pitch, modulation, volume) = (rq.rate, rq.pitch, rq.modulation, rq.volume)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    ClassicSpeech.shared.perform(op: op, channel: channel, text: text, voice: voice, rate: rate,
-                                                 pitch: pitch, modulation: modulation, volume: volume)
+                    if ClassicSpeech.shared.useAV {
+                        ClassicSpeech.shared.av.perform(op: op, channel: channel, text: text, voice: voice, rate: rate,
+                                                        pitch: pitch, volume: volume)
+                    } else {
+                        ClassicSpeech.shared.perform(op: op, channel: channel, text: text, voice: voice, rate: rate,
+                                                     pitch: pitch, modulation: modulation, volume: volume)
+                    }
                 }
             }
         }, nil)
@@ -133,6 +144,153 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
 
     public func speechSynthesizer(_ sender: NSSpeechSynthesizer, willSpeakPhoneme phonemeOpcode: Int16) {
         if let c = channel(sender) { machine_speech_event(c, 3, Int32(phonemeOpcode), 0) }
+    }
+}
+
+/// The AVSpeechSynthesizer backend.  Its utterances have no embedded
+/// commands, so an utterance is cut at each: rate, pitch base and volume
+/// become the next piece's settings, silence its pause, and a sync is
+/// reported when the speech reaches it.  Words come from willSpeakRange,
+/// placed back in the original text; phonemes aren't reported.
+final class AVSpeech: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
+    private struct Piece {
+        var text: String
+        var offset: Int /* in the original text */
+        var rate: Double, pitch: Double, volume: Double
+        var silenceAfter: Double
+        var syncsBefore: [Int32]
+    }
+    private var synths: [Int32: AVSpeechSynthesizer] = [:]
+    private var current: [ObjectIdentifier: (channel: Int32, offsets: [ObjectIdentifier: Int], syncs: [ObjectIdentifier: [Int32]], last: ObjectIdentifier?)] = [:]
+
+    private func voice(_ name: String?) -> AVSpeechSynthesisVoice? {
+        guard let name else { return nil }
+        let wanted = name.lowercased().replacingOccurrences(of: " ", with: "")
+        return AVSpeechSynthesisVoice.speechVoices().first {
+            $0.name.lowercased().replacingOccurrences(of: " ", with: "") == wanted
+        }
+    }
+
+    /// The text cut at its embedded commands.
+    private func split(_ text: String, rate: Double, pitch: Double, volume: Double) -> [Piece] {
+        let u = Array(text.utf16)
+        var out = [Piece]()
+        var cur = Piece(text: "", offset: 0, rate: rate, pitch: pitch, volume: volume, silenceAfter: 0, syncsBefore: [])
+        var i = 0, start = 0
+        func flush(_ end: Int) {
+            cur.text = String(utf16CodeUnits: Array(u[start..<end]), count: end - start)
+            cur.offset = start
+            if !cur.text.trimmingCharacters(in: .whitespaces).isEmpty || !cur.syncsBefore.isEmpty || cur.silenceAfter > 0 {
+                out.append(cur)
+            }
+            cur.syncsBefore = []
+            cur.silenceAfter = 0
+        }
+        while i < u.count {
+            if i + 1 < u.count, u[i] == 0x5B, u[i + 1] == 0x5B,
+               let close = (i + 2..<u.count).first(where: { $0 + 1 < u.count && u[$0] == 0x5D && u[$0 + 1] == 0x5D }) {
+                flush(i)
+                let cmd = String(utf16CodeUnits: Array(u[(i + 2)..<close]), count: close - i - 2)
+                    .trimmingCharacters(in: .whitespaces)
+                let parts = cmd.split(separator: " ", maxSplits: 1).map(String.init)
+                let arg = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+                let value = Double(arg.replacingOccurrences(of: "+", with: "")) ?? 0
+                switch parts.first?.lowercased() ?? "" {
+                case "rate": cur.rate = arg.hasPrefix("+") || arg.hasPrefix("-") ? cur.rate + value : value
+                case "pbas": cur.pitch = arg.hasPrefix("+") || arg.hasPrefix("-") ? cur.pitch + value : value
+                case "volm": cur.volume = value
+                case "slnc": if var last = out.popLast() { last.silenceAfter += value / 1000; out.append(last) }
+                case "sync":
+                    var v: UInt32 = 0
+                    if arg.hasPrefix("0x"), let n = UInt32(arg.dropFirst(2), radix: 16) {
+                        v = n
+                    } else if let n = UInt32(arg) {
+                        v = n
+                    } else {
+                        for b in arg.trimmingCharacters(in: CharacterSet(charactersIn: "'\"")).utf8.prefix(4) { v = v << 8 | UInt32(b) }
+                    }
+                    cur.syncsBefore.append(Int32(bitPattern: v))
+                default: break
+                }
+                i = close + 2
+                start = i
+                continue
+            }
+            i += 1
+        }
+        flush(u.count)
+        return out
+    }
+
+    @MainActor func perform(op: Int, channel: Int32, text: String?, voice name: String?, rate: Double, pitch: Double,
+                            volume: Double) {
+        switch op {
+        case Int(MACHINE_SPEECH_SPEAK):
+            let s = synths[channel] ?? {
+                let s = AVSpeechSynthesizer()
+                s.delegate = self
+                synths[channel] = s
+                return s
+            }()
+            if s.isSpeaking { s.stopSpeaking(at: .immediate) }
+            let parts = split(text ?? "", rate: rate > 0 ? rate : 180, pitch: pitch > 0 ? pitch : 46,
+                              volume: max(0, min(1, volume)))
+            var state = (channel: channel, offsets: [ObjectIdentifier: Int](), syncs: [ObjectIdentifier: [Int32]](),
+                         last: ObjectIdentifier?.none)
+            let v = self.voice(name)
+            for p in parts {
+                let ut = AVSpeechUtterance(string: p.text)
+                if let v { ut.voice = v }
+                // About 180 words a minute is AV's default rate.
+                ut.rate = Float(max(Double(AVSpeechUtteranceMinimumSpeechRate),
+                                    min(Double(AVSpeechUtteranceMaximumSpeechRate),
+                                        Double(AVSpeechUtteranceDefaultSpeechRate) * p.rate / 180)))
+                ut.pitchMultiplier = Float(max(0.5, min(2, pow(2, (p.pitch - 46) / 12))))
+                ut.volume = Float(p.volume)
+                ut.postUtteranceDelay = p.silenceAfter
+                state.offsets[ObjectIdentifier(ut)] = p.offset
+                state.syncs[ObjectIdentifier(ut)] = p.syncsBefore
+                state.last = ObjectIdentifier(ut)
+                s.speak(ut)
+            }
+            current[ObjectIdentifier(s)] = state
+            if parts.isEmpty { machine_speech_event(channel, 0, 0, 0) }
+        case Int(MACHINE_SPEECH_STOP):
+            synths[channel]?.stopSpeaking(at: .immediate)
+        case Int(MACHINE_SPEECH_PAUSE):
+            synths[channel]?.pauseSpeaking(at: .immediate)
+        case Int(MACHINE_SPEECH_CONTINUE):
+            synths[channel]?.continueSpeaking()
+        case Int(MACHINE_SPEECH_DISPOSE):
+            if let s = synths.removeValue(forKey: channel) {
+                s.stopSpeaking(at: .immediate)
+                current[ObjectIdentifier(s)] = nil
+            }
+        default:
+            break
+        }
+    }
+
+    func speechSynthesizer(_ s: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        guard let st = current[ObjectIdentifier(s)] else { return }
+        for sync in st.syncs[ObjectIdentifier(utterance)] ?? [] { machine_speech_event(st.channel, 2, sync, 0) }
+    }
+
+    func speechSynthesizer(_ s: AVSpeechSynthesizer, willSpeakRangeOfSpeechString range: NSRange,
+                           utterance: AVSpeechUtterance) {
+        guard let st = current[ObjectIdentifier(s)] else { return }
+        let base = st.offsets[ObjectIdentifier(utterance)] ?? 0
+        machine_speech_event(st.channel, 1, Int32(base + range.location), Int32(range.length))
+    }
+
+    func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        guard let st = current[ObjectIdentifier(s)], st.last == ObjectIdentifier(utterance) else { return }
+        machine_speech_event(st.channel, 0, 0, 0)
+    }
+
+    func speechSynthesizer(_ s: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        guard let st = current[ObjectIdentifier(s)], st.last == ObjectIdentifier(utterance) else { return }
+        machine_speech_event(st.channel, 0, 0, 0)
     }
 }
 #endif
