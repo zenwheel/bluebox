@@ -1,0 +1,71 @@
+/* QuickTime's classic codecs, decoded natively (qt_codec_*.c). */
+#ifndef QT_CODEC_H
+#define QT_CODEC_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+/* ---- Video ----
+ *
+ * A decoder turns a video track's samples into a frame of RGBA bytes
+ * (R, G, B, 255 per pixel, rows top down, width * 4 bytes each).  The frame
+ * belongs to the caller and is kept between samples: the classic codecs
+ * code most frames as changes to the one before.  Samples come in decoding
+ * order, a key frame first.
+ */
+typedef struct qt_vdec qt_vdec;
+
+typedef struct {
+    uint32_t format;       /* the sample description's codec: 'cvid', 'rle ', 'smc ', 'rpza', 'raw ' */
+    int width, height;     /* the sample description's size */
+    int depth;             /* its depth: 1-32, or 33-40 for 1-8-bit grey */
+    const uint32_t *palette; /* depths 1-8: 1 << depth colours, 0x00RRGGBB; NULL for the standard Mac ones */
+} qt_video_format;
+
+/* Whether there is a decoder for this codec at this depth. */
+bool qt_vdec_supported(uint32_t format, int depth);
+qt_vdec *qt_vdec_new(const qt_video_format *f);
+/* Decode one sample into frame (f->width * f->height * 4 bytes); false if
+ * the sample is damaged (the frame may be partly updated). */
+bool qt_vdec_decode(qt_vdec *d, const uint8_t *data, size_t len, uint8_t *frame);
+void qt_vdec_free(qt_vdec *d);
+
+/* The standard Mac colours for depths 1, 2, 4 and 8 (0x00RRGGBB), and the
+ * grey ramps for depths 33-40 (white first, as QuickDraw's grey tables). */
+const uint32_t *qt_standard_palette(int depth);
+
+/* One codec's entry points, for qt_codec.c's table. */
+typedef struct {
+    uint32_t format;
+    bool (*supports)(int depth);
+    void *(*open)(const qt_video_format *f);
+    bool (*decode)(void *state, const qt_video_format *f, const uint32_t *palette, const uint8_t *data,
+                   size_t len, uint8_t *frame);
+    void (*close)(void *state);
+} qt_video_codec;
+
+extern const qt_video_codec qt_codec_cvid;  /* Cinepak (qt_codec_cvid.c) */
+extern const qt_video_codec qt_codec_rle;   /* Animation (qt_codec_apple.c) */
+extern const qt_video_codec qt_codec_smc;   /* Graphics */
+extern const qt_video_codec qt_codec_rpza;  /* Apple Video (Road Pizza) */
+extern const qt_video_codec qt_codec_raw;   /* None */
+
+/* ---- Sound ----
+ *
+ * A sound track's samples as 16-bit PCM, interleaved when stereo.
+ */
+typedef struct {
+    uint32_t format;       /* 'raw ' (8-bit offset), 'twos', 'sowt', 'ima4', 'MAC3', 'MAC6' */
+    int channels;          /* 1 or 2 */
+    int bits;              /* 8 or 16 for the uncompressed formats */
+    double rate;           /* frames per second */
+} qt_sound_format;
+
+bool qt_adec_supported(const qt_sound_format *f);
+/* Bytes of coded data holding n frames (whole packets for 'ima4' and MACE). */
+size_t qt_adec_bytes(const qt_sound_format *f, uint32_t frames);
+/* Decode len bytes into *pcm (malloc'd); returns the frames decoded. */
+uint32_t qt_adec_decode(const qt_sound_format *f, const uint8_t *data, size_t len, int16_t **pcm);
+
+#endif
