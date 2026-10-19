@@ -1176,6 +1176,8 @@ typedef struct {
     int32_t flags;
     gaddr filter;
     int32_t filter_refcon;
+    int drawn_x;       /* where the slider's thumb was drawn (-1: none) */
+    int drawn_playing; /* and the button, 1 pause or 0 play (-1: not drawn) */
 } controller;
 
 static controller controllers[MAX_CONTROLLERS];
@@ -1209,6 +1211,22 @@ static bool filter(controller *c, int16_t action, gaddr params)
     return (cpu_pop16(cpu) >> 8) != 0;
 }
 
+/* The slider thumb's centre for the movie's time, or -1 without one. */
+static int thumb_x(const controller *c, movie *m)
+{
+    qrect b = bar_rect(c);
+    int left = b.left + 18, right = b.right - 6;
+    if (!m || m->duration <= 0 || right <= left)
+        return -1;
+    return left + (int)((right - left) * movie_ms(m) / (duration_ms(m) ? duration_ms(m) : 1));
+}
+
+static qrect thumb_rect(const controller *c, int x)
+{
+    qrect b = bar_rect(c);
+    return (qrect){ (int16_t)(b.top + 4), (int16_t)(x - 3), (int16_t)(b.top + 13), (int16_t)(x + 3) };
+}
+
 static void draw_bar(controller *c)
 {
     movie *m = movie_of(c->movie);
@@ -1237,17 +1255,53 @@ static void draw_bar(controller *c)
             tb_LineTo((int16_t)(bx + i * 2 + 1), (int16_t)(by + 9 - i));
         }
     }
+    c->drawn_playing = m && m->playing;
     /* The time slider. */
     int left = b.left + 18, right = b.right - 6;
     tb_MoveTo((int16_t)left, (int16_t)(b.top + 8));
     tb_LineTo((int16_t)right, (int16_t)(b.top + 8));
-    if (m && m->duration > 0 && right > left) {
-        int x = left + (int)((right - left) * movie_ms(m) / (duration_ms(m) ? duration_ms(m) : 1));
-        qrect_put(r, (qrect){ (int16_t)(b.top + 4), (int16_t)(x - 3), (int16_t)(b.top + 13), (int16_t)(x + 3) });
+    c->drawn_x = thumb_x(c, m);
+    if (c->drawn_x >= 0) {
+        qrect_put(r, thumb_rect(c, c->drawn_x));
         tb_EraseRect(r);
         tb_FrameRect(r);
     }
     tb_DisposePtr(r);
+    tb_SetPort(saved);
+}
+
+/* While the movie plays: the thumb moved along, the rest left alone (a
+ * whole bar redrawn at every idle flickers). */
+static void update_bar(controller *c)
+{
+    movie *m = movie_of(c->movie);
+    if (!c->visible || !c->attached)
+        return;
+    int x = thumb_x(c, m), playing = m && m->playing;
+    if (playing != c->drawn_playing || c->drawn_x < 0 || x < 0) {
+        draw_bar(c);
+        return;
+    }
+    if (x == c->drawn_x)
+        return;
+    gaddr saved = qd_port();
+    tb_SetPort(c->port);
+    tb_PenNormal();
+    qrect b = bar_rect(c), old = thumb_rect(c, c->drawn_x);
+    gaddr r = tb_NewPtr(8, false, false);
+    qrect_put(r, old);
+    tb_EraseRect(r);
+    int left = b.left + 18, right = b.right - 6; /* the slider's line where the thumb was */
+    int from = old.left > left ? old.left : left, to = old.right - 1 < right ? old.right - 1 : right;
+    if (to >= from) {
+        tb_MoveTo((int16_t)from, (int16_t)(b.top + 8));
+        tb_LineTo((int16_t)to, (int16_t)(b.top + 8));
+    }
+    qrect_put(r, thumb_rect(c, x));
+    tb_EraseRect(r);
+    tb_FrameRect(r);
+    tb_DisposePtr(r);
+    c->drawn_x = x;
     tb_SetPort(saved);
 }
 
@@ -1271,7 +1325,7 @@ static void mc_idle(controller *c)
     bool was = m->playing;
     task(m);
     if (m->playing || was)
-        draw_bar(c);
+        update_bar(c);
 }
 
 static void mc_play(controller *c, int32_t rate)
@@ -1311,6 +1365,7 @@ static bool mc_click(controller *c, uint32_t pt)
 
 static void place(controller *c, qrect r)
 {
+    c->drawn_x = -1; /* the bar is drawn whole next time */
     movie *m = movie_of(c->movie);
     int bar = c->visible && c->attached ? BAR : 0;
     if (!m) {
@@ -1511,6 +1566,7 @@ gaddr tb_NewMovieController(gaddr movie_h, gaddr rect, int32_t flags)
     c->visible = !(flags & mcNotVisible);
     c->attached = true;
     c->active = true;
+    c->drawn_x = c->drawn_playing = -1;
     movie *m = movie_of(movie_h);
     c->port = m ? m->port : qd_port();
     place(c, rect ? qrect_get(rect) : (qrect){ 0, 0, 0, 0 });
