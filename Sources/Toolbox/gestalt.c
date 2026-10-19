@@ -105,6 +105,8 @@ void gestalt_init(void)
      * Manager, 16-bit sound I/O, SndPlayDoubleBuffer, several channels,
      * 16-bit audio (no recording devices). */
     gestalt_set(fourcc("snd "), 0x1C8B);
+    gestalt_set(fourcc("teat"), 0x1);           /* gestaltTEAttr: TEGetHiliteRgn */
+    gestalt_set(fourcc("drag"), 0x1);           /* gestaltDragMgrAttr: the Drag Manager */
     gestalt_set(fourcc("ttsc"), 0x1);           /* gestaltSpeechAttr: the Speech Manager */
     gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
 }

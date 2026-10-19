@@ -1329,6 +1329,23 @@ uint32_t ev_press_count(void);
 bool ev_still_down(void);
 void ev_wait_tick(void);
 
+/* The visible window whose structure holds the global point, or nil. */
+gaddr wm_window_at(uint32_t p)
+{
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
+        if (!wvisible(w))
+            continue;
+        hrgn s;
+        hrgn_init(&s);
+        rgn_read(WindowRecord_strucRgn(w), &s);
+        bool in = hrgn_contains(&s, pt_h(p), pt_v(p));
+        hrgn_free(&s);
+        if (in)
+            return w;
+    }
+    return 0;
+}
+
 int16_t tb_FindWindow(uint32_t p, gaddr wpp)
 {
     wr32(wpp, 0);

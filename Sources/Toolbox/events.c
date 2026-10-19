@@ -397,6 +397,15 @@ bool ev_still_down(void)
     return d;
 }
 
+/* The modifier keys and button now, as an event's modifiers field has them. */
+uint16_t ev_modifiers(void)
+{
+    pthread_mutex_lock(&lock);
+    uint16_t m = (uint16_t)(key_mods | (button_down ? 0 : btnState));
+    pthread_mutex_unlock(&lock);
+    return m;
+}
+
 uint32_t ev_mouse_global(void)
 {
     pthread_mutex_lock(&lock);

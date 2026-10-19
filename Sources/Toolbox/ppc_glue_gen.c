@@ -2471,6 +2471,354 @@ static void ppcglue_DIZero(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_InstallTrackingHandler(ppc_cpu *c)
+{
+    gaddr a_trackingHandler = (gaddr)c->gpr[3];
+    gaddr a_theWindow = (gaddr)c->gpr[4];
+    gaddr a_handlerRefCon = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallTrackingHandler(a_trackingHandler, a_theWindow, a_handlerRefCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallReceiveHandler(ppc_cpu *c)
+{
+    gaddr a_receiveHandler = (gaddr)c->gpr[3];
+    gaddr a_theWindow = (gaddr)c->gpr[4];
+    gaddr a_handlerRefCon = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallReceiveHandler(a_receiveHandler, a_theWindow, a_handlerRefCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveTrackingHandler(ppc_cpu *c)
+{
+    gaddr a_trackingHandler = (gaddr)c->gpr[3];
+    gaddr a_theWindow = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveTrackingHandler(a_trackingHandler, a_theWindow);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveReceiveHandler(ppc_cpu *c)
+{
+    gaddr a_receiveHandler = (gaddr)c->gpr[3];
+    gaddr a_theWindow = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveReceiveHandler(a_receiveHandler, a_theWindow);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewDrag(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewDrag(a_theDrag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeDrag(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisposeDrag(a_theDrag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddDragItemFlavor(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    int32_t a_theType = (int32_t)c->gpr[5];
+    gaddr a_dataPtr = (gaddr)c->gpr[6];
+    int32_t a_dataSize = (int32_t)c->gpr[7];
+    uint32_t a_theFlags = (uint32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddDragItemFlavor(a_theDrag, a_theItemRef, a_theType, a_dataPtr, a_dataSize, a_theFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDragItemFlavorData(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    int32_t a_theType = (int32_t)c->gpr[5];
+    gaddr a_dataPtr = (gaddr)c->gpr[6];
+    int32_t a_dataSize = (int32_t)c->gpr[7];
+    uint32_t a_dataOffset = (uint32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDragItemFlavorData(a_theDrag, a_theItemRef, a_theType, a_dataPtr, a_dataSize, a_dataOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDragSendProc(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_sendProc = (gaddr)c->gpr[4];
+    gaddr a_dragSendRefCon = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDragSendProc(a_theDrag, a_sendProc, a_dragSendRefCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDragInputProc(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_inputProc = (gaddr)c->gpr[4];
+    gaddr a_dragInputRefCon = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDragInputProc(a_theDrag, a_inputProc, a_dragInputRefCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDragDrawingProc(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_drawingProc = (gaddr)c->gpr[4];
+    gaddr a_dragDrawingRefCon = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDragDrawingProc(a_theDrag, a_drawingProc, a_dragDrawingRefCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TrackDrag(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_theEvent = (gaddr)c->gpr[4];
+    gaddr a_theRegion = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TrackDrag(a_theDrag, a_theEvent, a_theRegion);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountDragItems(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_numItems = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountDragItems(a_theDrag, a_numItems);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDragItemReferenceNumber(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint16_t a_index = (uint16_t)c->gpr[4];
+    gaddr a_theItemRef = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDragItemReferenceNumber(a_theDrag, a_index, a_theItemRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountDragItemFlavors(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    gaddr a_numFlavors = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountDragItemFlavors(a_theDrag, a_theItemRef, a_numFlavors);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFlavorType(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    uint16_t a_index = (uint16_t)c->gpr[5];
+    gaddr a_theType = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFlavorType(a_theDrag, a_theItemRef, a_index, a_theType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFlavorFlags(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    int32_t a_theType = (int32_t)c->gpr[5];
+    gaddr a_theFlags = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFlavorFlags(a_theDrag, a_theItemRef, a_theType, a_theFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFlavorDataSize(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    int32_t a_theType = (int32_t)c->gpr[5];
+    gaddr a_dataSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFlavorDataSize(a_theDrag, a_theItemRef, a_theType, a_dataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFlavorData(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    int32_t a_theType = (int32_t)c->gpr[5];
+    gaddr a_dataPtr = (gaddr)c->gpr[6];
+    gaddr a_dataSize = (gaddr)c->gpr[7];
+    uint32_t a_dataOffset = (uint32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFlavorData(a_theDrag, a_theItemRef, a_theType, a_dataPtr, a_dataSize, a_dataOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDragItemBounds(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    gaddr a_itemBounds = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDragItemBounds(a_theDrag, a_theItemRef, a_itemBounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDragItemBounds(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_theItemRef = (uint32_t)c->gpr[4];
+    gaddr a_itemBounds = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDragItemBounds(a_theDrag, a_theItemRef, a_itemBounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDropLocation(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_dropLocation = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDropLocation(a_theDrag, a_dropLocation);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDropLocation(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_dropLocation = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDropLocation(a_theDrag, a_dropLocation);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDragAttributes(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_flags = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDragAttributes(a_theDrag, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDragMouse(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_mouse = (gaddr)c->gpr[4];
+    gaddr a_globalPinnedMouse = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDragMouse(a_theDrag, a_mouse, a_globalPinnedMouse);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDragMouse(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_globalPinnedMouse = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDragMouse(a_theDrag, a_globalPinnedMouse);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDragOrigin(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_globalInitialMouse = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDragOrigin(a_theDrag, a_globalInitialMouse);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDragModifiers(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_modifiers = (gaddr)c->gpr[4];
+    gaddr a_mouseDownModifiers = (gaddr)c->gpr[5];
+    gaddr a_mouseUpModifiers = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDragModifiers(a_theDrag, a_modifiers, a_mouseDownModifiers, a_mouseUpModifiers);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShowDragHilite(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_hiliteFrame = (gaddr)c->gpr[4];
+    int8_t a_inside = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ShowDragHilite(a_theDrag, a_hiliteFrame, a_inside);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HideDragHilite(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HideDragHilite(a_theDrag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DragPreScroll(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    int16_t a_dH = (int16_t)c->gpr[4];
+    int16_t a_dV = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DragPreScroll(a_theDrag, a_dH, a_dV);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DragPostScroll(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DragPostScroll(a_theDrag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UpdateDragHilite(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_updateRgn = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UpdateDragHilite(a_theDrag, a_updateRgn);
+    c->pc = c->lr;
+}
+
+static void ppcglue_WaitMouseMoved(ppc_cpu *c)
+{
+    uint32_t a_initialMouse = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_WaitMouseMoved(a_initialMouse);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ZoomRects(ppc_cpu *c)
+{
+    gaddr a_fromRect = (gaddr)c->gpr[3];
+    gaddr a_toRect = (gaddr)c->gpr[4];
+    int16_t a_zoomSteps = (int16_t)c->gpr[5];
+    int16_t a_acceleration = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ZoomRects(a_fromRect, a_toRect, a_zoomSteps, a_acceleration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ZoomRegion(ppc_cpu *c)
+{
+    gaddr a_region = (gaddr)c->gpr[3];
+    uint32_t a_zoomDistance = (uint32_t)c->gpr[4];
+    int16_t a_zoomSteps = (int16_t)c->gpr[5];
+    int16_t a_acceleration = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ZoomRegion(a_region, a_zoomDistance, a_zoomSteps, a_acceleration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDragHiliteColor(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_color = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDragHiliteColor(a_window, a_color);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDragImage(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    gaddr a_imagePixMap = (gaddr)c->gpr[4];
+    gaddr a_imageRgn = (gaddr)c->gpr[5];
+    uint32_t a_imageOffsetPt = (uint32_t)c->gpr[6];
+    uint32_t a_theImageFlags = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDragImage(a_theDrag, a_imagePixMap, a_imageRgn, a_imageOffsetPt, a_theImageFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ChangeDragBehaviors(ppc_cpu *c)
+{
+    gaddr a_theDrag = (gaddr)c->gpr[3];
+    uint32_t a_inBehaviorsToSet = (uint32_t)c->gpr[4];
+    uint32_t a_inBehaviorsToClear = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ChangeDragBehaviors(a_theDrag, a_inBehaviorsToSet, a_inBehaviorsToClear);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitEditionPackVersion(ppc_cpu *c)
 {
     int16_t a_unused = (int16_t)c->gpr[3];
@@ -10886,6 +11234,14 @@ static void ppcglue_TextUtilFunctions(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_TEGetHiliteRgn(ppc_cpu *c)
+{
+    gaddr a_region = (gaddr)c->gpr[3];
+    gaddr a_hTE = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TEGetHiliteRgn(a_region, a_hTE);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMoviesError(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMoviesError();
@@ -11546,588 +11902,6 @@ static void ppctrap_DMRegisterNotifyProc(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap((uint16_t)(0xABEB));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_InstallTrackingHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_InstallReceiveHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveTrackingHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveReceiveHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewDrag(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeDrag(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddDragItemFlavor(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDragItemFlavorData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDragSendProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xAu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDragInputProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDragDrawingProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xCu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_TrackDrag(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CountDragItems(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDragItemReferenceNumber(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CountDragItemFlavors(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x10u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetFlavorType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x11u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetFlavorFlags(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x12u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetFlavorDataSize(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x13u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetFlavorData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDragItemBounds(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x15u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDragItemBounds(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x16u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDropLocation(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x17u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDropLocation(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x18u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDragAttributes(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x19u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDragMouse(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDragMouse(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDragOrigin(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDragModifiers(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShowDragHilite(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HideDragHilite(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DragPreScroll(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DragPostScroll(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x21u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_UpdateDragHilite(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x22u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_WaitMouseMoved(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x23u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ZoomRects(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x24u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ZoomRegion(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x25u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDragHiliteColor(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x26u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDragImage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x27u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xABED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ChangeDragBehaviors(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x28u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABED));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
@@ -22334,7 +22108,7 @@ const ppc_export ppc_exports[] = {
     {"AddCallBackToTimeBase", ppctrap_AddCallBackToTimeBase},
     {"AddClonedTrackToMovie", ppctrap_AddClonedTrackToMovie},
     {"AddComp", ppcglue_AddComp},
-    {"AddDragItemFlavor", ppctrap_AddDragItemFlavor},
+    {"AddDragItemFlavor", ppcglue_AddDragItemFlavor},
     {"AddEmptyTrackToMovie", ppctrap_AddEmptyTrackToMovie},
     {"AddFilePreview", ppcglue_AddFilePreview},
     {"AddIconToSuite", ppcglue_AddIconToSuite},
@@ -22417,7 +22191,7 @@ const ppc_export ppc_exports[] = {
     {"CanQuickTimeOpenFile", ppctrap_CanQuickTimeOpenFile},
     {"CancelCallBack", ppctrap_CancelCallBack},
     {"CautionAlert", ppcglue_CautionAlert},
-    {"ChangeDragBehaviors", ppctrap_ChangeDragBehaviors},
+    {"ChangeDragBehaviors", ppcglue_ChangeDragBehaviors},
     {"ChangedResource", ppcglue_ChangedResource},
     {"Char2Pixel", ppcglue_Char2Pixel},
     {"CharByte", ppcglue_CharByte},
@@ -22489,8 +22263,8 @@ const ppc_export ppc_exports[] = {
     {"Count1Types", ppcglue_Count1Types},
     {"CountADBs", ppcglue_CountADBs},
     {"CountDITL", ppcglue_CountDITL},
-    {"CountDragItemFlavors", ppctrap_CountDragItemFlavors},
-    {"CountDragItems", ppctrap_CountDragItems},
+    {"CountDragItemFlavors", ppcglue_CountDragItemFlavors},
+    {"CountDragItems", ppcglue_CountDragItems},
     {"CountImageDescriptionExtensionType", ppctrap_CountImageDescriptionExtensionType},
     {"CountMItems", ppcglue_CountMItems},
     {"CountResources", ppcglue_CountResources},
@@ -22556,7 +22330,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeCodecNameList", ppcglue_DisposeCodecNameList},
     {"DisposeControl", ppcglue_DisposeControl},
     {"DisposeDialog", ppcglue_DisposeDialog},
-    {"DisposeDrag", ppctrap_DisposeDrag},
+    {"DisposeDrag", ppcglue_DisposeDrag},
     {"DisposeGDevice", ppcglue_DisposeGDevice},
     {"DisposeGWorld", ppcglue_DisposeGWorld},
     {"DisposeHandle", ppcglue_DisposeHandle},
@@ -22589,8 +22363,8 @@ const ppc_export ppc_exports[] = {
     {"DragAlignedWindow", ppctrap_DragAlignedWindow},
     {"DragControl", ppcglue_DragControl},
     {"DragGrayRgn", ppcglue_DragGrayRgn},
-    {"DragPostScroll", ppctrap_DragPostScroll},
-    {"DragPreScroll", ppctrap_DragPreScroll},
+    {"DragPostScroll", ppcglue_DragPostScroll},
+    {"DragPreScroll", ppcglue_DragPreScroll},
     {"DragTheRgn", ppctrap_DragTheRgn},
     {"DragWindow", ppcglue_DragWindow},
     {"Draw1Control", ppcglue_Draw1Control},
@@ -22778,14 +22552,14 @@ const ppc_export ppc_exports[] = {
     {"GetDialogItem", ppcglue_GetDialogItem},
     {"GetDialogItemText", ppcglue_GetDialogItemText},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
-    {"GetDragAttributes", ppctrap_GetDragAttributes},
-    {"GetDragHiliteColor", ppctrap_GetDragHiliteColor},
-    {"GetDragItemBounds", ppctrap_GetDragItemBounds},
-    {"GetDragItemReferenceNumber", ppctrap_GetDragItemReferenceNumber},
-    {"GetDragModifiers", ppctrap_GetDragModifiers},
-    {"GetDragMouse", ppctrap_GetDragMouse},
-    {"GetDragOrigin", ppctrap_GetDragOrigin},
-    {"GetDropLocation", ppctrap_GetDropLocation},
+    {"GetDragAttributes", ppcglue_GetDragAttributes},
+    {"GetDragHiliteColor", ppcglue_GetDragHiliteColor},
+    {"GetDragItemBounds", ppcglue_GetDragItemBounds},
+    {"GetDragItemReferenceNumber", ppcglue_GetDragItemReferenceNumber},
+    {"GetDragModifiers", ppcglue_GetDragModifiers},
+    {"GetDragMouse", ppcglue_GetDragMouse},
+    {"GetDragOrigin", ppcglue_GetDragOrigin},
+    {"GetDropLocation", ppcglue_GetDropLocation},
     {"GetEditionFormatMark", ppctrap_GetEditionFormatMark},
     {"GetEditionInfo", ppctrap_GetEditionInfo},
     {"GetEditionOpenerProc", ppctrap_GetEditionOpenerProc},
@@ -22793,10 +22567,10 @@ const ppc_export ppc_exports[] = {
     {"GetEntryUsage", ppcglue_GetEntryUsage},
     {"GetFNum", ppcglue_GetFNum},
     {"GetFirstCallBack", ppctrap_GetFirstCallBack},
-    {"GetFlavorData", ppctrap_GetFlavorData},
-    {"GetFlavorDataSize", ppctrap_GetFlavorDataSize},
-    {"GetFlavorFlags", ppctrap_GetFlavorFlags},
-    {"GetFlavorType", ppctrap_GetFlavorType},
+    {"GetFlavorData", ppcglue_GetFlavorData},
+    {"GetFlavorDataSize", ppcglue_GetFlavorDataSize},
+    {"GetFlavorFlags", ppcglue_GetFlavorFlags},
+    {"GetFlavorType", ppcglue_GetFlavorType},
     {"GetFontInfo", ppcglue_GetFontInfo},
     {"GetFontName", ppcglue_GetFontName},
     {"GetForeColor", ppcglue_GetForeColor},
@@ -23098,7 +22872,7 @@ const ppc_export ppc_exports[] = {
     {"HideControl", ppcglue_HideControl},
     {"HideCursor", ppcglue_HideCursor},
     {"HideDialogItem", ppcglue_HideDialogItem},
-    {"HideDragHilite", ppctrap_HideDragHilite},
+    {"HideDragHilite", ppcglue_HideDragHilite},
     {"HidePen", ppcglue_HidePen},
     {"HideWindow", ppcglue_HideWindow},
     {"HiliteColor", ppcglue_HiliteColor},
@@ -23179,8 +22953,8 @@ const ppc_export ppc_exports[] = {
     {"InsertTrackSegment", ppctrap_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
-    {"InstallReceiveHandler", ppctrap_InstallReceiveHandler},
-    {"InstallTrackingHandler", ppctrap_InstallTrackingHandler},
+    {"InstallReceiveHandler", ppcglue_InstallReceiveHandler},
+    {"InstallTrackingHandler", ppcglue_InstallTrackingHandler},
     {"IntlScript", ppcglue_IntlScript},
     {"InvalMenuBar", ppcglue_InvalMenuBar},
     {"InvalRect", ppcglue_InvalRect},
@@ -23804,7 +23578,7 @@ const ppc_export ppc_exports[] = {
     {"NewColorDialog", ppcglue_NewColorDialog},
     {"NewControl", ppcglue_NewControl},
     {"NewDialog", ppcglue_NewDialog},
-    {"NewDrag", ppctrap_NewDrag},
+    {"NewDrag", ppcglue_NewDrag},
     {"NewEmptyHandle", ppcglue_NewEmptyHandle},
     {"NewEmptyHandleSys", ppcglue_NewEmptyHandleSys},
     {"NewFatRoutineDescriptor", ppctrap_NewFatRoutineDescriptor},
@@ -24395,10 +24169,10 @@ const ppc_export ppc_exports[] = {
     {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
     {"RemoveMovieExecuteWiredActionsProc", ppctrap_RemoveMovieExecuteWiredActionsProc},
     {"RemoveMovieResource", ppctrap_RemoveMovieResource},
-    {"RemoveReceiveHandler", ppctrap_RemoveReceiveHandler},
+    {"RemoveReceiveHandler", ppcglue_RemoveReceiveHandler},
     {"RemoveResource", ppcglue_RemoveResource},
     {"RemoveSoundDescriptionExtension", ppctrap_RemoveSoundDescriptionExtension},
-    {"RemoveTrackingHandler", ppctrap_RemoveTrackingHandler},
+    {"RemoveTrackingHandler", ppcglue_RemoveTrackingHandler},
     {"RemoveUserData", ppctrap_RemoveUserData},
     {"RemoveUserDataText", ppctrap_RemoveUserDataText},
     {"ReplaceDSequenceImageDescription", ppctrap_ReplaceDSequenceImageDescription},
@@ -24510,14 +24284,14 @@ const ppc_export ppc_exports[] = {
     {"SetDialogItem", ppcglue_SetDialogItem},
     {"SetDialogItemText", ppcglue_SetDialogItemText},
     {"SetDialogTracksCursor", ppcglue_SetDialogTracksCursor},
-    {"SetDragDrawingProc", ppctrap_SetDragDrawingProc},
-    {"SetDragImage", ppctrap_SetDragImage},
-    {"SetDragInputProc", ppctrap_SetDragInputProc},
-    {"SetDragItemBounds", ppctrap_SetDragItemBounds},
-    {"SetDragItemFlavorData", ppctrap_SetDragItemFlavorData},
-    {"SetDragMouse", ppctrap_SetDragMouse},
-    {"SetDragSendProc", ppctrap_SetDragSendProc},
-    {"SetDropLocation", ppctrap_SetDropLocation},
+    {"SetDragDrawingProc", ppcglue_SetDragDrawingProc},
+    {"SetDragImage", ppcglue_SetDragImage},
+    {"SetDragInputProc", ppcglue_SetDragInputProc},
+    {"SetDragItemBounds", ppcglue_SetDragItemBounds},
+    {"SetDragItemFlavorData", ppcglue_SetDragItemFlavorData},
+    {"SetDragMouse", ppcglue_SetDragMouse},
+    {"SetDragSendProc", ppcglue_SetDragSendProc},
+    {"SetDropLocation", ppcglue_SetDropLocation},
     {"SetEditionFormatMark", ppctrap_SetEditionFormatMark},
     {"SetEditionOpenerProc", ppctrap_SetEditionOpenerProc},
     {"SetEmptyRgn", ppcglue_SetEmptyRgn},
@@ -24677,7 +24451,7 @@ const ppc_export ppc_exports[] = {
     {"ShowControl", ppcglue_ShowControl},
     {"ShowCursor", ppcglue_ShowCursor},
     {"ShowDialogItem", ppcglue_ShowDialogItem},
-    {"ShowDragHilite", ppctrap_ShowDragHilite},
+    {"ShowDragHilite", ppcglue_ShowDragHilite},
     {"ShowHide", ppcglue_ShowHide},
     {"ShowMovieInformation", ppctrap_ShowMovieInformation},
     {"ShowMoviePoster", ppcglue_ShowMoviePoster},
@@ -24781,6 +24555,7 @@ const ppc_export ppc_exports[] = {
     {"TEFeatureFlag", ppcglue_TEFeatureFlag},
     {"TEFromScrap", ppcglue_TEFromScrap},
     {"TEGetHeight", ppcglue_TEGetHeight},
+    {"TEGetHiliteRgn", ppcglue_TEGetHiliteRgn},
     {"TEGetOffset", ppcglue_TEGetOffset},
     {"TEGetPoint", ppcglue_TEGetPoint},
     {"TEGetScrapLength", ppcglue_TEGetScrapLength},
@@ -24835,7 +24610,7 @@ const ppc_export ppc_exports[] = {
     {"ToggleDate", ppctrap_ToggleDate},
     {"TrackBox", ppcglue_TrackBox},
     {"TrackControl", ppcglue_TrackControl},
-    {"TrackDrag", ppctrap_TrackDrag},
+    {"TrackDrag", ppcglue_TrackDrag},
     {"TrackGoAway", ppcglue_TrackGoAway},
     {"TrackTimeToMediaTime", ppctrap_TrackTimeToMediaTime},
     {"TransformRgn", ppctrap_TransformRgn},
@@ -24856,7 +24631,7 @@ const ppc_export ppc_exports[] = {
     {"UpdateAlias", ppcglue_UpdateAlias},
     {"UpdateControls", ppcglue_UpdateControls},
     {"UpdateDialog", ppcglue_UpdateDialog},
-    {"UpdateDragHilite", ppctrap_UpdateDragHilite},
+    {"UpdateDragHilite", ppcglue_UpdateDragHilite},
     {"UpdateGWorld", ppcglue_UpdateGWorld},
     {"UpdateMovie", ppcglue_UpdateMovie},
     {"UpdateMovieInStorage", ppctrap_UpdateMovieInStorage},
@@ -24871,7 +24646,7 @@ const ppc_export ppc_exports[] = {
     {"ValidRect", ppcglue_ValidRect},
     {"ValidRgn", ppcglue_ValidRgn},
     {"VisibleLength", ppcglue_VisibleLength},
-    {"WaitMouseMoved", ppctrap_WaitMouseMoved},
+    {"WaitMouseMoved", ppcglue_WaitMouseMoved},
     {"WaitMouseUp", ppcglue_WaitMouseUp},
     {"WaitNextEvent", ppcglue_WaitNextEvent},
     {"WakeUpProcess", ppcglue_WakeUpProcess},
@@ -24882,8 +24657,8 @@ const ppc_export ppc_exports[] = {
     {"XorRgn", ppcglue_XorRgn},
     {"YieldToThread", ppcglue_YieldToThread},
     {"ZeroScrap", ppcglue_ZeroScrap},
-    {"ZoomRects", ppctrap_ZoomRects},
-    {"ZoomRegion", ppctrap_ZoomRegion},
+    {"ZoomRects", ppcglue_ZoomRects},
+    {"ZoomRegion", ppcglue_ZoomRegion},
     {"ZoomWindow", ppcglue_ZoomWindow},
     {"_AE_hdlr_delete", ppcglue__AE_hdlr_delete},
     {"_AE_hdlr_insert", ppcglue__AE_hdlr_insert},

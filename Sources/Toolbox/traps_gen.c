@@ -1451,6 +1451,21 @@ static void glue_AddComp(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddDragItemFlavor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theFlags = (uint32_t)cpu_pop32(c);
+    int32_t a_dataSize = (int32_t)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    int32_t a_theType = (int32_t)cpu_pop32(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AddDragItemFlavor(a_theDrag, a_theItemRef, a_theType, a_dataPtr, a_dataSize, a_theFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AddFilePreview(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1871,6 +1886,18 @@ static void glue_CautionAlert(cpu68k *c, uint16_t trapword)
     gaddr a_fp = (gaddr)cpu_pop32(c);
     int16_t a_id = (int16_t)cpu_pop16(c);
     int16_t r = tb_CautionAlert(a_id, a_fp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ChangeDragBehaviors(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_inBehaviorsToClear = (uint32_t)cpu_pop32(c);
+    uint32_t a_inBehaviorsToSet = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ChangeDragBehaviors(a_theDrag, a_inBehaviorsToSet, a_inBehaviorsToClear);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -2320,6 +2347,29 @@ static void glue_CountDITL(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CountDragItemFlavors(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numFlavors = (gaddr)cpu_pop32(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CountDragItemFlavors(a_theDrag, a_theItemRef, a_numFlavors);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CountDragItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numItems = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CountDragItems(a_theDrag, a_numItems);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CountMItems(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2744,6 +2794,16 @@ static void glue_DisposeDialog(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DisposeDrag(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DisposeDrag(a_theDrag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposeGDevice(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2926,6 +2986,28 @@ static void glue_DragGrayRgn(cpu68k *c, uint16_t trapword)
     gaddr a_rgn = (gaddr)cpu_pop32(c);
     int32_t r = tb_DragGrayRgn(a_rgn, a_startp, a_limit, a_slop, a_axis, a_proc);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DragPostScroll(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DragPostScroll(a_theDrag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DragPreScroll(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_dV = (int16_t)cpu_pop16(c);
+    int16_t a_dH = (int16_t)cpu_pop16(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DragPreScroll(a_theDrag, a_dH, a_dV);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -4382,6 +4464,99 @@ static void glue_GetDialogItemText(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDragAttributes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_flags = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDragAttributes(a_theDrag, a_flags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDragHiliteColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_color = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDragHiliteColor(a_window, a_color);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDragItemBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemBounds = (gaddr)cpu_pop32(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDragItemBounds(a_theDrag, a_theItemRef, a_itemBounds);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDragItemReferenceNumber(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theItemRef = (gaddr)cpu_pop32(c);
+    uint16_t a_index = (uint16_t)cpu_pop16(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDragItemReferenceNumber(a_theDrag, a_index, a_theItemRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDragModifiers(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_mouseUpModifiers = (gaddr)cpu_pop32(c);
+    gaddr a_mouseDownModifiers = (gaddr)cpu_pop32(c);
+    gaddr a_modifiers = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDragModifiers(a_theDrag, a_modifiers, a_mouseDownModifiers, a_mouseUpModifiers);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDragMouse(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_globalPinnedMouse = (gaddr)cpu_pop32(c);
+    gaddr a_mouse = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDragMouse(a_theDrag, a_mouse, a_globalPinnedMouse);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDragOrigin(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_globalInitialMouse = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDragOrigin(a_theDrag, a_globalInitialMouse);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDropLocation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dropLocation = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDropLocation(a_theDrag, a_dropLocation);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetEntryColor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4412,6 +4587,60 @@ static void glue_GetFNum(cpu68k *c, uint16_t trapword)
     gaddr a_fnum = (gaddr)cpu_pop32(c);
     gaddr a_fnam = (gaddr)cpu_pop32(c);
     tb_GetFNum(a_fnam, a_fnum);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFlavorData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_dataOffset = (uint32_t)cpu_pop32(c);
+    gaddr a_dataSize = (gaddr)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    int32_t a_theType = (int32_t)cpu_pop32(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFlavorData(a_theDrag, a_theItemRef, a_theType, a_dataPtr, a_dataSize, a_dataOffset);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFlavorDataSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dataSize = (gaddr)cpu_pop32(c);
+    int32_t a_theType = (int32_t)cpu_pop32(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFlavorDataSize(a_theDrag, a_theItemRef, a_theType, a_dataSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFlavorFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theFlags = (gaddr)cpu_pop32(c);
+    int32_t a_theType = (int32_t)cpu_pop32(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFlavorFlags(a_theDrag, a_theItemRef, a_theType, a_theFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFlavorType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theType = (gaddr)cpu_pop32(c);
+    uint16_t a_index = (uint16_t)cpu_pop16(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFlavorType(a_theDrag, a_theItemRef, a_index, a_theType);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -6167,6 +6396,16 @@ static void glue_HideDialogItem(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_HideDragHilite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_HideDragHilite(a_theDrag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_HidePen(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6637,6 +6876,30 @@ static void glue_InsetRgn(cpu68k *c, uint16_t trapword)
     int16_t a_dh = (int16_t)cpu_pop16(c);
     gaddr a_rh = (gaddr)cpu_pop32(c);
     tb_InsetRgn(a_rh, a_dh, a_dv);
+    cpu_push32(c, ret);
+}
+
+static void glue_InstallReceiveHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_handlerRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    gaddr a_receiveHandler = (gaddr)cpu_pop32(c);
+    int16_t r = tb_InstallReceiveHandler(a_receiveHandler, a_theWindow, a_handlerRefCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InstallTrackingHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_handlerRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    gaddr a_trackingHandler = (gaddr)cpu_pop32(c);
+    int16_t r = tb_InstallTrackingHandler(a_trackingHandler, a_theWindow, a_handlerRefCon);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8079,6 +8342,16 @@ static void glue_NewDialog(cpu68k *c, uint16_t trapword)
     gaddr a_dst = (gaddr)cpu_pop32(c);
     gaddr r = tb_NewDialog(a_dst, a_r, a_tit, a_vis, a_procid, a_behind, a_gaflag, a_rc, a_items);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewDrag(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewDrag(a_theDrag);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -10359,12 +10632,34 @@ static void glue_ReleaseResource(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RemoveReceiveHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    gaddr a_receiveHandler = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RemoveReceiveHandler(a_receiveHandler, a_theWindow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RemoveResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     gaddr a_res = (gaddr)cpu_pop32(c);
     tb_RemoveResource(a_res);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveTrackingHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    gaddr a_trackingHandler = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RemoveTrackingHandler(a_trackingHandler, a_theWindow);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -11227,6 +11522,105 @@ static void glue_SetDialogTracksCursor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDragDrawingProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dragDrawingRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_drawingProc = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDragDrawingProc(a_theDrag, a_drawingProc, a_dragDrawingRefCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDragImage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theImageFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_imageOffsetPt = (uint32_t)cpu_pop32(c);
+    gaddr a_imageRgn = (gaddr)cpu_pop32(c);
+    gaddr a_imagePixMap = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDragImage(a_theDrag, a_imagePixMap, a_imageRgn, a_imageOffsetPt, a_theImageFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDragInputProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dragInputRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_inputProc = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDragInputProc(a_theDrag, a_inputProc, a_dragInputRefCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDragItemBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemBounds = (gaddr)cpu_pop32(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDragItemBounds(a_theDrag, a_theItemRef, a_itemBounds);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDragItemFlavorData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_dataOffset = (uint32_t)cpu_pop32(c);
+    int32_t a_dataSize = (int32_t)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    int32_t a_theType = (int32_t)cpu_pop32(c);
+    uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDragItemFlavorData(a_theDrag, a_theItemRef, a_theType, a_dataPtr, a_dataSize, a_dataOffset);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDragMouse(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_globalPinnedMouse = (uint32_t)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDragMouse(a_theDrag, a_globalPinnedMouse);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDragSendProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dragSendRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_sendProc = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDragSendProc(a_theDrag, a_sendProc, a_dragSendRefCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDropLocation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dropLocation = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDropLocation(a_theDrag, a_dropLocation);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetEmptyRgn(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12083,6 +12477,18 @@ static void glue_ShowDialogItem(cpu68k *c, uint16_t trapword)
     int16_t a_item = (int16_t)cpu_pop16(c);
     gaddr a_dp = (gaddr)cpu_pop32(c);
     tb_ShowDialogItem(a_dp, a_item);
+    cpu_push32(c, ret);
+}
+
+static void glue_ShowDragHilite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_inside = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_hiliteFrame = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ShowDragHilite(a_theDrag, a_hiliteFrame, a_inside);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -13041,6 +13447,17 @@ static void glue_TEGetHeight(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TEGetHiliteRgn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_hTE = (gaddr)cpu_pop32(c);
+    gaddr a_region = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TEGetHiliteRgn(a_region, a_hTE);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_TEGetOffset(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13595,6 +14012,18 @@ static void glue_TrackControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TrackDrag(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theRegion = (gaddr)cpu_pop32(c);
+    gaddr a_theEvent = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TrackDrag(a_theDrag, a_theEvent, a_theRegion);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_TrackGoAway(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13759,6 +14188,17 @@ static void glue_UpdateDialog(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UpdateDragHilite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_updateRgn = (gaddr)cpu_pop32(c);
+    gaddr a_theDrag = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UpdateDragHilite(a_theDrag, a_updateRgn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UpdateGWorld(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13858,6 +14298,16 @@ static void glue_VisibleLength(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_WaitMouseMoved(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_initialMouse = (uint32_t)cpu_pop32(c);
+    int8_t r = tb_WaitMouseMoved(a_initialMouse);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_WaitMouseUp(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13938,6 +14388,32 @@ static void glue_ZeroScrap(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t r = tb_ZeroScrap();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ZoomRects(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_acceleration = (int16_t)cpu_pop16(c);
+    int16_t a_zoomSteps = (int16_t)cpu_pop16(c);
+    gaddr a_toRect = (gaddr)cpu_pop32(c);
+    gaddr a_fromRect = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ZoomRects(a_fromRect, a_toRect, a_zoomSteps, a_acceleration);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ZoomRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_acceleration = (int16_t)cpu_pop16(c);
+    int16_t a_zoomSteps = (int16_t)cpu_pop16(c);
+    uint32_t a_zoomDistance = (uint32_t)cpu_pop32(c);
+    gaddr a_region = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ZoomRegion(a_region, a_zoomDistance, a_zoomSteps, a_acceleration);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -14731,45 +15207,45 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA68, (int32_t)0x305u, "SetDialogCancelItem", CONV_STACK, 6, 2, glue_SetDialogCancelItem},
     {0xAA68, (int32_t)0x306u, "SetDialogTracksCursor", CONV_STACK, 6, 2, glue_SetDialogTracksCursor},
     {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x1u, "InstallTrackingHandler", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0x2u, "InstallReceiveHandler", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0x3u, "RemoveTrackingHandler", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x4u, "RemoveReceiveHandler", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x5u, "NewDrag", CONV_STACK, 4, 2, 0},
-    {0xABED, (int32_t)0x6u, "DisposeDrag", CONV_STACK, 4, 2, 0},
-    {0xABED, (int32_t)0x7u, "AddDragItemFlavor", CONV_STACK, 24, 2, 0},
-    {0xABED, (int32_t)0x9u, "SetDragItemFlavorData", CONV_STACK, 24, 2, 0},
-    {0xABED, (int32_t)0xAu, "SetDragSendProc", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0xBu, "SetDragInputProc", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0xCu, "SetDragDrawingProc", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0xDu, "TrackDrag", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0xEu, "CountDragItems", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0xFu, "GetDragItemReferenceNumber", CONV_STACK, 10, 2, 0},
-    {0xABED, (int32_t)0x10u, "CountDragItemFlavors", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0x11u, "GetFlavorType", CONV_STACK, 14, 2, 0},
-    {0xABED, (int32_t)0x12u, "GetFlavorFlags", CONV_STACK, 16, 2, 0},
-    {0xABED, (int32_t)0x13u, "GetFlavorDataSize", CONV_STACK, 16, 2, 0},
-    {0xABED, (int32_t)0x14u, "GetFlavorData", CONV_STACK, 24, 2, 0},
-    {0xABED, (int32_t)0x15u, "GetDragItemBounds", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0x16u, "SetDragItemBounds", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0x17u, "GetDropLocation", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x18u, "SetDropLocation", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x19u, "GetDragAttributes", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x1Au, "GetDragMouse", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0x1Bu, "SetDragMouse", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x1Cu, "GetDragOrigin", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x1Du, "GetDragModifiers", CONV_STACK, 16, 2, 0},
-    {0xABED, (int32_t)0x1Eu, "ShowDragHilite", CONV_STACK, 10, 2, 0},
-    {0xABED, (int32_t)0x1Fu, "HideDragHilite", CONV_STACK, 4, 2, 0},
-    {0xABED, (int32_t)0x20u, "DragPreScroll", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x21u, "DragPostScroll", CONV_STACK, 4, 2, 0},
-    {0xABED, (int32_t)0x22u, "UpdateDragHilite", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x23u, "WaitMouseMoved", CONV_STACK, 4, 2, 0},
-    {0xABED, (int32_t)0x24u, "ZoomRects", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0x25u, "ZoomRegion", CONV_STACK, 12, 2, 0},
-    {0xABED, (int32_t)0x26u, "GetDragHiliteColor", CONV_STACK, 8, 2, 0},
-    {0xABED, (int32_t)0x27u, "SetDragImage", CONV_STACK, 20, 2, 0},
-    {0xABED, (int32_t)0x28u, "ChangeDragBehaviors", CONV_STACK, 12, 2, 0},
+    {0xABED, (int32_t)0x1u, "InstallTrackingHandler", CONV_STACK, 12, 2, glue_InstallTrackingHandler},
+    {0xABED, (int32_t)0x2u, "InstallReceiveHandler", CONV_STACK, 12, 2, glue_InstallReceiveHandler},
+    {0xABED, (int32_t)0x3u, "RemoveTrackingHandler", CONV_STACK, 8, 2, glue_RemoveTrackingHandler},
+    {0xABED, (int32_t)0x4u, "RemoveReceiveHandler", CONV_STACK, 8, 2, glue_RemoveReceiveHandler},
+    {0xABED, (int32_t)0x5u, "NewDrag", CONV_STACK, 4, 2, glue_NewDrag},
+    {0xABED, (int32_t)0x6u, "DisposeDrag", CONV_STACK, 4, 2, glue_DisposeDrag},
+    {0xABED, (int32_t)0x7u, "AddDragItemFlavor", CONV_STACK, 24, 2, glue_AddDragItemFlavor},
+    {0xABED, (int32_t)0x9u, "SetDragItemFlavorData", CONV_STACK, 24, 2, glue_SetDragItemFlavorData},
+    {0xABED, (int32_t)0xAu, "SetDragSendProc", CONV_STACK, 12, 2, glue_SetDragSendProc},
+    {0xABED, (int32_t)0xBu, "SetDragInputProc", CONV_STACK, 12, 2, glue_SetDragInputProc},
+    {0xABED, (int32_t)0xCu, "SetDragDrawingProc", CONV_STACK, 12, 2, glue_SetDragDrawingProc},
+    {0xABED, (int32_t)0xDu, "TrackDrag", CONV_STACK, 12, 2, glue_TrackDrag},
+    {0xABED, (int32_t)0xEu, "CountDragItems", CONV_STACK, 8, 2, glue_CountDragItems},
+    {0xABED, (int32_t)0xFu, "GetDragItemReferenceNumber", CONV_STACK, 10, 2, glue_GetDragItemReferenceNumber},
+    {0xABED, (int32_t)0x10u, "CountDragItemFlavors", CONV_STACK, 12, 2, glue_CountDragItemFlavors},
+    {0xABED, (int32_t)0x11u, "GetFlavorType", CONV_STACK, 14, 2, glue_GetFlavorType},
+    {0xABED, (int32_t)0x12u, "GetFlavorFlags", CONV_STACK, 16, 2, glue_GetFlavorFlags},
+    {0xABED, (int32_t)0x13u, "GetFlavorDataSize", CONV_STACK, 16, 2, glue_GetFlavorDataSize},
+    {0xABED, (int32_t)0x14u, "GetFlavorData", CONV_STACK, 24, 2, glue_GetFlavorData},
+    {0xABED, (int32_t)0x15u, "GetDragItemBounds", CONV_STACK, 12, 2, glue_GetDragItemBounds},
+    {0xABED, (int32_t)0x16u, "SetDragItemBounds", CONV_STACK, 12, 2, glue_SetDragItemBounds},
+    {0xABED, (int32_t)0x17u, "GetDropLocation", CONV_STACK, 8, 2, glue_GetDropLocation},
+    {0xABED, (int32_t)0x18u, "SetDropLocation", CONV_STACK, 8, 2, glue_SetDropLocation},
+    {0xABED, (int32_t)0x19u, "GetDragAttributes", CONV_STACK, 8, 2, glue_GetDragAttributes},
+    {0xABED, (int32_t)0x1Au, "GetDragMouse", CONV_STACK, 12, 2, glue_GetDragMouse},
+    {0xABED, (int32_t)0x1Bu, "SetDragMouse", CONV_STACK, 8, 2, glue_SetDragMouse},
+    {0xABED, (int32_t)0x1Cu, "GetDragOrigin", CONV_STACK, 8, 2, glue_GetDragOrigin},
+    {0xABED, (int32_t)0x1Du, "GetDragModifiers", CONV_STACK, 16, 2, glue_GetDragModifiers},
+    {0xABED, (int32_t)0x1Eu, "ShowDragHilite", CONV_STACK, 10, 2, glue_ShowDragHilite},
+    {0xABED, (int32_t)0x1Fu, "HideDragHilite", CONV_STACK, 4, 2, glue_HideDragHilite},
+    {0xABED, (int32_t)0x20u, "DragPreScroll", CONV_STACK, 8, 2, glue_DragPreScroll},
+    {0xABED, (int32_t)0x21u, "DragPostScroll", CONV_STACK, 4, 2, glue_DragPostScroll},
+    {0xABED, (int32_t)0x22u, "UpdateDragHilite", CONV_STACK, 8, 2, glue_UpdateDragHilite},
+    {0xABED, (int32_t)0x23u, "WaitMouseMoved", CONV_STACK, 4, 2, glue_WaitMouseMoved},
+    {0xABED, (int32_t)0x24u, "ZoomRects", CONV_STACK, 12, 2, glue_ZoomRects},
+    {0xABED, (int32_t)0x25u, "ZoomRegion", CONV_STACK, 12, 2, glue_ZoomRegion},
+    {0xABED, (int32_t)0x26u, "GetDragHiliteColor", CONV_STACK, 8, 2, glue_GetDragHiliteColor},
+    {0xABED, (int32_t)0x27u, "SetDragImage", CONV_STACK, 20, 2, glue_SetDragImage},
+    {0xABED, (int32_t)0x28u, "ChangeDragBehaviors", CONV_STACK, 12, 2, glue_ChangeDragBehaviors},
     {0xA060, (int32_t)0x1u, "PBOpenWD", CONV_REG, 0, 0, glue_PBOpenWD},
     {0xA060, (int32_t)0x2u, "PBCloseWD", CONV_REG, 0, 0, glue_PBCloseWD},
     {0xA060, (int32_t)0x5u, "PBCatMove", CONV_REG, 0, 0, glue_PBCatMove},
@@ -15952,6 +16428,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA83D, (int32_t)0xCu, "TECustomHook", CONV_STACK, 10, 0, glue_TECustomHook},
     {0xA83D, (int32_t)0xDu, "TENumStyles", CONV_STACK, 12, 4, glue_TENumStyles},
     {0xA83D, (int32_t)0xEu, "TEFeatureFlag", CONV_STACK, 8, 2, glue_TEFeatureFlag},
+    {0xA83D, (int32_t)0xFu, "TEGetHiliteRgn", CONV_STACK, 8, 2, glue_TEGetHiliteRgn},
     {0xABF2, (int32_t)0xBu, "ThreadBeginCritical", CONV_STACK, 0, 2, glue_ThreadBeginCritical},
     {0xABF2, (int32_t)0xCu, "ThreadEndCritical", CONV_STACK, 0, 2, glue_ThreadEndCritical},
     {0xABF2, (int32_t)0x205u, "YieldToThread", CONV_STACK, 4, 2, glue_YieldToThread},

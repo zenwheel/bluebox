@@ -466,8 +466,8 @@ static void restore_clip(gaddr saved_clip)
     tb_DisposeRgn(saved_clip);
 }
 
-/* Invert the selection range [a, b). */
-static void invert_range(gaddr teh, int a, int b)
+/* The area of the range [a, b), as the selection highlights it. */
+static void range_region(gaddr teh, int a, int b, hrgn *r)
 {
     if (a > b) {
         int t = a;
@@ -478,8 +478,7 @@ static void invert_range(gaddr teh, int a, int b)
         return;
     qrect dest = qrect_get(te(teh) + TERec_destRect_off);
     int la = line_of(teh, a), lb = line_of(teh, b);
-    hrgn r, tmp;
-    hrgn_init(&r);
+    hrgn tmp;
     hrgn_init(&tmp);
     for (int line = la; line <= lb; line++) {
         int ls = line_start(teh, line), le = line_start(teh, line + 1);
@@ -489,11 +488,36 @@ static void invert_range(gaddr teh, int a, int b)
         int x1 = (b > le || (e == le && line < lb)) ? dest.right : lx + width_of(teh, ls, e - ls);
         int top = dest.top + line_top(teh, line), lh = line_height(teh, line);
         hrgn_rect(&tmp, (qrect){ (int16_t)top, (int16_t)x0, (int16_t)(top + lh), (int16_t)x1 });
-        hrgn_op(&r, &r, &tmp, RGN_UNION);
+        hrgn_op(r, r, &tmp, RGN_UNION);
     }
-    qd_fill_region(qd_port(), &r, qd_pat_black, patXor);
-    hrgn_free(&r);
     hrgn_free(&tmp);
+}
+
+/* Invert the selection range [a, b). */
+static void invert_range(gaddr teh, int a, int b)
+{
+    hrgn r;
+    hrgn_init(&r);
+    range_region(teh, a, b, &r);
+    if (!hrgn_empty(&r))
+        qd_fill_region(qd_port(), &r, qd_pat_black, patXor);
+    hrgn_free(&r);
+}
+
+/* TextEdit 7.5: the selection's highlighted area (empty at a caret), which
+ * programs test clicks against to start dragging the selection. */
+int16_t tb_TEGetHiliteRgn(gaddr region, gaddr teh)
+{
+    if (!region || !teh)
+        return paramErr;
+    port_state s = enter(teh);
+    hrgn r;
+    hrgn_init(&r);
+    range_region(teh, te16(teh, TERec_selStart_off), te16(teh, TERec_selEnd_off), &r);
+    rgn_write(region, &r);
+    hrgn_free(&r);
+    leave(teh, s);
+    return noErr;
 }
 
 static void draw_caret(gaddr teh)

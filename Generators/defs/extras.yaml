@@ -674,3 +674,15 @@
         type: int16_t
     dispatcher: ScriptUtil
     selector: 0x800AFFB6
+
+# TextEdit 7.5's selection region (TextEdit.h; Gestalt 'teat' bit 0).
+- function:
+    name: TEGetHiliteRgn
+    return: OSErr
+    args:
+      - name: region
+        type: RgnHandle
+      - name: hTE
+        type: TEHandle
+    dispatcher: TEDispatch
+    selector: 0x000F

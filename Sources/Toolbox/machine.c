@@ -270,6 +270,7 @@ bool machine_boot(bool census)
     events_reset();
     display_reset();
     speech_reset();
+    drag_reset();
     aem_reset();
     aem_reset_handlers();
     dialogs_reset();

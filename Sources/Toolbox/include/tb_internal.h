@@ -151,6 +151,13 @@ void quicktime_reset(void);
 /* Mouse button and location into low memory (events.c). */
 void events_sync_lowmem(void);
 void fm_flush_dirty(void); /* open forks written out (filemgr.c) */
+/* The mouse and modifiers now (events.c); the window under a global point (wm.c). */
+bool ev_still_down(void);
+uint32_t ev_mouse_global(void);
+uint16_t ev_modifiers(void);
+void ev_wait_tick(void);
+gaddr wm_window_at(uint32_t p);
+void drag_reset(void); /* Drag Manager (drag.c): a fresh machine */
 /* The mouse's own motion for ADB packets (events.c). */
 bool ev_take_motion(int *dh, int *dv, int limit);
 bool ev_motion_pending(void);

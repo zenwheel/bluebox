@@ -170,6 +170,54 @@ extension BlueBox {
         }
     }
 
+    /// The Drag Manager's items and flavors, and TextEdit's highlight region.
+    @Suite struct DragManager {
+        @Test func itemsCarryFlavorData() {
+            launchTestApp()
+            _ = initToolbox()
+            let ref = tb_NewPtr(4, false, true)
+            #expect(tb_NewDrag(ref) == 0)
+            let drag = rd32(ref)
+            let text = tb_NewPtr(5, false, true)
+            for (i, b) in "hello".utf8.enumerated() { wr8(text + UInt32(i), b) }
+            let TEXT = Int32(bitPattern: 0x5445_5854), styl = Int32(bitPattern: 0x7374_796C)
+            #expect(tb_AddDragItemFlavor(drag, 1, TEXT, text, 5, 0) == 0)
+            #expect(tb_AddDragItemFlavor(drag, 1, TEXT, text, 5, 0) == -1853)  // duplicateFlavorErr
+            #expect(tb_AddDragItemFlavor(drag, 1, styl, 0, 0, 0) == 0)          // promised, no sender
+            let n = tb_NewPtr(4, false, true)
+            #expect(tb_CountDragItems(drag, n) == 0 && rd16(n) == 1)
+            #expect(tb_CountDragItemFlavors(drag, 1, n) == 0 && rd16(n) == 2)
+            #expect(tb_GetFlavorType(drag, 1, 2, n) == 0 && rd32(n) == UInt32(bitPattern: styl))
+            let buf = tb_NewPtr(16, false, true), size = tb_NewPtr(4, false, true)
+            wr32(size, 3)
+            #expect(tb_GetFlavorData(drag, 1, TEXT, buf, size, 1) == 0)        // from offset 1, 3 bytes
+            #expect(rd32(size) == 3 && rd8(buf) == UInt8(ascii: "e") && rd8(buf + 2) == UInt8(ascii: "l"))
+            #expect(tb_GetFlavorDataSize(drag, 1, styl, size) == -1854)        // cantGetFlavorErr
+            #expect(tb_GetFlavorDataSize(drag, 2, TEXT, size) == -1851)        // badDragItemErr
+            #expect(tb_DisposeDrag(drag) == 0)
+            #expect(tb_CountDragItems(drag, n) == -1850)                       // badDragRefErr
+        }
+
+        @Test func hiliteRegionCoversTheSelection() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 0, 300, 400].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let te = tb_TENew(r, r)
+            let p = tb_NewPtr(11, false, false)
+            for (i, b) in "hello world".utf8.enumerated() { wr8(p + UInt32(i), b) }
+            tb_TEInsert(p, 11, te)
+            let rgn = tb_NewRgn()
+            tb_TESetSelect(3, 3, te)
+            #expect(tb_TEGetHiliteRgn(rgn, te) == 0)
+            #expect(tb_EmptyRgn(rgn) != 0)                                     // a caret: nothing
+            tb_TESetSelect(0, 5, te)
+            #expect(tb_TEGetHiliteRgn(rgn, te) == 0)
+            let box = rd32(rgn) + 2
+            #expect(rd16(box + 2) == 0 && rd16(box + 6) > 20 && rd16(box + 6) < 60) // "hello"
+        }
+    }
+
     /// Styled TextEdit: runs, the style table, the null style, line
     /// heights and style scraps, in Apple's structures.
     @Suite struct StyledTextEdit {
