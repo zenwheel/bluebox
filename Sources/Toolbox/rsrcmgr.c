@@ -733,9 +733,15 @@ void tb_SetResFileAttrs(int16_t rn, int16_t attrs)
     set_res_err(noErr);
 }
 
+/* As on the real Mac, a random unused ID (here at least 128): programs
+ * call it until one lands in a range of their own (Sword Dream: 10000 up). */
 static int16_t unique_id(uint32_t type, bool one)
 {
-    for (int id = 128; id < 32767; id++) {
+    static uint32_t seed = 12345;
+    seed = seed * 1103515245u + 12345u;
+    int start = 128 + (int)((seed >> 16) % (32767 - 128));
+    for (int k = 0; k < 32767 - 128; k++) {
+        int id = 128 + (start - 128 + k) % (32767 - 128);
         bool used = false;
         for (gaddr maph = cur_map(); maph && !used; maph = one ? 0 : map_next(maph))
             used = find_ref(maph, type, (int16_t)id) != 0;
