@@ -160,6 +160,25 @@ extension BlueBox {
             #expect(Self.callbacks == 1)
             #expect(tb_SndDisposeChannel(chan, 1) == 0)
         }
+
+        /// The Sound Driver: StartSound's asynchronous free-form write stays
+        /// in progress while it plays, then completes (StuntCopter).
+        @Test func soundDriverPlaysFreeFormAsynchronously() {
+            launchTestApp()
+            let rec = tb_NewPtr(6 + 2225, false, true) // a tenth of a second
+            wr16(rec, 0)                               // ffMode
+            wr32(rec + 2, 0x0001_0000)                 // the Mac's rate
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
+            wr32(pb + UInt32(IOParam_ioBuffer_off), rec)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), 6 + 2225)
+            #expect(driver_call(pb, true, Int32(DRIVER_WRITE)) == 1)
+            sound_pump()
+            #expect(rd16(pb + UInt32(IOParam_ioResult_off)) == 1)
+            machine_skip_time(200_000_000)
+            sound_pump()
+            #expect(rd16(pb + UInt32(IOParam_ioResult_off)) == 0)
+        }
     }
 }
 

@@ -131,6 +131,8 @@ void raw_Elems68K(cpu68k *c, uint16_t tw);
 void sane_reset(void);
 /* Time Manager and VBL tasks due now (interrupt time). */
 void time_pump(void);
+/* An asynchronous call's completion routine, at the next interrupt pump. */
+void io_complete_later(gaddr pb, int16_t result);
 bool time_busy(void);  /* a Time Manager or VBL task waiting */
 bool sound_busy(void); /* a sound channel open */
 void adb_install(void); /* the ADB Manager's ADBOp, at boot */
@@ -288,6 +290,8 @@ extern const native_driver mactcp_driver;
 void mactcp_poll(void);
 void mactcp_reset(void);
 void mactcp_install_resolver(void);
+/* The Sound Driver (.Sound) of the first Macs (sound.c). */
+extern const native_driver sound_driver;
 /* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */
 extern const native_driver mpp_driver;
 void appletalk_poll(void);

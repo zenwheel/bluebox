@@ -437,6 +437,7 @@ static void pump(channel *c)
 }
 
 static bool in_pump;
+static void sd_pump(void);
 
 /* Called at safe points (Event Manager, TickCount, SystemTask). */
 /* Whether a channel is open: its completions and double-buffer refills
@@ -457,6 +458,7 @@ void sound_pump(void)
     for (int i = 0; i < MAX_CHANNELS; i++)
         if (chans[i].chan)
             pump(&chans[i]);
+    sd_pump();
     in_pump = false;
 }
 
@@ -732,8 +734,174 @@ void sound_beep(void)
     c->chan = 0; /* the host plays it out; we do not wait */
 }
 
+/* ---------------------------------------------------------------------- */
+/* The Sound Driver (.Sound, refnum -4), from before the Sound Manager:
+ * StartSound writes a synthesizer record to it, StopSound kills it.  The
+ * record's first word is the mode: free-form (0, a rate and 8-bit
+ * samples), four-tone (1, a pointer to an FTSoundRec the program may
+ * change as it plays), or square wave (-1, count/amplitude/duration
+ * triples, count 0 ending them). */
+
+enum { ffMode = 0, ftMode = 1, swMode = -1, abortErr = -27 };
+#define MAC_RATE 22254.5454
+static channel sd_chan;
+static gaddr sd_pb;            /* the write playing */
+static gaddr sd_ft;            /* four-tone: its FTSoundRec */
+static uint64_t sd_ft_next;    /* when the next tick of four-tone is due */
+
+/* A tick of four-tone sound, ahead of time: the four voices' wave tables
+ * stepped by their rates (fixed point, table positions a sample), the
+ * phases and duration written back as the driver did. */
+static void ft_render_tick(void)
+{
+    gaddr r = sd_ft;
+    int frames = (int)(MAC_RATE / 60.0);
+    int16_t pcm[400];
+    uint32_t phase[4], rate[4];
+    gaddr wave[4];
+    for (int v = 0; v < 4; v++) {
+        rate[v] = rd32(r + 2 + (uint32_t)v * 8);
+        phase[v] = rd32(r + 6 + (uint32_t)v * 8);
+        wave[v] = rd32(r + 34 + (uint32_t)v * 4);
+    }
+    for (int i = 0; i < frames; i++) {
+        int sum = 0;
+        for (int v = 0; v < 4; v++) {
+            if (wave[v])
+                sum += (int)rd8(wave[v] + ((phase[v] >> 16) & 255)) - 128;
+            phase[v] += rate[v];
+        }
+        pcm[i] = (int16_t)(sum * 64);
+    }
+    for (int v = 0; v < 4; v++)
+        wr32(r + 6 + (uint32_t)v * 8, phase[v]);
+    emit(&sd_chan, pcm, frames, 1, MAC_RATE);
+}
+
+static void sd_done(int16_t result)
+{
+    gaddr pb = sd_pb;
+    sd_pb = sd_ft = 0;
+    if (!pb)
+        return;
+    wr16(pb + IOParam_ioResult_off, (uint16_t)result);
+    io_complete_later(pb, result);
+}
+
+/* From the sound pump: four-tone goes on a tick at a time while its
+ * duration lasts; a write finishes when its sound has played. */
+static void sd_pump(void)
+{
+    if (!sd_pb)
+        return;
+    if (sd_ft) {
+        while (sd_ft && now_ns() + DB_LEAD_NS / 2 >= sd_ft_next) {
+            int16_t left = (int16_t)rd16(sd_ft);
+            if (left <= 0) {
+                sd_done(noErr);
+                return;
+            }
+            wr16(sd_ft, (uint16_t)(left - 1));
+            ft_render_tick();
+            sd_ft_next = sd_chan.busy_until;
+        }
+        return;
+    }
+    if (now_ns() >= sd_chan.busy_until)
+        sd_done(noErr);
+}
+
+static void sd_stop(void)
+{
+    stop_host(&sd_chan);
+    if (sd_pb)
+        sd_done(abortErr);
+}
+
+static int16_t sd_write(gaddr pb, bool async)
+{
+    gaddr rec = rd32(pb + IOParam_ioBuffer_off);
+    uint32_t len = rd32(pb + IOParam_ioReqCount_off);
+    int mode = (int16_t)rd16(rec);
+    LOGF(LOG_TRAPS, "  .Sound mode %d, %u bytes%s\n", mode, len, async ? ", async" : "");
+    if (sd_pb)
+        sd_stop(); /* a new sound replaces the one playing */
+    if (!sd_chan.id)
+        sd_chan.id = next_id++;
+    sd_chan.amp = 255;
+    sd_chan.volume = 0x01000100;
+    wr32(pb + IOParam_ioActCount_off, len);
+    if (mode == ffMode && len > 6) {
+        double rate = MAC_RATE * fixed_rate(rd32(rec + 2));
+        uint32_t n = len - 6;
+        int16_t *pcm = malloc(sizeof *pcm * n);
+        for (uint32_t i = 0; i < n; i++)
+            pcm[i] = (int16_t)(((int)rd8(rec + 6 + i) - 128) << 8);
+        if (rate > 1000 && rate < 100000)
+            emit(&sd_chan, pcm, (int)n, 1, rate);
+        free(pcm);
+    } else if (mode == swMode) {
+        for (gaddr t = rec + 2; t + 6 <= rec + len; t += 6) {
+            uint16_t count = rd16(t), amp = rd16(t + 2), ticks = rd16(t + 4);
+            if (!count)
+                break;
+            double freq = 783360.0 / count, secs = ticks / 60.0;
+            int frames = (int)(secs * MAC_RATE);
+            int16_t *pcm = malloc(sizeof *pcm * (size_t)(frames ? frames : 1));
+            for (int i = 0; i < frames; i++)
+                pcm[i] = (int16_t)((fmod(i * freq / MAC_RATE, 1.0) < 0.5 ? 1 : -1) * (int)(amp & 255) * 24);
+            emit(&sd_chan, pcm, frames, 1, MAC_RATE);
+            free(pcm);
+        }
+    } else if (mode == ftMode) {
+        sd_ft = rd32(rec + 2);
+        sd_ft_next = now_ns();
+    }
+    sd_pb = pb;
+    if (async) {
+        wr16(pb + IOParam_ioResult_off, ioInProgress);
+        sd_pump();
+        return sd_pb == pb ? ioInProgress : (int16_t)rd16(pb + IOParam_ioResult_off);
+    }
+    /* Synchronous: the sound plays out first, with interrupt-time work
+     * going on, as StartSound with no completion routine did. */
+    while (sd_pb == pb && !g_cpu->halted) {
+        if (events_host_attached()) {
+            struct timespec ts = { 0, 5000000 };
+            nanosleep(&ts, NULL);
+        } else {
+            uint64_t t = now_ns();
+            uint64_t until = sd_ft ? sd_ft_next : sd_chan.busy_until;
+            if (until > t)
+                machine_skip_time(until - t);
+        }
+        machine_advance_ticks();
+        sound_pump();
+        time_pump();
+    }
+    sd_pb = 0;
+    return noErr;
+}
+
+static int16_t sd_kill(gaddr pb)
+{
+    sd_stop();
+    return noErr;
+}
+
+static int16_t sd_control(gaddr pb, bool async)
+{
+    if ((int16_t)rd16(pb + CntrlParam_csCode_off) == 1) /* killCode */
+        sd_stop();
+    return noErr;
+}
+
+const native_driver sound_driver = { ".Sound", 3, NULL, NULL, sd_control, NULL, NULL, sd_write, sd_kill };
+
 void sound_reset(void)
 {
+    sd_pb = sd_ft = 0;
+    memset(&sd_chan, 0, sizeof sd_chan);
     for (int i = 0; i < MAX_CHANNELS; i++)
         if (chans[i].chan)
             stop_host(&chans[i]);
