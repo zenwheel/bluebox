@@ -124,6 +124,19 @@ static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rat
     }
 }
 
+/* Sound for the host from elsewhere (movies), on channels of their own. */
+void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume)
+{
+    if (sound_fn && frames > 0)
+        sound_fn(id, pcm, frames, nch, rate, volume, sound_ctx);
+}
+
+void sound_host_stop(int id)
+{
+    if (sound_fn)
+        sound_fn(id, NULL, 0, 0, 0, 0, sound_ctx);
+}
+
 static void stop_host(channel *c)
 {
     c->busy_until = 0;

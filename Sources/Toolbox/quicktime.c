@@ -12,6 +12,11 @@
  * UpdateMovie, the movie controller) and VLC plays the sound; otherwise
  * (headless runs) movies keep time without pictures or sound.
  *
+ * Movies whose codecs we have (Cinepak, Animation, Graphics, Apple Video,
+ * None; uncompressed, IMA and MACE sound) play through our own decoders
+ * instead (qt_native.c), headless runs included: frames for the movie's
+ * clock, and sound sent to the host a second ahead.  VLC is the fallback.
+ *
  * The movie controller is a component of our own: a play/pause button and a
  * time slider under the movie, with the standard actions and action filters.
  */
@@ -24,6 +29,7 @@
 #include "forks.h"
 #include "m68k.h"
 #include "qd_internal.h"
+#include "qt_native.h"
 #include "qt_vlc.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -32,6 +38,7 @@ enum {
     noMovieFound = -2048, invalidMovie = -2010, invalidTrack = -2009, badImageDescription = -2001,
     movieToolboxUninitialized = -2020,
 };
+enum { newMovieActive = 1 };
 
 static int16_t movies_error, sticky_error;
 
@@ -70,6 +77,9 @@ typedef struct {
     int64_t base_ms;     /* time when stopped, or at start_ns */
     uint64_t start_ns;
     qt_vlc_player *player;
+    qt_native *native;   /* our decoders, when they cover the movie */
+    int64_t sound_ms;    /* native sound sent to the host up to here */
+    bool sound_on;
     uint8_t *frame;
     int fw, fh;
     bool frame_indexed;
@@ -425,8 +435,12 @@ static movie *new_movie(void)
     return NULL;
 }
 
+static void stop_sound(movie *m);
+
 static void free_movie(movie *m)
 {
+    stop_sound(m);
+    qt_native_close(m->native);
     if (m->player)
         qt_vlc_close(m->player);
     if (m->temp_file && m->play_path)
@@ -468,7 +482,20 @@ static int16_t open_movie(const char *path, int16_t *resid, uint32_t data_offset
     for (int k = 0; k < m->ntracks; k++) {
         m->tracks[k].handle = tb_NewHandle(4, false, true);
     }
-    if (flattened) {
+    /* Palettized video without colours of its own takes the screen's. */
+    uint32_t screen[256];
+    pixdst d = qd_port_pixels(m->port);
+    int sd = d.depth <= 8 ? d.depth : 0;
+    for (int v = 0; sd && v < (1 << sd); v++) {
+        uint16_t c[3];
+        qd_px_rgb(sd, d.ctab, (uint32_t)v, c);
+        screen[v] = (uint32_t)(c[0] >> 8) << 16 | (uint32_t)(c[1] >> 8) << 8 | (c[2] >> 8);
+    }
+    m->native = qt_native_open(moov, len, path, m->scale, sd ? screen : NULL, sd);
+    LOGF(LOG_TRAPS, "  movie %s: %s\n", path, m->native ? "our decoders" : "VLC");
+    if (m->native) {
+        m->play_path = NULL;
+    } else if (flattened) {
         m->play_path = strdup(path);
     } else {
         m->play_path = flatten(path, moov, len);
@@ -509,9 +536,45 @@ static bool movie_done(movie *m)
     return movie_ms(m) >= duration_ms(m);
 }
 
+/* ---- Native sound ---- */
+
+static int sound_id(const movie *m) { return 0x4D560000 + (int)(m - movies); }
+
+static void stop_sound(movie *m)
+{
+    if (m->sound_on)
+        sound_host_stop(sound_id(m));
+    m->sound_on = false;
+}
+
+/* Keep a second of sound queued ahead of the clock (normal speed only). */
+static void feed_sound(movie *m)
+{
+    if (!m->native || !qt_native_has_sound(m->native) || !m->playing || m->rate != 0x10000 || !plays(m, "soun") ||
+        m->volume <= 0)
+        return;
+    int64_t now = movie_ms(m), end = duration_ms(m);
+    if (!m->sound_on || m->sound_ms < now || m->sound_ms > now + 1500) { /* starting, behind, or rewound */
+        stop_sound(m);
+        m->sound_ms = now;
+    }
+    while (m->sound_ms < now + 1000 && m->sound_ms < end) {
+        int64_t to = m->sound_ms + 500 < end ? m->sound_ms + 500 : end;
+        int16_t *pcm = NULL;
+        int nch = 1;
+        double rate = 22050;
+        uint32_t frames = qt_native_sound(m->native, m->sound_ms, to, &pcm, &nch, &rate);
+        if (frames)
+            sound_host_pcm(sound_id(m), pcm, (int)frames, nch, rate, (float)m->volume / 256.0f);
+        free(pcm);
+        m->sound_on = true;
+        m->sound_ms = to;
+    }
+}
+
 static void ensure_player(movie *m)
 {
-    if (!m->player && m->play_path && use_vlc()) {
+    if (!m->player && !m->native && m->play_path && use_vlc()) {
         m->player = qt_vlc_open(m->play_path, m->index_depth != 0);
         if (m->player)
             qt_vlc_set_volume(m->player, vlc_volume(m));
@@ -526,9 +589,12 @@ static void start(movie *m, int32_t rate)
             m->playing = false;
             if (m->player)
                 qt_vlc_pause(m->player);
+            stop_sound(m);
         }
         return;
     }
+    if (rate != m->rate)
+        stop_sound(m);
     m->rate = rate;
     if (movie_done(m) && !m->playing)
         m->base_ms = 0; /* playing a finished movie starts it again */
@@ -544,10 +610,12 @@ static void start(movie *m, int32_t rate)
     }
     m->start_ns = machine_time_ns();
     m->playing = true;
+    feed_sound(m);
 }
 
 static void seek(movie *m, int64_t ms)
 {
+    stop_sound(m);
     m->base_ms = ms;
     m->start_ns = machine_time_ns();
     if (m->player) {
@@ -562,9 +630,17 @@ static void seek(movie *m, int64_t ms)
 
 static void draw_frame(movie *m, bool force)
 {
-    if (!m->player)
+    bool fresh;
+    if (m->native) {
+        if (!qt_native_has_video(m->native))
+            return;
+        fresh = qt_native_frame(m->native, movie_ms(m), &m->serial, &m->frame, &m->fw, &m->fh);
+        m->frame_indexed = false;
+    } else if (m->player) {
+        fresh = qt_vlc_frame(m->player, &m->serial, &m->frame, &m->fw, &m->fh, &m->frame_indexed);
+    } else {
         return;
-    bool fresh = qt_vlc_frame(m->player, &m->serial, &m->frame, &m->fw, &m->fh, &m->frame_indexed);
+    }
     if ((!fresh && !force) || !m->frame || !m->active || !plays(m, "vide"))
         return;
     gaddr saved = qd_port();
@@ -599,6 +675,7 @@ static void task(movie *m)
     if (!m->playing)
         return;
     draw_frame(m, false);
+    feed_sound(m);
     if (movie_done(m)) {
         if (m->looping) {
             m->base_ms = 0;
@@ -651,12 +728,16 @@ int16_t tb_NewMovieFromFile(gaddr moviep, int16_t refnum, gaddr resid, gaddr res
     char path[1024];
     if (changed)
         wr8(changed, 0);
-    if (!fm_refnum_host_path(refnum, path, sizeof path)) {
+    /* OpenMovieFile's reference number, or a resource file's (SimpleText
+     * opens movies with FSpOpenResFile). */
+    if (!fm_refnum_host_path(refnum, path, sizeof path) && !rm_host_path(refnum, path, sizeof path)) {
         wr32(moviep, 0);
         return set_error(-51 /* rfNumErr */);
     }
     int16_t id = resid ? (int16_t)rd16(resid) : 0;
     int16_t err = open_movie(path, &id, 0, false, moviep);
+    if (!err && (flags & newMovieActive))
+        movie_of(rd32(moviep))->active = true;
     if (!err && resid)
         wr16(resid, (uint16_t)id);
     if (!err && resname)
@@ -673,7 +754,10 @@ int16_t tb_NewMovieFromDataFork(gaddr moviep, int16_t refnum, int32_t offset, in
         wr32(moviep, 0);
         return set_error(-51);
     }
-    return open_movie(path, NULL, (uint32_t)offset, true, moviep);
+    int16_t err = open_movie(path, NULL, (uint32_t)offset, true, moviep);
+    if (!err && (flags & newMovieActive))
+        movie_of(rd32(moviep))->active = true;
+    return err;
 }
 
 int16_t tb_NewMovieFromHandle(gaddr moviep, int32_t h, int16_t flags, gaddr changed)
@@ -705,6 +789,7 @@ int16_t tb_NewMovieFromHandle(gaddr moviep, int32_t h, int16_t flags, gaddr chan
     m->box = m->natural;
     for (int k = 0; k < m->ntracks; k++)
         m->tracks[k].handle = tb_NewHandle(4, false, true);
+    m->active = (flags & newMovieActive) != 0;
     free(buf);
     wr32(moviep, m->handle);
     return set_error(noErr);

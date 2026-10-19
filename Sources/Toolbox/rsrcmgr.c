@@ -125,6 +125,16 @@ bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len)
     return true;
 }
 
+/* The host file behind a resource file's reference number. */
+bool rm_host_path(int16_t rn, char *out, size_t outsize)
+{
+    resfile *f = file_for(rn);
+    if (!f || !f->path || strlen(f->path) >= outsize)
+        return false;
+    strcpy(out, f->path);
+    return true;
+}
+
 static resfile *file_for_map(gaddr maph)
 {
     for (int i = 0; i < MAX_RESFILES; i++)

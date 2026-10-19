@@ -208,6 +208,9 @@ void notify_reset(void);
 void sound_pump(void);
 void sound_beep(void);
 void sound_reset(void);
+/* PCM straight to the host on a channel id of the caller's (movies). */
+void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume);
+void sound_host_stop(int id);
 
 /* ---- Appearance ---- */
 
@@ -338,6 +341,7 @@ gaddr serial_crm_search(gaddr req); /* the Communications Resource Manager's CRM
 void ppc_glue_reset(void); /* ppc_glue.c */
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);
+bool rm_host_path(int16_t rn, char *out, size_t outsize);
 bool gestalt_exists(uint32_t selector);
 void gestalt_delete(uint32_t selector);
 void wm_hide_menu_bar(bool hide);
