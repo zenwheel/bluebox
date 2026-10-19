@@ -47,6 +47,28 @@ struct ForkStoreTests {
         #expect(f.rsrc_len == 0)
     }
 
+    #if os(macOS)
+    /// No sidecar: the file's own Finder info and resource fork, as macOS
+    /// keeps them for Finder copies and file sharing.
+    @Test func nativeForksWithoutASidecar() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("Tune").path
+        try Data("data".utf8).write(to: URL(fileURLWithPath: path))
+        let info = cat(be32(fourCC("MooV")), be32(fourCC("TVOD"))) + [UInt8](repeating: 0, count: 24)
+        let rsrc = Array("resource fork".utf8)
+        #expect(setxattr(path, "com.apple.FinderInfo", info, info.count, 0, 0) == 0)
+        #expect(setxattr(path, "com.apple.ResourceFork", rsrc, rsrc.count, 0, 0) == 0)
+        var f = mac_file()
+        var err = [CChar](repeating: 0, count: 256)
+        #expect(appledouble_read(path, &f, &err, err.count))
+        defer { mac_file_free(&f) }
+        #expect(f.has_finder_info && mac_file_type(&f) == fourCC("MooV"))
+        #expect(Array(UnsafeBufferPointer(start: f.rsrc, count: f.rsrc_len)) == rsrc)
+        #expect(appledouble_has_native(path))
+    }
+    #endif
+
     @Test func macBinaryII() throws {
         let data: [UInt8] = [1, 2, 3]
         let rsrc: [UInt8] = buildFork([TestResource(type: "abcd", id: 1, data: [9])])

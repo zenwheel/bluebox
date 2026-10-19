@@ -963,7 +963,7 @@ static bool host_file_type(const char *path, uint8_t finfo[16])
     uint8_t implied[16];
     int kind = implied_type(path, implied);
     char *side = appledouble_sidecar_path(path);
-    bool has_side = side && exists(side);
+    bool has_side = (side && exists(side)) || appledouble_has_native(path);
     free(side);
     if (!has_side) {
         if (kind)
@@ -1103,6 +1103,18 @@ void fm_flush_dirty(void)
 
 static bool hfs_call(void) { return (trap_current_word() & 0x0200) != 0; }
 
+/* The data fork opened last (QuickTime takes a movie with no resource
+ * fork from it). */
+static char last_data_open[PATH_MAX];
+
+bool fm_last_data_fork(char *out, size_t outsize)
+{
+    if (!last_data_open[0] || strlen(last_data_open) >= outsize)
+        return false;
+    strcpy(out, last_data_open);
+    return true;
+}
+
 static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
 {
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
@@ -1152,6 +1164,8 @@ static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
         host_pname(f->name, path);
         wr16(pb + IOParam_ioRefNum_off, (uint16_t)fcb_refnum(i));
         fm_fcb_record(fcb_refnum(i), path, rsrc, write, f->len, 0);
+        if (!rsrc)
+            snprintf(last_data_open, sizeof last_data_open, "%s", path);
         return noErr;
     }
     return tmfoErr;
@@ -2502,8 +2516,13 @@ static bool sidecar_finfo(const char *path, uint8_t out[16])
     char *side = appledouble_sidecar_path(path);
     FILE *fp = side ? fopen(side, "rb") : NULL;
     free(side);
-    if (!fp)
-        return false;
+    if (!fp) { /* none: the file's own (macOS) */
+        uint8_t fi[32];
+        if (!appledouble_native_finder_info(path, fi) || !memcmp(fi, "\0\0\0\0", 4))
+            return false;
+        memcpy(out, fi, 16);
+        return true;
+    }
     uint8_t h[26 + 12 * 16];
     size_t n = fread(h, 1, sizeof h, fp);
     bool ok = false;

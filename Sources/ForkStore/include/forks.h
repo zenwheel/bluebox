@@ -49,8 +49,13 @@ bool macbinary_parse(const uint8_t *buf, size_t len, mac_file *out, char *err, s
 
 /* Path of the sidecar for a data-fork path. Caller frees. */
 char *appledouble_sidecar_path(const char *path);
-/* Read both forks. A missing sidecar means an empty resource fork. */
+/* Read both forks.  Without a sidecar, the file's own Finder info and
+ * resource fork (macOS extended attributes), else an empty resource fork. */
 bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen);
+/* The file's own Finder info (macOS), and whether it has any typed Finder
+ * info or resource fork of its own. */
+bool appledouble_native_finder_info(const char *path, uint8_t out[32]);
+bool appledouble_has_native(const char *path);
 /* Write both forks atomically (temp file + rename). */
 bool appledouble_write(const char *path, const mac_file *f, char *err, size_t errlen);
 /* Encode/decode just the sidecar contents. */

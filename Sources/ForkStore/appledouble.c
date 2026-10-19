@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <sys/xattr.h>
+#endif
 
 enum {
     AD_MAGIC = 0x00051607,
@@ -129,6 +132,50 @@ uint8_t *appledouble_encode(const mac_file *f, size_t *len_out)
     return b;
 }
 
+/* Without a sidecar: the Finder info and resource fork macOS keeps with the
+ * file itself (extended attributes), as Finder copies, file sharing and
+ * files from real Macs carry them.  Read only; writes go to a sidecar,
+ * which is read first from then on. */
+bool appledouble_native_finder_info(const char *path, uint8_t out[32])
+{
+#ifdef __APPLE__
+    return getxattr(path, "com.apple.FinderInfo", out, 32, 0, 0) == 32;
+#else
+    (void)path;
+    (void)out;
+    return false;
+#endif
+}
+
+static void native_forks(const char *path, mac_file *out)
+{
+    out->has_finder_info = appledouble_native_finder_info(path, out->finder_info);
+#ifdef __APPLE__
+    ssize_t n = getxattr(path, "com.apple.ResourceFork", NULL, 0, 0, 0);
+    if (n > 0 && n < (64 << 20)) {
+        uint8_t *r = malloc((size_t)n);
+        if (r && getxattr(path, "com.apple.ResourceFork", r, (size_t)n, 0, 0) == n) {
+            out->rsrc = r;
+            out->rsrc_len = (size_t)n;
+        } else {
+            free(r);
+        }
+    }
+#endif
+}
+
+bool appledouble_has_native(const char *path)
+{
+    uint8_t fi[32];
+    if (appledouble_native_finder_info(path, fi) && memcmp(fi, "\0\0\0\0", 4))
+        return true;
+#ifdef __APPLE__
+    return getxattr(path, "com.apple.ResourceFork", NULL, 0, 0, 0) > 0;
+#else
+    return false;
+#endif
+}
+
 bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen)
 {
     memset(out, 0, sizeof *out);
@@ -158,6 +205,8 @@ bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen)
     if (have_side) {
         ok = appledouble_decode(sbuf, slen, out, err, errlen);
         free(sbuf);
+    } else {
+        native_forks(path, out);
     }
     if (!out->rsrc) {
         out->rsrc = malloc(1);
