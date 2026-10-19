@@ -422,7 +422,9 @@ void machine_set_disk(const char *path);
  * Before boot; false if the spec isn't one of these. */
 bool machine_set_serial(int port, const char *spec);
 /* AppleTalk on LocalTalk over UDP: "local" (the default: copies on this
- * host only), "lan" (the local network) or "off".  Before boot. */
+ * host only), "lan" (the local network, on the interface the system
+ * picks), "lan:IF" (on network interface IF, e.g. en0) or "off".  Before
+ * boot. */
 bool machine_set_appletalk(const char *how);
 /* A headless run's clock: by default its time follows the instructions
  * run (10 million a second), so runs repeat exactly; real time instead

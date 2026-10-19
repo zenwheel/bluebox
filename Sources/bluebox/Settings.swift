@@ -13,7 +13,7 @@ struct AppSettings: Codable {
     var scale: Double? /* host points per Mac pixel */
     var appearance: String? /* bw, native, or a theme's name */
     var highlight: String? /* host (the host's selection colour) or #RRGGBB */
-    var appletalk: String? /* local, lan or off */
+    var appletalk: String? /* local, lan, lan:IF (an interface, e.g. en0) or off */
     var modemPort: String? /* what the modem port connects to (machine_set_serial's specs) */
     var printerPort: String?
     var isEmpty: Bool {
@@ -130,7 +130,7 @@ func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[
 
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
-///     [appletalk local|lan|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
+///     [appletalk local|lan|lan:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -190,10 +190,10 @@ func setCommand(_ args: [String]) {
         case "appletalk":
             if value == "default" {
                 s.appletalk = nil
-            } else if ["local", "lan", "off"].contains(value) {
+            } else if ["local", "lan", "off"].contains(value) || (value.hasPrefix("lan:") && value.count > 4) {
                 s.appletalk = value
             } else {
-                fail("appletalk expects local, lan, off or default")
+                fail("appletalk expects local, lan, lan:IF (e.g. lan:en0), off or default")
             }
         case "modem-port", "printer-port":
             let spec: String? = value == "default" ? nil : value

@@ -20,6 +20,19 @@ extension BlueBox {
             }
         }
 
+        /// On a network interface that isn't there, .MPP doesn't open
+        /// (portNotCf), rather than joining the group on another.
+        @Test func missingInterfaceIsNotConfigured() {
+            #expect(machine_set_appletalk("lan:nosuchif9"))
+            #expect(!machine_set_appletalk("lan:"))
+            launchTestApp()
+            let pb = tb_NewPtr(80, false, true), name = tb_NewPtr(8, false, true)
+            guestPString(".MPP", at: name)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+            #expect(tb_PBOpen(pb, false) == -98)
+            #expect(machine_set_appletalk("local"))
+        }
+
         @Test func namesAndDatagrams() {
             #expect(machine_set_appletalk("local"))
             launchTestApp()

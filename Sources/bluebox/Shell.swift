@@ -622,9 +622,18 @@ struct SettingsForm: View {
             Picker("AppleTalk", selection: $settings.appletalk) {
                 Text("\(inherit) (\(appletalkName(fallback.appletalk ?? "local").lowercased()))").tag(String?.none)
                 ForEach(["local", "lan", "off"], id: \.self) { a in Text(appletalkName(a)).tag(String?.some(a)) }
+                ForEach(NetworkInterface.all(), id: \.name) { i in
+                    Text("Local network through \(i.label)").tag(String?.some("lan:" + i.name))
+                }
+                // An interface from the settings that isn't up now.
+                if let a = settings.appletalk, a.hasPrefix("lan:"),
+                   !NetworkInterface.all().contains(where: { "lan:" + $0.name == a }) {
+                    Text("Local network through \(a.dropFirst(4)) (not connected)").tag(String?.some(a))
+                }
             }
-            .help("LocalTalk over UDP: copies on this Mac find each other, or, on the local network, other "
-                  + "Macs, emulators and AppleTalk routers that speak LToUDP")
+            .help("LocalTalk over UDP (multicast): copies on this Mac find each other, or, on the local network "
+                  + "through the interface chosen, other Macs, emulators and AppleTalk routers that speak LToUDP. "
+                  + "Bridging EtherTalk onto a wired interface is still to come.")
             PortPicker(label: "Modem port", spec: $settings.modemPort, inherit: inherit,
                        inherited: fallback.modemPort ?? "modem")
             PortPicker(label: "Printer port", spec: $settings.printerPort, inherit: inherit,
@@ -634,7 +643,7 @@ struct SettingsForm: View {
 
     private func appletalkName(_ a: String) -> String {
         switch a {
-        case "lan": return "On the local network"
+        case "lan": return "On the local network (automatic interface)"
         case "off": return "Off"
         default: return "This Mac only"
         }
@@ -943,5 +952,32 @@ struct PortPicker: View {
     static func serialDevices() -> [String] {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: "/dev")) ?? []
         return names.filter { $0.hasPrefix("cu.") }.map { "/dev/" + $0 }.sorted()
+    }
+}
+
+/// The host's network interfaces with an IPv4 address (what LocalTalk over
+/// UDP's multicast can use), loopback left out.
+struct NetworkInterface {
+    let name: String
+    let address: String
+    var label: String { "\(name) (\(address))" }
+
+    static func all() -> [NetworkInterface] {
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0, let first = list else { return [] }
+        defer { freeifaddrs(list) }
+        var out = [NetworkInterface]()
+        for p in sequence(first: first, next: { $0.pointee.ifa_next }) {
+            let i = p.pointee
+            guard let sa = i.ifa_addr, sa.pointee.sa_family == UInt8(AF_INET),
+                  i.ifa_flags & UInt32(IFF_LOOPBACK) == 0, i.ifa_flags & UInt32(IFF_UP) != 0 else { continue }
+            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            getnameinfo(sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST)
+            let name = String(cString: i.ifa_name)
+            if !out.contains(where: { $0.name == name }) {
+                out.append(NetworkInterface(name: name, address: String(cString: host)))
+            }
+        }
+        return out
     }
 }

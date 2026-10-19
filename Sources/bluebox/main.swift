@@ -55,7 +55,8 @@ func usage() -> Never {
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
           --appletalk A  AppleTalk on LocalTalk over UDP: local (the default; copies
                      on this host play each other), lan (the local network, other
-                     emulators and routers that speak LToUDP) or off
+                     emulators and routers that speak LToUDP), lan:IF (the local
+                     network through interface IF, e.g. lan:en0) or off
           --modem-port S, --printer-port S  what a serial port connects to: modem (a
                      Hayes modem, the modem port's default: ATDT host:port dials over
                      TCP), modem:PORT (one that also answers calls to PORT),
@@ -88,7 +89,7 @@ func usage() -> Never {
           ~/Applications/Blue Box) with its Finder icon; documents dropped on it open
           in the application.
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
-                [scale 1|1.5|2|default] [appletalk local|lan|off|default]
+                [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
@@ -360,7 +361,7 @@ func runCommand(_ args: [String]) {
             cpuModel = m
         case "--appletalk":
             i += 1
-            guard i < args.count, machine_set_appletalk(args[i]) else { fail("--appletalk expects local, lan or off") }
+            guard i < args.count, machine_set_appletalk(args[i]) else { fail("--appletalk expects local, lan, lan:IF (e.g. lan:en0) or off") }
             appletalkGiven = true
         case "--modem-port", "--printer-port":
             let port: Int32 = args[i] == "--modem-port" ? 0 : 1
@@ -463,7 +464,7 @@ func runCommand(_ args: [String]) {
     machine_set_appearance(appearance)
     // Network and serial ports from the settings, unless given here.
     if !appletalkGiven, let a = saved.appletalk, !machine_set_appletalk(a) {
-        eprint("bluebox: appletalk \"\(a)\" (from the settings) is not local, lan or off\n")
+        eprint("bluebox: appletalk \"\(a)\" (from the settings) is not local, lan, lan:IF or off\n")
     }
     for (port, spec) in [(Int32(0), saved.modemPort), (Int32(1), saved.printerPort)] where !portsGiven.contains(port) {
         if let spec, !machine_set_serial(port, spec) {

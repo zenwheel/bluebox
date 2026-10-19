@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ifaddrs.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
@@ -59,6 +60,7 @@ enum {
 enum { SYS_LAP_ADDR = 0, TO_RHA = 1, SYS_NET_NUM = 0x1A, VARS_SIZE = 64 };
 
 static int mode = 1; /* 0 off, 1 this host, 2 the local network */
+static char ifname[16]; /* the network interface for mode 2, or "" for the system's choice */
 static int fd = -1;
 static uint32_t sender;
 static uint8_t node;
@@ -123,6 +125,22 @@ static void send_frame(const uint8_t *frame, int len)
     sendto(fd, buf, (size_t)len + 4, 0, (struct sockaddr *)&to, sizeof to);
 }
 
+/* An interface's IPv4 address, for multicast on it. */
+static bool interface_address(const char *name, struct in_addr *out)
+{
+    struct ifaddrs *list = NULL;
+    if (getifaddrs(&list) < 0)
+        return false;
+    bool found = false;
+    for (struct ifaddrs *i = list; i && !found; i = i->ifa_next)
+        if (i->ifa_addr && i->ifa_addr->sa_family == AF_INET && !strcmp(i->ifa_name, name)) {
+            *out = ((struct sockaddr_in *)i->ifa_addr)->sin_addr;
+            found = true;
+        }
+    freeifaddrs(list);
+    return found;
+}
+
 static bool open_link(void)
 {
     fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -140,6 +158,12 @@ static bool open_link(void)
     memset(&mr, 0, sizeof mr);
     inet_pton(AF_INET, LTOUDP_GROUP, &mr.imr_multiaddr);
     struct in_addr ifa = { htonl(mode == 2 ? INADDR_ANY : INADDR_LOOPBACK) };
+    if (mode == 2 && ifname[0] && !interface_address(ifname, &ifa)) {
+        fprintf(stderr, "bluebox: AppleTalk: no IPv4 address on %s\n", ifname);
+        close(fd);
+        fd = -1;
+        return false;
+    }
     mr.imr_interface = ifa;
     unsigned char ttl = 1, loop = 1;
     if (bind(fd, (struct sockaddr *)&sa, sizeof sa) < 0 ||
@@ -148,7 +172,7 @@ static bool open_link(void)
         fd = -1;
         return false;
     }
-    if (mode != 2)
+    if (mode != 2 || ifname[0])
         setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &ifa, sizeof ifa);
     setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof ttl);
     setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof loop);
@@ -847,8 +871,11 @@ bool machine_set_appletalk(const char *how)
         mode = 1;
     else if (!strcmp(how, "lan"))
         mode = 2;
+    else if (!strncmp(how, "lan:", 4) && how[4] && strlen(how + 4) < sizeof ifname)
+        mode = 2;
     else
         return false;
+    snprintf(ifname, sizeof ifname, "%s", mode == 2 && how[3] == ':' ? how + 4 : "");
     return true;
 }
 
