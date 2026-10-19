@@ -16,7 +16,10 @@ classic version-0 atoms a QuickTime 2.x Mac reads; time scale 600):
                 (graphics mode transparent, magenta keyed out), and a square
                 moving diagonally on a higher layer; one key frame and
                 override samples ten times a second.  Over it, keyed text
-                with a drop shadow.  Sprite tracks need QuickTime 2.1.
+                with a drop shadow.  Sprite tracks need QuickTime 2.1; a real
+                Mac's QuickTime 2.5 doesn't apply override samples (the
+                sprites stay in the first frame), the key-frame movie below
+                plays there.
   Sprites (key frames).mov
                 The same with every sample a whole scene (images and all
                 sprites), for QuickTimes that play sprite tracks without
