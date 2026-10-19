@@ -201,5 +201,77 @@ extension BlueBox {
             #expect(call(xpp, 246, x) == 0)
             #expect(pstring(at: zone) == "*")
         }
+
+        /// An ADSP session to ourselves: a listener hears the request, a
+        /// connection end accepts it, a message goes across with its end
+        /// marked, and the close reaches the other end.
+        @Test func adspSession() {
+            #expect(machine_set_appletalk("local"))
+            launchTestApp()
+            let stack = tb_NewPtr(65536, false, true)
+            g_cpu!.pointee.a.7 = stack + 65536 - 16
+            let mpp = open(".MPP"), dsp = open(".DSP")
+            let pb = tb_NewPtr(80, false, true)
+            wr8(pb + 28, 1)
+            #expect(call(mpp, 256, pb) == 0) // setSelfSend
+            let node = rd8(rd32(UInt32(LM_ABusVars)))
+
+            func newEnd(_ code: Int) -> (ref: UInt16, skt: UInt8, ccb: UInt32) {
+                let p = tb_NewPtr(80, false, true), ccb = tb_NewPtr(242, false, true)
+                wr32(p + 34, ccb)
+                wr16(p + 42, 600)
+                wr16(p + 48, 600)
+                wr32(p + 54, tb_NewPtr(570, false, true))
+                #expect(call(dsp, code, p) == 0)
+                return (rd16(p + 32), rd8(p + 58), ccb)
+            }
+            let listener = newEnd(251), client = newEnd(255), server = newEnd(255)
+
+            let listen = tb_NewPtr(80, false, true)
+            wr16(listen + 32, listener.ref)
+            #expect(call(dsp, 249, listen, async: true) == 1) // dspCLListen
+
+            let req = tb_NewPtr(80, false, true)
+            wr16(req + 32, client.ref)
+            wr8(req + 40, node)
+            wr8(req + 41, listener.skt)
+            wr8(req + 64, 1) // ocRequest
+            #expect(call(dsp, 253, req, async: true) == 1)
+            poll { rd16(listen + 16) != 1 }
+            #expect(rd16(listen + 16) == 0)
+
+            let acc = tb_NewPtr(80, false, true)
+            gmemcpy(acc + 34, listen + 34, 30)
+            wr16(acc + 32, server.ref)
+            wr8(acc + 64, 3) // ocAccept
+            #expect(call(dsp, 253, acc, async: true) == 1)
+            poll { rd16(req + 16) != 1 && rd16(acc + 16) != 1 }
+            #expect(rd16(req + 16) == 0 && rd16(acc + 16) == 0)
+            #expect(rd16(client.ccb + 6) == 4 && rd16(server.ccb + 6) == 4) // sOpen
+
+            let w = tb_NewPtr(80, false, true), text = tb_NewPtr(8, false, true)
+            for (i, c) in "hello".utf8.enumerated() { wr8(text + UInt32(i), c) }
+            wr16(w + 32, client.ref)
+            wr16(w + 34, 5)
+            wr32(w + 38, text)
+            wr8(w + 42, 1) // eom
+            wr8(w + 43, 1) // flush
+            #expect(call(dsp, 245, w) == 0)
+
+            let r = tb_NewPtr(80, false, true), buf = tb_NewPtr(100, false, true)
+            wr16(r + 32, server.ref)
+            wr16(r + 34, 100)
+            wr32(r + 38, buf)
+            _ = call(dsp, 246, r, async: true)
+            poll { rd16(r + 16) != 1 }
+            #expect(rd16(r + 16) == 0 && rd16(r + 36) == 5 && rd8(r + 42) == 1)
+            #expect(String(decoding: (0..<5).map { rd8(buf + UInt32($0)) }, as: UTF8.self) == "hello")
+
+            let c = tb_NewPtr(80, false, true)
+            wr16(c + 32, client.ref)
+            #expect(call(dsp, 252, c) == 0) // dspClose
+            poll { rd16(server.ccb + 6) == 6 }
+            #expect(rd16(server.ccb + 6) == 6 && rd8(server.ccb + 8) & 0x80 != 0) // sClosed, eClosed
+        }
     }
 }

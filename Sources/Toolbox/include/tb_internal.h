@@ -296,7 +296,9 @@ void mactcp_install_resolver(void);
 /* The Sound Driver (.Sound) of the first Macs (sound.c). */
 extern const native_driver sound_driver;
 /* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */
-extern const native_driver mpp_driver, atp_driver, xpp_driver;
+extern const native_driver mpp_driver, atp_driver, xpp_driver, dsp_driver;
+void adsp_poll(void);
+void adsp_reset(void);
 /* For ATP (appletalk_atp.c): DDP on the node appletalk.c runs. */
 typedef void (*at_handler)(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, const uint8_t *data, int len);
 int16_t at_open(void); /* .MPP's open: the link and a node */

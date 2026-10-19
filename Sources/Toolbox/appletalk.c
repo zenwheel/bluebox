@@ -710,6 +710,7 @@ void appletalk_poll(void)
     polling = true;
     pump();
     atp_poll();
+    adsp_poll();
     for (int i = 0; i < (int)(sizeof ops / sizeof ops[0]); i++) {
         nbp_op *o = &ops[i];
         if (!o->used)
@@ -975,6 +976,7 @@ void appletalk_reset(void)
     memset(sockets, 0, sizeof sockets);
     memset(handlers, 0, sizeof handlers);
     atp_reset();
+    adsp_reset();
     memset(listeners, 0, sizeof listeners);
     memset(ops, 0, sizeof ops);
     polling = false;
