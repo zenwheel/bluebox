@@ -25,6 +25,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <zlib.h>
 
 #include "forks.h"
 #include "m68k.h"
@@ -366,6 +367,33 @@ static uint8_t *moov_in_data(const char *path, uint32_t offset, uint32_t *len)
     return out;
 }
 
+/* A compressed header (QuickTime 3's 'cmov': 'dcom' naming the method,
+ * 'cmvd' the uncompressed size and the data) as the 'moov' atom it holds,
+ * so the movie's size and length are known and VLC can play it (QuickTime
+ * 2.5 itself refused these).  Takes moov; NULL if it can't be read. */
+static uint8_t *uncompress_moov(uint8_t *moov, uint32_t *len)
+{
+    uint32_t n, dn, cn;
+    uint8_t *cmov = find_atom(moov + 8, moov + *len, "cmov", &n);
+    if (!cmov)
+        return moov;
+    uint8_t *dcom = find_atom(cmov + 8, cmov + n, "dcom", &dn), *cmvd = find_atom(cmov + 8, cmov + n, "cmvd", &cn);
+    uint8_t *out = NULL;
+    if (dcom && dn >= 12 && !memcmp(dcom + 8, "zlib", 4) && cmvd && cn >= 12) {
+        uLongf size = be32(cmvd + 8);
+        if (size >= 8 && size < 64u << 20 && (out = malloc(size)) &&
+            (uncompress(out, &size, cmvd + 12, cn - 12) != Z_OK || size < 8 || memcmp(out + 4, "moov", 4) ||
+             be32(out) > size)) {
+            free(out);
+            out = NULL;
+        }
+        if (out)
+            *len = be32(out);
+    }
+    free(moov);
+    return out;
+}
+
 static int temp_count;
 
 /* Write a flattened copy for VLC: 'mdat' header, the data fork, the atom. */
@@ -474,13 +502,9 @@ static int16_t open_movie(const char *path, int16_t *resid, uint32_t data_offset
     }
     if (!moov)
         return set_error(noMovieFound);
-    /* A compressed header ('cmov', QuickTime 3) has no 'mvhd' QuickTime 2.5
-     * could read: such movies don't open, as on a real Mac of the time. */
-    uint32_t n;
-    if (!find_atom(moov + 8, moov + len, "mvhd", &n)) {
-        free(moov);
+    moov = uncompress_moov(moov, &len);
+    if (!moov)
         return set_error(invalidMovie);
-    }
     movie *m = new_movie();
     if (!m) {
         free(moov);
