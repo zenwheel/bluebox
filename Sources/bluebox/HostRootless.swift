@@ -37,6 +37,25 @@ let classicMenuBarHeight: CGFloat = 20
             Int32(((vf.maxY - p.y) / displayScale + classicMenuBarHeight).rounded(.down)))
 }
 
+/// Whether the mouse is captured (a program reading its motion): the
+/// host's pointer is frozen then, so clicks carry the program's own mouse
+/// position, and drags add nothing beyond the motion already sent.
+@MainActor var mouseCaptured = false
+
+/// A click, release or drag from the host: at the host pointer, or while
+/// captured at wherever the program's mouse is.
+@MainActor func postHostMouse(button: Int32) {
+    if mouseCaptured {
+        guard button >= 0 else { return }
+        var x: Int32 = 0, y: Int32 = 0, relative = false
+        _ = machine_mouse_state(&x, &y, &relative)
+        machine_post_mouse(x, y, button)
+        return
+    }
+    let (x, y) = hostToMac(NSEvent.mouseLocation)
+    machine_post_mouse(x, y, button)
+}
+
 final class MacWindow: NSWindow {
     var macID: UInt32 = 0
     var native = false
@@ -92,10 +111,7 @@ final class MacWindowView: NSView {
         layer?.contents = image
     }
 
-    private func post(_ event: NSEvent, button: Int32) {
-        let (x, y) = hostToMac(NSEvent.mouseLocation)
-        machine_post_mouse(x, y, button)
-    }
+    private func post(_ event: NSEvent, button: Int32) { postHostMouse(button: button) }
 
     override func mouseDown(with event: NSEvent) { post(event, button: 1) }
     override func mouseUp(with event: NSEvent) { post(event, button: 0) }
@@ -142,10 +158,7 @@ final class TransientView: NSView {
         CATransaction.commit()
     }
 
-    private func post(_ button: Int32) {
-        let (x, y) = hostToMac(NSEvent.mouseLocation)
-        machine_post_mouse(x, y, button)
-    }
+    private func post(_ button: Int32) { postHostMouse(button: button) }
 
     override func mouseDown(with event: NSEvent) { post(1) }
     override func mouseUp(with event: NSEvent) { post(0) }
@@ -241,6 +254,7 @@ final class TransientView: NSView {
     func setCaptured(_ on: Bool) {
         guard on != captured else { return }
         captured = on
+        mouseCaptured = on
         CGAssociateMouseAndMouseCursorPosition(on ? 0 : 1)
         if on && motionMonitor == nil {
             motionMonitor = NSEvent.addLocalMonitorForEvents(
