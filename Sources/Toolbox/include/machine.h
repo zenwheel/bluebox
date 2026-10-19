@@ -403,6 +403,13 @@ typedef void (*machine_sound_fn)(int channel, const int16_t *pcm, int frames, in
                                  void *ctx);
 void machine_set_sound_handler(machine_sound_fn fn, void *ctx);
 
+/* ---- Images ---- */
+
+/* Decode a still image the host's frameworks read (JPEG for QuickTime's
+ * Photo-JPEG codec) into RGBA rows (*rgba malloc'd, *w by *h). */
+typedef bool (*machine_image_fn)(const uint8_t *data, size_t len, uint8_t **rgba, int *w, int *h, void *ctx);
+void machine_set_image_decoder(machine_image_fn fn, void *ctx);
+
 /* ---- Clipboard ---- */
 
 /* Text the app put on its clipboard (UTF-8), for the host clipboard. */

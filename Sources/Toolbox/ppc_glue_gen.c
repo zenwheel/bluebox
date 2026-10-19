@@ -11605,6 +11605,13 @@ static void ppcglue_SetTimeBaseRate(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_CodecManagerVersion(ppc_cpu *c)
+{
+    gaddr a_version = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CodecManagerVersion(a_version);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCodecNameList(ppc_cpu *c)
 {
     gaddr a_list = (gaddr)c->gpr[3];
@@ -11617,6 +11624,246 @@ static void ppcglue_DisposeCodecNameList(ppc_cpu *c)
 {
     int32_t a_list = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisposeCodecNameList(a_list);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCodecInfo(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    int32_t a_cType = (int32_t)c->gpr[4];
+    int32_t a_codec = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetCodecInfo(a_info, a_cType, a_codec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DecompressImage(ppc_cpu *c)
+{
+    int32_t a_data = (int32_t)c->gpr[3];
+    int32_t a_desc = (int32_t)c->gpr[4];
+    int32_t a_dst = (int32_t)c->gpr[5];
+    gaddr a_srcRect = (gaddr)c->gpr[6];
+    gaddr a_dstRect = (gaddr)c->gpr[7];
+    int16_t a_mode = (int16_t)c->gpr[8];
+    int32_t a_mask = (int32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DecompressImage(a_data, a_desc, a_dst, a_srcRect, a_dstRect, a_mode, a_mask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FDecompressImage(ppc_cpu *c)
+{
+    int32_t a_data = (int32_t)c->gpr[3];
+    int32_t a_desc = (int32_t)c->gpr[4];
+    int32_t a_dst = (int32_t)c->gpr[5];
+    gaddr a_srcRect = (gaddr)c->gpr[6];
+    int32_t a_matrix = (int32_t)c->gpr[7];
+    int16_t a_mode = (int16_t)c->gpr[8];
+    int32_t a_mask = (int32_t)c->gpr[9];
+    int32_t a_matte = (int32_t)c->gpr[10];
+    gaddr a_matteRect = (gaddr)rd32(c->gpr[1] + 56);
+    int32_t a_accuracy = (int32_t)rd32(c->gpr[1] + 60);
+    int32_t a_codec = (int32_t)rd32(c->gpr[1] + 64);
+    int32_t a_bufferSize = (int32_t)rd32(c->gpr[1] + 68);
+    int32_t a_dataProc = (int32_t)rd32(c->gpr[1] + 72);
+    int32_t a_progressProc = (int32_t)rd32(c->gpr[1] + 76);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FDecompressImage(a_data, a_desc, a_dst, a_srcRect, a_matrix, a_mode, a_mask, a_matte, a_matteRect, a_accuracy, a_codec, a_bufferSize, a_dataProc, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DecompressSequenceBegin(ppc_cpu *c)
+{
+    gaddr a_seqID = (gaddr)c->gpr[3];
+    int32_t a_desc = (int32_t)c->gpr[4];
+    int32_t a_port = (int32_t)c->gpr[5];
+    int32_t a_gdh = (int32_t)c->gpr[6];
+    gaddr a_srcRect = (gaddr)c->gpr[7];
+    int32_t a_matrix = (int32_t)c->gpr[8];
+    int16_t a_mode = (int16_t)c->gpr[9];
+    int32_t a_mask = (int32_t)c->gpr[10];
+    int16_t a_flags = (int16_t)rd32(c->gpr[1] + 56);
+    int32_t a_accuracy = (int32_t)rd32(c->gpr[1] + 60);
+    int32_t a_codec = (int32_t)rd32(c->gpr[1] + 64);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DecompressSequenceBegin(a_seqID, a_desc, a_port, a_gdh, a_srcRect, a_matrix, a_mode, a_mask, a_flags, a_accuracy, a_codec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DecompressSequenceBeginS(ppc_cpu *c)
+{
+    gaddr a_seqID = (gaddr)c->gpr[3];
+    int32_t a_desc = (int32_t)c->gpr[4];
+    int32_t a_data = (int32_t)c->gpr[5];
+    int32_t a_dataSize = (int32_t)c->gpr[6];
+    int32_t a_port = (int32_t)c->gpr[7];
+    int32_t a_gdh = (int32_t)c->gpr[8];
+    gaddr a_srcRect = (gaddr)c->gpr[9];
+    int32_t a_matrix = (int32_t)c->gpr[10];
+    int16_t a_mode = (int16_t)rd32(c->gpr[1] + 56);
+    int32_t a_mask = (int32_t)rd32(c->gpr[1] + 60);
+    int16_t a_flags = (int16_t)rd32(c->gpr[1] + 64);
+    int32_t a_accuracy = (int32_t)rd32(c->gpr[1] + 68);
+    int32_t a_codec = (int32_t)rd32(c->gpr[1] + 72);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DecompressSequenceBeginS(a_seqID, a_desc, a_data, a_dataSize, a_port, a_gdh, a_srcRect, a_matrix, a_mode, a_mask, a_flags, a_accuracy, a_codec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DecompressSequenceFrame(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int16_t a_inFlags = (int16_t)c->gpr[5];
+    gaddr a_outFlags = (gaddr)c->gpr[6];
+    int32_t a_asyncCompletionProc = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DecompressSequenceFrame(a_seqID, a_data, a_inFlags, a_outFlags, a_asyncCompletionProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DecompressSequenceFrameS(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_dataSize = (int32_t)c->gpr[5];
+    int16_t a_inFlags = (int16_t)c->gpr[6];
+    gaddr a_outFlags = (gaddr)c->gpr[7];
+    int32_t a_asyncCompletionProc = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DecompressSequenceFrameS(a_seqID, a_data, a_dataSize, a_inFlags, a_outFlags, a_asyncCompletionProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DecompressSequenceFrameWhen(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_dataSize = (int32_t)c->gpr[5];
+    int16_t a_inFlags = (int16_t)c->gpr[6];
+    gaddr a_outFlags = (gaddr)c->gpr[7];
+    int32_t a_asyncCompletionProc = (int32_t)c->gpr[8];
+    gaddr a_frameTime = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DecompressSequenceFrameWhen(a_seqID, a_data, a_dataSize, a_inFlags, a_outFlags, a_asyncCompletionProc, a_frameTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceFlush(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceFlush(a_seqID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceMatrix(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_matrix = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceMatrix(a_seqID, a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDSequenceMatrix(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_matrix = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDSequenceMatrix(a_seqID, a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceMatte(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_matte = (int32_t)c->gpr[4];
+    gaddr a_matteRect = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceMatte(a_seqID, a_matte, a_matteRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceMask(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_mask = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceMask(a_seqID, a_mask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceTransferMode(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int16_t a_mode = (int16_t)c->gpr[4];
+    gaddr a_opColor = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceTransferMode(a_seqID, a_mode, a_opColor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceDataProc(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_dataProc = (int32_t)c->gpr[4];
+    int32_t a_bufferSize = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceDataProc(a_seqID, a_dataProc, a_bufferSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceAccuracy(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_accuracy = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceAccuracy(a_seqID, a_accuracy);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceSrcRect(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_srcRect = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceSrcRect(a_seqID, a_srcRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceFlags(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    int32_t a_flagsMask = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceFlags(a_seqID, a_flags, a_flagsMask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceBusy(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceBusy(a_seqID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceEnd(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceEnd(a_seqID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCompressedImageSize(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_bufferSize = (int32_t)c->gpr[5];
+    int32_t a_dataProc = (int32_t)c->gpr[6];
+    gaddr a_dataSize = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetCompressedImageSize(a_desc, a_data, a_bufferSize, a_dataProc, a_dataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetImageDescriptionCTable(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    gaddr a_ctable = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetImageDescriptionCTable(a_desc, a_ctable);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindCodec(ppc_cpu *c)
+{
+    int32_t a_cType = (int32_t)c->gpr[3];
+    int32_t a_specCodec = (int32_t)c->gpr[4];
+    gaddr a_compressor = (gaddr)c->gpr[5];
+    gaddr a_decompressor = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FindCodec(a_cType, a_specCodec, a_compressor, a_decompressor);
     c->pc = c->lr;
 }
 
@@ -11689,6 +11936,35 @@ static void ppcglue_AddFilePreview(ppc_cpu *c)
     int32_t a_previewType = (int32_t)c->gpr[4];
     int32_t a_previewData = (int32_t)c->gpr[5];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddFilePreview(a_resRefNum, a_previewType, a_previewData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AlignScreenRect(ppc_cpu *c)
+{
+    gaddr a_rp = (gaddr)c->gpr[3];
+    int32_t a_alignmentProc = (int32_t)c->gpr[4];
+    tb_AlignScreenRect(a_rp, a_alignmentProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AlignWindow(ppc_cpu *c)
+{
+    int32_t a_wp = (int32_t)c->gpr[3];
+    int8_t a_front = (int8_t)c->gpr[4];
+    gaddr a_alignmentRect = (gaddr)c->gpr[5];
+    int32_t a_alignmentProc = (int32_t)c->gpr[6];
+    tb_AlignWindow(a_wp, a_front, a_alignmentRect, a_alignmentProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DragAlignedWindow(ppc_cpu *c)
+{
+    int32_t a_wp = (int32_t)c->gpr[3];
+    int32_t a_startPt = (int32_t)c->gpr[4];
+    gaddr a_boundsRect = (gaddr)c->gpr[5];
+    gaddr a_alignmentRect = (gaddr)c->gpr[6];
+    int32_t a_alignmentProc = (int32_t)c->gpr[7];
+    tb_DragAlignedWindow(a_wp, a_startPt, a_boundsRect, a_alignmentRect, a_alignmentProc);
     c->pc = c->lr;
 }
 
@@ -19447,34 +19723,6 @@ static void ppctrap_ExecuteCallBack(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_CodecManagerVersion(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetCodecInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_GetMaxCompressionSize(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -19572,51 +19820,6 @@ static void ppctrap_FCompressImage(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_DecompressImage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(2, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FDecompressImage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(2, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap_push(4, rd32(c->gpr[1] + 64));
-    ppc_trap_push(4, rd32(c->gpr[1] + 68));
-    ppc_trap_push(4, rd32(c->gpr[1] + 72));
-    ppc_trap_push(4, rd32(c->gpr[1] + 76));
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_CompressSequenceBegin(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -19656,251 +19859,6 @@ static void ppctrap_CompressSequenceFrame(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[8]);
     ppc_trap_push(4, c->gpr[9]);
     ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DecompressSequenceBegin(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(2, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(2, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap_push(4, rd32(c->gpr[1] + 64));
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DecompressSequenceBeginS(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x5Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(2, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap_push(2, rd32(c->gpr[1] + 64));
-    ppc_trap_push(4, rd32(c->gpr[1] + 68));
-    ppc_trap_push(4, rd32(c->gpr[1] + 72));
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DecompressSequenceFrame(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DecompressSequenceFrameS(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x47u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DecompressSequenceFrameWhen(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x5Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceFlush(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x5Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x10u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDSequenceMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x91u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceMatte(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x11u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceMask(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x12u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceTransferMode(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x13u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceDataProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceAccuracy(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x34u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceSrcRect(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x35u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceFlags(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x57u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
     ppc_trap((uint16_t)(0xAAA3));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
@@ -20054,32 +20012,6 @@ static void ppctrap_GetCSequencePrevBuffer(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_CDSequenceBusy(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceEnd(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_CDSequenceEquivalentImageDescription(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -20125,23 +20057,6 @@ static void ppctrap_ReplaceDSequenceImageDescription(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_GetCompressedImageSize(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_GetSimilarity(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -20152,20 +20067,6 @@ static void ppctrap_GetSimilarity(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[5]);
     ppc_trap_push(4, c->gpr[6]);
     ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetImageDescriptionCTable(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
     ppc_trap((uint16_t)(0xAAA3));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
@@ -20255,22 +20156,6 @@ static void ppctrap_GetNextImageDescriptionExtensionType(ppc_cpu *c)
     ppc_trap_set(0, 0x3Cu);
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FindCodec(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x23u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
     ppc_trap((uint16_t)(0xAAA3));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
@@ -20574,44 +20459,6 @@ static void ppctrap_TransformRgn(ppc_cpu *c)
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AlignScreenRect(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x4Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_AlignWindow(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x4Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(1, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_DragAlignedWindow(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x4Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    ppc_trap_end();
     c->pc = c->lr;
 }
 
@@ -22131,8 +21978,8 @@ const ppc_export ppc_exports[] = {
     {"AddUserData", ppctrap_AddUserData},
     {"AddUserDataText", ppctrap_AddUserDataText},
     {"Alert", ppcglue_Alert},
-    {"AlignScreenRect", ppctrap_AlignScreenRect},
-    {"AlignWindow", ppctrap_AlignWindow},
+    {"AlignScreenRect", ppcglue_AlignScreenRect},
+    {"AlignWindow", ppcglue_AlignWindow},
     {"AllocCursor", ppcglue_AllocCursor},
     {"AllowPurgePixels", ppcglue_AllowPurgePixels},
     {"AngleFromSlope", ppcglue_AngleFromSlope},
@@ -22161,14 +22008,14 @@ const ppc_export ppc_exports[] = {
     {"BlockMoveData", ppcglue_BlockMoveData},
     {"BringToFront", ppcglue_BringToFront},
     {"Button", ppcglue_Button},
-    {"CDSequenceBusy", ppctrap_CDSequenceBusy},
+    {"CDSequenceBusy", ppcglue_CDSequenceBusy},
     {"CDSequenceChangedSourceData", ppctrap_CDSequenceChangedSourceData},
     {"CDSequenceDisposeDataSource", ppctrap_CDSequenceDisposeDataSource},
     {"CDSequenceDisposeMemory", ppctrap_CDSequenceDisposeMemory},
-    {"CDSequenceEnd", ppctrap_CDSequenceEnd},
+    {"CDSequenceEnd", ppcglue_CDSequenceEnd},
     {"CDSequenceEquivalentImageDescription", ppctrap_CDSequenceEquivalentImageDescription},
     {"CDSequenceEquivalentImageDescriptionS", ppctrap_CDSequenceEquivalentImageDescriptionS},
-    {"CDSequenceFlush", ppctrap_CDSequenceFlush},
+    {"CDSequenceFlush", ppcglue_CDSequenceFlush},
     {"CDSequenceGetDataSource", ppctrap_CDSequenceGetDataSource},
     {"CDSequenceInvalidate", ppctrap_CDSequenceInvalidate},
     {"CDSequenceNewDataSource", ppctrap_CDSequenceNewDataSource},
@@ -22225,7 +22072,7 @@ const ppc_export ppc_exports[] = {
     {"CloseResFile", ppcglue_CloseResFile},
     {"CloseRgn", ppcglue_CloseRgn},
     {"CloseWindow", ppcglue_CloseWindow},
-    {"CodecManagerVersion", ppctrap_CodecManagerVersion},
+    {"CodecManagerVersion", ppcglue_CodecManagerVersion},
     {"Color2Index", ppcglue_Color2Index},
     {"ColorBit", ppcglue_ColorBit},
     {"Comp3to1", ppctrap_Comp3to1},
@@ -22295,12 +22142,12 @@ const ppc_export ppc_exports[] = {
     {"DateToSeconds", ppctrap_DateToSeconds},
     {"DebugStr", ppcglue_DebugStr},
     {"Debugger", ppcglue_Debugger},
-    {"DecompressImage", ppctrap_DecompressImage},
-    {"DecompressSequenceBegin", ppctrap_DecompressSequenceBegin},
-    {"DecompressSequenceBeginS", ppctrap_DecompressSequenceBeginS},
-    {"DecompressSequenceFrame", ppctrap_DecompressSequenceFrame},
-    {"DecompressSequenceFrameS", ppctrap_DecompressSequenceFrameS},
-    {"DecompressSequenceFrameWhen", ppctrap_DecompressSequenceFrameWhen},
+    {"DecompressImage", ppcglue_DecompressImage},
+    {"DecompressSequenceBegin", ppcglue_DecompressSequenceBegin},
+    {"DecompressSequenceBeginS", ppcglue_DecompressSequenceBeginS},
+    {"DecompressSequenceFrame", ppcglue_DecompressSequenceFrame},
+    {"DecompressSequenceFrameS", ppcglue_DecompressSequenceFrameS},
+    {"DecompressSequenceFrameWhen", ppcglue_DecompressSequenceFrameWhen},
     {"DelComp", ppcglue_DelComp},
     {"DelSearch", ppcglue_DelSearch},
     {"Delay", ppctrap_Delay},
@@ -22360,7 +22207,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeUserData", ppctrap_DisposeUserData},
     {"DisposeWindow", ppcglue_DisposeWindow},
     {"DragAlignedGrayRgn", ppctrap_DragAlignedGrayRgn},
-    {"DragAlignedWindow", ppctrap_DragAlignedWindow},
+    {"DragAlignedWindow", ppcglue_DragAlignedWindow},
     {"DragControl", ppcglue_DragControl},
     {"DragGrayRgn", ppcglue_DragGrayRgn},
     {"DragPostScroll", ppcglue_DragPostScroll},
@@ -22413,7 +22260,7 @@ const ppc_export ppc_exports[] = {
     {"FCompressImage", ppctrap_FCompressImage},
     {"FCompressPicture", ppctrap_FCompressPicture},
     {"FCompressPictureFile", ppctrap_FCompressPictureFile},
-    {"FDecompressImage", ppctrap_FDecompressImage},
+    {"FDecompressImage", ppcglue_FDecompressImage},
     {"FInitQueue", ppctrap_FInitQueue},
     {"FMSwapFont", ppcglue_FMSwapFont},
     {"FSMakeFSSpec", ppcglue_FSMakeFSSpec},
@@ -22446,7 +22293,7 @@ const ppc_export ppc_exports[] = {
     {"FillRoundRect", ppcglue_FillRoundRect},
     {"FinaleUnknown1", ppctrap_FinaleUnknown1},
     {"FinaleUnknown2", ppcglue_FinaleUnknown2},
-    {"FindCodec", ppctrap_FindCodec},
+    {"FindCodec", ppcglue_FindCodec},
     {"FindControl", ppcglue_FindControl},
     {"FindDialogItem", ppcglue_FindDialogItem},
     {"FindFolder", ppcglue_FindFolder},
@@ -22523,10 +22370,10 @@ const ppc_export ppc_exports[] = {
     {"GetCallBackType", ppctrap_GetCallBackType},
     {"GetCaretTime", ppcglue_GetCaretTime},
     {"GetClip", ppcglue_GetClip},
-    {"GetCodecInfo", ppctrap_GetCodecInfo},
+    {"GetCodecInfo", ppcglue_GetCodecInfo},
     {"GetCodecNameList", ppcglue_GetCodecNameList},
     {"GetColor", ppcglue_GetColor},
-    {"GetCompressedImageSize", ppctrap_GetCompressedImageSize},
+    {"GetCompressedImageSize", ppcglue_GetCompressedImageSize},
     {"GetCompressedPixMapInfo", ppctrap_GetCompressedPixMapInfo},
     {"GetCompressionInfo", ppctrap_GetCompressionInfo},
     {"GetCompressionTime", ppctrap_GetCompressionTime},
@@ -22541,7 +22388,7 @@ const ppc_export ppc_exports[] = {
     {"GetCurrentThread", ppcglue_GetCurrentThread},
     {"GetCursor", ppcglue_GetCursor},
     {"GetDSequenceImageBuffer", ppctrap_GetDSequenceImageBuffer},
-    {"GetDSequenceMatrix", ppctrap_GetDSequenceMatrix},
+    {"GetDSequenceMatrix", ppcglue_GetDSequenceMatrix},
     {"GetDSequenceScreenBuffer", ppctrap_GetDSequenceScreenBuffer},
     {"GetDataHandler", ppctrap_GetDataHandler},
     {"GetDateTime", ppcglue_GetDateTime},
@@ -22591,7 +22438,7 @@ const ppc_export ppc_exports[] = {
     {"GetIconCacheProc", ppctrap_GetIconCacheProc},
     {"GetIconFromSuite", ppcglue_GetIconFromSuite},
     {"GetIconSuite", ppcglue_GetIconSuite},
-    {"GetImageDescriptionCTable", ppctrap_GetImageDescriptionCTable},
+    {"GetImageDescriptionCTable", ppcglue_GetImageDescriptionCTable},
     {"GetImageDescriptionExtension", ppctrap_GetImageDescriptionExtension},
     {"GetIndADB", ppcglue_GetIndADB},
     {"GetIndPattern", ppcglue_GetIndPattern},
@@ -24264,15 +24111,15 @@ const ppc_export ppc_exports[] = {
     {"SetControlTitle", ppcglue_SetControlTitle},
     {"SetControlValue", ppcglue_SetControlValue},
     {"SetCursor", ppcglue_SetCursor},
-    {"SetDSequenceAccuracy", ppctrap_SetDSequenceAccuracy},
-    {"SetDSequenceDataProc", ppctrap_SetDSequenceDataProc},
-    {"SetDSequenceFlags", ppctrap_SetDSequenceFlags},
-    {"SetDSequenceMask", ppctrap_SetDSequenceMask},
-    {"SetDSequenceMatrix", ppctrap_SetDSequenceMatrix},
-    {"SetDSequenceMatte", ppctrap_SetDSequenceMatte},
-    {"SetDSequenceSrcRect", ppctrap_SetDSequenceSrcRect},
+    {"SetDSequenceAccuracy", ppcglue_SetDSequenceAccuracy},
+    {"SetDSequenceDataProc", ppcglue_SetDSequenceDataProc},
+    {"SetDSequenceFlags", ppcglue_SetDSequenceFlags},
+    {"SetDSequenceMask", ppcglue_SetDSequenceMask},
+    {"SetDSequenceMatrix", ppcglue_SetDSequenceMatrix},
+    {"SetDSequenceMatte", ppcglue_SetDSequenceMatte},
+    {"SetDSequenceSrcRect", ppcglue_SetDSequenceSrcRect},
     {"SetDSequenceTimeCode", ppctrap_SetDSequenceTimeCode},
-    {"SetDSequenceTransferMode", ppctrap_SetDSequenceTransferMode},
+    {"SetDSequenceTransferMode", ppcglue_SetDSequenceTransferMode},
     {"SetDateTime", ppctrap_SetDateTime},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},

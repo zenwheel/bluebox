@@ -552,6 +552,7 @@ func runCommand(_ args: [String]) {
         cpaths.forEach { free($0) }
     }
     #if canImport(AppKit)
+    ClassicImages.install()
     if let printTo { installPrintToFile(printTo) } else { printFolder = saved.printFolder.flatMap { $0.isEmpty ? nil : $0 } }
     if !headlessFileAnswers.isEmpty {
         // Open and save dialogs answered in turn, without a panel.

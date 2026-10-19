@@ -1532,6 +1532,28 @@ static void glue_Alert(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AlignScreenRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_alignmentProc = (int32_t)cpu_pop32(c);
+    gaddr a_rp = (gaddr)cpu_pop32(c);
+    tb_AlignScreenRect(a_rp, a_alignmentProc);
+    cpu_push32(c, ret);
+}
+
+static void glue_AlignWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_alignmentProc = (int32_t)cpu_pop32(c);
+    gaddr a_alignmentRect = (gaddr)cpu_pop32(c);
+    int8_t a_front = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_wp = (int32_t)cpu_pop32(c);
+    tb_AlignWindow(a_wp, a_front, a_alignmentRect, a_alignmentProc);
+    cpu_push32(c, ret);
+}
+
 static void glue_AllocCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1788,6 +1810,36 @@ static void glue_Button(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int8_t r = tb_Button();
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_CDSequenceBusy(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CDSequenceBusy(a_seqID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CDSequenceEnd(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CDSequenceEnd(a_seqID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CDSequenceFlush(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CDSequenceFlush(a_seqID);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2165,6 +2217,16 @@ static void glue_CloseWindow(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_CloseWindow(a_w);
+    cpu_push32(c, ret);
+}
+
+static void glue_CodecManagerVersion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_version = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CodecManagerVersion(a_version);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2587,6 +2649,109 @@ static void glue_Debugger(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DecompressImage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_mask = (int32_t)cpu_pop32(c);
+    int16_t a_mode = (int16_t)cpu_pop16(c);
+    gaddr a_dstRect = (gaddr)cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_dst = (int32_t)cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DecompressImage(a_data, a_desc, a_dst, a_srcRect, a_dstRect, a_mode, a_mask);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DecompressSequenceBegin(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_accuracy = (int32_t)cpu_pop32(c);
+    int16_t a_flags = (int16_t)cpu_pop16(c);
+    int32_t a_mask = (int32_t)cpu_pop32(c);
+    int16_t a_mode = (int16_t)cpu_pop16(c);
+    int32_t a_matrix = (int32_t)cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_gdh = (int32_t)cpu_pop32(c);
+    int32_t a_port = (int32_t)cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    gaddr a_seqID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DecompressSequenceBegin(a_seqID, a_desc, a_port, a_gdh, a_srcRect, a_matrix, a_mode, a_mask, a_flags, a_accuracy, a_codec);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DecompressSequenceBeginS(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_accuracy = (int32_t)cpu_pop32(c);
+    int16_t a_flags = (int16_t)cpu_pop16(c);
+    int32_t a_mask = (int32_t)cpu_pop32(c);
+    int16_t a_mode = (int16_t)cpu_pop16(c);
+    int32_t a_matrix = (int32_t)cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_gdh = (int32_t)cpu_pop32(c);
+    int32_t a_port = (int32_t)cpu_pop32(c);
+    int32_t a_dataSize = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    gaddr a_seqID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DecompressSequenceBeginS(a_seqID, a_desc, a_data, a_dataSize, a_port, a_gdh, a_srcRect, a_matrix, a_mode, a_mask, a_flags, a_accuracy, a_codec);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DecompressSequenceFrame(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_asyncCompletionProc = (int32_t)cpu_pop32(c);
+    gaddr a_outFlags = (gaddr)cpu_pop32(c);
+    int16_t a_inFlags = (int16_t)cpu_pop16(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DecompressSequenceFrame(a_seqID, a_data, a_inFlags, a_outFlags, a_asyncCompletionProc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DecompressSequenceFrameS(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_asyncCompletionProc = (int32_t)cpu_pop32(c);
+    gaddr a_outFlags = (gaddr)cpu_pop32(c);
+    int16_t a_inFlags = (int16_t)cpu_pop16(c);
+    int32_t a_dataSize = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DecompressSequenceFrameS(a_seqID, a_data, a_dataSize, a_inFlags, a_outFlags, a_asyncCompletionProc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DecompressSequenceFrameWhen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_frameTime = (gaddr)cpu_pop32(c);
+    int32_t a_asyncCompletionProc = (int32_t)cpu_pop32(c);
+    gaddr a_outFlags = (gaddr)cpu_pop32(c);
+    int16_t a_inFlags = (int16_t)cpu_pop16(c);
+    int32_t a_dataSize = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DecompressSequenceFrameWhen(a_seqID, a_data, a_dataSize, a_inFlags, a_outFlags, a_asyncCompletionProc, a_frameTime);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DelComp(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2958,6 +3123,19 @@ static void glue_DisposeWindow(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_DisposeWindow(a_w);
+    cpu_push32(c, ret);
+}
+
+static void glue_DragAlignedWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_alignmentProc = (int32_t)cpu_pop32(c);
+    gaddr a_alignmentRect = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    int32_t a_startPt = (int32_t)cpu_pop32(c);
+    int32_t a_wp = (int32_t)cpu_pop32(c);
+    tb_DragAlignedWindow(a_wp, a_startPt, a_boundsRect, a_alignmentRect, a_alignmentProc);
     cpu_push32(c, ret);
 }
 
@@ -3357,6 +3535,29 @@ static void glue_ExtendedToString(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FDecompressImage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_progressProc = (int32_t)cpu_pop32(c);
+    int32_t a_dataProc = (int32_t)cpu_pop32(c);
+    int32_t a_bufferSize = (int32_t)cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_accuracy = (int32_t)cpu_pop32(c);
+    gaddr a_matteRect = (gaddr)cpu_pop32(c);
+    int32_t a_matte = (int32_t)cpu_pop32(c);
+    int32_t a_mask = (int32_t)cpu_pop32(c);
+    int16_t a_mode = (int16_t)cpu_pop16(c);
+    int32_t a_matrix = (int32_t)cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_dst = (int32_t)cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FDecompressImage(a_data, a_desc, a_dst, a_srcRect, a_matrix, a_mode, a_mask, a_matte, a_matteRect, a_accuracy, a_codec, a_bufferSize, a_dataProc, a_progressProc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FMSwapFont(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3665,6 +3866,19 @@ static void glue_FinaleUnknown2(cpu68k *c, uint16_t trapword)
     int32_t a_arg1 = (int32_t)cpu_pop32(c);
     int32_t a_arg0 = (int32_t)cpu_pop32(c);
     int16_t r = tb_FinaleUnknown2(a_arg0, a_arg1, a_arg2, a_arg3);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FindCodec(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_decompressor = (gaddr)cpu_pop32(c);
+    gaddr a_compressor = (gaddr)cpu_pop32(c);
+    int32_t a_specCodec = (int32_t)cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FindCodec(a_cType, a_specCodec, a_compressor, a_decompressor);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -4269,6 +4483,18 @@ static void glue_GetClip(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetCodecInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_codec = (int32_t)cpu_pop32(c);
+    int32_t a_cType = (int32_t)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetCodecInfo(a_info, a_cType, a_codec);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetCodecNameList(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4290,6 +4516,20 @@ static void glue_GetColor(cpu68k *c, uint16_t trapword)
     uint32_t a_arg0 = (uint32_t)cpu_pop32(c);
     int8_t r = tb_GetColor(a_arg0, a_arg1, a_arg2, a_arg3);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCompressedImageSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dataSize = (gaddr)cpu_pop32(c);
+    int32_t a_dataProc = (int32_t)cpu_pop32(c);
+    int32_t a_bufferSize = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCompressedImageSize(a_desc, a_data, a_bufferSize, a_dataProc, a_dataSize);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -4390,6 +4630,17 @@ static void glue_GetCursor(cpu68k *c, uint16_t trapword)
     int16_t a_id = (int16_t)cpu_pop16(c);
     gaddr r = tb_GetCursor(a_id);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDSequenceMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_matrix = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetDSequenceMatrix(a_seqID, a_matrix);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -4783,6 +5034,17 @@ static void glue_GetIconSuite(cpu68k *c, uint16_t trapword)
     int16_t a_res_id = (int16_t)cpu_pop16(c);
     gaddr a_suite = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetIconSuite(a_suite, a_res_id, a_selector);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetImageDescriptionCTable(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_ctable = (gaddr)cpu_pop32(c);
+    int32_t a_desc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetImageDescriptionCTable(a_desc, a_ctable);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -11411,6 +11673,98 @@ static void glue_SetCursor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDSequenceAccuracy(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_accuracy = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDSequenceAccuracy(a_seqID, a_accuracy);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDSequenceDataProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_bufferSize = (int32_t)cpu_pop32(c);
+    int32_t a_dataProc = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDSequenceDataProc(a_seqID, a_dataProc, a_bufferSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDSequenceFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_flagsMask = (int32_t)cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDSequenceFlags(a_seqID, a_flags, a_flagsMask);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDSequenceMask(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_mask = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDSequenceMask(a_seqID, a_mask);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDSequenceMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_matrix = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDSequenceMatrix(a_seqID, a_matrix);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDSequenceMatte(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_matteRect = (gaddr)cpu_pop32(c);
+    int32_t a_matte = (int32_t)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDSequenceMatte(a_seqID, a_matte, a_matteRect);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDSequenceSrcRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_srcRect = (gaddr)cpu_pop32(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDSequenceSrcRect(a_seqID, a_srcRect);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDSequenceTransferMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_opColor = (gaddr)cpu_pop32(c);
+    int16_t a_mode = (int16_t)cpu_pop16(c);
+    int32_t a_seqID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDSequenceTransferMode(a_seqID, a_mode, a_opColor);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDebuggerNotificationProcs(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15345,40 +15699,40 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABC9, (int32_t)0x90Fu, "PtInIconMethod", CONV_STACK, 18, 2, 0},
     {0xABC9, (int32_t)0x912u, "RectInIconMethod", CONV_STACK, 18, 2, 0},
     {0xABC9, (int32_t)0x915u, "IconMethodToRgn", CONV_STACK, 18, 2, 0},
-    {0xAAA3, (int32_t)0x0u, "CodecManagerVersion", CONV_STACK, 4, 2, 0},
+    {0xAAA3, (int32_t)0x0u, "CodecManagerVersion", CONV_STACK, 4, 2, glue_CodecManagerVersion},
     {0xAAA3, (int32_t)0x1u, "GetCodecNameList", CONV_STACK, 6, 2, glue_GetCodecNameList},
-    {0xAAA3, (int32_t)0x3u, "GetCodecInfo", CONV_STACK, 12, 2, 0},
+    {0xAAA3, (int32_t)0x3u, "GetCodecInfo", CONV_STACK, 12, 2, glue_GetCodecInfo},
     {0xAAA3, (int32_t)0x4u, "GetMaxCompressionSize", CONV_STACK, 26, 2, 0},
     {0xAAA3, (int32_t)0x5u, "GetCompressionTime", CONV_STACK, 30, 2, 0},
     {0xAAA3, (int32_t)0x6u, "CompressImage", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x7u, "FCompressImage", CONV_STACK, 48, 2, 0},
-    {0xAAA3, (int32_t)0x8u, "DecompressImage", CONV_STACK, 26, 2, 0},
-    {0xAAA3, (int32_t)0x9u, "FDecompressImage", CONV_STACK, 54, 2, 0},
+    {0xAAA3, (int32_t)0x8u, "DecompressImage", CONV_STACK, 26, 2, glue_DecompressImage},
+    {0xAAA3, (int32_t)0x9u, "FDecompressImage", CONV_STACK, 54, 2, glue_FDecompressImage},
     {0xAAA3, (int32_t)0xAu, "CompressSequenceBegin", CONV_STACK, 52, 2, 0},
     {0xAAA3, (int32_t)0xBu, "CompressSequenceFrame", CONV_STACK, 30, 2, 0},
     {0xAAA3, (int32_t)0xCu, "StdPix", CONV_STACK, 28, 0, 0},
-    {0xAAA3, (int32_t)0xDu, "DecompressSequenceBegin", CONV_STACK, 40, 2, 0},
-    {0xAAA3, (int32_t)0xEu, "DecompressSequenceFrame", CONV_STACK, 18, 2, 0},
+    {0xAAA3, (int32_t)0xDu, "DecompressSequenceBegin", CONV_STACK, 40, 2, glue_DecompressSequenceBegin},
+    {0xAAA3, (int32_t)0xEu, "DecompressSequenceFrame", CONV_STACK, 18, 2, glue_DecompressSequenceFrame},
     {0xAAA3, (int32_t)0xFu, "DisposeCodecNameList", CONV_STACK, 4, 2, glue_DisposeCodecNameList},
-    {0xAAA3, (int32_t)0x10u, "SetDSequenceMatrix", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x11u, "SetDSequenceMatte", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x12u, "SetDSequenceMask", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x13u, "SetDSequenceTransferMode", CONV_STACK, 10, 2, 0},
-    {0xAAA3, (int32_t)0x14u, "SetDSequenceDataProc", CONV_STACK, 12, 2, 0},
+    {0xAAA3, (int32_t)0x10u, "SetDSequenceMatrix", CONV_STACK, 8, 2, glue_SetDSequenceMatrix},
+    {0xAAA3, (int32_t)0x11u, "SetDSequenceMatte", CONV_STACK, 12, 2, glue_SetDSequenceMatte},
+    {0xAAA3, (int32_t)0x12u, "SetDSequenceMask", CONV_STACK, 8, 2, glue_SetDSequenceMask},
+    {0xAAA3, (int32_t)0x13u, "SetDSequenceTransferMode", CONV_STACK, 10, 2, glue_SetDSequenceTransferMode},
+    {0xAAA3, (int32_t)0x14u, "SetDSequenceDataProc", CONV_STACK, 12, 2, glue_SetDSequenceDataProc},
     {0xAAA3, (int32_t)0x15u, "GetDSequenceImageBuffer", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x16u, "GetDSequenceScreenBuffer", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x17u, "SetCSequenceQuality", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x18u, "SetCSequencePrev", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x19u, "GetCSequencePrevBuffer", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x1Au, "CDSequenceBusy", CONV_STACK, 4, 2, 0},
-    {0xAAA3, (int32_t)0x1Bu, "CDSequenceEnd", CONV_STACK, 4, 2, 0},
-    {0xAAA3, (int32_t)0x1Cu, "GetCompressedImageSize", CONV_STACK, 20, 2, 0},
+    {0xAAA3, (int32_t)0x1Au, "CDSequenceBusy", CONV_STACK, 4, 2, glue_CDSequenceBusy},
+    {0xAAA3, (int32_t)0x1Bu, "CDSequenceEnd", CONV_STACK, 4, 2, glue_CDSequenceEnd},
+    {0xAAA3, (int32_t)0x1Cu, "GetCompressedImageSize", CONV_STACK, 20, 2, glue_GetCompressedImageSize},
     {0xAAA3, (int32_t)0x1Du, "GetSimilarity", CONV_STACK, 20, 2, 0},
-    {0xAAA3, (int32_t)0x1Eu, "GetImageDescriptionCTable", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x1Eu, "GetImageDescriptionCTable", CONV_STACK, 8, 2, glue_GetImageDescriptionCTable},
     {0xAAA3, (int32_t)0x1Fu, "SetImageDescriptionCTable", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x20u, "GetImageDescriptionExtension", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0x21u, "AddImageDescriptionExtension", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x23u, "FindCodec", CONV_STACK, 16, 2, 0},
+    {0xAAA3, (int32_t)0x23u, "FindCodec", CONV_STACK, 16, 2, glue_FindCodec},
     {0xAAA3, (int32_t)0x24u, "CompressPicture", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0x25u, "FCompressPicture", CONV_STACK, 34, 2, 0},
     {0xAAA3, (int32_t)0x26u, "CompressPictureFile", CONV_STACK, 12, 2, 0},
@@ -15393,8 +15747,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x2Fu, "DrawTrimmedPictureFile", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0x30u, "ConvertImage", CONV_STACK, 38, 2, 0},
     {0xAAA3, (int32_t)0x33u, "SetCSequenceFlushProc", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x34u, "SetDSequenceAccuracy", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x35u, "SetDSequenceSrcRect", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x34u, "SetDSequenceAccuracy", CONV_STACK, 8, 2, glue_SetDSequenceAccuracy},
+    {0xAAA3, (int32_t)0x35u, "SetDSequenceSrcRect", CONV_STACK, 8, 2, glue_SetDSequenceSrcRect},
     {0xAAA3, (int32_t)0x36u, "SetCSequenceKeyFrameRate", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x37u, "GetCompressedPixMapInfo", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x38u, "SetCompressedPixMapInfo", CONV_STACK, 24, 2, 0},
@@ -15408,11 +15762,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x44u, "CustomGetFilePreview", CONV_STACK, 40, 0, glue_CustomGetFilePreview},
     {0xAAA3, (int32_t)0x45u, "MakeFilePreview", CONV_STACK, 6, 2, glue_MakeFilePreview},
     {0xAAA3, (int32_t)0x46u, "AddFilePreview", CONV_STACK, 10, 2, glue_AddFilePreview},
-    {0xAAA3, (int32_t)0x47u, "DecompressSequenceFrameS", CONV_STACK, 22, 2, 0},
+    {0xAAA3, (int32_t)0x47u, "DecompressSequenceFrameS", CONV_STACK, 22, 2, glue_DecompressSequenceFrameS},
     {0xAAA3, (int32_t)0x4Bu, "GetCSequenceKeyFrameRate", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x4Cu, "AlignScreenRect", CONV_STACK, 8, 0, 0},
-    {0xAAA3, (int32_t)0x4Du, "AlignWindow", CONV_STACK, 14, 0, 0},
-    {0xAAA3, (int32_t)0x4Eu, "DragAlignedWindow", CONV_STACK, 20, 0, 0},
+    {0xAAA3, (int32_t)0x4Cu, "AlignScreenRect", CONV_STACK, 8, 0, glue_AlignScreenRect},
+    {0xAAA3, (int32_t)0x4Du, "AlignWindow", CONV_STACK, 14, 0, glue_AlignWindow},
+    {0xAAA3, (int32_t)0x4Eu, "DragAlignedWindow", CONV_STACK, 20, 0, glue_DragAlignedWindow},
     {0xAAA3, (int32_t)0x4Fu, "DragAlignedGrayRgn", CONV_STACK, 30, 4, 0},
     {0xAAA3, (int32_t)0x50u, "SetCSequenceDataRateParams", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x51u, "SetCSequenceFrameNumber", CONV_STACK, 8, 2, 0},
@@ -15421,13 +15775,13 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x54u, "GetCSequenceFrameNumber", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x55u, "GetBestDeviceRect", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x56u, "SetSequenceProgressProc", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x57u, "SetDSequenceFlags", CONV_STACK, 12, 2, 0},
+    {0xAAA3, (int32_t)0x57u, "SetDSequenceFlags", CONV_STACK, 12, 2, glue_SetDSequenceFlags},
     {0xAAA3, (int32_t)0x5Au, "GDHasScale", CONV_STACK, 10, 2, 0},
     {0xAAA3, (int32_t)0x5Bu, "GDGetScale", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x5Cu, "GDSetScale", CONV_STACK, 10, 2, 0},
-    {0xAAA3, (int32_t)0x5Du, "DecompressSequenceBeginS", CONV_STACK, 48, 2, 0},
-    {0xAAA3, (int32_t)0x5Eu, "DecompressSequenceFrameWhen", CONV_STACK, 26, 2, 0},
-    {0xAAA3, (int32_t)0x5Fu, "CDSequenceFlush", CONV_STACK, 4, 2, 0},
+    {0xAAA3, (int32_t)0x5Du, "DecompressSequenceBeginS", CONV_STACK, 48, 2, glue_DecompressSequenceBeginS},
+    {0xAAA3, (int32_t)0x5Eu, "DecompressSequenceFrameWhen", CONV_STACK, 26, 2, glue_DecompressSequenceFrameWhen},
+    {0xAAA3, (int32_t)0x5Fu, "CDSequenceFlush", CONV_STACK, 4, 2, glue_CDSequenceFlush},
     {0xAAA3, (int32_t)0x61u, "QTGetFileNameExtension", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x62u, "ICMShieldSequenceCursor", CONV_STACK, 4, 2, 0},
     {0xAAA3, (int32_t)0x63u, "ICMDecompressComplete", CONV_STACK, 12, 0, 0},
@@ -15474,7 +15828,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x8Eu, "QTGetPixMapHandleRowBytes", CONV_STACK, 4, 4, 0},
     {0xAAA3, (int32_t)0x8Fu, "QTSetPixMapHandleRowBytes", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x90u, "QTSetPixMapPtrRowBytes", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x91u, "GetDSequenceMatrix", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x91u, "GetDSequenceMatrix", CONV_STACK, 8, 2, glue_GetDSequenceMatrix},
     {0xAAA3, (int32_t)0x92u, "MakeImageDescriptionForEffect", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x93u, "QTGetPixMapPtrGammaLevel", CONV_STACK, 4, 4, 0},
     {0xAAA3, (int32_t)0x94u, "QTSetPixMapPtrGammaLevel", CONV_STACK, 8, 2, 0},

@@ -4,12 +4,14 @@
  *
  * Host frameworks have dropped most of these codecs (macOS no longer
  * decodes Cinepak), so they are ours: Cinepak in qt_codec_cvid.c, Apple's
- * Animation, Graphics, Video and None in qt_codec_apple.c.  Sound tracks are
+ * Animation, Graphics, Video and None in qt_codec_apple.c.  Photo-JPEG goes
+ * to the host's image decoder, which reads baseline JPEG everywhere.  Sound tracks are
  * uncompressed, IMA 4:1 or MACE (through the MACE target).
  */
 #include <stdlib.h>
 #include <string.h>
 
+#include "machine.h"
 #include "mace_decoder.h"
 #include "qd_internal.h"
 #include "qt_codec.h"
@@ -17,8 +19,38 @@
 
 /* ---- Video ---- */
 
+/* Photo-JPEG ('jpeg'): each sample a JPEG image, through the host. */
+static machine_image_fn image_fn;
+static void *image_ctx;
+
+void machine_set_image_decoder(machine_image_fn fn, void *ctx)
+{
+    image_fn = fn;
+    image_ctx = ctx;
+}
+
+static bool jpeg_supports(int depth) { return image_fn && (depth == 24 || depth == 32 || depth == 40); }
+static void *jpeg_open(const qt_video_format *f) { return (void *)1; }
+static void jpeg_close(void *s) {}
+
+static bool jpeg_decode(void *s, const qt_video_format *f, const uint32_t *palette, const uint8_t *data, size_t len,
+                        uint8_t *frame)
+{
+    uint8_t *rgba = NULL;
+    int w = 0, h = 0;
+    if (!image_fn || !image_fn(data, len, &rgba, &w, &h, image_ctx) || !rgba)
+        return false;
+    for (int y = 0; y < f->height && y < h; y++)
+        memcpy(frame + (size_t)y * (size_t)f->width * 4, rgba + (size_t)y * (size_t)w * 4,
+               (size_t)(w < f->width ? w : f->width) * 4);
+    free(rgba);
+    return true;
+}
+
+static const qt_video_codec qt_codec_jpeg = { 0x6A706567, jpeg_supports, jpeg_open, jpeg_decode, jpeg_close };
+
 static const qt_video_codec *const codecs[] = { &qt_codec_cvid, &qt_codec_rle, &qt_codec_smc, &qt_codec_rpza,
-                                               &qt_codec_raw };
+                                               &qt_codec_raw, &qt_codec_jpeg };
 
 struct qt_vdec {
     const qt_video_codec *codec;

@@ -272,6 +272,7 @@ bool machine_boot(bool census)
     speech_reset();
     drag_reset();
     print_reset();
+    icm_reset();
     aem_reset();
     aem_reset_handlers();
     dialogs_reset();

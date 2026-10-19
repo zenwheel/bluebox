@@ -159,6 +159,7 @@ void ev_wait_tick(void);
 gaddr wm_window_at(uint32_t p);
 void drag_reset(void); /* Drag Manager (drag.c): a fresh machine */
 void print_reset(void); /* Printing Manager (print.c) */
+void icm_reset(void); /* Image Compression Manager (qt_icm.c) */
 /* The mouse's own motion for ADB packets (events.c). */
 bool ev_take_motion(int *dh, int *dv, int limit);
 bool ev_motion_pending(void);
@@ -216,9 +217,12 @@ void sound_host_stop(int id);
 
 /* MACHINE_APPEARANCE_*: how the standard definition procedures draw. */
 extern int g_appearance;
+#include "qd_internal.h"
+/* A compressed picture's image ($8200 opcode), drawn at dst in the current port. */
+void icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mask);
+
 /* Themes (theme.c): each returns false when no theme applies, and the
  * standard black-and-white drawing is used instead. */
-#include "qd_internal.h"
 bool theme_active(void);
 bool theme_window_insets(int var, int *l, int *t, int *r, int *b);
 bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom, int param);

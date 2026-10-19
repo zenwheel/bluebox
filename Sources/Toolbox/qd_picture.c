@@ -721,6 +721,25 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0xA0: r16(r); break;
         case 0xA1: { r16(r); skip(r, (uint16_t)r16(r)); break; }
         case 0x0C00: skip(r, 24); break;
+        case 0x8200: { /* CompressedQuickTime: matrix, matte, mode, srcRect, accuracy, mask, then the image */
+            uint32_t len = r32(r);
+            gaddr q = r->p;
+            if (len >= 66) {
+                qrect src = qrect_get(q + 50);
+                uint32_t matte = rd32(q + 36), mask = rd32(q + 62);
+                gaddr desc = q + 66 + matte + mask;
+                if (desc + 86 <= q + len && desc + rd32(desc) <= q + len) {
+                    double sx = (int32_t)rd32(q) / 65536.0, sy = (int32_t)rd32(q + 16) / 65536.0;
+                    double tx = (int32_t)rd32(q + 24) / 65536.0, ty = (int32_t)rd32(q + 28) / 65536.0;
+                    qrect at = { (int16_t)(src.top * sy + ty), (int16_t)(src.left * sx + tx),
+                                 (int16_t)(src.bottom * sy + ty), (int16_t)(src.right * sx + tx) };
+                    icm_draw_compressed(desc, desc + rd32(desc), src, map_rect(m, at), 0);
+                }
+            }
+            r->p = q;
+            skip(r, len);
+            break;
+        }
         default:
             if (op >= 0x30 && op <= 0x6F) {
                 int kind = (op - 0x30) >> 4;          /* 0 rect, 1 rrect, 2 oval, 3 arc */
