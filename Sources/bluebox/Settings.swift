@@ -13,19 +13,29 @@ struct AppSettings: Codable {
     var scale: Double? /* host points per Mac pixel */
     var appearance: String? /* bw, native, or a theme's name */
     var highlight: String? /* host (the host's selection colour) or #RRGGBB */
-    var isEmpty: Bool { depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil }
+    var appletalk: String? /* local, lan or off */
+    var modemPort: String? /* what the modem port connects to (machine_set_serial's specs) */
+    var printerPort: String?
+    var isEmpty: Bool {
+        depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
+            && modemPort == nil && printerPort == nil
+    }
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), "
             + "cpu \(cpu.map { $0 == powerPCSetting ? "ppc" : String($0) } ?? "default (68040)"), "
             + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
-            + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)")"
+            + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)"), "
+            + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
+            + "printer-port \(printerPort ?? "default (none)")"
     }
 
     /// These settings, with any left unset taken from `fallback`.
     func over(_ fallback: AppSettings?) -> AppSettings {
         guard let f = fallback else { return self }
         return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, scale: scale ?? f.scale,
-                           appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight)
+                           appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
+                           appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
+                           printerPort: printerPort ?? f.printerPort)
     }
 }
 
@@ -120,6 +130,7 @@ func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[
 
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
+///     [appletalk local|lan|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -176,12 +187,41 @@ func setCommand(_ args: [String]) {
             } else {
                 fail("highlight expects host, #RRGGBB or default")
             }
+        case "appletalk":
+            if value == "default" {
+                s.appletalk = nil
+            } else if ["local", "lan", "off"].contains(value) {
+                s.appletalk = value
+            } else {
+                fail("appletalk expects local, lan, off or default")
+            }
+        case "modem-port", "printer-port":
+            let spec: String? = value == "default" ? nil : value
+            if let spec, !validSerialSpec(spec) {
+                fail("\(name) expects modem, modem:PORT, tcp:HOST:PORT, listen:PORT, pty, a device, none or default")
+            }
+            if name == "modem-port" { s.modemPort = spec } else { s.printerPort = spec }
         default:
-            fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight)")
+            fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, "
+                 + "modem-port, printer-port)")
         }
     }
     if !pairs.isEmpty { usage() }
     all[key] = s.isEmpty ? nil : s
     saveSettings(all, library: library)
     print("\(key): \(s.summary)")
+}
+
+/// Whether a serial port spec is one machine_set_serial takes.
+func validSerialSpec(_ s: String) -> Bool {
+    let num = { (t: Substring) in Int(t).map { $0 > 0 && $0 < 65536 } ?? false }
+    if ["modem", "pty", "none"].contains(s) || s.hasPrefix("/") { return true }
+    if s.hasPrefix("modem:") { return num(s.dropFirst(6)) }
+    if s.hasPrefix("listen:") { return num(s.dropFirst(7)) }
+    if s.hasPrefix("tcp:") {
+        let rest = s.dropFirst(4)
+        guard let c = rest.lastIndex(of: ":") else { return false }
+        return !rest[..<c].isEmpty && num(rest[rest.index(after: c)...])
+    }
+    return false
 }

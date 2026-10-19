@@ -88,7 +88,8 @@ func usage() -> Never {
           ~/Applications/Blue Box) with its Finder icon; documents dropped on it open
           in the application.
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
-                [scale 1|1.5|2|default] [--library dir]
+                [scale 1|1.5|2|default] [appletalk local|lan|off|default]
+                [modem-port S|default] [printer-port S|default] [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
           game that wants 256 colours, or cpu 68020 for one that misbehaves on a
@@ -287,6 +288,8 @@ func runCommand(_ args: [String]) {
     var keyScript: [String] = []
     var headless = false
     var screenWindow = false
+    var appletalkGiven = false
+    var portsGiven = Set<Int32>()
     var screenshot: String?
     var screenDepth: Int32?
     var preferPPC: Bool? /* nil: the application's setting */
@@ -358,9 +361,11 @@ func runCommand(_ args: [String]) {
         case "--appletalk":
             i += 1
             guard i < args.count, machine_set_appletalk(args[i]) else { fail("--appletalk expects local, lan or off") }
+            appletalkGiven = true
         case "--modem-port", "--printer-port":
             let port: Int32 = args[i] == "--modem-port" ? 0 : 1
             i += 1
+            portsGiven.insert(port)
             guard i < args.count, machine_set_serial(port, args[i]) else {
                 fail("\(args[i - 1]) expects modem, modem:PORT, tcp:HOST:PORT, listen:PORT, pty, a device or none")
             }
@@ -456,6 +461,15 @@ func runCommand(_ args: [String]) {
     }
     #endif
     machine_set_appearance(appearance)
+    // Network and serial ports from the settings, unless given here.
+    if !appletalkGiven, let a = saved.appletalk, !machine_set_appletalk(a) {
+        eprint("bluebox: appletalk \"\(a)\" (from the settings) is not local, lan or off\n")
+    }
+    for (port, spec) in [(Int32(0), saved.modemPort), (Int32(1), saved.printerPort)] where !portsGiven.contains(port) {
+        if let spec, !machine_set_serial(port, spec) {
+            eprint("bluebox: serial port \"\(spec)\" (from the settings) is not one Blue Box knows\n")
+        }
+    }
     #if canImport(AppKit)
     if let rgb = saved.highlight.flatMap(parseHighlight) {
         machine_set_hilite_color(rgb.0, rgb.1, rgb.2)

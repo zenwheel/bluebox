@@ -618,6 +618,26 @@ struct SettingsForm: View {
                 Text(cpuName(powerPCSetting)).tag(Int?.some(powerPCSetting))
             }
         }
+        Section("Network and ports") {
+            Picker("AppleTalk", selection: $settings.appletalk) {
+                Text("\(inherit) (\(appletalkName(fallback.appletalk ?? "local").lowercased()))").tag(String?.none)
+                ForEach(["local", "lan", "off"], id: \.self) { a in Text(appletalkName(a)).tag(String?.some(a)) }
+            }
+            .help("LocalTalk over UDP: copies on this Mac find each other, or, on the local network, other "
+                  + "Macs, emulators and AppleTalk routers that speak LToUDP")
+            PortPicker(label: "Modem port", spec: $settings.modemPort, inherit: inherit,
+                       inherited: fallback.modemPort ?? "modem")
+            PortPicker(label: "Printer port", spec: $settings.printerPort, inherit: inherit,
+                       inherited: fallback.printerPort ?? "none")
+        }
+    }
+
+    private func appletalkName(_ a: String) -> String {
+        switch a {
+        case "lan": return "On the local network"
+        case "off": return "Off"
+        default: return "This Mac only"
+        }
     }
 
     private func scaleName(_ v: Double) -> String { v == 1.5 ? "1.5×" : "\(Int(v))×" }
@@ -832,3 +852,96 @@ func shellCommand(_ args: [String]) -> Never {
     return main
 }
 #endif
+
+/// What a serial port connects to: a kind, and for some kinds a value
+/// (a port number, host:port, or a device), kept as the spec that
+/// `bluebox run --modem-port` takes.
+struct PortPicker: View {
+    let label: String
+    @Binding var spec: String?
+    let inherit: String
+    let inherited: String
+    @State private var devices: [String] = []
+
+    enum Kind: String, CaseIterable { case modem, answer, tcp, listen, pty, device, none }
+
+    private var kind: Kind? {
+        guard let s = spec else { return nil }
+        if s == "modem" { return .modem }
+        if s.hasPrefix("modem:") { return .answer }
+        if s.hasPrefix("tcp:") { return .tcp }
+        if s.hasPrefix("listen:") { return .listen }
+        if s == "pty" { return .pty }
+        if s.hasPrefix("/") { return .device }
+        return .none
+    }
+
+    private var value: String {
+        guard let s = spec, let k = kind else { return "" }
+        switch k {
+        case .answer: return String(s.dropFirst(6))
+        case .tcp: return String(s.dropFirst(4))
+        case .listen: return String(s.dropFirst(7))
+        case .device: return s
+        default: return ""
+        }
+    }
+
+    private func set(_ k: Kind?, _ v: String) {
+        guard let k else { spec = nil; return }
+        switch k {
+        case .modem: spec = "modem"
+        case .answer: spec = "modem:" + (v.isEmpty ? "2323" : v)
+        case .tcp: spec = "tcp:" + (v.isEmpty ? "localhost:23" : v)
+        case .listen: spec = "listen:" + (v.isEmpty ? "2323" : v)
+        case .pty: spec = "pty"
+        case .device: spec = v.hasPrefix("/") ? v : (devices.first ?? "/dev/cu.usbserial")
+        case .none: spec = "none"
+        }
+    }
+
+    private func name(_ k: Kind) -> String {
+        switch k {
+        case .modem: return "Modem (dials over the internet)"
+        case .answer: return "Modem that answers calls on a port"
+        case .tcp: return "TCP connection to a host"
+        case .listen: return "TCP connection from a host"
+        case .pty: return "Pseudo-terminal"
+        case .device: return "Serial device"
+        case .none: return "Nothing"
+        }
+    }
+
+    private func describe(_ s: String) -> String {
+        if s == "modem" { return "modem" }
+        if s == "none" { return "nothing" }
+        if s == "pty" { return "pseudo-terminal" }
+        return s
+    }
+
+    var body: some View {
+        Picker(label, selection: Binding(get: { kind }, set: { set($0, value) })) {
+            Text("\(inherit) (\(describe(inherited)))").tag(Kind?.none)
+            ForEach(Kind.allCases, id: \.self) { k in Text(name(k)).tag(Kind?.some(k)) }
+        }
+        .onAppear { devices = Self.serialDevices() }
+        switch kind {
+        case .answer?, .listen?:
+            TextField("Port", text: Binding(get: { value }, set: { set(kind, $0) }))
+        case .tcp?:
+            TextField("Host:port", text: Binding(get: { value }, set: { set(kind, $0) }))
+        case .device?:
+            Picker("Device", selection: Binding(get: { value }, set: { set(.device, $0) })) {
+                ForEach(Array(Set(devices + [value])).sorted(), id: \.self) { d in Text(d).tag(d) }
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    /// The host's serial devices (/dev/cu.*).
+    static func serialDevices() -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: "/dev")) ?? []
+        return names.filter { $0.hasPrefix("cu.") }.map { "/dev/" + $0 }.sorted()
+    }
+}
