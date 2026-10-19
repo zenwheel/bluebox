@@ -157,6 +157,11 @@ qt_sprite *qt_sprite_new(const uint8_t *desc, uint32_t len, int w, int h)
     s->w = w;
     s->h = h;
     s->visible = true;
+    /* SpriteDescription: size, format, reserved, data reference, then
+     * version 16, decompressor 20 and the sample flags 24, how overrides
+     * apply (a track property may say so too). */
+    if (len >= 28)
+        s->all_overrides = (be32(desc + 24) & ALL_OVERRIDES) != 0;
     /* The property container after the header (16 bytes, or 28 with the
      * later SpriteDescription's version, decompressor and flags). */
     for (uint32_t at = 16; at + 12 + 20 <= len; at += 4) {

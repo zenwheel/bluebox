@@ -304,7 +304,10 @@ def sprites_movie(path):
         sx, sy = square_at(i)
         samples.append(qt_container([sprite_atom(2, bx, by, image=3 if i >= steps // 2 else 2),
                                      sprite_atom(3, sx, sy)]))
-    desc = be32(16) + b"sprt" + bytes(6) + be16(1)
+    # SpriteDescription: size, format, reserved, data reference, version,
+    # decompressor (none), sample flags (each override applies to the key frame).
+    kKeyFrameAndSingleOverride = 1 << 1
+    desc = be32(28) + b"sprt" + bytes(6) + be16(1) + be32(0) + be32(0) + be32(kKeyFrameAndSingleOverride)
     sprites = Track(b"sprt", "Apple Sprite Media Handler", w, h, samples, [SCALE // 10] * steps, desc, gmhd(),
                     keys=[1])
     th = 30
