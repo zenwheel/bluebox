@@ -172,7 +172,85 @@ final class TransientView: NSView {
 
     func application(_ application: NSApplication, open urls: [URL]) { launchEvents.open(urls) }
     func applicationDidBecomeActive(_ notification: Notification) { ClipboardSync.shared.didBecomeActive() }
-    func applicationWillResignActive(_ notification: Notification) { ClipboardSync.shared.willResignActive() }
+    func applicationWillResignActive(_ notification: Notification) {
+        ClipboardSync.shared.willResignActive()
+        setCaptured(false)
+    }
+
+    // MARK: Full-screen programs
+    //
+    // While a program has the whole screen (screenWindow) and we are the
+    // active app, it gets it as on a Mac: the macOS menu bar and Dock are
+    // hidden behind a black backdrop, and the mouse is captured.  The
+    // pointer then moves by the mouse's own motion, kept on the Mac screen,
+    // so a game steering by the mouse never stalls at a display edge and
+    // stray clicks can't reach the Dock or another display.  Switching
+    // away (Command-Tab) lets go.
+
+    var captured = false
+    var pointer = (x: CGFloat(0), y: CGFloat(0)) /* Mac global, while captured */
+    var backdrop: NSWindow?
+    var motionMonitor: Any?
+
+    func updateCapture() {
+        let want = screenWindow != nil && NSApp.isActive
+        if want != captured { setCaptured(want) }
+    }
+
+    func setCaptured(_ on: Bool) {
+        guard on != captured else { return }
+        captured = on
+        if on {
+            NSApp.presentationOptions = [.hideDock, .hideMenuBar]
+            let screen = NSScreen.main ?? NSScreen.screens[0]
+            if backdrop == nil {
+                let w = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+                w.backgroundColor = .black
+                w.isReleasedWhenClosed = false
+                w.hasShadow = false
+                backdrop = w
+            }
+            backdrop?.setFrame(screen.frame, display: false)
+            backdrop?.orderFront(nil)
+            screenWindow?.orderFront(nil)
+            let (x, y) = hostToMac(NSEvent.mouseLocation)
+            pointer = (CGFloat(x), CGFloat(y))
+            clampPointer()
+            CGAssociateMouseAndMouseCursorPosition(0)
+            if motionMonitor == nil {
+                motionMonitor = NSEvent.addLocalMonitorForEvents(
+                    matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+                ) { [weak self] event in
+                    MainActor.assumeIsolated { self?.moved(by: event.deltaX, event.deltaY) }
+                    return event
+                }
+            }
+        } else {
+            CGAssociateMouseAndMouseCursorPosition(1)
+            NSApp.presentationOptions = []
+            backdrop?.orderOut(nil)
+        }
+    }
+
+    func clampPointer() {
+        var sw: Int32 = 0, sh: Int32 = 0
+        machine_screen_size(&sw, &sh)
+        pointer.x = min(max(pointer.x, 0), CGFloat(sw - 1))
+        pointer.y = min(max(pointer.y, 0), CGFloat(sh - 1))
+    }
+
+    func moved(by dx: CGFloat, _ dy: CGFloat) {
+        guard captured else { return }
+        pointer.x += dx / displayScale
+        pointer.y += dy / displayScale
+        clampPointer()
+        machine_post_mouse(Int32(pointer.x), Int32(pointer.y), -1)
+        // The host pointer follows, so a visible cursor and clicks agree.
+        let p = macToHost(pointer.x, pointer.y)
+        let top = NSScreen.screens.first?.frame.maxY ?? 0
+        CGWarpMouseCursorPosition(CGPoint(x: p.x, y: top - p.y))
+        lastMouse = NSEvent.mouseLocation
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // After launch: AppKit sets the icon from the main bundle while launching.
@@ -200,8 +278,9 @@ final class TransientView: NSView {
             NSApp.terminate(nil)
             return
         }
+        updateCapture()
         let mouse = NSEvent.mouseLocation
-        if mouse != lastMouse {
+        if !captured && mouse != lastMouse {
             lastMouse = mouse
             let (x, y) = hostToMac(mouse)
             machine_post_mouse(x, y, -1)
