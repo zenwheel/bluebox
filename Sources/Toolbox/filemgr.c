@@ -1081,6 +1081,22 @@ static int16_t save_fork(fcb *f)
     return ok ? noErr : ioErrF;
 }
 
+/* Open forks written out: what a program wrote is on disk by the time it
+ * waits for its next event, as the Mac's disk cache had it there soon
+ * after (a document saved and kept open, as SimpleText keeps it, isn't
+ * lost if the run ends without the program closing it). */
+static bool any_dirty;
+
+void fm_flush_dirty(void)
+{
+    if (!any_dirty)
+        return;
+    any_dirty = false;
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && fcbs[i].dirty)
+            save_fork(&fcbs[i]);
+}
+
 
 /* ---------------------------------------------------------------------- */
 /* Opening and closing */
@@ -1246,7 +1262,7 @@ static int16_t pb_write(gaddr pb, bool async)
     f->pos += n;
     if (f->pos > f->len)
         f->len = f->pos;
-    f->dirty = true;
+    f->dirty = any_dirty = true;
     wr32(pb + IOParam_ioActCount_off, n);
     wr32(pb + IOParam_ioPosOffset_off, f->pos);
     return noErr;
@@ -1276,7 +1292,7 @@ static int16_t pb_set_eof(gaddr pb, bool async)
     f->len = n;
     if (f->pos > n)
         f->pos = n;
-    f->dirty = true;
+    f->dirty = any_dirty = true;
     return noErr;
 }
 

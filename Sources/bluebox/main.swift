@@ -27,6 +27,9 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
+/// --file-answer's paths, taken in turn by open and save dialogs.
+nonisolated(unsafe) var headlessFileAnswers: [String] = []
+
 func usage() -> Never {
     eprint("""
     usage:
@@ -73,6 +76,8 @@ func usage() -> Never {
                      PNG file P, with P-before.png and P-after.png (screens where
                      incremental drawing missed something)
           --print-to F  print to PDF file F instead of the print panel (headless runs)
+          --file-answer P  answer the next open or save dialog with host path P,
+                     without a panel (headless runs; repeatable, in order)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
                      Kaleidoscope scheme file, an archive of schemes (.sit etc.,
                      "archive.sit:Name" picks one), or the name of an imported
@@ -337,6 +342,10 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             printTo = args[i]
+        case "--file-answer":
+            i += 1
+            guard i < args.count else { usage() }
+            headlessFileAnswers.append(args[i])
         case "--redraw-check":
             i += 1
             guard i < args.count else { usage() }
@@ -527,6 +536,17 @@ func runCommand(_ args: [String]) {
     }
     #if canImport(AppKit)
     if let printTo { installPrintToFile(printTo) }
+    if !headlessFileAnswers.isEmpty {
+        // Open and save dialogs answered in turn, without a panel.
+        machine_set_file_handler({ _, pathOut, pathSize, _ in
+            guard let pathOut, !headlessFileAnswers.isEmpty else { return false }
+            let answer = headlessFileAnswers.removeFirst()
+            let bytes = Array(answer.utf8.prefix(pathSize - 1)) + [0]
+            bytes.withUnsafeBufferPointer { pathOut.update(from: UnsafeRawPointer($0.baseAddress!).assumingMemoryBound(to: CChar.self), count: bytes.count) }
+            eprint("bluebox: file dialog answered with \(answer)\n")
+            return true
+        }, nil)
+    }
     launchDocumentsSent = !documents.isEmpty
     if !interactive && documents.isEmpty { machine_send_open_application() }
     #else
