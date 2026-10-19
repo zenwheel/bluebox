@@ -35,6 +35,14 @@ static void mirror_queue(void);
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t arrived = PTHREAD_COND_INITIALIZER;
 static int16_t mouse_h, mouse_v;
+/* Moving the cursor themselves (games recentring it to read the mouse's
+ * motion): the position last written to low memory, the program's moves
+ * counted, and when it last moved it. */
+static uint32_t written_pt;
+static uint32_t warps;
+static uint64_t last_warp_ns;
+static double frac_h, frac_v; /* captured motion's fractions of a pixel */
+#define LM_CrsrNew 0x08CEu    /* Byte: nonzero when the cursor must be redrawn at RawMouse */
 static bool button_down;
 static uint32_t presses, key_presses; /* counted, so a quick click is never missed */
 static uint16_t key_mods;
@@ -167,8 +175,34 @@ static void mirror_queue(void)
 void events_sync_lowmem(void)
 {
     mirror_queue();
+    /* A program that moved the cursor: a new position in MTemp or
+     * RawMouse, and CrsrNew set (as the cursor VBL task then drew it
+     * there).  The mouse is there now, and the host's pointer follows. */
+    uint32_t mtemp = rd32(LM_MTemp), raw = rd32(LM_MouseLocation);
+    bool changed = mtemp != written_pt || raw != written_pt;
+    /* Caught between its writes and its CrsrNew: left alone until the next
+     * sync (once only, in case it never sets it). */
+    static bool waiting;
+    if (changed && !rd8(LM_CrsrNew) && !waiting) {
+        waiting = true;
+        return;
+    }
+    waiting = false;
+    bool moved = changed;
+    if (rd8(LM_CrsrNew))
+        wr8(LM_CrsrNew, 0);
     pthread_mutex_lock(&lock);
+    if (moved) {
+        uint32_t to = raw != written_pt ? raw : mtemp;
+        mouse_v = (int16_t)(to >> 16);
+        mouse_h = (int16_t)to;
+        frac_h = frac_v = 0;
+        warps++;
+        last_warp_ns = machine_time_ns();
+        LOGF(LOG_TRAPS, "  the program moved the cursor to %d,%d\n", mouse_h, mouse_v);
+    }
     uint32_t pt = make_pt(mouse_v, mouse_h);
+    written_pt = pt;
     bool down = button_down;
     uint8_t keys[16];
     memcpy(keys, keymap, sizeof keys);
@@ -225,6 +259,41 @@ void machine_post_mouse(int x, int y, int button)
     }
     pthread_cond_broadcast(&arrived);
     pthread_mutex_unlock(&lock);
+}
+
+/* Captured mouse motion, in Mac pixels: added to wherever the mouse is
+ * now, the program's own moves included, and kept on the screen. */
+void machine_post_mouse_delta(double dx, double dy)
+{
+    int w = 0, h = 0;
+    machine_screen_size(&w, &h);
+    pthread_mutex_lock(&lock);
+    frac_h += dx;
+    frac_v += dy;
+    int ih = (int)frac_h, iv = (int)frac_v;
+    frac_h -= ih;
+    frac_v -= iv;
+    int nh = mouse_h + ih, nv = mouse_v + iv;
+    nh = nh < 0 ? 0 : nh >= w ? w - 1 : nh;
+    nv = nv < 0 ? 0 : nv >= h ? h - 1 : nv;
+    mouse_h = (int16_t)nh;
+    mouse_v = (int16_t)nv;
+    pthread_cond_broadcast(&arrived);
+    pthread_mutex_unlock(&lock);
+}
+
+/* Where the mouse is, how many times the program has moved it, and
+ * whether it is reading the mouse by moving it (it did in the last two
+ * seconds): the host then gives it the mouse's motion. */
+uint32_t machine_mouse_state(int *x, int *y, bool *relative)
+{
+    pthread_mutex_lock(&lock);
+    *x = mouse_h;
+    *y = mouse_v;
+    uint32_t n = warps;
+    *relative = warps && machine_time_ns() - last_warp_ns < 2000000000ull;
+    pthread_mutex_unlock(&lock);
+    return n;
 }
 
 /* The host stopped seeing the keyboard (it went to the background): keys

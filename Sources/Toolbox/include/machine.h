@@ -72,6 +72,11 @@ void machine_set_log(unsigned mask);
 /* Host input (thread-safe).  Coordinates are global screen pixels;
  * button: 1 down, 0 up, -1 unchanged. */
 void machine_post_mouse(int x, int y, int button);
+/* Mouse motion while the host has captured the mouse, in Mac pixels. */
+void machine_post_mouse_delta(double dx, double dy);
+/* The mouse's position; the count of the program's own moves of it; and
+ * whether it is reading the mouse by recentring it (moved it lately). */
+uint32_t machine_mouse_state(int *x, int *y, bool *relative);
 void machine_release_keys(void); /* all keys up: the host lost the keyboard */
 void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, int repeat);
 /* Scripted input for headless runs: kind 0 a key (a = character, b =

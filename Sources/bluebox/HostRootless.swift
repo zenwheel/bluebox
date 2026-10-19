@@ -175,31 +175,46 @@ final class TransientView: NSView {
     func applicationWillResignActive(_ notification: Notification) {
         ClipboardSync.shared.willResignActive()
         setCaptured(false)
+        setChromeHidden(false)
     }
 
-    // MARK: Full-screen programs
+    // MARK: Capturing the mouse
     //
-    // While a program has the whole screen (screenWindow) and we are the
-    // active app, it gets it as on a Mac: the macOS menu bar and Dock are
-    // hidden behind a black backdrop, and the mouse is captured.  The
-    // pointer then moves by the mouse's own motion, kept on the Mac screen,
-    // so a game steering by the mouse never stalls at a display edge and
-    // stray clicks can't reach the Dock or another display.  Switching
-    // away (Command-Tab) lets go.
+    // Classic games read the mouse in one of two ways, and each gets it as
+    // on a Mac.  A program that moves the cursor itself (writes RawMouse and
+    // MTemp and sets CrsrNew, recentring it each frame to measure the
+    // mouse's motion, as Ingemar's skiing game and Apeiron do) is reading
+    // relative motion: it gets the mouse's own motion, added to wherever it
+    // put the cursor, and the host's pointer is moved to follow it.  A
+    // program that has the whole screen gets that too, and the macOS menu
+    // bar and Dock are hidden behind a black backdrop so stray clicks can't
+    // reach them.  The pointer is captured only while we are the active app
+    // and the program is doing either; Command-Tab lets go.
 
     var captured = false
-    var pointer = (x: CGFloat(0), y: CGFloat(0)) /* Mac global, while captured */
+    var hidingChrome = false
     var backdrop: NSWindow?
     var motionMonitor: Any?
+    var programWarps: UInt32 = 0
 
     func updateCapture() {
-        let want = screenWindow != nil && NSApp.isActive
-        if want != captured { setCaptured(want) }
+        var x: Int32 = 0, y: Int32 = 0, relative = false
+        let warps = machine_mouse_state(&x, &y, &relative)
+        let active = NSApp.isActive && openMenus == 0 && transientWindow == nil
+        setChromeHidden(active && screenWindow != nil)
+        setCaptured(active && (screenWindow != nil || relative))
+        // The program moved the cursor: the host's pointer goes there.
+        if warps != programWarps {
+            programWarps = warps
+            if active { warpHostPointer(to: x, y) }
+        } else if captured {
+            warpHostPointer(to: x, y)
+        }
     }
 
-    func setCaptured(_ on: Bool) {
-        guard on != captured else { return }
-        captured = on
+    func setChromeHidden(_ on: Bool) {
+        guard on != hidingChrome else { return }
+        hidingChrome = on
         if on {
             NSApp.presentationOptions = [.hideDock, .hideMenuBar]
             let screen = NSScreen.main ?? NSScreen.screens[0]
@@ -213,42 +228,40 @@ final class TransientView: NSView {
             backdrop?.setFrame(screen.frame, display: false)
             backdrop?.orderFront(nil)
             screenWindow?.orderFront(nil)
-            let (x, y) = hostToMac(NSEvent.mouseLocation)
-            pointer = (CGFloat(x), CGFloat(y))
-            clampPointer()
-            CGAssociateMouseAndMouseCursorPosition(0)
-            if motionMonitor == nil {
-                motionMonitor = NSEvent.addLocalMonitorForEvents(
-                    matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
-                ) { [weak self] event in
-                    MainActor.assumeIsolated { self?.moved(by: event.deltaX, event.deltaY) }
-                    return event
-                }
-            }
         } else {
-            CGAssociateMouseAndMouseCursorPosition(1)
             NSApp.presentationOptions = []
             backdrop?.orderOut(nil)
         }
     }
 
-    func clampPointer() {
-        var sw: Int32 = 0, sh: Int32 = 0
-        machine_screen_size(&sw, &sh)
-        pointer.x = min(max(pointer.x, 0), CGFloat(sw - 1))
-        pointer.y = min(max(pointer.y, 0), CGFloat(sh - 1))
+    func setCaptured(_ on: Bool) {
+        guard on != captured else { return }
+        captured = on
+        CGAssociateMouseAndMouseCursorPosition(on ? 0 : 1)
+        if on && motionMonitor == nil {
+            motionMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+            ) { [weak self] event in
+                MainActor.assumeIsolated {
+                    if self?.captured == true {
+                        machine_post_mouse_delta(Double(event.deltaX / displayScale), Double(event.deltaY / displayScale))
+                    }
+                }
+                return event
+            }
+        }
     }
 
-    func moved(by dx: CGFloat, _ dy: CGFloat) {
-        guard captured else { return }
-        pointer.x += dx / displayScale
-        pointer.y += dy / displayScale
-        clampPointer()
-        machine_post_mouse(Int32(pointer.x), Int32(pointer.y), -1)
-        // The host pointer follows, so a visible cursor and clicks agree.
-        let p = macToHost(pointer.x, pointer.y)
+    /// Put the host's pointer where the Mac's mouse is (Mac global).
+    func warpHostPointer(to x: Int32, _ y: Int32) {
+        let (hx, hy) = hostToMac(NSEvent.mouseLocation)
+        guard hx != x || hy != y else { return }
+        let p = macToHost(CGFloat(x), CGFloat(y))
         let top = NSScreen.screens.first?.frame.maxY ?? 0
         CGWarpMouseCursorPosition(CGPoint(x: p.x, y: top - p.y))
+        /* Associating again ends the quarter second macOS ignores the mouse
+         * after a warp; captured, it stays dissociated. */
+        CGAssociateMouseAndMouseCursorPosition(captured ? 0 : 1)
         lastMouse = NSEvent.mouseLocation
     }
 

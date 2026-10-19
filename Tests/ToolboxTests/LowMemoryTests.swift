@@ -76,6 +76,35 @@ extension BlueBox {
             #expect(rd16(t + UInt32(WidthTable_tabSize_off)) == UInt16(WidthTable_SIZEOF))
         }
 
+        /// A program moving the cursor itself (RawMouse and MTemp, then
+        /// CrsrNew, as games recentring it do) moves the mouse: the host
+        /// hears of it, and captured motion is added to where it put it.
+        @Test func programsMoveTheCursor() {
+            machine_post_mouse(100, 100, -1)
+            events_sync_lowmem()
+            var x: Int32 = 0, y: Int32 = 0, relative = false
+            let before = machine_mouse_state(&x, &y, &relative)
+            #expect(x == 100 && y == 100)
+            let center: UInt32 = 384 << 16 | 512
+            wr32(UInt32(LM_MouseLocation), center)
+            wr32(UInt32(LM_MTemp), center)
+            events_sync_lowmem() // between its writes and CrsrNew: waits
+            wr8(0x8CE, 0xFF)
+            events_sync_lowmem()
+            #expect(machine_mouse_state(&x, &y, &relative) == before + 1)
+            #expect(x == 512 && y == 384 && relative)
+            #expect(rd8(0x8CE) == 0)
+            machine_post_mouse_delta(3.5, -2)
+            machine_post_mouse_delta(0.5, 0)
+            events_sync_lowmem()
+            _ = machine_mouse_state(&x, &y, &relative)
+            #expect(x == 516 && y == 382)
+            #expect(rd32(UInt32(LM_MTemp)) == UInt32(382) << 16 | 516)
+            machine_post_mouse_delta(-5000, 5000) // kept on the screen
+            _ = machine_mouse_state(&x, &y, &relative)
+            #expect(x == 0 && y > 382)
+        }
+
         /// Key1Trans translates a key code (D2) with modifiers (D1) to a character.
         @Test func keyTransVectors() {
             setStack()
