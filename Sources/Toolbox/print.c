@@ -56,17 +56,26 @@ void tb_PrCtlCall(int16_t iWhichCtl, int32_t lParam1, int32_t lParam2, int32_t l
 gaddr tb_PrDrvrDCE(void) { return 0; }
 int16_t tb_PrDrvrVers(void) { return 1; }
 
-/* Fill a print record from a page setup. */
-static void put_setup(gaddr p, const machine_page_setup *ps)
+/* The record's resolution: 72 dpi, or what PrGeneral's setRslOp chose. */
+static int res_of(gaddr p, int off)
 {
-    int w = (int)(ps->right - ps->left + 0.5), h = (int)(ps->bottom - ps->top + 0.5);
-    int left = (int)(ps->left + 0.5), top = (int)(ps->top + 0.5);
+    int r = (int16_t)rd16(p + off);
+    return r >= 72 && r <= 600 ? r : 72;
+}
+
+/* Fill a print record from a page setup (in points), at the record's
+ * resolution. */
+static void put_setup(gaddr p, const machine_page_setup *ps, int vres, int hres)
+{
+    double sv = vres / 72.0, sh = hres / 72.0;
+    int w = (int)((ps->right - ps->left) * sh + 0.5), h = (int)((ps->bottom - ps->top) * sv + 0.5);
+    int left = (int)(ps->left * sh + 0.5), top = (int)(ps->top * sv + 0.5);
     qrect page = { 0, 0, (int16_t)h, (int16_t)w };
-    qrect paper = { (int16_t)-top, (int16_t)-left, (int16_t)(ps->paper_height - top + 0.5),
-                    (int16_t)(ps->paper_width - left + 0.5) };
+    qrect paper = { (int16_t)-top, (int16_t)-left, (int16_t)(ps->paper_height * sv - top + 0.5),
+                    (int16_t)(ps->paper_width * sh - left + 0.5) };
     wr16(p + 2, 3);                    /* iDev */
-    wr16(p + 4, 72);                   /* iVRes */
-    wr16(p + 6, 72);                   /* iHRes */
+    wr16(p + 4, (uint16_t)vres);       /* iVRes */
+    wr16(p + 6, (uint16_t)hres);       /* iHRes */
     qrect_put(p + 8, page);
     qrect_put(p + 16, paper);
     wr16(p + 24, 0x0300);              /* wDev: LaserWriter-class */
@@ -80,12 +89,13 @@ static void put_setup(gaddr p, const machine_page_setup *ps)
 static void get_setup(gaddr p, machine_page_setup *ps)
 {
     qrect page = qrect_get(p + 8), paper = qrect_get(p + 16);
-    ps->paper_width = paper.right - paper.left;
-    ps->paper_height = paper.bottom - paper.top;
-    ps->left = -paper.left;
-    ps->top = -paper.top;
-    ps->right = ps->left + (page.right - page.left);
-    ps->bottom = ps->top + (page.bottom - page.top);
+    double sv = 72.0 / res_of(p, 4), sh = 72.0 / res_of(p, 6);
+    ps->paper_width = (paper.right - paper.left) * sh;
+    ps->paper_height = (paper.bottom - paper.top) * sv;
+    ps->left = -paper.left * sh;
+    ps->top = -paper.top * sv;
+    ps->right = ps->left + (page.right - page.left) * sh;
+    ps->bottom = ps->top + (page.bottom - page.top) * sv;
     ps->landscape = ps->paper_width > ps->paper_height;
 }
 
@@ -94,7 +104,7 @@ void tb_PrintDefault(gaddr h)
     gaddr p = rd32(h);
     gmemset(p, 0, TPrint_SIZE);
     wr16(p, 3);                        /* iPrVersion */
-    put_setup(p, &defaults);
+    put_setup(p, &defaults, 72, 72);
     wr16(p + 62, 1);                   /* iFstPage */
     wr16(p + 64, 9999);                /* iLstPage */
     wr16(p + 66, 1);                   /* iCopies */
@@ -124,7 +134,7 @@ int8_t tb_PrStlDialog(gaddr h)
         set_print_error(noErr);
         return 0;
     }
-    put_setup(rd32(h), &ps);
+    put_setup(rd32(h), &ps, res_of(rd32(h), 4), res_of(rd32(h), 6));
     return 1;
 }
 
@@ -145,7 +155,65 @@ int8_t tb_PrJobDialog(gaddr h)
 gaddr tb_PrJobInit(gaddr h) { return 0; }
 gaddr tb_PrStlInit(gaddr h) { return 0; }
 int8_t tb_PrDlgMain(gaddr h, gaddr initfptr) { return h && (tb_PrJobDialog(h) != 0); }
-void tb_PrGeneral(gaddr pData) { wr16(pData + 2, (uint16_t)-1); /* iError: opcode not supported */ }
+/* PrGeneral: the resolutions a LaserWriter offers (the pages are drawn at
+ * the chosen one and scaled back to points in the PDF), draft bits (no
+ * difference here) and the orientation.  The blocks start iOpCode 0,
+ * iError 2, lReserved 4. */
+enum { getRslDataOp = 4, setRslOp = 5, draftBitsOp = 6, noDraftBitsOp = 7, getRotnOp = 8 };
+enum { noSuchRsl = 1, opNotImpl = 2 };
+static const int16_t resolutions[] = { 72, 144, 300, 600 };
+
+void tb_PrGeneral(gaddr pData)
+{
+    int16_t op = (int16_t)rd16(pData);
+    int16_t err = noErr;
+    gaddr h = rd32(pData + 8);
+    switch (op) {
+    case getRslDataOp: /* iRgType 8, xRslRg 10, yRslRg 14, iRslRecCnt 18, rgRslRec 20 */
+        wr16(pData + 8, 1);
+        wr16(pData + 10, 72);
+        wr16(pData + 12, 600);
+        wr16(pData + 14, 72);
+        wr16(pData + 16, 600);
+        wr16(pData + 18, (uint16_t)(sizeof resolutions / sizeof *resolutions));
+        for (size_t i = 0; i < sizeof resolutions / sizeof *resolutions; i++) {
+            wr16(pData + 20 + 4 * (uint32_t)i, (uint16_t)resolutions[i]);
+            wr16(pData + 22 + 4 * (uint32_t)i, (uint16_t)resolutions[i]);
+        }
+        break;
+    case setRslOp: { /* hPrint 8, iXRsl 12, iYRsl 14 */
+        int16_t x = (int16_t)rd16(pData + 12), y = (int16_t)rd16(pData + 14);
+        if (x < 72 || x > 600 || y < 72 || y > 600 || !h || !rd32(h)) {
+            err = noSuchRsl;
+            break;
+        }
+        tb_PrValidate(h);
+        machine_page_setup ps;
+        get_setup(rd32(h), &ps);
+        put_setup(rd32(h), &ps, y, x);
+        break;
+    }
+    case draftBitsOp:
+    case noDraftBitsOp:
+        if (h && rd32(h))
+            tb_PrValidate(h);
+        break;
+    case getRotnOp: { /* hPrint 8, fLandscape 12 */
+        machine_page_setup ps = defaults;
+        if (h && rd32(h)) {
+            tb_PrValidate(h);
+            get_setup(rd32(h), &ps);
+        }
+        wr8(pData + 12, ps.landscape ? 0xFF : 0);
+        wr8(pData + 13, 0);
+        break;
+    }
+    default:
+        err = opNotImpl;
+    }
+    wr16(pData + 2, (uint16_t)err);
+    set_print_error(noErr);
+}
 
 gaddr tb_PrOpenDoc(gaddr h, gaddr port, gaddr pIOBuf)
 {
@@ -204,6 +272,8 @@ void tb_PrCloseDoc(gaddr port)
         job.page = (mprect){ page.top, page.left, page.bottom, page.right };
         job.paper = (mprect){ paper.top, paper.left, paper.bottom, paper.right };
         job.copies = rd16(p + 66);
+        job.vres = res_of(p, 4);
+        job.hres = res_of(p, 6);
         if (print_fn)
             print_fn(&job, print_ctx);
         else

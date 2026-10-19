@@ -15,7 +15,9 @@ public enum ClassicPrint {
     public static func pdf(_ job: UnsafePointer<machine_print_job>) -> Data {
         let j = job.pointee
         let paper = j.paper
-        let size = CGSize(width: CGFloat(paper.right - paper.left), height: CGFloat(paper.bottom - paper.top))
+        // Pages drawn at a higher resolution (PrGeneral) are scaled back to points.
+        let sx = j.hres > 72 ? 72 / CGFloat(j.hres) : 1, sy = j.vres > 72 ? 72 / CGFloat(j.vres) : 1
+        let size = CGSize(width: CGFloat(paper.right - paper.left) * sx, height: CGFloat(paper.bottom - paper.top) * sy)
         let data = NSMutableData()
         var box = CGRect(origin: .zero, size: size)
         guard let consumer = CGDataConsumer(data: data as CFMutableData),
@@ -24,7 +26,7 @@ public enum ClassicPrint {
             ctx.beginPDFPage(nil)
             // QuickDraw coordinates: y down, 0,0 at the printable area's corner.
             ctx.translateBy(x: 0, y: size.height)
-            ctx.scaleBy(x: 1, y: -1)
+            ctx.scaleBy(x: sx, y: -sy)
             ctx.translateBy(x: CGFloat(-paper.left), y: CGFloat(-paper.top))
             let page = j.pages[p]
             for i in 0..<Int(page.nops) { draw(page.ops[i], in: ctx) }

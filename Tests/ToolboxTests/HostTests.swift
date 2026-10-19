@@ -124,7 +124,7 @@ extension BlueBox {
         nonisolated(unsafe) static var pdf = Data()
         nonisolated(unsafe) static var pages = 0
 
-        func printPage(_ draw: () -> Void) {
+        func printPage(setup: (UInt32) -> Void = { _ in }, _ draw: () -> Void) {
             Self.ops = []
             Self.pdf = Data()
             Self.pages = 0
@@ -144,6 +144,7 @@ extension BlueBox {
             let h = tb_NewHandle(120, false, true)
             tb_PrOpen()
             tb_PrintDefault(h)
+            setup(h)
             let port = tb_PrOpenDoc(h, 0, 0)
             #expect(port != 0)
             tb_SetPort(port)
@@ -180,6 +181,46 @@ extension BlueBox {
             let doc = try #require(PDFDocument(data: Self.pdf))
             #expect(doc.pageCount == 1)
             #expect(doc.page(at: 0)?.string?.contains("Hello, printer") == true) // real text, not pixels
+        }
+
+        @Test func prGeneralSetsTheResolution() throws {
+            launchTestApp()
+            _ = initToolbox()
+            let blk = tb_NewPtr(128, false, true)
+            wr16(blk, 4)                                          // getRslDataOp
+            tb_PrGeneral(blk)
+            #expect(rd16(blk + 2) == 0)
+            #expect(rd16(blk + 18) >= 1 && rd16(blk + 12) >= 300) // records; x range up to 300 dpi or more
+            var page = (h: 0, w: 0)
+            printPage(setup: { h in
+                wr16(blk, 5)                                      // setRslOp
+                wr32(blk + 8, h)
+                wr16(blk + 12, 300)
+                wr16(blk + 14, 300)
+                tb_PrGeneral(blk)
+                #expect(rd16(blk + 2) == 0)
+                let p = rd32(h)
+                #expect(rd16(p + 4) == 300 && rd16(p + 6) == 300)
+                page = (Int(rd16(p + 12)) - Int(rd16(p + 8)), Int(rd16(p + 14)) - Int(rd16(p + 10)))
+            }) {
+                tb_TextFont(3)
+                tb_TextSize(50)                                   // 12 points at 300 dpi
+                tb_MoveTo(300, 400)
+                tb_DrawString(guestString("Fine print"))
+            }
+            #expect(page.w > 2000 && page.h > 2800)               // US Letter less margins, in dots
+            let doc = try #require(PDFDocument(data: Self.pdf))
+            let box = try #require(doc.page(at: 0)?.bounds(for: .mediaBox))
+            #expect(abs(box.width - 612) < 2 && abs(box.height - 792) < 2) // back in points
+            #expect(doc.page(at: 0)?.string?.contains("Fine print") == true)
+
+            wr16(blk, 5)
+            wr16(blk + 12, 1000)
+            tb_PrGeneral(blk)
+            #expect(rd16(blk + 2) == 1)                           // noSuchRsl
+            wr16(blk, 99)
+            tb_PrGeneral(blk)
+            #expect(rd16(blk + 2) == 2)                           // opNotImpl
         }
 
         @Test func pageSetupChangesThePrintRecord() {

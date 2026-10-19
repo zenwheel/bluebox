@@ -289,6 +289,7 @@ typedef struct {
     mprect page;                 /* printable area (rPage) */
     mprect paper;                /* paper, relative to the printable area (rPaper) */
     int copies;
+    int vres, hres;              /* the drawing's resolution, dpi (72: points) */
 } machine_print_job;
 
 /* Page setup as the host's page layout panel describes it, in points. */
