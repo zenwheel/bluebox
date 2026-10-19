@@ -309,6 +309,14 @@ void at_close_socket(int s);
 void at_send_ddp(uint8_t dnode, uint8_t dskt, uint8_t sskt, uint8_t type, const uint8_t *data, int n);
 void at_complete(gaddr pb, int16_t r);
 void atp_poll(void);
+/* EtherTalk (ethertalk.c), for --appletalk bridge:IF. */
+bool et_open(const char *ifname);
+int et_fd(void);
+void et_close(void);
+void et_send(const uint8_t *llap, int len);
+int et_receive(uint8_t *llap, int cap);
+void et_acquire(uint32_t seed, uint16_t *net, uint8_t *node);
+void et_use_fake(int fd, const uint8_t hw[6]);
 void atp_reset(void);
 void appletalk_poll(void);
 void appletalk_reset(void);

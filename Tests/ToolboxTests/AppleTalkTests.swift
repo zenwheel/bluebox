@@ -273,5 +273,66 @@ extension BlueBox {
             poll { rd16(server.ccb + 6) == 6 }
             #expect(rd16(server.ccb + 6) == 6 && rd8(server.ccb + 8) & 0x80 != 0) // sClosed, eClosed
         }
+
+        /// EtherTalk over a fake link (a socket pair, this test the wire):
+        /// AARP probes for a node in the startup range, an answer to a
+        /// request for our address, and an AEP echo back to the sender's
+        /// Ethernet address with a long DDP header.
+        @Test func etherTalkFrames() {
+            var fds: [Int32] = [0, 0]
+            #expect(socketpair(AF_UNIX, SOCK_DGRAM, 0, &fds) == 0)
+            defer { close(fds[1]); machine_set_appletalk("local") }
+            let ours: [UInt8] = [0x02, 0, 0, 0, 0, 0x01], theirs: [UInt8] = [0x02, 0, 0, 0, 0, 0x02]
+            #expect(machine_set_appletalk("bridge:fake0"))
+            launchTestApp()
+            et_use_fake(fds[0], ours)
+            _ = open(".MPP")
+            let node = rd8(rd32(UInt32(LM_ABusVars)))
+            let net = rd16(rd32(UInt32(LM_ABusVars)) + 0x1A)
+            #expect(net >= 0xFF00 && net <= 0xFFFE && node >= 1 && node <= 253)
+
+            func frames() -> [[UInt8]] {
+                var out = [[UInt8]]()
+                var buf = [UInt8](repeating: 0, count: 1600)
+                fcntl(fds[1], F_SETFL, O_NONBLOCK)
+                while true {
+                    let n = recv(fds[1], &buf, buf.count, 0)
+                    if n <= 0 { break }
+                    out.append(Array(buf[0..<n]))
+                }
+                return out
+            }
+            let probes = frames().filter { $0.count >= 50 && $0[14...21] == [0xAA, 0xAA, 0x03, 0, 0, 0, 0x80, 0xF3] }
+            #expect(probes.count == 10 && probes[0][29] == 3) // AARP probe
+            #expect(probes.last.map { Array($0[0...5]) } == [0x09, 0x00, 0x07, 0xFF, 0xFF, 0xFF])
+
+            func send(_ snap: [UInt8], _ payload: [UInt8], to dst: [UInt8]) {
+                var f = dst + theirs
+                let len = snap.count + payload.count
+                f += [UInt8(len >> 8), UInt8(len & 0xFF)] + snap + payload
+                _ = f.withUnsafeBytes { Darwin.send(fds[1], $0.baseAddress, f.count, 0) }
+                for _ in 0..<5 {
+                    usleep(2000)
+                    appletalk_poll()
+                }
+            }
+            // AARP request for our address: a response to us.
+            let aarp: [UInt8] = [0, 1, 0x80, 0x9B, 6, 4, 0, 1] + theirs + [0, 0xFF, 0x10, 9] + [0, 0, 0, 0, 0, 0] +
+                [0, UInt8(net >> 8), UInt8(net & 0xFF), node]
+            send([0xAA, 0xAA, 0x03, 0, 0, 0, 0x80, 0xF3], aarp, to: [0x09, 0x00, 0x07, 0xFF, 0xFF, 0xFF])
+            let replies = frames()
+            #expect(replies.contains { Array($0[0...5]) == theirs && $0[29] == 2 && $0[39] == node && $0[49] == 9 })
+
+            // AEP echo request to our socket 4.
+            var ddp: [UInt8] = [0, 13 + 3, 0, 0, UInt8(net >> 8), UInt8(net & 0xFF), 0xFF, 0x10, node, 9, 4, 0x80, 4]
+            ddp += [1, 0x42, 0x43]
+            send([0xAA, 0xAA, 0x03, 0x08, 0x00, 0x07, 0x80, 0x9B], ddp, to: ours)
+            let echo = frames().first { $0.count > 35 && $0[14...21] == [0xAA, 0xAA, 0x03, 0x08, 0x00, 0x07, 0x80, 0x9B] }
+            #expect(echo.map { Array($0[0...5]) } == theirs)
+            if let e = echo {
+                #expect(e[22 + 8] == 9 && e[22 + 9] == node && e[22 + 10] == 0x80 && e[22 + 12] == 4) // to node 9 socket $80, AEP
+                #expect(e[22 + 13] == 2 && e[22 + 14] == 0x42) // an echo reply
+            }
+        }
     }
 }

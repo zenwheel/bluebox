@@ -428,9 +428,12 @@ void machine_set_disk(const char *path);
 bool machine_set_serial(int port, const char *spec);
 /* AppleTalk on LocalTalk over UDP: "local" (the default: copies on this
  * host only), "lan" (the local network, on the interface the system
- * picks), "lan:IF" (on network interface IF, e.g. en0) or "off".  Before
- * boot. */
+ * picks), "lan:IF" (on network interface IF, e.g. en0) or "off"; or
+ * "bridge:IF", EtherTalk on wired interface IF (asks for an administrator
+ * password when AppleTalk opens).  Before boot. */
 bool machine_set_appletalk(const char *how);
+/* bluebox bpf-helper: run as root, a BPF device for IF passed to SOCKET. */
+int machine_bpf_helper(const char *sockpath, const char *ifname);
 /* A headless run's clock: by default its time follows the instructions
  * run (10 million a second), so runs repeat exactly; real time instead
  * for programs that talk to other programs over the network. */

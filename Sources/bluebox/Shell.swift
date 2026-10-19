@@ -625,15 +625,20 @@ struct SettingsForm: View {
                 ForEach(NetworkInterface.all(), id: \.name) { i in
                     Text("Local network through \(i.label)").tag(String?.some("lan:" + i.name))
                 }
+                ForEach(NetworkInterface.all(), id: \.name) { i in
+                    Text("EtherTalk bridged onto \(i.name) (asks for a password)").tag(String?.some("bridge:" + i.name))
+                }
                 // An interface from the settings that isn't up now.
-                if let a = settings.appletalk, a.hasPrefix("lan:"),
-                   !NetworkInterface.all().contains(where: { "lan:" + $0.name == a }) {
-                    Text("Local network through \(a.dropFirst(4)) (not connected)").tag(String?.some(a))
+                if let a = settings.appletalk, a.hasPrefix("lan:") || a.hasPrefix("bridge:"),
+                   !NetworkInterface.all().contains(where: { a.hasSuffix(":" + $0.name) }) {
+                    Text("\(a) (not connected)").tag(String?.some(a))
                 }
             }
             .help("LocalTalk over UDP (multicast): copies on this Mac find each other, or, on the local network "
                   + "through the interface chosen, other Macs, emulators and AppleTalk routers that speak LToUDP. "
-                  + "Bridging EtherTalk onto a wired interface is still to come.")
+                  + "EtherTalk bridged onto a wired interface reaches real Macs, file servers and routers; it "
+                  + "asks for an administrator password each time AppleTalk opens, for a moment's access to "
+                  + "the interface's raw frames.")
             PortPicker(label: "Modem port", spec: $settings.modemPort, inherit: inherit,
                        inherited: fallback.modemPort ?? "modem")
             PortPicker(label: "Printer port", spec: $settings.printerPort, inherit: inherit,
@@ -644,6 +649,8 @@ struct SettingsForm: View {
     private func appletalkName(_ a: String) -> String {
         switch a {
         case "lan": return "On the local network (automatic interface)"
+        case let b where b.hasPrefix("bridge:"): return "EtherTalk bridged onto \(b.dropFirst(7))"
+        case let l where l.hasPrefix("lan:"): return "Local network through \(l.dropFirst(4))"
         case "off": return "Off"
         default: return "This Mac only"
         }

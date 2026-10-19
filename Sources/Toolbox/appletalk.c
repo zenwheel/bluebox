@@ -59,7 +59,8 @@ enum {
  * both directly). */
 enum { SYS_LAP_ADDR = 0, TO_RHA = 1, SYS_NET_NUM = 0x1A, VARS_SIZE = 64 };
 
-static int mode = 1; /* 0 off, 1 this host, 2 the local network */
+static int mode = 1; /* 0 off, 1 this host, 2 the local network, 3 EtherTalk (bridged) */
+static uint16_t net;  /* this network's number: 0 on LocalTalk, from AARP and RTMP on EtherTalk */
 static char ifname[16]; /* the network interface for mode 2, or "" for the system's choice */
 static int fd = -1;
 static uint32_t sender;
@@ -110,6 +111,10 @@ static uint64_t now_ms(void)
 
 static void send_frame(const uint8_t *frame, int len)
 {
+    if (mode == 3) {
+        et_send(frame, len);
+        return;
+    }
     if (fd < 0)
         return;
     uint8_t buf[4 + 3 + 13 + MAX_DATA];
@@ -144,6 +149,12 @@ static bool interface_address(const char *name, struct in_addr *out)
 
 static bool open_link(void)
 {
+    if (mode == 3) {
+        if (!et_open(ifname))
+            return false;
+        fd = et_fd();
+        return true;
+    }
     fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0)
         return false;
@@ -184,6 +195,8 @@ static bool open_link(void)
 /* A frame from another node, or 0. */
 static int receive(uint8_t *frame, int cap)
 {
+    if (mode == 3)
+        return et_receive(frame, cap);
     uint8_t buf[2048];
     for (;;) {
         ssize_t r = recv(fd, buf, sizeof buf, 0);
@@ -202,6 +215,11 @@ static int receive(uint8_t *frame, int cap)
  * enquiry for it. */
 static void acquire_node(void)
 {
+    if (mode == 3) {
+        et_acquire(sender, &net, &node);
+        return;
+    }
+    net = 0;
     uint8_t want = (uint8_t)(1 + (sender % 253));
     for (int attempt = 0; attempt < 20; attempt++, want = (uint8_t)(1 + (want % 253))) {
         bool taken = false;
@@ -333,8 +351,8 @@ static void nbp_send(uint8_t fn, uint8_t id, uint8_t dnode, uint8_t dskt, const 
 /* A lookup tuple for one of our names: address, enumerator, entity. */
 static int tuple_of(uint8_t *out, gaddr nte, const entity *e)
 {
-    out[0] = 0;
-    out[1] = 0;
+    out[0] = (uint8_t)(net >> 8);
+    out[1] = (uint8_t)net;
     out[2] = node;
     out[3] = rd8(nte + 7);
     out[4] = rd8(nte + 8);
@@ -347,8 +365,8 @@ static void lookup_request(nbp_op *o, uint8_t dnode)
     entity e;
     guest_entity(&e, rd32(pb + PB_ENTITY) + (o->kind == OP_REGISTER ? 9 : 0)); /* a names table entry's entity */
     uint8_t t[5 + 99];
-    t[0] = 0;
-    t[1] = 0;
+    t[0] = (uint8_t)(net >> 8);
+    t[1] = (uint8_t)net;
     t[2] = node;
     t[3] = NIS_SOCKET;
     t[4] = 0;
@@ -883,7 +901,7 @@ static int16_t mpp_control(gaddr pb, bool async)
         gmemset(pb + 28, 0, 50);
         wr32(pb + 30, vars);
         wr16(pb + 44, selfsend);
-        wr16(pb + 50, 0);
+        wr16(pb + 50, net);
         wr8(pb + 52, node);
         return noErr;
     case loadNBP: case unloadNBP: case SetMyZone: case ATalkClosePrep:
@@ -907,7 +925,7 @@ static int16_t mpp_open(gaddr pb)
     acquire_node();
     wr8(vars + SYS_LAP_ADDR, node);
     LOGF(LOG_TRAPS, "  AppleTalk: node %u\n", node);
-    wr16(vars + SYS_NET_NUM, 0);
+    wr16(vars + SYS_NET_NUM, net);
     opened = true;
     sockets[NIS_SOCKET] = true;
     wr32(LM_ABusVars, vars);
@@ -955,9 +973,12 @@ bool machine_set_appletalk(const char *how)
         mode = 2;
     else if (!strncmp(how, "lan:", 4) && how[4] && strlen(how + 4) < sizeof ifname)
         mode = 2;
+    else if (!strncmp(how, "bridge:", 7) && how[7] && strlen(how + 7) < sizeof ifname)
+        mode = 3;
     else
         return false;
-    snprintf(ifname, sizeof ifname, "%s", mode == 2 && how[3] == ':' ? how + 4 : "");
+    const char *colon = strchr(how, ':');
+    snprintf(ifname, sizeof ifname, "%s", mode >= 2 && colon ? colon + 1 : "");
     return true;
 }
 
@@ -966,8 +987,10 @@ uint8_t appletalk_node(void) { return node; }
 
 void appletalk_reset(void)
 {
-    if (booted && fd >= 0)
+    if (booted && fd >= 0 && mode != 3)
         close(fd);
+    if (booted && mode == 3)
+        et_close();
     booted = true;
     fd = -1;
     opened = selfsend = false;
