@@ -625,14 +625,15 @@ struct SettingsForm: View {
                 ForEach(NetworkInterface.all(), id: \.name) { i in
                     Text("Local network through \(i.label)").tag(String?.some("lan:" + i.name))
                 }
-                ForEach(NetworkInterface.all(), id: \.name) { i in
-                    Text("EtherTalk bridged onto \(i.name)\(isWireless(i.name) ? " (Wi-Fi)" : "") (asks for a password)")
-                        .tag(String?.some("bridge:" + i.name))
+                ForEach(NetworkInterface.all().filter { !isWireless($0.name) }, id: \.name) { i in
+                    Text("EtherTalk bridged onto \(i.name) (asks for a password)").tag(String?.some("bridge:" + i.name))
                 }
                 // An interface from the settings that isn't up now.
                 if let a = settings.appletalk, a.hasPrefix("lan:") || a.hasPrefix("bridge:"),
                    !NetworkInterface.all().contains(where: { a.hasSuffix(":" + $0.name) }) {
                     Text("\(a) (not connected)").tag(String?.some(a))
+                } else if let a = settings.appletalk, a.hasPrefix("bridge:"), isWireless(String(a.dropFirst(7))) {
+                    Text("\(a) (Wi-Fi, which drops EtherTalk: not used)").tag(String?.some(a))
                 }
             }
             .help(Self.appleTalkHelp)
@@ -656,8 +657,8 @@ struct SettingsForm: View {
     private static let appleTalkHelp: String =
         "LocalTalk over UDP (multicast): copies on this Mac find each other, or, on the local network "
         + "through the interface chosen, other Macs, emulators and AppleTalk routers that speak LToUDP. "
-        + "EtherTalk bridged onto an interface reaches real Macs, file servers and routers (over Wi-Fi, "
-        + "as far as the access point passes AppleTalk: some drop it); it "
+        + "EtherTalk bridged onto a wired interface reaches real Macs, file servers and routers (Wi-Fi "
+        + "interfaces aren't offered: access points drop its frames); it "
         + "asks for an administrator password each time AppleTalk opens, for a moment's access to "
         + "the interface's raw frames."
 

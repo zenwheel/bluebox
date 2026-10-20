@@ -64,7 +64,7 @@ func usage() -> Never {
                      on this host play each other), lan (the local network, other
                      emulators and routers that speak LToUDP), lan:IF (the local
                      network through interface IF, e.g. lan:en0), bridge:IF (EtherTalk
-                     on interface IF, with real Macs, file servers and routers;
+                     on wired interface IF, with real Macs, file servers and routers;
                      asks for an administrator password when AppleTalk opens) or off
           --modem-port S, --printer-port S  what a serial port connects to: modem (a
                      Hayes modem, the modem port's default: ATDT host:port dials over
@@ -399,6 +399,9 @@ func runCommand(_ args: [String]) {
             cpuModel = m
         case "--appletalk":
             i += 1
+            if i < args.count, args[i].hasPrefix("bridge:"), isWireless(String(args[i].dropFirst(7))) {
+                fail("--appletalk: \(args[i].dropFirst(7)) is Wi-Fi, which drops EtherTalk; bridge onto a wired interface")
+            }
             guard i < args.count, machine_set_appletalk(args[i]) else { fail("--appletalk expects local, lan, lan:IF (e.g. lan:en0), bridge:IF or off") }
             appletalkGiven = true
         case "--modem-port", "--printer-port":
@@ -501,7 +504,9 @@ func runCommand(_ args: [String]) {
     #endif
     machine_set_appearance(appearance)
     // Network and serial ports from the settings, unless given here.
-    if !appletalkGiven, let a = saved.appletalk, !machine_set_appletalk(a) {
+    if !appletalkGiven, let a = saved.appletalk, a.hasPrefix("bridge:"), isWireless(String(a.dropFirst(7))) {
+        eprint("bluebox: appletalk \"\(a)\" (from the settings) is Wi-Fi, which drops EtherTalk; AppleTalk is on this Mac only\n")
+    } else if !appletalkGiven, let a = saved.appletalk, !machine_set_appletalk(a) {
         eprint("bluebox: appletalk \"\(a)\" (from the settings) is not local, lan, lan:IF, bridge:IF or off\n")
     }
     for (port, spec) in [(Int32(0), saved.modemPort), (Int32(1), saved.printerPort)] where !portsGiven.contains(port) {

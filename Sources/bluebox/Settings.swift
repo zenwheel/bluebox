@@ -4,8 +4,8 @@ import ForkStore
 import SystemConfiguration
 #endif
 
-/// Whether a host interface is Wi-Fi, where some access points drop
-/// bridged EtherTalk's frames.
+/// Whether a host interface is Wi-Fi, which bridged EtherTalk can't use:
+/// access points drop its frames.
 func isWireless(_ name: String) -> Bool {
     #if canImport(SystemConfiguration)
     let all = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] ?? []
@@ -213,6 +213,8 @@ func setCommand(_ args: [String]) {
         case "appletalk":
             if value == "default" {
                 s.appletalk = nil
+            } else if value.hasPrefix("bridge:") && isWireless(String(value.dropFirst(7))) {
+                fail("appletalk: \(value.dropFirst(7)) is Wi-Fi, which drops EtherTalk; bridge onto a wired interface")
             } else if ["local", "lan", "off"].contains(value) || (value.hasPrefix("lan:") && value.count > 4)
                         || (value.hasPrefix("bridge:") && value.count > 7) {
                 s.appletalk = value

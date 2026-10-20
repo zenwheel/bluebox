@@ -35,7 +35,6 @@
 #include <net/bpf.h>
 #include <net/if.h>
 #include <net/if_dl.h>
-#include <sys/sockio.h>
 #include <netinet/in.h>
 #include <spawn.h>
 extern char **environ;
@@ -411,21 +410,6 @@ int machine_bpf_helper(const char *sockpath, const char *ifname)
         return 1;
     }
     ioctl(b, BIOCPROMISC, NULL); /* AppleTalk's multicasts */
-    /* Wi-Fi has no promiscuous mode and keeps only the multicasts the
-     * interface has joined: join AppleTalk's broadcast (AARP, NBP, RTMP).
-     * The membership lasts until the interface goes down. */
-    struct ifreq mr;
-    memset(&mr, 0, sizeof mr);
-    snprintf(mr.ifr_name, sizeof mr.ifr_name, "%s", ifname);
-    mr.ifr_addr.sa_family = AF_UNSPEC;
-    mr.ifr_addr.sa_len = sizeof mr.ifr_addr;
-    memcpy(mr.ifr_addr.sa_data, broadcast, 6);
-    int ms = socket(AF_INET, SOCK_DGRAM, 0);
-    if (ms >= 0) {
-        if (ioctl(ms, SIOCADDMULTI, &mr) < 0 && errno != EADDRINUSE)
-            perror("bluebox: joining AppleTalk's broadcast");
-        close(ms);
-    }
     int s = socket(AF_UNIX, SOCK_STREAM, 0);
     struct sockaddr_un sa;
     memset(&sa, 0, sizeof sa);
