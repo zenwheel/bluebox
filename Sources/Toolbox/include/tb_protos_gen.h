@@ -1282,6 +1282,7 @@ void tb_SetWTitle(gaddr w, gaddr t);
 void tb_SetWinColor(gaddr w, gaddr new_w_ctab);
 void tb_SetWindowPic(gaddr w, gaddr p);
 void tb_SetZone(gaddr hz);
+int16_t tb_SetupSndHeader(gaddr sndhandle, int16_t numchannels, int32_t rate, int16_t size, int32_t compresion, int16_t basefreq, int32_t numbytes, gaddr headerlenp);
 void tb_ShieldCursor(gaddr rp, uint32_t p);
 void tb_ShortenDITL(gaddr arg0, int16_t arg1);
 void tb_ShowControl(gaddr c);

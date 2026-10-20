@@ -137,6 +137,27 @@ extension BlueBox {
             #expect(abs((Self.played.first?.rate ?? 0) - 22254.5) < 1)
         }
 
+        /// SetupSndHeader builds a 'snd ' a program fills with samples and plays.
+        @Test func setupSndHeaderMakesAPlayableSound() {
+            launchTestApp()
+            install()
+            defer { machine_set_sound_handler(nil, nil) }
+            let lenp = tb_NewPtr(2, false, true)
+            let rate = Int32(bitPattern: 0x56EE_8BA3)            // 22254.5 Hz
+            let h = tb_NewHandle(0, false, false)                // grows to fit
+            #expect(tb_SetupSndHeader(h, 1, rate, 8, Int32(bitPattern: fourCC("NONE")), 60, 1000, lenp) == 0)
+            #expect(rd16(lenp) == 42)                            // a standard header
+            tb_SetHandleSize(h, 42 + 1000)
+            for i in 0..<1000 { wr8(rd32(h) + 42 + UInt32(i), 0x80) }
+            #expect(tb_SndPlay(0, h, 0) == 0)
+            #expect(Self.played.first?.frames == 1000)
+            // 16-bit stereo takes an extended header; MACE a compressed one.
+            #expect(tb_SetupSndHeader(h, 2, rate, 16, Int32(bitPattern: fourCC("NONE")), 60, 4000, lenp) == 0)
+            #expect(rd16(lenp) == 84 && rd8(rd32(h) + 40) == 0xFF && rd32(rd32(h) + 42) == 1000)
+            #expect(tb_SetupSndHeader(h, 1, rate, 8, Int32(bitPattern: fourCC("MAC3")), 60, 600, lenp) == 0)
+            #expect(rd8(rd32(h) + 40) == 0xFE && rd32(rd32(h) + 42) == 300 && rd32(rd32(h) + 60) == fourCC("MAC3"))
+        }
+
         @Test func callbacksRunAfterTheSoundAtSafePoints() {
             launchTestApp()
             install()

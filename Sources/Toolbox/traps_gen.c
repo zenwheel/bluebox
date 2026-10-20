@@ -14221,6 +14221,23 @@ static void glue_SetZone(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_SetupSndHeader(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_headerlenp = (gaddr)cpu_pop32(c);
+    int32_t a_numbytes = (int32_t)cpu_pop32(c);
+    int16_t a_basefreq = (int16_t)cpu_pop16(c);
+    int32_t a_compresion = (int32_t)cpu_pop32(c);
+    int16_t a_size = (int16_t)cpu_pop16(c);
+    int32_t a_rate = (int32_t)cpu_pop32(c);
+    int16_t a_numchannels = (int16_t)cpu_pop16(c);
+    gaddr a_sndhandle = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetupSndHeader(a_sndhandle, a_numchannels, a_rate, a_size, a_compresion, a_basefreq, a_numbytes, a_headerlenp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ShieldCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18892,7 +18909,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0xA5C000Cu, "TextToPhonemes", CONV_STACK, 20, 2, glue_TextToPhonemes},
     {0xA800, (int32_t)0xB4C0014u, "SetupAIFFHeader", CONV_STACK, 22, 2, 0},
     {0xA800, (int32_t)0xD000008u, "SndStartFilePlay", CONV_STACK, 26, 2, glue_SndStartFilePlay},
-    {0xA800, (int32_t)0xD480014u, "SetupSndHeader", CONV_STACK, 26, 2, 0},
+    {0xA800, (int32_t)0xD480014u, "SetupSndHeader", CONV_STACK, 26, 2, glue_SetupSndHeader},
     {0xA800, (int32_t)0xE340014u, "SPBGetRecordingStatus", CONV_STACK, 28, 2, glue_SPBGetRecordingStatus},
     {0xA83D, (int32_t)0x0u, "TEStylePaste", CONV_STACK, 4, 0, glue_TEStylePaste},
     {0xA83D, (int32_t)0x1u, "TESetStyle", CONV_STACK, 12, 0, glue_TESetStyle},

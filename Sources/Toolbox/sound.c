@@ -761,6 +761,86 @@ int16_t tb_GetSoundHeaderOffset(gaddr sndh, gaddr offset)
     return badFormat;
 }
 
+/* A Fixed sample rate as an 80-bit extended (AIFFSampleRate). */
+static void rate_extended(gaddr x, uint32_t rate)
+{
+    double v = (double)rate / 65536.0;
+    gmemset(x, 0, 10);
+    if (v <= 0)
+        return;
+    int e;
+    double m = frexp(v, &e); /* v = m * 2^e, m in [0.5, 1) */
+    wr16(x, (uint16_t)(16383 + e - 1));
+    uint64_t mant = (uint64_t)ldexp(m, 64);
+    wr32(x + 2, (uint32_t)(mant >> 32));
+    wr32(x + 6, (uint32_t)mant);
+}
+
+/* SetupSndHeader: a format 1 'snd ' (the sampled synthesizer and one
+ * bufferCmd) with a standard, extended or compressed sound header for
+ * numBytes of samples to follow it; headerLen is where they go.  A handle
+ * too small for the header grows. */
+int16_t tb_SetupSndHeader(gaddr sndh, int16_t nch, int32_t fixed_rate, int16_t size, int32_t compression,
+                          int16_t base, int32_t nbytes, gaddr headerlen)
+{
+    uint32_t rate = (uint32_t)fixed_rate, comp = (uint32_t)compression;
+    enum { initMono = 0x80, initStereo = 0xC0, initMACE3 = 0x300, initMACE6 = 0x400 };
+    bool none = comp == fourcc("NONE") || comp == 0;
+    int kind = !none ? 2 : (nch == 1 && size == 8) ? 0 : 1; /* standard, extended, compressed */
+    uint32_t hlen = 20 + (kind == 0 ? 22 : 64);
+    if (headerlen)
+        wr16(headerlen, (uint16_t)hlen);
+    if (!sndh)
+        return noErr; /* just the length */
+    if (tb_GetHandleSize(sndh) < (int32_t)hlen) {
+        tb_SetHandleSize(sndh, (int32_t)hlen);
+        if (!rd32(sndh) || tb_GetHandleSize(sndh) < (int32_t)hlen)
+            return memFullErr;
+    }
+    gaddr p = rd32(sndh);
+    gmemset(p, 0, hlen);
+    uint32_t init = nch > 1 ? initStereo : initMono;
+    if (comp == fourcc("MAC3"))
+        init |= initMACE3;
+    else if (comp == fourcc("MAC6"))
+        init |= initMACE6;
+    wr16(p, 1);                                  /* format 1 */
+    wr16(p + 2, 1);                              /* one modifier: */
+    wr16(p + 4, sampledSynth);
+    wr32(p + 6, init);
+    wr16(p + 10, 1);                             /* one command: */
+    wr16(p + 12, dataPointerFlag | bufferCmd);   /* bufferCmd with the header's offset */
+    wr32(p + 16, 20);
+    gaddr h = p + 20;
+    int channels = nch > 0 ? nch : 1;
+    wr32(h + 8, rate);
+    wr8(h + 21, (uint8_t)base);
+    if (kind == 0) {
+        wr32(h + 4, (uint32_t)nbytes);           /* length */
+    } else {
+        wr32(h + 4, (uint32_t)channels);
+        wr8(h + 20, kind == 1 ? 0xFF : 0xFE);    /* encode: extSH or cmpSH */
+        uint32_t frames;
+        if (kind == 1) {
+            int frame = channels * (size > 8 ? (size + 7) / 8 : 1);
+            frames = (uint32_t)nbytes / (uint32_t)frame;
+            wr16(h + 48, (uint16_t)size);        /* sampleSize */
+        } else {
+            /* Packets: MACE 3:1 two bytes, 6:1 one byte, IMA 4:1 34 bytes, per channel. */
+            uint32_t packet = comp == fourcc("MAC3") ? 2 : comp == fourcc("MAC6") ? 1 :
+                              comp == fourcc("ima4") ? 34 : 1;
+            frames = (uint32_t)nbytes / (packet * (uint32_t)channels);
+            wr32(h + 40, comp);                  /* format */
+            int16_t id = comp == fourcc("MAC3") ? 3 : comp == fourcc("MAC6") ? 4 : -1;
+            wr16(h + 56, (uint16_t)id);          /* compressionID */
+            wr16(h + 62, (uint16_t)size);        /* sampleSize */
+        }
+        wr32(h + 22, frames);                    /* numFrames */
+        rate_extended(h + 26, rate);             /* AIFFSampleRate */
+    }
+    return noErr;
+}
+
 /* bluebox inspect: a resource's sampled sound, decoded as it would play.
  * The first sound or buffer command's header is the sound. */
 bool machine_snd_pcm(const uint8_t *snd, size_t len, int16_t **pcm, uint32_t *frames, int *channels,
