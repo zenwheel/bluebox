@@ -1,0 +1,242 @@
+# The Communications Toolbox's records (Connections.h, Terminals.h,
+# FileTransfers.h): the Connection, Terminal and File Transfer Managers
+# share their first fields (procID to oldConfig, and the private pointer
+# at 40).  The routines go through _CommToolboxDispatch with the selector
+# pushed last and A0 pointing at it; ctb.c has their table.
+
+- struct:
+    name: ConnRecord
+    members:
+      - name: procID
+        type: INTEGER
+      - name: flags
+        type: LONGINT
+      - name: errCode
+        type: INTEGER
+      - name: refCon
+        type: LONGINT
+      - name: userData
+        type: LONGINT
+      - name: defProc
+        type: ProcPtr
+      - name: config
+        type: Ptr
+      - name: oldConfig
+        type: Ptr
+      - name: asyncEOM
+        type: LONGINT
+      - name: reserved1
+        type: LONGINT
+      - name: reserved2
+        type: LONGINT
+      - name: cmPrivate
+        type: Ptr
+      - name: bufferArray
+        type: Ptr[8]
+      - name: bufSizes
+        type: LONGINT[8]
+      - name: mluField
+        type: LONGINT
+      - name: asyncCount
+        type: LONGINT[8]
+    size: 144
+
+- struct:
+    name: ConnEnvironRec
+    members:
+      - name: version
+        type: INTEGER
+      - name: baudRate
+        type: LONGINT
+      - name: dataBits
+        type: INTEGER
+      - name: channels
+        type: INTEGER
+      - name: swFlowControl
+        type: Boolean
+      - name: hwFlowControl
+        type: Boolean
+      - name: flags
+        type: INTEGER
+    size: 14
+
+- struct:
+    name: CMIOPB
+    members:
+      - name: qLink
+        type: Ptr
+      - name: qType
+        type: INTEGER
+      - name: hConn
+        type: Handle
+      - name: theBuffer
+        type: Ptr
+      - name: count
+        type: LONGINT
+      - name: flags
+        type: INTEGER
+      - name: userCompletion
+        type: ProcPtr
+      - name: timeout
+        type: LONGINT
+      - name: errCode
+        type: INTEGER
+      - name: channel
+        type: INTEGER
+      - name: asyncEOM
+        type: LONGINT
+      - name: reserved1
+        type: LONGINT
+      - name: reserved2
+        type: INTEGER
+      - name: version
+        type: INTEGER
+      - name: refCon
+        type: LONGINT
+      - name: toolData1
+        type: LONGINT
+      - name: toolData2
+        type: LONGINT
+    size: 56
+
+- struct:
+    name: TermRecord
+    members:
+      - name: procID
+        type: INTEGER
+      - name: flags
+        type: LONGINT
+      - name: errCode
+        type: INTEGER
+      - name: refCon
+        type: LONGINT
+      - name: userData
+        type: LONGINT
+      - name: defProc
+        type: ProcPtr
+      - name: config
+        type: Ptr
+      - name: oldConfig
+        type: Ptr
+      - name: environsProc
+        type: ProcPtr
+      - name: reserved1
+        type: LONGINT
+      - name: reserved2
+        type: LONGINT
+      - name: tmPrivate
+        type: Ptr
+      - name: sendProc
+        type: ProcPtr
+      - name: breakProc
+        type: ProcPtr
+      - name: cacheProc
+        type: ProcPtr
+      - name: clikLoop
+        type: ProcPtr
+      - name: owner
+        type: WindowPtr
+      - name: termRect
+        type: Rect
+      - name: viewRect
+        type: Rect
+      - name: visRect
+        type: Rect
+      - name: lastIdle
+        type: LONGINT
+      - name: selection
+        type: Rect
+      - name: selType
+        type: INTEGER
+      - name: mluField
+        type: LONGINT
+    size: 106
+
+- struct:
+    name: TermDataBlock
+    members:
+      - name: flags
+        type: INTEGER
+      - name: theData
+        type: Handle
+      - name: auxData
+        type: Handle
+      - name: reserved
+        type: LONGINT
+    size: 14
+
+- struct:
+    name: TermEnvironRec
+    members:
+      - name: version
+        type: INTEGER
+      - name: termType
+        type: INTEGER
+      - name: textRows
+        type: INTEGER
+      - name: textCols
+        type: INTEGER
+      - name: cellSize
+        type: Point
+      - name: graphicSize
+        type: Rect
+      - name: slop
+        type: Point
+      - name: auxSpace
+        type: Rect
+    size: 32
+
+- struct:
+    name: FTRecord
+    members:
+      - name: procID
+        type: INTEGER
+      - name: flags
+        type: LONGINT
+      - name: errCode
+        type: INTEGER
+      - name: refCon
+        type: LONGINT
+      - name: userData
+        type: LONGINT
+      - name: defProc
+        type: ProcPtr
+      - name: config
+        type: Ptr
+      - name: oldConfig
+        type: Ptr
+      - name: environsProc
+        type: ProcPtr
+      - name: reserved1
+        type: LONGINT
+      - name: reserved2
+        type: LONGINT
+      - name: ftPrivate
+        type: Ptr
+      - name: sendProc
+        type: ProcPtr
+      - name: recvProc
+        type: ProcPtr
+      - name: writeProc
+        type: ProcPtr
+      - name: readProc
+        type: ProcPtr
+      - name: owner
+        type: WindowPtr
+      - name: direction
+        type: INTEGER
+      - name: theReply
+        type: SFReply
+      - name: writePtr
+        type: LONGINT
+      - name: readPtr
+        type: LONGINT
+      - name: theBuf
+        type: Ptr
+      - name: bufSize
+        type: LONGINT
+      - name: autoRec
+        type: Str255
+      - name: attributes
+        type: INTEGER
+    size: 414

@@ -380,7 +380,26 @@ bool appletalk_enabled(void);
 extern const native_driver serial_drivers[4];
 void serial_poll(void);
 void serial_reset(void);
-gaddr serial_crm_search(gaddr req); /* the Communications Resource Manager's CRMSearch */
+/* The ports from C, for the Communications Toolbox's tools: port 0 is the
+ * modem port, 1 the printer port. */
+void serial_port_open(int port);
+void serial_port_close(int port);
+int serial_port_read(int port, uint8_t *b, int max);
+int serial_port_available(int port);
+void serial_port_write(int port, const uint8_t *b, int n);
+void serial_port_setup(int port, uint32_t baud, int data_bits, int parity, int stop_bits, int handshake);
+void serial_port_break(int port, bool on);
+void serial_port_dtr(int port, bool on);
+int serial_port_fd(int port);
+bool serial_port_online(int port);
+bool serial_port_in_use(int port);
+/* The Communications Toolbox (ctb.c): _CommToolboxDispatch and the
+ * managers' routines by selector, for 68k and PowerPC programs alike. */
+void ctb_reset(void);
+void ctb_poll(void); /* connections moved on, completion routines called */
+void crm_install(gaddr rec); /* CRMInstall: a device record queued, its ID given */
+gaddr crm_search(gaddr req); /* CRMSearch: the next record of a type after an ID */
+uint32_t ctb_call(uint16_t selector, const uint32_t *args, int nargs);
 void ppc_glue_reset(void); /* ppc_glue.c */
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);

@@ -123,7 +123,7 @@ extension BlueBox {
             wr32(req + UInt32(CRMRec_crmDeviceType_off), 1)
             var names = [String]()
             while true {
-                let rec = serial_crm_search(req)
+                let rec = crm_search(req)
                 if rec == 0 { break }
                 let ser = rd32(rec + UInt32(CRMRec_crmAttributes_off))
                 names.append([10, 2, 6].map { pstring(at: rd32(rd32(ser + $0))) }.joined(separator: " "))
