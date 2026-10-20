@@ -33,6 +33,9 @@ The program is `.build/release/bluebox`. To run the tests:
 swift test
 ```
 
+Or with make: `make` builds `bluebox` and `build/Blue Box.app`, `make test`
+runs the tests and `make clean` removes the build products and the app.
+
 The generated sources (`*_gen.c`) are checked in;
 `uv run --with pyyaml python Generators/gen.py` regenerates them from `Defs/`
 and `Generators/defs/`.
