@@ -444,6 +444,17 @@ static void ppc_CallUniversalProc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* CallOSTrapUniversalProc(theProc, procInfo, ...): as CallUniversalProc,
+ * with an OS trap's registers: A1, D1 and D2 kept across 68k code. */
+static void ppc_CallOSTrapUniversalProc(ppc_cpu *c)
+{
+    uint32_t a1 = g_cpu->a[1], d1 = g_cpu->d[1], d2 = g_cpu->d[2];
+    ppc_CallUniversalProc(c);
+    g_cpu->a[1] = a1;
+    g_cpu->d[1] = d1;
+    g_cpu->d[2] = d2;
+}
+
 /* NewRoutineDescriptor(theProc, procInfo, ISA) */
 static void ppc_NewRoutineDescriptor(ppc_cpu *c)
 {
@@ -482,6 +493,7 @@ static void ppc_GetCurrentISA(ppc_cpu *c)
 }
 
 const ppc_export mm_exports[] = {
+    { "CallOSTrapUniversalProc", ppc_CallOSTrapUniversalProc },
     { "CallUniversalProc", ppc_CallUniversalProc },
     { "DisposeRoutineDescriptor", ppc_DisposeRoutineDescriptor },
     { "GetCurrentArchitecture", ppc_GetCurrentISA },
