@@ -612,8 +612,8 @@ void atp_host_close(int s)
     at_close_socket(s);
 }
 
-int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
-                         int nresp, int timeout_ms, int retries, atp_reply *out)
+int16_t atp_host_start(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+                       int nresp, int timeout_ms, int retries, atp_reply *out)
 {
     if (skt <= 0 || skt > 254 || !atp_sockets[skt])
         return badATPSkt;
@@ -645,13 +645,27 @@ int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, con
     q->reqlen = 8 + len;
     send_request(q);
     q->next = now_ms() + q->timeout;
+    return noErr;
+}
+
+int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+                         int nresp, int timeout_ms, int retries, atp_reply *out)
+{
+    int16_t e = atp_host_start(skt, node, dskt, user, data, len, xo, nresp, timeout_ms, retries, out);
+    if (e != noErr)
+        return e;
+    request *q = NULL;
+    for (int i = 0; i < MAX_REQS && !q; i++)
+        if (reqs[i].used && reqs[i].host == out)
+            q = &reqs[i];
     /* A deadline of its own too, should the poll not be running. */
-    uint64_t give_up = now_ms() + q->timeout * (uint64_t)(retries < 0 ? 1000 : retries + 2);
+    uint64_t timeout = (uint64_t)(timeout_ms > 0 ? timeout_ms : 1000);
+    uint64_t give_up = now_ms() + timeout * (uint64_t)(retries < 0 ? 1000 : retries + 2);
     while (out->result == ioInProgress) {
         struct timespec ts = { 0, 1000000 };
         nanosleep(&ts, NULL);
         appletalk_poll();
-        if (out->result == ioInProgress && now_ms() > give_up && q->used && q->host == out)
+        if (out->result == ioInProgress && now_ms() > give_up && q && q->used && q->host == out)
             end_request(q, reqFailed);
     }
     return out->result;
@@ -662,6 +676,26 @@ void atp_host_respond(int skt, uint8_t node, uint8_t rskt, uint16_t tid, int cou
 {
     if (skt > 0 && skt < 255 && atp_sockets[skt] && count >= 1 && count <= 8)
         respond((uint8_t)skt, node, rskt, tid, EOM, count, data, lens, users);
+}
+
+/* A request of host code's given up: its responses go nowhere now. */
+void atp_host_cancel(atp_reply *out)
+{
+    for (int i = 0; i < MAX_REQS; i++)
+        if (reqs[i].used && reqs[i].host == out) {
+            reqs[i].host = NULL;
+            reqs[i].used = false;
+            if (reqs[i].own_skt) {
+                atp_sockets[reqs[i].skt] = false;
+                at_close_socket(reqs[i].skt);
+            }
+        }
+}
+
+bool atp_host_xo(int skt, uint8_t node, uint8_t rskt, uint16_t tid)
+{
+    seen *s = skt > 0 && skt < 255 ? find_seen((uint8_t)skt, node, rskt, tid) : NULL;
+    return s && s->xo;
 }
 
 void atp_host_send_once(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len)

@@ -109,6 +109,7 @@ void gestalt_init(void)
     gestalt_set(fourcc("pmgr"), 0x01100000);    /* gestaltGXPrintingMgrVersion */
     gestalt_set(fourcc("teat"), 0x1);           /* gestaltTEAttr: TEGetHiliteRgn */
     gestalt_set(fourcc("drag"), 0x1);           /* gestaltDragMgrAttr: the Drag Manager */
+    gestalt_set(fourcc("cmnu"), 0x2);           /* gestaltContextualMenuTrapAvailable */
     gestalt_set(fourcc("ttsc"), 0x1);           /* gestaltSpeechAttr: the Speech Manager */
     gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
     /* Blue Box itself, for software written for it: version 1.0 in the
@@ -132,8 +133,9 @@ void gestalt_powerpc(void)
     gestalt_set(fourcc("dplv"), 0x00020000); /* the Display Manager, 2.0 */
     gestalt_set(fourcc("dply"), 0x1);    /* gestaltDisplayMgrPresent */
     gestalt_set(fourcc("thds"), 0x7);    /* and gestaltThreadsLibraryPresent */
-    /* Open Transport with TCP/IP over the host's sockets (opentransport.c) */
-    gestalt_set(fourcc("otan"), 0x33);   /* present and loaded; TCP present and loaded */
+    /* Open Transport with TCP/IP over the host's sockets (opentransport.c),
+     * and AppleTalk on our stack when it's on (ot_appletalk.c) */
+    gestalt_set(fourcc("otan"), 0x33 | (appletalk_enabled() ? 0x0C : 0)); /* present and loaded; TCP, AppleTalk */
     gestalt_set(fourcc("otvr"), 0x01208000); /* 1.2 */
     gestalt_set(fourcc("cput"), 0x0108); /* gestaltCPU750 */
     gestalt_set(fourcc("cfrg"), 0x1);    /* gestaltCFMPresent */

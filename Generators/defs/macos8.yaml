@@ -1,0 +1,373 @@
+# Mac OS 8's additions that multiversal lacks (Menus.h, Navigation.h).
+# Same schema as Defs/multiversal/defs.
+
+# The Contextual Menu Manager: _ContextualMenuDispatch ($AA72), the
+# selector moved into D0 (MOVEQ #n,D0), Pascal arguments on the stack.
+- dispatcher:
+    name: ContextualMenuDispatch
+    trap: 0xAA72
+    selector-location: D0W
+
+- function:
+    name: InitContextualMenus
+    return: OSErr
+    dispatcher: ContextualMenuDispatch
+    selector: 0x0001
+
+- function:
+    name: IsShowContextualMenuClick
+    return: Boolean
+    args:
+      - name: inEvent
+        type: EventRecord*
+    dispatcher: ContextualMenuDispatch
+    selector: 0x0002
+
+- function:
+    name: ContextualMenuSelect
+    return: int32_t
+    args:
+      - name: inMenu
+        type: MenuHandle
+      - name: inGlobalLocation
+        type: Point
+      - name: inReserved
+        type: Boolean
+      - name: inHelpType
+        type: uint32_t
+      - name: inHelpItemString
+        type: ConstStr255Param
+      - name: inSelection
+        type: AEDesc*
+      - name: outUserSelectionType
+        type: uint32_t*
+      - name: outMenuID
+        type: int16_t*
+      - name: outMenuItem
+        type: uint16_t*
+    dispatcher: ContextualMenuDispatch
+    selector: 0x0003
+
+- function:
+    name: ProcessIsContextualMenuClient
+    return: Boolean
+    args:
+      - name: inPSN
+        type: ProcessSerialNumber*
+    dispatcher: ContextualMenuDispatch
+    selector: 0x0004
+
+# Navigation Services' default options (NavigationLib).
+- function:
+    name: NavGetDefaultDialogOptions
+    return: OSErr
+    args:
+      - name: dialogOptions
+        type: NavDialogOptions*
+    cfm: NavigationLib
+
+# The Window Manager's Mac OS 8 and 8.5 calls (MacWindows.h): Appearance
+# 1.0's (AppearanceLib) and 8.5's (WindowsLib), from PowerPC code only
+# here; the Appearance Manager's own 68k dispatch is not given them.
+- function:
+    name: GetWindowFeatures
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: outFeatures
+        type: uint32_t*
+    cfm: AppearanceLib
+
+- function:
+    name: GetWindowRegion
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: inRegionCode
+        type: uint16_t
+      - name: ioWinRgn
+        type: RgnHandle
+    cfm: AppearanceLib
+
+- function:
+    name: IsWindowCollapsable
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: AppearanceLib
+
+- function:
+    name: IsWindowCollapsed
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: AppearanceLib
+
+- function:
+    name: CollapseWindow
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: collapse
+        type: Boolean
+    cfm: AppearanceLib
+
+- function:
+    name: CollapseAllWindows
+    return: OSErr
+    args:
+      - name: collapse
+        type: Boolean
+    cfm: AppearanceLib
+
+- function:
+    name: FrontNonFloatingWindow
+    return: WindowPtr
+    cfm: WindowsLib
+
+- function:
+    name: IsValidWindowPtr
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: WindowsLib
+
+- function:
+    name: GetWindowClass
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: outClass
+        type: uint32_t*
+    cfm: WindowsLib
+
+- function:
+    name: GetWindowAttributes
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: outAttributes
+        type: uint32_t*
+    cfm: WindowsLib
+
+- function:
+    name: CreateNewWindow
+    return: OSErr
+    args:
+      - name: windowClass
+        type: uint32_t
+      - name: attributes
+        type: uint32_t
+      - name: contentBounds
+        type: const Rect*
+      - name: outWindow
+        type: WindowPtr*
+    cfm: WindowsLib
+
+- function:
+    name: InitFloatingWindows
+    return: OSErr
+    cfm: WindowsLib
+
+- function:
+    name: ShowFloatingWindows
+    return: OSErr
+    cfm: WindowsLib
+
+- function:
+    name: HideFloatingWindows
+    return: OSErr
+    cfm: WindowsLib
+
+- function:
+    name: AreFloatingWindowsVisible
+    return: Boolean
+    cfm: WindowsLib
+
+- function:
+    name: SetWindowContentColor
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: color
+        type: RGBColor*
+    cfm: WindowsLib
+
+- function:
+    name: GetWindowContentColor
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: color
+        type: RGBColor*
+    cfm: WindowsLib
+
+- function:
+    name: SetWindowProperty
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: propertyCreator
+        type: uint32_t
+      - name: propertyTag
+        type: uint32_t
+      - name: propertySize
+        type: uint32_t
+      - name: propertyBuffer
+        type: void*
+    cfm: WindowsLib
+
+- function:
+    name: GetWindowProperty
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: propertyCreator
+        type: uint32_t
+      - name: propertyTag
+        type: uint32_t
+      - name: bufferSize
+        type: uint32_t
+      - name: actualSize
+        type: uint32_t*
+      - name: propertyBuffer
+        type: void*
+    cfm: WindowsLib
+
+- function:
+    name: GetWindowPropertySize
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: creator
+        type: uint32_t
+      - name: tag
+        type: uint32_t
+      - name: size
+        type: uint32_t*
+    cfm: WindowsLib
+
+- function:
+    name: RemoveWindowProperty
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: propertyCreator
+        type: uint32_t
+      - name: propertyTag
+        type: uint32_t
+    cfm: WindowsLib
+
+- function:
+    name: SetWindowProxyFSSpec
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: inFile
+        type: const FSSpec*
+    cfm: WindowsLib
+
+- function:
+    name: GetWindowProxyFSSpec
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: outFile
+        type: FSSpec*
+    cfm: WindowsLib
+
+- function:
+    name: SetWindowProxyAlias
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: alias
+        type: Handle
+    cfm: WindowsLib
+
+- function:
+    name: GetWindowProxyAlias
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: alias
+        type: Handle*
+    cfm: WindowsLib
+
+- function:
+    name: SetWindowProxyCreatorAndType
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: fileCreator
+        type: uint32_t
+      - name: fileType
+        type: uint32_t
+      - name: vRefNum
+        type: int16_t
+    cfm: WindowsLib
+
+- function:
+    name: RemoveWindowProxy
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: WindowsLib
+
+- function:
+    name: SetWindowProxyIcon
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: icon
+        type: Handle
+    cfm: WindowsLib
+
+- function:
+    name: GetWindowProxyIcon
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: outIcon
+        type: Handle*
+    cfm: WindowsLib
+
+- function:
+    name: SetWindowModified
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: modified
+        type: Boolean
+    cfm: WindowsLib
+
+- function:
+    name: IsWindowModified
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: WindowsLib

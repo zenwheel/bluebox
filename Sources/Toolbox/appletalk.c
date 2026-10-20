@@ -66,6 +66,7 @@ static int fd = -1;
 static uint32_t sender;
 static uint8_t node;
 static bool opened, selfsend, booted;
+static int selfsend_holds; /* Open Transport's endpoints: always to ourselves too */
 static gaddr listeners[256];
 static bool sockets[256];
 static at_handler handlers[256]; /* sockets of ours (ATP's): datagrams go to C */
@@ -92,7 +93,7 @@ typedef struct {
     uint8_t frame[3 + 13 + MAX_DATA];
     int len;
 } frame_buf;
-static frame_buf selfq[8];
+static frame_buf selfq[32];
 static int nself;
 
 /* The packet a listener is reading */
@@ -388,6 +389,19 @@ static struct {
     uint8_t tuple[5];
 } host_lookup;
 
+/* Lookups by host code that go on while the program runs (Open
+ * Transport's mapper): every tuple answering goes to fn. */
+typedef struct {
+    bool used, done;
+    uint8_t id;
+    entity e;
+    int tries;
+    uint64_t next, interval;
+    at_nbp_fn fn;
+    void *ctx;
+} host_op;
+static host_op hops[8];
+
 static void complete(gaddr pb, int16_t r)
 {
     wr16(pb + IOParam_ioResult_off, (uint16_t)r);
@@ -480,6 +494,20 @@ static void nbp_receive(const uint8_t *pkt, int n, uint8_t snode)
     if (host_lookup.used && host_lookup.id == id && count && left >= 5 && !host_lookup.found) {
         memcpy(host_lookup.tuple, t, 5);
         host_lookup.found = true;
+    }
+    for (int j = 0; j < (int)(sizeof hops / sizeof hops[0]); j++) {
+        host_op *h = &hops[j];
+        if (!h->used || h->done || h->id != id)
+            continue;
+        const uint8_t *p = t;
+        int l = left;
+        for (int i = 0; i < count && l >= 5; i++) {
+            entity e;
+            int tl = 5 + parse_entity(&e, p + 5, l - 5);
+            h->fn(h->ctx, p, tl);
+            p += tl;
+            l -= tl;
+        }
     }
     for (int j = 0; j < (int)(sizeof ops / sizeof ops[0]); j++) {
         nbp_op *o = &ops[j];
@@ -662,7 +690,7 @@ static void send_ddp(uint16_t net, uint8_t dnode, uint8_t dskt, uint8_t sskt, ui
         LOGF(LOG_TRAPS, "  DDP out: socket %u -> node %u socket %u, type %u, %d bytes\n", sskt, dnode, dskt, type, n);
     if (dnode != node)
         send_frame(f, 3 + hl + n);
-    if ((dnode == node || dnode == 255) && (selfsend || dskt == NIS_SOCKET) && nself < (int)(sizeof selfq / sizeof selfq[0])) {
+    if ((dnode == node || dnode == 255) && (selfsend || selfsend_holds || dskt == NIS_SOCKET) && nself < (int)(sizeof selfq / sizeof selfq[0])) {
         memcpy(selfq[nself].frame, f, (size_t)(3 + hl + n));
         selfq[nself++].len = 3 + hl + n;
     }
@@ -758,6 +786,17 @@ void appletalk_poll(void)
         o->used = false;
         LOGF(LOG_TRAPS, "  NBP call completes -> %d\n", r);
         complete(o->pb, r);
+    }
+    for (int i = 0; i < (int)(sizeof hops / sizeof hops[0]); i++) {
+        host_op *h = &hops[i];
+        if (!h->used || h->done || t < h->next)
+            continue;
+        if (h->tries-- <= 0) {
+            h->done = true; /* the last interval has passed */
+            continue;
+        }
+        send_lookup(h->id, &h->e, 255);
+        h->next = t + h->interval;
     }
     polling = false;
 }
@@ -860,6 +899,94 @@ int16_t at_nbp_lookup(const char *obj, const char *type, const char *zone, int t
     *skt_out = host_lookup.tuple[3];
     return noErr;
 }
+
+/* A lookup by host code that runs on with the stack: `tries` requests
+ * `interval_ms` apart, each answer's tuple (address, enumerator, entity)
+ * to fn.  A handle, or 0 if none is free. */
+int at_nbp_start(const uint8_t *packed, int len, int tries, int interval_ms, at_nbp_fn fn, void *ctx)
+{
+    if (!opened)
+        return 0;
+    for (int i = 0; i < (int)(sizeof hops / sizeof hops[0]); i++) {
+        host_op *h = &hops[i];
+        if (h->used)
+            continue;
+        memset(h, 0, sizeof *h);
+        h->used = true;
+        h->id = ++nbp_id;
+        parse_entity(&h->e, packed, len);
+        if (!h->e.zone[0]) { /* this zone */
+            h->e.zone[0] = 1;
+            h->e.zone[1] = '*';
+        }
+        h->tries = tries > 0 ? tries : 1;
+        h->interval = (uint64_t)(interval_ms > 0 ? interval_ms : 250);
+        h->fn = fn;
+        h->ctx = ctx;
+        LOGF(LOG_TRAPS, "  NBP host lookup %.*s:%.*s@%.*s\n", h->e.obj[0], h->e.obj + 1, h->e.type[0], h->e.type + 1,
+             h->e.zone[0], h->e.zone + 1);
+        appletalk_poll(); /* the first request goes now */
+        return i + 1;
+    }
+    return 0;
+}
+
+/* Whether a host lookup is still asking. */
+bool at_nbp_busy(int handle)
+{
+    return handle > 0 && handle <= (int)(sizeof hops / sizeof hops[0]) && hops[handle - 1].used &&
+           !hops[handle - 1].done;
+}
+
+void at_nbp_stop(int handle)
+{
+    if (handle > 0 && handle <= (int)(sizeof hops / sizeof hops[0]))
+        hops[handle - 1].used = false;
+}
+
+/* A name of host code's, on one of its sockets: a names table entry made
+ * for it, so lookups find it as they find the program's.  The entry, or 0
+ * when the table is full. */
+gaddr at_register_name(const uint8_t *packed, int len, uint8_t skt)
+{
+    if (nnames >= (int)(sizeof names / sizeof names[0]))
+        return 0;
+    gaddr nte = tb_NewPtr(9 + 99, true, true);
+    if (!nte)
+        return 0;
+    wr8(nte + 7, skt);
+    gput(nte + 9, packed, (uint32_t)(len > 99 ? 99 : len));
+    add_name(nte);
+    return nte;
+}
+
+void at_remove_name(gaddr nte)
+{
+    for (int i = 0; i < nnames; i++)
+        if (names[i] == nte) {
+            memmove(names + i, names + i + 1, sizeof names[0] * (size_t)(nnames - i - 1));
+            nnames--;
+            tb_DisposePtr(nte);
+            return;
+        }
+}
+
+/* Whether this node has registered a name matching the entity already. */
+bool at_name_taken(const uint8_t *packed, int len)
+{
+    entity want;
+    parse_entity(&want, packed, len);
+    for (int i = 0; i < nnames; i++) {
+        entity got;
+        if (table_match(names[i], &want, &got))
+            return true;
+    }
+    return false;
+}
+
+/* Open Transport's endpoints hear what they send to this node. */
+void at_hold_selfsend(bool on) { selfsend_holds += on ? 1 : selfsend_holds > 0 ? -1 : 0; }
+uint16_t at_network(void) { return net; }
 
 /* ---------------------------------------------------------------------- */
 /* The driver */
@@ -1063,6 +1190,8 @@ void appletalk_reset(void)
     memset(listeners, 0, sizeof listeners);
     memset(ops, 0, sizeof ops);
     memset(&host_lookup, 0, sizeof host_lookup);
+    memset(hops, 0, sizeof hops);
+    selfsend_holds = 0;
     polling = false;
     vars = tb_NewPtr(VARS_SIZE, true, true);
     /* ReadPacket at A4, ReadRest at A4+2: branches to jumps to natives */

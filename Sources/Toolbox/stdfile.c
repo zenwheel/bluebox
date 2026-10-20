@@ -38,6 +38,9 @@ static struct {
     bool yd;
 } filter;
 
+/* Or another package's filter (Navigation Services'): true hides. */
+static bool (*filter_fn)(const char *path);
+
 static machine_file_fn file_fn;
 static void *file_ctx;
 static char last_dir[PATH_MAX]; /* where the last panel was left */
@@ -344,6 +347,8 @@ static void set_filter(gaddr proc, gaddr data, bool yd)
  * The filter gets the file's catalog information, as from PBGetCatInfo. */
 bool machine_file_filtered(const char *path)
 {
+    if (filter_fn)
+        return filter_fn(path);
     if (!filter.proc)
         return false;
     gaddr pb = tb_NewPtr(CInfoPBRec_SIZEOF, false, true), spec = tb_NewPtr(FSSpec_SIZEOF, false, true);
@@ -395,19 +400,29 @@ static bool ask(bool save, gaddr prompt, gaddr default_name, gaddr types, int16_
         for (int i = 0; i < rq.ntypes; i++)
             rq.types[i] = rd32(types + (uint32_t)i * 4);
     }
-    snprintf(rq.directory, sizeof rq.directory, "%s", last_dir);
+    return stdfile_request(&rq, path, pathsize);
+}
+
+/* A panel request (Standard File's, or Navigation Services'): it starts
+ * where the last one was left unless it says where. */
+bool stdfile_request(machine_file_request *rq, char *path, size_t pathsize)
+{
+    if (!rq->directory[0])
+        snprintf(rq->directory, sizeof rq->directory, "%s", last_dir);
     if (!file_fn) {
-        LOGF(LOG_UNIMPL, "Standard File: no host, %s cancelled\n", save ? "save" : "open");
+        LOGF(LOG_UNIMPL, "Standard File: no host, %s cancelled\n", rq->save ? "save" : "open");
         return false;
     }
-    if (!file_fn(&rq, path, pathsize, file_ctx) || !path[0])
+    if (!file_fn(rq, path, pathsize, file_ctx) || !path[0])
         return false;
     snprintf(last_dir, sizeof last_dir, "%s", path);
     char *slash = strrchr(last_dir, '/');
-    if (slash)
+    if (slash && !rq->folders)
         *slash = 0;
     return true;
 }
+
+void stdfile_set_filter(bool (*fn)(const char *path)) { filter_fn = fn; }
 
 /* System 7 reply.  The chosen folder also becomes the default for the next
  * call, as with the classic package (SFSaveDisk, CurDirStore). */

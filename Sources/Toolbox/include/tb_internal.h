@@ -95,6 +95,12 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
 void gestalt_init(void);
 uint32_t gestalt_value(uint32_t selector, uint32_t fallback);
 
+/* Standard File's host panels (stdfile.c), for Navigation Services too:
+ * a request answered with a host path, and a filter of its own for the
+ * files an open panel offers (true hides; NULL for none). */
+bool stdfile_request(machine_file_request *rq, char *path, size_t pathsize);
+void stdfile_set_filter(bool (*fn)(const char *path));
+
 /* ---- File Manager ---- */
 
 /* An FSSpec for a host path (the file need not exist). */
@@ -352,6 +358,20 @@ void atp_poll(void);
 /* For host code (ASP, asp.c): an NBP lookup, and ATP from C. */
 int16_t at_nbp_lookup(const char *obj, const char *type, const char *zone, int tries, int interval_ms,
                       uint16_t *net, uint8_t *node, uint8_t *skt);
+/* For Open Transport (ot_appletalk.c): lookups that run on with the stack
+ * (each answer's tuple to fn: network, node, socket, enumerator, entity),
+ * names on host code's sockets, and its endpoints hearing this node. */
+typedef void (*at_nbp_fn)(void *ctx, const uint8_t *tuple, int len);
+int at_nbp_start(const uint8_t *packed, int len, int tries, int interval_ms, at_nbp_fn fn, void *ctx);
+bool at_nbp_busy(int handle);
+void at_nbp_stop(int handle);
+gaddr at_register_name(const uint8_t *packed, int len, uint8_t skt);
+void at_remove_name(gaddr nte);
+bool at_name_taken(const uint8_t *packed, int len);
+void at_hold_selfsend(bool on);
+uint16_t at_network(void);
+/* ADSP's driver calls from C, on a parameter block in guest memory. */
+int16_t adsp_control(gaddr pb, bool async);
 typedef struct {
     int16_t result; /* ioInProgress while waiting */
     int count;      /* responses: the highest sequence number got, plus 1 */
@@ -365,6 +385,11 @@ int atp_host_open(atp_request_fn fn, void *ctx); /* a dynamic socket, or 0 */
 void atp_host_close(int skt);
 int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
                          int nresp, int timeout_ms, int retries, atp_reply *out);
+/* The same without waiting: out->result stays ioInProgress until it ends. */
+int16_t atp_host_start(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+                       int nresp, int timeout_ms, int retries, atp_reply *out);
+bool atp_host_xo(int skt, uint8_t node, uint8_t rskt, uint16_t tid); /* a request heard was exactly-once */
+void atp_host_cancel(atp_reply *out);
 void atp_host_respond(int skt, uint8_t node, uint8_t rskt, uint16_t tid, int count, const uint8_t (*data)[578],
                       const int *lens, const uint32_t *users);
 void atp_host_send_once(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len);

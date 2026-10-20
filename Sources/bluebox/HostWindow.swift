@@ -644,7 +644,7 @@ func installColorPicker() {
 func installFileHandler() {
     machine_set_file_handler({ rqPtr, pathOut, pathSize, _ in
         guard let rq = rqPtr?.pointee, let pathOut else { return false }
-        let save = rq.save
+        let save = rq.save, folders = rq.folders
         let prompt = withUnsafeBytes(of: rq.prompt) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
         let name = withUnsafeBytes(of: rq.default_name) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
         let dir = withUnsafeBytes(of: rq.directory) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
@@ -676,8 +676,9 @@ func installFileHandler() {
                         panel.canCreateDirectories = true
                     } else {
                         let open = NSOpenPanel()
-                        open.canChooseFiles = true
-                        open.canChooseDirectories = false
+                        // Navigation Services' folder and volume choosers want a folder.
+                        open.canChooseFiles = !folders
+                        open.canChooseDirectories = folders
                         open.allowsMultipleSelection = false
                         open.delegate = filter
                         panel = open

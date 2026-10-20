@@ -822,12 +822,16 @@ def gen_traps():
     protos = [HEADER, "#ifndef TB_PROTOS_GEN_H\n#define TB_PROTOS_GEN_H\n\n",
               "#include <stdbool.h>\n#include <stdint.h>\n#include \"mem.h\"\n\n"]
     glue = []
+    # Shared-library calls (Navigation Services') have no 68k form to glue.
+    library_only = {fn["name"] for fn in functions
+                    if (fn.get("cfm") or fn.get("inline")) and trap_num(fn) is None and not fn.get("dispatcher")}
     for name in sorted(impl):
         if name not in sigs:
             continue
         sig = sigs[name]
         protos.append(f"{c_return(sig)} tb_{name}({', '.join(c_params(sig)) or 'void'});\n")
-        glue.append(gen_glue(name, sig))
+        if name not in library_only:
+            glue.append(gen_glue(name, sig))
     protos.append("\n#endif\n")
 
     c = [HEADER, '#include "trap.h"\n#include "tb_protos_gen.h"\n#include "lowmem_gen.h"\n\n']

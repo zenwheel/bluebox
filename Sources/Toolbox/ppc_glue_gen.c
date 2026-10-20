@@ -6074,6 +6074,197 @@ static void ppcglue_InvalMenuBar(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NavServicesCanRun(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_NavServicesCanRun();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavServicesAvailable(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_NavServicesAvailable();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavLibraryVersion(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_NavLibraryVersion();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavLoad(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavLoad();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavUnload(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavUnload();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavDisposeReply(ppc_cpu *c)
+{
+    gaddr a_reply = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavDisposeReply(a_reply);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavGetFile(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_previewProc = (gaddr)c->gpr[7];
+    gaddr a_filterProc = (gaddr)c->gpr[8];
+    gaddr a_typeList = (gaddr)c->gpr[9];
+    gaddr a_callBackUD = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavGetFile(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_previewProc, a_filterProc, a_typeList, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavChooseFile(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_previewProc = (gaddr)c->gpr[7];
+    gaddr a_filterProc = (gaddr)c->gpr[8];
+    gaddr a_typeList = (gaddr)c->gpr[9];
+    gaddr a_callBackUD = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavChooseFile(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_previewProc, a_filterProc, a_typeList, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavTranslateFile(ppc_cpu *c)
+{
+    gaddr a_translateInfo = (gaddr)c->gpr[3];
+    uint32_t a_howToTranslate = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavTranslateFile(a_translateInfo, a_howToTranslate);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavChooseVolume(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_filterProc = (gaddr)c->gpr[7];
+    gaddr a_callBackUD = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavChooseVolume(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_filterProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavChooseFolder(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_filterProc = (gaddr)c->gpr[7];
+    gaddr a_callBackUD = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavChooseFolder(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_filterProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavChooseObject(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_filterProc = (gaddr)c->gpr[7];
+    gaddr a_callBackUD = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavChooseObject(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_filterProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavNewFolder(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_callBackUD = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavNewFolder(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavPutFile(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    int32_t a_fileType = (int32_t)c->gpr[7];
+    int32_t a_fileCreator = (int32_t)c->gpr[8];
+    gaddr a_callBackUD = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavPutFile(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_fileType, a_fileCreator, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavAskSaveChanges(ppc_cpu *c)
+{
+    gaddr a_dialogOptions = (gaddr)c->gpr[3];
+    uint32_t a_action = (uint32_t)c->gpr[4];
+    gaddr a_reply = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_callBackUD = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavAskSaveChanges(a_dialogOptions, a_action, a_reply, a_eventProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavCustomAskSaveChanges(ppc_cpu *c)
+{
+    gaddr a_dialogOptions = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_eventProc = (gaddr)c->gpr[5];
+    gaddr a_callBackUD = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavCustomAskSaveChanges(a_dialogOptions, a_reply, a_eventProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavAskDiscardChanges(ppc_cpu *c)
+{
+    gaddr a_dialogOptions = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_eventProc = (gaddr)c->gpr[5];
+    gaddr a_callBackUD = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavAskDiscardChanges(a_dialogOptions, a_reply, a_eventProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavCompleteSave(ppc_cpu *c)
+{
+    gaddr a_translateInfo = (gaddr)c->gpr[3];
+    uint32_t a_howToTranslate = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavCompleteSave(a_translateInfo, a_howToTranslate);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavCreatePreview(ppc_cpu *c)
+{
+    gaddr a_theObject = (gaddr)c->gpr[3];
+    int32_t a_previewDataType = (int32_t)c->gpr[4];
+    gaddr a_previewData = (gaddr)c->gpr[5];
+    int32_t a_previewDataSize = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavCreatePreview(a_theObject, a_previewDataType, a_previewData, a_previewDataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavCustomControl(ppc_cpu *c)
+{
+    gaddr a_context = (gaddr)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_parms = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavCustomControl(a_context, a_selector, a_parms);
+    c->pc = c->lr;
+}
+
 static void ppcglue_NMInstall(ppc_cpu *c)
 {
     gaddr a_nmptr = (gaddr)c->gpr[3];
@@ -12150,6 +12341,295 @@ static void ppcglue_GetIndexedCollectionItemInfo(ppc_cpu *c)
     gaddr a_itemSize = (gaddr)c->gpr[7];
     gaddr a_attributes = (gaddr)c->gpr[8];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIndexedCollectionItemInfo(a_c, a_index, a_tag, a_id, a_itemSize, a_attributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitContextualMenus(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsShowContextualMenuClick(ppc_cpu *c)
+{
+    gaddr a_inEvent = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsShowContextualMenuClick(a_inEvent);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ContextualMenuSelect(ppc_cpu *c)
+{
+    gaddr a_inMenu = (gaddr)c->gpr[3];
+    uint32_t a_inGlobalLocation = (uint32_t)c->gpr[4];
+    int8_t a_inReserved = (int8_t)c->gpr[5];
+    uint32_t a_inHelpType = (uint32_t)c->gpr[6];
+    gaddr a_inHelpItemString = (gaddr)c->gpr[7];
+    gaddr a_inSelection = (gaddr)c->gpr[8];
+    gaddr a_outUserSelectionType = (gaddr)c->gpr[9];
+    gaddr a_outMenuID = (gaddr)c->gpr[10];
+    gaddr a_outMenuItem = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)tb_ContextualMenuSelect(a_inMenu, a_inGlobalLocation, a_inReserved, a_inHelpType, a_inHelpItemString, a_inSelection, a_outUserSelectionType, a_outMenuID, a_outMenuItem);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ProcessIsContextualMenuClient(ppc_cpu *c)
+{
+    gaddr a_inPSN = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_ProcessIsContextualMenuClient(a_inPSN);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavGetDefaultDialogOptions(ppc_cpu *c)
+{
+    gaddr a_dialogOptions = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavGetDefaultDialogOptions(a_dialogOptions);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowFeatures(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_outFeatures = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowFeatures(a_window, a_outFeatures);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowRegion(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    uint16_t a_inRegionCode = (uint16_t)c->gpr[4];
+    gaddr a_ioWinRgn = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowRegion(a_window, a_inRegionCode, a_ioWinRgn);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsWindowCollapsable(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsWindowCollapsable(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsWindowCollapsed(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsWindowCollapsed(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CollapseWindow(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    int8_t a_collapse = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CollapseWindow(a_window, a_collapse);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CollapseAllWindows(ppc_cpu *c)
+{
+    int8_t a_collapse = (int8_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CollapseAllWindows(a_collapse);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FrontNonFloatingWindow(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_FrontNonFloatingWindow();
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsValidWindowPtr(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsValidWindowPtr(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowClass(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_outClass = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowClass(a_window, a_outClass);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowAttributes(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_outAttributes = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowAttributes(a_window, a_outAttributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateNewWindow(ppc_cpu *c)
+{
+    uint32_t a_windowClass = (uint32_t)c->gpr[3];
+    uint32_t a_attributes = (uint32_t)c->gpr[4];
+    gaddr a_contentBounds = (gaddr)c->gpr[5];
+    gaddr a_outWindow = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateNewWindow(a_windowClass, a_attributes, a_contentBounds, a_outWindow);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitFloatingWindows(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitFloatingWindows();
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShowFloatingWindows(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ShowFloatingWindows();
+    c->pc = c->lr;
+}
+
+static void ppcglue_HideFloatingWindows(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HideFloatingWindows();
+    c->pc = c->lr;
+}
+
+static void ppcglue_AreFloatingWindowsVisible(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_AreFloatingWindowsVisible();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWindowContentColor(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_color = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWindowContentColor(a_window, a_color);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowContentColor(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_color = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowContentColor(a_window, a_color);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWindowProperty(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    uint32_t a_propertyCreator = (uint32_t)c->gpr[4];
+    uint32_t a_propertyTag = (uint32_t)c->gpr[5];
+    uint32_t a_propertySize = (uint32_t)c->gpr[6];
+    gaddr a_propertyBuffer = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWindowProperty(a_window, a_propertyCreator, a_propertyTag, a_propertySize, a_propertyBuffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowProperty(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    uint32_t a_propertyCreator = (uint32_t)c->gpr[4];
+    uint32_t a_propertyTag = (uint32_t)c->gpr[5];
+    uint32_t a_bufferSize = (uint32_t)c->gpr[6];
+    gaddr a_actualSize = (gaddr)c->gpr[7];
+    gaddr a_propertyBuffer = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowProperty(a_window, a_propertyCreator, a_propertyTag, a_bufferSize, a_actualSize, a_propertyBuffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowPropertySize(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    uint32_t a_creator = (uint32_t)c->gpr[4];
+    uint32_t a_tag = (uint32_t)c->gpr[5];
+    gaddr a_size = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowPropertySize(a_window, a_creator, a_tag, a_size);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveWindowProperty(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    uint32_t a_propertyCreator = (uint32_t)c->gpr[4];
+    uint32_t a_propertyTag = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveWindowProperty(a_window, a_propertyCreator, a_propertyTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWindowProxyFSSpec(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_inFile = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWindowProxyFSSpec(a_window, a_inFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowProxyFSSpec(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_outFile = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowProxyFSSpec(a_window, a_outFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWindowProxyAlias(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_alias = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWindowProxyAlias(a_window, a_alias);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowProxyAlias(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_alias = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowProxyAlias(a_window, a_alias);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWindowProxyCreatorAndType(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    uint32_t a_fileCreator = (uint32_t)c->gpr[4];
+    uint32_t a_fileType = (uint32_t)c->gpr[5];
+    int16_t a_vRefNum = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWindowProxyCreatorAndType(a_window, a_fileCreator, a_fileType, a_vRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveWindowProxy(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveWindowProxy(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWindowProxyIcon(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_icon = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWindowProxyIcon(a_window, a_icon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWindowProxyIcon(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_outIcon = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWindowProxyIcon(a_window, a_outIcon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWindowModified(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    int8_t a_modified = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWindowModified(a_window, a_modified);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsWindowModified(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsWindowModified(a_window);
     c->pc = c->lr;
 }
 
@@ -24105,6 +24585,7 @@ const ppc_export ppc_exports[] = {
     {"AppendDITL", ppcglue_AppendDITL},
     {"AppendMenu", ppcglue_AppendMenu},
     {"AppendResMenu", ppcglue_AppendResMenu},
+    {"AreFloatingWindowsVisible", ppcglue_AreFloatingWindowsVisible},
     {"AssociateSection", ppctrap_AssociateSection},
     {"BackColor", ppcglue_BackColor},
     {"BackPat", ppcglue_BackPat},
@@ -24191,6 +24672,8 @@ const ppc_export ppc_exports[] = {
     {"CloseRgn", ppcglue_CloseRgn},
     {"CloseWindow", ppcglue_CloseWindow},
     {"CodecManagerVersion", ppcglue_CodecManagerVersion},
+    {"CollapseAllWindows", ppcglue_CollapseAllWindows},
+    {"CollapseWindow", ppcglue_CollapseWindow},
     {"CollectionTagExists", ppctrap_CollectionTagExists},
     {"Color2Index", ppcglue_Color2Index},
     {"ColorBit", ppcglue_ColorBit},
@@ -24215,6 +24698,7 @@ const ppc_export ppc_exports[] = {
     {"CompressSequenceBegin", ppcglue_CompressSequenceBegin},
     {"CompressSequenceFrame", ppcglue_CompressSequenceFrame},
     {"ConcatMatrix", ppcglue_ConcatMatrix},
+    {"ContextualMenuSelect", ppcglue_ContextualMenuSelect},
     {"ContinueSpeech", ppcglue_ContinueSpeech},
     {"ConvertFileToMovieFile", ppctrap_ConvertFileToMovieFile},
     {"ConvertImage", ppctrap_ConvertImage},
@@ -24260,6 +24744,7 @@ const ppc_export ppc_exports[] = {
     {"CreateMovieControl", ppctrap_CreateMovieControl},
     {"CreateMovieFile", ppctrap_CreateMovieFile},
     {"CreateMovieStorage", ppctrap_CreateMovieStorage},
+    {"CreateNewWindow", ppcglue_CreateNewWindow},
     {"CreateResFile", ppcglue_CreateResFile},
     {"CreateShortcutMovieFile", ppctrap_CreateShortcutMovieFile},
     {"CreateThreadPool", ppcglue_CreateThreadPool},
@@ -24485,6 +24970,7 @@ const ppc_export ppc_exports[] = {
     {"FreeDialog", ppcglue_FreeDialog},
     {"FreeMem", ppcglue_FreeMem},
     {"FreeMemSys", ppcglue_FreeMemSys},
+    {"FrontNonFloatingWindow", ppcglue_FrontNonFloatingWindow},
     {"FrontWindow", ppcglue_FrontWindow},
     {"GDGetScale", ppctrap_GDGetScale},
     {"GDHasScale", ppctrap_GDHasScale},
@@ -24970,7 +25456,17 @@ const ppc_export ppc_exports[] = {
     {"GetWRefCon", ppcglue_GetWRefCon},
     {"GetWTitle", ppcglue_GetWTitle},
     {"GetWVariant", ppcglue_GetWVariant},
+    {"GetWindowAttributes", ppcglue_GetWindowAttributes},
+    {"GetWindowClass", ppcglue_GetWindowClass},
+    {"GetWindowContentColor", ppcglue_GetWindowContentColor},
+    {"GetWindowFeatures", ppcglue_GetWindowFeatures},
     {"GetWindowPic", ppcglue_GetWindowPic},
+    {"GetWindowProperty", ppcglue_GetWindowProperty},
+    {"GetWindowPropertySize", ppcglue_GetWindowPropertySize},
+    {"GetWindowProxyAlias", ppcglue_GetWindowProxyAlias},
+    {"GetWindowProxyFSSpec", ppcglue_GetWindowProxyFSSpec},
+    {"GetWindowProxyIcon", ppcglue_GetWindowProxyIcon},
+    {"GetWindowRegion", ppcglue_GetWindowRegion},
     {"GetZone", ppcglue_GetZone},
     {"GlobalToLocal", ppcglue_GlobalToLocal},
     {"GoToBeginningOfMovie", ppcglue_GoToBeginningOfMovie},
@@ -25022,6 +25518,7 @@ const ppc_export ppc_exports[] = {
     {"HideCursor", ppcglue_HideCursor},
     {"HideDialogItem", ppcglue_HideDialogItem},
     {"HideDragHilite", ppcglue_HideDragHilite},
+    {"HideFloatingWindows", ppcglue_HideFloatingWindows},
     {"HidePen", ppcglue_HidePen},
     {"HideWindow", ppcglue_HideWindow},
     {"HiliteColor", ppcglue_HiliteColor},
@@ -25075,10 +25572,12 @@ const ppc_export ppc_exports[] = {
     {"InitAllPacks", ppcglue_InitAllPacks},
     {"InitApplZone", ppctrap_InitApplZone},
     {"InitCPort", ppcglue_InitCPort},
+    {"InitContextualMenus", ppcglue_InitContextualMenus},
     {"InitCursor", ppcglue_InitCursor},
     {"InitDateCache", ppcglue_InitDateCache},
     {"InitDialogs", ppcglue_InitDialogs},
     {"InitEditionPackVersion", ppcglue_InitEditionPackVersion},
+    {"InitFloatingWindows", ppcglue_InitFloatingWindows},
     {"InitFonts", ppcglue_InitFonts},
     {"InitGDevice", ppcglue_InitGDevice},
     {"InitGraf", ppcglue_InitGraf},
@@ -25125,6 +25624,11 @@ const ppc_export ppc_exports[] = {
     {"IsOutline", ppcglue_IsOutline},
     {"IsRegisteredSection", ppcglue_IsRegisteredSection},
     {"IsScrapMovie", ppctrap_IsScrapMovie},
+    {"IsShowContextualMenuClick", ppcglue_IsShowContextualMenuClick},
+    {"IsValidWindowPtr", ppcglue_IsValidWindowPtr},
+    {"IsWindowCollapsable", ppcglue_IsWindowCollapsable},
+    {"IsWindowCollapsed", ppcglue_IsWindowCollapsed},
+    {"IsWindowModified", ppcglue_IsWindowModified},
     {"KeyScript", ppcglue_KeyScript},
     {"KeyTranslate", ppcglue_KeyTranslate},
     {"KillControls", ppcglue_KillControls},
@@ -25723,6 +26227,27 @@ const ppc_export ppc_exports[] = {
     {"NMInstall", ppcglue_NMInstall},
     {"NMRemove", ppcglue_NMRemove},
     {"NSetPalette", ppcglue_NSetPalette},
+    {"NavAskDiscardChanges", ppcglue_NavAskDiscardChanges},
+    {"NavAskSaveChanges", ppcglue_NavAskSaveChanges},
+    {"NavChooseFile", ppcglue_NavChooseFile},
+    {"NavChooseFolder", ppcglue_NavChooseFolder},
+    {"NavChooseObject", ppcglue_NavChooseObject},
+    {"NavChooseVolume", ppcglue_NavChooseVolume},
+    {"NavCompleteSave", ppcglue_NavCompleteSave},
+    {"NavCreatePreview", ppcglue_NavCreatePreview},
+    {"NavCustomAskSaveChanges", ppcglue_NavCustomAskSaveChanges},
+    {"NavCustomControl", ppcglue_NavCustomControl},
+    {"NavDisposeReply", ppcglue_NavDisposeReply},
+    {"NavGetDefaultDialogOptions", ppcglue_NavGetDefaultDialogOptions},
+    {"NavGetFile", ppcglue_NavGetFile},
+    {"NavLibraryVersion", ppcglue_NavLibraryVersion},
+    {"NavLoad", ppcglue_NavLoad},
+    {"NavNewFolder", ppcglue_NavNewFolder},
+    {"NavPutFile", ppcglue_NavPutFile},
+    {"NavServicesAvailable", ppcglue_NavServicesAvailable},
+    {"NavServicesCanRun", ppcglue_NavServicesCanRun},
+    {"NavTranslateFile", ppcglue_NavTranslateFile},
+    {"NavUnload", ppcglue_NavUnload},
     {"NewAlias", ppcglue_NewAlias},
     {"NewAliasMinimal", ppcglue_NewAliasMinimal},
     {"NewAliasMinimalFromFullPath", ppcglue_NewAliasMinimalFromFullPath},
@@ -26127,6 +26652,7 @@ const ppc_export ppc_exports[] = {
     {"PrerollMovie", ppcglue_PrerollMovie},
     {"PrimeTime", ppcglue_PrimeTime},
     {"PrintDefault", ppcglue_PrintDefault},
+    {"ProcessIsContextualMenuClient", ppcglue_ProcessIsContextualMenuClient},
     {"ProtectEntry", ppcglue_ProtectEntry},
     {"Pt2Rect", ppcglue_Pt2Rect},
     {"PtInDSequenceData", ppctrap_PtInDSequenceData},
@@ -26336,6 +26862,8 @@ const ppc_export ppc_exports[] = {
     {"RemoveTrackingHandler", ppcglue_RemoveTrackingHandler},
     {"RemoveUserData", ppctrap_RemoveUserData},
     {"RemoveUserDataText", ppctrap_RemoveUserDataText},
+    {"RemoveWindowProperty", ppcglue_RemoveWindowProperty},
+    {"RemoveWindowProxy", ppcglue_RemoveWindowProxy},
     {"ReplaceDSequenceImageDescription", ppctrap_ReplaceDSequenceImageDescription},
     {"ReplaceGestalt", ppctrap_ReplaceGestalt},
     {"ReplaceIndexedCollectionItem", ppcglue_ReplaceIndexedCollectionItem},
@@ -26612,7 +27140,14 @@ const ppc_export ppc_exports[] = {
     {"SetWRefCon", ppcglue_SetWRefCon},
     {"SetWTitle", ppcglue_SetWTitle},
     {"SetWinColor", ppcglue_SetWinColor},
+    {"SetWindowContentColor", ppcglue_SetWindowContentColor},
+    {"SetWindowModified", ppcglue_SetWindowModified},
     {"SetWindowPic", ppcglue_SetWindowPic},
+    {"SetWindowProperty", ppcglue_SetWindowProperty},
+    {"SetWindowProxyAlias", ppcglue_SetWindowProxyAlias},
+    {"SetWindowProxyCreatorAndType", ppcglue_SetWindowProxyCreatorAndType},
+    {"SetWindowProxyFSSpec", ppcglue_SetWindowProxyFSSpec},
+    {"SetWindowProxyIcon", ppcglue_SetWindowProxyIcon},
     {"SetZone", ppcglue_SetZone},
     {"SetupAIFFHeader", ppctrap_SetupAIFFHeader},
     {"SetupSndHeader", ppctrap_SetupSndHeader},
@@ -26622,6 +27157,7 @@ const ppc_export ppc_exports[] = {
     {"ShowCursor", ppcglue_ShowCursor},
     {"ShowDialogItem", ppcglue_ShowDialogItem},
     {"ShowDragHilite", ppcglue_ShowDragHilite},
+    {"ShowFloatingWindows", ppcglue_ShowFloatingWindows},
     {"ShowHide", ppcglue_ShowHide},
     {"ShowMovieInformation", ppctrap_ShowMovieInformation},
     {"ShowMoviePoster", ppcglue_ShowMoviePoster},
