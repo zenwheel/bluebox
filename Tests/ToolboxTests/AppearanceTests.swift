@@ -38,7 +38,7 @@ extension BlueBox {
             launchTestApp()
             var resp: UInt32 = 0
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("appr")), &resp) == 0 && resp & 1 == 1)
-            #expect(tb_Gestalt(Int32(bitPattern: fourCC("apvr")), &resp) == 0 && resp == 0x0110)
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("apvr")), &resp) == 0 && resp == 0x0101)
         }
 
         @Test func registeringAsAClient() {

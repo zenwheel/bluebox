@@ -12269,6 +12269,14 @@ static void ppcglue_GetMenuItemKeyGlyph(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_IsMenuItemEnabled(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    uint16_t a_item = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsMenuItemEnabled(a_menu, a_item);
+    c->pc = c->lr;
+}
+
 static void ppcglue_IsMenuItemIconEnabled(ppc_cpu *c)
 {
     gaddr a_menu = (gaddr)c->gpr[3];
@@ -27167,6 +27175,7 @@ const ppc_export ppc_exports[] = {
     {"IsControlActive", ppcglue_IsControlActive},
     {"IsControlVisible", ppcglue_IsControlVisible},
     {"IsDialogEvent", ppcglue_IsDialogEvent},
+    {"IsMenuItemEnabled", ppcglue_IsMenuItemEnabled},
     {"IsMenuItemIconEnabled", ppcglue_IsMenuItemIconEnabled},
     {"IsMetric", ppcglue_IsMetric},
     {"IsMovieDone", ppcglue_IsMovieDone},

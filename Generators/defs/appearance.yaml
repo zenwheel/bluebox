@@ -1827,6 +1827,17 @@
     dispatcher: MenuDispatch
     selector: 0x0514
 
+# Mac OS 8.5's (MenusLib only here: its 68k selector isn't known).
+- function:
+    name: IsMenuItemEnabled
+    return: Boolean
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: UInt16
+    cfm: MenusLib
+
 - function:
     name: IsMenuItemIconEnabled
     return: Boolean

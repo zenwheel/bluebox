@@ -1620,6 +1620,12 @@ int16_t tb_GetMenuItemIconHandle(gaddr mh, int16_t item, gaddr type, gaddr icon)
     return noErr;
 }
 
+/* The item and its menu enabled (item 0: the menu itself). */
+int8_t tb_IsMenuItemEnabled(gaddr mh, uint16_t item)
+{
+    return mh && rd32(mh) && item_enabled(mh, item);
+}
+
 int8_t tb_IsMenuItemIconEnabled(gaddr mh, uint16_t item)
 {
     item_extra e;

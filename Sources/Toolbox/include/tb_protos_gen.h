@@ -862,6 +862,7 @@ int8_t tb_IsAppearanceClient(gaddr process);
 int8_t tb_IsControlActive(gaddr control);
 int8_t tb_IsControlVisible(gaddr control);
 int8_t tb_IsDialogEvent(gaddr evt);
+int8_t tb_IsMenuItemEnabled(gaddr menu, uint16_t item);
 int8_t tb_IsMenuItemIconEnabled(gaddr menu, uint16_t item);
 int8_t tb_IsMetric(void);
 int8_t tb_IsMovieDone(gaddr movie);
