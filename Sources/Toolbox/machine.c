@@ -357,6 +357,7 @@ bool machine_boot(bool census)
     ppc_glue_reset();
     ppc_libs_reset();
     sound_converters_reset();
+    carbon_reset();
     slots_reset();
     cursor_devices_reset();
     notify_reset();

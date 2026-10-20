@@ -1325,6 +1325,42 @@ static void toggle_collapse(gaddr w)
     hrgn_free(&now);
 }
 
+/* Window Manager 2.0's collapsing (CollapseWindow, IsWindowCollapsed):
+ * only windows our definitions draw can collapse. */
+bool wm_is_collapsed(gaddr w) { return is_collapsed(w); }
+
+bool wm_set_collapsed(gaddr w, bool on)
+{
+    if (our_wdef(w) < 0)
+        return false;
+    if (is_collapsed(w) != on)
+        toggle_collapse(w);
+    return true;
+}
+
+/* GetWindowFeatures' bits: kWindowCanGrow 1, CanZoom 2, CanCollapse 4,
+ * IsModal 8, CanGetWindowRegion 16, HasTitleBar 64. */
+uint32_t wm_window_features(gaddr w)
+{
+    int var = varcode(w), def = our_wdef(w);
+    uint32_t f = 16;
+    if (def == 0) {
+        if (has_grow(var))
+            f |= 1;
+        if (has_zoom(var))
+            f |= 2;
+        if (doc_variant(var))
+            f |= 4;
+        if (is_dialog_variant(var) || var == 5)
+            f |= 8;
+        if (!is_dialog_variant(var))
+            f |= 64;
+    } else if (def == 124) {
+        f |= 4 | 64;
+    }
+    return f;
+}
+
 uint32_t ev_press_count(void);
 bool ev_still_down(void);
 void ev_wait_tick(void);

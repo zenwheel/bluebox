@@ -415,12 +415,16 @@ uint32_t ctb_call(uint16_t selector, const uint32_t *args, int nargs);
 void ppc_glue_reset(void); /* ppc_glue.c */
 void ppc_libs_reset(void); /* ppc_libs.c */
 void sound_converters_reset(void); /* sndconvert.c */
+void carbon_reset(void); /* carbon.c */
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);
 bool rm_host_path(int16_t rn, char *out, size_t outsize);
 bool gestalt_exists(uint32_t selector);
 void gestalt_delete(uint32_t selector);
 void wm_hide_menu_bar(bool hide);
+bool wm_is_collapsed(gaddr w);
+bool wm_set_collapsed(gaddr w, bool on); /* false when the window can't collapse */
+uint32_t wm_window_features(gaddr w);
 bool cfm_launch(const char *app_path, char *err, size_t errlen);
 /* Load a PEF container in memory (an accelerated code resource's) once;
  * returns its main transition vector, or 0. */
