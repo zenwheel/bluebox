@@ -22,6 +22,7 @@ void trap_set_current_word(uint16_t w) { last_trapword = w; }
 #define STUB_BASE (GA_ROM + 0x1000u)
 /* 68000 routines the ROM provides, below the stubs. */
 #define METHOD_DISPATCH_CODE (GA_ROM + 0x800u)
+#define EXCEPTION_JMP (GA_ROM + 0x800000u) /* beyond the stubs: see trap_init */
 #define STUB_SIZE 8u
 #define MAX_NATIVES 8192
 
@@ -805,7 +806,14 @@ void trap_init(void)
 
     /* Exception vectors 2..63 (A-line gets its own marker stub). */
     uint32_t exc = native_register(exception_native, "Exception", 0);
+    /* Through a JMP at a ROM-like address ($xx8xxxxx, as a real ROM's
+     * $408xxxxx): programs that read through a bad pointer into the
+     * vectors find nonzero bytes where a Mac had them (Continuum's sound
+     * task, at the end of a level, tests the byte at $39 and calls the
+     * vector at $1C when it is zero). */
+    wr16(EXCEPTION_JMP, 0x4EF9);
+    wr32(EXCEPTION_JMP + 2, exc);
     for (unsigned v = 2; v < 64; v++)
-        wr32(v * 4, exc);
+        wr32(v * 4, EXCEPTION_JMP);
     wr32(10 * 4, aline_vector_stub);
 }
