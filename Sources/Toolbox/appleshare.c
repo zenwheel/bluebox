@@ -211,8 +211,15 @@ static bool connected(share *sh)
         sh->s = NULL;
     }
     if (!sh->s) {
-        if (!sh->failed)
+        if (!sh->failed) {
             LOGF(LOG_UNIMPL, "AppleShare: %s (trying again every 15 seconds)\n", err);
+            /* The volume would look empty: say why. */
+            char vn[64], text[400];
+            macroman_to_utf8((const uint8_t *)sh->volume, strlen(sh->volume), vn, sizeof vn);
+            snprintf(text, sizeof text, "AppleShare volume \"%s\" isn't connected: %s. Trying again every 15 seconds.",
+                     vn, err);
+            notify_host((int)(sh - shares), text);
+        }
         sh->failed = true;
         sh->failed_at = time(NULL);
         return false;

@@ -152,6 +152,7 @@ void as_dir_created(const char *path);
 void as_deleted(const char *path);
 void as_moved(const char *from, const char *to);
 void as_idle(void); /* at event calls: idle sessions kept open */
+void notify_host(int id, const char *text); /* a host notification of ours (notify.c) */
 /* Components of our own (components.c). */
 uint32_t components_register_native(uint32_t type, uint32_t subtype, uint32_t manufacturer, gaddr entry);
 uint32_t components_open(uint32_t component);

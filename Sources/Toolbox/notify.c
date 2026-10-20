@@ -29,6 +29,13 @@ void machine_set_notification_handler(machine_notify_fn fn, void *ctx)
     notify_ctx = ctx;
 }
 
+/* A notice of our own (not a program's request): id above the requests'. */
+void notify_host(int id, const char *text)
+{
+    if (notify_fn)
+        notify_fn(1000 + id, text, 0, notify_ctx);
+}
+
 int16_t tb_NMInstall(gaddr nm)
 {
     if (!nm || (int16_t)rd16(nm + NMRec_qType_off) != nmType)
