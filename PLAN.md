@@ -563,7 +563,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Raw fork access:** `OpenRF` with `FSRead` on raw fork bytes, which must be byte-exact.
 - **Automatic screen-in-a-window detection** (§2.4): framebuffer `mprotect` and the fault handler, the trigger heuristics, the runtime switch, and saving the decision to the profile.
 - **Profile system complete:** the layered profile, CLI overrides, the Gestalt and low-mem whitelist, and values derived from the host.
-- **`bluebox inspect`:** a host-side resource browser with export (`PICT`/icons → PNG, `snd` → WAV, `STR#`/`TEXT` → UTF-8).
+- **`bluebox inspect`:** a host-side resource browser with export (`PICT`/icons → PNG, `snd` → WAV, `STR#`/`TEXT` → UTF-8). (Done 2026-10-20: a summary for each resource's contents; PICT drawn by our QuickDraw and icons, including `cicn`, to PNG; sampled `snd` (standard, extended, MACE and IMA 4:1) to WAV; `STR`, `STR#`, `TEXT` and `vers` to UTF-8; other resources raw when chosen with `--type`/`--id`.)
 
 **Exit:** ResEdit opens a copy of TeachText, edits a `STR#`, a `DLOG` and an icon, saves, and the modified TeachText runs. Fuzzed resource maps never crash the runtime. A test app that writes directly to the screen switches to screen mode on its own.
 

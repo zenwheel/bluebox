@@ -909,3 +909,60 @@ int16_t tb_GetPixMapInfo(gaddr pm, gaddr info, int16_t verb, int16_t colors, int
     wr16(info + PictInfo_depth_off, (uint16_t)PixMap_pixelSize(p));
     return noErr;
 }
+
+/* ---------------------------------------------------------------------- */
+/* bluebox inspect: a picture drawn for the host, at its frame's size. */
+
+bool machine_picture_rgba(const uint8_t *pict, size_t len, uint8_t **rgba, int *w, int *h)
+{
+    *rgba = NULL;
+    if (len < 10 || len > 0x1000000)
+        return false;
+    int top = (int16_t)(pict[2] << 8 | pict[3]), left = (int16_t)(pict[4] << 8 | pict[5]);
+    int width = (int16_t)(pict[8] << 8 | pict[9]) - left, height = (int16_t)(pict[6] << 8 | pict[7]) - top;
+    if (width <= 0 || height <= 0 || width > 8192 || height > 8192)
+        return false;
+    /* QuickDraw's globals, in an A5 world of our own when no program has
+     * set one up: thePort at A5's pointer, the rest below it. */
+    if (!qd_port()) {
+        gaddr world = tb_NewPtr(1024, false, true), a5 = world + 768;
+        wr32(LM_CurrentA5, a5);
+        tb_InitGraf(world + 512);
+        tb_InitFonts();
+        tb_OpenPort(tb_NewPtr(GrafPort_SIZEOF, false, true));
+    }
+    gaddr saved = qd_port(), saved_gd = rd32(LM_TheGDevice);
+    gaddr bounds = tb_NewPtr(8, false, true), gw = tb_NewPtr(4, false, true);
+    qrect_put(bounds, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
+    gaddr pic = tb_NewHandle((int32_t)len, false, false);
+    bool ok = pic && tb_NewGWorld(gw, 32, bounds, 0, 0, 0) == noErr;
+    if (ok) {
+        gaddr port = rd32(gw);
+        tb_SetGWorld(port, 0);
+        tb_EraseRect(bounds);
+        gput(rd32(pic), pict, (uint32_t)len);
+        tb_DrawPicture(pic, bounds);
+        gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
+        gaddr base = PixMap_baseAddr(pm);
+        uint32_t row_bytes = (uint16_t)PixMap_rowBytes(pm) & 0x3FFF;
+        *rgba = malloc((size_t)width * (size_t)height * 4);
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++) {
+                uint32_t v = rd32(base + (uint32_t)y * row_bytes + (uint32_t)x * 4);
+                uint8_t *o = *rgba + ((size_t)y * (size_t)width + (size_t)x) * 4;
+                o[0] = (uint8_t)(v >> 16);
+                o[1] = (uint8_t)(v >> 8);
+                o[2] = (uint8_t)v;
+                o[3] = 255;
+            }
+        tb_SetGWorld(saved, saved_gd);
+        tb_DisposeGWorld(port);
+    }
+    if (pic)
+        tb_DisposeHandle(pic);
+    tb_DisposePtr(gw);
+    tb_DisposePtr(bounds);
+    *w = width;
+    *h = height;
+    return ok;
+}

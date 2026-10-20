@@ -314,17 +314,18 @@ bool machine_screenshot(const char *path)
     return ok;
 }
 
-/* An RGBA image (alpha ignored) as an uncompressed PNG. */
-bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h)
+/* An RGBA image as an uncompressed PNG: RGB, or RGBA keeping the alpha. */
+static bool write_png(const char *path, const uint8_t *rgba, int w, int h, bool alpha)
 {
-    size_t raw_row = (size_t)w * 3 + 1; /* filter byte + RGB */
+    size_t bpp = alpha ? 4 : 3;
+    size_t raw_row = (size_t)w * bpp + 1; /* filter byte + pixels */
     size_t raw_len = raw_row * (size_t)h;
     uint8_t *raw = malloc(raw_len);
     for (int y = 0; y < h; y++) {
         uint8_t *row = raw + (size_t)y * raw_row;
         row[0] = 0;
         for (int x = 0; x < w; x++)
-            memcpy(row + 1 + x * 3, rgba + ((size_t)y * (size_t)w + (size_t)x) * 4, 3);
+            memcpy(row + 1 + (size_t)x * bpp, rgba + ((size_t)y * (size_t)w + (size_t)x) * 4, bpp);
     }
     /* zlib stream of stored blocks. */
     size_t nblocks = raw_len / 65535 + 1;
@@ -362,7 +363,7 @@ bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h)
         put32be(ihdr, (uint32_t)w);
         put32be(ihdr + 4, (uint32_t)h);
         ihdr[8] = 8;  /* bit depth */
-        ihdr[9] = 2;  /* RGB */
+        ihdr[9] = alpha ? 6 : 2; /* RGBA or RGB */
         ihdr[10] = 0;
         ihdr[11] = 0;
         ihdr[12] = 0;
@@ -373,4 +374,10 @@ bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h)
     free(z);
     free(raw);
     return ok;
+}
+
+bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h) { return write_png(path, rgba, w, h, false); }
+bool machine_write_png_alpha(const char *path, const uint8_t *rgba, int w, int h)
+{
+    return write_png(path, rgba, w, h, true);
 }

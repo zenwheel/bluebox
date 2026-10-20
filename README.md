@@ -159,6 +159,23 @@ network with no setup, over Wi-Fi and VPNs too. MIDI Manager programs play
 through the Mac's General MIDI synthesizer, or to and from CoreMIDI devices
 when there are any.
 
+### Looking inside a program
+
+`bluebox inspect` lists a file's resources with what they hold: strings,
+picture and icon sizes, sound formats, menus, dialogs and the `SIZE` flags.
+With `--export` it saves them as files a modern Mac opens: pictures (drawn by
+Blue Box's own QuickDraw) and icons as PNG, sounds as WAV, strings and text as
+UTF-8.
+
+```sh
+bluebox inspect "SimpleText"
+bluebox inspect "SimpleText" --export SimpleText-resources
+bluebox inspect "SimpleText" --type snd --id 128 --export sounds
+```
+
+`--type` and `--id` choose resources; chosen ones with no modern format are
+saved as they are (`.bin`).
+
 ## What's in the repository
 
 | | |

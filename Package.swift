@@ -33,7 +33,7 @@ let package = Package(
                                  .linkedFramework("CoreFoundation", .when(platforms: [.macOS]))]),
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
         .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
-        // Command-line tool: run, import, install, apps, rsrc.
+        // Command-line tool: run, import, install, apps, rsrc, inspect.
         .executableTarget(name: "bluebox", dependencies: ["BlueBoxHost", "Toolbox", "ForkStore", "CCore"]),
         // Runner for the SingleStepTests CPU vectors (test-only).
         .target(name: "CPUTestSupport", dependencies: ["CPU68K", "CCore"], path: "Tests/CPUTestSupport",
