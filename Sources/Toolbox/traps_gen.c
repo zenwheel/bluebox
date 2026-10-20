@@ -8237,6 +8237,13 @@ static void glue_InitResources(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InitUtil(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_InitUtil();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_InitWindows(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16264,6 +16271,13 @@ static void glue_WakeUpProcess(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_WriteParam(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_WriteParam();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_WritePartialResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16465,11 +16479,11 @@ const trap_sig trap_sigs[] = {
     {0xA034, -1, "VRemove", CONV_REG, 0, 0, glue_VRemove},
     {0xA035, -1, "PBOffLine", CONV_REG, 0, 0, glue_PBOffLine},
     {0xA036, -1, "MoreMasters", CONV_STACK, 0, 0, glue_MoreMasters},
-    {0xA038, -1, "WriteParam", CONV_REG, 0, 0, 0},
+    {0xA038, -1, "WriteParam", CONV_REG, 0, 0, glue_WriteParam},
     {0xA039, -1, "ReadDateTime", CONV_REG, 0, 0, glue_ReadDateTime},
     {0xA03A, -1, "SetDateTime", CONV_REG, 0, 0, 0},
     {0xA03B, -1, "Delay", CONV_REG, 0, 0, glue_Delay},
-    {0xA03F, -1, "InitUtil", CONV_REG, 0, 0, 0},
+    {0xA03F, -1, "InitUtil", CONV_REG, 0, 0, glue_InitUtil},
     {0xA040, -1, "ReserveMem", CONV_REG, 0, 0, glue_ReserveMem},
     {0xA041, -1, "PBSetFLock", CONV_REG, 0, 0, glue_PBSetFLock},
     {0xA042, -1, "PBRstFLock", CONV_REG, 0, 0, glue_PBRstFLock},

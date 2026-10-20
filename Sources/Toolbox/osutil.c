@@ -65,6 +65,12 @@ void tb_SysBeep(int16_t i) { sound_beep(); }
 
 /* ---- Environment ---- */
 
+/* Parameter RAM: the low-memory copy (SysParam) is the only one there is,
+ * always valid, so InitUtil has nothing to set up and WriteParam nothing
+ * to write through to. */
+int16_t tb_InitUtil(void) { return noErr; }
+int16_t tb_WriteParam(void) { return noErr; }
+
 int16_t tb_SysEnvirons(int16_t vers, gaddr p)
 {
     if (vers < 1)

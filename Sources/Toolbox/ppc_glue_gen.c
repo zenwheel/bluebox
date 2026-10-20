@@ -6406,6 +6406,18 @@ static void ppcglue_SecondsToDate(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_InitUtil(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitUtil();
+    c->pc = c->lr;
+}
+
+static void ppcglue_WriteParam(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_WriteParam();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Enqueue(ppc_cpu *c)
 {
     gaddr a_e = (gaddr)c->gpr[3];
@@ -15183,26 +15195,6 @@ static void ppctrap_DateToSeconds(ppc_cpu *c)
     ppc_trap((uint16_t)(0xA9C7));
     if (o_s) wr32(o_s, ppc_trap_get(0));
     ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_InitUtil(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap((uint16_t)(0xA03F));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_WriteParam(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap((uint16_t)(0xA038));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
@@ -25587,7 +25579,7 @@ const ppc_export ppc_exports[] = {
     {"InitPort", ppcglue_InitPort},
     {"InitProcMenu", ppcglue_InitProcMenu},
     {"InitResources", ppcglue_InitResources},
-    {"InitUtil", ppctrap_InitUtil},
+    {"InitUtil", ppcglue_InitUtil},
     {"InitWindows", ppcglue_InitWindows},
     {"InsTime", ppcglue_InsTime},
     {"InsXTime", ppcglue_InsXTime},
@@ -27366,7 +27358,7 @@ const ppc_export ppc_exports[] = {
     {"WaitNextEvent", ppcglue_WaitNextEvent},
     {"WakeUpProcess", ppcglue_WakeUpProcess},
     {"WriteEdition", ppctrap_WriteEdition},
-    {"WriteParam", ppctrap_WriteParam},
+    {"WriteParam", ppcglue_WriteParam},
     {"WritePartialResource", ppcglue_WritePartialResource},
     {"WriteResource", ppcglue_WriteResource},
     {"XorRgn", ppcglue_XorRgn},

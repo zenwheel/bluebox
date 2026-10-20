@@ -148,9 +148,22 @@ bool process_launch(const char *app, const char *const *docs, int ndocs)
 
 int16_t tb_LaunchApplication(gaddr pb)
 {
+    char path[1024];
+    if (rd16(pb + LaunchParamBlockRec_launchBlockID_off) != 0x4C43) { /* not extendedBlock 'LC' */
+        /* The old _Launch: a file name (in the default directory) and a
+         * configuration word; the caller is replaced by any file with code,
+         * whatever its type (Dark Castle's application launches "Data A"). */
+        gaddr name = rd32(pb);
+        if (!name || !fm_host_path(0, 0, name, true, path, sizeof path))
+            return fnfErr;
+        if (!process_launch(path, NULL, 0))
+            return -600;
+        rm_update_all();
+        cpu_halt(g_cpu, "ExitToShell (launched %s)", path);
+        return noErr;
+    }
     gaddr spec = rd32(pb + LaunchParamBlockRec_launchAppSpec_off);
     uint16_t flags = rd16(pb + LaunchParamBlockRec_launchControlFlags_off);
-    char path[1024];
     if (!spec || !fm_host_path((int16_t)rd16(spec), (int32_t)rd32(spec + 2), spec + 6, true, path, sizeof path))
         return fnfErr;
     /* Documents to open come as an Open Documents event in the parameters. */
