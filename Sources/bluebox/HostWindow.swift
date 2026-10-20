@@ -646,10 +646,11 @@ func installFileHandler() {
                 // The application's hook gets null events meanwhile.
                 let idle = Timer(timeInterval: 0.5, repeats: true) { _ in machine_file_idle() }
                 RunLoop.main.add(idle, forMode: .modalPanel)
-                if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
+                // The filter and the pop-up's target (both held weakly) live as long as the panel runs.
+                withExtendedLifetime((filter, disks)) {
+                    if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
+                }
                 idle.invalidate()
-                _ = filter
-                _ = disks // the pop-up's target, alive while the panel runs
             }
         }
         guard let chosen else { return false }
