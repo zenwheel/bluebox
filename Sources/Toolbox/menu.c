@@ -30,6 +30,10 @@ int32_t display_take_menu_choice(void);
 static gaddr mlist(void) { return rd32(LM_MenuList); }
 static int mbar_height(void) { return (int16_t)rd16(LM_MBarHeight); }
 
+#define MAX_HIER 64
+static gaddr hier[MAX_HIER]; /* InsertMenu(menu, -1)'s */
+static int nhier;
+
 /* ---------------------------------------------------------------------- */
 /* Menu data */
 
@@ -157,6 +161,9 @@ void tb_DisposeMenu(gaddr mh)
 {
     if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
         return;
+    for (int i = 0; i < nhier; i++)
+        if (hier[i] == mh)
+            hier[i--] = hier[--nhier];
     if (tb_HGetState(mh) & 0x20)
         tb_ReleaseResource(mh);
     else
@@ -483,6 +490,7 @@ void tb_InitMenus(void)
     tb_SetHandleSize(l, 12);
     gaddr p = rd32(l);
     gmemset(p, 0, 12);
+    nhier = 0;
     wr8(LM_MenuFlash, 3);
     wr16(LM_TheMenu, 0);
     mc_init();
@@ -500,8 +508,16 @@ void tb_InsertMenu(gaddr mh, int16_t before)
     for (int i = 0; i < n; i++)
         if (menu_at(i) == mh || MenuInfo_menuID(menu_ptr(menu_at(i))) == id)
             return; /* already there */
-    if (before == -1)
-        return; /* hierarchical menus are tracked through the menu itself for now */
+    if (before == -1) {
+        /* Submenus and pop-up menus: in a list of their own, which
+         * GetMenuHandle looks in too (pop-up controls find theirs there). */
+        for (int i = 0; i < nhier; i++)
+            if (hier[i] == mh || (rd32(hier[i]) && MenuInfo_menuID(menu_ptr(hier[i])) == id))
+                return;
+        if (nhier < MAX_HIER)
+            hier[nhier++] = mh;
+        return;
+    }
     int pos = n;
     for (int i = 0; i < n; i++)
         if (MenuInfo_menuID(menu_ptr(menu_at(i))) == before) {
@@ -521,6 +537,9 @@ void tb_InsertMenu(gaddr mh, int16_t before)
 void tb_DeleteMenu(int16_t mid)
 {
     display_menus_changed();
+    for (int i = 0; i < nhier; i++)
+        if (!rd32(hier[i]) || MenuInfo_menuID(menu_ptr(hier[i])) == mid)
+            hier[i--] = hier[--nhier];
     int n = nmenus();
     for (int i = 0; i < n; i++) {
         if (MenuInfo_menuID(menu_ptr(menu_at(i))) == mid) {
@@ -539,6 +558,7 @@ void tb_DeleteMenu(int16_t mid)
 void tb_ClearMenuBar(void)
 {
     display_menus_changed();
+    nhier = 0;
     gaddr l = mlist();
     tb_SetHandleSize(l, 12);
     gmemset(rd32(l), 0, 12);
@@ -550,6 +570,9 @@ gaddr tb_GetMenuHandle(int16_t mid)
     for (int i = 0; i < n; i++)
         if (MenuInfo_menuID(menu_ptr(menu_at(i))) == mid)
             return menu_at(i);
+    for (int i = 0; i < nhier; i++)
+        if (rd32(hier[i]) && MenuInfo_menuID(menu_ptr(hier[i])) == mid)
+            return hier[i];
     return 0;
 }
 

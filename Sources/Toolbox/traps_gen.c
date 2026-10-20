@@ -1440,6 +1440,16 @@ static void glue_AcceptHighLevelEvent(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ActivateControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ActivateControl(a_control);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ActivatePalette(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1552,6 +1562,16 @@ static void glue_AddSearch(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_AddSearch(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_AdvanceKeyboardFocus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AdvanceKeyboardFocus(a_window);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -1681,6 +1701,17 @@ static void glue_ApplyThemeBackground(cpu68k *c, uint16_t trapword)
     uint32_t a_kind = (uint32_t)cpu_pop32(c);
     int32_t r = tb_ApplyThemeBackground(a_kind, a_bounds, a_state, a_depth, a_isColorDevice);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AutoEmbedControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AutoEmbedControl(a_control, a_window);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2143,6 +2174,16 @@ static void glue_ClearIntlResourceCache(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_ClearIntlResourceCache();
+    cpu_push32(c, ret);
+}
+
+static void glue_ClearKeyboardFocus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ClearKeyboardFocus(a_window);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2744,6 +2785,17 @@ static void glue_CountResources(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CountSubControls(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_count = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CountSubControls(a_control, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CountTypes(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2769,6 +2821,17 @@ static void glue_CreateResFile(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_fn = (gaddr)cpu_pop32(c);
     tb_CreateResFile(a_fn);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateRootControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CreateRootControl(a_window, a_control);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2932,6 +2995,16 @@ static void glue_DateToSeconds(cpu68k *c, uint16_t trapword)
     uint32_t a_s = 0;
     tb_DateToSeconds(a_d, &a_s);
     c->d[0] = a_s;
+}
+
+static void glue_DeactivateControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DeactivateControl(a_control);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_DebugStr(cpu68k *c, uint16_t trapword)
@@ -3551,6 +3624,15 @@ static void glue_DrawChar(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DrawControlInCurrentPort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_DrawControlInCurrentPort(a_control);
+    cpu_push32(c, ret);
+}
+
 static void glue_DrawControls(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4037,6 +4119,28 @@ static void glue_DrawThemeWindowListViewHeader(cpu68k *c, uint16_t trapword)
     gaddr a_r = (gaddr)cpu_pop32(c);
     int32_t r = tb_DrawThemeWindowListViewHeader(a_r, a_state);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DumpControlHierarchy(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_file = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DumpControlHierarchy(a_window, a_file);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_EmbedControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_container = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_EmbedControl(a_control, a_container);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -4675,6 +4779,18 @@ static void glue_FindControl(cpu68k *c, uint16_t trapword)
     uint32_t a_p = (uint32_t)cpu_pop32(c);
     int16_t r = tb_FindControl(a_p, a_w, a_cp);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FindControlUnderMouse(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_part = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    uint32_t a_where = (uint32_t)cpu_pop32(c);
+    gaddr r = tb_FindControlUnderMouse(a_where, a_window, a_part);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5827,6 +5943,51 @@ static void glue_GetBackColor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetBestControlRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_baseLineOffset = (gaddr)cpu_pop32(c);
+    gaddr a_rect = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetBestControlRect(a_control, a_rect, a_baseLineOffset);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetBevelButtonContentInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetBevelButtonContentInfo(a_button, a_content);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetBevelButtonMenuHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetBevelButtonMenuHandle(a_button, a_menu);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetBevelButtonMenuValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_value = (gaddr)cpu_pop32(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetBevelButtonMenuValue(a_button, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetCCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6063,6 +6224,45 @@ static void glue_GetControlAction(cpu68k *c, uint16_t trapword)
     gaddr a_c = (gaddr)cpu_pop32(c);
     gaddr r = tb_GetControlAction(a_c);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_actualSize = (gaddr)cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    int32_t a_bufferSize = (int32_t)cpu_pop32(c);
+    int32_t a_tag = (int32_t)cpu_pop32(c);
+    int16_t a_part = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetControlData(a_control, a_part, a_tag, a_bufferSize, a_buffer, a_actualSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlDataSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_maxSize = (gaddr)cpu_pop32(c);
+    int32_t a_tag = (int32_t)cpu_pop32(c);
+    int16_t a_part = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetControlDataSize(a_control, a_part, a_tag, a_maxSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlFeatures(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_features = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetControlFeatures(a_control, a_features);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -6652,6 +6852,18 @@ static void glue_GetIndexedCollectionItemInfo(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetIndexedSubControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_sub = (gaddr)cpu_pop32(c);
+    uint16_t a_index = (uint16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetIndexedSubControl(a_control, a_index, a_sub);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetIntlResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6716,6 +6928,17 @@ static void glue_GetItemStyle(cpu68k *c, uint16_t trapword)
     int16_t a_item = (int16_t)cpu_pop16(c);
     gaddr a_mh = (gaddr)cpu_pop32(c);
     tb_GetItemStyle(a_mh, a_item, a_stylep);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetKeyboardFocus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetKeyboardFocus(a_window, a_control);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -7498,6 +7721,17 @@ static void glue_GetResourceSizeOnDisk(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetRootControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetRootControl(a_window, a_control);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetScanOverride(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7646,6 +7880,17 @@ static void glue_GetSuiteLabel(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_suite = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetSuiteLabel(a_suite);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetSuperControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_parent = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetSuperControl(a_control, a_parent);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -8513,6 +8758,32 @@ static void glue_HandToHand(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_HandleControlClick(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_action = (gaddr)cpu_pop32(c);
+    int16_t a_modifiers = (int16_t)cpu_pop16(c);
+    uint32_t a_where = (uint32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_HandleControlClick(a_control, a_where, a_modifiers, a_action);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HandleControlKey(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_modifiers = (int16_t)cpu_pop16(c);
+    int16_t a_charCode = (int16_t)cpu_pop16(c);
+    int16_t a_keyCode = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_HandleControlKey(a_control, a_keyCode, a_charCode, a_modifiers);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_HandleZone(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8861,6 +9132,15 @@ static void glue_IconSuiteToRgn(cpu68k *c, uint16_t trapword)
     gaddr a_rgn = (gaddr)cpu_pop32(c);
     int16_t r = tb_IconSuiteToRgn(a_rgn, a_rect, a_align, a_suite);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IdleControls(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    tb_IdleControls(a_window);
     cpu_push32(c, ret);
 }
 
@@ -9262,6 +9542,26 @@ static void glue_IsAppearanceClient(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_process = (gaddr)cpu_pop32(c);
     int8_t r = tb_IsAppearanceClient(a_process);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsControlActive(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsControlActive(a_control);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsControlVisible(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsControlVisible(a_control);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -13225,6 +13525,16 @@ static void glue_RestoreFore(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ReverseKeyboardFocus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ReverseKeyboardFocus(a_window);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RmvTime(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13723,6 +14033,18 @@ static void glue_SendBehind(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SendControlMessage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_param = (int32_t)cpu_pop32(c);
+    int16_t a_message = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SendControlMessage(a_control, a_message, a_param);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetADBInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13757,6 +14079,75 @@ static void glue_SetApplLimit(cpu68k *c, uint16_t trapword)
     gaddr a_newlimit = (gaddr)c->a[0];
     tb_SetApplLimit(a_newlimit);
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
+}
+
+static void glue_SetBevelButtonContentInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetBevelButtonContentInfo(a_button, a_content);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetBevelButtonGraphicAlignment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_vOffset = (int16_t)cpu_pop16(c);
+    int16_t a_hOffset = (int16_t)cpu_pop16(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetBevelButtonGraphicAlignment(a_button, a_align, a_hOffset, a_vOffset);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetBevelButtonMenuValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_value = (int16_t)cpu_pop16(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetBevelButtonMenuValue(a_button, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetBevelButtonTextAlignment(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_hOffset = (int16_t)cpu_pop16(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetBevelButtonTextAlignment(a_button, a_align, a_hOffset);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetBevelButtonTextPlacement(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_where = (int16_t)cpu_pop16(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetBevelButtonTextPlacement(a_button, a_where);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetBevelButtonTransform(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_transform = (int16_t)cpu_pop16(c);
+    gaddr a_button = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetBevelButtonTransform(a_button, a_transform);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_SetCCursor(cpu68k *c, uint16_t trapword)
@@ -13897,6 +14288,31 @@ static void glue_SetControlColor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetControlData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int32_t a_size = (int32_t)cpu_pop32(c);
+    int32_t a_tag = (int32_t)cpu_pop32(c);
+    int16_t a_part = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetControlData(a_control, a_part, a_tag, a_size, a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlFontStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetControlFontStyle(a_control, a_style);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetControlMaximum(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13927,6 +14343,17 @@ static void glue_SetControlReference(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetControlSupervisor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_boss = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetControlSupervisor(a_control, a_boss);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetControlTitle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13944,6 +14371,18 @@ static void glue_SetControlValue(cpu68k *c, uint16_t trapword)
     int16_t a_v = (int16_t)cpu_pop16(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     tb_SetControlValue(a_c, a_v);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlVisibility(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_draw = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetControlVisibility(a_control, a_visible, a_draw);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -14155,6 +14594,17 @@ static void glue_SetDialogTracksCursor(cpu68k *c, uint16_t trapword)
     int8_t a_tracks = (int8_t)(cpu_pop16(c) >> 8);
     gaddr a_dialog = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetDialogTracksCursor(a_dialog, a_tracks);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDisclosureTriangleLastValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_value = (int16_t)cpu_pop16(c);
+    gaddr a_triangle = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetDisclosureTriangleLastValue(a_triangle, a_value);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -14392,6 +14842,28 @@ static void glue_SetIdentityMatrix(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetImageWellContentInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    gaddr a_well = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetImageWellContentInfo(a_well, a_content);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetImageWellTransform(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_transform = (int16_t)cpu_pop16(c);
+    gaddr a_well = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetImageWellTransform(a_well, a_transform);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetItemCmd(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14433,6 +14905,18 @@ static void glue_SetItemStyle(cpu68k *c, uint16_t trapword)
     int16_t a_item = (int16_t)cpu_pop16(c);
     gaddr a_mh = (gaddr)cpu_pop32(c);
     tb_SetItemStyle(a_mh, a_item, a_style);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetKeyboardFocus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_part = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetKeyboardFocus(a_window, a_control, a_part);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -14942,6 +15426,18 @@ static void glue_SetSysDirection(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetTabEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_enabled = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_tab = (int16_t)cpu_pop16(c);
+    gaddr a_tabs = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetTabEnabled(a_tabs, a_tab, a_enabled);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetThemeBackground(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15122,6 +15618,18 @@ static void glue_SetTrapAddress(cpu68k *c, uint16_t trapword)
     bool a_newTraps = (trapword & 0x200) != 0;
     bool a_tool = (trapword & 0x400) != 0;
     tb_SetTrapAddress(a_addr, a_n, a_newTraps, a_tool);
+}
+
+static void glue_SetUpControlBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetUpControlBackground(a_control, a_depth, a_isColorDevice);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_SetWRefCon(cpu68k *c, uint16_t trapword)
@@ -18131,38 +18639,38 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF6, (int32_t)0x24u, "GetIndexedCollectionItemHdl", CONV_STACK, 12, 2, 0},
     {0xABF6, (int32_t)0x25u, "FlattenCollectionToHdl", CONV_STACK, 8, 2, 0},
     {0xABF6, (int32_t)0x26u, "UnflattenCollectionFromHdl", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0xFFFFFFFEu, "SendControlMessage", CONV_STACK, 10, 4, 0},
-    {0xAA73, (int32_t)0xFFFFFFFFu, "DumpControlHierarchy", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x1u, "CreateRootControl", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x2u, "GetRootControl", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x3u, "EmbedControl", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x4u, "AutoEmbedControl", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x5u, "IsControlActive", CONV_STACK, 4, 2, 0},
-    {0xAA73, (int32_t)0x6u, "IsControlVisible", CONV_STACK, 4, 2, 0},
-    {0xAA73, (int32_t)0x7u, "ActivateControl", CONV_STACK, 4, 2, 0},
-    {0xAA73, (int32_t)0x8u, "DeactivateControl", CONV_STACK, 4, 2, 0},
-    {0xAA73, (int32_t)0x9u, "FindControlUnderMouse", CONV_STACK, 12, 4, 0},
-    {0xAA73, (int32_t)0xAu, "HandleControlClick", CONV_STACK, 14, 2, 0},
-    {0xAA73, (int32_t)0xBu, "HandleControlKey", CONV_STACK, 10, 2, 0},
-    {0xAA73, (int32_t)0xCu, "IdleControls", CONV_STACK, 4, 0, 0},
-    {0xAA73, (int32_t)0xDu, "GetKeyboardFocus", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0xEu, "SetKeyboardFocus", CONV_STACK, 10, 2, 0},
-    {0xAA73, (int32_t)0xFu, "AdvanceKeyboardFocus", CONV_STACK, 4, 2, 0},
-    {0xAA73, (int32_t)0x10u, "ReverseKeyboardFocus", CONV_STACK, 4, 2, 0},
-    {0xAA73, (int32_t)0x11u, "GetControlFeatures", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x12u, "SetControlData", CONV_STACK, 18, 2, 0},
-    {0xAA73, (int32_t)0x13u, "GetControlData", CONV_STACK, 22, 2, 0},
-    {0xAA73, (int32_t)0x14u, "GetControlDataSize", CONV_STACK, 14, 2, 0},
-    {0xAA73, (int32_t)0x15u, "GetSuperControl", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x16u, "CountSubControls", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x17u, "GetIndexedSubControl", CONV_STACK, 10, 2, 0},
-    {0xAA73, (int32_t)0x18u, "DrawControlInCurrentPort", CONV_STACK, 4, 0, 0},
-    {0xAA73, (int32_t)0x19u, "ClearKeyboardFocus", CONV_STACK, 4, 2, 0},
-    {0xAA73, (int32_t)0x1Au, "SetControlSupervisor", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x1Bu, "GetBestControlRect", CONV_STACK, 12, 2, 0},
-    {0xAA73, (int32_t)0x1Cu, "SetControlFontStyle", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x1Du, "SetUpControlBackground", CONV_STACK, 8, 2, 0},
-    {0xAA73, (int32_t)0x1Eu, "SetControlVisibility", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0xFFFFFFFEu, "SendControlMessage", CONV_STACK, 10, 4, glue_SendControlMessage},
+    {0xAA73, (int32_t)0xFFFFFFFFu, "DumpControlHierarchy", CONV_STACK, 8, 2, glue_DumpControlHierarchy},
+    {0xAA73, (int32_t)0x1u, "CreateRootControl", CONV_STACK, 8, 2, glue_CreateRootControl},
+    {0xAA73, (int32_t)0x2u, "GetRootControl", CONV_STACK, 8, 2, glue_GetRootControl},
+    {0xAA73, (int32_t)0x3u, "EmbedControl", CONV_STACK, 8, 2, glue_EmbedControl},
+    {0xAA73, (int32_t)0x4u, "AutoEmbedControl", CONV_STACK, 8, 2, glue_AutoEmbedControl},
+    {0xAA73, (int32_t)0x5u, "IsControlActive", CONV_STACK, 4, 2, glue_IsControlActive},
+    {0xAA73, (int32_t)0x6u, "IsControlVisible", CONV_STACK, 4, 2, glue_IsControlVisible},
+    {0xAA73, (int32_t)0x7u, "ActivateControl", CONV_STACK, 4, 2, glue_ActivateControl},
+    {0xAA73, (int32_t)0x8u, "DeactivateControl", CONV_STACK, 4, 2, glue_DeactivateControl},
+    {0xAA73, (int32_t)0x9u, "FindControlUnderMouse", CONV_STACK, 12, 4, glue_FindControlUnderMouse},
+    {0xAA73, (int32_t)0xAu, "HandleControlClick", CONV_STACK, 14, 2, glue_HandleControlClick},
+    {0xAA73, (int32_t)0xBu, "HandleControlKey", CONV_STACK, 10, 2, glue_HandleControlKey},
+    {0xAA73, (int32_t)0xCu, "IdleControls", CONV_STACK, 4, 0, glue_IdleControls},
+    {0xAA73, (int32_t)0xDu, "GetKeyboardFocus", CONV_STACK, 8, 2, glue_GetKeyboardFocus},
+    {0xAA73, (int32_t)0xEu, "SetKeyboardFocus", CONV_STACK, 10, 2, glue_SetKeyboardFocus},
+    {0xAA73, (int32_t)0xFu, "AdvanceKeyboardFocus", CONV_STACK, 4, 2, glue_AdvanceKeyboardFocus},
+    {0xAA73, (int32_t)0x10u, "ReverseKeyboardFocus", CONV_STACK, 4, 2, glue_ReverseKeyboardFocus},
+    {0xAA73, (int32_t)0x11u, "GetControlFeatures", CONV_STACK, 8, 2, glue_GetControlFeatures},
+    {0xAA73, (int32_t)0x12u, "SetControlData", CONV_STACK, 18, 2, glue_SetControlData},
+    {0xAA73, (int32_t)0x13u, "GetControlData", CONV_STACK, 22, 2, glue_GetControlData},
+    {0xAA73, (int32_t)0x14u, "GetControlDataSize", CONV_STACK, 14, 2, glue_GetControlDataSize},
+    {0xAA73, (int32_t)0x15u, "GetSuperControl", CONV_STACK, 8, 2, glue_GetSuperControl},
+    {0xAA73, (int32_t)0x16u, "CountSubControls", CONV_STACK, 8, 2, glue_CountSubControls},
+    {0xAA73, (int32_t)0x17u, "GetIndexedSubControl", CONV_STACK, 10, 2, glue_GetIndexedSubControl},
+    {0xAA73, (int32_t)0x18u, "DrawControlInCurrentPort", CONV_STACK, 4, 0, glue_DrawControlInCurrentPort},
+    {0xAA73, (int32_t)0x19u, "ClearKeyboardFocus", CONV_STACK, 4, 2, glue_ClearKeyboardFocus},
+    {0xAA73, (int32_t)0x1Au, "SetControlSupervisor", CONV_STACK, 8, 2, glue_SetControlSupervisor},
+    {0xAA73, (int32_t)0x1Bu, "GetBestControlRect", CONV_STACK, 12, 2, glue_GetBestControlRect},
+    {0xAA73, (int32_t)0x1Cu, "SetControlFontStyle", CONV_STACK, 8, 2, glue_SetControlFontStyle},
+    {0xAA73, (int32_t)0x1Du, "SetUpControlBackground", CONV_STACK, 8, 2, glue_SetUpControlBackground},
+    {0xAA73, (int32_t)0x1Eu, "SetControlVisibility", CONV_STACK, 8, 2, glue_SetControlVisibility},
     {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
     {0xAA68, (int32_t)0x20Du, "AutoSizeDialog", CONV_STACK, 4, 2, 0},
     {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},

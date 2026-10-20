@@ -1151,6 +1151,7 @@ void tb_CloseWindow(gaddr w)
     call_wdef(w, wDispose, 0);
     unlink_window(w);
     remove_aux(w);
+    controls_forget_window(w);
     WindowRecord_set_visible(w, 0);
     if (rd32(LM_CurActivate) == w)
         wr32(LM_CurActivate, 0);

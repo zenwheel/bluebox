@@ -296,6 +296,68 @@ void ap_little_arrows(qrect r, uint32_t state);
 void ap_popup_button(qrect r, uint32_t state, bool arrow_only);
 void ap_button(qrect r, int kind, uint32_t state, int value, int adorn);
 void ap_track(gaddr info); /* a ThemeTrackDrawInfo in guest memory */
+void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb);
+
+/* ---- Control Manager (controls.c) ---- */
+
+/* What we keep for each control: its variant and CDEF (procID & 15 and
+ * >> 4), its embedder and when it was embedded, what its embedder's hiding
+ * or deactivation changed, its ControlFontStyleRec, and the Appearance
+ * CDEF's own state (cdefs_appearance.c, malloc'd). */
+typedef struct {
+    gaddr ch;
+    int16_t var, cdef;
+    gaddr parent, supervisor;
+    uint32_t seq;
+    bool is_root, hidden_with_parent, inactive_with_parent, has_font;
+    uint8_t saved_hilite;
+    int8_t new_msgs; /* takes Control Manager 2.0's messages: -1 not asked yet */
+    uint8_t font[24];
+    void *ap;
+} ctl_info;
+typedef struct {
+    int16_t font, size, mode;
+    uint8_t face;
+} ctl_font_saved;
+ctl_info *ctl_find(gaddr ch);
+int32_t ctl_call(gaddr ch, int16_t msg, int32_t param);
+bool ctl_platinum(gaddr ch);
+gaddr ctl_window_root(gaddr w);
+void ctl_set_window_themed(gaddr w, bool themed);
+int ctl_subcontrols(gaddr ch, gaddr *out, int max);
+void ctl_font_begin(gaddr ch, ctl_font_saved *s);
+void ctl_font_end(const ctl_font_saved *s);
+bool ctl_font_color(gaddr ch, uint16_t rgb[3]);
+uint32_t ctl_local_mouse(gaddr ch);
+void ctl_call_action(gaddr action, gaddr ch, int16_t part);
+void controls_reset(void);
+void controls_forget_window(gaddr w);
+/* The Appearance CDEFs (cdefs_appearance.c): their entry, the standard
+ * buttons drawn in Platinum (kind 0 push, 1 check box, 2 radio), tracking
+ * of their own (false when the Control Manager's will do), and what
+ * follows a click (auto-toggles, tabs, radio groups). */
+typedef struct {
+    int16_t id;
+    native_fn fn;
+} ap_cdef_stub;
+extern const ap_cdef_stub ap_cdef_stubs[];
+extern const int ap_cdef_stub_count;
+void ap_draw_standard(gaddr ch, int kind);
+bool ap_ctl_track(gaddr ch, int16_t part, uint32_t pt, gaddr action, int16_t modifiers, int16_t *result);
+void ap_after_track(gaddr ch, int16_t part);
+/* A dialog item's stand-in control (GetDialogItemAsControl), out of the
+ * window's control list; a user item's draws and takes clicks through its
+ * procedures when it has them (ap_item_click: -1 when it has none). */
+gaddr ap_item_control(gaddr dialog, int item, int kind);
+void ap_forget_dialog(gaddr dialog);
+bool ap_item_draw(gaddr dialog, int item);
+int16_t ap_item_click(gaddr dialog, int item, uint32_t pt, int16_t modifiers);
+void ap_cdefs_reset(void);
+/* For the stand-ins (dialogs.c): an item drawn, its text selected, the
+ * dialog's TERec if the item is the edit text being edited. */
+void dialog_draw_item(gaddr d, int n);
+void dialog_select_item_text(gaddr d, int n, int start, int end);
+gaddr dialog_item_te(gaddr d, int n);
 
 /* ---- Dialog Manager ---- */
 

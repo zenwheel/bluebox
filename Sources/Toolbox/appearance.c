@@ -1467,6 +1467,29 @@ static void scroll_thumb(qrect r, bool horiz, bool pressed)
     }
 }
 
+/* A scroll bar as the Control Manager lays it out (CDEF 1's geometry):
+ * arrows of 16 pixels at the ends, the thumb where the caller puts it.
+ * hilite is the part pressed (20, 21; 22 and 23 the track; 129 the thumb). */
+void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb)
+{
+    qrect lo = vertical ? (qrect){ r.top, r.left, (int16_t)(r.top + 16), r.right } : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 16) };
+    qrect hi = vertical ? (qrect){ (int16_t)(r.bottom - 16), r.left, r.bottom, r.right }
+                        : (qrect){ r.top, (int16_t)(r.right - 16), r.bottom, r.right };
+    qrect area = vertical ? (qrect){ (int16_t)(r.top + 15), r.left, (int16_t)(r.bottom - 15), r.right }
+                          : (qrect){ r.top, (int16_t)(r.left + 15), r.bottom, (int16_t)(r.right - 15) };
+    ap_frame_grey(area, 0);
+    qrect in = inset(area, 1);
+    bool on = active && live;
+    ap_fill_grey(in, on ? 0xBBBB : 0xEEEE);
+    if (on && ap_in_color())
+        ap_fill_grey(vertical ? (qrect){ in.top, in.left, in.bottom, (int16_t)(in.left + 1) }
+                              : (qrect){ in.top, in.left, (int16_t)(in.top + 1), in.right }, 0x8888);
+    scroll_arrow(lo, vertical ? 3 : 0, on, hilite == 20);
+    scroll_arrow(hi, vertical ? 1 : 2, on, hilite == 21);
+    if (on && !qrect_empty(thumb))
+        scroll_thumb(thumb, !vertical, hilite == 129);
+}
+
 /* Scroll bars: the press state's bits are kTheme...Pressed. */
 static void draw_scroll_bar(const track_info *t)
 {

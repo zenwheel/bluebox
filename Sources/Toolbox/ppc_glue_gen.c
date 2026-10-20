@@ -11402,6 +11402,381 @@ static void ppcglue_GetThemeMetric(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_CreateRootControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_control = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateRootControl(a_window, a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetRootControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_control = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetRootControl(a_window, a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EmbedControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_container = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EmbedControl(a_control, a_container);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AutoEmbedControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_window = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AutoEmbedControl(a_control, a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsControlActive(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsControlActive(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsControlVisible(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsControlVisible(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ActivateControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ActivateControl(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeactivateControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeactivateControl(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindControlUnderMouse(ppc_cpu *c)
+{
+    uint32_t a_where = (uint32_t)c->gpr[3];
+    gaddr a_window = (gaddr)c->gpr[4];
+    gaddr a_part = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_FindControlUnderMouse(a_where, a_window, a_part);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlClick(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    uint32_t a_where = (uint32_t)c->gpr[4];
+    int16_t a_modifiers = (int16_t)c->gpr[5];
+    gaddr a_action = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HandleControlClick(a_control, a_where, a_modifiers, a_action);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlKey(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_keyCode = (int16_t)c->gpr[4];
+    int16_t a_charCode = (int16_t)c->gpr[5];
+    int16_t a_modifiers = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HandleControlKey(a_control, a_keyCode, a_charCode, a_modifiers);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IdleControls(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    tb_IdleControls(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_control = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetKeyboardFocus(a_window, a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_control = (gaddr)c->gpr[4];
+    int16_t a_part = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetKeyboardFocus(a_window, a_control, a_part);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AdvanceKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AdvanceKeyboardFocus(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ReverseKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ReverseKeyboardFocus(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlFeatures(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_features = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlFeatures(a_control, a_features);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlData(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_part = (int16_t)c->gpr[4];
+    int32_t a_tag = (int32_t)c->gpr[5];
+    int32_t a_size = (int32_t)c->gpr[6];
+    gaddr a_data = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetControlData(a_control, a_part, a_tag, a_size, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlData(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_part = (int16_t)c->gpr[4];
+    int32_t a_tag = (int32_t)c->gpr[5];
+    int32_t a_bufferSize = (int32_t)c->gpr[6];
+    gaddr a_buffer = (gaddr)c->gpr[7];
+    gaddr a_actualSize = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlData(a_control, a_part, a_tag, a_bufferSize, a_buffer, a_actualSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlDataSize(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_part = (int16_t)c->gpr[4];
+    int32_t a_tag = (int32_t)c->gpr[5];
+    gaddr a_maxSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlDataSize(a_control, a_part, a_tag, a_maxSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSuperControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_parent = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetSuperControl(a_control, a_parent);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountSubControls(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_count = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountSubControls(a_control, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIndexedSubControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    uint16_t a_index = (uint16_t)c->gpr[4];
+    gaddr a_sub = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIndexedSubControl(a_control, a_index, a_sub);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawControlInCurrentPort(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    tb_DrawControlInCurrentPort(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ClearKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ClearKeyboardFocus(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlSupervisor(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_boss = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetControlSupervisor(a_control, a_boss);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBestControlRect(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_rect = (gaddr)c->gpr[4];
+    gaddr a_baseLineOffset = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBestControlRect(a_control, a_rect, a_baseLineOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlFontStyle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_style = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetControlFontStyle(a_control, a_style);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetUpControlBackground(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_depth = (int16_t)c->gpr[4];
+    int8_t a_isColorDevice = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetUpControlBackground(a_control, a_depth, a_isColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlVisibility(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int8_t a_visible = (int8_t)c->gpr[4];
+    int8_t a_draw = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetControlVisibility(a_control, a_visible, a_draw);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SendControlMessage(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_message = (int16_t)c->gpr[4];
+    int32_t a_param = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SendControlMessage(a_control, a_message, a_param);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DumpControlHierarchy(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_file = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DumpControlHierarchy(a_window, a_file);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBevelButtonMenuValue(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    gaddr a_value = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBevelButtonMenuValue(a_button, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonMenuValue(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_value = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonMenuValue(a_button, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBevelButtonMenuHandle(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    gaddr a_menu = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBevelButtonMenuHandle(a_button, a_menu);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBevelButtonContentInfo(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBevelButtonContentInfo(a_button, a_content);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonContentInfo(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonContentInfo(a_button, a_content);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonTransform(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_transform = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonTransform(a_button, a_transform);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonGraphicAlignment(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_align = (int16_t)c->gpr[4];
+    int16_t a_hOffset = (int16_t)c->gpr[5];
+    int16_t a_vOffset = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonGraphicAlignment(a_button, a_align, a_hOffset, a_vOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonTextAlignment(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_align = (int16_t)c->gpr[4];
+    int16_t a_hOffset = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonTextAlignment(a_button, a_align, a_hOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonTextPlacement(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_where = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonTextPlacement(a_button, a_where);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetImageWellContentInfo(ppc_cpu *c)
+{
+    gaddr a_well = (gaddr)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetImageWellContentInfo(a_well, a_content);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetImageWellTransform(ppc_cpu *c)
+{
+    gaddr a_well = (gaddr)c->gpr[3];
+    int16_t a_transform = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetImageWellTransform(a_well, a_transform);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTabEnabled(ppc_cpu *c)
+{
+    gaddr a_tabs = (gaddr)c->gpr[3];
+    int16_t a_tab = (int16_t)c->gpr[4];
+    int8_t a_enabled = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetTabEnabled(a_tabs, a_tab, a_enabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDisclosureTriangleLastValue(ppc_cpu *c)
+{
+    gaddr a_triangle = (gaddr)c->gpr[3];
+    int16_t a_value = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDisclosureTriangleLastValue(a_triangle, a_value);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -16335,459 +16710,6 @@ static void ppctrap_DragTheRgn(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[8]);
     ppc_trap((uint16_t)(0xA926));
     uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CreateRootControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetRootControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_EmbedControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AutoEmbedControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_IsControlActive(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_IsControlVisible(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ActivateControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DeactivateControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FindControlUnderMouse(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HandleControlClick(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xAu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HandleControlKey(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_IdleControls(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xCu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetKeyboardFocus(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetKeyboardFocus(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AdvanceKeyboardFocus(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ReverseKeyboardFocus(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x10u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetControlFeatures(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x11u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetControlData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x12u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetControlData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x13u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetControlDataSize(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetSuperControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x15u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CountSubControls(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x16u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetIndexedSubControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x17u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DrawControlInCurrentPort(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x18u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ClearKeyboardFocus(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x19u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetControlSupervisor(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetBestControlRect(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetControlFontStyle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetUpControlBackground(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetControlVisibility(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(1, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SendControlMessage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0xFFFFFFFEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DumpControlHierarchy(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xFFFFFFFFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA73));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
     c->pc = c->lr;
@@ -25679,7 +25601,7 @@ const ppc_export ppc_exports[] = {
     {"AESuspendTheCurrentEvent", ppcglue_AESuspendTheCurrentEvent},
     {"AbortPrePrerollMovie", ppctrap_AbortPrePrerollMovie},
     {"AcceptHighLevelEvent", ppcglue_AcceptHighLevelEvent},
-    {"ActivateControl", ppctrap_ActivateControl},
+    {"ActivateControl", ppcglue_ActivateControl},
     {"ActivatePalette", ppcglue_ActivatePalette},
     {"AddCallBackToTimeBase", ppctrap_AddCallBackToTimeBase},
     {"AddClonedTrackToMovie", ppctrap_AddClonedTrackToMovie},
@@ -25708,7 +25630,7 @@ const ppc_export ppc_exports[] = {
     {"AddTrackReference", ppctrap_AddTrackReference},
     {"AddUserData", ppctrap_AddUserData},
     {"AddUserDataText", ppctrap_AddUserDataText},
-    {"AdvanceKeyboardFocus", ppctrap_AdvanceKeyboardFocus},
+    {"AdvanceKeyboardFocus", ppcglue_AdvanceKeyboardFocus},
     {"Alert", ppcglue_Alert},
     {"AlignScreenRect", ppcglue_AlignScreenRect},
     {"AlignWindow", ppcglue_AlignWindow},
@@ -25723,7 +25645,7 @@ const ppc_export ppc_exports[] = {
     {"AppendResMenu", ppcglue_AppendResMenu},
     {"ApplyThemeBackground", ppcglue_ApplyThemeBackground},
     {"AssociateSection", ppctrap_AssociateSection},
-    {"AutoEmbedControl", ppctrap_AutoEmbedControl},
+    {"AutoEmbedControl", ppcglue_AutoEmbedControl},
     {"AutoSizeDialog", ppctrap_AutoSizeDialog},
     {"BackColor", ppcglue_BackColor},
     {"BackPat", ppcglue_BackPat},
@@ -25790,7 +25712,7 @@ const ppc_export ppc_exports[] = {
     {"CheckUpdate", ppcglue_CheckUpdate},
     {"ChooseMovieClock", ppctrap_ChooseMovieClock},
     {"ClearIntlResourceCache", ppcglue_ClearIntlResourceCache},
-    {"ClearKeyboardFocus", ppctrap_ClearKeyboardFocus},
+    {"ClearKeyboardFocus", ppcglue_ClearKeyboardFocus},
     {"ClearMenuBar", ppcglue_ClearMenuBar},
     {"ClearMovieChanged", ppcglue_ClearMovieChanged},
     {"ClearMovieSelection", ppcglue_ClearMovieSelection},
@@ -25872,7 +25794,7 @@ const ppc_export ppc_exports[] = {
     {"CountImageDescriptionExtensionType", ppctrap_CountImageDescriptionExtensionType},
     {"CountMItems", ppcglue_CountMItems},
     {"CountResources", ppcglue_CountResources},
-    {"CountSubControls", ppctrap_CountSubControls},
+    {"CountSubControls", ppcglue_CountSubControls},
     {"CountSymbols", ppctrap_CountSymbols},
     {"CountTaggedCollectionItems", ppctrap_CountTaggedCollectionItems},
     {"CountTypes", ppcglue_CountTypes},
@@ -25883,7 +25805,7 @@ const ppc_export ppc_exports[] = {
     {"CreateMovieFile", ppctrap_CreateMovieFile},
     {"CreateMovieStorage", ppctrap_CreateMovieStorage},
     {"CreateResFile", ppcglue_CreateResFile},
-    {"CreateRootControl", ppctrap_CreateRootControl},
+    {"CreateRootControl", ppcglue_CreateRootControl},
     {"CreateShortcutMovieFile", ppctrap_CreateShortcutMovieFile},
     {"CreateThreadPool", ppcglue_CreateThreadPool},
     {"CurResFile", ppcglue_CurResFile},
@@ -25900,7 +25822,7 @@ const ppc_export ppc_exports[] = {
     {"DMRegisterNotifyProc", ppctrap_DMRegisterNotifyProc},
     {"DTInstall", ppcglue_DTInstall},
     {"DateToSeconds", ppctrap_DateToSeconds},
-    {"DeactivateControl", ppctrap_DeactivateControl},
+    {"DeactivateControl", ppcglue_DeactivateControl},
     {"DebugStr", ppcglue_DebugStr},
     {"Debugger", ppcglue_Debugger},
     {"DecompressImage", ppcglue_DecompressImage},
@@ -25980,7 +25902,7 @@ const ppc_export ppc_exports[] = {
     {"DragWindow", ppcglue_DragWindow},
     {"Draw1Control", ppcglue_Draw1Control},
     {"DrawChar", ppcglue_DrawChar},
-    {"DrawControlInCurrentPort", ppctrap_DrawControlInCurrentPort},
+    {"DrawControlInCurrentPort", ppcglue_DrawControlInCurrentPort},
     {"DrawControls", ppcglue_DrawControls},
     {"DrawDialog", ppcglue_DrawDialog},
     {"DrawGrowIcon", ppcglue_DrawGrowIcon},
@@ -26025,9 +25947,9 @@ const ppc_export ppc_exports[] = {
     {"DrawThemeWindowListViewHeader", ppcglue_DrawThemeWindowListViewHeader},
     {"DrawTrimmedPicture", ppctrap_DrawTrimmedPicture},
     {"DrawTrimmedPictureFile", ppctrap_DrawTrimmedPictureFile},
-    {"DumpControlHierarchy", ppctrap_DumpControlHierarchy},
+    {"DumpControlHierarchy", ppcglue_DumpControlHierarchy},
     {"EditionHasFormat", ppctrap_EditionHasFormat},
-    {"EmbedControl", ppctrap_EmbedControl},
+    {"EmbedControl", ppcglue_EmbedControl},
     {"EmptyCollection", ppctrap_EmptyCollection},
     {"EmptyHandle", ppcglue_EmptyHandle},
     {"EmptyRect", ppcglue_EmptyRect},
@@ -26097,7 +26019,7 @@ const ppc_export ppc_exports[] = {
     {"FinaleUnknown2", ppcglue_FinaleUnknown2},
     {"FindCodec", ppcglue_FindCodec},
     {"FindControl", ppcglue_FindControl},
-    {"FindControlUnderMouse", ppctrap_FindControlUnderMouse},
+    {"FindControlUnderMouse", ppcglue_FindControlUnderMouse},
     {"FindDialogItem", ppcglue_FindDialogItem},
     {"FindFolder", ppcglue_FindFolder},
     {"FindScriptRun", ppcglue_FindScriptRun},
@@ -26306,8 +26228,11 @@ const ppc_export ppc_exports[] = {
     {"GetAuxWin", ppcglue_GetAuxWin},
     {"GetAuxiliaryControlRecord", ppcglue_GetAuxiliaryControlRecord},
     {"GetBackColor", ppcglue_GetBackColor},
-    {"GetBestControlRect", ppctrap_GetBestControlRect},
+    {"GetBestControlRect", ppcglue_GetBestControlRect},
     {"GetBestDeviceRect", ppctrap_GetBestDeviceRect},
+    {"GetBevelButtonContentInfo", ppcglue_GetBevelButtonContentInfo},
+    {"GetBevelButtonMenuHandle", ppcglue_GetBevelButtonMenuHandle},
+    {"GetBevelButtonMenuValue", ppcglue_GetBevelButtonMenuValue},
     {"GetCCursor", ppcglue_GetCCursor},
     {"GetCIcon", ppcglue_GetCIcon},
     {"GetCPixel", ppcglue_GetCPixel},
@@ -26336,9 +26261,9 @@ const ppc_export ppc_exports[] = {
     {"GetCompressionInfo", ppctrap_GetCompressionInfo},
     {"GetCompressionTime", ppcglue_GetCompressionTime},
     {"GetControlAction", ppcglue_GetControlAction},
-    {"GetControlData", ppctrap_GetControlData},
-    {"GetControlDataSize", ppctrap_GetControlDataSize},
-    {"GetControlFeatures", ppctrap_GetControlFeatures},
+    {"GetControlData", ppcglue_GetControlData},
+    {"GetControlDataSize", ppcglue_GetControlDataSize},
+    {"GetControlFeatures", ppcglue_GetControlFeatures},
     {"GetControlMaximum", ppcglue_GetControlMaximum},
     {"GetControlMinimum", ppcglue_GetControlMinimum},
     {"GetControlReference", ppcglue_GetControlReference},
@@ -26412,14 +26337,14 @@ const ppc_export ppc_exports[] = {
     {"GetIndexedCollectionItemHdl", ppctrap_GetIndexedCollectionItemHdl},
     {"GetIndexedCollectionItemInfo", ppcglue_GetIndexedCollectionItemInfo},
     {"GetIndexedCollectionTag", ppctrap_GetIndexedCollectionTag},
-    {"GetIndexedSubControl", ppctrap_GetIndexedSubControl},
+    {"GetIndexedSubControl", ppcglue_GetIndexedSubControl},
     {"GetIntlResource", ppcglue_GetIntlResource},
     {"GetIntlResourceTable", ppcglue_GetIntlResourceTable},
     {"GetItemCmd", ppcglue_GetItemCmd},
     {"GetItemIcon", ppcglue_GetItemIcon},
     {"GetItemMark", ppcglue_GetItemMark},
     {"GetItemStyle", ppcglue_GetItemStyle},
-    {"GetKeyboardFocus", ppctrap_GetKeyboardFocus},
+    {"GetKeyboardFocus", ppcglue_GetKeyboardFocus},
     {"GetKeys", ppcglue_GetKeys},
     {"GetLabel", ppcglue_GetLabel},
     {"GetLastEditionContainerUsed", ppcglue_GetLastEditionContainerUsed},
@@ -26570,7 +26495,7 @@ const ppc_export ppc_exports[] = {
     {"GetResInfo", ppcglue_GetResInfo},
     {"GetResource", ppcglue_GetResource},
     {"GetResourceSizeOnDisk", ppcglue_GetResourceSizeOnDisk},
-    {"GetRootControl", ppctrap_GetRootControl},
+    {"GetRootControl", ppcglue_GetRootControl},
     {"GetScanOverride", ppcglue_GetScanOverride},
     {"GetScrap", ppcglue_GetScrap},
     {"GetScriptManagerVariable", ppcglue_GetScriptManagerVariable},
@@ -26591,7 +26516,7 @@ const ppc_export ppc_exports[] = {
     {"GetString", ppcglue_GetString},
     {"GetSubTable", ppcglue_GetSubTable},
     {"GetSuiteLabel", ppcglue_GetSuiteLabel},
-    {"GetSuperControl", ppctrap_GetSuperControl},
+    {"GetSuperControl", ppcglue_GetSuperControl},
     {"GetSysBeepVolume", ppcglue_GetSysBeepVolume},
     {"GetSysDirection", ppcglue_GetSysDirection},
     {"GetTaggedCollectionItem", ppctrap_GetTaggedCollectionItem},
@@ -26723,8 +26648,8 @@ const ppc_export ppc_exports[] = {
     {"HWPriv", ppcglue_HWPriv},
     {"HandAndHand", ppcglue_HandAndHand},
     {"HandToHand", ppctrap_HandToHand},
-    {"HandleControlClick", ppctrap_HandleControlClick},
-    {"HandleControlKey", ppctrap_HandleControlKey},
+    {"HandleControlClick", ppcglue_HandleControlClick},
+    {"HandleControlKey", ppcglue_HandleControlKey},
     {"HandleZone", ppcglue_HandleZone},
     {"HasDepth", ppcglue_HasDepth},
     {"HasMovieChanged", ppcglue_HasMovieChanged},
@@ -26776,7 +26701,7 @@ const ppc_export ppc_exports[] = {
     {"IconIDToRgn", ppcglue_IconIDToRgn},
     {"IconMethodToRgn", ppctrap_IconMethodToRgn},
     {"IconSuiteToRgn", ppcglue_IconSuiteToRgn},
-    {"IdleControls", ppctrap_IdleControls},
+    {"IdleControls", ppcglue_IdleControls},
     {"ImageFieldSequenceBegin", ppctrap_ImageFieldSequenceBegin},
     {"ImageFieldSequenceEnd", ppctrap_ImageFieldSequenceEnd},
     {"ImageFieldSequenceExtractCombine", ppctrap_ImageFieldSequenceExtractCombine},
@@ -26834,8 +26759,8 @@ const ppc_export ppc_exports[] = {
     {"InvertRgn", ppcglue_InvertRgn},
     {"InvertRoundRect", ppcglue_InvertRoundRect},
     {"IsAppearanceClient", ppcglue_IsAppearanceClient},
-    {"IsControlActive", ppctrap_IsControlActive},
-    {"IsControlVisible", ppctrap_IsControlVisible},
+    {"IsControlActive", ppcglue_IsControlActive},
+    {"IsControlVisible", ppcglue_IsControlVisible},
     {"IsDialogEvent", ppcglue_IsDialogEvent},
     {"IsMenuItemIconEnabled", ppctrap_IsMenuItemIconEnabled},
     {"IsMetric", ppcglue_IsMetric},
@@ -28081,7 +28006,7 @@ const ppc_export ppc_exports[] = {
     {"RestoreFore", ppcglue_RestoreFore},
     {"RestoreMixedModeState", ppctrap_RestoreMixedModeState},
     {"RetrievePictInfo", ppctrap_RetrievePictInfo},
-    {"ReverseKeyboardFocus", ppctrap_ReverseKeyboardFocus},
+    {"ReverseKeyboardFocus", ppcglue_ReverseKeyboardFocus},
     {"RmvTime", ppcglue_RmvTime},
     {"RotateMatrix", ppcglue_RotateMatrix},
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
@@ -28132,12 +28057,18 @@ const ppc_export ppc_exports[] = {
     {"SelectMovieAlternates", ppctrap_SelectMovieAlternates},
     {"SelectWindow", ppcglue_SelectWindow},
     {"SendBehind", ppcglue_SendBehind},
-    {"SendControlMessage", ppctrap_SendControlMessage},
+    {"SendControlMessage", ppcglue_SendControlMessage},
     {"SetADBInfo", ppcglue_SetADBInfo},
     {"SetAnimatedThemeCursor", ppcglue_SetAnimatedThemeCursor},
     {"SetApplBase", ppcglue_SetApplBase},
     {"SetApplLimit", ppcglue_SetApplLimit},
     {"SetAutoTrackAlternatesEnabled", ppctrap_SetAutoTrackAlternatesEnabled},
+    {"SetBevelButtonContentInfo", ppcglue_SetBevelButtonContentInfo},
+    {"SetBevelButtonGraphicAlignment", ppcglue_SetBevelButtonGraphicAlignment},
+    {"SetBevelButtonMenuValue", ppcglue_SetBevelButtonMenuValue},
+    {"SetBevelButtonTextAlignment", ppcglue_SetBevelButtonTextAlignment},
+    {"SetBevelButtonTextPlacement", ppcglue_SetBevelButtonTextPlacement},
+    {"SetBevelButtonTransform", ppcglue_SetBevelButtonTransform},
     {"SetCCursor", ppcglue_SetCCursor},
     {"SetCPixel", ppcglue_SetCPixel},
     {"SetCSequenceDataRateParams", ppcglue_SetCSequenceDataRateParams},
@@ -28155,15 +28086,15 @@ const ppc_export ppc_exports[] = {
     {"SetCompressedPixMapInfo", ppctrap_SetCompressedPixMapInfo},
     {"SetControlAction", ppcglue_SetControlAction},
     {"SetControlColor", ppcglue_SetControlColor},
-    {"SetControlData", ppctrap_SetControlData},
-    {"SetControlFontStyle", ppctrap_SetControlFontStyle},
+    {"SetControlData", ppcglue_SetControlData},
+    {"SetControlFontStyle", ppcglue_SetControlFontStyle},
     {"SetControlMaximum", ppcglue_SetControlMaximum},
     {"SetControlMinimum", ppcglue_SetControlMinimum},
     {"SetControlReference", ppcglue_SetControlReference},
-    {"SetControlSupervisor", ppctrap_SetControlSupervisor},
+    {"SetControlSupervisor", ppcglue_SetControlSupervisor},
     {"SetControlTitle", ppcglue_SetControlTitle},
     {"SetControlValue", ppcglue_SetControlValue},
-    {"SetControlVisibility", ppctrap_SetControlVisibility},
+    {"SetControlVisibility", ppcglue_SetControlVisibility},
     {"SetCursor", ppcglue_SetCursor},
     {"SetDSequenceAccuracy", ppcglue_SetDSequenceAccuracy},
     {"SetDSequenceDataProc", ppcglue_SetDSequenceDataProc},
@@ -28185,6 +28116,7 @@ const ppc_export ppc_exports[] = {
     {"SetDialogItem", ppcglue_SetDialogItem},
     {"SetDialogItemText", ppcglue_SetDialogItemText},
     {"SetDialogTracksCursor", ppcglue_SetDialogTracksCursor},
+    {"SetDisclosureTriangleLastValue", ppcglue_SetDisclosureTriangleLastValue},
     {"SetDragDrawingProc", ppcglue_SetDragDrawingProc},
     {"SetDragImage", ppcglue_SetDragImage},
     {"SetDragInputProc", ppcglue_SetDragInputProc},
@@ -28212,13 +28144,15 @@ const ppc_export ppc_exports[] = {
     {"SetIconCacheProc", ppctrap_SetIconCacheProc},
     {"SetIdentityMatrix", ppcglue_SetIdentityMatrix},
     {"SetImageDescriptionCTable", ppctrap_SetImageDescriptionCTable},
+    {"SetImageWellContentInfo", ppcglue_SetImageWellContentInfo},
+    {"SetImageWellTransform", ppcglue_SetImageWellTransform},
     {"SetIndexedCollectionItemInfo", ppctrap_SetIndexedCollectionItemInfo},
     {"SetIntlResource", ppctrap_SetIntlResource},
     {"SetItemCmd", ppcglue_SetItemCmd},
     {"SetItemIcon", ppcglue_SetItemIcon},
     {"SetItemMark", ppcglue_SetItemMark},
     {"SetItemStyle", ppcglue_SetItemStyle},
-    {"SetKeyboardFocus", ppctrap_SetKeyboardFocus},
+    {"SetKeyboardFocus", ppcglue_SetKeyboardFocus},
     {"SetMCEntries", ppcglue_SetMCEntries},
     {"SetMCInfo", ppcglue_SetMCInfo},
     {"SetMediaDataHandler", ppctrap_SetMediaDataHandler},
@@ -28320,6 +28254,7 @@ const ppc_export ppc_exports[] = {
     {"SetSuiteLabel", ppcglue_SetSuiteLabel},
     {"SetSysBeepVolume", ppcglue_SetSysBeepVolume},
     {"SetSysDirection", ppcglue_SetSysDirection},
+    {"SetTabEnabled", ppcglue_SetTabEnabled},
     {"SetThemeBackground", ppcglue_SetThemeBackground},
     {"SetThemeCursor", ppcglue_SetThemeCursor},
     {"SetThemeDrawingState", ppcglue_SetThemeDrawingState},
@@ -28358,7 +28293,7 @@ const ppc_export ppc_exports[] = {
     {"SetTrackUsage", ppctrap_SetTrackUsage},
     {"SetTrackVolume", ppctrap_SetTrackVolume},
     {"SetTrapAddress", ppcglue_SetTrapAddress},
-    {"SetUpControlBackground", ppctrap_SetUpControlBackground},
+    {"SetUpControlBackground", ppcglue_SetUpControlBackground},
     {"SetUserDataItem", ppctrap_SetUserDataItem},
     {"SetWRefCon", ppcglue_SetWRefCon},
     {"SetWTitle", ppcglue_SetWTitle},

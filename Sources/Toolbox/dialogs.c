@@ -562,6 +562,25 @@ static void draw_item(gaddr d, int n)
     tb_DisposePtr(rp);
 }
 
+/* For the items' stand-in controls (cdefs_appearance.c). */
+void dialog_draw_item(gaddr d, int n)
+{
+    if (n < 1 || n > item_count(d))
+        return;
+    gaddr saved = qd_port();
+    tb_SetPort(d);
+    draw_item(d, n);
+    tb_SetPort(saved);
+}
+
+void dialog_select_item_text(gaddr d, int n, int start, int end)
+{
+    if (n >= 1 && n <= item_count(d) && (item_type(d, n) & 0x7F) == editText)
+        activate_edit(d, n, start, end);
+}
+
+gaddr dialog_item_te(gaddr d, int n) { return n == edit_item(d) ? edit_te(d) : 0; }
+
 static void draw_default_ring(gaddr d)
 {
     int x = extra_index(d, false);

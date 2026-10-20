@@ -189,3 +189,173 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    /// Control Manager 2.0: embedding, activation and visibility following
+    /// the embedder, data access, keyboard focus, and the Appearance CDEFs.
+    @Suite struct ControlManager2 {
+        func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
+            let p = tb_NewPtr(8, false, true)
+            for (i, v) in [t, l, b, r].enumerated() { wr16(p + UInt32(i * 2), UInt16(bitPattern: Int16(v))) }
+            return p
+        }
+
+        func pstr(_ s: String) -> UInt32 {
+            let p = tb_NewPtr(256, false, true)
+            guestPString(s, at: p)
+            return p
+        }
+
+        func window() -> UInt32 {
+            let w = tb_NewCWindow(0, rect(40, 40, 240, 340), pstr("Test"), 1, 0, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            return w
+        }
+
+        func pixel(_ h: Int, _ v: Int) -> (UInt16, UInt16, UInt16) {
+            let c = tb_NewPtr(6, false, true)
+            tb_GetCPixel(Int16(h), Int16(v), c)
+            return (rd16(c), rd16(c + 2), rd16(c + 4))
+        }
+
+        @Test func embeddingFollowsTheRoot() {
+            launchTestApp()
+            _ = initToolbox()
+            let w = window()
+            let out = tb_NewPtr(4, false, true)
+            #expect(tb_GetRootControl(w, out) == -30586) // errNoRootControl
+            #expect(tb_CreateRootControl(w, out) == 0)
+            let root = rd32(out)
+            #expect(root != 0)
+            #expect(tb_CreateRootControl(w, out) == -30587) // errRootAlreadyExists
+            // A group box, then a push button inside it: each goes in the deepest embedder holding it.
+            let group = tb_NewControl(w, rect(10, 10, 150, 250), pstr("Group"), 1, 0, 0, 0, 160, 0)
+            let button = tb_NewControl(w, rect(40, 30, 60, 110), pstr("OK"), 1, 0, 0, 1, 368, 0)
+            let outside = tb_NewControl(w, rect(160, 10, 180, 100), pstr("Out"), 1, 0, 0, 1, 369, 0)
+            let count = tb_NewPtr(2, false, true)
+            #expect(tb_CountSubControls(root, count) == 0 && rd16(count) == 2)
+            #expect(tb_CountSubControls(group, count) == 0 && rd16(count) == 1)
+            #expect(tb_GetSuperControl(button, out) == 0 && rd32(out) == group)
+            #expect(tb_GetSuperControl(outside, out) == 0 && rd32(out) == root)
+            #expect(tb_GetIndexedSubControl(root, 1, out) == 0 && rd32(out) == group)
+            #expect(tb_GetIndexedSubControl(root, 2, out) == 0 && rd32(out) == outside)
+            // Deactivating the group deactivates the button; it comes back with it.
+            #expect(tb_DeactivateControl(group) == 0)
+            #expect(tb_IsControlActive(group) == 0 && tb_IsControlActive(button) == 0)
+            #expect(tb_IsControlActive(outside) != 0)
+            #expect(tb_ActivateControl(group) == 0)
+            #expect(tb_IsControlActive(button) != 0)
+            // One deactivated on its own stays so.
+            _ = tb_DeactivateControl(button)
+            _ = tb_DeactivateControl(group)
+            _ = tb_ActivateControl(group)
+            #expect(tb_IsControlActive(button) == 0)
+            _ = tb_ActivateControl(button)
+            // Hidden with its embedder, shown with it.
+            tb_HideControl(group)
+            #expect(tb_IsControlVisible(button) == 0)
+            tb_ShowControl(group)
+            #expect(tb_IsControlVisible(button) != 0)
+            #expect(tb_SetControlVisibility(button, 0, 0) == 0 && tb_IsControlVisible(button) == 0)
+            _ = tb_SetControlVisibility(button, 1, 1)
+            // FindControl finds the button, not the group behind it.
+            let hit = tb_NewPtr(4, false, true)
+            #expect(tb_FindControl(0x0032_0040, w, hit) == 10 && rd32(hit) == button) // (v 50, h 64)
+            // Disposing the group disposes the button.
+            tb_DisposeControl(group)
+            #expect(tb_CountSubControls(root, count) == 0 && rd16(count) == 1)
+            tb_DisposeWindow(w)
+        }
+
+        @Test func dataAccessAndFocus() {
+            launchTestApp()
+            _ = initToolbox()
+            let w = window()
+            let out = tb_NewPtr(4, false, true)
+            _ = tb_CreateRootControl(w, out)
+            let label = tb_NewControl(w, rect(10, 10, 26, 200), 0, 1, 0, 0, 0, 288, 0)
+            let text = Array("Hello, world".utf8)
+            let buf = tb_NewPtr(64, false, true)
+            for (i, b) in text.enumerated() { wr8(buf + UInt32(i), b) }
+            #expect(tb_SetControlData(label, 0, Int32(bitPattern: fourCC("text")), Int32(text.count), buf) == 0)
+            let size = tb_NewPtr(4, false, true)
+            #expect(tb_GetControlDataSize(label, 0, Int32(bitPattern: fourCC("text")), size) == 0)
+            #expect(rd32(size) == UInt32(text.count))
+            #expect(tb_GetControlData(label, 0, Int32(bitPattern: fourCC("bogs")), 4, buf, size) == -30581)
+            let features = tb_NewPtr(4, false, true)
+            #expect(tb_GetControlFeatures(label, features) == 0 && rd32(features) & (1 << 6) != 0) // data access
+            // Two edit text fields: focus, and Tab's advance.
+            let e1 = tb_NewControl(w, rect(40, 12, 56, 150), 0, 1, 0, 0, 0, 272, 0)
+            let e2 = tb_NewControl(w, rect(70, 12, 86, 150), 0, 1, 0, 0, 0, 272, 0)
+            #expect(tb_SetKeyboardFocus(w, e1, -1) == 0)
+            #expect(tb_GetKeyboardFocus(w, out) == 0 && rd32(out) == e1)
+            #expect(tb_HandleControlKey(e1, 0, 0x41, 0) == 5) // 'A' typed: kControlEditTextPart
+            #expect(tb_GetControlData(e1, 0, Int32(bitPattern: fourCC("text")), 64, buf, size) == 0)
+            #expect(rd32(size) == 1 && rd8(buf) == 0x41)
+            #expect(tb_AdvanceKeyboardFocus(w) == 0)
+            #expect(tb_GetKeyboardFocus(w, out) == 0 && rd32(out) == e2)
+            #expect(tb_SetKeyboardFocus(w, label, -1) == -30582) // errControlDoesntSupportFocus
+            #expect(tb_ClearKeyboardFocus(w) == 0)
+            #expect(tb_GetKeyboardFocus(w, out) == 0 && rd32(out) == 0)
+            tb_DisposeWindow(w)
+        }
+
+        /// Bevel buttons take their content and behaviour; the auto-toggle
+        /// check box and tabs change their value when clicked.
+        @Test func appearanceControlsBehave() {
+            launchTestApp()
+            _ = initToolbox()
+            let w = window()
+            // Toggling behaviour (0x0100) with no content.
+            let bevel = tb_NewControl(w, rect(10, 10, 40, 60), pstr("B"), 1, 0, 0x0100, 0, 33, 0)
+            #expect(tb_GetControlValue(bevel) == 0 && tb_GetControlMaximum(bevel) == 1)
+            let info = tb_NewPtr(6, false, true)
+            wr16(info, 3); wr16(info + 2, 999) // kControlContentPictRes, a picture that isn't there
+            #expect(tb_SetBevelButtonContentInfo(bevel, info) == 0)
+            let back = tb_NewPtr(6, false, true)
+            #expect(tb_GetBevelButtonContentInfo(bevel, back) == 0 && rd16(back) == 3)
+            ap_after_track(bevel, 10)
+            #expect(tb_GetControlValue(bevel) == 1)
+            ap_after_track(bevel, 10)
+            #expect(tb_GetControlValue(bevel) == 0)
+            let check = tb_NewControl(w, rect(50, 10, 66, 120), pstr("Auto"), 1, 0, 0, 1, 371, 0)
+            ap_after_track(check, 11)
+            #expect(tb_GetControlValue(check) == 1)
+            // A progress bar's indeterminate flag.
+            let progress = tb_NewControl(w, rect(80, 10, 94, 200), 0, 1, 30, 0, 100, 80, 0)
+            var yes: UInt8 = 1
+            let flag = tb_NewPtr(1, false, true)
+            wr8(flag, yes)
+            #expect(tb_SetControlData(progress, 0, Int32(bitPattern: fourCC("inde")), 1, flag) == 0)
+            wr8(flag, 0)
+            let got = tb_NewPtr(4, false, true)
+            #expect(tb_GetControlData(progress, 0, Int32(bitPattern: fourCC("inde")), 1, flag, got) == 0)
+            yes = rd8(flag)
+            #expect(yes == 1)
+            tb_DisposeWindow(w)
+        }
+
+        /// Appearance clients' push buttons are Platinum: grey faces, black frames.
+        @Test func platinumPushButton() {
+            machine_set_screen_depth(32)
+            defer { machine_set_screen_depth(1) }
+            launchTestApp()
+            _ = initToolbox()
+            #expect(tb_RegisterAppearanceClient() == 0)
+            let w = window()
+            let b = tb_NewControl(w, rect(20, 20, 40, 100), pstr("OK"), 1, 0, 0, 1, 368, 0)
+            tb_Draw1Control(b)
+            #expect(pixel(60, 20) == (0, 0, 0))                 // the frame along the top
+            #expect(pixel(30, 34) == (0xDDDD, 0xDDDD, 0xDDDD))  // the face
+            tb_HiliteControl(b, 10)
+            #expect(pixel(30, 34) == (0x7777, 0x7777, 0x7777))  // pressed
+            tb_HiliteControl(b, 255)
+            #expect(pixel(60, 20) == (0x8888, 0x8888, 0x8888))  // inactive frame
+            // CDEF 0's buttons too, for a client.
+            let old = tb_NewControl(w, rect(60, 20, 80, 100), pstr("Old"), 1, 0, 0, 1, 0, 0)
+            tb_Draw1Control(old)
+            #expect(pixel(30, 74) == (0xDDDD, 0xDDDD, 0xDDDD))
+            tb_DisposeWindow(w)
+        }
+    }
+}
