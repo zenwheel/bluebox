@@ -361,6 +361,60 @@ static inline void CIcon_set_iconData(gaddr p, gaddr v) { wr32(p + 78u, (uint32_
 #define CInfoPBRec_hFileInfo_off 0u
 #define CInfoPBRec_dirInfo_off 0u
 
+/* CMIOPB */
+#define CMIOPB_SIZEOF 56u
+#define CMIOPB_qLink_off 0u
+#define CMIOPB_qType_off 4u
+#define CMIOPB_hConn_off 6u
+#define CMIOPB_theBuffer_off 10u
+#define CMIOPB_count_off 14u
+#define CMIOPB_flags_off 18u
+#define CMIOPB_userCompletion_off 20u
+#define CMIOPB_timeout_off 24u
+#define CMIOPB_errCode_off 28u
+#define CMIOPB_channel_off 30u
+#define CMIOPB_asyncEOM_off 32u
+#define CMIOPB_reserved1_off 36u
+#define CMIOPB_reserved2_off 40u
+#define CMIOPB_version_off 42u
+#define CMIOPB_refCon_off 44u
+#define CMIOPB_toolData1_off 48u
+#define CMIOPB_toolData2_off 52u
+static inline gaddr CMIOPB_qLink(gaddr p) { return (gaddr)rd32(p + 0u); }
+static inline void CMIOPB_set_qLink(gaddr p, gaddr v) { wr32(p + 0u, (uint32_t)v); }
+static inline int16_t CMIOPB_qType(gaddr p) { return (int16_t)rd16(p + 4u); }
+static inline void CMIOPB_set_qType(gaddr p, int16_t v) { wr16(p + 4u, (uint16_t)v); }
+static inline gaddr CMIOPB_hConn(gaddr p) { return (gaddr)rd32(p + 6u); }
+static inline void CMIOPB_set_hConn(gaddr p, gaddr v) { wr32(p + 6u, (uint32_t)v); }
+static inline gaddr CMIOPB_theBuffer(gaddr p) { return (gaddr)rd32(p + 10u); }
+static inline void CMIOPB_set_theBuffer(gaddr p, gaddr v) { wr32(p + 10u, (uint32_t)v); }
+static inline int32_t CMIOPB_count(gaddr p) { return (int32_t)rd32(p + 14u); }
+static inline void CMIOPB_set_count(gaddr p, int32_t v) { wr32(p + 14u, (uint32_t)v); }
+static inline int16_t CMIOPB_flags(gaddr p) { return (int16_t)rd16(p + 18u); }
+static inline void CMIOPB_set_flags(gaddr p, int16_t v) { wr16(p + 18u, (uint16_t)v); }
+static inline gaddr CMIOPB_userCompletion(gaddr p) { return (gaddr)rd32(p + 20u); }
+static inline void CMIOPB_set_userCompletion(gaddr p, gaddr v) { wr32(p + 20u, (uint32_t)v); }
+static inline int32_t CMIOPB_timeout(gaddr p) { return (int32_t)rd32(p + 24u); }
+static inline void CMIOPB_set_timeout(gaddr p, int32_t v) { wr32(p + 24u, (uint32_t)v); }
+static inline int16_t CMIOPB_errCode(gaddr p) { return (int16_t)rd16(p + 28u); }
+static inline void CMIOPB_set_errCode(gaddr p, int16_t v) { wr16(p + 28u, (uint16_t)v); }
+static inline int16_t CMIOPB_channel(gaddr p) { return (int16_t)rd16(p + 30u); }
+static inline void CMIOPB_set_channel(gaddr p, int16_t v) { wr16(p + 30u, (uint16_t)v); }
+static inline int32_t CMIOPB_asyncEOM(gaddr p) { return (int32_t)rd32(p + 32u); }
+static inline void CMIOPB_set_asyncEOM(gaddr p, int32_t v) { wr32(p + 32u, (uint32_t)v); }
+static inline int32_t CMIOPB_reserved1(gaddr p) { return (int32_t)rd32(p + 36u); }
+static inline void CMIOPB_set_reserved1(gaddr p, int32_t v) { wr32(p + 36u, (uint32_t)v); }
+static inline int16_t CMIOPB_reserved2(gaddr p) { return (int16_t)rd16(p + 40u); }
+static inline void CMIOPB_set_reserved2(gaddr p, int16_t v) { wr16(p + 40u, (uint16_t)v); }
+static inline int16_t CMIOPB_version(gaddr p) { return (int16_t)rd16(p + 42u); }
+static inline void CMIOPB_set_version(gaddr p, int16_t v) { wr16(p + 42u, (uint16_t)v); }
+static inline int32_t CMIOPB_refCon(gaddr p) { return (int32_t)rd32(p + 44u); }
+static inline void CMIOPB_set_refCon(gaddr p, int32_t v) { wr32(p + 44u, (uint32_t)v); }
+static inline int32_t CMIOPB_toolData1(gaddr p) { return (int32_t)rd32(p + 48u); }
+static inline void CMIOPB_set_toolData1(gaddr p, int32_t v) { wr32(p + 48u, (uint32_t)v); }
+static inline int32_t CMIOPB_toolData2(gaddr p) { return (int32_t)rd32(p + 52u); }
+static inline void CMIOPB_set_toolData2(gaddr p, int32_t v) { wr32(p + 52u, (uint32_t)v); }
+
 /* CMYColor */
 #define CMYColor_SIZEOF 6u
 #define CMYColor_cyan_off 0u
@@ -634,6 +688,75 @@ static inline void CommonSpec_set_ID(gaddr p, int16_t v) { wr16(p + 2u, (uint16_
 /* ComponentRecord */
 #define ComponentRecord_SIZEOF 4u
 #define ComponentRecord_data_off 0u
+
+/* ConnEnvironRec */
+#define ConnEnvironRec_SIZEOF 14u
+#define ConnEnvironRec_version_off 0u
+#define ConnEnvironRec_baudRate_off 2u
+#define ConnEnvironRec_dataBits_off 6u
+#define ConnEnvironRec_channels_off 8u
+#define ConnEnvironRec_swFlowControl_off 10u
+#define ConnEnvironRec_hwFlowControl_off 11u
+#define ConnEnvironRec_flags_off 12u
+static inline int16_t ConnEnvironRec_version(gaddr p) { return (int16_t)rd16(p + 0u); }
+static inline void ConnEnvironRec_set_version(gaddr p, int16_t v) { wr16(p + 0u, (uint16_t)v); }
+static inline int32_t ConnEnvironRec_baudRate(gaddr p) { return (int32_t)rd32(p + 2u); }
+static inline void ConnEnvironRec_set_baudRate(gaddr p, int32_t v) { wr32(p + 2u, (uint32_t)v); }
+static inline int16_t ConnEnvironRec_dataBits(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void ConnEnvironRec_set_dataBits(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline int16_t ConnEnvironRec_channels(gaddr p) { return (int16_t)rd16(p + 8u); }
+static inline void ConnEnvironRec_set_channels(gaddr p, int16_t v) { wr16(p + 8u, (uint16_t)v); }
+static inline int8_t ConnEnvironRec_swFlowControl(gaddr p) { return (int8_t)rd8(p + 10u); }
+static inline void ConnEnvironRec_set_swFlowControl(gaddr p, int8_t v) { wr8(p + 10u, (uint8_t)v); }
+static inline int8_t ConnEnvironRec_hwFlowControl(gaddr p) { return (int8_t)rd8(p + 11u); }
+static inline void ConnEnvironRec_set_hwFlowControl(gaddr p, int8_t v) { wr8(p + 11u, (uint8_t)v); }
+static inline int16_t ConnEnvironRec_flags(gaddr p) { return (int16_t)rd16(p + 12u); }
+static inline void ConnEnvironRec_set_flags(gaddr p, int16_t v) { wr16(p + 12u, (uint16_t)v); }
+
+/* ConnRecord */
+#define ConnRecord_SIZEOF 144u
+#define ConnRecord_procID_off 0u
+#define ConnRecord_flags_off 2u
+#define ConnRecord_errCode_off 6u
+#define ConnRecord_refCon_off 8u
+#define ConnRecord_userData_off 12u
+#define ConnRecord_defProc_off 16u
+#define ConnRecord_config_off 20u
+#define ConnRecord_oldConfig_off 24u
+#define ConnRecord_asyncEOM_off 28u
+#define ConnRecord_reserved1_off 32u
+#define ConnRecord_reserved2_off 36u
+#define ConnRecord_cmPrivate_off 40u
+#define ConnRecord_bufferArray_off 44u
+#define ConnRecord_bufSizes_off 76u
+#define ConnRecord_mluField_off 108u
+#define ConnRecord_asyncCount_off 112u
+static inline int16_t ConnRecord_procID(gaddr p) { return (int16_t)rd16(p + 0u); }
+static inline void ConnRecord_set_procID(gaddr p, int16_t v) { wr16(p + 0u, (uint16_t)v); }
+static inline int32_t ConnRecord_flags(gaddr p) { return (int32_t)rd32(p + 2u); }
+static inline void ConnRecord_set_flags(gaddr p, int32_t v) { wr32(p + 2u, (uint32_t)v); }
+static inline int16_t ConnRecord_errCode(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void ConnRecord_set_errCode(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline int32_t ConnRecord_refCon(gaddr p) { return (int32_t)rd32(p + 8u); }
+static inline void ConnRecord_set_refCon(gaddr p, int32_t v) { wr32(p + 8u, (uint32_t)v); }
+static inline int32_t ConnRecord_userData(gaddr p) { return (int32_t)rd32(p + 12u); }
+static inline void ConnRecord_set_userData(gaddr p, int32_t v) { wr32(p + 12u, (uint32_t)v); }
+static inline gaddr ConnRecord_defProc(gaddr p) { return (gaddr)rd32(p + 16u); }
+static inline void ConnRecord_set_defProc(gaddr p, gaddr v) { wr32(p + 16u, (uint32_t)v); }
+static inline gaddr ConnRecord_config(gaddr p) { return (gaddr)rd32(p + 20u); }
+static inline void ConnRecord_set_config(gaddr p, gaddr v) { wr32(p + 20u, (uint32_t)v); }
+static inline gaddr ConnRecord_oldConfig(gaddr p) { return (gaddr)rd32(p + 24u); }
+static inline void ConnRecord_set_oldConfig(gaddr p, gaddr v) { wr32(p + 24u, (uint32_t)v); }
+static inline int32_t ConnRecord_asyncEOM(gaddr p) { return (int32_t)rd32(p + 28u); }
+static inline void ConnRecord_set_asyncEOM(gaddr p, int32_t v) { wr32(p + 28u, (uint32_t)v); }
+static inline int32_t ConnRecord_reserved1(gaddr p) { return (int32_t)rd32(p + 32u); }
+static inline void ConnRecord_set_reserved1(gaddr p, int32_t v) { wr32(p + 32u, (uint32_t)v); }
+static inline int32_t ConnRecord_reserved2(gaddr p) { return (int32_t)rd32(p + 36u); }
+static inline void ConnRecord_set_reserved2(gaddr p, int32_t v) { wr32(p + 36u, (uint32_t)v); }
+static inline gaddr ConnRecord_cmPrivate(gaddr p) { return (gaddr)rd32(p + 40u); }
+static inline void ConnRecord_set_cmPrivate(gaddr p, gaddr v) { wr32(p + 40u, (uint32_t)v); }
+static inline int32_t ConnRecord_mluField(gaddr p) { return (int32_t)rd32(p + 108u); }
+static inline void ConnRecord_set_mluField(gaddr p, int32_t v) { wr32(p + 108u, (uint32_t)v); }
 
 /* ControlRecord */
 #define ControlRecord_SIZEOF 296u
@@ -1448,6 +1571,80 @@ static inline int16_t FSSpec_vRefNum(gaddr p) { return (int16_t)rd16(p + 0u); }
 static inline void FSSpec_set_vRefNum(gaddr p, int16_t v) { wr16(p + 0u, (uint16_t)v); }
 static inline int32_t FSSpec_parID(gaddr p) { return (int32_t)rd32(p + 2u); }
 static inline void FSSpec_set_parID(gaddr p, int32_t v) { wr32(p + 2u, (uint32_t)v); }
+
+/* FTRecord */
+#define FTRecord_SIZEOF 414u
+#define FTRecord_procID_off 0u
+#define FTRecord_flags_off 2u
+#define FTRecord_errCode_off 6u
+#define FTRecord_refCon_off 8u
+#define FTRecord_userData_off 12u
+#define FTRecord_defProc_off 16u
+#define FTRecord_config_off 20u
+#define FTRecord_oldConfig_off 24u
+#define FTRecord_environsProc_off 28u
+#define FTRecord_reserved1_off 32u
+#define FTRecord_reserved2_off 36u
+#define FTRecord_ftPrivate_off 40u
+#define FTRecord_sendProc_off 44u
+#define FTRecord_recvProc_off 48u
+#define FTRecord_writeProc_off 52u
+#define FTRecord_readProc_off 56u
+#define FTRecord_owner_off 60u
+#define FTRecord_direction_off 64u
+#define FTRecord_theReply_off 66u
+#define FTRecord_writePtr_off 140u
+#define FTRecord_readPtr_off 144u
+#define FTRecord_theBuf_off 148u
+#define FTRecord_bufSize_off 152u
+#define FTRecord_autoRec_off 156u
+#define FTRecord_attributes_off 412u
+static inline int16_t FTRecord_procID(gaddr p) { return (int16_t)rd16(p + 0u); }
+static inline void FTRecord_set_procID(gaddr p, int16_t v) { wr16(p + 0u, (uint16_t)v); }
+static inline int32_t FTRecord_flags(gaddr p) { return (int32_t)rd32(p + 2u); }
+static inline void FTRecord_set_flags(gaddr p, int32_t v) { wr32(p + 2u, (uint32_t)v); }
+static inline int16_t FTRecord_errCode(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void FTRecord_set_errCode(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline int32_t FTRecord_refCon(gaddr p) { return (int32_t)rd32(p + 8u); }
+static inline void FTRecord_set_refCon(gaddr p, int32_t v) { wr32(p + 8u, (uint32_t)v); }
+static inline int32_t FTRecord_userData(gaddr p) { return (int32_t)rd32(p + 12u); }
+static inline void FTRecord_set_userData(gaddr p, int32_t v) { wr32(p + 12u, (uint32_t)v); }
+static inline gaddr FTRecord_defProc(gaddr p) { return (gaddr)rd32(p + 16u); }
+static inline void FTRecord_set_defProc(gaddr p, gaddr v) { wr32(p + 16u, (uint32_t)v); }
+static inline gaddr FTRecord_config(gaddr p) { return (gaddr)rd32(p + 20u); }
+static inline void FTRecord_set_config(gaddr p, gaddr v) { wr32(p + 20u, (uint32_t)v); }
+static inline gaddr FTRecord_oldConfig(gaddr p) { return (gaddr)rd32(p + 24u); }
+static inline void FTRecord_set_oldConfig(gaddr p, gaddr v) { wr32(p + 24u, (uint32_t)v); }
+static inline gaddr FTRecord_environsProc(gaddr p) { return (gaddr)rd32(p + 28u); }
+static inline void FTRecord_set_environsProc(gaddr p, gaddr v) { wr32(p + 28u, (uint32_t)v); }
+static inline int32_t FTRecord_reserved1(gaddr p) { return (int32_t)rd32(p + 32u); }
+static inline void FTRecord_set_reserved1(gaddr p, int32_t v) { wr32(p + 32u, (uint32_t)v); }
+static inline int32_t FTRecord_reserved2(gaddr p) { return (int32_t)rd32(p + 36u); }
+static inline void FTRecord_set_reserved2(gaddr p, int32_t v) { wr32(p + 36u, (uint32_t)v); }
+static inline gaddr FTRecord_ftPrivate(gaddr p) { return (gaddr)rd32(p + 40u); }
+static inline void FTRecord_set_ftPrivate(gaddr p, gaddr v) { wr32(p + 40u, (uint32_t)v); }
+static inline gaddr FTRecord_sendProc(gaddr p) { return (gaddr)rd32(p + 44u); }
+static inline void FTRecord_set_sendProc(gaddr p, gaddr v) { wr32(p + 44u, (uint32_t)v); }
+static inline gaddr FTRecord_recvProc(gaddr p) { return (gaddr)rd32(p + 48u); }
+static inline void FTRecord_set_recvProc(gaddr p, gaddr v) { wr32(p + 48u, (uint32_t)v); }
+static inline gaddr FTRecord_writeProc(gaddr p) { return (gaddr)rd32(p + 52u); }
+static inline void FTRecord_set_writeProc(gaddr p, gaddr v) { wr32(p + 52u, (uint32_t)v); }
+static inline gaddr FTRecord_readProc(gaddr p) { return (gaddr)rd32(p + 56u); }
+static inline void FTRecord_set_readProc(gaddr p, gaddr v) { wr32(p + 56u, (uint32_t)v); }
+static inline gaddr FTRecord_owner(gaddr p) { return (gaddr)rd32(p + 60u); }
+static inline void FTRecord_set_owner(gaddr p, gaddr v) { wr32(p + 60u, (uint32_t)v); }
+static inline int16_t FTRecord_direction(gaddr p) { return (int16_t)rd16(p + 64u); }
+static inline void FTRecord_set_direction(gaddr p, int16_t v) { wr16(p + 64u, (uint16_t)v); }
+static inline int32_t FTRecord_writePtr(gaddr p) { return (int32_t)rd32(p + 140u); }
+static inline void FTRecord_set_writePtr(gaddr p, int32_t v) { wr32(p + 140u, (uint32_t)v); }
+static inline int32_t FTRecord_readPtr(gaddr p) { return (int32_t)rd32(p + 144u); }
+static inline void FTRecord_set_readPtr(gaddr p, int32_t v) { wr32(p + 144u, (uint32_t)v); }
+static inline gaddr FTRecord_theBuf(gaddr p) { return (gaddr)rd32(p + 148u); }
+static inline void FTRecord_set_theBuf(gaddr p, gaddr v) { wr32(p + 148u, (uint32_t)v); }
+static inline int32_t FTRecord_bufSize(gaddr p) { return (int32_t)rd32(p + 152u); }
+static inline void FTRecord_set_bufSize(gaddr p, int32_t v) { wr32(p + 152u, (uint32_t)v); }
+static inline int16_t FTRecord_attributes(gaddr p) { return (int16_t)rd16(p + 412u); }
+static inline void FTRecord_set_attributes(gaddr p, int16_t v) { wr16(p + 412u, (uint16_t)v); }
 
 /* FTSoundRec */
 #define FTSoundRec_SIZEOF 50u
@@ -4941,6 +5138,107 @@ static inline void TPrint_set_iPrVersion(gaddr p, int16_t v) { wr16(p + 0u, (uin
 #define TargetID_recvrName_off 180u
 static inline int32_t TargetID_sessionID(gaddr p) { return (int32_t)rd32(p + 0u); }
 static inline void TargetID_set_sessionID(gaddr p, int32_t v) { wr32(p + 0u, (uint32_t)v); }
+
+/* TermDataBlock */
+#define TermDataBlock_SIZEOF 14u
+#define TermDataBlock_flags_off 0u
+#define TermDataBlock_theData_off 2u
+#define TermDataBlock_auxData_off 6u
+#define TermDataBlock_reserved_off 10u
+static inline int16_t TermDataBlock_flags(gaddr p) { return (int16_t)rd16(p + 0u); }
+static inline void TermDataBlock_set_flags(gaddr p, int16_t v) { wr16(p + 0u, (uint16_t)v); }
+static inline gaddr TermDataBlock_theData(gaddr p) { return (gaddr)rd32(p + 2u); }
+static inline void TermDataBlock_set_theData(gaddr p, gaddr v) { wr32(p + 2u, (uint32_t)v); }
+static inline gaddr TermDataBlock_auxData(gaddr p) { return (gaddr)rd32(p + 6u); }
+static inline void TermDataBlock_set_auxData(gaddr p, gaddr v) { wr32(p + 6u, (uint32_t)v); }
+static inline int32_t TermDataBlock_reserved(gaddr p) { return (int32_t)rd32(p + 10u); }
+static inline void TermDataBlock_set_reserved(gaddr p, int32_t v) { wr32(p + 10u, (uint32_t)v); }
+
+/* TermEnvironRec */
+#define TermEnvironRec_SIZEOF 32u
+#define TermEnvironRec_version_off 0u
+#define TermEnvironRec_termType_off 2u
+#define TermEnvironRec_textRows_off 4u
+#define TermEnvironRec_textCols_off 6u
+#define TermEnvironRec_cellSize_off 8u
+#define TermEnvironRec_graphicSize_off 12u
+#define TermEnvironRec_slop_off 20u
+#define TermEnvironRec_auxSpace_off 24u
+static inline int16_t TermEnvironRec_version(gaddr p) { return (int16_t)rd16(p + 0u); }
+static inline void TermEnvironRec_set_version(gaddr p, int16_t v) { wr16(p + 0u, (uint16_t)v); }
+static inline int16_t TermEnvironRec_termType(gaddr p) { return (int16_t)rd16(p + 2u); }
+static inline void TermEnvironRec_set_termType(gaddr p, int16_t v) { wr16(p + 2u, (uint16_t)v); }
+static inline int16_t TermEnvironRec_textRows(gaddr p) { return (int16_t)rd16(p + 4u); }
+static inline void TermEnvironRec_set_textRows(gaddr p, int16_t v) { wr16(p + 4u, (uint16_t)v); }
+static inline int16_t TermEnvironRec_textCols(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void TermEnvironRec_set_textCols(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+
+/* TermRecord */
+#define TermRecord_SIZEOF 106u
+#define TermRecord_procID_off 0u
+#define TermRecord_flags_off 2u
+#define TermRecord_errCode_off 6u
+#define TermRecord_refCon_off 8u
+#define TermRecord_userData_off 12u
+#define TermRecord_defProc_off 16u
+#define TermRecord_config_off 20u
+#define TermRecord_oldConfig_off 24u
+#define TermRecord_environsProc_off 28u
+#define TermRecord_reserved1_off 32u
+#define TermRecord_reserved2_off 36u
+#define TermRecord_tmPrivate_off 40u
+#define TermRecord_sendProc_off 44u
+#define TermRecord_breakProc_off 48u
+#define TermRecord_cacheProc_off 52u
+#define TermRecord_clikLoop_off 56u
+#define TermRecord_owner_off 60u
+#define TermRecord_termRect_off 64u
+#define TermRecord_viewRect_off 72u
+#define TermRecord_visRect_off 80u
+#define TermRecord_lastIdle_off 88u
+#define TermRecord_selection_off 92u
+#define TermRecord_selType_off 100u
+#define TermRecord_mluField_off 102u
+static inline int16_t TermRecord_procID(gaddr p) { return (int16_t)rd16(p + 0u); }
+static inline void TermRecord_set_procID(gaddr p, int16_t v) { wr16(p + 0u, (uint16_t)v); }
+static inline int32_t TermRecord_flags(gaddr p) { return (int32_t)rd32(p + 2u); }
+static inline void TermRecord_set_flags(gaddr p, int32_t v) { wr32(p + 2u, (uint32_t)v); }
+static inline int16_t TermRecord_errCode(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void TermRecord_set_errCode(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline int32_t TermRecord_refCon(gaddr p) { return (int32_t)rd32(p + 8u); }
+static inline void TermRecord_set_refCon(gaddr p, int32_t v) { wr32(p + 8u, (uint32_t)v); }
+static inline int32_t TermRecord_userData(gaddr p) { return (int32_t)rd32(p + 12u); }
+static inline void TermRecord_set_userData(gaddr p, int32_t v) { wr32(p + 12u, (uint32_t)v); }
+static inline gaddr TermRecord_defProc(gaddr p) { return (gaddr)rd32(p + 16u); }
+static inline void TermRecord_set_defProc(gaddr p, gaddr v) { wr32(p + 16u, (uint32_t)v); }
+static inline gaddr TermRecord_config(gaddr p) { return (gaddr)rd32(p + 20u); }
+static inline void TermRecord_set_config(gaddr p, gaddr v) { wr32(p + 20u, (uint32_t)v); }
+static inline gaddr TermRecord_oldConfig(gaddr p) { return (gaddr)rd32(p + 24u); }
+static inline void TermRecord_set_oldConfig(gaddr p, gaddr v) { wr32(p + 24u, (uint32_t)v); }
+static inline gaddr TermRecord_environsProc(gaddr p) { return (gaddr)rd32(p + 28u); }
+static inline void TermRecord_set_environsProc(gaddr p, gaddr v) { wr32(p + 28u, (uint32_t)v); }
+static inline int32_t TermRecord_reserved1(gaddr p) { return (int32_t)rd32(p + 32u); }
+static inline void TermRecord_set_reserved1(gaddr p, int32_t v) { wr32(p + 32u, (uint32_t)v); }
+static inline int32_t TermRecord_reserved2(gaddr p) { return (int32_t)rd32(p + 36u); }
+static inline void TermRecord_set_reserved2(gaddr p, int32_t v) { wr32(p + 36u, (uint32_t)v); }
+static inline gaddr TermRecord_tmPrivate(gaddr p) { return (gaddr)rd32(p + 40u); }
+static inline void TermRecord_set_tmPrivate(gaddr p, gaddr v) { wr32(p + 40u, (uint32_t)v); }
+static inline gaddr TermRecord_sendProc(gaddr p) { return (gaddr)rd32(p + 44u); }
+static inline void TermRecord_set_sendProc(gaddr p, gaddr v) { wr32(p + 44u, (uint32_t)v); }
+static inline gaddr TermRecord_breakProc(gaddr p) { return (gaddr)rd32(p + 48u); }
+static inline void TermRecord_set_breakProc(gaddr p, gaddr v) { wr32(p + 48u, (uint32_t)v); }
+static inline gaddr TermRecord_cacheProc(gaddr p) { return (gaddr)rd32(p + 52u); }
+static inline void TermRecord_set_cacheProc(gaddr p, gaddr v) { wr32(p + 52u, (uint32_t)v); }
+static inline gaddr TermRecord_clikLoop(gaddr p) { return (gaddr)rd32(p + 56u); }
+static inline void TermRecord_set_clikLoop(gaddr p, gaddr v) { wr32(p + 56u, (uint32_t)v); }
+static inline gaddr TermRecord_owner(gaddr p) { return (gaddr)rd32(p + 60u); }
+static inline void TermRecord_set_owner(gaddr p, gaddr v) { wr32(p + 60u, (uint32_t)v); }
+static inline int32_t TermRecord_lastIdle(gaddr p) { return (int32_t)rd32(p + 88u); }
+static inline void TermRecord_set_lastIdle(gaddr p, int32_t v) { wr32(p + 88u, (uint32_t)v); }
+static inline int16_t TermRecord_selType(gaddr p) { return (int16_t)rd16(p + 100u); }
+static inline void TermRecord_set_selType(gaddr p, int16_t v) { wr16(p + 100u, (uint16_t)v); }
+static inline int32_t TermRecord_mluField(gaddr p) { return (int32_t)rd32(p + 102u); }
+static inline void TermRecord_set_mluField(gaddr p, int32_t v) { wr32(p + 102u, (uint32_t)v); }
 
 /* TextStyle */
 #define TextStyle_SIZEOF 12u
