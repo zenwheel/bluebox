@@ -355,6 +355,8 @@ bool machine_boot(bool census)
     serial_reset();
     appletalk_reset();
     ppc_glue_reset();
+    ppc_libs_reset();
+    sound_converters_reset();
     slots_reset();
     cursor_devices_reset();
     notify_reset();

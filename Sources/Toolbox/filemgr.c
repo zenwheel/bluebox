@@ -1515,8 +1515,34 @@ int16_t tb_PBHRename(gaddr pb, bool async)
     return err ? err : rename_path(path, rd32(pb + IOParam_ioMisc_off));
 }
 
-int16_t tb_PBSetFLock(gaddr pb, bool async) { return noErr; }
-int16_t tb_PBRstFLock(gaddr pb, bool async) { return noErr; }
+/* Locking: the file must be there; the lock itself isn't kept (the host
+ * file's permissions stay the program's to change). */
+static int16_t lock_file(gaddr pb, bool hfs)
+{
+    char path[PATH_MAX];
+    int16_t err = pb_path(pb, hfs, path, sizeof path);
+    struct stat st;
+    return err ? err : stat(path, &st) != 0 ? fnfErrF : noErr;
+}
+
+int16_t tb_PBSetFLock(gaddr pb, bool async) { return lock_file(pb, hfs_call()); }
+int16_t tb_PBRstFLock(gaddr pb, bool async) { return lock_file(pb, hfs_call()); }
+
+/* SetFLock / RstFLock(fileName, vRefNum): the glue's parameter block. */
+static int16_t lock_by_name(gaddr name, int16_t vrn)
+{
+    gaddr pb = tb_NewPtr(IOParam_SIZEOF, false, true);
+    if (!pb)
+        return memFullErr;
+    wr32(pb + IOParam_ioNamePtr_off, name);
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)vrn);
+    int16_t err = lock_file(pb, false);
+    tb_DisposePtr(pb);
+    return err;
+}
+
+int16_t tb_SetFLock(gaddr filen, int16_t vrn) { return lock_by_name(filen, vrn); }
+int16_t tb_RstFLock(gaddr filen, int16_t vrn) { return lock_by_name(filen, vrn); }
 
 /* ---------------------------------------------------------------------- */
 /* File information */
@@ -2525,6 +2551,15 @@ int16_t tb_PBMountVol(gaddr pb) { return -56; /* nsDrvErr: no such drive */ }
 int16_t tb_PBUnmountVol(gaddr pb) { return fBsyErr; }
 int16_t tb_PBEject(gaddr pb) { return -56; }
 int16_t tb_PBOffLine(gaddr pb) { return -56; }
+
+/* DiskEject(drive): the drives are fixed disks, which don't eject. */
+int16_t tb_DiskEject(int16_t rn)
+{
+    for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e + DrvQEl_qLink_off))
+        if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == rn)
+            return -17; /* controlErr */
+    return -56;         /* nsDrvErr */
+}
 
 /* Opening with deny modes (AppleShare): the read and write access bits
  * become the permission; there is no one else to deny. */

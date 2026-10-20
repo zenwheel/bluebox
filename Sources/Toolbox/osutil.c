@@ -210,6 +210,13 @@ void raw_RelString(cpu68k *c, uint16_t tw)
     c->d[0] = (uint32_t)(r < 0 ? -1 : r > 0 ? 1 : 0);
 }
 
+/* StripDiacritics(text, len, script): the marks taken off, in place. */
+void tb_StripDiacritics(gaddr textp, int16_t len, int16_t script)
+{
+    for (int i = 0; i < len && textp; i++)
+        wr8(textp + (uint32_t)i, strip_mark(rd8(textp + (uint32_t)i)));
+}
+
 /* UprString: A0 the text, D0 its length; bit $0200 also strips marks. */
 void raw_UprString(cpu68k *c, uint16_t tw)
 {

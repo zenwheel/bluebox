@@ -121,6 +121,9 @@ void tb_InitDialogs(gaddr rp)
     wr16(LM_DlgFont, 0);
 }
 
+/* SetDialogFont: the font new dialogs' text items take. */
+void tb_SetDialogFont(int16_t i) { wr16(LM_DlgFont, (uint16_t)i); }
+
 void tb_ParamText(gaddr p0, gaddr p1, gaddr p2, gaddr p3)
 {
     gaddr params[4] = { p0, p1, p2, p3 };

@@ -1186,6 +1186,7 @@ void tb_TEPaste(gaddr teh)
 
 gaddr tb_TEScrapHandle(void) { return scrap_handle(); }
 int32_t tb_TEGetScrapLength(void) { return (int16_t)rd16(LM_TEScrpLength); }
+void tb_TESetScrapLength(int32_t ln) { wr16(LM_TEScrpLength, (uint16_t)(ln > 32767 ? 32767 : ln < 0 ? 0 : ln)); }
 /* Between the TextEdit scrap and the desk scrap (apps do this on resume
  * and suspend). */
 int16_t tb_TEFromScrap(void)

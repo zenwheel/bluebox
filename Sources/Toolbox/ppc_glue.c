@@ -538,7 +538,58 @@ static void g_UnmountVol(ppc_cpu *c)
     RET(tb_PBUnmountVol(pb));
 }
 
+/* HSetFLock / HRstFLock(vRefNum, dirID, fileName): the HFS traps. */
+static void h_lock(ppc_cpu *c, uint16_t trap)
+{
+    gaddr pb = pb_scratch();
+    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)R(0));
+    wr32(pb + HFileParam_ioDirID_off, R(1));
+    wr32(pb + IOParam_ioNamePtr_off, R(2));
+    ppc_trap_begin();
+    ppc_trap_set(8, pb);
+    ppc_trap(trap);
+    int16_t e = (int16_t)ppc_trap_get(0);
+    ppc_trap_end();
+    RET(e);
+}
+static void g_HSetFLock(ppc_cpu *c) { h_lock(c, 0xA241); }
+static void g_HRstFLock(ppc_cpu *c) { h_lock(c, 0xA242); }
+
+/* PB calls the local volumes don't support, answered in ioResult (and to
+ * the completion routine when asynchronous). */
+static void unsupported(ppc_cpu *c, int16_t err, bool async)
+{
+    gaddr pb = R(0);
+    if (pb) {
+        wr16(pb + IOParam_ioResult_off, (uint16_t)err);
+        if (async && rd32(pb + IOParam_ioCompletion_off))
+            io_complete_later(pb, err);
+    }
+    RET(err);
+}
+/* File sharing (PBShare, PBUnshare) is off, and the users and groups list
+ * is empty (PBGetUGEntry finds no more). */
+static void g_PBShareSync(ppc_cpu *c) { unsupported(c, paramErr, false); }
+static void g_PBShareAsync(ppc_cpu *c) { unsupported(c, paramErr, true); }
+static void g_PBGetUGEntrySync(ppc_cpu *c) { unsupported(c, fnfErr, false); }
+static void g_PBGetUGEntryAsync(ppc_cpu *c) { unsupported(c, fnfErr, true); }
+/* Foreign privileges are an AppleShare matter: wrgVolTypErr. */
+static void g_PBForeignPrivsSync(ppc_cpu *c) { unsupported(c, -123, false); }
+static void g_PBForeignPrivsAsync(ppc_cpu *c) { unsupported(c, -123, true); }
+/* Volume mounting information is for servers' volumes: the local ones
+ * have none to give (PBGetVolMountInfoSize, PBGetVolMountInfo), and
+ * PBVolumeMount knows no kind of volume to mount. */
+static void g_PBVolMountSync(ppc_cpu *c) { unsupported(c, paramErr, false); }
+
 const ppc_export ppc_glue_exports[] = {
+    { "HSetFLock", g_HSetFLock }, { "HRstFLock", g_HRstFLock },
+    { "PBShareSync", g_PBShareSync }, { "PBShareAsync", g_PBShareAsync },
+    { "PBUnshareSync", g_PBShareSync }, { "PBUnshareAsync", g_PBShareAsync },
+    { "PBGetUGEntrySync", g_PBGetUGEntrySync }, { "PBGetUGEntryAsync", g_PBGetUGEntryAsync },
+    { "PBGetForeignPrivsSync", g_PBForeignPrivsSync }, { "PBGetForeignPrivsAsync", g_PBForeignPrivsAsync },
+    { "PBSetForeignPrivsSync", g_PBForeignPrivsSync }, { "PBSetForeignPrivsAsync", g_PBForeignPrivsAsync },
+    { "PBGetVolMountInfoSize", g_PBVolMountSync }, { "PBGetVolMountInfo", g_PBVolMountSync },
+    { "PBVolumeMount", g_PBVolMountSync },
     { "CatMove", g_CatMove },
     { "CloseWD", g_CloseWD },
     { "Eject", g_Eject },

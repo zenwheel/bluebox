@@ -33,6 +33,9 @@ extern const unsigned lib_export_count;
 void (*cfm_export_fn(const char *name))(ppc_cpu *);
 /* The address of an exported data symbol (allocated on first use), or 0. */
 gaddr ppc_data_export(const char *name);
+/* The Sound Converter and ParseSndHeader (sndconvert.c). */
+extern const ppc_export snd_exports[];
+extern const unsigned snd_export_count;
 /* DrawSprocket (drawsprocket.c). */
 extern const ppc_export dsp_exports[];
 extern const unsigned dsp_export_count;
