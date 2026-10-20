@@ -33,6 +33,7 @@ static const struct {
     int16_t drawn_as;
 } classic_fonts[] = {
     { 0, "Chicago", 0 },  { 2, "New York", 2 },  { 3, "Geneva", 3 },  { 4, "Monaco", 4 },
+    { 16, "Palatino", 2 }, /* HyperCard's stacks ask for it */
     { 20, "Times", 2 },   { 21, "Helvetica", 3 }, { 22, "Courier", 4 }, { 23, "Symbol", 3 },
     { 2002, "Charcoal", 2002 }, /* Mac OS 8's system font */
 };
