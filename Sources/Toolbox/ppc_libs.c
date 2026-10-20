@@ -1844,7 +1844,11 @@ static void dm_GetIndexedDisplayModeFromList(ppc_cpu *c)
     int len = snprintf(text, sizeof text, "%d x %d", w, h);
     wr8(name, (uint8_t)len);
     gput(name + 1, text, (uint32_t)len);
-    wr32(timing + 4, 0x3);      /* timingInfoAttributes: kModeValid, kModeSafe */
+    /* VDTimingInfoRec: the mode, the format ('decl'), and csTimingFlags
+     * kModeValid and kModeSafe (StarCraft's Storm keeps only valid modes). */
+    wr32(timing, 0x80 + index);
+    wr32(timing + 8, 0x6465636C);
+    wr32(timing + 16, 0x3);
     wr32(block, 3);             /* depthBlockCount */
     wr32(block + 4, infos);     /* depthVPBlock */
     for (int i = 0; i < 3; i++) {
