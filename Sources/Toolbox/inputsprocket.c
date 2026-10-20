@@ -8,7 +8,8 @@
  * events are the changes since the element was last looked at.
  *
  * ISpNeed (mac68k alignment): name Str63 0, iconSuiteResourceId 64,
- * playerNum 66, group 67, theKind 68, theLabel 72, flags 76; 88 bytes.
+ * playerNum 66, group 67, theKind 68, theLabel 72, flags 76, three reserved
+ * longs; 92 bytes.
  * ISpElementEvent: when (AbsoluteTime) 0, element 8, refCon 12, data 16.
  */
 #include <ctype.h>
@@ -21,7 +22,7 @@
 #define R(n) (c->gpr[3 + (n)])
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; } while (0)
 
-enum { NEED_SIZE = 88 };
+enum { NEED_SIZE = 92 };
 #define FOURCC(a, b, c, d) ((uint32_t)(a) << 24 | (uint32_t)(b) << 16 | (uint32_t)(c) << 8 | (uint32_t)(d))
 enum {
     kButton = FOURCC('b', 'u', 't', 'n'),
