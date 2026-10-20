@@ -1,5 +1,6 @@
 import CCore
 import CPU68K
+import CPUPPC
 import Foundation
 import Testing
 import Toolbox
@@ -532,6 +533,41 @@ extension BlueBox {
             #expect(tb_SetMenuItemHierarchicalID(m, 1, 140) == 0)
             let h = tb_NewPtr(2, false, true)
             #expect(tb_GetMenuItemHierarchicalID(m, 1, h) == 0 && rd16(h) == 140)
+        }
+    }
+}
+
+extension BlueBox {
+    /// AppearanceLib's exports, called as a PowerPC program calls them.
+    @Suite struct AppearanceLibExports {
+        /// Call an export with arguments in r3 up; its r3 back.
+        func call(_ name: String, _ args: [UInt32]) -> UInt32? {
+            guard let fn = cfm_export_fn(name) else { return nil }
+            var c = ppc_cpu()
+            ppc_init(&c)
+            withUnsafeMutableBytes(of: &c.gpr) { raw in
+                raw.storeBytes(of: UInt32(0x6000_0100), toByteOffset: 4, as: UInt32.self) // r1
+                for (i, v) in args.enumerated() { raw.storeBytes(of: v, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+            }
+            fn(&c)
+            return withUnsafeBytes(of: c.gpr) { $0.load(fromByteOffset: 12, as: UInt32.self) }
+        }
+
+        @Test func exportsAnswer() {
+            launchTestApp()
+            _ = initToolbox()
+            for name in ["RegisterAppearanceClient", "UnregisterAppearanceClient", "GetDialogItemAsControl",
+                         "GetRootControl", "AutoSizeDialog", "MenuEvent", "SetMenuItemModifiers", "SetControlData",
+                         "GetControlData", "IdleControls", "DrawControlInCurrentPort", "SetBevelButtonContentInfo",
+                         "DrawThemeListBoxFrame", "DrawThemeButton", "GetThemeMetric", "SetControlVisibility"] {
+                #expect(cfm_export_fn(name) != nil, "\(name)")
+            }
+            #expect(call("RegisterAppearanceClient", []) == 0)
+            #expect(call("IsAppearanceClient", [0]) == 1)
+            let rgb = tb_NewPtr(6, false, true)
+            #expect(call("GetThemeBrushAsColor", [3, 32, 1, rgb]) == 0) // kThemeBrushAlertBackgroundActive
+            #expect(rd16(rgb) == 0xDDDD)
+            #expect(call("UnregisterAppearanceClient", []) == 0)
         }
     }
 }

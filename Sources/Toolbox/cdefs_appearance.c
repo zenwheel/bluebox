@@ -376,6 +376,22 @@ void ap_draw_standard(gaddr ch, int kind)
     uint8_t hil = chilite(ch);
     uint32_t state = hil == 255 || hil == 254 ? 0 : (hil == 10 || hil == 11) ? 2 : 1;
     uint16_t c[3];
+    if (g_appearance != MACHINE_APPEARANCE_BW) { /* the host's controls, or a Kaleidoscope theme's */
+        bool pressed = state == 2, disabled = state == 0;
+        if (kind == 0 && (native_draw_button(r, title, n, pressed, disabled) || theme_draw_button(r, title, n, pressed, disabled)))
+            return;
+        int top = r.top + (r.bottom - r.top - 12) / 2;
+        qrect box = { (int16_t)top, (int16_t)(r.left + 2), (int16_t)(top + 12), (int16_t)(r.left + 14) };
+        if (kind != 0) {
+            erase(r);
+            if (native_draw_check(box, kind == 2, cvalue(ch) != 0, pressed, disabled) ||
+                theme_draw_check(box, kind == 2, cvalue(ch) != 0, pressed, disabled)) {
+                text_rgb(ch, disabled ? 2 : 1, c);
+                ap_text_in((qrect){ r.top, (int16_t)(box.right + 5), r.bottom, r.right }, title, n, false, c);
+                return;
+            }
+        }
+    }
     if (kind == 0) {
         ap_push_button(r, state, a && a->is_default);
         text_rgb(ch, state == 0 ? 13 : state == 2 ? 14 : 12, c);

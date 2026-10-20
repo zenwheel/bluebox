@@ -139,7 +139,8 @@ void controls_forget_window(gaddr w)
     int i = win_index(w, false);
     if (i >= 0)
         wins[i].w = 0;
-    for (gaddr x = WindowRecord_controlList(w); x && rd32(x); x = ControlRecord_nextControl(cp(x))) {
+    int k = 0;
+    for (gaddr x = WindowRecord_controlList(w); x && rd32(x) && k < 4096; x = ControlRecord_nextControl(cp(x)), k++) {
         ctl_info *c = ctl_find(x);
         if (c) {
             free(c->ap);
