@@ -125,3 +125,27 @@ int16_t driver_call(gaddr pb, bool async, int kind)
         LOGF(LOG_TRAPS, "  %s csCode %d -> %d\n", d->name, (int16_t)rd16(pb + CntrlParam_csCode_off), r);
     return r;
 }
+
+/* DrvrInstall: a program's own driver gets a device control entry in the
+ * unit table, so GetDCtlEntry and programs walking the table find it.
+ * Its routines aren't called (the Device Manager answers only for ours),
+ * and a unit one of ours has keeps ours (the installation is accepted, as
+ * it was before there were entries). */
+int16_t driver_install(gaddr drvr, int16_t refnum)
+{
+    int16_t unit = (int16_t)(-1 - refnum);
+    gaddr table = rd32(LM_UTableBase);
+    if (refnum >= 0 || !table || unit >= (int16_t)rd16(LM_UnitNtryCnt))
+        return -21; /* badUnitErr */
+    if (driver_for(refnum))
+        return noErr;
+    gaddr h = tb_NewHandle(DCtlEntry_SIZEOF, true, true);
+    if (!h)
+        return memFullErr;
+    gaddr e = rd32(h);
+    wr32(e + DCtlEntry_dCtlDriver_off, drvr);
+    wr16(e + DCtlEntry_dCtlFlags_off, drvr ? rd16(drvr) : 0);
+    wr16(e + DCtlEntry_dCtlRefNum_off, (uint16_t)refnum);
+    wr32(table + 4 * (uint32_t)unit, h);
+    return noErr;
+}

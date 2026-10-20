@@ -2273,6 +2273,13 @@ static void ppcglue_InitDialogs(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetDialogFont(ppc_cpu *c)
+{
+    int16_t a_i = (int16_t)c->gpr[3];
+    tb_SetDialogFont(a_i);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParamText(ppc_cpu *c)
 {
     gaddr a_p0 = (gaddr)c->gpr[3];
@@ -2426,6 +2433,13 @@ static void ppcglue_CountDITL(ppc_cpu *c)
 {
     gaddr a_arg0 = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountDITL(a_arg0);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DiskEject(ppc_cpu *c)
+{
+    int16_t a_rn = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DiskEject(a_rn);
     c->pc = c->lr;
 }
 
@@ -2874,6 +2888,22 @@ static void ppcglue_SectionOptionsDialog(ppc_cpu *c)
 {
     gaddr a_reply = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SectionOptionsDialog(a_reply);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetFLock(ppc_cpu *c)
+{
+    gaddr a_filen = (gaddr)c->gpr[3];
+    int16_t a_vrn = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetFLock(a_filen, a_vrn);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RstFLock(ppc_cpu *c)
+{
+    gaddr a_filen = (gaddr)c->gpr[3];
+    int16_t a_vrn = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RstFLock(a_filen, a_vrn);
     c->pc = c->lr;
 }
 
@@ -8948,6 +8978,15 @@ static void ppcglue_CharToPixel(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_StripDiacritics(ppc_cpu *c)
+{
+    gaddr a_textp = (gaddr)c->gpr[3];
+    int16_t a_len = (int16_t)c->gpr[4];
+    int16_t a_script = (int16_t)c->gpr[5];
+    tb_StripDiacritics(a_textp, a_len, a_script);
+    c->pc = c->lr;
+}
+
 static void ppcglue_CharacterByteType(ppc_cpu *c)
 {
     gaddr a_textBuf = (gaddr)c->gpr[3];
@@ -10008,6 +10047,13 @@ static void ppcglue_TEScrapHandle(ppc_cpu *c)
 static void ppcglue_TEGetScrapLength(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)tb_TEGetScrapLength();
+    c->pc = c->lr;
+}
+
+static void ppcglue_TESetScrapLength(ppc_cpu *c)
+{
+    int32_t a_ln = (int32_t)c->gpr[3];
+    tb_TESetScrapLength(a_ln);
     c->pc = c->lr;
 }
 
@@ -24783,6 +24829,7 @@ const ppc_export ppc_exports[] = {
     {"DirectorUnknown3", ppcglue_DirectorUnknown3},
     {"DirectorUnknown4", ppcglue_DirectorUnknown4},
     {"DisableItem", ppcglue_DisableItem},
+    {"DiskEject", ppcglue_DiskEject},
     {"DisposeAllSprites", ppctrap_DisposeAllSprites},
     {"DisposeCCursor", ppcglue_DisposeCCursor},
     {"DisposeCIcon", ppcglue_DisposeCIcon},
@@ -26879,6 +26926,7 @@ const ppc_export ppc_exports[] = {
     {"RotateMatrix", ppcglue_RotateMatrix},
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
+    {"RstFLock", ppcglue_RstFLock},
     {"SFGetFile", ppcglue_SFGetFile},
     {"SFGetFilePreview", ppcglue_SFGetFilePreview},
     {"SFPGetFile", ppcglue_SFPGetFile},
@@ -26969,6 +27017,7 @@ const ppc_export ppc_exports[] = {
     {"SetDeviceAttribute", ppcglue_SetDeviceAttribute},
     {"SetDialogCancelItem", ppcglue_SetDialogCancelItem},
     {"SetDialogDefaultItem", ppcglue_SetDialogDefaultItem},
+    {"SetDialogFont", ppcglue_SetDialogFont},
     {"SetDialogItem", ppcglue_SetDialogItem},
     {"SetDialogItemText", ppcglue_SetDialogItemText},
     {"SetDialogTracksCursor", ppcglue_SetDialogTracksCursor},
@@ -26987,6 +27036,7 @@ const ppc_export ppc_exports[] = {
     {"SetEntryColor", ppcglue_SetEntryColor},
     {"SetEntryUsage", ppcglue_SetEntryUsage},
     {"SetEventMask", ppcglue_SetEventMask},
+    {"SetFLock", ppcglue_SetFLock},
     {"SetFScaleDisable", ppcglue_SetFScaleDisable},
     {"SetFontLock", ppcglue_SetFontLock},
     {"SetFractEnable", ppcglue_SetFractEnable},
@@ -27227,6 +27277,7 @@ const ppc_export ppc_exports[] = {
     {"StringToTime", ppctrap_StringToTime},
     {"StringWidth", ppcglue_StringWidth},
     {"StripAddress", ppcglue_StripAddress},
+    {"StripDiacritics", ppcglue_StripDiacritics},
     {"StuffHex", ppcglue_StuffHex},
     {"StyledLineBreak", ppcglue_StyledLineBreak},
     {"SubPt", ppcglue_SubPt},
@@ -27275,6 +27326,7 @@ const ppc_export ppc_exports[] = {
     {"TEScroll", ppcglue_TEScroll},
     {"TESelView", ppcglue_TESelView},
     {"TESetAlignment", ppcglue_TESetAlignment},
+    {"TESetScrapLength", ppcglue_TESetScrapLength},
     {"TESetSelect", ppcglue_TESetSelect},
     {"TESetStyle", ppcglue_TESetStyle},
     {"TESetStyleHandle", ppcglue_TESetStyleHandle},

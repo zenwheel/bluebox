@@ -3210,6 +3210,16 @@ static void glue_DisableItem(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DiskEject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_rn = (int16_t)cpu_pop16(c);
+    int16_t r = tb_DiskEject(a_rn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposeCCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12440,6 +12450,17 @@ static void glue_RsrcZoneInit(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RstFLock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_vrn = (int16_t)cpu_pop16(c);
+    gaddr a_filen = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RstFLock(a_filen, a_vrn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SFGetFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13302,6 +13323,15 @@ static void glue_SetDialogDefaultItem(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDialogFont(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_i = (int16_t)cpu_pop16(c);
+    tb_SetDialogFont(a_i);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDialogItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13484,6 +13514,17 @@ static void glue_SetEventMask(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t a_evmask = (int16_t)cpu_pop16(c);
     tb_SetEventMask(a_evmask);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetFLock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_vrn = (int16_t)cpu_pop16(c);
+    gaddr a_filen = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetFLock(a_filen, a_vrn);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -15036,6 +15077,17 @@ static void glue_StripAddress(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)r;
 }
 
+static void glue_StripDiacritics(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    int16_t a_len = (int16_t)cpu_pop16(c);
+    gaddr a_textp = (gaddr)cpu_pop32(c);
+    tb_StripDiacritics(a_textp, a_len, a_script);
+    cpu_push32(c, ret);
+}
+
 static void glue_StuffHex(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15509,6 +15561,15 @@ static void glue_TESetAlignment(cpu68k *c, uint16_t trapword)
     gaddr a_teh = (gaddr)cpu_pop32(c);
     int16_t a_j = (int16_t)cpu_pop16(c);
     tb_TESetAlignment(a_j, a_teh);
+    cpu_push32(c, ret);
+}
+
+static void glue_TESetScrapLength(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_ln = (int32_t)cpu_pop32(c);
+    tb_TESetScrapLength(a_ln);
     cpu_push32(c, ret);
 }
 

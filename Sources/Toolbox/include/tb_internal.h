@@ -205,11 +205,18 @@ void raw_RelString(cpu68k *c, uint16_t tw);
 void raw_UprString(cpu68k *c, uint16_t tw);
 void raw_LowerText(cpu68k *c, uint16_t tw);
 void raw_DrvrInstall(cpu68k *c, uint16_t tw);
+int16_t driver_install(gaddr drvr, int16_t refnum); /* drivers.c */
 void raw_ReadXPRam(cpu68k *c, uint16_t tw);
 void raw_WriteXPRam(cpu68k *c, uint16_t tw);
 void raw_InitZone(cpu68k *c, uint16_t tw);
 void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw);
+/* The Cursor Device Manager by selector, its arguments left to right (osutil.c). */
+int16_t cursor_device(uint16_t sel, const uint32_t *args);
+void cursor_devices_reset(void);
 void raw_SlotManager(cpu68k *c, uint16_t tw);
+/* The Slot Manager (slots.c): a selector on an SpBlock, as _SlotManager has them. */
+int16_t slot_manager(uint16_t sel, gaddr spb);
+void slots_reset(void);
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
 /* A MacRoman character's comparison key. */
 int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);
@@ -434,12 +441,18 @@ void crm_install(gaddr rec); /* CRMInstall: a device record queued, its ID given
 gaddr crm_search(gaddr req); /* CRMSearch: the next record of a type after an ID */
 uint32_t ctb_call(uint16_t selector, const uint32_t *args, int nargs);
 void ppc_glue_reset(void); /* ppc_glue.c */
+void ppc_libs_reset(void); /* ppc_libs.c */
+void sound_converters_reset(void); /* sndconvert.c */
+void carbon_reset(void); /* carbon.c */
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);
 bool rm_host_path(int16_t rn, char *out, size_t outsize);
 bool gestalt_exists(uint32_t selector);
 void gestalt_delete(uint32_t selector);
 void wm_hide_menu_bar(bool hide);
+bool wm_is_collapsed(gaddr w);
+bool wm_set_collapsed(gaddr w, bool on); /* false when the window can't collapse */
+uint32_t wm_window_features(gaddr w);
 bool cfm_launch(const char *app_path, char *err, size_t errlen);
 /* Load a PEF container in memory (an accelerated code resource's) once;
  * returns its main transition vector, or 0. */

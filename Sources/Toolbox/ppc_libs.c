@@ -528,14 +528,6 @@ static void s_sscanf(ppc_cpu *c)
     RETURN(done);
 }
 
-/* The cursor devices' calls: no devices besides the mouse. */
-static void g_CrsrDevNextDevice(ppc_cpu *c)
-{
-    if (R(0))
-        wr32(R(0), 0);
-    RETURN(0);
-}
-
 static uint32_t rand_state = 1;
 static void s_rand(ppc_cpu *c)
 {
@@ -930,11 +922,13 @@ static void g_Microseconds(ppc_cpu *c)
     }
     c->pc = c->lr;
 }
-/* ReadLocation(MachineLocation *): Greenwich, no daylight saving. */
+/* ReadLocation(MachineLocation *): WriteLocation's, or Greenwich with no
+ * daylight saving. */
+static uint8_t location[12];
 static void g_ReadLocation(ppc_cpu *c)
 {
     if (R(0))
-        gmemset(R(0), 0, 12);
+        gput(R(0), location, sizeof location);
     c->pc = c->lr;
 }
 /* Control/Status(refNum, csCode, csParamPtr) and KillIO(refNum): the
@@ -1505,13 +1499,6 @@ static void g_MIDIVersion(ppc_cpu *c)
 }
 /* No AppleTalk: the port isn't configured. */
 static void g_portNotCf(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
-/* FindServiceWindow(where, *window): no input method windows. */
-static void g_FindServiceWindow(ppc_cpu *c)
-{
-    if (R(1))
-        wr32(R(1), 0);
-    RETURN(0);
-}
 static void g_GetVideoDefault(ppc_cpu *c)
 {
     if (R(0))
@@ -1844,7 +1831,11 @@ static void dm_GetIndexedDisplayModeFromList(ppc_cpu *c)
     int len = snprintf(text, sizeof text, "%d x %d", w, h);
     wr8(name, (uint8_t)len);
     gput(name + 1, text, (uint32_t)len);
-    wr32(timing + 4, 0x3);      /* timingInfoAttributes: kModeValid, kModeSafe */
+    /* VDTimingInfoRec: the mode, the format ('decl'), and csTimingFlags
+     * kModeValid and kModeSafe (StarCraft's Storm keeps only valid modes). */
+    wr32(timing, 0x80 + index);
+    wr32(timing + 8, 0x6465636C);
+    wr32(timing + 16, 0x3);
     wr32(block, 3);             /* depthBlockCount */
     wr32(block + 4, infos);     /* depthVPBlock */
     for (int i = 0; i < 3; i++) {
@@ -1902,6 +1893,9 @@ static void g_InlineGetHandleSize(ppc_cpu *c) { RETURN(R(0) ? (uint32_t)tb_GetHa
 static void g_GZSaveHnd(ppc_cpu *c) { RETURN(rd32(LM_GZRootHnd)); }
 static void g_LMGetSysFontSize(ppc_cpu *c) { RETURN((int32_t)(int16_t)rd16(0x0BA8)); }
 static void g_LMSetSysFontSize(ppc_cpu *c) { wr16(0x0BA8, (uint16_t)R(0)); c->pc = c->lr; }
+/* HWCfgFlags: the low-memory word the definitions call SCSIFlags. */
+static void g_LMGetHWCfgFlags(ppc_cpu *c) { RETURN((int32_t)(int16_t)rd16(LM_SCSIFlags)); }
+static void g_LMSetHWCfgFlags(ppc_cpu *c) { wr16(LM_SCSIFlags, (uint16_t)R(0)); c->pc = c->lr; }
 static void g_LMGetGNEFilter(ppc_cpu *c) { RETURN(rd32(0x029A)); }
 static void g_LMSetGNEFilter(ppc_cpu *c) { wr32(0x029A, R(0)); c->pc = c->lr; }
 static void g_IUEqualPString(ppc_cpu *c) { g_IUEqualString(c); }
@@ -2104,7 +2098,583 @@ static void g_GetNodeAddress(ppc_cpu *c)
 static void g_IsMPPOpen(ppc_cpu *c) { RETURN(at_opened() ? 1 : 0); }
 static void g_MPPOpen(ppc_cpu *c) { RETURN((int32_t)at_open()); }
 
+/* ---------------------------------------------------------------------- */
+/* More InterfaceLib */
+
+/* The Slot Manager's calls on an SpBlock (slots.c). */
+#define SLOT_CALL(name, sel) static void g_##name(ppc_cpu *c) { RETURN((int32_t)slot_manager(sel, R(0))); }
+SLOT_CALL(SReadByte, 0x00) SLOT_CALL(SReadWord, 0x01) SLOT_CALL(SReadLong, 0x02) SLOT_CALL(SGetCString, 0x03)
+SLOT_CALL(SGetBlock, 0x05) SLOT_CALL(SFindStruct, 0x06) SLOT_CALL(SReadStruct, 0x07) SLOT_CALL(SGetSRsrc, 0x0B)
+SLOT_CALL(SGetTypeSRsrc, 0x0C) SLOT_CALL(SNextSRsrc, 0x14) SLOT_CALL(SNextTypeSRsrc, 0x15) SLOT_CALL(SRsrcInfo, 0x16)
+SLOT_CALL(SDisposePtr, 0x17) SLOT_CALL(SReadDrvrName, 0x19)
+#undef SLOT_CALL
+
+/* The Cursor Device Manager (osutil.c): the arguments as words, a word
+ * argument (2) sign-extended. */
+static void crsr_dev(ppc_cpu *c, uint16_t sel, const char *args)
+{
+    uint32_t v[4] = { 0 };
+    for (int i = 0; args[i] && i < 4; i++)
+        v[i] = args[i] == '2' ? (uint32_t)(int32_t)(int16_t)R(i) : R(i);
+    RETURN((int32_t)cursor_device(sel, v));
+}
+#define CRSR_CALL(name, sel, args) static void g_##name(ppc_cpu *c) { crsr_dev(c, sel, args); }
+CRSR_CALL(CrsrDevMove, 0x0, "444") CRSR_CALL(CrsrDevMoveTo, 0x1, "444") CRSR_CALL(CrsrDevFlush, 0x2, "4")
+CRSR_CALL(CrsrDevButtons, 0x3, "42") CRSR_CALL(CrsrDevButtonDown, 0x4, "4") CRSR_CALL(CrsrDevButtonUp, 0x5, "4")
+CRSR_CALL(CrsrDevButtonOp, 0x6, "4224") CRSR_CALL(CrsrDevSetButtons, 0x7, "42")
+CRSR_CALL(CrsrDevSetAcceleration, 0x8, "44") CRSR_CALL(CrsrDevDoubleTime, 0x9, "44")
+CRSR_CALL(CrsrDevUnitsPerInch, 0xA, "44") CRSR_CALL(CrsrDevNextDevice, 0xB, "4")
+CRSR_CALL(CrsrDevNewDevice, 0xC, "4") CRSR_CALL(CrsrDevDisposeDevice, 0xD, "4")
+#undef CRSR_CALL
+
+/* A universal procedure pointer from PowerPC code: a routine descriptor,
+ * or (from code that skipped NewRoutineDescriptor) a transition vector. */
+static uint32_t call_upp(gaddr upp, uint32_t procinfo, const uint32_t *args, int n)
+{
+    if (!upp)
+        return 0;
+    return mm_is_descriptor(upp) ? mm_call(upp, procinfo, args, n) : ppc_call(upp, args, n);
+}
+
+/* GetFormatOrder(ordering, firstFormat, lastFormat, lineRight, rlDirProc,
+ * dirParam): the style runs in display order.  rlDirProc (pascal Boolean
+ * (short run, void *dirParam)) says which runs go right to left; a line
+ * running left to right reverses each stretch of those, a right-to-left
+ * line reverses each stretch of the others and then the whole. */
+static void g_GetFormatOrder(ppc_cpu *c)
+{
+    gaddr order = R(0);
+    int first = (int16_t)R(1), last = (int16_t)R(2), n = last - first + 1;
+    bool line_right = (R(3) & 0xFF) != 0;
+    if (n <= 0 || n > 1024 || !order) {
+        c->pc = c->lr;
+        return;
+    }
+    int idx[1024];
+    bool rtl[1024];
+    for (int i = 0; i < n; i++) {
+        uint32_t args[2] = { (uint32_t)(first + i), R(5) };
+        idx[i] = first + i;
+        rtl[i] = R(4) ? (call_upp(R(4), 0x390, args, 2) & 0xFF) != 0 : false;
+    }
+    for (int i = 0; i < n;) {
+        int j = i;
+        while (j < n && rtl[j] == rtl[i])
+            j++;
+        if (rtl[i] != line_right)
+            for (int a = i, b = j - 1; a < b; a++, b--) {
+                int t = idx[a];
+                idx[a] = idx[b];
+                idx[b] = t;
+            }
+        i = j;
+    }
+    for (int i = 0; i < n; i++)
+        wr16(order + 2 * (uint32_t)i, (uint16_t)idx[line_right ? n - 1 - i : i]);
+    c->pc = c->lr;
+}
+
+/* Service windows: the Text Services Manager's floating windows for input
+ * methods.  There are no input methods, but a program can make them; they
+ * are windows in front of its others. */
+enum { MAX_SERVICE_WINDOWS = 16 };
+static gaddr service_windows[MAX_SERVICE_WINDOWS];
+
+static bool is_service_window(gaddr w)
+{
+    for (int i = 0; i < MAX_SERVICE_WINDOWS; i++)
+        if (w && service_windows[i] == w)
+            return true;
+    return false;
+}
+
+/* NewServiceWindow(wStorage, bounds, title, visible, theProc, behind,
+ * goAwayFlag, ts, *window) */
+static void g_NewServiceWindow(ppc_cpu *c)
+{
+    gaddr out = arg_word(c, 8);
+    int slot = -1;
+    for (int i = 0; i < MAX_SERVICE_WINDOWS && slot < 0; i++)
+        if (!service_windows[i])
+            slot = i;
+    if (out)
+        wr32(out, 0);
+    if (slot < 0) {
+        RETURN((int32_t)memFullErr);
+        return;
+    }
+    gaddr w = tb_NewCWindow(R(0), R(1), R(2), (int8_t)R(3), (int16_t)R(4), (gaddr)-1, (int8_t)R(6), (int32_t)R(7));
+    if (!w) {
+        RETURN((int32_t)memFullErr);
+        return;
+    }
+    service_windows[slot] = w;
+    if (out)
+        wr32(out, w);
+    RETURN(0);
+}
+
+static void g_CloseServiceWindow(ppc_cpu *c)
+{
+    for (int i = 0; i < MAX_SERVICE_WINDOWS; i++)
+        if (R(0) && service_windows[i] == R(0)) {
+            service_windows[i] = 0;
+            tb_DisposeWindow(R(0));
+            RETURN(0);
+            return;
+        }
+    RETURN((int32_t)paramErr);
+}
+
+/* GetFrontServiceWindow(*window): the frontmost of them, or nil. */
+static void g_GetFrontServiceWindow(ppc_cpu *c)
+{
+    gaddr w = rd32(LM_WindowList);
+    while (w && !is_service_window(w))
+        w = WindowRecord_nextWindow(w);
+    if (R(0))
+        wr32(R(0), w);
+    RETURN(0);
+}
+
+/* FindServiceWindow(where, *window): the part of a service window there,
+ * as FindWindow says it; inDesk when there is none. */
+static void g_FindServiceWindow(ppc_cpu *c)
+{
+    gaddr tmp = tb_NewPtr(4, false, true);
+    int16_t part = tmp ? tb_FindWindow(R(0), tmp) : 0;
+    gaddr w = tmp ? rd32(tmp) : 0;
+    if (tmp)
+        tb_DisposePtr(tmp);
+    if (!is_service_window(w))
+        part = 0, w = 0;
+    if (R(1))
+        wr32(R(1), w);
+    RETURN(part);
+}
+
+/* ValidDate(const LongDateRec *, flags, LongDateTime *newSecs): the first
+ * field (of those flags names, by mask bit) out of range, or -1
+ * (validDateFields) and the date's seconds.  smallDateBit (31) keeps the
+ * date within what the 32-bit Time global holds, 1904 to 2040. */
+static void g_ValidDate(ppc_cpu *c)
+{
+    gaddr d = R(0);
+    uint32_t flags = R(1);
+    int16_t f[11];
+    for (int i = 0; i < 11; i++)
+        f[i] = (int16_t)rd16(d + 2 * (uint32_t)i);
+    int y = f[1], m = f[2];
+    bool leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    static const int mdays[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    int dim = m >= 1 && m <= 12 ? mdays[m - 1] + (m == 2 && leap) : 31;
+    const int lo[11] = { 0, (flags >> 31) ? 1904 : -32767, 1, 1, 0, 0, 0, 1, 1, 1, 0 };
+    const int hi[11] = { 0, (flags >> 31) ? 2040 : 32767, 12, dim, 23, 59, 59, 7, leap ? 366 : 365, 53, 1 };
+    for (int i = 0; i < 11; i++)
+        if ((flags >> i) & 1 && (f[i] < lo[i] || f[i] > hi[i])) {
+            RETURN(i);
+            return;
+        }
+    if (R(2))
+        tb_LongDateToSeconds(d, R(2));
+    RETURN((uint32_t)-1);
+}
+
+/* IdleUpdate(): the Power Manager's idle timer starts again; Ticks. */
+static void g_IdleUpdate(ppc_cpu *c) { RETURN(rd32(LM_Ticks)); }
+
+/* FollowFinderAlias(fromFile, alias, logon, *target, *wasChanged) */
+static void g_FollowFinderAlias(ppc_cpu *c) { RETURN((int32_t)tb_ResolveAlias(R(0), R(1), R(3), R(4))); }
+
+/* DrvrInstall(drvrPtr, refNum) (drivers.c) */
+static void g_DrvrInstall(ppc_cpu *c) { RETURN((int32_t)driver_install(R(0), (int16_t)R(1))); }
+
+/* BuildBDS(buffPtr, bdsPtr, buffSize): BuildBDSBuffer's eight elements. */
+static void g_BuildBDS(ppc_cpu *c)
+{
+    c->gpr[6] = 8;
+    g_BuildBDSBuffer(c);
+}
+
+/* WriteLocation(MachineLocation *): kept for ReadLocation. */
+static void g_WriteLocation(ppc_cpu *c)
+{
+    if (R(0))
+        gget(location, R(0), sizeof location);
+    c->pc = c->lr;
+}
+
+/* IPCListPortsAsync(pb): IPCListPortsSync's answer, in ioResult and to
+ * the completion routine. */
+static void g_IPCListPortsAsync(ppc_cpu *c)
+{
+    gaddr pb = R(0);
+    int16_t r = -98;
+    if (pb) {
+        wr16(pb + IOParam_ioResult_off, (uint16_t)r);
+        if (rd32(pb + IOParam_ioCompletion_off))
+            io_complete_later(pb, r);
+    }
+    RETURN((int32_t)r);
+}
+
+/* SleepQInstall / SleepQRemove(SleepQRecPtr): the machine never sleeps,
+ * so the sleep queue's procedures are never called. */
+
+/* Anti-aliased text (Appearance's font smoothing): the setting is kept;
+ * QuickDraw here draws the fonts' bitmaps either way. */
+static bool aa_enabled;
+static int16_t aa_min_size = 12;
+static void g_SetAntiAliasedTextEnabled(ppc_cpu *c)
+{
+    aa_enabled = (R(0) & 0xFF) != 0;
+    aa_min_size = (int16_t)R(1);
+    RETURN(0);
+}
+static void g_IsAntiAliasedTextEnabled(ppc_cpu *c)
+{
+    if (R(0))
+        wr16(R(0), (uint16_t)aa_min_size);
+    RETURN(aa_enabled);
+}
+
+/* IsCmdChar(event, test): a key-down or auto-key with the Command key,
+ * whose key makes test with Shift up or down. */
+static void g_IsCmdChar(ppc_cpu *c)
+{
+    gaddr ev = R(0);
+    uint8_t want = (uint8_t)R(1);
+    int16_t what = ev ? (int16_t)rd16(ev) : 0;
+    uint16_t mods = ev ? rd16(ev + 14) : 0;
+    if ((what != 3 && what != 5) || !(mods & 0x0100)) {
+        RETURN(0);
+        return;
+    }
+    uint32_t msg = rd32(ev + 2);
+    if ((uint8_t)msg == want) {
+        RETURN(1);
+        return;
+    }
+    uint16_t key = (uint16_t)((msg >> 8) & 0x7F), hi = (uint16_t)((mods >> 8) & ~0x03); /* without Command and Shift */
+    for (int shift = 0; shift < 2; shift++)
+        if ((uint8_t)tb_KeyTranslate(0, (uint16_t)(key | (hi | (shift ? 2 : 0)) << 8), 0) == want) {
+            RETURN(1);
+            return;
+        }
+    RETURN(0);
+}
+
+/* getfnum(name, *num) and getfontname(num, name): C strings. */
+static void cs_getfnum(ppc_cpu *c) { with_pascals(c, "GetFNum", 1); }
+static void cs_getfontname(ppc_cpu *c) { with_pascal(c, "GetFontName", -1, 1); }
+
+/* AppleScriptLib: the Open Scripting Architecture's calls go to the
+ * scripting component instance they're given; with no AppleScript
+ * component there is none, and the Component Manager answers
+ * badComponentInstance. */
+static void os_OSALoad(ppc_cpu *c) { instance_call(c, 1, "444"); }
+static void os_OSAExecute(ppc_cpu *c) { instance_call(c, 3, "4444"); }
+static void os_OSADispose(ppc_cpu *c) { instance_call(c, 6, "4"); }
+
+/* The low-level I/O calls, MPW's: descriptors 0 to 2 are the console (what
+ * is written goes to the log, reading finds nothing), the others files
+ * open() opened through the File Manager.  Errors are -1 with errno set
+ * (MPW's numbers are Unix's). */
+enum { MPW_ENOENT = 2, MPW_EIO = 5, MPW_EBADF = 9, MPW_EACCES = 13, MPW_EEXIST = 17, MPW_EINVAL = 22,
+       MPW_EMFILE = 24, MPW_ENOSPC = 28, MPW_ESPIPE = 29 };
+/* MPW's open flags */
+enum { O_RDWR_MPW = 0x2, O_WRONLY_MPW = 0x1, O_APPEND_MPW = 0x8, O_RSRC_MPW = 0x10, O_CREAT_MPW = 0x100,
+       O_TRUNC_MPW = 0x200, O_EXCL_MPW = 0x400 };
+enum { MAX_FDS = 32 };
+static struct {
+    bool open;
+    int16_t refnum; /* 0 for the console */
+    bool append;
+} fds[MAX_FDS];
+static gaddr errno_block;
+
+static gaddr errno_addr(void)
+{
+    if (!errno_block)
+        errno_block = tb_NewPtr(4, true, true);
+    return errno_block;
+}
+
+static void fail(ppc_cpu *c, int e)
+{
+    if (errno_addr())
+        wr32(errno_addr(), (uint32_t)e);
+    RETURN((uint32_t)-1);
+}
+
+static int errno_for(int16_t err)
+{
+    switch (err) {
+    case -43: case -35: case -120: return MPW_ENOENT;          /* fnfErr, nsvErr, dirNFErr */
+    case -44: case -45: case -46: case -54: case -61: return MPW_EACCES; /* wPrErr, fLckdErr, vLckdErr, permErr, wrPermErr */
+    case -48: return MPW_EEXIST;                               /* dupFNErr */
+    case -42: return MPW_EMFILE;                               /* tmfoErr */
+    case -34: return MPW_ENOSPC;                               /* dskFulErr */
+    default: return MPW_EIO;
+    }
+}
+
+static int fd_of(int32_t fd) { return fd >= 0 && fd < MAX_FDS && (fd < 3 || fds[fd].open) ? fd : -1; }
+
+static gaddr io_pb(int16_t refnum)
+{
+    gaddr pb = tb_NewPtr(HFileParam_SIZEOF, false, true);
+    if (pb)
+        wr16(pb + IOParam_ioRefNum_off, (uint16_t)refnum);
+    return pb;
+}
+
+/* open(path, oflag): a Mac path (colons; relative ones from the default
+ * directory). */
+static void s_open(ppc_cpu *c)
+{
+    uint32_t flags = R(1);
+    int fd = 3;
+    while (fd < MAX_FDS && fds[fd].open)
+        fd++;
+    if (fd >= MAX_FDS) {
+        fail(c, MPW_EMFILE);
+        return;
+    }
+    if (gstrlen(R(0)) > 255) {
+        fail(c, MPW_ENOENT);
+        return;
+    }
+    gaddr name = temp_pstring(R(0)), pb = io_pb(0);
+    wr32(pb + IOParam_ioNamePtr_off, name);
+    int16_t err = 0;
+    if (flags & O_CREAT_MPW) {
+        err = tb_PBHCreate(pb, false);
+        if (err == -48 && !(flags & O_EXCL_MPW))
+            err = 0;
+    }
+    if (!err) {
+        uint8_t perm = (flags & O_RDWR_MPW) ? 3 : (flags & O_WRONLY_MPW) ? 2 : 1;
+        wr8(pb + IOParam_ioPermssn_off, perm);
+        wr32(pb + HFileParam_ioDirID_off, 0);
+        err = (flags & O_RSRC_MPW) ? tb_PBHOpenRF(pb, false) : tb_PBHOpenDF(pb, false);
+    }
+    int16_t ref = (int16_t)rd16(pb + IOParam_ioRefNum_off);
+    if (!err && (flags & O_TRUNC_MPW)) {
+        wr32(pb + IOParam_ioMisc_off, 0);
+        err = tb_PBSetEOF(pb, false);
+        if (err) {
+            tb_PBClose(pb, false);
+        }
+    }
+    tb_DisposePtr(pb);
+    tb_DisposePtr(name);
+    if (err) {
+        fail(c, errno_for(err));
+        return;
+    }
+    fds[fd].open = true;
+    fds[fd].refnum = ref;
+    fds[fd].append = (flags & O_APPEND_MPW) != 0;
+    RETURN(fd);
+}
+
+/* read / write(fd, buf, count): the count done. */
+static void read_write(ppc_cpu *c, bool write)
+{
+    int fd = fd_of((int32_t)R(0));
+    if (fd < 0) {
+        fail(c, MPW_EBADF);
+        return;
+    }
+    if (fd < 3) {
+        if (write && R(2)) {
+            uint32_t n = R(2) < 4096 ? R(2) : 4096;
+            char buf[4097];
+            gget(buf, R(1), n);
+            buf[n] = 0;
+            LOGF(LOG_UNIMPL, "%s: %s%s", fd == 2 ? "stderr" : "stdout", buf, n && buf[n - 1] == '\n' ? "" : "\n");
+        }
+        RETURN(write ? R(2) : 0);
+        return;
+    }
+    gaddr pb = io_pb(fds[fd].refnum);
+    if (write && fds[fd].append) {
+        wr16(pb + IOParam_ioPosMode_off, 2); /* fsFromLEOF */
+        wr32(pb + IOParam_ioPosOffset_off, 0);
+        tb_PBSetFPos(pb, false);
+    }
+    wr32(pb + IOParam_ioBuffer_off, R(1));
+    wr32(pb + IOParam_ioReqCount_off, R(2));
+    wr16(pb + IOParam_ioPosMode_off, 0); /* fsAtMark */
+    int16_t err = write ? tb_PBWrite(pb, false) : tb_PBRead(pb, false);
+    uint32_t done = rd32(pb + IOParam_ioActCount_off);
+    tb_DisposePtr(pb);
+    if (err && !(err == -39 && !write)) /* eofErr: what there was */
+        fail(c, errno_for(err));
+    else
+        RETURN(done);
+}
+static void s_read(ppc_cpu *c) { read_write(c, false); }
+static void s_write(ppc_cpu *c) { read_write(c, true); }
+
+/* lseek(fd, offset, whence): SEEK_SET, SEEK_CUR, SEEK_END; the new
+ * position.  A position past the end makes the file that long. */
+static void s_lseek(ppc_cpu *c)
+{
+    int fd = fd_of((int32_t)R(0));
+    int32_t off = (int32_t)R(1), whence = (int32_t)R(2);
+    if (fd < 0 || fd < 3) {
+        fail(c, fd < 0 ? MPW_EBADF : MPW_ESPIPE);
+        return;
+    }
+    gaddr pb = io_pb(fds[fd].refnum);
+    int16_t err = tb_PBGetEOF(pb, false);
+    int64_t eof = rd32(pb + IOParam_ioMisc_off), at = 0;
+    if (!err)
+        err = tb_PBGetFPos(pb, false);
+    int64_t mark = rd32(pb + IOParam_ioPosOffset_off);
+    at = whence == 0 ? off : whence == 1 ? mark + off : whence == 2 ? eof + off : -1;
+    if (!err && (at < 0 || at > 0x7FFFFFFF)) {
+        tb_DisposePtr(pb);
+        fail(c, MPW_EINVAL);
+        return;
+    }
+    if (!err && at > eof) {
+        wr32(pb + IOParam_ioMisc_off, (uint32_t)at);
+        err = tb_PBSetEOF(pb, false);
+    }
+    if (!err) {
+        wr16(pb + IOParam_ioPosMode_off, 1); /* fsFromStart */
+        wr32(pb + IOParam_ioPosOffset_off, (uint32_t)at);
+        err = tb_PBSetFPos(pb, false);
+    }
+    tb_DisposePtr(pb);
+    if (err)
+        fail(c, errno_for(err));
+    else
+        RETURN((uint32_t)at);
+}
+
+static void s_close(ppc_cpu *c)
+{
+    int fd = fd_of((int32_t)R(0));
+    if (fd < 0) {
+        fail(c, MPW_EBADF);
+        return;
+    }
+    int16_t err = 0;
+    if (fd >= 3) {
+        gaddr pb = io_pb(fds[fd].refnum);
+        err = tb_PBClose(pb, false);
+        tb_DisposePtr(pb);
+        fds[fd].open = false;
+    }
+    if (err)
+        fail(c, errno_for(err));
+    else
+        RETURN(0);
+}
+
+/* TrapAvailable(trap): its address isn't _Unimplemented's. */
+static void s_TrapAvailable(ppc_cpu *c)
+{
+    uint16_t t = (uint16_t)R(0);
+    bool tool = (t & 0x0800) != 0;
+    RETURN(trap_address(t, tool) != trap_address(0xA89F, true));
+}
+
+/* MakeResolvedFSSpec(vRefNum, dirID, name, *spec, *isFolder, *hadAlias,
+ * *leafIsAlias): FSMakeFSSpec, then any alias at the end followed. */
+static void s_MakeResolvedFSSpec(ppc_cpu *c)
+{
+    gaddr spec = R(3);
+    int16_t err = tb_FSMakeFSSpec((int16_t)R(0), (int32_t)R(1), R(2), spec);
+    gaddr flags = tb_NewPtr(2, false, true);
+    if (!err && flags)
+        err = tb_ResolveAliasFile(spec, 1, flags, flags + 1);
+    if (R(4))
+        wr8(R(4), err || !flags ? 0 : rd8(flags));
+    if (R(5))
+        wr8(R(5), err || !flags ? 0 : rd8(flags + 1));
+    if (R(6))
+        wr8(R(6), err || !flags ? 0 : rd8(flags + 1));
+    if (flags)
+        tb_DisposePtr(flags);
+    RETURN((int32_t)err);
+}
+
+/* __assertprint(...): MPW's assert, failing: the message to the log. */
+static void s_assertprint(ppc_cpu *c)
+{
+    char msg[256] = "";
+    size_t n = 0;
+    for (int i = 0; i < 3 && n < sizeof msg - 1; i++) {
+        uint32_t v = R(i);
+        if (v >= 0x1000 && v < 0x40000000) { /* a string */
+            for (uint32_t k = 0; k < 120 && rd8(v + k) && n < sizeof msg - 2; k++)
+                msg[n++] = (char)rd8(v + k);
+            msg[n++] = ' ';
+        } else {
+            n += (size_t)snprintf(msg + n, sizeof msg - n, "%d ", (int32_t)v);
+        }
+    }
+    msg[n < sizeof msg ? n : sizeof msg - 1] = 0;
+    LOGF(LOG_UNIMPL, "assertion failed: %s\n", msg);
+    c->pc = c->lr;
+}
+
+/* A new run: the guest blocks went with the old heap. */
+void ppc_libs_reset(void)
+{
+    memset(service_windows, 0, sizeof service_windows);
+    memset(location, 0, sizeof location);
+    memset(fds, 0, sizeof fds);
+    errno_block = 0;
+    aa_enabled = false;
+    aa_min_size = 12;
+}
+
 const ppc_export lib_exports[] = {
+    /* Slot Manager */
+    { "SReadByte", g_SReadByte }, { "SReadWord", g_SReadWord }, { "SReadLong", g_SReadLong },
+    { "SGetCString", g_SGetCString }, { "SGetBlock", g_SGetBlock }, { "SFindStruct", g_SFindStruct },
+    { "SReadStruct", g_SReadStruct }, { "SGetSRsrc", g_SGetSRsrc }, { "SGetTypeSRsrc", g_SGetTypeSRsrc },
+    { "SNextSRsrc", g_SNextSRsrc }, { "SNextTypeSRsrc", g_SNextTypeSRsrc }, { "SRsrcInfo", g_SRsrcInfo },
+    { "SDisposePtr", g_SDisposePtr }, { "SReadDrvrName", g_SReadDrvrName },
+    /* Cursor Device Manager, by both names */
+    { "CrsrDevMove", g_CrsrDevMove }, { "CrsrDevMoveTo", g_CrsrDevMoveTo }, { "CrsrDevFlush", g_CrsrDevFlush },
+    { "CrsrDevButtons", g_CrsrDevButtons }, { "CrsrDevButtonDown", g_CrsrDevButtonDown },
+    { "CrsrDevButtonUp", g_CrsrDevButtonUp }, { "CrsrDevButtonOp", g_CrsrDevButtonOp },
+    { "CrsrDevSetButtons", g_CrsrDevSetButtons }, { "CrsrDevSetAcceleration", g_CrsrDevSetAcceleration },
+    { "CrsrDevDoubleTime", g_CrsrDevDoubleTime }, { "CrsrDevUnitsPerInch", g_CrsrDevUnitsPerInch },
+    { "CrsrDevNextDevice", g_CrsrDevNextDevice }, { "CrsrDevNewDevice", g_CrsrDevNewDevice },
+    { "CrsrDevDisposeDevice", g_CrsrDevDisposeDevice },
+    { "CursorDeviceMove", g_CrsrDevMove }, { "CursorDeviceMoveTo", g_CrsrDevMoveTo },
+    { "CursorDeviceFlush", g_CrsrDevFlush }, { "CursorDeviceButtons", g_CrsrDevButtons },
+    { "CursorDeviceButtonDown", g_CrsrDevButtonDown }, { "CursorDeviceButtonUp", g_CrsrDevButtonUp },
+    { "CursorDeviceButtonOp", g_CrsrDevButtonOp }, { "CursorDeviceSetButtons", g_CrsrDevSetButtons },
+    { "CursorDeviceSetAcceleration", g_CrsrDevSetAcceleration }, { "CursorDeviceDoubleTime", g_CrsrDevDoubleTime },
+    { "CursorDeviceUnitsPerInch", g_CrsrDevUnitsPerInch }, { "CursorDeviceNextDevice", g_CrsrDevNextDevice },
+    { "CursorDeviceNewDevice", g_CrsrDevNewDevice }, { "CursorDeviceDisposeDevice", g_CrsrDevDisposeDevice },
+    /* Assorted InterfaceLib */
+    { "GetFormatOrder", g_GetFormatOrder }, { "NewServiceWindow", g_NewServiceWindow },
+    { "CloseServiceWindow", g_CloseServiceWindow }, { "GetFrontServiceWindow", g_GetFrontServiceWindow },
+    { "ValidDate", g_ValidDate }, { "IdleUpdate", g_IdleUpdate }, { "FollowFinderAlias", g_FollowFinderAlias },
+    { "DrvrInstall", g_DrvrInstall }, { "BuildBDS", g_BuildBDS }, { "WriteLocation", g_WriteLocation },
+    { "LwrText", g_LowerText }, { "IPCListPortsAsync", g_IPCListPortsAsync },
+    { "DebuggerLockMemory", g_noErr }, { "DebuggerUnlockMemory", g_noErr },
+    { "SleepQInstall", g_nothing }, { "SleepQRemove", g_nothing },
+    { "SetAntiAliasedTextEnabled", g_SetAntiAliasedTextEnabled },
+    { "IsAntiAliasedTextEnabled", g_IsAntiAliasedTextEnabled }, { "IsCmdChar", g_IsCmdChar },
+    { "getfnum", cs_getfnum }, { "getfontname", cs_getfontname },
+    { "LMGetHWCfgFlags", g_LMGetHWCfgFlags }, { "LMSetHWCfgFlags", g_LMSetHWCfgFlags },
+    /* StdCLib's I/O */
+    { "open", s_open }, { "read", s_read }, { "write", s_write }, { "lseek", s_lseek }, { "close", s_close },
+    { "TrapAvailable", s_TrapAvailable }, { "MakeResolvedFSSpec", s_MakeResolvedFSSpec },
+    { "__assertprint", s_assertprint },
+    /* AppleScriptLib */
+    { "OSALoad", os_OSALoad }, { "OSAExecute", os_OSAExecute }, { "OSADispose", os_OSADispose },
     /* Wide arithmetic */
     { "WideAdd", w_WideAdd }, { "WideBitShift", w_WideBitShift }, { "WideCompare", w_WideCompare },
     { "WideDivide", w_WideDivide }, { "WideMultiply", w_WideMultiply }, { "WideNegate", w_WideNegate },
@@ -2293,8 +2863,7 @@ const ppc_export lib_exports[] = {
     { "isalnum", s_isalnum }, { "isalpha", s_isalpha }, { "isdigit", s_isdigit }, { "isxdigit", s_isxdigit },
     { "isspace", s_isspace }, { "isupper", s_isupper }, { "islower", s_islower }, { "ispunct", s_ispunct },
     { "isprint", s_isprint }, { "isgraph", s_isgraph }, { "iscntrl", s_iscntrl }, { "isascii", s_isascii },
-    { "sscanf", s_sscanf }, { "CrsrDevNextDevice", g_CrsrDevNextDevice }, { "CrsrDevMoveTo", g_noErr },
-    { "CrsrDevMove", g_noErr }, { "EnableIdle", g_nothing }, { "DisableIdle", g_nothing },
+    { "sscanf", s_sscanf }, { "EnableIdle", g_nothing }, { "DisableIdle", g_nothing },
     { "abs", s_abs }, { "atof", s_atof }, { "atoi", s_atoi }, { "atol", s_atoi }, { "calloc", s_calloc },
     { "clock", s_clock }, { "exit", s_exit }, { "abort", s_exit }, { "_exit", s_exit }, { "fflush", s_fflush },
     { "fprintf", s_fprintf }, { "free", s_free }, { "getenv", s_getenv }, { "labs", s_abs },
@@ -2390,8 +2959,10 @@ gaddr ppc_data_export(const char *name)
         wr_double(p, M_PI);
         return p;
     }
+    if (!strcmp(name, "errno"))
+        return errno_addr();
     static const char *const zeroed[] = { "_IntEnv", "_exit_status", "__target_for_exit", "__NubAt3",
-                                          "__C_phase", "_iob", "StandAlone", "errno", "__huge_val" };
+                                          "__C_phase", "_iob", "StandAlone", "__huge_val" };
     for (unsigned i = 0; i < sizeof zeroed / sizeof zeroed[0]; i++)
         if (!strcmp(name, zeroed[i]))
             return tb_NewPtr(1024, true, true);

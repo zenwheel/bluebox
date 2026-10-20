@@ -134,6 +134,12 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < isp_export_count; i++)
         if (!strcmp(isp_exports[i].name, name))
             return isp_exports[i].fn;
+    for (unsigned i = 0; i < carbon_export_count; i++)
+        if (!strcmp(carbon_exports[i].name, name))
+            return carbon_exports[i].fn;
+    for (unsigned i = 0; i < snd_export_count; i++)
+        if (!strcmp(snd_exports[i].name, name))
+            return snd_exports[i].fn;
     for (unsigned i = 0; i < dsp_export_count; i++)
         if (!strcmp(dsp_exports[i].name, name))
             return dsp_exports[i].fn;
@@ -419,6 +425,9 @@ typedef struct {
     bool native;         /* a library we provide (InterfaceLib ...): no PEF */
     gaddr memory;        /* a code resource's container, prepared from memory */
     bool loading;
+    gaddr code, data;    /* its first code and data sections */
+    uint32_t code_size, data_size;
+    gaddr container;     /* the container in guest memory, when it has exception tables */
 } fragment;
 
 #define MAX_FRAGMENTS 64
@@ -671,6 +680,20 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
         x->addr = addr;
         x->cls = (uint8_t)(cn >> 24) & 0x0F;
     }
+    for (int i = ninst - 1; i >= 0; i--) {
+        if (sections[i].kind == kCode)
+            f->code = sections[i].base, f->code_size = sections[i].size;
+        else if (sections[i].base && sections[i].kind != kConstant)
+            f->data = sections[i].base, f->data_size = sections[i].size;
+    }
+    /* C++ exception handling (MrCExceptionsLib) reads the exception
+     * section from the container itself (FragFindOwnerOfPC). */
+    f->container = 0;
+    for (int i = 0; i < nsect; i++)
+        if (pef[40 + i * 28 + 24] == kException && (f->container = tb_NewPtr((int32_t)len, false, false)) != 0) {
+            gput(f->container, pef, (uint32_t)len);
+            break;
+        }
     f->main_tv = main_sect >= 0 && main_sect < ninst ? sections[main_sect].base + main_off : 0;
     f->init_tv = init_sect >= 0 && init_sect < ninst ? sections[init_sect].base + init_off : 0;
     f->term_tv = term_sect >= 0 && term_sect < ninst ? sections[term_sect].base + term_off : 0;
@@ -1311,6 +1334,34 @@ static void ppc_GetIndSymbol(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* FragFindOwnerOfPC(pc, *info) (PrivateInterfaceLib, undocumented): the
+ * fragment whose code holds pc.  MrCExceptionsLib reads the container at
+ * 0 (its section headers lead to the exception tables) and the code
+ * section and its size at 16 and 20; what lies between is our guess (the
+ * container's length, the data section and its size). */
+static void ppc_FragFindOwnerOfPC(ppc_cpu *c)
+{
+    gaddr pc = c->gpr[3], info = c->gpr[4];
+    c->pc = c->lr;
+    for (int i = 0; i < nfrags; i++) {
+        const fragment *f = &frags[i];
+        if (!f->code || pc < f->code || pc - f->code >= f->code_size)
+            continue;
+        if (info) {
+            gaddr container = f->memory ? f->memory : f->container;
+            wr32(info, container);
+            wr32(info + 4, container ? f->length : 0);
+            wr32(info + 8, f->data);
+            wr32(info + 12, f->data_size);
+            wr32(info + 16, f->code);
+            wr32(info + 20, f->code_size);
+        }
+        c->gpr[3] = 0;
+        return;
+    }
+    c->gpr[3] = (uint32_t)(int32_t)paramErr;
+}
+
 /* CloseConnection(*connID): the fragment stays. */
 static void ppc_CloseConnection(ppc_cpu *c)
 {
@@ -1322,6 +1373,7 @@ const ppc_export cfm_exports[] = {
     { "CloseConnection", ppc_CloseConnection },
     { "CountSymbols", ppc_CountSymbols },
     { "FindSymbol", ppc_FindSymbol },
+    { "FragFindOwnerOfPC", ppc_FragFindOwnerOfPC },
     { "GetDiskFragment", ppc_GetDiskFragment },
     { "GetIndSymbol", ppc_GetIndSymbol },
     { "GetMemFragment", ppc_GetMemFragment },
