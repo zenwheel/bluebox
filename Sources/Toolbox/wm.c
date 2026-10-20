@@ -158,6 +158,56 @@ static bool is_dialog_variant(int var) { return var == 1 || var == 2 || var == 3
 static bool has_zoom(int var) { return var == 8 || var == 12; }
 static bool has_grow(int var) { return var == 0 || var == 8; }
 
+/* Zoom states: as the standard WDEF did, a zoomable window's dataHandle
+ * holds a WStateData, userState then stdState (global content
+ * rectangles), made at wNew; programs read and set them (Shards opens its
+ * puzzle window at another window's userState). */
+static gaddr zoom_state(gaddr w)
+{
+    gaddr h = WindowRecord_dataHandle(w);
+    return h && rd32(h) && tb_GetHandleSize(h) >= 16 ? h : 0;
+}
+
+/* The standard state: the screen below the menu bar, room left for the
+ * title bar, inset a little. */
+static qrect std_state(void)
+{
+    int16_t top = (int16_t)(rd16(LM_MBarHeight) + TITLE_HEIGHT + 4);
+    return (qrect){ top, 4, (int16_t)(g_screen_height - 6), (int16_t)(g_screen_width - 6) };
+}
+
+static void wdef_new(gaddr w, int var)
+{
+    if (!has_zoom(var) || WindowRecord_dataHandle(w))
+        return;
+    gaddr h = tb_NewHandle(16, false, true);
+    if (!h)
+        return;
+    qrect_put(rd32(h), global_content(w));
+    qrect_put(rd32(h) + 8, std_state());
+    WindowRecord_set_dataHandle(w, h);
+}
+
+static void wdef_dispose(gaddr w, int var)
+{
+    if (has_zoom(var) && WindowRecord_dataHandle(w)) {
+        tb_DisposeHandle(WindowRecord_dataHandle(w));
+        WindowRecord_set_dataHandle(w, 0);
+    }
+}
+
+static bool rect_eq(qrect a, qrect b)
+{
+    return a.top == b.top && a.left == b.left && a.bottom == b.bottom && a.right == b.right;
+}
+
+/* The zoom box's part: zoom in from the standard state, out otherwise. */
+static int zoom_hit(gaddr w)
+{
+    gaddr z = zoom_state(w);
+    return z && rect_eq(global_content(w), qrect_get(rd32(z) + 8)) ? wInZoomIn : wInZoomOut;
+}
+
 /* The native appearance: document windows' frames are the host's. */
 static bool native_frame(int var)
 {
@@ -202,7 +252,7 @@ static int16_t take_action(gaddr wpp)
         wr32(wpp, pending.w);
         switch (pending.action) {
         case MACHINE_ACTION_CLOSE: part = 6; break;   /* inGoAway */
-        case MACHINE_ACTION_ZOOM: part = 8; break;    /* inZoomOut */
+        case MACHINE_ACTION_ZOOM: part = zoom_hit(pending.w) == wInZoomIn ? 7 : 8; break; /* inZoomIn, inZoomOut */
         case MACHINE_ACTION_MOVE: part = 4; break;    /* inDrag */
         case MACHINE_ACTION_RESIZE: part = 5; break;  /* inGrow */
         default: pending.taken = false; break;
@@ -437,7 +487,7 @@ static int32_t wdef_hit(gaddr w, int var, uint32_t pt)
         if (part == 1 && hil && WindowRecord_goAwayFlag(w))
             return wInGoAway;
         if (part == 2 && hil && has_zoom(var))
-            return wInZoomIn;
+            return zoom_hit(w);
         if (part == 3 && doc_variant(var))
             return wInCollapseBox;
         if (part == 0)
@@ -453,7 +503,7 @@ static int32_t wdef_hit(gaddr w, int var, uint32_t pt)
             if (WindowRecord_goAwayFlag(w) && h >= t.left + 8 && h < t.left + 19 && v >= t.top + 3 && v < t.top + 14)
                 return wInGoAway;
             if (has_zoom(var) && h >= t.right - 20 && h < t.right - 9 && v >= t.top + 3 && v < t.top + 14)
-                return wInZoomIn;
+                return zoom_hit(w);
         }
         return wInDrag;
     }
@@ -498,6 +548,8 @@ void wdef0_native(cpu68k *c, uint16_t tw)
     case wDraw: wdef_draw(w, var, param); break;
     case wHit: result = wdef_hit(w, var, (uint32_t)param); break;
     case wCalcRgns: wdef_calc(w, var); break;
+    case wNew: wdef_new(w, var); break;
+    case wDispose: wdef_dispose(w, var); break;
     case wDrawGIcon: wdef_grow_icon(w, var); break;
     default: break;
     }
@@ -1932,16 +1984,29 @@ int8_t tb_TrackBox(gaddr wp, uint32_t pt, int16_t part)
 
 void tb_ZoomWindow(gaddr wp, int16_t part, int8_t front)
 {
-    /* Toggle between the current size and the screen (standard state). */
-    qrect c = global_content(wp);
-    int16_t top = (int16_t)(rd16(LM_MBarHeight) + TITLE_HEIGHT + 4);
-    if (c.left == 4 && c.top == top) {
-        tb_MoveWindow(wp, 40, (int16_t)(top + 20), front);
-        tb_SizeWindow(wp, (int16_t)(g_screen_width / 2), (int16_t)(g_screen_height / 2), 1);
+    /* As the Window Manager did, with the WStateData in the dataHandle:
+     * zooming out keeps the current place as the user state and goes to
+     * the standard state; zooming in goes back to the user state. */
+    qrect c = global_content(wp), to;
+    gaddr z = zoom_state(wp);
+    if (z) {
+        if (part == inZoomOut) {
+            qrect_put(rd32(z), c);
+            to = qrect_get(rd32(z) + 8);
+        } else {
+            to = qrect_get(rd32(z));
+        }
     } else {
-        tb_MoveWindow(wp, 4, top, front);
-        tb_SizeWindow(wp, (int16_t)(g_screen_width - 8 - 2), (int16_t)(g_screen_height - top - 6), 1);
+        /* No states (a definition of the program's own that keeps none):
+         * toggle between the current size and the screen. */
+        to = std_state();
+        if (rect_eq(c, to)) {
+            int16_t top = (int16_t)(to.top + 20);
+            to = (qrect){ top, 40, (int16_t)(top + g_screen_height / 2), (int16_t)(40 + g_screen_width / 2) };
+        }
     }
+    tb_MoveWindow(wp, to.left, to.top, front);
+    tb_SizeWindow(wp, (int16_t)(to.right - to.left), (int16_t)(to.bottom - to.top), 1);
 }
 
 /* ---------------------------------------------------------------------- */

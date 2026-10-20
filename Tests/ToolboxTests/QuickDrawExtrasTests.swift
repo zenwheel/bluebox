@@ -370,6 +370,29 @@ extension BlueBox {
             tb_DisposeWindow(w)
         }
 
+        /// A zoomable window's dataHandle holds its user and standard states
+        /// (Shards opens its puzzle window at another window's user state);
+        /// ZoomWindow goes between them, keeping where the window was.
+        @Test func zoomStatesAreInTheDataHandle() {
+            launchTestApp()
+            _ = initToolbox()
+            let w = tb_NewCWindow(0, rect(100, 100, 200, 300), 0, 1, 8, 0xFFFF_FFFF, 1, 0) // zoomDocProc
+            let state = WindowRecord_dataHandle(w)
+            func content() -> [Int] { bbox(WindowRecord_contRgn(w)) }
+            func get(_ off: UInt32) -> [Int] { (0..<4).map { Int(Int16(bitPattern: rd16(rd32(state) + off + UInt32($0 * 2)))) } }
+            #expect(state != 0 && get(0) == [100, 100, 200, 300])
+            let std = get(8)
+            #expect(std[0] > 20 && std[2] > 300)
+            #expect(find(280, 90) == 8)      // inZoomOut
+            tb_MoveWindow(w, 120, 140, 0)
+            tb_ZoomWindow(w, 8, 0)
+            #expect(content() == std && get(0) == [140, 120, 240, 320])
+            #expect(find(std[3] - 20, std[0] - 10) == 7) // inZoomIn
+            tb_ZoomWindow(w, 7, 0)
+            #expect(content() == [140, 120, 240, 320])
+            tb_DisposeWindow(w)
+        }
+
         /// Two clicks in a title bar without moving it collapse the window to
         /// its title bar (WindowShade), and two more expand it.
         @Test func doubleClickingTheTitleBarCollapses() {
