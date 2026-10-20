@@ -262,6 +262,7 @@ void time_pump(void)
     opentransport_poll(); /* Open Transport's notifiers, at deferred task time */
     mactcp_poll();        /* MacTCP's calls in progress and its notification routines */
     serial_poll();        /* serial reads waiting for their bytes */
+    ctb_poll();           /* Communications Toolbox connections and their completion routines */
     appletalk_poll();     /* datagrams for socket listeners, NBP's answers */
     adb_pump();
     uint64_t t = now();

@@ -44,6 +44,10 @@ void inputsprocket_reset(void);
 extern const ppc_export ot_exports[];
 extern const unsigned ot_export_count;
 void ot_unsupported(ppc_cpu *c); /* the rest of Open Transport: kOTNotSupportedErr */
+/* The Communications Toolbox (ctb.c); names of routines that are 68k only
+ * are empty. */
+extern const ppc_export ctb_exports[];
+extern const unsigned ctb_export_count;
 /* Mixed Mode (mixedmode.c). */
 extern const ppc_export mm_exports[];
 extern const unsigned mm_export_count;

@@ -285,6 +285,7 @@ bool machine_boot(bool census)
     opentransport_reset();
     drivers_reset();
     mactcp_reset();
+    ctb_reset(); /* the CRM's queue first: the serial ports go in it */
     serial_reset();
     appletalk_reset();
     ppc_glue_reset();

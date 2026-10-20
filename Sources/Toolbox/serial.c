@@ -15,7 +15,8 @@
  *   none             present but unplugged
  *
  * The modem port is a modem unless set otherwise; the printer port is
- * unplugged.  The Communications Resource Manager lists both ports.
+ * unplugged.  The Communications Resource Manager lists both ports, and the
+ * Communications Toolbox's tools use them directly (serial_port_*).
  */
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -82,7 +83,6 @@ typedef struct {
 } sport;
 
 static sport ports[NPORTS];
-static gaddr crm_recs[NPORTS];
 static bool polling;
 
 static uint64_t now_ms(void)
@@ -713,9 +713,8 @@ static sport *port_of(gaddr pb)
     return &ports[unit >= 7 ? PORT_B : PORT_A];
 }
 
-static int16_t ser_open(gaddr pb)
+static void open_port(sport *p)
 {
-    sport *p = port_of(pb);
     if (!p->opened) {
         p->opened = true;
         p->inlen = 0;
@@ -724,14 +723,12 @@ static int16_t ser_open(gaddr pb)
         connect_port(p);
         set_use(p, true);
     }
-    return noErr;
 }
 
-static int16_t ser_close(gaddr pb)
+static void close_port(sport *p)
 {
-    sport *p = port_of(pb);
     if (!p->opened)
-        return noErr;
+        return;
     if (p->rd_pb) {
         complete(p->rd_pb, abortErr);
         p->rd_pb = 0;
@@ -742,6 +739,17 @@ static int16_t ser_close(gaddr pb)
         hang_up(p, false);
     else if (p->kind == K_TCP)
         close_fd(&p->fd);
+}
+
+static int16_t ser_open(gaddr pb)
+{
+    open_port(port_of(pb));
+    return noErr;
+}
+
+static int16_t ser_close(gaddr pb)
+{
+    close_port(port_of(pb));
     return noErr;
 }
 
@@ -885,6 +893,102 @@ const native_driver serial_drivers[4] = {
 };
 
 /* ---------------------------------------------------------------------- */
+/* The ports from C, for the Communications Toolbox's tools (ctb_cm.c):
+ * the same ports and buffers as the drivers', without parameter blocks. */
+
+static sport *port_n(int port) { return &ports[port == PORT_B ? PORT_B : PORT_A]; }
+
+void serial_port_open(int port) { open_port(port_n(port)); }
+void serial_port_close(int port) { close_port(port_n(port)); }
+
+/* What has come in, up to max bytes. */
+int serial_port_read(int port, uint8_t *b, int max)
+{
+    sport *p = port_n(port);
+    if (!p->opened)
+        return 0;
+    pump(p);
+    int n = max < p->inlen ? max : p->inlen;
+    memcpy(b, p->in, (size_t)n);
+    memmove(p->in, p->in + n, (size_t)(p->inlen - n));
+    p->inlen -= n;
+    return n;
+}
+
+int serial_port_available(int port)
+{
+    sport *p = port_n(port);
+    if (!p->opened)
+        return 0;
+    pump(p);
+    return p->inlen;
+}
+
+void serial_port_write(int port, const uint8_t *b, int n)
+{
+    sport *p = port_n(port);
+    if (!p->opened || n <= 0)
+        return;
+    if (p->kind == K_MODEM)
+        modem_write(p, b, (size_t)n);
+    else
+        to_host(p, b, (size_t)n);
+}
+
+/* As SerReset and SerHShake: parity 0 none, 1 odd, 2 even; stop bits 1, 2
+ * (or 15 for one and a half); handshake 0 none, 1 XON/XOFF, 2 CTS, 3 DTR. */
+void serial_port_setup(int port, uint32_t baud, int data_bits, int parity, int stop_bits, int handshake)
+{
+    sport *p = port_n(port);
+    static const uint16_t sizes[4] = { 0, 2, 1, 3 }; /* 5, 6, 7 and 8 bits as SerReset codes them */
+    uint16_t cfg = (uint16_t)(115200u / (baud ? baud : 9600) - 2u) & 0x3FF;
+    cfg |= (uint16_t)(sizes[(data_bits < 5 ? 8 : data_bits > 8 ? 8 : data_bits) - 5] << 10);
+    cfg |= (uint16_t)((parity == 1 ? 1 : parity == 2 ? 3 : 0) << 12);
+    cfg |= (uint16_t)((stop_bits == 2 ? 3 : stop_bits == 15 ? 2 : 1) << 14);
+    p->config = cfg;
+    p->baud = baud ? baud : 9600;
+    p->xon_out = p->xon_in = handshake == 1;
+    p->cts = handshake == 2;
+    p->dtr_in = handshake == 3;
+    apply_settings(p);
+}
+
+void serial_port_break(int port, bool on)
+{
+    sport *p = port_n(port);
+    if (has_lines(p))
+        ioctl(p->fd, on ? TIOCSBRK : TIOCCBRK);
+}
+
+/* DTR down hangs a modem up, as &D2 has it. */
+void serial_port_dtr(int port, bool on)
+{
+    sport *p = port_n(port);
+    if (has_lines(p))
+        ioctl(p->fd, on ? TIOCSDTR : TIOCCDTR);
+    else if (p->kind == K_MODEM && !on && p->mode != M_COMMAND)
+        hang_up(p, true);
+}
+
+/* The descriptor to wait on (-1: none). */
+int serial_port_fd(int port)
+{
+    sport *p = port_n(port);
+    return p->fd >= 0 ? p->fd : p->lfd;
+}
+
+/* Whether something is at the other end: a modem online, a connection
+ * made, a device or pty there. */
+bool serial_port_online(int port)
+{
+    sport *p = port_n(port);
+    return p->fd >= 0 && (p->kind != K_MODEM || p->mode == M_ONLINE);
+}
+
+/* Whether the port is open, by a driver or a tool. */
+bool serial_port_in_use(int port) { return port_n(port)->opened; }
+
+/* ---------------------------------------------------------------------- */
 /* Setup */
 
 static char specs[NPORTS][256] = { "modem", "none" };
@@ -916,10 +1020,11 @@ static int kind_of(const char *spec)
     return K_NONE;
 }
 
-/* A serial device's record; its crmAttributes points to a CRMSerialRecord:
- * version, inputDriverName, outputDriverName, name (string handles),
- * deviceIcon, ratedSpeed, maxSpeed, reserved. */
-static gaddr crm_record(int id, const char *name, const char *in, const char *out)
+/* A serial device's record for the Communications Resource Manager; its
+ * crmAttributes points to a CRMSerialRecord: version, inputDriverName,
+ * outputDriverName, name (string handles), deviceIcon, ratedSpeed,
+ * maxSpeed, reserved. */
+static gaddr crm_record(const char *name, const char *in, const char *out)
 {
     gaddr rec = tb_NewPtr(CRMRec_SIZEOF, true, true);
     gaddr ser = tb_NewPtr(30, true, true);
@@ -938,38 +1043,8 @@ static gaddr crm_record(int id, const char *name, const char *in, const char *ou
     wr32(ser + 22, 230400);
     CRMRec_set_crmVersion(rec, 1);
     CRMRec_set_crmDeviceType(rec, 1); /* crmSerialDevice */
-    CRMRec_set_crmDeviceID(rec, id);
     CRMRec_set_crmAttributes(rec, (int32_t)ser);
     return rec;
-}
-
-/* CRMSearch: the next record of the type asked for, by device ID. */
-gaddr serial_crm_search(gaddr req)
-{
-    if (!req || CRMRec_crmDeviceType(req) != 1)
-        return 0;
-    int32_t after = CRMRec_crmDeviceID(req);
-    for (int i = 0; i < NPORTS; i++)
-        if (crm_recs[i] && CRMRec_crmDeviceID(crm_recs[i]) > after)
-            return crm_recs[i];
-    return 0;
-}
-
-/* _CommToolboxDispatch (A08B): A0 points to the selector word, the
- * arguments after it.  Of the Communications Toolbox only the Resource
- * Manager is here, enough for programs to find the serial ports; a
- * program that tests for the trap then asks the CRM for them. */
-static void ctb_dispatch(cpu68k *c, uint16_t tw)
-{
-    uint16_t sel = rd16(c->a[0]);
-    switch (sel) {
-    case 0x0505: c->d[0] = serial_crm_search(rd32(c->a[0] + 2)); break; /* CRMSearch */
-    case 0x0401: case 0x0501: c->d[0] = 0; break;                     /* InitCTBUtilities, InitCRM */
-    case 0x0101: case 0x0201: case 0x0301: c->d[0] = (uint32_t)-2; break; /* InitCM, InitTM, InitFT: no tools */
-    default:
-        LOGF(LOG_UNIMPL, "CommToolboxDispatch selector %04X\n", sel);
-        c->d[0] = 0;
-    }
 }
 
 void serial_reset(void)
@@ -992,7 +1067,6 @@ void serial_reset(void)
     wr8(LM_PortAUse, portFree);
     wr8(LM_PortBUse, portFree);
     wr8(LM_SPConfig, 0); /* neither port set aside for AppleTalk */
-    crm_recs[PORT_A] = crm_record(1, "Modem Port", ".AIn", ".AOut");
-    crm_recs[PORT_B] = crm_record(2, "Printer Port", ".BIn", ".BOut");
-    wr32(OS_TRAP_TABLE + 0x8Bu * 4, native_register(ctb_dispatch, "CommToolboxDispatch", 0xA08B));
+    crm_install(crm_record("Modem Port", ".AIn", ".AOut"));
+    crm_install(crm_record("Printer Port", ".BIn", ".BOut"));
 }

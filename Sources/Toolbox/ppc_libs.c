@@ -1950,10 +1950,6 @@ static void g_SerSetBrk(ppc_cpu *c) { ser_call(c, ser_pb(c, 12), false, 0, 0); }
 static void g_SerClrBrk(ppc_cpu *c) { ser_call(c, ser_pb(c, 11), false, 0, 0); }
 static void g_SerGetBuf(ppc_cpu *c) { ser_call(c, ser_pb(c, 2), true, R(1), 4); }
 static void g_SerStatus(ppc_cpu *c) { ser_call(c, ser_pb(c, 8), true, R(1), 6); }
-static void g_CRMSearch(ppc_cpu *c) { RETURN(serial_crm_search(R(0))); }
-/* The Communications Toolbox: no tools. */
-static void g_cmNoTools(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-2); }
-static void g_zero_handle(ppc_cpu *c) { RETURN(0); }
 /* The AppleTalk calls: AppleTalk isn't there. */
 static void g_noAppleTalk(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
 
@@ -2145,10 +2141,6 @@ const ppc_export lib_exports[] = {
     /* Serial ports */
     { "SerReset", g_SerReset }, { "SerHShake", g_SerHShake }, { "SerSetBuf", g_SerSetBuf }, { "SerSetBrk", g_SerSetBrk },
     { "SerClrBrk", g_SerClrBrk }, { "SerGetBuf", g_SerGetBuf }, { "SerStatus", g_SerStatus },
-    /* The Communications Toolbox */
-    { "InitCTBUtilities", g_noErr }, { "InitCM", g_cmNoTools }, { "InitCRM", g_noErr }, { "InitTM", g_cmNoTools },
-    { "InitFT", g_cmNoTools }, { "CRMSearch", g_CRMSearch }, { "CMNew", g_zero_handle },
-    { "CMGetProcID", g_cmNoTools },
     /* AppleTalk and the PPC Toolbox's network side */
     { "GetMyZone", g_noAppleTalk }, { "PPCBrowser", g_noAppleTalk }, { "IPCListPortsSync", g_noAppleTalk },
     { "NBPSetNTE", g_NBPSetNTE }, { "NBPSetEntity", g_NBPSetEntity }, { "NBPExtract", g_NBPExtract },
