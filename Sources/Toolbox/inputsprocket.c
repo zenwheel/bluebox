@@ -325,9 +325,10 @@ static element *find(gaddr ref)
 
 /* ---- Reading the hardware ---- */
 
+static gaddr km; /* a KeyMap to read the keys into */
+
 static bool key_down(uint8_t code)
 {
-    static gaddr km;
     if (code == K_NONE || devices[DEV_KEYBOARD].inactive)
         return false;
     if (!km)
@@ -1054,7 +1055,7 @@ static void isp_PlotAppIconSuite(ppc_cpu *c)
 void inputsprocket_reset(void)
 {
     nelements = spare = spare_button = nlists = 0;
-    ref_block = device_block = global_list = 0;
+    ref_block = device_block = global_list = km = 0;
     suspended = false;
     memset(lists, 0, sizeof lists);
     memset(devices, 0, sizeof devices);
