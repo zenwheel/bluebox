@@ -230,6 +230,21 @@ extension BlueBox {
             #expect(rn > 0 && tb_Count1Types() == 0)
             tb_CloseResFile(rn)
         }
+
+        /// A file kept as its AppleDouble sidecar alone (an empty data fork,
+        /// as archives give "Icon\r") resolves as an alias file to itself:
+        /// ShatterBat walks its folder that way and stopped at its icon file.
+        @Test func resolveAliasFileFindsASidecarOnlyFile() throws {
+            let dir = launchTestApp()
+            let spec = tb_NewPtr(70, false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Icon"), spec) == -43)
+            tb_FSpCreateResFile(spec, Int32(bitPattern: fourCC("MACS")), Int32(bitPattern: fourCC("icon")), 0)
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent("Icon")) // the data fork goes
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Icon"), spec) == 0)
+            let folder = tb_NewPtr(2, false, true), aliased = tb_NewPtr(2, false, true)
+            #expect(tb_ResolveAliasFile(spec, 1, folder, aliased) == 0)
+            #expect(rd8(folder) == 0 && rd8(aliased) == 0)
+        }
     }
 
     @Suite struct SystemFolder {

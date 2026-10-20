@@ -322,11 +322,11 @@ int16_t tb_ResolveAliasFile(gaddr theSpec, int8_t resolveAliasChains, gaddr targ
     if (!fm_host_path((int16_t)rd16(theSpec + FSSpec_vRefNum_off), (int32_t)rd32(theSpec + FSSpec_parID_off),
                       theSpec + FSSpec_name_off, true, host, sizeof host))
         return nsvErrA;
-    struct stat st;
-    if (stat(host, &st) != 0)
+    if (!fm_host_exists(host))
         return fnfErrA;
+    struct stat st;
     if (targetIsFolder)
-        wr8(targetIsFolder, S_ISDIR(st.st_mode) ? 1 : 0);
+        wr8(targetIsFolder, stat(host, &st) == 0 && S_ISDIR(st.st_mode) ? 1 : 0);
     return noErr;
 }
 

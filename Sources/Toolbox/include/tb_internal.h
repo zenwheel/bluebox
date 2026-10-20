@@ -101,6 +101,9 @@ uint32_t gestalt_value(uint32_t selector, uint32_t fallback);
 void fm_spec_for_path(const char *path, gaddr spec);
 /* Host path for a (vRefNum, dirID, name) triple. */
 bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize);
+/* Whether a host file exists for the Mac: its data fork, or only its
+ * AppleDouble sidecar (a file with an empty data fork). */
+bool fm_host_exists(const char *path);
 /* Classic file type of a host file (0 if unknown). */
 uint32_t fm_type_of_path(const char *path);
 /* The application (host path) that opens a document: one with the

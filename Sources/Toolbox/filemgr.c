@@ -585,7 +585,7 @@ static bool is_dir(const char *p)
 
 /* A file exists if its data fork does, or only its AppleDouble sidecar
  * (files with an empty data fork are often stored that way). */
-static bool exists(const char *p)
+bool fm_host_exists(const char *p)
 {
     struct stat st;
     if (stat(p, &st) == 0)
@@ -595,6 +595,8 @@ static bool exists(const char *p)
     free(side);
     return ok;
 }
+
+static bool exists(const char *p) { return fm_host_exists(p); }
 
 static bool hidden_name(const char *n)
 {
