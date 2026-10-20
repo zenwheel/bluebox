@@ -97,7 +97,11 @@ static uint32_t dist(const uint16_t a[3], const uint16_t b[3])
     return (uint32_t)(dr * dr * 3 + dg * dg * 4 + db * db * 2);
 }
 
-/* Nearest entry; a one-entry cache keeps solid fills cheap. */
+/* Nearest entry.  The table is decoded once per table and seed (a copy
+ * of up to 256 colours), and recent answers are kept by colour: a
+ * CopyBits into an indexed port asks for every pixel, and each question
+ * used to decode the whole table once per entry (Snavely! drew its frames
+ * for minutes). */
 uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3])
 {
     switch (depth) {
@@ -106,31 +110,40 @@ uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3])
     case 32: return (uint32_t)((rgb[0] >> 8) << 16 | (rgb[1] >> 8) << 8 | (rgb[2] >> 8));
     default: break;
     }
+    enum { CACHE = 4096 };
     static struct {
         int depth;
         gaddr ctab;
         uint32_t seed;
-        uint16_t rgb[3];
-        uint32_t v;
         bool valid;
-    } cache;
+        uint32_t n;
+        uint16_t rgb[256][3];
+        struct { uint32_t key; uint8_t v; bool used; } hits[CACHE];
+    } pal;
     uint32_t seed = ctab && rd32(ctab) ? rd32(rd32(ctab)) : 0;
-    if (cache.valid && cache.depth == depth && cache.ctab == ctab && cache.seed == seed && !memcmp(cache.rgb, rgb, 6))
-        return cache.v;
-    uint32_t best = 0, best_d = UINT32_MAX, n = px_mask(depth) + 1;
+    if (!pal.valid || pal.depth != depth || pal.ctab != ctab || pal.seed != seed) {
+        pal.valid = true;
+        pal.depth = depth;
+        pal.ctab = ctab;
+        pal.seed = seed;
+        pal.n = px_mask(depth) + 1;
+        for (uint32_t v = 0; v < pal.n; v++)
+            qd_px_rgb(depth, ctab, v, pal.rgb[v]);
+        memset(pal.hits, 0, sizeof pal.hits);
+    }
+    uint32_t key = (uint32_t)(rgb[0] >> 8) << 16 | (uint32_t)(rgb[1] >> 8) << 8 | (rgb[2] >> 8);
+    uint32_t slot = ((key >> 12) ^ (key >> 4) ^ key) & (CACHE - 1);
+    if (pal.hits[slot].used && pal.hits[slot].key == key)
+        return pal.hits[slot].v;
+    uint32_t best = 0, best_d = UINT32_MAX, n = pal.n;
     /* Black is the last entry when that is black, as in a device's table,
      * even while a fade has made other entries black too. */
-    uint16_t last[3];
-    qd_px_rgb(depth, ctab, n - 1, last);
-    if (!(rgb[0] | rgb[1] | rgb[2]) && !dist(last, rgb)) {
+    if (!(rgb[0] | rgb[1] | rgb[2]) && !dist(pal.rgb[n - 1], rgb)) {
         best = n - 1;
-        best_d = 0;
         n = 0;
     }
     for (uint32_t v = 0; v < n; v++) {
-        uint16_t c[3];
-        qd_px_rgb(depth, ctab, v, c);
-        uint32_t d = dist(c, rgb);
+        uint32_t d = dist(pal.rgb[v], rgb);
         if (d < best_d) {
             best_d = d;
             best = v;
@@ -138,11 +151,8 @@ uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3])
                 break;
         }
     }
-    cache.depth = depth;
-    cache.ctab = ctab;
-    cache.seed = seed;
-    memcpy(cache.rgb, rgb, 6);
-    cache.v = best;
-    cache.valid = true;
+    pal.hits[slot].key = key;
+    pal.hits[slot].v = (uint8_t)best;
+    pal.hits[slot].used = true;
     return best;
 }
