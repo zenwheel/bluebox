@@ -84,6 +84,72 @@ extension BlueBox {
             #expect(control(pb, 37) == -23010) // invalidStreamPtr
         }
 
+        /// Fetch sends an FTP PORT command before it opens the listener the
+        /// command names; a server that connects at once still gets through,
+        /// and the passive open made afterwards has its connection.
+        @Test func portCommandListensEarly() {
+            launchTestApp()
+            setStack()
+            let (lfd, port) = listener()
+            defer { close(lfd) }
+            let (spare, dataPort) = listener() // a free port, for the data connection
+            close(spare)
+            let pb = tb_NewPtr(128, false, true), cs = pb + 32
+            let name = tb_NewPtr(8, false, true)
+            guestPString(".IPP", at: name)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+            #expect(tb_PBOpen(pb, false) == 0)
+            let rcv = tb_NewPtr(8192, false, true)
+            wr32(cs + UInt32(TCPCreatePB_rcvBuff_off), rcv)
+            wr32(cs + UInt32(TCPCreatePB_rcvBuffLen_off), 8192)
+            #expect(control(pb, 30) == 0) // TCPCreate
+            let ctl = rd32(pb + 28)
+            gmemset(cs, 0, 64)
+            wr32(cs + UInt32(TCPOpenPB_remoteHost_off), 0x7F00_0001)
+            wr16(cs + UInt32(TCPOpenPB_remotePort_off), port)
+            #expect(control(pb, 32) == 0) // TCPActiveOpen
+            let conn = accept(lfd, nil, nil)
+            defer { close(conn) }
+
+            let cmd = "PORT 127,0,0,1,\(dataPort >> 8),\(dataPort & 0xFF)\r\n"
+            let data = tb_NewPtr(64, false, true), wds = tb_NewPtr(12, false, true)
+            for (i, b) in cmd.utf8.enumerated() { wr8(data + UInt32(i), b) }
+            wr16(wds, UInt16(cmd.utf8.count))
+            wr32(wds + 2, data)
+            gmemset(cs, 0, 64)
+            wr32(cs + UInt32(TCPSendPB_wdsPtr_off), wds)
+            #expect(control(pb, 34) == 0) // TCPSend
+
+            // The server connects as soon as it reads the command.
+            let dfd = socket(AF_INET, SOCK_STREAM, 0)
+            defer { close(dfd) }
+            var sa = sockaddr_in()
+            sa.sin_family = sa_family_t(AF_INET)
+            sa.sin_addr.s_addr = inet_addr("127.0.0.1")
+            sa.sin_port = dataPort.bigEndian
+            let r = withUnsafePointer(to: &sa) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    connect(dfd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                }
+            }
+            #expect(r == 0)
+
+            let rcv2 = tb_NewPtr(8192, false, true)
+            gmemset(cs, 0, 64)
+            wr32(cs + UInt32(TCPCreatePB_rcvBuff_off), rcv2)
+            wr32(cs + UInt32(TCPCreatePB_rcvBuffLen_off), 8192)
+            #expect(control(pb, 30) == 0) // TCPCreate
+            gmemset(cs, 0, 64)
+            wr8(cs + UInt32(TCPOpenPB_commandTimeoutValue_off), 5)
+            wr16(cs + UInt32(TCPOpenPB_localPort_off), dataPort)
+            #expect(control(pb, 31) == 0) // TCPPassiveOpen
+            #expect(rd32(cs + UInt32(TCPOpenPB_remoteHost_off)) == 0x7F00_0001)
+
+            #expect(control(pb, 42) == 0) // TCPRelease
+            wr32(pb + 28, ctl)
+            #expect(control(pb, 42) == 0)
+        }
+
         /// The resolver dnr.c finds: a 'ztcp' control panel whose 'dnrp'
         /// jumps to us.  A dotted address resolves to itself, with no name.
         @Test func resolverTakesDottedAddresses() throws {

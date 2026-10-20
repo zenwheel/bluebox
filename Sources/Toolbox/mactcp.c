@@ -179,6 +179,81 @@ static void close_fd(int *fd)
     *fd = -1;
 }
 
+/* An FTP PORT command names the port the program will listen on, but Fetch
+ * opens that listener only after the server has answered the command, and
+ * servers that connect as soon as they read it (pyftpdlib) found nothing
+ * there.  MacTCP seems to have ignored a connection to a port no one
+ * listened on, so the server's retry a moment later found the listener; a
+ * host socket refuses it at once.  So a PORT command a program sends
+ * starts the listener here, the passive open for that port takes it over,
+ * and one not taken within a minute is closed. */
+#define MAX_EARLY 4
+static struct {
+    bool used;
+    int fd;
+    uint16_t port;
+    uint64_t made;
+} early[MAX_EARLY];
+
+static void listen_early(const uint8_t *buf, uint32_t len)
+{
+    if (len < 16 || memcmp(buf, "PORT ", 5) != 0)
+        return;
+    char line[64];
+    uint32_t n = len < sizeof line - 1 ? len : sizeof line - 1;
+    memcpy(line, buf, n);
+    line[n] = 0;
+    unsigned h[4], p[2];
+    if (sscanf(line + 5, "%u,%u,%u,%u,%u,%u", &h[0], &h[1], &h[2], &h[3], &p[0], &p[1]) != 6 || p[0] > 255 ||
+        p[1] > 255)
+        return;
+    uint16_t port = (uint16_t)(p[0] << 8 | p[1]);
+    int slot = -1;
+    for (int i = 0; i < MAX_EARLY; i++) {
+        if (early[i].used && early[i].port == port)
+            return;
+        if (!early[i].used && slot < 0)
+            slot = i;
+    }
+    if (slot < 0 || port == 0)
+        return;
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0)
+        return;
+    int one = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+    struct sockaddr_in la = inet(0, port);
+    if (bind(fd, (struct sockaddr *)&la, sizeof la) < 0 || listen(fd, 1) < 0) {
+        close(fd);
+        return;
+    }
+    set_nonblocking(fd);
+    early[slot].used = true;
+    early[slot].fd = fd;
+    early[slot].port = port;
+    early[slot].made = now_ns();
+}
+
+/* The listener a PORT command started for this port, or -1. */
+static int take_early(uint16_t port)
+{
+    for (int i = 0; i < MAX_EARLY; i++)
+        if (early[i].used && early[i].port == port && port) {
+            early[i].used = false;
+            return early[i].fd;
+        }
+    return -1;
+}
+
+static void expire_early(bool all)
+{
+    for (int i = 0; i < MAX_EARLY; i++)
+        if (early[i].used && (all || now_ns() - early[i].made > 60000000000ull)) {
+            close(early[i].fd);
+            early[i].used = false;
+        }
+}
+
 /* ---------------------------------------------------------------------- */
 /* Notification routines: pascal (stream, event, userData[, terminReason],
  * ICMPReport *) for TCP and UDP. */
@@ -327,18 +402,21 @@ static int16_t step_open(op *o, mstream *m)
         }
     } else { /* TCPPassiveOpen */
         if (m->lfd < 0 && m->fd < 0) {
-            m->lfd = socket(AF_INET, SOCK_STREAM, 0);
-            if (m->lfd < 0)
-                return insufficientResources;
-            int one = 1;
-            setsockopt(m->lfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
             struct sockaddr_in la = inet(0, rd16(p + TCPOpenPB_localPort_off));
-            if (bind(m->lfd, (struct sockaddr *)&la, sizeof la) < 0 || listen(m->lfd, 1) < 0) {
-                int16_t r = errno_result(errno);
-                close_fd(&m->lfd);
-                return r;
+            m->lfd = take_early(rd16(p + TCPOpenPB_localPort_off));
+            if (m->lfd < 0) {
+                m->lfd = socket(AF_INET, SOCK_STREAM, 0);
+                if (m->lfd < 0)
+                    return insufficientResources;
+                int one = 1;
+                setsockopt(m->lfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+                if (bind(m->lfd, (struct sockaddr *)&la, sizeof la) < 0 || listen(m->lfd, 1) < 0) {
+                    int16_t r = errno_result(errno);
+                    close_fd(&m->lfd);
+                    return r;
+                }
+                set_nonblocking(m->lfd);
             }
-            set_nonblocking(m->lfd);
             socklen_t len = sizeof la;
             getsockname(m->lfd, (struct sockaddr *)&la, &len);
             wr16(p + TCPOpenPB_localPort_off, ntohs(la.sin_port)); /* the port chosen for 0 */
@@ -456,6 +534,8 @@ static int16_t step_send(op *o, mstream *m)
         return connectionDoesntExist;
     uint32_t total;
     uint8_t *buf = wds_gather(rd32(p + TCPSendPB_wdsPtr_off), &total);
+    if (o->sent == 0)
+        listen_early(buf, total);
     while (o->sent < total) {
         ssize_t r = send(m->fd, buf + o->sent, total - o->sent, 0);
         if (r > 0) {
@@ -734,6 +814,7 @@ void mactcp_poll(void)
     if (polling || !g_cpu)
         return;
     polling = true;
+    expire_early(false);
     call_result_procs();
     for (int i = 0; i < MAX_OPS; i++) {
         if (!ops[i].used)
@@ -789,6 +870,7 @@ void mactcp_reset(void)
         streams[i].fd = streams[i].lfd = -1;
         streams[i].used = false;
     }
+    expire_early(true);
     booted = true;
     memset(ops, 0, sizeof ops);
     nanswers = 0;
