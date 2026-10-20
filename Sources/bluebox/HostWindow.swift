@@ -475,6 +475,49 @@ func installAlertHandler() {
 #endif
 
 #if canImport(AppKit)
+/// A "Disk" pop-up for the file panels: the volumes the program sees (its
+/// own disk, folders mounted as disks, AppleShare volumes), each opening
+/// its folder in the panel.
+@MainActor final class DiskPicker: NSObject {
+    weak var panel: NSSavePanel?
+    var volumes: [(name: String, root: String)] = []
+    let row = NSStackView()
+    var count: Int { volumes.count }
+
+    init(panel: NSSavePanel) {
+        self.panel = panel
+        super.init()
+        for i in 0..<Int(machine_volume_count()) {
+            var name = [CChar](repeating: 0, count: 256), root = [CChar](repeating: 0, count: 1024)
+            if machine_volume_info(Int32(i), &name, name.count, &root, root.count) {
+                func text(_ c: [CChar]) -> String {
+                    String(decoding: c.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+                }
+                volumes.append((text(name), text(root)))
+            }
+        }
+        let popup = NSPopUpButton()
+        popup.addItems(withTitles: volumes.map { $0.name })
+        popup.target = self
+        popup.action = #selector(choose(_:))
+        // The disk the panel starts on: the volume whose folder holds it most closely.
+        if let start = panel.directoryURL?.path,
+           let i = volumes.indices.filter({ start == volumes[$0].root || start.hasPrefix(volumes[$0].root + "/") })
+                .max(by: { volumes[$0].root.count < volumes[$1].root.count }) {
+            popup.selectItem(at: i)
+        }
+        row.orientation = .horizontal
+        row.addArrangedSubview(NSTextField(labelWithString: "Disk:"))
+        row.addArrangedSubview(popup)
+    }
+
+    @objc func choose(_ sender: NSPopUpButton) {
+        let i = sender.indexOfSelectedItem
+        guard volumes.indices.contains(i) else { return }
+        panel?.directoryURL = URL(fileURLWithPath: volumes[i].root, isDirectory: true)
+    }
+}
+
 /// Shows only files of the requested classic types (and folders).
 final class ClassicTypeFilter: NSObject, NSOpenSavePanelDelegate {
     let types: Set<UInt32>
@@ -586,8 +629,18 @@ func installFileHandler() {
                 if !prompt.isEmpty { panel.message = prompt }
                 if !dir.isEmpty { panel.directoryURL = URL(fileURLWithPath: dir, isDirectory: true) }
                 let accessory = ClassicItemsView(items: items, panel: panel)
-                if !items.isEmpty {
-                    panel.accessoryView = accessory
+                // The program's disks, as Standard File's Desktop showed them:
+                // a mounted folder or AppleShare volume is otherwise hard to find.
+                let disks = DiskPicker(panel: panel)
+                if !items.isEmpty || disks.count > 1 {
+                    let stack = NSStackView()
+                    stack.orientation = .vertical
+                    stack.alignment = .leading
+                    if disks.count > 1 { stack.addArrangedSubview(disks.row) }
+                    if !items.isEmpty { stack.addArrangedSubview(accessory) }
+                    stack.layoutSubtreeIfNeeded()
+                    stack.frame.size = stack.fittingSize
+                    panel.accessoryView = stack
                     if let open = panel as? NSOpenPanel { open.isAccessoryViewDisclosed = true }
                 }
                 // The application's hook gets null events meanwhile.
@@ -596,6 +649,7 @@ func installFileHandler() {
                 if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
                 idle.invalidate()
                 _ = filter
+                _ = disks // the pop-up's target, alive while the panel runs
             }
         }
         guard let chosen else { return false }

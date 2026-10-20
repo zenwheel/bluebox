@@ -25,6 +25,10 @@ void machine_mount_folder(const char *path, const char *name);
  * Connected when first looked into; false if the specification is wrong. */
 bool machine_mount_appleshare(const char *spec, char *err, size_t errlen);
 void machine_close_appleshares(void); /* logged out, forgotten */
+/* The volumes the program sees (0 the main one), for the host's file
+ * panels: the name (UTF-8) and the host folder each lives in. */
+int machine_volume_count(void);
+bool machine_volume_info(int i, char *name, size_t namesize, char *root, size_t rootsize);
 /* Run up to max_instructions. */
 run_status machine_run(uint64_t max_instructions);
 const char *machine_halt_reason(void);

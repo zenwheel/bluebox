@@ -678,6 +678,12 @@ extension BlueBox {
             wr16(vpb + UInt32(IOParam_ioVRefNum_off), UInt16(bitPattern: -2))
             #expect(tb_PBGetVInfo(vpb, false) == 0)
             #expect((0..<Int(rd8(vname))).map { rd8(vname + 1 + UInt32($0)) } == Array("StubVol".utf8))
+            // The host's file panels list it among the program's disks.
+            #expect(machine_volume_count() == 2)
+            var dname = [CChar](repeating: 0, count: 64), droot = [CChar](repeating: 0, count: 1024)
+            #expect(machine_volume_info(1, &dname, dname.count, &droot, droot.count))
+            #expect(String(decoding: dname.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self) == "StubVol")
+            #expect(String(decoding: droot.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self).hasSuffix("/StubVol"))
 
             // A file from the server: both forks and its type.
             let spec = tb_NewPtr(70, false, true)

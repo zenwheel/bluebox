@@ -102,6 +102,27 @@ void machine_mount_folder(const char *path, const char *name)
     npending++;
 }
 
+/* The volumes for the host's file panels: 0 the main one, then the mounts
+ * (AppleShare volumes among them). */
+int machine_volume_count(void) { return 1 + nmounts; }
+
+bool machine_volume_info(int i, char *name, size_t namesize, char *root, size_t rootsize)
+{
+    const char *mac, *dir;
+    if (i == 0) {
+        mac = vol_name;
+        dir = root_path;
+    } else if (i >= 1 && i <= nmounts) {
+        mac = mounts[i - 1].name;
+        dir = mounts[i - 1].root;
+    } else {
+        return false;
+    }
+    macroman_to_utf8((const uint8_t *)mac + 1, (uint8_t)mac[0], name, namesize);
+    snprintf(root, rootsize, "%s", dir);
+    return true;
+}
+
 static mount *mount_of_vref(int16_t vref)
 {
     for (int i = 0; i < nmounts; i++)
