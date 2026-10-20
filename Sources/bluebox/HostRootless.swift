@@ -591,6 +591,13 @@ final class TransientView: NSView {
                     let key = it.key != 0 ? String(UnicodeScalar(it.key)).lowercased() : ""
                     let ni = NSMenuItem(title: text, action: #selector(chooseMenu(_:)), keyEquivalent: key)
                     ni.target = self
+                    if it.modifiers != 0 { // Mac OS 8's item modifiers (SetMenuItemModifiers, 'xmnu')
+                        var mask: NSEvent.ModifierFlags = it.modifiers & 8 != 0 ? [] : [.command]
+                        if it.modifiers & 1 != 0 { mask.insert(.shift) }
+                        if it.modifiers & 2 != 0 { mask.insert(.option) }
+                        if it.modifiers & 4 != 0 { mask.insert(.control) }
+                        ni.keyEquivalentModifierMask = mask
+                    }
                     ni.isEnabled = it.enabled && m.enabled
                     ni.state = it.mark == 0x12 ? .on : .off
                     ni.representedObject = [Int(m.id), k + 1]

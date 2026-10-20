@@ -361,6 +361,10 @@ void dialog_draw_item(gaddr d, int n);
 void dialog_select_item_text(gaddr d, int n, int start, int end);
 gaddr dialog_item_te(gaddr d, int n);
 
+/* ---- Menu Manager (menu.c) ---- */
+void menu_reset(void);
+uint8_t menu_item_modifiers(gaddr mh, int item); /* Mac OS 8's kMenu...Modifier bits */
+
 /* ---- Dialog Manager ---- */
 
 /* A dialog from DLOG id; vis_override -1 keeps the resource's visibility. */

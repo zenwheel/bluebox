@@ -340,6 +340,7 @@ bool machine_boot(bool census)
     appearance_reset();
     controls_reset();
     ap_cdefs_reset();
+    menu_reset();
     wr32(LM_TheZone, GA_SYSHEAP);
     if (!open_system_file())
         return false;

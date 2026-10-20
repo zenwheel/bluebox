@@ -34,6 +34,105 @@ static int mbar_height(void) { return (int16_t)rd16(LM_MBarHeight); }
 static gaddr hier[MAX_HIER]; /* InsertMenu(menu, -1)'s */
 static int nhier;
 
+/* Mac OS 8's item attributes (SetMenuItemCommandID and the rest, 'xmnu'),
+ * and menus' fonts, by menu: kept beside the MenuInfo, which has no room
+ * for them, and moved along when items come and go. */
+typedef struct {
+    uint32_t command, refcon, refcon2, encoding;
+    gaddr icon;
+    int16_t hier_id, font, glyph;
+    uint8_t modifiers, icon_type;
+    bool icon_disabled;
+} item_extra;
+
+typedef struct {
+    gaddr mh;
+    int n;
+    item_extra *items;
+    int16_t font;
+    uint16_t size;
+    bool exclude_mark;
+} menu_extra;
+
+#define MAX_MENU_EXTRAS 128
+static menu_extra mextras[MAX_MENU_EXTRAS];
+
+static menu_extra *menu_extras(gaddr mh, bool create)
+{
+    for (int i = 0; i < MAX_MENU_EXTRAS; i++)
+        if (mextras[i].mh == mh)
+            return &mextras[i];
+    if (!create)
+        return NULL;
+    for (int i = 0; i < MAX_MENU_EXTRAS; i++)
+        if (!mextras[i].mh) {
+            memset(&mextras[i], 0, sizeof mextras[i]);
+            mextras[i].mh = mh;
+            return &mextras[i];
+        }
+    return NULL;
+}
+
+static item_extra *item_extras(gaddr mh, int item, bool create)
+{
+    menu_extra *m = menu_extras(mh, create);
+    if (!m || item < 1)
+        return NULL;
+    if (item > m->n) {
+        if (!create)
+            return NULL;
+        m->items = realloc(m->items, (size_t)item * sizeof *m->items);
+        memset(m->items + m->n, 0, (size_t)(item - m->n) * sizeof *m->items);
+        m->n = item;
+    }
+    return &m->items[item - 1];
+}
+
+/* An item came in at index (later ones move up), or went. */
+static void extras_inserted(gaddr mh, int index)
+{
+    menu_extra *m = menu_extras(mh, false);
+    if (!m || index > m->n)
+        return;
+    m->items = realloc(m->items, (size_t)(m->n + 1) * sizeof *m->items);
+    memmove(m->items + index, m->items + index - 1, (size_t)(m->n - index + 1) * sizeof *m->items);
+    memset(&m->items[index - 1], 0, sizeof *m->items);
+    m->n++;
+}
+
+static void extras_deleted(gaddr mh, int index)
+{
+    menu_extra *m = menu_extras(mh, false);
+    if (!m || index > m->n)
+        return;
+    memmove(m->items + index - 1, m->items + index, (size_t)(m->n - index) * sizeof *m->items);
+    m->n--;
+}
+
+static void extras_forget(gaddr mh)
+{
+    menu_extra *m = menu_extras(mh, false);
+    if (m) {
+        free(m->items);
+        memset(m, 0, sizeof *m);
+    }
+}
+
+void menu_reset(void)
+{
+    for (int i = 0; i < MAX_MENU_EXTRAS; i++)
+        free(mextras[i].items);
+    memset(mextras, 0, sizeof mextras);
+    nhier = 0;
+}
+
+/* An item's Mac OS 8 modifiers (kMenuShiftModifier ...), for the host's menus. */
+uint8_t menu_item_modifiers(gaddr mh, int item)
+{
+    item_extra *e = item_extras(mh, item, false);
+    return e ? e->modifiers : 0;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Menu data */
 
@@ -102,6 +201,7 @@ static uint32_t items_end(gaddr mh)
 }
 
 static int16_t system_font_width(const uint8_t *s, int n);
+void menu_apply_xmnu(gaddr mh, int16_t id);
 
 void tb_CalcMenuSize(gaddr mh)
 {
@@ -153,6 +253,7 @@ gaddr tb_GetMenu(int16_t rid)
     if (!mh)
         mh = tb_GetResource((int32_t)fourcc("MDEF"), 0);
     MenuInfo_set_menuProc(rd32(h), mh);
+    menu_apply_xmnu(h, rid);
     tb_CalcMenuSize(h);
     return h;
 }
@@ -164,6 +265,7 @@ void tb_DisposeMenu(gaddr mh)
     for (int i = 0; i < nhier; i++)
         if (hier[i] == mh)
             hier[i--] = hier[--nhier];
+    extras_forget(mh);
     if (tb_HGetState(mh) & 0x20)
         tb_ReleaseResource(mh);
     else
@@ -214,6 +316,7 @@ static void append_items(gaddr mh, const uint8_t *s, int n, int after)
         rec[4 + nl] = style;
         menu_insert_bytes(mh, at, rec, (uint32_t)nl + 5);
         int index = (after < 0 || after >= count) ? count + 1 : after + 1;
+        extras_inserted(mh, index);
         gaddr p = menu_ptr(mh);
         uint32_t flags = (uint32_t)MenuInfo_enableFlags(p);
         if (index <= 31) {
@@ -248,6 +351,7 @@ void tb_DeleteMenuItem(gaddr mh, int16_t item)
         return;
     gaddr it = item_addr(mh, item);
     menu_delete_bytes(mh, it - rd32(mh), (uint32_t)rd8(it) + 5);
+    extras_deleted(mh, item);
     gaddr p = menu_ptr(mh);
     uint32_t flags = (uint32_t)MenuInfo_enableFlags(p);
     if (item <= 31) {
@@ -778,6 +882,14 @@ void tb_SetMenuFlash(int16_t i) { wr16(LM_MenuFlash, (uint16_t)i); }
 static void mdef_draw(gaddr mh, qrect r, int hilite_item)
 {
     gaddr port = qd_port();
+    /* SetMenuFont's font, while the menu is drawn. */
+    menu_extra *mx = menu_extras(mh, false);
+    int16_t old_font = GrafPort_txFont(port), old_size = GrafPort_txSize(port);
+    if (mx && (mx->font || mx->size)) {
+        GrafPort_set_txFont(port, mx->font);
+        if (mx->size)
+            GrafPort_set_txSize(port, (int16_t)mx->size);
+    }
     gaddr rr = tb_NewPtr(8, false, false);
     qrect_put(rr, r);
     tb_EraseRect(rr);
@@ -819,6 +931,8 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
         }
     }
     tb_DisposePtr(rr);
+    GrafPort_set_txFont(port, old_font);
+    GrafPort_set_txSize(port, old_size);
 }
 
 /* MDEF 0: PROCEDURE (message, theMenu, VAR menuRect, hitPt, VAR whichItem). */
@@ -1251,4 +1365,367 @@ void tb_SetMenuItemText(gaddr mh, int16_t item, gaddr str)
         menu_delete_bytes(mh, at + 1, oldlen - newlen);
     gput(rd32(mh) + at, buf, newlen + 1);
     tb_CalcMenuSize(mh);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mac OS 8: command IDs, modifiers, glyphs, icons and fonts of items */
+
+enum { menuItemNotFoundErr = -5622, menuNotFoundErr = -5623 };
+enum { kMenuShiftModifier = 1, kMenuOptionModifier = 2, kMenuControlModifier = 4, kMenuNoCommandModifier = 8 };
+
+static bool item_ok(gaddr mh, int16_t item) { return mh && rd32(mh) && item >= 1 && item <= tb_CountMItems(mh); }
+
+/* Set a field of an item's: the menus' snapshot for the host changes with it. */
+static int16_t set_item(gaddr mh, int16_t item, item_extra **e)
+{
+    if (!item_ok(mh, item))
+        return menuItemNotFoundErr;
+    *e = item_extras(mh, item, true);
+    if (!*e)
+        return memFullErr;
+    display_menus_changed();
+    return noErr;
+}
+
+int16_t tb_SetMenuItemCommandID(gaddr mh, int16_t item, uint32_t v)
+{
+    item_extra *e;
+    int16_t err = set_item(mh, item, &e);
+    if (!err)
+        e->command = v;
+    return err;
+}
+
+int16_t tb_SetMenuItemModifiers(gaddr mh, int16_t item, uint8_t v)
+{
+    item_extra *e;
+    int16_t err = set_item(mh, item, &e);
+    if (!err)
+        e->modifiers = v;
+    return err;
+}
+
+int16_t tb_SetMenuItemTextEncoding(gaddr mh, int16_t item, uint32_t v)
+{
+    item_extra *e;
+    int16_t err = set_item(mh, item, &e);
+    if (!err)
+        e->encoding = v;
+    return err;
+}
+
+int16_t tb_SetMenuItemFontID(gaddr mh, int16_t item, int16_t v)
+{
+    item_extra *e;
+    int16_t err = set_item(mh, item, &e);
+    if (!err)
+        e->font = v;
+    return err;
+}
+
+int16_t tb_SetMenuItemRefCon(gaddr mh, int16_t item, uint32_t v)
+{
+    item_extra *e;
+    int16_t err = set_item(mh, item, &e);
+    if (!err)
+        e->refcon = v;
+    return err;
+}
+
+int16_t tb_SetMenuItemRefCon2(gaddr mh, int16_t item, uint32_t v)
+{
+    item_extra *e;
+    int16_t err = set_item(mh, item, &e);
+    if (!err)
+        e->refcon2 = v;
+    return err;
+}
+
+int16_t tb_SetMenuItemKeyGlyph(gaddr mh, int16_t item, int16_t v)
+{
+    item_extra *e;
+    int16_t err = set_item(mh, item, &e);
+    if (!err)
+        e->glyph = v;
+    return err;
+}
+
+static int16_t get_item(gaddr mh, int16_t item, item_extra *out)
+{
+    if (!item_ok(mh, item))
+        return menuItemNotFoundErr;
+    item_extra *e = item_extras(mh, item, false);
+    if (e)
+        *out = *e;
+    else
+        memset(out, 0, sizeof *out);
+    return noErr;
+}
+
+int16_t tb_GetMenuItemCommandID(gaddr mh, int16_t item, gaddr out)
+{
+    item_extra e;
+    int16_t err = get_item(mh, item, &e);
+    if (!err && out)
+        wr32(out, e.command);
+    return err;
+}
+
+int16_t tb_GetMenuItemModifiers(gaddr mh, int16_t item, gaddr out)
+{
+    item_extra e;
+    int16_t err = get_item(mh, item, &e);
+    if (!err && out)
+        wr8(out, e.modifiers);
+    return err;
+}
+
+int16_t tb_GetMenuItemTextEncoding(gaddr mh, int16_t item, gaddr out)
+{
+    item_extra e;
+    int16_t err = get_item(mh, item, &e);
+    if (!err && out)
+        wr32(out, e.encoding);
+    return err;
+}
+
+int16_t tb_GetMenuItemFontID(gaddr mh, int16_t item, gaddr out)
+{
+    item_extra e;
+    int16_t err = get_item(mh, item, &e);
+    if (!err && out)
+        wr16(out, (uint16_t)e.font);
+    return err;
+}
+
+int16_t tb_GetMenuItemRefCon(gaddr mh, int16_t item, gaddr out)
+{
+    item_extra e;
+    int16_t err = get_item(mh, item, &e);
+    if (!err && out)
+        wr32(out, e.refcon);
+    return err;
+}
+
+int16_t tb_GetMenuItemRefCon2(gaddr mh, int16_t item, gaddr out)
+{
+    item_extra e;
+    int16_t err = get_item(mh, item, &e);
+    if (!err && out)
+        wr32(out, e.refcon2);
+    return err;
+}
+
+int16_t tb_GetMenuItemKeyGlyph(gaddr mh, int16_t item, gaddr out)
+{
+    item_extra e;
+    int16_t err = get_item(mh, item, &e);
+    if (!err && out)
+        wr16(out, (uint16_t)e.glyph);
+    return err;
+}
+
+/* A submenu: the key equivalent $1B and the menu's ID as the mark, as
+ * System 7 had them. */
+int16_t tb_SetMenuItemHierarchicalID(gaddr mh, int16_t item, int16_t id)
+{
+    if (!item_ok(mh, item))
+        return menuItemNotFoundErr;
+    tb_SetItemCmd(mh, item, id ? 0x1B : 0);
+    tb_SetItemMark(mh, item, id);
+    return noErr;
+}
+
+int16_t tb_GetMenuItemHierarchicalID(gaddr mh, int16_t item, gaddr out)
+{
+    if (!item_ok(mh, item))
+        return menuItemNotFoundErr;
+    gaddr it = item_addr(mh, item);
+    int nl = rd8(it);
+    bool sub = rd8(it + 1 + nl + 1) == 0x1B;
+    wr16(out, sub ? rd8(it + 1 + nl + 2) : 0);
+    return noErr;
+}
+
+/* Icons: an icon handle of a kind (kMenuIconType 1, kMenuShrinkIconType 2,
+ * kMenuSmallIconType 3, kMenuColorIconType 4, kMenuIconSuiteType 5),
+ * shown in the item as its icon number is in System 7's. */
+int16_t tb_SetMenuItemIconHandle(gaddr mh, int16_t item, uint8_t type, gaddr icon)
+{
+    if (!item_ok(mh, item))
+        return menuItemNotFoundErr;
+    item_extra *e = item_extras(mh, item, true);
+    if (!e)
+        return memFullErr;
+    e->icon_type = type;
+    e->icon = icon;
+    display_menus_changed();
+    return noErr;
+}
+
+int16_t tb_GetMenuItemIconHandle(gaddr mh, int16_t item, gaddr type, gaddr icon)
+{
+    item_extra e;
+    int16_t err = get_item(mh, item, &e);
+    if (err)
+        return err;
+    if (type)
+        wr8(type, e.icon_type);
+    if (icon)
+        wr32(icon, e.icon);
+    return noErr;
+}
+
+int8_t tb_IsMenuItemIconEnabled(gaddr mh, uint16_t item)
+{
+    item_extra e;
+    return get_item(mh, (int16_t)item, &e) == noErr && !e.icon_disabled;
+}
+
+void tb_EnableMenuItemIcon(gaddr mh, uint16_t item)
+{
+    item_extra *e = item_ok(mh, (int16_t)item) ? item_extras(mh, item, true) : NULL;
+    if (e)
+        e->icon_disabled = false;
+}
+
+void tb_DisableMenuItemIcon(gaddr mh, uint16_t item)
+{
+    item_extra *e = item_ok(mh, (int16_t)item) ? item_extras(mh, item, true) : NULL;
+    if (e)
+        e->icon_disabled = true;
+}
+
+int32_t tb_GetMenuFont(gaddr mh, gaddr font, gaddr size)
+{
+    if (!mh || !rd32(mh))
+        return menuNotFoundErr;
+    menu_extra *m = menu_extras(mh, false);
+    if (font)
+        wr16(font, m ? (uint16_t)m->font : 0);
+    if (size)
+        wr16(size, m ? m->size : 0);
+    return noErr;
+}
+
+int32_t tb_SetMenuFont(gaddr mh, int16_t font, uint16_t size)
+{
+    if (!mh || !rd32(mh))
+        return menuNotFoundErr;
+    menu_extra *m = menu_extras(mh, true);
+    if (!m)
+        return memFullErr;
+    m->font = font;
+    m->size = size;
+    tb_CalcMenuSize(mh);
+    return noErr;
+}
+
+int8_t tb_GetMenuExcludesMarkColumn(gaddr mh)
+{
+    menu_extra *m = mh ? menu_extras(mh, false) : NULL;
+    return m && m->exclude_mark;
+}
+
+int32_t tb_SetMenuExcludesMarkColumn(gaddr mh, int8_t exclude)
+{
+    if (!mh || !rd32(mh))
+        return menuNotFoundErr;
+    menu_extra *m = menu_extras(mh, true);
+    if (m)
+        m->exclude_mark = exclude != 0;
+    return noErr;
+}
+
+/* The unshifted character of a key on a US keyboard, by its ADB key code:
+ * what an item's key equivalent is matched with when Option changes the
+ * character (Option-S is ß). */
+static uint8_t key_base_char(int code)
+{
+    static const char keys[49] = "asdfhgzxcv\0bqweryt123465=97-80]ou[ip\0lj'k;\\,/nm.";
+    return code >= 0 && code < 48 ? (uint8_t)keys[code] : 0;
+}
+
+static uint8_t upper(uint8_t c) { return c >= 'a' && c <= 'z' ? (uint8_t)(c - 32) : c; }
+
+/* MenuEvent: a key-down event's menu item, with the modifiers its item
+ * asks for (Shift, Option, Control, and no Command at all); failing an
+ * exact match, MenuKey's choice among items that ask for none (which
+ * takes Command-Shift-S for Command-S). */
+uint32_t tb_MenuEvent(gaddr evt)
+{
+    int what = (int16_t)rd16(evt);
+    if (what != 3 && what != 5) /* keyDown, autoKey */
+        return 0;
+    uint32_t msg = rd32(evt + EventRecord_message_off);
+    uint16_t mods = rd16(evt + EventRecord_modifiers_off);
+    uint8_t ch = upper((uint8_t)msg), base = upper(key_base_char((int)(msg >> 8 & 0xFF)));
+    bool cmd = mods & 0x0100;
+    uint8_t have = (uint8_t)((mods & 0x0200 ? kMenuShiftModifier : 0) | (mods & 0x0800 ? kMenuOptionModifier : 0) |
+                             (mods & 0x1000 ? kMenuControlModifier : 0) | (cmd ? 0 : kMenuNoCommandModifier));
+    int n = nmenus();
+    for (int pass = 0; pass < 2; pass++)
+        for (int i = n - 1; i >= 0; i--) {
+            gaddr mh = menu_at(i);
+            if (!(MenuInfo_enableFlags(menu_ptr(mh)) & 1))
+                continue;
+            int items = tb_CountMItems(mh);
+            for (int k = 1; k <= items; k++) {
+                gaddr it = item_addr(mh, k);
+                uint8_t key = upper(rd8(it + 1 + rd8(it) + 1));
+                if (!key || (key >= 0x1B && key <= 0x1F) || (key != ch && key != base))
+                    continue;
+                item_extra *e = item_extras(mh, k, false);
+                uint8_t want = e ? e->modifiers : 0;
+                bool match = pass == 0 ? want == have : (!want && cmd && key == ch);
+                if (!match || !item_enabled(mh, k))
+                    continue;
+                int16_t id = MenuInfo_menuID(menu_ptr(mh));
+                tb_HiliteMenu(id);
+                last_choice = ((int32_t)id << 16) | k;
+                return (uint32_t)last_choice;
+            }
+        }
+    return 0;
+}
+
+/* 'xmnu', by the menu's ID: for each item, nothing (0), or 1 and its
+ * command ID, modifiers, a byte and a long unused, text encoding, refCon,
+ * refCon2, submenu ID, font ID and key glyph. */
+void menu_apply_xmnu(gaddr mh, int16_t id)
+{
+    gaddr h = tb_GetResource((int32_t)fourcc("xmnu"), id);
+    if (!h || !rd32(h))
+        return;
+    uint32_t len = (uint32_t)tb_GetHandleSize(h);
+    gaddr p = rd32(h);
+    if (len < 4 || rd16(p) != 0)
+        return;
+    int n = (int16_t)rd16(p + 2), items = tb_CountMItems(mh);
+    uint32_t o = 4;
+    for (int i = 1; i <= n && o + 2 <= len; i++) {
+        int type = (int16_t)rd16(p + o);
+        o += 2;
+        if (type != 1)
+            continue;
+        if (o + 28 > len)
+            break;
+        if (i <= items) {
+            item_extra *e = item_extras(mh, i, true);
+            if (e) {
+                e->command = rd32(p + o);
+                e->modifiers = rd8(p + o + 4);
+                e->encoding = rd32(p + o + 10);
+                e->refcon = rd32(p + o + 14);
+                e->refcon2 = rd32(p + o + 18);
+                e->font = (int16_t)rd16(p + o + 24);
+                e->glyph = (int16_t)rd16(p + o + 26);
+            }
+            int16_t sub = (int16_t)rd16(p + o + 22);
+            if (sub > 0)
+                tb_SetMenuItemHierarchicalID(mh, (int16_t)i, sub);
+            p = rd32(h);
+        }
+        o += 28;
+    }
 }

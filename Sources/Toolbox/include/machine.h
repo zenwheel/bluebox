@@ -155,6 +155,7 @@ typedef struct {
     char text[64];               /* MacRoman */
     bool enabled, separator;
     uint8_t key, mark, style;
+    uint8_t modifiers;           /* Mac OS 8's: 1 Shift, 2 Option, 4 Control, 8 no Command */
 } machine_menu_item;
 
 typedef struct {

@@ -11849,6 +11849,234 @@ static void ppcglue_AppendDialogItemList(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_MenuEvent(ppc_cpu *c)
+{
+    gaddr a_event = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_MenuEvent(a_event);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemCommandID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint32_t a_commandID = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemCommandID(a_menu, a_item, a_commandID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemCommandID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_commandID = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemCommandID(a_menu, a_item, a_commandID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemModifiers(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint8_t a_modifiers = (uint8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemModifiers(a_menu, a_item, a_modifiers);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemModifiers(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_modifiers = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemModifiers(a_menu, a_item, a_modifiers);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemIconHandle(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint8_t a_iconType = (uint8_t)c->gpr[5];
+    gaddr a_icon = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemIconHandle(a_menu, a_item, a_iconType, a_icon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemIconHandle(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_iconType = (gaddr)c->gpr[5];
+    gaddr a_icon = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemIconHandle(a_menu, a_item, a_iconType, a_icon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemTextEncoding(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint32_t a_encoding = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemTextEncoding(a_menu, a_item, a_encoding);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemTextEncoding(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_encoding = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemTextEncoding(a_menu, a_item, a_encoding);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemHierarchicalID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_hierID = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemHierarchicalID(a_menu, a_item, a_hierID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemHierarchicalID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_hierID = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemHierarchicalID(a_menu, a_item, a_hierID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemFontID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_fontID = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemFontID(a_menu, a_item, a_fontID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemFontID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_fontID = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemFontID(a_menu, a_item, a_fontID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemRefCon(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint32_t a_refCon = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemRefCon(a_menu, a_item, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemRefCon(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_refCon = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemRefCon(a_menu, a_item, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemRefCon2(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint32_t a_refCon2 = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemRefCon2(a_menu, a_item, a_refCon2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemRefCon2(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_refCon2 = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemRefCon2(a_menu, a_item, a_refCon2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemKeyGlyph(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_glyph = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemKeyGlyph(a_menu, a_item, a_glyph);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemKeyGlyph(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_glyph = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemKeyGlyph(a_menu, a_item, a_glyph);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsMenuItemIconEnabled(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    uint16_t a_item = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsMenuItemIconEnabled(a_menu, a_item);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EnableMenuItemIcon(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    uint16_t a_item = (uint16_t)c->gpr[4];
+    tb_EnableMenuItemIcon(a_menu, a_item);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisableMenuItemIcon(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    uint16_t a_item = (uint16_t)c->gpr[4];
+    tb_DisableMenuItemIcon(a_menu, a_item);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuFont(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    gaddr a_fontID = (gaddr)c->gpr[4];
+    gaddr a_fontSize = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetMenuFont(a_menu, a_fontID, a_fontSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuFont(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_fontID = (int16_t)c->gpr[4];
+    uint16_t a_fontSize = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetMenuFont(a_menu, a_fontID, a_fontSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuExcludesMarkColumn(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetMenuExcludesMarkColumn(a_menu);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuExcludesMarkColumn(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int8_t a_excludesMark = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetMenuExcludesMarkColumn(a_menu, a_excludesMark);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -16784,327 +17012,6 @@ static void ppctrap_DragTheRgn(ppc_cpu *c)
     uint32_t r = ppc_trap_result(4);
     ppc_trap_end();
     c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MenuEvent(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x20Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemCommandID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x502u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemCommandID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x503u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemModifiers(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x404u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemModifiers(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x505u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemIconHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x606u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemIconHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x707u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemTextEncoding(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x408u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemTextEncoding(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x509u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemHierarchicalID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x40Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemHierarchicalID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x50Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemFontID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x40Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemFontID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x510u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemRefCon(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x50Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemRefCon(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x50Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemRefCon2(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x511u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemRefCon2(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x512u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMenuItemKeyGlyph(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x513u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMenuItemKeyGlyph(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x514u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_IsMenuItemIconEnabled(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x18u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA825));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_EnableMenuItemIcon(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x19u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA825));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisableMenuItemIcon(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x20u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA825));
-    ppc_trap_end();
     c->pc = c->lr;
 }
 
@@ -25810,7 +25717,7 @@ const ppc_export ppc_exports[] = {
     {"DirectorUnknown3", ppcglue_DirectorUnknown3},
     {"DirectorUnknown4", ppcglue_DirectorUnknown4},
     {"DisableItem", ppcglue_DisableItem},
-    {"DisableMenuItemIcon", ppctrap_DisableMenuItemIcon},
+    {"DisableMenuItemIcon", ppcglue_DisableMenuItemIcon},
     {"DisposeAllSprites", ppctrap_DisposeAllSprites},
     {"DisposeCCursor", ppcglue_DisposeCCursor},
     {"DisposeCIcon", ppcglue_DisposeCIcon},
@@ -25913,7 +25820,7 @@ const ppc_export ppc_exports[] = {
     {"EmptyRect", ppcglue_EmptyRect},
     {"EmptyRgn", ppcglue_EmptyRgn},
     {"EnableItem", ppcglue_EnableItem},
-    {"EnableMenuItemIcon", ppctrap_EnableMenuItemIcon},
+    {"EnableMenuItemIcon", ppcglue_EnableMenuItemIcon},
     {"EndFullScreen", ppcglue_EndFullScreen},
     {"EndMediaEdits", ppctrap_EndMediaEdits},
     {"EndThemeDragSound", ppcglue_EndThemeDragSound},
@@ -26348,17 +26255,19 @@ const ppc_export ppc_exports[] = {
     {"GetMemFragment", ppctrap_GetMemFragment},
     {"GetMenu", ppcglue_GetMenu},
     {"GetMenuBar", ppcglue_GetMenuBar},
+    {"GetMenuExcludesMarkColumn", ppcglue_GetMenuExcludesMarkColumn},
+    {"GetMenuFont", ppcglue_GetMenuFont},
     {"GetMenuHandle", ppcglue_GetMenuHandle},
-    {"GetMenuItemCommandID", ppctrap_GetMenuItemCommandID},
-    {"GetMenuItemFontID", ppctrap_GetMenuItemFontID},
-    {"GetMenuItemHierarchicalID", ppctrap_GetMenuItemHierarchicalID},
-    {"GetMenuItemIconHandle", ppctrap_GetMenuItemIconHandle},
-    {"GetMenuItemKeyGlyph", ppctrap_GetMenuItemKeyGlyph},
-    {"GetMenuItemModifiers", ppctrap_GetMenuItemModifiers},
-    {"GetMenuItemRefCon", ppctrap_GetMenuItemRefCon},
-    {"GetMenuItemRefCon2", ppctrap_GetMenuItemRefCon2},
+    {"GetMenuItemCommandID", ppcglue_GetMenuItemCommandID},
+    {"GetMenuItemFontID", ppcglue_GetMenuItemFontID},
+    {"GetMenuItemHierarchicalID", ppcglue_GetMenuItemHierarchicalID},
+    {"GetMenuItemIconHandle", ppcglue_GetMenuItemIconHandle},
+    {"GetMenuItemKeyGlyph", ppcglue_GetMenuItemKeyGlyph},
+    {"GetMenuItemModifiers", ppcglue_GetMenuItemModifiers},
+    {"GetMenuItemRefCon", ppcglue_GetMenuItemRefCon},
+    {"GetMenuItemRefCon2", ppcglue_GetMenuItemRefCon2},
     {"GetMenuItemText", ppcglue_GetMenuItemText},
-    {"GetMenuItemTextEncoding", ppctrap_GetMenuItemTextEncoding},
+    {"GetMenuItemTextEncoding", ppcglue_GetMenuItemTextEncoding},
     {"GetMouse", ppcglue_GetMouse},
     {"GetMovieActive", ppcglue_GetMovieActive},
     {"GetMovieActiveSegment", ppctrap_GetMovieActiveSegment},
@@ -26720,7 +26629,7 @@ const ppc_export ppc_exports[] = {
     {"IsControlActive", ppcglue_IsControlActive},
     {"IsControlVisible", ppcglue_IsControlVisible},
     {"IsDialogEvent", ppcglue_IsDialogEvent},
-    {"IsMenuItemIconEnabled", ppctrap_IsMenuItemIconEnabled},
+    {"IsMenuItemIconEnabled", ppcglue_IsMenuItemIconEnabled},
     {"IsMetric", ppcglue_IsMetric},
     {"IsMovieDone", ppcglue_IsMovieDone},
     {"IsOutline", ppcglue_IsOutline},
@@ -27309,7 +27218,7 @@ const ppc_export ppc_exports[] = {
     {"MeasureText", ppcglue_MeasureText},
     {"MediaTimeToSampleNum", ppctrap_MediaTimeToSampleNum},
     {"MenuChoice", ppcglue_MenuChoice},
-    {"MenuEvent", ppctrap_MenuEvent},
+    {"MenuEvent", ppcglue_MenuEvent},
     {"MenuKey", ppcglue_MenuKey},
     {"MenuSelect", ppcglue_MenuSelect},
     {"ModalDialog", ppcglue_ModalDialog},
@@ -28128,17 +28037,19 @@ const ppc_export ppc_exports[] = {
     {"SetMediaShadowSync", ppctrap_SetMediaShadowSync},
     {"SetMediaTimeScale", ppctrap_SetMediaTimeScale},
     {"SetMenuBar", ppcglue_SetMenuBar},
+    {"SetMenuExcludesMarkColumn", ppcglue_SetMenuExcludesMarkColumn},
     {"SetMenuFlash", ppcglue_SetMenuFlash},
-    {"SetMenuItemCommandID", ppctrap_SetMenuItemCommandID},
-    {"SetMenuItemFontID", ppctrap_SetMenuItemFontID},
-    {"SetMenuItemHierarchicalID", ppctrap_SetMenuItemHierarchicalID},
-    {"SetMenuItemIconHandle", ppctrap_SetMenuItemIconHandle},
-    {"SetMenuItemKeyGlyph", ppctrap_SetMenuItemKeyGlyph},
-    {"SetMenuItemModifiers", ppctrap_SetMenuItemModifiers},
-    {"SetMenuItemRefCon", ppctrap_SetMenuItemRefCon},
-    {"SetMenuItemRefCon2", ppctrap_SetMenuItemRefCon2},
+    {"SetMenuFont", ppcglue_SetMenuFont},
+    {"SetMenuItemCommandID", ppcglue_SetMenuItemCommandID},
+    {"SetMenuItemFontID", ppcglue_SetMenuItemFontID},
+    {"SetMenuItemHierarchicalID", ppcglue_SetMenuItemHierarchicalID},
+    {"SetMenuItemIconHandle", ppcglue_SetMenuItemIconHandle},
+    {"SetMenuItemKeyGlyph", ppcglue_SetMenuItemKeyGlyph},
+    {"SetMenuItemModifiers", ppcglue_SetMenuItemModifiers},
+    {"SetMenuItemRefCon", ppcglue_SetMenuItemRefCon},
+    {"SetMenuItemRefCon2", ppcglue_SetMenuItemRefCon2},
     {"SetMenuItemText", ppcglue_SetMenuItemText},
-    {"SetMenuItemTextEncoding", ppctrap_SetMenuItemTextEncoding},
+    {"SetMenuItemTextEncoding", ppcglue_SetMenuItemTextEncoding},
     {"SetMovieActive", ppcglue_SetMovieActive},
     {"SetMovieActiveSegment", ppctrap_SetMovieActiveSegment},
     {"SetMovieAnchorDataRef", ppctrap_SetMovieAnchorDataRef},

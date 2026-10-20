@@ -3313,6 +3313,16 @@ static void glue_DisableItem(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DisableMenuItemIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_item = (uint16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    tb_DisableMenuItemIcon(a_menu, a_item);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposeCCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4201,6 +4211,16 @@ static void glue_EnableItem(cpu68k *c, uint16_t trapword)
     int16_t a_item = (int16_t)cpu_pop16(c);
     gaddr a_mh = (gaddr)cpu_pop32(c);
     tb_EnableItem(a_mh, a_item);
+    cpu_push32(c, ret);
+}
+
+static void glue_EnableMenuItemIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_item = (uint16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    tb_EnableMenuItemIcon(a_menu, a_item);
     cpu_push32(c, ret);
 }
 
@@ -7113,6 +7133,28 @@ static void glue_GetMenuBar(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetMenuExcludesMarkColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int8_t r = tb_GetMenuExcludesMarkColumn(a_menu);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuFont(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fontSize = (gaddr)cpu_pop32(c);
+    gaddr a_fontID = (gaddr)cpu_pop32(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetMenuFont(a_menu, a_fontID, a_fontSize);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetMenuHandle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7120,6 +7162,103 @@ static void glue_GetMenuHandle(cpu68k *c, uint16_t trapword)
     int16_t a_mid = (int16_t)cpu_pop16(c);
     gaddr r = tb_GetMenuHandle(a_mid);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemCommandID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_commandID = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemCommandID(a_menu, a_item, a_commandID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemFontID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fontID = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemFontID(a_menu, a_item, a_fontID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemHierarchicalID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_hierID = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemHierarchicalID(a_menu, a_item, a_hierID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemIconHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_icon = (gaddr)cpu_pop32(c);
+    gaddr a_iconType = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemIconHandle(a_menu, a_item, a_iconType, a_icon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemKeyGlyph(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_glyph = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemKeyGlyph(a_menu, a_item, a_glyph);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemModifiers(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_modifiers = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemModifiers(a_menu, a_item, a_modifiers);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemRefCon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemRefCon(a_menu, a_item, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemRefCon2(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon2 = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemRefCon2(a_menu, a_item, a_refCon2);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -7131,6 +7270,18 @@ static void glue_GetMenuItemText(cpu68k *c, uint16_t trapword)
     int16_t a_item = (int16_t)cpu_pop16(c);
     gaddr a_mh = (gaddr)cpu_pop32(c);
     tb_GetMenuItemText(a_mh, a_item, a_str);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMenuItemTextEncoding(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_encoding = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetMenuItemTextEncoding(a_menu, a_item, a_encoding);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9610,6 +9761,17 @@ static void glue_IsDialogEvent(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsMenuItemIconEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_item = (uint16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsMenuItemIconEnabled(a_menu, a_item);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_IsMetric(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10720,6 +10882,16 @@ static void glue_MenuChoice(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int32_t r = tb_MenuChoice();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MenuEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_event = (gaddr)cpu_pop32(c);
+    uint32_t r = tb_MenuEvent(a_event);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -15014,12 +15186,132 @@ static void glue_SetMenuBar(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetMenuExcludesMarkColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_excludesMark = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetMenuExcludesMarkColumn(a_menu, a_excludesMark);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetMenuFlash(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t a_i = (int16_t)cpu_pop16(c);
     tb_SetMenuFlash(a_i);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuFont(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_fontSize = (uint16_t)cpu_pop16(c);
+    int16_t a_fontID = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetMenuFont(a_menu, a_fontID, a_fontSize);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemCommandID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_commandID = (uint32_t)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemCommandID(a_menu, a_item, a_commandID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemFontID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fontID = (int16_t)cpu_pop16(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemFontID(a_menu, a_item, a_fontID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemHierarchicalID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_hierID = (int16_t)cpu_pop16(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemHierarchicalID(a_menu, a_item, a_hierID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemIconHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_icon = (gaddr)cpu_pop32(c);
+    uint8_t a_iconType = (uint8_t)(cpu_pop16(c) >> 8);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemIconHandle(a_menu, a_item, a_iconType, a_icon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemKeyGlyph(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_glyph = (int16_t)cpu_pop16(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemKeyGlyph(a_menu, a_item, a_glyph);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemModifiers(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint8_t a_modifiers = (uint8_t)(cpu_pop16(c) >> 8);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemModifiers(a_menu, a_item, a_modifiers);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemRefCon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_refCon = (uint32_t)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemRefCon(a_menu, a_item, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemRefCon2(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_refCon2 = (uint32_t)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemRefCon2(a_menu, a_item, a_refCon2);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -15031,6 +15323,18 @@ static void glue_SetMenuItemText(cpu68k *c, uint16_t trapword)
     int16_t a_item = (int16_t)cpu_pop16(c);
     gaddr a_mh = (gaddr)cpu_pop32(c);
     tb_SetMenuItemText(a_mh, a_item, a_str);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMenuItemTextEncoding(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_encoding = (uint32_t)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_menu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetMenuItemTextEncoding(a_menu, a_item, a_encoding);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -19613,28 +19917,28 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABC2, (int32_t)0x23u, "TransformPoints", CONV_STACK, 12, 2, glue_TransformPoints},
     {0xABC2, (int32_t)0x24u, "TransformFixedRect", CONV_STACK, 12, 2, glue_TransformFixedRect},
     {0xABC2, (int32_t)0x25u, "TransformRect", CONV_STACK, 12, 2, glue_TransformRect},
-    {0xA825, (int32_t)0x18u, "IsMenuItemIconEnabled", CONV_STACK, 6, 2, 0},
-    {0xA825, (int32_t)0x19u, "EnableMenuItemIcon", CONV_STACK, 6, 0, 0},
-    {0xA825, (int32_t)0x20u, "DisableMenuItemIcon", CONV_STACK, 6, 0, 0},
-    {0xA825, (int32_t)0x20Cu, "MenuEvent", CONV_STACK, 4, 4, 0},
-    {0xA825, (int32_t)0x404u, "SetMenuItemModifiers", CONV_STACK, 8, 2, 0},
-    {0xA825, (int32_t)0x408u, "SetMenuItemTextEncoding", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x40Du, "SetMenuItemHierarchicalID", CONV_STACK, 8, 2, 0},
-    {0xA825, (int32_t)0x40Fu, "SetMenuItemFontID", CONV_STACK, 8, 2, 0},
-    {0xA825, (int32_t)0x502u, "SetMenuItemCommandID", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x503u, "GetMenuItemCommandID", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x505u, "GetMenuItemModifiers", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x509u, "GetMenuItemTextEncoding", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x50Au, "SetMenuItemRefCon", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x50Bu, "GetMenuItemRefCon", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x50Eu, "GetMenuItemHierarchicalID", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x510u, "GetMenuItemFontID", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x511u, "SetMenuItemRefCon2", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x512u, "GetMenuItemRefCon2", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x513u, "SetMenuItemKeyGlyph", CONV_STACK, 8, 2, 0},
-    {0xA825, (int32_t)0x514u, "GetMenuItemKeyGlyph", CONV_STACK, 10, 2, 0},
-    {0xA825, (int32_t)0x606u, "SetMenuItemIconHandle", CONV_STACK, 12, 2, 0},
-    {0xA825, (int32_t)0x707u, "GetMenuItemIconHandle", CONV_STACK, 14, 2, 0},
+    {0xA825, (int32_t)0x18u, "IsMenuItemIconEnabled", CONV_STACK, 6, 2, glue_IsMenuItemIconEnabled},
+    {0xA825, (int32_t)0x19u, "EnableMenuItemIcon", CONV_STACK, 6, 0, glue_EnableMenuItemIcon},
+    {0xA825, (int32_t)0x20u, "DisableMenuItemIcon", CONV_STACK, 6, 0, glue_DisableMenuItemIcon},
+    {0xA825, (int32_t)0x20Cu, "MenuEvent", CONV_STACK, 4, 4, glue_MenuEvent},
+    {0xA825, (int32_t)0x404u, "SetMenuItemModifiers", CONV_STACK, 8, 2, glue_SetMenuItemModifiers},
+    {0xA825, (int32_t)0x408u, "SetMenuItemTextEncoding", CONV_STACK, 10, 2, glue_SetMenuItemTextEncoding},
+    {0xA825, (int32_t)0x40Du, "SetMenuItemHierarchicalID", CONV_STACK, 8, 2, glue_SetMenuItemHierarchicalID},
+    {0xA825, (int32_t)0x40Fu, "SetMenuItemFontID", CONV_STACK, 8, 2, glue_SetMenuItemFontID},
+    {0xA825, (int32_t)0x502u, "SetMenuItemCommandID", CONV_STACK, 10, 2, glue_SetMenuItemCommandID},
+    {0xA825, (int32_t)0x503u, "GetMenuItemCommandID", CONV_STACK, 10, 2, glue_GetMenuItemCommandID},
+    {0xA825, (int32_t)0x505u, "GetMenuItemModifiers", CONV_STACK, 10, 2, glue_GetMenuItemModifiers},
+    {0xA825, (int32_t)0x509u, "GetMenuItemTextEncoding", CONV_STACK, 10, 2, glue_GetMenuItemTextEncoding},
+    {0xA825, (int32_t)0x50Au, "SetMenuItemRefCon", CONV_STACK, 10, 2, glue_SetMenuItemRefCon},
+    {0xA825, (int32_t)0x50Bu, "GetMenuItemRefCon", CONV_STACK, 10, 2, glue_GetMenuItemRefCon},
+    {0xA825, (int32_t)0x50Eu, "GetMenuItemHierarchicalID", CONV_STACK, 10, 2, glue_GetMenuItemHierarchicalID},
+    {0xA825, (int32_t)0x510u, "GetMenuItemFontID", CONV_STACK, 10, 2, glue_GetMenuItemFontID},
+    {0xA825, (int32_t)0x511u, "SetMenuItemRefCon2", CONV_STACK, 10, 2, glue_SetMenuItemRefCon2},
+    {0xA825, (int32_t)0x512u, "GetMenuItemRefCon2", CONV_STACK, 10, 2, glue_GetMenuItemRefCon2},
+    {0xA825, (int32_t)0x513u, "SetMenuItemKeyGlyph", CONV_STACK, 8, 2, glue_SetMenuItemKeyGlyph},
+    {0xA825, (int32_t)0x514u, "GetMenuItemKeyGlyph", CONV_STACK, 10, 2, glue_GetMenuItemKeyGlyph},
+    {0xA825, (int32_t)0x606u, "SetMenuItemIconHandle", CONV_STACK, 12, 2, glue_SetMenuItemIconHandle},
+    {0xA825, (int32_t)0x707u, "GetMenuItemIconHandle", CONV_STACK, 14, 2, glue_GetMenuItemIconHandle},
     {0xAA59, (int32_t)0x0u, "NewRoutineDescriptor", CONV_STACK, 10, 4, 0},
     {0xAA59, (int32_t)0x1u, "DisposeRoutineDescriptor", CONV_STACK, 4, 0, 0},
     {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, 0},

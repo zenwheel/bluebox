@@ -455,11 +455,83 @@ extension BlueBox {
             let r = tb_NewPtr(8, false, true)
             for (i, v) in [50, 50, 300, 400].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
             let items = tb_GetResource(Int32(bitPattern: fourCC("DITL")), 211)
-            _ = tb_DetachResource(items)
+            tb_DetachResource(items)
             let d = tb_NewFeaturesDialog(0, r, 0, 0, 1, 0xFFFF_FFFF, 0, 0, items, 2)
             let out = tb_NewPtr(4, false, true)
             #expect(tb_GetRootControl(d, out) == 0 && rd32(out) != 0)
             tb_DisposeDialog(d)
+        }
+    }
+}
+
+extension BlueBox {
+    /// Mac OS 8's Menu Manager: MenuEvent with item modifiers, command IDs,
+    /// 'xmnu' resources.
+    @Suite struct AppearanceMenus {
+        func pstr(_ s: String) -> UInt32 {
+            let p = tb_NewPtr(256, false, true)
+            guestPString(s, at: p)
+            return p
+        }
+
+        /// A key-down event: the character, the key code, and the modifiers.
+        func keyEvent(_ ch: Character, code: Int, mods: UInt16) -> UInt32 {
+            let e = tb_NewPtr(16, false, true)
+            wr16(e, 3)
+            wr32(e + 2, UInt32(code) << 8 | UInt32(ch.asciiValue!))
+            wr16(e + 14, mods)
+            return e
+        }
+
+        @Test func menuEventMatchesModifiers() {
+            launchTestApp()
+            _ = initToolbox()
+            let m = tb_NewMenu(130, pstr("File"))
+            tb_AppendMenu(m, pstr("Save/S;Save As/S;Close/W"))
+            tb_InsertMenu(m, 0)
+            #expect(tb_SetMenuItemModifiers(m, 2, 1) == 0) // Save As: Command-Shift-S
+            let mods = tb_NewPtr(1, false, true)
+            #expect(tb_GetMenuItemModifiers(m, 2, mods) == 0 && rd8(mods) == 1)
+            let cmd: UInt16 = 0x0100, shift: UInt16 = 0x0200
+            #expect(tb_MenuEvent(keyEvent("s", code: 1, mods: cmd)) == (130 << 16 | 1))
+            #expect(tb_MenuEvent(keyEvent("S", code: 1, mods: cmd | shift)) == (130 << 16 | 2))
+            #expect(tb_MenuEvent(keyEvent("w", code: 13, mods: cmd)) == (130 << 16 | 3))
+            #expect(tb_MenuEvent(keyEvent("w", code: 13, mods: 0)) == 0) // no Command
+            // Command IDs, and items moving up when one before them goes.
+            #expect(tb_SetMenuItemCommandID(m, 3, 0x636C6F73) == 0) // 'clos'
+            tb_DeleteMenuItem(m, 1)
+            let id = tb_NewPtr(4, false, true)
+            #expect(tb_GetMenuItemCommandID(m, 2, id) == 0 && rd32(id) == 0x636C6F73)
+            #expect(tb_GetMenuItemModifiers(m, 1, mods) == 0 && rd8(mods) == 1)
+            #expect(tb_SetMenuItemCommandID(m, 9, 1) == -5622) // menuItemNotFoundErr
+            #expect(tb_SetMenuFont(m, 3, 10) == 0)
+            let f = tb_NewPtr(2, false, true), sz = tb_NewPtr(2, false, true)
+            #expect(tb_GetMenuFont(m, f, sz) == 0 && rd16(f) == 3 && rd16(sz) == 10)
+        }
+
+        @Test func xmnuResourcesApply() {
+            // MENU 131: two items; 'xmnu' 131: the second with command 'quit', Command-Option.
+            let menu = cat(be16(131), be16(0), be16(0), be32(0), be32(0xFFFF_FFFF),
+                           [4], Array("Edit".utf8),
+                           [4], Array("Undo".utf8), [0, 0x5A, 0, 0],
+                           [4], Array("Quit".utf8), [0, 0x51, 0, 0], [0])
+            let entry = cat(be16(1), be32(0x7175_6974), [2, 0], be32(0), be32(0xFFFF_FFFE), be32(7), be32(0),
+                            be16(0), be16(0), be16(0))
+            let xmnu = cat(be16(0), be16(2), be16(0), entry)
+            launchTestApp([TestResource(type: "MENU", id: 131, data: menu),
+                           TestResource(type: "xmnu", id: 131, data: xmnu)])
+            _ = initToolbox()
+            let m = tb_GetMenu(131)
+            #expect(m != 0)
+            let v = tb_NewPtr(4, false, true)
+            #expect(tb_GetMenuItemCommandID(m, 2, v) == 0 && rd32(v) == 0x7175_6974)
+            #expect(tb_GetMenuItemRefCon(m, 2, v) == 0 && rd32(v) == 7)
+            let mods = tb_NewPtr(1, false, true)
+            #expect(tb_GetMenuItemModifiers(m, 2, mods) == 0 && rd8(mods) == 2)
+            #expect(tb_GetMenuItemCommandID(m, 1, v) == 0 && rd32(v) == 0)
+            #expect(tb_SetMenuItemHierarchicalID(m, 1, 140) == 0)
+            let h = tb_NewPtr(2, false, true)
+            #expect(tb_GetMenuItemHierarchicalID(m, 1, h) == 0 && rd16(h) == 140)
         }
     }
 }
