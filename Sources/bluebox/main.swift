@@ -103,7 +103,8 @@ func usage() -> Never {
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1),
                      keydown:K and keyup:K (K a character, space, return, tab,
-                     escape, delete or an arrow: left, right, up, down), and
+                     escape, delete or an arrow: left, right, up, down; or shift,
+                     option, control or command, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      in a window, wait:N is N/1000 ms and snap:F.png saves the screen
       bluebox import <file>... [--library dir] [--force]
@@ -246,7 +247,8 @@ func scriptKeyChar(_ name: String) -> Int32 {
 
 /// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item,
 /// keydown:K and keyup:K (K a character or return, tab, space, delete, escape,
-/// left, right, up, down: held for games that poll the keyboard), and the mouse.  Each step is queued at an instruction count (the waits
+/// left, right, up, down: held for games that poll the keyboard; or shift,
+/// option, control, command, held for the clicks and keys after them), and the mouse.  Each step is queued at an instruction count (the waits
 /// add up; other steps are spaced a little apart) and applied by the
 /// emulator when due, even while the application waits in the Toolbox.
 func queueScript(_ script: [String], start: UInt64) {
@@ -286,6 +288,14 @@ func queueScript(_ script: [String], start: UInt64) {
         }
         if let colon = step.firstIndex(of: ":"), ["keydown", "keyup"].contains(String(step[..<colon])) {
             let name = String(step[step.index(after: colon)...])
+            // A modifier: no key event, only the modifiers of what follows.
+            let modifiers: [String: (code: Int32, bit: Int32)] = ["shift": (56, 0x200), "option": (58, 0x800),
+                                                                   "control": (59, 0x1000), "command": (55, 0x100)]
+            if let m = modifiers[name] {
+                let down = step.hasPrefix("keydown")
+                add(down ? 3 : 4, -1, down ? m.bit : 0, m.code, after: 50_000)
+                continue
+            }
             guard let code = scriptKeyCodes[name] else { fail("unknown key: \(step)") }
             let ch = scriptKeyChar(name)
             add(step.hasPrefix("keydown") ? 3 : 4, ch, 0, code, after: 50_000)
