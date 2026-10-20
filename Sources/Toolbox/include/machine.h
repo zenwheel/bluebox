@@ -250,6 +250,7 @@ typedef struct {
 
 typedef struct {
     bool save;
+    bool folders;                /* open: choose a folder, not a file */
     char prompt[256];            /* UTF-8; may be empty */
     char default_name[256];      /* UTF-8, for save */
     uint32_t types[16];          /* for open; none means any file */

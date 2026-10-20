@@ -109,6 +109,7 @@ void gestalt_init(void)
     gestalt_set(fourcc("pmgr"), 0x01100000);    /* gestaltGXPrintingMgrVersion */
     gestalt_set(fourcc("teat"), 0x1);           /* gestaltTEAttr: TEGetHiliteRgn */
     gestalt_set(fourcc("drag"), 0x1);           /* gestaltDragMgrAttr: the Drag Manager */
+    gestalt_set(fourcc("cmnu"), 0x2);           /* gestaltContextualMenuTrapAvailable */
     gestalt_set(fourcc("ttsc"), 0x1);           /* gestaltSpeechAttr: the Speech Manager */
     gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
     /* Blue Box itself, for software written for it: version 1.0 in the

@@ -95,6 +95,12 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
 void gestalt_init(void);
 uint32_t gestalt_value(uint32_t selector, uint32_t fallback);
 
+/* Standard File's host panels (stdfile.c), for Navigation Services too:
+ * a request answered with a host path, and a filter of its own for the
+ * files an open panel offers (true hides; NULL for none). */
+bool stdfile_request(machine_file_request *rq, char *path, size_t pathsize);
+void stdfile_set_filter(bool (*fn)(const char *path));
+
 /* ---- File Manager ---- */
 
 /* An FSSpec for a host path (the file need not exist). */

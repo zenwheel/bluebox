@@ -6074,6 +6074,197 @@ static void ppcglue_InvalMenuBar(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NavServicesCanRun(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_NavServicesCanRun();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavServicesAvailable(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_NavServicesAvailable();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavLibraryVersion(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_NavLibraryVersion();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavLoad(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavLoad();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavUnload(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavUnload();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavDisposeReply(ppc_cpu *c)
+{
+    gaddr a_reply = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavDisposeReply(a_reply);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavGetFile(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_previewProc = (gaddr)c->gpr[7];
+    gaddr a_filterProc = (gaddr)c->gpr[8];
+    gaddr a_typeList = (gaddr)c->gpr[9];
+    gaddr a_callBackUD = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavGetFile(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_previewProc, a_filterProc, a_typeList, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavChooseFile(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_previewProc = (gaddr)c->gpr[7];
+    gaddr a_filterProc = (gaddr)c->gpr[8];
+    gaddr a_typeList = (gaddr)c->gpr[9];
+    gaddr a_callBackUD = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavChooseFile(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_previewProc, a_filterProc, a_typeList, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavTranslateFile(ppc_cpu *c)
+{
+    gaddr a_translateInfo = (gaddr)c->gpr[3];
+    uint32_t a_howToTranslate = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavTranslateFile(a_translateInfo, a_howToTranslate);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavChooseVolume(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_filterProc = (gaddr)c->gpr[7];
+    gaddr a_callBackUD = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavChooseVolume(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_filterProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavChooseFolder(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_filterProc = (gaddr)c->gpr[7];
+    gaddr a_callBackUD = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavChooseFolder(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_filterProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavChooseObject(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_filterProc = (gaddr)c->gpr[7];
+    gaddr a_callBackUD = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavChooseObject(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_filterProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavNewFolder(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_callBackUD = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavNewFolder(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavPutFile(ppc_cpu *c)
+{
+    gaddr a_defaultLocation = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_dialogOptions = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    int32_t a_fileType = (int32_t)c->gpr[7];
+    int32_t a_fileCreator = (int32_t)c->gpr[8];
+    gaddr a_callBackUD = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavPutFile(a_defaultLocation, a_reply, a_dialogOptions, a_eventProc, a_fileType, a_fileCreator, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavAskSaveChanges(ppc_cpu *c)
+{
+    gaddr a_dialogOptions = (gaddr)c->gpr[3];
+    uint32_t a_action = (uint32_t)c->gpr[4];
+    gaddr a_reply = (gaddr)c->gpr[5];
+    gaddr a_eventProc = (gaddr)c->gpr[6];
+    gaddr a_callBackUD = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavAskSaveChanges(a_dialogOptions, a_action, a_reply, a_eventProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavCustomAskSaveChanges(ppc_cpu *c)
+{
+    gaddr a_dialogOptions = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_eventProc = (gaddr)c->gpr[5];
+    gaddr a_callBackUD = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavCustomAskSaveChanges(a_dialogOptions, a_reply, a_eventProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavAskDiscardChanges(ppc_cpu *c)
+{
+    gaddr a_dialogOptions = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    gaddr a_eventProc = (gaddr)c->gpr[5];
+    gaddr a_callBackUD = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavAskDiscardChanges(a_dialogOptions, a_reply, a_eventProc, a_callBackUD);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavCompleteSave(ppc_cpu *c)
+{
+    gaddr a_translateInfo = (gaddr)c->gpr[3];
+    uint32_t a_howToTranslate = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavCompleteSave(a_translateInfo, a_howToTranslate);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavCreatePreview(ppc_cpu *c)
+{
+    gaddr a_theObject = (gaddr)c->gpr[3];
+    int32_t a_previewDataType = (int32_t)c->gpr[4];
+    gaddr a_previewData = (gaddr)c->gpr[5];
+    int32_t a_previewDataSize = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavCreatePreview(a_theObject, a_previewDataType, a_previewData, a_previewDataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavCustomControl(ppc_cpu *c)
+{
+    gaddr a_context = (gaddr)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_parms = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavCustomControl(a_context, a_selector, a_parms);
+    c->pc = c->lr;
+}
+
 static void ppcglue_NMInstall(ppc_cpu *c)
 {
     gaddr a_nmptr = (gaddr)c->gpr[3];
@@ -12150,6 +12341,48 @@ static void ppcglue_GetIndexedCollectionItemInfo(ppc_cpu *c)
     gaddr a_itemSize = (gaddr)c->gpr[7];
     gaddr a_attributes = (gaddr)c->gpr[8];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIndexedCollectionItemInfo(a_c, a_index, a_tag, a_id, a_itemSize, a_attributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitContextualMenus(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsShowContextualMenuClick(ppc_cpu *c)
+{
+    gaddr a_inEvent = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsShowContextualMenuClick(a_inEvent);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ContextualMenuSelect(ppc_cpu *c)
+{
+    gaddr a_inMenu = (gaddr)c->gpr[3];
+    uint32_t a_inGlobalLocation = (uint32_t)c->gpr[4];
+    int8_t a_inReserved = (int8_t)c->gpr[5];
+    uint32_t a_inHelpType = (uint32_t)c->gpr[6];
+    gaddr a_inHelpItemString = (gaddr)c->gpr[7];
+    gaddr a_inSelection = (gaddr)c->gpr[8];
+    gaddr a_outUserSelectionType = (gaddr)c->gpr[9];
+    gaddr a_outMenuID = (gaddr)c->gpr[10];
+    gaddr a_outMenuItem = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)tb_ContextualMenuSelect(a_inMenu, a_inGlobalLocation, a_inReserved, a_inHelpType, a_inHelpItemString, a_inSelection, a_outUserSelectionType, a_outMenuID, a_outMenuItem);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ProcessIsContextualMenuClient(ppc_cpu *c)
+{
+    gaddr a_inPSN = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_ProcessIsContextualMenuClient(a_inPSN);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NavGetDefaultDialogOptions(ppc_cpu *c)
+{
+    gaddr a_dialogOptions = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NavGetDefaultDialogOptions(a_dialogOptions);
     c->pc = c->lr;
 }
 
@@ -24215,6 +24448,7 @@ const ppc_export ppc_exports[] = {
     {"CompressSequenceBegin", ppcglue_CompressSequenceBegin},
     {"CompressSequenceFrame", ppcglue_CompressSequenceFrame},
     {"ConcatMatrix", ppcglue_ConcatMatrix},
+    {"ContextualMenuSelect", ppcglue_ContextualMenuSelect},
     {"ContinueSpeech", ppcglue_ContinueSpeech},
     {"ConvertFileToMovieFile", ppctrap_ConvertFileToMovieFile},
     {"ConvertImage", ppctrap_ConvertImage},
@@ -25075,6 +25309,7 @@ const ppc_export ppc_exports[] = {
     {"InitAllPacks", ppcglue_InitAllPacks},
     {"InitApplZone", ppctrap_InitApplZone},
     {"InitCPort", ppcglue_InitCPort},
+    {"InitContextualMenus", ppcglue_InitContextualMenus},
     {"InitCursor", ppcglue_InitCursor},
     {"InitDateCache", ppcglue_InitDateCache},
     {"InitDialogs", ppcglue_InitDialogs},
@@ -25125,6 +25360,7 @@ const ppc_export ppc_exports[] = {
     {"IsOutline", ppcglue_IsOutline},
     {"IsRegisteredSection", ppcglue_IsRegisteredSection},
     {"IsScrapMovie", ppctrap_IsScrapMovie},
+    {"IsShowContextualMenuClick", ppcglue_IsShowContextualMenuClick},
     {"KeyScript", ppcglue_KeyScript},
     {"KeyTranslate", ppcglue_KeyTranslate},
     {"KillControls", ppcglue_KillControls},
@@ -25723,6 +25959,27 @@ const ppc_export ppc_exports[] = {
     {"NMInstall", ppcglue_NMInstall},
     {"NMRemove", ppcglue_NMRemove},
     {"NSetPalette", ppcglue_NSetPalette},
+    {"NavAskDiscardChanges", ppcglue_NavAskDiscardChanges},
+    {"NavAskSaveChanges", ppcglue_NavAskSaveChanges},
+    {"NavChooseFile", ppcglue_NavChooseFile},
+    {"NavChooseFolder", ppcglue_NavChooseFolder},
+    {"NavChooseObject", ppcglue_NavChooseObject},
+    {"NavChooseVolume", ppcglue_NavChooseVolume},
+    {"NavCompleteSave", ppcglue_NavCompleteSave},
+    {"NavCreatePreview", ppcglue_NavCreatePreview},
+    {"NavCustomAskSaveChanges", ppcglue_NavCustomAskSaveChanges},
+    {"NavCustomControl", ppcglue_NavCustomControl},
+    {"NavDisposeReply", ppcglue_NavDisposeReply},
+    {"NavGetDefaultDialogOptions", ppcglue_NavGetDefaultDialogOptions},
+    {"NavGetFile", ppcglue_NavGetFile},
+    {"NavLibraryVersion", ppcglue_NavLibraryVersion},
+    {"NavLoad", ppcglue_NavLoad},
+    {"NavNewFolder", ppcglue_NavNewFolder},
+    {"NavPutFile", ppcglue_NavPutFile},
+    {"NavServicesAvailable", ppcglue_NavServicesAvailable},
+    {"NavServicesCanRun", ppcglue_NavServicesCanRun},
+    {"NavTranslateFile", ppcglue_NavTranslateFile},
+    {"NavUnload", ppcglue_NavUnload},
     {"NewAlias", ppcglue_NewAlias},
     {"NewAliasMinimal", ppcglue_NewAliasMinimal},
     {"NewAliasMinimalFromFullPath", ppcglue_NewAliasMinimalFromFullPath},
@@ -26127,6 +26384,7 @@ const ppc_export ppc_exports[] = {
     {"PrerollMovie", ppcglue_PrerollMovie},
     {"PrimeTime", ppcglue_PrimeTime},
     {"PrintDefault", ppcglue_PrintDefault},
+    {"ProcessIsContextualMenuClient", ppcglue_ProcessIsContextualMenuClient},
     {"ProtectEntry", ppcglue_ProtectEntry},
     {"Pt2Rect", ppcglue_Pt2Rect},
     {"PtInDSequenceData", ppctrap_PtInDSequenceData},

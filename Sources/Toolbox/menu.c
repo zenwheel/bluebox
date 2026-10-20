@@ -1229,3 +1229,48 @@ void tb_SetMenuItemText(gaddr mh, int16_t item, gaddr str)
     gput(rd32(mh) + at, buf, newlen + 1);
     tb_CalcMenuSize(mh);
 }
+
+/* ---------------------------------------------------------------------- */
+/* The Contextual Menu Manager (Mac OS 8): the program's menu as a pop-up
+ * where it asks, Control-click the gesture.  No plug-ins add items, and
+ * no help item is added. */
+
+enum { kCMNothingSelected = 0, kCMMenuItemSelected = 1 };
+enum { mouseDownEvt = 1, controlKeyMask = 0x1000, userCanceled = -128 };
+
+static bool cm_client;
+
+int16_t tb_InitContextualMenus(void)
+{
+    cm_client = true;
+    return noErr;
+}
+
+int8_t tb_IsShowContextualMenuClick(gaddr ev)
+{
+    return ev && rd16(ev + EventRecord_what_off) == mouseDownEvt &&
+           (rd16(ev + EventRecord_modifiers_off) & controlKeyMask) != 0;
+}
+
+/* ContextualMenuSelect(menu, where (global), reserved, helpType, helpItem,
+ * selection, &selectionType, &menuID, &item): userCanceledErr when nothing
+ * is chosen. */
+int32_t tb_ContextualMenuSelect(gaddr inMenu, uint32_t inGlobalLocation, int8_t inReserved, uint32_t inHelpType,
+                                gaddr inHelpItemString, gaddr inSelection, gaddr outUserSelectionType, gaddr outMenuID,
+                                gaddr outMenuItem)
+{
+    if (!inMenu || !rd32(inMenu))
+        return paramErr;
+    tb_CalcMenuSize(inMenu);
+    int32_t r = tb_PopUpMenuSelect(inMenu, pt_v(inGlobalLocation), pt_h(inGlobalLocation), 0);
+    uint16_t item = (uint16_t)(r & 0xFFFF);
+    if (outUserSelectionType)
+        wr32(outUserSelectionType, item ? kCMMenuItemSelected : kCMNothingSelected);
+    if (outMenuID)
+        wr16(outMenuID, item ? (uint16_t)(r >> 16) : 0);
+    if (outMenuItem)
+        wr16(outMenuItem, item);
+    return item ? noErr : userCanceled;
+}
+
+int8_t tb_ProcessIsContextualMenuClient(gaddr inPSN) { return cm_client; }

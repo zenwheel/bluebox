@@ -1,0 +1,67 @@
+# Mac OS 8's additions that multiversal lacks (Menus.h, Navigation.h).
+# Same schema as Defs/multiversal/defs.
+
+# The Contextual Menu Manager: _ContextualMenuDispatch ($AA72), the
+# selector moved into D0 (MOVEQ #n,D0), Pascal arguments on the stack.
+- dispatcher:
+    name: ContextualMenuDispatch
+    trap: 0xAA72
+    selector-location: D0W
+
+- function:
+    name: InitContextualMenus
+    return: OSErr
+    dispatcher: ContextualMenuDispatch
+    selector: 0x0001
+
+- function:
+    name: IsShowContextualMenuClick
+    return: Boolean
+    args:
+      - name: inEvent
+        type: EventRecord*
+    dispatcher: ContextualMenuDispatch
+    selector: 0x0002
+
+- function:
+    name: ContextualMenuSelect
+    return: int32_t
+    args:
+      - name: inMenu
+        type: MenuHandle
+      - name: inGlobalLocation
+        type: Point
+      - name: inReserved
+        type: Boolean
+      - name: inHelpType
+        type: uint32_t
+      - name: inHelpItemString
+        type: ConstStr255Param
+      - name: inSelection
+        type: AEDesc*
+      - name: outUserSelectionType
+        type: uint32_t*
+      - name: outMenuID
+        type: int16_t*
+      - name: outMenuItem
+        type: uint16_t*
+    dispatcher: ContextualMenuDispatch
+    selector: 0x0003
+
+- function:
+    name: ProcessIsContextualMenuClient
+    return: Boolean
+    args:
+      - name: inPSN
+        type: ProcessSerialNumber*
+    dispatcher: ContextualMenuDispatch
+    selector: 0x0004
+
+# Navigation Services' default options (NavigationLib).
+- function:
+    name: NavGetDefaultDialogOptions
+    return: OSErr
+    args:
+      - name: dialogOptions
+        type: NavDialogOptions*
+    cfm: NavigationLib

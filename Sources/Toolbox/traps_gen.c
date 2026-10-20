@@ -690,6 +690,7 @@ const char *const tb_trap_names[1024] = {
     [0x265] = "SetMCEntries",
     [0x266] = "MenuChoice",
     [0x268] = "DialogDispatch",
+    [0x272] = "ContextualMenuDispatch",
     [0x290] = "InitPalettes",
     [0x291] = "NewPalette",
     [0x292] = "GetNewPalette",
@@ -2490,6 +2491,24 @@ static void glue_ConcatMatrix(cpu68k *c, uint16_t trapword)
     gaddr a_b = (gaddr)cpu_pop32(c);
     gaddr a_a = (gaddr)cpu_pop32(c);
     tb_ConcatMatrix(a_a, a_b);
+    cpu_push32(c, ret);
+}
+
+static void glue_ContextualMenuSelect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outMenuItem = (gaddr)cpu_pop32(c);
+    gaddr a_outMenuID = (gaddr)cpu_pop32(c);
+    gaddr a_outUserSelectionType = (gaddr)cpu_pop32(c);
+    gaddr a_inSelection = (gaddr)cpu_pop32(c);
+    gaddr a_inHelpItemString = (gaddr)cpu_pop32(c);
+    uint32_t a_inHelpType = (uint32_t)cpu_pop32(c);
+    int8_t a_inReserved = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_inGlobalLocation = (uint32_t)cpu_pop32(c);
+    gaddr a_inMenu = (gaddr)cpu_pop32(c);
+    int32_t r = tb_ContextualMenuSelect(a_inMenu, a_inGlobalLocation, a_inReserved, a_inHelpType, a_inHelpItemString, a_inSelection, a_outUserSelectionType, a_outMenuID, a_outMenuItem);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5732,15 +5751,6 @@ static void glue_GetDSequenceMatrix(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
-static void glue_GetDateTime(cpu68k *c, uint16_t trapword)
-{
-    (void)trapword;
-    uint32_t ret = cpu_pop32(c);
-    gaddr a_mactimepointer = (gaddr)cpu_pop32(c);
-    tb_GetDateTime(a_mactimepointer);
-    cpu_push32(c, ret);
-}
-
 static void glue_GetDblTime(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8101,6 +8111,15 @@ static void glue_InitCPort(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InitContextualMenus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_InitContextualMenus();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InitCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8504,6 +8523,16 @@ static void glue_IsRegisteredSection(cpu68k *c, uint16_t trapword)
     gaddr a_section = (gaddr)cpu_pop32(c);
     int16_t r = tb_IsRegisteredSection(a_section);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IsShowContextualMenuClick(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inEvent = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsShowContextualMenuClick(a_inEvent);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -11710,6 +11739,16 @@ static void glue_PrintDefault(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_hPrint = (gaddr)cpu_pop32(c);
     tb_PrintDefault(a_hPrint);
+    cpu_push32(c, ret);
+}
+
+static void glue_ProcessIsContextualMenuClient(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inPSN = (gaddr)cpu_pop32(c);
+    int8_t r = tb_ProcessIsContextualMenuClient(a_inPSN);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -17126,6 +17165,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF6, (int32_t)0x24u, "GetIndexedCollectionItemHdl", CONV_STACK, 12, 2, 0},
     {0xABF6, (int32_t)0x25u, "FlattenCollectionToHdl", CONV_STACK, 8, 2, 0},
     {0xABF6, (int32_t)0x26u, "UnflattenCollectionFromHdl", CONV_STACK, 8, 2, 0},
+    {0xAA72, (int32_t)0x1u, "InitContextualMenus", CONV_STACK, 0, 2, glue_InitContextualMenus},
+    {0xAA72, (int32_t)0x2u, "IsShowContextualMenuClick", CONV_STACK, 4, 2, glue_IsShowContextualMenuClick},
+    {0xAA72, (int32_t)0x3u, "ContextualMenuSelect", CONV_STACK, 34, 4, glue_ContextualMenuSelect},
+    {0xAA72, (int32_t)0x4u, "ProcessIsContextualMenuClient", CONV_STACK, 4, 2, glue_ProcessIsContextualMenuClient},
     {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
     {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},
     {0xAA68, (int32_t)0x305u, "SetDialogCancelItem", CONV_STACK, 6, 2, glue_SetDialogCancelItem},
@@ -18938,6 +18981,7 @@ const dispatcher_info dispatchers[] = {
     {0xA823, "AliasDispatch", "D0W"},
     {0xAA5A, "CodeFragmentDispatch", "StackW"},
     {0xABF6, "CollectionDispatch", "D0W"},
+    {0xAA72, "ContextualMenuDispatch", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
     {0xABEB, "DisplayDispatch", "D0W"},
     {0xABED, "DragDispatch", "D0W"},
