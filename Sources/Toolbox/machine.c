@@ -283,6 +283,7 @@ bool machine_boot(bool census)
     icm_components_reset(); /* the Standard Image Compression component */
     quicktime_reset();
     opentransport_reset();
+    drivers_reset();
     mactcp_reset();
     serial_reset();
     appletalk_reset();

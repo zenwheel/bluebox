@@ -84,6 +84,25 @@ extension BlueBox {
             #expect(control(pb, 37) == -23010) // invalidStreamPtr
         }
 
+        /// Programs look for MacTCP by Gestalt and in the unit table.
+        @Test func presentInGestaltAndUnitTable() {
+            launchTestApp()
+            setStack()
+            var v: Int32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("mtcp")), &v) == 0 && v >> 16 == 0x0206)
+            let table = rd32(UInt32(LM_UTableBase))
+            #expect(rd16(UInt32(LM_UnitNtryCnt)) >= 49)
+            let dce = rd32(rd32(table + 48 * 4))
+            let hdr = rd32(dce + UInt32(DCtlEntry_dCtlDriver_off))
+            #expect(String(decoding: (0..<Int(rd8(hdr + 18))).map { rd8(hdr + 19 + UInt32($0)) }, as: UTF8.self) == ".IPP")
+            #expect(Int16(bitPattern: rd16(dce + UInt32(DCtlEntry_dCtlRefNum_off))) == -49)
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(8, false, true)
+            guestPString(".IPP", at: name)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+            #expect(tb_PBOpen(pb, false) == 0)
+            #expect(rd16(dce + UInt32(DCtlEntry_dCtlFlags_off)) & 0x20 != 0) // dOpened
+        }
+
         /// Fetch sends an FTP PORT command before it opens the listener the
         /// command names; a server that connects at once still gets through,
         /// and the passive open made afterwards has its connection.

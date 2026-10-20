@@ -316,6 +316,7 @@ typedef struct {
  * driver completes it, with its ioCompletion, later. */
 enum { ioInProgress = 1 };
 bool driver_open(gaddr pb, int16_t *err); /* false: no driver of that name */
+void drivers_reset(void);                 /* the unit table, at boot */
 bool driver_refnum(int16_t refnum);
 int16_t driver_call(gaddr pb, bool async, int kind);
 /* MacTCP (mactcp.c): the .IPP driver, its Domain Name Resolver, and the

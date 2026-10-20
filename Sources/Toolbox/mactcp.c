@@ -876,6 +876,7 @@ void mactcp_reset(void)
     nanswers = 0;
     polling = false;
     stub = native_register(dnr_native, "DNR", 0); /* natives start over at each boot */
+    gestalt_set(fourcc("mtcp"), 0x02068000); /* MacTCP 2.0.6, as NumVersion */
 }
 
 /* ---------------------------------------------------------------------- */

@@ -27,6 +27,49 @@ static const native_driver *driver_for(int16_t refnum)
     return NULL;
 }
 
+/* The unit table (UTableBase, UnitNtryCnt): a device control entry for
+ * each driver, whose dCtlDriver points at a driver header with the name.
+ * Programs look there to see whether a driver is installed (MacTCP's
+ * .IPP, the serial drivers) and GetDCtlEntry reads it; the calls
+ * themselves still come here by reference number. */
+enum { UNITS = 64, dOpened = 0x20 };
+static gaddr dce[NDRIVERS];
+
+void drivers_reset(void)
+{
+    gaddr table = tb_NewPtr(UNITS * 4, true, true);
+    wr32(LM_UTableBase, table);
+    wr16(LM_UnitNtryCnt, UNITS);
+    for (int i = 0; i < NDRIVERS; i++) {
+        const native_driver *d = drivers[i];
+        size_t n = strlen(d->name);
+        gaddr hdr = tb_NewPtr((int32_t)(18 + 1 + n), true, true);
+        uint16_t flags = (uint16_t)((d->read ? 0x0100 : 0) | (d->write ? 0x0200 : 0) | (d->control ? 0x0400 : 0) |
+                                    (d->status ? 0x0800 : 0));
+        wr16(hdr, flags); /* drvrFlags; its routines' offsets stay 0: calls come to us */
+        wr8(hdr + 18, (uint8_t)n);
+        for (size_t k = 0; k < n; k++)
+            wr8(hdr + 19 + (uint32_t)k, (uint8_t)d->name[k]);
+        gaddr h = tb_NewHandle(DCtlEntry_SIZEOF, true, true);
+        gaddr e = rd32(h);
+        wr32(e + DCtlEntry_dCtlDriver_off, hdr);
+        wr16(e + DCtlEntry_dCtlFlags_off, flags); /* a ROM-style driver: a pointer, not RAM-based */
+        wr16(e + DCtlEntry_dCtlRefNum_off, (uint16_t)(-1 - d->unit));
+        dce[i] = e;
+        if (d->unit >= 0 && d->unit < UNITS)
+            wr32(table + 4 * (uint32_t)d->unit, h);
+    }
+}
+
+static void set_opened(const native_driver *d, bool open)
+{
+    for (int i = 0; i < NDRIVERS; i++)
+        if (drivers[i] == d && dce[i]) {
+            uint16_t f = rd16(dce[i] + DCtlEntry_dCtlFlags_off);
+            wr16(dce[i] + DCtlEntry_dCtlFlags_off, (uint16_t)(open ? f | dOpened : f & ~dOpened));
+        }
+}
+
 bool driver_open(gaddr pb, int16_t *err)
 {
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
@@ -44,6 +87,8 @@ bool driver_open(gaddr pb, int16_t *err)
             continue;
         wr16(pb + IOParam_ioRefNum_off, (uint16_t)(-1 - drivers[i]->unit));
         *err = drivers[i]->open ? drivers[i]->open(pb) : noErr;
+        if (*err == noErr)
+            set_opened(drivers[i], true);
         return true;
     }
     return false;
@@ -70,6 +115,8 @@ int16_t driver_call(gaddr pb, bool async, int kind)
     if (!d)
         return -51; /* rfNumErr */
     int16_t r = call(d, pb, async, kind);
+    if (kind == DRIVER_CLOSE && r == noErr)
+        set_opened(d, false);
     if (kind == DRIVER_CONTROL || kind == DRIVER_STATUS)
         LOGF(LOG_TRAPS, "  %s csCode %d -> %d\n", d->name, (int16_t)rd16(pb + CntrlParam_csCode_off), r);
     return r;
