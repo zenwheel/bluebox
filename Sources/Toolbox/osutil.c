@@ -351,43 +351,111 @@ void key_trans_native(cpu68k *c, uint16_t tw)
     c->d[0] = tb_KeyTranslate(0, keycode, 0) & 0xFF;
 }
 
-/* DrvrInstall (A03D): A0 the driver, D0 its refnum.  Nothing calls drivers
- * here (the Device Manager answers for files and absent drivers), so the
- * installation is accepted and otherwise ignored. */
-void raw_DrvrInstall(cpu68k *c, uint16_t tw) { c->d[0] = 0; }
+/* DrvrInstall (A03D): A0 the driver, D0 its refnum. */
+void raw_DrvrInstall(cpu68k *c, uint16_t tw) { c->d[0] = (uint32_t)(int32_t)driver_install(c->a[0], (int16_t)c->d[0]); }
 
-/* CursorDeviceDispatch (AADB): the Cursor Device Manager, selector in D0.
- * There are no extra cursor devices: enumeration ends at once, NewDevice
- * makes a record that nothing moves, and calls on a device succeed
- * without effect. */
+/* The Cursor Device Manager: there are no cursor devices but the ones a
+ * program makes (CursorDeviceNewDevice), which keep what is set in them
+ * and move nothing.  args are the call's arguments, left to right. */
+enum {
+    cd_next = 0, cd_devID = 16, cd_resolution = 20, cd_devClass = 24, cd_cntButtons = 25, cd_buttons = 27,
+    cd_buttonOp = 28, cd_buttonData = 68, cd_doubleClickTime = 100, cd_acceleration = 104, cd_size = 138,
+};
+static gaddr cursor_devices;
+
+void cursor_devices_reset(void) { cursor_devices = 0; }
+
+int16_t cursor_device(uint16_t sel, const uint32_t *args)
+{
+    gaddr dev = args[0];
+    switch (sel) {
+    case 0x0B: { /* CursorDeviceNextDevice(*ourDevice): the one after, the first after nil */
+        gaddr at = dev ? rd32(dev) : 0;
+        wr32(dev, at ? rd32(at + cd_next) : cursor_devices);
+        return noErr;
+    }
+    case 0x0C: { /* CursorDeviceNewDevice(*ourDevice): a mouse of one button */
+        gaddr d = tb_NewPtr(cd_size, true, true);
+        if (!d)
+            return memFullErr;
+        wr32(d + cd_devID, fourcc("mous"));
+        wr32(d + cd_resolution, 100u << 16);
+        wr8(d + cd_devClass, 1); /* mouse */
+        wr8(d + cd_cntButtons, 1);
+        wr32(d + cd_doubleClickTime, rd32(LM_DoubleTime));
+        wr32(d + cd_acceleration, 1u << 16);
+        wr32(d + cd_next, cursor_devices);
+        cursor_devices = d;
+        wr32(dev, d);
+        return noErr;
+    }
+    default:
+        break;
+    }
+    if (!dev)
+        return paramErr;
+    switch (sel) {
+    case 0x03: /* CursorDeviceButtons(dev, buttons) */
+        wr8(dev + cd_buttons, (uint8_t)args[1]);
+        break;
+    case 0x04: /* CursorDeviceButtonDown */
+        wr8(dev + cd_buttons, (uint8_t)(rd8(dev + cd_buttons) | 1));
+        break;
+    case 0x05: /* CursorDeviceButtonUp */
+        wr8(dev + cd_buttons, (uint8_t)(rd8(dev + cd_buttons) & ~1));
+        break;
+    case 0x06: /* CursorDeviceButtonOp(dev, button, opcode, data) */
+        if (args[1] >= 8)
+            return paramErr;
+        wr8(dev + cd_buttonOp + args[1], (uint8_t)args[2]);
+        wr32(dev + cd_buttonData + 4 * args[1], args[3]);
+        break;
+    case 0x07: /* CursorDeviceSetButtons(dev, count) */
+        wr8(dev + cd_cntButtons, (uint8_t)args[1]);
+        break;
+    case 0x08: /* CursorDeviceSetAcceleration(dev, acceleration) */
+        wr32(dev + cd_acceleration, args[1]);
+        break;
+    case 0x09: /* CursorDeviceDoubleTime(dev, ticks) */
+        wr32(dev + cd_doubleClickTime, args[1]);
+        break;
+    case 0x0A: /* CursorDeviceUnitsPerInch(dev, resolution) */
+        wr32(dev + cd_resolution, args[1]);
+        break;
+    case 0x0D: /* CursorDeviceDisposeDevice */
+        if (cursor_devices == dev)
+            cursor_devices = rd32(dev + cd_next);
+        for (gaddr at = cursor_devices; at; at = rd32(at + cd_next))
+            if (rd32(at + cd_next) == dev)
+                wr32(at + cd_next, rd32(dev + cd_next));
+        tb_DisposePtr(dev);
+        break;
+    default: /* Move, MoveTo, Flush: the cursor is the host's */
+        break;
+    }
+    return noErr;
+}
+
+/* CursorDeviceDispatch (AADB): the selector in D0, Pascal arguments. */
 void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw)
 {
-    static const uint8_t param_bytes[13] = { 12, 12, 4, 4, 4, 12, 6, 8, 8, 8, 4, 4, 4 };
+    /* Each call's arguments, left to right: 4 a long or pointer, 2 a word. */
+    static const char *const args[14] = { "444", "444", "4", "42", "4", "4", "4224", "42", "44", "44", "44", "4", "4", "4" };
     uint16_t sel = (uint16_t)c->d[0];
-    uint32_t n = sel < 13 ? param_bytes[sel] : 4;
+    const char *a = sel < 14 ? args[sel] : "4";
+    uint32_t n = 0, v[4] = { 0 };
+    for (const char *p = a; *p; p++)
+        n += (uint32_t)(*p - '0');
     uint32_t ret = cpu_pop32(c);
-    gaddr first = rd32(c->a[7] + n - 4); /* the leftmost argument */
-    int16_t err = noErr;
-    if (sel == 0xA)       /* CursorDeviceNextDevice */
-        wr32(first, 0);
-    else if (sel == 0xB) { /* CursorDeviceNewDevice: a CursorDevice record */
-        gaddr dev = tb_NewPtr(64, true, true);
-        if (dev) {
-            wr16(dev + 20, 1); /* buttons */
-            wr32(first, dev);
-        } else {
-            err = memFullErr;
-        }
+    gaddr at = c->a[7] + n;
+    for (int i = 0; a[i]; i++) {
+        at -= (gaddr)(a[i] - '0');
+        v[i] = a[i] == '4' ? rd32(at) : (uint32_t)(int32_t)(int16_t)rd16(at);
     }
+    int16_t err = cursor_device(sel, v);
     c->a[7] += n;
     wr16(c->a[7], (uint16_t)err);
     cpu_push32(c, ret);
-}
-
-/* SlotManager (A06E): no NuBus or PDS cards, so every search ends at once. */
-void raw_SlotManager(cpu68k *c, uint16_t tw)
-{
-    c->d[0] = (uint32_t)-344; /* smNoMoresRsrcs */
 }
 
 /* Operating System queues: a header of qFlags (word), qHead and qTail; each

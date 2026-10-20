@@ -199,11 +199,18 @@ void raw_RelString(cpu68k *c, uint16_t tw);
 void raw_UprString(cpu68k *c, uint16_t tw);
 void raw_LowerText(cpu68k *c, uint16_t tw);
 void raw_DrvrInstall(cpu68k *c, uint16_t tw);
+int16_t driver_install(gaddr drvr, int16_t refnum); /* drivers.c */
 void raw_ReadXPRam(cpu68k *c, uint16_t tw);
 void raw_WriteXPRam(cpu68k *c, uint16_t tw);
 void raw_InitZone(cpu68k *c, uint16_t tw);
 void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw);
+/* The Cursor Device Manager by selector, its arguments left to right (osutil.c). */
+int16_t cursor_device(uint16_t sel, const uint32_t *args);
+void cursor_devices_reset(void);
 void raw_SlotManager(cpu68k *c, uint16_t tw);
+/* The Slot Manager (slots.c): a selector on an SpBlock, as _SlotManager has them. */
+int16_t slot_manager(uint16_t sel, gaddr spb);
+void slots_reset(void);
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
 /* A MacRoman character's comparison key. */
 int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);

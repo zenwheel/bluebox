@@ -77,6 +77,9 @@ static void init_lowmem(void)
     wr16(LM_HiliteRGB + 4, hilite_rgb[2]);
     wr8(LM_HiliteMode, 0xFF); /* no highlighting pending */
     wr8(LM_MMU32Bit, 1);              /* 32-bit addressing */
+    /* HWCfgFlags (SCSIFlags): SCSI, clock chip, extended PRAM, FPU (when
+     * there is one), MMU and ADB, as a Quadra has them. */
+    wr16(LM_SCSIFlags, (uint16_t)(0xEC00 | (g_cpu->model == 68040 ? 0x1000 : 0)));
     wr16(LM_SysVersion, 0x0710);
     wr32(LM_Lo3Bytes, 0x00FFFFFF);
     wr32(LM_MinusOne, 0xFFFFFFFF);
@@ -352,6 +355,8 @@ bool machine_boot(bool census)
     serial_reset();
     appletalk_reset();
     ppc_glue_reset();
+    slots_reset();
+    cursor_devices_reset();
     notify_reset();
 
     qd_screen_init(screen_w, screen_h);
