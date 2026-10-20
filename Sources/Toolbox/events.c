@@ -392,6 +392,20 @@ uint32_t ev_key_count(void)
 void machine_idle(void);
 void machine_pass_tick(void);
 
+/* The button itself, as Button reports it (MBState). */
+static bool button_now(void)
+{
+    if (!host_attached && g_cpu) {
+        if (g_cpu->halted)
+            return false;
+        events_script_pump(g_cpu->icount);
+    }
+    pthread_mutex_lock(&lock);
+    bool d = button_down;
+    pthread_mutex_unlock(&lock);
+    return d;
+}
+
 bool ev_still_down(void)
 {
     if (!host_attached && g_cpu) {
@@ -741,8 +755,10 @@ void tb_SetEventMask(int16_t evmask) { wr16(LM_SysEvtMask, (uint16_t)evmask); }
 
 int8_t tb_Button(void)
 {
-    /* Polling a released button is waiting for input, like a null event. */
-    bool down = ev_still_down();
+    /* Polling a released button is waiting for input, like a null event.
+     * The button as it is, mouse events waiting or not (a program polling
+     * Button never takes them from the queue). */
+    bool down = button_now();
     if (!down && !host_attached)
         machine_idle();
     return down;

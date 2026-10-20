@@ -44,6 +44,17 @@ extension BlueBox {
             tb_FlushEvents(-1, 0)
         }
 
+        /// Button is the button itself: a program polling it never takes the
+        /// mouse-down from the queue, and still sees the press (The Colony).
+        @Test func buttonIgnoresTheQueue() {
+            tb_FlushEvents(-1, 0)
+            machine_post_mouse(10, 10, 1)
+            #expect(tb_Button() != 0 && tb_StillDown() == 0)
+            machine_post_mouse(10, 10, 0)
+            #expect(tb_Button() == 0)
+            tb_FlushEvents(-1, 0)
+        }
+
         /// PortList lists the open ports.
         @Test func portListFollowsOpenAndClose() {
             let port = initToolbox()
