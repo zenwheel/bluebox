@@ -48,6 +48,8 @@ uint64_t machine_alert_depths(const char *message)
         { "millions", 32 }, { "24-bit", 32 }, { "24 bit", 32 }, { "32-bit", 32 }, { "32 bit", 32 },
         { "black and white", 1 }, { "black & white", 1 }, { "b&w", 1 }, { "monochrome", 1 },
         { "2-colo", 1 }, { "2 colo", 1 }, { "1-bit", 1 }, { "1 bit", 1 },
+        /* in words: Dark Castle's "set the main screen to two colors" */
+        { "two colo", 1 }, { "four colo", 2 }, { "sixteen colo", 4 },
     };
     uint64_t set = 0;
     for (size_t i = 0; i < sizeof words / sizeof words[0]; i++) {

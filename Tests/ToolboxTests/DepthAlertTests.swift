@@ -16,6 +16,7 @@ extension BlueBox {
             #expect(depths("Prince of Persia only runs inBlack and White, 4 color mode, 16 color mode or 256 color mode.") == [1, 2, 4, 8])
             #expect(depths("Sorry, Solarian II couldn't find an 640 by 480 or larger monitor in 8-bit (256 shade) mode.") == [8])
             #expect(depths("The depth of the screen is greater than 8 bit (256 colors).") == [8])
+            #expect(depths("You must set the main screen to two colors (using the Control Panel) before running Dark Castle.") == [1])
         }
 
         @Test func otherRequirementsAreNotDepths() {
