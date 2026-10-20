@@ -165,6 +165,17 @@ static bool open_system_file(void)
     defproc_stub(cdef1, cdef1_native, "CDEF 1");
     defproc_stub(cdef63, cdef63_native, "CDEF 63");
     defproc_stub(ldef0, ldef0_native, "LDEF 0");
+    /* The packages, for programs that get a PACK resource to keep it in
+     * memory, or call it: MOVE.L trap's address,-(SP); RTS, so it runs
+     * the package as its trap does (ResEdit's icon editor wants PACK 0). */
+    static const uint16_t pack_traps[16] = { 0xA9E7, 0, 0xA9E9, 0xA9EA, 0xA9EB, 0xA9EC, 0xA9ED, 0xA9EE,
+                                             0xA816, 0xA82B, 0xA82C, 0xA82D, 0xA82E, 0xA82F, 0xA830, 0xA831 };
+    uint8_t packs[16][6];
+    for (int i = 0; i < 16; i++) {
+        uint16_t entry = (uint16_t)(TB_TRAP_TABLE + (pack_traps[i] & 0x3FF) * 4u);
+        uint8_t s[6] = { 0x2F, 0x38, (uint8_t)(entry >> 8), (uint8_t)entry, 0x4E, 0x75 };
+        memcpy(packs[i], s, 6);
+    }
     rsrc_spec specs[512] = {
         { fourcc("WDEF"), 0, NULL, RES_SYS_HEAP, wdef0, 8 },
         { fourcc("WDEF"), 124, NULL, RES_SYS_HEAP, wdef124, 8 },
@@ -179,6 +190,9 @@ static bool open_system_file(void)
     size_t n = 0;
     while (n < 512 && specs[n].type) /* the entries above */
         n++;
+    for (int i = 0; i < 16; i++)
+        if (pack_traps[i])
+            specs[n++] = (rsrc_spec){ fourcc("PACK"), (int16_t)i, NULL, RES_SYS_HEAP, packs[i], 6 };
     /* Standard cursors and alert icons (Generators/sysres.py). */
     for (unsigned i = 0; i < sysres_count && n < 512; i++)
         specs[n++] = (rsrc_spec){ sysres[i].type, sysres[i].id, NULL, RES_SYS_HEAP | RES_PURGEABLE, sysres[i].data,
@@ -202,9 +216,9 @@ static bool open_system_file(void)
 }
 
 /* Hardware a program may address through low memory (the VIA, the serial
- * chip, the floppy controller, the sound buffer) and the driver unit
- * table: harmless memory of their own, so a program poking them writes
- * there and not over the vectors near address 0. */
+ * chip, the floppy controller, the sound buffer): harmless memory of
+ * their own, so a program poking them writes there and not over the
+ * vectors near address 0.  (The driver unit table is drivers.c's.) */
 static void hardware_globals(void)
 {
     gaddr via = mm_new_ptr_in(GA_SYSHEAP, 16 * 512, true);
@@ -216,9 +230,6 @@ static void hardware_globals(void)
     wr32(LM_SCCWr, scc);
     wr32(LM_IWM, mm_new_ptr_in(GA_SYSHEAP, 16 * 512, true));
     wr32(LM_SoundBase, mm_new_ptr_in(GA_SYSHEAP, 370 * 2, true));
-    /* No drivers live in the table: every unit empty. */
-    wr32(LM_UTableBase, mm_new_ptr_in(GA_SYSHEAP, 64 * 4, true));
-    wr16(LM_UnitNtryCnt, 64);
     /* ScrapName: the Clipboard file's name. */
     static const uint8_t scrap[] = "\016Clipboard File";
     gaddr name = mm_new_ptr_in(GA_SYSHEAP, sizeof scrap, true);

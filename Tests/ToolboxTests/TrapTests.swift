@@ -123,6 +123,30 @@ extension BlueBox {
             #expect(tb_GetTrapAddress(0x46, false, false) != unimplemented)
         }
 
+        /// A package with no native code runs from the program's PACK
+        /// resource (ResEdit's PACK 1), auto-pop or not; the System's
+        /// PACK 0 is there for programs that load it, and runs the List
+        /// Manager.
+        @Test func packagesComeFromPACKResources() {
+            var fork = buildFork([TestResource(type: "PACK", id: 1, data: [
+                0x30, 0x3C, 0x00, 0x2A, // MOVE.W #42,D0
+                0x4E, 0x75,             // RTS
+            ])])
+            #expect(rm_open_host_file(nil, &fork, UInt32(fork.count), true) > 0)
+            let reason = run([
+                0x7000,         // MOVEQ #0,D0
+                0xA9E8,         // _Pack1
+                0x3E00,         // MOVE.W D0,D7
+                0x4EBA, 0x0004, // JSR glue
+                0xA9F4,         // _ExitToShell
+                0xADE8,         // glue: _Pack1 with auto-pop, returning to the JSR's caller
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(cpu.pointee.d.7 & 0xFFFF == 42 && cpu.pointee.d.0 & 0xFFFF == 42)
+            let pack0 = tb_GetResource(Int32(bitPattern: fourCC("PACK")), 0)
+            #expect(pack0 != 0 && rd16(rd32(pack0)) == 0x2F38) // MOVE.L _Pack0's address,-(SP)
+        }
+
         @Test func unimplementedTrapHaltsWithItsName() {
             let reason = run([0xA9F3]) // _Chain
             #expect(reason.contains("A9F3"))

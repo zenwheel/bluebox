@@ -338,6 +338,36 @@ static void aline_vector_native(cpu68k *c, uint16_t tw)
     cpu_halt(c, "A-line vector entered directly");
 }
 
+/* A package trap ($A9E7-$A9EE _Pack0-7, $A816 _Pack8, $A82B-$A831
+ * _Pack9-15) that has no native code: as the Package Manager did, load
+ * PACK n from the open resource files and run it, with the caller's
+ * return address and arguments as they are (ResEdit's own PACK 1,
+ * "BitEdit", for its icon editor). */
+static int package_of(uint16_t tw)
+{
+    tw &= (uint16_t)~0x0400; /* auto-pop or not */
+    if (tw >= 0xA9E7 && tw <= 0xA9EE)
+        return tw - 0xA9E7;
+    if (tw == 0xA816)
+        return 8;
+    if (tw >= 0xA82B && tw <= 0xA831)
+        return tw - 0xA82B + 9;
+    return -1;
+}
+
+static void package_native(cpu68k *c, uint16_t tw)
+{
+    int n = package_of(tw);
+    gaddr h = tb_GetResource((int32_t)fourcc("PACK"), (int16_t)n);
+    if (!h || !rd32(h)) {
+        cpu_halt(c, "package %d (trap %04X) not found", n, tw);
+        return;
+    }
+    tb_HNoPurge(h);
+    tb_HLock(h);
+    cpu_push32(c, rd32(h)); /* the dispatcher's return goes there */
+}
+
 /* ---------------------------------------------------------------------- */
 /* Dispatch */
 
@@ -644,6 +674,11 @@ void trap_init(void)
         else
             wr32(OS_TRAP_TABLE + (r->trap & 0xFFu) * 4, stub);
     }
+
+    /* Packages without native code come from PACK resources. */
+    for (unsigned t = 0xA816; t <= 0xA9EE; t++)
+        if (package_of((uint16_t)t) >= 0 && rd32(TB_TRAP_TABLE + (t & 0x3FFu) * 4) == unimpl_stub)
+            wr32(TB_TRAP_TABLE + (t & 0x3FFu) * 4, native_register(package_native, "Package", (uint16_t)t));
 
     /* MethodDispatch (A9F8): the MPW Object Pascal method dispatcher that
      * the 128K and later ROMs carried.  The runtime library's own copy is
