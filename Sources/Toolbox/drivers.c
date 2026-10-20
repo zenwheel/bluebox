@@ -104,7 +104,11 @@ static int16_t call(const native_driver *d, gaddr pb, bool async, int kind)
     case DRIVER_READ: return d->read ? d->read(pb, async) : -19;           /* readErr */
     case DRIVER_WRITE: return d->write ? d->write(pb, async) : -20;        /* writErr */
     case DRIVER_CLOSE: return d->close ? d->close(pb) : noErr;
-    case DRIVER_KILLIO: return d->kill_io ? d->kill_io(pb) : noErr;
+    case DRIVER_KILLIO: {
+        int16_t r = d->kill_io ? d->kill_io(pb) : noErr;
+        io_complete_now_for((int16_t)(-1 - d->unit)); /* before the program frees their blocks */
+        return r;
+    }
     default: return -51;
     }
 }

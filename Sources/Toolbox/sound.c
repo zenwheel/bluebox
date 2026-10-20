@@ -864,6 +864,18 @@ static void sd_done(int16_t result)
     io_complete_later(pb, result);
 }
 
+/* KillIO: the sound stops, and the write's completion runs now. */
+static void sd_kill_now(void)
+{
+    gaddr pb = sd_pb;
+    stop_host(&sd_chan);
+    sd_pb = sd_ft = 0;
+    if (!pb)
+        return;
+    wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
+    io_complete_now(pb, abortErr);
+}
+
 /* From the sound pump: four-tone goes on a tick at a time while its
  * duration lasts; a write finishes when its sound has played. */
 static void sd_pump(void)
@@ -961,14 +973,14 @@ static int16_t sd_write(gaddr pb, bool async)
 
 static int16_t sd_kill(gaddr pb)
 {
-    sd_stop();
+    sd_kill_now();
     return noErr;
 }
 
 static int16_t sd_control(gaddr pb, bool async)
 {
     if ((int16_t)rd16(pb + CntrlParam_csCode_off) == 1) /* killCode */
-        sd_stop();
+        sd_kill_now();
     return noErr;
 }
 

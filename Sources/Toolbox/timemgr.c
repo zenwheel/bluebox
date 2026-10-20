@@ -226,6 +226,48 @@ static void run_deferred(void)
     }
 }
 
+/* A request killed (KillIO): its completion runs now, inside the call, as
+ * the Device Manager finished killed requests, with any still waiting for
+ * the same parameter block first.  The program may dispose of the block
+ * as soon as KillIO returns (Continuum and The Colony do, then reuse the
+ * memory), so later would read a stale ioCompletion. */
+/* KillIO on a driver: the completions of its requests that finished but
+ * have not run yet run now, for the same reason. */
+void io_complete_now_for(int16_t refnum)
+{
+    for (int i = 0; i < ncompletions;) {
+        gaddr pb = completions[i].pb;
+        if ((int16_t)rd16(pb + 24) == refnum) { /* ioRefNum */
+            int16_t r = completions[i].result;
+            memmove(completions + i, completions + i + 1, sizeof completions[0] * (size_t)(--ncompletions - i));
+            gaddr fn = rd32(pb + 12);
+            if (fn)
+                interrupt_call_d0(fn, pb, 0, (uint32_t)(int32_t)r);
+            i = 0; /* a completion may have queued more */
+        } else {
+            i++;
+        }
+    }
+}
+
+void io_complete_now(gaddr pb, int16_t result)
+{
+    for (int i = 0; i < ncompletions;) {
+        if (completions[i].pb == pb) {
+            int16_t r = completions[i].result;
+            memmove(completions + i, completions + i + 1, sizeof completions[0] * (size_t)(--ncompletions - i));
+            gaddr fn = rd32(pb + 12);
+            if (fn)
+                interrupt_call_d0(fn, pb, 0, (uint32_t)(int32_t)r);
+        } else {
+            i++;
+        }
+    }
+    gaddr fn = rd32(pb + 12); /* ioCompletion */
+    if (fn)
+        interrupt_call_d0(fn, pb, 0, (uint32_t)(int32_t)result);
+}
+
 static void run_completions(void)
 {
     /* Those a completion queues wait for the next pump. */
