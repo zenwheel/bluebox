@@ -94,6 +94,28 @@ extension BlueBox {
             #expect(available(input).contains("ERROR"))
         }
 
+        /// PortAUse/PortBUse say which port is open; handshaking, break and
+        /// DTR reach a port with control lines (a pty here).
+        @Test func portUseAndHandshake() {
+            #expect(machine_set_serial(1, "pty"))
+            defer { _ = machine_set_serial(1, "none") }
+            launchTestApp()
+            #expect(rd8(0x290) == 0xFF && rd8(UInt32(LM_PortBUse)) == 0xFF)
+            let input = open(".BIn")
+            #expect(rd8(UInt32(LM_PortBUse)) == 2 && rd8(0x290) == 0xFF) // useAsync
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true), cs = pb + UInt32(CntrlParam_csParam_off)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: input))
+            for (code, bytes) in [(14, [1, 1, 0x11, 0x13, 0, 0, 1, 1]), (12, []), (11, []), (18, []), (17, [])] as [(UInt16, [UInt8])] {
+                for (i, b) in bytes.enumerated() { wr8(cs + UInt32(i), b) }
+                wr16(pb + UInt32(CntrlParam_csCode_off), code)
+                #expect(tb_PBControl(pb, false) == 0, "csCode \(code)")
+            }
+            wr16(pb + UInt32(CntrlParam_csCode_off), 9)
+            #expect(tb_PBStatus(pb, false) == 0)
+            #expect(tb_PBClose(pb, false) == 0)
+            #expect(rd8(UInt32(LM_PortBUse)) == 0xFF)
+        }
+
         /// The Communications Resource Manager lists both ports by name and driver.
         @Test func resourceManagerListsThePorts() {
             launchTestApp()

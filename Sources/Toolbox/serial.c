@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <termios.h>
 #include <time.h>
@@ -42,6 +43,8 @@ enum { K_NONE, K_MODEM, K_TCP, K_LISTEN, K_PTY, K_DEVICE };
 enum { M_COMMAND, M_DIALING, M_ONLINE };
 enum { INBUF = 16384 };
 enum { abortErr = -27, notOpenErr = -28 };
+/* PortAUse/PortBUse: bit 7 set while the port is free, else its use */
+enum { LM_PortAUse = 0x0290, useAsync = 2, portFree = 0xFF };
 /* Telnet */
 enum { IAC = 255, DONT = 254, DO = 253, WONT = 252, WILL = 251, SB = 250, SE = 240 };
 enum { TN_DATA, TN_IAC, TN_OPT, TN_SB, TN_SB_IAC };
@@ -55,6 +58,9 @@ typedef struct {
     int inlen;
     uint32_t baud;
     uint16_t config;
+    /* SerHShake: XON/XOFF out (fXOn) and in (fInX), CTS, DTR in */
+    bool xon_out, xon_in, cts, dtr_in;
+    uint8_t xon_char, xoff_char;
     /* a read waiting for its bytes */
     gaddr rd_pb;
     /* the modem */
@@ -202,6 +208,19 @@ static void apply_settings(sport *p)
     }
     if ((p->config >> 14) == 3)
         t.c_cflag |= CSTOPB;
+    /* handshaking, as SerHShake asked for */
+    t.c_cflag &= ~(tcflag_t)(CCTS_OFLOW | CRTS_IFLOW | CDTR_IFLOW);
+    if (p->cts)
+        t.c_cflag |= CCTS_OFLOW | CRTS_IFLOW;
+    if (p->dtr_in)
+        t.c_cflag |= CDTR_IFLOW;
+    t.c_iflag &= ~(tcflag_t)(IXON | IXOFF);
+    if (p->xon_out)
+        t.c_iflag |= IXON;
+    if (p->xon_in)
+        t.c_iflag |= IXOFF;
+    t.c_cc[VSTART] = p->xon_char ? p->xon_char : 0x11;
+    t.c_cc[VSTOP] = p->xoff_char ? p->xoff_char : 0x13;
     cfsetspeed(&t, host_speed(p->baud));
     tcsetattr(p->fd, TCSANOW, &t);
 }
@@ -680,6 +699,14 @@ void serial_poll(void)
 /* ---------------------------------------------------------------------- */
 /* The drivers */
 
+/* Whether a port has a host device's control lines (a device or a pty). */
+static bool has_lines(sport *p) { return p->fd >= 0 && (p->kind == K_DEVICE || p->kind == K_PTY); }
+
+static void set_use(sport *p, bool open)
+{
+    wr8(p == &ports[PORT_A] ? LM_PortAUse : LM_PortBUse, open ? useAsync : portFree);
+}
+
 static sport *port_of(gaddr pb)
 {
     int16_t unit = (int16_t)(-1 - (int16_t)rd16(pb + IOParam_ioRefNum_off));
@@ -695,6 +722,7 @@ static int16_t ser_open(gaddr pb)
         p->mode = M_COMMAND;
         reset_modem(p);
         connect_port(p);
+        set_use(p, true);
     }
     return noErr;
 }
@@ -709,6 +737,7 @@ static int16_t ser_close(gaddr pb)
         p->rd_pb = 0;
     }
     p->opened = false;
+    set_use(p, false);
     if (p->kind == K_MODEM) /* DTR drops: the modem hangs up */
         hang_up(p, false);
     else if (p->kind == K_TCP)
@@ -732,8 +761,29 @@ static int16_t ser_control(gaddr pb, bool async)
         p->baud = rd16(cs);
         apply_settings(p);
         return noErr;
-    case 9: case 10: case 11: case 12: case 14: case 16: case 17: case 18:
-    case 19: case 20: case 21: case 22: case 23: case 24: case 25:
+    case 10: /* SerHShake */
+    case 14: /* SerHShake, with DTR input flow control */
+        p->xon_out = rd8(cs + SerShk_fXOn_off) != 0;
+        p->cts = rd8(cs + SerShk_fCTS_off) != 0;
+        p->xon_char = rd8(cs + SerShk_xOn_off);
+        p->xoff_char = rd8(cs + SerShk_xOff_off);
+        p->xon_in = rd8(cs + SerShk_fInX_off) != 0;
+        p->dtr_in = rd16(pb + CntrlParam_csCode_off) == 14 && rd8(cs + SerShk_null_off) != 0;
+        apply_settings(p);
+        return noErr;
+    case 12: /* SerSetBrk */
+    case 11: /* SerClrBrk */
+        if (has_lines(p))
+            ioctl(p->fd, rd16(pb + CntrlParam_csCode_off) == 12 ? TIOCSBRK : TIOCCBRK);
+        return noErr;
+    case 17: /* assert DTR */
+    case 18: /* negate DTR */
+        if (has_lines(p))
+            ioctl(p->fd, rd16(pb + CntrlParam_csCode_off) == 17 ? TIOCSDTR : TIOCCDTR);
+        else if (p->kind == K_MODEM && rd16(pb + CntrlParam_csCode_off) == 18 && p->mode != M_COMMAND)
+            hang_up(p, true); /* a Hayes modem hangs up when DTR drops (&D2) */
+        return noErr;
+    case 9: case 16: case 19: case 20: case 21: case 22: case 23: case 24: case 25:
         return noErr;
     case 1: /* KillIO by control code */
         if (p->rd_pb) {
@@ -755,14 +805,21 @@ static int16_t ser_status(gaddr pb, bool async)
         wr32(cs, (uint32_t)p->inlen);
         return noErr;
     case 8: /* SerStatus: cumErrs, xOffSent, rdPend, wrPend, ctsHold, xOffHold */
-        gmemset(cs, 0, 6);
-        wr8(cs + 2, p->rd_pb ? 0xFF : 0);
-        return noErr;
-    case 9: /* SerStatus with DSR and the modem's lines */
+    case 9: { /* SerStatus with DSR and the modem's lines */
+        int lines = TIOCM_CTS | TIOCM_DSR | TIOCM_CD;
+        if (has_lines(p) && ioctl(p->fd, TIOCMGET, &lines) < 0)
+            lines = TIOCM_CTS | TIOCM_DSR | TIOCM_CD;
+        if (p->fd < 0)
+            lines &= ~TIOCM_CD;
         gmemset(cs, 0, 8);
         wr8(cs + 2, p->rd_pb ? 0xFF : 0);
-        wr8(cs + 7, (p->fd >= 0 ? 0x08 : 0) | 0x10); /* DCD, CTS */
+        wr8(cs + 4, p->cts && !(lines & TIOCM_CTS) ? 0xFF : 0); /* ctsHold */
+        if (rd16(pb + CntrlParam_csCode_off) == 9) {
+            wr8(cs + 6, lines & TIOCM_DSR ? 0x08 : 0);                                       /* DSR */
+            wr8(cs + 7, (lines & TIOCM_CD ? 0x08 : 0) | (lines & TIOCM_CTS ? 0x10 : 0)); /* DCD, CTS */
+        }
         return noErr;
+    }
     default: return -18; /* statusErr */
     }
 }
@@ -932,6 +989,9 @@ void serial_reset(void)
         reset_modem(p);
     }
     polling = false;
+    wr8(LM_PortAUse, portFree);
+    wr8(LM_PortBUse, portFree);
+    wr8(LM_SPConfig, 0); /* neither port set aside for AppleTalk */
     crm_recs[PORT_A] = crm_record(1, "Modem Port", ".AIn", ".AOut");
     crm_recs[PORT_B] = crm_record(2, "Printer Port", ".BIn", ".BOut");
     wr32(OS_TRAP_TABLE + 0x8Bu * 4, native_register(ctb_dispatch, "CommToolboxDispatch", 0xA08B));
