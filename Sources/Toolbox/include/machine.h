@@ -456,6 +456,28 @@ void machine_set_midi_out_handler(machine_midi_out_fn fn, void *ctx);
  * client's output port as packets. */
 void machine_midi_in(const uint8_t *bytes, int n);
 
+/* ---- Game controllers ----
+ * The host's game controllers, for InputSprocket: up to MACHINE_PADS of
+ * them, each with its buttons (a mask of MACHINE_PAD_*), two sticks (-1 to
+ * 1, up and right positive) and two triggers (0 to 1).  The host sets a
+ * pad's state whenever it changes, and connected false when it goes away;
+ * any thread. */
+enum { MACHINE_PADS = 4 };
+enum {
+    MACHINE_PAD_A = 1 << 0, MACHINE_PAD_B = 1 << 1, MACHINE_PAD_X = 1 << 2, MACHINE_PAD_Y = 1 << 3,
+    MACHINE_PAD_L1 = 1 << 4, MACHINE_PAD_R1 = 1 << 5, MACHINE_PAD_L2 = 1 << 6, MACHINE_PAD_R2 = 1 << 7,
+    MACHINE_PAD_L3 = 1 << 8, MACHINE_PAD_R3 = 1 << 9, MACHINE_PAD_MENU = 1 << 10, MACHINE_PAD_OPTIONS = 1 << 11,
+    MACHINE_PAD_UP = 1 << 12, MACHINE_PAD_DOWN = 1 << 13, MACHINE_PAD_LEFT = 1 << 14, MACHINE_PAD_RIGHT = 1 << 15,
+};
+enum { MACHINE_PAD_LX, MACHINE_PAD_LY, MACHINE_PAD_RX, MACHINE_PAD_RY, MACHINE_PAD_LT, MACHINE_PAD_RT, MACHINE_PAD_AXES };
+typedef struct {
+    bool connected;
+    char name[64]; /* UTF-8, as the host names it */
+    uint32_t buttons;
+    float axes[MACHINE_PAD_AXES];
+} machine_gamepad;
+void machine_set_gamepad(int index, const machine_gamepad *pad);
+
 /* ---- Images ---- */
 
 /* Decode a still image the host's frameworks read (JPEG for QuickTime's

@@ -437,6 +437,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     ClassicAudio.shared.install()
     ClassicMusic.shared.install()
     ClassicMIDI.shared.install()
+    GameControllers.shared.install()
     NativeControls.install()
     if !speechBackend.hasPrefix("record:") { ClassicSpeech.shared.install(avspeech: speechBackend == "avspeech") }
     NotificationRelay.shared.install()
