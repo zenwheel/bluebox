@@ -400,3 +400,72 @@ extension BlueBox {
     }
 }
 }
+
+extension BlueBox {
+    /// Damaged resource forks: the parser and the Resource Manager refuse
+    /// or read what they can, and never crash or read past the fork.
+    @Suite struct DamagedForks {
+        @Test func mutatedForksDoNotCrash() {
+            bootMachine()
+            let good = buildFork([
+                TestResource(type: "TEST", id: 128, name: "hello", data: Array("first".utf8)),
+                TestResource(type: "TEST", id: 129, attrs: 0x01, // compressed
+                             data: dcmp0Resource(decompressedSize: 4, body: cat([0x02], Array("WXYZ".utf8), [0xFF]))),
+                TestResource(type: "STR ", id: 1, data: cat([3], Array("abc".utf8))),
+                TestResource(type: "PURG", id: 7, attrs: 0x20, data: [1, 2, 3]),
+            ])
+            var seed: UInt64 = 0x9E37_79B9_7F4A_7C15
+            func next() -> Int {
+                seed = seed &* 6364136223846793005 &+ 1442695040888963407
+                return Int(truncatingIfNeeded: seed >> 33)
+            }
+            var opened = 0
+            for round in 0..<20000 {
+                var fork = good
+                switch round % 4 {
+                case 0: // a few bytes anywhere
+                    for _ in 0..<(1 + next() % 4) { fork[next() % fork.count] = UInt8(truncatingIfNeeded: next()) }
+                case 1: // the header or the map, where offsets and counts live
+                    let mapAt = Int(fork[4]) << 24 | Int(fork[5]) << 16 | Int(fork[6]) << 8 | Int(fork[7])
+                    for _ in 0..<(1 + next() % 3) {
+                        let i = round % 8 == 1 ? next() % 16 : mapAt + next() % max(1, fork.count - mapAt)
+                        if i < fork.count { fork[i] = UInt8(truncatingIfNeeded: next()) }
+                    }
+                case 2: // cut short
+                    fork = Array(fork.prefix(next() % fork.count))
+                default: // extreme values in the map's words
+                    let mapAt = Int(fork[7]) | Int(fork[6]) << 8
+                    let i = min(fork.count - 2, mapAt + 22 + next() % 40)
+                    if i >= 0 { fork[i] = 0xFF; fork[i + 1] = 0xFF }
+                }
+                var idx = rsrc_index()
+                var err = [CChar](repeating: 0, count: 256)
+                if rsrc_parse(fork, fork.count, &idx, &err, err.count) {
+                    for k in 0..<idx.count {
+                        var e = idx.entries[Int(k)]
+                        _ = rsrc_data(fork, &idx, &e)
+                    }
+                    rsrc_index_free(&idx)
+                }
+                let rn = rm_open_host_file(nil, &fork, UInt32(fork.count), true)
+                guard rn > 0 else { continue }
+                opened += 1
+                tb_UseResFile(rn)
+                let types = tb_Count1Types()
+                for t in 0..<max(0, min(Int(types), 8)) {
+                    let tp = tb_NewPtr(4, false, true)
+                    tb_Get1IndType(tp, Int16(t + 1))
+                    let type = Int32(bitPattern: rd32(tp))
+                    tb_DisposePtr(tp)
+                    for k in 0..<max(0, min(Int(tb_Count1Resources(type)), 8)) {
+                        let h = tb_Get1IndResource(type, Int16(k + 1))
+                        if h != 0 { _ = tb_GetHandleSize(h) }
+                    }
+                    _ = tb_Get1Resource(type, 128)
+                }
+                tb_CloseResFile(rn)
+            }
+            #expect(opened > 0) // some damage leaves a usable map
+        }
+    }
+}
