@@ -7,7 +7,7 @@ extension BlueBox {
     @Suite struct ColorQuickDraw {
         func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
             let p = tb_NewPtr(8, false, true)
-            for (i, v) in [t, l, b, r].enumerated() { wr16(p + UInt32(i * 2), UInt16(v)) }
+            for (i, v) in [t, l, b, r].enumerated() { wr16(p + UInt32(i * 2), UInt16(truncatingIfNeeded: v)) }
             return p
         }
 
@@ -38,6 +38,32 @@ extension BlueBox {
             #expect(rd16(back + 2) == 0xFFFF) // still white
             tb_SetGWorld(rd32(screen), rd32(dev))
             tb_DisposeGWorld(port)
+        }
+
+        /// At depth 0 the rectangle is global, only to choose the screen: the
+        /// world starts at 0,0 (Squark draws at 0,0 into a world made from
+        /// its window's global rectangle).  A given depth keeps the rectangle.
+        @Test func screenDepthWorldsStartAtTheOrigin() {
+            launchTestApp()
+            _ = initToolbox()
+            let gw = tb_NewPtr(4, false, true)
+            func rects(_ port: UInt32) -> [Int16] {
+                let pm = rd32(tb_GetGWorldPixMap(port))
+                return (0..<4).map { Int16(bitPattern: rd16(port + 16 + UInt32($0 * 2))) }
+                    + (0..<4).map { Int16(bitPattern: rd16(pm + 6 + UInt32($0 * 2))) }
+            }
+            #expect(tb_NewGWorld(gw, 0, rect(144, 192, 624, 832), 0, 0, 2) == 0)
+            #expect(rects(rd32(gw)) == [0, 0, 480, 640, 0, 0, 480, 640])
+            tb_DisposeGWorld(rd32(gw))
+            #expect(tb_NewGWorld(gw, 32, rect(144, 192, 624, 832), 0, 0, 0) == 0)
+            #expect(rects(rd32(gw)) == [144, 192, 624, 832, 144, 192, 624, 832])
+            tb_DisposeGWorld(rd32(gw))
+            // A left edge off a long word of screen pixels keeps its alignment.
+            #expect(tb_NewGWorld(gw, 0, rect(-50, -60, 50, 140), 0, 0, 0) == 0)
+            let depth = Int(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + 32))
+            let shift = Int16(depth < 32 ? ((-60 % (32 / depth)) + 32 / depth) % (32 / depth) : 0)
+            #expect(rects(rd32(gw)) == [0, 0, 100, 200, 0, -shift, 100, 200])
+            tb_DisposeGWorld(rd32(gw))
         }
 
         /// A picture recorded in colour plays back in colour (RGBFgCol).

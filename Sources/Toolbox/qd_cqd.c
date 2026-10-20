@@ -199,6 +199,30 @@ void tb_GDeviceChanged(gaddr gdh) {}
 
 static int gworld_depth(int16_t depth) { return depth > 0 ? depth : qd_screen_depth(); }
 
+/* Depth 0 asks for the screen's depth and takes boundsRect in global
+ * coordinates, only to choose the device: the world itself starts at (0,0),
+ * as on a Mac (Squark makes its world from its window's global rectangle
+ * and draws at 0,0).  The bounds keep the rectangle's alignment within a
+ * long word of screen pixels: a left edge of -60 at 1 bit makes bounds
+ * (0,-4)-(100,200) under a portRect of (0,0)-(100,200). */
+static qrect gworld_bounds(int16_t pixelDepth, qrect r, int depth, qrect *port_rect)
+{
+    if (pixelDepth == 0) {
+        int per = depth < 32 ? 32 / depth : 1, shift = ((r.left % per) + per) % per;
+        r = (qrect){ 0, (int16_t)-shift, (int16_t)(r.bottom - r.top), (int16_t)(r.right - r.left) };
+    }
+    *port_rect = r;
+    if (pixelDepth == 0)
+        port_rect->left = 0;
+    return r;
+}
+
+static void set_port_rect(gaddr port, qrect r)
+{
+    qrect_put(port + GrafPort_portRect_off, r);
+    tb_RectRgn(GrafPort_visRgn(port), port + GrafPort_portRect_off);
+}
+
 static uint32_t row_bytes_for(int w, int depth) { return (uint32_t)((w * depth + 31) / 32 * 4); }
 
 static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
@@ -318,12 +342,15 @@ int16_t tb_NewGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect
     /* InitCPort lent the port the screen's colour table; set_pixels gives
      * the world one of its own. */
     PixMap_set_pmTable(rd32(rd32(port + CGrafPort_portPixMap_off)), 0);
-    if (!set_pixels(port, qrect_get(boundsRect), gworld_depth(pixelDepth), cTable)) {
+    int depth = gworld_depth(pixelDepth);
+    qrect pr, r = gworld_bounds(pixelDepth, qrect_get(boundsRect), depth, &pr);
+    if (!set_pixels(port, r, depth, cTable)) {
         tb_CloseCPort(port);
         tb_DisposePtr(port);
         tb_SetPort(saved);
         return memFullErr;
     }
+    set_port_rect(port, pr);
     tb_SetPort(saved);
     /* A GWorld's port says so: portVersion $C001 (programs choose how to
      * draw by it: Graphing Calculator's surfaces). */
@@ -338,18 +365,19 @@ int32_t tb_UpdateGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsR
 {
     gaddr port = rd32(offscreenGWorld);
     gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
-    qrect r = qrect_get(boundsRect), cur = qrect_get(pm + PixMap_bounds_off);
+    qrect cur = qrect_get(pm + PixMap_bounds_off);
     int depth = gworld_depth(pixelDepth);
+    qrect pr, r = gworld_bounds(pixelDepth, qrect_get(boundsRect), depth, &pr);
     if (r.right - r.left == cur.right - cur.left && r.bottom - r.top == cur.bottom - cur.top &&
         depth == PixMap_pixelSize(pm)) {
         qrect_put(pm + PixMap_bounds_off, r);
-        qrect_put(port + GrafPort_portRect_off, r);
-        tb_RectRgn(GrafPort_visRgn(port), port + GrafPort_portRect_off);
+        set_port_rect(port, pr);
         return 0;
     }
     gaddr old = PixMap_baseAddr(pm);
     if (!set_pixels(port, r, depth, cTable))
         return memFullErr;
+    set_port_rect(port, pr);
     tb_DisposePtr(old);
     struct gworld_dev *g = gworld_of(port);
     if (g && g->own)
