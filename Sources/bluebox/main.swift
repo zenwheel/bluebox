@@ -108,7 +108,7 @@ func usage() -> Never {
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
                 [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
-                [appleshare S|none|default]
+                [appleshare S|none|default] [display rootless|screen|default]
                 [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
@@ -593,6 +593,22 @@ func runCommand(_ args: [String]) {
     #endif
 
     #if canImport(AppKit)
+    // The whole screen in one window, as the setting says, or when the
+    // program turns out to want it: then that becomes its setting.
+    if interactive && !screenWindow && saved.display == "screen" { screenWindow = true }
+    let chosenFor = app
+    MainActor.assumeIsolated {
+        RootlessHost.switchesToScreen = saved.display != "rootless"
+        RootlessHost.screenModeChosen = { why in
+            var all = loadSettings(defaultLibrary())
+            var s = all[settingsKey(chosenFor)] ?? AppSettings()
+            guard s.display == nil else { return }
+            s.display = "screen"
+            all[settingsKey(chosenFor)] = s
+            saveSettings(all, library: defaultLibrary())
+            eprint("bluebox: the whole screen for \(settingsKey(chosenFor)): \(why) (now its display setting)\n")
+        }
+    }
     if interactive {
         let title = (app as NSString).lastPathComponent
         let script = keyScript

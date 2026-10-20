@@ -1464,7 +1464,12 @@ static int mode_depth(int16_t depth)
 
 int16_t tb_SetDepth(gaddr gdh, int16_t depth, int16_t which, int16_t flags)
 {
-    return qd_screen_set_depth(mode_depth(depth)) ? noErr : -1;
+    int before = qd_screen_depth();
+    if (!qd_screen_set_depth(mode_depth(depth)))
+        return -1;
+    if (qd_screen_depth() != before)
+        display_want_screen("it changes the screen's depth"); /* a game's, usually */
+    return noErr;
 }
 
 int16_t tb_HasDepth(gaddr gdh, int16_t depth, int16_t which, int16_t flags)

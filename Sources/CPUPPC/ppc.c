@@ -13,6 +13,14 @@
 
 #include "ppc.h"
 
+/* The program's stores, watched (mem.h). */
+static inline void ppc_wr8(gaddr a, uint8_t v) { watch_store(a); wr8(a, v); }
+static inline void ppc_wr16(gaddr a, uint16_t v) { watch_store(a); wr16(a, v); }
+static inline void ppc_wr32(gaddr a, uint32_t v) { watch_store(a); wr32(a, v); }
+#define wr8 ppc_wr8
+#define wr16 ppc_wr16
+#define wr32 ppc_wr32
+
 /* ---------------------------------------------------------------------- */
 /* Fields */
 

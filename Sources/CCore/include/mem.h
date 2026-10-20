@@ -47,6 +47,17 @@ void mem_discard(gaddr addr, uint32_t len);
 
 static inline uint8_t *gptr(gaddr a) { return g_mem + a; }
 
+/* A range the CPUs' own stores are watched in (the screen, for writes a
+ * program makes to it directly rather than through QuickDraw): a store
+ * there calls g_watch_fn.  The Toolbox's own writes aren't watched. */
+extern gaddr g_watch_lo, g_watch_len;
+extern void (*g_watch_fn)(gaddr a);
+static inline void watch_store(gaddr a)
+{
+    if (a - g_watch_lo < g_watch_len)
+        g_watch_fn(a);
+}
+
 static inline uint8_t rd8(gaddr a) { return g_mem[a]; }
 static inline uint16_t rd16(gaddr a)
 {

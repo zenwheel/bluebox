@@ -171,9 +171,14 @@ final class TransientView: NSView {
     var windows: [UInt32: MacWindow] = [:]
     var windowsVersion: UInt32 = .max
     /// A program that covers the whole screen with a window (a full-screen
-    /// game) may then draw on the screen outside its windows: from then on
-    /// the whole screen is shown, in one window, as on a Mac.
+    /// game), draws on the screen outside its windows, hides the menu bar
+    /// or changes the screen's depth wants the whole screen: from then on
+    /// it is shown, in one window, as on a Mac.
     var screenWindow: MacWindow?
+    /// False when the program's display setting keeps it rootless.
+    static var switchesToScreen = true
+    /// Told why, once, when the program is switched (main.swift saves it).
+    static var screenModeChosen: ((String) -> Void)?
     var menusVersion: UInt32 = .max
     var lastMouse = NSPoint(x: -1, y: -1)
     var timer: Timer?
@@ -359,6 +364,10 @@ final class TransientView: NSView {
     // MARK: Windows
 
     func syncWindows() {
+        if screenWindow == nil, Self.switchesToScreen, let why = machine_screen_mode_wanted() {
+            switchToScreen(because: String(cString: why))
+            return
+        }
         let version = machine_windows_version()
         guard version != windowsVersion else { return }
         windowsVersion = version
@@ -370,9 +379,9 @@ final class TransientView: NSView {
         }
         var sw: Int32 = 0, sh: Int32 = 0
         machine_screen_size(&sw, &sh)
-        if screenWindow == nil,
+        if screenWindow == nil, Self.switchesToScreen,
            current.contains(where: { $0.left <= 0 && $0.top <= 0 && Int32($0.right) >= sw && Int32($0.bottom) >= sh }) {
-            showWholeScreen(Int(sw), Int(sh))
+            switchToScreen(because: "it opens a window covering the screen")
         }
         if screenWindow != nil {
             for w in windows.values { w.orderOut(nil) }
@@ -448,6 +457,15 @@ final class TransientView: NSView {
         // Stack them in Mac order: back first, so the front ends up on top.
         for mw in current.reversed() { windows[mw.id]?.orderFront(nil) }
         if let front = current.first, let w = windows[front.id], NSApp.isActive { w.makeKey() }
+    }
+
+    func switchToScreen(because why: String) {
+        var sw: Int32 = 0, sh: Int32 = 0
+        machine_screen_size(&sw, &sh)
+        showWholeScreen(Int(sw), Int(sh))
+        for w in windows.values { w.orderOut(nil) }
+        windows.removeAll()
+        Self.screenModeChosen?(why)
     }
 
     func showWholeScreen(_ width: Int, _ height: Int) {

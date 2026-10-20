@@ -17,9 +17,9 @@
 static inline uint8_t mr8(cpu68k *c, uint32_t a) { return rd8(a & c->addr_mask); }
 static inline uint16_t mr16(cpu68k *c, uint32_t a) { return rd16(a & c->addr_mask); }
 static inline uint32_t mr32(cpu68k *c, uint32_t a) { return rd32(a & c->addr_mask); }
-static inline void mw8(cpu68k *c, uint32_t a, uint8_t v) { wr8(a & c->addr_mask, v); }
-static inline void mw16(cpu68k *c, uint32_t a, uint16_t v) { wr16(a & c->addr_mask, v); }
-static inline void mw32(cpu68k *c, uint32_t a, uint32_t v) { wr32(a & c->addr_mask, v); }
+static inline void mw8(cpu68k *c, uint32_t a, uint8_t v) { watch_store(a & c->addr_mask); wr8(a & c->addr_mask, v); }
+static inline void mw16(cpu68k *c, uint32_t a, uint16_t v) { watch_store(a & c->addr_mask); wr16(a & c->addr_mask, v); }
+static inline void mw32(cpu68k *c, uint32_t a, uint32_t v) { watch_store(a & c->addr_mask); wr32(a & c->addr_mask, v); }
 
 static inline uint32_t mread(cpu68k *c, uint32_t a, int sz)
 {

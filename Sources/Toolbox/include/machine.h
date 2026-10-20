@@ -42,6 +42,9 @@ void machine_set_screen(int width, int height);
 bool machine_add_resource_file(const char *path, char *err, size_t errlen);
 /* The screen, for the host to display: its size, and any rectangle as RGBA. */
 void machine_screen_size(int *width, int *height);
+/* Why the program wants the whole screen shown (it draws outside its
+ * windows, hides the menu bar ...), or NULL while rootless suits it. */
+const char *machine_screen_mode_wanted(void);
 void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out);
 /* Window, control and menu appearance; the colour ones use an 8-bit screen.
  * Call before boot. */

@@ -317,6 +317,11 @@ typedef struct {
 enum { ioInProgress = 1 };
 bool driver_open(gaddr pb, int16_t *err); /* false: no driver of that name */
 void drivers_reset(void);                 /* the unit table, at boot */
+/* The whole screen in one window instead of rootless windows (display.c). */
+void display_want_screen(const char *why);
+void display_sync(void); /* the host's snapshots, at a safe point */
+uint32_t qd_screen_row_bytes(void);
+int qd_screen_depth(void);
 bool driver_refnum(int16_t refnum);
 int16_t driver_call(gaddr pb, bool async, int kind);
 /* MacTCP (mactcp.c): the .IPP driver, its Domain Name Resolver, and the

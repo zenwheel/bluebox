@@ -4,6 +4,8 @@
 #include <sys/mman.h>
 
 uint8_t *g_mem;
+gaddr g_watch_lo, g_watch_len;
+void (*g_watch_fn)(gaddr a);
 
 /* 4 GB plus slack so a multi-byte access at the very top cannot run off. */
 #define ARENA_SIZE ((size_t)1 << 32)

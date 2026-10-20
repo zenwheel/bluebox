@@ -607,6 +607,15 @@ struct SettingsForm: View {
                 Text("macOS window frames").tag(String?.some("native"))
                 ForEach(themes, id: \.self) { t in Text("Theme: \(t)").tag(String?.some(t)) }
             }
+            Picker("Display", selection: $settings.display) {
+                Text("\(inherit) (\(displayName(fallback.display).lowercased()))").tag(String?.none)
+                Text(displayName("rootless")).tag(String?.some("rootless"))
+                Text(displayName("screen")).tag(String?.some("screen"))
+            }
+            .help("Rootless: each classic window is a window of its own. The whole screen: the Mac's screen in "
+                  + "one window, for programs that draw on the screen outside their windows (games, mostly). By "
+                  + "default a program is rootless until it shows it wants the whole screen, which then becomes "
+                  + "its setting.")
             HighlightPicker(highlight: $settings.highlight, inherit: inherit,
                             inheritedName: highlightName(fallback.highlight ?? "host"))
         }
@@ -669,6 +678,14 @@ struct SettingsForm: View {
         case let l where l.hasPrefix("lan:"): return "Local network through \(l.dropFirst(4))"
         case "off": return "Off"
         default: return "This Mac only"
+        }
+    }
+
+    private func displayName(_ d: String?) -> String {
+        switch d {
+        case "rootless": return "Rootless windows"
+        case "screen": return "The whole screen in a window"
+        default: return "Rootless, or the whole screen when wanted"
         }
     }
 

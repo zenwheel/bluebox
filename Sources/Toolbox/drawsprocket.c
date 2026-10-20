@@ -172,6 +172,7 @@ static void dsp_Reserve(ppc_cpu *c)
         wr32(ctx + 48, 1);
     wr8(ctx + CTX_RESERVED, 1);
     wr16(ctx + CTX_STATE, kDSpContextState_Inactive);
+    display_want_screen("it uses DrawSprocket");
     wr16(ctx + CTX_LEFT, (uint16_t)((g_screen_width - (int)w) / 2));
     wr16(ctx + CTX_TOP, (uint16_t)((g_screen_height - (int)h) / 2));
 

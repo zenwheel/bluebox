@@ -341,10 +341,80 @@ bool display_menu_tracking_wait(void)
 }
 
 /* ---------------------------------------------------------------------- */
+/* The whole screen: a program that wants it (draws on the screen outside
+ * its windows itself, hides the menu bar, changes the screen's depth,
+ * uses DrawSprocket) is shown in one window of the whole Mac screen
+ * instead of rootless windows.  The first reason is kept; the host asks. */
+
+uint32_t qd_screen_row_bytes(void);
+int qd_screen_depth(void);
+
+static const char *_Atomic screen_reason;
+static bool direct_written;
+static int dw_top, dw_left, dw_bottom, dw_right; /* pixels written since the last sync */
+
+void display_want_screen(const char *why)
+{
+    if (!screen_reason) {
+        screen_reason = why;
+        LOGF(LOG_UNIMPL, "screen mode: %s\n", why);
+    }
+}
+
+const char *machine_screen_mode_wanted(void) { return screen_reason; }
+
+/* A store the program made into the screen (mem.h's watch). */
+static void screen_written(gaddr a)
+{
+    uint32_t off = a - g_watch_lo, rb = qd_screen_row_bytes();
+    int y = (int)(off / rb), x = (int)((off % rb) * 8 / (uint32_t)qd_screen_depth());
+    if (!direct_written) {
+        direct_written = true;
+        dw_top = dw_bottom = y;
+        dw_left = dw_right = x;
+        return;
+    }
+    if (y < dw_top) dw_top = y;
+    if (y > dw_bottom) dw_bottom = y;
+    if (x < dw_left) dw_left = x;
+    if (x > dw_right) dw_right = x;
+}
+
+/* Whether one of the program's windows covers what it wrote. */
+static bool writes_in_a_window(void)
+{
+    for (gaddr w = rd32(LM_WindowList); w; w = WindowRecord_nextWindow(w)) {
+        gaddr rgn = WindowRecord_strucRgn(w);
+        if (!WindowRecord_visible(w) || !rgn || !rd32(rgn))
+            continue;
+        qrect b = qrect_get(rd32(rgn) + 2);
+        if (dw_top >= b.top && dw_bottom < b.bottom && dw_left >= b.left && dw_right < b.right)
+            return true;
+    }
+    return false;
+}
+
+static void check_screen_mode(void)
+{
+    if (!screen_reason) {
+        if ((int16_t)rd16(LM_MBarHeight) == 0)
+            display_want_screen("it hides the menu bar");
+        else if (direct_written && !writes_in_a_window())
+            display_want_screen("it draws on the screen outside its windows");
+    }
+    direct_written = false;
+    int w, h;
+    machine_screen_size(&w, &h);
+    g_watch_fn = screen_written;
+    g_watch_lo = rd32(LM_ScrnBase);
+    g_watch_len = screen_reason ? 0 : qd_screen_row_bytes() * (uint32_t)h; /* decided: no more watching */
+}
 
 /* Called by the Event Manager on the emulator thread: a safe point. */
 void display_sync(void)
 {
+    check_screen_mode();
+
     /* A choice still waiting for MenuSelect: the click may only have shown
      * a hidden menu bar (Prince of Persia's), as a first click does on a
      * Mac; click again, a few times at most. */
@@ -374,6 +444,9 @@ void display_sync(void)
 
 void display_reset(void)
 {
+    screen_reason = NULL;
+    direct_written = false;
+    g_watch_len = 0;
     wins_dirty = menus_dirty = true;
     pending_choice = 0;
     tracking = in_select = track_done = false;
