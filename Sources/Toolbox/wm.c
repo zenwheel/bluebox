@@ -1142,7 +1142,20 @@ gaddr tb_GetNewCWindow(int16_t wid, gaddr wst, gaddr behind)
     return w;
 }
 
-void tb_CloseWindow(gaddr w)
+/* What CloseWindow frees: the regions, the title and the port. */
+static void free_window_parts(gaddr w)
+{
+    tb_DisposeRgn(WindowRecord_strucRgn(w));
+    tb_DisposeRgn(WindowRecord_contRgn(w));
+    tb_DisposeRgn(WindowRecord_updateRgn(w));
+    tb_DisposeHandle(WindowRecord_titleHandle(w));
+    if (qd_port_is_color(w))
+        tb_CloseCPort(w);
+    else
+        tb_ClosePort(w);
+}
+
+static void close_window(gaddr w, bool keep_parts)
 {
     bool was_visible = wvisible(w);
     hrgn s;
@@ -1158,14 +1171,8 @@ void tb_CloseWindow(gaddr w)
         wr32(LM_CurDeactive, 0);
     if (qd_port() == w)
         tb_SetPort(wmgr_port());
-    tb_DisposeRgn(WindowRecord_strucRgn(w));
-    tb_DisposeRgn(WindowRecord_contRgn(w));
-    tb_DisposeRgn(WindowRecord_updateRgn(w));
-    tb_DisposeHandle(WindowRecord_titleHandle(w));
-    if (qd_port_is_color(w))
-        tb_CloseCPort(w);
-    else
-        tb_ClosePort(w);
+    if (!keep_parts)
+        free_window_parts(w);
     forget_varcode(w);
     if (was_visible) {
         update_active();
@@ -1174,10 +1181,44 @@ void tb_CloseWindow(gaddr w)
     hrgn_free(&s);
 }
 
+void tb_CloseWindow(gaddr w) { close_window(w, false); }
+
+/* Windows that DisposeWindow frees stay whole (record, regions, port) until
+ * a few more have been disposed, as freed memory on a Mac stays as it was
+ * until something else takes it.  Programs go on using a window they have
+ * just disposed: Star Chaos keeps its CPU speed test's window as its main
+ * one, then moves, sizes, shows and selects it and plays in it.  A window
+ * brought back into the window list that way is never freed. */
+enum { DISPOSED_KEPT = 4 };
+static gaddr disposed[DISPOSED_KEPT];
+static int ndisposed;
+
+static bool in_window_list(gaddr w)
+{
+    for (gaddr x = wlist(); x; x = WindowRecord_nextWindow(x))
+        if (x == w)
+            return true;
+    return false;
+}
+
 void tb_DisposeWindow(gaddr w)
 {
-    tb_CloseWindow(w);
-    tb_DisposePtr(w);
+    for (int i = 0; i < ndisposed; i++)
+        if (disposed[i] == w) { /* disposed again: it was in use after all */
+            disposed[i] = disposed[--ndisposed];
+            break;
+        }
+    close_window(w, true);
+    if (ndisposed == DISPOSED_KEPT) {
+        gaddr old = disposed[0];
+        memmove(disposed, disposed + 1, (DISPOSED_KEPT - 1) * sizeof *disposed);
+        ndisposed--;
+        if (!in_window_list(old)) {
+            free_window_parts(old);
+            tb_DisposePtr(old);
+        }
+    }
+    disposed[ndisposed++] = w;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1978,6 +2019,7 @@ void tb_InitWindows(void)
         tb_SetPort(saved);
     }
     wr32(LM_WindowList, 0);
+    ndisposed = 0;
     wr32(LM_CurActivate, 0);
     wr32(LM_CurDeactive, 0);
     gput(LM_DeskPattern, qd_pat_gray, 8);

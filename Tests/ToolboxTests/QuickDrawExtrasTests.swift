@@ -395,6 +395,44 @@ extension BlueBox {
 }
 
 extension BlueBox {
+    /// A window DisposeWindow has just freed stays whole for a while (Star
+    /// Chaos moves, sizes, shows and selects its CPU test's window after
+    /// disposing it, and plays in it); one brought back is kept.
+    @Suite struct DisposedWindows {
+        func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
+            let p = tb_NewPtr(8, false, true)
+            for (i, v) in [t, l, b, r].enumerated() { wr16(p + UInt32(i * 2), UInt16(bitPattern: Int16(v))) }
+            return p
+        }
+
+        func bbox(_ rgn: UInt32) -> [Int] { (0..<4).map { Int(Int16(bitPattern: rd16(rd32(rgn) + 2 + UInt32($0 * 2)))) } }
+
+        @Test func aJustDisposedWindowCanBeUsedAgain() {
+            launchTestApp()
+            _ = initToolbox()
+            let title = tb_NewPtr(2, false, true)
+            let w = tb_NewCWindow(0, rect(100, 100, 200, 300), title, 1, 0, 0xFFFF_FFFF, 0, 0)
+            let regions = [WindowRecord_strucRgn(w), WindowRecord_contRgn(w), WindowRecord_updateRgn(w)]
+            tb_DisposeWindow(w)
+            #expect(tb_FrontWindow() == 0)
+            // Its regions are not handed out again yet.
+            let fresh = (0..<3).map { _ in tb_NewRgn() }
+            #expect(Set(fresh).isDisjoint(with: regions))
+            tb_MoveWindow(w, 0, 40, 0)
+            tb_SizeWindow(w, 400, 300, 1)
+            tb_ShowWindow(w)
+            tb_SelectWindow(w)
+            #expect(tb_FrontWindow() == w)
+            #expect(bbox(WindowRecord_strucRgn(w)) == [21, -1, 342, 402])
+            // Back in use, it outlives the windows disposed after it.
+            for _ in 0..<6 { tb_DisposeWindow(tb_NewCWindow(0, rect(50, 50, 80, 80), title, 0, 0, 0xFFFF_FFFF, 0, 0)) }
+            #expect(tb_FrontWindow() == w)
+            #expect(bbox(WindowRecord_strucRgn(w)) == [21, -1, 342, 402])
+        }
+    }
+}
+
+extension BlueBox {
     /// Native scroll bars are hit where macOS draws their knob.
     @Suite struct NativeScrollBars {
         @Test func theKnobIsWhereTheHostDrewIt() {
