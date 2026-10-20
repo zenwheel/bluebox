@@ -615,6 +615,20 @@ static bool dark_title(const frame *f)
     return n && sum / n / 100 < 110;
 }
 
+/* A run of racing stripes w wide from the scheme's stripe icon: its first
+ * and last columns are the stripes' ends (Platinum's bevels), drawn once
+ * at each end; the columns between them tile the rest. */
+static void blit_stripes(const image *st, int x, int y, int w, const hrgn *clip)
+{
+    if (st->w < 3 || w < 3) {
+        blit_tiled(st, 0, 0, st->w, st->h, x, y, w, st->h, clip);
+        return;
+    }
+    blit(st, 0, 0, 1, st->h, x, y, clip);
+    blit_tiled(st, 1, 0, st->w - 2, st->h, x + 1, y, w - 2, st->h, clip);
+    blit(st, st->w - 1, 0, 1, st->h, x + w - 1, y, clip);
+}
+
 /* Kaleidoscope 1.x: after the classic frame is drawn, lay the scheme's
  * racing stripes over the title bar's. */
 void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom)
@@ -646,7 +660,7 @@ void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway,
         if (k < 3 && !cuts[k][1])
             continue;
         if (end > x)
-            blit_tiled(st, 0, 0, st->w, st->h, x, top, end - x, st->h, &clip);
+            blit_stripes(st, x, top, end - x, &clip);
         if (k < 3)
             x = cuts[k][1];
     }
