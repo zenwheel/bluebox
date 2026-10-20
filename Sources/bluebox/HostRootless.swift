@@ -737,6 +737,7 @@ func postScriptLive(_ script: [String]) {
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()
     ClassicMusic.shared.install()
+    ClassicMIDI.shared.install()
     NativeControls.install()
     if !speechBackend.hasPrefix("record:") { ClassicSpeech.shared.install(avspeech: speechBackend == "avspeech") }
     NotificationRelay.shared.install()

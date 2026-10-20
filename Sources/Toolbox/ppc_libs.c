@@ -1496,6 +1496,13 @@ static void g_SVersion(ppc_cpu *c)
         wr32(R(0), 0x03218000);
     c->pc = c->lr;
 }
+/* The MIDI Manager's version, the same way. */
+static void g_MIDIVersion(ppc_cpu *c)
+{
+    if (R(0))
+        wr32(R(0), (uint32_t)tb_DirectorUnknown3());
+    c->pc = c->lr;
+}
 /* No AppleTalk: the port isn't configured. */
 static void g_portNotCf(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
 /* FindServiceWindow(where, *window): no input method windows. */
@@ -2170,7 +2177,7 @@ const ppc_export lib_exports[] = {
     { "DMSetDisplayMode", dm_paramErr }, { "DMSetMainDisplay", dm_paramErr },
     /* Odds and ends */
     { "equalstring", g_equalstring }, { "relstring", g_relstring }, { "SVersion", g_SVersion },
-    { "MIDIVersion", g_noErr }, { "InstallExceptionHandler", g_noErr }, { "FindServiceWindow", g_FindServiceWindow },
+    { "MIDIVersion", g_MIDIVersion }, { "InstallExceptionHandler", g_noErr }, { "FindServiceWindow", g_FindServiceWindow },
     { "GetVideoDefault", g_GetVideoDefault }, { "MPPOpen", g_portNotCf }, { "PPCInit", g_noErr },
     { "OpenXPP", g_portNotCf }, { "ATPLoad", g_portNotCf }, { "MPPClose", g_noErr },
     /* ObjectSupportLib */

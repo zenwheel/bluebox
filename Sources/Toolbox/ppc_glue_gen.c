@@ -9136,29 +9136,9 @@ static void ppcglue_SndDisposeChannel(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppcglue_FinaleUnknown2(ppc_cpu *c)
-{
-    int32_t a_arg0 = (int32_t)c->gpr[3];
-    int32_t a_arg1 = (int32_t)c->gpr[4];
-    gaddr a_arg2 = (gaddr)c->gpr[5];
-    gaddr a_arg3 = (gaddr)c->gpr[6];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FinaleUnknown2(a_arg0, a_arg1, a_arg2, a_arg3);
-    c->pc = c->lr;
-}
-
 static void ppcglue_DirectorUnknown3(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)tb_DirectorUnknown3();
-    c->pc = c->lr;
-}
-
-static void ppcglue_DirectorUnknown4(ppc_cpu *c)
-{
-    int32_t a_arg0 = (int32_t)c->gpr[3];
-    int16_t a_arg1 = (int16_t)c->gpr[4];
-    gaddr a_arg2 = (gaddr)c->gpr[5];
-    gaddr a_arg3 = (gaddr)c->gpr[6];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DirectorUnknown4(a_arg0, a_arg1, a_arg2, a_arg3);
     c->pc = c->lr;
 }
 
@@ -10736,6 +10716,46 @@ static void ppcglue_PBHOpenRFDenyAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenRFDeny(a_pb, true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FinaleUnknown2(ppc_cpu *c)
+{
+    int32_t a_clientID = (int32_t)c->gpr[3];
+    int32_t a_refCon = (int32_t)c->gpr[4];
+    gaddr a_icon = (gaddr)c->gpr[5];
+    gaddr a_name = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FinaleUnknown2(a_clientID, a_refCon, a_icon, a_name);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MIDISignIn(ppc_cpu *c)
+{
+    int32_t a_clientID = (int32_t)c->gpr[3];
+    int32_t a_refCon = (int32_t)c->gpr[4];
+    gaddr a_icon = (gaddr)c->gpr[5];
+    gaddr a_name = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FinaleUnknown2(a_clientID, a_refCon, a_icon, a_name);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DirectorUnknown4(ppc_cpu *c)
+{
+    int32_t a_clientID = (int32_t)c->gpr[3];
+    int16_t a_bufSize = (int16_t)c->gpr[4];
+    gaddr a_refnum = (gaddr)c->gpr[5];
+    gaddr a_init = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DirectorUnknown4(a_clientID, a_bufSize, a_refnum, a_init);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MIDIAddPort(ppc_cpu *c)
+{
+    int32_t a_clientID = (int32_t)c->gpr[3];
+    int16_t a_bufSize = (int16_t)c->gpr[4];
+    gaddr a_refnum = (gaddr)c->gpr[5];
+    gaddr a_init = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DirectorUnknown4(a_clientID, a_bufSize, a_refnum, a_init);
     c->pc = c->lr;
 }
 
@@ -25619,6 +25639,7 @@ const ppc_export ppc_exports[] = {
     {"LongMul", ppcglue_LongMul},
     {"LongSecondsToDate", ppcglue_LongSecondsToDate},
     {"MACEVersion", ppcglue_MACEVersion},
+    {"MIDIAddPort", ppcglue_MIDIAddPort},
     {"MIDIConnectData", ppcglue_MIDIConnectData},
     {"MIDIConnectTime", ppcglue_MIDIConnectTime},
     {"MIDIConvertTime", ppcglue_MIDIConvertTime},
@@ -25648,6 +25669,7 @@ const ppc_export ppc_exports[] = {
     {"MIDISetRunRate", ppcglue_MIDISetRunRate},
     {"MIDISetSync", ppcglue_MIDISetSync},
     {"MIDISetTCFormat", ppcglue_MIDISetTCFormat},
+    {"MIDISignIn", ppcglue_MIDISignIn},
     {"MIDISignOut", ppcglue_MIDISignOut},
     {"MIDIStartTime", ppcglue_MIDIStartTime},
     {"MIDIStopTime", ppcglue_MIDIStopTime},

@@ -192,7 +192,7 @@ bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
 void time_reset(void);
-/* MIDI Manager time base ports (midi.c), run from time_pump. */
+/* The MIDI Manager (midi.c): packets and time base ports, run from time_pump. */
 void midi_pump(void);
 void midi_reset(void);
 void raw_RelString(cpu68k *c, uint16_t tw);

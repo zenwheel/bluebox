@@ -421,6 +421,16 @@ typedef struct {
 } machine_midi_event;
 typedef void (*machine_midi_fn)(int id, const machine_midi_event *events, int n, void *ctx);
 void machine_set_midi_handler(machine_midi_fn fn, void *ctx);
+/* The MIDI Manager's host client: what programs send its input port, a
+ * whole message at a time (System Exclusive whole, F0 to F7, up to 4K),
+ * for the host's MIDI destinations.  Return false when there are none, and
+ * channel messages play on the General MIDI synthesizer instead (the MIDI
+ * handler above, id 'MI' << 16).  Called on the emulator thread. */
+typedef bool (*machine_midi_out_fn)(const uint8_t *bytes, int n, void *ctx);
+void machine_set_midi_out_handler(machine_midi_out_fn fn, void *ctx);
+/* MIDI bytes from the host's sources (any thread): they leave the host
+ * client's output port as packets. */
+void machine_midi_in(const uint8_t *bytes, int n);
 
 /* ---- Images ---- */
 
