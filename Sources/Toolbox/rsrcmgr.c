@@ -1400,8 +1400,38 @@ void tb_RemoveResource(gaddr res)
     set_res_err(noErr);
 }
 
+/* As the Resource Manager did, ReadPartialResource reads the file, not the
+ * resource's handle, which the program may have changed (PopChar Pro's
+ * installer checksums its own resources, CODE 1 among them, which its
+ * runtime has relocated in memory).  A resource changed and not yet
+ * written comes from memory: the file has nothing, or something older. */
 void tb_ReadPartialResource(gaddr res, int32_t offset, gaddr buffer, int32_t count)
 {
+    gaddr maph;
+    uint32_t r;
+    if (!find_handle(res, &maph, &r, NULL)) {
+        set_res_err(resNotFound);
+        return;
+    }
+    resfile *f = file_for_map(maph);
+    gaddr m = mp_of(maph);
+    if (f && f->fork && !(rd8(m + r + 4) & RES_CHANGED)) {
+        uint32_t doff = rd32(m + r + 4) & 0x00FFFFFF, dstart = rd32(m);
+        if ((uint64_t)dstart + doff + 4 > f->len) {
+            set_res_err(mapReadErr);
+            return;
+        }
+        const uint8_t *src = f->fork + dstart + doff;
+        uint32_t len = ((uint32_t)src[0] << 24) | ((uint32_t)src[1] << 16) | ((uint32_t)src[2] << 8) | src[3];
+        if (offset < 0 || count < 0 || (uint64_t)offset + (uint32_t)count > len ||
+            (uint64_t)dstart + doff + 4 + len > f->len) {
+            set_res_err(-39 /* eofErr */);
+            return;
+        }
+        gput(buffer, src + 4 + offset, (uint32_t)count);
+        set_res_err(noErr);
+        return;
+    }
     tb_LoadResource(res);
     if (rd16(LM_ResErr))
         return;

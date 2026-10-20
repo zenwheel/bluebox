@@ -114,6 +114,30 @@ extension BlueBox {
             #expect(bytes(h) == cat([3], Array("abc".utf8)))
         }
 
+        /// ReadPartialResource reads the file, not the handle the program
+        /// may have changed (PopChar Pro's installer checksums its own
+        /// code, relocated in memory), and leaves an empty handle empty;
+        /// a resource marked changed comes from memory.
+        @Test func readPartialResourceReadsTheFile() {
+            let buf = tb_NewPtr(8, false, true)
+            let h = tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128)
+            wr8(rd32(h), UInt8(ascii: "F"))
+            tb_ReadPartialResource(h, 1, buf, 4)
+            #expect(resErr() == 0 && (0..<4).map { rd8(buf + UInt32($0)) } == Array("irst".utf8))
+            tb_ReadPartialResource(h, 0, buf, 1)
+            #expect(rd8(buf) == UInt8(ascii: "f"))
+            tb_ReadPartialResource(h, 2, buf, 4)
+            #expect(resErr() == -39) // eofErr
+            tb_SetResLoad(0)
+            let s = tb_GetResource(Int32(bitPattern: fourCC("STR ")), 1)
+            tb_SetResLoad(1)
+            tb_ReadPartialResource(s, 1, buf, 3)
+            #expect((0..<3).map { rd8(buf + UInt32($0)) } == Array("abc".utf8) && rd32(s) == 0)
+            tb_SetResAttrs(h, Int16(tb_GetResAttrs(h)) | 2) // resChanged
+            tb_ReadPartialResource(h, 0, buf, 1)
+            #expect(rd8(buf) == UInt8(ascii: "F"))
+        }
+
         @Test func releaseAndDetach() {
             let h = tb_GetResource(Int32(bitPattern: fourCC("STR ")), 1)
             tb_DetachResource(h)
