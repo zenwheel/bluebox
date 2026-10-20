@@ -359,3 +359,107 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    /// Mac OS 8's Dialog Manager: 'dlgx' dialogs with a control hierarchy
+    /// and the theme's background, items as controls, AutoSizeDialog.
+    @Suite struct AppearanceDialogs {
+        static func text(_ s: String) -> [UInt8] { Array(s.utf8) }
+        static let items = ditl([
+            ditlItem(4, (160, 220, 180, 290), text("OK")),             // 1 button
+            ditlItem(5, (20, 20, 36, 200), text("Remember me")),      // 2 check box
+            ditlItem(8, (50, 20, 66, 280), text("Hello")),            // 3 static text
+            ditlItem(16, (80, 20, 96, 200), text("abc")),             // 4 edit text
+            ditlItem(0, (110, 20, 130, 60), []),                      // 5 user item
+            ditlItem(8, (140, 20, 156, 120), text("A longer text that wraps onto more lines in its box")), // 6
+            ditlItem(4, (190, 220, 210, 290), text("Below")),          // 7 button below it
+        ])
+
+        func open(flags: UInt32) -> UInt32 {
+            launchTestApp([TestResource(type: "DLOG", id: 210, data: dlog(items: 210)),
+                           TestResource(type: "DITL", id: 210, data: Self.items),
+                           TestResource(type: "dlgx", id: 210, data: cat(be16(0), be32(flags)))])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(210, 0, 0xFFFF_FFFF)
+            #expect(d != 0)
+            return d
+        }
+
+        func item(_ d: UInt32, _ n: Int16) -> (handle: UInt32, rect: [Int16]) {
+            let t = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true)
+            tb_GetDialogItem(d, n, t, h, r)
+            return (rd32(h), (0..<4).map { Int16(bitPattern: rd16(r + UInt32($0 * 2))) })
+        }
+
+        func controlText(_ ch: UInt32) -> String {
+            let buf = tb_NewPtr(256, false, true), size = tb_NewPtr(4, false, true)
+            #expect(tb_GetControlData(ch, 0, Int32(bitPattern: fourCC("text")), 256, buf, size) == 0)
+            return String(decoding: (0..<Int(rd32(size))).map { rd8(buf + UInt32($0)) }, as: UTF8.self)
+        }
+
+        @Test func itemsAsControls() {
+            let d = open(flags: 0x0B) // theme background, control hierarchy, theme controls
+            let out = tb_NewPtr(4, false, true)
+            #expect(tb_GetRootControl(d, out) == 0)
+            let root = rd32(out)
+            let count = tb_NewPtr(2, false, true)
+            #expect(tb_CountSubControls(root, count) == 0 && rd16(count) >= 3) // the buttons and the check box
+            #expect(tb_GetDialogItemAsControl(d, 1, out) == 0 && rd32(out) == item(d, 1).handle)
+            #expect(tb_GetSuperControl(item(d, 1).handle, out) == 0 && rd32(out) == root)
+            // Static text: the control's text is the item's.
+            #expect(tb_GetDialogItemAsControl(d, 3, out) == 0)
+            let label = rd32(out)
+            #expect(controlText(label) == "Hello")
+            let bye = Array("Bye".utf8), buf = tb_NewPtr(8, false, true)
+            for (i, b) in bye.enumerated() { wr8(buf + UInt32(i), b) }
+            #expect(tb_SetControlData(label, 0, Int32(bitPattern: fourCC("text")), 3, buf) == 0)
+            let s = tb_NewPtr(256, false, true)
+            tb_GetDialogItemText(item(d, 3).handle, s)
+            #expect(pstring(at: s) == "Bye")
+            #expect(tb_GetDialogItemAsControl(d, 3, out) == 0 && rd32(out) == label) // the same one again
+            // Edit text: its text, and it has the keyboard focus.
+            #expect(tb_GetDialogItemAsControl(d, 4, out) == 0)
+            let field = rd32(out)
+            #expect(controlText(field) == "abc")
+            #expect(tb_GetKeyboardFocus(d, out) == 0 && rd32(out) == field)
+            // A user item is a user pane.
+            #expect(tb_GetDialogItemAsControl(d, 5, out) == 0 && rd32(out) != 0)
+            let features = tb_NewPtr(4, false, true)
+            #expect(tb_GetControlFeatures(rd32(out), features) == 0 && rd32(features) & (1 << 1) != 0) // embedding
+            // The theme's background.
+            tb_SetPort(d)
+            let c = tb_NewPtr(6, false, true)
+            tb_GetBackColor(c)
+            #expect(rd16(c) == 0xDDDD)
+            tb_DisposeDialog(d)
+        }
+
+        @Test func autoSizeDialogGrowsTextItems() {
+            let d = open(flags: 0)
+            let before = item(d, 6).rect, below = item(d, 7).rect
+            #expect(tb_AutoSizeDialog(d) == 0)
+            let after = item(d, 6).rect
+            #expect(after[2] > before[2])                       // taller
+            let grown = after[2] - before[2]
+            #expect(item(d, 7).rect[0] == below[0] + grown)     // the button below moved down
+            #expect(item(d, 1).rect[0] == 160 + grown)
+            #expect(item(d, 2).rect[0] == 20)                    // the check box above did not
+            #expect(tb_MoveDialogItem(d, 2, 30, 25) == 0 && item(d, 2).rect == [25, 30, 41, 210])
+            #expect(tb_SizeDialogItem(d, 2, 100, 20) == 0 && item(d, 2).rect == [25, 30, 45, 130])
+            tb_DisposeDialog(d)
+        }
+
+        @Test func newFeaturesDialogMakesARoot() {
+            launchTestApp([TestResource(type: "DITL", id: 211, data: Self.items)])
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [50, 50, 300, 400].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let items = tb_GetResource(Int32(bitPattern: fourCC("DITL")), 211)
+            _ = tb_DetachResource(items)
+            let d = tb_NewFeaturesDialog(0, r, 0, 0, 1, 0xFFFF_FFFF, 0, 0, items, 2)
+            let out = tb_NewPtr(4, false, true)
+            #expect(tb_GetRootControl(d, out) == 0 && rd32(out) != 0)
+            tb_DisposeDialog(d)
+        }
+    }
+}

@@ -1732,7 +1732,14 @@ int16_t tb_HandleControlClick(gaddr ch, uint32_t where, int16_t modifiers, gaddr
 int16_t tb_GetKeyboardFocus(gaddr w, gaddr out)
 {
     int i = win_index(w, false);
-    wr32(out, i >= 0 ? wins[i].focus : 0);
+    gaddr focus = i >= 0 ? wins[i].focus : 0;
+    /* A dialog's edit text being edited has the focus (as its stand-in). */
+    if (w && WindowRecord_windowKind(w) == 2 && (!focus || ap_is_stand_in(focus))) {
+        int16_t field = (int16_t)rd16(w + DialogRecord_editField_off);
+        if (field >= 0 && rd32(w + DialogRecord_textH_off))
+            focus = ap_item_control(w, field + 1, 16);
+    }
+    wr32(out, focus);
     return noErr;
 }
 

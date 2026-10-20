@@ -2267,6 +2267,12 @@ int16_t ap_item_click(gaddr d, int item, uint32_t pt, int16_t mods)
 
 void ap_cdefs_reset(void) { memset(stand_ins, 0, sizeof stand_ins); }
 
+bool ap_is_stand_in(gaddr ch)
+{
+    ap_ctl *a = ap_of(ch);
+    return a && a->dialog;
+}
+
 /* ---------------------------------------------------------------------- */
 /* AppearanceLib's helpers: SetControlData and GetControlData by another name */
 

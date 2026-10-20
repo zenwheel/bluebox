@@ -929,22 +929,28 @@ enum {
 };
 
 /* A push button's face and frame: rounded, grey, bevelled; pressed, dark. */
+/* The default button's ring, four pixels around the button r. */
+void ap_default_ring(qrect r, uint32_t state)
+{
+    bool active = state != kThemeStateInactive;
+    qrect ring = inset(r, -4);
+    uint16_t g[3];
+    grey(g, 0xDDDD);
+    rrect_ring(ring, 4, 14, g);
+    grey(g, active ? 0 : 0x8888);
+    rrect_ring(ring, 1, 14, g);
+    if (ap_in_color()) {
+        ap_fill_grey((qrect){ (int16_t)(ring.top + 1), (int16_t)(ring.left + 4), (int16_t)(ring.top + 2), (int16_t)(ring.right - 4) }, 0xFFFF);
+        ap_fill_grey((qrect){ (int16_t)(ring.bottom - 2), (int16_t)(ring.left + 4), (int16_t)(ring.bottom - 1), (int16_t)(ring.right - 4) }, 0xAAAA);
+    }
+}
+
 void ap_push_button(qrect r, uint32_t state, bool is_default)
 {
     bool active = state != kThemeStateInactive, pressed = state == kThemeStatePressed;
     int round = 8;
-    if (is_default) {
-        qrect ring = inset(r, -4);
-        uint16_t g[3];
-        grey(g, 0xDDDD);
-        rrect_ring(ring, 4, round + 6, g);
-        grey(g, active ? 0 : 0x8888);
-        rrect_ring(ring, 1, round + 6, g);
-        if (ap_in_color()) {
-            ap_fill_grey((qrect){ (int16_t)(ring.top + 1), (int16_t)(ring.left + 4), (int16_t)(ring.top + 2), (int16_t)(ring.right - 4) }, 0xFFFF);
-            ap_fill_grey((qrect){ (int16_t)(ring.bottom - 2), (int16_t)(ring.left + 4), (int16_t)(ring.bottom - 1), (int16_t)(ring.right - 4) }, 0xAAAA);
-        }
-    }
+    if (is_default)
+        ap_default_ring(r, state);
     uint16_t face[3], frame[3];
     grey(face, pressed ? 0x7777 : 0xDDDD);
     grey(frame, active ? 0 : 0x8888);

@@ -289,6 +289,7 @@ void ap_separator(qrect r, uint32_t state);
 void ap_tab_pane(qrect r, uint32_t state);
 void ap_tab(qrect r, int style, const uint8_t *title, int n);
 void ap_push_button(qrect r, uint32_t state, bool is_default);
+void ap_default_ring(qrect r, uint32_t state);
 void ap_check_box(qrect box, bool radio, int value, uint32_t state);
 void ap_bevel_button(qrect r, int kind, uint32_t state, bool on);
 void ap_disclosure(qrect r, int value, uint32_t state, bool left_facing);
@@ -353,6 +354,7 @@ void ap_forget_dialog(gaddr dialog);
 bool ap_item_draw(gaddr dialog, int item);
 int16_t ap_item_click(gaddr dialog, int item, uint32_t pt, int16_t modifiers);
 void ap_cdefs_reset(void);
+bool ap_is_stand_in(gaddr ch);
 /* For the stand-ins (dialogs.c): an item drawn, its text selected, the
  * dialog's TERec if the item is the edit text being edited. */
 void dialog_draw_item(gaddr d, int n);

@@ -1670,6 +1670,18 @@ static void glue_AppendDITL(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AppendDialogItemList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_method = (int16_t)cpu_pop16(c);
+    int16_t a_ditlID = (int16_t)cpu_pop16(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AppendDialogItemList(a_dialog, a_ditlID, a_method);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AppendMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1711,6 +1723,16 @@ static void glue_AutoEmbedControl(cpu68k *c, uint16_t trapword)
     gaddr a_window = (gaddr)cpu_pop32(c);
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_AutoEmbedControl(a_control, a_window);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AutoSizeDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AutoSizeDialog(a_dialog);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -6428,6 +6450,18 @@ static void glue_GetDialogItem(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDialogItemAsControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDialogItemAsControl(a_dialog, a_item, a_control);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDialogItemText(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10749,6 +10783,19 @@ static void glue_MoveControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MoveDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_v = (int16_t)cpu_pop16(c);
+    int16_t a_h = (int16_t)cpu_pop16(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_MoveDialogItem(a_dialog, a_item, a_h, a_v);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MoveHHi(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10975,6 +11022,25 @@ static void glue_NewEmptyHandle(cpu68k *c, uint16_t trapword)
     gaddr r = tb_NewEmptyHandle(a_sys_p);
     c->a[0] = (uint32_t)r;
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
+}
+
+static void glue_NewFeaturesDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    int8_t a_goAway = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int16_t a_procID = (int16_t)cpu_pop16(c);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr a_storage = (gaddr)cpu_pop32(c);
+    gaddr r = tb_NewFeaturesDialog(a_storage, a_bounds, a_title, a_visible, a_procID, a_behind, a_goAway, a_refCon, a_items, a_flags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_NewGDevice(cpu68k *c, uint16_t trapword)
@@ -15786,6 +15852,19 @@ static void glue_SizeControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SizeDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_height = (int16_t)cpu_pop16(c);
+    int16_t a_width = (int16_t)cpu_pop16(c);
+    int16_t a_item = (int16_t)cpu_pop16(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SizeDialogItem(a_dialog, a_item, a_width, a_height);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SizeWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16158,6 +16237,20 @@ static void glue_StackSpace(cpu68k *c, uint16_t trapword)
     (void)trapword;
     int32_t r = tb_StackSpace();
     c->d[0] = (uint32_t)r;
+}
+
+static void glue_StandardAlert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemHit = (gaddr)cpu_pop32(c);
+    gaddr a_param = (gaddr)cpu_pop32(c);
+    gaddr a_explanation = (gaddr)cpu_pop32(c);
+    gaddr a_error = (gaddr)cpu_pop32(c);
+    int16_t a_alertType = (int16_t)cpu_pop16(c);
+    int16_t r = tb_StandardAlert(a_alertType, a_error, a_explanation, a_param, a_itemHit);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_StandardGetFile(cpu68k *c, uint16_t trapword)
@@ -18672,16 +18765,16 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA73, (int32_t)0x1Du, "SetUpControlBackground", CONV_STACK, 8, 2, glue_SetUpControlBackground},
     {0xAA73, (int32_t)0x1Eu, "SetControlVisibility", CONV_STACK, 8, 2, glue_SetControlVisibility},
     {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
-    {0xAA68, (int32_t)0x20Du, "AutoSizeDialog", CONV_STACK, 4, 2, 0},
+    {0xAA68, (int32_t)0x20Du, "AutoSizeDialog", CONV_STACK, 4, 2, glue_AutoSizeDialog},
     {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},
     {0xAA68, (int32_t)0x305u, "SetDialogCancelItem", CONV_STACK, 6, 2, glue_SetDialogCancelItem},
     {0xAA68, (int32_t)0x306u, "SetDialogTracksCursor", CONV_STACK, 6, 2, glue_SetDialogTracksCursor},
-    {0xAA68, (int32_t)0x412u, "AppendDialogItemList", CONV_STACK, 8, 2, 0},
-    {0xAA68, (int32_t)0x50Fu, "GetDialogItemAsControl", CONV_STACK, 10, 2, 0},
-    {0xAA68, (int32_t)0x510u, "MoveDialogItem", CONV_STACK, 10, 2, 0},
-    {0xAA68, (int32_t)0x511u, "SizeDialogItem", CONV_STACK, 10, 2, 0},
-    {0xAA68, (int32_t)0x90Eu, "StandardAlert", CONV_STACK, 18, 2, 0},
-    {0xAA68, (int32_t)0x110Cu, "NewFeaturesDialog", CONV_STACK, 34, 4, 0},
+    {0xAA68, (int32_t)0x412u, "AppendDialogItemList", CONV_STACK, 8, 2, glue_AppendDialogItemList},
+    {0xAA68, (int32_t)0x50Fu, "GetDialogItemAsControl", CONV_STACK, 10, 2, glue_GetDialogItemAsControl},
+    {0xAA68, (int32_t)0x510u, "MoveDialogItem", CONV_STACK, 10, 2, glue_MoveDialogItem},
+    {0xAA68, (int32_t)0x511u, "SizeDialogItem", CONV_STACK, 10, 2, glue_SizeDialogItem},
+    {0xAA68, (int32_t)0x90Eu, "StandardAlert", CONV_STACK, 18, 2, glue_StandardAlert},
+    {0xAA68, (int32_t)0x110Cu, "NewFeaturesDialog", CONV_STACK, 34, 4, glue_NewFeaturesDialog},
     {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, 0},
     {0xABED, (int32_t)0x1u, "InstallTrackingHandler", CONV_STACK, 12, 2, glue_InstallTrackingHandler},
     {0xABED, (int32_t)0x2u, "InstallReceiveHandler", CONV_STACK, 12, 2, glue_InstallReceiveHandler},

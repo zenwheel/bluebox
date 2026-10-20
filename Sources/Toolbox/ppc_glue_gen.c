@@ -11777,6 +11777,78 @@ static void ppcglue_SetDisclosureTriangleLastValue(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NewFeaturesDialog(ppc_cpu *c)
+{
+    gaddr a_storage = (gaddr)c->gpr[3];
+    gaddr a_bounds = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int8_t a_visible = (int8_t)c->gpr[6];
+    int16_t a_procID = (int16_t)c->gpr[7];
+    gaddr a_behind = (gaddr)c->gpr[8];
+    int8_t a_goAway = (int8_t)c->gpr[9];
+    int32_t a_refCon = (int32_t)c->gpr[10];
+    gaddr a_items = (gaddr)rd32(c->gpr[1] + 56);
+    uint32_t a_flags = (uint32_t)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)tb_NewFeaturesDialog(a_storage, a_bounds, a_title, a_visible, a_procID, a_behind, a_goAway, a_refCon, a_items, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AutoSizeDialog(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AutoSizeDialog(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_StandardAlert(ppc_cpu *c)
+{
+    int16_t a_alertType = (int16_t)c->gpr[3];
+    gaddr a_error = (gaddr)c->gpr[4];
+    gaddr a_explanation = (gaddr)c->gpr[5];
+    gaddr a_param = (gaddr)c->gpr[6];
+    gaddr a_itemHit = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_StandardAlert(a_alertType, a_error, a_explanation, a_param, a_itemHit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogItemAsControl(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_control = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDialogItemAsControl(a_dialog, a_item, a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MoveDialogItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_h = (int16_t)c->gpr[5];
+    int16_t a_v = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MoveDialogItem(a_dialog, a_item, a_h, a_v);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SizeDialogItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_width = (int16_t)c->gpr[5];
+    int16_t a_height = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SizeDialogItem(a_dialog, a_item, a_width, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AppendDialogItemList(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    int16_t a_ditlID = (int16_t)c->gpr[4];
+    int16_t a_method = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AppendDialogItemList(a_dialog, a_ditlID, a_method);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -16710,120 +16782,6 @@ static void ppctrap_DragTheRgn(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[8]);
     ppc_trap((uint16_t)(0xA926));
     uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewFeaturesDialog(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x110Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(1, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(1, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap((uint16_t)(0xAA68));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AutoSizeDialog(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA68));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_StandardAlert(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x90Eu);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAA68));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDialogItemAsControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x50Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA68));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MoveDialogItem(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x510u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAA68));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SizeDialogItem(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x511u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAA68));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AppendDialogItemList(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x412u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA68));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
     c->pc = c->lr;
@@ -25640,13 +25598,13 @@ const ppc_export ppc_exports[] = {
     {"AnimateEntry", ppcglue_AnimateEntry},
     {"AnimatePalette", ppcglue_AnimatePalette},
     {"AppendDITL", ppcglue_AppendDITL},
-    {"AppendDialogItemList", ppctrap_AppendDialogItemList},
+    {"AppendDialogItemList", ppcglue_AppendDialogItemList},
     {"AppendMenu", ppcglue_AppendMenu},
     {"AppendResMenu", ppcglue_AppendResMenu},
     {"ApplyThemeBackground", ppcglue_ApplyThemeBackground},
     {"AssociateSection", ppctrap_AssociateSection},
     {"AutoEmbedControl", ppcglue_AutoEmbedControl},
-    {"AutoSizeDialog", ppctrap_AutoSizeDialog},
+    {"AutoSizeDialog", ppcglue_AutoSizeDialog},
     {"BackColor", ppcglue_BackColor},
     {"BackPat", ppcglue_BackPat},
     {"BackPixPat", ppcglue_BackPixPat},
@@ -26283,7 +26241,7 @@ const ppc_export ppc_exports[] = {
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
     {"GetDialogItem", ppcglue_GetDialogItem},
-    {"GetDialogItemAsControl", ppctrap_GetDialogItemAsControl},
+    {"GetDialogItemAsControl", ppcglue_GetDialogItemAsControl},
     {"GetDialogItemText", ppcglue_GetDialogItemText},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
     {"GetDragAttributes", ppcglue_GetDragAttributes},
@@ -27358,7 +27316,7 @@ const ppc_export ppc_exports[] = {
     {"MoreMasters", ppcglue_MoreMasters},
     {"Move", ppcglue_Move},
     {"MoveControl", ppcglue_MoveControl},
-    {"MoveDialogItem", ppctrap_MoveDialogItem},
+    {"MoveDialogItem", ppcglue_MoveDialogItem},
     {"MoveHHi", ppcglue_MoveHHi},
     {"MovePortTo", ppcglue_MovePortTo},
     {"MoveTo", ppcglue_MoveTo},
@@ -27383,7 +27341,7 @@ const ppc_export ppc_exports[] = {
     {"NewEmptyHandle", ppcglue_NewEmptyHandle},
     {"NewEmptyHandleSys", ppcglue_NewEmptyHandleSys},
     {"NewFatRoutineDescriptor", ppctrap_NewFatRoutineDescriptor},
-    {"NewFeaturesDialog", ppctrap_NewFeaturesDialog},
+    {"NewFeaturesDialog", ppcglue_NewFeaturesDialog},
     {"NewGDevice", ppcglue_NewGDevice},
     {"NewGWorld", ppcglue_NewGWorld},
     {"NewGestalt", ppcglue_NewGestalt},
@@ -28318,7 +28276,7 @@ const ppc_export ppc_exports[] = {
     {"ShutDwnRemove", ppctrap_ShutDwnRemove},
     {"ShutDwnStart", ppctrap_ShutDwnStart},
     {"SizeControl", ppcglue_SizeControl},
-    {"SizeDialogItem", ppctrap_SizeDialogItem},
+    {"SizeDialogItem", ppcglue_SizeDialogItem},
     {"SizeWindow", ppcglue_SizeWindow},
     {"SkewMatrix", ppcglue_SkewMatrix},
     {"SlopeFromAngle", ppcglue_SlopeFromAngle},
@@ -28356,7 +28314,7 @@ const ppc_export ppc_exports[] = {
     {"SpriteWorldHitTest", ppctrap_SpriteWorldHitTest},
     {"SpriteWorldIdle", ppctrap_SpriteWorldIdle},
     {"StackSpace", ppcglue_StackSpace},
-    {"StandardAlert", ppctrap_StandardAlert},
+    {"StandardAlert", ppcglue_StandardAlert},
     {"StandardGetFile", ppcglue_StandardGetFile},
     {"StandardGetFilePreview", ppcglue_StandardGetFilePreview},
     {"StandardPutFile", ppcglue_StandardPutFile},
