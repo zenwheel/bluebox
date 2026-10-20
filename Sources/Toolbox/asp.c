@@ -108,7 +108,16 @@ asp_session *asp_open(const char *nbp_name, uint8_t *status, int *status_len, ch
     uint16_t net;
     uint8_t node, sls;
     if (at_nbp_lookup(obj, type, zone, 4, 750, &net, &node, &sls) != noErr) {
-        snprintf(err, errlen, "no %s:%s@%s on the network", obj, type, zone);
+        const char *bridge = at_bridge_interface();
+        if (bridge && !et_heard())
+            /* No AARP, no RTMP, nothing: the network isn't carrying EtherTalk. */
+            snprintf(err, errlen, "no %s:%s@%s on the network (no AppleTalk at all heard on %s)", obj, type, zone,
+                     bridge);
+        else if (bridge)
+            snprintf(err, errlen, "no %s:%s@%s on the network (%d AppleTalk frames heard on %s, none from it)", obj,
+                     type, zone, et_heard(), bridge);
+        else
+            snprintf(err, errlen, "no %s:%s@%s on the network", obj, type, zone);
         return NULL;
     }
     asp_session *s = calloc(1, sizeof *s);

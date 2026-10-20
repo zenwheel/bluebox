@@ -994,7 +994,8 @@ import UserNotifications
     static let shared = NotificationRelay()
     private var attention: [Int: Int] = [:]
 
-    func install() {
+    /// Nonisolated: the handler runs on the machine's thread.
+    nonisolated func install() {
         if Bundle.main.bundleIdentifier != nil {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
         }

@@ -54,6 +54,7 @@ static uint16_t my_net;
 static uint8_t my_node;
 static uint16_t range_lo = 0xFF00, range_hi = 0xFFFE;
 static bool probing, conflict;
+static int heard;             /* AppleTalk frames from other machines */
 static uint8_t rbuf[65536];   /* BPF's read buffer */
 static int rlen, rpos;
 
@@ -220,6 +221,7 @@ int et_receive(uint8_t *out, int cap)
             return 0;
         if (n < ETH_HDR + SNAP || !memcmp(f + 6, mac, 6))
             continue; /* ours, seen sent */
+        heard++;
         const uint8_t *snap = f + ETH_HDR, *p = f + ETH_HDR + SNAP;
         int len = (f[12] << 8 | f[13]) - SNAP;
         if (len < 0 || len > n - ETH_HDR - SNAP)
@@ -339,6 +341,7 @@ void et_acquire(uint32_t seed, uint16_t *net, uint8_t *node)
 }
 
 int et_fd(void) { return bfd; }
+int et_heard(void) { return heard; }
 
 void et_close(void)
 {
@@ -346,7 +349,7 @@ void et_close(void)
         close(bfd);
     bfd = -1;
     fake = false;
-    namt = nwaiting = rlen = rpos = 0;
+    namt = nwaiting = rlen = rpos = heard = 0;
     range_lo = 0xFF00;
     range_hi = 0xFFFE;
 }

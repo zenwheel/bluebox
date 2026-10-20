@@ -147,6 +147,9 @@ static bool interface_address(const char *name, struct in_addr *out)
     return found;
 }
 
+/* The interface EtherTalk is bridged onto, or NULL. */
+const char *at_bridge_interface(void) { return mode == 3 ? ifname : NULL; }
+
 static bool open_link(void)
 {
     if (mode == 3) {

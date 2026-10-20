@@ -362,6 +362,8 @@ void atp_host_send_once(int skt, uint8_t node, uint8_t dskt, uint32_t user, cons
 /* EtherTalk (ethertalk.c), for --appletalk bridge:IF. */
 bool et_open(const char *ifname);
 int et_fd(void);
+int et_heard(void); /* AppleTalk frames heard from other machines */
+const char *at_bridge_interface(void);
 void et_close(void);
 void et_send(const uint8_t *llap, int len);
 int et_receive(uint8_t *llap, int cap);
