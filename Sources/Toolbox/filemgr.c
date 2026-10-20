@@ -614,8 +614,14 @@ static const char *entry_name(const char *dir, const char *n)
     return hidden_name(n) ? NULL : n;
 }
 
-/* The n-th (1-based) visible entry of a directory; dirs and files mixed, sorted. */
-static int cmp_names(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
+/* The n-th (1-based) visible entry of a directory; dirs and files mixed, in
+ * catalog order: HFS compares names without regard to case. */
+static int cmp_names(const void *a, const void *b)
+{
+    const char *x = *(char *const *)a, *y = *(char *const *)b;
+    int r = strcasecmp(x, y);
+    return r ? r : strcmp(x, y);
+}
 
 /* The visible entries of a directory, sorted; the volume's root also lists
  * the Host folder (as "/"). */
