@@ -594,9 +594,16 @@ func installLaunchHandler() {
         let me = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         let exe = (Bundle.main.executableURL ?? me).resolvingSymlinksInPath()
         var args = ["run", path] + docs
-        if let i = CommandLine.arguments.firstIndex(of: "--appearance"), i + 1 < CommandLine.arguments.count {
-            args += ["--appearance", CommandLine.arguments[i + 1]]
+        for option in ["--appearance", "--scale", "--screen"] {
+            if let i = CommandLine.arguments.firstIndex(of: option), i + 1 < CommandLine.arguments.count {
+                args += [option, CommandLine.arguments[i + 1]]
+            }
         }
+        if CommandLine.arguments.contains("--screen-window") { args.append("--screen-window") }
+        // The screen keeps a depth other than the default, as a Mac's did from
+        // one program to the next (Dark Castle's loader, at 1 bit, launches
+        // its game); at the default, the next program may still ask for its own.
+        if machine_screen_depth() != 32 { args += ["--depth", String(machine_screen_depth())] }
         let p = Process()
         p.executableURL = exe
         p.arguments = args
