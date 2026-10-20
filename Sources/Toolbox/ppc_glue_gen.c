@@ -6791,6 +6791,14 @@ static void ppcglue_GetProcessSerialNumberFromPortName(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetPortNameFromProcessSerialNumber(ppc_cpu *c)
+{
+    gaddr a_port_name = (gaddr)c->gpr[3];
+    gaddr a_serial_number = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetPortNameFromProcessSerialNumber(a_port_name, a_serial_number);
+    c->pc = c->lr;
+}
+
 static void ppcglue_LaunchApplication(ppc_cpu *c)
 {
     gaddr a_params = (gaddr)c->gpr[3];
@@ -12369,6 +12377,35 @@ static void ppcglue_GetFrontProcess(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetActiveTaskInfo(ppc_cpu *c)
+{
+    gaddr a_taskInfo = (gaddr)c->gpr[3];
+    int16_t a_numSlots = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetActiveTaskInfo(a_taskInfo, a_numSlots);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSwitchInfo(ppc_cpu *c)
+{
+    gaddr a_switchInfo = (gaddr)c->gpr[3];
+    tb_GetSwitchInfo(a_switchInfo);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CancelSwitch(ppc_cpu *c)
+{
+    tb_CancelSwitch();
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCDispatch(ppc_cpu *c)
+{
+    int32_t a_d0 = (int32_t)c->gpr[3];
+    int32_t a_a0 = (int32_t)c->gpr[4];
+    tb_PPCDispatch(a_d0, a_a0);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetScanOverride(ppc_cpu *c)
 {
     int8_t a_scanOverride = (int8_t)c->gpr[3];
@@ -16741,20 +16778,6 @@ static void ppctrap_PrJobMerge(ppc_cpu *c)
     ppc_trap_push(4, 0x5804089Cu);
     ppc_trap((uint16_t)(0xA8FD));
     ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetPortNameFromProcessSerialNumber(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, 0x46);
-    ppc_trap((uint16_t)(0xA88F));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
@@ -26067,6 +26090,7 @@ const ppc_export ppc_exports[] = {
     {"CanQuickTimeOpenDataRef", ppctrap_CanQuickTimeOpenDataRef},
     {"CanQuickTimeOpenFile", ppctrap_CanQuickTimeOpenFile},
     {"CancelCallBack", ppctrap_CancelCallBack},
+    {"CancelSwitch", ppcglue_CancelSwitch},
     {"CautionAlert", ppcglue_CautionAlert},
     {"ChangeDragBehaviors", ppcglue_ChangeDragBehaviors},
     {"ChangedResource", ppcglue_ChangedResource},
@@ -26599,6 +26623,7 @@ const ppc_export ppc_exports[] = {
     {"Get1NamedResource", ppcglue_Get1NamedResource},
     {"Get1Resource", ppcglue_Get1Resource},
     {"GetADBInfo", ppcglue_GetADBInfo},
+    {"GetActiveTaskInfo", ppcglue_GetActiveTaskInfo},
     {"GetAlertStage", ppcglue_GetAlertStage},
     {"GetAliasInfo", ppcglue_GetAliasInfo},
     {"GetAppParms", ppcglue_GetAppParms},
@@ -26861,7 +26886,7 @@ const ppc_export ppc_exports[] = {
     {"GetPixel", ppcglue_GetPixel},
     {"GetPixelsState", ppcglue_GetPixelsState},
     {"GetPort", ppcglue_GetPort},
-    {"GetPortNameFromProcessSerialNumber", ppctrap_GetPortNameFromProcessSerialNumber},
+    {"GetPortNameFromProcessSerialNumber", ppcglue_GetPortNameFromProcessSerialNumber},
     {"GetPosterBox", ppctrap_GetPosterBox},
     {"GetPreserveGlyph", ppcglue_GetPreserveGlyph},
     {"GetPrevTrackForCompositing", ppctrap_GetPrevTrackForCompositing},
@@ -26896,6 +26921,7 @@ const ppc_export ppc_exports[] = {
     {"GetSubTable", ppcglue_GetSubTable},
     {"GetSuiteLabel", ppcglue_GetSuiteLabel},
     {"GetSuperControl", ppcglue_GetSuperControl},
+    {"GetSwitchInfo", ppcglue_GetSwitchInfo},
     {"GetSysBeepVolume", ppcglue_GetSysBeepVolume},
     {"GetSysDirection", ppcglue_GetSysDirection},
     {"GetTaggedCollectionItem", ppctrap_GetTaggedCollectionItem},
@@ -28125,6 +28151,7 @@ const ppc_export ppc_exports[] = {
     {"PBWriteAsync", ppcglue_PBWriteAsync},
     {"PBWriteSync", ppcglue_PBWriteSync},
     {"PMgrVersion", ppcglue_PMgrVersion},
+    {"PPCDispatch", ppcglue_PPCDispatch},
     {"PPostEvent", ppcglue_PPostEvent},
     {"PackBits", ppcglue_PackBits},
     {"PaintArc", ppcglue_PaintArc},

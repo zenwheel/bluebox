@@ -79,6 +79,46 @@ int16_t tb_SetFrontProcess(gaddr psn) { return is_us(psn) ? noErr : procNotFound
 int16_t tb_WakeUpProcess(gaddr psn) { return is_us(psn) ? noErr : procNotFound; }
 int16_t tb_GetProcessSerialNumberFromPortName(gaddr port_name, gaddr psn) { return procNotFound; }
 
+/* Our high-level event port, named as the Process Manager names them: the
+ * application's name, its creator and the type 'ep01'. */
+int16_t tb_GetPortNameFromProcessSerialNumber(gaddr port, gaddr psn)
+{
+    if (!is_us(psn))
+        return procNotFound;
+    gmemset(port, 0, PPCPortRec_SIZEOF);
+    uint32_t len = rd8(LM_CurApName);
+    gmemcpy(port + PPCPortRec_name_off, LM_CurApName, (len > 31 ? 31 : len) + 1);
+    if (len > 31)
+        wr8(port + PPCPortRec_name_off, 31);
+    PPCPortRec_set_portKindsSelector(port, 1); /* ppcByCreatorAndType */
+    wr32(port + PPCPortRec_u_port_creator_off, g_app_creator);
+    wr32(port + PPCPortRec_u_port_type_off, fourcc("ep01"));
+    return noErr;
+}
+
+/* MultiFinder's calls, kept by the Process Manager for Microsoft's programs.
+ * GetSwitchInfo gives the system process's signature ('TWIT') and version;
+ * GetActiveTaskInfo lists the applications (ours) as TaskInfoRecs
+ * (ProcessID word, signature, the 'VERS' 0 version long; 10 bytes). */
+void tb_GetSwitchInfo(gaddr info)
+{
+    wr32(info, fourcc("TWIT"));
+    wr32(info + 4, rd16(LM_SysVersion));
+}
+
+int16_t tb_GetActiveTaskInfo(gaddr info, int16_t slots)
+{
+    if (slots > 0 && info) {
+        gaddr vers = tb_GetResource((int32_t)fourcc("VERS"), 0);
+        wr16(info, 1);
+        wr32(info + 2, g_app_creator);
+        wr32(info + 6, vers && rd32(vers) ? rd32(rd32(vers)) : 0);
+    }
+    return 1;
+}
+
+void tb_CancelSwitch(void) {}
+
 /* ---- Temporary memory ---- */
 
 int32_t tb_TempFreeMem(void) { return tb_FreeMem(false); }
@@ -181,4 +221,17 @@ int16_t tb_LaunchApplication(gaddr pb)
         cpu_halt(g_cpu, "ExitToShell (launched %s)", path);
     }
     return noErr;
+}
+
+/* The PPC Toolbox ($A0DD, selector in D0): it starts, but no port opens, as
+ * on a Mac with nothing to talk to (Word 5.0 opens one at startup and goes
+ * on without it).  The result is in D0 and the parameter block's ioResult. */
+enum { noPortErr = -903 };
+
+void tb_PPCDispatch(int32_t d0, int32_t a0)
+{
+    int16_t err = d0 == 0 /* PPCInit */ ? noErr : noPortErr;
+    if (d0 != 0 && a0)
+        wr16((gaddr)a0 + 16, (uint16_t)err);
+    g_cpu->d[0] = (uint32_t)(int32_t)err;
 }

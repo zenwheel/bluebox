@@ -107,6 +107,7 @@ const char *const os_trap_names[256] = {
     [0x98] = "HWPriv",
     [0xAD] = "GestaltDispatch",
     [0xBD] = "FlushCodeCache",
+    [0xDD] = "PPCDispatch",
 };
 
 const char *const tb_trap_names[1024] = {
@@ -2050,6 +2051,14 @@ static void glue_CalcVisBehind(cpu68k *c, uint16_t trapword)
     gaddr a_clobbered = (gaddr)cpu_pop32(c);
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_CalcVisBehind(a_w, a_clobbered);
+    cpu_push32(c, ret);
+}
+
+static void glue_CancelSwitch(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_CancelSwitch();
     cpu_push32(c, ret);
 }
 
@@ -5992,6 +6001,17 @@ static void glue_GetADBInfo(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_GetActiveTaskInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_numSlots = (int16_t)cpu_pop16(c);
+    gaddr a_taskInfo = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetActiveTaskInfo(a_taskInfo, a_numSlots);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetAlertStage(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7875,6 +7895,17 @@ static void glue_GetPort(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetPortNameFromProcessSerialNumber(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_serial_number = (gaddr)cpu_pop32(c);
+    gaddr a_port_name = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetPortNameFromProcessSerialNumber(a_port_name, a_serial_number);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetPreserveGlyph(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8138,6 +8169,15 @@ static void glue_GetSuperControl(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetSuperControl(a_control, a_parent);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetSwitchInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_switchInfo = (gaddr)cpu_pop32(c);
+    tb_GetSwitchInfo(a_switchInfo);
     cpu_push32(c, ret);
 }
 
@@ -12525,6 +12565,14 @@ static void glue_PMgrVersion(cpu68k *c, uint16_t trapword)
     int16_t r = tb_PMgrVersion();
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_PPCDispatch(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t a_d0 = (int32_t)c->d[0];
+    int32_t a_a0 = (int32_t)c->a[0];
+    tb_PPCDispatch(a_d0, a_a0);
 }
 
 static void glue_PPostEvent(cpu68k *c, uint16_t trapword)
@@ -18587,6 +18635,7 @@ const trap_sig trap_sigs[] = {
     {0xA082, -1, "DTInstall", CONV_REG, 0, 0, glue_DTInstall},
     {0xA090, -1, "SysEnvirons", CONV_REG, 0, 0, glue_SysEnvirons},
     {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, 0},
+    {0xA0DD, -1, "PPCDispatch", CONV_REG, 0, 0, glue_PPCDispatch},
     {0xA11A, -1, "GetZone", CONV_REG, 0, 0, glue_GetZone},
     {0xA11D, -1, "MaxMem", CONV_REG, 0, 0, glue_MaxMem},
     {0xA11E, -1, "NewPtr", CONV_REG, 0, 0, glue_NewPtr},
@@ -20195,6 +20244,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, 0},
     {0xAA59, (int32_t)0x3u, "SaveMixedModeState", CONV_STACK, 8, 2, 0},
     {0xAA59, (int32_t)0x4u, "RestoreMixedModeState", CONV_STACK, 8, 2, 0},
+    {0xA88F, (int32_t)0x1u, "GetActiveTaskInfo", CONV_STACK, 6, 2, glue_GetActiveTaskInfo},
+    {0xA88F, (int32_t)0x2u, "GetSwitchInfo", CONV_STACK, 4, 0, glue_GetSwitchInfo},
+    {0xA88F, (int32_t)0x3u, "CancelSwitch", CONV_STACK, 0, 0, glue_CancelSwitch},
     {0xA88F, (int32_t)0x15u, "TempMaxMem", CONV_STACK, 4, 4, glue_TempMaxMem},
     {0xA88F, (int32_t)0x16u, "TempTopMem", CONV_STACK, 0, 4, glue_TempTopMem},
     {0xA88F, (int32_t)0x18u, "TempFreeMem", CONV_STACK, 0, 4, glue_TempFreeMem},
@@ -20213,7 +20265,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x3Cu, "WakeUpProcess", CONV_STACK, 4, 2, glue_WakeUpProcess},
     {0xA88F, (int32_t)0x3Du, "SameProcess", CONV_STACK, 12, 2, glue_SameProcess},
     {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
-    {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, 0},
+    {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, glue_GetPortNameFromProcessSerialNumber},
     {0xA9E7, (int32_t)0x0u, "LActivate", CONV_STACK, 6, 0, glue_LActivate},
     {0xA9E7, (int32_t)0x4u, "LAddColumn", CONV_STACK, 8, 2, glue_LAddColumn},
     {0xA9E7, (int32_t)0x8u, "LAddRow", CONV_STACK, 8, 2, glue_LAddRow},

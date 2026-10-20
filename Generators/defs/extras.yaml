@@ -13,6 +13,47 @@
     dispatcher: OSDispatch
     selector: 0x0039
 
+# MultiFinder's first OSDispatch calls, which the Process Manager kept
+# (OSDispatch selectors 1 to 3): Microsoft Word 5.0 asks GetSwitchInfo for
+# the system's signature and version, and GetActiveTaskInfo lists the
+# applications open.
+- function:
+    name: GetActiveTaskInfo
+    return: INTEGER
+    args:
+      - name: taskInfo
+        type: Ptr
+      - name: numSlots
+        type: INTEGER
+    dispatcher: OSDispatch
+    selector: 0x0001
+
+- function:
+    name: GetSwitchInfo
+    args:
+      - name: switchInfo
+        type: Ptr
+    dispatcher: OSDispatch
+    selector: 0x0002
+
+- function:
+    name: CancelSwitch
+    dispatcher: OSDispatch
+    selector: 0x0003
+
+# The PPC Toolbox's trap: the routine selector in D0, the parameter
+# block in A0, the result in D0.
+- function:
+    name: PPCDispatch
+    args:
+      - name: d0
+        type: LONGINT
+        register: D0
+      - name: a0
+        type: LONGINT
+        register: A0
+    trap: 0xA0DD
+
 # ResourceDispatch's private override calls (ResourcesPriv.h); ResEdit
 # turns scanning of override maps on and off around its own searches.
 - function:

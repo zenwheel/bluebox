@@ -147,6 +147,45 @@ extension BlueBox {
             #expect(pack0 != 0 && rd16(rd32(pack0)) == 0x2F38) // MOVE.L _Pack0's address,-(SP)
         }
 
+        /// MultiFinder's OSDispatch calls (Microsoft Word 5.0 asks for the
+        /// switch information at startup) and the PPC Toolbox, which starts
+        /// but opens no ports.
+        @Test func multiFinderCallsAndThePPCToolbox() {
+            let info = tb_NewPtr(20, false, true), pb = tb_NewPtr(64, false, true)
+            let reason = run([
+                0x2F3C, hi(info), lo(info),     // MOVE.L #info,-(SP)
+                0x3F3C, 0x0002,                 // MOVE.W #2,-(SP)    GetSwitchInfo
+                0xA88F,                         // _OSDispatch
+                0x4267,                         // CLR.W -(SP)        result space
+                0x2F3C, hi(info + 8), lo(info + 8),
+                0x3F3C, 0x0001,                 // MOVE.W #1,-(SP)    one slot
+                0x3F3C, 0x0001,                 // MOVE.W #1,-(SP)    GetActiveTaskInfo
+                0xA88F,
+                0x3E1F,                         // MOVE.W (SP)+,D7
+                0x7000,                         // MOVEQ #0,D0        PPCInit
+                0xA0DD,                         // _PPC
+                0x3C00,                         // MOVE.W D0,D6
+                0x7001,                         // MOVEQ #1,D0        PPCOpen
+                0x207C, hi(pb), lo(pb),         // MOVEA.L #pb,A0
+                0xA0DD,
+                0x3A00,                         // MOVE.W D0,D5
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(rd32(info) == fourCC("TWIT"))
+            #expect(cpu.pointee.d.7 & 0xFFFF == 1 && rd16(info + 8) == 1)
+            #expect(cpu.pointee.d.6 & 0xFFFF == 0)
+            #expect(Int16(bitPattern: UInt16(cpu.pointee.d.5 & 0xFFFF)) == -903) // noPortErr
+            #expect(Int16(bitPattern: rd16(pb + 16)) == -903)
+
+            // Our high-level event port's name, as the Process Manager gives it.
+            let psn = tb_NewPtr(8, false, true), port = tb_NewPtr(Int32(PPCPortRec_SIZEOF), false, true)
+            wr32(psn + 4, 2) // kCurrentProcess
+            #expect(tb_GetPortNameFromProcessSerialNumber(port, psn) == 0)
+            #expect(rd16(port + UInt32(PPCPortRec_portKindsSelector_off)) == 1) // ppcByCreatorAndType
+            #expect(rd32(port + UInt32(PPCPortRec_u_port_type_off)) == fourCC("ep01"))
+        }
+
         @Test func unimplementedTrapHaltsWithItsName() {
             let reason = run([0xA9F3]) // _Chain
             #expect(reason.contains("A9F3"))
