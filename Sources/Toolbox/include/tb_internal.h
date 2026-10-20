@@ -316,6 +316,7 @@ typedef struct {
  * driver completes it, with its ioCompletion, later. */
 enum { ioInProgress = 1 };
 bool driver_open(gaddr pb, int16_t *err); /* false: no driver of that name */
+enum { CD_UNIT = 35 };                    /* .AppleCD, the mounted volumes' driver */
 void io_complete_now(gaddr pb, int16_t result); /* KillIO's: inside the call (timemgr.c) */
 void io_complete_now_for(int16_t refnum);
 void drivers_reset(void);                 /* the unit table, at boot */
