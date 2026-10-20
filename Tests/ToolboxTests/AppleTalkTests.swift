@@ -334,5 +334,28 @@ extension BlueBox {
                 #expect(e[22 + 13] == 2 && e[22 + 14] == 0x42) // an echo reply
             }
         }
+
+        /// macOS hands out 02:00:00:00:00:00 for every interface's address;
+        /// EtherTalk finds the real one (IOKit, or a bridge's link-local
+        /// IPv6 address) or none, never the stand-in.
+        @Test func interfaceAddressIsNotTheStandIn() {
+            var list: UnsafeMutablePointer<ifaddrs>?
+            guard getifaddrs(&list) == 0, let first = list else { return }
+            defer { freeifaddrs(list) }
+            let names = Set(sequence(first: first, next: { $0.pointee.ifa_next }).compactMap { p -> String? in
+                guard let sa = p.pointee.ifa_addr, sa.pointee.sa_family == UInt8(AF_LINK) else { return nil }
+                return String(cString: p.pointee.ifa_name)
+            })
+            var found = 0
+            for name in names {
+                var mac = [UInt8](repeating: 0, count: 6)
+                if et_interface_mac(name, &mac) {
+                    found += 1
+                    #expect(mac != [2, 0, 0, 0, 0, 0], "\(name)")
+                }
+            }
+            #expect(found > 0)
+            #expect(!et_interface_mac("nonesuch0", nil))
+        }
     }
 }

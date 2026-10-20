@@ -27,7 +27,10 @@ let package = Package(
         // MACE 3:1 and 6:1 decoding, from FFmpeg: this target alone is LGPL 2.1+.
         .target(name: "MACE"),
         .target(name: "Toolbox", dependencies: ["CCore", "CPU68K", "CPUPPC", "ForkStore", "MACE"], cSettings: warnings,
-                linkerSettings: [.linkedLibrary("z")]), // zlib: QuickTime 3's compressed movie headers
+                linkerSettings: [.linkedLibrary("z"), // zlib: QuickTime 3's compressed movie headers
+                                 // EtherTalk: an interface's own Ethernet address
+                                 .linkedFramework("IOKit", .when(platforms: [.macOS])),
+                                 .linkedFramework("CoreFoundation", .when(platforms: [.macOS]))]),
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
         .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
         // Command-line tool: run, import, install, apps, rsrc.

@@ -369,6 +369,8 @@ void et_send(const uint8_t *llap, int len);
 int et_receive(uint8_t *llap, int cap);
 void et_acquire(uint32_t seed, uint16_t *net, uint8_t *node);
 void et_use_fake(int fd, const uint8_t hw[6]);
+bool et_interface_mac(const char *ifname, uint8_t out[6]);
+bool host_interface_mac(const char *ifname, uint8_t out[6]); /* hostmac.c: IOKit's */
 void atp_reset(void);
 void appletalk_poll(void);
 void appletalk_reset(void);

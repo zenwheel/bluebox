@@ -35,6 +35,7 @@
 #include <net/bpf.h>
 #include <net/if.h>
 #include <net/if_dl.h>
+#include <netinet/in.h>
 #include <spawn.h>
 extern char **environ;
 #endif
@@ -445,28 +446,59 @@ int machine_bpf_helper(const char *sockpath, const char *ifname)
 #endif
 }
 
-/* The interface's Ethernet address. */
+/* The interface's Ethernet address.  macOS gives programs without an
+ * entitlement a stand-in (02:00:00:00:00:00) in place of every interface's
+ * address, and frames sent from it, or answers to it, are lost.  IOKit
+ * still has a physical interface's; a virtual one (a VM's bridge100) has
+ * its address in its IPv6 link-local one, when that is the EUI-64 kind. */
 static bool interface_mac(const char *ifname)
 {
 #ifdef __APPLE__
     struct ifaddrs *list = NULL;
     if (getifaddrs(&list) < 0)
         return false;
-    bool found = false;
-    for (struct ifaddrs *i = list; i && !found; i = i->ifa_next)
-        if (i->ifa_addr && i->ifa_addr->sa_family == AF_LINK && !strcmp(i->ifa_name, ifname)) {
+    bool exists = false, found = false;
+    for (struct ifaddrs *i = list; i; i = i->ifa_next) {
+        if (!i->ifa_addr || strcmp(i->ifa_name, ifname))
+            continue;
+        if (i->ifa_addr->sa_family == AF_LINK) {
+            exists = true;
             struct sockaddr_dl *dl = (struct sockaddr_dl *)i->ifa_addr;
-            if (dl->sdl_alen == 6) {
+            static const uint8_t stand_in[6] = { 0x02, 0, 0, 0, 0, 0 };
+            if (dl->sdl_alen == 6 && memcmp(LLADDR(dl), stand_in, 6) && !found) {
                 memcpy(mac, LLADDR(dl), 6);
                 found = true;
             }
+        } else if (i->ifa_addr->sa_family == AF_INET6 && !found) {
+            const uint8_t *a = ((struct sockaddr_in6 *)i->ifa_addr)->sin6_addr.s6_addr;
+            if (a[0] == 0xFE && (a[1] & 0xC0) == 0x80 && a[11] == 0xFF && a[12] == 0xFE) {
+                mac[0] = a[8] ^ 0x02; /* the universal/local bit, inverted in EUI-64 */
+                mac[1] = a[9];
+                mac[2] = a[10];
+                mac[3] = a[13];
+                mac[4] = a[14];
+                mac[5] = a[15];
+                found = true;
+            }
         }
+    }
     freeifaddrs(list);
-    return found;
+    if (exists && host_interface_mac(ifname, mac))
+        found = true; /* the controller's own, over a link-local guess */
+    return exists && found;
 #else
     (void)ifname;
     return false;
 #endif
+}
+
+/* Tests: the address EtherTalk would use on an interface. */
+bool et_interface_mac(const char *ifname, uint8_t out[6])
+{
+    if (!interface_mac(ifname))
+        return false;
+    memcpy(out, mac, 6);
+    return true;
 }
 
 /* The BPF device, from the helper run as root through the administrator
@@ -477,7 +509,7 @@ bool et_open(const char *ifname)
         return true;
 #ifdef __APPLE__
     if (!interface_mac(ifname)) {
-        fprintf(stderr, "bluebox: AppleTalk: no Ethernet interface %s\n", ifname);
+        fprintf(stderr, "bluebox: AppleTalk: no Ethernet interface %s (or its address is hidden)\n", ifname);
         return false;
     }
     char dir[] = "/tmp/bluebox-bpf-XXXXXX";
