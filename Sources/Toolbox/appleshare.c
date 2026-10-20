@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "afp.h"
@@ -43,6 +44,7 @@ typedef struct {
 
 typedef struct {
     bool used, atalk, failed;
+    time_t failed_at;       /* the last try that failed: tried again after a while */
     char server[256], user[64], password[64];
     char volume[32];        /* MacRoman */
     char root[1024];        /* the cache folder */
@@ -198,8 +200,8 @@ static bool connected(share *sh)
 {
     if (sh->s)
         return true;
-    if (sh->failed)
-        return false;
+    if (sh->failed && time(NULL) - sh->failed_at < 15)
+        return false; /* (AppleTalk's link may still be coming up) */
     char err[256] = "";
     sh->s = sh->atalk ? afp_connect_atalk(sh->server, sh->user, sh->password, err, sizeof err)
                       : afp_connect_tcp(sh->server, sh->user, sh->password, err, sizeof err);
@@ -209,8 +211,10 @@ static bool connected(share *sh)
         sh->s = NULL;
     }
     if (!sh->s) {
-        LOGF(LOG_UNIMPL, "AppleShare: %s\n", err);
-        sh->failed = true; /* once per run: the volume stays empty */
+        if (!sh->failed)
+            LOGF(LOG_UNIMPL, "AppleShare: %s (trying again every 15 seconds)\n", err);
+        sh->failed = true;
+        sh->failed_at = time(NULL);
         return false;
     }
     add_dir(sh, sh->root, 2);
@@ -496,7 +500,7 @@ void machine_close_appleshares(void)
 void as_idle(void)
 {
     for (int i = 0; i < MAX_SHARES; i++) {
-        if (shares[i].used && !shares[i].s && !shares[i].failed)
+        if (shares[i].used && !shares[i].s)
             connected(&shares[i]); /* at the first event call: the volume there before the Open panel lists it */
         if (shares[i].used && shares[i].s)
             afp_idle(shares[i].s);

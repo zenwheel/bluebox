@@ -634,11 +634,7 @@ struct SettingsForm: View {
                     Text("\(a) (not connected)").tag(String?.some(a))
                 }
             }
-            .help("LocalTalk over UDP (multicast): copies on this Mac find each other, or, on the local network "
-                  + "through the interface chosen, other Macs, emulators and AppleTalk routers that speak LToUDP. "
-                  + "EtherTalk bridged onto a wired interface reaches real Macs, file servers and routers; it "
-                  + "asks for an administrator password each time AppleTalk opens, for a moment's access to "
-                  + "the interface's raw frames.")
+            .help(Self.appleTalkHelp)
             PortPicker(label: "Modem port", spec: $settings.modemPort, inherit: inherit,
                        inherited: fallback.modemPort ?? "modem")
             PortPicker(label: "Printer port", spec: $settings.printerPort, inherit: inherit,
@@ -655,6 +651,14 @@ struct SettingsForm: View {
             PrintFolderPicker(folder: $settings.printFolder, inherit: inherit, inherited: fallback.printFolder)
         }
     }
+
+    private static let appleTalkHelp: String =
+        "LocalTalk over UDP (multicast): copies on this Mac find each other, or, on the local network "
+        + "through the interface chosen, other Macs, emulators and AppleTalk routers that speak LToUDP. "
+        + "EtherTalk bridged onto a wired interface reaches real Macs, file servers and routers (over "
+        + "Wi-Fi, access points tend to drop its frames); it "
+        + "asks for an administrator password each time AppleTalk opens, for a moment's access to "
+        + "the interface's raw frames."
 
     private func appletalkName(_ a: String) -> String {
         switch a {
