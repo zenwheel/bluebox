@@ -204,6 +204,7 @@ void raw_WriteXPRam(cpu68k *c, uint16_t tw);
 void raw_InitZone(cpu68k *c, uint16_t tw);
 void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw);
 void raw_SlotManager(cpu68k *c, uint16_t tw);
+void raw_MemoryDispatch(cpu68k *c, uint16_t tw);
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
 /* A MacRoman character's comparison key. */
 int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);

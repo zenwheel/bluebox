@@ -229,6 +229,7 @@ const raw_trap raw_traps[] = {
     { 0xA051, "ReadXPRam", raw_ReadXPRam },
     { 0xA052, "WriteXPRam", raw_WriteXPRam },
     { 0xA056, "LowerText", raw_LowerText },
+    { 0xA05C, "MemoryDispatch", raw_MemoryDispatch },
     { 0xA06E, "SlotManager", raw_SlotManager },
     { 0xA050, "RelString", raw_RelString },
     { 0xA054, "UprString", raw_UprString },

@@ -170,5 +170,19 @@ extension BlueBox {
             #expect(tb_GetPtrSize(p) == 16)
             #expect(tb_GetHandleSize(p) < 0 || memErr() != 0)
         }
+
+        /// MemoryDispatch: holding and locking memory succeed with nothing
+        /// to do (Prince of Persia 2 locks its buffers); others are refused.
+        @Test func memoryDispatchHoldsAndLocks() {
+            var c = cpu68k()
+            for sel: UInt32 in 0...4 {
+                c.d.0 = sel
+                raw_MemoryDispatch(&c, 0xA05C)
+                #expect(c.d.0 == 0)
+            }
+            c.d.0 = 9
+            raw_MemoryDispatch(&c, 0xA05C)
+            #expect(Int32(bitPattern: c.d.0) == -50)
+        }
     }
 }
