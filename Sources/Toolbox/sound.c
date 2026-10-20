@@ -199,10 +199,8 @@ static const int16_t ima_steps[89] = {
 };
 static const int8_t ima_index[16] = { -1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8 };
 
-static void play_ima4(channel *c, gaddr data, uint32_t packets, int nch, double rate)
+static int16_t *decode_ima4(gaddr data, uint32_t packets, int nch)
 {
-    if (packets > 0x100000)
-        return;
     uint32_t frames = packets * 64;
     int16_t *pcm = malloc(sizeof *pcm * (frames * (uint32_t)nch ? frames * (uint32_t)nch : 1));
     for (uint32_t p = 0; p < packets; p++)
@@ -228,36 +226,42 @@ static void play_ima4(channel *c, gaddr data, uint32_t packets, int nch, double 
                 pcm[(p * 64 + (uint32_t)k) * (uint32_t)nch + (uint32_t)ch] = (int16_t)pred;
             }
         }
-    emit(c, pcm, (int)frames, nch, rate);
-    free(pcm);
+    return pcm;
 }
 
-/* Play a sound header (standard, extended or compressed). */
-static void play_header(channel *c, gaddr h)
+/* Decode a sound header (standard, extended or compressed) to 16-bit PCM
+ * (malloc'd).  NULL with *frames 0 when it makes no sense; NULL with the
+ * frames, channels and rate set when its format is one we can't decode.
+ * *bits is the sound's own sample size. */
+static int16_t *decode_header(gaddr h, uint32_t *frames_out, int *nch_out, double *rate_out, int *bits_out)
 {
     gaddr data = rd32(h);
     uint8_t encode = rd8(h + 20);
     double rate = fixed_rate(rd32(h + 8));
     if (rate < 1000 || rate > 100000)
         rate = 22254.5454;
-    c->sound_header = h;
+    *rate_out = rate;
+    *frames_out = 0;
+    *nch_out = 1;
+    *bits_out = 16;
     if (encode == 0x00) { /* standard: 8-bit unsigned mono, length in bytes */
         uint32_t n = rd32(h + 4);
         if (!data)
             data = h + 22;
         if (n > 0x4000000)
-            return;
+            return NULL;
         int16_t *pcm = malloc(sizeof *pcm * (n ? n : 1));
         for (uint32_t i = 0; i < n; i++)
             pcm[i] = (int16_t)(((int)rd8(data + i) - 128) << 8);
-        emit(c, pcm, (int)n, 1, rate);
-        free(pcm);
-        return;
+        *frames_out = n;
+        *bits_out = 8;
+        return pcm;
     }
     uint32_t nch = rd32(h + 4);
     uint32_t frames = rd32(h + 22);
     if (nch < 1 || nch > 2 || frames > 0x4000000)
-        return;
+        return NULL;
+    *nch_out = (int)nch;
     if (encode == 0xFF) { /* extended */
         int bits = (int16_t)rd16(h + 48);
         if (!data)
@@ -266,17 +270,19 @@ static void play_header(channel *c, gaddr h)
         int16_t *pcm = malloc(sizeof *pcm * (n ? n : 1));
         for (uint32_t i = 0; i < n; i++)
             pcm[i] = bits == 16 ? (int16_t)rd16(data + i * 2) : (int16_t)(((int)rd8(data + i) - 128) << 8);
-        emit(c, pcm, (int)frames, (int)nch, rate);
-        free(pcm);
-        return;
+        *frames_out = frames;
+        *bits_out = bits == 16 ? 16 : 8;
+        return pcm;
     }
     /* compressed (0xFE) */
     uint32_t format = rd32(h + 40);
     if (!data)
         data = h + 64;
     if (format == fourcc("ima4")) {
-        play_ima4(c, data, frames, (int)nch, rate);
-        return;
+        if (frames > 0x100000)
+            return NULL;
+        *frames_out = frames * 64; /* frames counts packets */
+        return decode_ima4(data, frames, (int)nch);
     }
     if (format == fourcc("twos") || format == fourcc("sowt") || format == fourcc("raw ") || format == fourcc("NONE")) {
         int bits = (int16_t)rd16(h + 62);
@@ -290,9 +296,9 @@ static void play_header(channel *c, gaddr h)
                 pcm[i] = format == fourcc("twos") ? (int16_t)((int8_t)rd8(data + i) << 8)
                                                   : (int16_t)(((int)rd8(data + i) - 128) << 8);
         }
-        emit(c, pcm, (int)frames, (int)nch, rate);
-        free(pcm);
-        return;
+        *frames_out = frames;
+        *bits_out = bits == 16 ? 16 : 8;
+        return pcm;
     }
     /* MACE 3:1 and 6:1 (compressionID 3 and 4, or the format): a frame is
      * a packet of 6 samples, 2 bytes (MACE 3) or 1 byte (MACE 6) per
@@ -305,15 +311,27 @@ static void play_header(channel *c, gaddr h)
         gget(in, data, bytes);
         size_t cap = (size_t)bytes * (mace3 ? 3 : 6) / nch + 6;
         int16_t *pcm = calloc(cap * nch, sizeof *pcm);
-        size_t n = mace_decode(in, bytes, (int)nch, mace3, pcm);
-        emit(c, pcm, (int)n, (int)nch, rate);
-        free(pcm);
+        *frames_out = (uint32_t)mace_decode(in, bytes, (int)nch, mace3, pcm);
         free(in);
-        return;
+        return pcm;
     }
-    /* Others: keep the timing, play silence. */
-    int16_t *pcm = calloc(frames * nch ? frames * nch : 1, sizeof *pcm);
-    emit(c, pcm, (int)frames, (int)nch, rate);
+    *frames_out = frames;
+    return NULL;
+}
+
+/* Play a sound header. */
+static void play_header(channel *c, gaddr h)
+{
+    c->sound_header = h;
+    uint32_t frames;
+    int nch, bits;
+    double rate;
+    int16_t *pcm = decode_header(h, &frames, &nch, &rate, &bits);
+    /* Formats we can't decode keep their timing as silence. */
+    if (!pcm && frames)
+        pcm = calloc((size_t)frames * (size_t)nch, sizeof *pcm);
+    if (pcm)
+        emit(c, pcm, (int)frames, nch, rate);
     free(pcm);
 }
 
@@ -741,6 +759,34 @@ int16_t tb_GetSoundHeaderOffset(gaddr sndh, gaddr offset)
     }
     wr32(offset, 0);
     return badFormat;
+}
+
+/* bluebox inspect: a resource's sampled sound, decoded as it would play.
+ * The first sound or buffer command's header is the sound. */
+bool machine_snd_pcm(const uint8_t *snd, size_t len, int16_t **pcm, uint32_t *frames, int *channels,
+                     double *rate, int *bits)
+{
+    *pcm = NULL;
+    if (len < 6 || len > 0x4000000)
+        return false;
+    gaddr p = tb_NewPtr((int32_t)len, false, false);
+    if (!p)
+        return false;
+    gput(p, snd, (uint32_t)len);
+    int format = (int16_t)rd16(p);
+    gaddr q = format == 1 ? p + 4 + (uint32_t)(int16_t)rd16(p + 2) * 6 : format == 2 ? p + 4 : 0;
+    int n = q && q + 2 <= p + len ? (int16_t)rd16(q) : 0;
+    gaddr h = 0;
+    for (int i = 0; i < n && !h && q + 10 + (uint32_t)i * 8 <= p + len; i++) {
+        uint16_t cmd = rd16(q + 2 + (uint32_t)i * 8);
+        uint32_t off = rd32(q + 2 + (uint32_t)i * 8 + 4);
+        if (((cmd & 0x7FFF) == bufferCmd || (cmd & 0x7FFF) == soundCmd) && off + 22 <= len)
+            h = p + off;
+    }
+    if (h)
+        *pcm = decode_header(h, frames, channels, rate, bits);
+    tb_DisposePtr(p);
+    return *pcm != NULL;
 }
 
 /* SysBeep: a short, soft classic beep. */

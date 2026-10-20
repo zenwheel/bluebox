@@ -4,6 +4,7 @@
 //                     [--gestalt sel=value]...
 //   bluebox import <macbinary-file> <dest-dir>
 //   bluebox rsrc <file>
+//   bluebox inspect <file> [--export DIR] [--type TYPE] [--id N]
 
 #if canImport(Darwin)
 import Darwin
@@ -135,6 +136,14 @@ func usage() -> Never {
           List the themes (Kaleidoscope schemes) in the library.
       bluebox rsrc <file>
           List the resources in a file (AppleDouble or MacBinary).
+      bluebox inspect <file> [--export dir] [--type T] [--id N]
+          List a file's resources (AppleDouble or MacBinary, or an application
+          as bluebox apps lists it) with what they hold: strings, picture and
+          icon sizes, sound formats, menus, dialogs ...  --export writes them
+          to dir as host files: PICT and icons (ICON, ICN#, ics#, icl4/8, ics4/8,
+          cicn) as PNG, snd as WAV, STR, STR#, TEXT and vers as UTF-8 text.
+          --type and --id pick resources (snd for 'snd '); those picked that
+          have no host format are written raw (.bin).
       bluebox fonts [import <disk image>...]
           List the fonts in Blue Box's Fonts folder (\(fontsFolder())), or
           copy the fonts of a System disk image's System Folder there (raw,
@@ -951,6 +960,77 @@ func rsrcCommand(_ args: [String]) {
     }
 }
 
+/// bluebox inspect: the resources with what is in them, or exported as
+/// host files (--export), all of them or those --type and --id choose.
+func inspectCommand(_ args: [String]) {
+    var file: String?, exportDir: String?, type: UInt32?, id: Int16?
+    var i = 0
+    while i < args.count {
+        let a = args[i]
+        let value: String? = i + 1 < args.count ? args[i + 1] : nil
+        switch a {
+        case "--export", "--type", "--id":
+            guard let value else { usage() }
+            i += 1
+            if a == "--export" {
+                exportDir = value
+            } else if a == "--type" {
+                // Short types ("snd", "STR") are padded with spaces.
+                guard value.utf8.count <= 4, let t = parseFourCC(value.padding(4)) else {
+                    fail("--type: \(value) is not a resource type")
+                }
+                type = t
+            } else {
+                guard let n = Int16(value) else { fail("--id: \(value) is not a resource ID") }
+                id = n
+            }
+        default:
+            if a.hasPrefix("--") || file != nil { usage() }
+            file = a
+        }
+        i += 1
+    }
+    guard let file else { usage() }
+    var mf = loadMacFile(findListedApplication(file) ?? file)
+    defer { mac_file_free(&mf) }
+    let all: [InspectedResource]
+    do { all = try inspectResources(fork: mf.rsrc, length: mf.rsrc_len) } catch { fail("\(error)") }
+    let chosen = all.filter { (type == nil || $0.type == type) && (id == nil || $0.id == id) }
+
+    guard let exportDir else {
+        print("\(fourCC(mac_file_type(&mf)))/\(fourCC(mac_file_creator(&mf)))  data \(mf.data_len)  rsrc \(mf.rsrc_len)  \(all.count) resources")
+        for r in chosen {
+            let size = r.compressed ? "\(r.storedSize) → \(r.data.count)" : "\(r.data.count)"
+            let name = r.name.isEmpty ? "" : "  \"\(r.name)\""
+            let summary = resourceSummary(r).map { "  \($0)" } ?? ""
+            let line = "  \(r.typeText) \(String(r.id).padding(6))  \(size.padding(8))\(name)\(summary)"
+            print(line.replacingOccurrences(of: " +$", with: "", options: .regularExpression))
+        }
+        return
+    }
+    do {
+        try FileManager.default.createDirectory(atPath: exportDir, withIntermediateDirectories: true)
+    } catch { fail("\(exportDir): \(error.localizedDescription)") }
+    // Resources without a host format are written raw only when asked for.
+    let exporter = ResourceExporter(directory: exportDir, resources: all)
+    var written = 0, failed = false
+    for r in chosen {
+        do {
+            if let name = try exporter.export(r, raw: type != nil || id != nil) {
+                print(name)
+                written += 1
+            }
+        } catch let e as InspectError where e.undecodable {
+            eprint("bluebox: \(e), skipped\n")
+        } catch {
+            eprint("bluebox: \(error)\n")
+            failed = true
+        }
+    }
+    print("\(written) file\(written == 1 ? "" : "s") in \(exportDir)")
+    exit(failed ? 1 : 0)
+}
+
 extension String {
     func padding(_ width: Int) -> String {
         count >= width ? self : self + String(repeating: " ", count: width - count)
@@ -1036,6 +1116,7 @@ case "shell": shellCommand(rest)
 #endif
 case "set": setCommand(rest)
 case "rsrc": rsrcCommand(rest)
+case "inspect": inspectCommand(rest)
 case "themes": themesCommand(rest)
 case "fonts": fontsCommand(rest)
 case "bpf-helper": /* run as root by bridged AppleTalk: not for people */

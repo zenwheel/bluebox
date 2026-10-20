@@ -138,7 +138,7 @@ public func icons(fork: ResourceFork, id: Int16) -> [IconImage] {
     return out
 }
 
-private func colorIcon(size: Int, depth: Int, pixels: [UInt8], mask: [UInt8]) -> IconImage {
+func colorIcon(size: Int, depth: Int, pixels: [UInt8], mask: [UInt8]) -> IconImage {
     var img = IconImage(size: size, rgba: [UInt8](repeating: 0, count: size * size * 4))
     let maskRow = size / 8
     for y in 0..<size {

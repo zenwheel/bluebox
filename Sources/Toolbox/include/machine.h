@@ -78,6 +78,20 @@ uint64_t machine_alert_depths(const char *message);
 /* Write the screen to a PNG file. */
 bool machine_screenshot(const char *path);
 bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h);
+/* The same keeping the alpha (icons' masks). */
+bool machine_write_png_alpha(const char *path, const uint8_t *rgba, int w, int h);
+
+/* ---- Resources rendered for the host (bluebox inspect) ----
+ * Both need a booted machine (machine_boot) and leave it usable. */
+
+/* Draw a 'PICT' resource's data with QuickDraw into a 32-bit offscreen
+ * the size of its frame: *rgba (malloc'd, w*h*4 bytes, opaque). */
+bool machine_picture_rgba(const uint8_t *pict, size_t len, uint8_t **rgba, int *w, int *h);
+/* Decode the sampled sound of a 'snd ' resource (format 1 or 2, a standard,
+ * extended or compressed header) to 16-bit PCM, interleaved when stereo:
+ * *pcm malloc'd; bits is the sound's own sample size (8 or 16). */
+bool machine_snd_pcm(const uint8_t *snd, size_t len, int16_t **pcm, uint32_t *frames, int *channels,
+                     double *rate, int *bits);
 /* The redraw check: repaint everything (every window's content erased and
  * queued for update), and go on running after the instruction limit. */
 void machine_redraw_all(void);
