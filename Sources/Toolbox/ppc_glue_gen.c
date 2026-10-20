@@ -12641,6 +12641,30 @@ static void ppcglue_SetTimeBaseRate(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ConvertTimeScale(ppc_cpu *c)
+{
+    gaddr a_inout = (gaddr)c->gpr[3];
+    int32_t a_newScale = (int32_t)c->gpr[4];
+    tb_ConvertTimeScale(a_inout, a_newScale);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddTime(ppc_cpu *c)
+{
+    gaddr a_dst = (gaddr)c->gpr[3];
+    gaddr a_src = (gaddr)c->gpr[4];
+    tb_AddTime(a_dst, a_src);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SubtractTime(ppc_cpu *c)
+{
+    gaddr a_dst = (gaddr)c->gpr[3];
+    gaddr a_src = (gaddr)c->gpr[4];
+    tb_SubtractTime(a_dst, a_src);
+    c->pc = c->lr;
+}
+
 static void ppcglue_CodecManagerVersion(ppc_cpu *c)
 {
     gaddr a_version = (gaddr)c->gpr[3];
@@ -21973,39 +21997,6 @@ static void ppctrap_ConvertTime(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_ConvertTimeScale(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xB7u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x10Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SubtractTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x10Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_GetTimeBaseStatus(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -24084,7 +24075,7 @@ const ppc_export ppc_exports[] = {
     {"AddResource", ppcglue_AddResource},
     {"AddSearch", ppcglue_AddSearch},
     {"AddSoundDescriptionExtension", ppctrap_AddSoundDescriptionExtension},
-    {"AddTime", ppctrap_AddTime},
+    {"AddTime", ppcglue_AddTime},
     {"AddTrackReference", ppctrap_AddTrackReference},
     {"AddUserData", ppctrap_AddUserData},
     {"AddUserDataText", ppctrap_AddUserDataText},
@@ -24214,7 +24205,7 @@ const ppc_export ppc_exports[] = {
     {"ConvertImage", ppctrap_ConvertImage},
     {"ConvertMovieToFile", ppctrap_ConvertMovieToFile},
     {"ConvertTime", ppctrap_ConvertTime},
-    {"ConvertTimeScale", ppctrap_ConvertTimeScale},
+    {"ConvertTimeScale", ppcglue_ConvertTimeScale},
     {"CopyBits", ppcglue_CopyBits},
     {"CopyCollection", ppctrap_CopyCollection},
     {"CopyDeepMask", ppcglue_CopyDeepMask},
@@ -26696,7 +26687,7 @@ const ppc_export ppc_exports[] = {
     {"StuffHex", ppcglue_StuffHex},
     {"StyledLineBreak", ppcglue_StyledLineBreak},
     {"SubPt", ppcglue_SubPt},
-    {"SubtractTime", ppctrap_SubtractTime},
+    {"SubtractTime", ppcglue_SubtractTime},
     {"SwapMMUMode", ppctrap_SwapMMUMode},
     {"SysBeep", ppcglue_SysBeep},
     {"SysEnvirons", ppcglue_SysEnvirons},

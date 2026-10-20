@@ -1520,6 +1520,43 @@ int32_t tb_GetTimeBaseTime(int32_t tb, int32_t scale, gaddr tr)
     return v;
 }
 
+/* A TimeRecord's value in another scale, rounded toward zero. */
+static int64_t time_in_scale(gaddr tr, int32_t scale)
+{
+    int64_t v = (int64_t)((uint64_t)rd32(tr) << 32 | rd32(tr + 4));
+    int32_t from = (int32_t)rd32(tr + 8);
+    if (from <= 0 || scale <= 0 || from == scale)
+        return v;
+    return (int64_t)((__int128)v * scale / from);
+}
+
+static void set_time_value(gaddr tr, int64_t v)
+{
+    wr32(tr, (uint32_t)((uint64_t)v >> 32));
+    wr32(tr + 4, (uint32_t)v);
+}
+
+void tb_ConvertTimeScale(gaddr inout, int32_t newScale)
+{
+    if (!inout || newScale <= 0)
+        return;
+    set_time_value(inout, time_in_scale(inout, newScale));
+    wr32(inout + 8, (uint32_t)newScale);
+}
+
+/* AddTime and SubtractTime: the source in the destination's scale. */
+void tb_AddTime(gaddr dst, gaddr src)
+{
+    if (dst && src)
+        set_time_value(dst, time_in_scale(dst, 0) + time_in_scale(src, (int32_t)rd32(dst + 8)));
+}
+
+void tb_SubtractTime(gaddr dst, gaddr src)
+{
+    if (dst && src)
+        set_time_value(dst, time_in_scale(dst, 0) - time_in_scale(src, (int32_t)rd32(dst + 8)));
+}
+
 void tb_SetTimeBaseRate(int32_t tb, int32_t rate) { tb_SetMovieRate(tb, rate); }
 void tb_SetMovieMasterTimeBase(int32_t h, int32_t tb, gaddr zero) {}
 

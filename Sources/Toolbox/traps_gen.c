@@ -1552,6 +1552,16 @@ static void glue_AddSearch(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    tb_AddTime(a_dst, a_src);
+    cpu_push32(c, ret);
+}
+
 static void glue_Alert(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2500,6 +2510,16 @@ static void glue_ContinueSpeech(cpu68k *c, uint16_t trapword)
     gaddr a_chan = (gaddr)cpu_pop32(c);
     int16_t r = tb_ContinueSpeech(a_chan);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ConvertTimeScale(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_newScale = (int32_t)cpu_pop32(c);
+    gaddr a_inout = (gaddr)cpu_pop32(c);
+    tb_ConvertTimeScale(a_inout, a_newScale);
     cpu_push32(c, ret);
 }
 
@@ -15043,6 +15063,16 @@ static void glue_SubPt(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SubtractTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_src = (gaddr)cpu_pop32(c);
+    gaddr a_dst = (gaddr)cpu_pop32(c);
+    tb_SubtractTime(a_dst, a_src);
+    cpu_push32(c, ret);
+}
+
 static void glue_SwapMMUMode(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18438,7 +18468,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0xB4u, "SetTimeBaseMasterTimeBase", CONV_STACK, 12, 0, 0},
     {0xAAAA, (int32_t)0xB5u, "ConvertTime", CONV_STACK, 8, 0, 0},
     {0xAAAA, (int32_t)0xB6u, "DisposeTimeBase", CONV_STACK, 4, 0, 0},
-    {0xAAAA, (int32_t)0xB7u, "ConvertTimeScale", CONV_STACK, 8, 0, 0},
+    {0xAAAA, (int32_t)0xB7u, "ConvertTimeScale", CONV_STACK, 8, 0, glue_ConvertTimeScale},
     {0xAAAA, (int32_t)0xB8u, "CallMeWhen", CONV_STACK, 24, 2, 0},
     {0xAAAA, (int32_t)0xB9u, "CancelCallBack", CONV_STACK, 4, 0, 0},
     {0xAAAA, (int32_t)0xC5u, "GetMediaTrack", CONV_STACK, 4, 4, 0},
@@ -18484,8 +18514,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x108u, "UseTrackEditState", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x109u, "DisposeTrackEditState", CONV_STACK, 4, 2, 0},
     {0xAAAA, (int32_t)0x10Bu, "GetTimeBaseStatus", CONV_STACK, 8, 4, 0},
-    {0xAAAA, (int32_t)0x10Cu, "AddTime", CONV_STACK, 8, 0, 0},
-    {0xAAAA, (int32_t)0x10Du, "SubtractTime", CONV_STACK, 8, 0, 0},
+    {0xAAAA, (int32_t)0x10Cu, "AddTime", CONV_STACK, 8, 0, glue_AddTime},
+    {0xAAAA, (int32_t)0x10Du, "SubtractTime", CONV_STACK, 8, 0, glue_SubtractTime},
     {0xAAAA, (int32_t)0x10Eu, "GetMovieNextInterestingTime", CONV_STACK, 28, 0, glue_GetMovieNextInterestingTime},
     {0xAAAA, (int32_t)0x111u, "GetTrackBoundsRgn", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x112u, "GetTrackDisplayBoundsRgn", CONV_STACK, 4, 4, 0},

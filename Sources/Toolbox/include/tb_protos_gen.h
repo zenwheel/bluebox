@@ -72,6 +72,7 @@ int16_t tb_AddMovieResource(int32_t theMovie, int16_t resRefNum, gaddr resId, in
 void tb_AddPt(uint32_t src, gaddr dst);
 void tb_AddResource(gaddr data, int32_t typ, int16_t id, gaddr name);
 void tb_AddSearch(gaddr arg0);
+void tb_AddTime(gaddr dst, gaddr src);
 int16_t tb_Alert(int16_t id, gaddr fp);
 void tb_AlignScreenRect(gaddr rp, int32_t alignmentProc);
 void tb_AlignWindow(int32_t wp, int8_t front, gaddr alignmentRect, int32_t alignmentProc);
@@ -162,6 +163,7 @@ int16_t tb_CompressSequenceBegin(gaddr seqID, int32_t src, int32_t prev, gaddr s
 int16_t tb_CompressSequenceFrame(int32_t seqID, int32_t src, gaddr srcRect, int16_t flags, int32_t data, gaddr dataSize, gaddr similarity, int32_t asyncCompletionProc);
 void tb_ConcatMatrix(gaddr a, gaddr b);
 int16_t tb_ContinueSpeech(gaddr chan);
+void tb_ConvertTimeScale(gaddr inout, int32_t newScale);
 void tb_CopyBits(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode, gaddr mask);
 void tb_CopyDeepMask(gaddr srcBits, gaddr maskBits, gaddr dstBits, gaddr srcRect, gaddr maskRect, gaddr dstRect, int16_t mode, gaddr maskRgn);
 void tb_CopyMask(gaddr srcbp, gaddr mskbp, gaddr dstbp, gaddr srcrp, gaddr mskrp, gaddr dstrp);
@@ -1358,6 +1360,7 @@ gaddr tb_StripAddress(gaddr p);
 void tb_StuffHex(gaddr p, gaddr s);
 uint8_t tb_StyledLineBreak(gaddr textp, int32_t length, int32_t text_start, int32_t text_end, int32_t flags, gaddr text_width_fp, gaddr text_offset);
 void tb_SubPt(uint32_t src, gaddr dst);
+void tb_SubtractTime(gaddr dst, gaddr src);
 void tb_SwapMMUMode(uint32_t *bp);
 void tb_SysBeep(int16_t i);
 int16_t tb_SysEnvirons(int16_t vers, gaddr p);

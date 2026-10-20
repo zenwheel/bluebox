@@ -98,5 +98,22 @@ extension BlueBox {
             tb_DisposeMovie(movie)
             _ = tb_CloseMovieFile(Int16(bitPattern: rd16(rn)))
         }
+
+        /// TimeRecords change scale and add up across scales (Director's
+        /// QuickTime sprites time themselves this way).
+        @Test func timeRecordArithmetic() {
+            bootMachine()
+            let a = tb_NewPtr(16, false, true), b = tb_NewPtr(16, false, true)
+            wr32(a, 1); wr32(a + 4, 0); wr32(a + 8, 600)       // 2^32 at 600
+            tb_ConvertTimeScale(a, 60)
+            #expect(rd32(a) == 0 && rd32(a + 4) == 0x1999_9999 && rd32(a + 8) == 60)
+            wr32(a, 0); wr32(a + 4, 120); wr32(a + 8, 60)      // 2 s
+            wr32(b, 0); wr32(b + 4, 300); wr32(b + 8, 600)     // 0.5 s
+            tb_AddTime(a, b)
+            #expect(rd32(a + 4) == 150 && rd32(a + 8) == 60)
+            tb_SubtractTime(a, b)
+            tb_SubtractTime(a, b)
+            #expect(rd32(a + 4) == 90)
+        }
     }
 }
