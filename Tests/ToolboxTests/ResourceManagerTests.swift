@@ -124,6 +124,19 @@ extension BlueBox {
             #expect(resErr() == 0)
         }
 
+        /// A changed resource isn't released or detached: it stays to be
+        /// written (ResEdit releases what an editor changed before Save).
+        @Test func changedResourceIsKept() {
+            let h = tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128)
+            tb_SetResAttrs(h, Int16(tb_GetResAttrs(h)) | 2) // resChanged, as ResEdit sets it
+            tb_ReleaseResource(h)
+            #expect(resErr() == -198) // resAttrErr
+            tb_DetachResource(h)
+            #expect(resErr() == -198)
+            #expect(tb_HomeResFile(h) == refnum && bytes(h) == Array("first".utf8))
+            #expect(tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128) == h)
+        }
+
         @Test func uniqueIDAvoidsExistingIDs() {
             let id = tb_UniqueID(Int32(bitPattern: fourCC("TEST")))
             #expect(id != 128 && id != 129 && id >= 128)

@@ -73,7 +73,27 @@ static gaddr item_at(gaddr d, int n)
 static int item_type(gaddr d, int n) { return rd8(item_at(d, n) + 12); }
 static gaddr item_handle(gaddr d, int n) { return rd32(item_at(d, n)); }
 static qrect item_rect(gaddr d, int n) { return qrect_get(item_at(d, n) + 4); }
-static bool is_dialog(gaddr w) { return w && WindowRecord_windowKind(w) == dialogKind; }
+/* A dialog: windowKind dialogKind, or a window whose dialog fields hold
+ * an item list.  A program may give its dialogs a windowKind of its own,
+ * or make one from a window it filled in itself (ResEdit's editors, kind
+ * 135, from NewWindow), and still pass it to DialogSelect, GetDialogItem
+ * and the rest, which took its word for it; only IsDialogEvent goes by
+ * windowKind. */
+static bool kind_dialog(gaddr w) { return w && WindowRecord_windowKind(w) == dialogKind; }
+
+static bool is_dialog(gaddr w)
+{
+    if (kind_dialog(w))
+        return true;
+    gaddr items = w ? rd32(w + DialogRecord_items_off) : 0;
+    gaddr p = items ? rd32(items) : 0;
+    if (!p)
+        return false;
+    uint16_t err = rd16(LM_MemErr);
+    bool handle = tb_RecoverHandle(p, false) == items;
+    wr16(LM_MemErr, err);
+    return handle;
+}
 
 static int item_for_handle(gaddr d, gaddr h)
 {
@@ -619,9 +639,9 @@ int8_t tb_IsDialogEvent(gaddr evt)
 {
     int what = (int16_t)rd16(evt);
     if (what == updateEvt || what == activateEvt)
-        return is_dialog(rd32(evt + EventRecord_message_off));
+        return kind_dialog(rd32(evt + EventRecord_message_off));
     gaddr front = tb_FrontWindow();
-    if (!is_dialog(front))
+    if (!kind_dialog(front))
         return 0;
     if (what == mouseDown) {
         gaddr wp = tb_NewPtr(4, false, true);
@@ -712,8 +732,8 @@ int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
             }
             break;
         }
-        tb_TEKey((int16_t)c, te);
-        int n = edit_item(d);
+            tb_TEKey((int16_t)c, te);
+            int n = edit_item(d);
         if (item_enabled(d, n)) {
             wr16(itemp, (uint16_t)n);
             result = 1;

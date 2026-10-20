@@ -590,6 +590,13 @@ void tb_ReleaseResource(gaddr res)
         set_res_err(resNotFound);
         return;
     }
+    /* A changed resource stays, to be written: the Resource Manager
+     * refused to let it go (ResEdit closes an editor, releasing what it
+     * edited, before Save). */
+    if (rd8(mp_of(maph) + r + 4) & RES_CHANGED) {
+        set_res_err(resAttrErr);
+        return;
+    }
     wr32(mp_of(maph) + r + 8, 0);
     tb_HClrRBit(res);
     tb_DisposeHandle(res);
@@ -602,6 +609,10 @@ void tb_DetachResource(gaddr res)
     uint32_t r;
     if (!find_handle(res, &maph, &r, NULL)) {
         set_res_err(resNotFound);
+        return;
+    }
+    if (rd8(mp_of(maph) + r + 4) & RES_CHANGED) { /* as ReleaseResource */
+        set_res_err(resAttrErr);
         return;
     }
     wr32(mp_of(maph) + r + 8, 0);

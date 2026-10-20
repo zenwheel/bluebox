@@ -102,6 +102,24 @@ extension BlueBox {
             #expect(pstring(at: text) == "de")          // the initial text was selected
             tb_DisposeDialog(d)
         }
+
+        /// A dialog with a windowKind of the program's own (ResEdit's
+        /// editors) still takes DialogSelect's keys.
+        @Test func dialogSelectTakesAnyKindOfDialog() {
+            let d = open()
+            tb_SelectWindow(d)
+            wr16(d + UInt32(WindowRecord_windowKind_off), 135)
+            let evt = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true), dp = tb_NewPtr(4, false, true)
+            let hit = tb_NewPtr(2, false, true)
+            wr16(evt, 3) // keyDown
+            wr32(evt + UInt32(EventRecord_message_off), UInt32(UInt8(ascii: "x")))
+            #expect(tb_IsDialogEvent(evt) == 0) // by windowKind, as before
+            #expect(tb_DialogSelect(evt, dp, hit) != 0 && rd32(dp) == d && rd16(hit) == 4)
+            let text = tb_NewPtr(256, false, true)
+            tb_GetDialogItemText(item(d, 4).handle, text)
+            #expect(pstring(at: text) == "x")
+            tb_DisposeDialog(d)
+        }
     }
 
     @Suite struct Pictures {
