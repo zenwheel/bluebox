@@ -192,16 +192,14 @@ void events_sync_lowmem(void)
      * there).  The mouse is there now, and the host's pointer follows. */
     uint32_t mtemp = rd32(LM_MTemp), raw = rd32(LM_MouseLocation);
     bool changed = mtemp != written_pt || raw != written_pt;
-    /* Caught between its writes and its CrsrNew: left alone until the next
-     * sync (once only, in case it never sets it). */
+    /* Caught between its writes and its CrsrNew: the mouse is left alone
+     * until the next sync (once only, in case it never sets it); the keys
+     * and the button are brought up to date all the same. */
     static bool waiting;
-    if (changed && !rd8(LM_CrsrNew) && !waiting) {
-        waiting = true;
-        return;
-    }
-    waiting = false;
-    bool moved = changed;
-    if (rd8(LM_CrsrNew))
+    bool hold_mouse = changed && !rd8(LM_CrsrNew) && !waiting;
+    waiting = hold_mouse;
+    bool moved = changed && !hold_mouse;
+    if (!hold_mouse && rd8(LM_CrsrNew))
         wr8(LM_CrsrNew, 0);
     pthread_mutex_lock(&lock);
     if (moved) {
@@ -214,7 +212,8 @@ void events_sync_lowmem(void)
         LOGF(LOG_TRAPS, "  the program moved the cursor to %d,%d\n", mouse_h, mouse_v);
     }
     uint32_t pt = make_pt(mouse_v, mouse_h);
-    written_pt = pt;
+    if (!hold_mouse)
+        written_pt = pt;
     bool down = button_down;
     uint8_t keys[16];
     memcpy(keys, keymap, sizeof keys);
@@ -232,6 +231,8 @@ void events_sync_lowmem(void)
     if (button_changed)
         wr32(LM_MBTicks, rd32(LM_Ticks));
     wr8(LM_MBState, down ? 0x00 : 0x80);
+    if (hold_mouse)
+        return;
     wr32(LM_MTemp, pt);
     wr32(LM_MouseLocation, pt);
     wr32(LM_MouseLocation2, pt);
