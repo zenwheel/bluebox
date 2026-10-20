@@ -104,6 +104,32 @@ extension BlueBox {
             tb_DisposeCTable(ct)
         }
 
+        /// SaveEntries and RestoreEntries take their selection as a ReqListRec
+        /// (a pointer: reqLSize, the count less one, then entry numbers).
+        @Test func saveAndRestoreEntriesTakeARequestList() {
+            launchTestApp()
+            _ = initToolbox()
+            let src = tb_GetCTable(8), dst = tb_GetCTable(8)
+            let entry = { (ct: UInt32, i: Int) -> UInt32 in rd32(ct) + 8 + UInt32(i * 8) }
+            wr16(entry(src, 5) + 2, 0x1234)
+            wr16(entry(src, 9) + 2, 0x5678)
+            let sel = tb_NewPtr(6, false, true)
+            wr16(sel, 1); wr16(sel + 2, 5); wr16(sel + 4, 9)
+            let saved = tb_NewHandle(0, false, true)
+            tb_SaveEntries(src, saved, sel)
+            #expect(tb_GetHandleSize(saved) == 8 + 2 * 8)
+            #expect(rd16(rd32(saved) + 6) == 1)
+            #expect(rd16(entry(saved, 0)) == 5 && rd16(entry(saved, 0) + 2) == 0x1234)
+            #expect(rd16(entry(saved, 1)) == 9 && rd16(entry(saved, 1) + 2) == 0x5678)
+            // Back into other entries of another table.
+            wr16(sel + 2, 1); wr16(sel + 4, 2)
+            tb_RestoreEntries(saved, dst, sel)
+            #expect(rd16(entry(dst, 1) + 2) == 0x1234 && rd16(entry(dst, 2) + 2) == 0x5678)
+            tb_DisposeHandle(saved)
+            tb_DisposeCTable(src)
+            tb_DisposeCTable(dst)
+        }
+
         /// Black is the table's last entry even while a fade has made every
         /// entry black, so it is still black when the colours come back.
         @Test func blackIsTheLastEntryDuringAFade() {

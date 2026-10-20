@@ -1230,16 +1230,24 @@ void tb_SetEntries(int16_t start, int16_t count, gaddr specs)
         qd_device_itable(current_device());
 }
 
+/* The selection is a ReqListRec (a pointer, not a handle): reqLSize, the
+ * number of entries less one, then that many entry numbers. */
 void tb_SaveEntries(gaddr src, gaddr result, gaddr selection)
 {
     gaddr ct = src ? src : device_table();
-    if (!ct || !rd32(ct) || !result || !rd32(result))
+    if (!ct || !rd32(ct) || !result || !selection)
         return;
-    int n = (int16_t)rd16(rd32(selection) + 6) + 1, have = (int16_t)rd16(rd32(ct) + 6) + 1;
+    int n = (int16_t)rd16(selection) + 1, have = (int16_t)rd16(rd32(ct) + 6) + 1;
+    if (n < 1)
+        return;
     tb_SetHandleSize(result, 8 + n * 8);
+    if (!rd32(result) || tb_GetHandleSize(result) < 8 + n * 8)
+        return;
+    wr32(rd32(result), 0);
+    wr16(rd32(result) + 4, 0);
     wr16(rd32(result) + 6, (uint16_t)(n - 1));
     for (int i = 0; i < n; i++) {
-        int index = (int16_t)rd16(rd32(selection) + 8 + (uint32_t)i * 8);
+        int index = (int16_t)rd16(selection + 2 + (uint32_t)i * 2);
         gaddr d = rd32(result) + 8 + (uint32_t)i * 8;
         wr16(d, (uint16_t)index);
         if (index >= 0 && index < have)
@@ -1247,15 +1255,37 @@ void tb_SaveEntries(gaddr src, gaddr result, gaddr selection)
     }
 }
 
+/* srcTable's entries, in order, go to the entries of dstTable (the
+ * device's, and the screen, when nil) that the selection names. */
 void tb_RestoreEntries(gaddr src, gaddr dst, gaddr selection)
 {
-    if (!src || !rd32(src))
+    if (!src || !rd32(src) || !selection)
         return;
-    int n = (int16_t)rd16(rd32(src) + 6) + 1;
-    gaddr tmp = tb_NewPtr(n * 8, false, false);
-    gmemcpy(tmp, rd32(src) + 8, (uint32_t)n * 8);
-    tb_SetEntries(-1, (int16_t)(n - 1), tmp);
-    tb_DisposePtr(tmp);
+    int n = (int16_t)rd16(rd32(src) + 6) + 1, want = (int16_t)rd16(selection) + 1;
+    if (want < n)
+        n = want;
+    if (n < 1)
+        return;
+    if (!dst || dst == device_table()) {
+        gaddr tmp = tb_NewPtr(n * 8, false, false);
+        if (!tmp)
+            return;
+        gmemcpy(tmp, rd32(src) + 8, (uint32_t)n * 8);
+        for (int i = 0; i < n; i++)
+            wr16(tmp + (uint32_t)i * 8, rd16(selection + 2 + (uint32_t)i * 2));
+        tb_SetEntries(-1, (int16_t)(n - 1), tmp);
+        tb_DisposePtr(tmp);
+        return;
+    }
+    if (!rd32(dst))
+        return;
+    int have = (int16_t)rd16(rd32(dst) + 6) + 1;
+    for (int i = 0; i < n; i++) {
+        int index = (int16_t)rd16(selection + 2 + (uint32_t)i * 2);
+        if (index >= 0 && index < have)
+            gmemcpy(rd32(dst) + 8 + (uint32_t)index * 8 + 2, rd32(src) + 8 + (uint32_t)i * 8 + 2, 6);
+    }
+    bump_seed(dst);
 }
 
 void tb_ProtectEntry(int16_t index, int8_t protect) {}
