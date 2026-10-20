@@ -1,3 +1,4 @@
+import BlueBoxHost
 import CCore
 import CPU68K
 import Testing
@@ -210,3 +211,20 @@ extension BlueBox {
         }
     }
 }
+
+#if canImport(CoreMIDI)
+/// MIDI 1.0 bytes to Universal MIDI Packets for CoreMIDI and back.
+@Suite struct HostMIDIPackets {
+    @Test func channelAndSystemExclusiveRoundTrip() {
+        let messages: [[UInt8]] = [[0x90, 60, 100], [0xC3, 41], [0xF8], [0xF2, 1, 2],
+                                   [0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7], Array([0xF0] + (1...13) + [0xF7])]
+        #expect(ClassicMIDI.packets(of: [0x90, 60, 100]) == [[0x2090_3C64]])
+        #expect(ClassicMIDI.packets(of: messages[4]) == [[0x3004_7E7F, 0x0901_0000]])
+        for m in messages {
+            var out: [UInt8] = []
+            ClassicMIDI.bytes(of: ClassicMIDI.packets(of: m).flatMap { $0 }, into: &out)
+            #expect(out == m)
+        }
+    }
+}
+#endif
