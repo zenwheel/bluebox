@@ -1,5 +1,22 @@
 import Foundation
 import ForkStore
+#if canImport(SystemConfiguration)
+import SystemConfiguration
+#endif
+
+/// Whether a host interface is Wi-Fi, which bridged EtherTalk can't use:
+/// access points drop its frames.
+func isWireless(_ name: String) -> Bool {
+    #if canImport(SystemConfiguration)
+    let all = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] ?? []
+    return all.contains {
+        SCNetworkInterfaceGetBSDName($0) as String? == name
+            && SCNetworkInterfaceGetInterfaceType($0) as String? == kSCNetworkInterfaceTypeIEEE80211 as String
+    }
+    #else
+    return false
+    #endif
+}
 
 /// Per-application settings kept in the library (Settings.json), keyed by
 /// the application's file name.  `bluebox run` applies them unless the
@@ -196,6 +213,8 @@ func setCommand(_ args: [String]) {
         case "appletalk":
             if value == "default" {
                 s.appletalk = nil
+            } else if value.hasPrefix("bridge:") && isWireless(String(value.dropFirst(7))) {
+                fail("appletalk: \(value.dropFirst(7)) is Wi-Fi, which drops EtherTalk; bridge onto a wired interface")
             } else if ["local", "lan", "off"].contains(value) || (value.hasPrefix("lan:") && value.count > 4)
                         || (value.hasPrefix("bridge:") && value.count > 7) {
                 s.appletalk = value
