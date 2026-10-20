@@ -456,6 +456,14 @@ void machine_set_midi_out_handler(machine_midi_out_fn fn, void *ctx);
  * client's output port as packets. */
 void machine_midi_in(const uint8_t *bytes, int n);
 
+/* Sound input from the host's microphone, for the Sound Input Manager:
+ * the handler starts capturing (start true; false if there is no
+ * microphone) and stops; captured samples come back through
+ * machine_sound_input (floats, -1 to 1, interleaved; any thread). */
+typedef bool (*machine_sound_input_fn)(bool start, void *ctx);
+void machine_set_sound_input_handler(machine_sound_input_fn fn, void *ctx);
+void machine_sound_input(const float *pcm, int frames, int channels, double rate);
+
 /* ---- Game controllers ----
  * The host's game controllers, for InputSprocket: up to MACHINE_PADS of
  * them, each with its buttons (a mask of MACHINE_PAD_*), two sticks (-1 to

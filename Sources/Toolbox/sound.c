@@ -494,7 +494,7 @@ bool sound_busy(void)
     for (int i = 0; i < MAX_CHANNELS; i++)
         if (chans[i].chan)
             return true;
-    return false;
+    return sound_input_busy();
 }
 
 void sound_pump(void)
@@ -506,6 +506,7 @@ void sound_pump(void)
         if (chans[i].chan)
             pump(&chans[i]);
     sd_pump();
+    sound_input_pump();
     qt_tune_pump();
     in_pump = false;
 }
@@ -841,6 +842,64 @@ int16_t tb_SetupSndHeader(gaddr sndh, int16_t nch, int32_t fixed_rate, int16_t s
     return noErr;
 }
 
+/* SetupAIFFHeader: an AIFF file's header (AIFF-C when the sound is
+ * compressed), written at the file's mark, for numBytes of samples to
+ * follow it: FORM, the version (AIFF-C), COMM and the start of SSND. */
+int16_t tb_SetupAIFFHeader(int16_t refnum, int16_t nch, int32_t fixed_rate, int16_t size, int32_t compression,
+                           int32_t nbytes, int32_t nframes)
+{
+    uint32_t comp = (uint32_t)compression;
+    bool aifc = comp && comp != fourcc("NONE");
+    const char *name = comp == fourcc("MAC3") ? "MACE 3-to-1" : comp == fourcc("MAC6") ? "MACE 6-to-1"
+                       : comp == fourcc("ima4") ? "IMA 4 to 1" : "not compressed";
+    uint32_t namelen = aifc ? ((uint32_t)strlen(name) + 2) & ~1u : 0; /* a Pascal string, even */
+    uint32_t comm = 18 + (aifc ? 4 + namelen : 0);
+    uint32_t len = 12 + (aifc ? 12 : 0) + 8 + comm + 16;
+    if (!nframes && nch > 0 && size > 0)
+        nframes = nbytes / (nch * ((size + 7) / 8));
+    gaddr h = tb_NewPtr((int32_t)len, false, true), pb = tb_NewPtr(80, false, true);
+    if (!h || !pb) {
+        if (h)
+            tb_DisposePtr(h);
+        return memFullErr;
+    }
+    gaddr p = h;
+    wr32(p, fourcc("FORM"));
+    wr32(p + 4, len - 8 + (uint32_t)nbytes);
+    wr32(p + 8, fourcc(aifc ? "AIFC" : "AIFF"));
+    p += 12;
+    if (aifc) {
+        wr32(p, fourcc("FVER"));
+        wr32(p + 4, 4);
+        wr32(p + 8, 0xA2805140); /* AIFF-C version 1 */
+        p += 12;
+    }
+    wr32(p, fourcc("COMM"));
+    wr32(p + 4, comm);
+    wr16(p + 8, (uint16_t)nch);
+    wr32(p + 10, (uint32_t)nframes);
+    wr16(p + 14, (uint16_t)size);
+    rate_extended(p + 16, (uint32_t)fixed_rate);
+    if (aifc) {
+        wr32(p + 26, comp);
+        wr8(p + 30, (uint8_t)strlen(name));
+        gput(p + 31, name, (uint32_t)strlen(name));
+    }
+    p += 8 + comm;
+    wr32(p, fourcc("SSND"));
+    wr32(p + 4, 8 + (uint32_t)nbytes);
+    wr32(p + 8, 0);  /* offset */
+    wr32(p + 12, 0); /* blockSize */
+    wr16(pb + 24, (uint16_t)refnum); /* ioRefNum */
+    wr32(pb + 32, h);                /* ioBuffer */
+    wr32(pb + 36, len);              /* ioReqCount */
+    wr16(pb + 44, 0);                /* ioPosMode: fsAtMark */
+    int16_t err = tb_PBWrite(pb, false);
+    tb_DisposePtr(pb);
+    tb_DisposePtr(h);
+    return err;
+}
+
 /* bluebox inspect: a resource's sampled sound, decoded as it would play.
  * The first sound or buffer command's header is the sound. */
 bool machine_snd_pcm(const uint8_t *snd, size_t len, int16_t **pcm, uint32_t *frames, int *channels,
@@ -1074,6 +1133,7 @@ void sound_reset(void)
         if (chans[i].chan)
             stop_host(&chans[i]);
     memset(chans, 0, sizeof chans);
+    sound_input_reset();
 }
 
 
@@ -1285,44 +1345,3 @@ int16_t tb_SndStopFilePlay(gaddr chan, int8_t quietNow)
     }
     return noErr;
 }
-
-/* Sound input: a Mac with no input device. Opening one fails, and every
- * call on a device refNum (the zero a failed open leaves, which some
- * programs go on to use) answers that it is not a device. */
-enum { siNoSoundInHardware = -221, siBadSoundInDevice = -220, siBadRefNum = -229 };
-
-int16_t tb_SPBOpenDevice(gaddr name, int16_t permission, gaddr refnum)
-{
-    if (refnum)
-        wr32(refnum, 0);
-    return siNoSoundInHardware;
-}
-int16_t tb_SPBCloseDevice(int32_t refnum) { return siBadRefNum; }
-int16_t tb_SPBGetIndexedDevice(int16_t count, gaddr name, gaddr iconp)
-{
-    if (iconp)
-        wr32(iconp, 0);
-    return siBadSoundInDevice; /* none to list */
-}
-int16_t tb_SPBSignInDevice(int16_t refnum, gaddr name) { return noErr; }
-int16_t tb_SPBSignOutDevice(int16_t refnum) { return noErr; }
-int16_t tb_SPBGetDeviceInfo(int32_t refnum, int32_t info, gaddr infop) { return siBadRefNum; }
-int16_t tb_SPBSetDeviceInfo(int32_t refnum, int32_t info, gaddr infop) { return siBadRefNum; }
-int16_t tb_SPBRecord(gaddr inparamp, int8_t async) { return siBadRefNum; }
-int16_t tb_SPBRecordToFile(int16_t refnum, gaddr inparamp, int8_t async) { return siBadRefNum; }
-int16_t tb_SPBPauseRecording(int32_t refnum) { return siBadRefNum; }
-int16_t tb_SPBResumeRecording(int32_t refnum) { return siBadRefNum; }
-int16_t tb_SPBStopRecording(int32_t refnum) { return siBadRefNum; }
-int16_t tb_SPBGetRecordingStatus(int32_t refnum, gaddr status, gaddr meter, gaddr total_samps, gaddr samps,
-                                 gaddr total_ms, gaddr ms)
-{
-    return siBadRefNum;
-}
-int16_t tb_SPBMillisecondsToBytes(int32_t refnum, gaddr millip) { return siBadRefNum; }
-int16_t tb_SPBBytesToMilliseconds(int32_t refnum, gaddr bytesp) { return siBadRefNum; }
-int16_t tb_SndRecord(gaddr filterp, uint32_t corner, int32_t quality, gaddr sndhandlep) { return siNoSoundInHardware; }
-int16_t tb_SndRecordToFile(gaddr filterp, uint32_t corner, int32_t quality, int16_t refnum)
-{
-    return siNoSoundInHardware;
-}
-

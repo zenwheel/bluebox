@@ -14241,6 +14241,22 @@ static void glue_SetZone(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_SetupAIFFHeader(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_numframes = (int32_t)cpu_pop32(c);
+    int32_t a_numbytes = (int32_t)cpu_pop32(c);
+    int32_t a_compression = (int32_t)cpu_pop32(c);
+    int16_t a_samplesize = (int16_t)cpu_pop16(c);
+    int32_t a_samplerate = (int32_t)cpu_pop32(c);
+    int16_t a_numchannels = (int16_t)cpu_pop16(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SetupAIFFHeader(a_refnum, a_numchannels, a_samplerate, a_samplesize, a_compression, a_numbytes, a_numframes);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetupSndHeader(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18937,7 +18953,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x8040014u, "SndRecord", CONV_STACK, 16, 2, glue_SndRecord},
     {0xA800, (int32_t)0x828000Cu, "SpeakBuffer", CONV_STACK, 16, 2, glue_SpeakBuffer},
     {0xA800, (int32_t)0xA5C000Cu, "TextToPhonemes", CONV_STACK, 20, 2, glue_TextToPhonemes},
-    {0xA800, (int32_t)0xB4C0014u, "SetupAIFFHeader", CONV_STACK, 22, 2, 0},
+    {0xA800, (int32_t)0xB4C0014u, "SetupAIFFHeader", CONV_STACK, 22, 2, glue_SetupAIFFHeader},
     {0xA800, (int32_t)0xD000008u, "SndStartFilePlay", CONV_STACK, 26, 2, glue_SndStartFilePlay},
     {0xA800, (int32_t)0xD480014u, "SetupSndHeader", CONV_STACK, 26, 2, glue_SetupSndHeader},
     {0xA800, (int32_t)0xE340014u, "SPBGetRecordingStatus", CONV_STACK, 28, 2, glue_SPBGetRecordingStatus},

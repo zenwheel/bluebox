@@ -78,6 +78,8 @@ cat > "$app/Contents/Info.plist" <<EOF
 	<string>13.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Classic programs record sound through the microphone.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPrincipalClass</key>

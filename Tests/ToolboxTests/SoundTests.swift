@@ -201,6 +201,92 @@ extension BlueBox {
             #expect(rd16(pb + UInt32(IOParam_ioResult_off)) == 0)
         }
     }
+
+    /// The Sound Input Manager: one device, recording what the host
+    /// captures, and silence without it.
+    @Suite struct SoundInput {
+        /// An SPB recording `count` bytes into a buffer of its own.
+        func spb(_ refnum: UInt32, count: UInt32) -> (pb: UInt32, buffer: UInt32) {
+            let pb = tb_NewPtr(38, false, true), buffer = tb_NewPtr(Int32(count), false, true)
+            wr32(pb, refnum)
+            wr32(pb + 4, count)
+            wr32(pb + 12, count)
+            wr32(pb + 16, buffer)
+            return (pb, buffer)
+        }
+
+        func open() -> UInt32 {
+            let r = tb_NewPtr(4, false, true)
+            #expect(tb_SPBOpenDevice(0, 1, r) == 0)
+            #expect(rd32(r) != 0)
+            return rd32(r)
+        }
+
+        @Test func theDeviceAndItsSettings() {
+            launchTestApp()
+            var answer: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("snd ")), &answer) == 0 && answer & 0x20 != 0)
+            let name = tb_NewPtr(256, false, true), icon = tb_NewPtr(4, false, true)
+            #expect(tb_SPBGetIndexedDevice(1, name, icon) == 0 && pstring(at: name) == "Built-in" && rd32(icon) != 0)
+            #expect(tb_SPBGetIndexedDevice(2, name, icon) == -220)
+            let refnum = open()
+            let info = tb_NewPtr(16, false, true)
+            #expect(tb_SPBGetDeviceInfo(Int32(bitPattern: refnum), Int32(bitPattern: fourCC("srat")), info) == 0)
+            #expect(rd32(info) == 0x56EE_8BA3)
+            wr16(info, 16)
+            #expect(tb_SPBSetDeviceInfo(Int32(bitPattern: refnum), Int32(bitPattern: fourCC("ssiz")), info) == 0)
+            wr16(info, 12)
+            #expect(tb_SPBSetDeviceInfo(Int32(bitPattern: refnum), Int32(bitPattern: fourCC("ssiz")), info) == -226)
+            wr32(info, 1000)
+            #expect(tb_SPBMillisecondsToBytes(Int32(bitPattern: refnum), info) == 0 && rd32(info) == 22254 * 2)
+            #expect(tb_SPBGetDeviceInfo(Int32(bitPattern: refnum), Int32(bitPattern: fourCC("what")), info) == -231)
+            #expect(tb_SPBCloseDevice(Int32(bitPattern: refnum)) == 0)
+            #expect(tb_SPBCloseDevice(Int32(bitPattern: refnum)) == -229)
+        }
+
+        /// Without a microphone, a synchronous recording is silence, as long as asked.
+        @Test func recordingWithoutAMicrophoneIsSilence() {
+            launchTestApp()
+            let refnum = open()
+            let (pb, buffer) = spb(refnum, count: 2000)
+            wr8(buffer + 1999, 0x12)
+            #expect(tb_SPBRecord(pb, 0) == 0)
+            #expect(rd32(pb + 4) == 2000 && rd32(pb + 8) == 90 && rd16(pb + 32) == 0)
+            #expect((0..<2000).allSatisfy { rd8(buffer + UInt32($0)) == 0x80 })
+            #expect(tb_SPBCloseDevice(Int32(bitPattern: refnum)) == 0)
+        }
+
+        /// What the host captures, resampled to the device's rate, fills an
+        /// asynchronous recording, which then completes.
+        @Test func asynchronousRecordingTakesTheHostsSamples() {
+            launchTestApp()
+            machine_set_sound_input_handler({ _, _ in true }, nil)
+            defer { machine_set_sound_input_handler(nil, nil) }
+            let refnum = open()
+            let (pb, buffer) = spb(refnum, count: 1000)
+            #expect(tb_SPBRecord(pb, 1) == 0)
+            #expect(rd16(pb + 32) == 1) // in progress
+            let half = [Float](repeating: 0.5, count: 2000) // 2000 frames at twice the rate
+            machine_sound_input(half, 2000, 1, 22254.545454 * 2)
+            machine_skip_time(100_000_000)
+            sound_pump()
+            #expect(rd16(pb + 32) == 0 && rd32(pb + 4) == 1000)
+            #expect((4..<1000).allSatisfy { rd8(buffer + UInt32($0)) == 0xC0 })
+            let status = tb_NewPtr(2, false, true)
+            #expect(tb_SPBGetRecordingStatus(Int32(bitPattern: refnum), status, 0, 0, 0, 0, 0) == 0 && rd16(status) == 0)
+            #expect(tb_SPBCloseDevice(Int32(bitPattern: refnum)) == 0)
+        }
+
+        /// SndRecord's dialog: Escape cancels it.
+        @Test func sndRecordCancels() {
+            launchTestApp()
+            _ = initToolbox()
+            machine_post_key(27, 0x35, 0, 1, 0)
+            let h = tb_NewPtr(4, false, true)
+            #expect(tb_SndRecord(0, 0, Int32(bitPattern: fourCC("best")), h) == -128)
+            #expect(rd32(h) == 0)
+        }
+    }
 }
 
 extension BlueBox {

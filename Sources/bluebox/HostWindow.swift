@@ -435,6 +435,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     installPrintHandlers()
     ClipboardSync.shared.install()
     ClassicAudio.shared.install()
+    ClassicSoundInput.shared.install()
     ClassicMusic.shared.install()
     ClassicMIDI.shared.install()
     GameControllers.shared.install()

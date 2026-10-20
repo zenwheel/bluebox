@@ -223,6 +223,11 @@ void notify_reset(void);
 void sound_pump(void);
 void sound_beep(void);
 void sound_reset(void);
+/* The Sound Input Manager (sound_input.c): recordings go on from the
+ * sound pump; busy while one is asynchronous. */
+void sound_input_pump(void);
+bool sound_input_busy(void);
+void sound_input_reset(void);
 /* PCM straight to the host on a channel id of the caller's (movies). */
 void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume);
 void sound_host_stop(int id);

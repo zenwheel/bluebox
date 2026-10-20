@@ -8994,6 +8994,19 @@ static void ppcglue_SetupSndHeader(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetupAIFFHeader(ppc_cpu *c)
+{
+    int16_t a_refnum = (int16_t)c->gpr[3];
+    int16_t a_numchannels = (int16_t)c->gpr[4];
+    int32_t a_samplerate = (int32_t)c->gpr[5];
+    int16_t a_samplesize = (int16_t)c->gpr[6];
+    int32_t a_compression = (int32_t)c->gpr[7];
+    int32_t a_numbytes = (int32_t)c->gpr[8];
+    int32_t a_numframes = (int32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetupAIFFHeader(a_refnum, a_numchannels, a_samplerate, a_samplesize, a_compression, a_numbytes, a_numframes);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SPBSignInDevice(ppc_cpu *c)
 {
     int16_t a_refnum = (int16_t)c->gpr[3];
@@ -15523,25 +15536,6 @@ static void ppctrap_Exp1to6(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[9]);
     ppc_trap((uint16_t)(0xA800));
     ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetupAIFFHeader(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xB4C0014u);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xA800));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
@@ -26599,7 +26593,7 @@ const ppc_export ppc_exports[] = {
     {"SetWinColor", ppcglue_SetWinColor},
     {"SetWindowPic", ppcglue_SetWindowPic},
     {"SetZone", ppcglue_SetZone},
-    {"SetupAIFFHeader", ppctrap_SetupAIFFHeader},
+    {"SetupAIFFHeader", ppcglue_SetupAIFFHeader},
     {"SetupSndHeader", ppcglue_SetupSndHeader},
     {"ShieldCursor", ppcglue_ShieldCursor},
     {"ShortenDITL", ppcglue_ShortenDITL},
