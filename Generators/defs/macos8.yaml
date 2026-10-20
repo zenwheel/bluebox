@@ -67,8 +67,9 @@
     cfm: NavigationLib
 
 # The Window Manager's Mac OS 8 and 8.5 calls (MacWindows.h): Appearance
-# 1.0's (AppearanceLib) and 8.5's (WindowsLib), from PowerPC code only
-# here; the Appearance Manager's own 68k dispatch is not given them.
+# 1.0's (AppearanceLib) and 8.5's (WindowsLib).  Appearance 1.0's also
+# reach 68k code through _AppearanceDispatch ($AA74, selectors from
+# MacWindows.h); 8.5's are PowerPC only.
 - function:
     name: GetWindowFeatures
     return: OSErr
@@ -77,6 +78,8 @@
         type: WindowPtr
       - name: outFeatures
         type: uint32_t*
+    dispatcher: AppearanceDispatch
+    selector: 0x0013
     cfm: AppearanceLib
 
 - function:
@@ -89,6 +92,8 @@
         type: uint16_t
       - name: ioWinRgn
         type: RgnHandle
+    dispatcher: AppearanceDispatch
+    selector: 0x0014
     cfm: AppearanceLib
 
 - function:
@@ -97,6 +102,8 @@
     args:
       - name: window
         type: WindowPtr
+    dispatcher: AppearanceDispatch
+    selector: 0x000F
     cfm: AppearanceLib
 
 - function:
@@ -105,6 +112,8 @@
     args:
       - name: window
         type: WindowPtr
+    dispatcher: AppearanceDispatch
+    selector: 0x0010
     cfm: AppearanceLib
 
 - function:
@@ -115,6 +124,8 @@
         type: WindowPtr
       - name: collapse
         type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0011
     cfm: AppearanceLib
 
 - function:
@@ -123,6 +134,8 @@
     args:
       - name: collapse
         type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0012
     cfm: AppearanceLib
 
 - function:

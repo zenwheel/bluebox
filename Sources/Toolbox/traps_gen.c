@@ -2361,6 +2361,27 @@ static void glue_CodecManagerVersion(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CollapseAllWindows(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_collapse = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t r = tb_CollapseAllWindows(a_collapse);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CollapseWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_collapse = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CollapseWindow(a_window, a_collapse);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_Color2Index(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8603,6 +8624,17 @@ static void glue_GetWVariant(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetWindowFeatures(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outFeatures = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetWindowFeatures(a_window, a_outFeatures);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetWindowPic(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8610,6 +8642,18 @@ static void glue_GetWindowPic(cpu68k *c, uint16_t trapword)
     gaddr a_w = (gaddr)cpu_pop32(c);
     gaddr r = tb_GetWindowPic(a_w);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetWindowRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_ioWinRgn = (gaddr)cpu_pop32(c);
+    uint16_t a_inRegionCode = (uint16_t)cpu_pop16(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetWindowRegion(a_window, a_inRegionCode, a_ioWinRgn);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9875,6 +9919,26 @@ static void glue_IsValidAppearanceFileType(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t a_fileType = (int32_t)cpu_pop32(c);
     int8_t r = tb_IsValidAppearanceFileType(a_fileType);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsWindowCollapsable(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsWindowCollapsable(a_window);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsWindowCollapsed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsWindowCollapsed(a_window);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -19085,6 +19149,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA74, (int32_t)0xCu, "DrawThemePrimaryGroup", CONV_STACK, 8, 4, glue_DrawThemePrimaryGroup},
     {0xAA74, (int32_t)0xDu, "DrawThemeSecondaryGroup", CONV_STACK, 8, 4, glue_DrawThemeSecondaryGroup},
     {0xAA74, (int32_t)0xEu, "DrawThemeSeparator", CONV_STACK, 8, 4, glue_DrawThemeSeparator},
+    {0xAA74, (int32_t)0xFu, "IsWindowCollapsable", CONV_STACK, 4, 2, glue_IsWindowCollapsable},
+    {0xAA74, (int32_t)0x10u, "IsWindowCollapsed", CONV_STACK, 4, 2, glue_IsWindowCollapsed},
+    {0xAA74, (int32_t)0x11u, "CollapseWindow", CONV_STACK, 6, 2, glue_CollapseWindow},
+    {0xAA74, (int32_t)0x12u, "CollapseAllWindows", CONV_STACK, 2, 2, glue_CollapseAllWindows},
+    {0xAA74, (int32_t)0x13u, "GetWindowFeatures", CONV_STACK, 8, 2, glue_GetWindowFeatures},
+    {0xAA74, (int32_t)0x14u, "GetWindowRegion", CONV_STACK, 10, 2, glue_GetWindowRegion},
     {0xAA74, (int32_t)0x15u, "RegisterAppearanceClient", CONV_STACK, 0, 4, glue_RegisterAppearanceClient},
     {0xAA74, (int32_t)0x16u, "UnregisterAppearanceClient", CONV_STACK, 0, 4, glue_UnregisterAppearanceClient},
     {0xAA74, (int32_t)0x18u, "DrawThemeMenuBarBackground", CONV_STACK, 10, 4, glue_DrawThemeMenuBarBackground},
