@@ -63,6 +63,27 @@ extension BlueBox {
             tb_DisposeDialog(d)
         }
 
+        /// As the Dialog Manager made them: a plain GrafPort, whose
+        /// portBits.bounds programs read (Word 5.0 centres its dialogs by
+        /// it), unless the dialog has a 'dctb' or comes from NewColorDialog.
+        @Test func dialogsAreColourOnlyWithAColourTable() {
+            let d = open()
+            func isColour(_ w: UInt32) -> Bool { rd16(w + 6) & 0xC000 == 0xC000 }
+            #expect(!isColour(d))
+            #expect(Int16(bitPattern: rd16(d + 8)) == -40) // portBits.bounds.top: the window's top, negated
+            let dctb = cat(be32(0), be16(0), be16(0xFFFF)) // ctSize -1: the default colours
+            launchTestApp([TestResource(type: "DLOG", id: 200, data: dlog(items: 200)),
+                           TestResource(type: "DITL", id: 200, data: Self.items),
+                           TestResource(type: "dctb", id: 200, data: dctb)])
+            _ = initToolbox()
+            let c = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+            #expect(isColour(c) && WindowRecord_visible(c) != 0)
+            let none = tb_NewHandle(2, false, true)
+            wr16(rd32(none), 0xFFFF) // no items
+            let n = tb_NewColorDialog(0, tb_NewPtr(8, false, true), 0, 0, 1, 0xFFFF_FFFF, 0, 0, none)
+            #expect(isColour(n))
+        }
+
         @Test func setTextAndHideItems() {
             let d = open()
             tb_SetPort(d)

@@ -417,16 +417,21 @@ int16_t tb_CountDITL(gaddr d) { return (int16_t)item_count(d); }
 
 /* A dialog, with Mac OS 8's flags ('dlgx', NewFeaturesDialog): the
  * theme's background, a root control the item controls go in, and the
- * standard controls in Platinum. */
+ * standard controls in Platinum.  As the Dialog Manager did, NewDialog
+ * makes a plain window (a GrafPort) and NewColorDialog a colour one;
+ * GetNewDialog makes a colour one when the dialog has a 'dctb' (Microsoft
+ * Word 5.0 centres its dialogs from portBits.bounds, which a CGrafPort
+ * does not have).  Dialogs with Mac OS 8's features are colour windows. */
 static gaddr new_dialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag,
-                        int32_t rc, gaddr items, uint32_t flags)
+                        int32_t rc, gaddr items, uint32_t flags, bool color)
 {
     gaddr d = dst ? dst : tb_NewPtr(DialogRecord_SIZEOF, false, true);
     if (!d)
         return 0;
-    /* With Color QuickDraw, the System 7 Dialog Manager makes every dialog a
-     * colour window; applications rely on its portPixMap. */
-    tb_NewCWindow(d, r, tit, 0, procid, behind, gaflag, rc);
+    if (color || flags)
+        tb_NewCWindow(d, r, tit, 0, procid, behind, gaflag, rc);
+    else
+        tb_NewWindow(d, r, tit, 0, procid, behind, gaflag, rc);
     WindowRecord_set_windowKind(d, dialogKind);
     wr32(d + DialogRecord_items_off, items);
     wr16(d + DialogRecord_aDefItem_off, 1);
@@ -456,13 +461,13 @@ static gaddr new_dialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t proci
 gaddr tb_NewDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag, int32_t rc,
                    gaddr items)
 {
-    return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, 0);
+    return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, 0, false);
 }
 
 gaddr tb_NewFeaturesDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag,
                            int32_t rc, gaddr items, uint32_t flags)
 {
-    return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, flags);
+    return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, flags, true);
 }
 
 /* 'dftb': version, count, then for each item 0 (none) or 1 and a
@@ -525,7 +530,7 @@ static void apply_dftb(gaddr d, int16_t id)
 gaddr tb_NewColorDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag,
                         int32_t rc, gaddr items)
 {
-    return tb_NewDialog(dst, r, tit, vis, procid, behind, gaflag, rc, items);
+    return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, 0, true);
 }
 
 /* DLOG: bounds(8), procID(2), visible(1), pad, goAway(1), pad, refCon(4), itemsID(2), title. */
@@ -547,10 +552,15 @@ gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override
     /* 'dlgx' (version 0, flags) asks for Mac OS 8's features. */
     gaddr x = tb_GetResource((int32_t)fourcc("dlgx"), id);
     uint32_t flags = x && rd32(x) && tb_GetHandleSize(x) >= 6 && rd16(rd32(x)) == 0 ? rd32(rd32(x) + 2) : 0;
+    gaddr dctb = tb_GetResource((int32_t)fourcc("dctb"), id);
+    bool color = dctb && rd32(dctb);
     p = rd32(dlog);
-    /* Shown after its fonts are in. */
-    gaddr d = new_dialog(dst, p, p + 20, 0, (int16_t)rd16(p + 8), behind, (int8_t)rd8(p + 12), rc, items, flags);
+    /* Shown after its fonts and colours are in. */
+    gaddr d = new_dialog(dst, p, p + 20, 0, (int16_t)rd16(p + 8), behind, (int8_t)rd8(p + 12), rc, items, flags,
+                         color);
     tb_HUnlock(dlog);
+    if (d && color && rd32(dctb) && (int16_t)rd16(rd32(dctb) + 6) != -1) /* ctSize -1: the default colours */
+        tb_SetWinColor(d, dctb);
     if (d)
         apply_dftb(d, id);
     if (d && vis)
