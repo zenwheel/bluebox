@@ -387,7 +387,15 @@ static void dsp_GetMaxFrameRate(ppc_cpu *c)
         wr32(R(1), 0);
     RETURN(0);
 }
-static void dsp_UserSelectContext(ppc_cpu *c) { RETURN(kDSpContextNotFoundErr); }
+/* DSpUserSelectContext(desired, displayID, eventProc, *context): no
+ * dialog to choose a display from, the one there is. */
+static void dsp_UserSelectContext(ppc_cpu *c)
+{
+    context_make();
+    if (R(3))
+        wr32(R(3), ctx);
+    RETURN(0);
+}
 
 /* The rest, for one context with nothing to save, queue or blit. */
 static void dsp_GetFlattenedSize(ppc_cpu *c)

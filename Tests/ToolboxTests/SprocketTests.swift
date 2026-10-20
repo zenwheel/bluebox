@@ -114,3 +114,28 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    /// DrawSprocketLib: with no dialog to choose a display from, the user's
+    /// choice is the one context there is (Skittles 2 asks for it).
+    @Suite struct DrawSprocket {
+        @Test func userSelectContextGivesTheContext() {
+            bootMachine()
+            let attrs: UInt32 = 0x6000_0000, out: UInt32 = 0x6000_0100, best: UInt32 = 0x6000_0104
+            for i in 0..<72 { wr8(attrs + UInt32(i), 0) }
+            wr32(attrs + 4, 640)
+            wr32(attrs + 8, 480)
+            func call(_ name: String, _ args: [UInt32]) -> UInt32 {
+                for (i, a) in args.enumerated() {
+                    withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+                }
+                cfm_export_fn(name)!(&g_ppc)
+                return g_ppc.gpr.3
+            }
+            #expect(call("DSpStartup", []) == 0)
+            #expect(call("DSpUserSelectContext", [attrs, 0, 0, out]) == 0)
+            #expect(call("DSpFindBestContext", [attrs, best]) == 0)
+            #expect(rd32(out) != 0 && rd32(out) == rd32(best))
+        }
+    }
+}
