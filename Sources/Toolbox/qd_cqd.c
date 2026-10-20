@@ -110,11 +110,15 @@ gaddr tb_GetCTable(int16_t id)
         tb_HandToHand(&h);
         return h;
     }
-    /* The standard tables: 1, 2, 4, 8 colour; 33-40 the same depths in grey. */
-    int depth = id > 32 ? id - 32 : id;
+    /* The standard tables: 1, 2, 4, 8 colour; 33-40 the same depths in grey;
+     * 66-72 the colour tables with the highlight colour, here the standard
+     * ones (the Star Trek demo fades its screen through table 72, writing
+     * through the handle without checking it). */
+    bool gray = id > 32 && id < 64;
+    int depth = id > 64 ? id - 64 : gray ? id - 32 : id;
     if (depth != 1 && depth != 2 && depth != 4 && depth != 8)
         return 0;
-    return make_table(1 << depth, id > 32 ? fill_gray : fill_std, depth, id);
+    return make_table(1 << depth, gray ? fill_gray : fill_std, depth, id);
 }
 
 void tb_DisposeCTable(gaddr h)

@@ -130,6 +130,20 @@ extension BlueBox {
             tb_DisposeCTable(dst)
         }
 
+        /// Tables 66, 68 and 72 (the standard tables with the highlight
+        /// colour) exist too: the Star Trek demo writes through table 72's
+        /// handle unchecked.
+        @Test func highlightColorTablesExist() {
+            launchTestApp()
+            _ = initToolbox()
+            for (id, entries) in [(66, 3), (68, 15), (72, 255)] {
+                let ct = tb_GetCTable(Int16(id))
+                #expect(ct != 0 && rd32(ct) != 0 && rd16(rd32(ct) + 6) == UInt16(entries))
+                tb_DisposeCTable(ct)
+            }
+            #expect(tb_GetCTable(73) == 0)
+        }
+
         /// Black is the table's last entry even while a fade has made every
         /// entry black, so it is still black when the colours come back.
         @Test func blackIsTheLastEntryDuringAFade() {
