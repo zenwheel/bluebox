@@ -567,6 +567,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** ResEdit opens a copy of TeachText, edits a `STR#`, a `DLOG` and an icon, saves, and the modified TeachText runs. Fuzzed resource maps never crash the runtime. A test app that writes directly to the screen switches to screen mode on its own.
 
+**Status (2026-10-20): done.** ResEdit 2.1.3 opens a copy of TeachText, edits a `STR#`, an `ICON`, a `cicn` and a `DLOG` (the bounds), saves, and the copy runs. That took: dialogs ResEdit builds itself from a window (kind 135) taking DialogSelect's keys; ReleaseResource/DetachResource keeping a changed resource (resAttrErr); StillDown false while a mouse event waits (double clicks); the System's `PACK` resources and programs' own packages (ResEdit's `PACK` 1, BitEdit) run through their traps. Twenty thousand damaged forks go through the parser and the Resource Manager without a crash (also under AddressSanitizer). Screen mode by itself: a program that writes to the screen outside its windows (the CPUs watch the framebuffer's memory), hides the menu bar, changes depth or reserves a DrawSprocket context gets the whole screen, and that becomes its `display` setting. The profile: the host's double-click and key-repeat times, `--lowmem` for the real settings, Gestalt `blbx`.
+
 ### M7: HyperCard 2.1
 
 **Goal:** HyperCard 2.1 runs the Home stack and typical stacks, including sound, XCMDs and printing.
@@ -582,6 +584,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Performance:** an interpreter profiling pass and pre-decoded instruction caches.
 
 **Exit:** HyperCard 2.1 runs its Home stack and a corpus of ten-plus stacks from Macintosh Garden: navigation, painting, sound, an XCMD-based stack, printing cards to PDF, and speech through a stack XCMD or HyperTalk `speak` where available.
+
+**Status (2026-10-20): done.** HyperCard 2.1 runs its Home stack; its own XCMDs (Palette, Script Editor, Picture, the watchers) and the Home stack's `FontExists` XFCN run, and Palatino (family 16, drawn with our serif face) no longer draws a missing-font warning. Stacks are found when "HyperCard Stacks" sits in the HyperCard folder, as the installer leaves it. Headless runs need two clicks before HyperCard shows its card window (it waits on OSEventAvail for an OS event, and the first click only activates); a person's first click does that.
 
 ### M8: PowerPC
 
