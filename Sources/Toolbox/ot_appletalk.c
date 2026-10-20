@@ -502,6 +502,8 @@ static void adsp_listen(ot_atalk *a)
     a->have_call = false;
 }
 
+static void unbind(provider *p);
+
 /* OTBind(ep, reqAddr TBind *, retAddr TBind *): a socket (the one asked
  * for, or any), and the name in the address registered on it. */
 void ota_Bind(ppc_cpu *c, provider *p)
@@ -564,6 +566,8 @@ void ota_Bind(ppc_cpu *c, provider *p)
         else
             a->nte = at_register_name(packed, n, a->skt);
     }
+    if (result != kOTNoError)
+        unbind(p); /* whatever was opened */
     if (result == kOTNoError) {
         p->state = T_IDLE;
         if (ret) {
@@ -576,7 +580,8 @@ void ota_Bind(ppc_cpu *c, provider *p)
     ot_complete(c, p, T_BINDCOMPLETE, result, ret);
 }
 
-void ota_Unbind(ppc_cpu *c, provider *p)
+/* What binding took: the name, the socket, the ADSP ends. */
+static void unbind(provider *p)
 {
     ot_atalk *a = p->at;
     if (a->nte) {
@@ -602,6 +607,11 @@ void ota_Unbind(ppc_cpu *c, provider *p)
     memset(a->out, 0, sizeof a->out);
     p->qlen = 0;
     p->state = T_UNBND;
+}
+
+void ota_Unbind(ppc_cpu *c, provider *p)
+{
+    unbind(p);
     ot_complete(c, p, T_UNBINDCOMPLETE, kOTNoError, 0);
 }
 
