@@ -320,6 +320,7 @@ void drivers_reset(void);                 /* the unit table, at boot */
 /* The whole screen in one window instead of rootless windows (display.c). */
 void display_want_screen(const char *why);
 void display_sync(void); /* the host's snapshots, at a safe point */
+void drag_host_pump(void); /* drags from the host, at the program's event calls */
 uint32_t qd_screen_row_bytes(void);
 int qd_screen_depth(void);
 bool driver_refnum(int16_t refnum);

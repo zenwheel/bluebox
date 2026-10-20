@@ -518,6 +518,12 @@ bool machine_waiting_for_input(void);
 
 /* Apple Events to the running app (as the Finder would send them). */
 void machine_open_documents(const char *const *paths, int n, bool print);
+/* A drag from the host's Finder or another program over the machine's
+ * windows: ENTER with its files (host paths) and text (UTF-8), then MOVE,
+ * and LEAVE or DROP, at Mac screen coordinates.  The program's Drag
+ * Manager handlers see it at its next event call. */
+enum { MACHINE_DRAG_ENTER, MACHINE_DRAG_MOVE, MACHINE_DRAG_LEAVE, MACHINE_DRAG_DROP };
+void machine_host_drag(int kind, int x, int y, const char *const *files, int nfiles, const char *text);
 void machine_send_open_application(void);
 void machine_send_quit(void);
 /* Ask the app to quit (Quit Application event, or its own Quit command). */

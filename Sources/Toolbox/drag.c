@@ -6,11 +6,14 @@
  * asks).  TrackDrag follows the mouse with the drag region's gray outline,
  * as DragGrayRgn draws it, sends the tracking handlers of the window under
  * the mouse their enter, in and leave messages, and on release offers the
- * drag to that window's receive handlers.  Drags to and from the host's
- * windows and the Finder are not part of it.
+ * drag to that window's receive handlers.  Files and text dragged from
+ * the Finder and other host programs come in the same way (machine_host_drag).
  */
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "forks.h"
 
 #include "qd_internal.h"
 #include "tb_internal.h"
@@ -58,6 +61,8 @@ typedef struct {
 } drag;
 
 static drag drags[MAX_DRAGS];
+static uint32_t host_ref;  /* a drag from the host being tracked (below) */
+static gaddr host_window;
 
 typedef struct {
     gaddr proc, window, refcon;
@@ -111,6 +116,8 @@ void drag_reset(void)
         if (drags[i].used)
             free_drag(&drags[i]);
     ntracking = nreceiving = 0;
+    host_ref = 0;
+    host_window = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -651,6 +658,8 @@ int8_t tb_WaitMouseMoved(uint32_t initialMouse)
     return 0;
 }
 
+static int16_t drop(uint32_t ref, gaddr w);
+
 int16_t tb_TrackDrag(uint32_t theDrag, gaddr theEvent, gaddr theRegion)
 {
     drag *d = get_drag(theDrag);
@@ -724,23 +733,193 @@ int16_t tb_TrackDrag(uint32_t theDrag, gaddr theEvent, gaddr theRegion)
 
     d->up_mods = ev_modifiers();
     d->mouse = d->pinned = ev_mouse_global();
+    int16_t result = drop(theDrag, current);
+    tb_SetPort(saved);
+    return result;
+}
+
+/* The drag ends over window w (or none): its receive handlers are offered
+ * it, and the tracking handlers told it has left. */
+static int16_t drop(uint32_t ref, gaddr w)
+{
     int16_t result = dragNotAcceptedErr;
-    if (current) {
-        tell(kDragTrackingLeaveWindow, current, theDrag);
+    if (w) {
+        tell(kDragTrackingLeaveWindow, w, ref);
         for (int i = 0; i < nreceiving && result != noErr; i++)
-            if (serves(&receiving[i], current)) {
+            if (serves(&receiving[i], w)) {
                 handler h = receiving[i];
-                result = call_receive(&h, current, theDrag) ? dragNotAcceptedErr : noErr;
+                result = call_receive(&h, w, ref) ? dragNotAcceptedErr : noErr;
             }
     }
     for (int i = 0; i < ntracking; i++)
         if (tracking[i].entered) {
             tracking[i].entered = false;
             handler h = tracking[i];
-            call_tracking(&h, kDragTrackingLeaveHandler, current, theDrag);
+            call_tracking(&h, kDragTrackingLeaveHandler, w, ref);
         }
-    tb_SetPort(saved);
     return result;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Drags from the host: files and text from the Finder and other programs.
+ * The host's calls are queued; at the program's next event call they are
+ * tracked through its handlers as its own drags are, and a drop goes to
+ * the receive handlers of the window under it.  Files a window takes no
+ * drags for open as an Open Documents event, as dropping them on the
+ * program's icon did. */
+
+enum { MAX_HOST_MSGS = 64 };
+static pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct { int kind, h, v; } host_msgs[MAX_HOST_MSGS];
+static int nhost_msgs;
+static char **pending_files, *pending_text; /* the next drag's items */
+static int npending_files;
+static char **host_files, *host_text;        /* the drag being tracked */
+static int nhost_files;
+static void free_items(char ***files, int *n, char **text)
+{
+    for (int i = 0; i < *n; i++)
+        free((*files)[i]);
+    free(*files);
+    free(*text);
+    *files = NULL;
+    *n = 0;
+    *text = NULL;
+}
+
+void machine_host_drag(int kind, int x, int y, const char *const *files, int nfiles, const char *text)
+{
+    pthread_mutex_lock(&host_lock);
+    if (kind == MACHINE_DRAG_ENTER) {
+        free_items(&pending_files, &npending_files, &pending_text);
+        pending_files = nfiles ? calloc((size_t)nfiles, sizeof *pending_files) : NULL;
+        for (int i = 0; i < nfiles; i++)
+            pending_files[i] = strdup(files[i]);
+        npending_files = nfiles;
+        pending_text = text ? strdup(text) : NULL;
+    }
+    if (nhost_msgs < MAX_HOST_MSGS) {
+        host_msgs[nhost_msgs].kind = kind;
+        host_msgs[nhost_msgs].h = x;
+        host_msgs[nhost_msgs++].v = y;
+    }
+    pthread_mutex_unlock(&host_lock);
+}
+
+static void add_flavor(drag *d, uint32_t item_ref, uint32_t type, const uint8_t *data, int32_t size)
+{
+    item *it = get_item(d, item_ref);
+    if (!it) {
+        d->items = realloc(d->items, sizeof *d->items * (size_t)(d->nitems + 1));
+        it = &d->items[d->nitems++];
+        memset(it, 0, sizeof *it);
+        it->ref = item_ref;
+    }
+    it->flavors = realloc(it->flavors, sizeof *it->flavors * (size_t)(it->nflavors + 1));
+    flavor *f = &it->flavors[it->nflavors++];
+    memset(f, 0, sizeof *f);
+    f->type = type;
+    f->size = size;
+    f->data = malloc(size ? (size_t)size : 1);
+    memcpy(f->data, data, (size_t)size);
+}
+
+/* A drag of the host's items: an HFSFlavor ('hfs ': type, creator, Finder
+ * flags, FSSpec) for each file, and the text as 'TEXT'. */
+static uint32_t host_drag_new(void)
+{
+    gaddr refp = tb_NewPtr(4, false, true);
+    int16_t err = tb_NewDrag(refp);
+    uint32_t ref = rd32(refp);
+    tb_DisposePtr(refp);
+    drag *d = err ? NULL : get_drag(ref);
+    if (!d)
+        return 0;
+    gaddr spec = tb_NewPtr(FSSpec_SIZEOF, false, true), info = tb_NewPtr(16, false, true);
+    for (int i = 0; i < nhost_files; i++) {
+        uint8_t hfs[10 + FSSpec_SIZEOF];
+        memset(hfs, 0, sizeof hfs);
+        fm_spec_for_path(host_files[i], spec);
+        if (tb_FSpGetFInfo(spec, info) == noErr) {
+            gget(hfs, info, 8);             /* fileType, fileCreator */
+            gget(hfs + 8, info + 8, 2);     /* fdFlags */
+        }
+        gget(hfs + 10, spec, FSSpec_SIZEOF);
+        add_flavor(d, (uint32_t)i + 1, fourcc("hfs "), hfs, (int32_t)sizeof hfs);
+    }
+    tb_DisposePtr(spec);
+    tb_DisposePtr(info);
+    if (host_text) {
+        size_t n = strlen(host_text);
+        uint8_t *mac = malloc(n + 1);
+        size_t m = utf8_to_macroman(host_text, mac, n + 1);
+        for (size_t k = 0; k < m; k++)
+            if (mac[k] == '\n')
+                mac[k] = '\r';
+        add_flavor(d, (uint32_t)nhost_files + 1, fourcc("TEXT"), mac, (int32_t)m);
+        free(mac);
+    }
+    return ref;
+}
+
+/* At the program's event calls: the host's drag messages, in order. */
+void drag_host_pump(void)
+{
+    for (;;) {
+        pthread_mutex_lock(&host_lock);
+        if (!nhost_msgs) {
+            pthread_mutex_unlock(&host_lock);
+            return;
+        }
+        int kind = host_msgs[0].kind;
+        uint32_t pt = make_pt((int16_t)host_msgs[0].v, (int16_t)host_msgs[0].h);
+        memmove(host_msgs, host_msgs + 1, sizeof host_msgs[0] * (size_t)--nhost_msgs);
+        if (kind == MACHINE_DRAG_ENTER) {
+            free_items(&host_files, &nhost_files, &host_text);
+            host_files = pending_files;
+            nhost_files = npending_files;
+            host_text = pending_text;
+            pending_files = NULL;
+            npending_files = 0;
+            pending_text = NULL;
+        }
+        pthread_mutex_unlock(&host_lock);
+
+        if (kind == MACHINE_DRAG_ENTER) {
+            if (host_ref)
+                tb_DisposeDrag(host_ref);
+            host_ref = host_drag_new();
+            host_window = 0;
+            for (int i = 0; i < ntracking; i++)
+                tracking[i].entered = false;
+        }
+        drag *d = get_drag(host_ref);
+        if (!d)
+            continue;
+        d->mouse = d->pinned = pt;
+        d->attributes = 0; /* from another application */
+        gaddr saved = qd_port();
+        gaddr w = kind == MACHINE_DRAG_LEAVE ? 0 : wm_window_at(pt);
+        if (kind == MACHINE_DRAG_DROP) {
+            if (w != host_window)
+                change_window(host_window, w, host_ref);
+            bool taken = drop(host_ref, w) == noErr;
+            if (!taken && nhost_files)
+                machine_open_documents((const char *const *)host_files, nhost_files, false);
+        } else if (w != host_window) {
+            change_window(host_window, w, host_ref);
+        } else if (w) {
+            tell(kDragTrackingInWindow, w, host_ref);
+        }
+        host_window = w;
+        tb_SetPort(saved);
+        if (kind == MACHINE_DRAG_DROP || kind == MACHINE_DRAG_LEAVE) {
+            tb_DisposeDrag(host_ref);
+            host_ref = 0;
+            host_window = 0;
+            free_items(&host_files, &nhost_files, &host_text);
+        }
+    }
 }
 
 /* The zoom animations: the drag snaps back at once. */

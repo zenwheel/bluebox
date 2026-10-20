@@ -198,6 +198,60 @@ extension BlueBox {
             #expect(tb_CountDragItems(drag, n) == -1850)                       // badDragRefErr
         }
 
+        /// A drag from the host: its files as 'hfs ' flavors and its text as
+        /// 'TEXT', tracked and dropped through the program's handlers; files
+        /// a window takes no drags for become an Open Documents event.
+        @Test func dragsFromTheHost() {
+            let dir = launchTestApp(sizeFlags: 0x0040)
+            _ = initToolbox()
+            let file = hostFile("note.txt", "hi", in: dir)
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [100, 100, 300, 400].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            _ = tb_NewWindow(0, r, tb_NewPtr(2, false, true), 1, 0, 0xFFFF_FFFF, 0, 0)
+
+            // Over the window: the drag exists with both items.
+            withCStrings([file.path]) { machine_host_drag(Int32(MACHINE_DRAG_ENTER), 200, 200, $0, 1, "café") }
+            drag_host_pump()
+            let drag: UInt32 = 0x4452_0001, n = tb_NewPtr(2, false, true), size = tb_NewPtr(4, false, true)
+            #expect(tb_CountDragItems(drag, n) == 0 && rd16(n) == 2)
+            #expect(tb_GetFlavorDataSize(drag, 1, Int32(bitPattern: fourCC("hfs ")), size) == 0 && rd32(size) == 80)
+            let text = tb_NewPtr(16, false, true)
+            wr32(size, 16)
+            #expect(tb_GetFlavorData(drag, 2, Int32(bitPattern: fourCC("TEXT")), text, size, 0) == 0)
+            #expect(rd32(size) == 4 && rd8(text + 3) == 0x8E) // é in MacRoman
+            machine_host_drag(Int32(MACHINE_DRAG_LEAVE), 0, 0, nil, 0, nil)
+            drag_host_pump()
+            #expect(tb_CountDragItems(drag, n) == -1850) // gone
+
+            // Dropped with no receive handler: the file opens.
+            withCStrings([file.path]) { machine_host_drag(Int32(MACHINE_DRAG_ENTER), 200, 200, $0, 1, nil) }
+            machine_host_drag(Int32(MACHINE_DRAG_DROP), 200, 200, nil, 0, nil)
+            drag_host_pump()
+            let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            func opened() -> Bool { // past the window's activate and update events
+                for _ in 0..<8 where tb_GetNextEvent(-1, e) != 0 {
+                    if rd16(e) == 23 && rd32(e + 10) == fourCC("odoc") { return true }
+                    if rd16(e) == 6 { tb_BeginUpdate(rd32(e + 2)); tb_EndUpdate(rd32(e + 2)) }
+                }
+                return false
+            }
+            #expect(opened())
+
+            // With one (68k: keep the drag reference, take the drop), nothing opens.
+            let got = tb_NewPtr(4, false, true)
+            let words: [UInt16] = [0x23EF, 0x0004, UInt16(got >> 16), UInt16(got & 0xFFFF), // MOVE.L 4(SP),got
+                                   0x426F, 0x0010,                                        // CLR.W 16(SP): noErr
+                                   0x205F, 0x4FEF, 0x000C, 0x4ED0]                         // pop and return
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            #expect(tb_InstallReceiveHandler(code, 0, 0) == 0)
+            withCStrings([file.path]) { machine_host_drag(Int32(MACHINE_DRAG_ENTER), 200, 200, $0, 1, nil) }
+            machine_host_drag(Int32(MACHINE_DRAG_DROP), 210, 210, nil, 0, nil)
+            drag_host_pump()
+            #expect(rd32(got) != 0)
+            #expect(!opened())
+        }
+
         @Test func hiliteRegionCoversTheSelection() {
             launchTestApp()
             _ = initToolbox()

@@ -20,12 +20,30 @@ final class ScreenView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: CursorSync.shared.cursor) }
 
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { FileDrops.operation(sender) }
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool { FileDrops.perform(sender) }
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        FileDrops.send(Int32(MACHINE_DRAG_ENTER), sender, at: mac(sender))
+    }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        FileDrops.send(Int32(MACHINE_DRAG_MOVE), sender, at: mac(sender))
+    }
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        if let sender { _ = FileDrops.send(Int32(MACHINE_DRAG_LEAVE), sender, at: mac(sender)) }
+    }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        FileDrops.send(Int32(MACHINE_DRAG_DROP), sender, at: mac(sender)) != []
+    }
+
+    /// A drag's point on the Mac screen.
+    private func mac(_ info: NSDraggingInfo) -> (Int32, Int32) {
+        let p = convert(info.draggingLocation, from: nil)
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
+        return (Int32(p.x * CGFloat(w) / bounds.width), Int32(p.y * CGFloat(h) / bounds.height))
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes(FileDrops.types)
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refreshIfChanged()
@@ -186,13 +204,40 @@ func sendOpenDocuments(_ urls: [URL]) -> Bool {
 /// Files dropped on a classic window open in the application, as dropping
 /// them on its icon in the Finder did (an Open Documents event): a playlist
 /// takes songs this way, a viewer opens pictures.
+/// Text and files dragged in go to the program's Drag Manager handlers for
+/// the window under the pointer (an 'hfs ' flavor per file, 'TEXT' for
+/// text); files a window doesn't take become an Open Documents event.
 @MainActor enum FileDrops {
+    static let types: [NSPasteboard.PasteboardType] = [.fileURL, .string]
+
     static func urls(_ info: NSDraggingInfo) -> [URL] {
         (info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
             as? [URL]) ?? []
     }
-    static func operation(_ info: NSDraggingInfo) -> NSDragOperation { urls(info).isEmpty ? [] : .copy }
-    static func perform(_ info: NSDraggingInfo) -> Bool { sendOpenDocuments(urls(info)) }
+
+    static func text(_ info: NSDraggingInfo) -> String? {
+        urls(info).isEmpty ? info.draggingPasteboard.string(forType: .string) : nil
+    }
+
+    /// The drag at Mac screen coordinates `at`.
+    static func send(_ kind: Int32, _ info: NSDraggingInfo, at: (Int32, Int32)) -> NSDragOperation {
+        let paths = urls(info).map(\.path), text = self.text(info)
+        guard !paths.isEmpty || text != nil else { return [] }
+        if kind == Int32(MACHINE_DRAG_ENTER) {
+            var cpaths = paths.map { strdup($0) }
+            cpaths.withUnsafeMutableBufferPointer { buf in
+                buf.baseAddress.map { base in
+                    base.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) { files in
+                        machine_host_drag(kind, at.0, at.1, files, Int32(buf.count), text)
+                    }
+                } ?? machine_host_drag(kind, at.0, at.1, nil, 0, text)
+            }
+            cpaths.forEach { free($0) }
+        } else {
+            machine_host_drag(kind, at.0, at.1, nil, 0, nil)
+        }
+        return .copy
+    }
 }
 
 /// Documents opened from the Finder or Dock become Open Documents events.

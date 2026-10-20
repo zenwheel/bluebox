@@ -74,12 +74,27 @@ final class MacWindowView: NSView {
     override var wantsUpdateLayer: Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: CursorSync.shared.cursor) }
 
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { FileDrops.operation(sender) }
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool { FileDrops.perform(sender) }
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        FileDrops.send(Int32(MACHINE_DRAG_ENTER), sender, at: mac(sender))
+    }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        FileDrops.send(Int32(MACHINE_DRAG_MOVE), sender, at: mac(sender))
+    }
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        if let sender { _ = FileDrops.send(Int32(MACHINE_DRAG_LEAVE), sender, at: mac(sender)) }
+    }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        FileDrops.send(Int32(MACHINE_DRAG_DROP), sender, at: mac(sender)) != []
+    }
+
+    /// A drag's point on the Mac screen.
+    private func mac(_ info: NSDraggingInfo) -> (Int32, Int32) {
+        hostToMac(window?.convertPoint(toScreen: info.draggingLocation) ?? info.draggingLocation)
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes(FileDrops.types)
         wantsLayer = true
         layer?.magnificationFilter = .nearest
         layer?.contentsGravity = .resize

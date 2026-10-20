@@ -524,6 +524,8 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     fm_flush_dirty();
     as_idle();
     appletalk_poll();
+    if (!os_only)
+        drag_host_pump();
     pthread_mutex_lock(&lock);
     event e = null_event();
     bool found = false;
