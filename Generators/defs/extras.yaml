@@ -47,7 +47,41 @@
 
 # MIDI Manager: SoundDispatch tool 4, (routine << 16) | 4 in D0.
 # MIDISignIn (FinaleUnknown2), MIDIAddPort (DirectorUnknown4) and the
-# version call (DirectorUnknown3) are in multiversal under other names.
+# version call (DirectorUnknown3) are in multiversal under other names;
+# InterfaceLib exports them under their own (MIDIVersion, a NumVersion,
+# is in ppc_libs.c).
+
+- function:
+    name: FinaleUnknown2
+    return: OSErr
+    args:
+      - name: clientID
+        type: OSType
+      - name: refCon
+        type: LONGINT
+      - name: icon
+        type: Handle
+      - name: name
+        type: ConstStringPtr
+    dispatcher: SoundDispatch
+    selector: 0x00040004
+    variants: [MIDISignIn]
+
+- function:
+    name: DirectorUnknown4
+    return: OSErr
+    args:
+      - name: clientID
+        type: OSType
+      - name: bufSize
+        type: INTEGER
+      - name: refnum
+        type: Ptr
+      - name: init
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x001C0004
+    variants: [MIDIAddPort]
 
 - function:
     name: MIDISignOut

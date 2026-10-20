@@ -3172,11 +3172,11 @@ static void glue_DirectorUnknown4(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
-    gaddr a_arg3 = (gaddr)cpu_pop32(c);
-    gaddr a_arg2 = (gaddr)cpu_pop32(c);
-    int16_t a_arg1 = (int16_t)cpu_pop16(c);
-    int32_t a_arg0 = (int32_t)cpu_pop32(c);
-    int16_t r = tb_DirectorUnknown4(a_arg0, a_arg1, a_arg2, a_arg3);
+    gaddr a_init = (gaddr)cpu_pop32(c);
+    gaddr a_refnum = (gaddr)cpu_pop32(c);
+    int16_t a_bufSize = (int16_t)cpu_pop16(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DirectorUnknown4(a_clientID, a_bufSize, a_refnum, a_init);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -4209,11 +4209,11 @@ static void glue_FinaleUnknown2(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
-    gaddr a_arg3 = (gaddr)cpu_pop32(c);
-    gaddr a_arg2 = (gaddr)cpu_pop32(c);
-    int32_t a_arg1 = (int32_t)cpu_pop32(c);
-    int32_t a_arg0 = (int32_t)cpu_pop32(c);
-    int16_t r = tb_FinaleUnknown2(a_arg0, a_arg1, a_arg2, a_arg3);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    gaddr a_icon = (gaddr)cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    int32_t a_clientID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FinaleUnknown2(a_clientID, a_refCon, a_icon, a_name);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
