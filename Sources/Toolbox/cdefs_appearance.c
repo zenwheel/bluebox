@@ -301,6 +301,28 @@ static void content_size(const ap_ctl *a, int *w, int *h)
     }
 }
 
+/* Too big for the room: icons drop to their small size, the rest shrink
+ * keeping their shape. */
+static void fit_content(const ap_ctl *a, qrect room, int *w, int *h)
+{
+    int rw = room.right - room.left, rh = room.bottom - room.top;
+    if (*w <= rw && *h <= rh)
+        return;
+    if (a->content_type != kControlContentPictRes && a->content_type != kControlContentPictHandle && rw >= 16 && rh >= 16) {
+        *w = *h = 16;
+        return;
+    }
+    if (*w <= 0 || *h <= 0 || rw <= 0 || rh <= 0)
+        return;
+    if ((long)*w * rh > (long)*h * rw) {
+        *h = *h * rw / *w;
+        *w = rw;
+    } else {
+        *w = *w * rh / *h;
+        *h = rh;
+    }
+}
+
 static void draw_content(const ap_ctl *a, qrect r, bool inactive)
 {
     if (!a->content || !rd32(a->content))
@@ -538,10 +560,7 @@ static void bevel_draw(gaddr ch, ap_ctl *a)
     title_of(ch, title, &n);
     int gw, gh;
     content_size(a, &gw, &gh);
-    if (gw > in.right - in.left || gh > in.bottom - in.top) { /* fit the small icons */
-        if (a->content_type == kControlContentIconSuiteRes || a->content_type == kControlContentIconSuiteHandle)
-            gw = gh = 16;
-    }
+    fit_content(a, in, &gw, &gh);
     qrect graphic = { 0, 0, 0, 0 }, text = in;
     if (gw && n) {
         int asc, desc;
@@ -1471,10 +1490,9 @@ static void well_draw(gaddr ch, ap_ctl *a)
     tb_DisposePtr(rp);
     int w, h;
     content_size(a, &w, &h);
+    fit_content(a, inset(r, 2), &w, &h);
     if (w)
-        draw_content(a, place(inset(r, 2), w > 32 && a->content_type != kControlContentPictRes ? 32 : w,
-                              h > 32 && a->content_type != kControlContentPictRes ? 32 : h, 0, 0, 0),
-                     chilite(ch) == 255);
+        draw_content(a, place(inset(r, 2), w, h, 0, 0, 0), chilite(ch) == 255);
 }
 
 static void clock_draw(gaddr ch, ap_ctl *a)
