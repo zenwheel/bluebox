@@ -137,6 +137,28 @@ Some useful options for `run`:
 `bluebox set <app> depth 8` (or `cpu`, `scale`) remembers a setting for one
 application. `bluebox --help` lists everything.
 
+### Networks, file servers and serial ports
+
+These can also be set per application, or for every application, in the
+shell's settings window or with `bluebox set` (`appletalk`, `modem-port`,
+`printer-port`, `appleshare`).
+
+| Option | |
+|---|---|
+| `--appletalk local` | AppleTalk between copies of Blue Box on this Mac (the default). |
+| `--appletalk lan` or `lan:en0` | AppleTalk on the local network as LocalTalk over UDP, the way other emulators and LToUDP routers speak it. Works over Wi-Fi. |
+| `--appletalk bridge:en5` | EtherTalk on a wired interface, with real Macs, netatalk servers and AppleTalk routers. It asks for an administrator password when AppleTalk opens. Wi-Fi isn't offered: AppleTalk doesn't get through it. A VM's network (UTM's `bridge100`) works. |
+| `--appletalk off` | No AppleTalk. |
+| `--appleshare tcp:host/Volume` | Mount a file server's volume as a disk while the program runs (AFP over TCP, e.g. netatalk or Mac OS 9 file sharing). |
+| `--appleshare atalk:Server:AFPServer@*/Volume` | The same over AppleTalk (with `--appletalk` on). Put `user:password@` before the server to log in; without it you are a guest. Repeatable. |
+| `--modem-port S`, `--printer-port S` | What a serial port connects to: `modem` (the modem port's default: a Hayes modem whose `ATDT host:port` dials over TCP), `modem:PORT` (one that also answers calls to PORT), `tcp:HOST:PORT`, `listen:PORT`, `pty`, a device such as `/dev/cu.usbserial`, or `none` (the printer port's default). |
+| `--realtime` | Headless runs follow real time, so networked copies agree on it. |
+
+MacTCP programs (Fetch, Eudora, IRC and Telnet clients) use the Mac's own
+network with no setup, over Wi-Fi and VPNs too. MIDI Manager programs play
+through the Mac's General MIDI synthesizer, or to and from CoreMIDI devices
+when there are any.
+
 ## What's in the repository
 
 | | |
