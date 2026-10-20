@@ -1375,11 +1375,6 @@ static void g_SetEnvirons(ppc_cpu *c)
     RETURN((uint32_t)(int32_t)tb_SetScriptManagerVariable((int16_t)R(0), (int32_t)R(1)));
 }
 
-/* StandardAlert(type, error, explanation, param, &itemHit) (AppearanceLib) */
-static void g_StandardAlert(ppc_cpu *c)
-{
-    RETURN((uint32_t)(int32_t)dialog_standard_alert((int16_t)R(0), R(1), R(2), R(3), R(4)));
-}
 
 /* SetSoundOutputInfo: settings are the host's; accepted and kept nowhere. */
 static void g_SetSoundOutputInfo(ppc_cpu *c) { RETURN(noErr); }
@@ -2746,7 +2741,7 @@ const ppc_export lib_exports[] = {
     { "AEObjectInit", g_noErr }, { "AESetObjectCallbacks", g_noErr }, { "AEInstallObjectAccessor", g_noErr },
     { "AERemoveObjectAccessor", g_noErr }, { "AEGetObjectAccessor", os_accessorNotFound },
     { "AEResolve", os_AEResolve }, { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },
-    { "GetSoundOutputInfo", g_GetSoundOutputInfo }, { "StandardAlert", g_StandardAlert },
+    { "GetSoundOutputInfo", g_GetSoundOutputInfo },
     { "GetScript", g_GetScript }, { "SetScript", g_SetScript }, { "GetEnvirons", g_GetEnvirons },
     { "SetEnvirons", g_SetEnvirons }, { "SetSoundOutputInfo", g_SetSoundOutputInfo },
     { "FindWordBreaks", g_FindWordBreaks }, { "UppercaseStripDiacritics", g_UppercaseStripDiacritics },

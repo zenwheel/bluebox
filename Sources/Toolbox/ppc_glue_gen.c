@@ -10926,6 +10926,1406 @@ static void ppcglue_GetAuxWin(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_RegisterAppearanceClient(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_RegisterAppearanceClient();
+    c->pc = c->lr;
+}
+
+static void ppcglue_UnregisterAppearanceClient(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_UnregisterAppearanceClient();
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsAppearanceClient(ppc_cpu *c)
+{
+    gaddr a_process = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsAppearanceClient(a_process);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetThemePen(ppc_cpu *c)
+{
+    int16_t a_brush = (int16_t)c->gpr[3];
+    int16_t a_depth = (int16_t)c->gpr[4];
+    int8_t a_isColorDevice = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetThemePen(a_brush, a_depth, a_isColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetThemeBackground(ppc_cpu *c)
+{
+    int16_t a_brush = (int16_t)c->gpr[3];
+    int16_t a_depth = (int16_t)c->gpr[4];
+    int8_t a_isColorDevice = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetThemeBackground(a_brush, a_depth, a_isColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetThemeTextColor(ppc_cpu *c)
+{
+    int16_t a_color = (int16_t)c->gpr[3];
+    int16_t a_depth = (int16_t)c->gpr[4];
+    int8_t a_isColorDevice = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetThemeTextColor(a_color, a_depth, a_isColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetThemeWindowBackground(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    int16_t a_brush = (int16_t)c->gpr[4];
+    int8_t a_update = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetThemeWindowBackground(a_window, a_brush, a_update);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeWindowHeader(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeWindowHeader(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeWindowListViewHeader(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeWindowListViewHeader(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemePlacard(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemePlacard(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeModelessDialogFrame(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeModelessDialogFrame(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeEditTextFrame(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeEditTextFrame(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeListBoxFrame(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeListBoxFrame(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeFocusRect(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    int8_t a_hasFocus = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeFocusRect(a_r, a_hasFocus);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemePrimaryGroup(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemePrimaryGroup(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeSecondaryGroup(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeSecondaryGroup(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeSeparator(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeSeparator(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeMenuBarBackground(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint16_t a_state = (uint16_t)c->gpr[4];
+    uint32_t a_attributes = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_DrawThemeMenuBarBackground(a_r, a_state, a_attributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeMenuTitle(ppc_cpu *c)
+{
+    gaddr a_menuBar = (gaddr)c->gpr[3];
+    gaddr a_title = (gaddr)c->gpr[4];
+    uint16_t a_state = (uint16_t)c->gpr[5];
+    uint32_t a_attributes = (uint32_t)c->gpr[6];
+    gaddr a_titleProc = (gaddr)c->gpr[7];
+    uint32_t a_titleData = (uint32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_DrawThemeMenuTitle(a_menuBar, a_title, a_state, a_attributes, a_titleProc, a_titleData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeMenuBarHeight(ppc_cpu *c)
+{
+    gaddr a_height = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetThemeMenuBarHeight(a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeMenuBackground(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint16_t a_menuType = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeMenuBackground(a_r, a_menuType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeMenuBackgroundRegion(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint16_t a_menuType = (uint16_t)c->gpr[4];
+    gaddr a_region = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetThemeMenuBackgroundRegion(a_r, a_menuType, a_region);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeMenuItem(ppc_cpu *c)
+{
+    gaddr a_menuRect = (gaddr)c->gpr[3];
+    gaddr a_itemRect = (gaddr)c->gpr[4];
+    int16_t a_virtualTop = (int16_t)c->gpr[5];
+    int16_t a_virtualBottom = (int16_t)c->gpr[6];
+    uint16_t a_state = (uint16_t)c->gpr[7];
+    uint16_t a_itemType = (uint16_t)c->gpr[8];
+    gaddr a_drawProc = (gaddr)c->gpr[9];
+    uint32_t a_userData = (uint32_t)c->gpr[10];
+    c->gpr[3] = (uint32_t)tb_DrawThemeMenuItem(a_menuRect, a_itemRect, a_virtualTop, a_virtualBottom, a_state, a_itemType, a_drawProc, a_userData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeMenuSeparator(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_DrawThemeMenuSeparator(a_r);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeMenuSeparatorHeight(ppc_cpu *c)
+{
+    gaddr a_height = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetThemeMenuSeparatorHeight(a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeMenuItemExtra(ppc_cpu *c)
+{
+    uint16_t a_itemType = (uint16_t)c->gpr[3];
+    gaddr a_height = (gaddr)c->gpr[4];
+    gaddr a_width = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetThemeMenuItemExtra(a_itemType, a_height, a_width);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeMenuTitleExtra(ppc_cpu *c)
+{
+    gaddr a_width = (gaddr)c->gpr[3];
+    int8_t a_squished = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetThemeMenuTitleExtra(a_width, a_squished);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeGenericWell(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    int8_t a_fillCenter = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_DrawThemeGenericWell(a_r, a_state, a_fillCenter);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeFocusRegion(ppc_cpu *c)
+{
+    gaddr a_region = (gaddr)c->gpr[3];
+    int8_t a_hasFocus = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeFocusRegion(a_region, a_hasFocus);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsThemeInColor(ppc_cpu *c)
+{
+    int16_t a_depth = (int16_t)c->gpr[3];
+    int8_t a_isColorDevice = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsThemeInColor(a_depth, a_isColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeAccentColors(ppc_cpu *c)
+{
+    gaddr a_colors = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetThemeAccentColors(a_colors);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PlayThemeSound(ppc_cpu *c)
+{
+    int32_t a_kind = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_PlayThemeSound(a_kind);
+    c->pc = c->lr;
+}
+
+static void ppcglue_BeginThemeDragSound(ppc_cpu *c)
+{
+    int32_t a_kind = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_BeginThemeDragSound(a_kind);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EndThemeDragSound(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_EndThemeDragSound();
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeTabPane(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeTabPane(a_r, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeTab(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint16_t a_style = (uint16_t)c->gpr[4];
+    uint16_t a_direction = (uint16_t)c->gpr[5];
+    gaddr a_labelProc = (gaddr)c->gpr[6];
+    uint32_t a_userData = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_DrawThemeTab(a_r, a_style, a_direction, a_labelProc, a_userData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeTabRegion(ppc_cpu *c)
+{
+    gaddr a_r = (gaddr)c->gpr[3];
+    uint16_t a_style = (uint16_t)c->gpr[4];
+    uint16_t a_direction = (uint16_t)c->gpr[5];
+    gaddr a_region = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetThemeTabRegion(a_r, a_style, a_direction, a_region);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetThemeCursor(ppc_cpu *c)
+{
+    uint32_t a_cursor = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_SetThemeCursor(a_cursor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetAnimatedThemeCursor(ppc_cpu *c)
+{
+    uint32_t a_cursor = (uint32_t)c->gpr[3];
+    uint32_t a_step = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetAnimatedThemeCursor(a_cursor, a_step);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeScrollBarThumbStyle(ppc_cpu *c)
+{
+    gaddr a_style = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetThemeScrollBarThumbStyle(a_style);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeScrollBarArrowStyle(ppc_cpu *c)
+{
+    gaddr a_style = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetThemeScrollBarArrowStyle(a_style);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeCheckBoxStyle(ppc_cpu *c)
+{
+    gaddr a_style = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetThemeCheckBoxStyle(a_style);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UseThemeFont(ppc_cpu *c)
+{
+    uint16_t a_fontID = (uint16_t)c->gpr[3];
+    int16_t a_script = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_UseThemeFont(a_fontID, a_script);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeFont(ppc_cpu *c)
+{
+    uint16_t a_fontID = (uint16_t)c->gpr[3];
+    int16_t a_script = (int16_t)c->gpr[4];
+    gaddr a_fontName = (gaddr)c->gpr[5];
+    gaddr a_fontSize = (gaddr)c->gpr[6];
+    gaddr a_style = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_GetThemeFont(a_fontID, a_script, a_fontName, a_fontSize, a_style);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeTrack(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    gaddr a_ghost = (gaddr)c->gpr[4];
+    gaddr a_eraseProc = (gaddr)c->gpr[5];
+    uint32_t a_eraseData = (uint32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_DrawThemeTrack(a_info, a_ghost, a_eraseProc, a_eraseData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HitTestThemeTrack(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    uint32_t a_pt = (uint32_t)c->gpr[4];
+    gaddr a_part = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_HitTestThemeTrack(a_info, a_pt, a_part);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeTrackBounds(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    gaddr a_bounds = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetThemeTrackBounds(a_info, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeTrackThumbRgn(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    gaddr a_thumb = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetThemeTrackThumbRgn(a_info, a_thumb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeTrackDragRect(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    gaddr a_dragRect = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetThemeTrackDragRect(a_info, a_dragRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeTrackTickMarks(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    uint32_t a_count = (uint32_t)c->gpr[4];
+    gaddr a_eraseProc = (gaddr)c->gpr[5];
+    uint32_t a_eraseData = (uint32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_DrawThemeTrackTickMarks(a_info, a_count, a_eraseProc, a_eraseData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeTrackThumbPositionFromOffset(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    uint32_t a_offset = (uint32_t)c->gpr[4];
+    gaddr a_position = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetThemeTrackThumbPositionFromOffset(a_info, a_offset, a_position);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeTrackThumbPositionFromRegion(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    gaddr a_thumb = (gaddr)c->gpr[4];
+    gaddr a_position = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetThemeTrackThumbPositionFromRegion(a_info, a_thumb, a_position);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeTrackLiveValue(ppc_cpu *c)
+{
+    gaddr a_info = (gaddr)c->gpr[3];
+    int32_t a_position = (int32_t)c->gpr[4];
+    gaddr a_value = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetThemeTrackLiveValue(a_info, a_position, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeScrollBarArrows(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint8_t a_enableState = (uint8_t)c->gpr[4];
+    uint8_t a_pressState = (uint8_t)c->gpr[5];
+    int8_t a_horizontal = (int8_t)c->gpr[6];
+    gaddr a_trackBounds = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_DrawThemeScrollBarArrows(a_bounds, a_enableState, a_pressState, a_horizontal, a_trackBounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeScrollBarTrackRect(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint8_t a_enableState = (uint8_t)c->gpr[4];
+    uint8_t a_pressState = (uint8_t)c->gpr[5];
+    int8_t a_horizontal = (int8_t)c->gpr[6];
+    gaddr a_trackBounds = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_GetThemeScrollBarTrackRect(a_bounds, a_enableState, a_pressState, a_horizontal, a_trackBounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HitTestThemeScrollBarArrows(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint8_t a_enableState = (uint8_t)c->gpr[4];
+    uint8_t a_pressState = (uint8_t)c->gpr[5];
+    int8_t a_horizontal = (int8_t)c->gpr[6];
+    uint32_t a_pt = (uint32_t)c->gpr[7];
+    gaddr a_trackBounds = (gaddr)c->gpr[8];
+    gaddr a_part = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_HitTestThemeScrollBarArrows(a_bounds, a_enableState, a_pressState, a_horizontal, a_pt, a_trackBounds, a_part);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeWindowRegion(ppc_cpu *c)
+{
+    uint16_t a_flavor = (uint16_t)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    uint32_t a_state = (uint32_t)c->gpr[5];
+    gaddr a_metrics = (gaddr)c->gpr[6];
+    uint32_t a_attributes = (uint32_t)c->gpr[7];
+    uint16_t a_regionCode = (uint16_t)c->gpr[8];
+    gaddr a_region = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_GetThemeWindowRegion(a_flavor, a_content, a_state, a_metrics, a_attributes, a_regionCode, a_region);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeWindowFrame(ppc_cpu *c)
+{
+    uint16_t a_flavor = (uint16_t)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    uint32_t a_state = (uint32_t)c->gpr[5];
+    gaddr a_metrics = (gaddr)c->gpr[6];
+    uint32_t a_attributes = (uint32_t)c->gpr[7];
+    gaddr a_titleProc = (gaddr)c->gpr[8];
+    uint32_t a_titleData = (uint32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_DrawThemeWindowFrame(a_flavor, a_content, a_state, a_metrics, a_attributes, a_titleProc, a_titleData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeTitleBarWidget(ppc_cpu *c)
+{
+    uint16_t a_flavor = (uint16_t)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    uint32_t a_state = (uint32_t)c->gpr[5];
+    gaddr a_metrics = (gaddr)c->gpr[6];
+    uint32_t a_attributes = (uint32_t)c->gpr[7];
+    uint16_t a_widget = (uint16_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_DrawThemeTitleBarWidget(a_flavor, a_content, a_state, a_metrics, a_attributes, a_widget);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeWindowRegionHit(ppc_cpu *c)
+{
+    uint16_t a_flavor = (uint16_t)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    uint32_t a_state = (uint32_t)c->gpr[5];
+    gaddr a_metrics = (gaddr)c->gpr[6];
+    uint32_t a_attributes = (uint32_t)c->gpr[7];
+    uint32_t a_pt = (uint32_t)c->gpr[8];
+    gaddr a_regionHit = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetThemeWindowRegionHit(a_flavor, a_content, a_state, a_metrics, a_attributes, a_pt, a_regionHit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeScrollBarDelimiters(ppc_cpu *c)
+{
+    uint16_t a_flavor = (uint16_t)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    uint32_t a_state = (uint32_t)c->gpr[5];
+    uint32_t a_attributes = (uint32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_DrawThemeScrollBarDelimiters(a_flavor, a_content, a_state, a_attributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeButton(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint16_t a_kind = (uint16_t)c->gpr[4];
+    gaddr a_newInfo = (gaddr)c->gpr[5];
+    gaddr a_prevInfo = (gaddr)c->gpr[6];
+    gaddr a_eraseProc = (gaddr)c->gpr[7];
+    gaddr a_labelProc = (gaddr)c->gpr[8];
+    uint32_t a_userData = (uint32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_DrawThemeButton(a_bounds, a_kind, a_newInfo, a_prevInfo, a_eraseProc, a_labelProc, a_userData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeButtonRegion(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint16_t a_kind = (uint16_t)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    gaddr a_region = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetThemeButtonRegion(a_bounds, a_kind, a_info, a_region);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeButtonContentBounds(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint16_t a_kind = (uint16_t)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    gaddr a_content = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetThemeButtonContentBounds(a_bounds, a_kind, a_info, a_content);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeButtonBackgroundBounds(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint16_t a_kind = (uint16_t)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    gaddr a_background = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetThemeButtonBackgroundBounds(a_bounds, a_kind, a_info, a_background);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeTickMark(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint32_t a_state = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_DrawThemeTickMark(a_bounds, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeChasingArrows(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint32_t a_index = (uint32_t)c->gpr[4];
+    uint32_t a_state = (uint32_t)c->gpr[5];
+    gaddr a_eraseProc = (gaddr)c->gpr[6];
+    uint32_t a_eraseData = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_DrawThemeChasingArrows(a_bounds, a_index, a_state, a_eraseProc, a_eraseData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemePopupArrow(ppc_cpu *c)
+{
+    gaddr a_bounds = (gaddr)c->gpr[3];
+    uint16_t a_orientation = (uint16_t)c->gpr[4];
+    uint16_t a_size = (uint16_t)c->gpr[5];
+    uint32_t a_state = (uint32_t)c->gpr[6];
+    gaddr a_eraseProc = (gaddr)c->gpr[7];
+    uint32_t a_eraseData = (uint32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_DrawThemePopupArrow(a_bounds, a_orientation, a_size, a_state, a_eraseProc, a_eraseData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeStandaloneGrowBox(ppc_cpu *c)
+{
+    uint32_t a_origin = (uint32_t)c->gpr[3];
+    uint16_t a_direction = (uint16_t)c->gpr[4];
+    int8_t a_small = (int8_t)c->gpr[5];
+    uint32_t a_state = (uint32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_DrawThemeStandaloneGrowBox(a_origin, a_direction, a_small, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawThemeStandaloneNoGrowBox(ppc_cpu *c)
+{
+    uint32_t a_origin = (uint32_t)c->gpr[3];
+    uint16_t a_direction = (uint16_t)c->gpr[4];
+    int8_t a_small = (int8_t)c->gpr[5];
+    uint32_t a_state = (uint32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_DrawThemeStandaloneNoGrowBox(a_origin, a_direction, a_small, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeStandaloneGrowBoxBounds(ppc_cpu *c)
+{
+    uint32_t a_origin = (uint32_t)c->gpr[3];
+    uint16_t a_direction = (uint16_t)c->gpr[4];
+    int8_t a_small = (int8_t)c->gpr[5];
+    gaddr a_bounds = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetThemeStandaloneGrowBoxBounds(a_origin, a_direction, a_small, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NormalizeThemeDrawingState(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_NormalizeThemeDrawingState();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeDrawingState(ppc_cpu *c)
+{
+    gaddr a_state = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetThemeDrawingState(a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetThemeDrawingState(ppc_cpu *c)
+{
+    gaddr a_state = (gaddr)c->gpr[3];
+    int8_t a_disposeNow = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetThemeDrawingState(a_state, a_disposeNow);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeThemeDrawingState(ppc_cpu *c)
+{
+    gaddr a_state = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_DisposeThemeDrawingState(a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ApplyThemeBackground(ppc_cpu *c)
+{
+    uint32_t a_kind = (uint32_t)c->gpr[3];
+    gaddr a_bounds = (gaddr)c->gpr[4];
+    uint32_t a_state = (uint32_t)c->gpr[5];
+    int16_t a_depth = (int16_t)c->gpr[6];
+    int8_t a_isColorDevice = (int8_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_ApplyThemeBackground(a_kind, a_bounds, a_state, a_depth, a_isColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetThemeTextColorForWindow(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    int8_t a_active = (int8_t)c->gpr[4];
+    int16_t a_depth = (int16_t)c->gpr[5];
+    int8_t a_isColorDevice = (int8_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_SetThemeTextColorForWindow(a_window, a_active, a_depth, a_isColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsValidAppearanceFileType(ppc_cpu *c)
+{
+    int32_t a_fileType = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsValidAppearanceFileType(a_fileType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeBrushAsColor(ppc_cpu *c)
+{
+    int16_t a_brush = (int16_t)c->gpr[3];
+    int16_t a_depth = (int16_t)c->gpr[4];
+    int8_t a_isColorDevice = (int8_t)c->gpr[5];
+    gaddr a_color = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetThemeBrushAsColor(a_brush, a_depth, a_isColorDevice, a_color);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeTextColor(ppc_cpu *c)
+{
+    int16_t a_color = (int16_t)c->gpr[3];
+    int16_t a_depth = (int16_t)c->gpr[4];
+    int8_t a_isColorDevice = (int8_t)c->gpr[5];
+    gaddr a_outColor = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetThemeTextColor(a_color, a_depth, a_isColorDevice, a_outColor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetThemeMetric(ppc_cpu *c)
+{
+    uint32_t a_metric = (uint32_t)c->gpr[3];
+    gaddr a_value = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetThemeMetric(a_metric, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateRootControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_control = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateRootControl(a_window, a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetRootControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_control = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetRootControl(a_window, a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EmbedControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_container = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EmbedControl(a_control, a_container);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AutoEmbedControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_window = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AutoEmbedControl(a_control, a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsControlActive(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsControlActive(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsControlVisible(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsControlVisible(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ActivateControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ActivateControl(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeactivateControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeactivateControl(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindControlUnderMouse(ppc_cpu *c)
+{
+    uint32_t a_where = (uint32_t)c->gpr[3];
+    gaddr a_window = (gaddr)c->gpr[4];
+    gaddr a_part = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_FindControlUnderMouse(a_where, a_window, a_part);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlClick(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    uint32_t a_where = (uint32_t)c->gpr[4];
+    int16_t a_modifiers = (int16_t)c->gpr[5];
+    gaddr a_action = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HandleControlClick(a_control, a_where, a_modifiers, a_action);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlKey(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_keyCode = (int16_t)c->gpr[4];
+    int16_t a_charCode = (int16_t)c->gpr[5];
+    int16_t a_modifiers = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HandleControlKey(a_control, a_keyCode, a_charCode, a_modifiers);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IdleControls(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    tb_IdleControls(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_control = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetKeyboardFocus(a_window, a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_control = (gaddr)c->gpr[4];
+    int16_t a_part = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetKeyboardFocus(a_window, a_control, a_part);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AdvanceKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AdvanceKeyboardFocus(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ReverseKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ReverseKeyboardFocus(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlFeatures(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_features = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlFeatures(a_control, a_features);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlData(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_part = (int16_t)c->gpr[4];
+    int32_t a_tag = (int32_t)c->gpr[5];
+    int32_t a_size = (int32_t)c->gpr[6];
+    gaddr a_data = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetControlData(a_control, a_part, a_tag, a_size, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlData(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_part = (int16_t)c->gpr[4];
+    int32_t a_tag = (int32_t)c->gpr[5];
+    int32_t a_bufferSize = (int32_t)c->gpr[6];
+    gaddr a_buffer = (gaddr)c->gpr[7];
+    gaddr a_actualSize = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlData(a_control, a_part, a_tag, a_bufferSize, a_buffer, a_actualSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlDataSize(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_part = (int16_t)c->gpr[4];
+    int32_t a_tag = (int32_t)c->gpr[5];
+    gaddr a_maxSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlDataSize(a_control, a_part, a_tag, a_maxSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSuperControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_parent = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetSuperControl(a_control, a_parent);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountSubControls(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_count = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountSubControls(a_control, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIndexedSubControl(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    uint16_t a_index = (uint16_t)c->gpr[4];
+    gaddr a_sub = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIndexedSubControl(a_control, a_index, a_sub);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawControlInCurrentPort(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    tb_DrawControlInCurrentPort(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ClearKeyboardFocus(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ClearKeyboardFocus(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlSupervisor(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_boss = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetControlSupervisor(a_control, a_boss);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBestControlRect(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_rect = (gaddr)c->gpr[4];
+    gaddr a_baseLineOffset = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBestControlRect(a_control, a_rect, a_baseLineOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlFontStyle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_style = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetControlFontStyle(a_control, a_style);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetUpControlBackground(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_depth = (int16_t)c->gpr[4];
+    int8_t a_isColorDevice = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetUpControlBackground(a_control, a_depth, a_isColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlVisibility(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int8_t a_visible = (int8_t)c->gpr[4];
+    int8_t a_draw = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetControlVisibility(a_control, a_visible, a_draw);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SendControlMessage(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_message = (int16_t)c->gpr[4];
+    int32_t a_param = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SendControlMessage(a_control, a_message, a_param);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DumpControlHierarchy(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_file = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DumpControlHierarchy(a_window, a_file);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBevelButtonMenuValue(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    gaddr a_value = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBevelButtonMenuValue(a_button, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonMenuValue(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_value = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonMenuValue(a_button, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBevelButtonMenuHandle(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    gaddr a_menu = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBevelButtonMenuHandle(a_button, a_menu);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBevelButtonContentInfo(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBevelButtonContentInfo(a_button, a_content);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonContentInfo(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonContentInfo(a_button, a_content);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonTransform(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_transform = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonTransform(a_button, a_transform);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonGraphicAlignment(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_align = (int16_t)c->gpr[4];
+    int16_t a_hOffset = (int16_t)c->gpr[5];
+    int16_t a_vOffset = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonGraphicAlignment(a_button, a_align, a_hOffset, a_vOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonTextAlignment(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_align = (int16_t)c->gpr[4];
+    int16_t a_hOffset = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonTextAlignment(a_button, a_align, a_hOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetBevelButtonTextPlacement(ppc_cpu *c)
+{
+    gaddr a_button = (gaddr)c->gpr[3];
+    int16_t a_where = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetBevelButtonTextPlacement(a_button, a_where);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetImageWellContentInfo(ppc_cpu *c)
+{
+    gaddr a_well = (gaddr)c->gpr[3];
+    gaddr a_content = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetImageWellContentInfo(a_well, a_content);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetImageWellTransform(ppc_cpu *c)
+{
+    gaddr a_well = (gaddr)c->gpr[3];
+    int16_t a_transform = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetImageWellTransform(a_well, a_transform);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTabEnabled(ppc_cpu *c)
+{
+    gaddr a_tabs = (gaddr)c->gpr[3];
+    int16_t a_tab = (int16_t)c->gpr[4];
+    int8_t a_enabled = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetTabEnabled(a_tabs, a_tab, a_enabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDisclosureTriangleLastValue(ppc_cpu *c)
+{
+    gaddr a_triangle = (gaddr)c->gpr[3];
+    int16_t a_value = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDisclosureTriangleLastValue(a_triangle, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewFeaturesDialog(ppc_cpu *c)
+{
+    gaddr a_storage = (gaddr)c->gpr[3];
+    gaddr a_bounds = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int8_t a_visible = (int8_t)c->gpr[6];
+    int16_t a_procID = (int16_t)c->gpr[7];
+    gaddr a_behind = (gaddr)c->gpr[8];
+    int8_t a_goAway = (int8_t)c->gpr[9];
+    int32_t a_refCon = (int32_t)c->gpr[10];
+    gaddr a_items = (gaddr)rd32(c->gpr[1] + 56);
+    uint32_t a_flags = (uint32_t)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)tb_NewFeaturesDialog(a_storage, a_bounds, a_title, a_visible, a_procID, a_behind, a_goAway, a_refCon, a_items, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AutoSizeDialog(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AutoSizeDialog(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_StandardAlert(ppc_cpu *c)
+{
+    int16_t a_alertType = (int16_t)c->gpr[3];
+    gaddr a_error = (gaddr)c->gpr[4];
+    gaddr a_explanation = (gaddr)c->gpr[5];
+    gaddr a_param = (gaddr)c->gpr[6];
+    gaddr a_itemHit = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_StandardAlert(a_alertType, a_error, a_explanation, a_param, a_itemHit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogItemAsControl(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_control = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDialogItemAsControl(a_dialog, a_item, a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MoveDialogItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_h = (int16_t)c->gpr[5];
+    int16_t a_v = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MoveDialogItem(a_dialog, a_item, a_h, a_v);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SizeDialogItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_width = (int16_t)c->gpr[5];
+    int16_t a_height = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SizeDialogItem(a_dialog, a_item, a_width, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AppendDialogItemList(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    int16_t a_ditlID = (int16_t)c->gpr[4];
+    int16_t a_method = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AppendDialogItemList(a_dialog, a_ditlID, a_method);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MenuEvent(ppc_cpu *c)
+{
+    gaddr a_event = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_MenuEvent(a_event);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemCommandID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint32_t a_commandID = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemCommandID(a_menu, a_item, a_commandID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemCommandID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_commandID = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemCommandID(a_menu, a_item, a_commandID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemModifiers(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint8_t a_modifiers = (uint8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemModifiers(a_menu, a_item, a_modifiers);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemModifiers(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_modifiers = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemModifiers(a_menu, a_item, a_modifiers);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemIconHandle(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint8_t a_iconType = (uint8_t)c->gpr[5];
+    gaddr a_icon = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemIconHandle(a_menu, a_item, a_iconType, a_icon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemIconHandle(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_iconType = (gaddr)c->gpr[5];
+    gaddr a_icon = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemIconHandle(a_menu, a_item, a_iconType, a_icon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemTextEncoding(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint32_t a_encoding = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemTextEncoding(a_menu, a_item, a_encoding);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemTextEncoding(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_encoding = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemTextEncoding(a_menu, a_item, a_encoding);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemHierarchicalID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_hierID = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemHierarchicalID(a_menu, a_item, a_hierID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemHierarchicalID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_hierID = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemHierarchicalID(a_menu, a_item, a_hierID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemFontID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_fontID = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemFontID(a_menu, a_item, a_fontID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemFontID(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_fontID = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemFontID(a_menu, a_item, a_fontID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemRefCon(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint32_t a_refCon = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemRefCon(a_menu, a_item, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemRefCon(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_refCon = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemRefCon(a_menu, a_item, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemRefCon2(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    uint32_t a_refCon2 = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemRefCon2(a_menu, a_item, a_refCon2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemRefCon2(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_refCon2 = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemRefCon2(a_menu, a_item, a_refCon2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemKeyGlyph(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int16_t a_glyph = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemKeyGlyph(a_menu, a_item, a_glyph);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemKeyGlyph(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_glyph = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemKeyGlyph(a_menu, a_item, a_glyph);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsMenuItemIconEnabled(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    uint16_t a_item = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsMenuItemIconEnabled(a_menu, a_item);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EnableMenuItemIcon(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    uint16_t a_item = (uint16_t)c->gpr[4];
+    tb_EnableMenuItemIcon(a_menu, a_item);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisableMenuItemIcon(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    uint16_t a_item = (uint16_t)c->gpr[4];
+    tb_DisableMenuItemIcon(a_menu, a_item);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuFont(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    gaddr a_fontID = (gaddr)c->gpr[4];
+    gaddr a_fontSize = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetMenuFont(a_menu, a_fontID, a_fontSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuFont(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_fontID = (int16_t)c->gpr[4];
+    uint16_t a_fontSize = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetMenuFont(a_menu, a_fontID, a_fontSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuExcludesMarkColumn(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetMenuExcludesMarkColumn(a_menu);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuExcludesMarkColumn(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int8_t a_excludesMark = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetMenuExcludesMarkColumn(a_menu, a_excludesMark);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -24584,6 +25984,7 @@ const ppc_export ppc_exports[] = {
     {"AESuspendTheCurrentEvent", ppcglue_AESuspendTheCurrentEvent},
     {"AbortPrePrerollMovie", ppctrap_AbortPrePrerollMovie},
     {"AcceptHighLevelEvent", ppcglue_AcceptHighLevelEvent},
+    {"ActivateControl", ppcglue_ActivateControl},
     {"ActivatePalette", ppcglue_ActivatePalette},
     {"AddCallBackToTimeBase", ppctrap_AddCallBackToTimeBase},
     {"AddClonedTrackToMovie", ppctrap_AddClonedTrackToMovie},
@@ -24612,6 +26013,7 @@ const ppc_export ppc_exports[] = {
     {"AddTrackReference", ppctrap_AddTrackReference},
     {"AddUserData", ppctrap_AddUserData},
     {"AddUserDataText", ppctrap_AddUserDataText},
+    {"AdvanceKeyboardFocus", ppcglue_AdvanceKeyboardFocus},
     {"Alert", ppcglue_Alert},
     {"AlignScreenRect", ppcglue_AlignScreenRect},
     {"AlignWindow", ppcglue_AlignWindow},
@@ -24621,15 +26023,20 @@ const ppc_export ppc_exports[] = {
     {"AnimateEntry", ppcglue_AnimateEntry},
     {"AnimatePalette", ppcglue_AnimatePalette},
     {"AppendDITL", ppcglue_AppendDITL},
+    {"AppendDialogItemList", ppcglue_AppendDialogItemList},
     {"AppendMenu", ppcglue_AppendMenu},
     {"AppendResMenu", ppcglue_AppendResMenu},
+    {"ApplyThemeBackground", ppcglue_ApplyThemeBackground},
     {"AreFloatingWindowsVisible", ppcglue_AreFloatingWindowsVisible},
     {"AssociateSection", ppctrap_AssociateSection},
+    {"AutoEmbedControl", ppcglue_AutoEmbedControl},
+    {"AutoSizeDialog", ppcglue_AutoSizeDialog},
     {"BackColor", ppcglue_BackColor},
     {"BackPat", ppcglue_BackPat},
     {"BackPixPat", ppcglue_BackPixPat},
     {"BeginFullScreen", ppcglue_BeginFullScreen},
     {"BeginMediaEdits", ppctrap_BeginMediaEdits},
+    {"BeginThemeDragSound", ppcglue_BeginThemeDragSound},
     {"BeginUpdate", ppcglue_BeginUpdate},
     {"BitAnd", ppcglue_BitAnd},
     {"BitClr", ppcglue_BitClr},
@@ -24689,6 +26096,7 @@ const ppc_export ppc_exports[] = {
     {"CheckUpdate", ppcglue_CheckUpdate},
     {"ChooseMovieClock", ppctrap_ChooseMovieClock},
     {"ClearIntlResourceCache", ppcglue_ClearIntlResourceCache},
+    {"ClearKeyboardFocus", ppcglue_ClearKeyboardFocus},
     {"ClearMenuBar", ppcglue_ClearMenuBar},
     {"ClearMovieChanged", ppcglue_ClearMovieChanged},
     {"ClearMovieSelection", ppcglue_ClearMovieSelection},
@@ -24773,6 +26181,7 @@ const ppc_export ppc_exports[] = {
     {"CountImageDescriptionExtensionType", ppctrap_CountImageDescriptionExtensionType},
     {"CountMItems", ppcglue_CountMItems},
     {"CountResources", ppcglue_CountResources},
+    {"CountSubControls", ppcglue_CountSubControls},
     {"CountSymbols", ppctrap_CountSymbols},
     {"CountTaggedCollectionItems", ppctrap_CountTaggedCollectionItems},
     {"CountTypes", ppcglue_CountTypes},
@@ -24784,6 +26193,7 @@ const ppc_export ppc_exports[] = {
     {"CreateMovieStorage", ppctrap_CreateMovieStorage},
     {"CreateNewWindow", ppcglue_CreateNewWindow},
     {"CreateResFile", ppcglue_CreateResFile},
+    {"CreateRootControl", ppcglue_CreateRootControl},
     {"CreateShortcutMovieFile", ppctrap_CreateShortcutMovieFile},
     {"CreateThreadPool", ppcglue_CreateThreadPool},
     {"CurResFile", ppcglue_CurResFile},
@@ -24800,6 +26210,7 @@ const ppc_export ppc_exports[] = {
     {"DMRegisterNotifyProc", ppctrap_DMRegisterNotifyProc},
     {"DTInstall", ppcglue_DTInstall},
     {"DateToSeconds", ppctrap_DateToSeconds},
+    {"DeactivateControl", ppcglue_DeactivateControl},
     {"DebugStr", ppcglue_DebugStr},
     {"Debugger", ppcglue_Debugger},
     {"DecompressImage", ppcglue_DecompressImage},
@@ -24829,6 +26240,7 @@ const ppc_export ppc_exports[] = {
     {"DirectorUnknown3", ppcglue_DirectorUnknown3},
     {"DirectorUnknown4", ppcglue_DirectorUnknown4},
     {"DisableItem", ppcglue_DisableItem},
+    {"DisableMenuItemIcon", ppcglue_DisableMenuItemIcon},
     {"DiskEject", ppcglue_DiskEject},
     {"DisposeAllSprites", ppctrap_DisposeAllSprites},
     {"DisposeCCursor", ppcglue_DisposeCCursor},
@@ -24862,6 +26274,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeSpeechChannel", ppcglue_DisposeSpeechChannel},
     {"DisposeSprite", ppctrap_DisposeSprite},
     {"DisposeSpriteWorld", ppctrap_DisposeSpriteWorld},
+    {"DisposeThemeDrawingState", ppcglue_DisposeThemeDrawingState},
     {"DisposeThread", ppcglue_DisposeThread},
     {"DisposeTimeBase", ppctrap_DisposeTimeBase},
     {"DisposeTrackEditState", ppctrap_DisposeTrackEditState},
@@ -24878,6 +26291,7 @@ const ppc_export ppc_exports[] = {
     {"DragWindow", ppcglue_DragWindow},
     {"Draw1Control", ppcglue_Draw1Control},
     {"DrawChar", ppcglue_DrawChar},
+    {"DrawControlInCurrentPort", ppcglue_DrawControlInCurrentPort},
     {"DrawControls", ppcglue_DrawControls},
     {"DrawDialog", ppcglue_DrawDialog},
     {"DrawGrowIcon", ppcglue_DrawGrowIcon},
@@ -24889,16 +26303,51 @@ const ppc_export ppc_exports[] = {
     {"DrawPictureFile", ppctrap_DrawPictureFile},
     {"DrawString", ppcglue_DrawString},
     {"DrawText", ppcglue_DrawText},
+    {"DrawThemeButton", ppcglue_DrawThemeButton},
+    {"DrawThemeChasingArrows", ppcglue_DrawThemeChasingArrows},
+    {"DrawThemeEditTextFrame", ppcglue_DrawThemeEditTextFrame},
+    {"DrawThemeFocusRect", ppcglue_DrawThemeFocusRect},
+    {"DrawThemeFocusRegion", ppcglue_DrawThemeFocusRegion},
+    {"DrawThemeGenericWell", ppcglue_DrawThemeGenericWell},
+    {"DrawThemeListBoxFrame", ppcglue_DrawThemeListBoxFrame},
+    {"DrawThemeMenuBackground", ppcglue_DrawThemeMenuBackground},
+    {"DrawThemeMenuBarBackground", ppcglue_DrawThemeMenuBarBackground},
+    {"DrawThemeMenuItem", ppcglue_DrawThemeMenuItem},
+    {"DrawThemeMenuSeparator", ppcglue_DrawThemeMenuSeparator},
+    {"DrawThemeMenuTitle", ppcglue_DrawThemeMenuTitle},
+    {"DrawThemeModelessDialogFrame", ppcglue_DrawThemeModelessDialogFrame},
+    {"DrawThemePlacard", ppcglue_DrawThemePlacard},
+    {"DrawThemePopupArrow", ppcglue_DrawThemePopupArrow},
+    {"DrawThemePrimaryGroup", ppcglue_DrawThemePrimaryGroup},
+    {"DrawThemeScrollBarArrows", ppcglue_DrawThemeScrollBarArrows},
+    {"DrawThemeScrollBarDelimiters", ppcglue_DrawThemeScrollBarDelimiters},
+    {"DrawThemeSecondaryGroup", ppcglue_DrawThemeSecondaryGroup},
+    {"DrawThemeSeparator", ppcglue_DrawThemeSeparator},
+    {"DrawThemeStandaloneGrowBox", ppcglue_DrawThemeStandaloneGrowBox},
+    {"DrawThemeStandaloneNoGrowBox", ppcglue_DrawThemeStandaloneNoGrowBox},
+    {"DrawThemeTab", ppcglue_DrawThemeTab},
+    {"DrawThemeTabPane", ppcglue_DrawThemeTabPane},
+    {"DrawThemeTickMark", ppcglue_DrawThemeTickMark},
+    {"DrawThemeTitleBarWidget", ppcglue_DrawThemeTitleBarWidget},
+    {"DrawThemeTrack", ppcglue_DrawThemeTrack},
+    {"DrawThemeTrackTickMarks", ppcglue_DrawThemeTrackTickMarks},
+    {"DrawThemeWindowFrame", ppcglue_DrawThemeWindowFrame},
+    {"DrawThemeWindowHeader", ppcglue_DrawThemeWindowHeader},
+    {"DrawThemeWindowListViewHeader", ppcglue_DrawThemeWindowListViewHeader},
     {"DrawTrimmedPicture", ppctrap_DrawTrimmedPicture},
     {"DrawTrimmedPictureFile", ppctrap_DrawTrimmedPictureFile},
+    {"DumpControlHierarchy", ppcglue_DumpControlHierarchy},
     {"EditionHasFormat", ppctrap_EditionHasFormat},
+    {"EmbedControl", ppcglue_EmbedControl},
     {"EmptyCollection", ppctrap_EmptyCollection},
     {"EmptyHandle", ppcglue_EmptyHandle},
     {"EmptyRect", ppcglue_EmptyRect},
     {"EmptyRgn", ppcglue_EmptyRgn},
     {"EnableItem", ppcglue_EnableItem},
+    {"EnableMenuItemIcon", ppcglue_EnableMenuItemIcon},
     {"EndFullScreen", ppcglue_EndFullScreen},
     {"EndMediaEdits", ppctrap_EndMediaEdits},
+    {"EndThemeDragSound", ppcglue_EndThemeDragSound},
     {"EndUpdate", ppcglue_EndUpdate},
     {"Enqueue", ppcglue_Enqueue},
     {"EnterMovies", ppcglue_EnterMovies},
@@ -24959,6 +26408,7 @@ const ppc_export ppc_exports[] = {
     {"FinaleUnknown2", ppcglue_FinaleUnknown2},
     {"FindCodec", ppcglue_FindCodec},
     {"FindControl", ppcglue_FindControl},
+    {"FindControlUnderMouse", ppcglue_FindControlUnderMouse},
     {"FindDialogItem", ppcglue_FindDialogItem},
     {"FindFolder", ppcglue_FindFolder},
     {"FindScriptRun", ppcglue_FindScriptRun},
@@ -25168,7 +26618,11 @@ const ppc_export ppc_exports[] = {
     {"GetAuxWin", ppcglue_GetAuxWin},
     {"GetAuxiliaryControlRecord", ppcglue_GetAuxiliaryControlRecord},
     {"GetBackColor", ppcglue_GetBackColor},
+    {"GetBestControlRect", ppcglue_GetBestControlRect},
     {"GetBestDeviceRect", ppctrap_GetBestDeviceRect},
+    {"GetBevelButtonContentInfo", ppcglue_GetBevelButtonContentInfo},
+    {"GetBevelButtonMenuHandle", ppcglue_GetBevelButtonMenuHandle},
+    {"GetBevelButtonMenuValue", ppcglue_GetBevelButtonMenuValue},
     {"GetCCursor", ppcglue_GetCCursor},
     {"GetCIcon", ppcglue_GetCIcon},
     {"GetCPixel", ppcglue_GetCPixel},
@@ -25197,6 +26651,9 @@ const ppc_export ppc_exports[] = {
     {"GetCompressionInfo", ppctrap_GetCompressionInfo},
     {"GetCompressionTime", ppcglue_GetCompressionTime},
     {"GetControlAction", ppcglue_GetControlAction},
+    {"GetControlData", ppcglue_GetControlData},
+    {"GetControlDataSize", ppcglue_GetControlDataSize},
+    {"GetControlFeatures", ppcglue_GetControlFeatures},
     {"GetControlMaximum", ppcglue_GetControlMaximum},
     {"GetControlMinimum", ppcglue_GetControlMinimum},
     {"GetControlReference", ppcglue_GetControlReference},
@@ -25216,6 +26673,7 @@ const ppc_export ppc_exports[] = {
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
     {"GetDialogItem", ppcglue_GetDialogItem},
+    {"GetDialogItemAsControl", ppcglue_GetDialogItemAsControl},
     {"GetDialogItemText", ppcglue_GetDialogItemText},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
     {"GetDragAttributes", ppcglue_GetDragAttributes},
@@ -25269,12 +26727,14 @@ const ppc_export ppc_exports[] = {
     {"GetIndexedCollectionItemHdl", ppctrap_GetIndexedCollectionItemHdl},
     {"GetIndexedCollectionItemInfo", ppcglue_GetIndexedCollectionItemInfo},
     {"GetIndexedCollectionTag", ppctrap_GetIndexedCollectionTag},
+    {"GetIndexedSubControl", ppcglue_GetIndexedSubControl},
     {"GetIntlResource", ppcglue_GetIntlResource},
     {"GetIntlResourceTable", ppcglue_GetIntlResourceTable},
     {"GetItemCmd", ppcglue_GetItemCmd},
     {"GetItemIcon", ppcglue_GetItemIcon},
     {"GetItemMark", ppcglue_GetItemMark},
     {"GetItemStyle", ppcglue_GetItemStyle},
+    {"GetKeyboardFocus", ppcglue_GetKeyboardFocus},
     {"GetKeys", ppcglue_GetKeys},
     {"GetLabel", ppcglue_GetLabel},
     {"GetLastEditionContainerUsed", ppcglue_GetLastEditionContainerUsed},
@@ -25320,8 +26780,19 @@ const ppc_export ppc_exports[] = {
     {"GetMemFragment", ppctrap_GetMemFragment},
     {"GetMenu", ppcglue_GetMenu},
     {"GetMenuBar", ppcglue_GetMenuBar},
+    {"GetMenuExcludesMarkColumn", ppcglue_GetMenuExcludesMarkColumn},
+    {"GetMenuFont", ppcglue_GetMenuFont},
     {"GetMenuHandle", ppcglue_GetMenuHandle},
+    {"GetMenuItemCommandID", ppcglue_GetMenuItemCommandID},
+    {"GetMenuItemFontID", ppcglue_GetMenuItemFontID},
+    {"GetMenuItemHierarchicalID", ppcglue_GetMenuItemHierarchicalID},
+    {"GetMenuItemIconHandle", ppcglue_GetMenuItemIconHandle},
+    {"GetMenuItemKeyGlyph", ppcglue_GetMenuItemKeyGlyph},
+    {"GetMenuItemModifiers", ppcglue_GetMenuItemModifiers},
+    {"GetMenuItemRefCon", ppcglue_GetMenuItemRefCon},
+    {"GetMenuItemRefCon2", ppcglue_GetMenuItemRefCon2},
     {"GetMenuItemText", ppcglue_GetMenuItemText},
+    {"GetMenuItemTextEncoding", ppcglue_GetMenuItemTextEncoding},
     {"GetMouse", ppcglue_GetMouse},
     {"GetMovieActive", ppcglue_GetMovieActive},
     {"GetMovieActiveSegment", ppctrap_GetMovieActiveSegment},
@@ -25416,6 +26887,7 @@ const ppc_export ppc_exports[] = {
     {"GetResInfo", ppcglue_GetResInfo},
     {"GetResource", ppcglue_GetResource},
     {"GetResourceSizeOnDisk", ppcglue_GetResourceSizeOnDisk},
+    {"GetRootControl", ppcglue_GetRootControl},
     {"GetScanOverride", ppcglue_GetScanOverride},
     {"GetScrap", ppcglue_GetScrap},
     {"GetScriptManagerVariable", ppcglue_GetScriptManagerVariable},
@@ -25436,10 +26908,39 @@ const ppc_export ppc_exports[] = {
     {"GetString", ppcglue_GetString},
     {"GetSubTable", ppcglue_GetSubTable},
     {"GetSuiteLabel", ppcglue_GetSuiteLabel},
+    {"GetSuperControl", ppcglue_GetSuperControl},
     {"GetSysBeepVolume", ppcglue_GetSysBeepVolume},
     {"GetSysDirection", ppcglue_GetSysDirection},
     {"GetTaggedCollectionItem", ppctrap_GetTaggedCollectionItem},
     {"GetTaggedCollectionItemInfo", ppctrap_GetTaggedCollectionItemInfo},
+    {"GetThemeAccentColors", ppcglue_GetThemeAccentColors},
+    {"GetThemeBrushAsColor", ppcglue_GetThemeBrushAsColor},
+    {"GetThemeButtonBackgroundBounds", ppcglue_GetThemeButtonBackgroundBounds},
+    {"GetThemeButtonContentBounds", ppcglue_GetThemeButtonContentBounds},
+    {"GetThemeButtonRegion", ppcglue_GetThemeButtonRegion},
+    {"GetThemeCheckBoxStyle", ppcglue_GetThemeCheckBoxStyle},
+    {"GetThemeDrawingState", ppcglue_GetThemeDrawingState},
+    {"GetThemeFont", ppcglue_GetThemeFont},
+    {"GetThemeMenuBackgroundRegion", ppcglue_GetThemeMenuBackgroundRegion},
+    {"GetThemeMenuBarHeight", ppcglue_GetThemeMenuBarHeight},
+    {"GetThemeMenuItemExtra", ppcglue_GetThemeMenuItemExtra},
+    {"GetThemeMenuSeparatorHeight", ppcglue_GetThemeMenuSeparatorHeight},
+    {"GetThemeMenuTitleExtra", ppcglue_GetThemeMenuTitleExtra},
+    {"GetThemeMetric", ppcglue_GetThemeMetric},
+    {"GetThemeScrollBarArrowStyle", ppcglue_GetThemeScrollBarArrowStyle},
+    {"GetThemeScrollBarThumbStyle", ppcglue_GetThemeScrollBarThumbStyle},
+    {"GetThemeScrollBarTrackRect", ppcglue_GetThemeScrollBarTrackRect},
+    {"GetThemeStandaloneGrowBoxBounds", ppcglue_GetThemeStandaloneGrowBoxBounds},
+    {"GetThemeTabRegion", ppcglue_GetThemeTabRegion},
+    {"GetThemeTextColor", ppcglue_GetThemeTextColor},
+    {"GetThemeTrackBounds", ppcglue_GetThemeTrackBounds},
+    {"GetThemeTrackDragRect", ppcglue_GetThemeTrackDragRect},
+    {"GetThemeTrackLiveValue", ppcglue_GetThemeTrackLiveValue},
+    {"GetThemeTrackThumbPositionFromOffset", ppcglue_GetThemeTrackThumbPositionFromOffset},
+    {"GetThemeTrackThumbPositionFromRegion", ppcglue_GetThemeTrackThumbPositionFromRegion},
+    {"GetThemeTrackThumbRgn", ppcglue_GetThemeTrackThumbRgn},
+    {"GetThemeWindowRegion", ppcglue_GetThemeWindowRegion},
+    {"GetThemeWindowRegionHit", ppcglue_GetThemeWindowRegionHit},
     {"GetThreadCurrentTaskRef", ppcglue_GetThreadCurrentTaskRef},
     {"GetThreadState", ppcglue_GetThreadState},
     {"GetThreadStateGivenTaskRef", ppcglue_GetThreadStateGivenTaskRef},
@@ -25549,6 +27050,8 @@ const ppc_export ppc_exports[] = {
     {"HWPriv", ppcglue_HWPriv},
     {"HandAndHand", ppcglue_HandAndHand},
     {"HandToHand", ppctrap_HandToHand},
+    {"HandleControlClick", ppcglue_HandleControlClick},
+    {"HandleControlKey", ppcglue_HandleControlKey},
     {"HandleZone", ppcglue_HandleZone},
     {"HasDepth", ppcglue_HasDepth},
     {"HasMovieChanged", ppcglue_HasMovieChanged},
@@ -25566,6 +27069,8 @@ const ppc_export ppc_exports[] = {
     {"HiliteText", ppcglue_HiliteText},
     {"HiliteWindow", ppcglue_HiliteWindow},
     {"HitTestDSequenceData", ppctrap_HitTestDSequenceData},
+    {"HitTestThemeScrollBarArrows", ppcglue_HitTestThemeScrollBarArrows},
+    {"HitTestThemeTrack", ppcglue_HitTestThemeTrack},
     {"HomeResFile", ppcglue_HomeResFile},
     {"ICMDecompressComplete", ppctrap_ICMDecompressComplete},
     {"ICMDecompressCompleteS", ppctrap_ICMDecompressCompleteS},
@@ -25599,6 +27104,7 @@ const ppc_export ppc_exports[] = {
     {"IconIDToRgn", ppcglue_IconIDToRgn},
     {"IconMethodToRgn", ppctrap_IconMethodToRgn},
     {"IconSuiteToRgn", ppcglue_IconSuiteToRgn},
+    {"IdleControls", ppcglue_IdleControls},
     {"ImageFieldSequenceBegin", ppctrap_ImageFieldSequenceBegin},
     {"ImageFieldSequenceEnd", ppctrap_ImageFieldSequenceEnd},
     {"ImageFieldSequenceExtractCombine", ppctrap_ImageFieldSequenceExtractCombine},
@@ -25657,13 +27163,19 @@ const ppc_export ppc_exports[] = {
     {"InvertRect", ppcglue_InvertRect},
     {"InvertRgn", ppcglue_InvertRgn},
     {"InvertRoundRect", ppcglue_InvertRoundRect},
+    {"IsAppearanceClient", ppcglue_IsAppearanceClient},
+    {"IsControlActive", ppcglue_IsControlActive},
+    {"IsControlVisible", ppcglue_IsControlVisible},
     {"IsDialogEvent", ppcglue_IsDialogEvent},
+    {"IsMenuItemIconEnabled", ppcglue_IsMenuItemIconEnabled},
     {"IsMetric", ppcglue_IsMetric},
     {"IsMovieDone", ppcglue_IsMovieDone},
     {"IsOutline", ppcglue_IsOutline},
     {"IsRegisteredSection", ppcglue_IsRegisteredSection},
     {"IsScrapMovie", ppctrap_IsScrapMovie},
     {"IsShowContextualMenuClick", ppcglue_IsShowContextualMenuClick},
+    {"IsThemeInColor", ppcglue_IsThemeInColor},
+    {"IsValidAppearanceFileType", ppcglue_IsValidAppearanceFileType},
     {"IsValidWindowPtr", ppcglue_IsValidWindowPtr},
     {"IsWindowCollapsable", ppcglue_IsWindowCollapsable},
     {"IsWindowCollapsed", ppcglue_IsWindowCollapsed},
@@ -26249,12 +27761,14 @@ const ppc_export ppc_exports[] = {
     {"MeasureText", ppcglue_MeasureText},
     {"MediaTimeToSampleNum", ppctrap_MediaTimeToSampleNum},
     {"MenuChoice", ppcglue_MenuChoice},
+    {"MenuEvent", ppcglue_MenuEvent},
     {"MenuKey", ppcglue_MenuKey},
     {"MenuSelect", ppcglue_MenuSelect},
     {"ModalDialog", ppcglue_ModalDialog},
     {"MoreMasters", ppcglue_MoreMasters},
     {"Move", ppcglue_Move},
     {"MoveControl", ppcglue_MoveControl},
+    {"MoveDialogItem", ppcglue_MoveDialogItem},
     {"MoveHHi", ppcglue_MoveHHi},
     {"MovePortTo", ppcglue_MovePortTo},
     {"MoveTo", ppcglue_MoveTo},
@@ -26300,6 +27814,7 @@ const ppc_export ppc_exports[] = {
     {"NewEmptyHandle", ppcglue_NewEmptyHandle},
     {"NewEmptyHandleSys", ppcglue_NewEmptyHandleSys},
     {"NewFatRoutineDescriptor", ppctrap_NewFatRoutineDescriptor},
+    {"NewFeaturesDialog", ppcglue_NewFeaturesDialog},
     {"NewGDevice", ppcglue_NewGDevice},
     {"NewGWorld", ppcglue_NewGWorld},
     {"NewGestalt", ppcglue_NewGestalt},
@@ -26352,6 +27867,7 @@ const ppc_export ppc_exports[] = {
     {"NewUserDataFromHandle", ppctrap_NewUserDataFromHandle},
     {"NewWindow", ppcglue_NewWindow},
     {"NoPurgePixels", ppcglue_NoPurgePixels},
+    {"NormalizeThemeDrawingState", ppcglue_NormalizeThemeDrawingState},
     {"NoteAlert", ppcglue_NoteAlert},
     {"NumToString", ppcglue_NumToString},
     {"OSEventAvail", ppcglue_OSEventAvail},
@@ -26649,6 +28165,7 @@ const ppc_export ppc_exports[] = {
     {"Pixel2Char", ppcglue_Pixel2Char},
     {"PixelToChar", ppcglue_PixelToChar},
     {"PlayMoviePreview", ppctrap_PlayMoviePreview},
+    {"PlayThemeSound", ppcglue_PlayThemeSound},
     {"PlotCIcon", ppcglue_PlotCIcon},
     {"PlotCIconHandle", ppcglue_PlotCIconHandle},
     {"PlotIcon", ppcglue_PlotIcon},
@@ -26887,6 +28404,7 @@ const ppc_export ppc_exports[] = {
     {"RectInRgn", ppcglue_RectInRgn},
     {"RectMatrix", ppcglue_RectMatrix},
     {"RectRgn", ppcglue_RectRgn},
+    {"RegisterAppearanceClient", ppcglue_RegisterAppearanceClient},
     {"RegisterSection", ppcglue_RegisterSection},
     {"ReleaseResource", ppcglue_ReleaseResource},
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
@@ -26922,6 +28440,7 @@ const ppc_export ppc_exports[] = {
     {"RestoreFore", ppcglue_RestoreFore},
     {"RestoreMixedModeState", ppctrap_RestoreMixedModeState},
     {"RetrievePictInfo", ppctrap_RetrievePictInfo},
+    {"ReverseKeyboardFocus", ppcglue_ReverseKeyboardFocus},
     {"RmvTime", ppcglue_RmvTime},
     {"RotateMatrix", ppcglue_RotateMatrix},
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
@@ -26973,10 +28492,18 @@ const ppc_export ppc_exports[] = {
     {"SelectMovieAlternates", ppctrap_SelectMovieAlternates},
     {"SelectWindow", ppcglue_SelectWindow},
     {"SendBehind", ppcglue_SendBehind},
+    {"SendControlMessage", ppcglue_SendControlMessage},
     {"SetADBInfo", ppcglue_SetADBInfo},
+    {"SetAnimatedThemeCursor", ppcglue_SetAnimatedThemeCursor},
     {"SetApplBase", ppcglue_SetApplBase},
     {"SetApplLimit", ppcglue_SetApplLimit},
     {"SetAutoTrackAlternatesEnabled", ppctrap_SetAutoTrackAlternatesEnabled},
+    {"SetBevelButtonContentInfo", ppcglue_SetBevelButtonContentInfo},
+    {"SetBevelButtonGraphicAlignment", ppcglue_SetBevelButtonGraphicAlignment},
+    {"SetBevelButtonMenuValue", ppcglue_SetBevelButtonMenuValue},
+    {"SetBevelButtonTextAlignment", ppcglue_SetBevelButtonTextAlignment},
+    {"SetBevelButtonTextPlacement", ppcglue_SetBevelButtonTextPlacement},
+    {"SetBevelButtonTransform", ppcglue_SetBevelButtonTransform},
     {"SetCCursor", ppcglue_SetCCursor},
     {"SetCPixel", ppcglue_SetCPixel},
     {"SetCSequenceDataRateParams", ppcglue_SetCSequenceDataRateParams},
@@ -26994,11 +28521,15 @@ const ppc_export ppc_exports[] = {
     {"SetCompressedPixMapInfo", ppctrap_SetCompressedPixMapInfo},
     {"SetControlAction", ppcglue_SetControlAction},
     {"SetControlColor", ppcglue_SetControlColor},
+    {"SetControlData", ppcglue_SetControlData},
+    {"SetControlFontStyle", ppcglue_SetControlFontStyle},
     {"SetControlMaximum", ppcglue_SetControlMaximum},
     {"SetControlMinimum", ppcglue_SetControlMinimum},
     {"SetControlReference", ppcglue_SetControlReference},
+    {"SetControlSupervisor", ppcglue_SetControlSupervisor},
     {"SetControlTitle", ppcglue_SetControlTitle},
     {"SetControlValue", ppcglue_SetControlValue},
+    {"SetControlVisibility", ppcglue_SetControlVisibility},
     {"SetCursor", ppcglue_SetCursor},
     {"SetDSequenceAccuracy", ppcglue_SetDSequenceAccuracy},
     {"SetDSequenceDataProc", ppcglue_SetDSequenceDataProc},
@@ -27021,6 +28552,7 @@ const ppc_export ppc_exports[] = {
     {"SetDialogItem", ppcglue_SetDialogItem},
     {"SetDialogItemText", ppcglue_SetDialogItemText},
     {"SetDialogTracksCursor", ppcglue_SetDialogTracksCursor},
+    {"SetDisclosureTriangleLastValue", ppcglue_SetDisclosureTriangleLastValue},
     {"SetDragDrawingProc", ppcglue_SetDragDrawingProc},
     {"SetDragImage", ppcglue_SetDragImage},
     {"SetDragInputProc", ppcglue_SetDragInputProc},
@@ -27049,12 +28581,15 @@ const ppc_export ppc_exports[] = {
     {"SetIconCacheProc", ppctrap_SetIconCacheProc},
     {"SetIdentityMatrix", ppcglue_SetIdentityMatrix},
     {"SetImageDescriptionCTable", ppctrap_SetImageDescriptionCTable},
+    {"SetImageWellContentInfo", ppcglue_SetImageWellContentInfo},
+    {"SetImageWellTransform", ppcglue_SetImageWellTransform},
     {"SetIndexedCollectionItemInfo", ppctrap_SetIndexedCollectionItemInfo},
     {"SetIntlResource", ppctrap_SetIntlResource},
     {"SetItemCmd", ppcglue_SetItemCmd},
     {"SetItemIcon", ppcglue_SetItemIcon},
     {"SetItemMark", ppcglue_SetItemMark},
     {"SetItemStyle", ppcglue_SetItemStyle},
+    {"SetKeyboardFocus", ppcglue_SetKeyboardFocus},
     {"SetMCEntries", ppcglue_SetMCEntries},
     {"SetMCInfo", ppcglue_SetMCInfo},
     {"SetMediaDataHandler", ppctrap_SetMediaDataHandler},
@@ -27072,8 +28607,19 @@ const ppc_export ppc_exports[] = {
     {"SetMediaShadowSync", ppctrap_SetMediaShadowSync},
     {"SetMediaTimeScale", ppctrap_SetMediaTimeScale},
     {"SetMenuBar", ppcglue_SetMenuBar},
+    {"SetMenuExcludesMarkColumn", ppcglue_SetMenuExcludesMarkColumn},
     {"SetMenuFlash", ppcglue_SetMenuFlash},
+    {"SetMenuFont", ppcglue_SetMenuFont},
+    {"SetMenuItemCommandID", ppcglue_SetMenuItemCommandID},
+    {"SetMenuItemFontID", ppcglue_SetMenuItemFontID},
+    {"SetMenuItemHierarchicalID", ppcglue_SetMenuItemHierarchicalID},
+    {"SetMenuItemIconHandle", ppcglue_SetMenuItemIconHandle},
+    {"SetMenuItemKeyGlyph", ppcglue_SetMenuItemKeyGlyph},
+    {"SetMenuItemModifiers", ppcglue_SetMenuItemModifiers},
+    {"SetMenuItemRefCon", ppcglue_SetMenuItemRefCon},
+    {"SetMenuItemRefCon2", ppcglue_SetMenuItemRefCon2},
     {"SetMenuItemText", ppcglue_SetMenuItemText},
+    {"SetMenuItemTextEncoding", ppcglue_SetMenuItemTextEncoding},
     {"SetMovieActive", ppcglue_SetMovieActive},
     {"SetMovieActiveSegment", ppctrap_SetMovieActiveSegment},
     {"SetMovieAnchorDataRef", ppctrap_SetMovieAnchorDataRef},
@@ -27147,6 +28693,14 @@ const ppc_export ppc_exports[] = {
     {"SetSuiteLabel", ppcglue_SetSuiteLabel},
     {"SetSysBeepVolume", ppcglue_SetSysBeepVolume},
     {"SetSysDirection", ppcglue_SetSysDirection},
+    {"SetTabEnabled", ppcglue_SetTabEnabled},
+    {"SetThemeBackground", ppcglue_SetThemeBackground},
+    {"SetThemeCursor", ppcglue_SetThemeCursor},
+    {"SetThemeDrawingState", ppcglue_SetThemeDrawingState},
+    {"SetThemePen", ppcglue_SetThemePen},
+    {"SetThemeTextColor", ppcglue_SetThemeTextColor},
+    {"SetThemeTextColorForWindow", ppcglue_SetThemeTextColorForWindow},
+    {"SetThemeWindowBackground", ppcglue_SetThemeWindowBackground},
     {"SetThreadReadyGivenTaskRef", ppcglue_SetThreadReadyGivenTaskRef},
     {"SetThreadScheduler", ppcglue_SetThreadScheduler},
     {"SetThreadState", ppcglue_SetThreadState},
@@ -27178,6 +28732,7 @@ const ppc_export ppc_exports[] = {
     {"SetTrackUsage", ppctrap_SetTrackUsage},
     {"SetTrackVolume", ppctrap_SetTrackVolume},
     {"SetTrapAddress", ppcglue_SetTrapAddress},
+    {"SetUpControlBackground", ppcglue_SetUpControlBackground},
     {"SetUserDataItem", ppctrap_SetUserDataItem},
     {"SetWRefCon", ppcglue_SetWRefCon},
     {"SetWTitle", ppcglue_SetWTitle},
@@ -27210,6 +28765,7 @@ const ppc_export ppc_exports[] = {
     {"ShutDwnRemove", ppctrap_ShutDwnRemove},
     {"ShutDwnStart", ppctrap_ShutDwnStart},
     {"SizeControl", ppcglue_SizeControl},
+    {"SizeDialogItem", ppcglue_SizeDialogItem},
     {"SizeWindow", ppcglue_SizeWindow},
     {"SkewMatrix", ppcglue_SkewMatrix},
     {"SlopeFromAngle", ppcglue_SlopeFromAngle},
@@ -27247,6 +28803,7 @@ const ppc_export ppc_exports[] = {
     {"SpriteWorldHitTest", ppctrap_SpriteWorldHitTest},
     {"SpriteWorldIdle", ppctrap_SpriteWorldIdle},
     {"StackSpace", ppcglue_StackSpace},
+    {"StandardAlert", ppcglue_StandardAlert},
     {"StandardGetFile", ppcglue_StandardGetFile},
     {"StandardGetFilePreview", ppcglue_StandardGetFilePreview},
     {"StandardPutFile", ppcglue_StandardPutFile},
@@ -27385,6 +28942,7 @@ const ppc_export ppc_exports[] = {
     {"UnloadSeg", ppctrap_UnloadSeg},
     {"UnlockPixels", ppcglue_UnlockPixels},
     {"UnpackBits", ppcglue_UnpackBits},
+    {"UnregisterAppearanceClient", ppcglue_UnregisterAppearanceClient},
     {"UnsignedFixMulDiv", ppcglue_UnsignedFixMulDiv},
     {"UnsignedFixedMulDiv", ppctrap_UnsignedFixedMulDiv},
     {"UpdateAlias", ppcglue_UpdateAlias},
@@ -27399,6 +28957,7 @@ const ppc_export ppc_exports[] = {
     {"UseDictionary", ppcglue_UseDictionary},
     {"UseMovieEditState", ppctrap_UseMovieEditState},
     {"UseResFile", ppcglue_UseResFile},
+    {"UseThemeFont", ppcglue_UseThemeFont},
     {"UseTrackEditState", ppctrap_UseTrackEditState},
     {"VInstall", ppcglue_VInstall},
     {"VRemove", ppcglue_VRemove},

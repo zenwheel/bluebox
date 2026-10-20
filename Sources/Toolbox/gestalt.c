@@ -112,6 +112,12 @@ void gestalt_init(void)
     gestalt_set(fourcc("cmnu"), 0x2);           /* gestaltContextualMenuTrapAvailable */
     gestalt_set(fourcc("ttsc"), 0x1);           /* gestaltSpeechAttr: the Speech Manager */
     gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
+    /* The Appearance Manager, 1.1 as in Mac OS 8.5, for 68k programs too
+     * (as if the Appearance extension were installed): programs ask before
+     * using its calls, and draw their lists and controls in Platinum when
+     * it is there. */
+    gestalt_set(fourcc("appr"), 0x1);         /* gestaltAppearanceExists */
+    gestalt_set(fourcc("apvr"), 0x0110);      /* gestaltAppearanceVersion */
     /* Blue Box itself, for software written for it: version 1.0 in the
      * high word; the host, macOS (bit 0) or Linux (bit 1).  Not Classic's
      * 'bbox', which says Mac OS X is underneath. */

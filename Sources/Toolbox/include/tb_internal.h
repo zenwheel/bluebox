@@ -272,6 +272,112 @@ void native_forget_control(gaddr ch);
 bool native_draw_popup(qrect r, const uint8_t *item, int n, bool pressed, bool disabled);
 bool native_draw_edit_frame(qrect r, bool focused);
 
+/* The Appearance Manager (appearance.c): whether the program registered as
+ * a client; the host's colours taken up at event calls; the Platinum
+ * look's drawing, in RGB through the current port's clip (black and white
+ * below 4 bits a pixel).  States are ThemeDrawState's: 0 inactive, 1
+ * active, 2 pressed. */
+bool appearance_client(void);
+void appearance_reset(void);
+void appearance_poll(void);
+void appearance_hilite_changed(uint16_t r, uint16_t g, uint16_t b);
+bool ap_brush_rgb(int brush, uint16_t out[3]);
+bool ap_text_rgb(int color, uint16_t out[3]);
+bool ap_in_color(void);
+void ap_fill_rgn(const hrgn *g, const uint16_t rgb[3]);
+void ap_fill(qrect r, const uint16_t rgb[3]);
+void ap_fill_grey(qrect r, uint16_t v);
+void ap_frame(qrect r, const uint16_t rgb[3]);
+void ap_frame_grey(qrect r, uint16_t v);
+void ap_bevel(qrect r, uint16_t light, uint16_t dark);
+void ap_text(int x, int y, const uint8_t *s, int n, const uint16_t rgb[3]);
+void ap_text_in(qrect r, const uint8_t *s, int n, bool center, const uint16_t rgb[3]);
+void ap_font_info(int *ascent, int *descent);
+void ap_arrow(qrect r, int dir, int size, const uint16_t rgb[3]);
+void ap_placard(qrect r, uint32_t state);
+void ap_well_frame(qrect r, uint32_t state);
+void ap_focus_rect(qrect r, bool focus);
+void ap_group(qrect r, uint32_t state, bool primary);
+void ap_separator(qrect r, uint32_t state);
+void ap_tab_pane(qrect r, uint32_t state);
+void ap_tab(qrect r, int style, const uint8_t *title, int n);
+void ap_push_button(qrect r, uint32_t state, bool is_default);
+void ap_default_ring(qrect r, uint32_t state);
+void ap_check_box(qrect box, bool radio, int value, uint32_t state);
+void ap_bevel_button(qrect r, int kind, uint32_t state, bool on);
+void ap_disclosure(qrect r, int value, uint32_t state, bool left_facing);
+void ap_little_arrows(qrect r, uint32_t state);
+void ap_popup_button(qrect r, uint32_t state, bool arrow_only);
+void ap_button(qrect r, int kind, uint32_t state, int value, int adorn);
+void ap_track(gaddr info); /* a ThemeTrackDrawInfo in guest memory */
+void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb);
+
+/* ---- Control Manager (controls.c) ---- */
+
+/* What we keep for each control: its variant and CDEF (procID & 15 and
+ * >> 4), its embedder and when it was embedded, what its embedder's hiding
+ * or deactivation changed, its ControlFontStyleRec, and the Appearance
+ * CDEF's own state (cdefs_appearance.c, malloc'd). */
+typedef struct {
+    gaddr ch;
+    int16_t var, cdef;
+    gaddr parent, supervisor;
+    uint32_t seq;
+    bool is_root, hidden_with_parent, inactive_with_parent, has_font;
+    uint8_t saved_hilite;
+    int8_t new_msgs; /* takes Control Manager 2.0's messages: -1 not asked yet */
+    uint8_t font[24];
+    void *ap;
+} ctl_info;
+typedef struct {
+    int16_t font, size, mode;
+    uint8_t face;
+} ctl_font_saved;
+ctl_info *ctl_find(gaddr ch);
+int32_t ctl_call(gaddr ch, int16_t msg, int32_t param);
+bool ctl_platinum(gaddr ch);
+gaddr ctl_window_root(gaddr w);
+void ctl_set_window_themed(gaddr w, bool themed);
+int ctl_subcontrols(gaddr ch, gaddr *out, int max);
+void ctl_font_begin(gaddr ch, ctl_font_saved *s);
+void ctl_font_end(const ctl_font_saved *s);
+bool ctl_font_color(gaddr ch, uint16_t rgb[3]);
+uint32_t ctl_local_mouse(gaddr ch);
+void ctl_call_action(gaddr action, gaddr ch, int16_t part);
+void controls_reset(void);
+void controls_forget_window(gaddr w);
+/* The Appearance CDEFs (cdefs_appearance.c): their entry, the standard
+ * buttons drawn in Platinum (kind 0 push, 1 check box, 2 radio), tracking
+ * of their own (false when the Control Manager's will do), and what
+ * follows a click (auto-toggles, tabs, radio groups). */
+typedef struct {
+    int16_t id;
+    native_fn fn;
+} ap_cdef_stub;
+extern const ap_cdef_stub ap_cdef_stubs[];
+extern const int ap_cdef_stub_count;
+void ap_draw_standard(gaddr ch, int kind);
+bool ap_ctl_track(gaddr ch, int16_t part, uint32_t pt, gaddr action, int16_t modifiers, int16_t *result);
+void ap_after_track(gaddr ch, int16_t part);
+/* A dialog item's stand-in control (GetDialogItemAsControl), out of the
+ * window's control list; a user item's draws and takes clicks through its
+ * procedures when it has them (ap_item_click: -1 when it has none). */
+gaddr ap_item_control(gaddr dialog, int item, int kind);
+void ap_forget_dialog(gaddr dialog);
+bool ap_item_draw(gaddr dialog, int item);
+int16_t ap_item_click(gaddr dialog, int item, uint32_t pt, int16_t modifiers);
+void ap_cdefs_reset(void);
+bool ap_is_stand_in(gaddr ch);
+/* For the stand-ins (dialogs.c): an item drawn, its text selected, the
+ * dialog's TERec if the item is the edit text being edited. */
+void dialog_draw_item(gaddr d, int n);
+void dialog_select_item_text(gaddr d, int n, int start, int end);
+gaddr dialog_item_te(gaddr d, int n);
+
+/* ---- Menu Manager (menu.c) ---- */
+void menu_reset(void);
+uint8_t menu_item_modifiers(gaddr mh, int item); /* Mac OS 8's kMenu...Modifier bits */
+
 /* ---- Dialog Manager ---- */
 
 /* A dialog from DLOG id; vis_override -1 keeps the resource's visibility. */

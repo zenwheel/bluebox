@@ -320,6 +320,11 @@ int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gadd
     return noErr;
 }
 
+int16_t tb_StandardAlert(int16_t type, gaddr error, gaddr explanation, gaddr param, gaddr item_hit)
+{
+    return dialog_standard_alert(type, error, explanation, param, item_hit);
+}
+
 int16_t tb_Alert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_PLAIN); }
 int16_t tb_StopAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_STOP); }
 int16_t tb_NoteAlert(int16_t id, gaddr fp) { return run_alert(id, MACHINE_ALERT_NOTE); }

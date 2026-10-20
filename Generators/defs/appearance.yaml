@@ -1,0 +1,1898 @@
+# The Appearance Manager (Appearance.h, Universal Interfaces 3.2), Control
+# Manager 2.0 (Controls.h), and the Mac OS 8 Dialog and Menu Manager
+# additions.  The 68k calls go through _AppearanceDispatch ($AA74),
+# _ControlDispatch ($AA73), _DialogDispatch ($AA68) and _MenuDispatch
+# ($A825) with the selector in D0; the Appearance 1.1 calls had no trap
+# (AppearanceLib exports only).
+
+- dispatcher:
+    name: AppearanceDispatch
+    trap: 0xAA74
+    selector-location: D0W
+
+- dispatcher:
+    name: ControlDispatch
+    trap: 0xAA73
+    selector-location: D0W
+
+- dispatcher:
+    name: MenuDispatch
+    trap: 0xA825
+    selector-location: D0W
+
+# Appearance 1.0
+- function:
+    name: RegisterAppearanceClient
+    return: OSStatus
+    dispatcher: AppearanceDispatch
+    selector: 0x0015
+
+- function:
+    name: UnregisterAppearanceClient
+    return: OSStatus
+    dispatcher: AppearanceDispatch
+    selector: 0x0016
+
+- function:
+    name: IsAppearanceClient
+    return: Boolean
+    args:
+      - name: process
+        type: const ProcessSerialNumber*
+    dispatcher: AppearanceDispatch
+    selector: -1
+
+- function:
+    name: SetThemePen
+    return: OSStatus
+    args:
+      - name: brush
+        type: SInt16
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0001
+
+- function:
+    name: SetThemeBackground
+    return: OSStatus
+    args:
+      - name: brush
+        type: SInt16
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0002
+
+- function:
+    name: SetThemeTextColor
+    return: OSStatus
+    args:
+      - name: color
+        type: SInt16
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0003
+
+- function:
+    name: SetThemeWindowBackground
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: brush
+        type: SInt16
+      - name: update
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0004
+
+- function:
+    name: DrawThemeWindowHeader
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x0005
+
+- function:
+    name: DrawThemeWindowListViewHeader
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x0006
+
+- function:
+    name: DrawThemePlacard
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x0007
+
+- function:
+    name: DrawThemeModelessDialogFrame
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x0008
+
+- function:
+    name: DrawThemeEditTextFrame
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x0009
+
+- function:
+    name: DrawThemeListBoxFrame
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x000A
+
+- function:
+    name: DrawThemeFocusRect
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: hasFocus
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x000B
+
+- function:
+    name: DrawThemePrimaryGroup
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x000C
+
+- function:
+    name: DrawThemeSecondaryGroup
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x000D
+
+- function:
+    name: DrawThemeSeparator
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x000E
+
+# Appearance 1.0.1
+- function:
+    name: DrawThemeMenuBarBackground
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt16
+      - name: attributes
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x0018
+
+- function:
+    name: DrawThemeMenuTitle
+    return: OSStatus
+    args:
+      - name: menuBar
+        type: const Rect*
+      - name: title
+        type: const Rect*
+      - name: state
+        type: UInt16
+      - name: attributes
+        type: UInt32
+      - name: titleProc
+        type: ProcPtr
+      - name: titleData
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x0019
+
+- function:
+    name: GetThemeMenuBarHeight
+    return: OSStatus
+    args:
+      - name: height
+        type: SInt16*
+    dispatcher: AppearanceDispatch
+    selector: 0x001A
+
+- function:
+    name: DrawThemeMenuBackground
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: menuType
+        type: UInt16
+    dispatcher: AppearanceDispatch
+    selector: 0x001B
+
+- function:
+    name: GetThemeMenuBackgroundRegion
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: menuType
+        type: UInt16
+      - name: region
+        type: RgnHandle
+    dispatcher: AppearanceDispatch
+    selector: 0x001C
+
+- function:
+    name: DrawThemeMenuItem
+    return: OSStatus
+    args:
+      - name: menuRect
+        type: const Rect*
+      - name: itemRect
+        type: const Rect*
+      - name: virtualTop
+        type: SInt16
+      - name: virtualBottom
+        type: SInt16
+      - name: state
+        type: UInt16
+      - name: itemType
+        type: UInt16
+      - name: drawProc
+        type: ProcPtr
+      - name: userData
+        type: UInt32
+    dispatcher: AppearanceDispatch
+    selector: 0x001D
+
+- function:
+    name: DrawThemeMenuSeparator
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+    dispatcher: AppearanceDispatch
+    selector: 0x001E
+
+- function:
+    name: GetThemeMenuSeparatorHeight
+    return: OSStatus
+    args:
+      - name: height
+        type: SInt16*
+    dispatcher: AppearanceDispatch
+    selector: 0x001F
+
+- function:
+    name: GetThemeMenuItemExtra
+    return: OSStatus
+    args:
+      - name: itemType
+        type: UInt16
+      - name: height
+        type: SInt16*
+      - name: width
+        type: SInt16*
+    dispatcher: AppearanceDispatch
+    selector: 0x0020
+
+- function:
+    name: GetThemeMenuTitleExtra
+    return: OSStatus
+    args:
+      - name: width
+        type: SInt16*
+      - name: squished
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0021
+
+- function:
+    name: DrawThemeGenericWell
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+      - name: fillCenter
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0022
+
+- function:
+    name: DrawThemeFocusRegion
+    return: OSStatus
+    args:
+      - name: region
+        type: RgnHandle
+      - name: hasFocus
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0023
+
+- function:
+    name: IsThemeInColor
+    return: Boolean
+    args:
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+    dispatcher: AppearanceDispatch
+    selector: 0x0024
+
+- function:
+    name: GetThemeAccentColors
+    return: OSStatus
+    args:
+      - name: colors
+        type: CTabHandle*
+    dispatcher: AppearanceDispatch
+    selector: 0x0025
+
+- function:
+    name: PlayThemeSound
+    return: OSStatus
+    args:
+      - name: kind
+        type: OSType
+    dispatcher: AppearanceDispatch
+    selector: 0x0026
+
+- function:
+    name: BeginThemeDragSound
+    return: OSStatus
+    args:
+      - name: kind
+        type: OSType
+    dispatcher: AppearanceDispatch
+    selector: 0x0027
+
+- function:
+    name: EndThemeDragSound
+    return: OSStatus
+    dispatcher: AppearanceDispatch
+    selector: 0x0028
+
+# Appearance 1.1 (AppearanceLib only)
+- function:
+    name: DrawThemeTabPane
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: state
+        type: UInt32
+
+- function:
+    name: DrawThemeTab
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: style
+        type: UInt16
+      - name: direction
+        type: UInt16
+      - name: labelProc
+        type: ProcPtr
+      - name: userData
+        type: UInt32
+
+- function:
+    name: GetThemeTabRegion
+    return: OSStatus
+    args:
+      - name: r
+        type: const Rect*
+      - name: style
+        type: UInt16
+      - name: direction
+        type: UInt16
+      - name: region
+        type: RgnHandle
+
+- function:
+    name: SetThemeCursor
+    return: OSStatus
+    args:
+      - name: cursor
+        type: UInt32
+
+- function:
+    name: SetAnimatedThemeCursor
+    return: OSStatus
+    args:
+      - name: cursor
+        type: UInt32
+      - name: step
+        type: UInt32
+
+- function:
+    name: GetThemeScrollBarThumbStyle
+    return: OSStatus
+    args:
+      - name: style
+        type: UInt16*
+
+- function:
+    name: GetThemeScrollBarArrowStyle
+    return: OSStatus
+    args:
+      - name: style
+        type: UInt16*
+
+- function:
+    name: GetThemeCheckBoxStyle
+    return: OSStatus
+    args:
+      - name: style
+        type: UInt16*
+
+- function:
+    name: UseThemeFont
+    return: OSStatus
+    args:
+      - name: fontID
+        type: UInt16
+      - name: script
+        type: SInt16
+
+- function:
+    name: GetThemeFont
+    return: OSStatus
+    args:
+      - name: fontID
+        type: UInt16
+      - name: script
+        type: SInt16
+      - name: fontName
+        type: StringPtr
+      - name: fontSize
+        type: SInt16*
+      - name: style
+        type: Style*
+
+- function:
+    name: DrawThemeTrack
+    return: OSStatus
+    args:
+      - name: info
+        type: const void*
+      - name: ghost
+        type: RgnHandle
+      - name: eraseProc
+        type: ProcPtr
+      - name: eraseData
+        type: UInt32
+
+- function:
+    name: HitTestThemeTrack
+    return: Boolean
+    args:
+      - name: info
+        type: const void*
+      - name: pt
+        type: Point
+      - name: part
+        type: SInt16*
+
+- function:
+    name: GetThemeTrackBounds
+    return: OSStatus
+    args:
+      - name: info
+        type: const void*
+      - name: bounds
+        type: Rect*
+
+- function:
+    name: GetThemeTrackThumbRgn
+    return: OSStatus
+    args:
+      - name: info
+        type: const void*
+      - name: thumb
+        type: RgnHandle
+
+- function:
+    name: GetThemeTrackDragRect
+    return: OSStatus
+    args:
+      - name: info
+        type: const void*
+      - name: dragRect
+        type: Rect*
+
+- function:
+    name: DrawThemeTrackTickMarks
+    return: OSStatus
+    args:
+      - name: info
+        type: const void*
+      - name: count
+        type: UInt32
+      - name: eraseProc
+        type: ProcPtr
+      - name: eraseData
+        type: UInt32
+
+- function:
+    name: GetThemeTrackThumbPositionFromOffset
+    return: OSStatus
+    args:
+      - name: info
+        type: const void*
+      - name: offset
+        type: Point
+      - name: position
+        type: SInt32*
+
+- function:
+    name: GetThemeTrackThumbPositionFromRegion
+    return: OSStatus
+    args:
+      - name: info
+        type: const void*
+      - name: thumb
+        type: RgnHandle
+      - name: position
+        type: SInt32*
+
+- function:
+    name: GetThemeTrackLiveValue
+    return: OSStatus
+    args:
+      - name: info
+        type: const void*
+      - name: position
+        type: SInt32
+      - name: value
+        type: SInt32*
+
+- function:
+    name: DrawThemeScrollBarArrows
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: enableState
+        type: UInt8
+      - name: pressState
+        type: UInt8
+      - name: horizontal
+        type: Boolean
+      - name: trackBounds
+        type: Rect*
+
+- function:
+    name: GetThemeScrollBarTrackRect
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: enableState
+        type: UInt8
+      - name: pressState
+        type: UInt8
+      - name: horizontal
+        type: Boolean
+      - name: trackBounds
+        type: Rect*
+
+- function:
+    name: HitTestThemeScrollBarArrows
+    return: Boolean
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: enableState
+        type: UInt8
+      - name: pressState
+        type: UInt8
+      - name: horizontal
+        type: Boolean
+      - name: pt
+        type: Point
+      - name: trackBounds
+        type: Rect*
+      - name: part
+        type: SInt16*
+
+- function:
+    name: GetThemeWindowRegion
+    return: OSStatus
+    args:
+      - name: flavor
+        type: UInt16
+      - name: content
+        type: const Rect*
+      - name: state
+        type: UInt32
+      - name: metrics
+        type: const void*
+      - name: attributes
+        type: UInt32
+      - name: regionCode
+        type: UInt16
+      - name: region
+        type: RgnHandle
+
+- function:
+    name: DrawThemeWindowFrame
+    return: OSStatus
+    args:
+      - name: flavor
+        type: UInt16
+      - name: content
+        type: const Rect*
+      - name: state
+        type: UInt32
+      - name: metrics
+        type: const void*
+      - name: attributes
+        type: UInt32
+      - name: titleProc
+        type: ProcPtr
+      - name: titleData
+        type: UInt32
+
+- function:
+    name: DrawThemeTitleBarWidget
+    return: OSStatus
+    args:
+      - name: flavor
+        type: UInt16
+      - name: content
+        type: const Rect*
+      - name: state
+        type: UInt32
+      - name: metrics
+        type: const void*
+      - name: attributes
+        type: UInt32
+      - name: widget
+        type: UInt16
+
+- function:
+    name: GetThemeWindowRegionHit
+    return: Boolean
+    args:
+      - name: flavor
+        type: UInt16
+      - name: content
+        type: const Rect*
+      - name: state
+        type: UInt32
+      - name: metrics
+        type: const void*
+      - name: attributes
+        type: UInt32
+      - name: pt
+        type: Point
+      - name: regionHit
+        type: UInt16*
+
+- function:
+    name: DrawThemeScrollBarDelimiters
+    return: OSStatus
+    args:
+      - name: flavor
+        type: UInt16
+      - name: content
+        type: const Rect*
+      - name: state
+        type: UInt32
+      - name: attributes
+        type: UInt32
+
+- function:
+    name: DrawThemeButton
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: kind
+        type: UInt16
+      - name: newInfo
+        type: const void*
+      - name: prevInfo
+        type: const void*
+      - name: eraseProc
+        type: ProcPtr
+      - name: labelProc
+        type: ProcPtr
+      - name: userData
+        type: UInt32
+
+- function:
+    name: GetThemeButtonRegion
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: kind
+        type: UInt16
+      - name: info
+        type: const void*
+      - name: region
+        type: RgnHandle
+
+- function:
+    name: GetThemeButtonContentBounds
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: kind
+        type: UInt16
+      - name: info
+        type: const void*
+      - name: content
+        type: Rect*
+
+- function:
+    name: GetThemeButtonBackgroundBounds
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: kind
+        type: UInt16
+      - name: info
+        type: const void*
+      - name: background
+        type: Rect*
+
+- function:
+    name: DrawThemeTickMark
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: state
+        type: UInt32
+
+- function:
+    name: DrawThemeChasingArrows
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: index
+        type: UInt32
+      - name: state
+        type: UInt32
+      - name: eraseProc
+        type: ProcPtr
+      - name: eraseData
+        type: UInt32
+
+- function:
+    name: DrawThemePopupArrow
+    return: OSStatus
+    args:
+      - name: bounds
+        type: const Rect*
+      - name: orientation
+        type: UInt16
+      - name: size
+        type: UInt16
+      - name: state
+        type: UInt32
+      - name: eraseProc
+        type: ProcPtr
+      - name: eraseData
+        type: UInt32
+
+- function:
+    name: DrawThemeStandaloneGrowBox
+    return: OSStatus
+    args:
+      - name: origin
+        type: Point
+      - name: direction
+        type: UInt16
+      - name: small
+        type: Boolean
+      - name: state
+        type: UInt32
+
+- function:
+    name: DrawThemeStandaloneNoGrowBox
+    return: OSStatus
+    args:
+      - name: origin
+        type: Point
+      - name: direction
+        type: UInt16
+      - name: small
+        type: Boolean
+      - name: state
+        type: UInt32
+
+- function:
+    name: GetThemeStandaloneGrowBoxBounds
+    return: OSStatus
+    args:
+      - name: origin
+        type: Point
+      - name: direction
+        type: UInt16
+      - name: small
+        type: Boolean
+      - name: bounds
+        type: Rect*
+
+- function:
+    name: NormalizeThemeDrawingState
+    return: OSStatus
+
+- function:
+    name: GetThemeDrawingState
+    return: OSStatus
+    args:
+      - name: state
+        type: Ptr*
+
+- function:
+    name: SetThemeDrawingState
+    return: OSStatus
+    args:
+      - name: state
+        type: Ptr
+      - name: disposeNow
+        type: Boolean
+
+- function:
+    name: DisposeThemeDrawingState
+    return: OSStatus
+    args:
+      - name: state
+        type: Ptr
+
+- function:
+    name: ApplyThemeBackground
+    return: OSStatus
+    args:
+      - name: kind
+        type: UInt32
+      - name: bounds
+        type: const Rect*
+      - name: state
+        type: UInt32
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+
+- function:
+    name: SetThemeTextColorForWindow
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: active
+        type: Boolean
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+
+- function:
+    name: IsValidAppearanceFileType
+    return: Boolean
+    args:
+      - name: fileType
+        type: OSType
+
+- function:
+    name: GetThemeBrushAsColor
+    return: OSStatus
+    args:
+      - name: brush
+        type: SInt16
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+      - name: color
+        type: RGBColor*
+
+- function:
+    name: GetThemeTextColor
+    return: OSStatus
+    args:
+      - name: color
+        type: SInt16
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+      - name: outColor
+        type: RGBColor*
+
+- function:
+    name: GetThemeMetric
+    return: OSStatus
+    args:
+      - name: metric
+        type: UInt32
+      - name: value
+        type: SInt32*
+
+# Control Manager 2.0
+- function:
+    name: CreateRootControl
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: control
+        type: ControlHandle*
+    dispatcher: ControlDispatch
+    selector: 0x0001
+
+- function:
+    name: GetRootControl
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: control
+        type: ControlHandle*
+    dispatcher: ControlDispatch
+    selector: 0x0002
+
+- function:
+    name: EmbedControl
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: container
+        type: ControlHandle
+    dispatcher: ControlDispatch
+    selector: 0x0003
+
+- function:
+    name: AutoEmbedControl
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: window
+        type: WindowPtr
+    dispatcher: ControlDispatch
+    selector: 0x0004
+
+- function:
+    name: IsControlActive
+    return: Boolean
+    args:
+      - name: control
+        type: ControlHandle
+    dispatcher: ControlDispatch
+    selector: 0x0005
+
+- function:
+    name: IsControlVisible
+    return: Boolean
+    args:
+      - name: control
+        type: ControlHandle
+    dispatcher: ControlDispatch
+    selector: 0x0006
+
+- function:
+    name: ActivateControl
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+    dispatcher: ControlDispatch
+    selector: 0x0007
+
+- function:
+    name: DeactivateControl
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+    dispatcher: ControlDispatch
+    selector: 0x0008
+
+- function:
+    name: FindControlUnderMouse
+    return: ControlHandle
+    args:
+      - name: where
+        type: Point
+      - name: window
+        type: WindowPtr
+      - name: part
+        type: SInt16*
+    dispatcher: ControlDispatch
+    selector: 0x0009
+
+- function:
+    name: HandleControlClick
+    return: SInt16
+    args:
+      - name: control
+        type: ControlHandle
+      - name: where
+        type: Point
+      - name: modifiers
+        type: SInt16
+      - name: action
+        type: ProcPtr
+    dispatcher: ControlDispatch
+    selector: 0x000A
+
+- function:
+    name: HandleControlKey
+    return: SInt16
+    args:
+      - name: control
+        type: ControlHandle
+      - name: keyCode
+        type: SInt16
+      - name: charCode
+        type: SInt16
+      - name: modifiers
+        type: SInt16
+    dispatcher: ControlDispatch
+    selector: 0x000B
+
+- function:
+    name: IdleControls
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: ControlDispatch
+    selector: 0x000C
+
+- function:
+    name: GetKeyboardFocus
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: control
+        type: ControlHandle*
+    dispatcher: ControlDispatch
+    selector: 0x000D
+
+- function:
+    name: SetKeyboardFocus
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: control
+        type: ControlHandle
+      - name: part
+        type: SInt16
+    dispatcher: ControlDispatch
+    selector: 0x000E
+
+- function:
+    name: AdvanceKeyboardFocus
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: ControlDispatch
+    selector: 0x000F
+
+- function:
+    name: ReverseKeyboardFocus
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: ControlDispatch
+    selector: 0x0010
+
+- function:
+    name: GetControlFeatures
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: features
+        type: UInt32*
+    dispatcher: ControlDispatch
+    selector: 0x0011
+
+- function:
+    name: SetControlData
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: part
+        type: SInt16
+      - name: tag
+        type: ResType
+      - name: size
+        type: Size
+      - name: data
+        type: Ptr
+    dispatcher: ControlDispatch
+    selector: 0x0012
+
+- function:
+    name: GetControlData
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: part
+        type: SInt16
+      - name: tag
+        type: ResType
+      - name: bufferSize
+        type: Size
+      - name: buffer
+        type: Ptr
+      - name: actualSize
+        type: Size*
+    dispatcher: ControlDispatch
+    selector: 0x0013
+
+- function:
+    name: GetControlDataSize
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: part
+        type: SInt16
+      - name: tag
+        type: ResType
+      - name: maxSize
+        type: Size*
+    dispatcher: ControlDispatch
+    selector: 0x0014
+
+- function:
+    name: GetSuperControl
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: parent
+        type: ControlHandle*
+    dispatcher: ControlDispatch
+    selector: 0x0015
+
+- function:
+    name: CountSubControls
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: count
+        type: UInt16*
+    dispatcher: ControlDispatch
+    selector: 0x0016
+
+- function:
+    name: GetIndexedSubControl
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: index
+        type: UInt16
+      - name: sub
+        type: ControlHandle*
+    dispatcher: ControlDispatch
+    selector: 0x0017
+
+- function:
+    name: DrawControlInCurrentPort
+    args:
+      - name: control
+        type: ControlHandle
+    dispatcher: ControlDispatch
+    selector: 0x0018
+
+- function:
+    name: ClearKeyboardFocus
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: ControlDispatch
+    selector: 0x0019
+
+- function:
+    name: SetControlSupervisor
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: boss
+        type: ControlHandle
+    dispatcher: ControlDispatch
+    selector: 0x001A
+
+- function:
+    name: GetBestControlRect
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: rect
+        type: Rect*
+      - name: baseLineOffset
+        type: SInt16*
+    dispatcher: ControlDispatch
+    selector: 0x001B
+
+- function:
+    name: SetControlFontStyle
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: style
+        type: const void*
+    dispatcher: ControlDispatch
+    selector: 0x001C
+
+- function:
+    name: SetUpControlBackground
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: depth
+        type: SInt16
+      - name: isColorDevice
+        type: Boolean
+    dispatcher: ControlDispatch
+    selector: 0x001D
+
+- function:
+    name: SetControlVisibility
+    return: OSErr
+    args:
+      - name: control
+        type: ControlHandle
+      - name: visible
+        type: Boolean
+      - name: draw
+        type: Boolean
+    dispatcher: ControlDispatch
+    selector: 0x001E
+
+- function:
+    name: SendControlMessage
+    return: SInt32
+    args:
+      - name: control
+        type: ControlHandle
+      - name: message
+        type: SInt16
+      - name: param
+        type: SInt32
+    dispatcher: ControlDispatch
+    selector: -2
+
+- function:
+    name: DumpControlHierarchy
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+      - name: file
+        type: const void*
+    dispatcher: ControlDispatch
+    selector: -1
+
+# The Appearance controls' helpers (AppearanceLib glue over SetControlData)
+- function:
+    name: GetBevelButtonMenuValue
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: value
+        type: SInt16*
+
+- function:
+    name: SetBevelButtonMenuValue
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: value
+        type: SInt16
+
+- function:
+    name: GetBevelButtonMenuHandle
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: menu
+        type: MenuHandle*
+
+- function:
+    name: GetBevelButtonContentInfo
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: content
+        type: void*
+
+- function:
+    name: SetBevelButtonContentInfo
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: content
+        type: void*
+
+- function:
+    name: SetBevelButtonTransform
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: transform
+        type: SInt16
+
+- function:
+    name: SetBevelButtonGraphicAlignment
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: align
+        type: SInt16
+      - name: hOffset
+        type: SInt16
+      - name: vOffset
+        type: SInt16
+
+- function:
+    name: SetBevelButtonTextAlignment
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: align
+        type: SInt16
+      - name: hOffset
+        type: SInt16
+
+- function:
+    name: SetBevelButtonTextPlacement
+    return: OSErr
+    args:
+      - name: button
+        type: ControlHandle
+      - name: where
+        type: SInt16
+
+- function:
+    name: SetImageWellContentInfo
+    return: OSErr
+    args:
+      - name: well
+        type: ControlHandle
+      - name: content
+        type: void*
+
+- function:
+    name: SetImageWellTransform
+    return: OSErr
+    args:
+      - name: well
+        type: ControlHandle
+      - name: transform
+        type: SInt16
+
+- function:
+    name: SetTabEnabled
+    return: OSErr
+    args:
+      - name: tabs
+        type: ControlHandle
+      - name: tab
+        type: SInt16
+      - name: enabled
+        type: Boolean
+
+- function:
+    name: SetDisclosureTriangleLastValue
+    return: OSErr
+    args:
+      - name: triangle
+        type: ControlHandle
+      - name: value
+        type: SInt16
+
+# Dialog Manager (Mac OS 8)
+- function:
+    name: NewFeaturesDialog
+    return: DialogPtr
+    args:
+      - name: storage
+        type: void*
+      - name: bounds
+        type: const Rect*
+      - name: title
+        type: ConstStringPtr
+      - name: visible
+        type: Boolean
+      - name: procID
+        type: SInt16
+      - name: behind
+        type: WindowPtr
+      - name: goAway
+        type: Boolean
+      - name: refCon
+        type: SInt32
+      - name: items
+        type: Handle
+      - name: flags
+        type: UInt32
+    dispatcher: DialogDispatch
+    selector: 0x110C
+
+- function:
+    name: AutoSizeDialog
+    return: OSErr
+    args:
+      - name: dialog
+        type: DialogPtr
+    dispatcher: DialogDispatch
+    selector: 0x020D
+
+- function:
+    name: StandardAlert
+    return: OSErr
+    args:
+      - name: alertType
+        type: SInt16
+      - name: error
+        type: StringPtr
+      - name: explanation
+        type: StringPtr
+      - name: param
+        type: void*
+      - name: itemHit
+        type: SInt16*
+    dispatcher: DialogDispatch
+    selector: 0x090E
+
+- function:
+    name: GetDialogItemAsControl
+    return: OSErr
+    args:
+      - name: dialog
+        type: DialogPtr
+      - name: item
+        type: SInt16
+      - name: control
+        type: ControlHandle*
+    dispatcher: DialogDispatch
+    selector: 0x050F
+
+- function:
+    name: MoveDialogItem
+    return: OSErr
+    args:
+      - name: dialog
+        type: DialogPtr
+      - name: item
+        type: SInt16
+      - name: h
+        type: SInt16
+      - name: v
+        type: SInt16
+    dispatcher: DialogDispatch
+    selector: 0x0510
+
+- function:
+    name: SizeDialogItem
+    return: OSErr
+    args:
+      - name: dialog
+        type: DialogPtr
+      - name: item
+        type: SInt16
+      - name: width
+        type: SInt16
+      - name: height
+        type: SInt16
+    dispatcher: DialogDispatch
+    selector: 0x0511
+
+- function:
+    name: AppendDialogItemList
+    return: OSErr
+    args:
+      - name: dialog
+        type: DialogPtr
+      - name: ditlID
+        type: SInt16
+      - name: method
+        type: SInt16
+    dispatcher: DialogDispatch
+    selector: 0x0412
+
+# Menu Manager (Mac OS 8)
+- function:
+    name: MenuEvent
+    return: UInt32
+    args:
+      - name: event
+        type: const EventRecord*
+    dispatcher: MenuDispatch
+    selector: 0x020C
+
+- function:
+    name: SetMenuItemCommandID
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: commandID
+        type: UInt32
+    dispatcher: MenuDispatch
+    selector: 0x0502
+
+- function:
+    name: GetMenuItemCommandID
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: commandID
+        type: UInt32*
+    dispatcher: MenuDispatch
+    selector: 0x0503
+
+- function:
+    name: SetMenuItemModifiers
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: modifiers
+        type: UInt8
+    dispatcher: MenuDispatch
+    selector: 0x0404
+
+- function:
+    name: GetMenuItemModifiers
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: modifiers
+        type: UInt8*
+    dispatcher: MenuDispatch
+    selector: 0x0505
+
+- function:
+    name: SetMenuItemIconHandle
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: iconType
+        type: UInt8
+      - name: icon
+        type: Handle
+    dispatcher: MenuDispatch
+    selector: 0x0606
+
+- function:
+    name: GetMenuItemIconHandle
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: iconType
+        type: UInt8*
+      - name: icon
+        type: Handle*
+    dispatcher: MenuDispatch
+    selector: 0x0707
+
+- function:
+    name: SetMenuItemTextEncoding
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: encoding
+        type: UInt32
+    dispatcher: MenuDispatch
+    selector: 0x0408
+
+- function:
+    name: GetMenuItemTextEncoding
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: encoding
+        type: UInt32*
+    dispatcher: MenuDispatch
+    selector: 0x0509
+
+- function:
+    name: SetMenuItemHierarchicalID
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: hierID
+        type: SInt16
+    dispatcher: MenuDispatch
+    selector: 0x040D
+
+- function:
+    name: GetMenuItemHierarchicalID
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: hierID
+        type: SInt16*
+    dispatcher: MenuDispatch
+    selector: 0x050E
+
+- function:
+    name: SetMenuItemFontID
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: fontID
+        type: SInt16
+    dispatcher: MenuDispatch
+    selector: 0x040F
+
+- function:
+    name: GetMenuItemFontID
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: fontID
+        type: SInt16*
+    dispatcher: MenuDispatch
+    selector: 0x0510
+
+- function:
+    name: SetMenuItemRefCon
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: refCon
+        type: UInt32
+    dispatcher: MenuDispatch
+    selector: 0x050A
+
+- function:
+    name: GetMenuItemRefCon
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: refCon
+        type: UInt32*
+    dispatcher: MenuDispatch
+    selector: 0x050B
+
+- function:
+    name: SetMenuItemRefCon2
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: refCon2
+        type: UInt32
+    dispatcher: MenuDispatch
+    selector: 0x0511
+
+- function:
+    name: GetMenuItemRefCon2
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: refCon2
+        type: UInt32*
+    dispatcher: MenuDispatch
+    selector: 0x0512
+
+- function:
+    name: SetMenuItemKeyGlyph
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: glyph
+        type: SInt16
+    dispatcher: MenuDispatch
+    selector: 0x0513
+
+- function:
+    name: GetMenuItemKeyGlyph
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: glyph
+        type: SInt16*
+    dispatcher: MenuDispatch
+    selector: 0x0514
+
+- function:
+    name: IsMenuItemIconEnabled
+    return: Boolean
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: UInt16
+    dispatcher: MenuDispatch
+    selector: 0x0018
+
+- function:
+    name: EnableMenuItemIcon
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: UInt16
+    dispatcher: MenuDispatch
+    selector: 0x0019
+
+- function:
+    name: DisableMenuItemIcon
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: UInt16
+    dispatcher: MenuDispatch
+    selector: 0x0020
+
+- function:
+    name: GetMenuFont
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: fontID
+        type: SInt16*
+      - name: fontSize
+        type: UInt16*
+
+- function:
+    name: SetMenuFont
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: fontID
+        type: SInt16
+      - name: fontSize
+        type: UInt16
+
+- function:
+    name: GetMenuExcludesMarkColumn
+    return: Boolean
+    args:
+      - name: menu
+        type: MenuHandle
+
+- function:
+    name: SetMenuExcludesMarkColumn
+    return: OSStatus
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: excludesMark
+        type: Boolean
+

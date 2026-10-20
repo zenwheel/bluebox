@@ -183,6 +183,7 @@ static void publish_menus(void)
                 mi->key = rd8(it + 1 + nl + 1);
                 mi->mark = rd8(it + 1 + nl + 2);
                 mi->style = rd8(it + 1 + nl + 3);
+                mi->modifiers = menu_item_modifiers(mh, k + 1);
                 mi->enabled = (flags & 1) && ((k + 1) > 31 || (flags & (1u << (k + 1))));
                 k++;
                 it += (uint32_t)nl + 5;

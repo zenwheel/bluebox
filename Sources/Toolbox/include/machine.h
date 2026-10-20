@@ -60,6 +60,10 @@ void machine_set_appearance(int appearance);
 /* The highlight colour (HiliteRGB) from boot on: the host's selection
  * colour, for selected text and list rows to match the host. */
 void machine_set_hilite_color(uint16_t r, uint16_t g, uint16_t b);
+/* The host's accent colour, for the Appearance Manager's (scroll bar
+ * thumbs, focus rings, selected menu items).  Both may be set from any
+ * thread while the machine runs: they take effect at its next event call. */
+void machine_set_accent_color(uint16_t r, uint16_t g, uint16_t b);
 /* Use a Kaleidoscope 2 scheme file (AppleDouble) for windows and controls;
  * implies MACHINE_APPEARANCE_THEME and a 32-bit screen.  Before boot. */
 bool machine_load_theme(const char *path, char *err, size_t errlen);
@@ -153,6 +157,7 @@ typedef struct {
     char text[64];               /* MacRoman */
     bool enabled, separator;
     uint8_t key, mark, style;
+    uint8_t modifiers;           /* Mac OS 8's: 1 Shift, 2 Option, 4 Control, 8 no Command */
 } machine_menu_item;
 
 typedef struct {

@@ -39,6 +39,9 @@ static int16_t mouse_h, mouse_v;
  * motion): the position last written to low memory, the program's moves
  * counted, and when it last moved it. */
 static uint32_t written_pt;
+/* Since boot: the first sync writes the mouse without looking for a move;
+ * waiting, caught between a program's cursor writes and its CrsrNew. */
+static bool synced, waiting;
 static uint32_t warps;
 static uint64_t last_warp_ns;
 static double frac_h, frac_v; /* captured motion's fractions of a pixel */
@@ -191,11 +194,11 @@ void events_sync_lowmem(void)
      * RawMouse, and CrsrNew set (as the cursor VBL task then drew it
      * there).  The mouse is there now, and the host's pointer follows. */
     uint32_t mtemp = rd32(LM_MTemp), raw = rd32(LM_MouseLocation);
-    bool changed = mtemp != written_pt || raw != written_pt;
+    bool changed = synced && (mtemp != written_pt || raw != written_pt);
+    synced = true;
     /* Caught between its writes and its CrsrNew: the mouse is left alone
      * until the next sync (once only, in case it never sets it); the keys
      * and the button are brought up to date all the same. */
-    static bool waiting;
     bool hold_mouse = changed && !rd8(LM_CrsrNew) && !waiting;
     waiting = hold_mouse;
     bool moved = changed && !hold_mouse;
@@ -541,6 +544,7 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     appletalk_poll();
     if (!os_only)
         drag_host_pump();
+    appearance_poll(); /* the host's highlight and accent colours */
     pthread_mutex_lock(&lock);
     event e = null_event();
     bool found = false;
@@ -892,6 +896,7 @@ void events_reset(void)
     wr32(LM_SysEvtBuf, buf);
     wr16(LM_SysEvtCnt, QSIZE - 1);
     mirrored = (uint32_t)-1;
+    synced = waiting = false;
     pthread_mutex_lock(&lock);
     qhead = qtail = 0;
     qversion++;

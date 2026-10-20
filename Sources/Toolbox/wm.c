@@ -338,7 +338,15 @@ static void wdef_draw(gaddr w, int var, int32_t param)
         if (var == 1) {
             set_rect(r, c.top - 8, c.left - 8, c.bottom + 8, c.right + 8);
             tb_FrameRect(r);
-            set_rect(r, c.top - 7, c.left - 7, c.bottom + 7, c.right + 7);
+            /* The frame's inside, not the content (which is the window's,
+             * in its own background: a theme dialog's grey). */
+            set_rect(r, c.top - 7, c.left - 7, c.top, c.right + 7);
+            tb_EraseRect(r);
+            set_rect(r, c.bottom, c.left - 7, c.bottom + 7, c.right + 7);
+            tb_EraseRect(r);
+            set_rect(r, c.top, c.left - 7, c.bottom, c.left);
+            tb_EraseRect(r);
+            set_rect(r, c.top, c.right, c.bottom, c.right + 7);
             tb_EraseRect(r);
             set_rect(r, c.top - 4, c.left - 4, c.bottom + 4, c.right + 4);
             tb_PenSize(2, 2);
@@ -1158,6 +1166,7 @@ void tb_CloseWindow(gaddr w)
     call_wdef(w, wDispose, 0);
     unlink_window(w);
     remove_aux(w);
+    controls_forget_window(w);
     WindowRecord_set_visible(w, 0);
     if (rd32(LM_CurActivate) == w)
         wr32(LM_CurActivate, 0);

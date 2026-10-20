@@ -26,12 +26,17 @@ enum { nullEvent = 0, mouseDown = 1, keyDown = 3, autoKey = 5, updateEvt = 6, ac
 
 #define ITEM_HEADER 14
 
-/* Per-dialog settings from SetDialogDefaultItem and friends. */
+/* Per-dialog settings from SetDialogDefaultItem and friends, and Mac OS
+ * 8's: the 'dlgx' flags and the 'dftb' font styles of the items. */
 #define MAX_EXTRAS 32
+enum { kDialogFlagsUseThemeBackground = 1, kDialogFlagsUseControlHierarchy = 2, kDialogFlagsUseThemeControls = 8 };
 typedef struct {
     gaddr dialog;
     int16_t cancel;
     bool ring; /* draw the default button's outline */
+    uint32_t flags;
+    uint8_t (*fonts)[24]; /* ControlFontStyleRec by item, flags 0 for none */
+    int nfonts;
 } dialog_extra;
 static dialog_extra extras[MAX_EXTRAS];
 
@@ -44,7 +49,7 @@ static int extra_index(gaddr d, bool create)
         return -1;
     for (int i = 0; i < MAX_EXTRAS; i++)
         if (!extras[i].dialog) {
-            extras[i] = (dialog_extra){ d, 0, false };
+            extras[i] = (dialog_extra){ d, 0, false, 0, NULL, 0 };
             return i;
         }
     return -1;
@@ -73,6 +78,101 @@ static gaddr item_at(gaddr d, int n)
 static int item_type(gaddr d, int n) { return rd8(item_at(d, n) + 12); }
 static gaddr item_handle(gaddr d, int n) { return rd32(item_at(d, n)); }
 static qrect item_rect(gaddr d, int n) { return qrect_get(item_at(d, n) + 4); }
+static uint32_t dialog_flags(gaddr d)
+{
+    int x = extra_index(d, false);
+    return x >= 0 ? extras[x].flags : 0;
+}
+
+/* Edit text in a theme-background dialog is white: TextEdit erases with
+ * the port's background, so it is white while TextEdit works. */
+typedef struct {
+    bool on;
+    uint16_t back[3];
+} edit_bk;
+
+static void edit_bk_begin(gaddr d, edit_bk *b)
+{
+    b->on = (dialog_flags(d) & kDialogFlagsUseThemeBackground) != 0;
+    if (!b->on)
+        return;
+    gaddr c = tb_NewPtr(6, false, false);
+    tb_GetBackColor(c);
+    for (int i = 0; i < 3; i++)
+        b->back[i] = rd16(c + (uint32_t)i * 2);
+    wr16(c, 0xFFFF);
+    wr16(c + 2, 0xFFFF);
+    wr16(c + 4, 0xFFFF);
+    tb_RGBBackColor(c);
+    tb_DisposePtr(c);
+}
+
+static void edit_bk_end(const edit_bk *b)
+{
+    if (!b->on)
+        return;
+    gaddr c = tb_NewPtr(6, false, false);
+    for (int i = 0; i < 3; i++)
+        wr16(c + (uint32_t)i * 2, b->back[i]);
+    tb_RGBBackColor(c);
+    tb_DisposePtr(c);
+}
+
+/* An item's 'dftb' font style, if it has one. */
+static const uint8_t *item_font(gaddr d, int n)
+{
+    int x = extra_index(d, false);
+    if (x < 0 || n < 1 || n > extras[x].nfonts || !extras[x].fonts)
+        return NULL;
+    const uint8_t *f = extras[x].fonts[n - 1];
+    return (f[0] | f[1]) ? f : NULL;
+}
+
+typedef struct {
+    int16_t font, size;
+    uint8_t face;
+    bool on;
+} item_font_saved;
+
+/* The item's font in the port while it is drawn. */
+static void item_font_begin(gaddr d, int n, item_font_saved *s)
+{
+    const uint8_t *f = item_font(d, n);
+    s->on = f != NULL;
+    if (!f)
+        return;
+    s->font = GrafPort_txFont(d);
+    s->size = GrafPort_txSize(d);
+    s->face = GrafPort_txFace(d);
+    int flags = f[0] << 8 | f[1];
+    int16_t font = (int16_t)(f[2] << 8 | f[3]), size = (int16_t)(f[4] << 8 | f[5]);
+    if (flags & 1) {
+        if (font == -1) {
+            GrafPort_set_txFont(d, 0);
+            GrafPort_set_txSize(d, 12);
+        } else if (font == -2 || font == -3) {
+            GrafPort_set_txFont(d, 3);
+            GrafPort_set_txSize(d, 10);
+            GrafPort_set_txFace(d, font == -3 ? 1 : 0);
+        } else {
+            GrafPort_set_txFont(d, font);
+        }
+    }
+    if (flags & 2)
+        GrafPort_set_txFace(d, f[7]);
+    if (flags & 4)
+        GrafPort_set_txSize(d, (int16_t)((flags & 0x100) ? GrafPort_txSize(d) + size : size));
+}
+
+static void item_font_end(gaddr d, const item_font_saved *s)
+{
+    if (!s->on)
+        return;
+    GrafPort_set_txFont(d, s->font);
+    GrafPort_set_txSize(d, s->size);
+    GrafPort_set_txFace(d, s->face);
+}
+
 /* A dialog: windowKind dialogKind, or a window whose dialog fields hold
  * an item list.  A program may give its dialogs a windowKind of its own,
  * or make one from a window it filled in itself (ResEdit's editors, kind
@@ -119,6 +219,8 @@ static gaddr edit_te(gaddr d) { return rd32(d + DialogRecord_textH_off); }
 static int edit_item(gaddr d) { return (int16_t)rd16(d + DialogRecord_editField_off) + 1; }
 
 /* Make item n the active edit text item, selecting [start, end). */
+static void focus_ring(gaddr d, int n, bool on);
+
 static void activate_edit(gaddr d, int n, int start, int end)
 {
     gaddr te = edit_te(d);
@@ -126,17 +228,39 @@ static void activate_edit(gaddr d, int n, int start, int end)
         return;
     gaddr saved = qd_port();
     tb_SetPort(d);
+    edit_bk bk;
+    edit_bk_begin(d, &bk);
     tb_TEDeactivate(te);
+    int old = edit_item(d);
+    if (old != n)
+        focus_ring(d, old, false);
     qrect r = item_rect(d, n);
     gaddr t = rd32(te);
     qrect_put(t + TERec_destRect_off, r);
     qrect_put(t + TERec_viewRect_off, r);
     TERec_set_hText(t, item_handle(d, n));
+    /* The item's font ('dftb'), or the dialog's. */
+    item_font_saved fs;
+    item_font_begin(d, n, &fs);
+    gaddr fi = tb_NewPtr(8, false, false);
+    tb_GetFontInfo(fi);
+    t = rd32(te);
+    TERec_set_txFont(t, GrafPort_txFont(d));
+    TERec_set_txSize(t, GrafPort_txSize(d));
+    TERec_set_txFace(t, (int8_t)GrafPort_txFace(d));
+    int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2), lead = (int16_t)rd16(fi + 6);
+    TERec_set_lineHeight(t, (int16_t)(asc + desc + lead));
+    TERec_set_fontAscent(t, (int16_t)asc);
+    tb_DisposePtr(fi);
+    item_font_end(d, &fs);
     tb_TECalText(te);
     wr16(d + DialogRecord_editField_off, (uint16_t)(n - 1));
     tb_TESetSelect(start, end, te);
     if (WindowRecord_hilited(d))
         tb_TEActivate(te);
+    edit_bk_end(&bk);
+    if (WindowRecord_visible(d))
+        focus_ring(d, n, true);
     tb_SetPort(saved);
 }
 
@@ -291,8 +415,11 @@ void tb_ShortenDITL(gaddr d, int16_t count)
 
 int16_t tb_CountDITL(gaddr d) { return (int16_t)item_count(d); }
 
-gaddr tb_NewDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag, int32_t rc,
-                   gaddr items)
+/* A dialog, with Mac OS 8's flags ('dlgx', NewFeaturesDialog): the
+ * theme's background, a root control the item controls go in, and the
+ * standard controls in Platinum. */
+static gaddr new_dialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag,
+                        int32_t rc, gaddr items, uint32_t flags)
 {
     gaddr d = dst ? dst : tb_NewPtr(DialogRecord_SIZEOF, false, true);
     if (!d)
@@ -309,10 +436,90 @@ gaddr tb_NewDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, ga
     tb_TextFont((int16_t)rd16(LM_DlgFont));
     tb_TextSize(12);
     tb_SetPort(saved);
+    if (flags) {
+        int x = extra_index(d, true);
+        if (x >= 0)
+            extras[x].flags = flags;
+        if (flags & kDialogFlagsUseThemeBackground)
+            tb_SetThemeWindowBackground(d, 1, false); /* kThemeBrushDialogBackgroundActive */
+        if (flags & (kDialogFlagsUseThemeControls | kDialogFlagsUseThemeBackground))
+            ctl_set_window_themed(d, true);
+        if (flags & kDialogFlagsUseControlHierarchy)
+            tb_CreateRootControl(d, 0);
+    }
     make_items(d);
     if (vis)
         tb_ShowWindow(d);
     return d;
+}
+
+gaddr tb_NewDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag, int32_t rc,
+                   gaddr items)
+{
+    return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, 0);
+}
+
+gaddr tb_NewFeaturesDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag,
+                           int32_t rc, gaddr items, uint32_t flags)
+{
+    return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, flags);
+}
+
+/* 'dftb': version, count, then for each item 0 (none) or 1 and a
+ * ControlFontStyleRec's fields with a font name after them. */
+static void apply_dftb(gaddr d, int16_t id)
+{
+    gaddr h = tb_GetResource((int32_t)fourcc("dftb"), id);
+    if (!h || !rd32(h))
+        return;
+    uint32_t len = (uint32_t)tb_GetHandleSize(h);
+    gaddr p = rd32(h);
+    if (len < 4 || rd16(p) != 0)
+        return;
+    int n = (int16_t)rd16(p + 2);
+    int x = extra_index(d, true);
+    if (x < 0 || n <= 0)
+        return;
+    free(extras[x].fonts);
+    extras[x].fonts = calloc((size_t)n, 24);
+    extras[x].nfonts = n;
+    uint32_t o = 4;
+    for (int i = 0; i < n && o + 2 <= len; i++) {
+        int type = (int16_t)rd16(p + o);
+        o += 2;
+        if (type != 1)
+            continue;
+        if (o + 24 + 1 > len)
+            break;
+        uint8_t *f = extras[x].fonts[i];
+        gget(f, p + o, 24);
+        int flags = f[0] << 8 | f[1];
+        uint32_t nl = rd8(p + o + 24);
+        if ((flags & 0x200) && nl) { /* kDialogFontUseFontNameMask: the font by name */
+            gaddr name = tb_NewPtr(256, false, true), num = tb_NewPtr(2, false, true);
+            gmemcpy(name, p + o + 24, nl + 1);
+            tb_GetFNum(name, num);
+            f[2] = (uint8_t)(rd16(num) >> 8);
+            f[3] = (uint8_t)rd16(num);
+            flags |= 1;
+            f[0] = (uint8_t)(flags >> 8);
+            f[1] = (uint8_t)flags;
+            tb_DisposePtr(num);
+            tb_DisposePtr(name);
+        }
+        o += 24 + 1 + nl;
+        if (i < item_count(d) && (item_type(d, i + 1) & ctrlItem) && item_handle(d, i + 1)) {
+            gaddr rec = tb_NewPtr(24, false, false);
+            gput(rec, f, 24);
+            tb_SetControlFontStyle(item_handle(d, i + 1), rec);
+            tb_DisposePtr(rec);
+        }
+        h = tb_GetResource((int32_t)fourcc("dftb"), id); /* (memory may have moved) */
+        p = h && rd32(h) ? rd32(h) : 0;
+        if (!p)
+            break;
+        x = extra_index(d, true);
+    }
 }
 
 gaddr tb_NewColorDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag,
@@ -337,8 +544,17 @@ gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override
     gaddr p = rd32(dlog);
     int vis = vis_override >= 0 ? vis_override : rd8(p + 10);
     int32_t rc = use_refcon ? refcon_override : (int32_t)rd32(p + 14);
-    gaddr d = tb_NewDialog(dst, p, p + 20, (int8_t)vis, (int16_t)rd16(p + 8), behind, (int8_t)rd8(p + 12), rc, items);
+    /* 'dlgx' (version 0, flags) asks for Mac OS 8's features. */
+    gaddr x = tb_GetResource((int32_t)fourcc("dlgx"), id);
+    uint32_t flags = x && rd32(x) && tb_GetHandleSize(x) >= 6 && rd16(rd32(x)) == 0 ? rd32(rd32(x) + 2) : 0;
+    p = rd32(dlog);
+    /* Shown after its fonts are in. */
+    gaddr d = new_dialog(dst, p, p + 20, 0, (int16_t)rd16(p + 8), behind, (int8_t)rd8(p + 12), rc, items, flags);
     tb_HUnlock(dlog);
+    if (d)
+        apply_dftb(d, id);
+    if (d && vis)
+        tb_ShowWindow(d);
     return d;
 }
 
@@ -346,6 +562,7 @@ gaddr tb_GetNewDialog(int16_t id, gaddr dst, gaddr behind) { return dialog_from_
 
 void tb_CloseDialog(gaddr d)
 {
+    ap_forget_dialog(d);
     gaddr te = edit_te(d);
     if (te) {
         TERec_set_hText(rd32(te), tb_NewHandle(0, false, false)); /* the item owns its text */
@@ -363,8 +580,10 @@ void tb_CloseDialog(gaddr d)
         tb_DisposeHandle(items_handle(d));
     wr32(d + DialogRecord_items_off, 0);
     int x = extra_index(d, false);
-    if (x >= 0)
-        extras[x].dialog = 0;
+    if (x >= 0) {
+        free(extras[x].fonts);
+        extras[x] = (dialog_extra){ 0 };
+    }
 }
 
 void tb_DisposeDialog(gaddr d)
@@ -521,6 +740,28 @@ static void draw_text_item(gaddr h, qrect r, bool substitute)
     free(out);
 }
 
+/* Platinum's edit text: white inside a well frame, the one being edited
+ * with the focus ring (theme dialogs, in colour). */
+static bool platinum_edit(gaddr d)
+{
+    return (dialog_flags(d) & (kDialogFlagsUseThemeBackground | kDialogFlagsUseThemeControls)) &&
+           g_appearance == MACHINE_APPEARANCE_BW && ap_in_color();
+}
+
+static void focus_ring(gaddr d, int n, bool on)
+{
+    if (n < 1 || n > item_count(d) || (item_type(d, n) & 0x7F) != editText || !platinum_edit(d))
+        return;
+    qrect r = item_rect(d, n);
+    if (r.left > 8192)
+        return;
+    gaddr saved = qd_port();
+    tb_SetPort(d);
+    ap_focus_rect((qrect){ (int16_t)(r.top - 4), (int16_t)(r.left - 4), (int16_t)(r.bottom + 4), (int16_t)(r.right + 4) },
+                  on && WindowRecord_hilited(d));
+    tb_SetPort(saved);
+}
+
 static void draw_item(gaddr d, int n)
 {
     int type = item_type(d, n) & 0x7F;
@@ -530,6 +771,8 @@ static void draw_item(gaddr d, int n)
     gaddr h = item_handle(d, n);
     gaddr rp = tb_NewPtr(8, false, false);
     qrect_put(rp, r);
+    item_font_saved fs;
+    item_font_begin(d, n, &fs);
     if (type & ctrlItem) {
         if (h)
             tb_Draw1Control(h);
@@ -537,17 +780,29 @@ static void draw_item(gaddr d, int n)
         draw_text_item(h, r, true);
     } else if (type == editText) {
         qrect f = { (int16_t)(r.top - 3), (int16_t)(r.left - 3), (int16_t)(r.bottom + 3), (int16_t)(r.right + 3) };
-        if (!native_draw_edit_frame(f, n == edit_item(d))) {
+        bool platinum = platinum_edit(d);
+        if (platinum) {
+            ap_fill_grey((qrect){ (int16_t)(r.top - 2), (int16_t)(r.left - 2), (int16_t)(r.bottom + 2), (int16_t)(r.right + 2) }, 0xFFFF);
+            ap_well_frame((qrect){ (int16_t)(r.top - 2), (int16_t)(r.left - 2), (int16_t)(r.bottom + 2), (int16_t)(r.right + 2) },
+                          WindowRecord_hilited(d) ? 1 : 0);
+        } else if (!native_draw_edit_frame(f, n == edit_item(d))) {
             gaddr fp = tb_NewPtr(8, false, false);
             qrect_put(fp, f);
             tb_PenNormal();
             tb_FrameRect(fp);
             tb_DisposePtr(fp);
         }
+        edit_bk bk;
+        edit_bk_begin(d, &bk);
         if (n == edit_item(d) && edit_te(d))
             tb_TEUpdate(rp, edit_te(d));
         else
             draw_text_item(h, r, false);
+        edit_bk_end(&bk);
+        if (platinum && n == edit_item(d) && edit_te(d))
+            focus_ring(d, n, true);
+    } else if (type == userItem && ap_item_draw(d, n)) {
+        /* its stand-in's drawing procedure (a user pane's) */
     } else if (type == iconItem) {
         if (h)
             tb_PlotIcon(rp, h);
@@ -559,8 +814,28 @@ static void draw_item(gaddr d, int n)
         cpu_push16(g_cpu, (uint16_t)n);
         guest_call(h);
     }
+    item_font_end(d, &fs);
     tb_DisposePtr(rp);
 }
+
+/* For the items' stand-in controls (cdefs_appearance.c). */
+void dialog_draw_item(gaddr d, int n)
+{
+    if (n < 1 || n > item_count(d))
+        return;
+    gaddr saved = qd_port();
+    tb_SetPort(d);
+    draw_item(d, n);
+    tb_SetPort(saved);
+}
+
+void dialog_select_item_text(gaddr d, int n, int start, int end)
+{
+    if (n >= 1 && n <= item_count(d) && (item_type(d, n) & 0x7F) == editText)
+        activate_edit(d, n, start, end);
+}
+
+gaddr dialog_item_te(gaddr d, int n) { return n == edit_item(d) ? edit_te(d) : 0; }
 
 static void draw_default_ring(gaddr d)
 {
@@ -571,6 +846,12 @@ static void draw_default_ring(gaddr d)
     if (n < 1 || n > item_count(d) || !(item_type(d, n) & ctrlItem))
         return;
     qrect r = item_rect(d, n);
+    gaddr button = item_handle(d, n);
+    if (button && rd32(button) && ctl_platinum(button)) { /* Platinum's ring */
+        uint8_t hil = ControlRecord_contrlHilite(rd32(button));
+        ap_default_ring(qrect_get(rd32(button) + ControlRecord_contrlRect_off), hil == 255 ? 0 : 1);
+        return;
+    }
     gaddr rp = tb_NewPtr(8, false, false);
     qrect_put(rp, (qrect){ (int16_t)(r.top - 4), (int16_t)(r.left - 4), (int16_t)(r.bottom + 4), (int16_t)(r.right + 4) });
     tb_PenSize(3, 3);
@@ -598,13 +879,29 @@ void tb_DrawDialog(gaddr d)
     }
     /* Controls the program added with NewControl, outside the item list,
      * are the dialog's too (DrawControls draws them all): Installer VISE's
-     * Install Location pop-up. */
+     * Install Location pop-up.  With a root control, those in it that are
+     * not items (an embedded control is drawn with its embedder). */
+    gaddr root = ctl_window_root(d);
     for (gaddr c = WindowRecord_controlList(d); c && rd32(c); c = ControlRecord_nextControl(rd32(c))) {
         bool item = false;
         for (int i = 1; i <= n && !item; i++)
             item = (item_type(d, i) & ctrlItem) && item_handle(d, i) == c;
-        if (!item)
+        if (item)
+            continue;
+        ctl_info *ci = ctl_find(c);
+        if (c == root) {
+            gaddr subs[256];
+            int k = ctl_subcontrols(root, subs, 256);
+            for (int j = 0; j < k; j++) {
+                bool sub_item = false;
+                for (int i = 1; i <= n && !sub_item; i++)
+                    sub_item = (item_type(d, i) & ctrlItem) && item_handle(d, i) == subs[j];
+                if (!sub_item)
+                    tb_Draw1Control(subs[j]);
+            }
+        } else if (!ci || !ci->parent) {
             tb_Draw1Control(c);
+        }
     }
     draw_default_ring(d);
     tb_SetPort(saved);
@@ -680,14 +977,27 @@ int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
         tb_DrawDialog(d);
         tb_EndUpdate(d);
         break;
-    case activateEvt:
+    case activateEvt: {
+        bool on = rd16(evt + EventRecord_modifiers_off) & 1;
         if (te) {
-            if (rd16(evt + EventRecord_modifiers_off) & 1)
+            edit_bk bk;
+            edit_bk_begin(d, &bk);
+            if (on)
                 tb_TEActivate(te);
             else
                 tb_TEDeactivate(te);
+            edit_bk_end(&bk);
+            focus_ring(d, edit_item(d), on);
+        }
+        gaddr root = ctl_window_root(d); /* Mac OS 8's dialogs dim their controls when inactive */
+        if (root) {
+            if (on)
+                tb_ActivateControl(root);
+            else
+                tb_DeactivateControl(root);
         }
         break;
+    }
     case mouseDown: {
         gaddr pt = tb_NewPtr(4, false, false);
         wr32(pt, rd32(evt + EventRecord_where_off));
@@ -707,7 +1017,13 @@ int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
             if (n > 0 && (item_type(d, n) & 0x7F) == editText && te) {
                 if (n != edit_item(d))
                     activate_edit(d, n, 0, 0);
+                edit_bk bk;
+                edit_bk_begin(d, &bk);
                 tb_TEClick(p, (rd16(evt + EventRecord_modifiers_off) & 0x0200) != 0, te);
+                edit_bk_end(&bk);
+            } else if (n > 0 && (item_type(d, n) & 0x7F) == userItem &&
+                       !ap_item_click(d, n, p, (int16_t)rd16(evt + EventRecord_modifiers_off))) {
+                n = 0; /* a user pane's hit test said no */
             }
         }
         if (n > 0 && item_enabled(d, n)) {
@@ -732,7 +1048,10 @@ int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
             }
             break;
         }
+            edit_bk bk;
+            edit_bk_begin(d, &bk);
             tb_TEKey((int16_t)c, te);
+            edit_bk_end(&bk);
             int n = edit_item(d);
         if (item_enabled(d, n)) {
             wr16(itemp, (uint16_t)n);
@@ -741,8 +1060,12 @@ int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
         break;
     }
     default:
-        if (te)
+        if (te) {
+            edit_bk bk;
+            edit_bk_begin(d, &bk);
             tb_TEIdle(te);
+            edit_bk_end(&bk);
+        }
         break;
     }
     tb_SetPort(saved);
@@ -995,4 +1318,152 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
     }
     tb_DisposePtr(dp);
     tb_DisposePtr(evt);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mac OS 8's additions */
+
+enum { errItemNotControl = -30596 };
+
+/* The item's control: a control item's own, or for the others a stand-in
+ * whose data is the item's (static and edit text, icons, pictures, user
+ * items as user panes). */
+int16_t tb_GetDialogItemAsControl(gaddr d, int16_t n, gaddr out)
+{
+    if (out)
+        wr32(out, 0);
+    if (!is_dialog(d) || n < 1 || n > item_count(d))
+        return errItemNotControl;
+    int type = item_type(d, n) & 0x7F;
+    gaddr ch = (type & ctrlItem) ? item_handle(d, n) : 0;
+    if (!ch && type != 1) /* help items have none */
+        ch = ap_item_control(d, n, type);
+    if (!ch)
+        return errItemNotControl;
+    if (out)
+        wr32(out, ch);
+    return noErr;
+}
+
+/* Move an item to (h, v) (window coordinates), its control or text with it. */
+int16_t tb_MoveDialogItem(gaddr d, int16_t n, int16_t h, int16_t v)
+{
+    if (!is_dialog(d) || n < 1 || n > item_count(d))
+        return paramErr;
+    qrect r = item_rect(d, n);
+    bool hidden = r.left > 8192;
+    if (hidden) {
+        r.left -= 16384;
+        r.right -= 16384;
+    }
+    qrect nr = { v, h, (int16_t)(v + r.bottom - r.top), (int16_t)(h + r.right - r.left) };
+    if (hidden) {
+        nr.left += 16384;
+        nr.right += 16384;
+    }
+    qrect_put(item_at(d, n) + 4, nr);
+    if ((item_type(d, n) & ctrlItem) && item_handle(d, n))
+        tb_MoveControl(item_handle(d, n), h, v); /* (a hidden item's control is hidden, where it was) */
+    if (n == edit_item(d) && edit_te(d)) {
+        gaddr t = rd32(edit_te(d));
+        qrect_put(t + TERec_destRect_off, nr);
+        qrect_put(t + TERec_viewRect_off, nr);
+        tb_TECalText(edit_te(d));
+    }
+    return noErr;
+}
+
+int16_t tb_SizeDialogItem(gaddr d, int16_t n, int16_t width, int16_t height)
+{
+    if (!is_dialog(d) || n < 1 || n > item_count(d))
+        return paramErr;
+    qrect r = item_rect(d, n);
+    r.right = (int16_t)(r.left + width);
+    r.bottom = (int16_t)(r.top + height);
+    qrect_put(item_at(d, n) + 4, r);
+    if ((item_type(d, n) & ctrlItem) && item_handle(d, n))
+        tb_SizeControl(item_handle(d, n), width, height);
+    if (n == edit_item(d) && edit_te(d)) {
+        gaddr t = rd32(edit_te(d));
+        qrect_put(t + TERec_destRect_off, r);
+        qrect_put(t + TERec_viewRect_off, r);
+        tb_TECalText(edit_te(d));
+    }
+    return noErr;
+}
+
+/* AutoSizeDialog: static text items grow to hold their text (wrapped in
+ * their width), the items below move down, and the window grows. */
+int16_t tb_AutoSizeDialog(gaddr d)
+{
+    if (!is_dialog(d))
+        return paramErr;
+    gaddr saved = qd_port();
+    tb_SetPort(d);
+    int n = item_count(d), grown = 0;
+    gaddr fi = tb_NewPtr(8, false, false);
+    for (int i = 1; i <= n; i++) {
+        if ((item_type(d, i) & 0x7F) != statText)
+            continue;
+        qrect r = item_rect(d, i);
+        if (r.left > 8192)
+            continue;
+        gaddr h = item_handle(d, i);
+        uint32_t len = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
+        if (!len)
+            continue;
+        uint8_t *text = malloc(len);
+        gget(text, rd32(h), len);
+        item_font_saved fs;
+        item_font_begin(d, i, &fs);
+        tb_GetFontInfo(fi);
+        int line = (int16_t)rd16(fi) + (int16_t)rd16(fi + 2) + (int16_t)rd16(fi + 6);
+        /* Lines as TextBox breaks them: at returns, and at the last space that fits. */
+        int lines = 1, width = r.right - r.left;
+        uint32_t start = 0, space = 0;
+        for (uint32_t k = 0; k < len; k++) {
+            if (text[k] == '\r') {
+                lines++;
+                start = k + 1;
+                space = 0;
+                continue;
+            }
+            if (text[k] == ' ')
+                space = k;
+            if (qd_text_width(d, text + start, (int)(k + 1 - start)) > width) {
+                lines++;
+                start = space > start ? space + 1 : k;
+                space = 0;
+            }
+        }
+        item_font_end(d, &fs);
+        free(text);
+        int need = lines * line - (r.bottom - r.top);
+        if (need <= 0)
+            continue;
+        qrect_put(item_at(d, i) + 4, (qrect){ r.top, r.left, (int16_t)(r.bottom + need), r.right });
+        for (int k = 1; k <= n; k++) {
+            qrect o = item_rect(d, k);
+            if (k == i || o.top < r.bottom)
+                continue;
+            tb_MoveDialogItem(d, (int16_t)k, o.left > 8192 ? (int16_t)(o.left - 16384) : o.left, (int16_t)(o.top + need));
+        }
+        grown += need;
+    }
+    tb_DisposePtr(fi);
+    if (grown) {
+        qrect port = qrect_get(d + GrafPort_portRect_off);
+        tb_SizeWindow(d, (int16_t)(port.right - port.left), (int16_t)(port.bottom - port.top + grown), true);
+    }
+    tb_SetPort(saved);
+    return noErr;
+}
+
+int16_t tb_AppendDialogItemList(gaddr d, int16_t id, int16_t method)
+{
+    gaddr ditl = tb_GetResource((int32_t)fourcc("DITL"), id);
+    if (!ditl || !rd32(ditl))
+        return resNotFound;
+    tb_AppendDITL(d, ditl, method);
+    return noErr;
 }

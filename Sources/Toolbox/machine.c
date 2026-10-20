@@ -49,6 +49,7 @@ void machine_set_hilite_color(uint16_t r, uint16_t g, uint16_t b)
     hilite_rgb[0] = r;
     hilite_rgb[1] = g;
     hilite_rgb[2] = b;
+    appearance_hilite_changed(r, g, b); /* a running machine's follows */
 }
 
 static uint64_t now_ns(void)
@@ -231,6 +232,13 @@ static bool open_system_file(void)
         uint8_t s[6] = { 0x2F, 0x38, (uint8_t)(entry >> 8), (uint8_t)entry, 0x4E, 0x75 };
         memcpy(packs[i], s, 6);
     }
+    /* The Appearance Manager's CDEFs. */
+    static uint8_t ap_cdefs[32][8];
+    static char ap_names[32][12];
+    for (int i = 0; i < ap_cdef_stub_count && i < 32; i++) {
+        snprintf(ap_names[i], sizeof ap_names[i], "CDEF %d", ap_cdef_stubs[i].id);
+        defproc_stub(ap_cdefs[i], ap_cdef_stubs[i].fn, ap_names[i]);
+    }
     rsrc_spec specs[512] = {
         { fourcc("WDEF"), 0, NULL, RES_SYS_HEAP, wdef0, 8 },
         { fourcc("WDEF"), 124, NULL, RES_SYS_HEAP, wdef124, 8 },
@@ -248,6 +256,8 @@ static bool open_system_file(void)
     for (int i = 0; i < 16; i++)
         if (pack_traps[i])
             specs[n++] = (rsrc_spec){ fourcc("PACK"), (int16_t)i, NULL, RES_SYS_HEAP, packs[i], 6 };
+    for (int i = 0; i < ap_cdef_stub_count && i < 32; i++)
+        specs[n++] = (rsrc_spec){ fourcc("CDEF"), ap_cdef_stubs[i].id, NULL, RES_SYS_HEAP, ap_cdefs[i], 8 };
     /* Standard cursors and alert icons (Generators/sysres.py). */
     for (unsigned i = 0; i < sysres_count && n < 512; i++)
         specs[n++] = (rsrc_spec){ sysres[i].type, sysres[i].id, NULL, RES_SYS_HEAP | RES_PURGEABLE, sysres[i].data,
@@ -330,6 +340,10 @@ bool machine_boot(bool census)
     threads_reset();
     help_reset();
     dialog_reset();
+    appearance_reset();
+    controls_reset();
+    ap_cdefs_reset();
+    menu_reset();
     wr32(LM_TheZone, GA_SYSHEAP);
     if (!open_system_file())
         return false;
