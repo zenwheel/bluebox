@@ -243,6 +243,21 @@ extension BlueBox {
             #expect(rn > 0 && tb_Count1Types() == 0)
             tb_CloseResFile(rn)
         }
+
+        /// A file kept as its AppleDouble sidecar alone (an empty data fork,
+        /// as archives give "Icon\r") resolves as an alias file to itself:
+        /// ShatterBat walks its folder that way and stopped at its icon file.
+        @Test func resolveAliasFileFindsASidecarOnlyFile() throws {
+            let dir = launchTestApp()
+            let spec = tb_NewPtr(70, false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Icon"), spec) == -43)
+            tb_FSpCreateResFile(spec, Int32(bitPattern: fourCC("MACS")), Int32(bitPattern: fourCC("icon")), 0)
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent("Icon")) // the data fork goes
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Icon"), spec) == 0)
+            let folder = tb_NewPtr(2, false, true), aliased = tb_NewPtr(2, false, true)
+            #expect(tb_ResolveAliasFile(spec, 1, folder, aliased) == 0)
+            #expect(rd8(folder) == 0 && rd8(aliased) == 0)
+        }
     }
 
     @Suite struct SystemFolder {
@@ -409,6 +424,33 @@ extension BlueBox {
             guestPString(":" + found + ":note", at: path)
             let spec = tb_NewPtr(70, false, true)
             #expect(tb_FSMakeFSSpec(0, 0, path, spec) == 0)
+        }
+    }
+
+    @Suite struct CatalogOrder {
+        /// Indexed entries come in HFS catalog order, which ignores case:
+        /// programs that look for a file by walking a folder (Bad Day on
+        /// the Midway's CD check) expect "badday.dxr" before "CREDIT.DIR".
+        @Test func indexingIgnoresCase() throws {
+            let dir = launchTestApp()
+            let sub = dir.appendingPathComponent("Disc")
+            try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+            for n in ["CRXC.DIR", "credits.aif", "badday.dxr", "CREDIT.DIR"] {
+                try Data("x".utf8).write(to: sub.appendingPathComponent(n))
+            }
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(64, false, true)
+            guestPString("Disc", at: name)
+            wr32(pb + 18, name)
+            #expect(tb_PBGetCatInfo(pb, false) == 0)
+            let dirID = rd32(pb + 48)
+            var names: [String] = []
+            for idx in 1...4 {
+                wr32(pb + 18, name)
+                wr16(pb + 22, 0); wr16(pb + 28, UInt16(idx)); wr32(pb + 48, dirID)
+                #expect(tb_PBGetCatInfo(pb, false) == 0)
+                names.append(pstring(at: name))
+            }
+            #expect(names == ["badday.dxr", "CREDIT.DIR", "credits.aif", "CRXC.DIR"])
         }
     }
 }

@@ -1922,14 +1922,17 @@ static void op_lineF(cpu68k *c, uint16_t op)
             c->pc = base + (uint32_t)disp;
         break;
     }
-    case 4: { /* FSAVE: an idle frame */
+    case 4: { /* FSAVE: the 68040's idle frame, a format word of version
+               * $41 and size 0 and nothing more, so FRESTORE takes back
+               * just the 4 bytes pushed (Safari's sound interrupt saves
+               * and restores the FPU around its work) */
         int mode = (op >> 3) & 7, reg = op & 7;
         if (mode == 4) {
             c->a[reg] -= 4;
-            mw32(c, c->a[reg], 0x1F180000u);
+            mw32(c, c->a[reg], 0x41000000u);
         } else {
             ea_t e = ea_resolve(c, mode, reg, 4);
-            mw32(c, e.addr, 0x1F180000u);
+            mw32(c, e.addr, 0x41000000u);
         }
         break;
     }

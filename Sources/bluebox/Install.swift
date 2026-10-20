@@ -49,6 +49,9 @@ private func versionString(_ path: String) -> String? {
     return s.isEmpty ? nil : s
 }
 
+/// Why the application may ask for the microphone (the Sound Input Manager).
+private let microphoneUsage = "Classic programs record sound through the microphone."
+
 private func infoPlist(app: String, name: String, executable: String, bundle: FinderBundle, creator: UInt32,
                        hasIcon: Bool) -> [String: Any] {
     let slug = name.lowercased().map { $0.isLetter || $0.isNumber ? String($0) : "-" }.joined()
@@ -63,6 +66,7 @@ private func infoPlist(app: String, name: String, executable: String, bundle: Fi
         "CFBundleVersion": "1",
         "LSMinimumSystemVersion": "13.0",
         "NSHighResolutionCapable": true,
+        "NSMicrophoneUsageDescription": microphoneUsage,
         "NSPrincipalClass": "NSApplication",
         bundleAppKey: app,
     ]
@@ -228,6 +232,7 @@ func reexecInNamedBundle(app: String) {
         "CFBundleDisplayName": name,
         "CFBundlePackageType": "APPL",
         "NSHighResolutionCapable": true,
+        "NSMicrophoneUsageDescription": microphoneUsage,
         "NSPrincipalClass": "NSApplication",
         bundleAppKey: app,
     ]

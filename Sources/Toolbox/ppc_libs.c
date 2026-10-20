@@ -1817,7 +1817,7 @@ static void dm_GetIndexedDisplayModeFromList(ppc_cpu *c)
     }
     int w = mode_sizes[sizes[index]].w, h = mode_sizes[sizes[index]].h;
     static const int depths[3] = { 8, 16, 32 };
-    /* entry 28, name 256, timing 80, depth block 20, 3 depth infos 20 each,
+    /* entry 28, name 256, timing 80 (20 used), depth block 20, 3 depth infos 20 each,
      * 3 switch infos 16 each, 3 VPBlocks 42 each, resolution 32 */
     gaddr m = tb_NewPtr(28 + 256 + 80 + 20 + 3 * (20 + 16 + 42) + 32, true, true);
     gaddr entry = m, name = m + 28, timing = name + 256, block = timing + 80, infos = block + 20;

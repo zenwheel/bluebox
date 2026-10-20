@@ -110,11 +110,15 @@ gaddr tb_GetCTable(int16_t id)
         tb_HandToHand(&h);
         return h;
     }
-    /* The standard tables: 1, 2, 4, 8 colour; 33-40 the same depths in grey. */
-    int depth = id > 32 ? id - 32 : id;
+    /* The standard tables: 1, 2, 4, 8 colour; 33-40 the same depths in grey;
+     * 66-72 the colour tables with the highlight colour, here the standard
+     * ones (the Star Trek demo fades its screen through table 72, writing
+     * through the handle without checking it). */
+    bool gray = id > 32 && id < 64;
+    int depth = id > 64 ? id - 64 : gray ? id - 32 : id;
     if (depth != 1 && depth != 2 && depth != 4 && depth != 8)
         return 0;
-    return make_table(1 << depth, id > 32 ? fill_gray : fill_std, depth, id);
+    return make_table(1 << depth, gray ? fill_gray : fill_std, depth, id);
 }
 
 void tb_DisposeCTable(gaddr h)
@@ -194,6 +198,30 @@ void tb_GDeviceChanged(gaddr gdh) {}
 /* GWorlds: colour ports over their own pixels */
 
 static int gworld_depth(int16_t depth) { return depth > 0 ? depth : qd_screen_depth(); }
+
+/* Depth 0 asks for the screen's depth and takes boundsRect in global
+ * coordinates, only to choose the device: the world itself starts at (0,0),
+ * as on a Mac (Squark makes its world from its window's global rectangle
+ * and draws at 0,0).  The bounds keep the rectangle's alignment within a
+ * long word of screen pixels: a left edge of -60 at 1 bit makes bounds
+ * (0,-4)-(100,200) under a portRect of (0,0)-(100,200). */
+static qrect gworld_bounds(int16_t pixelDepth, qrect r, int depth, qrect *port_rect)
+{
+    if (pixelDepth == 0) {
+        int per = depth < 32 ? 32 / depth : 1, shift = ((r.left % per) + per) % per;
+        r = (qrect){ 0, (int16_t)-shift, (int16_t)(r.bottom - r.top), (int16_t)(r.right - r.left) };
+    }
+    *port_rect = r;
+    if (pixelDepth == 0)
+        port_rect->left = 0;
+    return r;
+}
+
+static void set_port_rect(gaddr port, qrect r)
+{
+    qrect_put(port + GrafPort_portRect_off, r);
+    tb_RectRgn(GrafPort_visRgn(port), port + GrafPort_portRect_off);
+}
 
 static uint32_t row_bytes_for(int w, int depth) { return (uint32_t)((w * depth + 31) / 32 * 4); }
 
@@ -314,12 +342,15 @@ int16_t tb_NewGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect
     /* InitCPort lent the port the screen's colour table; set_pixels gives
      * the world one of its own. */
     PixMap_set_pmTable(rd32(rd32(port + CGrafPort_portPixMap_off)), 0);
-    if (!set_pixels(port, qrect_get(boundsRect), gworld_depth(pixelDepth), cTable)) {
+    int depth = gworld_depth(pixelDepth);
+    qrect pr, r = gworld_bounds(pixelDepth, qrect_get(boundsRect), depth, &pr);
+    if (!set_pixels(port, r, depth, cTable)) {
         tb_CloseCPort(port);
         tb_DisposePtr(port);
         tb_SetPort(saved);
         return memFullErr;
     }
+    set_port_rect(port, pr);
     tb_SetPort(saved);
     /* A GWorld's port says so: portVersion $C001 (programs choose how to
      * draw by it: Graphing Calculator's surfaces). */
@@ -334,18 +365,19 @@ int32_t tb_UpdateGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsR
 {
     gaddr port = rd32(offscreenGWorld);
     gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
-    qrect r = qrect_get(boundsRect), cur = qrect_get(pm + PixMap_bounds_off);
+    qrect cur = qrect_get(pm + PixMap_bounds_off);
     int depth = gworld_depth(pixelDepth);
+    qrect pr, r = gworld_bounds(pixelDepth, qrect_get(boundsRect), depth, &pr);
     if (r.right - r.left == cur.right - cur.left && r.bottom - r.top == cur.bottom - cur.top &&
         depth == PixMap_pixelSize(pm)) {
         qrect_put(pm + PixMap_bounds_off, r);
-        qrect_put(port + GrafPort_portRect_off, r);
-        tb_RectRgn(GrafPort_visRgn(port), port + GrafPort_portRect_off);
+        set_port_rect(port, pr);
         return 0;
     }
     gaddr old = PixMap_baseAddr(pm);
     if (!set_pixels(port, r, depth, cTable))
         return memFullErr;
+    set_port_rect(port, pr);
     tb_DisposePtr(old);
     struct gworld_dev *g = gworld_of(port);
     if (g && g->own)
@@ -1230,16 +1262,24 @@ void tb_SetEntries(int16_t start, int16_t count, gaddr specs)
         qd_device_itable(current_device());
 }
 
+/* The selection is a ReqListRec (a pointer, not a handle): reqLSize, the
+ * number of entries less one, then that many entry numbers. */
 void tb_SaveEntries(gaddr src, gaddr result, gaddr selection)
 {
     gaddr ct = src ? src : device_table();
-    if (!ct || !rd32(ct) || !result || !rd32(result))
+    if (!ct || !rd32(ct) || !result || !selection)
         return;
-    int n = (int16_t)rd16(rd32(selection) + 6) + 1, have = (int16_t)rd16(rd32(ct) + 6) + 1;
+    int n = (int16_t)rd16(selection) + 1, have = (int16_t)rd16(rd32(ct) + 6) + 1;
+    if (n < 1)
+        return;
     tb_SetHandleSize(result, 8 + n * 8);
+    if (!rd32(result) || tb_GetHandleSize(result) < 8 + n * 8)
+        return;
+    wr32(rd32(result), 0);
+    wr16(rd32(result) + 4, 0);
     wr16(rd32(result) + 6, (uint16_t)(n - 1));
     for (int i = 0; i < n; i++) {
-        int index = (int16_t)rd16(rd32(selection) + 8 + (uint32_t)i * 8);
+        int index = (int16_t)rd16(selection + 2 + (uint32_t)i * 2);
         gaddr d = rd32(result) + 8 + (uint32_t)i * 8;
         wr16(d, (uint16_t)index);
         if (index >= 0 && index < have)
@@ -1247,15 +1287,37 @@ void tb_SaveEntries(gaddr src, gaddr result, gaddr selection)
     }
 }
 
+/* srcTable's entries, in order, go to the entries of dstTable (the
+ * device's, and the screen, when nil) that the selection names. */
 void tb_RestoreEntries(gaddr src, gaddr dst, gaddr selection)
 {
-    if (!src || !rd32(src))
+    if (!src || !rd32(src) || !selection)
         return;
-    int n = (int16_t)rd16(rd32(src) + 6) + 1;
-    gaddr tmp = tb_NewPtr(n * 8, false, false);
-    gmemcpy(tmp, rd32(src) + 8, (uint32_t)n * 8);
-    tb_SetEntries(-1, (int16_t)(n - 1), tmp);
-    tb_DisposePtr(tmp);
+    int n = (int16_t)rd16(rd32(src) + 6) + 1, want = (int16_t)rd16(selection) + 1;
+    if (want < n)
+        n = want;
+    if (n < 1)
+        return;
+    if (!dst || dst == device_table()) {
+        gaddr tmp = tb_NewPtr(n * 8, false, false);
+        if (!tmp)
+            return;
+        gmemcpy(tmp, rd32(src) + 8, (uint32_t)n * 8);
+        for (int i = 0; i < n; i++)
+            wr16(tmp + (uint32_t)i * 8, rd16(selection + 2 + (uint32_t)i * 2));
+        tb_SetEntries(-1, (int16_t)(n - 1), tmp);
+        tb_DisposePtr(tmp);
+        return;
+    }
+    if (!rd32(dst))
+        return;
+    int have = (int16_t)rd16(rd32(dst) + 6) + 1;
+    for (int i = 0; i < n; i++) {
+        int index = (int16_t)rd16(selection + 2 + (uint32_t)i * 2);
+        if (index >= 0 && index < have)
+            gmemcpy(rd32(dst) + 8 + (uint32_t)index * 8 + 2, rd32(src) + 8 + (uint32_t)i * 8 + 2, 6);
+    }
+    bump_seed(dst);
 }
 
 void tb_ProtectEntry(int16_t index, int8_t protect) {}

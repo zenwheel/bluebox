@@ -101,10 +101,11 @@ void gestalt_init(void)
     gestalt_set(fourcc("stdf"), 0x1);         /* Standard File 5.8 calls */
     gestalt_set(fourcc("icon"), 0x1);         /* Icon Utilities present */
     gestalt_set(fourcc("tmgr"), 3);           /* extended Time Manager */
-    /* Sound Manager 3 output: stereo, stereo mixing, the Sound I/O
-     * Manager, 16-bit sound I/O, SndPlayDoubleBuffer, several channels,
-     * 16-bit audio (no recording devices). */
-    gestalt_set(fourcc("snd "), 0x1C8B);
+    /* Sound Manager 3: stereo, stereo mixing, the Sound I/O Manager, a
+     * built-in sound input device (the host's microphone), playing while
+     * recording, 16-bit sound I/O, stereo input, SndPlayDoubleBuffer,
+     * several channels, 16-bit audio. */
+    gestalt_set(fourcc("snd "), 0x1DFB);
     gestalt_set(fourcc("qdgx"), 0x01100000);    /* gestaltGXVersion: QuickDraw GX 1.1 (printing, shapes) */
     gestalt_set(fourcc("pmgr"), 0x01100000);    /* gestaltGXPrintingMgrVersion */
     gestalt_set(fourcc("teat"), 0x1);           /* gestaltTEAttr: TEGetHiliteRgn */

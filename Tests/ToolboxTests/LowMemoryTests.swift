@@ -286,5 +286,39 @@ extension BlueBox {
             // A full path ignores the directory given with it, even one that doesn't exist.
             #expect(tb_FSMakeFSSpec(-2, 65546, name, spec) == 0)
         }
+
+        /// The mounted volume's drive is in the drive queue, on the CD-ROM
+        /// driver (Prince of Persia 2 looks for it there and checks the
+        /// driver's name), and the driver reports the drive's status.
+        @Test func theVolumesDriveIsOnTheCDDriver() {
+            machine_mount_folder(tempDir().path, "PoP")
+            launchTestApp()
+            _ = initToolbox()
+            let pb = tb_NewPtr(Int32(HVolumeParam_SIZEOF), false, true)
+            wr16(pb + UInt32(VolumeParam_ioVolIndex_off), 2)
+            #expect(tb_PBHGetVInfo(pb, false) == 0)
+            let drive = rd16(pb + UInt32(HVolumeParam_ioVDrvInfo_off))
+            let refnum = Int16(bitPattern: rd16(pb + UInt32(HVolumeParam_ioVDRefNum_off)))
+            var el = rd32(UInt32(LM_DrvQHdr) + 2), found: UInt32 = 0
+            while el != 0 {
+                if rd16(el + UInt32(DrvQEl_dQDrive_off)) == drive { found = el }
+                el = rd32(el)
+            }
+            #expect(found != 0)
+            #expect(Int16(bitPattern: rd16(found + UInt32(DrvQEl_dQRefNum_off))) == refnum)
+            #expect(rd8(found - 4) == 0x80) // write-protected
+            // The unit table's entry for the driver names it.
+            let dce = rd32(rd32(rd32(UInt32(LM_UTableBase)) + UInt32(-1 - Int32(refnum)) * 4))
+            #expect(pstring(at: rd32(dce + UInt32(DCtlEntry_dCtlDriver_off)) + 18) == ".AppleCD")
+            // Status 8: the drive's status.
+            let st = tb_NewPtr(Int32(CntrlParam_SIZEOF), false, true)
+            wr16(st + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: refnum))
+            wr16(st + UInt32(IOParam_ioVRefNum_off), drive)
+            wr16(st + UInt32(CntrlParam_csCode_off), 8)
+            #expect(tb_PBStatus(st, false) == 0)
+            let sts = st + UInt32(CntrlParam_csParam_off)
+            #expect(rd8(sts + UInt32(DrvSts_writeProt_off)) == 0x80 && rd8(sts + UInt32(DrvSts_installed_off)) == 1)
+            #expect(rd16(sts + UInt32(DrvSts_dQDrive_off)) == drive)
+        }
     }
 }

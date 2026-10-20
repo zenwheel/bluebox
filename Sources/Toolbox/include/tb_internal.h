@@ -107,6 +107,9 @@ void stdfile_set_filter(bool (*fn)(const char *path));
 void fm_spec_for_path(const char *path, gaddr spec);
 /* Host path for a (vRefNum, dirID, name) triple. */
 bool fm_host_path(int16_t vref, int32_t dirid, gaddr name, bool hfs, char *out, size_t outsize);
+/* Whether a host file exists for the Mac: its data fork, or only its
+ * AppleDouble sidecar (a file with an empty data fork). */
+bool fm_host_exists(const char *path);
 /* Classic file type of a host file (0 if unknown). */
 uint32_t fm_type_of_path(const char *path);
 /* The application (host path) that opens a document: one with the
@@ -217,6 +220,7 @@ void raw_SlotManager(cpu68k *c, uint16_t tw);
 /* The Slot Manager (slots.c): a selector on an SpBlock, as _SlotManager has them. */
 int16_t slot_manager(uint16_t sel, gaddr spb);
 void slots_reset(void);
+void raw_MemoryDispatch(cpu68k *c, uint16_t tw);
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
 /* A MacRoman character's comparison key. */
 int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);
@@ -235,6 +239,11 @@ void notify_reset(void);
 void sound_pump(void);
 void sound_beep(void);
 void sound_reset(void);
+/* The Sound Input Manager (sound_input.c): recordings go on from the
+ * sound pump; busy while one is asynchronous. */
+void sound_input_pump(void);
+bool sound_input_busy(void);
+void sound_input_reset(void);
 /* PCM straight to the host on a channel id of the caller's (movies). */
 void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume);
 void sound_host_stop(int id);
@@ -435,6 +444,7 @@ typedef struct {
  * driver completes it, with its ioCompletion, later. */
 enum { ioInProgress = 1 };
 bool driver_open(gaddr pb, int16_t *err); /* false: no driver of that name */
+enum { CD_UNIT = 35 };                    /* .AppleCD, the mounted volumes' driver */
 void io_complete_now(gaddr pb, int16_t result); /* KillIO's: inside the call (timemgr.c) */
 void io_complete_now_for(int16_t refnum);
 void drivers_reset(void);                 /* the unit table, at boot */

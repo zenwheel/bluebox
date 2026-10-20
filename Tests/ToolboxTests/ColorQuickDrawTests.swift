@@ -7,7 +7,7 @@ extension BlueBox {
     @Suite struct ColorQuickDraw {
         func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
             let p = tb_NewPtr(8, false, true)
-            for (i, v) in [t, l, b, r].enumerated() { wr16(p + UInt32(i * 2), UInt16(v)) }
+            for (i, v) in [t, l, b, r].enumerated() { wr16(p + UInt32(i * 2), UInt16(truncatingIfNeeded: v)) }
             return p
         }
 
@@ -38,6 +38,32 @@ extension BlueBox {
             #expect(rd16(back + 2) == 0xFFFF) // still white
             tb_SetGWorld(rd32(screen), rd32(dev))
             tb_DisposeGWorld(port)
+        }
+
+        /// At depth 0 the rectangle is global, only to choose the screen: the
+        /// world starts at 0,0 (Squark draws at 0,0 into a world made from
+        /// its window's global rectangle).  A given depth keeps the rectangle.
+        @Test func screenDepthWorldsStartAtTheOrigin() {
+            launchTestApp()
+            _ = initToolbox()
+            let gw = tb_NewPtr(4, false, true)
+            func rects(_ port: UInt32) -> [Int16] {
+                let pm = rd32(tb_GetGWorldPixMap(port))
+                return (0..<4).map { Int16(bitPattern: rd16(port + 16 + UInt32($0 * 2))) }
+                    + (0..<4).map { Int16(bitPattern: rd16(pm + 6 + UInt32($0 * 2))) }
+            }
+            #expect(tb_NewGWorld(gw, 0, rect(144, 192, 624, 832), 0, 0, 2) == 0)
+            #expect(rects(rd32(gw)) == [0, 0, 480, 640, 0, 0, 480, 640])
+            tb_DisposeGWorld(rd32(gw))
+            #expect(tb_NewGWorld(gw, 32, rect(144, 192, 624, 832), 0, 0, 0) == 0)
+            #expect(rects(rd32(gw)) == [144, 192, 624, 832, 144, 192, 624, 832])
+            tb_DisposeGWorld(rd32(gw))
+            // A left edge off a long word of screen pixels keeps its alignment.
+            #expect(tb_NewGWorld(gw, 0, rect(-50, -60, 50, 140), 0, 0, 0) == 0)
+            let depth = Int(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + 32))
+            let shift = Int16(depth < 32 ? ((-60 % (32 / depth)) + 32 / depth) % (32 / depth) : 0)
+            #expect(rects(rd32(gw)) == [0, 0, 100, 200, 0, -shift, 100, 200])
+            tb_DisposeGWorld(rd32(gw))
         }
 
         /// A picture recorded in colour plays back in colour (RGBFgCol).
@@ -102,6 +128,46 @@ extension BlueBox {
             tb_InvertColor(c)
             #expect(rd16(c) == 0xFFFF)
             tb_DisposeCTable(ct)
+        }
+
+        /// SaveEntries and RestoreEntries take their selection as a ReqListRec
+        /// (a pointer: reqLSize, the count less one, then entry numbers).
+        @Test func saveAndRestoreEntriesTakeARequestList() {
+            launchTestApp()
+            _ = initToolbox()
+            let src = tb_GetCTable(8), dst = tb_GetCTable(8)
+            let entry = { (ct: UInt32, i: Int) -> UInt32 in rd32(ct) + 8 + UInt32(i * 8) }
+            wr16(entry(src, 5) + 2, 0x1234)
+            wr16(entry(src, 9) + 2, 0x5678)
+            let sel = tb_NewPtr(6, false, true)
+            wr16(sel, 1); wr16(sel + 2, 5); wr16(sel + 4, 9)
+            let saved = tb_NewHandle(0, false, true)
+            tb_SaveEntries(src, saved, sel)
+            #expect(tb_GetHandleSize(saved) == 8 + 2 * 8)
+            #expect(rd16(rd32(saved) + 6) == 1)
+            #expect(rd16(entry(saved, 0)) == 5 && rd16(entry(saved, 0) + 2) == 0x1234)
+            #expect(rd16(entry(saved, 1)) == 9 && rd16(entry(saved, 1) + 2) == 0x5678)
+            // Back into other entries of another table.
+            wr16(sel + 2, 1); wr16(sel + 4, 2)
+            tb_RestoreEntries(saved, dst, sel)
+            #expect(rd16(entry(dst, 1) + 2) == 0x1234 && rd16(entry(dst, 2) + 2) == 0x5678)
+            tb_DisposeHandle(saved)
+            tb_DisposeCTable(src)
+            tb_DisposeCTable(dst)
+        }
+
+        /// Tables 66, 68 and 72 (the standard tables with the highlight
+        /// colour) exist too: the Star Trek demo writes through table 72's
+        /// handle unchecked.
+        @Test func highlightColorTablesExist() {
+            launchTestApp()
+            _ = initToolbox()
+            for (id, entries) in [(66, 3), (68, 15), (72, 255)] {
+                let ct = tb_GetCTable(Int16(id))
+                #expect(ct != 0 && rd32(ct) != 0 && rd16(rd32(ct) + 6) == UInt16(entries))
+                tb_DisposeCTable(ct)
+            }
+            #expect(tb_GetCTable(73) == 0)
         }
 
         /// Black is the table's last entry even while a fade has made every

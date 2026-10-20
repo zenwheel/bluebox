@@ -73,6 +73,7 @@ int16_t tb_AddMovieResource(int32_t theMovie, int16_t resRefNum, gaddr resId, in
 void tb_AddPt(uint32_t src, gaddr dst);
 void tb_AddResource(gaddr data, int32_t typ, int16_t id, gaddr name);
 void tb_AddSearch(gaddr arg0);
+void tb_AddTime(gaddr dst, gaddr src);
 int16_t tb_AdvanceKeyboardFocus(gaddr window);
 int16_t tb_Alert(int16_t id, gaddr fp);
 void tb_AlignScreenRect(gaddr rp, int32_t alignmentProc);
@@ -174,6 +175,7 @@ int16_t tb_CompressSequenceFrame(int32_t seqID, int32_t src, gaddr srcRect, int1
 void tb_ConcatMatrix(gaddr a, gaddr b);
 int32_t tb_ContextualMenuSelect(gaddr inMenu, uint32_t inGlobalLocation, int8_t inReserved, uint32_t inHelpType, gaddr inHelpItemString, gaddr inSelection, gaddr outUserSelectionType, gaddr outMenuID, gaddr outMenuItem);
 int16_t tb_ContinueSpeech(gaddr chan);
+void tb_ConvertTimeScale(gaddr inout, int32_t newScale);
 void tb_CopyBits(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode, gaddr mask);
 void tb_CopyDeepMask(gaddr srcBits, gaddr maskBits, gaddr dstBits, gaddr srcRect, gaddr maskRect, gaddr dstRect, int16_t mode, gaddr maskRgn);
 void tb_CopyMask(gaddr srcbp, gaddr mskbp, gaddr dstbp, gaddr srcrp, gaddr mskrp, gaddr dstrp);
@@ -1498,6 +1500,8 @@ int16_t tb_SetWindowProxyCreatorAndType(gaddr window, uint32_t fileCreator, uint
 int16_t tb_SetWindowProxyFSSpec(gaddr window, gaddr inFile);
 int16_t tb_SetWindowProxyIcon(gaddr window, gaddr icon);
 void tb_SetZone(gaddr hz);
+int16_t tb_SetupAIFFHeader(int16_t refnum, int16_t numchannels, int32_t samplerate, int16_t samplesize, int32_t compression, int32_t numbytes, int32_t numframes);
+int16_t tb_SetupSndHeader(gaddr sndhandle, int16_t numchannels, int32_t rate, int16_t size, int32_t compresion, int16_t basefreq, int32_t numbytes, gaddr headerlenp);
 void tb_ShieldCursor(gaddr rp, uint32_t p);
 void tb_ShortenDITL(gaddr arg0, int16_t arg1);
 void tb_ShowControl(gaddr c);
@@ -1577,6 +1581,7 @@ void tb_StripDiacritics(gaddr textp, int16_t len, int16_t script);
 void tb_StuffHex(gaddr p, gaddr s);
 uint8_t tb_StyledLineBreak(gaddr textp, int32_t length, int32_t text_start, int32_t text_end, int32_t flags, gaddr text_width_fp, gaddr text_offset);
 void tb_SubPt(uint32_t src, gaddr dst);
+void tb_SubtractTime(gaddr dst, gaddr src);
 void tb_SwapMMUMode(uint32_t *bp);
 void tb_SysBeep(int16_t i);
 int16_t tb_SysEnvirons(int16_t vers, gaddr p);

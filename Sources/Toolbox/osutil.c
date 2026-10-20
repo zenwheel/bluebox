@@ -471,6 +471,15 @@ void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw)
     cpu_push32(c, ret);
 }
 
+/* MemoryDispatch (A05C), virtual memory's calls, selector in D0: with all
+ * memory real and resident, holding and locking (HoldMemory, UnholdMemory,
+ * LockMemory, UnlockMemory, LockMemoryContiguous) have nothing to do, as
+ * on a Mac with virtual memory off. */
+void raw_MemoryDispatch(cpu68k *c, uint16_t tw)
+{
+    c->d[0] = (uint16_t)c->d[0] <= 4 ? 0 : (uint32_t)-50; /* noErr; paramErr */
+}
+
 /* Operating System queues: a header of qFlags (word), qHead and qTail; each
  * element begins with its link to the next. */
 enum { qErr = -1 };

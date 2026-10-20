@@ -123,5 +123,25 @@ extension BlueBox {
             let bits = UInt64(rd32(x)) << 32 | UInt64(rd32(x + 4))
             #expect(abs(Double(bitPattern: bits) - 2.0 / 7.0) < 1e-12)
         }
+
+        /// FSAVE pushes the 68040's 4-byte idle frame and FRESTORE takes back
+        /// as much: an interrupt routine that saves the FPU around its work
+        /// (Safari's sound callback, with FMOVEM of all eight registers)
+        /// returns with its stack where it was.
+        @Test func fsaveAndFrestoreBalance() {
+            let code: [UInt16] = [
+                0x2E0F,                           // MOVE.L A7,D7
+                0xF327,                           // FSAVE -(A7)
+                0x1C17,                           // MOVE.B (A7),D6: the frame's version
+                0xF227, 0xE0FF,                   // FMOVEM.X FP0-FP7,-(A7)
+                0xF21F, 0xD0FF,                   // FMOVEM.X (A7)+,FP0-FP7
+                0xF35F,                           // FRESTORE (A7)+
+                0x9E8F,                           // SUB.L A7,D7
+                0xA9F4,
+            ]
+            #expect(run(code) == "ExitToShell")
+            #expect(cpu.pointee.d.7 == 0)
+            #expect(cpu.pointee.d.6 & 0xFF == 0x41)
+        }
     }
 }

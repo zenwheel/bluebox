@@ -585,7 +585,7 @@ static bool is_dir(const char *p)
 
 /* A file exists if its data fork does, or only its AppleDouble sidecar
  * (files with an empty data fork are often stored that way). */
-static bool exists(const char *p)
+bool fm_host_exists(const char *p)
 {
     struct stat st;
     if (stat(p, &st) == 0)
@@ -595,6 +595,8 @@ static bool exists(const char *p)
     free(side);
     return ok;
 }
+
+static bool exists(const char *p) { return fm_host_exists(p); }
 
 static bool hidden_name(const char *n)
 {
@@ -614,8 +616,14 @@ static const char *entry_name(const char *dir, const char *n)
     return hidden_name(n) ? NULL : n;
 }
 
-/* The n-th (1-based) visible entry of a directory; dirs and files mixed, sorted. */
-static int cmp_names(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
+/* The n-th (1-based) visible entry of a directory; dirs and files mixed, in
+ * catalog order: HFS compares names without regard to case. */
+static int cmp_names(const void *a, const void *b)
+{
+    const char *x = *(char *const *)a, *y = *(char *const *)b;
+    int r = strcasecmp(x, y);
+    return r ? r : strcmp(x, y);
+}
 
 /* The visible entries of a directory, sorted; the volume's root also lists
  * the Host folder (as "/"). */
@@ -757,26 +765,39 @@ static void guest_tables_init(void)
         wr16(mv + VCB_vcbAtrb_off, 0x8080); /* locked */
         gput(mv + VCB_vcbVN_off, mounts[i].name, (uint32_t)mounts[i].name[0] + 1);
         wr16(mv + VCB_vcbDrvNum_off, (uint16_t)(2 + i));
+        wr16(mv + VCB_vcbDRefNum_off, (uint16_t)(-1 - CD_UNIT));
         wr16(mv + VCB_vcbVRefNum_off, (uint16_t)mounts[i].vref);
         wr32(last, mv); /* qLink */
         last = mv;
     }
     wr32(LM_VCBQHdr + 6, last);
     wr32(LM_DefVCBPtr, v);
-    /* The drive queue: drive 1 holds the volume.  Four flag bytes precede
-     * the element: not write-protected, a fixed disk, installed, one side. */
-    gaddr dq = mm_new_ptr_in(zone, 4 + DrvQEl_SIZEOF, true);
-    if (dq) {
-        wr8(dq + 1, 8);
+    /* The drive queue: drive 1 holds the volume, and each mounted volume
+     * has its drive too, on the CD driver (programs look up the drive a
+     * volume reports and its driver, as Prince of Persia 2's Mohawk engine
+     * does for its CD).  Four flag bytes precede an element: write-protected,
+     * a disk in place (fixed, or ejectable for a mounted one), installed,
+     * one side. */
+    wr16(LM_DrvQHdr, 0);
+    wr32(LM_DrvQHdr + 2, 0);
+    wr32(LM_DrvQHdr + 6, 0);
+    for (int i = -1; i < nmounts; i++) {
+        gaddr dq = mm_new_ptr_in(zone, 4 + DrvQEl_SIZEOF, true);
+        if (!dq)
+            break;
+        wr8(dq, i < 0 ? 0 : 0x80);
+        wr8(dq + 1, i < 0 ? 8 : 1);
         wr8(dq + 2, 1);
         gaddr e = dq + 4;
         wr16(e + DrvQEl_qType_off, 1); /* dQDrvSz2 is valid */
-        wr16(e + DrvQEl_dQDrive_off, 1);
-        wr16(e + DrvQEl_dQRefNum_off, (uint16_t)-5);
-        wr16(e + DrvQEl_dQDrvSz_off, 0);      /* 2 GB in 512-byte blocks */
+        wr16(e + DrvQEl_dQDrive_off, (uint16_t)(2 + i));
+        wr16(e + DrvQEl_dQRefNum_off, (uint16_t)(i < 0 ? -5 : -1 - CD_UNIT));
+        wr16(e + DrvQEl_dQDrvSz_off, 0); /* 2 GB in 512-byte blocks */
         wr16(e + DrvQEl_dQDrvSz2_off, 0x40);
-        wr16(LM_DrvQHdr, 0);
-        wr32(LM_DrvQHdr + 2, e);
+        if (rd32(LM_DrvQHdr + 6))
+            wr32(rd32(LM_DrvQHdr + 6), e); /* qLink */
+        else
+            wr32(LM_DrvQHdr + 2, e);
         wr32(LM_DrvQHdr + 6, e);
     }
 }
@@ -1752,7 +1773,7 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     if (hfs) {
         wr16(pb + HVolumeParam_ioVSigWord_off, 0x4244);
         wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)(m ? 2 + (m - mounts) : 1));
-        wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)-5);
+        wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)(m ? -1 - CD_UNIT : -5));
         wr16(pb + HVolumeParam_ioVFSID_off, 0);
         wr32(pb + HVolumeParam_ioVBkUp_off, 0);
         wr16(pb + HVolumeParam_ioVSeqNum_off, 0);

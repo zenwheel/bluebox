@@ -189,5 +189,46 @@ extension BlueBox {
             #expect(rd16(a5 + 32 + 2) == 0x4EF9) // entry 0 is now a JMP
             #expect(rd16(a5 + 40 + 2) == 0x4EF9) // and so is entry 1
         }
+
+        /// LoadSeg gets each segment through GetResource, so a patch on it
+        /// (self-expanding applications unpack their segments there) is called.
+        @Test func loadSegCallsAPatchedGetResource() throws {
+            bootMachine()
+            let jt = cat(
+                be16(0), be16(0x3F3C), be16(1), be16(0xA9F0),     // entry 0: seg 1, offset 0
+                be16(0), be16(0x3F3C), be16(2), be16(0xA9F0))     // entry 1: seg 2, offset 0
+            let code0 = cat(be32(48), be32(256), be32(16), be32(32), jt)
+            let code1 = cat(
+                be16(0), be16(1),
+                be16(0x2B78), be16(0x1480), be16(0xFFF8),         // MOVE.L GetResource,-8(A5)
+                be16(0x41FA), be16(16),                           // LEA patch(PC),A0
+                be16(0x21C8), be16(0x1480),                       // MOVE.L A0,GetResource
+                be16(0x4EAD), be16(42),                           // JSR 42(A5): entry 1, CODE 2
+                be16(0x242D), be16(0xFFFC),                       // MOVE.L -4(A5),D2
+                be16(0xA9F4),                                     // _ExitToShell
+                be16(0x52AD), be16(0xFFFC),                       // patch: ADDQ.L #1,-4(A5)
+                be16(0x2F2D), be16(0xFFF8), be16(0x4E75))         // MOVE.L -8(A5),-(SP); RTS
+            let code2 = cat(be16(8), be16(1), be16(0x7209), be16(0x4E75)) // MOVEQ #9,D1; RTS
+            var fork = buildFork([
+                TestResource(type: "CODE", id: 0, data: code0),
+                TestResource(type: "CODE", id: 1, data: code1),
+                TestResource(type: "CODE", id: 2, data: code2),
+            ])
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let path = dir.appendingPathComponent("Patcher").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+
+            #expect(machine_launch(path, &err, err.count))
+            #expect(machine_run(10_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.1 == 9)  // CODE 2 ran
+            #expect(g_cpu!.pointee.d.2 == 1)  // through the patch, once
+        }
     }
 }

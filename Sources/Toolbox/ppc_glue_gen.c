@@ -9222,6 +9222,33 @@ static void ppcglue_SPBSetDeviceInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetupSndHeader(ppc_cpu *c)
+{
+    gaddr a_sndhandle = (gaddr)c->gpr[3];
+    int16_t a_numchannels = (int16_t)c->gpr[4];
+    int32_t a_rate = (int32_t)c->gpr[5];
+    int16_t a_size = (int16_t)c->gpr[6];
+    int32_t a_compresion = (int32_t)c->gpr[7];
+    int16_t a_basefreq = (int16_t)c->gpr[8];
+    int32_t a_numbytes = (int32_t)c->gpr[9];
+    gaddr a_headerlenp = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetupSndHeader(a_sndhandle, a_numchannels, a_rate, a_size, a_compresion, a_basefreq, a_numbytes, a_headerlenp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetupAIFFHeader(ppc_cpu *c)
+{
+    int16_t a_refnum = (int16_t)c->gpr[3];
+    int16_t a_numchannels = (int16_t)c->gpr[4];
+    int32_t a_samplerate = (int32_t)c->gpr[5];
+    int16_t a_samplesize = (int16_t)c->gpr[6];
+    int32_t a_compression = (int32_t)c->gpr[7];
+    int32_t a_numbytes = (int32_t)c->gpr[8];
+    int32_t a_numframes = (int32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetupAIFFHeader(a_refnum, a_numchannels, a_samplerate, a_samplesize, a_compression, a_numbytes, a_numframes);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SPBSignInDevice(ppc_cpu *c)
 {
     int16_t a_refnum = (int16_t)c->gpr[3];
@@ -14573,6 +14600,30 @@ static void ppcglue_SetTimeBaseRate(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ConvertTimeScale(ppc_cpu *c)
+{
+    gaddr a_inout = (gaddr)c->gpr[3];
+    int32_t a_newScale = (int32_t)c->gpr[4];
+    tb_ConvertTimeScale(a_inout, a_newScale);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddTime(ppc_cpu *c)
+{
+    gaddr a_dst = (gaddr)c->gpr[3];
+    gaddr a_src = (gaddr)c->gpr[4];
+    tb_AddTime(a_dst, a_src);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SubtractTime(ppc_cpu *c)
+{
+    gaddr a_dst = (gaddr)c->gpr[3];
+    gaddr a_src = (gaddr)c->gpr[4];
+    tb_SubtractTime(a_dst, a_src);
+    c->pc = c->lr;
+}
+
 static void ppcglue_CodecManagerVersion(ppc_cpu *c)
 {
     gaddr a_version = (gaddr)c->gpr[3];
@@ -17411,45 +17462,6 @@ static void ppctrap_Exp1to6(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[9]);
     ppc_trap((uint16_t)(0xA800));
     ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetupSndHeader(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xD480014u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(2, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xA800));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetupAIFFHeader(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xB4C0014u);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xA800));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
@@ -23905,39 +23917,6 @@ static void ppctrap_ConvertTime(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_ConvertTimeScale(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xB7u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x10Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SubtractTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x10Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_GetTimeBaseStatus(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -26017,7 +25996,7 @@ const ppc_export ppc_exports[] = {
     {"AddResource", ppcglue_AddResource},
     {"AddSearch", ppcglue_AddSearch},
     {"AddSoundDescriptionExtension", ppctrap_AddSoundDescriptionExtension},
-    {"AddTime", ppctrap_AddTime},
+    {"AddTime", ppcglue_AddTime},
     {"AddTrackReference", ppctrap_AddTrackReference},
     {"AddUserData", ppctrap_AddUserData},
     {"AddUserDataText", ppctrap_AddUserDataText},
@@ -26158,7 +26137,7 @@ const ppc_export ppc_exports[] = {
     {"ConvertImage", ppctrap_ConvertImage},
     {"ConvertMovieToFile", ppctrap_ConvertMovieToFile},
     {"ConvertTime", ppctrap_ConvertTime},
-    {"ConvertTimeScale", ppctrap_ConvertTimeScale},
+    {"ConvertTimeScale", ppcglue_ConvertTimeScale},
     {"CopyBits", ppcglue_CopyBits},
     {"CopyCollection", ppctrap_CopyCollection},
     {"CopyDeepMask", ppcglue_CopyDeepMask},
@@ -28755,8 +28734,8 @@ const ppc_export ppc_exports[] = {
     {"SetWindowProxyFSSpec", ppcglue_SetWindowProxyFSSpec},
     {"SetWindowProxyIcon", ppcglue_SetWindowProxyIcon},
     {"SetZone", ppcglue_SetZone},
-    {"SetupAIFFHeader", ppctrap_SetupAIFFHeader},
-    {"SetupSndHeader", ppctrap_SetupSndHeader},
+    {"SetupAIFFHeader", ppcglue_SetupAIFFHeader},
+    {"SetupSndHeader", ppcglue_SetupSndHeader},
     {"ShieldCursor", ppcglue_ShieldCursor},
     {"ShortenDITL", ppcglue_ShortenDITL},
     {"ShowControl", ppcglue_ShowControl},
@@ -28847,7 +28826,7 @@ const ppc_export ppc_exports[] = {
     {"StuffHex", ppcglue_StuffHex},
     {"StyledLineBreak", ppcglue_StyledLineBreak},
     {"SubPt", ppcglue_SubPt},
-    {"SubtractTime", ppctrap_SubtractTime},
+    {"SubtractTime", ppcglue_SubtractTime},
     {"SwapMMUMode", ppctrap_SwapMMUMode},
     {"SysBeep", ppcglue_SysBeep},
     {"SysEnvirons", ppcglue_SysEnvirons},

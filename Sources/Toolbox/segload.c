@@ -20,6 +20,28 @@
 
 static gaddr jt_base(void) { return rd32(LM_CurrentA5) + rd16(LM_CurJTOffset); }
 
+/* GetResource('CODE', seg) through the trap table when a program has
+ * patched it, as the ROM's LoadSeg calls it: self-expanding applications
+ * (Shufflepuck Café) patch GetResource to unpack each segment as it loads. */
+static gaddr get_code_patched(int16_t seg)
+{
+    cpu68k *c = g_cpu;
+    gaddr fn = rd32(TB_TRAP_TABLE + 0x1A0u * 4);
+    if (!c || native_index_for(fn) >= 0)
+        return 0;
+    uint32_t d[8], a[8];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    cpu_push32(c, 0); /* the result */
+    cpu_push32(c, fourcc("CODE"));
+    cpu_push16(c, (uint16_t)seg);
+    guest_call_regs(fn);
+    gaddr h = cpu_pop32(c);
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    return h;
+}
+
 /* Find the CODE resource for a segment in the application's resource file. */
 static gaddr get_code(int16_t seg)
 {
@@ -27,23 +49,26 @@ static gaddr get_code(int16_t seg)
     uint8_t saved_load = rd8(LM_ResLoad);
     wr16(LM_CurMap, rd16(LM_CurApRefNum));
     wr8(LM_ResLoad, 0xFF);
-    gaddr h = tb_Get1Resource((int32_t)fourcc("CODE"), seg);
+    gaddr h = get_code_patched(seg);
+    if (!h)
+        h = tb_Get1Resource((int32_t)fourcc("CODE"), seg);
     wr8(LM_ResLoad, saved_load);
     wr16(LM_CurMap, (uint16_t)saved);
     return h;
 }
 
-static bool load_segment(int16_t seg)
+/* Load a segment and fill in its jump table entries; its code, or 0. */
+static gaddr load_segment(int16_t seg)
 {
     gaddr h = get_code(seg);
     if (!h || !rd32(h))
-        return false;
+        return 0;
     tb_HLock(h);
     gaddr code = rd32(h);
     uint16_t first = rd16(code);
     uint16_t count = rd16(code + 2);
     if (first == 0xA89F) /* still compressed: should have been expanded on load */
-        return false;
+        return 0;
     gaddr e = jt_base() + first;
     for (unsigned i = 0; i < count; i++, e += 8) {
         if (rd16(e + 2) == JMP_ABS_L)
@@ -54,7 +79,7 @@ static bool load_segment(int16_t seg)
         wr32(e + 4, code + off + 4);
     }
     LOGF(LOG_SEG, "seg: loaded CODE %d at %08X (%u entries)\n", seg, code, count);
-    return true;
+    return code;
 }
 
 /* _LoadSeg: stack is [return][segment]; the return address is just past
@@ -63,7 +88,8 @@ static void raw_LoadSeg(cpu68k *c, uint16_t tw)
 {
     uint32_t ret = cpu_pop32(c);
     int16_t seg = (int16_t)cpu_pop16(c);
-    if (!load_segment(seg)) {
+    gaddr code = load_segment(seg);
+    if (!code) {
         cpu_halt(c, "LoadSeg: cannot load CODE %d", seg);
         return;
     }
@@ -72,7 +98,6 @@ static void raw_LoadSeg(cpu68k *c, uint16_t tw)
      * (Director projectors) call through entries not at CurrentA5. */
     gaddr e = ret - 8;
     if (rd16(e + 2) == 0x3F3C && (int16_t)rd16(e + 4) == seg && rd16(e + 6) == 0xA9F0) {
-        gaddr code = rd32(get_code(seg));
         uint16_t off = rd16(e);
         wr16(e, (uint16_t)seg);
         wr16(e + 2, JMP_ABS_L);
@@ -204,6 +229,7 @@ const raw_trap raw_traps[] = {
     { 0xA051, "ReadXPRam", raw_ReadXPRam },
     { 0xA052, "WriteXPRam", raw_WriteXPRam },
     { 0xA056, "LowerText", raw_LowerText },
+    { 0xA05C, "MemoryDispatch", raw_MemoryDispatch },
     { 0xA06E, "SlotManager", raw_SlotManager },
     { 0xA050, "RelString", raw_RelString },
     { 0xA054, "UprString", raw_UprString },
