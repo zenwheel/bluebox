@@ -124,17 +124,30 @@ extension BlueBox {
             #expect(resErr() == 0)
         }
 
-        /// A changed resource isn't released or detached: it stays to be
-        /// written (ResEdit releases what an editor changed before Save).
+        /// A changed resource isn't released (noErr all the same) or detached
+        /// (resAttrErr): it stays to be written (ResEdit releases what an
+        /// editor changed before Save).
         @Test func changedResourceIsKept() {
             let h = tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128)
             tb_SetResAttrs(h, Int16(tb_GetResAttrs(h)) | 2) // resChanged, as ResEdit sets it
             tb_ReleaseResource(h)
-            #expect(resErr() == -198) // resAttrErr
+            #expect(resErr() == 0)    // kept, but noErr, as Inside Macintosh says
             tb_DetachResource(h)
             #expect(resErr() == -198)
             #expect(tb_HomeResFile(h) == refnum && bytes(h) == Array("first".utf8))
             #expect(tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128) == h)
+        }
+
+        /// A purgeable resource added to a file or changed stays until it is
+        /// written (SoundApp adds its purgeable default PREF to its prefs).
+        @Test func addedAndChangedResourcesAreNotPurged() {
+            let h = tb_GetResource(Int32(bitPattern: fourCC("PURG")), 7)
+            tb_ChangedResource(h)
+            #expect(UInt8(bitPattern: tb_HGetState(h)) & 0x40 == 0)
+            let added = tb_NewHandle(3, false, true)
+            tb_HPurge(added)
+            tb_AddResource(added, Int32(bitPattern: fourCC("PREF")), 300, 0)
+            #expect(UInt8(bitPattern: tb_HGetState(added)) & 0x40 == 0)
         }
 
         @Test func uniqueIDAvoidsExistingIDs() {

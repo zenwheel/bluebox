@@ -590,11 +590,11 @@ void tb_ReleaseResource(gaddr res)
         set_res_err(resNotFound);
         return;
     }
-    /* A changed resource stays, to be written: the Resource Manager
-     * refused to let it go (ResEdit closes an editor, releasing what it
-     * edited, before Save). */
+    /* A changed resource stays, to be written, and ResError still says
+     * noErr, as the Resource Manager had it (ResEdit closes an editor,
+     * releasing what it edited, before Save; SoundApp checks ResError). */
     if (rd8(mp_of(maph) + r + 4) & RES_CHANGED) {
-        set_res_err(resAttrErr);
+        set_res_err(noErr);
         return;
     }
     wr32(mp_of(maph) + r + 8, 0);
@@ -611,7 +611,7 @@ void tb_DetachResource(gaddr res)
         set_res_err(resNotFound);
         return;
     }
-    if (rd8(mp_of(maph) + r + 4) & RES_CHANGED) { /* as ReleaseResource */
+    if (rd8(mp_of(maph) + r + 4) & RES_CHANGED) { /* kept, and said so */
         set_res_err(resAttrErr);
         return;
     }
@@ -1291,6 +1291,7 @@ void tb_ChangedResource(gaddr res)
     }
     wr8(a, rd8(a) | RES_CHANGED);
     mark_map_changed(maph);
+    tb_HNoPurge(res); /* a purge now would write the resource empty */
     set_res_err(noErr);
 }
 
@@ -1365,6 +1366,10 @@ void tb_AddResource(gaddr data, int32_t typ, int16_t id, gaddr name)
     l.v[at] = rec;
     if (store_refs(maph, &l, map_attrs(maph) | MAP_CHANGED)) {
         tb_HSetRBit(data);
+        /* Kept until written: SoundApp adds its purgeable default PREF to
+         * its preferences file, and a purge before the file closed wrote
+         * it empty, which SoundApp can't read at the next launch. */
+        tb_HNoPurge(data);
         set_res_err(noErr);
     } else {
         set_res_err(addResFailed);
