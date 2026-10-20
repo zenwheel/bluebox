@@ -511,10 +511,14 @@ func installAlertHandler() {
         row.addArrangedSubview(popup)
     }
 
+    /// The disk chosen: the panel closes, to open again there.
+    var reopenAt: String?
+
     @objc func choose(_ sender: NSPopUpButton) {
         let i = sender.indexOfSelectedItem
         guard volumes.indices.contains(i) else { return }
-        panel?.directoryURL = URL(fileURLWithPath: volumes[i].root, isDirectory: true)
+        reopenAt = volumes[i].root
+        panel?.cancel(nil)
     }
 }
 
@@ -608,49 +612,59 @@ func installFileHandler() {
         var chosen: String?
         onMain {
             MainActor.assumeIsolated {
-                let panel: NSSavePanel
-                let filter = ClassicTypeFilter(types: types)
-                if save {
-                    panel = NSSavePanel()
-                    panel.nameFieldStringValue = name
-                    // Classic names are taken as typed: no extension added or hidden.
-                    panel.allowsOtherFileTypes = true
-                    panel.isExtensionHidden = false
-                    panel.canSelectHiddenExtension = false
-                    panel.canCreateDirectories = true
-                } else {
-                    let open = NSOpenPanel()
-                    open.canChooseFiles = true
-                    open.canChooseDirectories = false
-                    open.allowsMultipleSelection = false
-                    open.delegate = filter
-                    panel = open
-                }
-                if !prompt.isEmpty { panel.message = prompt }
-                if !dir.isEmpty { panel.directoryURL = URL(fileURLWithPath: dir, isDirectory: true) }
-                let accessory = ClassicItemsView(items: items, panel: panel)
-                // The program's disks, as Standard File's Desktop showed them:
-                // a mounted folder or AppleShare volume is otherwise hard to find.
-                let disks = DiskPicker(panel: panel)
-                if !items.isEmpty || disks.count > 1 {
-                    let stack = NSStackView()
-                    stack.orientation = .vertical
-                    stack.alignment = .leading
-                    if disks.count > 1 { stack.addArrangedSubview(disks.row) }
-                    if !items.isEmpty { stack.addArrangedSubview(accessory) }
-                    stack.layoutSubtreeIfNeeded()
-                    stack.frame.size = stack.fittingSize
-                    panel.accessoryView = stack
-                    if let open = panel as? NSOpenPanel { open.isAccessoryViewDisclosed = true }
-                }
-                // The application's hook gets null events meanwhile.
-                let idle = Timer(timeInterval: 0.5, repeats: true) { _ in machine_file_idle() }
-                RunLoop.main.add(idle, forMode: .modalPanel)
-                // The filter and the pop-up's target (both held weakly) live as long as the panel runs.
-                withExtendedLifetime((filter, disks)) {
-                    if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
-                }
-                idle.invalidate()
+                // Choosing another disk closes the panel and opens it again
+                // there (a running panel doesn't move when told to).
+                var startDir = dir, saveName = name
+                var reopen: String?
+                repeat {
+                    reopen = nil
+                    let panel: NSSavePanel
+                    let filter = ClassicTypeFilter(types: types)
+                    if save {
+                        panel = NSSavePanel()
+                        panel.nameFieldStringValue = saveName
+                        // Classic names are taken as typed: no extension added or hidden.
+                        panel.allowsOtherFileTypes = true
+                        panel.isExtensionHidden = false
+                        panel.canSelectHiddenExtension = false
+                        panel.canCreateDirectories = true
+                    } else {
+                        let open = NSOpenPanel()
+                        open.canChooseFiles = true
+                        open.canChooseDirectories = false
+                        open.allowsMultipleSelection = false
+                        open.delegate = filter
+                        panel = open
+                    }
+                    if !prompt.isEmpty { panel.message = prompt }
+                    if !startDir.isEmpty { panel.directoryURL = URL(fileURLWithPath: startDir, isDirectory: true) }
+                    let accessory = ClassicItemsView(items: items, panel: panel)
+                    // The program's disks, as Standard File's Desktop showed them:
+                    // a mounted folder or AppleShare volume is otherwise hard to find.
+                    let disks = DiskPicker(panel: panel)
+                    if !items.isEmpty || disks.count > 1 {
+                        let stack = NSStackView()
+                        stack.orientation = .vertical
+                        stack.alignment = .leading
+                        if disks.count > 1 { stack.addArrangedSubview(disks.row) }
+                        if !items.isEmpty { stack.addArrangedSubview(accessory) }
+                        stack.layoutSubtreeIfNeeded()
+                        stack.frame.size = stack.fittingSize
+                        panel.accessoryView = stack
+                        if let open = panel as? NSOpenPanel { open.isAccessoryViewDisclosed = true }
+                    }
+                    // The application's hook gets null events meanwhile.
+                    let idle = Timer(timeInterval: 0.5, repeats: true) { _ in machine_file_idle() }
+                    RunLoop.main.add(idle, forMode: .modalPanel)
+                    // The filter and the pop-up's target (both held weakly) live as long as the panel runs.
+                    withExtendedLifetime((filter, disks)) {
+                        if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
+                    }
+                    reopen = disks.reopenAt
+                    saveName = panel.nameFieldStringValue // kept when it opens again
+                    idle.invalidate()
+                    if let r = reopen { startDir = r }
+                } while reopen != nil
             }
         }
         guard let chosen else { return false }
