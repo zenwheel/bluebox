@@ -50,10 +50,12 @@ static void set_varcode(gaddr w, int16_t v)
 }
 
 static void set_collapsed(gaddr w, bool on);
+static void forget_properties(gaddr w);
 
 static void forget_varcode(gaddr w)
 {
     set_collapsed(w, false);
+    forget_properties(w);
     for (int i = 0; i < 256; i++)
         if (varcodes[i].w == w)
             varcodes[i].w = 0;
@@ -88,6 +90,11 @@ static void set_collapsed(gaddr w, bool on)
     if (on && ncollapsed < 64)
         collapsed[ncollapsed++] = w;
 }
+
+/* Floating windows hidden together by HideFloatingWindows. */
+static bool floats_hidden;
+static gaddr hidden_floats[32];
+static int nhidden_floats;
 
 void wdef0_native(cpu68k *c, uint16_t tw);
 void wdef124_native(cpu68k *c, uint16_t tw);
@@ -1978,6 +1985,8 @@ void tb_InitWindows(void)
         tb_SetPort(saved);
     }
     wr32(LM_WindowList, 0);
+    floats_hidden = false;
+    nhidden_floats = 0;
     wr32(LM_CurActivate, 0);
     wr32(LM_CurDeactive, 0);
     gput(LM_DeskPattern, qd_pat_gray, 8);
@@ -2021,3 +2030,453 @@ void tb_InitWindows(void)
 }
 
 int16_t tb_GetWVariant(gaddr w) { return w ? varcode(w) : 0; }
+
+/* ---------------------------------------------------------------------- */
+/* Mac OS 8's additions (WindowsLib): classes, features and regions of
+ * the windows our definitions draw, collapsing, floating windows (those
+ * WDEF 124 draws), content colours, properties, and proxies (none). */
+
+enum {
+    kAlertWindowClass = 1, kMovableAlertWindowClass, kModalWindowClass, kMovableModalWindowClass,
+    kFloatingWindowClass, kDocumentWindowClass, kPlainWindowClass = 13,
+};
+enum {
+    kWindowCloseBoxAttribute = 1 << 0, kWindowHorizontalZoomAttribute = 1 << 1, kWindowVerticalZoomAttribute = 1 << 2,
+    kWindowCollapseBoxAttribute = 1 << 3, kWindowResizableAttribute = 1 << 4, kWindowSideTitlebarAttribute = 1 << 5,
+};
+enum {
+    kWindowCanGrow = 1 << 0, kWindowCanZoom = 1 << 1, kWindowCanCollapse = 1 << 2, kWindowIsModal = 1 << 3,
+    kWindowCanGetWindowRegion = 1 << 4, kWindowIsAlert = 1 << 5, kWindowHasTitleBar = 1 << 6,
+};
+enum {
+    kWindowTitleBarRgn = 0, kWindowTitleTextRgn, kWindowCloseBoxRgn, kWindowZoomBoxRgn, kWindowDragRgn = 5,
+    kWindowGrowRgn, kWindowCollapseBoxRgn, kWindowStructureRgn = 32, kWindowContentRgn, kWindowUpdateRgn,
+    kWindowGlobalPortRgn = 40,
+};
+enum {
+    errInvalidWindowPtr = -5600, errUnsupportedWindowAttributesForClass = -5601, errWindowDoesNotHaveProxy = -5602,
+    errWindowPropertyNotFound = -5604, errUnrecognizedWindowClass = -5605,
+};
+
+static bool is_floating(gaddr w) { return our_wdef(w) == 124; }
+
+gaddr tb_FrontNonFloatingWindow(void)
+{
+    gaddr ghost = rd32(LM_GhostWindow);
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
+        if (wvisible(w) && w != ghost && !is_floating(w))
+            return w;
+    return 0;
+}
+
+int8_t tb_IsValidWindowPtr(gaddr w) { return w && is_window(w); }
+
+int16_t tb_GetWindowClass(gaddr w, gaddr outClass)
+{
+    if (!is_window(w))
+        return errInvalidWindowPtr;
+    int var = varcode(w), def = our_wdef(w);
+    uint32_t cls = kDocumentWindowClass;
+    if (def == 124)
+        cls = kFloatingWindowClass;
+    else if (def == 0 && (var == 1 || var == 3))
+        cls = WindowRecord_windowKind(w) == dialogKind ? kModalWindowClass : kPlainWindowClass;
+    else if (def == 0 && var == 2)
+        cls = kPlainWindowClass;
+    else if (def == 0 && var == 5)
+        cls = kMovableModalWindowClass;
+    if (outClass)
+        wr32(outClass, cls);
+    return noErr;
+}
+
+static uint32_t attributes_of(gaddr w)
+{
+    int var = varcode(w), def = our_wdef(w);
+    uint32_t a = WindowRecord_goAwayFlag(w) ? kWindowCloseBoxAttribute : 0;
+    if (def == 0 && doc_variant(var)) {
+        a |= kWindowCollapseBoxAttribute;
+        if (has_zoom(var))
+            a |= kWindowHorizontalZoomAttribute | kWindowVerticalZoomAttribute;
+        if (has_grow(var))
+            a |= kWindowResizableAttribute;
+    } else if (def == 124) {
+        a |= kWindowCollapseBoxAttribute;
+        if (float_zoom(var))
+            a |= kWindowHorizontalZoomAttribute | kWindowVerticalZoomAttribute;
+        if (float_grow(var))
+            a |= kWindowResizableAttribute;
+        if (float_side(var))
+            a |= kWindowSideTitlebarAttribute;
+    }
+    return a;
+}
+
+int16_t tb_GetWindowAttributes(gaddr w, gaddr outAttributes)
+{
+    if (!is_window(w))
+        return errInvalidWindowPtr;
+    if (outAttributes)
+        wr32(outAttributes, attributes_of(w));
+    return noErr;
+}
+
+/* GetWindowFeatures(w, &features): what its definition does; nothing
+ * for the program's own definitions. */
+int16_t tb_GetWindowFeatures(gaddr w, gaddr outFeatures)
+{
+    if (!is_window(w))
+        return errInvalidWindowPtr;
+    int var = varcode(w), def = our_wdef(w);
+    uint32_t a = attributes_of(w), f = 0;
+    if (def >= 0) {
+        f = kWindowCanGetWindowRegion;
+        if (a & kWindowResizableAttribute)
+            f |= kWindowCanGrow;
+        if (a & kWindowHorizontalZoomAttribute)
+            f |= kWindowCanZoom;
+        if (a & kWindowCollapseBoxAttribute)
+            f |= kWindowCanCollapse;
+        if (def == 124 || doc_variant(var) || var == 5)
+            f |= kWindowHasTitleBar;
+        if (def == 0 && (var == 1 || var == 5))
+            f |= kWindowIsModal;
+    }
+    if (outFeatures)
+        wr32(outFeatures, f);
+    return noErr;
+}
+
+/* The bounding box of the points in the title bar where the definition
+ * reports a part (its hit test, the window taken as active). */
+static qrect part_box(gaddr w, qrect bar, int part)
+{
+    qrect box = { 0, 0, 0, 0 };
+    bool any = false;
+    uint8_t hil = WindowRecord_hilited(w);
+    WindowRecord_set_hilited(w, 1);
+    for (int v = bar.top; v < bar.bottom; v++)
+        for (int h = bar.left; h < bar.right; h++) {
+            if (call_wdef(w, wHit, (int32_t)((uint32_t)(uint16_t)v << 16 | (uint16_t)h)) != part)
+                continue;
+            if (!any)
+                box = (qrect){ (int16_t)v, (int16_t)h, (int16_t)(v + 1), (int16_t)(h + 1) };
+            box.top = (int16_t)(v < box.top ? v : box.top);
+            box.left = (int16_t)(h < box.left ? h : box.left);
+            box.bottom = (int16_t)(v + 1 > box.bottom ? v + 1 : box.bottom);
+            box.right = (int16_t)(h + 1 > box.right ? h + 1 : box.right);
+            any = true;
+        }
+    WindowRecord_set_hilited(w, hil);
+    return box;
+}
+
+/* GetWindowRegion(w, code, rgn): global coordinates. */
+int16_t tb_GetWindowRegion(gaddr w, uint16_t code, gaddr rgn)
+{
+    if (!is_window(w) || !rgn)
+        return errInvalidWindowPtr;
+    hrgn r, s, c;
+    hrgn_init(&r);
+    hrgn_init(&s);
+    hrgn_init(&c);
+    rgn_read(WindowRecord_strucRgn(w), &s);
+    rgn_read(WindowRecord_contRgn(w), &c);
+    qrect sb = hrgn_bbox(&s), cb = hrgn_bbox(&c);
+    /* the title bar: the frame above the content, or beside it */
+    qrect bar = cb.top > sb.top ? (qrect){ sb.top, sb.left, cb.top, sb.right }
+              : cb.left > sb.left ? (qrect){ sb.top, sb.left, sb.bottom, cb.left }
+                                  : (qrect){ 0, 0, 0, 0 };
+    if (is_collapsed(w))
+        bar = sb;
+    int16_t e = noErr;
+    switch (code) {
+    case kWindowStructureRgn: hrgn_op(&r, &s, &s, RGN_UNION); break;
+    case kWindowContentRgn: hrgn_op(&r, &c, &c, RGN_UNION); break;
+    case kWindowUpdateRgn: rgn_read(WindowRecord_updateRgn(w), &r); break;
+    case kWindowGlobalPortRgn: hrgn_rect(&r, global_content(w)); break;
+    case kWindowTitleBarRgn:
+    case kWindowDragRgn:
+    case kWindowTitleTextRgn:
+        if (our_wdef(w) >= 0 && bar.bottom > bar.top)
+            hrgn_rect(&r, bar);
+        break;
+    case kWindowCloseBoxRgn:
+    case kWindowZoomBoxRgn:
+    case kWindowCollapseBoxRgn:
+        if (our_wdef(w) >= 0 && bar.bottom > bar.top)
+            hrgn_rect(&r, part_box(w, bar, code == kWindowCloseBoxRgn ? wInGoAway
+                                          : code == kWindowZoomBoxRgn  ? wInZoomIn
+                                                                       : wInCollapseBox));
+        break;
+    case kWindowGrowRgn:
+        if (attributes_of(w) & kWindowResizableAttribute && !is_collapsed(w))
+            hrgn_rect(&r, (qrect){ (int16_t)(cb.bottom - 15), (int16_t)(cb.right - 15), cb.bottom, cb.right });
+        break;
+    default: e = paramErr; break;
+    }
+    rgn_write(rgn, &r);
+    hrgn_free(&r);
+    hrgn_free(&s);
+    hrgn_free(&c);
+    return e;
+}
+
+int8_t tb_IsWindowCollapsable(gaddr w) { return is_window(w) && (attributes_of(w) & kWindowCollapseBoxAttribute); }
+int8_t tb_IsWindowCollapsed(gaddr w) { return is_window(w) && is_collapsed(w); }
+
+int16_t tb_CollapseWindow(gaddr w, int8_t collapse)
+{
+    if (!is_window(w))
+        return errInvalidWindowPtr;
+    if (!tb_IsWindowCollapsable(w))
+        return errUnsupportedWindowAttributesForClass;
+    if (is_collapsed(w) != (collapse != 0))
+        toggle_collapse(w);
+    return noErr;
+}
+
+int16_t tb_CollapseAllWindows(int8_t collapse)
+{
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
+        if (wvisible(w) && tb_IsWindowCollapsable(w) && is_collapsed(w) != (collapse != 0))
+            toggle_collapse(w);
+    return noErr;
+}
+
+/* CreateNewWindow(class, attributes, contentBounds, &window): a colour
+ * window of the definition the class and attributes call for, hidden. */
+int16_t tb_CreateNewWindow(uint32_t windowClass, uint32_t attributes, gaddr bounds, gaddr outWindow)
+{
+    if (!bounds || !outWindow)
+        return paramErr;
+    bool zoom = attributes & (kWindowHorizontalZoomAttribute | kWindowVerticalZoomAttribute);
+    bool grow = attributes & kWindowResizableAttribute;
+    int16_t proc;
+    switch (windowClass) {
+    case kDocumentWindowClass: proc = (int16_t)(zoom ? (grow ? 8 : 12) : (grow ? 0 : 4)); break;
+    case kFloatingWindowClass:
+        proc = (int16_t)(124 * 16 + (grow ? 2 : 0) + (zoom ? 4 : 0) + (attributes & kWindowSideTitlebarAttribute ? 8 : 0));
+        break;
+    case kAlertWindowClass:
+    case kModalWindowClass: proc = 1; break;
+    case kMovableAlertWindowClass:
+    case kMovableModalWindowClass: proc = 5; break;
+    case kPlainWindowClass: proc = 2; break;
+    default: return errUnrecognizedWindowClass;
+    }
+    gaddr title = tb_NewPtr(2, true, true);
+    gaddr w = new_window(0, qrect_get(bounds), title, false, proc, IN_FRONT, (attributes & kWindowCloseBoxAttribute) != 0,
+                         0, true);
+    tb_DisposePtr(title);
+    if (w && windowClass != kDocumentWindowClass && windowClass != kFloatingWindowClass)
+        WindowRecord_set_windowKind(w, dialogKind);
+    wr32(outWindow, w);
+    return w ? noErr : memFullErr;
+}
+
+/* Floating windows hidden together (those that were showing), and shown
+ * again. */
+int16_t tb_InitFloatingWindows(void) { return noErr; }
+int8_t tb_AreFloatingWindowsVisible(void) { return !floats_hidden; }
+
+static int16_t show_floats(bool show)
+{
+    if (floats_hidden == !show)
+        return noErr;
+    floats_hidden = !show;
+    if (show) {
+        for (int i = 0; i < nhidden_floats; i++)
+            if (is_window(hidden_floats[i]))
+                tb_ShowHide(hidden_floats[i], true);
+        nhidden_floats = 0;
+        return noErr;
+    }
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
+        if (is_floating(w) && wvisible(w) && nhidden_floats < 32)
+            hidden_floats[nhidden_floats++] = w;
+    for (int i = 0; i < nhidden_floats; i++)
+        tb_ShowHide(hidden_floats[i], false);
+    return noErr;
+}
+
+int16_t tb_ShowFloatingWindows(void) { return show_floats(true); }
+int16_t tb_HideFloatingWindows(void) { return show_floats(false); }
+
+/* Content colours: the window port's background, and what Get answers. */
+static struct {
+    gaddr w;
+    uint16_t rgb[3];
+} content_colors[32];
+
+int16_t tb_SetWindowContentColor(gaddr w, gaddr color)
+{
+    if (!is_window(w) || !color)
+        return errInvalidWindowPtr;
+    int slot = -1;
+    for (int i = 0; i < 32 && slot < 0; i++)
+        if (content_colors[i].w == w || !content_colors[i].w || !is_window(content_colors[i].w))
+            slot = i;
+    if (slot >= 0) {
+        content_colors[slot].w = w;
+        for (int k = 0; k < 3; k++)
+            content_colors[slot].rgb[k] = rd16(color + (uint32_t)k * 2);
+    }
+    gaddr saved = qd_port();
+    tb_SetPort(w);
+    tb_RGBBackColor(color);
+    tb_SetPort(saved);
+    return noErr;
+}
+
+int16_t tb_GetWindowContentColor(gaddr w, gaddr color)
+{
+    if (!is_window(w) || !color)
+        return errInvalidWindowPtr;
+    for (int i = 0; i < 32; i++)
+        if (content_colors[i].w == w) {
+            for (int k = 0; k < 3; k++)
+                wr16(color + (uint32_t)k * 2, content_colors[i].rgb[k]);
+            return noErr;
+        }
+    /* the window's colour table's content colour, or white */
+    gaddr h = aux_of(w) ? aux_of(w) : aux_of(0);
+    gaddr ct = h ? rd32(rd32(h) + AW_CTABLE) : 0;
+    for (int k = 0; k < 3; k++)
+        wr16(color + (uint32_t)k * 2, ct && rd32(ct) ? rd16(rd32(ct) + 8 + 2 + (uint32_t)k * 2) : 0xFFFF);
+    return noErr;
+}
+
+/* Properties: a program's data kept with a window, by creator and tag. */
+typedef struct {
+    gaddr w;
+    uint32_t creator, tag, size;
+    uint8_t *data;
+} window_property;
+static window_property *props;
+static int nprops, maxprops;
+
+static window_property *find_property(gaddr w, uint32_t creator, uint32_t tag)
+{
+    for (int i = 0; i < nprops; i++)
+        if (props[i].w == w && props[i].creator == creator && props[i].tag == tag)
+            return &props[i];
+    return NULL;
+}
+
+int16_t tb_SetWindowProperty(gaddr w, uint32_t creator, uint32_t tag, uint32_t size, gaddr buffer)
+{
+    if (!is_window(w))
+        return errInvalidWindowPtr;
+    window_property *p = find_property(w, creator, tag);
+    if (!p) {
+        if (nprops == maxprops) {
+            int n = maxprops ? maxprops * 2 : 16;
+            window_property *more = realloc(props, sizeof *props * (size_t)n);
+            if (!more)
+                return memFullErr;
+            props = more;
+            maxprops = n;
+        }
+        p = &props[nprops++];
+        *p = (window_property){ w, creator, tag, 0, NULL };
+    }
+    uint8_t *d = malloc(size ? size : 1);
+    if (!d)
+        return memFullErr;
+    if (size && buffer)
+        gget(d, buffer, size);
+    free(p->data);
+    p->data = d;
+    p->size = size;
+    return noErr;
+}
+
+int16_t tb_GetWindowProperty(gaddr w, uint32_t creator, uint32_t tag, uint32_t bufferSize, gaddr actualSize,
+                             gaddr buffer)
+{
+    window_property *p = find_property(w, creator, tag);
+    if (!p)
+        return errWindowPropertyNotFound;
+    uint32_t n = p->size < bufferSize ? p->size : bufferSize;
+    if (buffer && n)
+        gput(buffer, p->data, n);
+    if (actualSize)
+        wr32(actualSize, n);
+    return noErr;
+}
+
+int16_t tb_GetWindowPropertySize(gaddr w, uint32_t creator, uint32_t tag, gaddr size)
+{
+    window_property *p = find_property(w, creator, tag);
+    if (!p)
+        return errWindowPropertyNotFound;
+    if (size)
+        wr32(size, p->size);
+    return noErr;
+}
+
+int16_t tb_RemoveWindowProperty(gaddr w, uint32_t creator, uint32_t tag)
+{
+    window_property *p = find_property(w, creator, tag);
+    if (!p)
+        return errWindowPropertyNotFound;
+    free(p->data);
+    *p = props[--nprops];
+    return noErr;
+}
+
+/* A window's properties go with it. */
+static void forget_properties(gaddr w)
+{
+    for (int i = 0; i < nprops;)
+        if (props[i].w == w) {
+            free(props[i].data);
+            props[i] = props[--nprops];
+        } else {
+            i++;
+        }
+}
+
+/* Proxies (the title bar's document icon) are not shown: there is none
+ * to get, and setting one is taken. */
+int16_t tb_SetWindowProxyFSSpec(gaddr w, gaddr spec) { return is_window(w) ? noErr : errInvalidWindowPtr; }
+int16_t tb_GetWindowProxyFSSpec(gaddr w, gaddr spec) { return errWindowDoesNotHaveProxy; }
+int16_t tb_SetWindowProxyAlias(gaddr w, gaddr alias) { return is_window(w) ? noErr : errInvalidWindowPtr; }
+int16_t tb_GetWindowProxyAlias(gaddr w, gaddr alias) { return errWindowDoesNotHaveProxy; }
+int16_t tb_SetWindowProxyCreatorAndType(gaddr w, uint32_t creator, uint32_t type, int16_t vref)
+{
+    return is_window(w) ? noErr : errInvalidWindowPtr;
+}
+int16_t tb_RemoveWindowProxy(gaddr w) { return is_window(w) ? noErr : errInvalidWindowPtr; }
+int16_t tb_SetWindowProxyIcon(gaddr w, gaddr icon) { return is_window(w) ? noErr : errInvalidWindowPtr; }
+int16_t tb_GetWindowProxyIcon(gaddr w, gaddr icon) { return errWindowDoesNotHaveProxy; }
+
+/* The modified flag (shown by nothing here). */
+static gaddr modified[32];
+
+int16_t tb_SetWindowModified(gaddr w, int8_t on)
+{
+    if (!is_window(w))
+        return errInvalidWindowPtr;
+    int at = -1, free_slot = -1;
+    for (int i = 0; i < 32; i++) {
+        if (modified[i] == w)
+            at = i;
+        else if (free_slot < 0 && (!modified[i] || !is_window(modified[i])))
+            free_slot = i;
+    }
+    if (!on && at >= 0)
+        modified[at] = 0;
+    else if (on && at < 0 && free_slot >= 0)
+        modified[free_slot] = w;
+    return noErr;
+}
+
+int8_t tb_IsWindowModified(gaddr w)
+{
+    for (int i = 0; i < 32; i++)
+        if (w && modified[i] == w)
+            return 1;
+    return 0;
+}
