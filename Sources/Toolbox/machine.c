@@ -49,6 +49,7 @@ void machine_set_hilite_color(uint16_t r, uint16_t g, uint16_t b)
     hilite_rgb[0] = r;
     hilite_rgb[1] = g;
     hilite_rgb[2] = b;
+    appearance_hilite_changed(r, g, b); /* a running machine's follows */
 }
 
 static uint64_t now_ns(void)
@@ -327,6 +328,7 @@ bool machine_boot(bool census)
     threads_reset();
     help_reset();
     dialog_reset();
+    appearance_reset();
     wr32(LM_TheZone, GA_SYSHEAP);
     if (!open_system_file())
         return false;

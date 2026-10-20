@@ -259,6 +259,44 @@ void native_forget_control(gaddr ch);
 bool native_draw_popup(qrect r, const uint8_t *item, int n, bool pressed, bool disabled);
 bool native_draw_edit_frame(qrect r, bool focused);
 
+/* The Appearance Manager (appearance.c): whether the program registered as
+ * a client; the host's colours taken up at event calls; the Platinum
+ * look's drawing, in RGB through the current port's clip (black and white
+ * below 4 bits a pixel).  States are ThemeDrawState's: 0 inactive, 1
+ * active, 2 pressed. */
+bool appearance_client(void);
+void appearance_reset(void);
+void appearance_poll(void);
+void appearance_hilite_changed(uint16_t r, uint16_t g, uint16_t b);
+bool ap_brush_rgb(int brush, uint16_t out[3]);
+bool ap_text_rgb(int color, uint16_t out[3]);
+bool ap_in_color(void);
+void ap_fill_rgn(const hrgn *g, const uint16_t rgb[3]);
+void ap_fill(qrect r, const uint16_t rgb[3]);
+void ap_fill_grey(qrect r, uint16_t v);
+void ap_frame(qrect r, const uint16_t rgb[3]);
+void ap_frame_grey(qrect r, uint16_t v);
+void ap_bevel(qrect r, uint16_t light, uint16_t dark);
+void ap_text(int x, int y, const uint8_t *s, int n, const uint16_t rgb[3]);
+void ap_text_in(qrect r, const uint8_t *s, int n, bool center, const uint16_t rgb[3]);
+void ap_font_info(int *ascent, int *descent);
+void ap_arrow(qrect r, int dir, int size, const uint16_t rgb[3]);
+void ap_placard(qrect r, uint32_t state);
+void ap_well_frame(qrect r, uint32_t state);
+void ap_focus_rect(qrect r, bool focus);
+void ap_group(qrect r, uint32_t state, bool primary);
+void ap_separator(qrect r, uint32_t state);
+void ap_tab_pane(qrect r, uint32_t state);
+void ap_tab(qrect r, int style, const uint8_t *title, int n);
+void ap_push_button(qrect r, uint32_t state, bool is_default);
+void ap_check_box(qrect box, bool radio, int value, uint32_t state);
+void ap_bevel_button(qrect r, int kind, uint32_t state, bool on);
+void ap_disclosure(qrect r, int value, uint32_t state, bool left_facing);
+void ap_little_arrows(qrect r, uint32_t state);
+void ap_popup_button(qrect r, uint32_t state, bool arrow_only);
+void ap_button(qrect r, int kind, uint32_t state, int value, int adorn);
+void ap_track(gaddr info); /* a ThemeTrackDrawInfo in guest memory */
+
 /* ---- Dialog Manager ---- */
 
 /* A dialog from DLOG id; vis_override -1 keeps the resource's visibility. */

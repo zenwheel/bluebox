@@ -319,12 +319,28 @@ func nameProcess(_ name: String) {
 }
 
 /// The classic highlight colour (HiliteRGB) follows the host's selection
-/// colour, so selected text and rows look as the host's do.
+/// colour, so selected text and rows look as the host's do, and the
+/// Appearance Manager's accent (scroll bar thumbs, focus rings, selected
+/// menu items) follows the host's accent colour; both change when the
+/// host's do.
 @MainActor func useHostSelectionColor() {
-    guard let c = NSColor.selectedTextBackgroundColor.usingColorSpace(.sRGB) else { return }
     func word(_ v: CGFloat) -> UInt16 { UInt16((max(0, min(1, v)) * 65535).rounded()) }
-    machine_set_hilite_color(word(c.redComponent), word(c.greenComponent), word(c.blueComponent))
+    if let c = NSColor.selectedTextBackgroundColor.usingColorSpace(.sRGB) {
+        machine_set_hilite_color(word(c.redComponent), word(c.greenComponent), word(c.blueComponent))
+    }
+    if let a = NSColor.controlAccentColor.usingColorSpace(.sRGB) {
+        machine_set_accent_color(word(a.redComponent), word(a.greenComponent), word(a.blueComponent))
+    }
+    if !hostColorsObserved {
+        hostColorsObserved = true
+        NotificationCenter.default.addObserver(forName: NSColor.systemColorsDidChangeNotification, object: nil,
+                                               queue: .main) { _ in
+            MainActor.assumeIsolated { useHostSelectionColor() }
+        }
+    }
 }
+
+nonisolated(unsafe) private var hostColorsObserved = false
 
 /// The classic application's Finder icon, for the Dock and alerts.
 nonisolated(unsafe) var appIcon: NSImage?

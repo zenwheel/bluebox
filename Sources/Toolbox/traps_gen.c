@@ -143,6 +143,7 @@ const char *const tb_trap_names[1024] = {
     [0x021] = "GetMaxResourceSize",
     [0x022] = "ResourceDispatch",
     [0x023] = "AliasDispatch",
+    [0x025] = "MenuDispatch",
     [0x026] = "InsertMenuItem",
     [0x027] = "HideDialogItem",
     [0x028] = "ShowDialogItem",
@@ -690,6 +691,8 @@ const char *const tb_trap_names[1024] = {
     [0x265] = "SetMCEntries",
     [0x266] = "MenuChoice",
     [0x268] = "DialogDispatch",
+    [0x273] = "ControlDispatch",
+    [0x274] = "AppearanceDispatch",
     [0x290] = "InitPalettes",
     [0x291] = "NewPalette",
     [0x292] = "GetNewPalette",
@@ -1667,6 +1670,20 @@ static void glue_AppendResMenu(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ApplyThemeBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    uint32_t a_kind = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_ApplyThemeBackground(a_kind, a_bounds, a_state, a_depth, a_isColorDevice);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_BackColor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1707,6 +1724,16 @@ static void glue_BeginFullScreen(cpu68k *c, uint16_t trapword)
     gaddr a_restoreState = (gaddr)cpu_pop32(c);
     int16_t r = tb_BeginFullScreen(a_restoreState, a_whichGD, a_desiredWidth, a_desiredHeight, a_newWindow, a_eraseColor, a_flags);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_BeginThemeDragSound(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_kind = (int32_t)cpu_pop32(c);
+    int32_t r = tb_BeginThemeDragSound(a_kind);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -3401,6 +3428,16 @@ static void glue_DisposeSpeechChannel(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DisposeThemeDrawingState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_state = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DisposeThemeDrawingState(a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposeThread(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3614,6 +3651,395 @@ static void glue_DrawText(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DrawThemeButton(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_userData = (uint32_t)cpu_pop32(c);
+    gaddr a_labelProc = (gaddr)cpu_pop32(c);
+    gaddr a_eraseProc = (gaddr)cpu_pop32(c);
+    gaddr a_prevInfo = (gaddr)cpu_pop32(c);
+    gaddr a_newInfo = (gaddr)cpu_pop32(c);
+    uint16_t a_kind = (uint16_t)cpu_pop16(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeButton(a_bounds, a_kind, a_newInfo, a_prevInfo, a_eraseProc, a_labelProc, a_userData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeChasingArrows(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_eraseData = (uint32_t)cpu_pop32(c);
+    gaddr a_eraseProc = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    uint32_t a_index = (uint32_t)cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeChasingArrows(a_bounds, a_index, a_state, a_eraseProc, a_eraseData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeEditTextFrame(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeEditTextFrame(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeFocusRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_hasFocus = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeFocusRect(a_r, a_hasFocus);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeFocusRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_hasFocus = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_region = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeFocusRegion(a_region, a_hasFocus);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeGenericWell(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_fillCenter = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeGenericWell(a_r, a_state, a_fillCenter);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeListBoxFrame(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeListBoxFrame(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeMenuBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_menuType = (uint16_t)cpu_pop16(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeMenuBackground(a_r, a_menuType);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeMenuBarBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_attributes = (uint32_t)cpu_pop32(c);
+    uint16_t a_state = (uint16_t)cpu_pop16(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeMenuBarBackground(a_r, a_state, a_attributes);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeMenuItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_userData = (uint32_t)cpu_pop32(c);
+    gaddr a_drawProc = (gaddr)cpu_pop32(c);
+    uint16_t a_itemType = (uint16_t)cpu_pop16(c);
+    uint16_t a_state = (uint16_t)cpu_pop16(c);
+    int16_t a_virtualBottom = (int16_t)cpu_pop16(c);
+    int16_t a_virtualTop = (int16_t)cpu_pop16(c);
+    gaddr a_itemRect = (gaddr)cpu_pop32(c);
+    gaddr a_menuRect = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeMenuItem(a_menuRect, a_itemRect, a_virtualTop, a_virtualBottom, a_state, a_itemType, a_drawProc, a_userData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeMenuSeparator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeMenuSeparator(a_r);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeMenuTitle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_titleData = (uint32_t)cpu_pop32(c);
+    gaddr a_titleProc = (gaddr)cpu_pop32(c);
+    uint32_t a_attributes = (uint32_t)cpu_pop32(c);
+    uint16_t a_state = (uint16_t)cpu_pop16(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_menuBar = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeMenuTitle(a_menuBar, a_title, a_state, a_attributes, a_titleProc, a_titleData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeModelessDialogFrame(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeModelessDialogFrame(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemePlacard(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemePlacard(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemePopupArrow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_eraseData = (uint32_t)cpu_pop32(c);
+    gaddr a_eraseProc = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    uint16_t a_size = (uint16_t)cpu_pop16(c);
+    uint16_t a_orientation = (uint16_t)cpu_pop16(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemePopupArrow(a_bounds, a_orientation, a_size, a_state, a_eraseProc, a_eraseData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemePrimaryGroup(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemePrimaryGroup(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeScrollBarArrows(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_trackBounds = (gaddr)cpu_pop32(c);
+    int8_t a_horizontal = (int8_t)(cpu_pop16(c) >> 8);
+    uint8_t a_pressState = (uint8_t)(cpu_pop16(c) >> 8);
+    uint8_t a_enableState = (uint8_t)(cpu_pop16(c) >> 8);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeScrollBarArrows(a_bounds, a_enableState, a_pressState, a_horizontal, a_trackBounds);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeScrollBarDelimiters(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_attributes = (uint32_t)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    uint16_t a_flavor = (uint16_t)cpu_pop16(c);
+    int32_t r = tb_DrawThemeScrollBarDelimiters(a_flavor, a_content, a_state, a_attributes);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeSecondaryGroup(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeSecondaryGroup(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeSeparator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeSeparator(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeStandaloneGrowBox(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    int8_t a_small = (int8_t)(cpu_pop16(c) >> 8);
+    uint16_t a_direction = (uint16_t)cpu_pop16(c);
+    uint32_t a_origin = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_DrawThemeStandaloneGrowBox(a_origin, a_direction, a_small, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeStandaloneNoGrowBox(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    int8_t a_small = (int8_t)(cpu_pop16(c) >> 8);
+    uint16_t a_direction = (uint16_t)cpu_pop16(c);
+    uint32_t a_origin = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_DrawThemeStandaloneNoGrowBox(a_origin, a_direction, a_small, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeTab(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_userData = (uint32_t)cpu_pop32(c);
+    gaddr a_labelProc = (gaddr)cpu_pop32(c);
+    uint16_t a_direction = (uint16_t)cpu_pop16(c);
+    uint16_t a_style = (uint16_t)cpu_pop16(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeTab(a_r, a_style, a_direction, a_labelProc, a_userData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeTabPane(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeTabPane(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeTickMark(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeTickMark(a_bounds, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeTitleBarWidget(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_widget = (uint16_t)cpu_pop16(c);
+    uint32_t a_attributes = (uint32_t)cpu_pop32(c);
+    gaddr a_metrics = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    uint16_t a_flavor = (uint16_t)cpu_pop16(c);
+    int32_t r = tb_DrawThemeTitleBarWidget(a_flavor, a_content, a_state, a_metrics, a_attributes, a_widget);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeTrack(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_eraseData = (uint32_t)cpu_pop32(c);
+    gaddr a_eraseProc = (gaddr)cpu_pop32(c);
+    gaddr a_ghost = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeTrack(a_info, a_ghost, a_eraseProc, a_eraseData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeTrackTickMarks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_eraseData = (uint32_t)cpu_pop32(c);
+    gaddr a_eraseProc = (gaddr)cpu_pop32(c);
+    uint32_t a_count = (uint32_t)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeTrackTickMarks(a_info, a_count, a_eraseProc, a_eraseData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeWindowFrame(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_titleData = (uint32_t)cpu_pop32(c);
+    gaddr a_titleProc = (gaddr)cpu_pop32(c);
+    uint32_t a_attributes = (uint32_t)cpu_pop32(c);
+    gaddr a_metrics = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    uint16_t a_flavor = (uint16_t)cpu_pop16(c);
+    int32_t r = tb_DrawThemeWindowFrame(a_flavor, a_content, a_state, a_metrics, a_attributes, a_titleProc, a_titleData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeWindowHeader(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeWindowHeader(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DrawThemeWindowListViewHeader(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_DrawThemeWindowListViewHeader(a_r, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_EmptyHandle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3660,6 +4086,15 @@ static void glue_EndFullScreen(cpu68k *c, uint16_t trapword)
     int32_t a_fullState = (int32_t)cpu_pop32(c);
     int16_t r = tb_EndFullScreen(a_fullState, a_flags);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_EndThemeDragSound(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_EndThemeDragSound();
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -7234,6 +7669,342 @@ static void glue_GetSysDirection(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetThemeAccentColors(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_colors = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeAccentColors(a_colors);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeBrushAsColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_color = (gaddr)cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    int16_t a_brush = (int16_t)cpu_pop16(c);
+    int32_t r = tb_GetThemeBrushAsColor(a_brush, a_depth, a_isColorDevice, a_color);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeButtonBackgroundBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_background = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint16_t a_kind = (uint16_t)cpu_pop16(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeButtonBackgroundBounds(a_bounds, a_kind, a_info, a_background);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeButtonContentBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint16_t a_kind = (uint16_t)cpu_pop16(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeButtonContentBounds(a_bounds, a_kind, a_info, a_content);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeButtonRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_region = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint16_t a_kind = (uint16_t)cpu_pop16(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeButtonRegion(a_bounds, a_kind, a_info, a_region);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeCheckBoxStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeCheckBoxStyle(a_style);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeDrawingState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_state = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeDrawingState(a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeFont(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    gaddr a_fontSize = (gaddr)cpu_pop32(c);
+    gaddr a_fontName = (gaddr)cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    uint16_t a_fontID = (uint16_t)cpu_pop16(c);
+    int32_t r = tb_GetThemeFont(a_fontID, a_script, a_fontName, a_fontSize, a_style);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeMenuBackgroundRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_region = (gaddr)cpu_pop32(c);
+    uint16_t a_menuType = (uint16_t)cpu_pop16(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeMenuBackgroundRegion(a_r, a_menuType, a_region);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeMenuBarHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeMenuBarHeight(a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeMenuItemExtra(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_width = (gaddr)cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    uint16_t a_itemType = (uint16_t)cpu_pop16(c);
+    int32_t r = tb_GetThemeMenuItemExtra(a_itemType, a_height, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeMenuSeparatorHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeMenuSeparatorHeight(a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeMenuTitleExtra(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_squished = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_width = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeMenuTitleExtra(a_width, a_squished);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeMetric(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_value = (gaddr)cpu_pop32(c);
+    uint32_t a_metric = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_GetThemeMetric(a_metric, a_value);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeScrollBarArrowStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeScrollBarArrowStyle(a_style);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeScrollBarThumbStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeScrollBarThumbStyle(a_style);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeScrollBarTrackRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_trackBounds = (gaddr)cpu_pop32(c);
+    int8_t a_horizontal = (int8_t)(cpu_pop16(c) >> 8);
+    uint8_t a_pressState = (uint8_t)(cpu_pop16(c) >> 8);
+    uint8_t a_enableState = (uint8_t)(cpu_pop16(c) >> 8);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeScrollBarTrackRect(a_bounds, a_enableState, a_pressState, a_horizontal, a_trackBounds);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeStandaloneGrowBoxBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int8_t a_small = (int8_t)(cpu_pop16(c) >> 8);
+    uint16_t a_direction = (uint16_t)cpu_pop16(c);
+    uint32_t a_origin = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_GetThemeStandaloneGrowBoxBounds(a_origin, a_direction, a_small, a_bounds);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeTabRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_region = (gaddr)cpu_pop32(c);
+    uint16_t a_direction = (uint16_t)cpu_pop16(c);
+    uint16_t a_style = (uint16_t)cpu_pop16(c);
+    gaddr a_r = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeTabRegion(a_r, a_style, a_direction, a_region);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeTextColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outColor = (gaddr)cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    int16_t a_color = (int16_t)cpu_pop16(c);
+    int32_t r = tb_GetThemeTextColor(a_color, a_depth, a_isColorDevice, a_outColor);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeTrackBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeTrackBounds(a_info, a_bounds);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeTrackDragRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dragRect = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeTrackDragRect(a_info, a_dragRect);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeTrackLiveValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_value = (gaddr)cpu_pop32(c);
+    int32_t a_position = (int32_t)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeTrackLiveValue(a_info, a_position, a_value);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeTrackThumbPositionFromOffset(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_position = (gaddr)cpu_pop32(c);
+    uint32_t a_offset = (uint32_t)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeTrackThumbPositionFromOffset(a_info, a_offset, a_position);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeTrackThumbPositionFromRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_position = (gaddr)cpu_pop32(c);
+    gaddr a_thumb = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeTrackThumbPositionFromRegion(a_info, a_thumb, a_position);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeTrackThumbRgn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_thumb = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetThemeTrackThumbRgn(a_info, a_thumb);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeWindowRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_region = (gaddr)cpu_pop32(c);
+    uint16_t a_regionCode = (uint16_t)cpu_pop16(c);
+    uint32_t a_attributes = (uint32_t)cpu_pop32(c);
+    gaddr a_metrics = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    uint16_t a_flavor = (uint16_t)cpu_pop16(c);
+    int32_t r = tb_GetThemeWindowRegion(a_flavor, a_content, a_state, a_metrics, a_attributes, a_regionCode, a_region);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetThemeWindowRegionHit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_regionHit = (gaddr)cpu_pop32(c);
+    uint32_t a_pt = (uint32_t)cpu_pop32(c);
+    uint32_t a_attributes = (uint32_t)cpu_pop32(c);
+    gaddr a_metrics = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    uint16_t a_flavor = (uint16_t)cpu_pop16(c);
+    int8_t r = tb_GetThemeWindowRegionHit(a_flavor, a_content, a_state, a_metrics, a_attributes, a_pt, a_regionHit);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_GetThreadCurrentTaskRef(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7888,6 +8659,34 @@ static void glue_HiliteWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_HitTestThemeScrollBarArrows(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_part = (gaddr)cpu_pop32(c);
+    gaddr a_trackBounds = (gaddr)cpu_pop32(c);
+    uint32_t a_pt = (uint32_t)cpu_pop32(c);
+    int8_t a_horizontal = (int8_t)(cpu_pop16(c) >> 8);
+    uint8_t a_pressState = (uint8_t)(cpu_pop16(c) >> 8);
+    uint8_t a_enableState = (uint8_t)(cpu_pop16(c) >> 8);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int8_t r = tb_HitTestThemeScrollBarArrows(a_bounds, a_enableState, a_pressState, a_horizontal, a_pt, a_trackBounds, a_part);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_HitTestThemeTrack(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_part = (gaddr)cpu_pop32(c);
+    uint32_t a_pt = (uint32_t)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int8_t r = tb_HitTestThemeTrack(a_info, a_pt, a_part);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_HomeResFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8457,6 +9256,16 @@ static void glue_InvertRoundRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsAppearanceClient(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_process = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsAppearanceClient(a_process);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_IsDialogEvent(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8504,6 +9313,27 @@ static void glue_IsRegisteredSection(cpu68k *c, uint16_t trapword)
     gaddr a_section = (gaddr)cpu_pop32(c);
     int16_t r = tb_IsRegisteredSection(a_section);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IsThemeInColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    int8_t r = tb_IsThemeInColor(a_depth, a_isColorDevice);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsValidAppearanceFileType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_fileType = (int32_t)cpu_pop32(c);
+    int8_t r = tb_IsValidAppearanceFileType(a_fileType);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -10148,6 +10978,15 @@ static void glue_NoPurgePixels(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NormalizeThemeDrawingState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_NormalizeThemeDrawingState();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NoteAlert(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11292,6 +12131,16 @@ static void glue_PixelToChar(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PlayThemeSound(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_kind = (int32_t)cpu_pop32(c);
+    int32_t r = tb_PlayThemeSound(a_kind);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_PlotCIcon(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12157,6 +13006,15 @@ static void glue_RectRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RegisterAppearanceClient(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_RegisterAppearanceClient();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RegisterSection(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12872,6 +13730,17 @@ static void glue_SetADBInfo(cpu68k *c, uint16_t trapword)
     int16_t a_address = (int16_t)c->d[0];
     int16_t r = tb_SetADBInfo(a_adbp, a_address);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_SetAnimatedThemeCursor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_step = (uint32_t)cpu_pop32(c);
+    uint32_t a_cursor = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_SetAnimatedThemeCursor(a_cursor, a_step);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_SetApplBase(cpu68k *c, uint16_t trapword)
@@ -14070,6 +14939,88 @@ static void glue_SetSysDirection(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t a_just = (int16_t)cpu_pop16(c);
     tb_SetSysDirection(a_just);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThemeBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    int16_t a_brush = (int16_t)cpu_pop16(c);
+    int32_t r = tb_SetThemeBackground(a_brush, a_depth, a_isColorDevice);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThemeCursor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_cursor = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_SetThemeCursor(a_cursor);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThemeDrawingState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_disposeNow = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_state = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetThemeDrawingState(a_state, a_disposeNow);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThemePen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    int16_t a_brush = (int16_t)cpu_pop16(c);
+    int32_t r = tb_SetThemePen(a_brush, a_depth, a_isColorDevice);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThemeTextColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    int16_t a_color = (int16_t)cpu_pop16(c);
+    int32_t r = tb_SetThemeTextColor(a_color, a_depth, a_isColorDevice);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThemeTextColorForWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_depth = (int16_t)cpu_pop16(c);
+    int8_t a_active = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetThemeTextColorForWindow(a_window, a_active, a_depth, a_isColorDevice);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetThemeWindowBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_update = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_brush = (int16_t)cpu_pop16(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetThemeWindowBackground(a_window, a_brush, a_update);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -16015,6 +16966,15 @@ static void glue_UnpackBits(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UnregisterAppearanceClient(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_UnregisterAppearanceClient();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UnsignedFixMulDiv(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16135,6 +17095,17 @@ static void glue_UseResFile(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t a_rn = (int16_t)cpu_pop16(c);
     tb_UseResFile(a_rn);
+    cpu_push32(c, ret);
+}
+
+static void glue_UseThemeFont(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    uint16_t a_fontID = (uint16_t)cpu_pop16(c);
+    int32_t r = tb_UseThemeFont(a_fontID, a_script);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -17080,6 +18051,40 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA823, (int32_t)0x8u, "NewAliasMinimal", CONV_STACK, 8, 2, glue_NewAliasMinimal},
     {0xA823, (int32_t)0x9u, "NewAliasMinimalFromFullPath", CONV_STACK, 18, 2, glue_NewAliasMinimalFromFullPath},
     {0xA823, (int32_t)0xCu, "ResolveAliasFile", CONV_STACK, 14, 2, glue_ResolveAliasFile},
+    {0xAA74, (int32_t)0xFFFFFFFFu, "IsAppearanceClient", CONV_STACK, 4, 2, glue_IsAppearanceClient},
+    {0xAA74, (int32_t)0x1u, "SetThemePen", CONV_STACK, 6, 4, glue_SetThemePen},
+    {0xAA74, (int32_t)0x2u, "SetThemeBackground", CONV_STACK, 6, 4, glue_SetThemeBackground},
+    {0xAA74, (int32_t)0x3u, "SetThemeTextColor", CONV_STACK, 6, 4, glue_SetThemeTextColor},
+    {0xAA74, (int32_t)0x4u, "SetThemeWindowBackground", CONV_STACK, 8, 4, glue_SetThemeWindowBackground},
+    {0xAA74, (int32_t)0x5u, "DrawThemeWindowHeader", CONV_STACK, 8, 4, glue_DrawThemeWindowHeader},
+    {0xAA74, (int32_t)0x6u, "DrawThemeWindowListViewHeader", CONV_STACK, 8, 4, glue_DrawThemeWindowListViewHeader},
+    {0xAA74, (int32_t)0x7u, "DrawThemePlacard", CONV_STACK, 8, 4, glue_DrawThemePlacard},
+    {0xAA74, (int32_t)0x8u, "DrawThemeModelessDialogFrame", CONV_STACK, 8, 4, glue_DrawThemeModelessDialogFrame},
+    {0xAA74, (int32_t)0x9u, "DrawThemeEditTextFrame", CONV_STACK, 8, 4, glue_DrawThemeEditTextFrame},
+    {0xAA74, (int32_t)0xAu, "DrawThemeListBoxFrame", CONV_STACK, 8, 4, glue_DrawThemeListBoxFrame},
+    {0xAA74, (int32_t)0xBu, "DrawThemeFocusRect", CONV_STACK, 6, 4, glue_DrawThemeFocusRect},
+    {0xAA74, (int32_t)0xCu, "DrawThemePrimaryGroup", CONV_STACK, 8, 4, glue_DrawThemePrimaryGroup},
+    {0xAA74, (int32_t)0xDu, "DrawThemeSecondaryGroup", CONV_STACK, 8, 4, glue_DrawThemeSecondaryGroup},
+    {0xAA74, (int32_t)0xEu, "DrawThemeSeparator", CONV_STACK, 8, 4, glue_DrawThemeSeparator},
+    {0xAA74, (int32_t)0x15u, "RegisterAppearanceClient", CONV_STACK, 0, 4, glue_RegisterAppearanceClient},
+    {0xAA74, (int32_t)0x16u, "UnregisterAppearanceClient", CONV_STACK, 0, 4, glue_UnregisterAppearanceClient},
+    {0xAA74, (int32_t)0x18u, "DrawThemeMenuBarBackground", CONV_STACK, 10, 4, glue_DrawThemeMenuBarBackground},
+    {0xAA74, (int32_t)0x19u, "DrawThemeMenuTitle", CONV_STACK, 22, 4, glue_DrawThemeMenuTitle},
+    {0xAA74, (int32_t)0x1Au, "GetThemeMenuBarHeight", CONV_STACK, 4, 4, glue_GetThemeMenuBarHeight},
+    {0xAA74, (int32_t)0x1Bu, "DrawThemeMenuBackground", CONV_STACK, 6, 4, glue_DrawThemeMenuBackground},
+    {0xAA74, (int32_t)0x1Cu, "GetThemeMenuBackgroundRegion", CONV_STACK, 10, 4, glue_GetThemeMenuBackgroundRegion},
+    {0xAA74, (int32_t)0x1Du, "DrawThemeMenuItem", CONV_STACK, 24, 4, glue_DrawThemeMenuItem},
+    {0xAA74, (int32_t)0x1Eu, "DrawThemeMenuSeparator", CONV_STACK, 4, 4, glue_DrawThemeMenuSeparator},
+    {0xAA74, (int32_t)0x1Fu, "GetThemeMenuSeparatorHeight", CONV_STACK, 4, 4, glue_GetThemeMenuSeparatorHeight},
+    {0xAA74, (int32_t)0x20u, "GetThemeMenuItemExtra", CONV_STACK, 10, 4, glue_GetThemeMenuItemExtra},
+    {0xAA74, (int32_t)0x21u, "GetThemeMenuTitleExtra", CONV_STACK, 6, 4, glue_GetThemeMenuTitleExtra},
+    {0xAA74, (int32_t)0x22u, "DrawThemeGenericWell", CONV_STACK, 10, 4, glue_DrawThemeGenericWell},
+    {0xAA74, (int32_t)0x23u, "DrawThemeFocusRegion", CONV_STACK, 6, 4, glue_DrawThemeFocusRegion},
+    {0xAA74, (int32_t)0x24u, "IsThemeInColor", CONV_STACK, 4, 2, glue_IsThemeInColor},
+    {0xAA74, (int32_t)0x25u, "GetThemeAccentColors", CONV_STACK, 4, 4, glue_GetThemeAccentColors},
+    {0xAA74, (int32_t)0x26u, "PlayThemeSound", CONV_STACK, 4, 4, glue_PlayThemeSound},
+    {0xAA74, (int32_t)0x27u, "BeginThemeDragSound", CONV_STACK, 4, 4, glue_BeginThemeDragSound},
+    {0xAA74, (int32_t)0x28u, "EndThemeDragSound", CONV_STACK, 0, 4, glue_EndThemeDragSound},
     {0xAA5A, (int32_t)0x1u, "GetSharedLibrary", CONV_STACK, 24, 2, 0},
     {0xAA5A, (int32_t)0x2u, "GetDiskFragment", CONV_STACK, 32, 2, 0},
     {0xAA5A, (int32_t)0x3u, "GetMemFragment", CONV_STACK, 28, 2, 0},
@@ -17126,10 +18131,49 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF6, (int32_t)0x24u, "GetIndexedCollectionItemHdl", CONV_STACK, 12, 2, 0},
     {0xABF6, (int32_t)0x25u, "FlattenCollectionToHdl", CONV_STACK, 8, 2, 0},
     {0xABF6, (int32_t)0x26u, "UnflattenCollectionFromHdl", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0xFFFFFFFEu, "SendControlMessage", CONV_STACK, 10, 4, 0},
+    {0xAA73, (int32_t)0xFFFFFFFFu, "DumpControlHierarchy", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x1u, "CreateRootControl", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x2u, "GetRootControl", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x3u, "EmbedControl", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x4u, "AutoEmbedControl", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x5u, "IsControlActive", CONV_STACK, 4, 2, 0},
+    {0xAA73, (int32_t)0x6u, "IsControlVisible", CONV_STACK, 4, 2, 0},
+    {0xAA73, (int32_t)0x7u, "ActivateControl", CONV_STACK, 4, 2, 0},
+    {0xAA73, (int32_t)0x8u, "DeactivateControl", CONV_STACK, 4, 2, 0},
+    {0xAA73, (int32_t)0x9u, "FindControlUnderMouse", CONV_STACK, 12, 4, 0},
+    {0xAA73, (int32_t)0xAu, "HandleControlClick", CONV_STACK, 14, 2, 0},
+    {0xAA73, (int32_t)0xBu, "HandleControlKey", CONV_STACK, 10, 2, 0},
+    {0xAA73, (int32_t)0xCu, "IdleControls", CONV_STACK, 4, 0, 0},
+    {0xAA73, (int32_t)0xDu, "GetKeyboardFocus", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0xEu, "SetKeyboardFocus", CONV_STACK, 10, 2, 0},
+    {0xAA73, (int32_t)0xFu, "AdvanceKeyboardFocus", CONV_STACK, 4, 2, 0},
+    {0xAA73, (int32_t)0x10u, "ReverseKeyboardFocus", CONV_STACK, 4, 2, 0},
+    {0xAA73, (int32_t)0x11u, "GetControlFeatures", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x12u, "SetControlData", CONV_STACK, 18, 2, 0},
+    {0xAA73, (int32_t)0x13u, "GetControlData", CONV_STACK, 22, 2, 0},
+    {0xAA73, (int32_t)0x14u, "GetControlDataSize", CONV_STACK, 14, 2, 0},
+    {0xAA73, (int32_t)0x15u, "GetSuperControl", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x16u, "CountSubControls", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x17u, "GetIndexedSubControl", CONV_STACK, 10, 2, 0},
+    {0xAA73, (int32_t)0x18u, "DrawControlInCurrentPort", CONV_STACK, 4, 0, 0},
+    {0xAA73, (int32_t)0x19u, "ClearKeyboardFocus", CONV_STACK, 4, 2, 0},
+    {0xAA73, (int32_t)0x1Au, "SetControlSupervisor", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x1Bu, "GetBestControlRect", CONV_STACK, 12, 2, 0},
+    {0xAA73, (int32_t)0x1Cu, "SetControlFontStyle", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x1Du, "SetUpControlBackground", CONV_STACK, 8, 2, 0},
+    {0xAA73, (int32_t)0x1Eu, "SetControlVisibility", CONV_STACK, 8, 2, 0},
     {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
+    {0xAA68, (int32_t)0x20Du, "AutoSizeDialog", CONV_STACK, 4, 2, 0},
     {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},
     {0xAA68, (int32_t)0x305u, "SetDialogCancelItem", CONV_STACK, 6, 2, glue_SetDialogCancelItem},
     {0xAA68, (int32_t)0x306u, "SetDialogTracksCursor", CONV_STACK, 6, 2, glue_SetDialogTracksCursor},
+    {0xAA68, (int32_t)0x412u, "AppendDialogItemList", CONV_STACK, 8, 2, 0},
+    {0xAA68, (int32_t)0x50Fu, "GetDialogItemAsControl", CONV_STACK, 10, 2, 0},
+    {0xAA68, (int32_t)0x510u, "MoveDialogItem", CONV_STACK, 10, 2, 0},
+    {0xAA68, (int32_t)0x511u, "SizeDialogItem", CONV_STACK, 10, 2, 0},
+    {0xAA68, (int32_t)0x90Eu, "StandardAlert", CONV_STACK, 18, 2, 0},
+    {0xAA68, (int32_t)0x110Cu, "NewFeaturesDialog", CONV_STACK, 34, 4, 0},
     {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, 0},
     {0xABED, (int32_t)0x1u, "InstallTrackingHandler", CONV_STACK, 12, 2, glue_InstallTrackingHandler},
     {0xABED, (int32_t)0x2u, "InstallReceiveHandler", CONV_STACK, 12, 2, glue_InstallReceiveHandler},
@@ -17968,6 +19012,28 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABC2, (int32_t)0x23u, "TransformPoints", CONV_STACK, 12, 2, glue_TransformPoints},
     {0xABC2, (int32_t)0x24u, "TransformFixedRect", CONV_STACK, 12, 2, glue_TransformFixedRect},
     {0xABC2, (int32_t)0x25u, "TransformRect", CONV_STACK, 12, 2, glue_TransformRect},
+    {0xA825, (int32_t)0x18u, "IsMenuItemIconEnabled", CONV_STACK, 6, 2, 0},
+    {0xA825, (int32_t)0x19u, "EnableMenuItemIcon", CONV_STACK, 6, 0, 0},
+    {0xA825, (int32_t)0x20u, "DisableMenuItemIcon", CONV_STACK, 6, 0, 0},
+    {0xA825, (int32_t)0x20Cu, "MenuEvent", CONV_STACK, 4, 4, 0},
+    {0xA825, (int32_t)0x404u, "SetMenuItemModifiers", CONV_STACK, 8, 2, 0},
+    {0xA825, (int32_t)0x408u, "SetMenuItemTextEncoding", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x40Du, "SetMenuItemHierarchicalID", CONV_STACK, 8, 2, 0},
+    {0xA825, (int32_t)0x40Fu, "SetMenuItemFontID", CONV_STACK, 8, 2, 0},
+    {0xA825, (int32_t)0x502u, "SetMenuItemCommandID", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x503u, "GetMenuItemCommandID", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x505u, "GetMenuItemModifiers", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x509u, "GetMenuItemTextEncoding", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x50Au, "SetMenuItemRefCon", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x50Bu, "GetMenuItemRefCon", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x50Eu, "GetMenuItemHierarchicalID", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x510u, "GetMenuItemFontID", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x511u, "SetMenuItemRefCon2", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x512u, "GetMenuItemRefCon2", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x513u, "SetMenuItemKeyGlyph", CONV_STACK, 8, 2, 0},
+    {0xA825, (int32_t)0x514u, "GetMenuItemKeyGlyph", CONV_STACK, 10, 2, 0},
+    {0xA825, (int32_t)0x606u, "SetMenuItemIconHandle", CONV_STACK, 12, 2, 0},
+    {0xA825, (int32_t)0x707u, "GetMenuItemIconHandle", CONV_STACK, 14, 2, 0},
     {0xAA59, (int32_t)0x0u, "NewRoutineDescriptor", CONV_STACK, 10, 4, 0},
     {0xAA59, (int32_t)0x1u, "DisposeRoutineDescriptor", CONV_STACK, 4, 0, 0},
     {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, 0},
@@ -18936,8 +20002,10 @@ const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[
 
 const dispatcher_info dispatchers[] = {
     {0xA823, "AliasDispatch", "D0W"},
+    {0xAA74, "AppearanceDispatch", "D0W"},
     {0xAA5A, "CodeFragmentDispatch", "StackW"},
     {0xABF6, "CollectionDispatch", "D0W"},
+    {0xAA73, "ControlDispatch", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
     {0xABEB, "DisplayDispatch", "D0W"},
     {0xABED, "DragDispatch", "D0W"},
@@ -18950,6 +20018,7 @@ const dispatcher_info dispatchers[] = {
     {0xABC9, "IconDispatch", "D0W"},
     {0xAAA3, "ImageCompressionDispatch", "D0W"},
     {0xABC2, "MatrixDispatch", "D0W"},
+    {0xA825, "MenuDispatch", "D0W"},
     {0xAA59, "MixedModeDispatch", "D0W"},
     {0xA88F, "OSDispatch", "StackW"},
     {0xA9E7, "Pack0", "StackW"},
