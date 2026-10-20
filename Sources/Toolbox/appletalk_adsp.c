@@ -639,6 +639,8 @@ static int16_t dsp_control(gaddr pb, bool async)
     }
 }
 
+int16_t adsp_control(gaddr pb, bool async) { return dsp_control(pb, async); }
+
 static int16_t dsp_driver_open(gaddr pb) { return at_open(); }
 
 const native_driver dsp_driver = { ".DSP", 42, dsp_driver_open, NULL, dsp_control, NULL, NULL, NULL, NULL };

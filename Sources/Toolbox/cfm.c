@@ -140,6 +140,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ot_export_count; i++)
         if (!strcmp(ot_exports[i].name, name))
             return ot_exports[i].fn;
+    for (unsigned i = 0; i < ota_export_count; i++)
+        if (!strcmp(ota_exports[i].name, name))
+            return ota_exports[i].fn;
     for (unsigned i = 0; i < ctb_export_count; i++)
         if (!strcmp(ctb_exports[i].name, name))
             return ctb_exports[i].fn;
@@ -433,7 +436,8 @@ static const char *const native_libraries[] = {
     "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
     "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib", "InputSprocketLib",
     "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
-    "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "QuickDrawGXLib", "CollectionsLib",
+    "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
+    "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib",
 };
 
 static bool core_library(const char *name)
