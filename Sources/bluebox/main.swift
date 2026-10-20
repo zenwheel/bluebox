@@ -15,6 +15,9 @@ import Foundation
 import ForkStore
 import BlueBoxHost
 import Toolbox
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// Write to standard error (fd 2; glibc's `stderr` global is not concurrency-safe).
 func eprint(_ s: String) {
@@ -50,6 +53,10 @@ func usage() -> Never {
           --max N    stop after N instructions (default 50000000)
           --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
+          --lowmem N=V  set a low-memory setting: DoubleTime, CaretTime, KeyThresh,
+                     KeyRepThresh (ticks), SdVolume, MenuFlash, DlgFont, SysFontFam,
+                     ApFontID, ScrDmpEnb or the SP parameter RAM copies, e.g.
+                     DoubleTime=20 (windowed runs take the first four from macOS)
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
           --ppc      run a fat application's PowerPC code (PowerPC-only ones always run it)
@@ -304,6 +311,7 @@ func runCommand(_ args: [String]) {
     var maxInstructions: UInt64 = 50_000_000
     var logMask: UInt32 = UInt32(LOG_UNIMPL)
     var gestalts: [(UInt32, UInt32)] = []
+    var lowmems: [(String, UInt32)] = []
     var fontFiles: [String] = []
     var keyScript: [String] = []
     var headless = false
@@ -452,6 +460,12 @@ func runCommand(_ args: [String]) {
                 fail("--gestalt expects sel=value, e.g. sysv=0x0755")
             }
             gestalts.append((sel, UInt32(truncatingIfNeeded: v)))
+        case "--lowmem":
+            i += 1
+            guard i < args.count else { usage() }
+            let parts = args[i].split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2, let v = parseNumber(parts[1]) else { fail("--lowmem expects name=value, e.g. DoubleTime=20") }
+            lowmems.append((parts[0], UInt32(truncatingIfNeeded: v)))
         default:
             if a.hasPrefix("-psn_") { break } // LaunchServices process serial number
             if a.hasPrefix("-") { usage() }
@@ -536,6 +550,20 @@ func runCommand(_ args: [String]) {
     if let m = processor, m != Int32(powerPCSetting) { machine_set_cpu(m) }
     machine_set_depth_alerts(depthRelaunch != nil)
     machine_set_prefer_ppc(preferPPC ?? (processor == Int32(powerPCSetting)))
+    #if canImport(AppKit)
+    // The host's double-click and key-repeat times, in ticks (headless runs
+    // keep the defaults, so they repeat exactly).
+    if interactive {
+        let ticks = { (s: TimeInterval) in Int32((s * 60).rounded()) }
+        machine_set_input_timing(ticks(NSEvent.doubleClickInterval), 0, ticks(NSEvent.keyRepeatDelay),
+                                 ticks(NSEvent.keyRepeatInterval))
+    }
+    #endif
+    for (name, v) in lowmems where !machine_set_lowmem(name, v) {
+        fail("--lowmem: \(name) is not a low-memory setting (DoubleTime, CaretTime, KeyThresh, KeyRepThresh, "
+             + "SdVolume, MenuFlash, DlgFont, SysFontFam, ApFontID, ScrDmpEnb, SPVolCtl, SPClikCaret, SPKbd, "
+             + "SPMisc2, SPFont, SPAlarm)")
+    }
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_set(sel, v) }

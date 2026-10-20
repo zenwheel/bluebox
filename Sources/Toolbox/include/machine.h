@@ -45,6 +45,13 @@ void machine_screen_size(int *width, int *height);
 /* Why the program wants the whole screen shown (it draws outside its
  * windows, hides the menu bar ...), or NULL while rootless suits it. */
 const char *machine_screen_mode_wanted(void);
+/* The host's double-click, caret-blink and key-repeat times, in ticks,
+ * for the low-memory settings at boot (0 keeps a default). */
+void machine_set_input_timing(int double_time, int caret_time, int key_thresh, int key_rep);
+/* A low-memory setting by name (DoubleTime, SdVolume, DlgFont ...: real
+ * settings only, not the machine's own state), applied at each boot;
+ * NULL forgets them all. */
+bool machine_set_lowmem(const char *name, uint32_t value);
 void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out);
 /* Window, control and menu appearance; the colour ones use an 8-bit screen.
  * Call before boot. */

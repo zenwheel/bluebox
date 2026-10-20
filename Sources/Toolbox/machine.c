@@ -32,6 +32,10 @@ void machine_set_screen(int width, int height)
 }
 static uint64_t ticks_base_ns;
 static uint64_t skipped_ns; /* Delay's skips (see machine_time_ns) */
+/* The environment profile's low memory (PLAN 2.6): the double-click,
+ * caret and key-repeat times (ticks) from the host's own settings, and
+ * overrides of the real settings, applied once the machine is up. */
+static uint32_t input_timing[4] = { 30, 32, 16, 4 }; /* DoubleTime, CaretTime, KeyThresh, KeyRepThresh */
 
 uint32_t mac_now(void);
 
@@ -111,10 +115,10 @@ static void init_lowmem(void)
     wr16(LM_SaveUpdate, 0xFFFF);      /* and queue its update */
     wr8(LM_QDExist, 0xFF);            /* QuickDraw not initialised */
     wr8(LM_WWExist, 0xFF);            /* Window Manager not initialised */
-    wr32(LM_DoubleTime, 30);
-    wr32(LM_CaretTime, 32);
-    wr16(LM_KeyThresh, 16);
-    wr16(LM_KeyRepThresh, 4);
+    wr32(LM_DoubleTime, input_timing[0]);
+    wr32(LM_CaretTime, input_timing[1]);
+    wr16(LM_KeyThresh, (uint16_t)input_timing[2]);
+    wr16(LM_KeyRepThresh, (uint16_t)input_timing[3]);
     wr16(LM_SysFontFam, 0);
     wr16(LM_SysFontSiz, 12);
     wr16(LM_MBarHeight, 20);
@@ -125,6 +129,54 @@ static void init_lowmem(void)
     /* Fake ROM header: version word at ROMBase+8. */
     wr32(GA_ROM, 0x420DBFF3);
     wr16(GA_ROM + 8, 0x077D);
+}
+
+
+void machine_set_input_timing(int double_time, int caret_time, int key_thresh, int key_rep)
+{
+    int v[4] = { double_time, caret_time, key_thresh, key_rep };
+    for (int i = 0; i < 4; i++)
+        if (v[i] > 0 && v[i] < 600)
+            input_timing[i] = (uint32_t)v[i];
+}
+
+static const char *const settable[] = {
+    "DoubleTime", "CaretTime", "KeyThresh", "KeyRepThresh", "SdVolume", "MenuFlash", "DlgFont",
+    "SysFontFam", "ApFontID", "ScrDmpEnb", "SPVolCtl", "SPClikCaret", "SPKbd", "SPMisc2", "SPFont", "SPAlarm",
+};
+typedef struct { unsigned addr, size; uint32_t value; } lowmem_override;
+static lowmem_override overrides[32];
+static int noverrides;
+
+bool machine_set_lowmem(const char *name, uint32_t value)
+{
+    if (!name) { /* none any more */
+        noverrides = 0;
+        return true;
+    }
+    bool ok = false;
+    for (size_t i = 0; i < sizeof settable / sizeof settable[0] && !ok; i++)
+        ok = !strcmp(settable[i], name);
+    for (unsigned i = 0; ok && i < lowmem_count; i++)
+        if (!strcmp(lowmem_table[i].name, name)) {
+            if (noverrides == 32)
+                return false;
+            overrides[noverrides++] = (lowmem_override){ lowmem_table[i].addr, lowmem_table[i].size, value };
+            return true;
+        }
+    return false;
+}
+
+static void apply_lowmem_overrides(void)
+{
+    for (int i = 0; i < noverrides; i++) {
+        if (overrides[i].size == 1)
+            wr8(overrides[i].addr, (uint8_t)overrides[i].value);
+        else if (overrides[i].size == 2)
+            wr16(overrides[i].addr, (uint16_t)overrides[i].value);
+        else
+            wr32(overrides[i].addr, overrides[i].value);
+    }
 }
 
 void threads_reset(void);
@@ -309,6 +361,7 @@ bool machine_boot(bool census)
     /* No documents to open. */
     gaddr parms = tb_NewHandle(4, false, true);
     wr32(LM_AppParmHandle, parms);
+    apply_lowmem_overrides();
 
     ticks_base_ns = now_ns();
     skipped_ns = 0;

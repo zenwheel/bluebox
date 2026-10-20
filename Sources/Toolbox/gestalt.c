@@ -111,6 +111,14 @@ void gestalt_init(void)
     gestalt_set(fourcc("drag"), 0x1);           /* gestaltDragMgrAttr: the Drag Manager */
     gestalt_set(fourcc("ttsc"), 0x1);           /* gestaltSpeechAttr: the Speech Manager */
     gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
+    /* Blue Box itself, for software written for it: version 1.0 in the
+     * high word; the host, macOS (bit 0) or Linux (bit 1).  Not Classic's
+     * 'bbox', which says Mac OS X is underneath. */
+#ifdef __APPLE__
+    gestalt_set(fourcc("blbx"), 0x01000001);
+#else
+    gestalt_set(fourcc("blbx"), 0x01000002);
+#endif
 }
 
 /* A PowerPC application: a PowerPC Mac's answers (a G3 with System 7.6.1,

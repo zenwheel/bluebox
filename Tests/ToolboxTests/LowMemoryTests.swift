@@ -223,6 +223,29 @@ extension BlueBox {
 }
 
 extension BlueBox {
+    /// The environment profile: the host's input timing and --lowmem
+    /// settings at boot, only real settings; Blue Box's own Gestalt marker.
+    @Suite struct Profile {
+        @Test func settingsAtBoot() {
+            machine_set_input_timing(20, 0, 15, 2)
+            #expect(machine_set_lowmem("SdVolume", 3))
+            #expect(machine_set_lowmem("CaretTime", 40))
+            #expect(!machine_set_lowmem("ApplZone", 0)) // the machine's own state
+            #expect(!machine_set_lowmem("NoSuchThing", 0))
+            launchTestApp()
+            defer {
+                _ = machine_set_lowmem(nil, 0)
+                machine_set_input_timing(30, 32, 16, 4)
+            }
+            #expect(rd32(UInt32(LM_DoubleTime)) == 20 && rd16(UInt32(LM_KeyThresh)) == 15)
+            #expect(rd16(UInt32(LM_KeyRepThresh)) == 2)
+            #expect(rd32(UInt32(LM_CaretTime)) == 40 && rd8(UInt32(LM_SdVolume)) == 3)
+            var v: Int32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("blbx")), &v) == 0 && v >> 16 == 0x0100)
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("bbox")), &v) != 0) // not Classic's
+        }
+    }
+
     /// A folder mounted as a volume of its own, as an application's CD.
     @Suite struct MountedVolumes {
         @Test func theApplicationsDiskIsAVolume() {
