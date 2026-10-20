@@ -140,6 +140,18 @@ static uint32_t local_address(void)
     return ip;
 }
 
+/* The address a connection is made from: the host's, as the other end
+ * sees it (127.0.0.1 for a connection to this host). */
+static uint32_t connection_address(int fd)
+{
+    struct sockaddr_in la;
+    socklen_t len = sizeof la;
+    if (fd >= 0 && getsockname(fd, (struct sockaddr *)&la, &len) == 0 && la.sin_family == AF_INET &&
+        la.sin_addr.s_addr != 0)
+        return ntohl(la.sin_addr.s_addr);
+    return local_address();
+}
+
 static int stream_index(gaddr stream)
 {
     for (int i = 0; i < MAX_STREAMS; i++)
@@ -292,6 +304,14 @@ static int16_t step_open(op *o, mstream *m)
                 m->state = stClosed;
                 return r == connectionDoesntExist ? openFailed : r;
             }
+            /* Our end's address is known from the start, as MacTCP had it
+             * while the connection was still being made (Fetch takes it
+             * then for its FTP PORT commands). */
+            m->lhost = connection_address(m->fd);
+            struct sockaddr_in la2;
+            socklen_t l2 = sizeof la2;
+            if (getsockname(m->fd, (struct sockaddr *)&la2, &l2) == 0)
+                m->lport = ntohs(la2.sin_port);
         }
         struct pollfd pf = { m->fd, POLLOUT, 0 };
         if (poll(&pf, 1, 0) <= 0)
@@ -322,6 +342,19 @@ static int16_t step_open(op *o, mstream *m)
             socklen_t len = sizeof la;
             getsockname(m->lfd, (struct sockaddr *)&la, &len);
             wr16(p + TCPOpenPB_localPort_off, ntohs(la.sin_port)); /* the port chosen for 0 */
+            /* and our address, as MacTCP filled it in at once: programs put
+             * it in an FTP PORT command (Fetch).  The one the program's
+             * other connections are made from, as the other end knows us. */
+            uint32_t ours = local_address();
+            for (int k = 0; k < MAX_STREAMS; k++)
+                if (streams[k].used && !streams[k].udp && streams[k].fd >= 0 && &streams[k] != m &&
+                    streams[k].state == stEstablished) {
+                    ours = connection_address(streams[k].fd);
+                    break;
+                }
+            m->lhost = ours;
+            m->lport = ntohs(la.sin_port);
+            wr32(p + TCPOpenPB_localHost_off, m->lhost);
             m->state = stListen;
         }
         struct sockaddr_in ra;
@@ -340,7 +373,7 @@ static int16_t step_open(op *o, mstream *m)
     struct sockaddr_in la;
     socklen_t len = sizeof la;
     getsockname(m->fd, (struct sockaddr *)&la, &len);
-    m->lhost = local_address();
+    m->lhost = connection_address(m->fd);
     m->lport = ntohs(la.sin_port);
     m->state = stEstablished;
     m->told_data = m->told_closing = m->told_term = m->eof = m->reset = false;
@@ -543,6 +576,7 @@ static int16_t new_stream(gaddr pb, bool udp)
         m->stream = buf;
         m->rcvbuf = buf;
         m->rcvlen = len;
+        m->lhost = local_address(); /* until a connection says which */
         m->notify = rd32(p + (udp ? UDPC_NOTIFY : TCPCreatePB_notifyProc_off));
         m->userdata = rd32(p + (udp ? UDPC_USERDATA : TCPCreatePB_userDataPtr_off));
         m->fd = m->lfd = -1;
