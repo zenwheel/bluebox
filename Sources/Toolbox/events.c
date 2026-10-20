@@ -113,14 +113,21 @@ uint64_t events_script_next_at(void) { return script_next < nscript ? script[scr
 
 void machine_choose_menu(int16_t menu_id, int16_t item);
 
+void machine_advance_ticks(void);
+
 void events_script_pump(uint64_t now)
 {
+    if (script_next < nscript && script[script_next].at <= now)
+        machine_advance_ticks(); /* the events' time is now, not when Ticks last moved */
     while (script_next < nscript && script[script_next].at <= now) {
         script_step s = script[script_next++];
         switch (s.kind) {
         case 0: /* a: character, b: modifiers, c: key code */
             machine_post_key(s.a, s.c, (unsigned)s.b, 1, 0);
             machine_post_key(s.a, s.c, (unsigned)s.b, 0, 0);
+            pthread_mutex_lock(&lock);
+            key_mods = 0; /* and lets go of Command (cmd-x) */
+            pthread_mutex_unlock(&lock);
             break;
         case 3: machine_post_key(s.a, s.c, (unsigned)s.b, 1, 0); break; /* held down */
         case 4: machine_post_key(s.a, s.c, (unsigned)s.b, 0, 0); break; /* released */
@@ -391,8 +398,13 @@ bool ev_still_down(void)
             return false;
         events_script_pump(g_cpu->icount); /* scripted input due by now */
     }
+    /* The button is down and no mouse event waits: a press already let go
+     * of and pressed again (a double click) ends the first one's tracking. */
     pthread_mutex_lock(&lock);
     bool d = button_down;
+    for (int i = qhead; d && i != qtail; i = (i + 1) % QSIZE)
+        if (queue[i].what == mouseDown || queue[i].what == mouseUp)
+            d = false;
     pthread_mutex_unlock(&lock);
     return d;
 }
@@ -596,7 +608,7 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
     machine_advance_ticks();
     display_sync();
     if (next_event(em, evt, true, false)) {
-        LOGF(LOG_TRAPS, "  event %d message %08X\n", (int16_t)rd16(evt), rd32(evt + 2));
+        LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evt), rd32(evt + 2), rd32(evt + 6), rd32(evt + 10), rd16(evt + 14));
         note_repeated_update(evt);
         return 1;
     }
@@ -625,7 +637,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     notify_pump();
     display_sync();
     if (next_event(mask, evp, true, false)) {
-        LOGF(LOG_TRAPS, "  event %d message %08X\n", (int16_t)rd16(evp), rd32(evp + 2));
+        LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evp), rd32(evp + 2), rd32(evp + 6), rd32(evp + 10), rd16(evp + 14));
         note_repeated_update(evp);
         return 1;
     }

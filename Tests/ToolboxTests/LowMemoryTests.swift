@@ -28,6 +28,22 @@ extension BlueBox {
             #expect(rd32(UInt32(LM_EventQueue) + 2) == 0)
         }
 
+        /// StillDown is false while a mouse event waits: the second press of
+        /// a double click ends the first one's tracking.
+        @Test func stillDownEndsAtAQueuedClick() {
+            tb_FlushEvents(-1, 0)
+            machine_post_mouse(10, 10, 1)
+            tb_FlushEvents(-1, 0) // the program has taken the first press
+            #expect(tb_StillDown() != 0)
+            machine_post_mouse(10, 10, 0)
+            machine_post_mouse(10, 10, 1)
+            #expect(tb_StillDown() == 0) // down again, but a release and a press wait
+            tb_FlushEvents(-1, 0)
+            #expect(tb_StillDown() != 0)
+            machine_post_mouse(10, 10, 0)
+            tb_FlushEvents(-1, 0)
+        }
+
         /// PortList lists the open ports.
         @Test func portListFollowsOpenAndClose() {
             let port = initToolbox()
