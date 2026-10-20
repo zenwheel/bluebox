@@ -137,5 +137,36 @@ extension BlueBox {
             #expect(call("DSpFindBestContext", [attrs, best]) == 0)
             #expect(rd32(out) != 0 && rd32(out) == rd32(best))
         }
+
+        nonisolated(unsafe) static var timingFlags: [UInt32] = []
+
+        /// The Display Manager's mode entries carry a VDTimingInfoRec whose
+        /// csTimingFlags (at 16) say the mode is valid and safe: StarCraft
+        /// takes no mode without them.
+        @Test func modeListTimingsAreValid() {
+            bootMachine()
+            Self.timingFlags = []
+            // pascal void (void *userData, DMListIndexType, DMDisplayModeListEntryPtr)
+            let iterator = native_register({ c, _ in
+                guard let c else { return }
+                let ret = cpu_pop32(c)
+                let entry = cpu_pop32(c)
+                _ = cpu_pop32(c)
+                _ = cpu_pop32(c)
+                DrawSprocket.timingFlags.append(rd32(rd32(entry + 12) + 16))
+                cpu_push32(c, ret)
+            }, "test mode iterator", 0)
+            let count: UInt32 = 0x6000_0200, list: UInt32 = 0x6000_0204
+            func call(_ name: String, _ args: [UInt32]) -> UInt32 {
+                for (i, a) in args.enumerated() {
+                    withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+                }
+                cfm_export_fn(name)!(&g_ppc)
+                return g_ppc.gpr.3
+            }
+            #expect(call("DMNewDisplayModeList", [0, 0, 0, count, list]) == 0 && rd32(count) > 0)
+            #expect(call("DMGetIndexedDisplayModeFromList", [rd32(list), 0, 0, iterator, 0]) == 0)
+            #expect(Self.timingFlags == [3])
+        }
     }
 }
