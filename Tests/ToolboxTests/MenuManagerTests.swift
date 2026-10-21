@@ -63,6 +63,16 @@ extension BlueBox {
             #expect(rd32(0x10) == low)
         }
 
+        /// CopyRgn from a disposed region (a dead port's clipRgn) gives an
+        /// empty region instead of copying an error as a length.
+        @Test func copyRgnFromDisposedRegion() {
+            launchTestApp()
+            let dead = tb_NewRgn(), out = tb_NewRgn()
+            tb_DisposeRgn(dead)
+            tb_CopyRgn(dead, out)
+            #expect(tb_GetHandleSize(out) == 10 && tb_EmptyRgn(out) != 0)
+        }
+
         @Test func insertDeleteAndStyle() {
             launchTestApp()
             _ = initToolbox()

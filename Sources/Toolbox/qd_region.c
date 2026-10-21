@@ -454,10 +454,19 @@ void tb_DisposeRgn(gaddr rh) { tb_DisposeHandle(rh); }
 
 void tb_CopyRgn(gaddr s, gaddr d)
 {
-    if (s == d)
+    if (s == d || !d || !rd32(d))
         return;
-    int32_t n = tb_GetHandleSize(s);
+    /* A region that isn't one (a disposed port's clipRgn, whose size is an
+     * error, which as a length ran past guest memory: Internet Explorer 4's
+     * GetClip in a rootless run) copies as an empty one. */
+    int32_t n = s && rd32(s) ? tb_GetHandleSize(s) : 0;
+    if (n < 10) {
+        tb_SetEmptyRgn(d);
+        return;
+    }
     tb_SetHandleSize(d, n);
+    if (tb_GetHandleSize(d) != n)
+        return;
     gmemcpy(rd32(d), rd32(s), (uint32_t)n);
 }
 
