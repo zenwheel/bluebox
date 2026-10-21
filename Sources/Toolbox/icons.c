@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "icons_internal.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
 
@@ -127,19 +128,13 @@ int16_t tb_GetLabel(int16_t label, gaddr color, gaddr str)
 /* ---------------------------------------------------------------------- */
 /* Rendering */
 
-/* An icon as RGBA: `size` square (32, 16 or 12 x 16 for mini icons). */
-typedef struct {
-    int w, h;
-    uint8_t px[32 * 32 * 4];
-} icon_img;
-
 static bool bit_at(const uint8_t *bits, int rowbytes, int x, int y)
 {
     return bits[y * rowbytes + x / 8] & (0x80 >> (x % 8));
 }
 
 /* Colour data `d` (depth 1, 4 or 8) plus a 1-bit mask into img. */
-static void render(icon_img *img, int w, int h, int depth, const uint8_t *d, const uint8_t *mask)
+void icon_render(icon_img *img, int w, int h, int depth, const uint8_t *d, const uint8_t *mask)
 {
     img->w = w;
     img->h = h;
@@ -204,11 +199,11 @@ static bool suite_image(gaddr suite, int size, icon_img *img)
             continue;
         uint8_t data[32 * 32];
         if (depth >= 8 && handle_bytes(suite_get(suite, fourcc(fam[f].c8)), (uint32_t)(w * h), data))
-            render(img, w, h, 8, data, bw + plane);
+            icon_render(img, w, h, 8, data, bw + plane);
         else if (depth >= 4 && handle_bytes(suite_get(suite, fourcc(fam[f].c4)), (uint32_t)(w * h / 2), data))
-            render(img, w, h, 4, data, bw + plane);
+            icon_render(img, w, h, 4, data, bw + plane);
         else
-            render(img, w, h, 1, bw, bw + plane);
+            icon_render(img, w, h, 1, bw, bw + plane);
         return true;
     }
     return false;
@@ -241,17 +236,19 @@ static void crop_to_mask(icon_img *img)
     img->h = h;
 }
 
-static void plot(icon_img *img, qrect r, int16_t align, int16_t transform)
+qrect icon_place(icon_img *img, qrect r, int16_t align)
 {
     int rw = r.right - r.left, rh = r.bottom - r.top;
     /* A small icon in a mini icon's place (16x12): its drawing is rarely the
      * full 16 rows, so it is shown at its own size when what it draws fits,
      * rather than shrunk (which loses rows of detail). */
     if (img->w > rw || img->h > rh) {
-        icon_img trimmed = *img;
-        crop_to_mask(&trimmed);
-        if (trimmed.w <= rw && trimmed.h <= rh)
-            *img = trimmed;
+        icon_img *trimmed = malloc(sizeof *trimmed);
+        *trimmed = *img;
+        crop_to_mask(trimmed);
+        if (trimmed->w <= rw && trimmed->h <= rh)
+            *img = *trimmed;
+        free(trimmed);
     }
     int dw = img->w, dh = img->h;
     bool standard = (rw == 32 || rw == 16 || rw == 12) && (rh == 32 || rh == 16 || rh == 12);
@@ -273,6 +270,12 @@ static void plot(icon_img *img, qrect r, int16_t align, int16_t transform)
     case 8: left = r.left; break;
     case 12: left = r.right - dw; break;
     }
+    return (qrect){ (int16_t)top, (int16_t)left, (int16_t)(top + dh), (int16_t)(left + dw) };
+}
+
+void icon_plot(icon_img *img, qrect r, int16_t align, int16_t transform)
+{
+    qrect dst = icon_place(img, r, align);
     int t = transform & 0xFF;
     bool sel = transform & ttSelected;
     for (int i = 0; i < img->w * img->h; i++) {
@@ -286,7 +289,7 @@ static void plot(icon_img *img, qrect r, int16_t align, int16_t transform)
         if (t == ttOpen && p[3])
             p[0] = p[1] = p[2] = 0x88;
     }
-    qd_draw_rgba(img->px, img->w, img->h, (qrect){ (int16_t)top, (int16_t)left, (int16_t)(top + dh), (int16_t)(left + dw) });
+    qd_draw_rgba(img->px, img->w, img->h, dst);
 }
 
 int16_t tb_PlotIconSuite(gaddr rect, int16_t align, int16_t transform, gaddr suite)
@@ -296,7 +299,7 @@ int16_t tb_PlotIconSuite(gaddr rect, int16_t align, int16_t transform, gaddr sui
     int size = r.right - r.left < r.bottom - r.top ? r.right - r.left : r.bottom - r.top;
     bool ok = suite && suite_image(suite, size, img);
     if (ok)
-        plot(img, r, align, transform);
+        icon_plot(img, r, align, transform);
     free(img);
     return ok ? noErr : noMaskFoundErr;
 }
@@ -324,8 +327,8 @@ int16_t tb_PlotIconHandle(gaddr rect, int16_t align, int16_t transform, gaddr ic
         return paramErr_;
     gget(d, rd32(icon), n >= 256 ? 256 : 128);
     icon_img *img = malloc(sizeof *img);
-    render(img, 32, 32, 1, d, n >= 256 ? d + 128 : NULL);
-    plot(img, qrect_get(rect), align, transform);
+    icon_render(img, 32, 32, 1, d, n >= 256 ? d + 128 : NULL);
+    icon_plot(img, qrect_get(rect), align, transform);
     free(img);
     return noErr;
 }
@@ -338,11 +341,11 @@ int16_t tb_PlotSICNHandle(gaddr rect, int16_t align, int16_t transform, gaddr ic
     uint8_t d[32];
     gget(d, rd32(icon), 32);
     icon_img *img = malloc(sizeof *img);
-    render(img, 16, 16, 1, d, NULL);
+    icon_render(img, 16, 16, 1, d, NULL);
     for (int i = 0; i < 16 * 16; i++) /* white is transparent */
         if (img->px[i * 4] == 255)
             img->px[i * 4 + 3] = 0;
-    plot(img, qrect_get(rect), align, transform);
+    icon_plot(img, qrect_get(rect), align, transform);
     free(img);
     return noErr;
 }

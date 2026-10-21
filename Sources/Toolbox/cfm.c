@@ -446,7 +446,7 @@ static const char *const native_libraries[] = {
     "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib", "InputSprocketLib",
     "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
     "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
-    "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu",
+    "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
 };
 
 static bool core_library(const char *name)

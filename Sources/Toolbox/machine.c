@@ -375,6 +375,7 @@ bool machine_boot(bool census)
     slots_reset();
     cursor_devices_reset();
     notify_reset();
+    iconservices_reset();
 
     qd_screen_init(screen_w, screen_h);
     /* CrsrPin: the mouse stays on the screen. */

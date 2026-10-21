@@ -13874,6 +13874,337 @@ static void ppcglue_GetIndexedCollectionItemInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetIconRef(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    int32_t a_creator = (int32_t)c->gpr[4];
+    int32_t a_iconType = (int32_t)c->gpr[5];
+    gaddr a_theIconRef = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIconRef(a_vRefNum, a_creator, a_iconType, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIconRefFromFile(ppc_cpu *c)
+{
+    gaddr a_theFile = (gaddr)c->gpr[3];
+    gaddr a_theIconRef = (gaddr)c->gpr[4];
+    gaddr a_theLabel = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIconRefFromFile(a_theFile, a_theIconRef, a_theLabel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIconRefFromFolder(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    int32_t a_parentFolderID = (int32_t)c->gpr[4];
+    int32_t a_folderID = (int32_t)c->gpr[5];
+    int8_t a_attributes = (int8_t)c->gpr[6];
+    int8_t a_accessPrivileges = (int8_t)c->gpr[7];
+    gaddr a_theIconRef = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIconRefFromFolder(a_vRefNum, a_parentFolderID, a_folderID, a_attributes, a_accessPrivileges, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RegisterIconRefFromIconFamily(ppc_cpu *c)
+{
+    int32_t a_creator = (int32_t)c->gpr[3];
+    int32_t a_iconType = (int32_t)c->gpr[4];
+    gaddr a_iconFamily = (gaddr)c->gpr[5];
+    gaddr a_theIconRef = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RegisterIconRefFromIconFamily(a_creator, a_iconType, a_iconFamily, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RegisterIconRefFromResource(ppc_cpu *c)
+{
+    int32_t a_creator = (int32_t)c->gpr[3];
+    int32_t a_iconType = (int32_t)c->gpr[4];
+    gaddr a_resourceFile = (gaddr)c->gpr[5];
+    int16_t a_resourceID = (int16_t)c->gpr[6];
+    gaddr a_theIconRef = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RegisterIconRefFromResource(a_creator, a_iconType, a_resourceFile, a_resourceID, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RegisterIconRefFromIconFile(ppc_cpu *c)
+{
+    int32_t a_creator = (int32_t)c->gpr[3];
+    int32_t a_iconType = (int32_t)c->gpr[4];
+    gaddr a_iconFile = (gaddr)c->gpr[5];
+    gaddr a_theIconRef = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RegisterIconRefFromIconFile(a_creator, a_iconType, a_iconFile, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ReadIconFile(ppc_cpu *c)
+{
+    gaddr a_iconFile = (gaddr)c->gpr[3];
+    gaddr a_iconFamily = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ReadIconFile(a_iconFile, a_iconFamily);
+    c->pc = c->lr;
+}
+
+static void ppcglue_WriteIconFile(ppc_cpu *c)
+{
+    gaddr a_iconFamily = (gaddr)c->gpr[3];
+    gaddr a_iconFile = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_WriteIconFile(a_iconFamily, a_iconFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UnregisterIconRef(ppc_cpu *c)
+{
+    int32_t a_creator = (int32_t)c->gpr[3];
+    int32_t a_iconType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UnregisterIconRef(a_creator, a_iconType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UpdateIconRef(ppc_cpu *c)
+{
+    gaddr a_theIconRef = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UpdateIconRef(a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OverrideIconRefFromResource(ppc_cpu *c)
+{
+    gaddr a_theIconRef = (gaddr)c->gpr[3];
+    gaddr a_resourceFile = (gaddr)c->gpr[4];
+    int16_t a_resourceID = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OverrideIconRefFromResource(a_theIconRef, a_resourceFile, a_resourceID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OverrideIconRef(ppc_cpu *c)
+{
+    gaddr a_oldIconRef = (gaddr)c->gpr[3];
+    gaddr a_newIconRef = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OverrideIconRef(a_oldIconRef, a_newIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveIconRefOverride(ppc_cpu *c)
+{
+    gaddr a_theIconRef = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveIconRefOverride(a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompositeIconRef(ppc_cpu *c)
+{
+    gaddr a_backgroundIconRef = (gaddr)c->gpr[3];
+    gaddr a_foregroundIconRef = (gaddr)c->gpr[4];
+    gaddr a_compositeIconRef = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CompositeIconRef(a_backgroundIconRef, a_foregroundIconRef, a_compositeIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsIconRefComposite(ppc_cpu *c)
+{
+    gaddr a_compositeIconRef = (gaddr)c->gpr[3];
+    gaddr a_backgroundIconRef = (gaddr)c->gpr[4];
+    gaddr a_foregroundIconRef = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IsIconRefComposite(a_compositeIconRef, a_backgroundIconRef, a_foregroundIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsValidIconRef(ppc_cpu *c)
+{
+    gaddr a_theIconRef = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsValidIconRef(a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AcquireIconRef(ppc_cpu *c)
+{
+    gaddr a_theIconRef = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AcquireIconRef(a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ReleaseIconRef(ppc_cpu *c)
+{
+    gaddr a_theIconRef = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ReleaseIconRef(a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIconRefOwners(ppc_cpu *c)
+{
+    gaddr a_theIconRef = (gaddr)c->gpr[3];
+    gaddr a_owners = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIconRefOwners(a_theIconRef, a_owners);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PlotIconRef(ppc_cpu *c)
+{
+    gaddr a_theRect = (gaddr)c->gpr[3];
+    int16_t a_align = (int16_t)c->gpr[4];
+    int16_t a_transform = (int16_t)c->gpr[5];
+    uint32_t a_theIconServicesUsageFlags = (uint32_t)c->gpr[6];
+    gaddr a_theIconRef = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PlotIconRef(a_theRect, a_align, a_transform, a_theIconServicesUsageFlags, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PlotIconRefInContext(ppc_cpu *c)
+{
+    gaddr a_inContext = (gaddr)c->gpr[3];
+    gaddr a_inRect = (gaddr)c->gpr[4];
+    int16_t a_inAlign = (int16_t)c->gpr[5];
+    int16_t a_inTransform = (int16_t)c->gpr[6];
+    gaddr a_inLabelColor = (gaddr)c->gpr[7];
+    uint32_t a_inFlags = (uint32_t)c->gpr[8];
+    gaddr a_inIconRef = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_PlotIconRefInContext(a_inContext, a_inRect, a_inAlign, a_inTransform, a_inLabelColor, a_inFlags, a_inIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PtInIconRef(ppc_cpu *c)
+{
+    gaddr a_testPt = (gaddr)c->gpr[3];
+    gaddr a_iconRect = (gaddr)c->gpr[4];
+    int16_t a_align = (int16_t)c->gpr[5];
+    uint32_t a_theIconServicesUsageFlags = (uint32_t)c->gpr[6];
+    gaddr a_theIconRef = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_PtInIconRef(a_testPt, a_iconRect, a_align, a_theIconServicesUsageFlags, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RectInIconRef(ppc_cpu *c)
+{
+    gaddr a_testRect = (gaddr)c->gpr[3];
+    gaddr a_iconRect = (gaddr)c->gpr[4];
+    int16_t a_align = (int16_t)c->gpr[5];
+    uint32_t a_iconServicesUsageFlags = (uint32_t)c->gpr[6];
+    gaddr a_theIconRef = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_RectInIconRef(a_testRect, a_iconRect, a_align, a_iconServicesUsageFlags, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IconRefToRgn(ppc_cpu *c)
+{
+    gaddr a_theRgn = (gaddr)c->gpr[3];
+    gaddr a_iconRect = (gaddr)c->gpr[4];
+    int16_t a_align = (int16_t)c->gpr[5];
+    uint32_t a_iconServicesUsageFlags = (uint32_t)c->gpr[6];
+    gaddr a_theIconRef = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IconRefToRgn(a_theRgn, a_iconRect, a_align, a_iconServicesUsageFlags, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIconSizesFromIconRef(ppc_cpu *c)
+{
+    uint32_t a_iconSelectorInput = (uint32_t)c->gpr[3];
+    gaddr a_iconSelectorOutputPtr = (gaddr)c->gpr[4];
+    uint32_t a_iconServicesUsageFlags = (uint32_t)c->gpr[5];
+    gaddr a_theIconRef = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIconSizesFromIconRef(a_iconSelectorInput, a_iconSelectorOutputPtr, a_iconServicesUsageFlags, a_theIconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsIconRefMaskEmpty(ppc_cpu *c)
+{
+    gaddr a_iconRef = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsIconRefMaskEmpty(a_iconRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIconRefVariant(ppc_cpu *c)
+{
+    gaddr a_inIconRef = (gaddr)c->gpr[3];
+    int32_t a_inVariant = (int32_t)c->gpr[4];
+    gaddr a_outTransform = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetIconRefVariant(a_inIconRef, a_inVariant, a_outTransform);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IconRefToIconFamily(ppc_cpu *c)
+{
+    gaddr a_theIconRef = (gaddr)c->gpr[3];
+    uint32_t a_whichIcons = (uint32_t)c->gpr[4];
+    gaddr a_iconFamily = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IconRefToIconFamily(a_theIconRef, a_whichIcons, a_iconFamily);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IconFamilyToIconSuite(ppc_cpu *c)
+{
+    gaddr a_iconFamily = (gaddr)c->gpr[3];
+    uint32_t a_whichIcons = (uint32_t)c->gpr[4];
+    gaddr a_iconSuite = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IconFamilyToIconSuite(a_iconFamily, a_whichIcons, a_iconSuite);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IconSuiteToIconFamily(ppc_cpu *c)
+{
+    gaddr a_iconSuite = (gaddr)c->gpr[3];
+    uint32_t a_whichIcons = (uint32_t)c->gpr[4];
+    gaddr a_iconFamily = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IconSuiteToIconFamily(a_iconSuite, a_whichIcons, a_iconFamily);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetIconFamilyData(ppc_cpu *c)
+{
+    gaddr a_iconFamily = (gaddr)c->gpr[3];
+    int32_t a_iconType = (int32_t)c->gpr[4];
+    gaddr a_h = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetIconFamilyData(a_iconFamily, a_iconType, a_h);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIconFamilyData(ppc_cpu *c)
+{
+    gaddr a_iconFamily = (gaddr)c->gpr[3];
+    int32_t a_iconType = (int32_t)c->gpr[4];
+    gaddr a_h = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIconFamilyData(a_iconFamily, a_iconType, a_h);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FlushIconRefs(ppc_cpu *c)
+{
+    int32_t a_creator = (int32_t)c->gpr[3];
+    int32_t a_iconType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FlushIconRefs(a_creator, a_iconType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FlushIconRefsByVolume(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FlushIconRefsByVolume(a_vRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetCustomIconsEnabled(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    int8_t a_enableCustomIcons = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetCustomIconsEnabled(a_vRefNum, a_enableCustomIcons);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCustomIconsEnabled(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    gaddr a_customIconsEnabled = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetCustomIconsEnabled(a_vRefNum, a_customIconsEnabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsDataAvailableInIconRef(ppc_cpu *c)
+{
+    int32_t a_inIconKind = (int32_t)c->gpr[3];
+    gaddr a_inIconRef = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsDataAvailableInIconRef(a_inIconKind, a_inIconRef);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -14160,6 +14491,73 @@ static void ppcglue_IsWindowModified(ppc_cpu *c)
 {
     gaddr a_window = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsWindowModified(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControl32BitValue(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int32_t a_newValue = (int32_t)c->gpr[4];
+    tb_SetControl32BitValue(a_theControl, a_newValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControl32BitValue(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControl32BitValue(a_theControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControl32BitMinimum(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int32_t a_newMinimum = (int32_t)c->gpr[4];
+    tb_SetControl32BitMinimum(a_theControl, a_newMinimum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControl32BitMinimum(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControl32BitMinimum(a_theControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControl32BitMaximum(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int32_t a_newMaximum = (int32_t)c->gpr[4];
+    tb_SetControl32BitMaximum(a_theControl, a_newMaximum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControl32BitMaximum(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControl32BitMaximum(a_theControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlViewSize(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int32_t a_newViewSize = (int32_t)c->gpr[4];
+    tb_SetControlViewSize(a_theControl, a_newViewSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlViewSize(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlViewSize(a_theControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsValidControlHandle(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsValidControlHandle(a_theControl);
     c->pc = c->lr;
 }
 
@@ -25994,6 +26392,7 @@ const ppc_export ppc_exports[] = {
     {"AESuspendTheCurrentEvent", ppcglue_AESuspendTheCurrentEvent},
     {"AbortPrePrerollMovie", ppctrap_AbortPrePrerollMovie},
     {"AcceptHighLevelEvent", ppcglue_AcceptHighLevelEvent},
+    {"AcquireIconRef", ppcglue_AcquireIconRef},
     {"ActivateControl", ppcglue_ActivateControl},
     {"ActivatePalette", ppcglue_ActivatePalette},
     {"AddCallBackToTimeBase", ppctrap_AddCallBackToTimeBase},
@@ -26149,6 +26548,7 @@ const ppc_export ppc_exports[] = {
     {"CompSub", ppcglue_CompSub},
     {"CompactMem", ppcglue_CompactMem},
     {"CompactMemSys", ppcglue_CompactMemSys},
+    {"CompositeIconRef", ppcglue_CompositeIconRef},
     {"CompressImage", ppcglue_CompressImage},
     {"CompressPicture", ppcglue_CompressPicture},
     {"CompressPictureFile", ppctrap_CompressPictureFile},
@@ -26448,6 +26848,8 @@ const ppc_export ppc_exports[] = {
     {"FlushCodeCache", ppctrap_FlushCodeCache},
     {"FlushEvents", ppcglue_FlushEvents},
     {"FlushFonts", ppcglue_FlushFonts},
+    {"FlushIconRefs", ppcglue_FlushIconRefs},
+    {"FlushIconRefsByVolume", ppcglue_FlushIconRefsByVolume},
     {"FontMetrics", ppcglue_FontMetrics},
     {"FontScript", ppcglue_FontScript},
     {"FontToScript", ppcglue_FontToScript},
@@ -26662,6 +27064,9 @@ const ppc_export ppc_exports[] = {
     {"GetCompressedPixMapInfo", ppctrap_GetCompressedPixMapInfo},
     {"GetCompressionInfo", ppctrap_GetCompressionInfo},
     {"GetCompressionTime", ppcglue_GetCompressionTime},
+    {"GetControl32BitMaximum", ppcglue_GetControl32BitMaximum},
+    {"GetControl32BitMinimum", ppcglue_GetControl32BitMinimum},
+    {"GetControl32BitValue", ppcglue_GetControl32BitValue},
     {"GetControlAction", ppcglue_GetControlAction},
     {"GetControlData", ppcglue_GetControlData},
     {"GetControlDataSize", ppcglue_GetControlDataSize},
@@ -26672,9 +27077,11 @@ const ppc_export ppc_exports[] = {
     {"GetControlTitle", ppcglue_GetControlTitle},
     {"GetControlValue", ppcglue_GetControlValue},
     {"GetControlVariant", ppcglue_GetControlVariant},
+    {"GetControlViewSize", ppcglue_GetControlViewSize},
     {"GetCurrentProcess", ppcglue_GetCurrentProcess},
     {"GetCurrentThread", ppcglue_GetCurrentThread},
     {"GetCursor", ppcglue_GetCursor},
+    {"GetCustomIconsEnabled", ppcglue_GetCustomIconsEnabled},
     {"GetDSequenceImageBuffer", ppctrap_GetDSequenceImageBuffer},
     {"GetDSequenceMatrix", ppcglue_GetDSequenceMatrix},
     {"GetDSequenceScreenBuffer", ppctrap_GetDSequenceScreenBuffer},
@@ -26725,7 +27132,14 @@ const ppc_export ppc_exports[] = {
     {"GetIcon", ppcglue_GetIcon},
     {"GetIconCacheData", ppctrap_GetIconCacheData},
     {"GetIconCacheProc", ppctrap_GetIconCacheProc},
+    {"GetIconFamilyData", ppcglue_GetIconFamilyData},
     {"GetIconFromSuite", ppcglue_GetIconFromSuite},
+    {"GetIconRef", ppcglue_GetIconRef},
+    {"GetIconRefFromFile", ppcglue_GetIconRefFromFile},
+    {"GetIconRefFromFolder", ppcglue_GetIconRefFromFolder},
+    {"GetIconRefOwners", ppcglue_GetIconRefOwners},
+    {"GetIconRefVariant", ppcglue_GetIconRefVariant},
+    {"GetIconSizesFromIconRef", ppcglue_GetIconSizesFromIconRef},
     {"GetIconSuite", ppcglue_GetIconSuite},
     {"GetImageDescriptionCTable", ppcglue_GetImageDescriptionCTable},
     {"GetImageDescriptionExtension", ppctrap_GetImageDescriptionExtension},
@@ -27114,8 +27528,12 @@ const ppc_export ppc_exports[] = {
     {"IUTextOrder", ppcglue_IUTextOrder},
     {"IUTimePString", ppcglue_IUTimePString},
     {"IUTimeString", ppcglue_IUTimeString},
+    {"IconFamilyToIconSuite", ppcglue_IconFamilyToIconSuite},
     {"IconIDToRgn", ppcglue_IconIDToRgn},
     {"IconMethodToRgn", ppctrap_IconMethodToRgn},
+    {"IconRefToIconFamily", ppcglue_IconRefToIconFamily},
+    {"IconRefToRgn", ppcglue_IconRefToRgn},
+    {"IconSuiteToIconFamily", ppcglue_IconSuiteToIconFamily},
     {"IconSuiteToRgn", ppcglue_IconSuiteToRgn},
     {"IdleControls", ppcglue_IdleControls},
     {"ImageFieldSequenceBegin", ppctrap_ImageFieldSequenceBegin},
@@ -27179,7 +27597,10 @@ const ppc_export ppc_exports[] = {
     {"IsAppearanceClient", ppcglue_IsAppearanceClient},
     {"IsControlActive", ppcglue_IsControlActive},
     {"IsControlVisible", ppcglue_IsControlVisible},
+    {"IsDataAvailableInIconRef", ppcglue_IsDataAvailableInIconRef},
     {"IsDialogEvent", ppcglue_IsDialogEvent},
+    {"IsIconRefComposite", ppcglue_IsIconRefComposite},
+    {"IsIconRefMaskEmpty", ppcglue_IsIconRefMaskEmpty},
     {"IsMenuItemEnabled", ppcglue_IsMenuItemEnabled},
     {"IsMenuItemIconEnabled", ppcglue_IsMenuItemIconEnabled},
     {"IsMetric", ppcglue_IsMetric},
@@ -27190,6 +27611,8 @@ const ppc_export ppc_exports[] = {
     {"IsShowContextualMenuClick", ppcglue_IsShowContextualMenuClick},
     {"IsThemeInColor", ppcglue_IsThemeInColor},
     {"IsValidAppearanceFileType", ppcglue_IsValidAppearanceFileType},
+    {"IsValidControlHandle", ppcglue_IsValidControlHandle},
+    {"IsValidIconRef", ppcglue_IsValidIconRef},
     {"IsValidWindowPtr", ppcglue_IsValidWindowPtr},
     {"IsWindowCollapsable", ppcglue_IsWindowCollapsable},
     {"IsWindowCollapsed", ppcglue_IsWindowCollapsed},
@@ -27906,6 +28329,8 @@ const ppc_export ppc_exports[] = {
     {"OpenResFile", ppcglue_OpenResFile},
     {"OpenRgn", ppcglue_OpenRgn},
     {"OutlineMetrics", ppcglue_OutlineMetrics},
+    {"OverrideIconRef", ppcglue_OverrideIconRef},
+    {"OverrideIconRefFromResource", ppcglue_OverrideIconRefFromResource},
     {"PBAllocate", ppcglue_PBAllocate},
     {"PBAllocateAsync", ppcglue_PBAllocateAsync},
     {"PBAllocateSync", ppcglue_PBAllocateSync},
@@ -28187,6 +28612,8 @@ const ppc_export ppc_exports[] = {
     {"PlotIconHandle", ppcglue_PlotIconHandle},
     {"PlotIconID", ppcglue_PlotIconID},
     {"PlotIconMethod", ppcglue_PlotIconMethod},
+    {"PlotIconRef", ppcglue_PlotIconRef},
+    {"PlotIconRefInContext", ppcglue_PlotIconRefInContext},
     {"PlotIconSuite", ppcglue_PlotIconSuite},
     {"PlotSICNHandle", ppcglue_PlotSICNHandle},
     {"PmBackColor", ppcglue_PmBackColor},
@@ -28229,6 +28656,7 @@ const ppc_export ppc_exports[] = {
     {"PtInDSequenceData", ppctrap_PtInDSequenceData},
     {"PtInIconID", ppcglue_PtInIconID},
     {"PtInIconMethod", ppctrap_PtInIconMethod},
+    {"PtInIconRef", ppcglue_PtInIconRef},
     {"PtInIconSuite", ppcglue_PtInIconSuite},
     {"PtInMovie", ppctrap_PtInMovie},
     {"PtInRect", ppcglue_PtInRect},
@@ -28405,6 +28833,7 @@ const ppc_export ppc_exports[] = {
     {"Random", ppcglue_Random},
     {"ReadDateTime", ppcglue_ReadDateTime},
     {"ReadEdition", ppctrap_ReadEdition},
+    {"ReadIconFile", ppcglue_ReadIconFile},
     {"ReadPartialResource", ppcglue_ReadPartialResource},
     {"RealColor", ppcglue_RealColor},
     {"RealFont", ppcglue_RealFont},
@@ -28415,15 +28844,21 @@ const ppc_export ppc_exports[] = {
     {"RecoverHandleSys", ppcglue_RecoverHandleSys},
     {"RectInIconID", ppcglue_RectInIconID},
     {"RectInIconMethod", ppctrap_RectInIconMethod},
+    {"RectInIconRef", ppcglue_RectInIconRef},
     {"RectInIconSuite", ppcglue_RectInIconSuite},
     {"RectInRgn", ppcglue_RectInRgn},
     {"RectMatrix", ppcglue_RectMatrix},
     {"RectRgn", ppcglue_RectRgn},
     {"RegisterAppearanceClient", ppcglue_RegisterAppearanceClient},
+    {"RegisterIconRefFromIconFamily", ppcglue_RegisterIconRefFromIconFamily},
+    {"RegisterIconRefFromIconFile", ppcglue_RegisterIconRefFromIconFile},
+    {"RegisterIconRefFromResource", ppcglue_RegisterIconRefFromResource},
     {"RegisterSection", ppcglue_RegisterSection},
+    {"ReleaseIconRef", ppcglue_ReleaseIconRef},
     {"ReleaseResource", ppcglue_ReleaseResource},
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
+    {"RemoveIconRefOverride", ppcglue_RemoveIconRefOverride},
     {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
     {"RemoveIndexedCollectionItem", ppctrap_RemoveIndexedCollectionItem},
     {"RemoveMovieExecuteWiredActionsProc", ppctrap_RemoveMovieExecuteWiredActionsProc},
@@ -28534,6 +28969,9 @@ const ppc_export ppc_exports[] = {
     {"SetCollectionExceptionProc", ppctrap_SetCollectionExceptionProc},
     {"SetCollectionItemInfo", ppctrap_SetCollectionItemInfo},
     {"SetCompressedPixMapInfo", ppctrap_SetCompressedPixMapInfo},
+    {"SetControl32BitMaximum", ppcglue_SetControl32BitMaximum},
+    {"SetControl32BitMinimum", ppcglue_SetControl32BitMinimum},
+    {"SetControl32BitValue", ppcglue_SetControl32BitValue},
     {"SetControlAction", ppcglue_SetControlAction},
     {"SetControlColor", ppcglue_SetControlColor},
     {"SetControlData", ppcglue_SetControlData},
@@ -28544,8 +28982,10 @@ const ppc_export ppc_exports[] = {
     {"SetControlSupervisor", ppcglue_SetControlSupervisor},
     {"SetControlTitle", ppcglue_SetControlTitle},
     {"SetControlValue", ppcglue_SetControlValue},
+    {"SetControlViewSize", ppcglue_SetControlViewSize},
     {"SetControlVisibility", ppcglue_SetControlVisibility},
     {"SetCursor", ppcglue_SetCursor},
+    {"SetCustomIconsEnabled", ppcglue_SetCustomIconsEnabled},
     {"SetDSequenceAccuracy", ppcglue_SetDSequenceAccuracy},
     {"SetDSequenceDataProc", ppcglue_SetDSequenceDataProc},
     {"SetDSequenceFlags", ppcglue_SetDSequenceFlags},
@@ -28594,6 +29034,7 @@ const ppc_export ppc_exports[] = {
     {"SetHandleSize", ppcglue_SetHandleSize},
     {"SetIconCacheData", ppctrap_SetIconCacheData},
     {"SetIconCacheProc", ppctrap_SetIconCacheProc},
+    {"SetIconFamilyData", ppcglue_SetIconFamilyData},
     {"SetIdentityMatrix", ppcglue_SetIdentityMatrix},
     {"SetImageDescriptionCTable", ppctrap_SetImageDescriptionCTable},
     {"SetImageWellContentInfo", ppcglue_SetImageWellContentInfo},
@@ -28958,6 +29399,7 @@ const ppc_export ppc_exports[] = {
     {"UnlockPixels", ppcglue_UnlockPixels},
     {"UnpackBits", ppcglue_UnpackBits},
     {"UnregisterAppearanceClient", ppcglue_UnregisterAppearanceClient},
+    {"UnregisterIconRef", ppcglue_UnregisterIconRef},
     {"UnsignedFixMulDiv", ppcglue_UnsignedFixMulDiv},
     {"UnsignedFixedMulDiv", ppctrap_UnsignedFixedMulDiv},
     {"UpdateAlias", ppcglue_UpdateAlias},
@@ -28965,6 +29407,7 @@ const ppc_export ppc_exports[] = {
     {"UpdateDialog", ppcglue_UpdateDialog},
     {"UpdateDragHilite", ppcglue_UpdateDragHilite},
     {"UpdateGWorld", ppcglue_UpdateGWorld},
+    {"UpdateIconRef", ppcglue_UpdateIconRef},
     {"UpdateMovie", ppcglue_UpdateMovie},
     {"UpdateMovieInStorage", ppctrap_UpdateMovieInStorage},
     {"UpdateMovieResource", ppcglue_UpdateMovieResource},
@@ -28984,6 +29427,7 @@ const ppc_export ppc_exports[] = {
     {"WaitNextEvent", ppcglue_WaitNextEvent},
     {"WakeUpProcess", ppcglue_WakeUpProcess},
     {"WriteEdition", ppctrap_WriteEdition},
+    {"WriteIconFile", ppcglue_WriteIconFile},
     {"WriteParam", ppcglue_WriteParam},
     {"WritePartialResource", ppcglue_WritePartialResource},
     {"WriteResource", ppcglue_WriteResource},

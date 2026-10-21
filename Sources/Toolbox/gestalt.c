@@ -99,7 +99,9 @@ void gestalt_init(void)
     gestalt_set(fourcc("fold"), 0x1);         /* Folder Manager (FindFolder) present */
     gestalt_set(fourcc("fs  "), 0x2);         /* FSSpec calls */
     gestalt_set(fourcc("stdf"), 0x1);         /* Standard File 5.8 calls */
-    gestalt_set(fourcc("icon"), 0x1);         /* Icon Utilities present */
+    /* The Icon Utilities, with Icon Services' 48-pixel icons, 32-bit
+     * colour and 8-bit masks, and Icon Services itself (IconServicesLib). */
+    gestalt_set(fourcc("icon"), 0x1F);
     gestalt_set(fourcc("tmgr"), 3);           /* extended Time Manager */
     /* Sound Manager 3: stereo, stereo mixing, the Sound I/O Manager, a
      * built-in sound input device (the host's microphone), playing while
@@ -116,11 +118,11 @@ void gestalt_init(void)
     /* The Appearance Manager for 68k programs too (as if the Appearance
      * extension were installed): programs ask before using its calls, and
      * draw their lists and controls in Platinum when it is there.  Version
-     * 1.0.1, Mac OS 8.0's: 1.1 is taken for Mac OS 8.5 and its libraries
-     * (Greg's Browser then calls Icon Services, which isn't here).  The
-     * 1.1 calls are there all the same. */
+     * 1.1, Mac OS 8.5's: programs take it to mean Mac OS 8.5 and its
+     * libraries (Greg's Browser then calls Icon Services), and some require
+     * it (sixtyforce). */
     gestalt_set(fourcc("appr"), 0x1);         /* gestaltAppearanceExists */
-    gestalt_set(fourcc("apvr"), 0x0101);      /* gestaltAppearanceVersion */
+    gestalt_set(fourcc("apvr"), 0x0110);      /* gestaltAppearanceVersion */
     /* Blue Box itself, for software written for it: version 1.0 in the
      * high word; the host, macOS (bit 0) or Linux (bit 1).  Not Classic's
      * 'bbox', which says Mac OS X is underneath. */

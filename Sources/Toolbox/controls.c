@@ -1991,3 +1991,32 @@ int16_t tb_SetUpControlBackground(gaddr ch, int16_t depth, int8_t color)
 }
 
 int16_t tb_DumpControlHierarchy(gaddr w, gaddr file) { return noErr; }
+
+/* ---------------------------------------------------------------------- */
+/* Mac OS 8.5's ControlsLib: 32-bit settings, kept to the 16 bits the
+ * control record holds, and a scroll bar's view size, kept (its thumb is
+ * not drawn in proportion). */
+
+static int16_t clamp16(int32_t v) { return (int16_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v); }
+
+void tb_SetControl32BitValue(gaddr c, int32_t v) { tb_SetControlValue(c, clamp16(v)); }
+int32_t tb_GetControl32BitValue(gaddr c) { return tb_GetControlValue(c); }
+void tb_SetControl32BitMinimum(gaddr c, int32_t v) { tb_SetControlMinimum(c, clamp16(v)); }
+int32_t tb_GetControl32BitMinimum(gaddr c) { return tb_GetControlMinimum(c); }
+void tb_SetControl32BitMaximum(gaddr c, int32_t v) { tb_SetControlMaximum(c, clamp16(v)); }
+int32_t tb_GetControl32BitMaximum(gaddr c) { return tb_GetControlMaximum(c); }
+
+void tb_SetControlViewSize(gaddr c, int32_t size)
+{
+    ctl_info *i = ctl_find(c);
+    if (i)
+        i->view_size = size;
+}
+
+int32_t tb_GetControlViewSize(gaddr c)
+{
+    ctl_info *i = ctl_find(c);
+    return i ? i->view_size : 0;
+}
+
+int8_t tb_IsValidControlHandle(gaddr c) { return ctl_find(c) != NULL; }

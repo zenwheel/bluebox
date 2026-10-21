@@ -384,3 +384,82 @@
       - name: window
         type: WindowPtr
     cfm: WindowsLib
+
+# The Control Manager's Mac OS 8.5 calls (ControlsLib): 32-bit settings
+# and the view size of proportional scroll bars.  PowerPC only.
+
+- function:
+    name: SetControl32BitValue
+    args:
+      - name: theControl
+        type: ControlHandle
+      - name: newValue
+        type: int32_t
+    cfm: ControlsLib
+
+- function:
+    name: GetControl32BitValue
+    return: int32_t
+    args:
+      - name: theControl
+        type: ControlHandle
+    cfm: ControlsLib
+
+- function:
+    name: SetControl32BitMinimum
+    args:
+      - name: theControl
+        type: ControlHandle
+      - name: newMinimum
+        type: int32_t
+    cfm: ControlsLib
+
+- function:
+    name: GetControl32BitMinimum
+    return: int32_t
+    args:
+      - name: theControl
+        type: ControlHandle
+    cfm: ControlsLib
+
+- function:
+    name: SetControl32BitMaximum
+    args:
+      - name: theControl
+        type: ControlHandle
+      - name: newMaximum
+        type: int32_t
+    cfm: ControlsLib
+
+- function:
+    name: GetControl32BitMaximum
+    return: int32_t
+    args:
+      - name: theControl
+        type: ControlHandle
+    cfm: ControlsLib
+
+- function:
+    name: SetControlViewSize
+    args:
+      - name: theControl
+        type: ControlHandle
+      - name: newViewSize
+        type: int32_t
+    cfm: ControlsLib
+
+- function:
+    name: GetControlViewSize
+    return: int32_t
+    args:
+      - name: theControl
+        type: ControlHandle
+    cfm: ControlsLib
+
+- function:
+    name: IsValidControlHandle
+    return: Boolean
+    args:
+      - name: theControl
+        type: ControlHandle
+    cfm: ControlsLib
