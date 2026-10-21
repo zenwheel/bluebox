@@ -252,9 +252,10 @@ struct LaunchEvents {
         if !launched { openedAtLaunch = true }
     }
 
-    mutating func finishLaunching() {
+    @MainActor mutating func finishLaunching() {
         if !launched && !openedAtLaunch && !launchDocumentsSent { machine_send_open_application() }
         launched = true
+        HostAppleEvents.shared.launched = true
     }
 }
 
@@ -265,6 +266,8 @@ struct LaunchEvents {
 /// goes to it with its text, the program's reply coming back as the result.
 @MainActor final class HostAppleEvents: NSObject {
     static let shared = HostAppleEvents()
+    /// Set once the application has finished launching (LaunchEvents).
+    var launched = false
 
     func install() {
         let m = NSAppleEventManager.shared()
@@ -278,11 +281,18 @@ struct LaunchEvents {
 
     @objc func quit(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) { machine_request_quit() }
 
+    /// Launched to print, the program gets Print Documents and then Quit,
+    /// as from the System 7 Finder.
     @objc func printDocuments(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
         guard let list = event.paramDescriptor(forKeyword: keyDirectObject) else { return }
         let items = list.numberOfItems > 0 ? (1...list.numberOfItems).compactMap { list.atIndex($0) } : [list]
         let paths = items.compactMap { $0.fileURLValue?.path }
+        guard !paths.isEmpty else { return }
         withCStringArray(paths) { machine_open_documents($0, Int32(paths.count), true) }
+        if !launched {
+            launchDocumentsSent = true
+            machine_send_quit()
+        }
     }
 
     @objc func doScript(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
