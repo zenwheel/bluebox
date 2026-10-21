@@ -110,6 +110,13 @@ static int our_wdef(gaddr w)
     return fn == wdef0_native ? 0 : fn == wdef124_native ? 124 : -1;
 }
 
+static bool is_floating(gaddr w) { return our_wdef(w) == 124; }
+
+/* After InitFloatingWindows (Mac OS 8.5), the Window Manager keeps the
+ * floating windows (WDEF 124's) in front of the others, all of them
+ * highlighted, and the front document window the active one. */
+static bool float_layer;
+
 static void port_offset(gaddr w, int *dh, int *dv)
 {
     pixdst d = qd_port_pixels(w);
@@ -1023,6 +1030,17 @@ static gaddr first_visible(void)
     return 0;
 }
 
+/* The window to make active: with floating windows layered, the front one
+ * of the others. */
+static gaddr front_active(void)
+{
+    gaddr ghost = rd32(LM_GhostWindow);
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
+        if (wvisible(w) && w != ghost && !(float_layer && is_floating(w)))
+            return w;
+    return 0;
+}
+
 static void set_hilite(gaddr w, bool on)
 {
     if (!w || (WindowRecord_hilited(w) != 0) == on)
@@ -1052,8 +1070,12 @@ static void set_hilite(gaddr w, bool on)
 /* Make the frontmost visible window the active one, queuing activate events. */
 static void update_active(void)
 {
-    gaddr front = first_visible();
+    gaddr front = front_active();
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
+        if (float_layer && is_floating(w)) {
+            set_hilite(w, wvisible(w) != 0);
+            continue;
+        }
         if (w != front && WindowRecord_hilited(w)) {
             set_hilite(w, false);
             wr32(LM_CurDeactive, w);
@@ -1085,6 +1107,14 @@ static void unlink_window(gaddr w)
 
 static void link_behind(gaddr w, gaddr behind)
 {
+    if (behind == IN_FRONT && float_layer && !is_floating(w)) {
+        /* In front of the others: behind the floating windows. */
+        gaddr last = 0;
+        for (gaddr x = wlist(); x && is_floating(x); x = WindowRecord_nextWindow(x))
+            last = x;
+        if (last)
+            behind = last;
+    }
     if (behind == IN_FRONT || !wlist()) {
         WindowRecord_set_nextWindow(w, wlist());
         wr32(LM_WindowList, w);
@@ -2137,6 +2167,7 @@ void tb_InitWindows(void)
     }
     wr32(LM_WindowList, 0);
     floats_hidden = false;
+    float_layer = false;
     nhidden_floats = 0;
     ndisposed = 0;
     wr32(LM_CurActivate, 0);
@@ -2210,7 +2241,6 @@ enum {
     errWindowPropertyNotFound = -5604, errUnrecognizedWindowClass = -5605,
 };
 
-static bool is_floating(gaddr w) { return our_wdef(w) == 124; }
 
 gaddr tb_FrontNonFloatingWindow(void)
 {
@@ -2429,7 +2459,24 @@ int16_t tb_CreateNewWindow(uint32_t windowClass, uint32_t attributes, gaddr boun
 
 /* Floating windows hidden together (those that were showing), and shown
  * again. */
-int16_t tb_InitFloatingWindows(void) { return noErr; }
+int16_t tb_InitFloatingWindows(void)
+{
+    float_layer = true;
+    /* Floating windows already made come to the front, in their order. */
+    gaddr floats[64];
+    int n = 0;
+    for (gaddr w = wlist(); w && n < 64; w = WindowRecord_nextWindow(w))
+        if (is_floating(w))
+            floats[n++] = w;
+    for (int i = n - 1; i >= 0; i--) {
+        unlink_window(floats[i]);
+        link_behind(floats[i], IN_FRONT);
+    }
+    if (n)
+        repaint_all();
+    update_active();
+    return noErr;
+}
 int8_t tb_AreFloatingWindowsVisible(void) { return !floats_hidden; }
 
 static int16_t show_floats(bool show)

@@ -370,6 +370,25 @@ extension BlueBox {
             tb_DisposeWindow(w)
         }
 
+        /// After InitFloatingWindows the floating windows stay in front:
+        /// documents brought forward or made go behind them, the front
+        /// document is the active one and the floating ones stay highlighted.
+        @Test func floatingWindowsStayInFront() {
+            launchTestApp()
+            _ = initToolbox()
+            let doc1 = tb_NewCWindow(0, rect(100, 100, 200, 300), 0, 1, 0, 0xFFFF_FFFF, 1, 0)
+            let palette = tb_NewCWindow(0, rect(100, 400, 200, 460), 0, 1, 1985, 0, 1, 0) // at the back
+            #expect(tb_InitFloatingWindows() == 0)
+            #expect(tb_FrontWindow() == palette && tb_FrontNonFloatingWindow() == doc1)
+            let doc2 = tb_NewCWindow(0, rect(150, 150, 250, 350), 0, 1, 0, 0xFFFF_FFFF, 1, 0)
+            #expect(WindowRecord_nextWindow(palette) == doc2)
+            tb_SelectWindow(doc1)
+            #expect(tb_FrontWindow() == palette && tb_FrontNonFloatingWindow() == doc1)
+            #expect(WindowRecord_hilited(doc1) != 0 && WindowRecord_hilited(doc2) == 0)
+            #expect(WindowRecord_hilited(palette) != 0)
+            for w in [doc2, doc1, palette] { tb_DisposeWindow(w) }
+        }
+
         /// A zoomable window's dataHandle holds its user and standard states
         /// (Shards opens its puzzle window at another window's user state);
         /// ZoomWindow goes between them, keeping where the window was.
