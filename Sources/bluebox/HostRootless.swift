@@ -13,9 +13,16 @@ import Toolbox
 
 let classicMenuBarHeight: CGFloat = 20
 
-/// The host area the Mac screen maps onto.
+/// The host area the Mac screen maps onto: the main screen's visible area
+/// when first asked (as the Mac screen's size is set at launch), and kept.
+/// Hiding the menu bar and Dock for screen mode changes the visible area,
+/// and clicks were then mapped a menu bar's height below the pointer.
+@MainActor private var mappedScreenFrame: NSRect?
 @MainActor func rootlessScreenFrame() -> NSRect {
-    (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 748)
+    if let f = mappedScreenFrame { return f }
+    let f = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 748)
+    mappedScreenFrame = f
+    return f
 }
 
 /// The Mac screen's size for the host's visible area at the display scale:
