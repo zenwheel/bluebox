@@ -286,7 +286,9 @@ static void *await_reply(void *arg)
 }
 
 /* The process an address names: a signature ('sign'), a process ID
- * ('kpid') or a target ID ('targ', by its port's creator). */
+ * ('kpid'), a serial number ('psn ', {1, process ID}: the Process
+ * Manager's for other runs) or a target ID ('targ', by its port's
+ * creator). */
 static bool find_target(const uint8_t *addr, uint32_t type, uint32_t len, machine_ae_process *found)
 {
     uint32_t sig = 0;
@@ -295,6 +297,8 @@ static bool find_target(const uint8_t *addr, uint32_t type, uint32_t len, machin
         sig = be32(addr);
     else if (type == T("kpid") && len >= 4)
         pid = (int)be32(addr);
+    else if (type == T("psn ") && len >= 8 && be32(addr) == 1)
+        pid = (int)be32(addr + 4);
     else if (type == T("targ") && len >= TargetID_SIZEOF)
         sig = be32(addr + TargetID_name_off + PPCPortRec_u_port_creator_off);
     else
@@ -331,7 +335,7 @@ int16_t aem_remote_send(const uint8_t *addr, uint32_t addr_type, uint32_t addr_l
     int ms = timeout == -2 ? -1 : timeout == -1 ? 60000 : timeout * 1000 / 60;
     int16_t err = machine_ae_send(p.pid, p.signature, event, len, mode, ms, reply, reply_len);
     /* Delivered: the handler's error is in the reply (keyErrorNumber). */
-    return *reply || mode == kAENoReply ? noErr : err;
+    return *reply ? noErr : err;
 }
 
 /* ---------------------------------------------------------------------- */

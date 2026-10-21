@@ -1649,7 +1649,7 @@ static bool to_self(gaddr evt)
         return true;
     gaddr p = rd32(h);
     uint32_t type = rd32(p + off + 4);
-    if (type == T("psn "))
+    if (type == T("psn ")) /* other runs are {1, process ID} */
         return rd32(p + off + 12) == 0 && (rd32(p + off + 16) == 2 || rd32(p + off + 16) == 0x1000); /* us */
     if (type == T("sign"))
         return rd32(p + off + 12) == g_app_creator;

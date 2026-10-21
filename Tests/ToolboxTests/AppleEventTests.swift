@@ -677,6 +677,39 @@ extension BlueBox {
             #expect(done.wait(timeout: .now() + 5) == .success)
             #expect(err == 0 && result == "ran: go")
 
+            // The Process Manager lists the other runs after us: here a
+            // stand-in (a live process with an entry in the folder).
+            let folder = FileManager.default.temporaryDirectory.path
+            let ours = (try? FileManager.default.contentsOfDirectory(atPath: folder))?
+                .filter { $0.hasPrefix("bluebox-ae-") }
+                .map { folder + "/" + $0 }
+                .first { ((try? FileManager.default.contentsOfDirectory(atPath: $0)) ?? []).contains { $0.hasPrefix("\(getpid()).") } }
+            let sleeper = Process()
+            sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
+            sleeper.arguments = ["10"]
+            if let ours, (try? sleeper.run()) != nil {
+                let entry = ours + "/\(sleeper.processIdentifier).54455354" // 'TEST'
+                FileManager.default.createFile(atPath: entry, contents: nil)
+                defer { try? FileManager.default.removeItem(atPath: entry); sleeper.terminate() }
+                let psn = tb_NewPtr(8, false, true), info = tb_NewPtr(Int32(ProcessInfoRec_SIZEOF), false, true)
+                var signatures: [UInt32] = []
+                while tb_GetNextProcess(psn) == 0 {
+                    wr32(info + UInt32(ProcessInfoRec_processInfoLength_off), UInt32(ProcessInfoRec_SIZEOF))
+                    #expect(tb_GetProcessInformation(psn, info) == 0)
+                    signatures.append(rd32(info + UInt32(ProcessInfoRec_processSignature_off)))
+                    if rd32(psn) == 1 && rd32(psn + 4) == UInt32(sleeper.processIdentifier) {
+                        // It doesn't answer: nothing listens there.
+                        let target = newDesc(), evt = newDesc()
+                        _ = tb_AECreateDesc(code("psn "), psn, 8, target)
+                        _ = tb_AECreateAppleEvent(code("misc"), code("dosc"), target, -1, 0, evt)
+                        #expect(tb_AESend(evt, 0, 1, 0, -1, 0, 0) == -600)
+                    }
+                }
+                #expect(signatures.contains(fourCC("TEST")))
+            } else {
+                Issue.record("no socket folder or no process to stand in")
+            }
+
             // A signature nobody has: no such process.
             let target = newDesc(), evt = newDesc(), reply = newDesc()
             _ = tb_AECreateDesc(code("sign"), guestLong(fourCC("Nobd")), 4, target)
