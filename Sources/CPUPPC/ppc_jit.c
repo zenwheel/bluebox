@@ -83,73 +83,19 @@ int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
 
 #else
 
-#include "a64.h"
+#include "jit_a64.h"
 
-enum { HC = 19, HM = 20, HX = 21, HB = 22, HMAP = 23 };
-enum { MAX_INSN = 64, CODE_SIZE = 64 << 20, FAST_BITS = 14, PC_BUCKETS = 1 << 16, RG_BUCKETS = 1 << 16 };
+enum { HC = JR_CPU, HB = JR_BUDGET };
+enum { MAX_INSN = 64, CODE_SIZE = 64 << 20 };
 /* Bumped whenever translated code changes shape (the cache's build). */
-#define TRANSLATOR_VERSION 2
+#define TRANSLATOR_VERSION 3
 
-/* ------------------------------------------------------------------ */
-/* State */
+/* The translator's helpers in the engine's context. */
+enum { H_EXECUTE, H_ST8, H_ST16, H_ST32, H_ICBI };
 
-typedef struct fast_ent {
-    uint32_t pc;
-    uint32_t pad;
-    uint32_t *entry;
-} fast_ent;
-
-/* What translated code reaches through x21. */
-typedef struct jit_ctx {
-    void *exit;              /* the exit routine */
-    void *execute;           /* ppc_execute */
-    void *store[3];          /* 8-, 16-, 32-bit stores, the slow way */
-    void *icbi;              /* icbi's helper */
-    uint8_t *mem;            /* g_mem */
-    uint8_t *map;            /* g_code_map */
-    uint32_t watch_lo, watch_len;
-    uint32_t *last_stub;     /* the exit stub that left last, or NULL */
-    fast_ent *fast;          /* indirect-branch table */
-} jit_ctx;
-
-typedef struct block block;
-typedef struct region_link {
-    uint32_t region;
-    block *b;
-    struct region_link *next;
-} region_link;
-
-struct block {
-    uint32_t pc;
-    uint32_t ninsn;          /* 0: the interpreter runs the instruction here */
-    uint32_t *entry;
-    uint32_t *dead;          /* where a dropped block's entry branches */
-    bool live;
-    block *next;             /* pc hash chain */
-    region_link links[3];
-    int nlinks;
-};
-
-typedef uint64_t (*enter_fn)(ppc_cpu *c, jit_ctx *x, int64_t budget, uint32_t *entry);
-
-static struct {
-    bool ready;
-    jit_code code;
-    size_t code_start;       /* after the trampoline */
-    enter_fn enter;
-    jit_ctx ctx;
-    fast_ent fast[1 << FAST_BITS];
-    block *pcs[PC_BUCKETS];
-    region_link *regions[RG_BUCKETS];
-    block **pool;            /* every block made since the last flush */
-    size_t npool, cappool;
-    uint32_t *scratch;       /* translation buffer */
-    uint64_t generation;     /* flushes so far */
-    jit_cache *cache;
-    char cache_dir[1024], cache_name[256];
-    bool cache_tried;
-    ppc_jit_stats st;
-} J;
+static jit_engine E;
+static uint32_t *scratch; /* translation buffer */
+static ppc_jit_stats st;
 
 /* ------------------------------------------------------------------ */
 /* Helpers translated code calls */
@@ -176,95 +122,10 @@ static void do_icbi(uint32_t a)
         mem_code_range(a, 32);
 }
 
-/* ------------------------------------------------------------------ */
-/* Lookup */
-
-static unsigned pc_bucket(uint32_t pc) { return (pc >> 2) * 2654435761u >> 16; }
-static unsigned rg_bucket(uint32_t r) { return r * 2654435761u >> 16; }
-static fast_ent *fast_slot(uint32_t pc) { return &J.fast[(pc >> 2) & ((1 << FAST_BITS) - 1)]; }
-
-static block *lookup(uint32_t pc)
-{
-    fast_ent *f = fast_slot(pc);
-    for (block *b = J.pcs[pc_bucket(pc)]; b; b = b->next)
-        if (b->pc == pc) {
-            if (b->ninsn) {
-                f->pc = pc;
-                f->entry = b->entry;
-            }
-            return b;
-        }
-    return NULL;
-}
-
-static void write_word(uint32_t *at, uint32_t w)
-{
-    jit_code_write_begin(&J.code);
-    *at = w;
-    jit_code_write_end(&J.code, at, 4);
-}
-
-/* Take a block out of use: no more lookups find it, and code that still
- * branches to it (chained exits) is sent back to the dispatcher. */
-static void kill(block *b)
-{
-    if (!b->live)
-        return;
-    b->live = false;
-    for (block **p = &J.pcs[pc_bucket(b->pc)]; *p; p = &(*p)->next)
-        if (*p == b) {
-            *p = b->next;
-            break;
-        }
-    fast_ent *f = fast_slot(b->pc);
-    if (f->pc == b->pc) {
-        f->pc = 1; /* never a guest pc: those are word-aligned */
-        f->entry = NULL;
-    }
-    if (b->ninsn)
-        write_word(b->entry, a64_b_word((int32_t)(b->dead - b->entry)));
-    J.st.invalidated++;
-}
-
-/* mem.h: a store landed in a region holding translated code. */
-static void code_written(gaddr lo, gaddr hi)
-{
-    uint32_t r = lo >> CODE_MAP_SHIFT;
-    for (region_link **p = &J.regions[rg_bucket(r)]; *p;) {
-        region_link *l = *p;
-        if (l->region == r) {
-            kill(l->b);
-            *p = l->next;
-        } else {
-            p = &l->next;
-        }
-    }
-    mem_code_unmark(lo, lo + 1, CODE_PPC);
-    (void)hi;
-}
-
-static void flush_all(void)
-{
-    for (size_t i = 0; i < J.npool; i++) {
-        block *b = J.pool[i];
-        if (b->live)
-            mem_code_unmark(b->pc, b->pc + (b->ninsn ? 4 * b->ninsn : 4), CODE_PPC);
-        free(b);
-    }
-    J.npool = 0;
-    memset(J.pcs, 0, sizeof J.pcs);
-    memset(J.regions, 0, sizeof J.regions);
-    for (size_t i = 0; i < (1 << FAST_BITS); i++)
-        J.fast[i] = (fast_ent){ 1, 0, NULL };
-    J.code.used = J.code_start;
-    J.generation++;
-    J.st.flushes++;
-}
-
 void ppc_jit_flush(void)
 {
-    if (J.ready)
-        flush_all();
+    if (E.ready)
+        jit_flush(&E);
 }
 
 /* ------------------------------------------------------------------ */
@@ -272,7 +133,6 @@ void ppc_jit_flush(void)
 
 #define GPR(n) ((uint32_t)offsetof(ppc_cpu, gpr) + 4u * (uint32_t)(n))
 #define FIELD(f) ((uint32_t)offsetof(ppc_cpu, f))
-#define CTX(f) ((uint32_t)offsetof(jit_ctx, f))
 
 typedef struct tctx {
     a64_buf b;
@@ -332,11 +192,6 @@ static void ldg0(tctx *t, int w, int r)
         a64_movz(&t->b, false, w, 0, 0);
 }
 
-static void call_ctx(tctx *t, uint32_t off)
-{
-    a64_ldst(&t->b, A64_LDRX, 16, HX, off);
-    a64_blr(&t->b, 16);
-}
 
 /* w = w + imm (any 32-bit immediate; w9 is free to use). */
 static void add_imm(tctx *t, int wd, int wn, int32_t imm)
@@ -396,28 +251,10 @@ static void flags_from_ca(tctx *t)
     a64_cmp_imm(&t->b, 9, 1);
 }
 
-/* Guest loads: address in w1, value to w0. */
-static void load(tctx *t, int size, bool algebraic, bool reversed)
-{
-    a64_buf *b = &t->b;
-    if (size == 1) {
-        a64_ldst_r(b, A64_LDRB_R, 0, HM, 1);
-    } else if (size == 2) {
-        a64_ldst_r(b, A64_LDRH_R, 0, HM, 1);
-        if (!reversed)
-            a64_rev16(b, 0, 0);
-        if (algebraic)
-            a64_sxth(b, 0, 0);
-    } else {
-        a64_ldst_r(b, A64_LDRW_R, 0, HM, 1);
-        if (!reversed)
-            a64_rev(b, 0, 0);
-    }
-}
+static void load(tctx *t, int size, bool algebraic, bool reversed) { jit_load(&t->b, size, algebraic, reversed); }
 
 /* Guest stores: address in w1, value in w2 (in guest order: byte-reversed
- * stores reverse it first).  Inline unless the address is in the screen
- * watch range or a region of the code map. */
+ * stores reverse it first). */
 static void store(tctx *t, int size, bool reversed)
 {
     a64_buf *b = &t->b;
@@ -429,32 +266,7 @@ static void store(tctx *t, int size, bool reversed)
             a64_ubfx(b, 2, 2, 0, 16);
         }
     }
-    a64_ldpw(b, 9, 10, HX, (int)CTX(watch_lo));
-    a64_sub(b, 9, 1, 9);
-    a64_cmp(b, 9, 10);
-    uint32_t to_slow1 = a64_here(b);
-    a64_bcond(b, A64_LO, 0);
-    a64_lsr(b, 9, 1, CODE_MAP_SHIFT);
-    a64_ldst_r(b, A64_LDRB_R, 9, HMAP, 9);
-    uint32_t to_slow2 = a64_here(b);
-    a64_cbz(b, true, 9, 0);
-    if (size == 1) {
-        a64_ldst_r(b, A64_STRB_R, 2, HM, 1);
-    } else if (size == 2) {
-        a64_rev16(b, 9, 2);
-        a64_ldst_r(b, A64_STRH_R, 9, HM, 1);
-    } else {
-        a64_rev(b, 9, 2);
-        a64_ldst_r(b, A64_STRW_R, 9, HM, 1);
-    }
-    uint32_t to_done = a64_here(b);
-    a64_b(b, 0);
-    a64_patch_here(b, to_slow1);
-    a64_patch_here(b, to_slow2);
-    a64_mov(b, false, 0, 1);
-    a64_mov(b, false, 1, 2);
-    call_ctx(t, CTX(store) + 8u * (size == 1 ? 0 : size == 2 ? 1 : 2));
-    a64_patch_here(b, to_done);
+    jit_store(b, size, true, H_ST8);
 }
 
 /* Run one instruction through the interpreter. */
@@ -462,16 +274,10 @@ static void execute(tctx *t, uint32_t op)
 {
     a64_mov(&t->b, true, 0, HC);
     a64_mov32(&t->b, 1, op);
-    call_ctx(t, CTX(execute));
+    jit_call(&t->b, H_EXECUTE);
 }
 
-/* The exit routine with x1 = 0 (nothing to chain). */
-static void exit_plain(tctx *t)
-{
-    a64_mov(&t->b, true, 1, A64_ZR);
-    a64_ldst(&t->b, A64_LDRX, 16, HX, CTX(exit));
-    a64_br(&t->b, 16);
-}
+static void exit_plain(tctx *t) { jit_exit_plain(&t->b); }
 
 /* op_pc and prev_pc as the interpreter leaves them after the block. */
 static void exit_pcs(tctx *t)
@@ -492,31 +298,20 @@ static void exit_pcs(tctx *t)
 static void exit_to(tctx *t, uint32_t target)
 {
     a64_buf *b = &t->b;
-    a64_adr(b, 1, 0);
+    jit_exit_chainable_head(b);
     a64_mov32(b, 0, target);
     stf(t, 0, FIELD(pc));
     exit_pcs(t);
-    a64_ldst(b, A64_LDRX, 16, HX, CTX(exit));
-    a64_br(b, 16);
+    jit_exit_chainable_tail(b);
 }
 
 /* An exit to the address in w12: straight to its translation when the
  * table knows it, else back to the dispatcher. */
 static void exit_indirect(tctx *t)
 {
-    a64_buf *b = &t->b;
     stf(t, 12, FIELD(pc));
     exit_pcs(t);
-    a64_ldst(b, A64_LDRX, 13, HX, CTX(fast));
-    a64_ubfx(b, 14, 12, 2, FAST_BITS);
-    a64_addsub(b, A64_ADD, true, 13, 13, 14, 0, 4);
-    a64_ldst(b, A64_LDRW, 15, 13, 0);
-    a64_cmp(b, 15, 12);
-    uint32_t miss = a64_here(b);
-    a64_bcond(b, A64_NE, 0);
-    a64_ldst(b, A64_LDRX, 16, 13, 8);
-    a64_br(b, 16);
-    a64_patch_here(b, miss);
+    jit_fast_lookup(&t->b, 12, 2);
     exit_plain(t);
 }
 
@@ -1099,7 +894,7 @@ static bool emit(tctx *t, uint32_t op, uint32_t pc)
         ldg0(t, 1, a);
         ldg(t, 2, rb);
         a64_add(b, 0, 1, 2);
-        call_ctx(t, CTX(icbi));
+        jit_call(&t->b, H_ICBI);
         return true;
     case 54: case 86: case 246: case 278: case 470: /* data cache hints */
     case 598: case 854: case 306: case 370: case 566: case 146: case 210: case 242: /* sync and supervisor no-ops */
@@ -1202,78 +997,12 @@ static uint64_t build_id(void)
     return jit_hash(id, strlen(id), 0);
 }
 
-static uint64_t guest_hash(uint32_t pc, uint32_t len) { return jit_hash(g_mem + pc, len, pc); }
-
-static block *new_block(uint32_t pc, uint32_t ninsn)
-{
-    if (J.npool == J.cappool) {
-        size_t cap = J.cappool ? 2 * J.cappool : 4096;
-        block **p = realloc(J.pool, cap * sizeof *p);
-        if (!p)
-            return NULL;
-        J.pool = p;
-        J.cappool = cap;
-    }
-    block *b = calloc(1, sizeof *b);
-    if (!b)
-        return NULL;
-    b->pc = pc;
-    b->ninsn = ninsn;
-    b->live = true;
-    J.pool[J.npool++] = b;
-    b->next = J.pcs[pc_bucket(pc)];
-    J.pcs[pc_bucket(pc)] = b;
-    /* The regions it was translated from (and the one just before). */
-    uint32_t end = pc + (ninsn ? 4 * ninsn : 4);
-    uint32_t r0 = (pc >= 8 ? pc - 8 : 0) >> CODE_MAP_SHIFT, r1 = (end - 1) >> CODE_MAP_SHIFT;
-    for (uint32_t r = r0; r <= r1 && b->nlinks < 3; r++) {
-        region_link *l = &b->links[b->nlinks++];
-        l->region = r;
-        l->b = b;
-        l->next = J.regions[rg_bucket(r)];
-        J.regions[rg_bucket(r)] = l;
-    }
-    mem_code_mark(pc, end, CODE_PPC);
-    return b;
-}
-
-static void open_cache(void)
-{
-    J.cache_tried = true;
-    if (J.cache_dir[0] && J.cache_name[0])
-        J.cache = jit_cache_open(J.cache_dir, J.cache_name, build_id());
-}
-
-/* Place host code (from the cache or just translated) in the buffer. */
-static block *install(uint32_t pc, uint32_t ninsn, const uint32_t *code, uint32_t nwords, uint32_t dead_at)
-{
-    uint32_t *at = jit_code_alloc(&J.code, nwords * 4);
-    if (!at) {
-        flush_all();
-        at = jit_code_alloc(&J.code, nwords * 4);
-        if (!at)
-            return NULL;
-    }
-    jit_code_write_begin(&J.code);
-    memcpy(at, code, nwords * 4);
-    jit_code_write_end(&J.code, at, nwords * 4);
-    block *b = new_block(pc, ninsn);
-    if (!b)
-        return NULL;
-    b->entry = at;
-    b->dead = at + dead_at;
-    lookup(pc); /* into the fast table */
-    return b;
-}
-
 /* Translate the block at pc (or take it from the cache).  A cache record
  * holds the host code followed by one word: the offset of the block's dead
  * path, where kill() points its entry. */
-static block *translate(uint32_t pc)
+static jit_block *translate(uint32_t pc)
 {
     uint64_t t0 = now_ns();
-    if (!J.cache_tried)
-        open_cache();
 
     /* How far the block goes. */
     uint32_t ops[MAX_INSN];
@@ -1293,29 +1022,24 @@ static block *translate(uint32_t pc)
             break;
         }
     }
-    if (n == 0) {
-        block *b = new_block(pc, 0);
-        return b;
-    }
+    if (n == 0)
+        return jit_marker(&E, pc, 4);
 
-    uint64_t h = guest_hash(pc, 4 * n);
-    if (J.cache) {
-        const jit_cache_rec *r = jit_cache_find(J.cache, pc);
-        if (r && r->ninsn && r->code_len >= 8 && r->guest_len == 4 * r->ninsn &&
-            guest_hash(pc, r->guest_len) == r->hash) {
-            uint32_t nwords = r->code_len / 4 - 1, dead_at;
-            memcpy(&dead_at, r->code + 4 * nwords, 4);
-            block *b = install(pc, r->ninsn, (const uint32_t *)(const void *)r->code, nwords, dead_at);
-            if (b) {
-                J.st.from_cache++;
-                J.st.translate_ns += now_ns() - t0;
-                return b;
-            }
+    const jit_cache_rec *r = jit_cached(&E, pc, 0);
+    if (r) {
+        uint32_t nwords = r->code_len / 4 - 1, dead_at;
+        memcpy(&dead_at, r->code + 4 * nwords, 4);
+        jit_block *b = jit_install(&E, pc, r->ninsn, r->guest_len, (const uint32_t *)(const void *)r->code, nwords,
+                                   dead_at);
+        if (b) {
+            st.from_cache++;
+            st.translate_ns += now_ns() - t0;
+            return b;
         }
     }
 
     tctx t = { 0 };
-    t.b.p = J.scratch;
+    t.b.p = scratch;
     t.b.cap = 16384 - 1;
     t.pc = pc;
     t.ninsn = n;
@@ -1396,79 +1120,30 @@ static block *translate(uint32_t pc)
     stf(&t, 0, FIELD(pc));
     exit_plain(&t);
     if (b->full)
-        return new_block(pc, 0); /* too big: leave it to the interpreter */
+        return jit_marker(&E, pc, 4); /* too big: leave it to the interpreter */
 
-    b->p[b->n] = dead_at; /* the cache's trailing word */
-    block *blk = install(pc, n, b->p, b->n, dead_at);
+    jit_block *blk = jit_install(&E, pc, n, 4 * n, b->p, b->n, dead_at);
     if (blk) {
-        J.st.translated++;
-        if (J.cache)
-            jit_cache_add(J.cache, pc, n, 4 * n, h, b->p, 4 * (b->n + 1));
+        st.translated++;
+        jit_remember(&E, pc, n, 4 * n, 0, b->p, b->n, dead_at);
     }
-    J.st.translate_ns += now_ns() - t0;
+    st.translate_ns += now_ns() - t0;
     return blk;
 }
 
-/* ------------------------------------------------------------------ */
-/* Set-up: the trampoline into translated code and the exit back */
-
 static bool setup(void)
 {
-    if (J.ready)
+    if (E.ready)
         return true;
-    if (!jit_code_init(&J.code, CODE_SIZE))
+    scratch = malloc(16384 * 4);
+    if (!scratch || !jit_engine_init(&E, CODE_PPC, 2, CODE_SIZE))
         return false;
-    J.scratch = malloc(16384 * 4);
-    if (!J.scratch)
-        return false;
-    uint32_t words[64];
-    a64_buf b = { words, 0, 64, false };
-    /* enter(cpu x0, ctx x1, budget x2, entry x3) -> budget left */
-    a64_stp_pre(&b, 29, 30, A64_SP, -96);
-    a64_stp(&b, 19, 20, A64_SP, 16);
-    a64_stp(&b, 21, 22, A64_SP, 32);
-    a64_stp(&b, 23, 24, A64_SP, 48);
-    a64_stp(&b, 25, 26, A64_SP, 64);
-    a64_stp(&b, 27, 28, A64_SP, 80);
-    a64_addsub_imm(&b, A64_ADDI, true, 29, A64_SP, 0);
-    a64_mov(&b, true, HC, 0);
-    a64_mov(&b, true, HX, 1);
-    a64_mov(&b, true, HB, 2);
-    a64_ldst(&b, A64_LDRX, HM, HX, CTX(mem));
-    a64_ldst(&b, A64_LDRX, HMAP, HX, CTX(map));
-    a64_br(&b, 3);
-    uint32_t exit_at = b.n;
-    a64_ldst(&b, A64_STRX, 1, HX, CTX(last_stub));
-    a64_mov(&b, true, 0, HB);
-    a64_ldp(&b, 27, 28, A64_SP, 80);
-    a64_ldp(&b, 25, 26, A64_SP, 64);
-    a64_ldp(&b, 23, 24, A64_SP, 48);
-    a64_ldp(&b, 21, 22, A64_SP, 32);
-    a64_ldp(&b, 19, 20, A64_SP, 16);
-    a64_ldp_post(&b, 29, 30, A64_SP, 96);
-    a64_ret(&b);
-    uint32_t *at = jit_code_alloc(&J.code, b.n * 4);
-    jit_code_write_begin(&J.code);
-    memcpy(at, words, b.n * 4);
-    jit_code_write_end(&J.code, at, b.n * 4);
-    J.code_start = J.code.used;
-    J.enter = (enter_fn)(void *)at;
-    J.ctx.exit = at + exit_at;
-    J.ctx.execute = (void *)ppc_execute;
-    J.ctx.store[0] = (void *)st8;
-    J.ctx.store[1] = (void *)st16;
-    J.ctx.store[2] = (void *)st32;
-    J.ctx.icbi = (void *)do_icbi;
-    J.ctx.mem = g_mem;
-    J.ctx.fast = J.fast;
-    for (size_t i = 0; i < (1 << FAST_BITS); i++)
-        J.fast[i] = (fast_ent){ 1, 0, NULL };
-    /* The code map, made now so translated code can rely on it. */
-    if (!mem_code_mark(0, 4, 0))
-        return false;
-    J.ctx.map = g_code_map;
-    g_code_written[0] = code_written;
-    J.ready = true;
+    E.build = build_id();
+    E.ctx.helper[H_EXECUTE] = (void *)ppc_execute;
+    E.ctx.helper[H_ST8] = (void *)st8;
+    E.ctx.helper[H_ST16] = (void *)st16;
+    E.ctx.helper[H_ST32] = (void *)st32;
+    E.ctx.helper[H_ICBI] = (void *)do_icbi;
     return true;
 }
 
@@ -1477,64 +1152,59 @@ bool ppc_jit_available(void) { return true; }
 void ppc_jit_enable(bool on, const char *cache_dir, const char *cache_name)
 {
     ppc_jit_enabled = on;
-    if (J.cache) {
-        jit_cache_close(J.cache);
-        J.cache = NULL;
-    }
-    J.cache_tried = false;
-    snprintf(J.cache_dir, sizeof J.cache_dir, "%s", cache_dir ? cache_dir : "");
-    snprintf(J.cache_name, sizeof J.cache_name, "%s", cache_name ? cache_name : "");
+    jit_engine_cache(&E, cache_dir, cache_name);
 }
 
 uint64_t ppc_jit_run(ppc_cpu *c, uint64_t max)
 {
     uint64_t start = c->icount;
-    if (!J.ready && !setup()) {
+    if (!E.ready && !setup()) {
         ppc_jit_enabled = false;
         while (!c->halted && c->icount - start < max)
             ppc_step(c);
         return c->icount - start;
     }
-    J.ctx.mem = g_mem;
+    E.ctx.mem = g_mem;
     while (!c->halted) {
         uint64_t done = c->icount - start;
         if (done >= max)
             break;
         uint64_t left = max - done;
-        block *b = lookup(c->pc);
+        jit_block *b = jit_lookup(&E, c->pc);
         if (!b)
             b = translate(c->pc);
         if (!b || !b->ninsn || b->ninsn > left) {
             ppc_step(c);
-            J.st.interpreted++;
+            st.interpreted++;
             continue;
         }
-        J.ctx.watch_lo = g_watch_lo;
-        J.ctx.watch_len = g_watch_len;
-        J.ctx.last_stub = NULL;
-        uint64_t after = J.enter(c, &J.ctx, (int64_t)left, b->entry);
-        uint64_t ran = left - after;
+        E.ctx.watch_lo = g_watch_lo;
+        E.ctx.watch_len = g_watch_len;
+        E.ctx.last_stub = NULL;
+        uint64_t ran = left - jit_enter(&E, c, (int64_t)left, b->entry);
         c->icount += ran;
         c->tb += ran;
-        J.st.jitted += ran;
-        J.st.blocks++;
+        st.jitted += ran;
+        st.blocks++;
         /* Chain the exit just taken to its successor. */
-        uint32_t *stub = J.ctx.last_stub;
-        if (stub) {
-            uint64_t gen = J.generation;
-            block *n = lookup(c->pc);
+        if (E.ctx.last_stub) {
+            uint64_t gen = E.generation;
+            jit_block *n = jit_lookup(&E, c->pc);
             if (!n)
                 n = translate(c->pc);
-            if (n && n->ninsn && n->live && gen == J.generation) {
-                write_word(stub, a64_b_word((int32_t)(n->entry - stub)));
-                J.st.chained++;
-            }
+            jit_chain(&E, n, gen);
         }
     }
     return c->icount - start;
 }
 
-void ppc_jit_get_stats(ppc_jit_stats *s) { *s = J.st; }
+void ppc_jit_get_stats(ppc_jit_stats *s)
+{
+    *s = st;
+    s->invalidated = E.invalidated;
+    s->flushes = E.flushes;
+    s->chained = E.chained;
+}
 
 /* ------------------------------------------------------------------ */
 /* Differential self-test */
