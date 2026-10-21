@@ -454,7 +454,7 @@ void tb_DisposeRgn(gaddr rh) { tb_DisposeHandle(rh); }
 
 void tb_CopyRgn(gaddr s, gaddr d)
 {
-    if (s == d || !d || !rd32(d))
+    if (s == d || !d)
         return;
     /* A region that isn't one (a disposed port's clipRgn, whose size is an
      * error, which as a length ran past guest memory: Internet Explorer 4's

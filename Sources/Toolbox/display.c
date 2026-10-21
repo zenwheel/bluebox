@@ -395,6 +395,31 @@ static bool writes_in_a_window(void)
     return false;
 }
 
+void display_note_screen_draw(qrect r)
+{
+    if (screen_reason)
+        return;
+    gaddr port = qd_port();
+    if (port && (port == rd32(LM_WMgrPort) || port == rd32(LM_WMgrCPort)))
+        return; /* the Window Manager's own drawing: the desktop, outlines */
+    int w, h;
+    machine_screen_size(&w, &h);
+    if (r.top < 0) r.top = 0;
+    if (r.left < 0) r.left = 0;
+    if (r.bottom > h) r.bottom = (int16_t)h;
+    if (r.right > w) r.right = (int16_t)w;
+    if (r.bottom <= r.top || r.right <= r.left)
+        return;
+    if ((int)(r.bottom - r.top) * (r.right - r.left) < w * h / 4)
+        return; /* small: a zoom rectangle, a cursor's save area */
+    int st = dw_top, sl = dw_left, sb = dw_bottom, sr = dw_right;
+    dw_top = r.top, dw_left = r.left, dw_bottom = r.bottom - 1, dw_right = r.right - 1;
+    bool inside = writes_in_a_window();
+    dw_top = st, dw_left = sl, dw_bottom = sb, dw_right = sr;
+    if (!inside)
+        display_want_screen("it draws on the screen outside its windows");
+}
+
 static void check_screen_mode(void)
 {
     if (!screen_reason) {

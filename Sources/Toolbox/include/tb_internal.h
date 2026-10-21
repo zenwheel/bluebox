@@ -470,6 +470,10 @@ void io_complete_now_for(int16_t refnum);
 void drivers_reset(void);                 /* the unit table, at boot */
 /* The whole screen in one window instead of rootless windows (display.c). */
 void display_want_screen(const char *why);
+/* QuickDraw drew rectangle r (global) on the screen: a program filling much
+ * of it outside its windows (Solarian II, through a port of its own) wants
+ * the whole screen. */
+void display_note_screen_draw(qrect r);
 void display_sync(void); /* the host's snapshots, at a safe point */
 void drag_host_pump(void); /* drags from the host, at the program's event calls */
 uint32_t qd_screen_row_bytes(void);

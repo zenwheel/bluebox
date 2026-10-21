@@ -531,9 +531,36 @@ static void set_fill(int verb, gaddr pat)
         gmemcpy(dst, pat, 8);
 }
 
+/* A drawing in the current port's coordinates, given to the screen-mode
+ * check when the port draws on the screen: what reaches it, within the
+ * port's visRgn and clipRgn (an invisible window's drawing doesn't). */
+static void note_screen_draw(qrect q)
+{
+    gaddr port = qd_port();
+    if (!port || qd_port_pixels(port).base != rd32(LM_ScrnBase))
+        return;
+    hrgn clip, r;
+    hrgn_init(&clip);
+    hrgn_init(&r);
+    qd_port_clip(port, &clip);
+    hrgn_rect(&r, q);
+    hrgn_op(&r, &r, &clip, RGN_SECT);
+    qrect b = hrgn_bbox(&r);
+    bool empty = hrgn_empty(&r);
+    hrgn_free(&clip);
+    hrgn_free(&r);
+    if (empty)
+        return;
+    pixdst d = qd_port_pixels(port);
+    display_note_screen_draw((qrect){ (int16_t)(b.top - d.bounds.top), (int16_t)(b.left - d.bounds.left),
+                                      (int16_t)(b.bottom - d.bounds.top), (int16_t)(b.right - d.bounds.left) });
+}
+
 static void verb_rect(int verb, gaddr r, gaddr pat)
 {
     qrect q = qrect_get(r);
+    if (verb != V_FRAME)
+        note_screen_draw(q);
     hrgn shape, frame, inner;
     hrgn_init(&shape);
     hrgn_init(&frame);
@@ -713,6 +740,8 @@ static void verb_rgn(int verb, gaddr rh, gaddr pat)
     hrgn_init(&frame);
     hrgn_init(&inner);
     rgn_read(rh, &shape);
+    if (verb != V_FRAME && rh && rd32(rh))
+        note_screen_draw(qrect_get(rd32(rh) + 2)); /* its bounding box */
     if (verb == V_FRAME) {
         int pw, ph;
         pen_size(qd_port(), &pw, &ph);
@@ -1461,7 +1490,10 @@ static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, 
                             gaddr mask)
 {
     gaddr port = qd_port();
-    bool into_port = port && resolve_bits(dst_bitmap) == port + GrafPort_portBits_off;
+    gaddr db = resolve_bits(dst_bitmap);
+    bool into_port = port && db == port + GrafPort_portBits_off;
+    if (rd32(db) == rd32(LM_ScrnBase) && into_port)
+        note_screen_draw(qrect_get(dst_rect));
     if (into_port && qd_rec_active(port) && !qd_rec_suppressed())
         record_copy(src_bitmap, src_rect, dst_rect);
     if (into_port && qd_pic_of(port))
