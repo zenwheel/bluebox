@@ -29,6 +29,7 @@
 #include "tb_internal.h"
 
 #define R(n) (c->gpr[3 + (n)])
+#define SESSION(p) ((p)->kind == P_PAP || (p)->kind == P_ASP)
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; } while (0)
 
 enum { AF_ATALK_DDP = 0x0100, AF_ATALK_DDPNBP = 0x0101, AF_ATALK_NBP = 0x0102, AF_ATALK_MNODE = 0x0103 };
@@ -48,6 +49,8 @@ enum {
     PB_SIZE = 80,
 };
 enum { ocRequest = 1, ocAccept = 3, sClosed = 6, CCB_STATE = 6, CCB_REMOTE = 10, CCB_SIZE = 242, ADSP_QUEUE = 8192 };
+/* the CCB's user flags and the attention message heard */
+enum { CCB_FLAGS = 8, CCB_ATTNCODE = 14, CCB_ATTNSIZE = 16, CCB_ATTNPTR = 18, eAttention = 0x20 };
 enum { errOpenDenied = -1273, errOpening = -1277 };
 
 /* A datagram waiting for OTRcvUData. */
@@ -93,6 +96,7 @@ typedef struct ot_atalk {
     int16_t ref, lref;     /* the connection end and the listener (0: none) */
     gaddr ccb, attn, pb, pb_open, pb_listen;
     bool listening, have_call, accepting, told_attn;
+    bool eom;              /* "adsp(EnableEOM=1)": messages, not a stream */
     provider *acceptor;    /* the listener whose OTAccept is opening this end */
     /* NBP's mapper */
     int lookup;            /* at_nbp_start's handle */
@@ -328,6 +332,10 @@ bool ota_kind(const char *config, provider_kind *kind)
         *kind = P_ADSP;
     else if (!strcmp(name, "nbp"))
         *kind = P_NBP_MAPPER;
+    else if (!strcmp(name, "pap"))
+        *kind = P_PAP;
+    else if (!strcmp(name, "asp"))
+        *kind = P_ASP;
     else
         return false;
     return true;
@@ -342,18 +350,26 @@ void ota_info(gaddr info, provider_kind kind)
     wr32(info + 12, kind == P_ADSP ? 572 : (uint32_t)-2);
     wr32(info + 16, kind == P_ADSP ? 0 : (uint32_t)-2);
     wr32(info + 20, kind == P_ADSP ? 0 : (uint32_t)-2);
-    wr32(info + 24, kind == P_DDP ? 3 : kind == P_ATP ? 5 : 2); /* T_CLTS, T_TRANS, T_COTS_ORD */
+    wr32(info + 24, kind == P_DDP ? 3 : kind == P_ATP ? 7 : 2); /* T_CLTS, T_TRANS_CLTS, T_COTS_ORD */
     wr32(info + 28, 0);
+    if (kind == P_PAP || kind == P_ASP)
+        ots_info(info, kind);
 }
 
-int32_t ota_open(provider *p)
+int32_t ota_open(provider *p, const char *config)
 {
     if (!appletalk_enabled() || at_open() != noErr)
         return kOTNotFoundErr;
     p->at = calloc(1, sizeof *p->at);
     if (!p->at)
         return kOTOutOfMemoryErr;
-    if (p->kind == P_DDP || p->kind == P_ATP || p->kind == P_ADSP) {
+    p->at->eom = p->kind == P_ADSP && config && strcasestr(config, "EnableEOM=1");
+    if (p->kind == P_PAP || p->kind == P_ASP) {
+        int32_t e = ots_open(p);
+        if (e != kOTNoError)
+            return e;
+    }
+    if (p->kind == P_DDP || p->kind == P_ATP || p->kind == P_ADSP || p->kind == P_PAP || p->kind == P_ASP) {
         at_hold_selfsend(true);
         p->at->held = true;
     }
@@ -398,6 +414,11 @@ void ota_close(provider *p)
         at_close_socket(a->skt);
     if (p->kind == P_ATP && a->skt)
         atp_host_close(a->skt); /* our requests end with it */
+    if (p->kind == P_PAP || p->kind == P_ASP) {
+        ots_close(p);
+        if (a->skt)
+            atp_host_close(a->skt);
+    }
     if (p->kind == P_ADSP) {
         adsp_remove_end(a);
         if (a->lref) {
@@ -535,6 +556,16 @@ void ota_Bind(ppc_cpu *c, provider *p)
         if (!a->skt)
             result = kOTAddressBusyErr;
         break;
+    case P_PAP:
+    case P_ASP:
+        if (skt) { /* host ATP sockets are dynamic ones */
+            result = kOTBadAddressErr;
+            break;
+        }
+        a->skt = ots_bind(p, qlen);
+        if (!a->skt)
+            result = kOTAddressBusyErr;
+        break;
     case P_ADSP:
         if (qlen > 0) {
             a->pb = a->pb ? a->pb : new_pb();
@@ -574,8 +605,10 @@ void ota_Bind(ppc_cpu *c, provider *p)
             netbuf_ddp(ret, at_network(), at_node(), a->skt, p->kind == P_DDP ? a->ddptype : 0);
             wr32(ret + 12, (uint32_t)p->qlen);
         }
-        LOGF(LOG_TRAPS, "OT: %s endpoint %d bound to socket %u\n",
-             p->kind == P_DDP ? "ddp" : p->kind == P_ATP ? "atp" : "adsp", (int)(p - ot_providers), a->skt);
+        static const char *const names[] = { [P_DDP] = "ddp", [P_ATP] = "atp", [P_ADSP] = "adsp",
+                                             [P_PAP] = "pap", [P_ASP] = "asp" };
+        LOGF(LOG_TRAPS, "OT: %s endpoint %d bound to socket %u\n", names[p->kind] ? names[p->kind] : "?",
+             (int)(p - ot_providers), a->skt);
     }
     ot_complete(c, p, T_BINDCOMPLETE, result, ret);
 }
@@ -592,6 +625,8 @@ static void unbind(provider *p)
         at_close_socket(a->skt);
     if (p->kind == P_ATP && a->skt)
         atp_host_close(a->skt);
+    if (p->kind == P_PAP || p->kind == P_ASP)
+        ots_unbind(p, a->skt);
     if (p->kind == P_ADSP) {
         adsp_remove_end(a);
         if (a->lref) {
@@ -607,6 +642,35 @@ static void unbind(provider *p)
     memset(a->out, 0, sizeof a->out);
     p->qlen = 0;
     p->state = T_UNBND;
+}
+
+/* For ot_session.c */
+bool ota_address(provider *p, gaddr buf, uint32_t len, uint8_t *node, uint8_t *skt)
+{
+    at_addr a;
+    uint16_t net;
+    if (!get_addr(buf, len, &a) || !resolve(p, &a, &net, node, skt))
+        return false;
+    if (!*node)
+        *node = at_node();
+    return true;
+}
+
+void ota_netbuf_ddp(gaddr nb, uint8_t node, uint8_t skt) { netbuf_ddp(nb, at_network(), node, skt, 0); }
+
+uint8_t ota_socket(provider *p) { return p->at ? p->at->skt : 0; }
+
+int32_t ota_bind_any(provider *p)
+{
+    if (p->state != T_UNBND)
+        return kOTOutStateErr;
+    if (p->kind == P_PAP || p->kind == P_ASP) {
+        p->at->skt = ots_bind(p, 0);
+        if (!p->at->skt)
+            return kOTAddressBusyErr;
+    }
+    p->state = T_IDLE;
+    return kOTNoError;
 }
 
 void ota_Unbind(ppc_cpu *c, provider *p)
@@ -672,13 +736,13 @@ void ota_SndUData(ppc_cpu *c, provider *p)
         RETURN((uint32_t)kOTBadAddressErr);
         return;
     }
-    uint32_t n = rd32(ud + 28);
+    uint32_t n = ot_data_len(rd32(ud + 32), rd32(ud + 28));
     if (n > DDP_MAX) {
         RETURN((uint32_t)kOTBadDataErr);
         return;
     }
     uint8_t data[DDP_MAX];
-    gget(data, rd32(ud + 32), n);
+    ot_data_get(data, rd32(ud + 32), rd32(ud + 28), n);
     uint8_t type = to.type ? to.type : a->ddptype;
     at_send_ddp(node ? node : at_node(), skt, a->skt, type, data, (int)n);
     appletalk_poll();
@@ -728,6 +792,10 @@ void ota_RcvUData(ppc_cpu *c, provider *p)
 static void ota_SndURequest(ppc_cpu *c)
 {
     provider *p = ot_provider_of(R(0));
+    if (p && p->kind == P_ASP) { /* GetStatus */
+        ots_SndURequest(c, p);
+        return;
+    }
     if (!p || p->kind != P_ATP) {
         RETURN((uint32_t)(p ? kOTNotSupportedErr : kOTBadReferenceErr));
         return;
@@ -745,13 +813,13 @@ static void ota_SndURequest(ppc_cpu *c)
         RETURN((uint32_t)kOTBadAddressErr);
         return;
     }
-    uint32_t n = rd32(req + 28);
+    uint32_t n = ot_data_len(rd32(req + 32), rd32(req + 28));
     if (n > 4 + ATP_MAX) {
         RETURN((uint32_t)kOTBadDataErr);
         return;
     }
     uint8_t data[4 + ATP_MAX] = { 0 };
-    gget(data, rd32(req + 32), n);
+    ot_data_get(data, rd32(req + 32), rd32(req + 28), n);
     asked *q = NULL;
     for (int i = 0; i < MAX_OUT && !q; i++)
         if (!a->out[i].used)
@@ -804,6 +872,10 @@ static bool asking(ot_atalk *a)
 static void ota_RcvUReply(ppc_cpu *c)
 {
     provider *p = ot_provider_of(R(0));
+    if (p && p->kind == P_ASP) {
+        ots_RcvUReply(c, p);
+        return;
+    }
     if (!p || p->kind != P_ATP) {
         RETURN((uint32_t)(p ? kOTNotSupportedErr : kOTBadReferenceErr));
         return;
@@ -914,14 +986,14 @@ static void ota_SndUReply(ppc_cpu *c)
         RETURN((uint32_t)kOTBadSequenceErr);
         return;
     }
-    uint32_t n = rd32(reply + 16);
+    uint32_t n = ot_data_len(rd32(reply + 20), rd32(reply + 16));
     if (n > 4 + 8 * ATP_MAX) {
         RETURN((uint32_t)kOTBadDataErr);
         return;
     }
     static uint8_t data[4 + 8 * ATP_MAX];
     memset(data, 0, 4);
-    gget(data, rd32(reply + 20), n);
+    ot_data_get(data, rd32(reply + 20), rd32(reply + 16), n);
     uint8_t (*pkts)[578] = calloc(8, sizeof *pkts);
     int lens[8] = { 0 }, count = 0;
     uint32_t users[8] = { (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 | data[3] };
@@ -988,6 +1060,9 @@ static int adsp_status(ot_atalk *a, int field)
 
 static bool adsp_closed(ot_atalk *a) { return a->ccb && rd16(a->ccb + CCB_STATE) == sClosed; }
 
+/* An attention message heard and not yet read (the driver keeps one). */
+static bool adsp_attention(ot_atalk *a) { return a->ccb && a->ref && (rd8(a->ccb + CCB_FLAGS) & eAttention); }
+
 static int32_t open_error(int16_t e)
 {
     return e == errOpenDenied ? kECONNREFUSEDErr : e == errOpening ? kETIMEDOUTErr : kECONNRESETErr;
@@ -997,6 +1072,10 @@ static int32_t open_error(int16_t e)
  * udata, sequence. */
 void ota_Connect(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_Connect(c, p);
+        return;
+    }
     ot_atalk *a = p->at;
     gaddr snd = R(1), rcv = R(2);
     at_addr to;
@@ -1053,6 +1132,10 @@ void ota_Connect(ppc_cpu *c, provider *p)
 /* OTRcvConnect(ep, call TCall *) */
 void ota_RcvConnect(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_RcvConnect(c, p);
+        return;
+    }
     ot_atalk *a = p->at;
     if (p->kind != P_ADSP || p->state != T_OUTCON) {
         RETURN((uint32_t)kOTOutStateErr);
@@ -1082,6 +1165,10 @@ void ota_RcvConnect(ppc_cpu *c, provider *p)
 /* OTListen(ep, call TCall *): the open request the listener heard. */
 void ota_Listen(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_Listen(c, p);
+        return;
+    }
     ot_atalk *a = p->at;
     if (p->kind != P_ADSP || !a->lref) {
         RETURN((uint32_t)kOTNotSupportedErr);
@@ -1115,6 +1202,10 @@ void ota_Listen(ppc_cpu *c, provider *p)
  * answers the request, from the listener's socket's call. */
 void ota_Accept(ppc_cpu *c, provider *p, provider *w)
 {
+    if (SESSION(p)) {
+        ots_Accept(c, p, w);
+        return;
+    }
     ot_atalk *a = p->at;
     if (!w || !w->at || w->kind != P_ADSP) {
         RETURN((uint32_t)kOTBadReferenceErr);
@@ -1173,6 +1264,10 @@ void ota_Accept(ppc_cpu *c, provider *p, provider *w)
 /* OTSnd(ep, buf, nbytes, flags): bytes sent */
 void ota_Snd(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_Snd(c, p);
+        return;
+    }
     ot_atalk *a = p->at;
     gaddr buf = R(1);
     uint32_t n = R(2), done = 0;
@@ -1182,6 +1277,23 @@ void ota_Snd(ppc_cpu *c, provider *p)
     }
     if (p->state != T_DATAXFER && p->state != T_INREL) {
         RETURN((uint32_t)(p->disconnected || p->eof ? kOTLookErr : kOTOutStateErr));
+        return;
+    }
+    if (n == kNetbufDataIsOTData) { /* the chain in one guest buffer, sent from there */
+        n = ot_data_len(buf, n);
+        gaddr flat = tb_NewPtr((int32_t)(n ? n : 1), false, true);
+        if (!flat) {
+            RETURN((uint32_t)kOTOutOfMemoryErr);
+            return;
+        }
+        uint8_t *tmp = malloc(n ? n : 1);
+        ot_data_get(tmp, buf, kNetbufDataIsOTData, n);
+        gput(flat, tmp, n);
+        free(tmp);
+        R(1) = flat;
+        R(2) = n;
+        ota_Snd(c, p);
+        tb_DisposePtr(flat);
         return;
     }
     if (R(3) & T_EXPEDITED) { /* an attention message: its code, then data */
@@ -1218,7 +1330,8 @@ void ota_Snd(ppc_cpu *c, provider *p)
         wr16(pb + P_REFNUM, (uint16_t)a->ref);
         wr16(pb + P_REQCOUNT, (uint16_t)k);
         wr32(pb + P_DATAPTR, buf + done);
-        wr8(pb + P_EOM, 0);
+        /* with EOM, the end of a send without T_MORE ends a message */
+        wr8(pb + P_EOM, a->eom && !(R(3) & T_MORE) && done + k == n);
         wr8(pb + P_FLUSH, 1);
         if (dsp(pb, dspWrite, false) != noErr)
             break;
@@ -1231,6 +1344,10 @@ void ota_Snd(ppc_cpu *c, provider *p)
 /* OTRcv(ep, buf, nbytes, &flags): bytes received */
 void ota_Rcv(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_Rcv(c, p);
+        return;
+    }
     ot_atalk *a = p->at;
     gaddr buf = R(1), flags = R(3);
     uint32_t n = R(2);
@@ -1242,6 +1359,23 @@ void ota_Rcv(ppc_cpu *c, provider *p)
     }
     if (!adsp_open(p)) {
         RETURN((uint32_t)(p->disconnected ? kOTLookErr : kOTOutStateErr));
+        return;
+    }
+    if (adsp_attention(a)) { /* expedited data first: the code, then the message */
+        uint8_t m[2 + 570];
+        uint16_t code = rd16(a->ccb + CCB_ATTNCODE);
+        uint32_t len = rd16(a->ccb + CCB_ATTNSIZE);
+        len = len > 570 ? 570 : len;
+        m[0] = (uint8_t)(code >> 8);
+        m[1] = (uint8_t)code;
+        gget(m + 2, rd32(a->ccb + CCB_ATTNPTR), len);
+        uint32_t k = 2 + len < n ? 2 + len : n;
+        gput(buf, m, k);
+        wr8(a->ccb + CCB_FLAGS, rd8(a->ccb + CCB_FLAGS) & ~eAttention);
+        a->told_attn = false;
+        if (flags)
+            wr32(flags, T_EXPEDITED);
+        RETURN(k);
         return;
     }
     int have;
@@ -1270,14 +1404,18 @@ void ota_Rcv(ppc_cpu *c, provider *p)
         return;
     }
     uint32_t got = rd16(pb + P_ACTCOUNT);
-    if (flags && !rd8(pb + P_EOM))
-        wr32(flags, T_MORE); /* a stream: more may come */
+    if (flags && a->eom && !rd8(pb + P_EOM))
+        wr32(flags, T_MORE); /* the rest of the message to come */
     RETURN(got);
 }
 
 /* OTLook(ep): the event waiting */
 void ota_Look(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_Look(c, p);
+        return;
+    }
     ot_atalk *a = p->at;
     ota_poll(p);
     if (p->kind == P_DDP)
@@ -1292,6 +1430,8 @@ void ota_Look(ppc_cpu *c, provider *p)
         RETURN(T_CONNECT);
     else if (a->have_call || (a->listening && pb_result(a->pb_listen) == noErr))
         RETURN(T_LISTEN);
+    else if (adsp_open(p) && adsp_attention(a))
+        RETURN(T_EXDATA);
     else if (adsp_open(p) && adsp_status(a, P_RECVPEND) > 0)
         RETURN(T_DATA);
     else if (p->eof)
@@ -1302,6 +1442,10 @@ void ota_Look(ppc_cpu *c, provider *p)
 
 void ota_CountDataBytes(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_CountDataBytes(c, p);
+        return;
+    }
     ot_atalk *a = p->at;
     int n = 0;
     if (p->kind == P_ADSP)
@@ -1332,6 +1476,10 @@ static void adsp_reset_flags(provider *p)
  * and T_ORDREL comes to this end as to the other. */
 void ota_SndOrderlyDisconnect(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_SndOrderlyDisconnect(c, p);
+        return;
+    }
     if (p->kind != P_ADSP || (p->state != T_DATAXFER && p->state != T_INREL)) {
         RETURN((uint32_t)(p->kind == P_ADSP ? kOTOutStateErr : kOTNotSupportedErr));
         return;
@@ -1348,6 +1496,10 @@ void ota_SndOrderlyDisconnect(ppc_cpu *c, provider *p)
 
 void ota_RcvOrderlyDisconnect(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_RcvOrderlyDisconnect(c, p);
+        return;
+    }
     if (p->kind != P_ADSP || !p->eof) {
         RETURN((uint32_t)(p->kind == P_ADSP ? kOTNoReleaseErr : kOTNotSupportedErr));
         return;
@@ -1364,6 +1516,10 @@ void ota_RcvOrderlyDisconnect(ppc_cpu *c, provider *p)
 /* OTSndDisconnect(ep, call): abort the connection, or refuse a request. */
 void ota_SndDisconnect(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_SndDisconnect(c, p);
+        return;
+    }
     ot_atalk *a = p->at;
     if (p->kind != P_ADSP) {
         RETURN((uint32_t)kOTNotSupportedErr);
@@ -1389,6 +1545,10 @@ void ota_SndDisconnect(ppc_cpu *c, provider *p)
 /* OTRcvDisconnect(ep, discon TDiscon *): udata, reason, sequence. */
 void ota_RcvDisconnect(ppc_cpu *c, provider *p)
 {
+    if (SESSION(p)) {
+        ots_RcvDisconnect(c, p);
+        return;
+    }
     if (p->kind != P_ADSP || !p->disconnected) {
         RETURN((uint32_t)kOTNoDisconnectErr);
         return;
@@ -1701,6 +1861,10 @@ void ota_poll(provider *p)
             ot_post(p, T_LISTEN, 0, 0);
         }
         if (adsp_open(p)) {
+            if (!a->told_attn && adsp_attention(a)) {
+                a->told_attn = true;
+                ot_post(p, T_EXDATA, 0, 0);
+            }
             if (!p->told_data && adsp_status(a, P_RECVPEND) > 0) {
                 p->told_data = true;
                 ot_post(p, T_DATA, 0, 0);
@@ -1715,6 +1879,8 @@ void ota_poll(provider *p)
             }
         }
         break;
+    case P_PAP:
+    case P_ASP: ots_poll(p); break;
     case P_NBP_MAPPER: /* (synchronous calls finish themselves) */
         if (p->async && a->lookup && !lookup_running(a))
             lookup_done(p);
@@ -1748,7 +1914,7 @@ static int open_kind(provider_kind kind, int32_t *err)
         *err = kOTOutOfMemoryErr;
         return -1;
     }
-    *err = ota_open(&ot_providers[i]);
+    *err = ota_open(&ot_providers[i], NULL);
     if (*err != kOTNoError) {
         wr32(ot_providers[i].ref, 0);
         tb_DisposePtr(ot_providers[i].ref);
@@ -2112,3 +2278,4 @@ const ppc_export ota_exports[] = {
     { "OTExtractNBPZone", ota_ExtractNBPZone },
 };
 const unsigned ota_export_count = sizeof ota_exports / sizeof ota_exports[0];
+

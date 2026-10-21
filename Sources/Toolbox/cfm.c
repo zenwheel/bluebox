@@ -149,6 +149,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ota_export_count; i++)
         if (!strcmp(ota_exports[i].name, name))
             return ota_exports[i].fn;
+    for (unsigned i = 0; i < ots_export_count; i++)
+        if (!strcmp(ots_exports[i].name, name))
+            return ots_exports[i].fn;
     for (unsigned i = 0; i < ctb_export_count; i++)
         if (!strcmp(ctb_exports[i].name, name))
             return ctb_exports[i].fn;

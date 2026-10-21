@@ -585,7 +585,7 @@ func runCommand(_ args: [String]) {
     }
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
-    for (sel, v) in gestalts { gestalt_set(sel, v) }
+    for (sel, v) in gestalts { gestalt_override(sel, v) }
 
     var err = [CChar](repeating: 0, count: 256)
     for f in fontFiles {

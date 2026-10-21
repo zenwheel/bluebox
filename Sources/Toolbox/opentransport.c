@@ -37,7 +37,7 @@
 #define R(n) (c->gpr[3 + (n)])
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; } while (0)
 
-enum { kOTAnyInetAddress = 0, AF_INET_OT = 2 };
+enum { kOTAnyInetAddress = 0, AF_INET_OT = 2, AF_DNS = 42 };
 
 #define REF_MAGIC 0x4F547072u /* 'OTpr' */
 #define MAX_EVENTS 256
@@ -184,6 +184,23 @@ static bool get_inet(gaddr a, uint32_t len, struct sockaddr_in *sa)
 #ifdef __APPLE__
     sa->sin_len = sizeof *sa;
 #endif
+    if (a && len > 2 && len <= 2 + 255 && rd16(a) == AF_DNS) {
+        /* "host" or "host:port", looked up as OTConnect and OTSndUData do */
+        char name[256] = { 0 };
+        gget(name, a + 2, len - 2);
+        char *colon = strrchr(name, ':');
+        if (colon) {
+            *colon = 0;
+            sa->sin_port = htons((uint16_t)atoi(colon + 1));
+        }
+        struct addrinfo hints = { 0 }, *res = NULL;
+        hints.ai_family = AF_INET;
+        if (getaddrinfo(name, NULL, &hints, &res) != 0 || !res)
+            return false;
+        sa->sin_addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr;
+        freeaddrinfo(res);
+        return true;
+    }
     if (!a || len < 8 || rd16(a) != AF_INET_OT)
         return false;
     sa->sin_port = htons(rd16(a + 2));
@@ -351,11 +368,17 @@ static void ot_CreateConfiguration(ppc_cpu *c)
     RETURN(cfg);
 }
 
-static provider_kind kind_of(gaddr cfg)
+static void config_string(gaddr cfg, char s[256])
 {
-    char s[256] = { 0 };
+    memset(s, 0, 256);
     for (uint32_t i = 0; cfg && i < 255 && rd8(cfg + i); i++)
         s[i] = (char)rd8(cfg + i);
+}
+
+static provider_kind kind_of(gaddr cfg)
+{
+    char s[256];
+    config_string(cfg, s);
     provider_kind k;
     if (ota_kind(s, &k))
         return k;
@@ -389,9 +412,11 @@ static int open_endpoint(gaddr cfg, gaddr info, int32_t *err)
         *err = kOTOutOfMemoryErr;
         return -1;
     }
-    if (kind >= P_DDP)
-        *err = ota_open(&providers[i]);
-    else
+    if (kind >= P_DDP) {
+        char s[256];
+        config_string(cfg, s);
+        *err = ota_open(&providers[i], s);
+    } else
         providers[i].fd = make_socket(kind);
     if (kind >= P_DDP ? *err != kOTNoError : providers[i].fd < 0) {
         close_provider(&providers[i]);
@@ -569,6 +594,8 @@ static void ot_Connect(ppc_cpu *c)
     gaddr snd = R(1), rcv = R(2);
     struct sockaddr_in sa;
     if (!snd || !get_inet(rd32(snd + 8), rd32(snd + 4), &sa)) {
+        LOGF(LOG_TRAPS, "OT: connect %d: address type %d, %u bytes\n", (int)(p - providers),
+             snd && rd32(snd + 8) ? rd16(rd32(snd + 8)) : -1, snd ? rd32(snd + 4) : 0);
         RETURN((uint32_t)kOTBadAddressErr);
         return;
     }
@@ -687,6 +714,35 @@ static void ot_Accept(ppc_cpu *c)
     ot_complete(c, p, T_ACCEPTCOMPLETE, kOTNoError, R(2));
 }
 
+uint32_t ot_data_len(gaddr buf, uint32_t len)
+{
+    if (len != kNetbufDataIsOTData)
+        return len;
+    uint32_t n = 0;
+    for (int i = 0; buf && i < 1024; buf = rd32(buf), i++)
+        n += rd32(buf + 8);
+    return n;
+}
+
+uint32_t ot_data_get(uint8_t *out, gaddr buf, uint32_t len, uint32_t max)
+{
+    if (len != kNetbufDataIsOTData) {
+        uint32_t n = len < max ? len : max;
+        if (n)
+            gget(out, buf, n);
+        return n;
+    }
+    uint32_t n = 0;
+    for (int i = 0; buf && i < 1024 && n < max; buf = rd32(buf), i++) {
+        uint32_t k = rd32(buf + 8);
+        k = k < max - n ? k : max - n;
+        if (k)
+            gget(out + n, rd32(buf + 4), k);
+        n += k;
+    }
+    return n;
+}
+
 /* OTSnd(ep, buf, nbytes, flags): bytes sent */
 static void ot_Snd(ppc_cpu *c)
 {
@@ -697,8 +753,18 @@ static void ot_Snd(ppc_cpu *c)
         RETURN((uint32_t)(p->disconnected ? kOTLookErr : kOTOutStateErr));
         return;
     }
+    uint8_t *gathered = NULL; /* an OTData chain, in one piece */
+    if (n == kNetbufDataIsOTData) {
+        n = ot_data_len(buf, kNetbufDataIsOTData);
+        gathered = malloc(n ? n : 1);
+        if (!gathered) {
+            RETURN((uint32_t)kOTOutOfMemoryErr);
+            return;
+        }
+        ot_data_get(gathered, buf, kNetbufDataIsOTData, n);
+    }
     while (done < n) {
-        ssize_t r = send(p->fd, gptr(buf + done), n - done, 0);
+        ssize_t r = send(p->fd, gathered ? gathered + done : gptr(buf + done), n - done, 0);
         LOGF(LOG_TRAPS, "OT: snd %d: %zd of %u\n", (int)(p - providers), r, n - done);
         if (r > 0) {
             done += (uint32_t)r;
@@ -709,6 +775,7 @@ static void ot_Snd(ppc_cpu *c)
                 continue;
             if (!done) {
                 p->flow = true;
+                free(gathered);
                 RETURN((uint32_t)kOTFlowErr);
                 return;
             }
@@ -716,9 +783,11 @@ static void ot_Snd(ppc_cpu *c)
         }
         p->disconnected = true;
         p->disc_reason = errno;
+        free(gathered);
         RETURN((uint32_t)(done ? done : (uint32_t)kOTLookErr));
         return;
     }
+    free(gathered);
     RETURN(done);
 }
 
@@ -906,7 +975,9 @@ static void ot_SndUData(ppc_cpu *c)
         RETURN((uint32_t)kOTBadAddressErr);
         return;
     }
-    ssize_t r = sendto(p->fd, gptr(rd32(ud + 32)), rd32(ud + 28), 0, (struct sockaddr *)&sa, sizeof sa);
+    static uint8_t data[65536];
+    uint32_t n = ot_data_get(data, rd32(ud + 32), rd32(ud + 28), sizeof data);
+    ssize_t r = sendto(p->fd, data, n, 0, (struct sockaddr *)&sa, sizeof sa);
     RETURN(r < 0 ? (uint32_t)(errno == EAGAIN ? kOTFlowErr : errno_result(errno)) : kOTNoError);
 }
 
@@ -1010,6 +1081,22 @@ static void ot_InitInetAddress(ppc_cpu *c)
         gmemset(a + 8, 0, 8);
     }
     c->pc = c->lr;
+}
+
+/* OTInitDNSAddress(DNSAddress *, char *str): the address's length */
+static void ot_InitDNSAddress(ppc_cpu *c)
+{
+    gaddr a = R(0), str = R(1);
+    uint32_t n = 0;
+    while (str && n < 255 && rd8(str + n))
+        n++;
+    if (a) {
+        wr16(a, AF_DNS);
+        if (n)
+            gmemcpy(a + 2, str, n);
+        wr8(a + 2 + n, 0);
+    }
+    RETURN(2 + n);
 }
 
 /* The host's address on the network the default route uses. */
@@ -1323,6 +1410,7 @@ const ppc_export ot_exports[] = {
     { "OTAsyncOpenInternetServicesInContext", ot_AsyncOpenInternetServices },
     { "OTInetStringToAddress", ot_InetStringToAddress }, { "OTInetMailExchange", ot_InetMailExchange },
     { "OTInetHostToString", ot_InetHostToString }, { "OTInitInetAddress", ot_InitInetAddress },
+    { "OTInitDNSAddress", ot_InitDNSAddress },
     { "OTInetGetInterfaceInfo", ot_InetGetInterfaceInfo },
     /* OTUtilityLib */
     { "OTAllocMem", ot_AllocMem }, { "OTFreeMem", ot_FreeMem }, { "OTMemcpy", ot_MemcpyOrMove },

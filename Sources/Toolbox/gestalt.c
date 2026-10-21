@@ -16,6 +16,9 @@ typedef struct {
 
 static gestalt_entry table[MAX_GESTALT];
 static unsigned count;
+/* The run's own answers (--gestalt), kept over the PowerPC ones. */
+static gestalt_entry overrides[16];
+static unsigned noverrides;
 
 void gestalt_set(uint32_t selector, uint32_t value)
 {
@@ -28,6 +31,20 @@ void gestalt_set(uint32_t selector, uint32_t value)
     }
     if (count < MAX_GESTALT)
         table[count++] = (gestalt_entry){ selector, value, 0 };
+}
+
+void gestalt_override(uint32_t selector, uint32_t value)
+{
+    gestalt_set(selector, value);
+    if (selector == fourcc("sysv"))
+        wr16(LM_SysVersion, (uint16_t)value);
+    for (unsigned i = 0; i < noverrides; i++)
+        if (overrides[i].selector == selector) {
+            overrides[i].value = value;
+            return;
+        }
+    if (noverrides < sizeof overrides / sizeof overrides[0])
+        overrides[noverrides++] = (gestalt_entry){ selector, value, 0 };
 }
 
 bool gestalt_exists(uint32_t selector)
@@ -59,6 +76,7 @@ uint32_t gestalt_value(uint32_t selector, uint32_t fallback)
 void gestalt_init(void)
 {
     count = 0;
+    noverrides = 0;
     gestalt_set(fourcc("sysv"), 0x0710);      /* System 7.1 */
     gestalt_set(fourcc("thds"), 0x3);         /* the Thread Manager, with exact-match pools */
     gestalt_set(fourcc("sysa"), 1);           /* 68k architecture */
@@ -155,6 +173,8 @@ void gestalt_powerpc(void)
     gestalt_set(fourcc("cfrg"), 0x1);    /* gestaltCFMPresent */
     gestalt_set(fourcc("mixd"), 0x1);    /* gestaltPowerPCAware */
     gestalt_set(fourcc("fpu "), 0);
+    for (unsigned i = 0; i < noverrides; i++)
+        gestalt_override(overrides[i].selector, overrides[i].value);
 }
 
 static int16_t gestalt_lookup(int32_t selector, uint32_t *responsep)
