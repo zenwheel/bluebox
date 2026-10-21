@@ -63,7 +63,7 @@ final class MacWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
-final class MacWindowView: NSView {
+final class MacWindowView: NSView, MacScreenView {
     var macBounds = (top: Int16(0), left: Int16(0), bottom: Int16(0), right: Int16(0))
     var mask = [UInt8]()
     var lastHash = 0
@@ -91,6 +91,8 @@ final class MacWindowView: NSView {
     private func mac(_ info: NSDraggingInfo) -> (Int32, Int32) {
         hostToMac(window?.convertPoint(toScreen: info.draggingLocation) ?? info.draggingLocation)
     }
+
+    func macPoint(screen: NSPoint) -> (Int32, Int32) { hostToMac(screen) }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -128,9 +130,15 @@ final class MacWindowView: NSView {
 
     private func post(_ event: NSEvent, button: Int32) { postHostMouse(button: button) }
 
-    override func mouseDown(with event: NSEvent) { post(event, button: 1) }
+    override func mouseDown(with event: NSEvent) {
+        post(event, button: 1)
+        DragOut.shared.note(event, in: self)
+    }
     override func mouseUp(with event: NSEvent) { post(event, button: 0) }
-    override func mouseDragged(with event: NSEvent) { post(event, button: -1) }
+    override func mouseDragged(with event: NSEvent) {
+        post(event, button: -1)
+        DragOut.shared.note(event, in: self)
+    }
 }
 
 /// While a pop-up menu is up: a window over the whole screen showing the
@@ -321,6 +329,11 @@ final class TransientView: NSView {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+        DragOut.shared.refresh = { [weak self] in
+            guard let self else { return }
+            for w in self.windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }
+            (self.screenWindow?.contentView as? MacWindowView)?.refresh(force: false)
+        }
     }
 
     func tick() {
@@ -342,6 +355,7 @@ final class TransientView: NSView {
         syncTransient()
         syncMenus()
         CursorSync.shared.tick()
+        DragOut.shared.tick()
     }
 
     // MARK: Pop-up menus
@@ -775,6 +789,7 @@ func postScriptLive(_ script: [String]) {
     installColorPicker()
     installPrintHandlers()
     ClipboardSync.shared.install()
+    DragOut.shared.install()
     ClassicAudio.shared.install()
     ClassicSoundInput.shared.install()
     ClassicMusic.shared.install()
