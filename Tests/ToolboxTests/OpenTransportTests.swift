@@ -210,6 +210,7 @@ extension BlueBox {
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("sysa")), &answer) == 0 && answer == 1)
             launchTestApp(name: "IE 4.01 Full Fat Installer")
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("sysa")), &answer) == 0 && answer == 2)
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("otan")), &answer) == 0 && answer & 1 != 0) // Open Transport
         }
 
         /// The run's own Gestalt answers (--gestalt) stand over the ones a

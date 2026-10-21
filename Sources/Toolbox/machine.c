@@ -638,13 +638,15 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
         return cfm_launch(app_path, err, errlen);
     }
     /* An installer is told it runs on a PowerPC Mac, as a 68k installer
-     * was on a Power Mac, so a fat one installs the PowerPC build, which
-     * runs here (Internet Explorer 4.01's otherwise installs its CFM-68K
-     * build, which doesn't).  Other 68k programs keep seeing a Quadra. */
+     * was on a Power Mac, with what a PowerPC program sees (Mac OS 8.1,
+     * Open Transport, the Code Fragment Manager), so a fat one installs the
+     * PowerPC build, which runs here: Internet Explorer 4.01's otherwise
+     * installs its CFM-68K build, which doesn't, and wants Open Transport
+     * for the PowerPC one.  Other 68k programs keep seeing a Quadra. */
     char name[32];
     snprintf(name, sizeof name, "%.*s", rd8(LM_CurApName), (const char *)gptr(LM_CurApName + 1));
     if (is_installer(name, g_app_creator))
-        gestalt_set(fourcc("sysa"), 2); /* gestaltPowerPC */
+        gestalt_powerpc();
     uint32_t a5;
     start_jit(app_path);
     uint32_t entry = seg_launch(rn, &a5, err, errlen);
