@@ -13,6 +13,7 @@
 #include "tb_internal.h"
 #include "sysres_gen.h"
 #include "machine.h"
+#include "jit.h"
 #include "ppc.h"
 
 cpu68k *g_cpu;
@@ -472,6 +473,48 @@ static void build_app_parms(void)
 static bool prefer_ppc;
 void machine_set_prefer_ppc(bool on) { prefer_ppc = on; }
 
+static bool jit_on;
+static char jit_cache_dir[1024];
+
+bool machine_set_jit(bool on, const char *cache_dir)
+{
+    if (on && !ppc_jit_available())
+        return false;
+    jit_on = on;
+    snprintf(jit_cache_dir, sizeof jit_cache_dir, "%s", cache_dir ? cache_dir : "");
+    if (!on)
+        ppc_jit_enable(false, NULL, NULL);
+    return true;
+}
+
+/* The JIT for the application at path: its cache file is named after a
+ * hash of the path (blocks are checked against their code anyway). */
+static void start_jit(const char *path)
+{
+    if (!jit_on)
+        return;
+    char name[64];
+    snprintf(name, sizeof name, "%016llx-ppc.bbjit", (unsigned long long)jit_hash(path, strlen(path), 0));
+    ppc_jit_enable(true, jit_cache_dir[0] ? jit_cache_dir : NULL, name);
+}
+
+void machine_jit_report(char *buf, size_t len)
+{
+    buf[0] = 0;
+    if (!ppc_jit_enabled)
+        return;
+    ppc_jit_stats s;
+    ppc_jit_get_stats(&s);
+    uint64_t all = s.jitted + s.interpreted;
+    snprintf(buf, len,
+             "jit: %llu blocks translated (%llu from the cache) in %.1f ms, %.1f%% of %llu instructions "
+             "translated, %llu block runs, %llu chained, %llu invalidated, %llu flushes",
+             (unsigned long long)(s.translated + s.from_cache), (unsigned long long)s.from_cache,
+             (double)s.translate_ns / 1e6, all ? 100.0 * (double)s.jitted / (double)all : 0.0,
+             (unsigned long long)all, (unsigned long long)s.blocks, (unsigned long long)s.chained,
+             (unsigned long long)s.invalidated, (unsigned long long)s.flushes);
+}
+
 static int cmp_names(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
 /* The font files in the System Folder's Fonts folder (the user's own, from
@@ -548,8 +591,10 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
      * fragment when PowerPC is preferred. */
     g_ppc_mode = false;
     bool has_68k = tb_Get1Resource((int32_t)fourcc("CODE"), 0) != 0;
-    if (cfm_has_ppc() && (!has_68k || prefer_ppc))
+    if (cfm_has_ppc() && (!has_68k || prefer_ppc)) {
+        start_jit(app_path);
         return cfm_launch(app_path, err, errlen);
+    }
     uint32_t a5;
     uint32_t entry = seg_launch(rn, &a5, err, errlen);
     if (!entry)

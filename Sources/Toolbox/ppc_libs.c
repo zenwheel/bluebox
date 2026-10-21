@@ -231,7 +231,7 @@ static void s_strcpy(ppc_cpu *c)
 {
     gaddr d = R(0), s = R(1);
     size_t n = gstrlen(s);
-    memmove(gptr(d), gptr(s), n + 1);
+    gmemcpy(d, s, (uint32_t)n + 1);
     RETURN(d);
 }
 static void s_strncpy(ppc_cpu *c)
@@ -248,7 +248,7 @@ static void s_strcat(ppc_cpu *c)
 {
     gaddr d = R(0), s = R(1);
     size_t at = gstrlen(d), n = gstrlen(s);
-    memmove(gptr(d + (gaddr)at), gptr(s), n + 1);
+    gmemcpy(d + (gaddr)at, s, (uint32_t)n + 1);
     RETURN(d);
 }
 static void s_strncat(ppc_cpu *c)
@@ -312,13 +312,13 @@ static void s_strstr(ppc_cpu *c)
 static void s_memcpy(ppc_cpu *c)
 {
     if (R(2))
-        memmove(gptr(R(0)), gptr(R(1)), R(2));
+        gmemcpy(R(0), R(1), R(2));
     RETURN(R(0));
 }
 static void s_memset(ppc_cpu *c)
 {
     if (R(2))
-        memset(gptr(R(0)), (int)(R(1) & 0xFF), R(2));
+        gmemset(R(0), (int)(R(1) & 0xFF), R(2));
     RETURN(R(0));
 }
 static void s_memcmp(ppc_cpu *c)
@@ -776,7 +776,7 @@ static void g_c2pstr(ppc_cpu *c)
     size_t n = gstrlen(s);
     if (n > 255)
         n = 255;
-    memmove(gptr(s + 1), gptr(s), n);
+    gmemcpy(s + 1, s, (uint32_t)n);
     wr8(s, (uint8_t)n);
     RETURN(s);
 }
@@ -784,7 +784,7 @@ static void g_p2cstr(ppc_cpu *c)
 {
     gaddr s = R(0);
     uint8_t n = rd8(s);
-    memmove(gptr(s), gptr(s + 1), n);
+    gmemcpy(s, s + 1, n);
     wr8(s + n, 0);
     RETURN(s);
 }
@@ -794,13 +794,13 @@ static void c_to_p(gaddr src, gaddr dst)
     size_t n = gstrlen(src);
     if (n > 255)
         n = 255;
-    memmove(gptr(dst + 1), gptr(src), n);
+    gmemcpy(dst + 1, src, (uint32_t)n);
     wr8(dst, (uint8_t)n);
 }
 static void p_to_c(gaddr src, gaddr dst)
 {
     uint8_t n = rd8(src);
-    memmove(gptr(dst), gptr(src + 1), n);
+    gmemcpy(dst, src + 1, n);
     wr8(dst + n, 0);
 }
 static void g_c2pstrcpy(ppc_cpu *c) { c_to_p(R(1), R(0)); c->pc = c->lr; }
@@ -994,6 +994,15 @@ static void g_SetA5(ppc_cpu *c)
 }
 static void g_nothing(ppc_cpu *c) { c->pc = c->lr; }
 static void g_noErr(ppc_cpu *c) { RETURN(0); }
+
+/* MakeDataExecutable(address, length): code was written there; the JIT
+ * drops what it translated from that range. */
+static void g_make_data_executable(ppc_cpu *c)
+{
+    if (g_code_map && R(1))
+        mem_code_range(R(0), R(1));
+    c->pc = c->lr;
+}
 
 /* Trap addresses: _GetTrapAddress with the new-style bit, and the
  * Toolbox bit for Toolbox traps. */
@@ -2867,7 +2876,7 @@ const ppc_export lib_exports[] = {
     { "GetMBarHeight", g_GetMBarHeight }, { "GetOSTrapAddress", g_GetOSTrapAddress },
     { "GetSoundVol", g_GetSoundVol }, { "GetToolboxTrapAddress", g_GetToolboxTrapAddress },
     { "GetTrapAddress", g_GetTrapAddress }, { "GetWDInfo", g_GetWDInfo }, { "HLockHi", g_HLockHi },
-    { "IUCompString", g_IUCompString }, { "IUEqualString", g_IUEqualString }, { "MakeDataExecutable", g_nothing },
+    { "IUCompString", g_IUCompString }, { "IUEqualString", g_IUEqualString }, { "MakeDataExecutable", g_make_data_executable },
     { "MemError", g_MemError }, { "NGetTrapAddress", g_NGetTrapAddress }, { "NSetTrapAddress", g_NSetTrapAddress },
     { "OpenDriver", g_OpenDriver }, { "P2CStr", g_p2cstr }, { "RelString", g_RelString },
     { "SetA5", g_SetA5 }, { "SetCurrentA5", g_SetCurrentA5 }, { "SetOSTrapAddress", g_SetOSTrapAddress },

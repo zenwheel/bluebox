@@ -7,6 +7,61 @@ uint8_t *g_mem;
 gaddr g_watch_lo, g_watch_len;
 void (*g_watch_fn)(gaddr a);
 
+uint8_t *g_code_map;
+void (*g_code_written[2])(gaddr lo, gaddr hi);
+
+#define CODE_REGION ((gaddr)1 << CODE_MAP_SHIFT)
+#define CODE_MAP_SIZE ((size_t)1 << (32 - CODE_MAP_SHIFT))
+
+bool mem_code_mark(gaddr lo, gaddr hi, int bit)
+{
+    if (!g_code_map) {
+        /* Reserved whole, committed by the host as regions are marked. */
+        void *p = mmap(NULL, CODE_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_NORESERVE, -1, 0);
+        if (p == MAP_FAILED)
+            return false;
+        g_code_map = p;
+    }
+    uint32_t first = (lo >= 8 ? lo - 8 : 0) >> CODE_MAP_SHIFT, last = (hi - 1) >> CODE_MAP_SHIFT;
+    for (uint32_t r = first; r <= last; r++)
+        g_code_map[r] |= (uint8_t)bit;
+    return true;
+}
+
+void mem_code_unmark(gaddr lo, gaddr hi, int bit)
+{
+    if (!g_code_map)
+        return;
+    for (uint32_t r = lo >> CODE_MAP_SHIFT; r <= (hi - 1) >> CODE_MAP_SHIFT; r++)
+        g_code_map[r] &= (uint8_t)~bit;
+}
+
+/* A store touched a marked region: each owner drops what it had there.
+ * The handlers clear their own bits. */
+void mem_code_written(gaddr a, uint32_t len)
+{
+    uint32_t first = a >> CODE_MAP_SHIFT, last = (gaddr)(a + len - 1) >> CODE_MAP_SHIFT;
+    for (uint32_t r = first;; r++) {
+        uint8_t m = g_code_map[r];
+        for (int t = 0; t < 2; t++)
+            if ((m & (1 << t)) && g_code_written[t])
+                g_code_written[t](r << CODE_MAP_SHIFT, (r << CODE_MAP_SHIFT) + CODE_REGION);
+        if (r == last)
+            break;
+    }
+}
+
+void mem_code_range(gaddr a, uint32_t n)
+{
+    uint32_t first = a >> CODE_MAP_SHIFT, last = (gaddr)(a + n - 1) >> CODE_MAP_SHIFT;
+    for (uint32_t r = first;; r++) {
+        if (g_code_map[r])
+            mem_code_written(r << CODE_MAP_SHIFT, CODE_REGION);
+        if (r == last)
+            break;
+    }
+}
+
 /* 4 GB plus slack so a multi-byte access at the very top cannot run off. */
 #define ARENA_SIZE ((size_t)1 << 32)
 #define ARENA_SLACK ((size_t)1 << 16)
@@ -27,6 +82,8 @@ bool mem_init(void)
 
 void mem_discard(gaddr addr, uint32_t len)
 {
+    if (g_code_map && len)
+        mem_code_range(addr, len);
     /* Only whole pages can go back to the host; zero the ragged edges. */
     const uintptr_t page = 16384;
     uintptr_t start = (uintptr_t)(g_mem + addr);
@@ -69,7 +126,7 @@ void pstr_from_c(gaddr dst, const char *s)
     if (n > 255)
         n = 255;
     wr8(dst, (uint8_t)n);
-    memcpy(g_mem + dst + 1, s, n);
+    gput(dst + 1, s, (uint32_t)n);
 }
 
 const char *fourcc_str(uint32_t code, char buf[5])

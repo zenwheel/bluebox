@@ -810,6 +810,8 @@ static void ot_Rcv(ppc_cpu *c)
             RETURN((uint32_t)kOTOutStateErr);
             return;
         }
+        if (g_code_map && n)
+            mem_code_range(buf, n);
         ssize_t r = recv(p->fd, gptr(buf), n, 0);
         LOGF(LOG_TRAPS, "OT: rcv %d: %zd of %u%s%s\n", (int)(p - providers), r, n, r < 0 ? ", " : "",
              r < 0 ? strerror(errno) : "");
@@ -1007,6 +1009,8 @@ static void ot_RcvUData(ppc_cpu *c)
     for (;;) {
         struct sockaddr_in sa;
         socklen_t len = sizeof sa;
+        if (g_code_map && rd32(ud + 24))
+            mem_code_range(rd32(ud + 32), rd32(ud + 24));
         ssize_t r = recvfrom(p->fd, gptr(rd32(ud + 32)), rd32(ud + 24), 0, (struct sockaddr *)&sa, &len);
         if (r >= 0) {
             wr32(ud + 28, (uint32_t)r);

@@ -25,6 +25,34 @@ extension BlueBox {
 
         @Test(arguments: ppcCases.map(\.name))
         func instructionCase(_ name: String) {
+            runCase(name)
+        }
+
+        /// The same cases through the JIT (where the host has one).
+        @Test(arguments: ppcCases.map(\.name))
+        func instructionCaseJIT(_ name: String) {
+            guard ppc_jit_available() else { return }
+            ppc_jit_enable(true, nil, nil)
+            defer { ppc_jit_enable(false, nil, nil) }
+            runCase(name)
+        }
+
+        /// Random blocks of translated instructions: the interpreter and the
+        /// JIT from the same state end with the same registers and memory.
+        @Test func jitMatchesInterpreterOnRandomBlocks() {
+            guard ppc_jit_available() else { return }
+            bootMachine()
+            var why = [CChar](repeating: 0, count: 1024)
+            var before = ppc_jit_stats()
+            ppc_jit_get_stats(&before)
+            let bad = ppc_jit_selftest(0x1234_5678, 10000, Self.codeAt, 0x6000_0000, &why, Int32(why.count))
+            #expect(bad == 0, "\(bad) mismatches; first: \(String(cString: why))")
+            var after = ppc_jit_stats()
+            ppc_jit_get_stats(&after)
+            #expect(after.translated - before.translated >= 10000 && after.jitted > before.jitted)
+        }
+
+        func runCase(_ name: String) {
             bootMachine()
             let t = ppcCases.first { $0.name == name }!
             for i in 0..<0x40 { wr32(0x6000_0000 + UInt32(i * 4), 0) }

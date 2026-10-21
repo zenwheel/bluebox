@@ -58,6 +58,31 @@ static inline void watch_store(gaddr a)
         g_watch_fn(a);
 }
 
+/* Guest memory a JIT has translated code from, in 256-byte regions: one
+ * byte each, a bit per translator (CODE_PPC, CODE_68K).  NULL until a JIT
+ * starts.  Every store into guest memory (the CPUs', the Toolbox's, the
+ * bulk copies below) checks it, so a translation never outlives the code
+ * it came from: a store into a marked region calls mem_code_written, which
+ * tells each translator owning it to drop its blocks there. */
+enum { CODE_MAP_SHIFT = 8, CODE_PPC = 1, CODE_68K = 2 };
+extern uint8_t *g_code_map;
+/* A translator's handler for stores into its regions [lo, hi). */
+extern void (*g_code_written[2])(gaddr lo, gaddr hi);
+void mem_code_written(gaddr a, uint32_t len);
+/* Mark [lo, hi) as holding a translator's code (also the region just
+ * before, so a misaligned store starting there is seen).  Returns false if
+ * the map can't be made. */
+bool mem_code_mark(gaddr lo, gaddr hi, int bit);
+/* Clear a translator's bit over [lo, hi), whole regions. */
+void mem_code_unmark(gaddr lo, gaddr hi, int bit);
+
+static inline void code_store(gaddr a, uint32_t len)
+{
+    if (__builtin_expect(g_code_map != NULL, 0) &&
+        (g_code_map[a >> CODE_MAP_SHIFT] | g_code_map[(gaddr)(a + len - 1) >> CODE_MAP_SHIFT]))
+        mem_code_written(a, len);
+}
+
 static inline uint8_t rd8(gaddr a) { return g_mem[a]; }
 static inline uint16_t rd16(gaddr a)
 {
@@ -71,21 +96,44 @@ static inline uint32_t rd32(gaddr a)
     memcpy(&v, g_mem + a, 4);
     return __builtin_bswap32(v);
 }
-static inline void wr8(gaddr a, uint8_t v) { g_mem[a] = v; }
+static inline void wr8(gaddr a, uint8_t v)
+{
+    code_store(a, 1);
+    g_mem[a] = v;
+}
 static inline void wr16(gaddr a, uint16_t v)
 {
+    code_store(a, 2);
     v = __builtin_bswap16(v);
     memcpy(g_mem + a, &v, 2);
 }
 static inline void wr32(gaddr a, uint32_t v)
 {
+    code_store(a, 4);
     v = __builtin_bswap32(v);
     memcpy(g_mem + a, &v, 4);
 }
 
-static inline void gmemcpy(gaddr dst, gaddr src, uint32_t n) { memmove(g_mem + dst, g_mem + src, n); }
-static inline void gmemset(gaddr dst, int c, uint32_t n) { memset(g_mem + dst, c, n); }
-static inline void gput(gaddr dst, const void *src, uint32_t n) { memcpy(g_mem + dst, src, n); }
+/* Bulk stores (a whole range checked against the code map). */
+void mem_code_range(gaddr a, uint32_t n);
+static inline void gmemcpy(gaddr dst, gaddr src, uint32_t n)
+{
+    if (g_code_map && n)
+        mem_code_range(dst, n);
+    memmove(g_mem + dst, g_mem + src, n);
+}
+static inline void gmemset(gaddr dst, int c, uint32_t n)
+{
+    if (g_code_map && n)
+        mem_code_range(dst, n);
+    memset(g_mem + dst, c, n);
+}
+static inline void gput(gaddr dst, const void *src, uint32_t n)
+{
+    if (g_code_map && n)
+        mem_code_range(dst, n);
+    memcpy(g_mem + dst, src, n);
+}
 static inline void gget(void *dst, gaddr src, uint32_t n) { memcpy(dst, g_mem + src, n); }
 
 /* Pascal strings in guest memory. */
