@@ -52,6 +52,29 @@ extension BlueBox {
             #expect(after.translated - before.translated >= 10000 && after.jitted > before.jitted)
         }
 
+        /// A store into the block being run (the next instruction but one)
+        /// takes effect, as under the interpreter.
+        @Test func jitSeesCodeItStoresAhead() {
+            guard ppc_jit_available() else { return }
+            bootMachine()
+            let code: [UInt32] = [0x908A_0008, 0x6000_0000, 0x3860_0000, 0x4800_0000] // stw r4,8(r10); nop; li r3,0; b .
+            for jit in [false, true] {
+                for (i, w) in code.enumerated() { wr32(Self.codeAt + UInt32(i * 4), w) }
+                var c = ppc_cpu()
+                ppc_init(&c)
+                c.pc = Self.codeAt
+                withUnsafeMutableBytes(of: &c.gpr) {
+                    $0.storeBytes(of: 0x3860_0005 as UInt32, toByteOffset: 4 * 4, as: UInt32.self) // r4: li r3,5
+                    $0.storeBytes(of: Self.codeAt, toByteOffset: 10 * 4, as: UInt32.self)
+                }
+                ppc_jit_enable(jit, nil, nil)
+                _ = ppc_run(&c, 4)
+                ppc_jit_enable(false, nil, nil)
+                let r3 = withUnsafeBytes(of: c.gpr) { $0.load(fromByteOffset: 3 * 4, as: UInt32.self) }
+                #expect(r3 == 5 && c.icount == 4, "jit \(jit): r3 \(r3), \(c.icount) instructions")
+            }
+        }
+
         func runCase(_ name: String) {
             bootMachine()
             let t = ppcCases.first { $0.name == name }!

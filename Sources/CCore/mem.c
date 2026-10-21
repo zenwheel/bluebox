@@ -36,27 +36,34 @@ void mem_code_unmark(gaddr lo, gaddr hi, int bit)
         g_code_map[r] &= (uint8_t)~bit;
 }
 
-/* A store touched a marked region: each owner drops what it had there.
- * The handlers clear their own bits. */
+/* A store touched a marked region: each owner drops what it had
+ * translated from the bytes written (and unmarks regions left empty). */
 void mem_code_written(gaddr a, uint32_t len)
 {
     uint32_t first = a >> CODE_MAP_SHIFT, last = (gaddr)(a + len - 1) >> CODE_MAP_SHIFT;
+    uint8_t m = 0;
     for (uint32_t r = first;; r++) {
-        uint8_t m = g_code_map[r];
-        for (int t = 0; t < 2; t++)
-            if ((m & (1 << t)) && g_code_written[t])
-                g_code_written[t](r << CODE_MAP_SHIFT, (r << CODE_MAP_SHIFT) + CODE_REGION);
+        m |= g_code_map[r];
         if (r == last)
             break;
     }
+    for (int t = 0; t < 2; t++)
+        if ((m & (1 << t)) && g_code_written[t])
+            g_code_written[t](a, a + len);
 }
 
 void mem_code_range(gaddr a, uint32_t n)
 {
     uint32_t first = a >> CODE_MAP_SHIFT, last = (gaddr)(a + n - 1) >> CODE_MAP_SHIFT;
     for (uint32_t r = first;; r++) {
-        if (g_code_map[r])
-            mem_code_written(r << CODE_MAP_SHIFT, CODE_REGION);
+        if (g_code_map[r]) {
+            gaddr lo = r << CODE_MAP_SHIFT, hi = lo + CODE_REGION;
+            if (lo < a)
+                lo = a;
+            if (hi - 1 > a + n - 1)
+                hi = a + n;
+            mem_code_written(lo, hi - lo);
+        }
         if (r == last)
             break;
     }

@@ -144,6 +144,7 @@ typedef struct tctx {
     int sets_flags;              /* ... or set them for this field */
     uint8_t cr_dead[MAX_INSN];   /* fields written that nothing reads */
     int at;                      /* index of the instruction */
+    bool stored;                 /* the instruction may have stored */
     int8_t host[32];             /* the host register caching a GPR, or -1 */
     bool dirty[32];              /* ... changed since it was loaded */
 } tctx;
@@ -174,6 +175,13 @@ static void cache_flush(tctx *t)
             a64_ldst(&t->b, A64_STRW, t->host[r], HC, GPR(r));
             t->dirty[r] = false;
         }
+}
+/* The same, on a path leaving the block (the main path's state kept). */
+static void cache_flush_exit(tctx *t)
+{
+    for (int r = 0; r < 32; r++)
+        if (t->host[r] >= 0 && t->dirty[r])
+            a64_ldst(&t->b, A64_STRW, t->host[r], HC, GPR(r));
 }
 static void cache_load(tctx *t)
 {
@@ -267,6 +275,7 @@ static void store(tctx *t, int size, bool reversed)
         }
     }
     jit_store(b, size, true, H_ST8);
+    t->stored = true;
 }
 
 /* Run one instruction through the interpreter. */
@@ -414,6 +423,24 @@ static enum kind classify(uint32_t op)
         }
     default:
         return K_STOP; /* sc, twi, NATIVE, illegal */
+    }
+}
+
+/* Whether an instruction left to the interpreter may store. */
+static bool exec_stores(uint32_t op)
+{
+    switch (OPCD(op)) {
+    case 47: case 52: case 53: case 54: case 55:
+        return true;
+    case 31:
+        switch (XO10(op)) {
+        case 150: case 661: case 725: case 663: case 695: case 727: case 759: case 983: case 1014:
+            return true;
+        default:
+            return false;
+        }
+    default:
+        return false;
     }
 }
 
@@ -1095,11 +1122,31 @@ static jit_block *translate(uint32_t pc)
             emit_branch(&t, op, ipc);
             break;
         }
+        t.stored = false;
         bool ok = kinds[i] == K_NATIVE && emit(&t, op, ipc);
         if (!ok) {
             cache_flush(&t);
             execute(&t, op);
             cache_load(&t);
+            t.keeps_flags = false;
+            t.sets_flags = -1;
+            t.stored = exec_stores(op);
+        }
+        if (t.stored && i + 1 < n) {
+            /* A store into translated code: leave after this instruction,
+             * the dispatcher translating what follows afresh. */
+            uint32_t skip = jit_killed_check(b);
+            cache_flush_exit(&t);
+            a64_addsub_imm(b, A64_ADDI, true, HB, HB, n - (i + 1));
+            uint32_t ninsn = t.ninsn;
+            t.ninsn = i + 1;
+            exit_pcs(&t);
+            t.ninsn = ninsn;
+            a64_mov32(b, 0, ipc + 4);
+            stf(&t, 0, FIELD(pc));
+            exit_plain(&t);
+            a64_patch_here(b, skip);
+            t.flags_crf = -1;
             t.keeps_flags = false;
             t.sets_flags = -1;
         }
@@ -1181,6 +1228,7 @@ uint64_t ppc_jit_run(ppc_cpu *c, uint64_t max)
         E.ctx.watch_lo = g_watch_lo;
         E.ctx.watch_len = g_watch_len;
         E.ctx.last_stub = NULL;
+        E.ctx.killed = 0;
         uint64_t ran = left - jit_enter(&E, c, (int64_t)left, b->entry);
         c->icount += ran;
         c->tb += ran;

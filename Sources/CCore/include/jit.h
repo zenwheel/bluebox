@@ -108,6 +108,9 @@ typedef struct jit_ctx {
     uint32_t watch_lo, watch_len;
     uint32_t *last_stub;     /* the exit stub that left last, or NULL */
     jit_fast *fast;          /* indirect-branch table */
+    uint32_t keep[4];        /* values kept across a helper call */
+    uint32_t killed;         /* a block was dropped since entry (a store
+                                into code: the running block may be stale) */
     void *helper[JIT_MAX_HELPERS]; /* the translator's */
 } jit_ctx;
 

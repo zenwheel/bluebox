@@ -297,33 +297,41 @@ static void kill(jit_engine *e, jit_block *b)
     if (b->ninsn)
         write_word(e, b->entry, a64_b_word((int32_t)(b->dead - b->entry)));
     e->invalidated++;
+    e->ctx.killed = 1;
 }
 
-/* mem.h: a store landed in a region holding translated code. */
-static void region_written(jit_engine *e, gaddr lo)
+/* mem.h: a store of [lo, hi) touched regions holding translated code.
+ * The blocks it overlaps go; a region with none left is unmarked, so
+ * stores to data sharing it stop coming here. */
+static void code_written(jit_engine *e, gaddr lo, gaddr hi)
 {
-    uint32_t r = lo >> CODE_MAP_SHIFT;
-    for (jit_region_link **p = &e->regions[rg_bucket(r)]; *p;) {
-        jit_region_link *l = *p;
-        if (l->region == r) {
-            kill(e, l->b);
-            *p = l->next;
-        } else {
-            p = &l->next;
+    uint64_t wlo = lo, whi = hi > lo ? hi : (uint64_t)lo + 1;
+    for (uint32_t r = lo >> CODE_MAP_SHIFT;; r++) {
+        bool left = false;
+        for (jit_region_link **p = &e->regions[rg_bucket(r)]; *p;) {
+            jit_region_link *l = *p;
+            if (l->region != r) {
+                p = &l->next;
+                continue;
+            }
+            jit_block *b = l->b;
+            if (b->live && (uint64_t)b->pc < whi && (uint64_t)b->pc + b->len > wlo)
+                kill(e, b);
+            if (!b->live) {
+                *p = l->next;
+            } else {
+                left = true;
+                p = &l->next;
+            }
         }
+        if (!left)
+            mem_code_unmark(r << CODE_MAP_SHIFT, (r << CODE_MAP_SHIFT) + 1, e->map_bit);
+        if (r == (uint32_t)((whi - 1) >> CODE_MAP_SHIFT))
+            break;
     }
-    mem_code_unmark(lo, lo + 1, e->map_bit);
 }
-static void written_ppc(gaddr lo, gaddr hi)
-{
-    (void)hi;
-    region_written(engines[0], lo);
-}
-static void written_68k(gaddr lo, gaddr hi)
-{
-    (void)hi;
-    region_written(engines[1], lo);
-}
+static void written_ppc(gaddr lo, gaddr hi) { code_written(engines[0], lo, hi); }
+static void written_68k(gaddr lo, gaddr hi) { code_written(engines[1], lo, hi); }
 
 void jit_flush(jit_engine *e)
 {

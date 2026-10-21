@@ -115,4 +115,15 @@ static inline void jit_store(a64_buf *b, int size, bool watched, int slow)
     a64_patch_here(b, to_done);
 }
 
+/* After an instruction that stored: whether a store dropped a block (the
+ * running one may be stale).  Emits the test; the caller emits what leaves
+ * the block after it, then patches the returned branch to skip that. */
+static inline uint32_t jit_killed_check(a64_buf *b)
+{
+    a64_ldst(b, A64_LDRW, 9, JR_CTX, JIT_CTX(killed));
+    uint32_t at = a64_here(b);
+    a64_cbz(b, false, 9, 0);
+    return at;
+}
+
 #endif

@@ -63,10 +63,10 @@ static inline void watch_store(gaddr a)
  * starts.  Every store into guest memory (the CPUs', the Toolbox's, the
  * bulk copies below) checks it, so a translation never outlives the code
  * it came from: a store into a marked region calls mem_code_written, which
- * tells each translator owning it to drop its blocks there. */
+ * tells each translator owning it to drop the blocks it overlaps. */
 enum { CODE_MAP_SHIFT = 8, CODE_PPC = 1, CODE_68K = 2 };
 extern uint8_t *g_code_map;
-/* A translator's handler for stores into its regions [lo, hi). */
+/* A translator's handler for a store of [lo, hi) touching its regions. */
 extern void (*g_code_written[2])(gaddr lo, gaddr hi);
 void mem_code_written(gaddr a, uint32_t len);
 /* Mark [lo, hi) as holding a translator's code (also the region just
