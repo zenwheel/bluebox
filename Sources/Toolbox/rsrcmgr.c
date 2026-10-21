@@ -1404,7 +1404,8 @@ void tb_RemoveResource(gaddr res)
  * resource's handle, which the program may have changed (PopChar Pro's
  * installer checksums its own resources, CODE 1 among them, which its
  * runtime has relocated in memory).  A resource changed and not yet
- * written comes from memory: the file has nothing, or something older. */
+ * written comes from memory: the file has nothing, or something older;
+ * so does a compressed one, whose bytes in the file are not its data. */
 void tb_ReadPartialResource(gaddr res, int32_t offset, gaddr buffer, int32_t count)
 {
     gaddr maph;
@@ -1415,7 +1416,7 @@ void tb_ReadPartialResource(gaddr res, int32_t offset, gaddr buffer, int32_t cou
     }
     resfile *f = file_for_map(maph);
     gaddr m = mp_of(maph);
-    if (f && f->fork && !(rd8(m + r + 4) & RES_CHANGED)) {
+    if (f && f->fork && !(rd8(m + r + 4) & (RES_CHANGED | RES_COMPRESSED))) {
         uint32_t doff = rd32(m + r + 4) & 0x00FFFFFF, dstart = rd32(m);
         if ((uint64_t)dstart + doff + 4 > f->len) {
             set_res_err(mapReadErr);
