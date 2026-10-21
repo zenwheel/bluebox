@@ -201,6 +201,17 @@ extension BlueBox {
             #expect(Int32(bitPattern: ot("ICDeletePref", 0, pstr("TestPref"))) == -666)
         }
 
+        /// A 68k installer is told it runs on a PowerPC Mac, so a fat
+        /// installer installs the PowerPC build (Internet Explorer 4.01's);
+        /// other 68k programs still see a 68k Mac.
+        @Test func installersSeeAPowerPC() {
+            var answer: UInt32 = 0
+            launchTestApp()
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("sysa")), &answer) == 0 && answer == 1)
+            launchTestApp(name: "IE 4.01 Full Fat Installer")
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("sysa")), &answer) == 0 && answer == 2)
+        }
+
         /// The run's own Gestalt answers (--gestalt) stand over the ones a
         /// PowerPC program is given (Spades Deluxe 2.0 wants Mac OS 8.1).
         @Test func gestaltOverrideKeptForPowerPC() {

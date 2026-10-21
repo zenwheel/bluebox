@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 
 #include "forks.h"
@@ -569,6 +570,20 @@ static void open_user_fonts(void)
     }
 }
 
+/* An installer: by its name, or by the installer builders' creators
+ * (Installer VISE, Apple's Installer, StuffIt InstallerMaker). */
+static bool is_installer(const char *name, uint32_t creator)
+{
+    static const char *const creators[] = { "VIS3", "VISE", "bjbc", "STi0", "STi3", "STi5" };
+    for (size_t i = 0; i < sizeof creators / sizeof *creators; i++)
+        if (creator == fourcc(creators[i]))
+            return true;
+    for (const char *p = name; *p; p++)
+        if (!strncasecmp(p, "install", 7))
+            return true;
+    return false;
+}
+
 bool machine_launch(const char *app_path, char *err, size_t errlen)
 {
     mac_file mf;
@@ -622,6 +637,14 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
         start_jit(app_path);
         return cfm_launch(app_path, err, errlen);
     }
+    /* An installer is told it runs on a PowerPC Mac, as a 68k installer
+     * was on a Power Mac, so a fat one installs the PowerPC build, which
+     * runs here (Internet Explorer 4.01's otherwise installs its CFM-68K
+     * build, which doesn't).  Other 68k programs keep seeing a Quadra. */
+    char name[32];
+    snprintf(name, sizeof name, "%.*s", rd8(LM_CurApName), (const char *)gptr(LM_CurApName + 1));
+    if (is_installer(name, g_app_creator))
+        gestalt_set(fourcc("sysa"), 2); /* gestaltPowerPC */
     uint32_t a5;
     start_jit(app_path);
     uint32_t entry = seg_launch(rn, &a5, err, errlen);

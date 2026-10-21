@@ -102,7 +102,8 @@ func tempDir() -> URL {
 /// so the A5 world, File Manager and SIZE flags are set up as for a real app.
 /// Returns the folder it lives in.
 @discardableResult
-func launchTestApp(_ extra: [TestResource] = [], sizeFlags: UInt16 = 0, documents: [String] = []) -> URL {
+func launchTestApp(_ extra: [TestResource] = [], sizeFlags: UInt16 = 0, documents: [String] = [],
+                   name: String = "Test App") -> URL {
     bootMachine()
     let jt = cat(be16(0), be16(0x3F3C), be16(1), be16(0xA9F0))
     let code0 = cat(be32(40), be32(256), be32(8), be32(32), jt)
@@ -114,7 +115,7 @@ func launchTestApp(_ extra: [TestResource] = [], sizeFlags: UInt16 = 0, document
         TestResource(type: "SIZE", id: -1, data: size),
     ] + extra)
     let dir = tempDir()
-    let path = dir.appendingPathComponent("Test App").path
+    let path = dir.appendingPathComponent(name).path
     var f = mac_file()
     var empty: [UInt8] = []
     empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
