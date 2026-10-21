@@ -564,6 +564,15 @@ enum { MACHINE_DRAG_ENTER, MACHINE_DRAG_MOVE, MACHINE_DRAG_LEAVE, MACHINE_DRAG_D
 void machine_host_drag(int kind, int x, int y, const char *const *files, int nfiles, const char *text);
 void machine_send_open_application(void);
 void machine_send_quit(void);
+/* Any Apple Event, delivered as a high-level event: its class and ID, and
+ * a direct object of files (host paths, as a list of FSSpecs) or of text
+ * (UTF-8, as 'TEXT': 'misc'/'dosc' takes a script this way), or neither.
+ * With `reply`, the program's reply comes back to it (flattened as
+ * aem_flatten does, and the handler's result) once handled, from the
+ * emulator's thread; NULL data if it was never handled. */
+typedef void (*machine_ae_reply_fn)(void *ctx, const uint8_t *reply, uint32_t len, int16_t err);
+void machine_send_apple_event(uint32_t cls, uint32_t id, const char *const *files, int nfiles, const char *text,
+                              machine_ae_reply_fn reply, void *ctx);
 /* Ask the app to quit (Quit Application event, or its own Quit command). */
 void machine_request_quit(void);
 

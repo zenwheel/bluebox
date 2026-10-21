@@ -576,6 +576,18 @@ gaddr cfm_prepare_container(gaddr pef);
 /* A transition vector whose code runs fn natively. */
 gaddr cfm_native_tvector(void (*fn)(struct ppc_cpu *), const char *name);
 
+/* The Apple Event Manager (aem.c) and the Object Support Library (osl.c). */
+/* Call a handler's universal procedure pointer (either ISA, or a bare
+ * transition vector from PowerPC code). */
+uint32_t aem_call_proc(gaddr upp, uint32_t procinfo, const uint32_t *args, int n);
+/* The application's special handler for key, else the system's; 0 if none. */
+gaddr aem_special_handler(uint32_t key);
+/* A descriptor's data flattened for another process (malloc'd), and such
+ * an event queued for the application, its reply to `reply`. */
+uint8_t *aem_flatten(gaddr desc, uint32_t *len_out);
+void aem_queue_flat(const uint8_t *data, uint32_t len, machine_ae_reply_fn reply, void *ctx);
+void osl_reset(void);
+
 /* Mixed Mode (mixedmode.c). */
 void mixedmode_init(void);
 bool mm_is_descriptor(gaddr p);
