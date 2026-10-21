@@ -9,6 +9,8 @@
 #include "m68k.h"
 #include "mem.h"
 
+bool sst_jit;
+
 /* ---- A tiny JSON reader, just enough for this format ---- */
 
 typedef struct {
@@ -223,7 +225,10 @@ static bool run_one(const char *name, const state *in, const state *out, char *w
         }
     }
 
-    cpu_step(&c);
+    if (sst_jit)
+        cpu_jit_step1(&c);
+    else
+        cpu_step(&c);
 
     /* 68000 address errors (odd word/long accesses) are not modelled. */
     uint32_t v3 = vec3(in);

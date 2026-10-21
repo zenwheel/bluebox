@@ -72,8 +72,8 @@ func usage() -> Never {
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
           --ppc      run a fat application's PowerPC code (PowerPC-only ones always run it)
-          --jit      translate PowerPC code to host code (experimental), keeping translations
-                     in ~/Library/Caches/Blue Box/JIT between runs
+          --jit      translate 68k and PowerPC code to host code (experimental), keeping
+                     translations in ~/Library/Caches/Blue Box/JIT between runs
           --jit-cache D  keep them in folder D instead; --no-jit-cache: don't keep them
           --68k      run a fat application's 68k code (the default unless its cpu setting is ppc)
           --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
@@ -739,7 +739,7 @@ func runCommand(_ args: [String]) {
     var regs = [CChar](repeating: 0, count: 1024)
     machine_describe_cpu(&regs, regs.count)
     print(str(regs))
-    var jitLine = [CChar](repeating: 0, count: 512)
+    var jitLine = [CChar](repeating: 0, count: 1024)
     machine_jit_report(&jitLine, jitLine.count)
     if jitLine[0] != 0 { print(str(jitLine)) }
 
