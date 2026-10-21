@@ -501,6 +501,18 @@ static bool frag_find_export(const fragment *f, const char *name, gaddr *addr, u
     return false;
 }
 
+/* Export i of a loader section, at addr. */
+static void add_export(fragment *f, const uint8_t *loader, uint32_t strings, const uint8_t *keys,
+                       const uint8_t *esyms, uint32_t i, gaddr addr)
+{
+    uint32_t namelen = be32(keys + i * 4) >> 16;
+    uint32_t cn = be32(esyms + i * 10);
+    frag_export *x = &f->exports[f->nexports++];
+    x->name = strndup((const char *)loader + strings + (cn & 0xFFFFFF), namelen);
+    x->addr = addr;
+    x->cls = (uint8_t)(cn >> 24) & 0x0F;
+}
+
 static int library_named(const char *name, char *err, size_t errlen);
 
 /* Load a PEF container into fragment f: sections, imports (loading the
@@ -565,6 +577,25 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
     uint32_t nlibs = be32(loader + 24), nsyms = be32(loader + 28), nreloc = be32(loader + 32);
     uint32_t reloc_off = be32(loader + 36), strings = be32(loader + 40);
     uint32_t hash_off = be32(loader + 44), hash_power = be32(loader + 48), nexports = be32(loader + 52);
+
+    /* Exports first, before the libraries this one needs are loaded: one
+     * of them may need this one in turn (Internet Explorer's C++ library
+     * and its MS Memory Library each import the other).  The key table
+     * gives each name's length, the symbol table its class, name and
+     * place. */
+    const uint8_t *keys = loader + hash_off + (4u << hash_power);
+    const uint8_t *esyms = keys + nexports * 4;
+    f->exports = calloc(nexports ? nexports : 1, sizeof *f->exports);
+    f->nexports = 0;
+    for (uint32_t i = 0; i < nexports; i++) {
+        const uint8_t *e = esyms + i * 10;
+        uint32_t value = be32(e + 4);
+        int16_t sect = (int16_t)be16(e + 8);
+        if (sect >= 0 && sect < ninst)
+            add_export(f, loader, strings, keys, esyms, i, sections[sect].base + value);
+        else if (sect == -2)
+            add_export(f, loader, strings, keys, esyms, i, value); /* absolute */
+    }
 
     /* Imports: an address each (a transition vector or data), or 0 for
      * missing weak ones. */
@@ -655,30 +686,12 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
             return false;
         }
     }
-    /* Exports: the key table gives each name's length, the symbol table
-     * its class, name and place. */
-    const uint8_t *keys = loader + hash_off + (4u << hash_power);
-    const uint8_t *esyms = keys + nexports * 4;
-    f->exports = calloc(nexports ? nexports : 1, sizeof *f->exports);
-    f->nexports = 0;
+    /* Re-exported imports, now that the imports are known. */
     for (uint32_t i = 0; i < nexports; i++) {
-        uint32_t namelen = be32(keys + i * 4) >> 16;
         const uint8_t *e = esyms + i * 10;
-        uint32_t cn = be32(e), value = be32(e + 4);
-        int16_t sect = (int16_t)be16(e + 8);
-        gaddr addr;
-        if (sect >= 0 && sect < ninst)
-            addr = sections[sect].base + value;
-        else if (sect == -2)
-            addr = value; /* absolute */
-        else if (sect == -3 && value < nsyms)
-            addr = imports[value]; /* re-exported import */
-        else
-            continue;
-        frag_export *x = &f->exports[f->nexports++];
-        x->name = strndup((const char *)loader + strings + (cn & 0xFFFFFF), namelen);
-        x->addr = addr;
-        x->cls = (uint8_t)(cn >> 24) & 0x0F;
+        uint32_t value = be32(e + 4);
+        if ((int16_t)be16(e + 8) == -3 && value < nsyms)
+            add_export(f, loader, strings, keys, esyms, i, imports[value]);
     }
     for (int i = ninst - 1; i >= 0; i--) {
         if (sections[i].kind == kCode)
@@ -1292,6 +1305,8 @@ static void ppc_FindSymbol(ppc_cpu *c)
             ok = addr != 0;
         }
     }
+    if (!ok)
+        LOGF(LOG_UNIMPL, "cfm: FindSymbol %s: not there\n", name);
     if (c->gpr[5])
         wr32(c->gpr[5], ok ? addr : 0);
     if (c->gpr[6])

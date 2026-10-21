@@ -20666,6 +20666,18 @@ static void ppcglue_CancelSwitch(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_BeginSystemMode(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BeginSystemMode();
+    c->pc = c->lr;
+}
+
+static void ppcglue_EndSystemMode(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EndSystemMode();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PPCDispatch(ppc_cpu *c)
 {
     int32_t a_d0 = (int32_t)c->gpr[3];
@@ -34314,6 +34326,7 @@ const ppc_export ppc_exports[] = {
     {"BackPixPat", ppcglue_BackPixPat},
     {"BeginFullScreen", ppcglue_BeginFullScreen},
     {"BeginMediaEdits", ppctrap_BeginMediaEdits},
+    {"BeginSystemMode", ppcglue_BeginSystemMode},
     {"BeginThemeDragSound", ppcglue_BeginThemeDragSound},
     {"BeginUpdate", ppcglue_BeginUpdate},
     {"BitAnd", ppcglue_BitAnd},
@@ -34626,6 +34639,7 @@ const ppc_export ppc_exports[] = {
     {"EnableMenuItemIcon", ppcglue_EnableMenuItemIcon},
     {"EndFullScreen", ppcglue_EndFullScreen},
     {"EndMediaEdits", ppctrap_EndMediaEdits},
+    {"EndSystemMode", ppcglue_EndSystemMode},
     {"EndThemeDragSound", ppcglue_EndThemeDragSound},
     {"EndUpdate", ppcglue_EndUpdate},
     {"Enqueue", ppcglue_Enqueue},

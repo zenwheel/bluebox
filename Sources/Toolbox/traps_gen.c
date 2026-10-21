@@ -1792,6 +1792,15 @@ static void glue_BeginFullScreen(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_BeginSystemMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_BeginSystemMode();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_BeginThemeDragSound(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4310,6 +4319,15 @@ static void glue_EndFullScreen(cpu68k *c, uint16_t trapword)
     int32_t a_flags = (int32_t)cpu_pop32(c);
     int32_t a_fullState = (int32_t)cpu_pop32(c);
     int16_t r = tb_EndFullScreen(a_fullState, a_flags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_EndSystemMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_EndSystemMode();
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -20264,6 +20282,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x3Bu, "SetFrontProcess", CONV_STACK, 4, 2, glue_SetFrontProcess},
     {0xA88F, (int32_t)0x3Cu, "WakeUpProcess", CONV_STACK, 4, 2, glue_WakeUpProcess},
     {0xA88F, (int32_t)0x3Du, "SameProcess", CONV_STACK, 12, 2, glue_SameProcess},
+    {0xA88F, (int32_t)0x40u, "BeginSystemMode", CONV_STACK, 0, 2, glue_BeginSystemMode},
+    {0xA88F, (int32_t)0x41u, "EndSystemMode", CONV_STACK, 0, 2, glue_EndSystemMode},
     {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, glue_GetPortNameFromProcessSerialNumber},
     {0xA9E7, (int32_t)0x0u, "LActivate", CONV_STACK, 6, 0, glue_LActivate},

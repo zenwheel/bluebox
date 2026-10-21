@@ -118,6 +118,8 @@ int16_t tb_GetActiveTaskInfo(gaddr info, int16_t slots)
 }
 
 void tb_CancelSwitch(void) {}
+int16_t tb_BeginSystemMode(void) { return 0; }
+int16_t tb_EndSystemMode(void) { return 0; }
 
 /* ---- Temporary memory ---- */
 
