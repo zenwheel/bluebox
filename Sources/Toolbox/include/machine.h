@@ -621,6 +621,34 @@ void machine_drag_out_end(int how, int x, int y, const char *folder);
 
 void machine_send_open_application(void);
 void machine_send_quit(void);
+/* Any Apple Event, delivered as a high-level event: its class and ID, and
+ * a direct object of files (host paths, as a list of FSSpecs) or of text
+ * (UTF-8, as 'TEXT': 'misc'/'dosc' takes a script this way), or neither.
+ * With `reply`, the program's reply comes back to it (flattened as
+ * aem_flatten does, and the handler's result) once handled, from the
+ * emulator's thread; NULL data if it was never handled. */
+typedef void (*machine_ae_reply_fn)(void *ctx, const uint8_t *reply, uint32_t len, int16_t err);
+void machine_send_apple_event(uint32_t cls, uint32_t id, const char *const *files, int nfiles, const char *text,
+                              machine_ae_reply_fn reply, void *ctx);
+/* Take Apple Events from other processes (other runs, `bluebox send`):
+ * a Unix socket named for this process and its application's signature,
+ * removed at exit.  After machine_launch. */
+bool machine_listen_for_apple_events(void);
+/* The runs listening (with this home folder): process ID and signature. */
+typedef struct {
+    int pid;
+    uint32_t signature;
+} machine_ae_process;
+int machine_ae_processes(machine_ae_process *out, int max);
+/* Send a run an event as machine_send_apple_event builds them; with wait,
+ * its result (the reply's direct object as text, or the error's message)
+ * and keyErrorNumber come back.  The handler's result, or procNotFound,
+ * errAETimeout. */
+int16_t machine_ae_send_to(int pid, uint32_t sig, uint32_t cls, uint32_t id, const char *const *files, int nfiles,
+                           const char *text, bool wait, char *result, size_t size, int32_t *errn);
+/* A flattened reply's direct object as text (UTF-8) and keyErrorNumber;
+ * false if it has no direct object (text then holds any error message). */
+bool machine_ae_reply_result(const uint8_t *reply, uint32_t len, char *text, size_t size, int32_t *errn);
 /* Ask the app to quit (Quit Application event, or its own Quit command). */
 void machine_request_quit(void);
 

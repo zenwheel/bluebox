@@ -218,6 +218,7 @@ final class TransientView: NSView {
 
     init(title: String) { self.title = title }
 
+    func applicationWillFinishLaunching(_ notification: Notification) { HostAppleEvents.shared.install() }
     func application(_ application: NSApplication, open urls: [URL]) { launchEvents.open(urls) }
     func applicationDidBecomeActive(_ notification: Notification) { ClipboardSync.shared.didBecomeActive() }
     func applicationWillResignActive(_ notification: Notification) {

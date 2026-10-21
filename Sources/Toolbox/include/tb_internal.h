@@ -580,6 +580,30 @@ gaddr cfm_prepare_container(gaddr pef);
 /* A transition vector whose code runs fn natively. */
 gaddr cfm_native_tvector(void (*fn)(struct ppc_cpu *), const char *name);
 
+/* The Apple Event Manager (aem.c) and the Object Support Library (osl.c). */
+/* Call a handler's universal procedure pointer (either ISA, or a bare
+ * transition vector from PowerPC code). */
+uint32_t aem_call_proc(gaddr upp, uint32_t procinfo, const uint32_t *args, int n);
+/* The application's special handler for key, else the system's; 0 if none. */
+gaddr aem_special_handler(uint32_t key);
+/* A descriptor's data flattened for another process (malloc'd), and such
+ * an event queued for the application, its reply to `reply`. */
+uint8_t *aem_flatten(gaddr desc, uint32_t *len_out);
+void aem_queue_flat(const uint8_t *data, uint32_t len, machine_ae_reply_fn reply, void *ctx);
+/* An event from the host, flattened likewise, without guest memory. */
+uint8_t *aem_build_flat(uint32_t cls, uint32_t id, const char *const *files, int nfiles, const char *text,
+                        bool reply, uint32_t *len_out);
+/* Another Blue Box process (aem_remote.c): a flattened event to the one
+ * an address names ('sign', 'kpid' or 'targ'); with kAEWaitReply, its
+ * reply.  procNotFound when none listens. */
+int16_t aem_remote_send(const uint8_t *addr, uint32_t addr_type, uint32_t addr_len, const uint8_t *event,
+                        uint32_t len, int mode, int32_t timeout, uint8_t **reply, uint32_t *reply_len);
+/* A flattened event to process pid (with signature sig), waiting at most
+ * timeout_ms (negative: for ever) for its reply; the handler's result. */
+int16_t machine_ae_send(int pid, uint32_t sig, const uint8_t *event, uint32_t len, int mode, int timeout_ms,
+                        uint8_t **reply, uint32_t *reply_len);
+void osl_reset(void);
+
 /* Mixed Mode (mixedmode.c). */
 void mixedmode_init(void);
 bool mm_is_descriptor(gaddr p);

@@ -1,9 +1,12 @@
 /*
- * Process Manager: one process per host process, so the app is the only
- * (and front) process.  Temporary memory comes from the growable
- * application heap.
+ * Process Manager: one process per host process, so the app is the front
+ * process.  Other runs that take Apple Events follow it in the process
+ * list, as serial numbers {1, their process ID}, so programs can find each
+ * other by signature and send events.  Temporary memory comes from the
+ * growable application heap.
  */
 #include <stdlib.h>
+#include <unistd.h>
 #include "machine.h"
 #include "tb_internal.h"
 
@@ -29,10 +32,38 @@ int16_t tb_GetCurrentProcess(gaddr psn)
     return noErr;
 }
 
+/* Another run, by its serial number: its listing entry. */
+static bool other_run(gaddr psn, machine_ae_process *found)
+{
+    if (rd32(psn) != 1)
+        return false;
+    machine_ae_process procs[64];
+    int n = machine_ae_processes(procs, 64);
+    for (int i = 0; i < n; i++)
+        if ((uint32_t)procs[i].pid == rd32(psn + 4)) {
+            *found = procs[i];
+            return true;
+        }
+    return false;
+}
+
 int16_t tb_GetNextProcess(gaddr psn)
 {
     if (rd32(psn) == 0 && rd32(psn + 4) == 0) { /* kNoProcess: the first one */
         put_us(psn);
+        return noErr;
+    }
+    /* Then the other runs, in process ID order. */
+    uint32_t after = is_us(psn) ? 0 : rd32(psn) == 1 ? rd32(psn + 4) : UINT32_MAX;
+    machine_ae_process procs[64];
+    int n = machine_ae_processes(procs, 64);
+    uint32_t next = UINT32_MAX;
+    for (int i = 0; i < n; i++)
+        if (procs[i].pid != getpid() && (uint32_t)procs[i].pid > after && (uint32_t)procs[i].pid < next)
+            next = (uint32_t)procs[i].pid;
+    if (next != UINT32_MAX) {
+        wr32(psn, 1);
+        wr32(psn + 4, next);
         return noErr;
     }
     wr32(psn, 0);
@@ -47,6 +78,28 @@ extern uint32_t g_app_creator;
 
 int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
 {
+    machine_ae_process other;
+    if (other_run(psn, &other)) {
+        /* What the listing says: its signature (its name stays empty). */
+        gaddr name = ProcessInfoRec_processName(info);
+        if (name)
+            wr8(name, 0);
+        gmemcpy(info + ProcessInfoRec_processNumber_off, psn, 8);
+        ProcessInfoRec_set_processType(info, fourcc("APPL"));
+        ProcessInfoRec_set_processSignature(info, (int32_t)other.signature);
+        ProcessInfoRec_set_processMode(info, 0x0040); /* takes high-level events */
+        ProcessInfoRec_set_processLocation(info, 0);
+        ProcessInfoRec_set_processSize(info, 0);
+        ProcessInfoRec_set_processFreeMem(info, 0);
+        wr32(info + ProcessInfoRec_processLauncher_off, 0);
+        wr32(info + ProcessInfoRec_processLauncher_off + 4, 0);
+        ProcessInfoRec_set_processLaunchDate(info, 0);
+        ProcessInfoRec_set_processActiveTime(info, 0);
+        gaddr spec = ProcessInfoRec_processAppSpec(info);
+        if (spec)
+            gmemset(spec, 0, FSSpec_SIZEOF);
+        return noErr;
+    }
     if (!is_us(psn))
         return procNotFound;
     gaddr name = ProcessInfoRec_processName(info);

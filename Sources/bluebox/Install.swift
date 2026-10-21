@@ -52,6 +52,33 @@ private func versionString(_ path: String) -> String? {
 /// Why the application may ask for the microphone (the Sound Input Manager).
 private let microphoneUsage = "Classic programs record sound through the microphone."
 
+/// A scripting dictionary for the bundle, so AppleScript can say
+/// `tell application "SimpleText" to do script "..."`: Do Script goes to
+/// the classic program (HostAppleEvents), as do the core events.
+let scriptingDefinitionName = "BlueBox.sdef"
+private let scriptingDefinition = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+    <dictionary title="Classic Application">
+      <suite name="Classic Suite" code="bbox" description="Apple Events for the classic application.">
+        <command name="do script" code="miscdosc" description="Send the classic application a script to run.">
+          <direct-parameter type="text" description="The script, in the application's own language."/>
+          <result type="text" description="The application's result."/>
+        </command>
+      </suite>
+    </dictionary>
+
+    """
+
+/// The keys and the file that make a bundle scriptable.
+func addScripting(_ info: inout [String: Any], resources: String) throws {
+    info["NSAppleScriptEnabled"] = true
+    info["OSAScriptingDefinition"] = scriptingDefinitionName
+    let url = URL(fileURLWithPath: resources + "/" + scriptingDefinitionName)
+    let data = Data(scriptingDefinition.utf8)
+    if (try? Data(contentsOf: url)) != data { try data.write(to: url) }
+}
+
 private func infoPlist(app: String, name: String, executable: String, bundle: FinderBundle, creator: UInt32,
                        hasIcon: Bool) -> [String: Any] {
     let slug = name.lowercased().map { $0.isLetter || $0.isNumber ? String($0) : "-" }.joined()
@@ -172,8 +199,9 @@ func installCommand(_ args: [String]) {
         try Data(launcherScript(classic: selfPath, app: app).utf8).write(to: URL(fileURLWithPath: launcher))
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: launcher)
         if let icns { try icns.write(to: URL(fileURLWithPath: bundlePath + "/Contents/Resources/AppIcon.icns")) }
-        let info = infoPlist(app: app, name: name, executable: executable, bundle: finder, creator: creator,
+        var info = infoPlist(app: app, name: name, executable: executable, bundle: finder, creator: creator,
                              hasIcon: icns != nil)
+        try addScripting(&info, resources: bundlePath + "/Contents/Resources")
         let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
         try data.write(to: URL(fileURLWithPath: bundlePath + "/Contents/Info.plist"))
         try Data("APPL\(info["CFBundleSignature"] as? String ?? "????")".utf8)
@@ -245,6 +273,7 @@ func reexecInNamedBundle(app: String) {
             try? fm.removeItem(atPath: exe)
             try fm.createSymbolicLink(atPath: exe, withDestinationPath: me)
         }
+        try addScripting(&info, resources: bundle + "/Contents/Resources")
         let plist = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
         let plistURL = URL(fileURLWithPath: bundle + "/Contents/Info.plist")
         if (try? Data(contentsOf: plistURL)) != plist { try plist.write(to: plistURL) }

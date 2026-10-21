@@ -12783,6 +12783,63 @@ static void ppcglue__AE_hdlr_insert(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_AEObjectInit(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AEObjectInit();
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateObjSpecifier(ppc_cpu *c)
+{
+    int32_t a_desiredClass = (int32_t)c->gpr[3];
+    gaddr a_theContainer = (gaddr)c->gpr[4];
+    int32_t a_keyForm = (int32_t)c->gpr[5];
+    gaddr a_keyData = (gaddr)c->gpr[6];
+    int8_t a_disposeInputs = (int8_t)c->gpr[7];
+    gaddr a_objSpecifier = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateObjSpecifier(a_desiredClass, a_theContainer, a_keyForm, a_keyData, a_disposeInputs, a_objSpecifier);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateOffsetDescriptor(ppc_cpu *c)
+{
+    int32_t a_theOffset = (int32_t)c->gpr[3];
+    gaddr a_theDescriptor = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateOffsetDescriptor(a_theOffset, a_theDescriptor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateCompDescriptor(ppc_cpu *c)
+{
+    int32_t a_comparisonOperator = (int32_t)c->gpr[3];
+    gaddr a_operand1 = (gaddr)c->gpr[4];
+    gaddr a_operand2 = (gaddr)c->gpr[5];
+    int8_t a_disposeInputs = (int8_t)c->gpr[6];
+    gaddr a_theDescriptor = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateCompDescriptor(a_comparisonOperator, a_operand1, a_operand2, a_disposeInputs, a_theDescriptor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateLogicalDescriptor(ppc_cpu *c)
+{
+    gaddr a_theLogicalTerms = (gaddr)c->gpr[3];
+    int32_t a_theLogicOperator = (int32_t)c->gpr[4];
+    int8_t a_disposeInputs = (int8_t)c->gpr[5];
+    gaddr a_theDescriptor = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateLogicalDescriptor(a_theLogicalTerms, a_theLogicOperator, a_disposeInputs, a_theDescriptor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateRangeDescriptor(ppc_cpu *c)
+{
+    gaddr a_rangeStart = (gaddr)c->gpr[3];
+    gaddr a_rangeStop = (gaddr)c->gpr[4];
+    int8_t a_disposeInputs = (int8_t)c->gpr[5];
+    gaddr a_theDescriptor = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateRangeDescriptor(a_rangeStart, a_rangeStop, a_disposeInputs, a_theDescriptor);
+    c->pc = c->lr;
+}
+
 static void ppcglue_CreateThreadPool(ppc_cpu *c)
 {
     int32_t a_threadStyle = (int32_t)c->gpr[3];
@@ -26367,6 +26424,7 @@ const ppc_export ppc_exports[] = {
     {"AEInstallSpecialHandler", ppcglue_AEInstallSpecialHandler},
     {"AEInteractWithUser", ppcglue_AEInteractWithUser},
     {"AEManagerInfo", ppcglue_AEManagerInfo},
+    {"AEObjectInit", ppcglue_AEObjectInit},
     {"AEProcessAppleEvent", ppcglue_AEProcessAppleEvent},
     {"AEPutArray", ppcglue_AEPutArray},
     {"AEPutAttributeDesc", ppcglue_AEPutAttributeDesc},
@@ -26598,11 +26656,16 @@ const ppc_export ppc_exports[] = {
     {"CountTypes", ppcglue_CountTypes},
     {"CountUserDataType", ppctrap_CountUserDataType},
     {"CountVoices", ppcglue_CountVoices},
+    {"CreateCompDescriptor", ppcglue_CreateCompDescriptor},
     {"CreateEditionContainerFile", ppctrap_CreateEditionContainerFile},
+    {"CreateLogicalDescriptor", ppcglue_CreateLogicalDescriptor},
     {"CreateMovieControl", ppctrap_CreateMovieControl},
     {"CreateMovieFile", ppctrap_CreateMovieFile},
     {"CreateMovieStorage", ppctrap_CreateMovieStorage},
     {"CreateNewWindow", ppcglue_CreateNewWindow},
+    {"CreateObjSpecifier", ppcglue_CreateObjSpecifier},
+    {"CreateOffsetDescriptor", ppcglue_CreateOffsetDescriptor},
+    {"CreateRangeDescriptor", ppcglue_CreateRangeDescriptor},
     {"CreateResFile", ppcglue_CreateResFile},
     {"CreateRootControl", ppcglue_CreateRootControl},
     {"CreateShortcutMovieFile", ppctrap_CreateShortcutMovieFile},

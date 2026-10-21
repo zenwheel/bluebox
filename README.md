@@ -137,6 +137,23 @@ Some useful options for `run`:
 `bluebox set <app> depth 8` (or `cpu`, `scale`) remembers a setting for one
 application. `bluebox --help` lists everything.
 
+### Apple Events
+
+A running application takes Apple Events as it would from the Finder or
+another program. Documents opened on its Dock icon or bundle arrive as
+Open Documents; `bluebox send` sends one from the command line (to the only
+application running, or the one `--to` names by process ID or creator):
+
+```sh
+bluebox send odoc letter.txt
+bluebox send dosc "some script"     # Do Script, for applications that take scripts
+bluebox send quit
+```
+
+Their bundles are scriptable too, so AppleScript can do the same:
+`tell application "SimpleText" to do script "..."`, `open`, `print` and
+`quit`. Running applications also reach each other's Apple Events.
+
 ### Networks, file servers and serial ports
 
 These can also be set per application, or for every application, in the

@@ -107,6 +107,11 @@ func usage() -> Never {
                      option, control or command, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      in a window, wait:N is N/1000 ms and snap:F.png saves the screen
+      bluebox send [--to PID|SIGNATURE] [--no-wait] odoc|pdoc FILE... | oapp | quit | dosc TEXT | CLASSID [TEXT]
+          Send an Apple Event to a running classic application (the only one, or the
+          one --to names by process ID or creator): open or print documents, open,
+          quit, or Do Script with TEXT; or any class and ID (eight characters, e.g.
+          miscdosc) with text as the direct object or none.  Prints the reply's result.
       bluebox import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
           files to the library as AppleDouble.  Archives need unar (The Unarchiver).
@@ -608,6 +613,8 @@ func runCommand(_ args: [String]) {
         guard machine_mount_appleshare(spec, &aerr, aerr.count) else { fail(str(aerr)) }
     }
     guard machine_launch(app, &err, err.count) else { fail(str(err)) }
+    // Other programs (other runs, bluebox send) can send it Apple Events.
+    _ = machine_listen_for_apple_events()
     // As the Finder does: open the documents, or just open the application.
     // An interactive host waits, since the Finder may still hand it documents.
     if !documents.isEmpty {
@@ -1106,6 +1113,72 @@ func redrawCheckReport(_ out: String) {
     after.withUnsafeBytes { _ = machine_write_png(base + "-after.png", $0.baseAddress!.assumingMemoryBound(to: UInt8.self), w, h) }
 }
 
+// MARK: - send
+
+/// bluebox send: an Apple Event to a running classic application, as
+/// another program on the Mac would send it, and its result.
+func sendCommand(_ args: [String]) {
+    var to: String?
+    var wait = true
+    var words: [String] = []
+    var i = 0
+    while i < args.count {
+        switch args[i] {
+        case "--to":
+            i += 1
+            guard i < args.count else { usage() }
+            to = args[i]
+        case "--no-wait": wait = false
+        default: words.append(args[i])
+        }
+        i += 1
+    }
+    guard let what = words.first else { usage() }
+    let operands = Array(words.dropFirst())
+    let event: (String, String)
+    switch what {
+    case "odoc", "pdoc", "oapp", "quit": event = ("aevt", what)
+    case "dosc": event = ("misc", "dosc")
+    default:
+        guard what.utf8.count == 8 else { usage() }
+        event = (String(what.prefix(4)), String(what.suffix(4)))
+    }
+    let files = what == "odoc" || what == "pdoc" ? operands.map { URL(fileURLWithPath: $0).standardizedFileURL.path } : []
+    let text = files.isEmpty && !operands.isEmpty ? operands.joined(separator: " ") : nil
+    if (what == "odoc" || what == "pdoc") && files.isEmpty { usage() }
+
+    var procs = [machine_ae_process](repeating: machine_ae_process(), count: 64)
+    let running = procs.withUnsafeMutableBufferPointer { Array($0.prefix(Int(machine_ae_processes($0.baseAddress, 64)))) }
+    let targets = running.filter { p in
+        guard let to else { return true }
+        if let pid = Int32(to) { return p.pid == pid }
+        return to.utf8.count == 4 && p.signature == fourCCValue(to)
+    }
+    guard targets.count == 1, let target = targets.first else {
+        if targets.isEmpty { fail(to.map { "no application \($0) is running" } ?? "no classic application is running") }
+        fail("several are running; pick one with --to: "
+             + targets.map { "\($0.pid) (\(fourCC($0.signature)))" }.joined(separator: ", "))
+    }
+    var result = [CChar](repeating: 0, count: 65536)
+    var errn: Int32 = 0
+    let err = withCStringArray(files) { paths in
+        machine_ae_send_to(target.pid, target.signature, fourCCValue(event.0), fourCCValue(event.1), paths,
+                           Int32(files.count), text, wait, &result, result.count, &errn)
+    }
+    let output = str(result)
+    if err != 0 || errn != 0 {
+        fail("error \(err != 0 ? Int32(err) : errn)" + (output.isEmpty ? "" : ": \(output)"))
+    }
+    if !output.isEmpty { print(output) }
+}
+
+/// Swift strings as a const char *const * array for the length of body.
+func withCStringArray<R>(_ strings: [String], _ body: (UnsafePointer<UnsafePointer<CChar>?>?) -> R) -> R {
+    let copies = strings.map { strdup($0) }
+    defer { copies.forEach { free($0) } }
+    return copies.map { UnsafePointer($0) }.withUnsafeBufferPointer { body($0.baseAddress) }
+}
+
 // MARK: - Main
 
 migrateDataFolder()
@@ -1120,6 +1193,7 @@ let rest = Array(argv.dropFirst())
 switch command {
 case "run": runCommand(rest)
 case "import": importCommand(rest)
+case "send": sendCommand(rest)
 case "apps": appsCommand(rest)
 #if canImport(AppKit)
 case "shell": shellCommand(rest)
