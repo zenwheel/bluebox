@@ -650,7 +650,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Drag Manager ↔ host drag and drop:** files and text in and out of bluebox apps. Into them: done (2026-10-20, `machine_host_drag`). Out to the host: still to do.
 - **Open Transport** (it comes after M8 because its API is delivered as Code Fragment Manager shared libraries, CFM-68K on 68k Macs):
   - endpoints, providers and notifiers; TCP, UDP and DNS on host sockets
-  - AppleTalk through OT (ADSP, ATP, DDP, NBP) on the M5 AppleTalk stack, so OT-era games and apps share the same network: done (2026-10-20), with AppleTalk services and OTATalkSharedLib's NBP helpers. Not yet: ADSP's attention messages received (sending works), ADSP's EOM option, PAP and ASP endpoints.
+  - AppleTalk through OT (ADSP, ATP, DDP, NBP) on the M5 AppleTalk stack, so OT-era games and apps share the same network: done (2026-10-20), with AppleTalk services and OTATalkSharedLib's NBP helpers. Since the same day: ADSP's attention messages both ways (T_EXDATA) and its EOM option (`adsp(EnableEOM=1)`), and pap and asp endpoints (ot_session.c), both ends of each, on host ATP: PAP's OpenConn, SendData with flow quanta, EOF as orderly release, tickles and CloseConn; ASP's OpenSess, commands as OTSndRequest/OTRcvReply and OTRcvRequest/OTSndReply, attentions, GetStatus and CloseSess (ASP's Write is not done). Data given as OTData chains is taken by every send.
   - the OT-era Gestalt selectors; apps that use both OT and MacTCP glue keep working
 - **Apple Events:** a broader set, plus a host-side "do script" hook.
 - **Corpus expansion:** office, graphics and internet apps, with a quirks database.

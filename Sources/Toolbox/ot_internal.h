@@ -49,10 +49,11 @@ enum { T_MORE = 0x0001, T_EXPEDITED = 0x0002, T_ACKNOWLEDGED = 0x0004, T_TIMEDOU
 
 #define MAX_PROVIDERS 64
 
-typedef enum { P_TCP, P_UDP, P_INET_SERVICES, P_DDP, P_ATP, P_ADSP, P_AT_SERVICES, P_NBP_MAPPER } provider_kind;
+typedef enum { P_TCP, P_UDP, P_INET_SERVICES, P_DDP, P_ATP, P_ADSP, P_AT_SERVICES, P_NBP_MAPPER, P_PAP, P_ASP } provider_kind;
 #define OT_ATALK(p) ((p)->kind >= P_DDP)
 
-struct ot_atalk; /* ot_appletalk.c's own state */
+struct ot_atalk;   /* ot_appletalk.c's own state */
+struct ot_session; /* and ot_session.c's, for PAP and ASP */
 
 typedef struct {
     bool used;
@@ -73,6 +74,7 @@ typedef struct {
     bool disconnected;   /* reset or refused: T_DISCONNECT until OTRcvDisconnect */
     int disc_reason;
     struct ot_atalk *at;
+    struct ot_session *ss;
 } provider;
 
 extern provider ot_providers[MAX_PROVIDERS];
@@ -120,5 +122,34 @@ void ota_GetProtAddress(ppc_cpu *c, provider *p);
 void ota_SndUData(ppc_cpu *c, provider *p);
 void ota_RcvUData(ppc_cpu *c, provider *p);
 void ota_ResolveAddress(ppc_cpu *c, provider *p);
+/* For ot_session.c: an address (DDP, or an NBP name looked up), a DDP
+ * address into a TNetbuf, the endpoint's socket, and an endpoint bound
+ * to any socket (OTAccept's worker). */
+bool ota_address(provider *p, gaddr buf, uint32_t len, uint8_t *node, uint8_t *skt);
+void ota_netbuf_ddp(gaddr nb, uint8_t node, uint8_t skt);
+uint8_t ota_socket(provider *p);
+int32_t ota_bind_any(provider *p);
+
+/* ot_session.c: pap and asp endpoints */
+int32_t ots_open(provider *p);
+void ots_close(provider *p);
+uint8_t ots_bind(provider *p, int qlen);
+void ots_unbind(provider *p, uint8_t skt);
+void ots_info(gaddr info, provider_kind kind);
+void ots_poll(provider *p);
+void ots_Connect(ppc_cpu *c, provider *p);
+void ots_RcvConnect(ppc_cpu *c, provider *p);
+void ots_Listen(ppc_cpu *c, provider *p);
+void ots_Accept(ppc_cpu *c, provider *p, provider *w);
+void ots_Snd(ppc_cpu *c, provider *p);
+void ots_Rcv(ppc_cpu *c, provider *p);
+void ots_Look(ppc_cpu *c, provider *p);
+void ots_CountDataBytes(ppc_cpu *c, provider *p);
+void ots_SndOrderlyDisconnect(ppc_cpu *c, provider *p);
+void ots_RcvOrderlyDisconnect(ppc_cpu *c, provider *p);
+void ots_SndDisconnect(ppc_cpu *c, provider *p);
+void ots_RcvDisconnect(ppc_cpu *c, provider *p);
+void ots_SndURequest(ppc_cpu *c, provider *p);
+void ots_RcvUReply(ppc_cpu *c, provider *p);
 
 #endif

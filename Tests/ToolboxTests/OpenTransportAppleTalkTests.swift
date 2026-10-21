@@ -337,6 +337,203 @@ extension BlueBox {
             for ep in [l2, w2, c2] { #expect(ot("OTCloseProvider", ep) == 0) }
         }
 
+        /// An NBP address ("name:type@zone") in a fresh buffer: its length.
+        func nbpAddress(_ name: String) -> (UInt32, UInt32) {
+            let a = tb_NewPtr(120, false, true)
+            return (a, ot("OTInitNBPAddress", a, cstr(name)))
+        }
+
+        /// A TCall (or TBind) at p for an address: addr's netbuf.
+        func call(to addr: (UInt32, UInt32)) -> UInt32 {
+            let c = tb_NewPtr(40, false, true)
+            wr32(c + 0, addr.1); wr32(c + 4, addr.1); wr32(c + 8, addr.0)
+            return c
+        }
+
+        /// A listener bound with an NBP name and a queue.
+        func listen(_ config: String, as name: String) -> UInt32 {
+            let ep = open(config)
+            let req = call(to: nbpAddress(name)), ret = tb_NewPtr(16, false, true)
+            wr32(req + 12, 1)
+            netbuf(ret, max: 8)
+            #expect(ot("OTBind", ep, req, ret) == 0)
+            return ep
+        }
+
+        /// What an atp endpoint hears (the request's data, its user bytes
+        /// first), from the TUnitRequest at got.
+        func hear(_ ep: UInt32, _ got: UInt32) -> [UInt8] {
+            netbuf(got, max: 8)
+            netbuf(got + 24, max: 600)
+            var r = UInt32(0)
+            pump { r = ot("OTRcvURequest", ep, got, 0); return r == 0 }
+            #expect(r == 0)
+            return (0..<Int(rd32(got + 28))).map { rd8(rd32(got + 32) + UInt32($0)) }
+        }
+
+        /// PAP's packets as Inside AppleTalk has them: OpenConn to the SLS
+        /// with our responding socket and flow quantum, and after the
+        /// reply, SendData (sequence 1) to the printer's responding socket.
+        @Test func papWire() {
+            start()
+            let printer = open("atp"), pap = open("pap")
+            let sls = bind(printer)
+            let rs = bind(pap)
+            let c = tb_NewPtr(40, false, true)
+            wr32(c + 0, 8); wr32(c + 4, 8); wr32(c + 8, ddp(sls))
+            #expect(err(ot("OTConnect", pap, c, 0)) == -3162)
+            let got = tb_NewPtr(40, false, true)
+            let open = hear(printer, got)
+            #expect(open.count == 8 && open[1] == 1 && open[2] == 0 && open[4] == rs && open[5] == 8)
+            let connID = open[0]
+
+            let rep = tb_NewPtr(28, false, true)
+            let body = tb_NewPtr(16, false, true)
+            for (i, b) in [connID, 2, 0, 0, sls, 8, 0, 0, 0].enumerated() { wr8(body + UInt32(i), b) }
+            wr32(rep + 12, 16); wr32(rep + 16, 9); wr32(rep + 20, body)
+            wr32(rep + 24, rd32(got + 36))
+            #expect(ot("OTSndUReply", printer, rep, 0) == 0)
+            pump { ot("OTRcvConnect", pap, 0) == 0 }
+            #expect(ot("OTGetEndpointState", pap) == 5)
+            let send = hear(printer, got)
+            #expect(send.count == 4 && send == [connID, 3, 0, 1])
+            #expect(rd8(rd32(got + 8) + 5) == rs)
+            #expect(ot("OTCloseProvider", pap) == 0 && ot("OTCloseProvider", printer) == 0)
+        }
+
+        /// PAP both ends: a job found by its NBP name, more than a flow
+        /// quantum of it written, the end of it (EOF) as T_ORDREL, the
+        /// printer's answer back, and both ends idle again; then a
+        /// connection refused.
+        @Test func papJob() {
+            start()
+            let listener = listen("pap", as: "Printer:LaserWriter@*")
+            let worker = open("pap"), client = open("pap")
+            _ = bind(client)
+            #expect(err(ot("OTConnect", client, call(to: nbpAddress("Printer:LaserWriter@*")), 0)) == -3162)
+            let heard = tb_NewPtr(40, false, true)
+            netbuf(heard, max: 8)
+            pump { ot("OTListen", listener, heard) == 0 }
+            #expect(ot("OTAccept", listener, worker, heard) == 0)
+            #expect(ot("OTGetEndpointState", worker) == 5)
+            pump { ot("OTRcvConnect", client, 0) == 0 }
+            #expect(ot("OTGetEndpointState", client) == 5)
+
+            let job = (0..<5000).map { UInt8(truncatingIfNeeded: $0 &* 7) }
+            let src = tb_NewPtr(5000, false, true)
+            for (i, b) in job.enumerated() { wr8(src + UInt32(i), b) }
+            #expect(ot("OTSnd", client, src, 5000, 0) == 5000)
+            #expect(ot("OTSndOrderlyDisconnect", client) == 0)
+            #expect(ot("OTGetEndpointState", client) == 6) // T_OUTREL
+
+            let buf = tb_NewPtr(8192, false, true), flags = tb_NewPtr(4, false, true)
+            var got = [UInt8]()
+            pump {
+                let n = Int(Int32(bitPattern: ot("OTRcv", worker, buf, 8192, flags)))
+                let more = (0..<max(n, 0)).map { rd8(buf + UInt32($0)) }
+                got += more
+                return got.count >= 5000 && ot("OTLook", worker) == 0x0080 // T_ORDREL
+            }
+            #expect(got.count == job.count)
+            #expect(got.count != job.count || got == job)
+            #expect(ot("OTRcvOrderlyDisconnect", worker) == 0)
+            #expect(ot("OTSnd", worker, cstr("%%[ done ]%%"), 12, 0) == 12)
+            #expect(ot("OTSndOrderlyDisconnect", worker) == 0)
+            #expect(ot("OTGetEndpointState", worker) == 2)
+
+            pump { ot("OTLook", client) == 0x0004 }
+            #expect(ot("OTRcv", client, buf, 64, flags) == 12 && bytes(buf, 12) == "%%[ done ]%%")
+            pump { ot("OTLook", client) == 0x0080 }
+            #expect(ot("OTRcvOrderlyDisconnect", client) == 0)
+            #expect(ot("OTGetEndpointState", client) == 2)
+
+            // A second connection, refused: T_DISCONNECT for the client.
+            #expect(err(ot("OTConnect", client, call(to: nbpAddress("Printer:LaserWriter@*")), 0)) == -3162)
+            pump { ot("OTListen", listener, heard) == 0 }
+            #expect(ot("OTSndDisconnect", listener, heard) == 0)
+            pump { ot("OTLook", client) == 0x0010 }
+            let discon = tb_NewPtr(20, false, true)
+            #expect(ot("OTRcvDisconnect", client, discon) == 0 && err(rd32(discon + 12)) == -3260) // ECONNREFUSED
+            for ep in [listener, worker, client] { #expect(ot("OTCloseProvider", ep) == 0) }
+        }
+
+        /// ASP's OpenSess as asp.c (the AppleShare client) sends it: the
+        /// function, the workstation's session socket, version 1.0.
+        @Test func aspWire() {
+            start()
+            let server = open("atp"), asp = open("asp")
+            let sls = bind(server)
+            let wss = bind(asp)
+            let c = tb_NewPtr(40, false, true)
+            wr32(c + 0, 8); wr32(c + 4, 8); wr32(c + 8, ddp(sls))
+            #expect(err(ot("OTConnect", asp, c, 0)) == -3162)
+            let open = hear(server, tb_NewPtr(40, false, true))
+            #expect(open == [4, wss, 0x01, 0x00])
+            #expect(ot("OTCloseProvider", asp) == 0 && ot("OTCloseProvider", server) == 0)
+        }
+
+        /// ASP both ends: the status, a session, a command and its reply
+        /// (the result in the first four bytes), an attention from the
+        /// server, and the workstation closing the session.
+        @Test func aspSession() {
+            start()
+            let listener = listen("asp", as: "Server:AFPServer@*")
+            let worker = open("asp"), client = open("asp")
+            _ = bind(client)
+
+            let sreq = call(to: nbpAddress("Server:AFPServer@*"))
+            #expect(ot("OTSndURequest", client, sreq, 0) == 0)
+            let status = tb_NewPtr(28, false, true), flags = tb_NewPtr(4, false, true)
+            netbuf(status + 12, max: 64)
+            var r = UInt32(0)
+            pump { r = ot("OTRcvUReply", client, status, flags); return r == 0 }
+            #expect(r == 0 && rd32(status + 24) == rd32(sreq + 36))
+
+            #expect(err(ot("OTConnect", client, call(to: nbpAddress("Server:AFPServer@*")), 0)) == -3162)
+            let heard = tb_NewPtr(40, false, true)
+            netbuf(heard, max: 8)
+            pump { ot("OTListen", listener, heard) == 0 }
+            #expect(ot("OTAccept", listener, worker, heard) == 0)
+            pump { ot("OTRcvConnect", client, 0) == 0 }
+            #expect(ot("OTGetEndpointState", client) == 5)
+
+            let req = tb_NewPtr(28, false, true)
+            netbuf(req, max: 16, text: "GetParms")
+            #expect(ot("OTSndRequest", client, req, 0) == 0)
+            let seq = rd32(req + 24)
+            let got = tb_NewPtr(28, false, true)
+            netbuf(got, max: 600)
+            pump { ot("OTLook", worker) == 0x0400 } // T_REQUEST
+            #expect(ot("OTRcvRequest", worker, got, flags) == 0)
+            #expect(bytes(rd32(got + 8), Int(rd32(got + 4))) == "GetParms")
+
+            let rep = tb_NewPtr(28, false, true)
+            let body = netbuf(rep, max: 16)
+            for (i, b) in Array("\u{0}\u{0}\u{0}\u{0}params".utf8).enumerated() { wr8(body + UInt32(i), b) }
+            wr32(rep + 4, 10)
+            wr32(rep + 24, rd32(got + 24))
+            #expect(ot("OTSndReply", worker, rep, 0) == 0)
+            let back = tb_NewPtr(28, false, true)
+            netbuf(back, max: 64)
+            pump { r = ot("OTRcvReply", client, back, flags); return r == 0 }
+            #expect(r == 0 && rd32(back + 24) == seq && rd32(back + 4) == 10)
+            #expect(rd32(rd32(back + 8)) == 0 && bytes(rd32(back + 8) + 4, 6) == "params")
+
+            let code = tb_NewPtr(2, false, true)
+            wr16(code, 0x8001)
+            #expect(ot("OTSnd", worker, code, 2, 0x0002) == 2) // an attention
+            pump { ot("OTLook", client) == 0x0008 }
+            let buf = tb_NewPtr(8, false, true)
+            #expect(ot("OTRcv", client, buf, 8, flags) == 2 && rd16(buf) == 0x8001 && rd32(flags) == 0x0002)
+
+            #expect(ot("OTSndDisconnect", client, 0) == 0)
+            #expect(ot("OTGetEndpointState", client) == 2)
+            pump { ot("OTLook", worker) == 0x0010 } // T_DISCONNECT
+            #expect(ot("OTRcvDisconnect", worker, 0) == 0)
+            #expect(ot("OTGetEndpointState", worker) == 2)
+            for ep in [listener, worker, client] { #expect(ot("OTCloseProvider", ep) == 0) }
+        }
+
         /// ATP: an exactly-once request, heard with its user bytes, and
         /// the reply back to the requester.
         @Test func atpTransaction() {

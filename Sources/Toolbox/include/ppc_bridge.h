@@ -53,6 +53,9 @@ void ot_unsupported(ppc_cpu *c); /* the rest of Open Transport: kOTNotSupportedE
 /* Open Transport's AppleTalk (ot_appletalk.c). */
 extern const ppc_export ota_exports[];
 extern const unsigned ota_export_count;
+/* Its PAP and ASP endpoints' transactions (ot_session.c). */
+extern const ppc_export ots_exports[];
+extern const unsigned ots_export_count;
 /* The Communications Toolbox (ctb.c); names of routines that are 68k only
  * are empty. */
 extern const ppc_export ctb_exports[];
