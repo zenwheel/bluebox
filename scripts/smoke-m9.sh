@@ -4,8 +4,8 @@
 # Appearance, Navigation Services, Window, Menu, Control and Dialog
 # libraries, Contextual Menus, Icon Services, Open Transport, the Text
 # Encoding Converter, the Sprockets).  Each one passes when it reaches its
-# event loop, run headless as PowerPC in a home of its own, with no import
-# missing.  Left out: Sigma Chess's endgame database generators, which
+# event loop within 2 billion instructions (some intros run long), headless
+# as PowerPC in a home of its own, with no import missing.  Left out: Sigma Chess's endgame database generators, which
 # compute until they are done and never wait for input, and Spot Box's
 # Yomavaders, a launcher for QuickTime Player.
 #
@@ -18,7 +18,7 @@ set -eu
 if [ "${1:-}" = --one ]; then
 	# One application: $2 the binary, $3 the work dir, $4 the path.
 	home=$(mktemp -d "$3/home.XXXXXX")
-	out=$(HOME="$home" timeout 900 "$2" run "$4" --ppc --headless --census --max 600000000 2>&1) || true
+	out=$(HOME="$home" timeout 1800 "$2" run "$4" --ppc --headless --census --max 2000000000 2>&1) || true
 	rm -rf "$home"
 	missing=$(printf '%s\n' "$out" | LC_ALL=C sed -n 's/^PowerPC imports missing: //p' | tail -n 1)
 	if printf '%s\n' "$out" | grep -q 'waiting for input' && [ -z "$missing" ]; then
