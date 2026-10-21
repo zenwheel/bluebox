@@ -12,7 +12,7 @@ import Toolbox
 /// Host points per Mac pixel: 1, 1.5 or 2 (--scale, or the app's setting).
 nonisolated(unsafe) var displayScale: CGFloat = 1
 
-final class ScreenView: NSView {
+final class ScreenView: NSView, MacScreenView {
     private var timer: Timer?
     private var rgba = [UInt32]()
 
@@ -34,11 +34,16 @@ final class ScreenView: NSView {
     }
 
     /// A drag's point on the Mac screen.
-    private func mac(_ info: NSDraggingInfo) -> (Int32, Int32) {
-        let p = convert(info.draggingLocation, from: nil)
+    private func mac(_ info: NSDraggingInfo) -> (Int32, Int32) { mac(convert(info.draggingLocation, from: nil)) }
+
+    private func mac(_ p: NSPoint) -> (Int32, Int32) {
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)
         return (Int32(p.x * CGFloat(w) / bounds.width), Int32(p.y * CGFloat(h) / bounds.height))
+    }
+
+    func macPoint(screen: NSPoint) -> (Int32, Int32) {
+        mac(convert(window?.convertPoint(fromScreen: screen) ?? screen, from: nil))
     }
 
     override init(frame: NSRect) {
@@ -48,6 +53,7 @@ final class ScreenView: NSView {
             MainActor.assumeIsolated {
                 self?.refreshIfChanged()
                 CursorSync.shared.tick()
+                DragOut.shared.tick()
                 if machine_halted() {
                     relaunchAtWantedDepth()
                     NSApp.terminate(nil)
@@ -108,9 +114,15 @@ final class ScreenView: NSView {
         machine_post_mouse(x, y, button)
     }
 
-    override func mouseDown(with event: NSEvent) { post(event, button: 1) }
+    override func mouseDown(with event: NSEvent) {
+        post(event, button: 1)
+        DragOut.shared.note(event, in: self)
+    }
     override func mouseUp(with event: NSEvent) { post(event, button: 0) }
-    override func mouseDragged(with event: NSEvent) { post(event, button: -1) }
+    override func mouseDragged(with event: NSEvent) {
+        post(event, button: -1)
+        DragOut.shared.note(event, in: self)
+    }
     override func mouseMoved(with event: NSEvent) { post(event, button: -1) }
 
     // MARK: Keyboard
@@ -208,7 +220,7 @@ func sendOpenDocuments(_ urls: [URL]) -> Bool {
 /// the window under the pointer (an 'hfs ' flavor per file, 'TEXT' for
 /// text); files a window doesn't take become an Open Documents event.
 @MainActor enum FileDrops {
-    static let types: [NSPasteboard.PasteboardType] = [.fileURL, .string]
+    static let types: [NSPasteboard.PasteboardType] = [.fileURL, .string, DragOut.marker]
 
     static func urls(_ info: NSDraggingInfo) -> [URL] {
         (info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
@@ -221,6 +233,7 @@ func sendOpenDocuments(_ urls: [URL]) -> Bool {
 
     /// The drag at Mac screen coordinates `at`.
     static func send(_ kind: Int32, _ info: NSDraggingInfo, at: (Int32, Int32)) -> NSDragOperation {
+        if DragOut.isOurs(info) { return DragOut.shared.over(kind, at: at) }
         let paths = urls(info).map(\.path), text = self.text(info)
         guard !paths.isEmpty || text != nil else { return [] }
         if kind == Int32(MACHINE_DRAG_ENTER) {
@@ -422,6 +435,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(view)
         NSApp.activate(ignoringOtherApps: true)
+        DragOut.shared.refresh = { [weak view] in view?.refreshIfChanged() }
 
         // Run the machine off the main thread.
         Thread.detachNewThread {
@@ -450,6 +464,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     installColorPicker()
     installPrintHandlers()
     ClipboardSync.shared.install()
+    DragOut.shared.install()
     ClassicAudio.shared.install()
     ClassicSoundInput.shared.install()
     ClassicMusic.shared.install()
