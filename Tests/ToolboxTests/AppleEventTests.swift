@@ -389,5 +389,193 @@ extension BlueBox {
     }
 }
 
+extension BlueBox {
+    /// The Object Support Library on a model of three windows ("One",
+    /// "Two", "Three"), each of words: tokens are 'WTok' (window index),
+    /// 'WPrp' (a window's name) and 'Word' (window and word index).
+    @Suite struct ObjectSupport {
+        static let names = ["One", "Two", "Three"]
+
+        func tokenDesc(_ type: String, _ values: [UInt32], _ out: UInt32) {
+            let p = guestBytes(values.flatMap { be32($0) })
+            _ = tb_AECreateDesc(code(type), p, Int32(values.count * 4), out)
+        }
+
+        func longs(_ d: UInt32) -> [UInt32] {
+            let b = descBytes(d)
+            return stride(from: 0, to: b.count, by: 4).map { i in b[i..<i + 4].reduce(0) { $0 << 8 | UInt32($1) } }
+        }
+
+        /// The model's accessors and callbacks; `log` records disposals.
+        func install(_ log: @escaping (String) -> Void) {
+            guestStack()
+            // FUNCTION (desiredClass, container, containerClass, form, selectionData, VAR value, refcon): OSErr
+            let windows = pascalProc([4, 4, 4, 4, 4, 4, 4]) { a in
+                let form = a[3], seld = a[4]
+                if form == fourCC("indx") {
+                    let i = rd32(rd32(rd32(seld + 4)))
+                    guard i >= 1 && i <= 3 else { return -1728 }
+                    self.tokenDesc("WTok", [i], a[5])
+                } else if form == fourCC("name") {
+                    guard let i = Self.names.firstIndex(of: descText(seld)) else { return -1728 }
+                    self.tokenDesc("WTok", [UInt32(i + 1)], a[5])
+                } else { return -1708 }
+                return 0
+            }
+            let property = pascalProc([4, 4, 4, 4, 4, 4, 4]) { a in
+                self.tokenDesc("WPrp", self.longs(a[1]), a[5])
+                return 0
+            }
+            let words = pascalProc([4, 4, 4, 4, 4, 4, 4]) { a in
+                let w = self.longs(a[1])[0], form = a[3], seld = a[4]
+                if form == fourCC("indx") {
+                    self.tokenDesc("Word", [w, rd32(rd32(rd32(seld + 4)))], a[5])
+                } else if form == fourCC("rang") {
+                    let star = newDesc(), stop = newDesc()
+                    _ = tb_AEGetParamDesc(seld, code("star"), code("****"), star)
+                    _ = tb_AEGetParamDesc(seld, code("stop"), code("****"), stop)
+                    log("range \(self.longs(star)) \(self.longs(stop))")
+                    self.tokenDesc("Word", [w, self.longs(star)[1], self.longs(stop)[1]], a[5])
+                } else { return -1708 }
+                return 0
+            }
+            _ = tb_AEInstallObjectAccessor(code("cwin"), code("null"), windows, 0, 0)
+            _ = tb_AEInstallObjectAccessor(code("prop"), code("WTok"), property, 0, 0)
+            _ = tb_AEInstallObjectAccessor(code("cwrd"), code("WTok"), words, 0, 1) // the system's table works too
+            // FUNCTION (comparisonOperator, obj1, obj2, VAR result: Boolean): OSErr
+            let compare = pascalProc([4, 4, 4, 4]) { a in
+                guard a[0] == fourCC("=   "), rd32(a[1]) == fourCC("WPrp") else { return -1708 }
+                wr8(a[3], Self.names[Int(self.longs(a[1])[0]) - 1] == descText(a[2]) ? 1 : 0)
+                return 0
+            }
+            // FUNCTION (desiredType, containerClass, container, VAR result: LONGINT): OSErr
+            let count = pascalProc([4, 4, 4, 4]) { a in wr32(a[3], 3); return 0 }
+            let dispose = pascalProc([4]) { a in
+                log("dispose \(String(decoding: be32(rd32(a[0])), as: UTF8.self))")
+                return -1708 // the default disposal does the rest
+            }
+            #expect(tb_AESetObjectCallbacks(compare, count, dispose, 0, 0, 0, 0) == 0)
+        }
+
+        func windowNamed(_ name: String) -> UInt32 {
+            let key = newDesc(), spec = newDesc()
+            _ = tb_AECreateDesc(code("TEXT"), guestBytes(Array(name.utf8)), Int32(name.utf8.count), key)
+            #expect(tb_CreateObjSpecifier(code("cwin"), 0, code("name"), key, 1, spec) == 0)
+            return spec
+        }
+
+        func word(_ n: UInt32, of container: UInt32) -> UInt32 {
+            let key = newDesc(), spec = newDesc()
+            #expect(tb_CreateOffsetDescriptor(Int32(n), key) == 0)
+            #expect(tb_CreateObjSpecifier(code("cwrd"), container, code("indx"), key, 0, spec) == 0)
+            return spec
+        }
+
+        @Test func nestedSpecifiers() {
+            launchTestApp()
+            var log: [String] = []
+            install { log.append($0) }
+            let spec = word(2, of: windowNamed("Two"))
+            #expect(descType(spec) == fourCC("obj "))
+            let token = newDesc()
+            #expect(tb_AEResolve(spec, 0, token) == 0)
+            #expect(descType(token) == fourCC("Word") && longs(token) == [2, 2])
+            #expect(log == ["dispose WTok"]) // the container's token, done with
+            log = []
+            #expect(tb_AEDisposeToken(token) == 0)
+            #expect(log == ["dispose Word"] && descType(token) == fourCC("null"))
+
+            // A null specifier is the application.
+            let null = newDesc()
+            _ = tb_AECreateDesc(code("null"), 0, 0, null)
+            #expect(tb_AEResolve(null, 0, token) == 0 && descType(token) == fourCC("null"))
+            // Nothing for the class: no accessor; nothing by that name: no such object.
+            let key = newDesc(), bad = newDesc()
+            _ = tb_CreateOffsetDescriptor(1, key)
+            _ = tb_CreateObjSpecifier(code("cpar"), 0, code("indx"), key, 0, bad)
+            #expect(tb_AEResolve(bad, 0, token) == -1723)
+            #expect(tb_AEResolve(windowNamed("Four"), 0, token) == -1728)
+        }
+
+        /// windows whose name = "Two" or name = "Three": the test runs here,
+        /// element by element.
+        @Test func whoseClauses() {
+            launchTestApp()
+            install { _ in }
+            func nameIs(_ s: String) -> UInt32 {
+                let pnam = newDesc(), exmn = newDesc(), prop = newDesc(), text = newDesc(), cmp = newDesc()
+                _ = tb_AECreateDesc(code("type"), guestLong(fourCC("pnam")), 4, pnam)
+                _ = tb_AECreateDesc(code("exmn"), 0, 0, exmn)
+                _ = tb_CreateObjSpecifier(code("prop"), exmn, code("prop"), pnam, 1, prop)
+                _ = tb_AECreateDesc(code("TEXT"), guestBytes(Array(s.utf8)), Int32(s.utf8.count), text)
+                #expect(tb_CreateCompDescriptor(code("=   "), prop, text, 1, cmp) == 0)
+                return cmp
+            }
+            let terms = newDesc(), test = newDesc(), spec = newDesc()
+            _ = tb_AECreateList(0, 0, 0, terms)
+            _ = tb_AEPutDesc(terms, 0, nameIs("Two"))
+            _ = tb_AEPutDesc(terms, 0, nameIs("Three"))
+            #expect(tb_CreateLogicalDescriptor(terms, code("OR  "), 1, test) == 0)
+            #expect(descType(test) == fourCC("logi"))
+            #expect(tb_CreateObjSpecifier(code("cwin"), 0, code("test"), test, 1, spec) == 0)
+            let token = newDesc()
+            #expect(tb_AEResolve(spec, 0, token) == 0)
+            #expect(descType(token) == fourCC("list"))
+            let count = tb_NewPtr(4, false, true)
+            _ = tb_AECountItems(token, count)
+            #expect(rd32(count) == 2)
+            let item = newDesc()
+            _ = tb_AEGetNthDesc(token, 1, code("****"), 0, item)
+            #expect(longs(item) == [2])
+
+            // Word 1 of each of them: the accessor applies to every token.
+            let words = word(1, of: spec), wtok = newDesc()
+            #expect(tb_AEResolve(words, 0, wtok) == 0)
+            _ = tb_AEGetNthDesc(wtok, 2, code("****"), 0, item)
+            #expect(descType(wtok) == fourCC("list") && longs(item) == [3, 1])
+        }
+
+        /// words 2 thru 3 of window 1: the bounds resolve in the window and
+        /// the accessor gets their tokens.
+        @Test func ranges() {
+            launchTestApp()
+            var log: [String] = []
+            install { log.append($0) }
+            let one = newDesc(), win = newDesc(), ccnt = newDesc(), range = newDesc(), spec = newDesc()
+            _ = tb_CreateOffsetDescriptor(1, one)
+            _ = tb_CreateObjSpecifier(code("cwin"), 0, code("indx"), one, 1, win)
+            _ = tb_AECreateDesc(code("ccnt"), 0, 0, ccnt)
+            let start = word(2, of: ccnt), stop = word(3, of: ccnt)
+            #expect(tb_CreateRangeDescriptor(start, stop, 1, range) == 0)
+            #expect(tb_CreateObjSpecifier(code("cwrd"), win, code("rang"), range, 1, spec) == 0)
+            let token = newDesc()
+            #expect(tb_AEResolve(spec, 0, token) == 0)
+            #expect(longs(token) == [1, 2, 3])
+            #expect(log.first == "range [1, 2] [1, 3]")
+        }
+
+        /// PowerPC programs import the library's calls from ObjectSupportLib.
+        @Test func powerPCExports() {
+            launchTestApp()
+            for name in ["AEObjectInit", "AEResolve", "AEInstallObjectAccessor", "AESetObjectCallbacks",
+                         "AEDisposeToken", "AECallObjectAccessor", "CreateObjSpecifier", "CreateOffsetDescriptor",
+                         "CreateCompDescriptor", "CreateLogicalDescriptor", "CreateRangeDescriptor"] {
+                #expect(cfm_export_fn(name) != nil, "\(name)")
+            }
+            let key = newDesc(), spec = newDesc()
+            _ = tb_CreateOffsetDescriptor(4, key)
+            g_ppc.gpr.3 = fourCC("cwin")
+            g_ppc.gpr.4 = 0
+            g_ppc.gpr.5 = fourCC("indx")
+            g_ppc.gpr.6 = key
+            g_ppc.gpr.7 = 0
+            g_ppc.gpr.8 = spec
+            cfm_export_fn("CreateObjSpecifier")!(&g_ppc)
+            #expect(g_ppc.gpr.3 == 0 && descType(spec) == fourCC("obj "))
+            #expect(tb_AEGetParamPtr(spec, code("seld"), code("long"), 0, key, 4, 0) == 0)
+        }
+    }
+}
+
 private nonisolated(unsafe) var launched: [String] = []
 private nonisolated(unsafe) var hostReplies: [([UInt8], Int16)] = []

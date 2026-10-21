@@ -1316,11 +1316,6 @@ CCALL(NASetNoteChannelSoundLocalization, 44, "44")
 CCALL(NAGetController, 45, "444")
 #undef CCALL
 
-/* ObjectSupportLib: the object model's resolution isn't there, so
- * accessors install and resolving answers errAEEventNotHandled. */
-static void os_notHandled(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1708); }
-static void os_accessorNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1723); }
-static void os_coercionFail(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-1700); }
 /* FindWordBreaks(text, len, offset, leadingEdge, breaks, offsets, script):
  * FindWord's, the script aside. */
 static void g_FindWordBreaks(ppc_cpu *c)
@@ -1424,7 +1419,6 @@ static void g_GetDefaultUser(ppc_cpu *c)
     RETURN(0);
 }
 
-static void os_AEResolve(ppc_cpu *c) { RETURN((uint32_t)(int32_t)tb_AEResolve(R(3), (int16_t)R(4), R(5))); }
 
 /* Internet Config: an instance with no preferences in it. */
 static void ic_ICStart(ppc_cpu *c)
@@ -2737,18 +2731,12 @@ const ppc_export lib_exports[] = {
     { "MIDIVersion", g_MIDIVersion }, { "InstallExceptionHandler", g_noErr }, { "FindServiceWindow", g_FindServiceWindow },
     { "GetVideoDefault", g_GetVideoDefault }, { "MPPOpen", g_portNotCf }, { "PPCInit", g_noErr },
     { "OpenXPP", g_portNotCf }, { "ATPLoad", g_portNotCf }, { "MPPClose", g_noErr },
-    /* ObjectSupportLib */
-    { "AEObjectInit", g_noErr }, { "AESetObjectCallbacks", g_noErr }, { "AEInstallObjectAccessor", g_noErr },
-    { "AERemoveObjectAccessor", g_noErr }, { "AEGetObjectAccessor", os_accessorNotFound },
-    { "AEResolve", os_AEResolve }, { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },
+    { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },
     { "GetSoundOutputInfo", g_GetSoundOutputInfo },
     { "GetScript", g_GetScript }, { "SetScript", g_SetScript }, { "GetEnvirons", g_GetEnvirons },
     { "SetEnvirons", g_SetEnvirons }, { "SetSoundOutputInfo", g_SetSoundOutputInfo },
     { "FindWordBreaks", g_FindWordBreaks }, { "UppercaseStripDiacritics", g_UppercaseStripDiacritics },
-    { "PBControlImmed", g_PBControlImmed }, { "AECallObjectAccessor", os_notHandled }, { "AEDisposeToken", g_noErr },
-    { "CreateObjSpecifier", os_coercionFail }, { "CreateOffsetDescriptor", os_coercionFail },
-    { "CreateCompDescriptor", os_coercionFail }, { "CreateLogicalDescriptor", os_coercionFail },
-    { "CreateRangeDescriptor", os_coercionFail },
+    { "PBControlImmed", g_PBControlImmed },
     /* Internet Config */
     { "ICStart", ic_ICStart }, { "ICStop", g_noErr }, { "ICFindConfigFile", g_noErr },
     { "ICFindUserConfigFile", g_noErr }, { "ICGeneralFindConfigFile", g_noErr }, { "ICChooseConfig", g_noErr },

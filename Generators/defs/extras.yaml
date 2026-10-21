@@ -520,6 +520,86 @@
     dispatcher: Pack8
     selector: 0x0830
 
+# The Object Support Library's calls that 68k programs link in (the
+# ObjectSupportLib.o library) and PowerPC programs import from
+# ObjectSupportLib.
+- function:
+    name: AEObjectInit
+    return: OSErr
+    cfm: ObjectSupportLib
+
+- function:
+    name: CreateObjSpecifier
+    return: OSErr
+    args:
+      - name: desiredClass
+        type: DescType
+      - name: theContainer
+        type: AEDesc*
+      - name: keyForm
+        type: DescType
+      - name: keyData
+        type: AEDesc*
+      - name: disposeInputs
+        type: Boolean
+      - name: objSpecifier
+        type: AEDesc*
+    cfm: ObjectSupportLib
+
+- function:
+    name: CreateOffsetDescriptor
+    return: OSErr
+    args:
+      - name: theOffset
+        type: int32_t
+      - name: theDescriptor
+        type: AEDesc*
+    cfm: ObjectSupportLib
+
+- function:
+    name: CreateCompDescriptor
+    return: OSErr
+    args:
+      - name: comparisonOperator
+        type: DescType
+      - name: operand1
+        type: AEDesc*
+      - name: operand2
+        type: AEDesc*
+      - name: disposeInputs
+        type: Boolean
+      - name: theDescriptor
+        type: AEDesc*
+    cfm: ObjectSupportLib
+
+- function:
+    name: CreateLogicalDescriptor
+    return: OSErr
+    args:
+      - name: theLogicalTerms
+        type: AEDesc*
+      - name: theLogicOperator
+        type: DescType
+      - name: disposeInputs
+        type: Boolean
+      - name: theDescriptor
+        type: AEDesc*
+    cfm: ObjectSupportLib
+
+- function:
+    name: CreateRangeDescriptor
+    return: OSErr
+    args:
+      - name: rangeStart
+        type: AEDesc*
+      - name: rangeStop
+        type: AEDesc*
+      - name: disposeInputs
+        type: Boolean
+      - name: theDescriptor
+        type: AEDesc*
+    cfm: ObjectSupportLib
+
 # The Thread Manager (Threads.h): an extension for System 7.1, built in
 # from 7.5. Selectors from the header's inline glue; YieldToAnyThread is
 # YieldToThread(kNoThreadID).
