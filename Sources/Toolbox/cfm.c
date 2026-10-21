@@ -452,6 +452,16 @@ static const char *const native_libraries[] = {
     "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
 };
 
+/* Apple libraries left unloaded even where an installer put them: the
+ * Text Encoding Converter (Internet Explorer 4's installer adds it) builds
+ * its tables at startup in a loop that doesn't end here, so programs are
+ * told it isn't installed, as they were without it, and do without. */
+static bool unloaded_library(const char *name)
+{
+    return !strcmp(name, "TextCommon") || !strcmp(name, "TextCommonGlobals") || !strcmp(name, "UnicodeConverter")
+        || !strcmp(name, "TextEncodingConverter");
+}
+
 static bool core_library(const char *name)
 {
     return !strcmp(name, "InterfaceLib") || !strcmp(name, "MathLib") || !strcmp(name, "StdCLib");
@@ -972,6 +982,10 @@ static int library_named(const char *name, char *err, size_t errlen)
         snprintf(f->name, sizeof f->name, "%s", name);
         f->native = true;
         return nfrags++;
+    }
+    if (unloaded_library(name)) {
+        snprintf(err, errlen, "library %s left out", name);
+        return -1;
     }
     if (frags[0].path[0] && file_has_library(frags[0].path, name))
         return load_from_file(frags[0].path, name, err, errlen);
