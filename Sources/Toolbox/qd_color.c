@@ -108,7 +108,8 @@ uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3])
     case 1: return (rgb[0] * 30u + rgb[1] * 59u + rgb[2] * 11u) / 100u < 0x8000u ? 1 : 0;
     case 16: return (uint32_t)((rgb[0] >> 11) << 10 | (rgb[1] >> 11) << 5 | (rgb[2] >> 11));
     case 32: return (uint32_t)((rgb[0] >> 8) << 16 | (rgb[1] >> 8) << 8 | (rgb[2] >> 8));
-    default: break;
+    case 2: case 4: case 8: break;
+    default: depth = 8; break; /* not a depth (a dead port's pixel map said 64): as 8 bits */
     }
     enum { CACHE = 4096 };
     static struct {
@@ -127,6 +128,8 @@ uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3])
         pal.ctab = ctab;
         pal.seed = seed;
         pal.n = px_mask(depth) + 1;
+        if (pal.n > 256)
+            pal.n = 256;
         for (uint32_t v = 0; v < pal.n; v++)
             qd_px_rgb(depth, ctab, v, pal.rgb[v]);
         memset(pal.hits, 0, sizeof pal.hits);

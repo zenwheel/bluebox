@@ -84,6 +84,9 @@ typedef struct {
  * each row reaches, and not past the end of its buffer. */
 static inline void pixdst_clamp(pixdst *d)
 {
+    /* A pixel size that isn't one (a dead port's pixel map) draws as 8 bits. */
+    if (d->depth != 1 && d->depth != 2 && d->depth != 4 && d->depth != 8 && d->depth != 16 && d->depth != 32)
+        d->depth = 8;
     int fit = (int)(d->row_bytes * 8u / (unsigned)(d->depth > 0 ? d->depth : 1));
     if (d->bounds.right - d->bounds.left > fit)
         d->bounds.right = (int16_t)(d->bounds.left + fit);
