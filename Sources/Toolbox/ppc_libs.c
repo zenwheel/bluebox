@@ -862,35 +862,18 @@ static void g_UpperString(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-/* Case in MacRoman: ASCII, and the accented letters' pairs. */
-static const uint8_t roman_pairs[][2] = {
-    { 0x80, 0x8A }, { 0x81, 0x8C }, { 0x82, 0x8D }, { 0x83, 0x8E }, { 0x84, 0x96 }, { 0x85, 0x9A },
-    { 0x86, 0x9F }, { 0xCB, 0x88 }, { 0xCC, 0x8B }, { 0xCD, 0x9B }, { 0xCE, 0xCF }, { 0xAE, 0xBE },
-    { 0xAF, 0xBF }, { 0xE5, 0x89 }, { 0xE6, 0x90 }, { 0xE7, 0x87 }, { 0xE8, 0x91 }, { 0xE9, 0x8F },
-    { 0xEA, 0x92 }, { 0xEB, 0x94 }, { 0xEC, 0x95 }, { 0xED, 0x93 }, { 0xEE, 0x97 }, { 0xEF, 0x99 },
-    { 0xF1, 0x98 }, { 0xF2, 0x9C }, { 0xF3, 0x9E }, { 0xF4, 0x9D }, { 0xD9, 0xD8 },
-};
-
-static uint8_t roman_case(uint8_t ch, bool upper)
+/* UpperText(text, len) / UppercaseText(text, len, script) and the lower ones:
+ * by the script's 'itl2' tables (intl.c) */
+static void g_UpperText(ppc_cpu *c)
 {
-    if (upper && ch >= 'a' && ch <= 'z')
-        return (uint8_t)(ch - 32);
-    if (!upper && ch >= 'A' && ch <= 'Z')
-        return (uint8_t)(ch + 32);
-    for (unsigned i = 0; i < sizeof roman_pairs / sizeof roman_pairs[0]; i++)
-        if (roman_pairs[i][upper ? 1 : 0] == ch)
-            return roman_pairs[i][upper ? 0 : 1];
-    return ch;
+    intl_convert_text(R(0), (int16_t)R(1), true, false);
+    c->pc = c->lr;
 }
-
-static void change_case(gaddr text, int32_t len, bool upper)
+static void g_LowerText(ppc_cpu *c)
 {
-    for (int32_t i = 0; i < len; i++)
-        wr8(text + (gaddr)i, roman_case(rd8(text + (gaddr)i), upper));
+    intl_convert_text(R(0), (int16_t)R(1), false, false);
+    c->pc = c->lr;
 }
-/* UpperText(text, len) / UppercaseText(text, len, script) and the lower ones */
-static void g_UpperText(ppc_cpu *c) { change_case(R(0), (int16_t)R(1), true); c->pc = c->lr; }
-static void g_LowerText(ppc_cpu *c) { change_case(R(0), (int16_t)R(1), false); c->pc = c->lr; }
 
 /* Low-memory queue headers and globals that have accessor functions. */
 static void g_GetEvQHdr(ppc_cpu *c) { RETURN(LM_EventQueue); }
@@ -1336,9 +1319,7 @@ static void g_FindWordBreaks(ppc_cpu *c)
 /* UppercaseStripDiacritics(text, len, script): in place. */
 static void g_UppercaseStripDiacritics(ppc_cpu *c)
 {
-    int16_t n = (int16_t)R(1);
-    for (int16_t i = 0; i < n && R(0); i++)
-        wr8(R(0) + (uint32_t)i, (uint8_t)mac_char_key(rd8(R(0) + (uint32_t)i), false, true));
+    intl_convert_text(R(0), (int16_t)R(1), true, true);
     c->pc = c->lr;
 }
 

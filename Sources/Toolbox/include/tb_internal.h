@@ -239,9 +239,9 @@ void raw_MemoryDispatch(cpu68k *c, uint16_t tw);
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
 /* A MacRoman character's comparison key. */
 int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);
+void intl_convert_text(gaddr text, int32_t len, bool upper, bool strip);
+uint8_t *intl_itl2(uint32_t *lenp);
 /* Default US 'itl0' and 'itl1' resources. */
-size_t intl_default_itl0(uint8_t out[32]);
-size_t intl_default_itl1(uint8_t out[332]);
 
 /* ---- Notification Manager ---- */
 

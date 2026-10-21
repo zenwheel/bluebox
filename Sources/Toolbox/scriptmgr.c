@@ -1,9 +1,8 @@
 /*
  * Script Manager, for the Roman script only (System 7.1 U.S.).
  *
- * Text measurement goes through the current port's font; word and line
- * breaks follow the Roman rules (letters and digits make words, spaces
- * separate them).
+ * Text measurement goes through the current port's font; FindWord follows
+ * the break tables of the U.S. 'itl2'.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -60,31 +59,18 @@ void tb_KeyScript(int16_t scriptcode) {}
 int16_t tb_CharByte(gaddr textBuf, int16_t textOffset) { return 0; } /* single-byte script */
 int16_t tb_CharacterByteType(gaddr textBuf, int16_t textOffset, int16_t script) { return 0; }
 
-static bool is_alpha(uint8_t c)
-{
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= 0x80 && c <= 0x9F) || c == 0xA7 || c == 0xAE ||
-           c == 0xAF || c == 0xBE || c == 0xBF || (c >= 0xCB && c <= 0xCF) || c == 0xD8 || c == 0xD9;
-}
-static bool is_word_char(uint8_t c) { return is_alpha(c) || (c >= '0' && c <= '9') || c == '\''; }
-
+/* CharacterType by the 'itl2' type list: the type in bits 0-3 of the
+ * character's class entry, the punctuation class in bits 4-6, upper case
+ * in bit 7. */
 static int16_t char_type(uint8_t c)
 {
-    if (c >= 'A' && c <= 'Z')
-        return smCharAscii | smCharUpper;
-    if (c >= 'a' && c <= 'z')
-        return smCharAscii | smCharLower;
-    if (is_alpha(c)) {
-        bool upper = (c >= 0x80 && c <= 0x86) || c == 0xAE || c == 0xAF || (c >= 0xCB && c <= 0xCE) || c == 0xD9;
-        return (int16_t)(smCharEuro | (upper ? smCharUpper : smCharLower));
-    }
-    if (c >= '0' && c <= '9')
-        return smCharPunct | smPunctNumber;
-    if (c == ' ' || c == '\t' || c == '\r' || c == 0xCA)
-        return smCharPunct | smPunctBlank;
-    if (c == '$' || c == '%' || c == '+' || c == '<' || c == '=' || c == '>' || c == '^' || c == '|' || c == '~' ||
-        c >= 0xA0)
-        return smCharPunct | smPunctSymbol;
-    return smCharPunct | smPunctNormal;
+    uint32_t n;
+    uint8_t *p = intl_itl2(&n);
+    uint32_t types = (uint32_t)p[12] << 8 | p[13], cls = (uint32_t)p[14] << 8 | p[15];
+    uint32_t at = cls + c < n ? types + p[cls + c] : n;
+    uint8_t t = at < n ? p[at] : 0;
+    free(p);
+    return (int16_t)((t & 0x0F) | (t & 0x70) << 4 | (t & 0x80 ? smCharUpper : smCharLower));
 }
 
 int16_t tb_CharType(gaddr textbufp, int16_t offset) { return char_type(rd8(textbufp + (uint32_t)offset)); }
@@ -192,24 +178,102 @@ int16_t tb_FindScriptRun(gaddr textPtr, int32_t textLen, gaddr lenUsedp)
     return smRoman;
 }
 
-/* ---- Words and lines ---- */
+/* ---- Words and lines ----
+ * FindWord and FindWordBreaks run the state machines of an NBreakTable
+ * (Inside Macintosh: Text, B-44): the 'itl2' word-selection table, its
+ * line-break table when breaks is -1, or the program's own.  Each
+ * character's class and the state pick an action: mark the character's
+ * offset or not, and the next state, 0 to stop at the last mark. */
+
+static uint32_t be16_of(const uint8_t *p) { return (uint32_t)p[0] << 8 | p[1]; }
+
+typedef struct {
+    const uint8_t *t;
+    uint32_t n;
+} break_table;
+
+/* The action for character class k in state s of the state table at off. */
+static int break_action(const break_table *b, uint32_t off, int s, uint8_t ch)
+{
+    uint32_t cls = be16_of(b->t + 4);
+    int k = (int8_t)b->t[cls + ch]; /* negative: 2-byte characters, none here */
+    uint32_t row = off + 2u * (uint32_t)s;
+    if (k < 0 || row + 2 > b->n)
+        return 0;
+    uint32_t at = off + be16_of(b->t + row) + (uint32_t)k;
+    return at < b->n ? b->t[at] : 0;
+}
+
+/* Forward from a boundary to the next one. */
+static int break_forward(const break_table *b, const uint8_t *text, int len, int start)
+{
+    uint32_t off = be16_of(b->t + 10);
+    int state = 1, mark = start;
+    for (int i = start; i < len; i++) {
+        int a = break_action(b, off, state, text[i]);
+        if (a & 0x80)
+            mark = i;
+        state = (a & 0x7F) / 2;
+        if (!state)
+            return mark > start ? mark : start + 1;
+    }
+    return len;
+}
+
+/* Back from character i to a boundary at or before it. */
+static int break_backward(const break_table *b, const uint8_t *text, int i)
+{
+    uint32_t off = be16_of(b->t + 8);
+    int state = 1, mark = i;
+    for (; i >= 0; i--) {
+        int a = break_action(b, off, state, text[i]);
+        if (a & 0x80)
+            mark = i;
+        state = (a & 0x7F) / 2;
+        if (!state)
+            return mark;
+    }
+    return 0;
+}
 
 void tb_FindWord(gaddr textbufp, int16_t length, int16_t offset, int8_t leftside, gaddr breaks, gaddr offsets)
 {
-    int o = offset;
-    if (!leftside && o > 0)
-        o--;
-    if (o >= length)
-        o = length > 0 ? length - 1 : 0;
-    int a = o, b = o;
-    if (length > 0) {
-        bool word = is_word_char(rd8(textbufp + (uint32_t)o));
-        while (a > 0 && is_word_char(rd8(textbufp + (uint32_t)(a - 1))) == word &&
-               (word || rd8(textbufp + (uint32_t)(a - 1)) == rd8(textbufp + (uint32_t)o)))
-            a--;
-        while (b < length && is_word_char(rd8(textbufp + (uint32_t)b)) == word &&
-               (word || rd8(textbufp + (uint32_t)b) == rd8(textbufp + (uint32_t)o)))
-            b++;
+    int a = 0, b = 0;
+    if (length > 0 && textbufp) {
+        uint32_t n;
+        uint8_t *itl2 = intl_itl2(&n), *own = NULL;
+        bool line = breaks == 0xFFFFFFFFu;
+        uint32_t at = be16_of(itl2 + (line ? 24 : 22)); /* the word-selection or line-break table */
+        break_table t = { itl2 + at, at < n ? n - at : 0 };
+        if (breaks && !line && (rd8(breaks) & 0x80)) { /* the program's own NBreakTable */
+            uint32_t tn = rd16(breaks + 14);
+            if (tn >= 16 + 256) {
+                own = malloc(tn);
+                gget(own, breaks, tn);
+                t = (break_table){ own, tn };
+            }
+        }
+        uint8_t *text = malloc((size_t)length);
+        gget(text, textbufp, (uint32_t)length);
+        int o = offset;
+        if (!leftside && o > 0)
+            o--;
+        if (o >= length)
+            o = length - 1;
+        if (o < 0)
+            o = 0;
+        if (t.n >= 16 + 256) {
+            a = o < (int)be16_of(t.t + 12) ? 0 : break_backward(&t, text, o);
+            for (;;) {
+                b = break_forward(&t, text, length, a);
+                if (b > o || b >= length)
+                    break;
+                a = b;
+            }
+        }
+        free(text);
+        free(own);
+        free(itl2);
     }
     wr16(offsets, (uint16_t)a);
     wr16(offsets + 2, (uint16_t)b);

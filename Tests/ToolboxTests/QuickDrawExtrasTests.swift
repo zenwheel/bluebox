@@ -331,6 +331,83 @@ extension BlueBox {
             #expect(tb_KeyTranslate(0, 0x0200 | 0x00, 0) == UInt32(UInt8(ascii: "A")))
             #expect(tb_KeyTranslate(0, 0x0012, 0) == UInt32(UInt8(ascii: "1")))
         }
+
+        @Test func internationalResources() {
+            launchTestApp()
+            func res(_ id: Int16) -> (h: UInt32, p: UInt32, size: Int32) {
+                let h = tb_GetIntlResource(id)
+                return (h, h == 0 ? 0 : rd32(h), h == 0 ? 0 : tb_GetHandleSize(h))
+            }
+            let i0 = res(0), i1 = res(1), i2 = res(2), i4 = res(4)
+            #expect(i0.size == 32 && rd8(i0.p) == UInt8(ascii: ".") && rd8(i0.p + 1) == UInt8(ascii: ","))
+            #expect(rd16(i0.p + 30) == 1) // intl0Vers: U.S., version 1
+            // itl1: $A89F in localRtn, then the Itl1ExtRec with its abbreviated names.
+            #expect(i1.size == 468 && rd16(i1.p + 330) == 0xA89F && rd16(i1.p + 334) == 1)
+            let abbrevDays = rd32(i1.p + 354)
+            #expect(rd16(i1.p + abbrevDays) == 7 && pstring(at: i1.p + abbrevDays + 2) == "Sun")
+            // itl2: the System 7 header (the -1 flag, format 1) and its tables.
+            #expect(i2.size > 64 && rd16(i2.p + 8) == 0xFFFF && rd16(i2.p + 30) == 1)
+            let classes = i2.p + UInt32(rd16(i2.p + 14))
+            func apply(_ slot: UInt32, _ c: UInt8) -> UInt8 {
+                c &+ rd8(i2.p + UInt32(rd16(i2.p + slot * 2)) + UInt32(rd8(classes + UInt32(c))))
+            }
+            #expect(apply(8, 0x8E) == 0x83 && apply(9, 0x83) == 0x8E) // é and É
+            #expect(apply(8, UInt8(ascii: "q")) == UInt8(ascii: "Q") && apply(8, 0xA7) == 0xA7) // ß stays
+            #expect(apply(13, 0x8E) == UInt8(ascii: "e") && apply(10, 0x8E) == UInt8(ascii: "E"))
+            #expect(apply(13, 0xBF) == UInt8(ascii: "o")) // ø
+            // The type list: É an upper-case Euro letter, the digits numbers.
+            #expect(apply(6, 0x83) &- 0x83 == 0x87 && apply(6, UInt8(ascii: "5")) &- UInt8(ascii: "5") == 0x10)
+            // The tables agree with the older built-in conversions (UprString's,
+            // which knew fewer letters) wherever those change a character.
+            for c in 0...255 {
+                let b = UInt8(c), up = UInt8(mac_char_key(b, false, false)), plain = UInt8(mac_char_key(b, true, true))
+                #expect(up == b || apply(8, b) == up, "upper \(c)")
+                #expect(plain == b || apply(13, b) == plain, "strip \(c)")
+            }
+            // The Text Utilities convert by them: á, ı and ø as well.
+            let text = tb_NewPtr(8, false, true)
+            for (i, ch) in [0x87, 0xF5, 0xBF, 0x61].enumerated() { wr8(text + UInt32(i), UInt8(ch)) }
+            tb_TextUtilFunctions(text, 4, 0, 0x0400) // UppercaseText
+            #expect((0..<4).map { rd8(text + $0) } == [0xE7, 0x49, 0xAF, 0x41])
+            tb_TextUtilFunctions(text, 4, 0, 0x0800) // StripDiacritics
+            #expect((0..<4).map { rd8(text + $0) } == [0x41, 0x49, 0x4F, 0x41])
+            tb_TextUtilFunctions(text, 4, 0, 0) // LowercaseText
+            #expect((0..<4).map { rd8(text + $0) } == [0x61, 0x69, 0x6F, 0x61])
+            #expect(i4.size > 0x44 && rd32(i4.p + 2) == UInt32(fourCC("itl4")))
+            #expect(tb_GetResource(Int32(bitPattern: fourCC("itlb")), 0) != 0)
+            #expect(tb_GetResource(Int32(bitPattern: fourCC("itlc")), 0) != 0)
+
+            let out = tb_NewPtr(12, false, true)
+            func table(_ t: Int16) -> (h: UInt32, at: UInt32, len: UInt32) {
+                tb_GetIntlResourceTable(0, t, out, out + 4, out + 8)
+                return (rd32(out), rd32(out + 4), rd32(out + 8))
+            }
+            let word = table(0), wrap = table(1), parts = table(2), untoken = table(3), white = table(4)
+            #expect(word.h == i2.h && word.len > 256 && rd8(i2.p + word.at) == 0x80) // an NBreakTable
+            #expect(rd16(i2.p + word.at + 14) == word.len)
+            #expect(wrap.h == i2.h && wrap.len > 256 && wrap.at != word.at)
+            #expect(parts.h == i4.h && parts.len == 172 && rd16(i4.p + parts.at) == 1)
+            #expect(rd16(i4.p + parts.at + 2 + 13 * 2) == UInt16(UInt8(ascii: "."))) // tokDecPoint
+            #expect(rd16(i4.p + parts.at + 2 + 9 * 2) == UInt16(UInt8(ascii: ","))) // tokThousands
+            #expect(untoken.h == i4.h && rd16(i4.p + untoken.at) == untoken.len)
+            #expect(white.h == i4.h && rd16(i4.p + white.at + 2) == 2) // blank and tab
+            #expect(table(9).h == 0 && table(9).len == 0)
+
+            // A long date in day-month order, from an itl1 of the program's own.
+            let mine = tb_NewHandle(468, false, false)
+            tb_BlockMove(i1.p, rd32(mine), 468, false)
+            wr8(rd32(mine) + 305, 0) // lngDateFmt: day name, day, month, year
+            let d = tb_NewPtr(14, false, true)
+            for (i, v) in [1996, 1, 2, 13, 5, 7, 0].enumerated() { wr16(d + UInt32(i * 2), UInt16(v)) }
+            var secs: UInt32 = 0
+            tb_DateToSeconds(d, &secs)
+            let s = tb_NewPtr(256, false, true)
+            tb_IUDatePString(Int32(bitPattern: secs), 1, s, mine)
+            #expect(pstring(at: s) == "Tuesday, 2 January, 1996")
+            wr8(rd32(mine) + 304, 0xFF) // suppressDay: no day name
+            tb_IUDatePString(Int32(bitPattern: secs), 1, s, mine)
+            #expect(pstring(at: s) == "2 January, 1996")
+        }
     
     @Suite struct ColorPicker {
         @Test func colourModelsRoundTrip() {

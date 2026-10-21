@@ -214,9 +214,7 @@ static void defproc_stub(uint8_t out[8], native_fn fn, const char *name)
 
 static bool open_system_file(void)
 {
-    uint8_t wdef0[8], wdef124[8], mdef0[8], cdef0[8], cdef1[8], cdef63[8], ldef0[8], itl0[32], itl1[332];
-    intl_default_itl0(itl0);
-    intl_default_itl1(itl1);
+    uint8_t wdef0[8], wdef124[8], mdef0[8], cdef0[8], cdef1[8], cdef63[8], ldef0[8];
     defproc_stub(wdef0, wdef0_native, "WDEF 0");
     defproc_stub(wdef124, wdef124_native, "WDEF 124");
     defproc_stub(mdef0, mdef0_native, "MDEF 0");
@@ -250,8 +248,6 @@ static bool open_system_file(void)
         { fourcc("CDEF"), 1, NULL, RES_SYS_HEAP, cdef1, 8 },
         { fourcc("CDEF"), 63, NULL, RES_SYS_HEAP, cdef63, 8 },
         { fourcc("LDEF"), 0, NULL, RES_SYS_HEAP, ldef0, 8 },
-        { fourcc("itl0"), 0, NULL, RES_SYS_HEAP, itl0, sizeof itl0 },
-        { fourcc("itl1"), 0, NULL, RES_SYS_HEAP, itl1, sizeof itl1 },
     };
     size_t n = 0;
     while (n < 512 && specs[n].type) /* the entries above */
@@ -261,7 +257,8 @@ static bool open_system_file(void)
             specs[n++] = (rsrc_spec){ fourcc("PACK"), (int16_t)i, NULL, RES_SYS_HEAP, packs[i], 6 };
     for (int i = 0; i < ap_cdef_stub_count && i < 32; i++)
         specs[n++] = (rsrc_spec){ fourcc("CDEF"), ap_cdef_stubs[i].id, NULL, RES_SYS_HEAP, ap_cdefs[i], 8 };
-    /* Standard cursors and alert icons (Generators/sysres.py). */
+    /* Standard cursors, alert icons, the U.S. keyboard layout and
+     * international resources (Generators/sysres.py). */
     for (unsigned i = 0; i < sysres_count && n < 512; i++)
         specs[n++] = (rsrc_spec){ sysres[i].type, sysres[i].id, NULL, RES_SYS_HEAP | RES_PURGEABLE, sysres[i].data,
                                   sysres[i].len };

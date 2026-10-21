@@ -328,6 +328,10 @@ extension BlueBox {
             #expect(tb_CharType(t, 1) == 0x0001)
             #expect(tb_CharType(t, 2) == 0x0100)   // digit
             #expect(tb_CharType(t, 3) == 0x0300)   // blank
+            for (i, c) in [0x83, 0xE7, 0x8E, 0xCA, 0x23].enumerated() { wr8(t + UInt32(i), UInt8(c)) }
+            #expect(tb_CharType(t, 0) == 0x4007 && tb_CharType(t, 1) == 0x4007) // É, Á: upper-case Euro letters
+            #expect(tb_CharType(t, 2) == 0x0007)   // é
+            #expect(tb_CharType(t, 3) == 0x0200 && tb_CharType(t, 4) == 0x0200) // nonbreaking space and # are symbols
         }
 
         @Test func findWordFindsTheWordAroundAnOffset() {
@@ -338,6 +342,24 @@ extension BlueBox {
             let offs = tb_NewPtr(12, false, true)
             tb_FindWord(t, Int16(text.utf8.count), 8, 1, 0, offs)
             #expect(rd16(offs) == 6 && rd16(offs + 2) == 11)
+            // By the 'itl2' word-selection table: apostrophes and hyphens
+            // between letters, and a number's point and commas, stay in it.
+            func word(_ s: String, _ at: Int, _ breaks: UInt32 = 0) -> String {
+                let bytes = Array(s.utf8)
+                for (i, c) in bytes.enumerated() { wr8(t + UInt32(i), c) }
+                tb_FindWord(t, Int16(bytes.count), Int16(at), 1, breaks, offs)
+                return String(decoding: bytes[Int(rd16(offs))..<Int(rd16(offs + 2))], as: UTF8.self)
+            }
+            #expect(word("we don't stop", 4) == "don't")
+            #expect(word("pi is 3,141.59 or so", 8) == "3,141.59")
+            #expect(word("a well-known fact", 4) == "well-known")
+            #expect(word("the end- or not", 6) == "end")
+            #expect(word("cost $15 now", 5) == "$15")
+            #expect(word("one   two", 4) == "   ")
+            #expect(word("x, y", 1) == ",")
+            // The line-break table (breaks = -1): a line may break after a hyphen.
+            #expect(word("a well-known fact", 4, 0xFFFF_FFFF) == "well-")
+            #expect(word("a well-known fact", 8, 0xFFFF_FFFF) == "known")
         }
     }
 }

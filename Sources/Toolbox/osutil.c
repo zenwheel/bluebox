@@ -219,11 +219,7 @@ void raw_RelString(cpu68k *c, uint16_t tw)
 }
 
 /* StripDiacritics(text, len, script): the marks taken off, in place. */
-void tb_StripDiacritics(gaddr textp, int16_t len, int16_t script)
-{
-    for (int i = 0; i < len && textp; i++)
-        wr8(textp + (uint32_t)i, strip_mark(rd8(textp + (uint32_t)i)));
-}
+void tb_StripDiacritics(gaddr textp, int16_t len, int16_t script) { intl_convert_text(textp, len, false, true); }
 
 /* UprString: A0 the text, D0 its length; bit $0200 also strips marks. */
 void raw_UprString(cpu68k *c, uint16_t tw)
@@ -249,28 +245,12 @@ int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks)
     return c;
 }
 
-static uint8_t lower_mac(uint8_t c)
-{
-    if (c >= 'A' && c <= 'Z')
-        return (uint8_t)(c + 32);
-    for (int i = 0x80; i < 0x100; i++)
-        if (i != c && upper_mac((uint8_t)i) == c)
-            return (uint8_t)i;
-    return c;
-}
-
 /* LowerText (A056) and its variants: A0 the text, D0.W its length; trap bit
- * $0200 strips diacritical marks and $0400 makes upper case. */
+ * $0200 strips diacritical marks and $0400 makes upper case (StripText
+ * only strips).  The script's 'itl2' tables (intl.c). */
 void raw_LowerText(cpu68k *c, uint16_t tw)
 {
-    uint32_t a = c->a[0];
-    int n = (int)(c->d[0] & 0xFFFF);
-    for (int i = 0; i < n; i++) {
-        uint8_t ch = rd8(a + (uint32_t)i);
-        if (tw & 0x0200)
-            ch = strip_mark(ch);
-        wr8(a + (uint32_t)i, (tw & 0x0400) ? upper_mac(ch) : lower_mac(ch));
-    }
+    intl_convert_text(c->a[0], (int32_t)(c->d[0] & 0xFFFF), (tw & 0x0400) != 0, (tw & 0x0200) != 0);
     c->d[0] = 0;
 }
 
@@ -279,14 +259,7 @@ void raw_LowerText(cpu68k *c, uint16_t tw)
  * stripping marks (Roman script rules for every script). */
 void tb_TextUtilFunctions(gaddr textp, int16_t len, int16_t script, int16_t selector)
 {
-    for (int i = 0; i < len; i++) {
-        uint8_t ch = rd8(textp + (uint32_t)i);
-        if (selector & 0x0800)
-            ch = strip_mark(ch);
-        if ((selector & 0x0C00) != 0x0800)
-            ch = (selector & 0x0400) ? upper_mac(ch) : lower_mac(ch);
-        wr8(textp + (uint32_t)i, ch);
-    }
+    intl_convert_text(textp, len, (selector & 0x0400) != 0, (selector & 0x0800) != 0);
 }
 
 /* Extended parameter RAM: 256 bytes, kept for the session.  A0 the buffer,

@@ -1,22 +1,26 @@
 /*
  * International Utilities (Pack6) and date conversion.
  *
- * The System file carries US 'itl0' (number, date and time formats) and
- * 'itl1' (day and month names) resources, built here; the date and time
- * strings follow them, so an application that supplies its own resources
- * gets its own formats.  String ordering is MacRoman: letters by their
- * plain upper-case form first, then case and diacritical marks.
+ * The System file carries the U.S. international resources
+ * (Generators/intlres.py): 'itl0' (number, date and time formats), 'itl1'
+ * (day and month names), 'itl2' (character tables, word and line breaks)
+ * and 'itl4' (tokens, number parts).  The date and time strings follow
+ * itl0 and itl1, so an application that supplies its own resources gets
+ * its own formats.  String ordering is MacRoman: letters by their plain
+ * upper-case form first, then case and diacritical marks.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
+#include "sysres_gen.h"
 #include "tb_internal.h"
 
 #define MAC_EPOCH_OFFSET 2082844800u /* seconds from 1904 to 1970 */
 
 /* ---------------------------------------------------------------------- */
-/* Default resources */
+/* The formats when there is no itl0 or itl1 to read: the System's own. */
 
 static void put_pstr(uint8_t *p, const char *s, int field)
 {
@@ -27,7 +31,7 @@ static void put_pstr(uint8_t *p, const char *s, int field)
 }
 
 /* Intl0Rec, 32 bytes. */
-size_t intl_default_itl0(uint8_t out[32])
+static void default_itl0(uint8_t out[32])
 {
     memset(out, 0, 32);
     out[0] = '.';                 /* decimalPt */
@@ -39,18 +43,17 @@ size_t intl_default_itl0(uint8_t out[32])
     out[8] = 0;                   /* shrtDateFmt: no leading zeros, two-digit year */
     out[9] = '/';                 /* dateSep */
     out[10] = 0xFF;               /* timeCycle: 12-hour */
-    out[11] = 0x80 | 0x40;        /* timeFmt: minutes and seconds with leading zeros */
+    out[11] = 0x40 | 0x20;        /* timeFmt: minutes and seconds with leading zeros */
     memcpy(out + 12, " AM\0", 4); /* mornStr */
     memcpy(out + 16, " PM\0", 4); /* eveStr */
     out[20] = ':';                /* timeSep */
     out[29] = 0;                  /* metricSys: no */
-    out[30] = 0;                  /* intl0Vers: US, version 0 */
-    out[31] = 0;
-    return 32;
+    out[30] = 0;                  /* intl0Vers: US, version 1 */
+    out[31] = 1;
 }
 
 /* Intl1Rec, 332 bytes: day and month names, long date format. */
-size_t intl_default_itl1(uint8_t out[332])
+static void default_itl1(uint8_t out[332])
 {
     static const char *const days[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
     static const char *const months[] = { "January", "February", "March",     "April",   "May",      "June",
@@ -62,7 +65,7 @@ size_t intl_default_itl1(uint8_t out[332])
         put_pstr(out + 112 + i * 16, months[i], 16);
     uint8_t *p = out + 304;
     p[0] = 0; /* suppressDay */
-    p[1] = 0; /* lngDateFmt: day, month, date, year */
+    p[1] = 0xFF; /* lngDateFmt: day name, month, day, year */
     p[2] = 0; /* dayLeading0 */
     p[3] = 3; /* abbrLen */
     memcpy(p + 4, "\0\0\0\0", 4);  /* st0: before */
@@ -70,11 +73,10 @@ size_t intl_default_itl1(uint8_t out[332])
     memcpy(p + 12, " \0\0\0", 4);  /* st2: after the month */
     memcpy(p + 16, ", \0\0", 4);   /* st3: after the date */
     memcpy(p + 20, "\0\0\0\0", 4); /* st4: after the year */
-    out[324] = 0;                  /* intl1Vers */
-    out[325] = 0;
-    out[326] = 0x4E;               /* localRtn: RTS */
-    out[327] = 0x75;
-    return 332;
+    out[328] = 0;                  /* intl1Vers: US, version 1 */
+    out[329] = 1;
+    out[330] = 0x4E;               /* localRtn: RTS (no extension) */
+    out[331] = 0x75;
 }
 
 gaddr tb_GetIntlResource(int16_t id)
@@ -131,9 +133,9 @@ static bool intl_bytes(gaddr h, int id, uint8_t *out, size_t n)
         return true;
     }
     if (id == 0)
-        intl_default_itl0(out);
+        default_itl0(out);
     else
-        intl_default_itl1(out);
+        default_itl1(out);
     return true;
 }
 
@@ -203,25 +205,45 @@ static void format_date(uint32_t secs, int form, gaddr h, char *out, size_t cap)
         snprintf(out, cap, "%s%c%s%c%s", a, sep, b, sep, c);
         return;
     }
-    /* longDate (1) and abbrevDate (2). */
+    /* longDate (1) and abbrevDate (2): st0, then each element that is not
+     * suppressed followed by its separator (st1-st4), in lngDateFmt's
+     * order: 0 day name, day, month, year; $FF day name, month, day,
+     * year; otherwise four 2-bit element codes from the low bits up. */
+    enum { longDay, longWeek, longMonth, longYear };
     uint8_t i1[332];
     intl_bytes(h, 1, i1, sizeof i1);
     const uint8_t *p = i1 + 304;
     int abbr = form == 2 ? p[3] : 0;
+    int els[4] = { longWeek, longMonth, longDay, longYear };
+    if (p[1] == 0) {
+        els[1] = longDay;
+        els[2] = longMonth;
+    } else if (p[1] != 0xFF) {
+        for (int i = 0; i < 4; i++)
+            els[i] = (p[1] >> (2 * i)) & 3;
+    }
+    /* suppressDay: 0 none, $FF the day name, else a mask of supDay (1),
+     * supWeek (2), supMonth (4) and supYear (8). */
+    int suppress = p[0] == 0xFF ? 1 << longWeek : p[0];
     char num[16];
     cat4(out, cap, p + 4);
-    if (!p[0]) { /* suppressDay */
-        cat_name(out, cap, i1 + t.tm_wday * 16, abbr);
-        cat4(out, cap, p + 8);
+    for (int i = 0; i < 4; i++) {
+        if (suppress & (1 << els[i]))
+            continue;
+        switch (els[i]) {
+        case longDay:
+            snprintf(num, sizeof num, p[2] ? "%02d" : "%d", t.tm_mday);
+            strncat(out, num, cap - strlen(out) - 1);
+            break;
+        case longWeek: cat_name(out, cap, i1 + t.tm_wday * 16, abbr); break;
+        case longMonth: cat_name(out, cap, i1 + 112 + t.tm_mon * 16, abbr); break;
+        default:
+            snprintf(num, sizeof num, "%d", t.tm_year + 1900);
+            strncat(out, num, cap - strlen(out) - 1);
+            break;
+        }
+        cat4(out, cap, p + 8 + i * 4);
     }
-    cat_name(out, cap, i1 + 112 + t.tm_mon * 16, abbr);
-    cat4(out, cap, p + 12);
-    snprintf(num, sizeof num, p[2] ? "%02d" : "%d", t.tm_mday);
-    strncat(out, num, cap - strlen(out) - 1);
-    cat4(out, cap, p + 16);
-    snprintf(num, sizeof num, "%d", t.tm_year + 1900);
-    strncat(out, num, cap - strlen(out) - 1);
-    cat4(out, cap, p + 20);
 }
 
 static void format_time(uint32_t secs, bool with_secs, gaddr h, char *out, size_t cap)
@@ -242,12 +264,13 @@ static void format_time(uint32_t secs, bool with_secs, gaddr h, char *out, size_
     char sep = (char)i0[20];
     int fmt = i0[11];
     char buf[32];
-    snprintf(buf, sizeof buf, (fmt & 0x20) ? "%02d" : "%d", hour);
+    /* timeFmt: hrLeadingZ 128, minLeadingZ 64, secLeadingZ 32. */
+    snprintf(buf, sizeof buf, (fmt & 0x80) ? "%02d" : "%d", hour);
     size_t n = strlen(buf);
     snprintf(buf + n, sizeof buf - n, (fmt & 0x40) ? "%c%02d" : "%c%d", sep, t.tm_min);
     if (with_secs) {
         n = strlen(buf);
-        snprintf(buf + n, sizeof buf - n, (fmt & 0x80) ? "%c%02d" : "%c%d", sep, t.tm_sec);
+        snprintf(buf + n, sizeof buf - n, (fmt & 0x20) ? "%c%02d" : "%c%d", sep, t.tm_sec);
     }
     snprintf(out, cap, "%s", buf);
     if (suffix)
@@ -300,14 +323,73 @@ void tb_IULTimeString(gaddr datetimep, int8_t secs, gaddr result, gaddr h)
 }
 
 /* ---------------------------------------------------------------------- */
+/* Case and diacritical marks */
+
+static uint32_t be16_at(const uint8_t *p) { return (uint32_t)p[0] << 8 | p[1]; }
+
+/* The 'itl2' lists by their header slots. */
+enum { itl2Class = 7, itl2Upper = 8, itl2Lower = 9, itl2UpperStrip = 10, itl2Strip = 13 };
+
+/* A copy of the current 'itl2' (free it), or of the System's own when
+ * there is none with the System 7 header (the -1 flag and format 1). */
+uint8_t *intl_itl2(uint32_t *lenp)
+{
+    gaddr h = tb_GetIntlResource(2);
+    int32_t n = h && rd32(h) ? tb_GetHandleSize(h) : 0;
+    uint8_t *p = malloc(n >= 64 ? (size_t)n : 64);
+    if (n >= 64) {
+        gget(p, rd32(h), (uint32_t)n);
+        if (be16_at(p + 8) == 0xFFFF && be16_at(p + 30) >= 1) {
+            *lenp = (uint32_t)n;
+            return p;
+        }
+    }
+    for (unsigned i = 0; i < sysres_count; i++)
+        if (sysres[i].type == fourcc("itl2") && sysres[i].id == 0) {
+            p = realloc(p, sysres[i].len);
+            memcpy(p, sysres[i].data, sysres[i].len);
+            *lenp = sysres[i].len;
+        }
+    return p;
+}
+
+/* One of the 'itl2' lists as a map of the 256 characters: the class array
+ * gives each character a class, and the list the amount to add for it. */
+static void char_map(int slot, uint8_t map[256])
+{
+    uint32_t n;
+    uint8_t *p = intl_itl2(&n);
+    uint32_t cls = be16_at(p + itl2Class * 2), list = be16_at(p + (uint32_t)slot * 2);
+    for (int c = 0; c < 256; c++) {
+        uint32_t at = cls + (uint32_t)c < n ? list + p[cls + (uint32_t)c] : n;
+        map[c] = (uint8_t)(c + (at < n ? p[at] : 0));
+    }
+    free(p);
+}
+
+/* UppercaseText, LowercaseText, StripDiacritics and
+ * UppercaseStripDiacritics (and UprText, LwrText, StripText, StripUprText):
+ * the text converted in place by the Roman script's tables. */
+void intl_convert_text(gaddr text, int32_t len, bool upper, bool strip)
+{
+    uint8_t map[256];
+    char_map(upper ? (strip ? itl2UpperStrip : itl2Upper) : (strip ? itl2Strip : itl2Lower), map);
+    for (int32_t i = 0; i < len && text; i++)
+        wr8(text + (uint32_t)i, map[rd8(text + (uint32_t)i)]);
+}
+
+/* ---------------------------------------------------------------------- */
 /* Ordering */
 
 static int order(gaddr a, int la, gaddr b, int lb)
 {
+    uint8_t plain[256], upper[256];
+    char_map(itl2UpperStrip, plain);
+    char_map(itl2Upper, upper);
     /* Primary: plain upper case. */
     int n = la < lb ? la : lb;
     for (int i = 0; i < n; i++) {
-        int d = mac_char_key(rd8(a + (uint32_t)i), false, true) - mac_char_key(rd8(b + (uint32_t)i), false, true);
+        int d = plain[rd8(a + (uint32_t)i)] - plain[rd8(b + (uint32_t)i)];
         if (d)
             return d < 0 ? -1 : 1;
     }
@@ -315,7 +397,7 @@ static int order(gaddr a, int la, gaddr b, int lb)
         return la < lb ? -1 : 1;
     /* Then marks, then case. */
     for (int i = 0; i < n; i++) {
-        int d = mac_char_key(rd8(a + (uint32_t)i), false, false) - mac_char_key(rd8(b + (uint32_t)i), false, false);
+        int d = upper[rd8(a + (uint32_t)i)] - upper[rd8(b + (uint32_t)i)];
         if (d)
             return d < 0 ? -1 : 1;
     }
@@ -335,8 +417,10 @@ static int16_t ident(gaddr a, int la, gaddr b, int lb)
 {
     if (la != lb)
         return 1;
+    uint8_t upper[256];
+    char_map(itl2Upper, upper);
     for (int i = 0; i < la; i++)
-        if (mac_char_key(rd8(a + (uint32_t)i), false, false) != mac_char_key(rd8(b + (uint32_t)i), false, false))
+        if (upper[rd8(a + (uint32_t)i)] != upper[rd8(b + (uint32_t)i)])
             return 1;
     return 0;
 }
@@ -349,13 +433,43 @@ int16_t tb_IUTextOrder(gaddr a, gaddr b, int16_t la, int16_t lb, int16_t sa, int
     return (int16_t)order(a, la, b, lb);
 }
 
-/* The tables inside the itl resources (word break, truncation …): none. */
+/* GetIntlResourceTable: where a table lives in the script's 'itl2' (the
+ * word-selection and line-break tables) or 'itl4' (number parts, untoken
+ * table, white space), from the offsets and lengths in their headers.
+ * Roman is the only script; nil and zeros when there is no such table. */
+enum { smWordSelectTable, smWordWrapTable, smNumberPartsTable, smUnTokenTable, smWhiteSpaceList };
+
 void tb_GetIntlResourceTable(int16_t script, int16_t table, gaddr itlp, gaddr offsetp, gaddr lengthp)
 {
+    gaddr h = 0;
+    uint32_t off = 0, len = 0;
+    if (script == 0 || script == -1 || script == -2) { /* Roman, smSystemScript, smCurrentScript */
+        if (table == smWordSelectTable || table == smWordWrapTable) {
+            h = tb_GetIntlResource(2);
+            /* The System 7 header: the -1 flag and format 1. */
+            if (h && rd32(h) && tb_GetHandleSize(h) >= 64 && rd16(rd32(h) + 8) == 0xFFFF && rd16(rd32(h) + 30) >= 1) {
+                int slot = table == smWordSelectTable ? 11 : 12;
+                off = rd16(rd32(h) + (uint32_t)slot * 2);
+                len = rd16(rd32(h) + 32 + (uint32_t)slot * 2);
+            }
+        } else if (table >= smNumberPartsTable && table <= smWhiteSpaceList) {
+            h = tb_GetIntlResource(4);
+            if (h && rd32(h) && tb_GetHandleSize(h) >= 0x44 && rd32(rd32(h) + 2) == fourcc("itl4")) {
+                /* unTokenOffset, defPartsOffset and whtSpListOffset; their lengths. */
+                int slot = table == smNumberPartsTable ? 1 : table == smUnTokenTable ? 0 : 2;
+                off = rd32(rd32(h) + 0x20 + (uint32_t)slot * 4);
+                len = rd16(rd32(h) + 0x3A + (uint32_t)slot * 2);
+            }
+        }
+    }
+    if (!off || !len) {
+        h = 0;
+        off = len = 0;
+    }
     if (itlp)
-        wr32(itlp, 0);
+        wr32(itlp, h);
     if (offsetp)
-        wr32(offsetp, 0);
+        wr32(offsetp, off);
     if (lengthp)
-        wr32(lengthp, 0);
+        wr32(lengthp, len);
 }

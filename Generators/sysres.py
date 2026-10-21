@@ -5,13 +5,17 @@ The cursors every System file had (CURS 1-4: I-beam, cross, plus, watch),
 the alert icons (ICON 0-2: stop, note, caution), drawn here as ASCII art
 (our own designs in the classic manner), and the Standard File dialogs
 (DLOG/DITL -4000, -3999, -6042, -6043) with the item numbers applications
-rely on when they customise them, written as byte arrays to
-Sources/Toolbox/sysres_gen.c for the compatibility System file.
+rely on when they customise them, the U.S. keyboard layout and the U.S.
+international resources (itl0, itl1, itl2, itl4, itlb, itlc; intlres.py),
+written as byte arrays to Sources/Toolbox/sysres_gen.c for the
+compatibility System file.
 
     python3 Generators/sysres.py
 """
 
 import os
+
+import intlres
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "Sources", "Toolbox", "sysres_gen.c")
@@ -586,6 +590,10 @@ def main():
         table.append(("DITL", rid, f"ditl_m{n}"))
     parts.append("/* KCHR 0: U.S. keyboard layout */\n" + c_array("kchr_0", kchr()))
     table.append(("KCHR", 0, "kchr_0"))
+    for typ, rid, label, data in intlres.resources():
+        sym = f"{typ}_{rid}"
+        parts.append(f"/* {typ} {rid}: {label} */\n" + c_array(sym, data))
+        table.append((typ, rid, sym))
     parts.append("\nconst sysres_entry sysres[] = {\n")
     for t, rid, sym in table:
         parts.append(f"    {{ 0x{int.from_bytes(t.encode(), 'big'):08X}, {rid}, {sym}, sizeof {sym} }}, /* '{t}' */\n")
