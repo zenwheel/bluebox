@@ -2874,7 +2874,7 @@ const ppc_export lib_exports[] = {
     { "SetSoundVol", g_SetSoundVol }, { "SetToolboxTrapAddress", g_SetToolboxTrapAddress },
     { "SysBreak", g_nothing }, { "SysBreakFunc", g_nothing }, { "SysBreakStr", g_nothing },
     { "SystemZone", g_SystemZone }, { "UpperString", g_UpperString }, { "X2Fix", g_X2Fix },
-    { "UpperText", g_UpperText }, { "UppercaseText", g_UpperText }, { "LowerText", g_LowerText },
+    { "UpperText", g_UpperText }, { "UppercaseText", g_UpperText }, { "UprText", g_UpperText }, { "LowerText", g_LowerText },
     { "LowercaseText", g_LowerText }, { "GetEvQHdr", g_GetEvQHdr }, { "GetVCBQHdr", g_GetVCBQHdr },
     { "GetDrvQHdr", g_GetDrvQHdr }, { "GetFSQHdr", g_GetFSQHdr }, { "GetVBLQHdr", g_GetVBLQHdr },
     { "GetApplLimit", g_GetApplLimit }, { "GetGrayRgn", g_GetGrayRgn }, { "GetAppFont", g_GetAppFont },
