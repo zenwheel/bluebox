@@ -55,6 +55,20 @@ static bool button_down;
 static uint32_t presses, key_presses; /* counted, so a quick click is never missed */
 static uint16_t key_mods;
 static uint8_t keymap[16];
+/* Keys pressed since the program last looked at the keyboard (GetKeys or
+ * KeyMap): a tap let go of before it looks still shows once, as the
+ * key-down event it gets for it says it should. */
+static uint8_t keys_tapped[16];
+
+/* The keyboard as the program sees it: what is down, and what was tapped
+ * since it last looked; then forget the taps.  The lock is held. */
+static void keys_seen(uint8_t out[16])
+{
+    for (int i = 0; i < 16; i++) {
+        out[i] = keymap[i] | keys_tapped[i];
+        keys_tapped[i] = 0;
+    }
+}
 static bool host_attached;
 /* For low memory: the last key down (key code and character) and whether
  * a key or the button changed since it was last written. */
@@ -219,7 +233,7 @@ void events_sync_lowmem(void)
         written_pt = pt;
     bool down = button_down;
     uint8_t keys[16];
-    memcpy(keys, keymap, sizeof keys);
+    keys_seen(keys);
     bool key_changed = key_new, button_changed = button_new;
     uint16_t last = key_last;
     key_new = button_new = false;
@@ -363,8 +377,10 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
     }
     key_mods = (uint16_t)modifiers;
     if (keycode >= 0 && keycode < 128) {
-        if (down)
+        if (down) {
             keymap[keycode / 8] |= (uint8_t)(1u << (keycode % 8));
+            keys_tapped[keycode / 8] |= (uint8_t)(1u << (keycode % 8));
+        }
         else
             keymap[keycode / 8] &= (uint8_t)~(1u << (keycode % 8));
     }
@@ -581,7 +597,16 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
             }
         }
     }
+    /* A key event handed to the program: KeyMap shows that key now, not
+     * at the next emulation slice (Maelstrom reads it to see which key a
+     * key-down was for). */
+    uint8_t keys[16];
+    bool key_event = found && remove && (e.what == keyDown || e.what == autoKey || e.what == keyUp);
+    if (key_event)
+        keys_seen(keys);
     pthread_mutex_unlock(&lock);
+    if (key_event)
+        gput(LM_KeyMap, keys, sizeof keys);
     mirror_queue();
     /* High-level events (Apple Events): message = class, where = ID. */
     uint32_t cls, aeid;
@@ -868,9 +893,11 @@ void events_start_stall_log(void)
 void tb_GetKeys(gaddr keys)
 {
     note_poll();
+    uint8_t now[16];
     pthread_mutex_lock(&lock);
-    gput(keys, keymap, 16);
+    keys_seen(now);
     pthread_mutex_unlock(&lock);
+    gput(keys, now, 16);
 }
 
 int32_t tb_GetDblTime(void) { return (int32_t)rd32(LM_DoubleTime); }

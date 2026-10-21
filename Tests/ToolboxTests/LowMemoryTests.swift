@@ -103,6 +103,26 @@ extension BlueBox {
             #expect(rd16(t + UInt32(WidthTable_tabSize_off)) == UInt16(WidthTable_SIZEOF))
         }
 
+        /// A key tapped and let go of before the program looks still shows
+        /// once, in GetKeys and in KeyMap with its key-down event
+        /// (Maelstrom's controls dialog reads the key a key-down was for).
+        @Test func tappedKeysShowOnce() {
+            tb_FlushEvents(-1, 0)
+            let keys = tb_NewPtr(16, false, true)
+            machine_post_key(0x77, 13, 0, 1, 0) // 'w' down and up
+            machine_post_key(0x77, 13, 0, 0, 0)
+            tb_GetKeys(keys)
+            #expect(rd8(keys + 1) & 0x20 != 0)  // key code 13: byte 1, bit 5
+            tb_GetKeys(keys)
+            #expect(rd8(keys + 1) & 0x20 == 0)
+            machine_post_key(0x77, 13, 0, 1, 0)
+            machine_post_key(0x77, 13, 0, 0, 0)
+            let evt = tb_NewPtr(16, false, true)
+            #expect(tb_GetOSEvent(8, evt))  // keyDownMask
+            #expect(rd8(UInt32(LM_KeyMap) + 1) & 0x20 != 0)
+            tb_FlushEvents(-1, 0)
+        }
+
         /// A program moving the cursor itself (RawMouse and MTemp, then
         /// CrsrNew, as games recentring it do) moves the mouse: the host
         /// hears of it, and captured motion is added to where it put it.
