@@ -373,6 +373,19 @@ static void package_native(cpu68k *c, uint16_t tw)
 /* Dispatch */
 
 void io_complete_later(gaddr pb, int16_t result);
+
+int16_t pb_call_done(gaddr pb, int16_t err, bool async)
+{
+    if (!pb)
+        return err;
+    wr16(pb + 16, (uint16_t)err); /* ioResult */
+    /* async, with an ioCompletion; a driver call still in progress is
+     * completed by the driver */
+    if (async && rd32(pb + 12) && err != ioInProgress)
+        io_complete_later(pb, err);
+    /* Queued: the call itself succeeds; ioResult says it runs on. */
+    return async && err == ioInProgress ? noErr : err;
+}
 void key_trans_native(cpu68k *c, uint16_t tw);
 
 /* The File and Device Manager traps, whose argument is a parameter block
@@ -447,16 +460,8 @@ void trap_aline(cpu68k *c, uint16_t op)
         natives[n].fn(c, op);
         last_trapword = saved;
         current_trap = 0;
-        if (param_block_trap(op) && a0 && !c->halted) {
-            wr16(a0 + 16, (uint16_t)c->d[0]); /* ioResult */
-            /* async, with an ioCompletion; a driver call still in progress
-             * is completed by the driver */
-            if ((op & 0x0400) && rd32(a0 + 12) && (int16_t)c->d[0] != ioInProgress)
-                io_complete_later(a0, (int16_t)c->d[0]);
-            /* Queued: the call itself succeeds; ioResult says it runs on. */
-            if ((op & 0x0400) && (int16_t)c->d[0] == ioInProgress)
-                c->d[0] = noErr;
-        }
+        if (param_block_trap(op) && a0 && !c->halted)
+            c->d[0] = (uint32_t)(int32_t)pb_call_done(a0, (int16_t)c->d[0], (op & 0x0400) != 0);
         c->a[1] = a1;
         c->d[1] = d1;
         c->d[2] = d2;

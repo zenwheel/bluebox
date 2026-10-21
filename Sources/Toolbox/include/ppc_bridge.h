@@ -80,5 +80,9 @@ void ppc_trap_end(void);
 void ppc_struct_result(ppc_cpu *c, gaddr result, uint32_t value, int size);
 /* Copy n bytes of guest memory (a NULL destination or source copies nothing). */
 void ppc_copy(gaddr dst, gaddr src, uint32_t n);
+/* A parameter block call finished with err (trap.c): its ioResult set, and
+ * when asynchronous its completion routine queued, as the trap dispatcher
+ * does for 68k callers.  Returns what the caller gets back. */
+int16_t pb_call_done(gaddr pb, int16_t err, bool async);
 
 #endif

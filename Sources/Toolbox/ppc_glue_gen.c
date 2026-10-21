@@ -2052,21 +2052,21 @@ static void ppcglue_PBControl(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
     bool a_a = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBControl(a_pbp, a_a);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBControl(a_pbp, a_a), a_a);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBControlSync(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBControl(a_pbp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBControl(a_pbp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBControlAsync(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBControl(a_pbp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBControl(a_pbp, true), true);
     c->pc = c->lr;
 }
 
@@ -2074,21 +2074,21 @@ static void ppcglue_PBStatus(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
     bool a_a = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBStatus(a_pbp, a_a);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBStatus(a_pbp, a_a), a_a);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBStatusSync(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBStatus(a_pbp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBStatus(a_pbp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBStatusAsync(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBStatus(a_pbp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBStatus(a_pbp, true), true);
     c->pc = c->lr;
 }
 
@@ -2096,21 +2096,21 @@ static void ppcglue_PBKillIO(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
     bool a_a = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBKillIO(a_pbp, a_a);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBKillIO(a_pbp, a_a), a_a);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBKillIOSync(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBKillIO(a_pbp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBKillIO(a_pbp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBKillIOAsync(ppc_cpu *c)
 {
     gaddr a_pbp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBKillIO(a_pbp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pbp, tb_PBKillIO(a_pbp, true), true);
     c->pc = c->lr;
 }
 
@@ -2911,21 +2911,21 @@ static void ppcglue_PBOpen(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpen(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpen(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBOpenSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpen(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpen(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBOpenAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpen(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpen(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -2933,21 +2933,21 @@ static void ppcglue_PBHOpen(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpen(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpen(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpen(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpen(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpen(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpen(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -2955,21 +2955,21 @@ static void ppcglue_PBClose(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBClose(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBClose(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCloseSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBClose(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBClose(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCloseAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBClose(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBClose(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -2977,21 +2977,21 @@ static void ppcglue_PBRead(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRead(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRead(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBReadSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRead(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRead(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBReadAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRead(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRead(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -2999,21 +2999,21 @@ static void ppcglue_PBWrite(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBWrite(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBWrite(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBWriteSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBWrite(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBWrite(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBWriteAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBWrite(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBWrite(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3021,21 +3021,21 @@ static void ppcglue_PBGetVInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetVInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetVInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetVInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetVInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetVInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3043,21 +3043,21 @@ static void ppcglue_PBHGetVInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetVInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetVInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3065,21 +3065,21 @@ static void ppcglue_PBCreate(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCreate(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreate(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCreateSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCreate(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreate(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCreateAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCreate(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreate(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3087,21 +3087,21 @@ static void ppcglue_PBHCreate(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHCreate(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCreate(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHCreateSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHCreate(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCreate(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHCreateAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHCreate(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCreate(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3109,21 +3109,21 @@ static void ppcglue_PBDelete(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDelete(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDelete(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDeleteSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDelete(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDelete(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDeleteAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDelete(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDelete(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3131,21 +3131,21 @@ static void ppcglue_PBHDelete(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHDelete(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHDelete(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHDeleteSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHDelete(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHDelete(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHDeleteAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHDelete(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHDelete(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3153,21 +3153,21 @@ static void ppcglue_PBOpenRF(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenRF(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenRF(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBOpenRFSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenRF(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenRF(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBOpenRFAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenRF(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenRF(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3175,21 +3175,21 @@ static void ppcglue_PBHOpenRF(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenRF(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenRF(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenRFSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenRF(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenRF(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenRFAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenRF(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenRF(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3197,21 +3197,21 @@ static void ppcglue_PBRename(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRename(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRename(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBRenameSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRename(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRename(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBRenameAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRename(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRename(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3219,21 +3219,21 @@ static void ppcglue_PBHRename(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHRename(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHRename(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHRenameSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHRename(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHRename(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHRenameAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHRename(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHRename(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3241,21 +3241,21 @@ static void ppcglue_PBGetFInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetFInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetFInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3263,21 +3263,21 @@ static void ppcglue_PBHGetFInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetFInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetFInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetFInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetFInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetFInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetFInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetFInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetFInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3285,21 +3285,21 @@ static void ppcglue_PBSetFInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetFInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetFInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3307,21 +3307,21 @@ static void ppcglue_PBHSetFInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHSetFInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHSetFInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHSetFInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHSetFInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHSetFInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHSetFInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHSetFInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHSetFInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3343,21 +3343,21 @@ static void ppcglue_PBAllocate(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBAllocate(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocate(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBAllocateSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBAllocate(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocate(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBAllocateAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBAllocate(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocate(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3365,21 +3365,21 @@ static void ppcglue_PBGetEOF(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetEOF(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetEOF(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetEOFSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetEOF(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetEOF(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetEOFAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetEOF(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetEOF(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3387,21 +3387,21 @@ static void ppcglue_PBSetEOF(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetEOF(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetEOF(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetEOFSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetEOF(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetEOF(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetEOFAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetEOF(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetEOF(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3409,21 +3409,21 @@ static void ppcglue_PBFlushVol(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBFlushVol(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushVol(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBFlushVolSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBFlushVol(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushVol(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBFlushVolAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBFlushVol(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushVol(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3431,21 +3431,21 @@ static void ppcglue_PBGetVol(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetVol(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVol(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetVolSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetVol(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVol(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetVolAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetVol(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVol(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3453,21 +3453,21 @@ static void ppcglue_PBHGetVol(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVol(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVol(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetVolSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVol(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVol(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetVolAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVol(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVol(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3475,21 +3475,21 @@ static void ppcglue_PBSetVol(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetVol(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVol(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetVolSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetVol(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVol(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetVolAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetVol(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVol(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3497,21 +3497,21 @@ static void ppcglue_PBHSetVol(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHSetVol(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHSetVol(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHSetVolSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHSetVol(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHSetVol(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHSetVolAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHSetVol(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHSetVol(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3526,21 +3526,21 @@ static void ppcglue_PBGetFPos(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFPos(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFPos(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetFPosSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFPos(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFPos(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetFPosAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFPos(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFPos(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3555,21 +3555,21 @@ static void ppcglue_PBSetFLock(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFLock(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFLock(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetFLockSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFLock(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFLock(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetFLockAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFLock(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFLock(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3577,21 +3577,21 @@ static void ppcglue_PBRstFLock(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRstFLock(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRstFLock(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBRstFLockSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRstFLock(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRstFLock(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBRstFLockAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBRstFLock(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRstFLock(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3599,21 +3599,21 @@ static void ppcglue_PBSetFPos(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFPos(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFPos(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetFPosSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFPos(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFPos(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetFPosAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetFPos(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetFPos(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3621,21 +3621,21 @@ static void ppcglue_PBFlushFile(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBFlushFile(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushFile(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBFlushFileSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBFlushFile(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushFile(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBFlushFileAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBFlushFile(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushFile(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3643,21 +3643,21 @@ static void ppcglue_PBOpenWD(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenWD(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenWD(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBOpenWDSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenWD(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenWD(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBOpenWDAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenWD(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenWD(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3665,21 +3665,21 @@ static void ppcglue_PBCloseWD(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCloseWD(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseWD(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCloseWDSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCloseWD(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseWD(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCloseWDAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCloseWD(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseWD(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3687,21 +3687,21 @@ static void ppcglue_PBCatMove(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCatMove(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatMove(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCatMoveSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCatMove(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatMove(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCatMoveAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCatMove(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatMove(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3709,21 +3709,21 @@ static void ppcglue_PBDirCreate(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDirCreate(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDirCreate(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDirCreateSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDirCreate(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDirCreate(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDirCreateAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDirCreate(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDirCreate(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3731,21 +3731,21 @@ static void ppcglue_PBGetWDInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetWDInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetWDInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetWDInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetWDInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetWDInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetWDInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetWDInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetWDInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3753,21 +3753,21 @@ static void ppcglue_PBGetFCBInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFCBInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFCBInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetFCBInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFCBInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFCBInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetFCBInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetFCBInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetFCBInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3775,21 +3775,21 @@ static void ppcglue_PBGetCatInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetCatInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetCatInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetCatInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBGetCatInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBGetCatInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3797,21 +3797,21 @@ static void ppcglue_PBSetCatInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetCatInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetCatInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetCatInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetCatInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetCatInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetCatInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetCatInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetCatInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3819,21 +3819,21 @@ static void ppcglue_PBSetVInfo(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetVInfo(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVInfo(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetVInfoSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetVInfo(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVInfo(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBSetVInfoAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBSetVInfo(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVInfo(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3841,21 +3841,21 @@ static void ppcglue_PBCreateFileIDRef(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCreateFileIDRef(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFileIDRef(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCreateFileIDRefSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCreateFileIDRef(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFileIDRef(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCreateFileIDRefAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCreateFileIDRef(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFileIDRef(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3863,21 +3863,21 @@ static void ppcglue_PBDeleteFileIDRef(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDeleteFileIDRef(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteFileIDRef(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDeleteFileIDRefSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDeleteFileIDRef(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteFileIDRef(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDeleteFileIDRefAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDeleteFileIDRef(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteFileIDRef(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3885,21 +3885,21 @@ static void ppcglue_PBResolveFileIDRef(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBResolveFileIDRef(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBResolveFileIDRef(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBResolveFileIDRefSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBResolveFileIDRef(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBResolveFileIDRef(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBResolveFileIDRefAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBResolveFileIDRef(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBResolveFileIDRef(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3907,21 +3907,21 @@ static void ppcglue_PBCatSearch(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCatSearch(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatSearch(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCatSearchSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCatSearch(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatSearch(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBCatSearchAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCatSearch(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatSearch(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3929,21 +3929,21 @@ static void ppcglue_PBOpenDF(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenDF(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenDF(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBOpenDFSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenDF(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenDF(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBOpenDFAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenDF(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenDF(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3951,21 +3951,21 @@ static void ppcglue_PBHOpenDF(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenDF(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenDF(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenDFSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenDF(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenDF(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenDFAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenDF(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenDF(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3973,21 +3973,21 @@ static void ppcglue_PBHGetVolParms(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVolParms(a_pb, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVolParms(a_pb, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetVolParmsSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVolParms(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVolParms(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetVolParmsAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetVolParms(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetVolParms(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -3995,21 +3995,21 @@ static void ppcglue_PBHGetDirAccess(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_a = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetDirAccess(a_pb, a_a);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetDirAccess(a_pb, a_a), a_a);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetDirAccessSync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetDirAccess(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetDirAccess(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHGetDirAccessAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHGetDirAccess(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetDirAccess(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -4017,21 +4017,21 @@ static void ppcglue_PBHOpenDeny(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     bool a_a = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenDeny(a_pb, a_a);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenDeny(a_pb, a_a), a_a);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenDenySync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenDeny(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenDeny(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenDenyAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenDeny(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenDeny(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -4184,21 +4184,21 @@ static void ppcglue_PBDTAddIcon(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTAddIcon(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTAddIcon(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTAddIconSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTAddIcon(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTAddIcon(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTAddIconAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTAddIcon(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTAddIcon(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4206,21 +4206,21 @@ static void ppcglue_PBDTGetIcon(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetIcon(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetIcon(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetIconSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetIcon(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetIcon(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetIconAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetIcon(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetIcon(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4228,21 +4228,21 @@ static void ppcglue_PBDTGetIconInfo(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetIconInfo(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetIconInfo(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetIconInfoSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetIconInfo(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetIconInfo(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetIconInfoAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetIconInfo(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetIconInfo(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4250,21 +4250,21 @@ static void ppcglue_PBDTAddAPPL(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTAddAPPL(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTAddAPPL(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTAddAPPLSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTAddAPPL(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTAddAPPL(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTAddAPPLAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTAddAPPL(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTAddAPPL(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4272,21 +4272,21 @@ static void ppcglue_PBDTRemoveAPPL(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTRemoveAPPL(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTRemoveAPPL(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTRemoveAPPLSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTRemoveAPPL(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTRemoveAPPL(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTRemoveAPPLAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTRemoveAPPL(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTRemoveAPPL(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4294,21 +4294,21 @@ static void ppcglue_PBDTGetAPPL(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetAPPL(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetAPPL(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetAPPLSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetAPPL(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetAPPL(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetAPPLAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetAPPL(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetAPPL(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4316,21 +4316,21 @@ static void ppcglue_PBDTSetComment(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTSetComment(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTSetComment(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTSetCommentSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTSetComment(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTSetComment(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTSetCommentAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTSetComment(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTSetComment(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4338,21 +4338,21 @@ static void ppcglue_PBDTRemoveComment(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTRemoveComment(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTRemoveComment(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTRemoveCommentSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTRemoveComment(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTRemoveComment(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTRemoveCommentAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTRemoveComment(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTRemoveComment(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4360,21 +4360,21 @@ static void ppcglue_PBDTGetComment(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetComment(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetComment(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetCommentSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetComment(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetComment(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetCommentAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetComment(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetComment(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4382,21 +4382,21 @@ static void ppcglue_PBDTFlush(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTFlush(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTFlush(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTFlushSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTFlush(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTFlush(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTFlushAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTFlush(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTFlush(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4404,21 +4404,21 @@ static void ppcglue_PBDTReset(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTReset(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTReset(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTResetSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTReset(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTReset(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTResetAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTReset(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTReset(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4426,21 +4426,21 @@ static void ppcglue_PBDTGetInfo(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetInfo(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetInfo(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetInfoSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetInfo(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetInfo(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTGetInfoAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTGetInfo(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTGetInfo(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -4455,21 +4455,21 @@ static void ppcglue_PBDTDelete(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
     bool a_async = c->gpr[4] != 0;
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTDelete(a_dtp, a_async);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTDelete(a_dtp, a_async), a_async);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTDeleteSync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTDelete(a_dtp, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTDelete(a_dtp, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBDTDeleteAsync(ppc_cpu *c)
 {
     gaddr a_dtp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBDTDelete(a_dtp, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_dtp, tb_PBDTDelete(a_dtp, true), true);
     c->pc = c->lr;
 }
 
@@ -12422,21 +12422,21 @@ static void ppcglue_GetScanOverride(ppc_cpu *c)
 static void ppcglue_PBHOpenRFDeny(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenRFDeny(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenRFDeny(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenRFDenySync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenRFDeny(a_pb, false);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenRFDeny(a_pb, false), false);
     c->pc = c->lr;
 }
 
 static void ppcglue_PBHOpenRFDenyAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHOpenRFDeny(a_pb, true);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHOpenRFDeny(a_pb, true), true);
     c->pc = c->lr;
 }
 

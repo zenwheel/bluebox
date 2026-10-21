@@ -35,6 +35,34 @@ extension BlueBox {
 
         func read(_ p: UInt32, _ n: Int) -> [UInt8] { (0..<n).map { rd8(p + UInt32($0)) } }
 
+        /// A PowerPC program's asynchronous PB call sets ioResult and runs
+        /// its completion routine later, at interrupt time, as a 68k one's
+        /// does (Star Wars DroidWorks waits in YieldToAnyThread for it).
+        @Test func asyncCallsRunTheirCompletion() {
+            bootMachine()
+            let stack = tb_NewPtr(65536, false, true)
+            g_cpu!.pointee.a.7 = stack + 65536 - 16
+            let flag = tb_NewPtr(4, false, true)
+            // MOVE.W D0,flag; ADDQ.W #1,flag+2; RTS
+            let words: [UInt16] = [0x33C0, UInt16(flag >> 16), UInt16(flag & 0xFFFF),
+                                   0x5279, UInt16((flag + 2) >> 16), UInt16((flag + 2) & 0xFFFF), 0x4E75]
+            let code = bytes(words.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xFF)] })
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr32(pb + UInt32(IOParam_ioCompletion_off), code)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -1000)) // no such file
+            wr16(pb + UInt32(IOParam_ioResult_off), 1)
+            #expect(result16("PBReadAsync", [pb]) == -51) // rfNumErr
+            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -51)
+            #expect(rd16(flag + 2) == 0) // not from inside the call
+            time_pump()
+            #expect(rd16(flag + 2) == 1 && Int16(bitPattern: rd16(flag)) == -51)
+            wr16(pb + UInt32(IOParam_ioResult_off), 1)
+            #expect(result16("PBReadSync", [pb]) == -51)
+            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -51)
+            time_pump()
+            #expect(rd16(flag + 2) == 1) // a synchronous call has no completion
+        }
+
         // MARK: Slot Manager
 
         /// SpBlock: spResult 0, spsPointer 4, spParamData 24, spRefNum 38,

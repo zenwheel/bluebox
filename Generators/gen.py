@@ -537,6 +537,16 @@ def gen_ppc_glue(name, fn, sig, variant):
         slot += 1
     rt = c_return(sig)
     call = f"tb_{name}({', '.join(call_args)})"
+    # A parameter block call: ioResult set and an asynchronous call's
+    # completion routine queued, as the 68k trap dispatcher does.
+    pb_arg = next((n for n, c in sig["args"] if c[0] == "reg" and c[1] == "A0"), None)
+    async_arg = next((n for n, c in sig["args"] if c[0] == "reg" and c[1] == "TrapBit<0x400>"), None)
+    if name.startswith("PB") and pb_arg and async_arg and rt == "int16_t":
+        if fixed:
+            asy = "true" if ppc_variant_bits(variant, "TrapBit<0x400>") else "false"
+        else:
+            asy = "a_" + async_arg
+        call = f"pb_call_done(a_{pb_arg}, {call}, {asy})"
     if rt == "void":
         lines.append(f"    {call};\n")
     elif struct_result:
