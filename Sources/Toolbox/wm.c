@@ -1067,6 +1067,17 @@ static void set_hilite(gaddr w, bool on)
     }
 }
 
+/* The window that was made active last.  The front window gets its
+ * activate event when it becomes the active one, whether or not it was
+ * highlighted already: HyperCard 2.4's message box (a palette it highlights
+ * itself) shown in front of the card, which HyperCard's GetNextEvent patch
+ * answers by highlighting the card again. */
+static gaddr active_window;
+
+/* The window SaveOld saved the regions of, and those regions. */
+static gaddr old_window;
+static hrgn old_struc, old_cont;
+
 /* Make the frontmost visible window the active one, queuing activate events. */
 static void update_active(void)
 {
@@ -1081,10 +1092,11 @@ static void update_active(void)
             wr32(LM_CurDeactive, w);
         }
     }
-    if (front && !WindowRecord_hilited(front)) {
+    if (front && (!WindowRecord_hilited(front) || front != active_window)) {
         set_hilite(front, true);
         wr32(LM_CurActivate, front);
     }
+    active_window = front;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1261,6 +1273,10 @@ static void close_window(gaddr w, bool keep_parts)
     call_wdef(w, wDispose, 0);
     unlink_window(w);
     remove_aux(w);
+    if (active_window == w)
+        active_window = 0;
+    if (old_window == w)
+        old_window = 0;
     controls_forget_window(w);
     WindowRecord_set_visible(w, 0);
     if (rd32(LM_CurActivate) == w)
@@ -2070,8 +2086,37 @@ void tb_ClipAbove(gaddr w)
     hrgn_free(&clip);
     hrgn_free(&s);
 }
-void tb_SaveOld(gaddr w) {}
-void tb_DrawNew(gaddr w, int8_t flag) { repaint_rgn_of(w); }
+/* SaveOld and DrawNew, for a program that moves or resizes a window by
+ * changing its regions itself (HyperCard 2.4 going to a smaller stack):
+ * what the window covered before and no longer covers, and what changed
+ * between its old and new content, is repainted. */
+void tb_SaveOld(gaddr w)
+{
+    rgn_read(WindowRecord_strucRgn(w), &old_struc);
+    rgn_read(WindowRecord_contRgn(w), &old_cont);
+    old_window = w;
+}
+
+void tb_DrawNew(gaddr w, int8_t flag)
+{
+    (void)flag;
+    if (w != old_window) {
+        repaint_rgn_of(w);
+        return;
+    }
+    old_window = 0;
+    hrgn area, now;
+    hrgn_init(&area);
+    hrgn_init(&now);
+    rgn_read(WindowRecord_strucRgn(w), &now);
+    hrgn_op(&area, &old_struc, &now, RGN_XOR);
+    rgn_read(WindowRecord_contRgn(w), &now);
+    hrgn_op(&now, &old_cont, &now, RGN_XOR);
+    hrgn_op(&area, &area, &now, RGN_UNION);
+    repaint(&area);
+    hrgn_free(&area);
+    hrgn_free(&now);
+}
 /* ---------------------------------------------------------------------- */
 /* Auxiliary window records (AuxWinHead): handles of awNext, awOwner,
  * awCTable, dialogCItem, awFlags, awReserved, awRefCon, one for each window
@@ -2165,7 +2210,15 @@ void tb_InitWindows(void)
         tb_OpenPort(wp);
         tb_SetPort(saved);
     }
+    if (rd32(LM_WindowList)) {
+        /* Called again with windows open (Installer 4's licence viewer does
+           this after making its dialog, and goes on drawing in it): the
+           windows, the screen and the current port stay. */
+        return;
+    }
     wr32(LM_WindowList, 0);
+    active_window = 0;
+    old_window = 0;
     floats_hidden = false;
     float_layer = false;
     nhidden_floats = 0;

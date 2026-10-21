@@ -467,6 +467,25 @@ static void old_color_rgb(int32_t c, uint16_t rgb[3])
     }
 }
 
+/* The nearest of the eight old colours, which is what RGBForeColor and
+ * RGBBackColor give a GrafPort (the Installer's licence text, in red). */
+static int32_t nearest_old_color(const uint16_t rgb[3])
+{
+    static const int32_t olds[] = { blackColor, whiteColor, 69, 137, 205, 273, 341, 409 };
+    int32_t best = blackColor;
+    int64_t best_d = INT64_MAX;
+    for (size_t i = 0; i < sizeof olds / sizeof olds[0]; i++) {
+        uint16_t o[3];
+        old_color_rgb(olds[i], o);
+        int64_t d = 0;
+        for (int k = 0; k < 3; k++)
+            d += ((int64_t)rgb[k] - o[k]) * ((int64_t)rgb[k] - o[k]);
+        if (d < best_d)
+            best_d = d, best = olds[i];
+    }
+    return best;
+}
+
 static bool fg_override;
 static uint16_t fg_override_rgb[3];
 
@@ -630,7 +649,7 @@ void tb_RGBForeColor(gaddr c)
     if (qd_port_is_color(p))
         set_fore(p, rgb);
     else
-        GrafPort_set_fgColor(p, rgb_dark(rgb[0], rgb[1], rgb[2]) ? blackColor : whiteColor);
+        GrafPort_set_fgColor(p, nearest_old_color(rgb));
 }
 
 void tb_RGBBackColor(gaddr c)
@@ -640,7 +659,7 @@ void tb_RGBBackColor(gaddr c)
     if (qd_port_is_color(p))
         set_back(p, rgb);
     else
-        GrafPort_set_bkColor(p, rgb_dark(rgb[0], rgb[1], rgb[2]) ? blackColor : whiteColor);
+        GrafPort_set_bkColor(p, nearest_old_color(rgb));
 }
 
 void tb_GetForeColor(gaddr c)

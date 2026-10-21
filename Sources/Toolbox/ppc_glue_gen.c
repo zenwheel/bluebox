@@ -714,149 +714,434 @@ static void ppcglue_NumToString(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetStdCProcs(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA4E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetStdCProcs(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA4E)) {
+        ppcpatched_SetStdCProcs(c);
+        return;
+    }
     gaddr a_cProcs = (gaddr)c->gpr[3];
     tb_SetStdCProcs(a_cProcs);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpenCPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA00));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpenCPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA00)) {
+        ppcpatched_OpenCPort(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_OpenCPort(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitCPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA01));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitCPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA01)) {
+        ppcpatched_InitCPort(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_InitCPort(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CloseCPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA02));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CloseCPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA02)) {
+        ppcpatched_CloseCPort(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_CloseCPort(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_RGBForeColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA14));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_RGBForeColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA14)) {
+        ppcpatched_RGBForeColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_RGBForeColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_RGBBackColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA15));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_RGBBackColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA15)) {
+        ppcpatched_RGBBackColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_RGBBackColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetForeColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA19));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetForeColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA19)) {
+        ppcpatched_GetForeColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_GetForeColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetBackColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA1A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetBackColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA1A)) {
+        ppcpatched_GetBackColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_GetBackColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PenPixPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA0A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PenPixPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA0A)) {
+        ppcpatched_PenPixPat(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_PenPixPat(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BackPixPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA0B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_BackPixPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA0B)) {
+        ppcpatched_BackPixPat(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_BackPixPat(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA21));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA21)) {
+        ppcpatched_OpColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_OpColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_HiliteColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA22));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HiliteColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA22)) {
+        ppcpatched_HiliteColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_HiliteColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewPixMap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xAA03));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewPixMap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA03)) {
+        ppcpatched_NewPixMap(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_NewPixMap();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_DisposePixMap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA04));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_DisposePixMap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA04)) {
+        ppcpatched_DisposePixMap(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DisposePixMap(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CopyPixMap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA05));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CopyPixMap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA05)) {
+        ppcpatched_CopyPixMap(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_CopyPixMap(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewPixPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xAA07));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewPixPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA07)) {
+        ppcpatched_NewPixPat(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_NewPixPat();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_DisposePixPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA08));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_DisposePixPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA08)) {
+        ppcpatched_DisposePixPat(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DisposePixPat(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CopyPixPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA09));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CopyPixPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA09)) {
+        ppcpatched_CopyPixPat(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_CopyPixPat(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetPortPix(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA06));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetPortPix(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA06)) {
+        ppcpatched_SetPortPix(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_SetPortPix(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewGDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA2F));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewGDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA2F)) {
+        ppcpatched_NewGDevice(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     int32_t a_arg1 = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_NewGDevice(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitGDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA2E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitGDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA2E)) {
+        ppcpatched_InitGDevice(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     int32_t a_arg1 = (int32_t)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -864,8 +1149,23 @@ static void ppcglue_InitGDevice(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetDeviceAttribute(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(1, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA2D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetDeviceAttribute(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA2D)) {
+        ppcpatched_SetDeviceAttribute(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     int8_t a_arg2 = (int8_t)c->gpr[5];
@@ -873,54 +1173,173 @@ static void ppcglue_SetDeviceAttribute(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetGDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA31));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetGDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA31)) {
+        ppcpatched_SetGDevice(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_SetGDevice(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeGDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA30));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeGDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA30)) {
+        ppcpatched_DisposeGDevice(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DisposeGDevice(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetGDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xAA32));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetGDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA32)) {
+        ppcpatched_GetGDevice(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_GetGDevice();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetDeviceList(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xAA29));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_GetDeviceList(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA29)) {
+        ppcpatched_GetDeviceList(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_GetDeviceList();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetMainDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xAA2A));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_GetMainDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA2A)) {
+        ppcpatched_GetMainDevice(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_GetMainDevice();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetMaxDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA27));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_GetMaxDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA27)) {
+        ppcpatched_GetMaxDevice(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetMaxDevice(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNextDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA2B));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNextDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA2B)) {
+        ppcpatched_GetNextDevice(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetNextDevice(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DeviceLoop(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xABCA));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DeviceLoop(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xABCA)) {
+        ppcpatched_DeviceLoop(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     int32_t a_arg2 = (int32_t)c->gpr[5];
@@ -929,8 +1348,25 @@ static void ppcglue_DeviceLoop(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TestDeviceAttribute(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA2C));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TestDeviceAttribute(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA2C)) {
+        ppcpatched_TestDeviceAttribute(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_TestDeviceAttribute(a_arg0, a_arg1);
@@ -965,8 +1401,23 @@ static void ppcglue_SetDepth(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_MakeITable(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA39));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MakeITable(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA39)) {
+        ppcpatched_MakeITable(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     int16_t a_arg2 = (int16_t)c->gpr[5];
@@ -974,29 +1425,89 @@ static void ppcglue_MakeITable(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_Color2Index(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA33));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Color2Index(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA33)) {
+        ppcpatched_Color2Index(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_Color2Index(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Index2Color(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA34));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Index2Color(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA34)) {
+        ppcpatched_Index2Color(c);
+        return;
+    }
     int32_t a_arg0 = (int32_t)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_Index2Color(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetCTSeed(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xAA28));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCTSeed(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA28)) {
+        ppcpatched_GetCTSeed(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_GetCTSeed();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetSubTable(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA37));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_GetSubTable(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA37)) {
+        ppcpatched_GetSubTable(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -1004,8 +1515,24 @@ static void ppcglue_GetSubTable(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillCRoundRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xAA10));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillCRoundRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA10)) {
+        ppcpatched_FillCRoundRect(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     int16_t a_arg2 = (int16_t)c->gpr[5];
@@ -1014,24 +1541,68 @@ static void ppcglue_FillCRoundRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillCRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA0E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillCRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA0E)) {
+        ppcpatched_FillCRect(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_FillCRect(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillCOval(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA0F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillCOval(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA0F)) {
+        ppcpatched_FillCOval(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_FillCOval(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillCArc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xAA11));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillCArc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA11)) {
+        ppcpatched_FillCArc(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     int16_t a_arg2 = (int16_t)c->gpr[5];
@@ -1040,54 +1611,154 @@ static void ppcglue_FillCArc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillCPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA13));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillCPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA13)) {
+        ppcpatched_FillCPoly(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_FillCPoly(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillCRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA12));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillCRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA12)) {
+        ppcpatched_FillCRgn(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_FillCRgn(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvertColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA35));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvertColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA35)) {
+        ppcpatched_InvertColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_InvertColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_RealColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA36));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_RealColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA36)) {
+        ppcpatched_RealColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_RealColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ProtectEntry(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(1, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA3D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ProtectEntry(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA3D)) {
+        ppcpatched_ProtectEntry(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     int8_t a_arg1 = (int8_t)c->gpr[4];
     tb_ProtectEntry(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ReserveEntry(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(1, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA3E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ReserveEntry(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA3E)) {
+        ppcpatched_ReserveEntry(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     int8_t a_arg1 = (int8_t)c->gpr[4];
     tb_ReserveEntry(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetEntries(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA3F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetEntries(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA3F)) {
+        ppcpatched_SetEntries(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     gaddr a_cSpecArray = (gaddr)c->gpr[5];
@@ -1095,36 +1766,101 @@ static void ppcglue_SetEntries(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_AddSearch(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA3A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AddSearch(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA3A)) {
+        ppcpatched_AddSearch(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_AddSearch(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_AddComp(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA3B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AddComp(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA3B)) {
+        ppcpatched_AddComp(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_AddComp(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DelSearch(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA4C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DelSearch(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA4C)) {
+        ppcpatched_DelSearch(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DelSearch(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DelComp(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA4D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DelComp(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA4D)) {
+        ppcpatched_DelComp(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DelComp(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetClientID(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA3C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetClientID(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA3C)) {
+        ppcpatched_SetClientID(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     tb_SetClientID(a_arg0);
     c->pc = c->lr;
@@ -1139,15 +1875,46 @@ static void ppcglue_GetGray(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetPixPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA0C));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetPixPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA0C)) {
+        ppcpatched_GetPixPat(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetPixPat(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_QDError(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xAA40));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_QDError(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA40)) {
+        ppcpatched_QDError(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QDError();
     c->pc = c->lr;
 }
@@ -1224,28 +1991,88 @@ static void ppcglue_GetColor(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetCTable(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA18));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCTable(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA18)) {
+        ppcpatched_GetCTable(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetCTable(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeCTable(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA24));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeCTable(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA24)) {
+        ppcpatched_DisposeCTable(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DisposeCTable(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitPalettes(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xAA90));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitPalettes(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA90)) {
+        ppcpatched_InitPalettes(c);
+        return;
+    }
     tb_InitPalettes();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_NewPalette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xAA91));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_NewPalette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA91)) {
+        ppcpatched_NewPalette(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     int16_t a_arg2 = (int16_t)c->gpr[5];
@@ -1254,22 +2081,64 @@ static void ppcglue_NewPalette(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNewPalette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA92));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNewPalette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA92)) {
+        ppcpatched_GetNewPalette(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetNewPalette(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposePalette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA93));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposePalette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA93)) {
+        ppcpatched_DisposePalette(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DisposePalette(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ActivatePalette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA94));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ActivatePalette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA94)) {
+        ppcpatched_ActivatePalette(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_ActivatePalette(a_arg0);
     c->pc = c->lr;
@@ -1284,8 +2153,23 @@ static void ppcglue_SetPalette(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_NSetPalette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA95));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_NSetPalette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA95)) {
+        ppcpatched_NSetPalette(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     int16_t a_updates = (int16_t)c->gpr[5];
@@ -1293,29 +2177,86 @@ static void ppcglue_NSetPalette(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetPalette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA96));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetPalette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA96)) {
+        ppcpatched_GetPalette(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetPalette(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PmForeColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA97));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PmForeColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA97)) {
+        ppcpatched_PmForeColor(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     tb_PmForeColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PmBackColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA98));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PmBackColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA98)) {
+        ppcpatched_PmBackColor(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     tb_PmBackColor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_AnimateEntry(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA99));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AnimateEntry(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA99)) {
+        ppcpatched_AnimateEntry(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -1323,8 +2264,25 @@ static void ppcglue_AnimateEntry(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_AnimatePalette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap((uint16_t)(0xAA9A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AnimatePalette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA9A)) {
+        ppcpatched_AnimatePalette(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     int16_t a_arg2 = (int16_t)c->gpr[5];
@@ -1334,8 +2292,23 @@ static void ppcglue_AnimatePalette(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetEntryColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA9B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetEntryColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA9B)) {
+        ppcpatched_GetEntryColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -1343,8 +2316,23 @@ static void ppcglue_GetEntryColor(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetEntryColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA9C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetEntryColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA9C)) {
+        ppcpatched_SetEntryColor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -1352,8 +2340,24 @@ static void ppcglue_SetEntryColor(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetEntryUsage(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xAA9D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetEntryUsage(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA9D)) {
+        ppcpatched_GetEntryUsage(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -1362,8 +2366,24 @@ static void ppcglue_GetEntryUsage(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetEntryUsage(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xAA9E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetEntryUsage(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA9E)) {
+        ppcpatched_SetEntryUsage(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     int16_t a_arg2 = (int16_t)c->gpr[5];
@@ -1372,8 +2392,24 @@ static void ppcglue_SetEntryUsage(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CTab2Palette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xAA9F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CTab2Palette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA9F)) {
+        ppcpatched_CTab2Palette(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     int16_t a_arg2 = (int16_t)c->gpr[5];
@@ -1382,37 +2418,105 @@ static void ppcglue_CTab2Palette(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_Palette2CTab(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAAA0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Palette2CTab(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAAA0)) {
+        ppcpatched_Palette2CTab(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_Palette2CTab(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetCCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA1B));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA1B)) {
+        ppcpatched_GetCCursor(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetCCursor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetCCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA1C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetCCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA1C)) {
+        ppcpatched_SetCCursor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_SetCCursor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeCCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA26));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeCCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA26)) {
+        ppcpatched_DisposeCCursor(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DisposeCCursor(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_AllocCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xAA1D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AllocCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA1D)) {
+        ppcpatched_AllocCursor(c);
+        return;
+    }
     tb_AllocCursor();
     c->pc = c->lr;
 }
@@ -1481,8 +2585,25 @@ static void ppcglue_GetPaletteUpdates(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CopyPalette(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap((uint16_t)(0xAAA1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CopyPalette(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAAA1)) {
+        ppcpatched_CopyPalette(c);
+        return;
+    }
     gaddr a_src_palette = (gaddr)c->gpr[3];
     gaddr a_dst_palette = (gaddr)c->gpr[4];
     int16_t a_src_start = (int16_t)c->gpr[5];
@@ -1492,8 +2613,21 @@ static void ppcglue_CopyPalette(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetCWMgrPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA48));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCWMgrPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA48)) {
+        ppcpatched_GetCWMgrPort(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_GetCWMgrPort(a_arg0);
     c->pc = c->lr;
@@ -1685,8 +2819,25 @@ static void ppcglue_OffscreenVersion(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitMapToRegion(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8D7));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitMapToRegion(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D7)) {
+        ppcpatched_BitMapToRegion(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BitMapToRegion(a_arg0, a_arg1);
@@ -1700,8 +2851,23 @@ static void ppcglue_Entry2Index(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SaveEntries(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA49));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SaveEntries(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA49)) {
+        ppcpatched_SaveEntries(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -1709,8 +2875,23 @@ static void ppcglue_SaveEntries(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_RestoreEntries(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA4A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_RestoreEntries(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA4A)) {
+        ppcpatched_RestoreEntries(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -1742,75 +2923,223 @@ static void ppcglue_GetPixMapInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpenCPicture(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA20));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpenCPicture(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA20)) {
+        ppcpatched_OpenCPicture(c);
+        return;
+    }
     gaddr a_newheaderp = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_OpenCPicture(a_newheaderp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetControlTitle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA95F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetControlTitle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA95F)) {
+        ppcpatched_SetControlTitle(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     gaddr a_t = (gaddr)c->gpr[4];
     tb_SetControlTitle(a_c, a_t);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetControlTitle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA95E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetControlTitle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA95E)) {
+        ppcpatched_GetControlTitle(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     gaddr a_t = (gaddr)c->gpr[4];
     tb_GetControlTitle(a_c, a_t);
     c->pc = c->lr;
 }
 
+static void ppcpatched_HideControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA958));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HideControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA958)) {
+        ppcpatched_HideControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     tb_HideControl(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ShowControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA957));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ShowControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA957)) {
+        ppcpatched_ShowControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     tb_ShowControl(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_HiliteControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA95D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HiliteControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA95D)) {
+        ppcpatched_HiliteControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     int16_t a_state = (int16_t)c->gpr[4];
     tb_HiliteControl(a_c, a_state);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawControls(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA969));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawControls(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA969)) {
+        ppcpatched_DrawControls(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_DrawControls(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Draw1Control(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA96D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Draw1Control(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA96D)) {
+        ppcpatched_Draw1Control(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     tb_Draw1Control(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_UpdateControls(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA953));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_UpdateControls(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA953)) {
+        ppcpatched_UpdateControls(c);
+        return;
+    }
     gaddr a_wp = (gaddr)c->gpr[3];
     gaddr a_rh = (gaddr)c->gpr[4];
     tb_UpdateControls(a_wp, a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(1, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(2, c->gpr[8]);
+    ppc_trap_push(2, c->gpr[9]);
+    ppc_trap_push(2, c->gpr[10]);
+    ppc_trap_push(4, rd32(c->gpr[1] + 56));
+    ppc_trap((uint16_t)(0xA954));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA954)) {
+        ppcpatched_NewControl(c);
+        return;
+    }
     gaddr a_wst = (gaddr)c->gpr[3];
     gaddr a_r = (gaddr)c->gpr[4];
     gaddr a_title = (gaddr)c->gpr[5];
@@ -1824,75 +3153,229 @@ static void ppcglue_NewControl(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNewControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9BE));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNewControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9BE)) {
+        ppcpatched_GetNewControl(c);
+        return;
+    }
     int16_t a_cid = (int16_t)c->gpr[3];
     gaddr a_wst = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_GetNewControl(a_cid, a_wst);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA955));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA955)) {
+        ppcpatched_DisposeControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     tb_DisposeControl(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_KillControls(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA956));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_KillControls(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA956)) {
+        ppcpatched_KillControls(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_KillControls(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetControlReference(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA95B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetControlReference(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA95B)) {
+        ppcpatched_SetControlReference(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     int32_t a_data = (int32_t)c->gpr[4];
     tb_SetControlReference(a_c, a_data);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetControlReference(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA95A));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetControlReference(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA95A)) {
+        ppcpatched_GetControlReference(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetControlReference(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetControlAction(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA96B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetControlAction(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA96B)) {
+        ppcpatched_SetControlAction(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     gaddr a_a = (gaddr)c->gpr[4];
     tb_SetControlAction(a_c, a_a);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetControlAction(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA96A));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetControlAction(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA96A)) {
+        ppcpatched_GetControlAction(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetControlAction(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetControlVariant(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA809));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetControlVariant(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA809)) {
+        ppcpatched_GetControlVariant(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlVariant(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetAuxiliaryControlRecord(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA44));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetAuxiliaryControlRecord(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA44)) {
+        ppcpatched_GetAuxiliaryControlRecord(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     gaddr a_acHndl = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetAuxiliaryControlRecord(a_c, a_acHndl);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FindControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA96C));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FindControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA96C)) {
+        ppcpatched_FindControl(c);
+        return;
+    }
     uint32_t a_p = (uint32_t)c->gpr[3];
     gaddr a_w = (gaddr)c->gpr[4];
     gaddr a_cp = (gaddr)c->gpr[5];
@@ -1900,8 +3383,26 @@ static void ppcglue_FindControl(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TrackControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA968));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TrackControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA968)) {
+        ppcpatched_TrackControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     uint32_t a_p = (uint32_t)c->gpr[4];
     gaddr a_a = (gaddr)c->gpr[5];
@@ -1909,61 +3410,183 @@ static void ppcglue_TrackControl(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TestControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA966));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TestControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA966)) {
+        ppcpatched_TestControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     uint32_t a_p = (uint32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TestControl(a_c, a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetControlValue(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA963));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetControlValue(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA963)) {
+        ppcpatched_SetControlValue(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     tb_SetControlValue(a_c, a_v);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetControlValue(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA960));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetControlValue(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA960)) {
+        ppcpatched_GetControlValue(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlValue(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetControlMinimum(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA964));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetControlMinimum(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA964)) {
+        ppcpatched_SetControlMinimum(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     tb_SetControlMinimum(a_c, a_v);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetControlMinimum(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA961));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetControlMinimum(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA961)) {
+        ppcpatched_GetControlMinimum(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlMinimum(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetControlMaximum(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA965));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetControlMaximum(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA965)) {
+        ppcpatched_SetControlMaximum(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     tb_SetControlMaximum(a_c, a_v);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetControlMaximum(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA962));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetControlMaximum(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA962)) {
+        ppcpatched_GetControlMaximum(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlMaximum(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_MoveControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA959));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MoveControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA959)) {
+        ppcpatched_MoveControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     int16_t a_h = (int16_t)c->gpr[4];
     int16_t a_v = (int16_t)c->gpr[5];
@@ -1971,8 +3594,25 @@ static void ppcglue_MoveControl(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_DragControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap((uint16_t)(0xA967));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DragControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA967)) {
+        ppcpatched_DragControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     uint32_t a_p = (uint32_t)c->gpr[4];
     gaddr a_limit = (gaddr)c->gpr[5];
@@ -1982,8 +3622,23 @@ static void ppcglue_DragControl(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SizeControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA95C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SizeControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA95C)) {
+        ppcpatched_SizeControl(c);
+        return;
+    }
     gaddr a_c = (gaddr)c->gpr[3];
     int16_t a_width = (int16_t)c->gpr[4];
     int16_t a_height = (int16_t)c->gpr[5];
@@ -1991,58 +3646,172 @@ static void ppcglue_SizeControl(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetControlColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA43));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetControlColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA43)) {
+        ppcpatched_SetControlColor(c);
+        return;
+    }
     gaddr a_ctl = (gaddr)c->gpr[3];
     gaddr a_ctab = (gaddr)c->gpr[4];
     tb_SetControlColor(a_ctl, a_ctab);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpenDeskAcc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9B6));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpenDeskAcc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B6)) {
+        ppcpatched_OpenDeskAcc(c);
+        return;
+    }
     gaddr a_acc = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenDeskAcc(a_acc);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CloseDeskAcc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9B7));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CloseDeskAcc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B7)) {
+        ppcpatched_CloseDeskAcc(c);
+        return;
+    }
     int16_t a_rn = (int16_t)c->gpr[3];
     tb_CloseDeskAcc(a_rn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SystemClick(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9B3));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SystemClick(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B3)) {
+        ppcpatched_SystemClick(c);
+        return;
+    }
     gaddr a_evp = (gaddr)c->gpr[3];
     gaddr a_wp = (gaddr)c->gpr[4];
     tb_SystemClick(a_evp, a_wp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SystemEdit(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9C2));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SystemEdit(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9C2)) {
+        ppcpatched_SystemEdit(c);
+        return;
+    }
     int16_t a_editcmd = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SystemEdit(a_editcmd);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SystemTask(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA9B4));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SystemTask(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B4)) {
+        ppcpatched_SystemTask(c);
+        return;
+    }
     tb_SystemTask();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_SystemEvent(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9B2));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_SystemEvent(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B2)) {
+        ppcpatched_SystemEvent(c);
+        return;
+    }
     gaddr a_evp = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SystemEvent(a_evp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SystemMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9B5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SystemMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B5)) {
+        ppcpatched_SystemMenu(c);
+        return;
+    }
     int32_t a_menu = (int32_t)c->gpr[3];
     tb_SystemMenu(a_menu);
     c->pc = c->lr;
@@ -2114,68 +3883,212 @@ static void ppcglue_PBKillIOAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_Alert(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA985));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Alert(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA985)) {
+        ppcpatched_Alert(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     gaddr a_fp = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_Alert(a_id, a_fp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StopAlert(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA986));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_StopAlert(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA986)) {
+        ppcpatched_StopAlert(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     gaddr a_fp = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_StopAlert(a_id, a_fp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NoteAlert(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA987));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NoteAlert(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA987)) {
+        ppcpatched_NoteAlert(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     gaddr a_fp = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NoteAlert(a_id, a_fp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CautionAlert(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA988));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_CautionAlert(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA988)) {
+        ppcpatched_CautionAlert(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     gaddr a_fp = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CautionAlert(a_id, a_fp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CouldAlert(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA989));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CouldAlert(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA989)) {
+        ppcpatched_CouldAlert(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     tb_CouldAlert(a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FreeAlert(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA98A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FreeAlert(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA98A)) {
+        ppcpatched_FreeAlert(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     tb_FreeAlert(a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CouldDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA979));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CouldDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA979)) {
+        ppcpatched_CouldDialog(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     tb_CouldDialog(a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FreeDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA97A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FreeDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA97A)) {
+        ppcpatched_FreeDialog(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     tb_FreeDialog(a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(1, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap_push(1, c->gpr[9]);
+    ppc_trap_push(4, c->gpr[10]);
+    ppc_trap_push(4, rd32(c->gpr[1] + 56));
+    ppc_trap((uint16_t)(0xA97D));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA97D)) {
+        ppcpatched_NewDialog(c);
+        return;
+    }
     gaddr a_dst = (gaddr)c->gpr[3];
     gaddr a_r = (gaddr)c->gpr[4];
     gaddr a_tit = (gaddr)c->gpr[5];
@@ -2189,8 +4102,26 @@ static void ppcglue_NewDialog(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNewDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA97C));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNewDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA97C)) {
+        ppcpatched_GetNewDialog(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     gaddr a_dst = (gaddr)c->gpr[4];
     gaddr a_behind = (gaddr)c->gpr[5];
@@ -2198,60 +4129,178 @@ static void ppcglue_GetNewDialog(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CloseDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA982));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CloseDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA982)) {
+        ppcpatched_CloseDialog(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     tb_CloseDialog(a_dp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA983));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA983)) {
+        ppcpatched_DisposeDialog(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     tb_DisposeDialog(a_dp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ModalDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA991));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ModalDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA991)) {
+        ppcpatched_ModalDialog(c);
+        return;
+    }
     gaddr a_fp = (gaddr)c->gpr[3];
     gaddr a_item = (gaddr)c->gpr[4];
     tb_ModalDialog(a_fp, a_item);
     c->pc = c->lr;
 }
 
+static void ppcpatched_IsDialogEvent(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA97F));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_IsDialogEvent(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA97F)) {
+        ppcpatched_IsDialogEvent(c);
+        return;
+    }
     gaddr a_evt = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsDialogEvent(a_evt);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA981));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA981)) {
+        ppcpatched_DrawDialog(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     tb_DrawDialog(a_dp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FindDialogItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA984));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FindDialogItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA984)) {
+        ppcpatched_FindDialogItem(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     uint32_t a_pt = (uint32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FindDialogItem(a_dp, a_pt);
     c->pc = c->lr;
 }
 
+static void ppcpatched_UpdateDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA978));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_UpdateDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA978)) {
+        ppcpatched_UpdateDialog(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     gaddr a_rgn = (gaddr)c->gpr[4];
     tb_UpdateDialog(a_dp, a_rgn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DialogSelect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA980));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_DialogSelect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA980)) {
+        ppcpatched_DialogSelect(c);
+        return;
+    }
     gaddr a_evt = (gaddr)c->gpr[3];
     gaddr a_dpp = (gaddr)c->gpr[4];
     gaddr a_item = (gaddr)c->gpr[5];
@@ -2259,15 +4308,41 @@ static void ppcglue_DialogSelect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_ErrorSound(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA98C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ErrorSound(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA98C)) {
+        ppcpatched_ErrorSound(c);
+        return;
+    }
     gaddr a_sp = (gaddr)c->gpr[3];
     tb_ErrorSound(a_sp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitDialogs(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA97B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitDialogs(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA97B)) {
+        ppcpatched_InitDialogs(c);
+        return;
+    }
     gaddr a_rp = (gaddr)c->gpr[3];
     tb_InitDialogs(a_rp);
     c->pc = c->lr;
@@ -2280,8 +4355,24 @@ static void ppcglue_SetDialogFont(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_ParamText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA98B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParamText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA98B)) {
+        ppcpatched_ParamText(c);
+        return;
+    }
     gaddr a_p0 = (gaddr)c->gpr[3];
     gaddr a_p1 = (gaddr)c->gpr[4];
     gaddr a_p2 = (gaddr)c->gpr[5];
@@ -2290,8 +4381,25 @@ static void ppcglue_ParamText(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetDialogItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(4, c->gpr[7]);
+    ppc_trap((uint16_t)(0xA98D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetDialogItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA98D)) {
+        ppcpatched_GetDialogItem(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     int16_t a_itemno = (int16_t)c->gpr[4];
     gaddr a_itype = (gaddr)c->gpr[5];
@@ -2301,8 +4409,25 @@ static void ppcglue_GetDialogItem(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetDialogItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(4, c->gpr[7]);
+    ppc_trap((uint16_t)(0xA98E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetDialogItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA98E)) {
+        ppcpatched_SetDialogItem(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     int16_t a_itemno = (int16_t)c->gpr[4];
     int16_t a_itype = (int16_t)c->gpr[5];
@@ -2312,24 +4437,68 @@ static void ppcglue_SetDialogItem(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetDialogItemText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA990));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetDialogItemText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA990)) {
+        ppcpatched_GetDialogItemText(c);
+        return;
+    }
     gaddr a_item = (gaddr)c->gpr[3];
     gaddr a_text = (gaddr)c->gpr[4];
     tb_GetDialogItemText(a_item, a_text);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetDialogItemText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA98F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetDialogItemText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA98F)) {
+        ppcpatched_SetDialogItemText(c);
+        return;
+    }
     gaddr a_item = (gaddr)c->gpr[3];
     gaddr a_text = (gaddr)c->gpr[4];
     tb_SetDialogItemText(a_item, a_text);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SelectDialogItemText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA97E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SelectDialogItemText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA97E)) {
+        ppcpatched_SelectDialogItemText(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     int16_t a_itemno = (int16_t)c->gpr[4];
     int16_t a_start = (int16_t)c->gpr[5];
@@ -2350,24 +4519,76 @@ static void ppcglue_ResetAlertStage(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_HideDialogItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA827));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HideDialogItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA827)) {
+        ppcpatched_HideDialogItem(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     tb_HideDialogItem(a_dp, a_item);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ShowDialogItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA828));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ShowDialogItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA828)) {
+        ppcpatched_ShowDialogItem(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     tb_ShowDialogItem(a_dp, a_item);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewColorDialog(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(1, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap_push(1, c->gpr[9]);
+    ppc_trap_push(4, c->gpr[10]);
+    ppc_trap_push(4, rd32(c->gpr[1] + 56));
+    ppc_trap((uint16_t)(0xAA4B));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewColorDialog(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA4B)) {
+        ppcpatched_NewColorDialog(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -4147,8 +6368,27 @@ static void ppcglue_FSpOpenResFile(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_HOpenResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(1, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA81A));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_HOpenResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA81A)) {
+        ppcpatched_HOpenResFile(c);
+        return;
+    }
     int16_t a_vref = (int16_t)c->gpr[3];
     int32_t a_dirid = (int32_t)c->gpr[4];
     gaddr a_file_name = (gaddr)c->gpr[5];
@@ -4157,8 +6397,23 @@ static void ppcglue_HOpenResFile(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_HCreateResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA81B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HCreateResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA81B)) {
+        ppcpatched_HCreateResFile(c);
+        return;
+    }
     int16_t a_vrefnum = (int16_t)c->gpr[3];
     int32_t a_parid = (int32_t)c->gpr[4];
     gaddr a_name = (gaddr)c->gpr[5];
@@ -4473,66 +6728,191 @@ static void ppcglue_PBDTDeleteAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitFonts(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA8FE));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitFonts(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8FE)) {
+        ppcpatched_InitFonts(c);
+        return;
+    }
     tb_InitFonts();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetFontName(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8FF));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_GetFontName(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8FF)) {
+        ppcpatched_GetFontName(c);
+        return;
+    }
     int16_t a_fnum = (int16_t)c->gpr[3];
     gaddr a_fnam = (gaddr)c->gpr[4];
     tb_GetFontName(a_fnum, a_fnam);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetFNum(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA900));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFNum(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA900)) {
+        ppcpatched_GetFNum(c);
+        return;
+    }
     gaddr a_fnam = (gaddr)c->gpr[3];
     gaddr a_fnum = (gaddr)c->gpr[4];
     tb_GetFNum(a_fnam, a_fnum);
     c->pc = c->lr;
 }
 
+static void ppcpatched_RealFont(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA902));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_RealFont(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA902)) {
+        ppcpatched_RealFont(c);
+        return;
+    }
     int16_t a_fnum = (int16_t)c->gpr[3];
     int16_t a_sz = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_RealFont(a_fnum, a_sz);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetFontLock(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA903));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetFontLock(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA903)) {
+        ppcpatched_SetFontLock(c);
+        return;
+    }
     int8_t a_lflag = (int8_t)c->gpr[3];
     tb_SetFontLock(a_lflag);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FMSwapFont(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA901));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FMSwapFont(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA901)) {
+        ppcpatched_FMSwapFont(c);
+        return;
+    }
     gaddr a_fmip = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_FMSwapFont(a_fmip);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FontMetrics(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA835));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FontMetrics(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA835)) {
+        ppcpatched_FontMetrics(c);
+        return;
+    }
     gaddr a_metrp = (gaddr)c->gpr[3];
     tb_FontMetrics(a_metrp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetFScaleDisable(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA834));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetFScaleDisable(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA834)) {
+        ppcpatched_SetFScaleDisable(c);
+        return;
+    }
     int8_t a_disable = (int8_t)c->gpr[3];
     tb_SetFScaleDisable(a_disable);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetFractEnable(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA814));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetFractEnable(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA814)) {
+        ppcpatched_SetFractEnable(c);
+        return;
+    }
     int8_t a_enable = (int8_t)c->gpr[3];
     tb_SetFractEnable(a_enable);
     c->pc = c->lr;
@@ -4745,16 +7125,44 @@ static void ppcglue_PlotIconMethod(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_PlotCIcon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA1F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PlotCIcon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA1F)) {
+        ppcpatched_PlotCIcon(c);
+        return;
+    }
     gaddr a_rect = (gaddr)c->gpr[3];
     gaddr a_icon = (gaddr)c->gpr[4];
     tb_PlotCIcon(a_rect, a_icon);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PlotIcon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA94B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PlotIcon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA94B)) {
+        ppcpatched_PlotIcon(c);
+        return;
+    }
     gaddr a_rect = (gaddr)c->gpr[3];
     gaddr a_icon = (gaddr)c->gpr[4];
     tb_PlotIcon(a_rect, a_icon);
@@ -4791,22 +7199,67 @@ static void ppcglue_PlotSICNHandle(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetIcon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9BB));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetIcon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9BB)) {
+        ppcpatched_GetIcon(c);
+        return;
+    }
     int16_t a_icon_id = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetIcon(a_icon_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetCIcon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA1E));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCIcon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA1E)) {
+        ppcpatched_GetCIcon(c);
+        return;
+    }
     int16_t a_icon_id = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetCIcon(a_icon_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeCIcon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA25));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeCIcon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA25)) {
+        ppcpatched_DisposeCIcon(c);
+        return;
+    }
     gaddr a_icon = (gaddr)c->gpr[3];
     tb_DisposeCIcon(a_icon);
     c->pc = c->lr;
@@ -5743,79 +8196,231 @@ static void ppcglue_TempDisposeHandle(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawMenuBar(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA937));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawMenuBar(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA937)) {
+        ppcpatched_DrawMenuBar(c);
+        return;
+    }
     tb_DrawMenuBar();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_ClearMenuBar(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA934));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_ClearMenuBar(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA934)) {
+        ppcpatched_ClearMenuBar(c);
+        return;
+    }
     tb_ClearMenuBar();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_InitMenus(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA930));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_InitMenus(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA930)) {
+        ppcpatched_InitMenus(c);
+        return;
+    }
     tb_InitMenus();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_NewMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA931));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_NewMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA931)) {
+        ppcpatched_NewMenu(c);
+        return;
+    }
     int16_t a_mid = (int16_t)c->gpr[3];
     gaddr a_str = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_NewMenu(a_mid, a_str);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CalcMenuSize(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA948));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CalcMenuSize(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA948)) {
+        ppcpatched_CalcMenuSize(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     tb_CalcMenuSize(a_mh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9BF));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9BF)) {
+        ppcpatched_GetMenu(c);
+        return;
+    }
     int16_t a_rid = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetMenu(a_rid);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA932));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA932)) {
+        ppcpatched_DisposeMenu(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     tb_DisposeMenu(a_mh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_AppendMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA933));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AppendMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA933)) {
+        ppcpatched_AppendMenu(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     gaddr a_str = (gaddr)c->gpr[4];
     tb_AppendMenu(a_mh, a_str);
     c->pc = c->lr;
 }
 
+static void ppcpatched_AppendResMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA94D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AppendResMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA94D)) {
+        ppcpatched_AppendResMenu(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int32_t a_restype = (int32_t)c->gpr[4];
     tb_AppendResMenu(a_mh, a_restype);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DeleteMenuItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA952));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DeleteMenuItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA952)) {
+        ppcpatched_DeleteMenuItem(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     tb_DeleteMenuItem(a_mh, a_item);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InsertResMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA951));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InsertResMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA951)) {
+        ppcpatched_InsertResMenu(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int32_t a_restype = (int32_t)c->gpr[4];
     int16_t a_after = (int16_t)c->gpr[5];
@@ -5823,8 +8428,23 @@ static void ppcglue_InsertResMenu(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InsertMenuItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA826));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InsertMenuItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA826)) {
+        ppcpatched_InsertMenuItem(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     gaddr a_str = (gaddr)c->gpr[4];
     int16_t a_after = (int16_t)c->gpr[5];
@@ -5832,71 +8452,215 @@ static void ppcglue_InsertMenuItem(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InsertMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA935));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InsertMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA935)) {
+        ppcpatched_InsertMenu(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_before = (int16_t)c->gpr[4];
     tb_InsertMenu(a_mh, a_before);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DeleteMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA936));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DeleteMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA936)) {
+        ppcpatched_DeleteMenu(c);
+        return;
+    }
     int16_t a_mid = (int16_t)c->gpr[3];
     tb_DeleteMenu(a_mid);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNewMBar(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9C0));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNewMBar(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9C0)) {
+        ppcpatched_GetNewMBar(c);
+        return;
+    }
     int16_t a_mbarid = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetNewMBar(a_mbarid);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetMenuBar(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA93B));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMenuBar(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA93B)) {
+        ppcpatched_GetMenuBar(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_GetMenuBar();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_SetMenuBar(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA93C));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_SetMenuBar(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA93C)) {
+        ppcpatched_SetMenuBar(c);
+        return;
+    }
     gaddr a_ml = (gaddr)c->gpr[3];
     tb_SetMenuBar(a_ml);
     c->pc = c->lr;
 }
 
+static void ppcpatched_HiliteMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA938));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HiliteMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA938)) {
+        ppcpatched_HiliteMenu(c);
+        return;
+    }
     int16_t a_mid = (int16_t)c->gpr[3];
     tb_HiliteMenu(a_mid);
     c->pc = c->lr;
 }
 
+static void ppcpatched_MenuSelect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA93D));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_MenuSelect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA93D)) {
+        ppcpatched_MenuSelect(c);
+        return;
+    }
     uint32_t a_p = (uint32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_MenuSelect(a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FlashMenuBar(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA94C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FlashMenuBar(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA94C)) {
+        ppcpatched_FlashMenuBar(c);
+        return;
+    }
     int16_t a_mid = (int16_t)c->gpr[3];
     tb_FlashMenuBar(a_mid);
     c->pc = c->lr;
 }
 
+static void ppcpatched_MenuKey(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA93E));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_MenuKey(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA93E)) {
+        ppcpatched_MenuKey(c);
+        return;
+    }
     int16_t a_thec = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_MenuKey(a_thec);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetMenuItemText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA947));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetMenuItemText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA947)) {
+        ppcpatched_SetMenuItemText(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     gaddr a_str = (gaddr)c->gpr[5];
@@ -5904,8 +8668,23 @@ static void ppcglue_SetMenuItemText(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetMenuItemText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA946));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMenuItemText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA946)) {
+        ppcpatched_GetMenuItemText(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     gaddr a_str = (gaddr)c->gpr[5];
@@ -5913,24 +8692,67 @@ static void ppcglue_GetMenuItemText(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisableItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA93A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisableItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA93A)) {
+        ppcpatched_DisableItem(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     tb_DisableItem(a_mh, a_item);
     c->pc = c->lr;
 }
 
+static void ppcpatched_EnableItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA939));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_EnableItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA939)) {
+        ppcpatched_EnableItem(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     tb_EnableItem(a_mh, a_item);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CheckItem(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(1, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA945));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CheckItem(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA945)) {
+        ppcpatched_CheckItem(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     int8_t a_cflag = (int8_t)c->gpr[5];
@@ -5938,8 +8760,23 @@ static void ppcglue_CheckItem(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetItemMark(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA944));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetItemMark(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA944)) {
+        ppcpatched_SetItemMark(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     int16_t a_mark = (int16_t)c->gpr[5];
@@ -5947,8 +8784,23 @@ static void ppcglue_SetItemMark(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetItemMark(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA943));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetItemMark(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA943)) {
+        ppcpatched_GetItemMark(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     gaddr a_markp = (gaddr)c->gpr[5];
@@ -5956,8 +8808,23 @@ static void ppcglue_GetItemMark(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetItemIcon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(1, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA940));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetItemIcon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA940)) {
+        ppcpatched_SetItemIcon(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     uint8_t a_icon = (uint8_t)c->gpr[5];
@@ -5965,8 +8832,23 @@ static void ppcglue_SetItemIcon(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetItemIcon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA93F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetItemIcon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA93F)) {
+        ppcpatched_GetItemIcon(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     gaddr a_iconp = (gaddr)c->gpr[5];
@@ -5974,8 +8856,23 @@ static void ppcglue_GetItemIcon(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetItemStyle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA942));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetItemStyle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA942)) {
+        ppcpatched_SetItemStyle(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     int16_t a_style = (int16_t)c->gpr[5];
@@ -5983,8 +8880,23 @@ static void ppcglue_SetItemStyle(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetItemStyle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA941));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetItemStyle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA941)) {
+        ppcpatched_GetItemStyle(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     gaddr a_stylep = (gaddr)c->gpr[5];
@@ -5992,42 +8904,130 @@ static void ppcglue_GetItemStyle(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CountMItems(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA950));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_CountMItems(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA950)) {
+        ppcpatched_CountMItems(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountMItems(a_mh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetMenuHandle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA949));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMenuHandle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA949)) {
+        ppcpatched_GetMenuHandle(c);
+        return;
+    }
     int16_t a_mid = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetMenuHandle(a_mid);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetMenuFlash(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA94A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetMenuFlash(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA94A)) {
+        ppcpatched_SetMenuFlash(c);
+        return;
+    }
     int16_t a_i = (int16_t)c->gpr[3];
     tb_SetMenuFlash(a_i);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitProcMenu(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA808));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitProcMenu(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA808)) {
+        ppcpatched_InitProcMenu(c);
+        return;
+    }
     int16_t a_mbid = (int16_t)c->gpr[3];
     tb_InitProcMenu(a_mbid);
     c->pc = c->lr;
 }
 
+static void ppcpatched_MenuChoice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xAA66));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_MenuChoice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA66)) {
+        ppcpatched_MenuChoice(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_MenuChoice();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetItemCmd(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA84E));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_GetItemCmd(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA84E)) {
+        ppcpatched_GetItemCmd(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     gaddr a_cmdp = (gaddr)c->gpr[5];
@@ -6035,8 +9035,23 @@ static void ppcglue_GetItemCmd(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetItemCmd(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA84F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetItemCmd(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA84F)) {
+        ppcpatched_SetItemCmd(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_item = (int16_t)c->gpr[4];
     int16_t a_cmd = (int16_t)c->gpr[5];
@@ -6044,8 +9059,27 @@ static void ppcglue_SetItemCmd(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_PopUpMenuSelect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA80B));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_PopUpMenuSelect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA80B)) {
+        ppcpatched_PopUpMenuSelect(c);
+        return;
+    }
     gaddr a_mh = (gaddr)c->gpr[3];
     int16_t a_top = (int16_t)c->gpr[4];
     int16_t a_left = (int16_t)c->gpr[5];
@@ -6054,52 +9088,150 @@ static void ppcglue_PopUpMenuSelect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_DeleteMCEntries(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA60));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DeleteMCEntries(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA60)) {
+        ppcpatched_DeleteMCEntries(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     tb_DeleteMCEntries(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetMCInfo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xAA61));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMCInfo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA61)) {
+        ppcpatched_GetMCInfo(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_GetMCInfo();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_SetMCInfo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA62));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_SetMCInfo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA62)) {
+        ppcpatched_SetMCInfo(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_SetMCInfo(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeMCInfo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA63));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeMCInfo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA63)) {
+        ppcpatched_DisposeMCInfo(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_DisposeMCInfo(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetMCEntry(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA64));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMCEntry(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA64)) {
+        ppcpatched_GetMCEntry(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     int16_t a_arg1 = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_GetMCEntry(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetMCEntries(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA65));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetMCEntries(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA65)) {
+        ppcpatched_SetMCEntries(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     tb_SetMCEntries(a_arg0, a_arg1);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvalMenuBar(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA81D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvalMenuBar(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA81D)) {
+        ppcpatched_InvalMenuBar(c);
+        return;
+    }
     tb_InvalMenuBar();
     c->pc = c->lr;
 }
@@ -6524,8 +9656,21 @@ static void ppcglue_SetToolTrapAddress(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SysBeep(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9C8));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SysBeep(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9C8)) {
+        ppcpatched_SysBeep(c);
+        return;
+    }
     int16_t a_i = (int16_t)c->gpr[3];
     tb_SysBeep(a_i);
     c->pc = c->lr;
@@ -6546,15 +9691,40 @@ static void ppcglue_StripAddress(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_DebugStr(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xABFF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DebugStr(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xABFF)) {
+        ppcpatched_DebugStr(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     tb_DebugStr(a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Debugger(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA9FF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Debugger(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9FF)) {
+        ppcpatched_Debugger(c);
+        return;
+    }
     tb_Debugger();
     c->pc = c->lr;
 }
@@ -6567,15 +9737,40 @@ static void ppcglue_HWPriv(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitPack(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9E5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitPack(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9E5)) {
+        ppcpatched_InitPack(c);
+        return;
+    }
     int16_t a_packid = (int16_t)c->gpr[3];
     tb_InitPack(a_packid);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitAllPacks(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA9E6));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitAllPacks(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9E6)) {
+        ppcpatched_InitAllPacks(c);
+        return;
+    }
     tb_InitAllPacks();
     c->pc = c->lr;
 }
@@ -6806,8 +10001,26 @@ static void ppcglue_LaunchApplication(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CopyBits(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap((uint16_t)(0xA8EC));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CopyBits(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8EC)) {
+        ppcpatched_CopyBits(c);
+        return;
+    }
     gaddr a_src_bitmap = (gaddr)c->gpr[3];
     gaddr a_dst_bitmap = (gaddr)c->gpr[4];
     gaddr a_src_rect = (gaddr)c->gpr[5];
@@ -6818,8 +10031,24 @@ static void ppcglue_CopyBits(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_ScrollRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA8EF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ScrollRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8EF)) {
+        ppcpatched_ScrollRect(c);
+        return;
+    }
     gaddr a_rp = (gaddr)c->gpr[3];
     int16_t a_dh = (int16_t)c->gpr[4];
     int16_t a_dv = (int16_t)c->gpr[5];
@@ -6828,176 +10057,508 @@ static void ppcglue_ScrollRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_ForeColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA862));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ForeColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA862)) {
+        ppcpatched_ForeColor(c);
+        return;
+    }
     int32_t a_c = (int32_t)c->gpr[3];
     tb_ForeColor(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BackColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA863));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_BackColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA863)) {
+        ppcpatched_BackColor(c);
+        return;
+    }
     int32_t a_c = (int32_t)c->gpr[3];
     tb_BackColor(a_c);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ColorBit(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA864));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ColorBit(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA864)) {
+        ppcpatched_ColorBit(c);
+        return;
+    }
     int16_t a_b = (int16_t)c->gpr[3];
     tb_ColorBit(a_b);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA851));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA851)) {
+        ppcpatched_SetCursor(c);
+        return;
+    }
     gaddr a_cp = (gaddr)c->gpr[3];
     tb_SetCursor(a_cp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA850));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA850)) {
+        ppcpatched_InitCursor(c);
+        return;
+    }
     tb_InitCursor();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_HideCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA852));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_HideCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA852)) {
+        ppcpatched_HideCursor(c);
+        return;
+    }
     tb_HideCursor();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_ShowCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA853));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_ShowCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA853)) {
+        ppcpatched_ShowCursor(c);
+        return;
+    }
     tb_ShowCursor();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_ObscureCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA856));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_ObscureCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA856)) {
+        ppcpatched_ObscureCursor(c);
+        return;
+    }
     tb_ObscureCursor();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_ShieldCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA855));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_ShieldCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA855)) {
+        ppcpatched_ShieldCursor(c);
+        return;
+    }
     gaddr a_rp = (gaddr)c->gpr[3];
     uint32_t a_p = (uint32_t)c->gpr[4];
     tb_ShieldCursor(a_rp, a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitGraf(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA86E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitGraf(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA86E)) {
+        ppcpatched_InitGraf(c);
+        return;
+    }
     gaddr a_gp = (gaddr)c->gpr[3];
     tb_InitGraf(a_gp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA873));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA873)) {
+        ppcpatched_SetPort(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     tb_SetPort(a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA86D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA86D)) {
+        ppcpatched_InitPort(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     tb_InitPort(a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpenPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA86F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpenPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA86F)) {
+        ppcpatched_OpenPort(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     tb_OpenPort(a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ClosePort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA87D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ClosePort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA87D)) {
+        ppcpatched_ClosePort(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     tb_ClosePort(a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA874));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA874)) {
+        ppcpatched_GetPort(c);
+        return;
+    }
     gaddr a_pp = (gaddr)c->gpr[3];
     tb_GetPort(a_pp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GrafDevice(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA872));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GrafDevice(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA872)) {
+        ppcpatched_GrafDevice(c);
+        return;
+    }
     int16_t a_d = (int16_t)c->gpr[3];
     tb_GrafDevice(a_d);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetPortBits(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA875));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetPortBits(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA875)) {
+        ppcpatched_SetPortBits(c);
+        return;
+    }
     gaddr a_bm = (gaddr)c->gpr[3];
     tb_SetPortBits(a_bm);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PortSize(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA876));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PortSize(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA876)) {
+        ppcpatched_PortSize(c);
+        return;
+    }
     int16_t a_w = (int16_t)c->gpr[3];
     int16_t a_h = (int16_t)c->gpr[4];
     tb_PortSize(a_w, a_h);
     c->pc = c->lr;
 }
 
+static void ppcpatched_MovePortTo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA877));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MovePortTo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA877)) {
+        ppcpatched_MovePortTo(c);
+        return;
+    }
     int16_t a_lg = (int16_t)c->gpr[3];
     int16_t a_tg = (int16_t)c->gpr[4];
     tb_MovePortTo(a_lg, a_tg);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetOrigin(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA878));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetOrigin(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA878)) {
+        ppcpatched_SetOrigin(c);
+        return;
+    }
     int16_t a_h = (int16_t)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     tb_SetOrigin(a_h, a_v);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetClip(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA879));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetClip(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA879)) {
+        ppcpatched_SetClip(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_SetClip(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetClip(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA87A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetClip(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA87A)) {
+        ppcpatched_GetClip(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_GetClip(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ClipRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA87B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ClipRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA87B)) {
+        ppcpatched_ClipRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_ClipRect(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BackPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA87C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_BackPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA87C)) {
+        ppcpatched_BackPat(c);
+        return;
+    }
     gaddr a_pp = (gaddr)c->gpr[3];
     tb_BackPat(a_pp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SeedFill(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(2, c->gpr[8]);
+    ppc_trap_push(2, c->gpr[9]);
+    ppc_trap_push(2, c->gpr[10]);
+    ppc_trap((uint16_t)(0xA839));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SeedFill(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA839)) {
+        ppcpatched_SeedFill(c);
+        return;
+    }
     gaddr a_srcp = (gaddr)c->gpr[3];
     gaddr a_dstp = (gaddr)c->gpr[4];
     int16_t a_srcr = (int16_t)c->gpr[5];
@@ -7010,8 +10571,26 @@ static void ppcglue_SeedFill(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CalcMask(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(2, c->gpr[8]);
+    ppc_trap((uint16_t)(0xA838));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CalcMask(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA838)) {
+        ppcpatched_CalcMask(c);
+        return;
+    }
     gaddr a_srcp = (gaddr)c->gpr[3];
     gaddr a_dstp = (gaddr)c->gpr[4];
     int16_t a_srcr = (int16_t)c->gpr[5];
@@ -7022,8 +10601,26 @@ static void ppcglue_CalcMask(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CopyMask(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(4, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap((uint16_t)(0xA817));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CopyMask(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA817)) {
+        ppcpatched_CopyMask(c);
+        return;
+    }
     gaddr a_srcbp = (gaddr)c->gpr[3];
     gaddr a_mskbp = (gaddr)c->gpr[4];
     gaddr a_dstbp = (gaddr)c->gpr[5];
@@ -7034,45 +10631,133 @@ static void ppcglue_CopyMask(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CharExtra(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA23));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CharExtra(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA23)) {
+        ppcpatched_CharExtra(c);
+        return;
+    }
     int32_t a_Extra = (int32_t)c->gpr[3];
     tb_CharExtra(a_Extra);
     c->pc = c->lr;
 }
 
+static void ppcpatched_MakeRGBPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA0D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MakeRGBPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA0D)) {
+        ppcpatched_MakeRGBPat(c);
+        return;
+    }
     gaddr a_ph = (gaddr)c->gpr[3];
     gaddr a_colorp = (gaddr)c->gpr[4];
     tb_MakeRGBPat(a_ph, a_colorp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Random(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA861));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Random(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA861)) {
+        ppcpatched_Random(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_Random();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetPixel(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA865));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_GetPixel(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA865)) {
+        ppcpatched_GetPixel(c);
+        return;
+    }
     int16_t a_h = (int16_t)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetPixel(a_h, a_v);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StuffHex(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA866));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StuffHex(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA866)) {
+        ppcpatched_StuffHex(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     gaddr a_s = (gaddr)c->gpr[4];
     tb_StuffHex(a_p, a_s);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ScalePt(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8F8));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ScalePt(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F8)) {
+        ppcpatched_ScalePt(c);
+        return;
+    }
     gaddr a_pt = (gaddr)c->gpr[3];
     gaddr a_srcr = (gaddr)c->gpr[4];
     gaddr a_dstr = (gaddr)c->gpr[5];
@@ -7080,8 +10765,23 @@ static void ppcglue_ScalePt(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_MapPt(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8F9));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MapPt(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F9)) {
+        ppcpatched_MapPt(c);
+        return;
+    }
     gaddr a_pt = (gaddr)c->gpr[3];
     gaddr a_srcr = (gaddr)c->gpr[4];
     gaddr a_dstr = (gaddr)c->gpr[5];
@@ -7089,8 +10789,23 @@ static void ppcglue_MapPt(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_MapRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8FA));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MapRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8FA)) {
+        ppcpatched_MapRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     gaddr a_srcr = (gaddr)c->gpr[4];
     gaddr a_dstr = (gaddr)c->gpr[5];
@@ -7098,8 +10813,23 @@ static void ppcglue_MapRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_MapRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8FB));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MapRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8FB)) {
+        ppcpatched_MapRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     gaddr a_srcr = (gaddr)c->gpr[4];
     gaddr a_dstr = (gaddr)c->gpr[5];
@@ -7107,8 +10837,23 @@ static void ppcglue_MapRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_MapPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8FC));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MapPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8FC)) {
+        ppcpatched_MapPoly(c);
+        return;
+    }
     gaddr a_poly = (gaddr)c->gpr[3];
     gaddr a_srcr = (gaddr)c->gpr[4];
     gaddr a_dstr = (gaddr)c->gpr[5];
@@ -7116,122 +10861,350 @@ static void ppcglue_MapPoly(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_HidePen(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA896));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HidePen(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA896)) {
+        ppcpatched_HidePen(c);
+        return;
+    }
     tb_HidePen();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_ShowPen(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA897));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_ShowPen(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA897)) {
+        ppcpatched_ShowPen(c);
+        return;
+    }
     tb_ShowPen();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetPen(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA89A));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_GetPen(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA89A)) {
+        ppcpatched_GetPen(c);
+        return;
+    }
     gaddr a_ptp = (gaddr)c->gpr[3];
     tb_GetPen(a_ptp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetPenState(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA898));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetPenState(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA898)) {
+        ppcpatched_GetPenState(c);
+        return;
+    }
     gaddr a_ps = (gaddr)c->gpr[3];
     tb_GetPenState(a_ps);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetPenState(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA899));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetPenState(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA899)) {
+        ppcpatched_SetPenState(c);
+        return;
+    }
     gaddr a_ps = (gaddr)c->gpr[3];
     tb_SetPenState(a_ps);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PenSize(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA89B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PenSize(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA89B)) {
+        ppcpatched_PenSize(c);
+        return;
+    }
     int16_t a_w = (int16_t)c->gpr[3];
     int16_t a_h = (int16_t)c->gpr[4];
     tb_PenSize(a_w, a_h);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PenMode(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA89C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PenMode(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA89C)) {
+        ppcpatched_PenMode(c);
+        return;
+    }
     int16_t a_m = (int16_t)c->gpr[3];
     tb_PenMode(a_m);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PenPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA89D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PenPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA89D)) {
+        ppcpatched_PenPat(c);
+        return;
+    }
     gaddr a_pp = (gaddr)c->gpr[3];
     tb_PenPat(a_pp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PenNormal(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA89E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PenNormal(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA89E)) {
+        ppcpatched_PenNormal(c);
+        return;
+    }
     tb_PenNormal();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_MoveTo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA893));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_MoveTo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA893)) {
+        ppcpatched_MoveTo(c);
+        return;
+    }
     int16_t a_h = (int16_t)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     tb_MoveTo(a_h, a_v);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Move(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA894));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Move(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA894)) {
+        ppcpatched_Move(c);
+        return;
+    }
     int16_t a_dh = (int16_t)c->gpr[3];
     int16_t a_dv = (int16_t)c->gpr[4];
     tb_Move(a_dh, a_dv);
     c->pc = c->lr;
 }
 
+static void ppcpatched_LineTo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA891));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_LineTo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA891)) {
+        ppcpatched_LineTo(c);
+        return;
+    }
     int16_t a_h = (int16_t)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     tb_LineTo(a_h, a_v);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Line(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA892));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Line(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA892)) {
+        ppcpatched_Line(c);
+        return;
+    }
     int16_t a_dh = (int16_t)c->gpr[3];
     int16_t a_dv = (int16_t)c->gpr[4];
     tb_Line(a_dh, a_dv);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawPicture(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8F6));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawPicture(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F6)) {
+        ppcpatched_DrawPicture(c);
+        return;
+    }
     gaddr a_pic = (gaddr)c->gpr[3];
     gaddr a_destrp = (gaddr)c->gpr[4];
     tb_DrawPicture(a_pic, a_destrp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpenPicture(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8F3));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpenPicture(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F3)) {
+        ppcpatched_OpenPicture(c);
+        return;
+    }
     gaddr a_pf = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_OpenPicture(a_pf);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ClosePicture(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA8F4));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ClosePicture(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F4)) {
+        ppcpatched_ClosePicture(c);
+        return;
+    }
     tb_ClosePicture();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_PicComment(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8F2));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_PicComment(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F2)) {
+        ppcpatched_PicComment(c);
+        return;
+    }
     int16_t a_kind = (int16_t)c->gpr[3];
     int16_t a_size = (int16_t)c->gpr[4];
     gaddr a_hand = (gaddr)c->gpr[5];
@@ -7239,31 +11212,87 @@ static void ppcglue_PicComment(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_KillPicture(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8F5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_KillPicture(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F5)) {
+        ppcpatched_KillPicture(c);
+        return;
+    }
     gaddr a_pic = (gaddr)c->gpr[3];
     tb_KillPicture(a_pic);
     c->pc = c->lr;
 }
 
+static void ppcpatched_AddPt(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA87E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AddPt(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA87E)) {
+        ppcpatched_AddPt(c);
+        return;
+    }
     uint32_t a_src = (uint32_t)c->gpr[3];
     gaddr a_dst = (gaddr)c->gpr[4];
     tb_AddPt(a_src, a_dst);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SubPt(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA87F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SubPt(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA87F)) {
+        ppcpatched_SubPt(c);
+        return;
+    }
     uint32_t a_src = (uint32_t)c->gpr[3];
     gaddr a_dst = (gaddr)c->gpr[4];
     tb_SubPt(a_src, a_dst);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetPt(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA880));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetPt(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA880)) {
+        ppcpatched_SetPt(c);
+        return;
+    }
     gaddr a_pt = (gaddr)c->gpr[3];
     int16_t a_h = (int16_t)c->gpr[4];
     int16_t a_v = (int16_t)c->gpr[5];
@@ -7271,49 +11300,147 @@ static void ppcglue_SetPt(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_EqualPt(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA881));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_EqualPt(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA881)) {
+        ppcpatched_EqualPt(c);
+        return;
+    }
     uint32_t a_p1 = (uint32_t)c->gpr[3];
     uint32_t a_p2 = (uint32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_EqualPt(a_p1, a_p2);
     c->pc = c->lr;
 }
 
+static void ppcpatched_LocalToGlobal(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA870));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_LocalToGlobal(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA870)) {
+        ppcpatched_LocalToGlobal(c);
+        return;
+    }
     gaddr a_pt = (gaddr)c->gpr[3];
     tb_LocalToGlobal(a_pt);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GlobalToLocal(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA871));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GlobalToLocal(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA871)) {
+        ppcpatched_GlobalToLocal(c);
+        return;
+    }
     gaddr a_pt = (gaddr)c->gpr[3];
     tb_GlobalToLocal(a_pt);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpenPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA8CB));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpenPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8CB)) {
+        ppcpatched_OpenPoly(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_OpenPoly();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_ClosePoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA8CC));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_ClosePoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8CC)) {
+        ppcpatched_ClosePoly(c);
+        return;
+    }
     tb_ClosePoly();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_KillPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8CD));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_KillPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8CD)) {
+        ppcpatched_KillPoly(c);
+        return;
+    }
     gaddr a_poly = (gaddr)c->gpr[3];
     tb_KillPoly(a_poly);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OffsetPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8CE));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_OffsetPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8CE)) {
+        ppcpatched_OffsetPoly(c);
+        return;
+    }
     gaddr a_poly = (gaddr)c->gpr[3];
     int16_t a_dh = (int16_t)c->gpr[4];
     int16_t a_dv = (int16_t)c->gpr[5];
@@ -7321,8 +11448,25 @@ static void ppcglue_OffsetPoly(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap((uint16_t)(0xA8A7));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A7)) {
+        ppcpatched_SetRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_left = (int16_t)c->gpr[4];
     int16_t a_top = (int16_t)c->gpr[5];
@@ -7332,8 +11476,23 @@ static void ppcglue_SetRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_OffsetRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8A8));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_OffsetRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A8)) {
+        ppcpatched_OffsetRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_dh = (int16_t)c->gpr[4];
     int16_t a_dv = (int16_t)c->gpr[5];
@@ -7341,8 +11500,23 @@ static void ppcglue_OffsetRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InsetRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8A9));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InsetRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A9)) {
+        ppcpatched_InsetRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_dh = (int16_t)c->gpr[4];
     int16_t a_dv = (int16_t)c->gpr[5];
@@ -7350,15 +11524,49 @@ static void ppcglue_InsetRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_EmptyRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8AE));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_EmptyRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8AE)) {
+        ppcpatched_EmptyRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_EmptyRect(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SectRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8AA));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SectRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8AA)) {
+        ppcpatched_SectRect(c);
+        return;
+    }
     gaddr a_s1 = (gaddr)c->gpr[3];
     gaddr a_s2 = (gaddr)c->gpr[4];
     gaddr a_dest = (gaddr)c->gpr[5];
@@ -7366,8 +11574,23 @@ static void ppcglue_SectRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_UnionRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8AB));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_UnionRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8AB)) {
+        ppcpatched_UnionRect(c);
+        return;
+    }
     gaddr a_s1 = (gaddr)c->gpr[3];
     gaddr a_s2 = (gaddr)c->gpr[4];
     gaddr a_dest = (gaddr)c->gpr[5];
@@ -7375,16 +11598,48 @@ static void ppcglue_UnionRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_PtInRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8AD));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_PtInRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8AD)) {
+        ppcpatched_PtInRect(c);
+        return;
+    }
     uint32_t a_p = (uint32_t)c->gpr[3];
     gaddr a_r = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_PtInRect(a_p, a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Pt2Rect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8AC));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Pt2Rect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8AC)) {
+        ppcpatched_Pt2Rect(c);
+        return;
+    }
     uint32_t a_p1 = (uint32_t)c->gpr[3];
     uint32_t a_p2 = (uint32_t)c->gpr[4];
     gaddr a_dest = (gaddr)c->gpr[5];
@@ -7392,8 +11647,23 @@ static void ppcglue_Pt2Rect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_PtToAngle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8C3));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PtToAngle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C3)) {
+        ppcpatched_PtToAngle(c);
+        return;
+    }
     gaddr a_rp = (gaddr)c->gpr[3];
     uint32_t a_p = (uint32_t)c->gpr[4];
     gaddr a_angle = (gaddr)c->gpr[5];
@@ -7401,57 +11671,171 @@ static void ppcglue_PtToAngle(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_EqualRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8A6));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_EqualRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A6)) {
+        ppcpatched_EqualRect(c);
+        return;
+    }
     gaddr a_r1 = (gaddr)c->gpr[3];
     gaddr a_r2 = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_EqualRect(a_r1, a_r2);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA8D8));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D8)) {
+        ppcpatched_NewRgn(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_NewRgn();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_OpenRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA8DA));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_OpenRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8DA)) {
+        ppcpatched_OpenRgn(c);
+        return;
+    }
     tb_OpenRgn();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_CopyRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8DC));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_CopyRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8DC)) {
+        ppcpatched_CopyRgn(c);
+        return;
+    }
     gaddr a_s = (gaddr)c->gpr[3];
     gaddr a_d = (gaddr)c->gpr[4];
     tb_CopyRgn(a_s, a_d);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CloseRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8DB));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CloseRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8DB)) {
+        ppcpatched_CloseRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     tb_CloseRgn(a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8D9));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D9)) {
+        ppcpatched_DisposeRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     tb_DisposeRgn(a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetEmptyRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8DD));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetEmptyRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8DD)) {
+        ppcpatched_SetEmptyRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     tb_SetEmptyRgn(a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetRectRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap((uint16_t)(0xA8DE));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetRectRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8DE)) {
+        ppcpatched_SetRectRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     int16_t a_left = (int16_t)c->gpr[4];
     int16_t a_top = (int16_t)c->gpr[5];
@@ -7461,16 +11845,45 @@ static void ppcglue_SetRectRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_RectRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8DF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_RectRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8DF)) {
+        ppcpatched_RectRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     gaddr a_rect = (gaddr)c->gpr[4];
     tb_RectRgn(a_rh, a_rect);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OffsetRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8E0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_OffsetRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E0)) {
+        ppcpatched_OffsetRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     int16_t a_dh = (int16_t)c->gpr[4];
     int16_t a_dv = (int16_t)c->gpr[5];
@@ -7478,16 +11891,48 @@ static void ppcglue_OffsetRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_PtInRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8E8));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_PtInRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E8)) {
+        ppcpatched_PtInRgn(c);
+        return;
+    }
     uint32_t a_p = (uint32_t)c->gpr[3];
     gaddr a_rh = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_PtInRgn(a_p, a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InsetRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8E1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InsetRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E1)) {
+        ppcpatched_InsetRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     int16_t a_dh = (int16_t)c->gpr[4];
     int16_t a_dv = (int16_t)c->gpr[5];
@@ -7495,8 +11940,23 @@ static void ppcglue_InsetRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SectRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8E4));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SectRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E4)) {
+        ppcpatched_SectRgn(c);
+        return;
+    }
     gaddr a_s1 = (gaddr)c->gpr[3];
     gaddr a_s2 = (gaddr)c->gpr[4];
     gaddr a_dest = (gaddr)c->gpr[5];
@@ -7504,8 +11964,23 @@ static void ppcglue_SectRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_UnionRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8E5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_UnionRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E5)) {
+        ppcpatched_UnionRgn(c);
+        return;
+    }
     gaddr a_s1 = (gaddr)c->gpr[3];
     gaddr a_s2 = (gaddr)c->gpr[4];
     gaddr a_dest = (gaddr)c->gpr[5];
@@ -7513,8 +11988,23 @@ static void ppcglue_UnionRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_DiffRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8E6));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DiffRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E6)) {
+        ppcpatched_DiffRgn(c);
+        return;
+    }
     gaddr a_s1 = (gaddr)c->gpr[3];
     gaddr a_s2 = (gaddr)c->gpr[4];
     gaddr a_dest = (gaddr)c->gpr[5];
@@ -7522,8 +12012,23 @@ static void ppcglue_DiffRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_XorRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8E7));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_XorRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E7)) {
+        ppcpatched_XorRgn(c);
+        return;
+    }
     gaddr a_s1 = (gaddr)c->gpr[3];
     gaddr a_s2 = (gaddr)c->gpr[4];
     gaddr a_dest = (gaddr)c->gpr[5];
@@ -7531,103 +12036,300 @@ static void ppcglue_XorRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_RectInRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8E9));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_RectInRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E9)) {
+        ppcpatched_RectInRgn(c);
+        return;
+    }
     gaddr a_rp = (gaddr)c->gpr[3];
     gaddr a_rh = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_RectInRgn(a_rp, a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_EqualRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8E3));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_EqualRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E3)) {
+        ppcpatched_EqualRgn(c);
+        return;
+    }
     gaddr a_r1 = (gaddr)c->gpr[3];
     gaddr a_r2 = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_EqualRgn(a_r1, a_r2);
     c->pc = c->lr;
 }
 
+static void ppcpatched_EmptyRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8E2));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_EmptyRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8E2)) {
+        ppcpatched_EmptyRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_EmptyRgn(a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FrameRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8A1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FrameRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A1)) {
+        ppcpatched_FrameRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_FrameRect(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PaintRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8A2));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PaintRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A2)) {
+        ppcpatched_PaintRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_PaintRect(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_EraseRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8A3));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_EraseRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A3)) {
+        ppcpatched_EraseRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_EraseRect(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvertRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8A4));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvertRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A4)) {
+        ppcpatched_InvertRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_InvertRect(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8A5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A5)) {
+        ppcpatched_FillRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     gaddr a_pat = (gaddr)c->gpr[4];
     tb_FillRect(a_r, a_pat);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FrameOval(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8B7));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FrameOval(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B7)) {
+        ppcpatched_FrameOval(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_FrameOval(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PaintOval(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8B8));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PaintOval(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B8)) {
+        ppcpatched_PaintOval(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_PaintOval(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_EraseOval(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8B9));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_EraseOval(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B9)) {
+        ppcpatched_EraseOval(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_EraseOval(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvertOval(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8BA));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvertOval(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8BA)) {
+        ppcpatched_InvertOval(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_InvertOval(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillOval(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8BB));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillOval(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8BB)) {
+        ppcpatched_FillOval(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     gaddr a_pat = (gaddr)c->gpr[4];
     tb_FillOval(a_r, a_pat);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FrameRoundRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8B0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FrameRoundRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B0)) {
+        ppcpatched_FrameRoundRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_ow = (int16_t)c->gpr[4];
     int16_t a_oh = (int16_t)c->gpr[5];
@@ -7635,8 +12337,23 @@ static void ppcglue_FrameRoundRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_PaintRoundRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8B1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PaintRoundRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B1)) {
+        ppcpatched_PaintRoundRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_ow = (int16_t)c->gpr[4];
     int16_t a_oh = (int16_t)c->gpr[5];
@@ -7644,8 +12361,23 @@ static void ppcglue_PaintRoundRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_EraseRoundRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8B2));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_EraseRoundRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B2)) {
+        ppcpatched_EraseRoundRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_ow = (int16_t)c->gpr[4];
     int16_t a_oh = (int16_t)c->gpr[5];
@@ -7653,8 +12385,23 @@ static void ppcglue_EraseRoundRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvertRoundRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8B3));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvertRoundRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B3)) {
+        ppcpatched_InvertRoundRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_ow = (int16_t)c->gpr[4];
     int16_t a_oh = (int16_t)c->gpr[5];
@@ -7662,8 +12409,24 @@ static void ppcglue_InvertRoundRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillRoundRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA8B4));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillRoundRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B4)) {
+        ppcpatched_FillRoundRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_ow = (int16_t)c->gpr[4];
     int16_t a_oh = (int16_t)c->gpr[5];
@@ -7672,8 +12435,23 @@ static void ppcglue_FillRoundRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_FrameArc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8BE));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FrameArc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8BE)) {
+        ppcpatched_FrameArc(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_start = (int16_t)c->gpr[4];
     int16_t a_angle = (int16_t)c->gpr[5];
@@ -7681,8 +12459,23 @@ static void ppcglue_FrameArc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_PaintArc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8BF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PaintArc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8BF)) {
+        ppcpatched_PaintArc(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_start = (int16_t)c->gpr[4];
     int16_t a_angle = (int16_t)c->gpr[5];
@@ -7690,8 +12483,23 @@ static void ppcglue_PaintArc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_EraseArc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8C0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_EraseArc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C0)) {
+        ppcpatched_EraseArc(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_start = (int16_t)c->gpr[4];
     int16_t a_angle = (int16_t)c->gpr[5];
@@ -7699,8 +12507,23 @@ static void ppcglue_EraseArc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvertArc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8C1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvertArc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C1)) {
+        ppcpatched_InvertArc(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_start = (int16_t)c->gpr[4];
     int16_t a_angle = (int16_t)c->gpr[5];
@@ -7708,8 +12531,24 @@ static void ppcglue_InvertArc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillArc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA8C2));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillArc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C2)) {
+        ppcpatched_FillArc(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     int16_t a_start = (int16_t)c->gpr[4];
     int16_t a_angle = (int16_t)c->gpr[5];
@@ -7718,87 +12557,248 @@ static void ppcglue_FillArc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_FrameRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8D2));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FrameRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D2)) {
+        ppcpatched_FrameRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     tb_FrameRgn(a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PaintRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8D3));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PaintRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D3)) {
+        ppcpatched_PaintRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     tb_PaintRgn(a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_EraseRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8D4));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_EraseRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D4)) {
+        ppcpatched_EraseRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     tb_EraseRgn(a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvertRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8D5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvertRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D5)) {
+        ppcpatched_InvertRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     tb_InvertRgn(a_rh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8D6));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D6)) {
+        ppcpatched_FillRgn(c);
+        return;
+    }
     gaddr a_rh = (gaddr)c->gpr[3];
     gaddr a_pat = (gaddr)c->gpr[4];
     tb_FillRgn(a_rh, a_pat);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FramePoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8C6));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FramePoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C6)) {
+        ppcpatched_FramePoly(c);
+        return;
+    }
     gaddr a_poly = (gaddr)c->gpr[3];
     tb_FramePoly(a_poly);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PaintPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8C7));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PaintPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C7)) {
+        ppcpatched_PaintPoly(c);
+        return;
+    }
     gaddr a_poly = (gaddr)c->gpr[3];
     tb_PaintPoly(a_poly);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ErasePoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8C8));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ErasePoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C8)) {
+        ppcpatched_ErasePoly(c);
+        return;
+    }
     gaddr a_poly = (gaddr)c->gpr[3];
     tb_ErasePoly(a_poly);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvertPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8C9));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvertPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C9)) {
+        ppcpatched_InvertPoly(c);
+        return;
+    }
     gaddr a_poly = (gaddr)c->gpr[3];
     tb_InvertPoly(a_poly);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FillPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8CA));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_FillPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8CA)) {
+        ppcpatched_FillPoly(c);
+        return;
+    }
     gaddr a_poly = (gaddr)c->gpr[3];
     gaddr a_pat = (gaddr)c->gpr[4];
     tb_FillPoly(a_poly, a_pat);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetStdProcs(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8EA));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetStdProcs(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8EA)) {
+        ppcpatched_SetStdProcs(c);
+        return;
+    }
     gaddr a_procs = (gaddr)c->gpr[3];
     tb_SetStdProcs(a_procs);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdArc(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA8BD));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdArc(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8BD)) {
+        ppcpatched_StdArc(c);
+        return;
+    }
     int8_t a_verb = (int8_t)c->gpr[3];
     gaddr a_r = (gaddr)c->gpr[4];
     int16_t a_starta = (int16_t)c->gpr[5];
@@ -7807,8 +12807,25 @@ static void ppcglue_StdArc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdBits(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap_push(4, c->gpr[7]);
+    ppc_trap((uint16_t)(0xA8EB));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdBits(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8EB)) {
+        ppcpatched_StdBits(c);
+        return;
+    }
     gaddr a_srcbmp = (gaddr)c->gpr[3];
     gaddr a_srcrp = (gaddr)c->gpr[4];
     gaddr a_dstrp = (gaddr)c->gpr[5];
@@ -7818,23 +12835,65 @@ static void ppcglue_StdBits(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdLine(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA890));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdLine(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA890)) {
+        ppcpatched_StdLine(c);
+        return;
+    }
     uint32_t a_p = (uint32_t)c->gpr[3];
     tb_StdLine(a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdOval(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8B6));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdOval(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8B6)) {
+        ppcpatched_StdOval(c);
+        return;
+    }
     int8_t a_v = (int8_t)c->gpr[3];
     gaddr a_rp = (gaddr)c->gpr[4];
     tb_StdOval(a_v, a_rp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdComment(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8F1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdComment(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F1)) {
+        ppcpatched_StdComment(c);
+        return;
+    }
     int16_t a_kind = (int16_t)c->gpr[3];
     int16_t a_size = (int16_t)c->gpr[4];
     gaddr a_hand = (gaddr)c->gpr[5];
@@ -7842,32 +12901,90 @@ static void ppcglue_StdComment(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdGetPic(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8EE));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdGetPic(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8EE)) {
+        ppcpatched_StdGetPic(c);
+        return;
+    }
     gaddr a_dp = (gaddr)c->gpr[3];
     int16_t a_bc = (int16_t)c->gpr[4];
     tb_StdGetPic(a_dp, a_bc);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdPutPic(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8F0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdPutPic(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8F0)) {
+        ppcpatched_StdPutPic(c);
+        return;
+    }
     gaddr a_sp = (gaddr)c->gpr[3];
     int16_t a_bc = (int16_t)c->gpr[4];
     tb_StdPutPic(a_sp, a_bc);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdPoly(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8C5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdPoly(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C5)) {
+        ppcpatched_StdPoly(c);
+        return;
+    }
     int8_t a_verb = (int8_t)c->gpr[3];
     gaddr a_ph = (gaddr)c->gpr[4];
     tb_StdPoly(a_verb, a_ph);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdRRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA8AF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdRRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8AF)) {
+        ppcpatched_StdRRect(c);
+        return;
+    }
     int8_t a_verb = (int8_t)c->gpr[3];
     gaddr a_r = (gaddr)c->gpr[4];
     int16_t a_width = (int16_t)c->gpr[5];
@@ -7876,24 +12993,68 @@ static void ppcglue_StdRRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8A0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8A0)) {
+        ppcpatched_StdRect(c);
+        return;
+    }
     int8_t a_v = (int8_t)c->gpr[3];
     gaddr a_rp = (gaddr)c->gpr[4];
     tb_StdRect(a_v, a_rp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA8D1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D1)) {
+        ppcpatched_StdRgn(c);
+        return;
+    }
     int8_t a_verb = (int8_t)c->gpr[3];
     gaddr a_rgn = (gaddr)c->gpr[4];
     tb_StdRgn(a_verb, a_rgn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA882));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA882)) {
+        ppcpatched_StdText(c);
+        return;
+    }
     int16_t a_n = (int16_t)c->gpr[3];
     gaddr a_textbufp = (gaddr)c->gpr[4];
     uint32_t a_num = (uint32_t)c->gpr[5];
@@ -7902,8 +13063,28 @@ static void ppcglue_StdText(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdTxMeas(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(4, c->gpr[7]);
+    ppc_trap((uint16_t)(0xA8ED));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_StdTxMeas(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8ED)) {
+        ppcpatched_StdTxMeas(c);
+        return;
+    }
     int16_t a_n = (int16_t)c->gpr[3];
     gaddr a_p = (gaddr)c->gpr[4];
     gaddr a_nump = (gaddr)c->gpr[5];
@@ -7913,8 +13094,23 @@ static void ppcglue_StdTxMeas(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_MeasureText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA837));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MeasureText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA837)) {
+        ppcpatched_MeasureText(c);
+        return;
+    }
     int16_t a_n = (int16_t)c->gpr[3];
     gaddr a_text = (gaddr)c->gpr[4];
     gaddr a_chars = (gaddr)c->gpr[5];
@@ -7922,57 +13118,163 @@ static void ppcglue_MeasureText(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TextFont(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA887));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TextFont(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA887)) {
+        ppcpatched_TextFont(c);
+        return;
+    }
     int16_t a_f = (int16_t)c->gpr[3];
     tb_TextFont(a_f);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TextFace(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA888));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TextFace(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA888)) {
+        ppcpatched_TextFace(c);
+        return;
+    }
     int16_t a_thef = (int16_t)c->gpr[3];
     tb_TextFace(a_thef);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TextMode(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA889));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TextMode(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA889)) {
+        ppcpatched_TextMode(c);
+        return;
+    }
     int16_t a_m = (int16_t)c->gpr[3];
     tb_TextMode(a_m);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TextSize(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA88A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TextSize(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA88A)) {
+        ppcpatched_TextSize(c);
+        return;
+    }
     int16_t a_s = (int16_t)c->gpr[3];
     tb_TextSize(a_s);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SpaceExtra(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA88E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SpaceExtra(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA88E)) {
+        ppcpatched_SpaceExtra(c);
+        return;
+    }
     int32_t a_e = (int32_t)c->gpr[3];
     tb_SpaceExtra(a_e);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawChar(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA883));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawChar(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA883)) {
+        ppcpatched_DrawChar(c);
+        return;
+    }
     int16_t a_thec = (int16_t)c->gpr[3];
     tb_DrawChar(a_thec);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawString(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA884));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawString(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA884)) {
+        ppcpatched_DrawString(c);
+        return;
+    }
     gaddr a_s = (gaddr)c->gpr[3];
     tb_DrawString(a_s);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA885));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA885)) {
+        ppcpatched_DrawText(c);
+        return;
+    }
     gaddr a_tb = (gaddr)c->gpr[3];
     int16_t a_fb = (int16_t)c->gpr[4];
     int16_t a_bc = (int16_t)c->gpr[5];
@@ -7980,22 +13282,72 @@ static void ppcglue_DrawText(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CharWidth(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA88D));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_CharWidth(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA88D)) {
+        ppcpatched_CharWidth(c);
+        return;
+    }
     int16_t a_thec = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CharWidth(a_thec);
     c->pc = c->lr;
 }
 
+static void ppcpatched_StringWidth(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA88C));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_StringWidth(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA88C)) {
+        ppcpatched_StringWidth(c);
+        return;
+    }
     gaddr a_s = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_StringWidth(a_s);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TextWidth(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA886));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TextWidth(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA886)) {
+        ppcpatched_TextWidth(c);
+        return;
+    }
     gaddr a_tb = (gaddr)c->gpr[3];
     int16_t a_fb = (int16_t)c->gpr[4];
     int16_t a_bc = (int16_t)c->gpr[5];
@@ -8003,15 +13355,43 @@ static void ppcglue_TextWidth(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetFontInfo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA88B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFontInfo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA88B)) {
+        ppcpatched_GetFontInfo(c);
+        return;
+    }
     gaddr a_ip = (gaddr)c->gpr[3];
     tb_GetFontInfo(a_ip);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetCPixel(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA17));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCPixel(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA17)) {
+        ppcpatched_GetCPixel(c);
+        return;
+    }
     int16_t a_h = (int16_t)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     gaddr a_colorp = (gaddr)c->gpr[5];
@@ -8019,8 +13399,23 @@ static void ppcglue_GetCPixel(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetCPixel(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA16));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetCPixel(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA16)) {
+        ppcpatched_SetCPixel(c);
+        return;
+    }
     int16_t a_h = (int16_t)c->gpr[3];
     int16_t a_v = (int16_t)c->gpr[4];
     gaddr a_colorp = (gaddr)c->gpr[5];
@@ -8028,8 +13423,28 @@ static void ppcglue_SetCPixel(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SeedCFill(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(2, c->gpr[8]);
+    ppc_trap_push(4, c->gpr[9]);
+    ppc_trap_push(4, c->gpr[10]);
+    ppc_trap((uint16_t)(0xAA50));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SeedCFill(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA50)) {
+        ppcpatched_SeedCFill(c);
+        return;
+    }
     gaddr a_srcbp = (gaddr)c->gpr[3];
     gaddr a_dstbp = (gaddr)c->gpr[4];
     gaddr a_srcrp = (gaddr)c->gpr[5];
@@ -8042,8 +13457,27 @@ static void ppcglue_SeedCFill(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CalcCMask(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(4, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap_push(4, c->gpr[9]);
+    ppc_trap((uint16_t)(0xAA4F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CalcCMask(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA4F)) {
+        ppcpatched_CalcCMask(c);
+        return;
+    }
     gaddr a_srcbp = (gaddr)c->gpr[3];
     gaddr a_dstbp = (gaddr)c->gpr[4];
     gaddr a_srcrp = (gaddr)c->gpr[5];
@@ -8055,8 +13489,28 @@ static void ppcglue_CalcCMask(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CopyDeepMask(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(4, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap_push(2, c->gpr[9]);
+    ppc_trap_push(4, c->gpr[10]);
+    ppc_trap((uint16_t)(0xAA51));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CopyDeepMask(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA51)) {
+        ppcpatched_CopyDeepMask(c);
+        return;
+    }
     gaddr a_srcBits = (gaddr)c->gpr[3];
     gaddr a_maskBits = (gaddr)c->gpr[4];
     gaddr a_dstBits = (gaddr)c->gpr[5];
@@ -8231,112 +13685,346 @@ static void ppcglue_OpenMovieFile(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetResLoad(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA99B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetResLoad(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA99B)) {
+        ppcpatched_SetResLoad(c);
+        return;
+    }
     int8_t a_load = (int8_t)c->gpr[3];
     tb_SetResLoad(a_load);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CountResources(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA99C));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_CountResources(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA99C)) {
+        ppcpatched_CountResources(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountResources(a_typ);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Count1Resources(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA80D));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Count1Resources(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA80D)) {
+        ppcpatched_Count1Resources(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_Count1Resources(a_typ);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetIndResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA99D));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetIndResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA99D)) {
+        ppcpatched_GetIndResource(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     int16_t a_indx = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_GetIndResource(a_typ, a_indx);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Get1IndResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA80E));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Get1IndResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA80E)) {
+        ppcpatched_Get1IndResource(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     int16_t a_i = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_Get1IndResource(a_typ, a_i);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9A0));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A0)) {
+        ppcpatched_GetResource(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     int16_t a_id = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_GetResource(a_typ, a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Get1Resource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA81F));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Get1Resource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA81F)) {
+        ppcpatched_Get1Resource(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     int16_t a_id = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_Get1Resource(a_typ, a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNamedResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9A1));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNamedResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A1)) {
+        ppcpatched_GetNamedResource(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     gaddr a_nam = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_GetNamedResource(a_typ, a_nam);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Get1NamedResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA820));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Get1NamedResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA820)) {
+        ppcpatched_Get1NamedResource(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     gaddr a_s = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_Get1NamedResource(a_typ, a_s);
     c->pc = c->lr;
 }
 
+static void ppcpatched_LoadResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9A2));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_LoadResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A2)) {
+        ppcpatched_LoadResource(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     tb_LoadResource(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ReleaseResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9A3));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ReleaseResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A3)) {
+        ppcpatched_ReleaseResource(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     tb_ReleaseResource(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DetachResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA992));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DetachResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA992)) {
+        ppcpatched_DetachResource(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     tb_DetachResource(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_UniqueID(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9C1));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_UniqueID(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9C1)) {
+        ppcpatched_UniqueID(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UniqueID(a_typ);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Unique1ID(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA810));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Unique1ID(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA810)) {
+        ppcpatched_Unique1ID(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_Unique1ID(a_typ);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetResInfo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA9A8));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetResInfo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A8)) {
+        ppcpatched_GetResInfo(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     gaddr a_id1 = (gaddr)c->gpr[4];
     gaddr a_typ = (gaddr)c->gpr[5];
@@ -8345,98 +14033,308 @@ static void ppcglue_GetResInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetResAttrs(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9A6));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetResAttrs(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A6)) {
+        ppcpatched_GetResAttrs(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetResAttrs(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetResourceSizeOnDisk(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9A5));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetResourceSizeOnDisk(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A5)) {
+        ppcpatched_GetResourceSizeOnDisk(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetResourceSizeOnDisk(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CountTypes(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA99E));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_CountTypes(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA99E)) {
+        ppcpatched_CountTypes(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountTypes();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_Count1Types(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA81C));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_Count1Types(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA81C)) {
+        ppcpatched_Count1Types(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_Count1Types();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetIndType(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA99F));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_GetIndType(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA99F)) {
+        ppcpatched_GetIndType(c);
+        return;
+    }
     gaddr a_typ = (gaddr)c->gpr[3];
     int16_t a_indx = (int16_t)c->gpr[4];
     tb_GetIndType(a_typ, a_indx);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Get1IndType(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA80F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_Get1IndType(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA80F)) {
+        ppcpatched_Get1IndType(c);
+        return;
+    }
     gaddr a_typ = (gaddr)c->gpr[3];
     int16_t a_indx = (int16_t)c->gpr[4];
     tb_Get1IndType(a_typ, a_indx);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetMaxResourceSize(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA821));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMaxResourceSize(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA821)) {
+        ppcpatched_GetMaxResourceSize(c);
+        return;
+    }
     gaddr a_h = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetMaxResourceSize(a_h);
     c->pc = c->lr;
 }
 
+static void ppcpatched_RGetResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA80C));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_RGetResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA80C)) {
+        ppcpatched_RGetResource(c);
+        return;
+    }
     int32_t a_typ = (int32_t)c->gpr[3];
     int16_t a_id = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_RGetResource(a_typ, a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitResources(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA995));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitResources(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA995)) {
+        ppcpatched_InitResources(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitResources();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_RsrcZoneInit(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA996));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_RsrcZoneInit(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA996)) {
+        ppcpatched_RsrcZoneInit(c);
+        return;
+    }
     tb_RsrcZoneInit();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_ResError(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA9AF));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_ResError(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9AF)) {
+        ppcpatched_ResError(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ResError();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetResFileAttrs(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9F6));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_GetResFileAttrs(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9F6)) {
+        ppcpatched_GetResFileAttrs(c);
+        return;
+    }
     int16_t a_rn = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetResFileAttrs(a_rn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetResFileAttrs(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9F7));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetResFileAttrs(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9F7)) {
+        ppcpatched_SetResFileAttrs(c);
+        return;
+    }
     int16_t a_rn = (int16_t)c->gpr[3];
     int16_t a_attrs = (int16_t)c->gpr[4];
     tb_SetResFileAttrs(a_rn, a_attrs);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetResInfo(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9A9));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetResInfo(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A9)) {
+        ppcpatched_SetResInfo(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     int16_t a_id = (int16_t)c->gpr[4];
     gaddr a_name = (gaddr)c->gpr[5];
@@ -8444,23 +14342,66 @@ static void ppcglue_SetResInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetResAttrs(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9A7));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetResAttrs(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A7)) {
+        ppcpatched_SetResAttrs(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     int16_t a_attrs = (int16_t)c->gpr[4];
     tb_SetResAttrs(a_res, a_attrs);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ChangedResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9AA));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ChangedResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9AA)) {
+        ppcpatched_ChangedResource(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     tb_ChangedResource(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_AddResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA9AB));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_AddResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9AB)) {
+        ppcpatched_AddResource(c);
+        return;
+    }
     gaddr a_data = (gaddr)c->gpr[3];
     int32_t a_typ = (int32_t)c->gpr[4];
     int16_t a_id = (int16_t)c->gpr[5];
@@ -8469,43 +14410,126 @@ static void ppcglue_AddResource(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_RemoveResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9AD));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_RemoveResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9AD)) {
+        ppcpatched_RemoveResource(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     tb_RemoveResource(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_UpdateResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA999));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_UpdateResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA999)) {
+        ppcpatched_UpdateResFile(c);
+        return;
+    }
     int16_t a_rn = (int16_t)c->gpr[3];
     tb_UpdateResFile(a_rn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_WriteResource(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9B0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_WriteResource(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B0)) {
+        ppcpatched_WriteResource(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     tb_WriteResource(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetResPurge(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA993));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetResPurge(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA993)) {
+        ppcpatched_SetResPurge(c);
+        return;
+    }
     int8_t a_install = (int8_t)c->gpr[3];
     tb_SetResPurge(a_install);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CreateResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9B1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CreateResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B1)) {
+        ppcpatched_CreateResFile(c);
+        return;
+    }
     gaddr a_fn = (gaddr)c->gpr[3];
     tb_CreateResFile(a_fn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpenRFPerm(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(1, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9C4));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpenRFPerm(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9C4)) {
+        ppcpatched_OpenRFPerm(c);
+        return;
+    }
     gaddr a_fn = (gaddr)c->gpr[3];
     int16_t a_vref = (int16_t)c->gpr[4];
     uint8_t a_perm = (uint8_t)c->gpr[5];
@@ -8513,35 +14537,108 @@ static void ppcglue_OpenRFPerm(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_OpenResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA997));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_OpenResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA997)) {
+        ppcpatched_OpenResFile(c);
+        return;
+    }
     gaddr a_fn = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenResFile(a_fn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CloseResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA99A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CloseResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA99A)) {
+        ppcpatched_CloseResFile(c);
+        return;
+    }
     int16_t a_rn = (int16_t)c->gpr[3];
     tb_CloseResFile(a_rn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CurResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA994));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_CurResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA994)) {
+        ppcpatched_CurResFile(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CurResFile();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_HomeResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9A4));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_HomeResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9A4)) {
+        ppcpatched_HomeResFile(c);
+        return;
+    }
     gaddr a_res = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HomeResFile(a_res);
     c->pc = c->lr;
 }
 
+static void ppcpatched_UseResFile(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA998));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_UseResFile(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA998)) {
+        ppcpatched_UseResFile(c);
+        return;
+    }
     int16_t a_rn = (int16_t)c->gpr[3];
     tb_UseResFile(a_rn);
     c->pc = c->lr;
@@ -8604,32 +14701,110 @@ static void ppcglue_ROMlib_Fpstr2dec(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InfoScrap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA9F9));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_InfoScrap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9F9)) {
+        ppcpatched_InfoScrap(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_InfoScrap();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_UnloadScrap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA9FA));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_UnloadScrap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9FA)) {
+        ppcpatched_UnloadScrap(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_UnloadScrap();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_LoadScrap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA9FB));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_LoadScrap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9FB)) {
+        ppcpatched_LoadScrap(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_LoadScrap();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_ZeroScrap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA9FC));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_ZeroScrap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9FC)) {
+        ppcpatched_ZeroScrap(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_ZeroScrap();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_PutScrap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9FE));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_PutScrap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9FE)) {
+        ppcpatched_PutScrap(c);
+        return;
+    }
     int32_t a_len = (int32_t)c->gpr[3];
     int32_t a_rest = (int32_t)c->gpr[4];
     gaddr a_p = (gaddr)c->gpr[5];
@@ -8637,8 +14812,26 @@ static void ppcglue_PutScrap(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetScrap(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9FD));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetScrap(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9FD)) {
+        ppcpatched_GetScrap(c);
+        return;
+    }
     gaddr a_h = (gaddr)c->gpr[3];
     int32_t a_rest = (int32_t)c->gpr[4];
     gaddr a_off = (gaddr)c->gpr[5];
@@ -9024,8 +15217,23 @@ static void ppcglue_TransliterateText(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetAppParms(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9F5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetAppParms(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9F5)) {
+        ppcpatched_GetAppParms(c);
+        return;
+    }
     gaddr a_namep = (gaddr)c->gpr[3];
     gaddr a_rnp = (gaddr)c->gpr[4];
     gaddr a_aphandp = (gaddr)c->gpr[5];
@@ -9351,8 +15559,26 @@ static void ppcglue_SndSetInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SndPlay(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(1, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA805));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndPlay(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA805)) {
+        ppcpatched_SndPlay(c);
+        return;
+    }
     gaddr a_chanp = (gaddr)c->gpr[3];
     gaddr a_sndh = (gaddr)c->gpr[4];
     int8_t a_async = (int8_t)c->gpr[5];
@@ -9360,8 +15586,27 @@ static void ppcglue_SndPlay(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SndNewChannel(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA807));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndNewChannel(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA807)) {
+        ppcpatched_SndNewChannel(c);
+        return;
+    }
     gaddr a_chanpp = (gaddr)c->gpr[3];
     int16_t a_synth = (int16_t)c->gpr[4];
     int32_t a_init = (int32_t)c->gpr[5];
@@ -9370,8 +15615,27 @@ static void ppcglue_SndNewChannel(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SndAddModifier(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA802));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndAddModifier(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA802)) {
+        ppcpatched_SndAddModifier(c);
+        return;
+    }
     gaddr a_chanp = (gaddr)c->gpr[3];
     gaddr a_mod = (gaddr)c->gpr[4];
     int16_t a_id = (int16_t)c->gpr[5];
@@ -9380,8 +15644,26 @@ static void ppcglue_SndAddModifier(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SndDoCommand(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(1, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA803));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndDoCommand(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA803)) {
+        ppcpatched_SndDoCommand(c);
+        return;
+    }
     gaddr a_chanp = (gaddr)c->gpr[3];
     gaddr a_cmdp = (gaddr)c->gpr[4];
     int8_t a_nowait = (int8_t)c->gpr[5];
@@ -9389,24 +15671,75 @@ static void ppcglue_SndDoCommand(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SndDoImmediate(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA804));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndDoImmediate(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA804)) {
+        ppcpatched_SndDoImmediate(c);
+        return;
+    }
     gaddr a_chanp = (gaddr)c->gpr[3];
     gaddr a_cmdp = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SndDoImmediate(a_chanp, a_cmdp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SndControl(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA806));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndControl(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA806)) {
+        ppcpatched_SndControl(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     gaddr a_cmdp = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SndControl(a_id, a_cmdp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SndDisposeChannel(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(1, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA801));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndDisposeChannel(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA801)) {
+        ppcpatched_SndDisposeChannel(c);
+        return;
+    }
     gaddr a_chanp = (gaddr)c->gpr[3];
     int8_t a_quitnow = (int8_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SndDisposeChannel(a_chanp, a_quitnow);
@@ -9725,15 +16058,43 @@ static void ppcglue_CustomGetFile(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SysError(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9C9));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SysError(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9C9)) {
+        ppcpatched_SysError(c);
+        return;
+    }
     int16_t a_errorcode = (int16_t)c->gpr[3];
     tb_SysError(a_errorcode);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TESetText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9CF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TESetText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9CF)) {
+        ppcpatched_TESetText(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     int32_t a_ln = (int32_t)c->gpr[4];
     gaddr a_teh = (gaddr)c->gpr[5];
@@ -9741,31 +16102,91 @@ static void ppcglue_TESetText(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEGetText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9CB));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEGetText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9CB)) {
+        ppcpatched_TEGetText(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_TEGetText(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TESetAlignment(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9DF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TESetAlignment(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9DF)) {
+        ppcpatched_TESetAlignment(c);
+        return;
+    }
     int16_t a_j = (int16_t)c->gpr[3];
     gaddr a_teh = (gaddr)c->gpr[4];
     tb_TESetAlignment(a_j, a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEUpdate(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9D3));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEUpdate(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D3)) {
+        ppcpatched_TEUpdate(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     gaddr a_teh = (gaddr)c->gpr[4];
     tb_TEUpdate(a_r, a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TETextBox(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA9CE));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TETextBox(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9CE)) {
+        ppcpatched_TETextBox(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     int32_t a_ln = (int32_t)c->gpr[4];
     gaddr a_r = (gaddr)c->gpr[5];
@@ -9774,8 +16195,23 @@ static void ppcglue_TETextBox(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEScroll(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9DD));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEScroll(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9DD)) {
+        ppcpatched_TEScroll(c);
+        return;
+    }
     int16_t a_dh = (int16_t)c->gpr[3];
     int16_t a_dv = (int16_t)c->gpr[4];
     gaddr a_teh = (gaddr)c->gpr[5];
@@ -9783,44 +16219,125 @@ static void ppcglue_TEScroll(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEKey(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9DC));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEKey(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9DC)) {
+        ppcpatched_TEKey(c);
+        return;
+    }
     int16_t a_thec = (int16_t)c->gpr[3];
     gaddr a_teh = (gaddr)c->gpr[4];
     tb_TEKey(a_thec, a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TECopy(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9D5));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TECopy(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D5)) {
+        ppcpatched_TECopy(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TECopy(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TECut(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9D6));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TECut(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D6)) {
+        ppcpatched_TECut(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TECut(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEPaste(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9DB));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEPaste(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9DB)) {
+        ppcpatched_TEPaste(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TEPaste(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEDelete(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9D7));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEDelete(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D7)) {
+        ppcpatched_TEDelete(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TEDelete(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEInsert(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9DE));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEInsert(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9DE)) {
+        ppcpatched_TEInsert(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     int32_t a_ln = (int32_t)c->gpr[4];
     gaddr a_teh = (gaddr)c->gpr[5];
@@ -9828,8 +16345,23 @@ static void ppcglue_TEInsert(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEPinScroll(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA812));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEPinScroll(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA812)) {
+        ppcpatched_TEPinScroll(c);
+        return;
+    }
     int16_t a_dh = (int16_t)c->gpr[3];
     int16_t a_dv = (int16_t)c->gpr[4];
     gaddr a_teh = (gaddr)c->gpr[5];
@@ -9837,23 +16369,67 @@ static void ppcglue_TEPinScroll(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TESelView(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA811));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TESelView(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA811)) {
+        ppcpatched_TESelView(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TESelView(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEAutoView(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(1, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA813));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEAutoView(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA813)) {
+        ppcpatched_TEAutoView(c);
+        return;
+    }
     int8_t a_autoflag = (int8_t)c->gpr[3];
     gaddr a_teh = (gaddr)c->gpr[4];
     tb_TEAutoView(a_autoflag, a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEStyleNew(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA83E));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEStyleNew(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA83E)) {
+        ppcpatched_TEStyleNew(c);
+        return;
+    }
     gaddr a_dst = (gaddr)c->gpr[3];
     gaddr a_view = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_TEStyleNew(a_dst, a_view);
@@ -9892,8 +16468,25 @@ static void ppcglue_TEStyleInsert(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEGetOffset(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA83C));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEGetOffset(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA83C)) {
+        ppcpatched_TEGetOffset(c);
+        return;
+    }
     uint32_t a_pt = (uint32_t)c->gpr[3];
     gaddr a_teh = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TEGetOffset(a_pt, a_teh);
@@ -9994,36 +16587,106 @@ static void ppcglue_TENumStyles(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEInit(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA9CC));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEInit(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9CC)) {
+        ppcpatched_TEInit(c);
+        return;
+    }
     tb_TEInit();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_TENew(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA9D2));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_TENew(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D2)) {
+        ppcpatched_TENew(c);
+        return;
+    }
     gaddr a_dst = (gaddr)c->gpr[3];
     gaddr a_view = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_TENew(a_dst, a_view);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEDispose(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9CD));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEDispose(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9CD)) {
+        ppcpatched_TEDispose(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TEDispose(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEIdle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9DA));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEIdle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9DA)) {
+        ppcpatched_TEIdle(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TEIdle(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEClick(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(1, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9D4));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEClick(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D4)) {
+        ppcpatched_TEClick(c);
+        return;
+    }
     uint32_t a_p = (uint32_t)c->gpr[3];
     int8_t a_ext = (int8_t)c->gpr[4];
     gaddr a_teh = (gaddr)c->gpr[5];
@@ -10031,8 +16694,23 @@ static void ppcglue_TEClick(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TESetSelect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9D1));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TESetSelect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D1)) {
+        ppcpatched_TESetSelect(c);
+        return;
+    }
     int32_t a_start = (int32_t)c->gpr[3];
     int32_t a_stop = (int32_t)c->gpr[4];
     gaddr a_teh = (gaddr)c->gpr[5];
@@ -10040,22 +16718,61 @@ static void ppcglue_TESetSelect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEActivate(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9D8));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEActivate(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D8)) {
+        ppcpatched_TEActivate(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TEActivate(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TEDeactivate(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9D9));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TEDeactivate(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D9)) {
+        ppcpatched_TEDeactivate(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TEDeactivate(a_teh);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TECalText(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9D0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TECalText(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9D0)) {
+        ppcpatched_TECalText(c);
+        return;
+    }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TECalText(a_teh);
     c->pc = c->lr;
@@ -10130,8 +16847,26 @@ static void ppcglue_PrimeTime(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_KeyTranslate(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9C3));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_KeyTranslate(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9C3)) {
+        ppcpatched_KeyTranslate(c);
+        return;
+    }
     gaddr a_mapp = (gaddr)c->gpr[3];
     uint16_t a_code = (uint16_t)c->gpr[4];
     gaddr a_state = (gaddr)c->gpr[5];
@@ -10139,16 +16874,52 @@ static void ppcglue_KeyTranslate(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNextEvent(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA970));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNextEvent(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA970)) {
+        ppcpatched_GetNextEvent(c);
+        return;
+    }
     int16_t a_em = (int16_t)c->gpr[3];
     gaddr a_evt = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetNextEvent(a_em, a_evt);
     c->pc = c->lr;
 }
 
+static void ppcpatched_WaitNextEvent(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA860));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_WaitNextEvent(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA860)) {
+        ppcpatched_WaitNextEvent(c);
+        return;
+    }
     int16_t a_mask = (int16_t)c->gpr[3];
     gaddr a_evp = (gaddr)c->gpr[4];
     int32_t a_sleep = (int32_t)c->gpr[5];
@@ -10157,48 +16928,151 @@ static void ppcglue_WaitNextEvent(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_EventAvail(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA971));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_EventAvail(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA971)) {
+        ppcpatched_EventAvail(c);
+        return;
+    }
     int16_t a_em = (int16_t)c->gpr[3];
     gaddr a_evt = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_EventAvail(a_em, a_evt);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetMouse(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA972));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMouse(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA972)) {
+        ppcpatched_GetMouse(c);
+        return;
+    }
     gaddr a_p = (gaddr)c->gpr[3];
     tb_GetMouse(a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Button(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA974));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Button(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA974)) {
+        ppcpatched_Button(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_Button();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_StillDown(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA973));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_StillDown(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA973)) {
+        ppcpatched_StillDown(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_StillDown();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_WaitMouseUp(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap((uint16_t)(0xA977));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
 static void ppcglue_WaitMouseUp(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA977)) {
+        ppcpatched_WaitMouseUp(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_WaitMouseUp();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetKeys(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA976));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_GetKeys(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA976)) {
+        ppcpatched_GetKeys(c);
+        return;
+    }
     gaddr a_keys = (gaddr)c->gpr[3];
     tb_GetKeys(a_keys);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TickCount(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA975));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TickCount(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA975)) {
+        ppcpatched_TickCount(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_TickCount();
     c->pc = c->lr;
 }
@@ -10215,82 +17089,264 @@ static void ppcglue_GetCaretTime(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_FracSqrt(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA849));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FracSqrt(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA849)) {
+        ppcpatched_FracSqrt(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_FracSqrt(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FracSin(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA848));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FracSin(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA848)) {
+        ppcpatched_FracSin(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_FracSin(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FixATan2(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA818));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FixATan2(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA818)) {
+        ppcpatched_FixATan2(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     int32_t a_y = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_FixATan2(a_x, a_y);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FracCos(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA847));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FracCos(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA847)) {
+        ppcpatched_FracCos(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_FracCos(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FixRatio(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA869));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FixRatio(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA869)) {
+        ppcpatched_FixRatio(c);
+        return;
+    }
     int16_t a_n = (int16_t)c->gpr[3];
     int16_t a_d = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_FixRatio(a_n, a_d);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FixMul(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA868));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FixMul(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA868)) {
+        ppcpatched_FixMul(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     int32_t a_b = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_FixMul(a_a, a_b);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FixRound(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA86C));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FixRound(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA86C)) {
+        ppcpatched_FixRound(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FixRound(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewString(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA906));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewString(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA906)) {
+        ppcpatched_NewString(c);
+        return;
+    }
     gaddr a_s = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_NewString(a_s);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetString(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA907));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetString(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA907)) {
+        ppcpatched_SetString(c);
+        return;
+    }
     gaddr a_h = (gaddr)c->gpr[3];
     gaddr a_s = (gaddr)c->gpr[4];
     tb_SetString(a_h, a_s);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetString(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9BA));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetString(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9BA)) {
+        ppcpatched_GetString(c);
+        return;
+    }
     int16_t a_i = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetString(a_i);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Munger(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(4, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap((uint16_t)(0xA9E0));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Munger(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9E0)) {
+        ppcpatched_Munger(c);
+        return;
+    }
     gaddr a_h = (gaddr)c->gpr[3];
     int32_t a_off = (int32_t)c->gpr[4];
     gaddr a_p1 = (gaddr)c->gpr[5];
@@ -10301,8 +17357,23 @@ static void ppcglue_Munger(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_PackBits(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8CF));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PackBits(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8CF)) {
+        ppcpatched_PackBits(c);
+        return;
+    }
     gaddr a_sp = (gaddr)c->gpr[3];
     gaddr a_dp = (gaddr)c->gpr[4];
     int16_t a_len = (int16_t)c->gpr[5];
@@ -10310,8 +17381,23 @@ static void ppcglue_PackBits(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_UnpackBits(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA8D0));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_UnpackBits(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8D0)) {
+        ppcpatched_UnpackBits(c);
+        return;
+    }
     gaddr a_sp = (gaddr)c->gpr[3];
     gaddr a_dp = (gaddr)c->gpr[4];
     int16_t a_len = (int16_t)c->gpr[5];
@@ -10319,85 +17405,261 @@ static void ppcglue_UnpackBits(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitTst(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA85D));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitTst(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA85D)) {
+        ppcpatched_BitTst(c);
+        return;
+    }
     gaddr a_bp = (gaddr)c->gpr[3];
     int32_t a_bn = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_BitTst(a_bp, a_bn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitSet(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA85E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitSet(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA85E)) {
+        ppcpatched_BitSet(c);
+        return;
+    }
     gaddr a_bp = (gaddr)c->gpr[3];
     int32_t a_bn = (int32_t)c->gpr[4];
     tb_BitSet(a_bp, a_bn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitClr(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA85F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitClr(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA85F)) {
+        ppcpatched_BitClr(c);
+        return;
+    }
     gaddr a_bp = (gaddr)c->gpr[3];
     int32_t a_bn = (int32_t)c->gpr[4];
     tb_BitClr(a_bp, a_bn);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitAnd(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA858));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitAnd(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA858)) {
+        ppcpatched_BitAnd(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     int32_t a_b = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_BitAnd(a_a, a_b);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitOr(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA85B));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitOr(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA85B)) {
+        ppcpatched_BitOr(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     int32_t a_b = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_BitOr(a_a, a_b);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitXor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA859));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitXor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA859)) {
+        ppcpatched_BitXor(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     int32_t a_b = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_BitXor(a_a, a_b);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitNot(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA85A));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitNot(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA85A)) {
+        ppcpatched_BitNot(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_BitNot(a_a);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BitShift(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA85C));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_BitShift(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA85C)) {
+        ppcpatched_BitShift(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     int16_t a_n = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_BitShift(a_a, a_n);
     c->pc = c->lr;
 }
 
+static void ppcpatched_HiWord(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA86A));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_HiWord(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA86A)) {
+        ppcpatched_HiWord(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HiWord(a_a);
     c->pc = c->lr;
 }
 
+static void ppcpatched_LoWord(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA86B));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_LoWord(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA86B)) {
+        ppcpatched_LoWord(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LoWord(a_a);
     c->pc = c->lr;
 }
 
+static void ppcpatched_LongMul(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA867));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_LongMul(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA867)) {
+        ppcpatched_LongMul(c);
+        return;
+    }
     int32_t a_a = (int32_t)c->gpr[3];
     int32_t a_b = (int32_t)c->gpr[4];
     gaddr a_c = (gaddr)c->gpr[5];
@@ -10405,8 +17667,24 @@ static void ppcglue_LongMul(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetPattern(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9B8));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetPattern(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B8)) {
+        ppcpatched_GetPattern(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetPattern(a_id);
     c->pc = c->lr;
@@ -10421,103 +17699,331 @@ static void ppcglue_GetIndPattern(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetCursor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9B9));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCursor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9B9)) {
+        ppcpatched_GetCursor(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetCursor(a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetPicture(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA9BC));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetPicture(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9BC)) {
+        ppcpatched_GetPicture(c);
+        return;
+    }
     int16_t a_id = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetPicture(a_id);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DeltaPoint(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA94F));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_DeltaPoint(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA94F)) {
+        ppcpatched_DeltaPoint(c);
+        return;
+    }
     uint32_t a_a = (uint32_t)c->gpr[3];
     uint32_t a_b = (uint32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_DeltaPoint(a_a, a_b);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SlopeFromAngle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8BC));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_SlopeFromAngle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8BC)) {
+        ppcpatched_SlopeFromAngle(c);
+        return;
+    }
     int16_t a_a = (int16_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_SlopeFromAngle(a_a);
     c->pc = c->lr;
 }
 
+static void ppcpatched_AngleFromSlope(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA8C4));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_AngleFromSlope(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA8C4)) {
+        ppcpatched_AngleFromSlope(c);
+        return;
+    }
     int32_t a_s = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AngleFromSlope(a_s);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FracMul(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA84A));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FracMul(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA84A)) {
+        ppcpatched_FracMul(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     int32_t a_y = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_FracMul(a_x, a_y);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FixDiv(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA84D));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FixDiv(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA84D)) {
+        ppcpatched_FixDiv(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     int32_t a_y = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_FixDiv(a_x, a_y);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FracDiv(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA84B));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FracDiv(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA84B)) {
+        ppcpatched_FracDiv(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     int32_t a_y = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_FracDiv(a_x, a_y);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Long2Fix(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA83F));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Long2Fix(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA83F)) {
+        ppcpatched_Long2Fix(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_Long2Fix(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Fix2Long(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA840));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Fix2Long(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA840)) {
+        ppcpatched_Fix2Long(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_Fix2Long(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Fix2Frac(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA841));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Fix2Frac(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA841)) {
+        ppcpatched_Fix2Frac(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_Fix2Frac(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_Frac2Fix(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA842));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_Frac2Fix(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA842)) {
+        ppcpatched_Frac2Fix(c);
+        return;
+    }
     int32_t a_x = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_Frac2Fix(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_R_X2Fix(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA844));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_R_X2Fix(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA844)) {
+        ppcpatched_R_X2Fix(c);
+        return;
+    }
     gaddr a_x = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_R_X2Fix(a_x);
     c->pc = c->lr;
 }
 
+static void ppcpatched_R_X2Frac(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA846));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_R_X2Frac(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA846)) {
+        ppcpatched_R_X2Frac(c);
+        return;
+    }
     gaddr a_x = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_R_X2Frac(a_x);
     c->pc = c->lr;
@@ -10553,102 +18059,300 @@ static void ppcglue_SlotVRemove(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetWTitle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA91A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetWTitle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA91A)) {
+        ppcpatched_SetWTitle(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     gaddr a_t = (gaddr)c->gpr[4];
     tb_SetWTitle(a_w, a_t);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetWTitle(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA919));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetWTitle(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA919)) {
+        ppcpatched_GetWTitle(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     gaddr a_t = (gaddr)c->gpr[4];
     tb_GetWTitle(a_w, a_t);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FrontWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap((uint16_t)(0xA924));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FrontWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA924)) {
+        ppcpatched_FrontWindow(c);
+        return;
+    }
     c->gpr[3] = (uint32_t)tb_FrontWindow();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_HiliteWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(1, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA91C));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_HiliteWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA91C)) {
+        ppcpatched_HiliteWindow(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     int8_t a_flag = (int8_t)c->gpr[4];
     tb_HiliteWindow(a_w, a_flag);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BringToFront(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA920));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_BringToFront(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA920)) {
+        ppcpatched_BringToFront(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_BringToFront(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SelectWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA91F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SelectWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA91F)) {
+        ppcpatched_SelectWindow(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_SelectWindow(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ShowHide(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(1, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA908));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ShowHide(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA908)) {
+        ppcpatched_ShowHide(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     int8_t a_flag = (int8_t)c->gpr[4];
     tb_ShowHide(a_w, a_flag);
     c->pc = c->lr;
 }
 
+static void ppcpatched_HideWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA916));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HideWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA916)) {
+        ppcpatched_HideWindow(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_HideWindow(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ShowWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA915));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ShowWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA915)) {
+        ppcpatched_ShowWindow(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_ShowWindow(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SendBehind(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA921));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SendBehind(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA921)) {
+        ppcpatched_SendBehind(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     gaddr a_behind = (gaddr)c->gpr[4];
     tb_SendBehind(a_w, a_behind);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawGrowIcon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA904));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawGrowIcon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA904)) {
+        ppcpatched_DrawGrowIcon(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_DrawGrowIcon(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InitWindows(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap((uint16_t)(0xA912));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitWindows(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA912)) {
+        ppcpatched_InitWindows(c);
+        return;
+    }
     tb_InitWindows();
+    c->pc = c->lr;
+}
+
+static void ppcpatched_GetWMgrPort(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA910));
+    ppc_trap_end();
     c->pc = c->lr;
 }
 
 static void ppcglue_GetWMgrPort(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA910)) {
+        ppcpatched_GetWMgrPort(c);
+        return;
+    }
     gaddr a_wp = (gaddr)c->gpr[3];
     tb_GetWMgrPort(a_wp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(1, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap_push(1, c->gpr[9]);
+    ppc_trap_push(4, c->gpr[10]);
+    ppc_trap((uint16_t)(0xA913));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA913)) {
+        ppcpatched_NewWindow(c);
+        return;
+    }
     gaddr a_wst = (gaddr)c->gpr[3];
     gaddr a_r = (gaddr)c->gpr[4];
     gaddr a_title = (gaddr)c->gpr[5];
@@ -10661,8 +18365,26 @@ static void ppcglue_NewWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNewWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA9BD));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNewWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA9BD)) {
+        ppcpatched_GetNewWindow(c);
+        return;
+    }
     int16_t a_wid = (int16_t)c->gpr[3];
     gaddr a_wst = (gaddr)c->gpr[4];
     gaddr a_behind = (gaddr)c->gpr[5];
@@ -10670,15 +18392,51 @@ static void ppcglue_GetNewWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_CloseWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA92D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CloseWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA92D)) {
+        ppcpatched_CloseWindow(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_CloseWindow(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_NewCWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(1, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap_push(1, c->gpr[9]);
+    ppc_trap_push(4, c->gpr[10]);
+    ppc_trap((uint16_t)(0xAA45));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewCWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA45)) {
+        ppcpatched_NewCWindow(c);
+        return;
+    }
     gaddr a_storage = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -10691,8 +18449,26 @@ static void ppcglue_NewCWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetNewCWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(2, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xAA46));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetNewCWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA46)) {
+        ppcpatched_GetNewCWindow(c);
+        return;
+    }
     int16_t a_arg0 = (int16_t)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     gaddr a_arg2 = (gaddr)c->gpr[5];
@@ -10700,53 +18476,164 @@ static void ppcglue_GetNewCWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_DisposeWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA914));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DisposeWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA914)) {
+        ppcpatched_DisposeWindow(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_DisposeWindow(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetWRefCon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA918));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetWRefCon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA918)) {
+        ppcpatched_SetWRefCon(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     int32_t a_data = (int32_t)c->gpr[4];
     tb_SetWRefCon(a_w, a_data);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetWRefCon(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA917));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetWRefCon(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA917)) {
+        ppcpatched_GetWRefCon(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetWRefCon(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetWindowPic(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA92E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetWindowPic(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA92E)) {
+        ppcpatched_SetWindowPic(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     gaddr a_p = (gaddr)c->gpr[4];
     tb_SetWindowPic(a_w, a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetWindowPic(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA92F));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetWindowPic(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA92F)) {
+        ppcpatched_GetWindowPic(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetWindowPic(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PinRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA94E));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_PinRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA94E)) {
+        ppcpatched_PinRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     uint32_t a_p = (uint32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_PinRect(a_r, a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DragGrayRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap_push(4, c->gpr[6]);
+    ppc_trap_push(2, c->gpr[7]);
+    ppc_trap_push(4, c->gpr[8]);
+    ppc_trap((uint16_t)(0xA905));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_DragGrayRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA905)) {
+        ppcpatched_DragGrayRgn(c);
+        return;
+    }
     gaddr a_rgn = (gaddr)c->gpr[3];
     uint32_t a_startp = (uint32_t)c->gpr[4];
     gaddr a_limit = (gaddr)c->gpr[5];
@@ -10757,83 +18644,245 @@ static void ppcglue_DragGrayRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_ClipAbove(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA90B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ClipAbove(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA90B)) {
+        ppcpatched_ClipAbove(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_ClipAbove(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CheckUpdate(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA911));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_CheckUpdate(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA911)) {
+        ppcpatched_CheckUpdate(c);
+        return;
+    }
     gaddr a_ev = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_CheckUpdate(a_ev);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SaveOld(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA90E));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SaveOld(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA90E)) {
+        ppcpatched_SaveOld(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_SaveOld(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PaintOne(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA90C));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PaintOne(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA90C)) {
+        ppcpatched_PaintOne(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     gaddr a_clobbered = (gaddr)c->gpr[4];
     tb_PaintOne(a_w, a_clobbered);
     c->pc = c->lr;
 }
 
+static void ppcpatched_PaintBehind(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA90D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_PaintBehind(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA90D)) {
+        ppcpatched_PaintBehind(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     gaddr a_clobbered = (gaddr)c->gpr[4];
     tb_PaintBehind(a_w, a_clobbered);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CalcVis(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA909));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CalcVis(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA909)) {
+        ppcpatched_CalcVis(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_CalcVis(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_CalcVisBehind(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA90A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_CalcVisBehind(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA90A)) {
+        ppcpatched_CalcVisBehind(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     gaddr a_clobbered = (gaddr)c->gpr[4];
     tb_CalcVisBehind(a_w, a_clobbered);
     c->pc = c->lr;
 }
 
+static void ppcpatched_DrawNew(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(1, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA90F));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DrawNew(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA90F)) {
+        ppcpatched_DrawNew(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     int8_t a_flag = (int8_t)c->gpr[4];
     tb_DrawNew(a_w, a_flag);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetWVariant(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA80A));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetWVariant(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA80A)) {
+        ppcpatched_GetWVariant(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWVariant(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_FindWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA92C));
+    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_FindWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA92C)) {
+        ppcpatched_FindWindow(c);
+        return;
+    }
     uint32_t a_p = (uint32_t)c->gpr[3];
     gaddr a_wpp = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FindWindow(a_p, a_wpp);
     c->pc = c->lr;
 }
 
+static void ppcpatched_TrackBox(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA83B));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TrackBox(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA83B)) {
+        ppcpatched_TrackBox(c);
+        return;
+    }
     gaddr a_wp = (gaddr)c->gpr[3];
     uint32_t a_pt = (uint32_t)c->gpr[4];
     int16_t a_part = (int16_t)c->gpr[5];
@@ -10841,16 +18890,48 @@ static void ppcglue_TrackBox(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_TrackGoAway(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xA91E));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_TrackGoAway(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA91E)) {
+        ppcpatched_TrackGoAway(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     uint32_t a_p = (uint32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_TrackGoAway(a_w, a_p);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ZoomWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(1, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA83A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ZoomWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA83A)) {
+        ppcpatched_ZoomWindow(c);
+        return;
+    }
     gaddr a_wp = (gaddr)c->gpr[3];
     int16_t a_part = (int16_t)c->gpr[4];
     int8_t a_front = (int8_t)c->gpr[5];
@@ -10858,8 +18939,24 @@ static void ppcglue_ZoomWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_MoveWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(1, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA91B));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_MoveWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA91B)) {
+        ppcpatched_MoveWindow(c);
+        return;
+    }
     gaddr a_wp = (gaddr)c->gpr[3];
     int16_t a_h = (int16_t)c->gpr[4];
     int16_t a_v = (int16_t)c->gpr[5];
@@ -10868,8 +18965,23 @@ static void ppcglue_MoveWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_DragWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA925));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_DragWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA925)) {
+        ppcpatched_DragWindow(c);
+        return;
+    }
     gaddr a_wp = (gaddr)c->gpr[3];
     uint32_t a_p = (uint32_t)c->gpr[4];
     gaddr a_rp = (gaddr)c->gpr[5];
@@ -10877,8 +18989,26 @@ static void ppcglue_DragWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_GrowWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(4, c->gpr[5]);
+    ppc_trap((uint16_t)(0xA92B));
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GrowWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA92B)) {
+        ppcpatched_GrowWindow(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     uint32_t a_startp = (uint32_t)c->gpr[4];
     gaddr a_rp = (gaddr)c->gpr[5];
@@ -10886,8 +19016,24 @@ static void ppcglue_GrowWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_SizeWindow(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(2, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(1, c->gpr[6]);
+    ppc_trap((uint16_t)(0xA91D));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SizeWindow(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA91D)) {
+        ppcpatched_SizeWindow(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     int16_t a_width = (int16_t)c->gpr[4];
     int16_t a_height = (int16_t)c->gpr[5];
@@ -10896,65 +19042,187 @@ static void ppcglue_SizeWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvalRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA928));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvalRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA928)) {
+        ppcpatched_InvalRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_InvalRect(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_InvalRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA927));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InvalRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA927)) {
+        ppcpatched_InvalRgn(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_InvalRgn(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ValidRect(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA92A));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ValidRect(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA92A)) {
+        ppcpatched_ValidRect(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_ValidRect(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_ValidRgn(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA929));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_ValidRgn(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA929)) {
+        ppcpatched_ValidRgn(c);
+        return;
+    }
     gaddr a_r = (gaddr)c->gpr[3];
     tb_ValidRgn(a_r);
     c->pc = c->lr;
 }
 
+static void ppcpatched_BeginUpdate(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA922));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_BeginUpdate(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA922)) {
+        ppcpatched_BeginUpdate(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_BeginUpdate(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_EndUpdate(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xA923));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_EndUpdate(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xA923)) {
+        ppcpatched_EndUpdate(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     tb_EndUpdate(a_w);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetWinColor(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA41));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetWinColor(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA41)) {
+        ppcpatched_SetWinColor(c);
+        return;
+    }
     gaddr a_w = (gaddr)c->gpr[3];
     gaddr a_new_w_ctab = (gaddr)c->gpr[4];
     tb_SetWinColor(a_w, a_new_w_ctab);
     c->pc = c->lr;
 }
 
+static void ppcpatched_SetDeskCPat(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap((uint16_t)(0xAA47));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetDeskCPat(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA47)) {
+        ppcpatched_SetDeskCPat(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     tb_SetDeskCPat(a_arg0);
     c->pc = c->lr;
 }
 
+static void ppcpatched_GetAuxWin(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap((uint16_t)(0xAA42));
+    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
+    ppc_trap_end();
+    c->gpr[3] = r;
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetAuxWin(ppc_cpu *c)
 {
+    if (ppc_trap_patched(0xAA42)) {
+        ppcpatched_GetAuxWin(c);
+        return;
+    }
     gaddr a_arg0 = (gaddr)c->gpr[3];
     gaddr a_arg1 = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetAuxWin(a_arg0, a_arg1);
@@ -12395,6 +20663,18 @@ static void ppcglue_GetSwitchInfo(ppc_cpu *c)
 static void ppcglue_CancelSwitch(ppc_cpu *c)
 {
     tb_CancelSwitch();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BeginSystemMode(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BeginSystemMode();
+    c->pc = c->lr;
+}
+
+static void ppcglue_EndSystemMode(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EndSystemMode();
     c->pc = c->lr;
 }
 
@@ -26503,6 +34783,7 @@ const ppc_export ppc_exports[] = {
     {"BackPixPat", ppcglue_BackPixPat},
     {"BeginFullScreen", ppcglue_BeginFullScreen},
     {"BeginMediaEdits", ppctrap_BeginMediaEdits},
+    {"BeginSystemMode", ppcglue_BeginSystemMode},
     {"BeginThemeDragSound", ppcglue_BeginThemeDragSound},
     {"BeginUpdate", ppcglue_BeginUpdate},
     {"BitAnd", ppcglue_BitAnd},
@@ -26821,6 +35102,7 @@ const ppc_export ppc_exports[] = {
     {"EnableMenuItemIcon", ppcglue_EnableMenuItemIcon},
     {"EndFullScreen", ppcglue_EndFullScreen},
     {"EndMediaEdits", ppctrap_EndMediaEdits},
+    {"EndSystemMode", ppcglue_EndSystemMode},
     {"EndThemeDragSound", ppcglue_EndThemeDragSound},
     {"EndUpdate", ppcglue_EndUpdate},
     {"Enqueue", ppcglue_Enqueue},

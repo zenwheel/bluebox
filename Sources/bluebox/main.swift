@@ -60,14 +60,16 @@ func usage() -> Never {
                      DoubleTime=20 (windowed runs take the first four from macOS)
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
           --screen WxH  screen size (default 1024x768)
-          --ppc      run a fat application's PowerPC code (PowerPC-only ones always run it)
-          --68k      run a fat application's 68k code (the default unless its cpu setting is ppc)
+          --ppc      run a fat application's PowerPC code (the default; PowerPC-only ones
+                     always run it)
+          --68k      run a fat application's 68k code (as a cpu setting of 68020 or 68040 does)
           --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
                      application can still switch depth itself with SetDepth).  Without --depth,
                      a game known to need another depth gets it (unless it has a depth setting),
                      and one whose alert asks for another is started again at that depth, which
                      replaces its setting
-          --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU)
+          --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU); a fat
+                     application then runs its 68k code
           --appletalk A  AppleTalk on LocalTalk over UDP: local (the default; copies
                      on this host play each other), lan (the local network, other
                      emulators and routers that speak LToUDP), lan:IF (the local
@@ -126,10 +128,11 @@ func usage() -> Never {
                 [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
-          game that wants 256 colours, or cpu 68020 for one that misbehaves on a
-          68040.  --default sets them for every application without its own
-          (bluebox set --default scale 2 doubles every classic window).  With no
-          setting given, show them.
+          game that wants 256 colours, cpu 68020 for one that misbehaves on a
+          68040, or cpu 68040 for a fat application to run its 68k code.
+          --default sets them for every application without its own (bluebox set
+          --default scale 2 doubles every classic window).  With no setting given,
+          show them.
       bluebox shell
           Open the Blue Box shell: the library's applications to launch, with their
           settings and the defaults for every application; drop archives on its
@@ -568,12 +571,13 @@ func runCommand(_ args: [String]) {
     } else if let d = saved.depth {
         machine_set_screen_depth(Int32(d))
     }
-    // The processor: a 68k model, or PowerPC (750) for a fat application's
-    // PowerPC code (a 68k application then gets the default 68040).
+    // The processor: a fat application runs its PowerPC code unless a 68k
+    // model is chosen (on the command line or in its settings), which runs
+    // its 68k code on that model; a 68k application gets the default 68040.
     let processor = cpuModel ?? saved.cpu.map(Int32.init)
     if let m = processor, m != Int32(powerPCSetting) { machine_set_cpu(m) }
     machine_set_depth_alerts(depthRelaunch != nil)
-    machine_set_prefer_ppc(preferPPC ?? (processor == Int32(powerPCSetting)))
+    machine_set_prefer_ppc(preferPPC ?? (processor == nil || processor == Int32(powerPCSetting)))
     #if canImport(AppKit)
     // The host's double-click and key-repeat times, in ticks (headless runs
     // keep the defaults, so they repeat exactly).

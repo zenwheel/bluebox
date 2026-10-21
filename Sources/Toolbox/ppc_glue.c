@@ -114,6 +114,12 @@ void ppc_trap(uint16_t trapword)
         ppc_halt(&g_ppc, "%s", c->halt_reason);
 }
 
+bool ppc_trap_patched(uint16_t trapword)
+{
+    gaddr a = rd32(TB_TRAP_TABLE + (trapword & 0x3FFu) * 4);
+    return a && native_index_for(a) < 0;
+}
+
 uint32_t ppc_trap_result(int size)
 {
     gaddr sp = g_cpu->a[7];

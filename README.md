@@ -130,7 +130,7 @@ Some useful options for `run`:
 |---|---|
 | `--depth 1\|2\|4\|8\|16\|32` | Screen depth. Older games often want 8. |
 | `--scale 1\|1.5\|2` | Make classic windows bigger on modern displays. |
-| `--ppc` / `--68k` | Choose the code to run in a fat application. PowerPC-only applications always run PowerPC code. |
+| `--ppc` / `--68k` | Choose the code to run in a fat application: PowerPC by default, or 68k (as `bluebox set <app> cpu 68040` does for one application). PowerPC-only applications always run PowerPC code. |
 | `--appearance native` | Use macOS window frames. A Kaleidoscope scheme can be given instead. |
 | `--headless --screenshot out.png` | Run without a window and save the screen at the end. |
 

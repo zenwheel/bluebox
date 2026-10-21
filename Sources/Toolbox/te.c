@@ -917,6 +917,7 @@ gaddr tb_TEStyleNew(gaddr dst, gaddr view)
 
 void tb_TEDispose(gaddr teh)
 {
+    tb_TEAutoView(0, teh);
     if (styled(teh)) {
         gaddr sh = rd32(te(teh) + TERec_txFont_off), sr = rd32(sh);
         gaddr ns = rd32(sr + SR_NULLSTYLE);
@@ -1282,13 +1283,31 @@ void tb_TEPinScroll(int16_t dh, int16_t dv, gaddr teh)
     tb_TEScroll(dh, dv, teh);
 }
 
-static bool auto_view;
+/* The records with automatic scrolling on: each record has its own flag
+ * (the Installer's licence turns it on for one record, then makes another
+ * that must not scroll to the end of the text it inserts). */
+static gaddr auto_view[64];
 
-void tb_TEAutoView(int8_t autoflag, gaddr teh) { auto_view = autoflag != 0; }
+static int auto_view_slot(gaddr teh)
+{
+    for (int i = 0; i < (int)(sizeof auto_view / sizeof auto_view[0]); i++)
+        if (auto_view[i] == teh)
+            return i;
+    return -1;
+}
+
+void tb_TEAutoView(int8_t autoflag, gaddr teh)
+{
+    int i = auto_view_slot(teh);
+    if (!autoflag && i >= 0)
+        auto_view[i] = 0;
+    else if (autoflag && i < 0 && (i = auto_view_slot(0)) >= 0)
+        auto_view[i] = teh;
+}
 
 void tb_TESelView(gaddr teh)
 {
-    if (!auto_view)
+    if (!teh || auto_view_slot(teh) < 0)
         return;
     port_state s = enter(teh);
     int h, v;
@@ -1315,7 +1334,16 @@ void tb_TETextBox(gaddr p, int32_t ln, gaddr r, int16_t j)
     tb_TEDispose(teh);
 }
 
-int16_t tb_TEFeatureFlag(int16_t feature, int16_t action, gaddr t) { return 0; }
+/* teFAutoScroll (0) is TEAutoView's flag; the others are not kept. */
+int16_t tb_TEFeatureFlag(int16_t feature, int16_t action, gaddr t)
+{
+    if (feature != 0)
+        return 0;
+    int16_t was = auto_view_slot(t) >= 0;
+    if (action == 0 || action == 1) /* teBitClear, teBitSet; teBitTest is -1 */
+        tb_TEAutoView((int8_t)action, t);
+    return was;
+}
 
 void tb_TEInit(void)
 {

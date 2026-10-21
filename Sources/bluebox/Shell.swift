@@ -621,7 +621,8 @@ struct SettingsForm: View {
         }
         Section("Machine") {
             Picker("Processor", selection: $settings.cpu) {
-                Text("\(inherit) (\(cpuName(fallback.cpu ?? 68040)))").tag(Int?.none)
+                Text("\(inherit) (\(fallback.cpu.map(cpuName) ?? "PowerPC for fat applications, else 68040"))")
+                    .tag(Int?.none)
                 Text(cpuName(68040)).tag(Int?.some(68040))
                 Text(cpuName(68020)).tag(Int?.some(68020))
                 Text(cpuName(powerPCSetting)).tag(Int?.some(powerPCSetting))
@@ -691,7 +692,8 @@ struct SettingsForm: View {
 
     private func scaleName(_ v: Double) -> String { v == 1.5 ? "1.5×" : "\(Int(v))×" }
     private func cpuName(_ m: Int) -> String {
-        m == powerPCSetting ? "PowerPC (fat applications)" : m == 68020 ? "68020 without FPU" : "68040 with FPU"
+        m == powerPCSetting ? "PowerPC (fat applications)" : m == 68020 ? "68020 without FPU (68k code)"
+            : "68040 with FPU (68k code)"
     }
     private func appearanceName(_ a: String) -> String {
         switch a {

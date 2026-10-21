@@ -2850,6 +2850,9 @@ const ppc_export lib_exports[] = {
     { "__fpclassifyd", m_fpclassifyd }, { "__inf", m_inf }, { "__isfinited", m_isfinited },
     { "__isnan", m_isnand }, { "__isnand", m_isnand }, { "__isnanf", m_isnand }, { "__isnormald", m_isnormald },
     { "__signbitd", m_signbitd },
+    /* The float forms: a float argument comes in an FPR as a double. */
+    { "__fpclassifyf", m_fpclassifyd }, { "__isfinitef", m_isfinited }, { "__isnormalf", m_isnormald },
+    { "__signbitf", m_signbitd },
     /* StdCLib */
     { "isalnum", s_isalnum }, { "isalpha", s_isalpha }, { "isdigit", s_isdigit }, { "isxdigit", s_isxdigit },
     { "isspace", s_isspace }, { "isupper", s_isupper }, { "islower", s_islower }, { "ispunct", s_ispunct },

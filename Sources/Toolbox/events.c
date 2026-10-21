@@ -14,6 +14,7 @@
 #include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 enum { nullEvent = 0, mouseDown, mouseUp, keyDown, keyUp, autoKey, updateEvt, diskEvt, activateEvt, osEvt = 15 };
 enum { activeFlag = 1, btnState = 0x80, cmdKey = 0x100, shiftKey = 0x200, alphaLock = 0x400, optionKey = 0x800,
@@ -646,6 +647,8 @@ static void note_repeated_update(gaddr evt)
         machine_idle();
 }
 
+static bool gne_idled; /* GetNextEvent let time pass for a null event */
+
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
     sound_pump();
@@ -666,6 +669,7 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
         return next_event(em, evt, true, false);
     }
     machine_idle();
+    gne_idled = true;
     return 0;
 }
 
@@ -673,6 +677,39 @@ int8_t tb_EventAvail(int16_t em, gaddr evt)
 {
     display_sync();
     return next_event(em, evt, false, false);
+}
+
+/* A program's patch on GetNextEvent, if it has one.  System 7's
+ * WaitNextEvent took its events through GetNextEvent, so such a patch sees
+ * them all: HyperCard 2.4's PowerPC code activates its card window there,
+ * from CurActivate, and without it treats every click as one that brings
+ * the window to the front. */
+static bool in_gne_patch;
+
+static gaddr gne_patch(void)
+{
+    gaddr a = rd32(TB_TRAP_TABLE + 0x170u * 4);
+    return in_gne_patch || !a || native_index_for(a) >= 0 ? 0 : a;
+}
+
+/* The next event for WaitNextEvent: through the patch, or our own. */
+static bool wne_event(int16_t mask, gaddr evp, bool *idled)
+{
+    gaddr patch = gne_patch();
+    *idled = false;
+    if (!patch)
+        return next_event(mask, evp, true, false);
+    cpu68k *c = g_cpu;
+    cpu_push16(c, 0); /* the Boolean result */
+    cpu_push16(c, (uint16_t)mask);
+    cpu_push32(c, evp);
+    gne_idled = false;
+    in_gne_patch = true;
+    guest_call(patch);
+    in_gne_patch = false;
+    bool got = (cpu_pop16(c) >> 8) != 0;
+    *idled = gne_idled;
+    return got;
 }
 
 int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
@@ -683,7 +720,8 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     time_pump();
     notify_pump();
     display_sync();
-    if (next_event(mask, evp, true, false)) {
+    bool idled;
+    if (wne_event(mask, evp, &idled)) {
         LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evp), rd32(evp + 2), rd32(evp + 6), rd32(evp + 10), rd16(evp + 14));
         note_repeated_update(evp);
         return 1;
@@ -732,9 +770,9 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
                 return 0;
         }
         machine_advance_ticks();
-        return next_event(mask, evp, true, false);
+        return wne_event(mask, evp, &idled);
     }
-    if (!host_attached)
+    if (!host_attached && !idled)
         machine_idle();
     return 0;
 }

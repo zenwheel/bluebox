@@ -941,6 +941,11 @@ static int16_t open_path_perm(const char *path, int perm)
         set_res_err(fnfErr);
         return -1;
     }
+    if (!mf.rsrc_len) { /* an empty fork is eofErr, which callers answer with HCreateResFile */
+        mac_file_free(&mf);
+        set_res_err(-39);
+        return -1;
+    }
     int16_t rn = rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, false);
     mac_file_free(&mf);
     if (rn < 0 && !rd16(LM_ResErr))

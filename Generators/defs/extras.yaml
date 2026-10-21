@@ -41,6 +41,22 @@
     dispatcher: OSDispatch
     selector: 0x0003
 
+# OSDispatch selectors $40 and $41, which Microsoft's Internet Library
+# (Internet Explorer 5) calls around its allocations in the system heap:
+# by their use, the Process Manager's BeginSystemMode and EndSystemMode.
+# There is nothing to switch here.
+- function:
+    name: BeginSystemMode
+    return: OSErr
+    dispatcher: OSDispatch
+    selector: 0x0040
+
+- function:
+    name: EndSystemMode
+    return: OSErr
+    dispatcher: OSDispatch
+    selector: 0x0041
+
 # The PPC Toolbox's trap: the routine selector in D0, the parameter
 # block in A0, the result in D0.
 - function:
