@@ -73,6 +73,9 @@ void ppc_trap_push(int size, uint32_t value);
 void ppc_trap(uint16_t trapword);
 uint32_t ppc_trap_result(int size);
 void ppc_trap_end(void);
+/* Whether the program has patched a Toolbox trap: its glue then runs the
+ * trap through the table instead of calling our function. */
+bool ppc_trap_patched(uint16_t trapword);
 /* A small struct result (NumVersion, Point): written through the pointer a
  * caller passed in r3 (result, r3 on entry), when it points into the
  * caller's stack as such a buffer does, and also left in r3 itself, where

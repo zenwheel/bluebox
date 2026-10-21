@@ -738,6 +738,20 @@ def gen_ppc(impl, sigs):
             export = v_eff or name
             if any(e == export for e, _ in table):
                 continue
+            # A Toolbox trap the program has patched goes through the trap
+            # table, as InterfaceLib's glue did (HyperCard 2.4 patches
+            # SelectWindow and ShowWindow to keep its card window active
+            # behind its palettes).
+            trap = trap_num(fn)
+            if v_eff is None and not fn.get("dispatcher") and trap is not None and trap & 0x0800 \
+                    and sig["conv"] == "stack":
+                rp = gen_ppc_trapcall(name, fn, sig, None)
+                if rp is not None:
+                    pname = f"ppcpatched_{name}"
+                    out.append(rp[1].replace(f"static void {rp[0]}(", f"static void {pname}(", 1))
+                    text = text.replace("(ppc_cpu *c)\n{\n",
+                                        f"(ppc_cpu *c)\n{{\n    if (ppc_trap_patched(0x{trap:04X})) {{\n"
+                                        f"        {pname}(c);\n        return;\n    }}\n", 1)
             out.append(text)
             table.append((export, cname))
     # The rest of the traps: glue running the 68k trap.
