@@ -48,6 +48,8 @@ enum {
     PB_SIZE = 80,
 };
 enum { ocRequest = 1, ocAccept = 3, sClosed = 6, CCB_STATE = 6, CCB_REMOTE = 10, CCB_SIZE = 242, ADSP_QUEUE = 8192 };
+/* the CCB's user flags and the attention message heard */
+enum { CCB_FLAGS = 8, CCB_ATTNCODE = 14, CCB_ATTNSIZE = 16, CCB_ATTNPTR = 18, eAttention = 0x20 };
 enum { errOpenDenied = -1273, errOpening = -1277 };
 
 /* A datagram waiting for OTRcvUData. */
@@ -93,6 +95,7 @@ typedef struct ot_atalk {
     int16_t ref, lref;     /* the connection end and the listener (0: none) */
     gaddr ccb, attn, pb, pb_open, pb_listen;
     bool listening, have_call, accepting, told_attn;
+    bool eom;              /* "adsp(EnableEOM=1)": messages, not a stream */
     provider *acceptor;    /* the listener whose OTAccept is opening this end */
     /* NBP's mapper */
     int lookup;            /* at_nbp_start's handle */
@@ -346,13 +349,14 @@ void ota_info(gaddr info, provider_kind kind)
     wr32(info + 28, 0);
 }
 
-int32_t ota_open(provider *p)
+int32_t ota_open(provider *p, const char *config)
 {
     if (!appletalk_enabled() || at_open() != noErr)
         return kOTNotFoundErr;
     p->at = calloc(1, sizeof *p->at);
     if (!p->at)
         return kOTOutOfMemoryErr;
+    p->at->eom = p->kind == P_ADSP && config && strcasestr(config, "EnableEOM=1");
     if (p->kind == P_DDP || p->kind == P_ATP || p->kind == P_ADSP) {
         at_hold_selfsend(true);
         p->at->held = true;
@@ -988,6 +992,9 @@ static int adsp_status(ot_atalk *a, int field)
 
 static bool adsp_closed(ot_atalk *a) { return a->ccb && rd16(a->ccb + CCB_STATE) == sClosed; }
 
+/* An attention message heard and not yet read (the driver keeps one). */
+static bool adsp_attention(ot_atalk *a) { return a->ccb && a->ref && (rd8(a->ccb + CCB_FLAGS) & eAttention); }
+
 static int32_t open_error(int16_t e)
 {
     return e == errOpenDenied ? kECONNREFUSEDErr : e == errOpening ? kETIMEDOUTErr : kECONNRESETErr;
@@ -1235,7 +1242,8 @@ void ota_Snd(ppc_cpu *c, provider *p)
         wr16(pb + P_REFNUM, (uint16_t)a->ref);
         wr16(pb + P_REQCOUNT, (uint16_t)k);
         wr32(pb + P_DATAPTR, buf + done);
-        wr8(pb + P_EOM, 0);
+        /* with EOM, the end of a send without T_MORE ends a message */
+        wr8(pb + P_EOM, a->eom && !(R(3) & T_MORE) && done + k == n);
         wr8(pb + P_FLUSH, 1);
         if (dsp(pb, dspWrite, false) != noErr)
             break;
@@ -1259,6 +1267,23 @@ void ota_Rcv(ppc_cpu *c, provider *p)
     }
     if (!adsp_open(p)) {
         RETURN((uint32_t)(p->disconnected ? kOTLookErr : kOTOutStateErr));
+        return;
+    }
+    if (adsp_attention(a)) { /* expedited data first: the code, then the message */
+        uint8_t m[2 + 570];
+        uint16_t code = rd16(a->ccb + CCB_ATTNCODE);
+        uint32_t len = rd16(a->ccb + CCB_ATTNSIZE);
+        len = len > 570 ? 570 : len;
+        m[0] = (uint8_t)(code >> 8);
+        m[1] = (uint8_t)code;
+        gget(m + 2, rd32(a->ccb + CCB_ATTNPTR), len);
+        uint32_t k = 2 + len < n ? 2 + len : n;
+        gput(buf, m, k);
+        wr8(a->ccb + CCB_FLAGS, rd8(a->ccb + CCB_FLAGS) & ~eAttention);
+        a->told_attn = false;
+        if (flags)
+            wr32(flags, T_EXPEDITED);
+        RETURN(k);
         return;
     }
     int have;
@@ -1287,8 +1312,8 @@ void ota_Rcv(ppc_cpu *c, provider *p)
         return;
     }
     uint32_t got = rd16(pb + P_ACTCOUNT);
-    if (flags && !rd8(pb + P_EOM))
-        wr32(flags, T_MORE); /* a stream: more may come */
+    if (flags && a->eom && !rd8(pb + P_EOM))
+        wr32(flags, T_MORE); /* the rest of the message to come */
     RETURN(got);
 }
 
@@ -1309,6 +1334,8 @@ void ota_Look(ppc_cpu *c, provider *p)
         RETURN(T_CONNECT);
     else if (a->have_call || (a->listening && pb_result(a->pb_listen) == noErr))
         RETURN(T_LISTEN);
+    else if (adsp_open(p) && adsp_attention(a))
+        RETURN(T_EXDATA);
     else if (adsp_open(p) && adsp_status(a, P_RECVPEND) > 0)
         RETURN(T_DATA);
     else if (p->eof)
@@ -1718,6 +1745,10 @@ void ota_poll(provider *p)
             ot_post(p, T_LISTEN, 0, 0);
         }
         if (adsp_open(p)) {
+            if (!a->told_attn && adsp_attention(a)) {
+                a->told_attn = true;
+                ot_post(p, T_EXDATA, 0, 0);
+            }
             if (!p->told_data && adsp_status(a, P_RECVPEND) > 0) {
                 p->told_data = true;
                 ot_post(p, T_DATA, 0, 0);
@@ -1765,7 +1796,7 @@ static int open_kind(provider_kind kind, int32_t *err)
         *err = kOTOutOfMemoryErr;
         return -1;
     }
-    *err = ota_open(&ot_providers[i]);
+    *err = ota_open(&ot_providers[i], NULL);
     if (*err != kOTNoError) {
         wr32(ot_providers[i].ref, 0);
         tb_DisposePtr(ot_providers[i].ref);

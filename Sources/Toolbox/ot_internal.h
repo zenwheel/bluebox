@@ -97,7 +97,8 @@ uint32_t ot_data_get(uint8_t *out, gaddr buf, uint32_t len, uint32_t max);
 
 /* ot_appletalk.c */
 bool ota_kind(const char *config, provider_kind *kind);
-int32_t ota_open(provider *p);
+/* config: the configuration's string ("adsp(EnableEOM=1)"), or NULL */
+int32_t ota_open(provider *p, const char *config);
 void ota_close(provider *p);
 void ota_poll(provider *p);
 void ota_info(gaddr info, provider_kind kind);

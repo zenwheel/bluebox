@@ -266,6 +266,77 @@ extension BlueBox {
             for ep in [listener, worker, client] { #expect(ot("OTCloseProvider", ep) == 0) }
         }
 
+        /// A connected pair of adsp endpoints (with the configuration
+        /// given): the listener, the worker that took the call, the client.
+        func adspPair(_ config: String) -> (UInt32, UInt32, UInt32) {
+            let listener = open(config), worker = open(config), client = open(config)
+            let ls = bind(listener, qlen: 1)
+            _ = bind(client)
+            let call = tb_NewPtr(40, false, true)
+            wr32(call + 0, 8); wr32(call + 4, 8); wr32(call + 8, ddp(ls))
+            #expect(err(ot("OTConnect", client, call, 0)) == -3162)
+            let heard = tb_NewPtr(40, false, true)
+            netbuf(heard, max: 8)
+            pump { ot("OTListen", listener, heard) == 0 }
+            #expect(ot("OTAccept", listener, worker, heard) == 0)
+            pump { ot("OTRcvConnect", client, 0) == 0 }
+            #expect(ot("OTGetEndpointState", client) == 5 && ot("OTGetEndpointState", worker) == 5)
+            return (listener, worker, client)
+        }
+
+        /// ADSP attention messages both ways: T_EXDATA, and OTRcv gives
+        /// the code and the message flagged T_EXPEDITED, before the data.
+        @Test func adspAttention() {
+            start()
+            let (listener, worker, client) = adspPair("adsp")
+            let buf = tb_NewPtr(64, false, true), flags = tb_NewPtr(4, false, true)
+            let msg = tb_NewPtr(8, false, true)
+            wr16(msg, 0x1234); wr8(msg + 2, 0x41); wr8(msg + 3, 0x42) // code $1234, "AB"
+            #expect(ot("OTSnd", client, cstr("data"), 4, 0) == 4)
+            #expect(ot("OTSnd", client, msg, 4, 0x0002) == 4) // T_EXPEDITED
+            pump { ot("OTLook", worker) == 0x0008 } // T_EXDATA
+            #expect(ot("OTLook", worker) == 0x0008)
+            #expect(ot("OTRcv", worker, buf, 64, flags) == 4)
+            #expect(rd32(flags) == 0x0002 && rd16(buf) == 0x1234 && bytes(buf + 2, 2) == "AB")
+            #expect(ot("OTLook", worker) == 0x0004) // then the data
+            #expect(ot("OTRcv", worker, buf, 64, flags) == 4 && bytes(buf, 4) == "data")
+
+            wr16(msg, 0x0042)
+            #expect(ot("OTSnd", worker, msg, 2, 0x0002) == 2) // a code alone
+            pump { ot("OTLook", client) == 0x0008 }
+            #expect(ot("OTRcv", client, buf, 64, flags) == 2 && rd16(buf) == 0x0042 && rd32(flags) == 0x0002)
+            #expect(err(ot("OTRcv", client, buf, 64, flags)) == -3162)
+            for ep in [listener, worker, client] { #expect(ot("OTCloseProvider", ep) == 0) }
+        }
+
+        /// "adsp(EnableEOM=1)": a send without T_MORE ends a message, and
+        /// a receive stops at its end, T_MORE set until then; a stream
+        /// (no EOM) never sets T_MORE.
+        @Test func adspEndOfMessage() {
+            start()
+            let (listener, worker, client) = adspPair("adsp(EnableEOM=1)")
+            let buf = tb_NewPtr(64, false, true), flags = tb_NewPtr(4, false, true)
+            #expect(ot("OTSnd", client, cstr("one-"), 4, 0x0001) == 4) // T_MORE: the message goes on
+            #expect(ot("OTSnd", client, cstr("two"), 3, 0) == 3)
+            #expect(ot("OTSnd", client, cstr("three"), 5, 0) == 5)
+            var got = ""
+            let count = tb_NewPtr(4, false, true)
+            pump { ot("OTCountDataBytes", worker, count) == 0 && rd32(count) >= 12 }
+            #expect(ot("OTRcv", worker, buf, 3, flags) == 3 && rd32(flags) == 0x0001) // "one", more to come
+            got += bytes(buf, 3)
+            #expect(ot("OTRcv", worker, buf, 64, flags) == 4 && rd32(flags) == 0) // "-two": the end
+            got += bytes(buf, 4)
+            #expect(got == "one-two")
+            #expect(ot("OTRcv", worker, buf, 64, flags) == 5 && rd32(flags) == 0 && bytes(buf, 5) == "three")
+            for ep in [listener, worker, client] { #expect(ot("OTCloseProvider", ep) == 0) }
+
+            let (l2, w2, c2) = adspPair("adsp")
+            #expect(ot("OTSnd", c2, cstr("stream"), 6, 0) == 6)
+            pump { ot("OTLook", w2) == 0x0004 }
+            #expect(ot("OTRcv", w2, buf, 3, flags) == 3 && rd32(flags) == 0)
+            for ep in [l2, w2, c2] { #expect(ot("OTCloseProvider", ep) == 0) }
+        }
+
         /// ATP: an exactly-once request, heard with its user bytes, and
         /// the reply back to the requester.
         @Test func atpTransaction() {

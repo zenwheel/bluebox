@@ -368,11 +368,17 @@ static void ot_CreateConfiguration(ppc_cpu *c)
     RETURN(cfg);
 }
 
-static provider_kind kind_of(gaddr cfg)
+static void config_string(gaddr cfg, char s[256])
 {
-    char s[256] = { 0 };
+    memset(s, 0, 256);
     for (uint32_t i = 0; cfg && i < 255 && rd8(cfg + i); i++)
         s[i] = (char)rd8(cfg + i);
+}
+
+static provider_kind kind_of(gaddr cfg)
+{
+    char s[256];
+    config_string(cfg, s);
     provider_kind k;
     if (ota_kind(s, &k))
         return k;
@@ -406,9 +412,11 @@ static int open_endpoint(gaddr cfg, gaddr info, int32_t *err)
         *err = kOTOutOfMemoryErr;
         return -1;
     }
-    if (kind >= P_DDP)
-        *err = ota_open(&providers[i]);
-    else
+    if (kind >= P_DDP) {
+        char s[256];
+        config_string(cfg, s);
+        *err = ota_open(&providers[i], s);
+    } else
         providers[i].fd = make_socket(kind);
     if (kind >= P_DDP ? *err != kOTNoError : providers[i].fd < 0) {
         close_provider(&providers[i]);
