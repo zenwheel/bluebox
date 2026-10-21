@@ -92,6 +92,14 @@ bool process_open_url(const char *url);
 /* Internet Config's ICLaunchURL: the URL in data[a..b) (all len bytes when
  * the selection is empty) opened by the host; an Internet Config error. */
 int16_t ic_launch_url(gaddr data, int32_t len, int32_t a, int32_t b);
+/* Internet Config's preferences (components.c), for both CPUs. */
+int16_t ic_get_pref(gaddr key, gaddr attr, gaddr buf, gaddr size);
+int16_t ic_get_pref_handle(gaddr key, gaddr attr, gaddr out, gaddr h);
+int16_t ic_set_pref(gaddr key, gaddr buf, int32_t len);
+int16_t ic_delete_pref(gaddr key);
+int16_t ic_get_ind_pref(int32_t index, gaddr key);
+int32_t ic_count_prefs(void);
+uint32_t ic_get_seed(void);
 uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errlen);
 
 /* ---- Gestalt ---- */

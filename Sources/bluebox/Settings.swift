@@ -37,9 +37,11 @@ struct AppSettings: Codable {
     var printFolder: String? /* printed pages saved there as PDF files, without the print panel ("": the panel) */
     var appleShare: String? /* an AppleShare volume to mount (machine_mount_appleshare's spec; "": none) */
     var display: String? /* rootless, or screen (the whole Mac screen in one window); chosen by itself when unset */
+    var internet: InternetSettings? /* Internet Config's preferences */
     var isEmpty: Bool {
         depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
             && modemPort == nil && printerPort == nil && printFolder == nil && appleShare == nil && display == nil
+            && (internet?.isEmpty ?? true)
     }
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), "
@@ -51,6 +53,7 @@ struct AppSettings: Codable {
             + "print-folder \(printFolder.map { $0.isEmpty ? "panel" : $0 } ?? "default (the print panel)"), "
             + "appleshare \(appleShare.map { $0.isEmpty ? "none" : $0 } ?? "default (none)"), "
             + "display \(display ?? "default (rootless, the whole screen when the program wants it)")"
+            + (internet.map { $0.isEmpty ? "" : ", " + $0.summary } ?? "")
     }
 
     /// These settings, with any left unset taken from `fallback`.
@@ -60,7 +63,84 @@ struct AppSettings: Codable {
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
                            appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
-                           appleShare: appleShare ?? f.appleShare, display: display ?? f.display)
+                           appleShare: appleShare ?? f.appleShare, display: display ?? f.display,
+                           internet: internet.map { $0.over(f.internet) } ?? f.internet)
+    }
+}
+
+/// Internet Config's preferences, which every classic program that uses
+/// Internet Config reads: who you are, your servers, and the proxies.  A
+/// proxy is host:port, or "none" (off, over a default that has one).
+struct InternetSettings: Codable, Equatable {
+    var realName: String?
+    var email: String?
+    var organization: String?
+    var mailAccount: String? /* user@host, the account mail is fetched from */
+    var smtpHost: String?
+    var newsHost: String?
+    var homePage: String?
+    var searchPage: String?
+    var httpProxy: String?
+    var ftpProxy: String?
+    var gopherProxy: String?
+    var socks: String?
+    var noProxy: String? /* domains reached directly, comma-separated */
+    var passiveFTP: Bool?
+
+    /// The settings by their names in `bluebox set`, with Internet Config's key for each.
+    nonisolated(unsafe) static let fields: [(name: String, key: String, path: WritableKeyPath<InternetSettings, String?>)] = [
+        ("real-name", "RealName", \.realName), ("email", "Email", \.email),
+        ("organization", "Organization", \.organization), ("mail-account", "MailAccount", \.mailAccount),
+        ("smtp-host", "SMTPHost", \.smtpHost), ("news-host", "NNTPHost", \.newsHost),
+        ("home-page", "WWWHomePage", \.homePage), ("search-page", "WebSearchPagePrefs", \.searchPage),
+        ("http-proxy", "HTTPProxyHost", \.httpProxy), ("ftp-proxy", "FTPProxyHost", \.ftpProxy),
+        ("gopher-proxy", "GopherProxy", \.gopherProxy), ("socks", "SocksHost", \.socks),
+        ("no-proxy", "NoProxyDomains", \.noProxy),
+    ]
+    /// Each proxy's on/off key.
+    static let proxySwitches: [String: String] = [
+        "HTTPProxyHost": "UseHTTPProxy", "FTPProxyHost": "UseFTPProxy", "GopherProxy": "UseGopherProxy",
+        "SocksHost": "UseSocks",
+    ]
+
+    var isEmpty: Bool { Self.fields.allSatisfy { self[keyPath: $0.path] == nil } && passiveFTP == nil }
+
+    var summary: String {
+        (Self.fields.compactMap { f in self[keyPath: f.path].map { "\(f.name) \($0)" } }
+            + (passiveFTP.map { ["passive-ftp \($0 ? "on" : "off")"] } ?? [])).joined(separator: ", ")
+    }
+
+    func over(_ fallback: InternetSettings?) -> InternetSettings {
+        guard let f = fallback else { return self }
+        var s = self
+        for field in Self.fields where s[keyPath: field.path] == nil { s[keyPath: field.path] = f[keyPath: field.path] }
+        if s.passiveFTP == nil { s.passiveFTP = f.passiveFTP }
+        return s
+    }
+
+    /// The preferences as Internet Config holds them: Pascal strings in
+    /// MacRoman, Booleans as a byte, the no-proxy list as a STR#.
+    var preferences: [(key: String, data: [UInt8])] {
+        func pstring(_ s: String) -> [UInt8] {
+            let bytes = Array((s.data(using: .macOSRoman, allowLossyConversion: true) ?? Data()).prefix(255))
+            return [UInt8(bytes.count)] + bytes
+        }
+        var out: [(String, [UInt8])] = []
+        for f in Self.fields {
+            guard let v = self[keyPath: f.path]?.trimmingCharacters(in: .whitespaces) else { continue }
+            if f.key == "NoProxyDomains" {
+                let domains = v.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                out.append((f.key, [UInt8(domains.count >> 8), UInt8(domains.count & 0xFF)] + domains.flatMap(pstring)))
+            } else if let use = Self.proxySwitches[f.key] {
+                let off = v.isEmpty || v == "none"
+                out.append((use, [off ? 0 : 1]))
+                if !off { out.append((f.key, pstring(v))) }
+            } else {
+                out.append((f.key, pstring(v)))
+            }
+        }
+        if let p = passiveFTP { out.append(("UsePassiveFTP", [p ? 1 : 0])) }
+        return out
     }
 }
 
@@ -157,6 +237,9 @@ func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 ///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
 ///     [print-folder <folder>|panel|default] [appleshare <spec>|none|default] [display rootless|screen|default]
+///     [real-name|email|organization|mail-account|smtp-host|news-host|home-page|search-page <text>|default]
+///     [http-proxy|ftp-proxy|gopher-proxy|socks <host:port>|none|default] [no-proxy <domains>|default]
+///     [passive-ftp on|off|default]
 func setCommand(_ args: [String]) {
     var rest = args
     var library = defaultLibrary()
@@ -256,15 +339,36 @@ func setCommand(_ args: [String]) {
         case "display":
             guard ["rootless", "screen", "default"].contains(value) else { fail("display expects rootless, screen or default") }
             s.display = value == "default" ? nil : value
+        case "passive-ftp":
+            guard ["on", "off", "default"].contains(value) else { fail("passive-ftp expects on, off or default") }
+            var i = s.internet ?? InternetSettings()
+            i.passiveFTP = value == "default" ? nil : value == "on"
+            s.internet = i.isEmpty ? nil : i
+        case let n where InternetSettings.fields.contains { $0.name == n }:
+            let field = InternetSettings.fields.first { $0.name == n }!
+            if InternetSettings.proxySwitches[field.key] != nil, !["default", "none"].contains(value), !validHostPort(value) {
+                fail("\(name) expects host:port, none or default")
+            }
+            var i = s.internet ?? InternetSettings()
+            i[keyPath: field.path] = value == "default" ? nil : value
+            s.internet = i.isEmpty ? nil : i
         default:
             fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, "
-                 + "modem-port, printer-port, print-folder, appleshare, display)")
+                 + "modem-port, printer-port, print-folder, appleshare, display, "
+                 + InternetSettings.fields.map(\.name).joined(separator: ", ") + ", passive-ftp)")
         }
     }
     if !pairs.isEmpty { usage() }
     all[key] = s.isEmpty ? nil : s
     saveSettings(all, library: library)
     print("\(key): \(s.summary)")
+}
+
+/// A proxy's address: host, or host:port (port 1–65535).
+func validHostPort(_ s: String) -> Bool {
+    let parts = s.split(separator: ":", omittingEmptySubsequences: false)
+    guard let host = parts.first, !host.isEmpty, !host.contains(" "), parts.count <= 2 else { return false }
+    return parts.count == 1 || (Int(parts[1]).map { (1...65535).contains($0) } ?? false)
 }
 
 /// Whether a serial port spec is one machine_set_serial takes.

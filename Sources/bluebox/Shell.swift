@@ -662,6 +662,58 @@ struct SettingsForm: View {
         Section("Printing") {
             PrintFolderPicker(folder: $settings.printFolder, inherit: inherit, inherited: fallback.printFolder)
         }
+        Section {
+            internetField("Real name", \.realName)
+            internetField("Email address", \.email, example: "you@example.com")
+            internetField("Organization", \.organization)
+            internetField("Mail account", \.mailAccount, example: "user@pop.example.com")
+            internetField("Outgoing mail (SMTP)", \.smtpHost, example: "smtp.example.com")
+            internetField("News server (NNTP)", \.newsHost, example: "news.example.com")
+            internetField("Home page", \.homePage, example: "http://…")
+            internetField("Search page", \.searchPage, example: "http://…")
+        } header: {
+            Text("Internet")
+        } footer: {
+            Text("Internet Config's preferences: programs that use Internet Config (Internet Explorer, Netscape 4, "
+                 + "Fetch, mail and news readers) read them instead of asking. Programs that keep their own settings "
+                 + "still use those.")
+        }
+        Section("Proxies") {
+            internetField("Web proxy (HTTP)", \.httpProxy, example: "host:port", proxy: true)
+            internetField("FTP proxy", \.ftpProxy, example: "host:port", proxy: true)
+            internetField("Gopher proxy", \.gopherProxy, example: "host:port", proxy: true)
+            internetField("SOCKS server", \.socks, example: "host:1080", proxy: true)
+            internetField("No proxy for", \.noProxy, example: "local.lan, example.com")
+            Picker("Passive FTP", selection: Binding(get: { settings.internet?.passiveFTP }, set: { v in
+                var i = settings.internet ?? InternetSettings()
+                i.passiveFTP = v
+                settings.internet = i.isEmpty ? nil : i
+            })) {
+                Text("\(inherit) (\(fallback.internet?.passiveFTP.map { $0 ? "on" : "off" } ?? "the program's choice"))")
+                    .tag(Bool?.none)
+                Text("On").tag(Bool?.some(true))
+                Text("Off").tag(Bool?.some(false))
+            }
+        }
+    }
+
+    /// One Internet Config preference as a text field: empty takes the
+    /// default's value, shown as the prompt.  A proxy can be "none", which
+    /// turns it off over a default that has one.
+    private func internetField(_ label: String, _ path: WritableKeyPath<InternetSettings, String?>,
+                               example: String? = nil, proxy: Bool = false) -> some View {
+        let inherited = fallback.internet?[keyPath: path]
+        let value = settings.internet?[keyPath: path]
+        let valid = !proxy || value == nil || value == "none" || validHostPort(value!)
+        return TextField(label, text: Binding(get: { settings.internet?[keyPath: path] ?? "" }, set: {
+            let v = $0.trimmingCharacters(in: .whitespaces)
+            var i = settings.internet ?? InternetSettings()
+            i[keyPath: path] = v.isEmpty ? nil : v
+            settings.internet = i.isEmpty ? nil : i
+        }), prompt: Text(inherited.map { "\(inherit): \($0)" } ?? (proxy ? "none (\(example ?? "host:port"))" : example ?? "")))
+        .foregroundStyle(valid ? Color.primary : Color.red)
+        .help(proxy ? "host:port, or none to turn it off" + (isDefault ? "" : " for this application") + "."
+              : "Leave empty for " + (isDefault ? "none." : "the default's."))
     }
 
     private static let appleTalkHelp: String =

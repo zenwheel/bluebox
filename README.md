@@ -171,6 +171,28 @@ shell's settings window or with `bluebox set` (`appletalk`, `modem-port`,
 | `--modem-port S`, `--printer-port S` | What a serial port connects to: `modem` (the modem port's default: a Hayes modem whose `ATDT host:port` dials over TCP), `modem:PORT` (one that also answers calls to PORT), `tcp:HOST:PORT`, `listen:PORT`, `pty`, a device such as `/dev/cu.usbserial`, or `none` (the printer port's default). |
 | `--realtime` | Headless runs follow real time, so networked copies agree on it. |
 
+### Internet Config: name, servers and proxies
+
+Internet Config's preferences come from the Internet settings, set for
+every application in the shell's Defaults (Internet and Proxies) or with
+`bluebox set --default`, and per application over those. Programs that use
+Internet Config (Internet Explorer, Netscape 4, Fetch, mail and news
+readers) read them instead of asking; programs with settings of their own
+keep using those.
+
+```sh
+bluebox set --default real-name "Pat Doe" email pat@example.com smtp-host smtp.example.com
+bluebox set --default http-proxy proxy.example.com:8080 socks socks.example.com:1080 no-proxy "lan, example.com"
+bluebox set "Some Program" http-proxy none      # no web proxy for this one
+```
+
+The settings are `real-name`, `email`, `organization`, `mail-account`
+(user@host), `smtp-host`, `news-host`, `home-page`, `search-page`,
+`http-proxy`, `ftp-proxy`, `gopher-proxy` and `socks` (host:port, or
+`none`), `no-proxy` (domains, comma-separated) and `passive-ftp` (`on` or
+`off`); `default` clears one. A URL a program opens through Internet
+Config opens in the Mac's default browser.
+
 MacTCP programs (Fetch, Eudora, IRC and Telnet clients) use the Mac's own
 network with no setup, over Wi-Fi and VPNs too. MIDI Manager programs play
 through the Mac's General MIDI synthesizer, or to and from CoreMIDI devices

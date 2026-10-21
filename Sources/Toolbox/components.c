@@ -8,6 +8,8 @@
  * one of our own: Internet Config, with no preferences in it.  Asking for a
  * QuickTime codec or the like finds nothing.
  */
+#include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "m68k.h"
@@ -529,8 +531,10 @@ void components_close(uint32_t ci) { close_component(ci); }
 
 /* ---- Internet Config ('PREF' 'ICAp') ----
  * Programs that require Internet Config open it themselves (Internet
- * Explorer).  It holds no preferences: every lookup finds nothing, so
- * programs use their own defaults. */
+ * Explorer).  Its preferences are the ones the host gives (the Internet
+ * settings: name, mail, servers, proxies), and those programs set while
+ * they run; any other lookup finds nothing, so programs use their own
+ * defaults.  Keys match without regard to case, as Internet Config's do. */
 
 enum {
     kICCStart = 0, kICCStop = 1, kICCFindConfigFile = 2, kICCSpecifyConfigFile = 3, kICCGetSeed = 4,
@@ -538,8 +542,154 @@ enum {
     kICCDefaultFileName = 11,
     kICCDeletePref = 12, kICCGetPerm = 13, kICCFindUserConfigFile = 14, kICCGetPrefHandle = 26,
     kICCFindPrefHandle = 36, kICCLaunchURL = 17,
-    icPrefNotFoundErr = -666,
+    kICCSetPrefHandle = 27,
+    icTruncatedErr = -664, icPrefNotFoundErr = -666,
 };
+
+#define IC_MAX_PREFS 96
+static struct ic_pref {
+    uint8_t key[256]; /* a Pascal string */
+    uint8_t *data;
+    int32_t len;
+} ic_prefs[IC_MAX_PREFS];
+static int ic_npref;
+static uint32_t ic_seed = 1;
+
+static int ic_find(const uint8_t *key)
+{
+    for (int i = 0; i < ic_npref; i++) {
+        if (ic_prefs[i].key[0] != key[0])
+            continue;
+        int k = 1;
+        while (k <= key[0] && tolower(ic_prefs[i].key[k]) == tolower(key[k]))
+            k++;
+        if (k > key[0])
+            return i;
+    }
+    return -1;
+}
+
+static void ic_store(const uint8_t *key, const uint8_t *data, int32_t len)
+{
+    int i = ic_find(key);
+    if (i < 0) {
+        if (ic_npref == IC_MAX_PREFS)
+            return;
+        i = ic_npref++;
+        memcpy(ic_prefs[i].key, key, (size_t)key[0] + 1);
+        ic_prefs[i].data = NULL;
+    }
+    free(ic_prefs[i].data);
+    ic_prefs[i].data = malloc(len > 0 ? (size_t)len : 1);
+    if (len > 0)
+        memcpy(ic_prefs[i].data, data, (size_t)len);
+    ic_prefs[i].len = len;
+    ic_seed++;
+}
+
+static void ic_key(gaddr key, uint8_t out[256])
+{
+    out[0] = key ? rd8(key) : 0;
+    for (int k = 1; k <= out[0]; k++)
+        out[k] = rd8(key + (uint32_t)k);
+}
+
+void machine_set_internet_pref(const char *key, const uint8_t *data, int32_t len)
+{
+    uint8_t k[256];
+    size_t n = strlen(key) < 255 ? strlen(key) : 255;
+    k[0] = (uint8_t)n;
+    memcpy(k + 1, key, n);
+    ic_store(k, data, len);
+}
+
+/* ICGetPref: the data into buf (size in: its room, out: the data's
+ * length; no buf asks only the length), and the attributes. */
+int16_t ic_get_pref(gaddr key, gaddr attr, gaddr buf, gaddr size)
+{
+    uint8_t k[256];
+    ic_key(key, k);
+    int i = ic_find(k);
+    if (attr)
+        wr32(attr, 0);
+    if (i < 0) {
+        if (size)
+            wr32(size, 0);
+        return icPrefNotFoundErr;
+    }
+    int32_t room = size ? (int32_t)rd32(size) : 0, len = ic_prefs[i].len;
+    if (size)
+        wr32(size, (uint32_t)len);
+    if (!buf)
+        return noErr;
+    gput(buf, ic_prefs[i].data, (uint32_t)(len < room ? len : room));
+    return len > room ? icTruncatedErr : noErr;
+}
+
+/* ICGetPrefHandle (a new handle into *out) and ICFindPrefHandle (the
+ * data into the handle given). */
+int16_t ic_get_pref_handle(gaddr key, gaddr attr, gaddr out, gaddr h)
+{
+    uint8_t k[256];
+    ic_key(key, k);
+    int i = ic_find(k);
+    if (attr)
+        wr32(attr, 0);
+    if (out)
+        wr32(out, 0);
+    if (i < 0)
+        return icPrefNotFoundErr;
+    if (!h)
+        h = tb_NewHandle(ic_prefs[i].len, false, false);
+    else
+        tb_SetHandleSize(h, ic_prefs[i].len);
+    if (!h || !rd32(h) || tb_GetHandleSize(h) != ic_prefs[i].len)
+        return memFullErr;
+    gput(rd32(h), ic_prefs[i].data, (uint32_t)ic_prefs[i].len);
+    if (out)
+        wr32(out, h);
+    return noErr;
+}
+
+int16_t ic_set_pref(gaddr key, gaddr buf, int32_t len)
+{
+    uint8_t k[256];
+    ic_key(key, k);
+    if (!k[0] || len < 0)
+        return paramErr;
+    uint8_t *d = malloc(len > 0 ? (size_t)len : 1);
+    if (len > 0)
+        gget(d, buf, (uint32_t)len);
+    ic_store(k, d, len);
+    free(d);
+    return noErr;
+}
+
+int16_t ic_delete_pref(gaddr key)
+{
+    uint8_t k[256];
+    ic_key(key, k);
+    int i = ic_find(k);
+    if (i < 0)
+        return icPrefNotFoundErr;
+    free(ic_prefs[i].data);
+    ic_prefs[i] = ic_prefs[--ic_npref];
+    ic_seed++;
+    return noErr;
+}
+
+int32_t ic_count_prefs(void) { return ic_npref; }
+uint32_t ic_get_seed(void) { return ic_seed; }
+
+/* ICGetIndPref: the key of the index'th preference (from 1). */
+int16_t ic_get_ind_pref(int32_t index, gaddr key)
+{
+    if (index < 1 || index > ic_npref)
+        return icPrefNotFoundErr;
+    if (key)
+        gput(key, ic_prefs[index - 1].key, (uint32_t)ic_prefs[index - 1].key[0] + 1);
+    return noErr;
+}
 
 static void ic_file_name(gaddr str)
 {
@@ -603,18 +753,18 @@ static void ic_component(cpu68k *c, uint16_t tw)
     int32_t r = noErr;
     switch (what) {
     case -3: /* kComponentCanDoSelect */
-        r = rd16(params + 4) <= kICCFindPrefHandle || (int16_t)rd16(params + 4) < 0;
+        r = (int16_t)rd16(params + 4) <= kICCFindPrefHandle;
         break;
     case -4: /* kComponentVersionSelect */
         r = 0x00020000;
         break;
     case kICCGetSeed:
         if (last)
-            wr32(last, 1);
+            wr32(last, ic_get_seed());
         break;
     case kICCCountPref:
         if (last)
-            wr32(last, 0);
+            wr32(last, (uint32_t)ic_count_prefs());
         break;
     case kICCDefaultFileName: /* the preferences file's name (Str63) */
         if (last)
@@ -627,8 +777,27 @@ static void ic_component(cpu68k *c, uint16_t tw)
         if (last)
             wr8(last, 0); /* icNoPerm */
         break;
-    case kICCGetPref: case kICCGetIndPref: case kICCGetPrefHandle: case kICCFindPrefHandle: case kICCDeletePref:
-        r = icPrefNotFoundErr;
+    /* The arguments, last first: */
+    case kICCGetPref: /* (key, &attr, buf, &size) */
+        r = ic_get_pref(rd32(params + 16), rd32(params + 12), rd32(params + 8), last);
+        break;
+    case kICCSetPref: /* (key, attr, buf, size) */
+        r = ic_set_pref(rd32(params + 16), rd32(params + 8), (int32_t)last);
+        break;
+    case kICCGetIndPref: /* (index, key) */
+        r = ic_get_ind_pref((int32_t)rd32(params + 8), last);
+        break;
+    case kICCGetPrefHandle: /* (key, &attr, &prefh) */
+        r = ic_get_pref_handle(rd32(params + 12), rd32(params + 8), last, 0);
+        break;
+    case kICCFindPrefHandle: /* (key, &attr, prefh) */
+        r = ic_get_pref_handle(rd32(params + 12), rd32(params + 8), 0, last);
+        break;
+    case kICCSetPrefHandle: /* (key, attr, prefh) */
+        r = last && rd32(last) ? ic_set_pref(rd32(params + 12), rd32(last), tb_GetHandleSize(last)) : paramErr;
+        break;
+    case kICCDeletePref: /* (key) */
+        r = ic_delete_pref(last);
         break;
     case kICCLaunchURL: { /* (hint, data, len, &selStart, &selEnd), last first */
         gaddr ps = rd32(params + 8);

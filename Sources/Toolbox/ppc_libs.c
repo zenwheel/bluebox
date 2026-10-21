@@ -1420,7 +1420,7 @@ static void g_GetDefaultUser(ppc_cpu *c)
 }
 
 
-/* Internet Config: an instance with no preferences in it. */
+/* Internet Config: an instance (the preferences are components.c's). */
 static void ic_ICStart(ppc_cpu *c)
 {
     if (R(0))
@@ -1428,6 +1428,30 @@ static void ic_ICStart(ppc_cpu *c)
     RETURN(0);
 }
 static void ic_prefNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-666); }
+/* The preferences, after the instance in r3: */
+static void ic_GetPref(ppc_cpu *c) { RETURN((uint32_t)(int32_t)ic_get_pref(R(1), R(2), R(3), R(4))); }
+static void ic_SetPref(ppc_cpu *c) { RETURN((uint32_t)(int32_t)ic_set_pref(R(1), R(3), (int32_t)R(4))); }
+static void ic_GetPrefHandle(ppc_cpu *c) { RETURN((uint32_t)(int32_t)ic_get_pref_handle(R(1), R(2), R(3), 0)); }
+static void ic_FindPrefHandle(ppc_cpu *c) { RETURN((uint32_t)(int32_t)ic_get_pref_handle(R(1), R(2), 0, R(3))); }
+static void ic_SetPrefHandle(ppc_cpu *c)
+{
+    gaddr h = R(3);
+    RETURN((uint32_t)(int32_t)(h && rd32(h) ? ic_set_pref(R(1), rd32(h), tb_GetHandleSize(h)) : paramErr));
+}
+static void ic_DeletePref(ppc_cpu *c) { RETURN((uint32_t)(int32_t)ic_delete_pref(R(1))); }
+static void ic_GetIndPref(ppc_cpu *c) { RETURN((uint32_t)(int32_t)ic_get_ind_pref((int32_t)R(1), R(2))); }
+static void ic_CountPref(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), (uint32_t)ic_count_prefs());
+    RETURN(0);
+}
+static void ic_GetSeed(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), ic_get_seed());
+    RETURN(0);
+}
 
 /* ICLaunchURL(inst, hint, data, len, &selStart, &selEnd) */
 static void ic_LaunchURL(ppc_cpu *c)
@@ -2748,11 +2772,12 @@ const ppc_export lib_exports[] = {
     /* Internet Config */
     { "ICStart", ic_ICStart }, { "ICStop", g_noErr }, { "ICFindConfigFile", g_noErr },
     { "ICFindUserConfigFile", g_noErr }, { "ICGeneralFindConfigFile", g_noErr }, { "ICChooseConfig", g_noErr },
-    { "ICBegin", g_noErr }, { "ICEnd", g_noErr }, { "ICGetPref", ic_prefNotFound },
-    { "ICFindPrefHandle", ic_prefNotFound }, { "ICGetPrefHandle", ic_prefNotFound },
-    { "ICSetPref", g_noErr }, { "ICSetPrefHandle", g_noErr }, { "ICCountPref", g_noErr },
+    { "ICBegin", g_noErr }, { "ICEnd", g_noErr }, { "ICGetPref", ic_GetPref },
+    { "ICFindPrefHandle", ic_FindPrefHandle }, { "ICGetPrefHandle", ic_GetPrefHandle },
+    { "ICSetPref", ic_SetPref }, { "ICSetPrefHandle", ic_SetPrefHandle }, { "ICCountPref", ic_CountPref },
+    { "ICGetIndPref", ic_GetIndPref }, { "ICDeletePref", ic_DeletePref },
     { "ICLaunchURL", ic_LaunchURL }, { "ICMapFilename", ic_prefNotFound }, { "ICMapTypeCreator", ic_prefNotFound },
-    { "ICGetSeed", g_noErr }, { "ICGetVersion", g_noErr }, { "ICGetConfigName", g_noErr },
+    { "ICGetSeed", ic_GetSeed }, { "ICGetVersion", g_noErr }, { "ICGetConfigName", g_noErr },
     /* Movie controllers */
     { "MCActivate", cc_MCActivate }, { "MCAdjustCursor", cc_MCAdjustCursor }, { "MCClear", cc_MCClear },
     { "MCClick", cc_MCClick }, { "MCCopy", cc_MCCopy }, { "MCCut", cc_MCCut }, { "MCDoAction", cc_MCDoAction },

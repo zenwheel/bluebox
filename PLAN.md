@@ -755,16 +755,17 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** the corpus's AppleScript applets run; Script Editor (from a System 7.5 disk image) compiles, runs, records and saves a script that drives the Finder-free parts of a scriptable application (SimpleText or Scriptable Text Editor); a script compiled on the oracle runs here with the same result, and one compiled here runs on the oracle.
 
-### M15: Stand-alone application bundles (macOS)
+### M15: Self-contained application bundles (macOS)
 
-**Goal:** a classic application packaged as a macOS application of its own: a `.app` that carries the classic program, its documents and preferences folder, and Blue Box itself, so it launches from the Finder or the Dock like any other application. After M12 (asked for 2026-10-20).
+**Goal:** a classic application packaged as a macOS application that stands alone: one `.app` holding the classic program, its settings and Blue Box itself, which can be moved, copied to another Mac, or signed and handed to someone. After M12 (asked for 2026-10-20).
 
-- `bluebox bundle <app>`: an `.app` with the classic program (both forks, as AppleDouble or in a contained volume), the run's settings (architecture, depth, scale, appearance, screen or rootless mode, Gestalt overrides), its icon converted from the program's `ICN#`/`icl8`/`ic` resources, and its file types and creator mapped to `CFBundleDocumentTypes` so classic documents open in it.
-- Per-bundle System Folder and preferences under `~/Library/Application Support`, keyed by the bundle identifier; nothing written inside the bundle, so it stays signed.
-- The Blue Box executable inside the bundle, or a reference to an installed copy; code signing and notarization notes.
-- Apple software and third-party programs stay out of the repository: the tool builds bundles from the user's own copies.
+- **What exists:** `bluebox install` already makes a launcher bundle in `~/Applications/Blue Box`. It has the program's icon (from its `ICN#`/`icl8`), its document types (`CFBundleDocumentTypes` from the `BNDL`/`FREF`), and an executable script that runs the library's copy with the installed `bluebox`, so documents dropped on it open in the program. It depends on both staying where they are.
+- **Self-contained:** `bluebox install --standalone` copies into the bundle the classic program (both forks, AppleDouble or a small disk image), any folder it needs beside it (data files, a CD's contents), the run's settings (architecture, depth, scale, appearance, display mode, Gestalt overrides, the Internet settings), and the Blue Box executable, instead of a script that points at them.
+- **Nothing written inside:** the program's System Folder, preferences and saved documents go under `~/Library/Application Support/Blue Box/<bundle identifier>`, so the bundle stays unchanged and its signature valid.
+- **Signing:** ad hoc by default; a developer ID and notarization when the user has them, with the steps documented.
+- Apple software and third-party programs stay out of the repository: bundles are built from the user's own copies.
 
-**Exit:** a bundled 68k and a bundled PowerPC application each launch from the Finder, open their documents by double-click and drag-and-drop, keep their preferences across launches, and show their own icon and name in the Dock and the menu bar.
+**Exit:** a self-contained 68k bundle and PowerPC bundle each run from a different folder and on a second Mac without Blue Box installed, open documents dropped on them, keep their preferences across launches, and show their own icon and name in the Dock and the menu bar.
 
 ## 6. Risks
 

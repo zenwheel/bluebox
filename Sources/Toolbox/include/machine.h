@@ -427,6 +427,11 @@ void machine_set_launch_handler(machine_launch_fn fn, void *ctx);
  * whatever handles its scheme.  Returns false if it could not. */
 typedef bool (*machine_url_fn)(const char *url, void *ctx);
 void machine_set_url_handler(machine_url_fn fn, void *ctx);
+/* An Internet Config preference every program reads (the Internet
+ * settings): key as Internet Config names it ("Email", "UseHTTPProxy",
+ * "HTTPProxyHost"), data in its format (a Pascal string in MacRoman, a
+ * Boolean byte, a STR# list).  Set before or while the machine runs. */
+void machine_set_internet_pref(const char *key, const uint8_t *data, int32_t len);
 
 /* ---- Color Picker ----
  * GetColor: show `prompt`, start from `in` (16-bit RGB), and on OK write the

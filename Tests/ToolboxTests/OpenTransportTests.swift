@@ -149,6 +149,58 @@ extension BlueBox {
             #expect(Self.opened == ["http://www.skittles2.com/", "ftp://a.example/"])
         }
 
+        func pstr(_ s: String) -> UInt32 {
+            let bytes = Array(s.utf8)
+            let p = tb_NewPtr(Int32(bytes.count + 1), false, true)
+            wr8(p, UInt8(bytes.count))
+            for (i, b) in bytes.enumerated() { wr8(p + 1 + UInt32(i), b) }
+            return p
+        }
+
+        /// Internet Config's preferences: what the host set (the Internet
+        /// settings), found whatever the key's case, truncated to the room
+        /// given; set, counted, listed and deleted by the program.
+        @Test func internetConfigPreferences() {
+            launchTestApp()
+            let proxy: [UInt8] = [14] + Array("proxy.lan:8080".utf8)
+            proxy.withUnsafeBufferPointer { machine_set_internet_pref("HTTPProxyHost", $0.baseAddress, Int32($0.count)) }
+            machine_set_internet_pref("UseHTTPProxy", [1], 1)
+            let attr = tb_NewPtr(4, false, true), size = tb_NewPtr(4, false, true), buf = tb_NewPtr(64, false, true)
+            wr32(size, 64)
+            #expect(ot("ICGetPref", 0, pstr("httpproxyhost"), attr, buf, size) == 0)
+            #expect(rd32(size) == 15 && rd8(buf) == 14 && rd8(buf + 1) == UInt8(ascii: "p"))
+            wr32(size, 4) // too little room: what fits, and the length
+            #expect(Int32(bitPattern: ot("ICGetPref", 0, pstr("HTTPProxyHost"), attr, buf, size)) == -664)
+            #expect(rd32(size) == 15)
+            wr32(size, 1)
+            #expect(ot("ICGetPref", 0, pstr("UseHTTPProxy"), attr, buf, size) == 0 && rd8(buf) == 1)
+            #expect(Int32(bitPattern: ot("ICGetPref", 0, pstr("NoSuchPref"), attr, buf, size)) == -666)
+
+            let hp = tb_NewPtr(4, false, true)
+            #expect(ot("ICGetPrefHandle", 0, pstr("HTTPProxyHost"), attr, hp) == 0)
+            #expect(tb_GetHandleSize(rd32(hp)) == 15 && rd8(rd32(rd32(hp)) + 14) == UInt8(ascii: "0"))
+
+            let before = tb_NewPtr(4, false, true), count = tb_NewPtr(4, false, true)
+            ot("ICGetSeed", 0, before)
+            ot("ICCountPref", 0, count)
+            let n = rd32(count)
+            let data = cstr("abc")
+            #expect(ot("ICSetPref", 0, pstr("TestPref"), 0, data, 3) == 0)
+            let after = tb_NewPtr(4, false, true)
+            ot("ICGetSeed", 0, after)
+            #expect(rd32(after) != rd32(before))
+            ot("ICCountPref", 0, count)
+            #expect(rd32(count) == n + 1)
+            let key = tb_NewPtr(256, false, true)
+            let names = (1...Int(rd32(count))).map { i -> String in
+                _ = ot("ICGetIndPref", 0, UInt32(i), key)
+                return String(decoding: (0..<Int(rd8(key))).map { rd8(key + 1 + UInt32($0)) }, as: UTF8.self)
+            }
+            #expect(names.contains("TestPref") && names.contains("HTTPProxyHost"))
+            #expect(ot("ICDeletePref", 0, pstr("testpref")) == 0)
+            #expect(Int32(bitPattern: ot("ICDeletePref", 0, pstr("TestPref"))) == -666)
+        }
+
         /// The run's own Gestalt answers (--gestalt) stand over the ones a
         /// PowerPC program is given (Spades Deluxe 2.0 wants Mac OS 8.1).
         @Test func gestaltOverrideKeptForPowerPC() {

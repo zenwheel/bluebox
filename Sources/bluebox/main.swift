@@ -125,13 +125,20 @@ func usage() -> Never {
                 [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
                 [appleshare S|none|default] [display rootless|screen|default]
+                [real-name|email|organization|mail-account|smtp-host|news-host|
+                 home-page|search-page TEXT|default]
+                [http-proxy|ftp-proxy|gopher-proxy|socks HOST:PORT|none|default]
+                [no-proxy DOMAIN,...|default] [passive-ftp on|off|default]
                 [--library dir]
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
           game that wants 256 colours, cpu 68020 for one that misbehaves on a
           68040, or cpu 68040 for a fat application to run its 68k code.
           --default sets them for every application without its own (bluebox set
-          --default scale 2 doubles every classic window).  With no setting given,
+          --default scale 2 doubles every classic window).  The Internet settings
+          are Internet Config's preferences, which programs that use it read: bluebox
+          set --default http-proxy proxy.example.com:8080 gives every one a web
+          proxy; none turns one off for an application.  With no setting given,
           show them.
       bluebox shell
           Open the Blue Box shell: the library's applications to launch, with their
@@ -595,6 +602,10 @@ func runCommand(_ args: [String]) {
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_override(sel, v) }
+    // Internet Config's preferences: the Internet settings.
+    for p in saved.internet?.preferences ?? [] {
+        p.data.withUnsafeBufferPointer { machine_set_internet_pref(p.key, $0.baseAddress, Int32($0.count)) }
+    }
 
     var err = [CChar](repeating: 0, count: 256)
     for f in fontFiles {
