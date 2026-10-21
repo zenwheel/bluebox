@@ -118,7 +118,9 @@ bluebox install SimpleText
 ```
 
 The shell is a window listing the library's applications with their
-settings. You can drop archives on it to import them:
+settings. Its sidebar's search field finds applications by name or folder,
+and a folder's context menu moves the whole folder to the Trash. You can drop
+archives on it to import them:
 
 ```sh
 bluebox shell

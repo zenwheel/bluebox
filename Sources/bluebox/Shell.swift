@@ -63,6 +63,22 @@ struct ShellNode: Identifiable, Hashable {
     let name: String
     var app: ShellApp?
     var children: [ShellNode]? /* nil for an application */
+    /// A folder's place and its path there (the outer folder of a joined
+    /// label such as "Journeyman.toast_.zip/Journeyman").
+    var place = ""
+    var folder = ""
+}
+
+/// The applications a sidebar search finds: those whose folder and name
+/// hold every word of the search, ignoring case and diacritics.  An empty
+/// search finds them all.
+func shellSearch(_ apps: [ShellApp], _ text: String) -> [ShellApp] {
+    let words = text.split(whereSeparator: \.isWhitespace)
+    guard !words.isEmpty else { return apps }
+    return apps.filter { app in
+        let whole = app.folder + "/" + app.name
+        return words.allSatisfy { whole.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
 }
 
 /// The applications of one place as their folders hold them.  A folder that
@@ -92,8 +108,9 @@ func shellTree(_ apps: [ShellApp], prefix: String = "") -> [ShellNode] {
         if children.count == 1, let only = children.first, only.app != nil {
             folderNodes.append(only)
         } else {
-            folderNodes.append(ShellNode(id: "folder:" + (inside.first?.place ?? "") + "/" + path, name: label,
-                                         app: nil, children: children))
+            let place = inside.first?.place ?? ""
+            folderNodes.append(ShellNode(id: "folder:" + place + "/" + path, name: label, app: nil,
+                                         children: children, place: place, folder: path))
         }
     }
     let byName: (ShellNode, ShellNode) -> Bool = { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -101,11 +118,15 @@ func shellTree(_ apps: [ShellApp], prefix: String = "") -> [ShellNode] {
         + (nodes + folderNodes.filter { $0.app != nil }).sorted(by: byName)
 }
 
-/// The tree's rows: folders that open and close (remembered), and
-/// applications tagged for the sidebar's selection.
+/// The tree's rows: folders that open and close (remembered; all open
+/// while searching) and can be moved to the Trash, and applications tagged
+/// for the sidebar's selection.
 struct ShellNodeRows: View {
     @ObservedObject var model: ShellModel
     let nodes: [ShellNode]
+    var searching = false
+    /// The folder whose Move to Trash is being confirmed.
+    @Binding var trashing: ShellNode?
 
     var body: some View {
         ForEach(nodes) { node in
@@ -122,13 +143,25 @@ struct ShellNodeRows: View {
                 .tag(ShellItem.app(app))
             } else {
                 DisclosureGroup(isExpanded: Binding(
-                    get: { model.expanded.contains(node.id) },
+                    get: { searching || model.expanded.contains(node.id) },
                     set: { open in
+                        guard !searching else { return }
                         if open { model.expanded.insert(node.id) } else { model.expanded.remove(node.id) }
                     })) {
-                    ShellNodeRows(model: model, nodes: node.children ?? [])
+                    ShellNodeRows(model: model, nodes: node.children ?? [], searching: searching, trashing: $trashing)
                 } label: {
                     Label(node.name, systemImage: "folder").lineLimit(1)
+                        .contextMenu {
+                            let running = model.apps(in: node).contains { model.running[$0.path] != nil }
+                            Button("Move to Trash…") { trashing = node }
+                                .disabled(running || !model.canTrash(node))
+                                .help(running ? "Quit its applications first" : "Move the whole folder to the Trash")
+                            Button("Show in Finder") {
+                                if let path = model.folderPath(node) {
+                                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                                }
+                            }
+                        }
                 }
             }
         }
@@ -289,6 +322,62 @@ enum ShellItem: Hashable {
         refresh()
     }
 
+    /// A sidebar folder on disk.
+    func folderPath(_ node: ShellNode) -> String? {
+        guard node.app == nil, !node.folder.isEmpty else { return nil }
+        return (node.place == "Library" ? library : defaultDisk()) + "/" + node.folder
+    }
+
+    /// The applications in a sidebar folder, at any depth.
+    func apps(in node: ShellNode) -> [ShellApp] {
+        apps.filter { $0.place == node.place && ($0.folder == node.folder || $0.folder.hasPrefix(node.folder + "/")) }
+    }
+
+    /// Whether a folder may go to the Trash: one inside the library or on
+    /// the classic disk, never a place itself nor the disk's System Folder.
+    func canTrash(_ node: ShellNode) -> Bool {
+        let parts = node.folder.split(separator: "/")
+        guard folderPath(node) != nil, ["Library", "Macintosh HD"].contains(node.place), !parts.isEmpty,
+              !parts.contains(where: { $0 == "." || $0 == ".." }) else { return false }
+        return !(node.place == "Macintosh HD" && parts[0] == "System Folder")
+    }
+
+    /// Move a sidebar folder (with any AppleDouble sidecar of its own; those
+    /// of what it holds go inside it) to the macOS Trash, and forget the
+    /// settings of the applications in it.
+    func delete(folder node: ShellNode) {
+        guard canTrash(node), let path = folderPath(node) else { return }
+        let inside = apps(in: node)
+        let name = (node.folder as NSString).lastPathComponent
+        if inside.contains(where: { running[$0.path] != nil }) {
+            messages.append("Quit the applications in \(name) before moving it to the Trash")
+            return
+        }
+        let fm = FileManager.default
+        var trashed = false
+        for p in [path, sidecarPath(path)] where fm.fileExists(atPath: p) {
+            do {
+                try fm.trashItem(at: URL(fileURLWithPath: p), resultingItemURL: nil)
+                trashed = true
+            } catch {
+                messages.append("Could not move \((p as NSString).lastPathComponent) to the Trash: \(error.localizedDescription)")
+            }
+        }
+        refresh()
+        if trashed {
+            // Settings go by name, so those of a namesake still here stay.
+            let left = Set(apps.map { settingsKey($0.path) })
+            for app in inside where !left.contains(settingsKey(app.path)) {
+                settings[settingsKey(app.path)] = nil
+            }
+            saveSettings(settings, library: library)
+            recent.removeAll { path in inside.contains { $0.path == path } }
+            UserDefaults.standard.set(recent, forKey: "recent")
+            expanded = expanded.filter { $0 != node.id && !$0.hasPrefix(node.id + "/") }
+            messages.append("Moved \(name) to the Trash")
+        }
+    }
+
     /// Import dropped or chosen files into the library, off the main thread.
     /// Ask for files to import (the File menu, the sidebar, the status item).
     func chooseImport() {
@@ -372,6 +461,8 @@ struct ShellView: View {
         }
     }()
     @State private var dropTargeted = false
+    @State private var search = ""
+    @State private var trashing: ShellNode?
 
     var body: some View {
         NavigationSplitView {
@@ -380,15 +471,23 @@ struct ShellView: View {
                     Label("Defaults", systemImage: "slider.horizontal.3").tag(ShellItem.defaults)
                     Label("System Folder", systemImage: "folder.badge.gearshape").tag(ShellItem.systemFolder)
                 }
+                let found = shellSearch(model.apps, search)
                 ForEach(["Library", "Macintosh HD"], id: \.self) { place in
-                    let here = model.apps.filter { $0.place == place }
+                    let here = found.filter { $0.place == place }
                     if !here.isEmpty {
                         Section(place) {
-                            ShellNodeRows(model: model, nodes: shellTree(here))
+                            ShellNodeRows(model: model, nodes: shellTree(here), searching: !search.isEmpty,
+                                          trashing: $trashing)
                         }
                     }
                 }
+                if found.isEmpty && !search.isEmpty {
+                    Text("No applications match").foregroundStyle(.secondary)
+                }
             }
+            // The search finds applications by name or folder; the folders
+            // leading to them are shown open.
+            .searchable(text: $search, placement: .sidebar, prompt: "Search applications")
             // Double-clicking an application launches it; its context menu
             // launches it or shows it in the Finder.
             .contextMenu(forSelectionType: ShellItem.self) { items in
@@ -433,6 +532,16 @@ struct ShellView: View {
                 }
             }
             return true
+        }
+        .confirmationDialog("Move \(trashing?.name ?? "") to the Trash?", isPresented: Binding(
+            get: { trashing != nil }, set: { if !$0 { trashing = nil } }), titleVisibility: .visible,
+            presenting: trashing) { node in
+            Button("Move to Trash", role: .destructive) { model.delete(folder: node) }
+            Button("Cancel", role: .cancel) {}
+        } message: { node in
+            let count = model.apps(in: node).count
+            Text("\(node.place) › \(node.folder), with \(count) application\(count == 1 ? "" : "s") and everything "
+                 + "else in it. Their settings are forgotten; you can put it back from the Trash.")
         }
         .overlay(dropTargeted ? RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor, lineWidth: 3) : nil)
         .onAppear {
