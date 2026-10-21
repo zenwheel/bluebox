@@ -23,14 +23,22 @@
  * mask the block was translated for, stores through the screen watch and
  * the code map as the interpreter's do (pushes, as cpu_push32, unwatched).
  *
- * Condition codes are not computed where nothing reads them: a pass over
- * the block finds, for each instruction, which of X N Z V C a later one
- * reads before another sets them (all of them are taken to be read after
- * the block).  An instruction whose flags are all dead sets none; one
- * whose flags are read sets the host's (from operands shifted to the top
- * of the register, so byte and word results flag as the 68k does) and
- * stores them in SR.  A Bcc, DBcc or Scc testing flags the host still
- * holds branches on them directly.
+ * Condition codes are not computed where nothing reads them.  A pass
+ * over the block finds, for each instruction, which of X N Z V C are read
+ * after it before something sets them again; after the block, those its
+ * successors may read before setting them (looked for along up to 16
+ * instructions from each known successor; everything after an indirect
+ * jump, a trap or an instruction the JIT doesn't know; X always).  The
+ * block then depends on the code looked at, and goes when it is written.
+ * An instruction whose flags nothing reads sets none.  A Bcc, DBcc or Scc
+ * whose flags were set by an instruction in the block, the host flags
+ * untouched since, branches on the host's (set from operands shifted to
+ * the top of the register, so byte and word results flag as the 68k
+ * does), and they are stored in SR only if read again later.  So between
+ * blocks, SR's N Z V C may be stale where the code that follows sets them
+ * before reading them, and op_pc and op name an earlier instruction when
+ * a run stops at a block's entry after a chained exit; neither is read
+ * there (traps and exceptions run in the interpreter, which sets them).
  */
 #include <stddef.h>
 #include <stdio.h>
@@ -69,7 +77,7 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
 
 enum { HC = JR_CPU, HB = JR_BUDGET };
 enum { MAX_INSN = 64, MAX_BYTES = 512, CODE_SIZE = 64 << 20 };
-#define TRANSLATOR_VERSION 1
+#define TRANSLATOR_VERSION 2
 
 enum { H_ST8, H_ST16, H_ST32, H_PST8, H_PST16, H_PST32, H_EXEC };
 
@@ -129,8 +137,17 @@ typedef struct tctx {
     uint32_t ninsn;
     uint8_t reads, writes;   /* the instruction's flags (scan) */
     bool ends;               /* it ends the block (scan) */
-    uint8_t live;            /* flags read after the instruction (emit) */
+    uint8_t live;            /* flags read from SR after the instruction (emit) */
+    bool host_need;          /* a later instruction branches on its host flags */
     enum fkind fk;           /* what the host flags hold */
+    /* Scan: what the instruction did to the host flags, the condition it
+     * tested, where it can go. */
+    enum fkind setkind;
+    bool clobber;            /* host flags not its flags at its end */
+    int cc;
+    uint32_t succ[2];
+    int nsucc;
+    bool indirect;
     bool stored;             /* the instruction stored */
     uint32_t last_pc;        /* for exits */
     uint16_t last_op;
@@ -236,6 +253,7 @@ static void store(tctx *t, int sz, bool watched)
     jit_store(&t->b, sz, watched, watched ? H_ST8 : H_PST8);
     t->fk = FK_NONE;
     t->stored = true;
+    t->clobber = true;
 }
 
 /* wd = ws shifted so its sz bytes are at the top. */
@@ -253,7 +271,7 @@ static void top(tctx *t, int wd, int ws, int sz)
 static bool flags_needed(tctx *t, uint8_t writes)
 {
     t->writes |= writes;
-    if (t->scanning || (writes & t->live))
+    if (t->scanning || (writes & t->live) || t->host_need)
         return true;
     t->fk = FK_NONE; /* the 68k's flags change; nothing reads them */
     return false;
@@ -265,6 +283,8 @@ static void flags_store(tctx *t, enum fkind k, uint8_t writes, int creg)
 {
     a64_buf *b = &t->b;
     t->fk = k;
+    t->setkind = k;
+    t->clobber = false;
     if (!(writes & t->live) && !t->scanning)
         return;
     /* w10 = N Z V C (and X), each from the host flags. */
@@ -343,6 +363,7 @@ static uint8_t cc_reads(int cc)
 static int cond_flags(tctx *t, int cc)
 {
     t->reads |= cc_reads(cc);
+    t->cc = cc;
     int h = host_cond(t->fk, cc);
     if (h >= 0)
         return h;
@@ -1030,6 +1051,9 @@ static bool branch(tctx *t)
         else if (disp == -1 && t->model != 68000)
             disp = (int32_t)ext32(t);
         uint32_t target = base + (uint32_t)disp, next = t->at;
+        t->succ[0] = target;
+        t->succ[1] = next;
+        t->nsucc = cc < 2 ? 1 : 2;
         if (cc == 1) { /* BSR */
             a64_mov32(b, 2, next);
             push32(t);
@@ -1063,6 +1087,10 @@ static bool branch(tctx *t)
         int cc = (op >> 8) & 15, reg = op & 7;
         int16_t disp = (int16_t)ext16(t);
         uint32_t target = base + (uint32_t)(int32_t)disp, next = t->at;
+        t->succ[0] = target;
+        t->succ[1] = next;
+        t->nsucc = 2;
+        t->clobber = true; /* the count's compare */
         uint32_t to_next = UINT32_MAX;
         cache_flush(t);
         int h = cond_flags(t, cc);
@@ -1098,6 +1126,7 @@ static bool branch(tctx *t)
     }
     if (op == 0x4E75 || op == 0x4E74) { /* RTS, RTD */
         int32_t disp = op == 0x4E74 ? (int16_t)ext16(t) : 0;
+        t->indirect = true;
         getr(t, 1, 15);
         a64_mov(b, false, 3, 1);
         load(t, 4);
@@ -1122,8 +1151,11 @@ static bool branch(tctx *t)
     }
     cache_flush(t);
     if (e.constant) {
+        t->succ[0] = e.addr;
+        t->nsucc = 1;
         exit_to(t, e.addr);
     } else {
+        t->indirect = true;
         if (!jsr)
             a64_ldst(b, A64_STRW, 1, HC, FIELD(pc));
         exit_indirect(t);
@@ -1258,6 +1290,7 @@ static void exec_insn(tctx *t, uint32_t len, uint32_t left)
     a64_patch_here(b, stays);
     t->fk = FK_NONE;
     t->stored = true;
+    t->clobber = true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1286,12 +1319,73 @@ typedef struct scan_info {
     uint8_t reads, writes;
     bool branch;
     uint32_t exec;           /* run by the interpreter: its length */
+    enum fkind kind;         /* the host flags it sets */
+    bool clobber;            /* host flags not its own at its end */
+    int cc;                  /* the condition it tests, or -1 */
 } scan_info;
+
+static bool lookahead = true; /* off: flags are taken to be read after every block */
+
+/* Decode the instruction at `at` (t scanning): false if not translated
+ * or run in a block. */
+static bool scan_one(tctx *t, uint32_t at, scan_info *si)
+{
+    static uint32_t dummy[1];
+    t->b = (a64_buf){ dummy, 0, 0, false };
+    t->ipc = at;
+    t->iop = rd16(at & t->mask);
+    t->at = at + 2;
+    t->reads = t->writes = 0;
+    t->fk = FK_NONE;
+    t->setkind = FK_NONE;
+    t->clobber = false;
+    t->cc = -1;
+    bool br = is_branch(t->iop, t->model);
+    bool ok = br ? branch(t) : insn(t);
+    uint32_t elen = 0;
+    if (!ok && !br && (elen = exec_len(t)) != 0) {
+        ok = true;
+        t->at = at + elen;
+        t->reads = FALL; /* it may read any flag; it sets them in SR */
+        t->writes = 0;
+        t->clobber = true;
+        t->cc = -1;
+    }
+    *si = (scan_info){ at, t->iop, t->reads, t->writes, br, elen, t->setkind, t->clobber, t->cc };
+    return ok;
+}
+
+/* The flags the code at addr may read before it sets them: straight on,
+ * up to 16 instructions, everything not yet set taken as read at a branch
+ * or at an instruction the JIT doesn't know.  *len: the bytes looked at. */
+static uint8_t flags_read_at(uint32_t addr, uint32_t *len)
+{
+    tctx t;
+    memset(&t, 0, sizeof t);
+    memset(t.host, -1, sizeof t.host);
+    t.mask = cur_mask;
+    t.model = cur_model;
+    t.scanning = true;
+    t.live = FALL;
+    uint8_t need = 0, set = 0;
+    uint32_t at = addr;
+    for (int k = 0; k < 16 && set != FALL; k++) {
+        scan_info si;
+        if (!scan_one(&t, at, &si))
+            break;
+        need |= si.reads & ~set;
+        set |= si.writes;
+        at = t.at;
+        if (si.branch)
+            break;
+    }
+    *len = at - addr;
+    return (uint8_t)(need | (FALL & ~set));
+}
 
 static jit_block *translate(uint32_t pc)
 {
     uint64_t t0 = now_ns();
-    static uint32_t dummy[1];
     tctx t;
     memset(&t, 0, sizeof t);
     memset(t.host, -1, sizeof t.host);
@@ -1305,52 +1399,74 @@ static jit_block *translate(uint32_t pc)
     t.scanning = true;
     t.live = FALL;
     while (n < (uint32_t)max_insn && at - pc < MAX_BYTES) {
-        t.b = (a64_buf){ dummy, 0, 0, false };
-        t.ipc = at;
-        t.iop = rd16(at & t.mask);
-        t.at = at + 2;
-        t.reads = t.writes = 0;
-        t.fk = FK_NONE;
-        bool br = is_branch(t.iop, t.model);
-        bool ok = br ? branch(&t) : insn(&t);
-        uint32_t elen = 0;
-        if (!ok && !br && (elen = exec_len(&t)) != 0) {
-            ok = true;
-            t.at = at + elen;
-            t.reads = FALL; /* it may read any flag; it sets them in SR */
-            t.writes = 0;
-        }
-        if (!ok)
+        if (!scan_one(&t, at, &info[n]))
             break;
-        info[n] = (scan_info){ at, t.iop, t.reads, t.writes, br, elen };
         n++;
         at = t.at;
-        if (br)
+        if (info[n - 1].branch)
             break;
     }
     uint32_t len = at - pc;
     if (n == 0)
         return jit_marker(&E, pc, 2);
 
-    const jit_cache_rec *r = jit_cached(&E, pc, seed());
-    if (r && r->guest_len == len) {
-        uint32_t nwords = r->code_len / 4 - 1, dead_at;
-        memcpy(&dead_at, r->code + 4 * nwords, 4);
-        jit_block *blk =
-            jit_install(&E, pc, r->ninsn, r->guest_len, (const uint32_t *)(const void *)r->code, nwords, dead_at);
-        if (blk) {
-            st.from_cache++;
-            st.translate_ns += now_ns() - t0;
-            return blk;
-        }
+    jit_block *cached = jit_from_cache(&E, pc, seed());
+    if (cached) {
+        st.from_cache++;
+        st.translate_ns += now_ns() - t0;
+        return cached;
     }
 
-    /* Flags read after each instruction. */
+    /* The flags read after the block: what its successors may read before
+     * setting them (X is always kept).  The block then depends on the code
+     * looked at. */
+    uint8_t live_out = FALL;
+    jit_dep deps[JIT_MAX_DEPS];
+    int ndeps = 0;
+    if (lookahead && max_insn == MAX_INSN && !t.indirect) {
+        uint32_t succ[2] = { at, 0 };
+        int nsucc = 1;
+        if (info[n - 1].branch) {
+            succ[0] = t.succ[0];
+            succ[1] = t.succ[1];
+            nsucc = t.nsucc;
+        }
+        live_out = FX;
+        for (int k = 0; k < nsucc; k++) {
+            uint32_t dlen;
+            live_out |= flags_read_at(succ[k], &dlen);
+            if (dlen)
+                deps[ndeps++] = (jit_dep){ succ[k], dlen };
+        }
+        if (live_out == FALL)
+            ndeps = 0;
+    }
+
+    /* Flags read from SR after each instruction.  A Bcc, DBcc or Scc
+     * branching on the host flags of the instruction that set them (none
+     * clobbered in between) doesn't need them in SR; that instruction
+     * must set the host's (host_need). */
     uint8_t live_after[MAX_INSN];
-    uint8_t live = FALL;
+    bool host_need[MAX_INSN] = { false };
+    uint8_t live = live_out;
     for (int i = (int)n - 1; i >= 0; i--) {
         live_after[i] = live;
-        live = (uint8_t)((live & ~info[i].writes) | info[i].reads);
+        uint8_t reads = info[i].reads;
+        if (info[i].cc >= 2) {
+            uint8_t r = cc_reads(info[i].cc);
+            for (int k = i - 1; k >= 0; k--) {
+                if (info[k].writes) {
+                    if (!info[k].clobber && host_cond(info[k].kind, info[i].cc) != -1 && (info[k].writes & r) == r) {
+                        host_need[k] = true;
+                        reads &= (uint8_t)~r;
+                    }
+                    break;
+                }
+                if (info[k].clobber)
+                    break;
+            }
+        }
+        live = (uint8_t)((live & ~info[i].writes) | reads);
     }
 
     /* The registers used most live in x24-x28. */
@@ -1378,6 +1494,7 @@ static jit_block *translate(uint32_t pc)
         t.iop = info[i].op;
         t.at = t.ipc + 2;
         t.live = live_after[i];
+        t.host_need = host_need[i];
         t.last_pc = t.ipc;
         t.last_op = t.iop;
         t.stored = false;
@@ -1415,11 +1532,11 @@ static jit_block *translate(uint32_t pc)
     if (b->full)
         return jit_marker(&E, pc, 2);
 
-    jit_block *blk = jit_install(&E, pc, n, len, b->p, b->n, dead_at);
+    jit_block *blk = jit_install(&E, pc, n, len, b->p, b->n, dead_at, deps, ndeps);
     if (blk) {
         st.translated++;
         if (max_insn == MAX_INSN)
-            jit_remember(&E, pc, n, len, seed(), b->p, b->n, dead_at);
+            jit_remember(&E, pc, n, len, seed(), b->p, b->n, dead_at, deps, ndeps);
     }
     st.translate_ns += now_ns() - t0;
     return blk;
@@ -1813,6 +1930,60 @@ static void random_insn(gen *g)
     }
 }
 
+/* Random code at code_at: in the single-block form, one block of up to 30
+ * instructions closed by a branch of any kind; in the chained form, four
+ * blocks 0x200 bytes apart, each closed by a Bcc, DBcc, BSR or JMP to one
+ * of the four and followed by a BRA to another (for a branch not taken).
+ * Returns the end of the code; *n the instructions of the single block. */
+static uint32_t random_code(gen *g, uint32_t code_at, bool chained, int *n)
+{
+    uint32_t *s = g->s;
+    uint32_t end = code_at;
+    for (int blk = 0; blk < (chained ? 4 : 1); blk++) {
+        uint32_t at = code_at + (uint32_t)blk * 0x200;
+        int k = 1 + (int)(rnd(s) % (chained ? 20 : 30));
+        for (int i = 0; i < k; i++) {
+            random_insn(g);
+            for (int w = 0; w < g->n; w++, at += 2)
+                wr16(at, g->w[w]);
+        }
+        *n = k + 1;
+        uint32_t to = code_at + (rnd(s) % 4) * 0x200, other = code_at + (rnd(s) % 4) * 0x200;
+        int16_t disp = (int16_t)(to - (at + 2));
+        switch (rnd(s) % (chained ? 4 : 6)) {
+        case 0: /* Bcc.W */
+            wr16(at, (uint16_t)(0x6000 | (rnd(s) % 16) << 8));
+            wr16(at + 2, chained ? (uint16_t)disp : 0x40);
+            at += 4;
+            break;
+        case 1: /* DBcc */
+            wr16(at, (uint16_t)(0x50C8 | (rnd(s) % 16) << 8 | (rnd(s) % 8)));
+            wr16(at + 2, chained ? (uint16_t)disp : 0x40);
+            at += 4;
+            break;
+        case 2: /* BSR.W */
+            wr16(at, 0x6100);
+            wr16(at + 2, chained ? (uint16_t)disp : 0x40);
+            at += 4;
+            break;
+        case 3: /* JMP abs.L */
+            wr16(at, 0x4EF9);
+            wr32(at + 2, chained ? to : code_at + 0x1000);
+            at += 6;
+            break;
+        case 4: wr16(at, 0x4E75); at += 2; break;                    /* RTS */
+        default: wr16(at, (uint16_t)(0x4ED0 | (rnd(s) % 8))); at += 2; /* JMP (An) */
+        }
+        if (chained) { /* BRA.W, for a branch not taken */
+            wr16(at, 0x6000);
+            wr16(at + 2, (uint16_t)(int16_t)(other - (at + 2)));
+            at += 4;
+        }
+        end = at;
+    }
+    return end;
+}
+
 int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scratch, char *why, int whylen)
 {
     uint32_t s = seed ? seed : 1;
@@ -1825,25 +1996,20 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
         free(after_i);
         return -1;
     }
-    bool was = cpu_jit_enabled;
+    bool was = cpu_jit_enabled, was_lookahead = lookahead;
     gen g = { &s, { 0 }, 0, scratch };
     for (int iter = 0; iter < blocks; iter++) {
-        int n = 1 + (int)(rnd(&s) % 30);
-        uint32_t at = code_at;
-        for (int i = 0; i < n; i++) {
-            random_insn(&g);
-            for (int k = 0; k < g.n; k++, at += 2)
-                wr16(at, g.w[k]);
-        }
-        /* A closing branch: Bcc.W, DBcc, BSR, RTS, JMP (An) or JSR abs.L. */
-        switch (rnd(&s) % 6) {
-        case 0: case 1: wr16(at, (uint16_t)(0x6000 | (rnd(&s) % 16) << 8)); wr16(at + 2, 0x40); at += 4; break;
-        case 2: wr16(at, (uint16_t)(0x50C8 | (rnd(&s) % 16) << 8 | (rnd(&s) % 8))); wr16(at + 2, 0x40); at += 4; break;
-        case 3: wr16(at, 0x4E75); at += 2; break;
-        case 4: wr16(at, (uint16_t)(0x4ED0 | (rnd(&s) % 8))); at += 2; break;
-        default: wr16(at, 0x4EB9); wr32(at + 2, code_at + 0x1000); at += 6; break;
-        }
-        n++;
+        /* Odd iterations chain blocks, with the flags looked for after
+         * each: N Z V C may then be stale in SR where the code that
+         * follows sets them before reading them (so the final SR's are
+         * not compared), and any other difference shows in what runs.
+         * op_pc and op are not compared either: a chained exit doesn't
+         * set them, so when the run stops at the next block's budget
+         * check they still name an earlier block's last instruction. */
+        bool chained = iter & 1;
+        int n;
+        uint32_t end = random_code(&g, code_at, chained, &n);
+        uint64_t count = chained ? 50 + rnd(&s) % 250 : (uint64_t)n;
 
         cpu68k start;
         cpu_init(&start);
@@ -1863,14 +2029,18 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
         gput(scratch, before, AREA);
         cpu68k ci = start;
         cpu_jit_enabled = false;
-        cpu_run(&ci, (uint64_t)n);
+        cpu_run(&ci, count);
         memcpy(after_i, g_mem + scratch, AREA);
 
         gput(scratch, before, AREA);
         cpu68k cj = start;
         cpu_jit_enabled = true;
-        cpu_run(&cj, (uint64_t)n);
+        lookahead = chained;
+        jit_flush(&E);
+        cpu_run(&cj, count);
+        lookahead = was_lookahead;
 
+        uint16_t sr_mask = chained ? 0xFFF0 : 0xFFFF;
         const char *what = NULL;
         int which = -1;
         for (int i = 0; i < 8 && !what; i++)
@@ -1882,23 +2052,24 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
                 which = i;
             }
         if (!what) {
-            if (ci.sr != cj.sr) what = "sr";
+            if ((ci.sr & sr_mask) != (cj.sr & sr_mask)) what = "sr";
             else if (ci.pc != cj.pc) what = "pc";
             else if (ci.icount != cj.icount) what = "icount";
-            else if (ci.op_pc != cj.op_pc) what = "op_pc";
-            else if (ci.op != cj.op) what = "op";
+            else if (!chained && ci.op_pc != cj.op_pc) what = "op_pc";
+            else if (!chained && ci.op != cj.op) what = "op";
             else if (ci.halted != cj.halted) what = "halted";
             else if (memcmp(after_i, g_mem + scratch, AREA)) what = "memory";
         }
         if (what) {
             if (!bad) {
-                int w = snprintf(why, (size_t)whylen, "block %d (%d instructions): %s", iter, n, what);
+                int w = snprintf(why, (size_t)whylen, "case %d (%s, %llu instructions): %s", iter,
+                                 chained ? "chained" : "one block", (unsigned long long)count, what);
                 if (which >= 0)
                     w += snprintf(why + w, (size_t)(whylen - w), "%d %08X vs %08X", which,
                                   what[0] == 'd' ? ci.d[which] : ci.a[which], what[0] == 'd' ? cj.d[which] : cj.a[which]);
                 else if (!strcmp(what, "sr"))
                     w += snprintf(why + w, (size_t)(whylen - w), " %04X vs %04X", ci.sr, cj.sr);
-                for (uint32_t a = code_at; a < at && w < whylen - 6; a += 2)
+                for (uint32_t a = code_at; a < end && a < code_at + 0x80 && w < whylen - 6; a += 2)
                     w += snprintf(why + w, (size_t)(whylen - w), " %04X", rd16(a));
             }
             bad++;

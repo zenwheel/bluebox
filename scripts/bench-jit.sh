@@ -7,7 +7,8 @@
 # time.  Prints the seconds and millions of instructions per second of
 # each, the JIT's speed-up, and whether each JIT run ended in the same
 # state as the interpreter's (the same instruction count, pc and
-# registers: runs are deterministic, so they must).
+# registers).  Some programs aren't repeatable from run to run (they seed
+# from the date): those differ whatever runs them.
 #
 # usage: sh scripts/bench-jit.sh <census dir> <work dir> [bluebox binary] [instructions]
 #   The census dir holds corpus/; the work dir gets a home the archives
@@ -49,9 +50,12 @@ run() {
 	awk '/^real/ { printf "%.2f", $2 }' "$out.err"
 }
 
-# The final state: the stop line and the registers.
+# The final state: the stop line and the registers.  The low digit of the
+# 68k's SR is left out: the JIT doesn't store N Z V C where the code that
+# follows sets them before reading them.
 state() {
-	grep -E '^(instruction limit|stopped:|pc |d0 |a0 |PowerPC|r[0-9])' "$1" || true
+	grep -E '^(instruction limit|stopped:|pc |d0 |a0 |PowerPC|r[0-9])' "$1" |
+		sed 's/\(sr [0-9A-F][0-9A-F][0-9A-F]\)[0-9A-F]/\1x/' || true
 }
 
 mips() {

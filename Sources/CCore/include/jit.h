@@ -93,7 +93,13 @@ void jit_cache_close(jit_cache *c);
  * (subs x22, x22, #n; b.lt over) and has a dead path (pc stored, exit)
  * that kill() points its entry at. */
 
-enum { JIT_FAST_BITS = 14, JIT_MAX_HELPERS = 16 };
+enum { JIT_FAST_BITS = 14, JIT_MAX_HELPERS = 16, JIT_MAX_DEPS = 2 };
+
+/* Guest code a translation depends on besides its own (what a 68k block
+ * found its successors read, say): stores there drop the block too. */
+typedef struct jit_dep {
+    uint32_t lo, len;
+} jit_dep;
 
 typedef struct jit_fast {
     uint32_t pc;
@@ -129,7 +135,9 @@ struct jit_block {
     uint32_t *dead;
     bool live;
     jit_block *next;
-    jit_region_link links[3];
+    jit_dep deps[JIT_MAX_DEPS];
+    int ndeps;
+    jit_region_link links[3 * (1 + JIT_MAX_DEPS)];
     int nlinks;
 };
 
@@ -159,9 +167,9 @@ bool jit_engine_init(jit_engine *e, int map_bit, int align_shift, size_t code_si
 jit_block *jit_lookup(jit_engine *e, uint32_t pc);
 /* A block from host code (copied into the engine's buffer, flushing it
  * when full): ninsn guest instructions in len bytes at pc; dead_at the
- * word offset of its dead path. */
+ * word offset of its dead path; deps the other guest code it relies on. */
 jit_block *jit_install(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, const uint32_t *code,
-                       uint32_t nwords, uint32_t dead_at);
+                       uint32_t nwords, uint32_t dead_at, const jit_dep *deps, int ndeps);
 /* A marker: nothing translated at pc (len bytes looked at). */
 jit_block *jit_marker(jit_engine *e, uint32_t pc, uint32_t len);
 void jit_flush(jit_engine *e);
@@ -172,12 +180,14 @@ static inline uint64_t jit_enter(jit_engine *e, void *cpu, int64_t budget, uint3
 {
     return e->enter(cpu, &e->ctx, budget, entry);
 }
-/* Persistent cache: where (dir NULL: none), and the record for pc whose
- * guest code still hashes the same (seed mixed into the hash). */
+/* Persistent cache: where (dir NULL: none); the block for pc from it, if
+ * the guest code there and what it depends on still hash the same (seed
+ * mixed in: what else the translation was made for). */
 void jit_engine_cache(jit_engine *e, const char *dir, const char *name);
-const jit_cache_rec *jit_cached(jit_engine *e, uint32_t pc, uint64_t seed);
-/* Record a translation in the cache (the code with its dead-path word). */
+jit_block *jit_from_cache(jit_engine *e, uint32_t pc, uint64_t seed);
+/* Record a translation in the cache: its code, then its dead path's
+ * offset and its dependencies (each with a hash of its bytes). */
 void jit_remember(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, uint64_t seed, const uint32_t *code,
-                  uint32_t nwords, uint32_t dead_at);
+                  uint32_t nwords, uint32_t dead_at, const jit_dep *deps, int ndeps);
 
 #endif

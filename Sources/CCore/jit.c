@@ -315,7 +315,10 @@ static void code_written(jit_engine *e, gaddr lo, gaddr hi)
                 continue;
             }
             jit_block *b = l->b;
-            if (b->live && (uint64_t)b->pc < whi && (uint64_t)b->pc + b->len > wlo)
+            bool hit = (uint64_t)b->pc < whi && (uint64_t)b->pc + b->len > wlo;
+            for (int d = 0; d < b->ndeps && !hit; d++)
+                hit = (uint64_t)b->deps[d].lo < whi && (uint64_t)b->deps[d].lo + b->deps[d].len > wlo;
+            if (b->live && hit)
                 kill(e, b);
             if (!b->live) {
                 *p = l->next;
@@ -351,7 +354,23 @@ void jit_flush(jit_engine *e)
     e->flushes++;
 }
 
-static jit_block *new_block(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len)
+/* Link b to the regions of [lo, lo+len) (and the one just before). */
+static void link_regions(jit_engine *e, jit_block *b, uint32_t lo, uint32_t len)
+{
+    uint32_t end = lo + len;
+    uint32_t r0 = (lo >= 8 ? lo - 8 : 0) >> CODE_MAP_SHIFT, r1 = (end - 1) >> CODE_MAP_SHIFT;
+    for (uint32_t r = r0; r <= r1 && b->nlinks < (int)(sizeof b->links / sizeof b->links[0]); r++) {
+        jit_region_link *l = &b->links[b->nlinks++];
+        l->region = r;
+        l->b = b;
+        l->next = e->regions[rg_bucket(r)];
+        e->regions[rg_bucket(r)] = l;
+    }
+    mem_code_mark(lo, end, e->map_bit);
+}
+
+static jit_block *new_block(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, const jit_dep *deps,
+                            int ndeps)
 {
     if (e->npool == e->cappool) {
         size_t cap = e->cappool ? 2 * e->cappool : 4096;
@@ -371,24 +390,19 @@ static jit_block *new_block(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t
     e->pool[e->npool++] = b;
     b->next = e->pcs[pc_bucket(e, pc)];
     e->pcs[pc_bucket(e, pc)] = b;
-    /* The regions it was translated from (and the one just before). */
-    uint32_t end = pc + len;
-    uint32_t r0 = (pc >= 8 ? pc - 8 : 0) >> CODE_MAP_SHIFT, r1 = (end - 1) >> CODE_MAP_SHIFT;
-    for (uint32_t r = r0; r <= r1 && b->nlinks < 3; r++) {
-        jit_region_link *l = &b->links[b->nlinks++];
-        l->region = r;
-        l->b = b;
-        l->next = e->regions[rg_bucket(r)];
-        e->regions[rg_bucket(r)] = l;
-    }
-    mem_code_mark(pc, end, e->map_bit);
+    link_regions(e, b, pc, len);
+    for (int d = 0; d < ndeps && d < JIT_MAX_DEPS; d++)
+        if (deps[d].len) {
+            b->deps[b->ndeps++] = deps[d];
+            link_regions(e, b, deps[d].lo, deps[d].len);
+        }
     return b;
 }
 
-jit_block *jit_marker(jit_engine *e, uint32_t pc, uint32_t len) { return new_block(e, pc, 0, len); }
+jit_block *jit_marker(jit_engine *e, uint32_t pc, uint32_t len) { return new_block(e, pc, 0, len, NULL, 0); }
 
 jit_block *jit_install(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, const uint32_t *code,
-                       uint32_t nwords, uint32_t dead_at)
+                       uint32_t nwords, uint32_t dead_at, const jit_dep *deps, int ndeps)
 {
     uint32_t *at = jit_code_alloc(&e->code, nwords * 4);
     if (!at) {
@@ -400,7 +414,7 @@ jit_block *jit_install(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len,
     jit_code_write_begin(&e->code);
     memcpy(at, code, nwords * 4);
     jit_code_write_end(&e->code, at, nwords * 4);
-    jit_block *b = new_block(e, pc, ninsn, len);
+    jit_block *b = new_block(e, pc, ninsn, len, deps, ndeps);
     if (!b)
         return NULL;
     b->entry = at;
@@ -439,31 +453,56 @@ static jit_cache *cache_of(jit_engine *e)
     return e->cache;
 }
 
-const jit_cache_rec *jit_cached(jit_engine *e, uint32_t pc, uint64_t seed)
+/* The cache record's trailer, after the code: per dependency lo, len and
+ * its hash (two words), then dead_at, then the number of dependencies. */
+jit_block *jit_from_cache(jit_engine *e, uint32_t pc, uint64_t seed)
 {
     jit_cache *c = cache_of(e);
     if (!c)
         return NULL;
     const jit_cache_rec *r = jit_cache_find(c, pc);
-    if (!r || !r->ninsn || r->code_len < 8 || !r->guest_len)
+    if (!r || !r->ninsn || r->code_len < 12 || !r->guest_len)
         return NULL;
     if (jit_hash(g_mem + pc, r->guest_len, seed ^ pc) != r->hash)
         return NULL;
-    return r;
+    const uint32_t *w = (const uint32_t *)(const void *)r->code;
+    uint32_t total = r->code_len / 4, ndeps = w[total - 1];
+    if (ndeps > JIT_MAX_DEPS || total <= 2 + 4 * ndeps)
+        return NULL;
+    uint32_t nwords = total - 2 - 4 * ndeps;
+    const uint32_t *t = w + nwords;
+    jit_dep deps[JIT_MAX_DEPS];
+    for (uint32_t d = 0; d < ndeps; d++) {
+        deps[d] = (jit_dep){ t[4 * d], t[4 * d + 1] };
+        uint64_t h = (uint64_t)t[4 * d + 3] << 32 | t[4 * d + 2];
+        if (jit_hash(g_mem + deps[d].lo, deps[d].len, seed ^ deps[d].lo) != h)
+            return NULL;
+    }
+    return jit_install(e, pc, r->ninsn, r->guest_len, w, nwords, t[4 * ndeps], deps, (int)ndeps);
 }
 
 void jit_remember(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, uint64_t seed, const uint32_t *code,
-                  uint32_t nwords, uint32_t dead_at)
+                  uint32_t nwords, uint32_t dead_at, const jit_dep *deps, int ndeps)
 {
     jit_cache *c = cache_of(e);
     if (!c)
         return;
-    uint32_t *copy = malloc(4 * (nwords + 1));
+    uint32_t total = nwords + 2 + 4 * (uint32_t)ndeps;
+    uint32_t *copy = malloc(4 * total);
     if (!copy)
         return;
     memcpy(copy, code, 4 * nwords);
-    copy[nwords] = dead_at;
-    jit_cache_add(c, pc, ninsn, len, jit_hash(g_mem + pc, len, seed ^ pc), copy, 4 * (nwords + 1));
+    uint32_t *t = copy + nwords;
+    for (int d = 0; d < ndeps; d++) {
+        uint64_t h = jit_hash(g_mem + deps[d].lo, deps[d].len, seed ^ deps[d].lo);
+        t[4 * d] = deps[d].lo;
+        t[4 * d + 1] = deps[d].len;
+        t[4 * d + 2] = (uint32_t)h;
+        t[4 * d + 3] = (uint32_t)(h >> 32);
+    }
+    t[4 * ndeps] = dead_at;
+    t[4 * ndeps + 1] = (uint32_t)ndeps;
+    jit_cache_add(c, pc, ninsn, len, jit_hash(g_mem + pc, len, seed ^ pc), copy, 4 * total);
     free(copy);
 }
 

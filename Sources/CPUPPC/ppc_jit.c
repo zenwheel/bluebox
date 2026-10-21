@@ -36,11 +36,14 @@
  * flags still describe branches on the flags directly.
  *
  * Exits: a block ends in exit stubs, one per known successor.  A stub
- * stores the guest pc and returns to the dispatcher, which then patches
- * the stub's first instruction into a direct branch to the successor's
- * translation (chaining).  Indirect branches (blr, bctr) look the target
- * up in a direct-mapped table inline and go straight there when it has a
- * translation.
+ * stores the guest pc (and op_pc and prev_pc) and returns to the
+ * dispatcher, which then patches the stub's first instruction into a
+ * direct branch to the successor's translation (chaining).  Indirect
+ * branches (blr, bctr) look the target up in a direct-mapped table inline
+ * and go straight there when it has a translation.  A chained exit sets
+ * no op_pc: when a run stops at the next block's budget check, op_pc and
+ * prev_pc still name an earlier block's instructions (nothing reads them
+ * there; the interpreter sets them before anything that does).
  *
  * Memory: loads and stores go to the same arena the interpreter uses.  A
  * store checks the screen watch range and the code map inline; when
@@ -88,7 +91,7 @@ int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
 enum { HC = JR_CPU, HB = JR_BUDGET };
 enum { MAX_INSN = 64, CODE_SIZE = 64 << 20 };
 /* Bumped whenever translated code changes shape (the cache's build). */
-#define TRANSLATOR_VERSION 3
+#define TRANSLATOR_VERSION 4
 
 /* The translator's helpers in the engine's context. */
 enum { H_EXECUTE, H_ST8, H_ST16, H_ST32, H_ICBI };
@@ -1052,17 +1055,11 @@ static jit_block *translate(uint32_t pc)
     if (n == 0)
         return jit_marker(&E, pc, 4);
 
-    const jit_cache_rec *r = jit_cached(&E, pc, 0);
-    if (r) {
-        uint32_t nwords = r->code_len / 4 - 1, dead_at;
-        memcpy(&dead_at, r->code + 4 * nwords, 4);
-        jit_block *b = jit_install(&E, pc, r->ninsn, r->guest_len, (const uint32_t *)(const void *)r->code, nwords,
-                                   dead_at);
-        if (b) {
-            st.from_cache++;
-            st.translate_ns += now_ns() - t0;
-            return b;
-        }
+    jit_block *cached = jit_from_cache(&E, pc, 0);
+    if (cached) {
+        st.from_cache++;
+        st.translate_ns += now_ns() - t0;
+        return cached;
     }
 
     tctx t = { 0 };
@@ -1169,10 +1166,10 @@ static jit_block *translate(uint32_t pc)
     if (b->full)
         return jit_marker(&E, pc, 4); /* too big: leave it to the interpreter */
 
-    jit_block *blk = jit_install(&E, pc, n, 4 * n, b->p, b->n, dead_at);
+    jit_block *blk = jit_install(&E, pc, n, 4 * n, b->p, b->n, dead_at, NULL, 0);
     if (blk) {
         st.translated++;
-        jit_remember(&E, pc, n, 4 * n, 0, b->p, b->n, dead_at);
+        jit_remember(&E, pc, n, 4 * n, 0, b->p, b->n, dead_at, NULL, 0);
     }
     st.translate_ns += now_ns() - t0;
     return blk;
