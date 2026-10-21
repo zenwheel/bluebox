@@ -68,6 +68,18 @@ extension BlueBox {
         /// SpBlock: spResult 0, spsPointer 4, spParamData 24, spRefNum 38,
         /// spCategory 40, spCType 42, spDrvrSW 44, spDrvrHW 46, spTBMask 48,
         /// spSlot 49, spID 50, spExtDev 51.
+        /// GetHandleSize and GetPtrSize answer 0 for a bad handle or pointer,
+        /// MemError the reason (the 68k trap's D0 has the result code).
+        @Test func sizesOfBadHandlesAreZero() {
+            bootMachine()
+            #expect(call("GetHandleSize", [0]) == 0 && result16("MemError", []) == -109) // nilHandleErr
+            let h = tb_NewHandle(24, false, false)
+            #expect(call("GetHandleSize", [h]) == 24 && result16("MemError", []) == 0)
+            tb_EmptyHandle(h)
+            #expect(call("GetHandleSize", [h]) == 0)
+            #expect(call("GetPtrSize", [0]) == 0 && call("GetPtrSize", [tb_NewPtr(10, false, false)]) == 10)
+        }
+
         @Test func slotManagerFindsTheBuiltInVideo() {
             bootMachine()
             let spb = tb_NewPtr(56, false, true)

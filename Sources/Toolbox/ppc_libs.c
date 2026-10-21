@@ -1906,6 +1906,19 @@ static void g_TESetClickLoop(ppc_cpu *c)
     c->pc = c->lr;
 }
 static void g_InlineGetHandleSize(ppc_cpu *c) { RETURN(R(0) ? (uint32_t)tb_GetHandleSize(R(0)) : 0); }
+/* GetHandleSize and GetPtrSize: 0 when the handle or pointer is bad (nil
+ * or purged), MemError saying why.  Only the 68k trap leaves the result
+ * code in D0; Internet Explorer 5 sizes a copy of a nil handle by it. */
+static void g_GetHandleSize(ppc_cpu *c)
+{
+    int32_t n = tb_GetHandleSize(R(0));
+    RETURN((uint32_t)(n < 0 ? 0 : n));
+}
+static void g_GetPtrSize(ppc_cpu *c)
+{
+    int32_t n = tb_GetPtrSize(R(0));
+    RETURN((uint32_t)(n < 0 ? 0 : n));
+}
 static void g_GZSaveHnd(ppc_cpu *c) { RETURN(rd32(LM_GZRootHnd)); }
 static void g_LMGetSysFontSize(ppc_cpu *c) { RETURN((int32_t)(int16_t)rd16(0x0BA8)); }
 static void g_LMSetSysFontSize(ppc_cpu *c) { wr16(0x0BA8, (uint16_t)R(0)); c->pc = c->lr; }
@@ -2720,6 +2733,7 @@ const ppc_export lib_exports[] = {
     { "DMDisposeList", dm_DisposeList }, { "DMSuspendConfigure", g_noErr }, { "DMResumeConfigure", g_noErr },
     /* Assorted */
     { "TESetClickLoop", g_TESetClickLoop }, { "InlineGetHandleSize", g_InlineGetHandleSize },
+    { "GetHandleSize", g_GetHandleSize }, { "GetPtrSize", g_GetPtrSize },
     { "GZSaveHnd", g_GZSaveHnd }, { "LMGetSysFontSize", g_LMGetSysFontSize }, { "LMSetSysFontSize", g_LMSetSysFontSize },
     { "LMGetGNEFilter", g_LMGetGNEFilter }, { "LMSetGNEFilter", g_LMSetGNEFilter },
     { "IUEqualPString", g_IUEqualPString }, { "IUCompPString", g_IUCompPString },
