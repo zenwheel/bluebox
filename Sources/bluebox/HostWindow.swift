@@ -258,6 +258,65 @@ struct LaunchEvents {
     }
 }
 
+/// Apple Events from macOS beyond those AppKit turns into delegate calls:
+/// Quit Application asks the classic program as its own Quit would (so it
+/// still asks about unsaved changes), Print Documents prints with it, and
+/// Do Script ('misc'/'dosc', from osascript or the bundle's dictionary)
+/// goes to it with its text, the program's reply coming back as the result.
+@MainActor final class HostAppleEvents: NSObject {
+    static let shared = HostAppleEvents()
+
+    func install() {
+        let m = NSAppleEventManager.shared()
+        m.setEventHandler(self, andSelector: #selector(quit(_:reply:)), forEventClass: fourCCValue("aevt"),
+                          andEventID: fourCCValue("quit"))
+        m.setEventHandler(self, andSelector: #selector(printDocuments(_:reply:)), forEventClass: fourCCValue("aevt"),
+                          andEventID: fourCCValue("pdoc"))
+        m.setEventHandler(self, andSelector: #selector(doScript(_:reply:)), forEventClass: fourCCValue("misc"),
+                          andEventID: fourCCValue("dosc"))
+    }
+
+    @objc func quit(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) { machine_request_quit() }
+
+    @objc func printDocuments(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        guard let list = event.paramDescriptor(forKeyword: keyDirectObject) else { return }
+        let items = list.numberOfItems > 0 ? (1...list.numberOfItems).compactMap { list.atIndex($0) } : [list]
+        let paths = items.compactMap { $0.fileURLValue?.path }
+        withCStringArray(paths) { machine_open_documents($0, Int32(paths.count), true) }
+    }
+
+    @objc func doScript(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue ?? ""
+        let manager = NSAppleEventManager.shared()
+        guard let suspension = manager.suspendCurrentAppleEvent() else { return }
+        let ctx = Unmanaged.passRetained(Suspended(suspension)).toOpaque()
+        machine_send_apple_event(fourCCValue("misc"), fourCCValue("dosc"), nil, 0, text, { ctx, data, len, err in
+            var result = [CChar](repeating: 0, count: 65536)
+            var errn: Int32 = 0
+            let has = data.map { machine_ae_reply_result($0, len, &result, result.count, &errn) } ?? false
+            let text = str(result)
+            let failure = err != 0 ? Int32(err) : errn
+            let suspended = Unmanaged<Suspended>.fromOpaque(ctx!).takeRetainedValue()
+            DispatchQueue.main.async {
+                let manager = NSAppleEventManager.shared()
+                let reply = manager.replyAppleEvent(forSuspensionID: suspended.id)
+                if failure != 0 {
+                    reply.setParam(NSAppleEventDescriptor(int32: failure), forKeyword: keyErrorNumber)
+                    if !text.isEmpty { reply.setParam(NSAppleEventDescriptor(string: text), forKeyword: keyErrorString) }
+                } else if has {
+                    reply.setParam(NSAppleEventDescriptor(string: text), forKeyword: keyDirectObject)
+                }
+                manager.resume(withSuspensionID: suspended.id)
+            }
+        }, ctx)
+    }
+
+    private final class Suspended {
+        let id: NSAppleEventManager.SuspensionID
+        init(_ id: NSAppleEventManager.SuspensionID) { self.id = id }
+    }
+}
+
 @MainActor let keyTranslator = KeyTranslator()
 
 /// Name the host process after the classic application, so the macOS
@@ -400,6 +459,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     init(title: String) { self.title = title }
 
+    func applicationWillFinishLaunching(_ notification: Notification) { HostAppleEvents.shared.install() }
     func application(_ application: NSApplication, open urls: [URL]) { launchEvents.open(urls) }
     func applicationDidBecomeActive(_ notification: Notification) { ClipboardSync.shared.didBecomeActive() }
     func applicationWillResignActive(_ notification: Notification) { ClipboardSync.shared.willResignActive() }

@@ -577,5 +577,114 @@ extension BlueBox {
     }
 }
 
+extension BlueBox {
+    /// Events between processes travel flattened, files as host paths.
+    @Suite struct AppleEventsBetweenProcesses {
+        func takeEvent() -> UInt32? {
+            let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            guard tb_GetNextEvent(0x0400, e) != 0, rd16(e) == 23 else { return nil }
+            return e
+        }
+
+        /// An event flattened in one process arrives whole in another: its
+        /// files as FSSpecs and aliases of that process, records nested.
+        @Test func flattenedEventsArriveWhole() throws {
+            let dir = launchTestApp(sizeFlags: 0x0040)
+            guestStack()
+            let file = dir.appendingPathComponent("Report")
+            try Data("x".utf8).write(to: file)
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            fm_spec_for_path(file.path, spec)
+            let evt = newDesc(), list = newDesc(), rec = newDesc(), alias = newDesc()
+            _ = tb_AECreateAppleEvent(code("test"), code("flat"), 0, -1, 0, evt)
+            _ = tb_AECreateList(0, 0, 0, list)
+            _ = tb_AEPutPtr(list, 0, code("fss "), spec, Int32(FSSpec_SIZEOF))
+            _ = tb_AECoercePtr(code("fss "), spec, Int32(FSSpec_SIZEOF), code("alis"), alias)
+            _ = tb_AEPutDesc(list, 0, alias)
+            _ = tb_AEPutParamDesc(evt, code("----"), list)
+            _ = tb_AECreateList(0, 0, 1, rec)
+            _ = tb_AEPutParamPtr(rec, code("kwd1"), code("long"), guestLong(99), 4)
+            _ = tb_AEPutParamDesc(evt, code("reco"), rec)
+            var len: UInt32 = 0
+            let flat = aem_flatten(evt, &len)
+            #expect(flat != nil && len > 0)
+            // The FSSpec's numbers mean nothing elsewhere: it travels as its path.
+            let bytes = Array(UnsafeBufferPointer(start: flat, count: Int(len)))
+            #expect(String(decoding: bytes, as: UTF8.self).contains(file.path))
+
+            var names: [String] = []
+            var kept: UInt32 = 0
+            let handler = pascalProc([4, 4, 4]) { a in
+                let items = newDesc(), item = newDesc(), out = tb_NewPtr(4, false, true)
+                _ = tb_AEGetParamDesc(a[0], code("----"), code("list"), items)
+                for i: Int32 in 1...2 {
+                    _ = tb_AEGetNthDesc(items, i, code("fss "), 0, item) // the alias coerced
+                    names.append(pstring(at: rd32(rd32(item + 4)) + UInt32(FSSpec_name_off)))
+                }
+                let inner = newDesc()
+                _ = tb_AEGetParamDesc(a[0], code("reco"), code("reco"), inner)
+                _ = tb_AEGetParamPtr(inner, code("kwd1"), code("long"), 0, out, 4, 0)
+                kept = rd32(out)
+                return 0
+            }
+            _ = tb_AEInstallEventHandler(code("test"), code("flat"), handler, 0, 0)
+            aem_queue_flat(flat, len, nil, nil)
+            free(flat)
+            guard let e = takeEvent() else { Issue.record("no event"); return }
+            #expect(rd32(e + 2) == fourCC("test") && rd32(e + 10) == fourCC("flat"))
+            #expect(tb_AEProcessAppleEvent(e) == 0)
+            #expect(names == ["Report", "Report"] && kept == 99)
+        }
+
+        /// Another process (here a thread, as `bluebox send` would) reaches
+        /// a run through its socket and gets the reply.
+        @Test func sendingToARun() {
+            launchTestApp(sizeFlags: 0x0040)
+            guestStack()
+            #expect(machine_listen_for_apple_events())
+            var procs = [machine_ae_process](repeating: machine_ae_process(), count: 64)
+            let n = Int(machine_ae_processes(&procs, 64))
+            guard let me = procs.prefix(n).first(where: { $0.pid == getpid() }) else {
+                Issue.record("not listed")
+                return
+            }
+            let dosc = pascalProc([4, 4, 4]) { a in
+                let d = newDesc()
+                _ = tb_AEGetParamDesc(a[0], code("----"), code("TEXT"), d)
+                let answer = Array("ran: ".utf8) + descBytes(d)
+                _ = tb_AEPutParamPtr(a[1], code("----"), code("TEXT"), guestBytes(answer), Int32(answer.count))
+                return 0
+            }
+            _ = tb_AEInstallEventHandler(code("misc"), code("dosc"), dosc, 0, 0)
+            let done = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) var result = ""
+            nonisolated(unsafe) var err: Int16 = 1
+            Thread.detachNewThread {
+                var buf = [CChar](repeating: 0, count: 256)
+                var errn: Int32 = 0
+                err = machine_ae_send_to(me.pid, me.signature, fourCC("misc"), fourCC("dosc"), nil, 0, "go",
+                                         true, &buf, buf.count, &errn)
+                result = String(cString: buf)
+                done.signal()
+            }
+            var handled = false
+            for _ in 0..<200 where !handled {
+                if let e = takeEvent() {
+                    #expect(tb_AEProcessAppleEvent(e) == 0)
+                    handled = true
+                } else { usleep(10000) }
+            }
+            #expect(done.wait(timeout: .now() + 5) == .success)
+            #expect(err == 0 && result == "ran: go")
+
+            // A signature nobody has: no such process.
+            let target = newDesc(), evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateDesc(code("sign"), guestLong(fourCC("Nobd")), 4, target)
+            _ = tb_AECreateAppleEvent(code("misc"), code("dosc"), target, -1, 0, evt)
+            #expect(tb_AESend(evt, reply, 3, 0, -1, 0, 0) == -600)
+        }
+    }
+}
+
 private nonisolated(unsafe) var launched: [String] = []
 private nonisolated(unsafe) var hostReplies: [([UInt8], Int16)] = []

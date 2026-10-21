@@ -45,17 +45,100 @@ static uint32_t rd32be(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32
 
 enum { LIST_TAG = 0x424C7374 /* 'BLst' */, RECO_TAG = 0x42526563 /* 'BRec' */ };
 
+static void grow(uint8_t **buf, uint32_t *cap, uint32_t need)
+{
+    if (need <= *cap)
+        return;
+    while (*cap < need)
+        *cap = *cap ? *cap * 2 : 256;
+    *buf = realloc(*buf, *cap);
+}
+
+static void put32(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)(v >> 24), p[1] = (uint8_t)(v >> 16), p[2] = (uint8_t)(v >> 8), p[3] = (uint8_t)v;
+}
+
+/* An entry on a host buffer. */
+static void host_entry(uint8_t **buf, uint32_t *n, uint32_t *cap, uint32_t key, uint32_t type, const void *data,
+                       uint32_t len)
+{
+    grow(buf, cap, *n + 12 + len + 1);
+    put32(*buf + *n, key);
+    put32(*buf + *n + 4, type);
+    put32(*buf + *n + 8, len);
+    if (len)
+        memcpy(*buf + *n + 12, data, len);
+    *n += 12 + len;
+    if (len & 1)
+        (*buf)[(*n)++] = 0;
+}
+
+/* An event from the host (as from the Finder), flattened as aem_flatten
+ * does, without guest memory: files as host paths, text in MacRoman with
+ * Mac line ends.  malloc'd. */
+uint8_t *aem_build_flat(uint32_t cls, uint32_t id, const char *const *files, int nfiles, const char *text,
+                        bool reply, uint32_t *len_out)
+{
+    uint8_t *buf = NULL, v[4] = { 0 };
+    uint32_t n = 12, cap = 0;
+    grow(&buf, &cap, n);
+    put32(buf, RECO_TAG);
+    put32(buf + 4, reply ? 6 : 5);
+    put32(buf + 8, nfiles || text ? 1 : 0);
+    put32(v, cls);
+    host_entry(&buf, &n, &cap, T("evcl"), T("type"), v, 4);
+    put32(v, id);
+    host_entry(&buf, &n, &cap, T("evid"), T("type"), v, 4);
+    put32(v, T("MACS")); /* from the Finder, as it were */
+    host_entry(&buf, &n, &cap, T("addr"), T("sign"), v, 4);
+    v[0] = v[1] = 0;
+    host_entry(&buf, &n, &cap, T("rtid"), T("shor"), v, 2);
+    v[1] = kAELocalProcess;
+    host_entry(&buf, &n, &cap, T("esrc"), T("shor"), v, 2);
+    if (reply) {
+        v[0] = 1;
+        host_entry(&buf, &n, &cap, T("repq"), T("bool"), v, 1);
+    }
+    if (nfiles) {
+        /* Direct object: a list of files ('bbfp': FSSpecs to be). */
+        uint8_t *list = NULL;
+        uint32_t ln = 8, lcap = 0;
+        grow(&list, &lcap, ln);
+        put32(list, LIST_TAG);
+        put32(list + 4, (uint32_t)nfiles);
+        for (int i = 0; i < nfiles; i++) {
+            size_t plen = strlen(files[i]);
+            uint8_t *item = malloc(4 + plen);
+            put32(item, T("fss "));
+            memcpy(item + 4, files[i], plen);
+            host_entry(&list, &ln, &lcap, 0, T("bbfp"), item, (uint32_t)(4 + plen));
+            free(item);
+        }
+        host_entry(&buf, &n, &cap, T("----"), T("list"), list, ln);
+        free(list);
+    } else if (text) {
+        /* Direct object: the text, MacRoman with Mac line ends. */
+        size_t tn = strlen(text);
+        uint8_t *mac = malloc(tn + 1);
+        size_t m = utf8_to_macroman(text, mac, tn + 1);
+        for (size_t i = 0; i < m; i++)
+            if (mac[i] == '\n')
+                mac[i] = '\r';
+        host_entry(&buf, &n, &cap, T("----"), T("TEXT"), mac, (uint32_t)m);
+        free(mac);
+    }
+    *len_out = n;
+    return buf;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Host queue */
 
 typedef struct {
     uint32_t cls, id;
-    int nfiles;
-    char **files;
-    char *text;          /* a direct object of text (UTF-8), for do script */
-    uint8_t *flat;       /* or a whole event, as aem_flatten made it */
+    uint8_t *flat;       /* the event, as aem_flatten makes them */
     uint32_t flatlen;
-    int source;          /* kAESameProcess, kAELocalProcess */
     machine_ae_reply_fn reply;  /* who wants the reply, if anyone */
     void *reply_ctx;
 } pending_ae;
@@ -69,10 +152,6 @@ static void free_event(pending_ae *e, bool unanswered)
 {
     if (unanswered && e->reply)
         e->reply(e->reply_ctx, NULL, 0, errAEEventNotHandled);
-    for (int i = 0; i < e->nfiles; i++)
-        free(e->files[i]);
-    free(e->files);
-    free(e->text);
     free(e->flat);
     memset(e, 0, sizeof *e);
 }
@@ -93,11 +172,10 @@ static void enqueue(pending_ae *e)
 static void queue_event(uint32_t cls, uint32_t id, const char *const *files, int n, const char *text,
                         machine_ae_reply_fn reply, void *ctx)
 {
-    pending_ae e = { cls, id, n, NULL, text ? strdup(text) : NULL, NULL, 0, kAELocalProcess, reply, ctx };
-    e.files = n ? calloc((size_t)n, sizeof *e.files) : NULL;
-    for (int i = 0; i < n; i++)
-        e.files[i] = strdup(files[i]);
-    enqueue(&e);
+    uint32_t len;
+    uint8_t *flat = aem_build_flat(cls, id, files, n, text, reply != NULL, &len);
+    aem_queue_flat(flat, len, reply, ctx);
+    free(flat);
 }
 
 void machine_open_documents(const char *const *paths, int n, bool print)
@@ -135,7 +213,7 @@ void aem_queue_flat(const uint8_t *data, uint32_t len, machine_ae_reply_fn reply
         }
         off += 12 + ((elen + 1) & ~1u);
     }
-    pending_ae e = { cls, id, 0, NULL, NULL, malloc(len), len, kAELocalProcess, reply, ctx };
+    pending_ae e = { cls, id, malloc(len), len, reply, ctx };
     memcpy(e.flat, data, len);
     enqueue(&e);
 }
@@ -1207,44 +1285,7 @@ static gaddr unflatten_data(const uint8_t *data, uint32_t len);
 /* Build an event delivered to the app as an AppleEvent descriptor. */
 static void build_event(const pending_ae *e, gaddr desc)
 {
-    if (e->flat) {
-        set_desc(desc, T("aevt"), unflatten_data(e->flat, e->flatlen));
-        return;
-    }
-    gaddr h = new_container(true);
-    set_desc(desc, T("aevt"), h);
-    uint32_t cls = __builtin_bswap32(e->cls), id = __builtin_bswap32(e->id), finder = __builtin_bswap32(T("MACS"));
-    uint16_t source = __builtin_bswap16((uint16_t)e->source), rtid = 0;
-    append_entry(h, true, T("evcl"), T("type"), 0, 4, &cls);
-    append_entry(h, true, T("evid"), T("type"), 0, 4, &id);
-    append_entry(h, true, T("addr"), T("sign"), 0, 4, &finder); /* from the Finder, as it were */
-    append_entry(h, true, T("rtid"), T("shor"), 0, 2, &rtid);
-    append_entry(h, true, T("esrc"), T("shor"), 0, 2, &source);
-    if (e->nfiles) {
-        /* Direct object: a list of FSSpecs. */
-        gaddr list = new_container(false);
-        gaddr spec = tb_NewPtr(FSSpec_SIZEOF, false, true);
-        for (int i = 0; i < e->nfiles; i++) {
-            fm_grant(e->files[i], false); /* documents the user opened */
-            fm_spec_for_path(e->files[i], spec);
-            append_entry(list, false, 0, T("fss "), spec, FSSpec_SIZEOF, NULL);
-        }
-        tb_DisposePtr(spec);
-        int32_t n = tb_GetHandleSize(list);
-        tb_HLock(list);
-        append_entry(h, false, T("----"), T("list"), rd32(list), (uint32_t)n, NULL);
-        tb_DisposeHandle(list);
-    } else if (e->text) {
-        /* Direct object: the script, MacRoman with Mac line ends. */
-        size_t n = strlen(e->text);
-        uint8_t *mac = malloc(n + 1);
-        size_t m = utf8_to_macroman(e->text, mac, n + 1);
-        for (size_t i = 0; i < m; i++)
-            if (mac[i] == '\n')
-                mac[i] = '\r';
-        append_entry(h, false, T("----"), T("TEXT"), 0, (uint32_t)m, mac);
-        free(mac);
-    }
+    set_desc(desc, T("aevt"), unflatten_data(e->flat, e->flatlen));
 }
 
 int16_t tb_AEProcessAppleEvent(gaddr evt)
@@ -1253,12 +1294,12 @@ int16_t tb_AEProcessAppleEvent(gaddr evt)
     pending_ae e = current;
     memset(&current, 0, sizeof current);
     pthread_mutex_unlock(&lock);
-    if (!e.cls && !e.flat)
+    if (!e.flat)
         return errAEEventNotHandled;
     gaddr event = tb_NewPtr(AEDesc_SIZEOF, false, true), reply = tb_NewPtr(AEDesc_SIZEOF, false, true);
     build_event(&e, event);
-    /* Another process says in the event whether it wants the reply. */
-    bool wanted = e.reply != NULL && (!e.flat || attr_long(event, T("repq")) != 0);
+    /* The sender says in the event whether it wants the reply. */
+    bool wanted = e.reply != NULL && (attr_long(event, T("repq")) >> 24) != 0;
     make_reply(event, reply, wanted);
     int16_t result = receive(event, reply, e.reply, e.reply_ctx);
     e.reply = NULL; /* answered, or waiting in the suspended list */
@@ -1675,16 +1716,6 @@ static int16_t finder_event(gaddr evt)
     return err;
 }
 
-/* Another Blue Box process (aem_remote.c): the event, flattened, to the
- * process the address names; with kAEWaitReply, its reply (flattened) or
- * an error.  procNotFound when nothing there takes events. */
-__attribute__((weak)) int16_t aem_remote_send(const uint8_t *addr, uint32_t addr_type, uint32_t addr_len,
-                                              const uint8_t *event, uint32_t len, int mode, int32_t timeout,
-                                              uint8_t **reply, uint32_t *reply_len)
-{
-    return -600; /* procNotFound */
-}
-
 static int16_t send_to_self(gaddr evt, gaddr reply, int32_t send_mode)
 {
     int mode = send_mode & 3;
@@ -1742,11 +1773,10 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
     uint32_t answer_len = 0;
     int16_t err = aem_remote_send(addr, atype, alen > 64 ? 64 : alen, data, len, mode, timeout, &answer, &answer_len);
     free(data);
-    if (!err && answer && mode == kAEWaitReply && reply) {
+    if (answer && mode == kAEWaitReply && reply) {
         gaddr rh = unflatten_data(answer, answer_len);
         set_desc(reply, T("aevt"), rh);
-    } else if (!err && answer && mode == kAEQueueReply)
-        aem_queue_flat(answer, answer_len, NULL, NULL);
+    }
     free(answer);
     return err;
 }
@@ -1764,20 +1794,6 @@ void aem_reset_handlers(void)
 
 /* ---------------------------------------------------------------------- */
 /* Flattening, for other processes */
-
-static void grow(uint8_t **buf, uint32_t *cap, uint32_t need)
-{
-    if (need <= *cap)
-        return;
-    while (*cap < need)
-        *cap = *cap ? *cap * 2 : 256;
-    *buf = realloc(*buf, *cap);
-}
-
-static void put32(uint8_t *p, uint32_t v)
-{
-    p[0] = (uint8_t)(v >> 24), p[1] = (uint8_t)(v >> 16), p[2] = (uint8_t)(v >> 8), p[3] = (uint8_t)v;
-}
 
 /* Data at p (len bytes) flattened onto buf at *n.  Lists and records
  * recurse; FSSpecs and aliases become host paths. */
@@ -1874,6 +1890,7 @@ static void unflatten_into(gaddr h, const uint8_t *p, uint32_t len)
                 memcpy(path, data + 4, plen);
                 path[plen] = 0;
                 type = rd32be(data);
+                fm_grant(path, false); /* documents named by the user or another program */
                 gaddr spec = tb_NewPtr(FSSpec_SIZEOF, false, true);
                 fm_spec_for_path(path, spec);
                 gaddr ah = tb_NewPtr(4, false, true);
@@ -2021,7 +2038,7 @@ int16_t tb_AcceptHighLevelEvent(gaddr sender_id_return, gaddr refcon_return, gad
     pthread_mutex_lock(&lock);
     pending_ae e = current;
     pthread_mutex_unlock(&lock);
-    if (!e.cls && !e.flat)
+    if (!e.flat)
         return -615; /* noOutstandingHLE */
     if (refcon_return)
         wr32(refcon_return, 0);
