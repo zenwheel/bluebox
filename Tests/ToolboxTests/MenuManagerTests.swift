@@ -50,6 +50,19 @@ extension BlueBox {
             #expect(Self.launched.count == 1 && Self.launched[0].hasSuffix("Apple Menu Items/Puzzle"))
         }
 
+        /// A program that never calls InitMenus (Test Drive II) gets an
+        /// empty menu list from its first InsertMenu, not writes through nil.
+        @Test func insertMenuWithoutInitMenus() {
+            launchTestApp()
+            _ = initToolbox()
+            wr32(UInt32(LM_MenuList), 0)
+            let low = rd32(0x10)
+            let m = tb_NewMenu(300, pstr("Game"))
+            tb_InsertMenu(m, 0)
+            #expect(rd32(UInt32(LM_MenuList)) != 0 && tb_GetMenuHandle(300) == m)
+            #expect(rd32(0x10) == low)
+        }
+
         @Test func insertDeleteAndStyle() {
             launchTestApp()
             _ = initToolbox()

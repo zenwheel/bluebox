@@ -607,6 +607,15 @@ void tb_InsertMenu(gaddr mh, int16_t before)
         return;
     display_menus_changed();
     gaddr l = mlist();
+    if (!l) {
+        /* A program that never called InitMenus (Test Drive II): the empty
+         * list each application had at launch, which this used to write
+         * through a nil handle into low memory and the program's code. */
+        l = tb_NewHandle(6 + 6, true, true);
+        if (!l)
+            return;
+        wr32(LM_MenuList, l);
+    }
     int n = nmenus();
     int16_t id = MenuInfo_menuID(menu_ptr(mh));
     for (int i = 0; i < n; i++)
@@ -630,6 +639,8 @@ void tb_InsertMenu(gaddr mh, int16_t before)
         }
     int32_t size = tb_GetHandleSize(l);
     tb_SetHandleSize(l, size + 6);
+    if (tb_GetHandleSize(l) != size + 6)
+        return; /* no room: the list stays as it was */
     gaddr p = rd32(l);
     uint32_t at = 6 + (uint32_t)pos * 6;
     gmemcpy(p + at + 6, p + at, (uint32_t)size - at);
