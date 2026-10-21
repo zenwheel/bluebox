@@ -138,6 +138,52 @@ extension BlueBox {
             #expect(rd32(out) != 0 && rd32(out) == rd32(best))
         }
 
+        /// Alternate buffers are GWorlds of the context's depth; a blit
+        /// between them with a source key leaves the keyed pixels alone.
+        @Test func altBuffersAndKeyedBlits() {
+            launchTestApp()
+            _ = initToolbox()
+            let attrs = tb_NewPtr(72, false, true), ctxp = tb_NewPtr(4, false, true)
+            wr32(attrs + 4, 64)
+            wr32(attrs + 8, 32)
+            wr32(attrs + 32, 8) // backBufferDepthMask: 8 bits
+            func call(_ name: String, _ args: [UInt32]) -> UInt32 {
+                for (i, a) in args.enumerated() {
+                    withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+                }
+                cfm_export_fn(name)!(&g_ppc)
+                return g_ppc.gpr.3
+            }
+            #expect(call("DSpStartup", []) == 0)
+            #expect(call("DSpFindBestContext", [attrs, ctxp]) == 0)
+            let ctx = rd32(ctxp)
+            #expect(call("DSpContext_Reserve", [ctx, attrs]) == 0)
+            let altp = tb_NewPtr(4, false, true), portp = tb_NewPtr(8, false, true)
+            #expect(call("DSpAltBuffer_New", [ctx, 0, 0, altp]) == 0)
+            #expect(call("DSpAltBuffer_GetCGrafPtr", [rd32(altp), 0, portp, portp + 4]) == 0)
+            let alt = rd32(portp)
+            #expect(call("DSpContext_GetBackBuffer", [ctx, 0, portp]) == 0)
+            let back = rd32(portp)
+            func pixels(_ port: UInt32) -> UInt32 { // the first row's address
+                let pm = rd32(rd32(port + UInt32(CGrafPort_portPixMap_off)))
+                #expect(rd16(pm + UInt32(PixMap_pixelSize_off)) == 8)
+                return rd32(pm)
+            }
+            let ab = pixels(alt), bb = pixels(back)
+            for x in 0..<4 { wr8(ab + UInt32(x), x == 1 ? 0 : 7) } // pixel 1 is the key
+            for x in 0..<4 { wr8(bb + UInt32(x), 3) }
+            let info = tb_NewPtr(68, false, true)
+            wr32(info + 12, alt)
+            wr16(info + 22, 4); wr16(info + 20, 1) // srcRect 0,0,1,4
+            wr32(info + 24, 0)                     // srcKey 0
+            wr32(info + 32, back)
+            wr16(info + 42, 4); wr16(info + 40, 1) // dstRect 0,0,1,4
+            wr32(info + 48, 1)                     // kDSpBlitMode_SrcKey
+            #expect(call("DSpBlit_Fastest", [info, 0]) == 0)
+            #expect((0..<4).map { rd8(bb + UInt32($0)) } == [7, 3, 7, 7] && rd8(info) == 1)
+            #expect(call("DSpContext_Release", [ctx]) == 0)
+        }
+
         nonisolated(unsafe) static var timingFlags: [UInt32] = []
 
         /// The Display Manager's mode entries carry a VDTimingInfoRec whose
