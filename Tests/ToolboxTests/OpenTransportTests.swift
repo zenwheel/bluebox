@@ -83,6 +83,49 @@ extension BlueBox {
             #expect(ot("OTCloseProvider", ep) == 0)
         }
 
+        /// A connection the server closes, read without blocking by a
+        /// program with a notifier: the read that finds the end has no data
+        /// until the notifier has been told T_ORDREL, then kOTLookErr and
+        /// T_ORDREL (Internet Explorer 3 took an early kOTLookErr as the
+        /// page failing to load).
+        @Test func releaseToldBeforeLookError() {
+            launchTestApp()
+            let (lfd, port) = listener()
+            defer { close(lfd) }
+            let e = tb_NewPtr(4, false, true)
+            let ep = ot("OTOpenEndpoint", ot("OTCreateConfiguration", cstr("tcp")), 0, 0, e)
+            #expect(rd32(e) == 0 && ep != 0)
+            // A PowerPC notifier that only returns: blr, through a transition vector.
+            let code = tb_NewPtr(4, false, true), tv = tb_NewPtr(8, false, true)
+            wr32(code, 0x4E80_0020)
+            wr32(tv, code)
+            #expect(ot("OTSetBlocking", ep) == 0)
+            #expect(ot("OTBind", ep, 0, 0) == 0)
+            let dns = tb_NewPtr(260, false, true)
+            let len = ot("OTInitDNSAddress", dns, cstr("127.0.0.1:\(port)"))
+            let call = tb_NewPtr(40, false, true)
+            wr32(call + 0, len); wr32(call + 4, len); wr32(call + 8, dns)
+            #expect(ot("OTConnect", ep, call, 0) == 0)
+            let conn = accept(lfd, nil, nil)
+            #expect(conn >= 0)
+            _ = "page".withCString { send(conn, $0, 4, 0) }
+            close(conn)
+            usleep(50_000)
+            #expect(ot("OTSetNonBlocking", ep) == 0)
+            opentransport_poll() // the connection's own events, before the notifier
+            #expect(ot("OTInstallNotifier", ep, tv, 0) == 0)
+            let buf = tb_NewPtr(64, false, true), flags = tb_NewPtr(4, false, true)
+            #expect(ot("OTRcv", ep, buf, 64, flags) == 4)
+            #expect(Int32(bitPattern: ot("OTRcv", ep, buf, 64, flags)) == -3162) // kOTNoDataErr: not told yet
+            #expect(Int32(bitPattern: ot("OTRcv", ep, buf, 64, flags)) == -3162)
+            opentransport_poll() // the notifier hears T_ORDREL
+            g_cpu!.pointee.halted = false // (the stub notifier has nowhere to return to here)
+            #expect(Int32(bitPattern: ot("OTRcv", ep, buf, 64, flags)) == -3158) // kOTLookErr
+            #expect(ot("OTLook", ep) == 0x80) // T_ORDREL
+            #expect(ot("OTRcvOrderlyDisconnect", ep) == 0)
+            #expect(ot("OTCloseProvider", ep) == 0)
+        }
+
         /// The run's own Gestalt answers (--gestalt) stand over the ones a
         /// PowerPC program is given (Spades Deluxe 2.0 wants Mac OS 8.1).
         @Test func gestaltOverrideKeptForPowerPC() {

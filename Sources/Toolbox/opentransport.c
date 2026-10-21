@@ -135,6 +135,8 @@ void ot_post(provider *p, uint32_t code, int32_t result, gaddr cookie)
 
 static void call_notifier(provider *p, uint32_t code, int32_t result, gaddr cookie)
 {
+    if (code == T_ORDREL)
+        p->heard_ordrel = true;
     if (code != kOTSyncIdleEvent)
         LOGF(LOG_TRAPS, "OT: notifier %d event %08X result %d cookie %08X\n", (int)(p - providers), code, result, cookie);
     /* void (*OTNotifyProcPtr)(void *contextPtr, OTEventCode, OTResult, void *cookie) */
@@ -817,6 +819,21 @@ static void ot_Rcv(ppc_cpu *c)
         }
         if (r == 0) {
             p->eof = true;
+            /* Found here before the notifier heard of it: Open Transport
+             * would have told it T_ORDREL as the release came in, and an
+             * asynchronous program takes kOTLookErr before that as the
+             * connection failing (Internet Explorer 3 reports pages as not
+             * loaded).  So the release is told, and until the notifier has
+             * had it the call just has no data. */
+            if (p->notifier && !p->heard_ordrel && !(p->blocking && !p->async)) {
+                if (!p->told_ordrel) {
+                    p->told_ordrel = true;
+                    ot_post(p, T_ORDREL, 0, 0);
+                }
+                p->told_data = false;
+                RETURN((uint32_t)kOTNoDataErr);
+                return;
+            }
             RETURN((uint32_t)kOTLookErr); /* T_ORDREL */
             return;
         }
@@ -898,7 +915,7 @@ static void ot_SndDisconnect(ppc_cpu *c)
     p->fd = make_socket(p->kind);
     p->state = T_IDLE;
     p->connecting = p->connected = p->eof = p->disconnected = false;
-    p->told_connect = p->told_data = p->told_ordrel = p->told_disc = false;
+    p->told_connect = p->told_data = p->told_ordrel = p->told_disc = p->heard_ordrel = false;
     ot_complete(c, p, T_DISCONNECTCOMPLETE, kOTNoError, R(1));
 }
 
@@ -917,7 +934,7 @@ static void ot_RcvDisconnect(ppc_cpu *c)
     p->fd = make_socket(p->kind);
     p->state = T_IDLE;
     p->connecting = p->connected = p->eof = p->disconnected = false;
-    p->told_connect = p->told_data = p->told_ordrel = p->told_disc = false;
+    p->told_connect = p->told_data = p->told_ordrel = p->told_disc = p->heard_ordrel = false;
     RETURN(kOTNoError);
 }
 

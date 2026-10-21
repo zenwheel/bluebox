@@ -70,6 +70,7 @@ typedef struct {
     bool connecting;     /* a connect in progress */
     bool connected;      /* it finished: T_CONNECT until OTRcvConnect */
     bool told_connect, told_data, told_ordrel, told_disc, told_listen, flow;
+    bool heard_ordrel; /* the notifier has had T_ORDREL */
     bool eof;            /* the other end released */
     bool disconnected;   /* reset or refused: T_DISCONNECT until OTRcvDisconnect */
     int disc_reason;
