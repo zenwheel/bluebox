@@ -38,6 +38,7 @@ enum {
 /* The one context, in guest memory so it has an address to hand out:
  * the attributes reserved, then our own fields. */
 static gaddr ctx;
+static int depth_before; /* the screen's depth before a context changed it */
 #define CTX_STATE (ATTR_SIZE + 0)    /* word */
 #define CTX_RESERVED (ATTR_SIZE + 2) /* byte */
 #define CTX_WINDOW (ATTR_SIZE + 4)   /* the front buffer's window */
@@ -173,8 +174,14 @@ static void dsp_Reserve(ppc_cpu *c)
     wr8(ctx + CTX_RESERVED, 1);
     wr16(ctx + CTX_STATE, kDSpContextState_Inactive);
     display_want_screen("it uses DrawSprocket");
-    wr16(ctx + CTX_LEFT, (uint16_t)((g_screen_width - (int)w) / 2));
-    wr16(ctx + CTX_TOP, (uint16_t)((g_screen_height - (int)h) / 2));
+    /* As DrawSprocket set the display to the context's depth (and size,
+     * which ours keeps): games write to the screen's memory themselves,
+     * from its top left (Star Wars DroidWorks), so the display is there. */
+    if (!depth_before)
+        depth_before = qd_screen_depth();
+    qd_screen_set_depth(depth);
+    wr16(ctx + CTX_LEFT, 0);
+    wr16(ctx + CTX_TOP, 0);
 
     /* The back buffer: a GWorld of that size and depth. */
     gaddr r = tb_NewPtr(8, true, true), gwp = tb_NewPtr(4, true, true);
@@ -238,6 +245,9 @@ static void dsp_GetState(ppc_cpu *c)
 static void dsp_Release(ppc_cpu *c)
 {
     if (is_context(R(0))) {
+        if (depth_before)
+            qd_screen_set_depth(depth_before);
+        depth_before = 0;
         if (rd32(ctx + CTX_WINDOW)) {
             tb_DisposeWindow(rd32(ctx + CTX_WINDOW));
             wm_hide_menu_bar(false);
@@ -292,11 +302,126 @@ static void swap(void)
     tb_DisposePtr(saved_port);
     tb_DisposePtr(r);
 }
+/* Alternate buffers: GWorlds the context's size and depth, with its
+ * colours.  The underlay is the one the back buffer is restored from: the
+ * rectangles invalidated since the last swap, after each swap. */
+enum { ALT_MAGIC = 0x616C7462 /* 'altb' */, ALT_GWORLD = 4, ALT_SIZE = 8 };
+static gaddr underlay;
+static qrect dirty;
+
+static bool is_alt(gaddr a) { return a && rd32(a) == ALT_MAGIC; }
+
+static void copy_rect(gaddr from, gaddr to, qrect q)
+{
+    gaddr r = tb_NewPtr(8, true, true);
+    qrect_put(r, q);
+    gaddr saved = tb_NewPtr(8, false, true);
+    tb_GetGWorld(saved, saved + 4);
+    tb_SetGWorld(to, 0);
+    tb_CopyBits(from + CGrafPort_portPixMap_off, to + CGrafPort_portPixMap_off, r, r, 0 /* srcCopy */, 0);
+    tb_SetGWorld(rd32(saved), rd32(saved + 4));
+    tb_DisposePtr(saved);
+    tb_DisposePtr(r);
+}
+
 static void dsp_SwapBuffers(ppc_cpu *c)
 {
-    if (is_context(R(0)))
+    if (is_context(R(0))) {
         swap();
+        gaddr back = rd32(ctx + CTX_GWORLD);
+        if (is_alt(underlay) && back && dirty.bottom > dirty.top && dirty.right > dirty.left)
+            copy_rect(rd32(underlay + ALT_GWORLD), back, dirty);
+        dirty = (qrect){ 0, 0, 0, 0 };
+    }
     RETURN(0);
+}
+
+/* DSpContext_InvalBackBufferRect(context, rect) */
+static void dsp_InvalBackBufferRect(ppc_cpu *c)
+{
+    if (!is_context(R(0)))
+        RETURN(kDSpInvalidContextErr);
+    else {
+        qrect q = qrect_get(R(1));
+        if (dirty.bottom <= dirty.top || dirty.right <= dirty.left)
+            dirty = q;
+        else
+            dirty = (qrect){ q.top < dirty.top ? q.top : dirty.top, q.left < dirty.left ? q.left : dirty.left,
+                             q.bottom > dirty.bottom ? q.bottom : dirty.bottom,
+                             q.right > dirty.right ? q.right : dirty.right };
+        RETURN(0);
+    }
+}
+
+/* DSpAltBuffer_New(context, inVRAM, attributes, &altBuffer) */
+static void dsp_AltBufferNew(ppc_cpu *c)
+{
+    gaddr back = is_context(R(0)) ? rd32(ctx + CTX_GWORLD) : 0;
+    if (!back || !R(3))
+        RETURN(is_context(R(0)) ? kDSpContextNotReservedErr : kDSpInvalidContextErr);
+    else {
+        gaddr pmh = rd32(back + CGrafPort_portPixMap_off);
+        gaddr pm = rd32(pmh);
+        int depth = (int16_t)rd16(pm + PixMap_pixelSize_off);
+        gaddr ctab = depth <= 8 ? rd32(pm + PixMap_pmTable_off) : 0;
+        gaddr r = tb_NewPtr(8, true, true), gwp = tb_NewPtr(4, true, true);
+        wr16(r + 4, (uint16_t)rd32(ctx + 8));
+        wr16(r + 6, (uint16_t)rd32(ctx + 4));
+        int16_t err = tb_NewGWorld(gwp, (int16_t)depth, r, ctab, 0, 0);
+        gaddr alt = err ? 0 : tb_NewPtr(ALT_SIZE, true, true);
+        if (alt) {
+            wr32(alt, ALT_MAGIC);
+            wr32(alt + ALT_GWORLD, rd32(gwp));
+        }
+        wr32(R(3), alt);
+        tb_DisposePtr(r);
+        tb_DisposePtr(gwp);
+        RETURN(err ? err : alt ? 0 : memFullErr);
+    }
+}
+
+static void dsp_AltBufferDispose(ppc_cpu *c)
+{
+    gaddr alt = R(0);
+    if (!is_alt(alt))
+        RETURN(paramErr);
+    else {
+        if (underlay == alt)
+            underlay = 0;
+        tb_DisposeGWorld(rd32(alt + ALT_GWORLD));
+        wr32(alt, 0);
+        tb_DisposePtr(alt);
+        RETURN(0);
+    }
+}
+
+/* DSpAltBuffer_GetCGrafPtr(altBuffer, bufferKind, &port, &device) */
+static void dsp_AltBufferGetCGrafPtr(ppc_cpu *c)
+{
+    gaddr alt = R(0);
+    if (!is_alt(alt))
+        RETURN(paramErr);
+    else {
+        gaddr gw = rd32(alt + ALT_GWORLD);
+        if (R(2))
+            wr32(R(2), gw);
+        if (R(3))
+            wr32(R(3), tb_GetGWorldDevice(gw));
+        RETURN(0);
+    }
+}
+
+static void dsp_SetUnderlayAltBuffer(ppc_cpu *c)
+{
+    underlay = is_alt(R(1)) ? R(1) : 0;
+    RETURN(is_context(R(0)) ? 0 : kDSpInvalidContextErr);
+}
+
+static void dsp_GetUnderlayAltBuffer(ppc_cpu *c)
+{
+    if (R(1))
+        wr32(R(1), underlay);
+    RETURN(is_context(R(0)) ? 0 : kDSpInvalidContextErr);
 }
 
 /* DSpContext_SetCLUTEntries(context, entries, start, count) */
@@ -428,10 +553,10 @@ static void dsp_GetDirtyRectGridSize(ppc_cpu *c)
 static void dsp_unsupported(ppc_cpu *c) { RETURN(-30450); } /* kDSpFeatureNotImplementedErr */
 
 const ppc_export dsp_exports[] = {
-    { "DSpAltBuffer_Dispose", dsp_noErr },
-    { "DSpAltBuffer_GetCGrafPtr", dsp_unsupported },
+    { "DSpAltBuffer_Dispose", dsp_AltBufferDispose },
+    { "DSpAltBuffer_GetCGrafPtr", dsp_AltBufferGetCGrafPtr },
     { "DSpAltBuffer_InvalRect", dsp_noErr },
-    { "DSpAltBuffer_New", dsp_unsupported },
+    { "DSpAltBuffer_New", dsp_AltBufferNew },
     { "DSpBlit_Faster", dsp_unsupported },
     { "DSpBlit_Fastest", dsp_unsupported },
     { "DSpContext_Dispose", dsp_noErr },
@@ -439,11 +564,11 @@ const ppc_export dsp_exports[] = {
     { "DSpContext_GetDirtyRectGridSize", dsp_GetDirtyRectGridSize },
     { "DSpContext_GetDirtyRectGridUnits", dsp_GetDirtyRectGridSize },
     { "DSpContext_GetFlattenedSize", dsp_GetFlattenedSize },
-    { "DSpContext_GetUnderlayAltBuffer", dsp_unsupported },
+    { "DSpContext_GetUnderlayAltBuffer", dsp_GetUnderlayAltBuffer },
     { "DSpContext_Queue", dsp_noErr },
     { "DSpContext_Restore", dsp_Restore },
     { "DSpContext_SetDirtyRectGridSize", dsp_noErr },
-    { "DSpContext_SetUnderlayAltBuffer", dsp_noErr },
+    { "DSpContext_SetUnderlayAltBuffer", dsp_SetUnderlayAltBuffer },
     { "DSpContext_Switch", dsp_noErr },
     { "DSpCanUserSelectContext", dsp_false },
     { "DSpContext_CanUserSelectContext", dsp_false },
@@ -459,7 +584,7 @@ const ppc_export dsp_exports[] = {
     { "DSpContext_GetMonitorFrequency", dsp_GetMonitorFrequency },
     { "DSpContext_GetState", dsp_GetState },
     { "DSpContext_GlobalToLocal", dsp_GlobalToLocal },
-    { "DSpContext_InvalBackBufferRect", dsp_noErr },
+    { "DSpContext_InvalBackBufferRect", dsp_InvalBackBufferRect },
     { "DSpContext_IsBusy", dsp_false },
     { "DSpContext_LocalToGlobal", dsp_LocalToGlobal },
     { "DSpContext_Release", dsp_Release },
