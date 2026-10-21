@@ -115,6 +115,8 @@ uint32_t fm_type_of_path(const char *path);
 /* The application (host path) that opens a document: one with the
  * document's creator, on the disk or in a granted folder. */
 bool fm_app_for_document(const char *doc, char *app, size_t appsize);
+/* The application with a creator, found the same way. */
+bool fm_app_for_creator(uint32_t creator, char *app, size_t appsize);
 /* The System Folder's working directory refnum. */
 int16_t fm_system_vref(void);
 /* The guest FCB table: an access path opened, closed, or resized. */
@@ -232,6 +234,7 @@ size_t intl_default_itl1(uint8_t out[332]);
 
 void notify_pump(void);
 void notify_reset(void);
+void iconservices_reset(void); /* Icon Services (iconservices.c) */
 
 /* ---- Sound Manager ---- */
 

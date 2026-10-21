@@ -99,7 +99,9 @@ void gestalt_init(void)
     gestalt_set(fourcc("fold"), 0x1);         /* Folder Manager (FindFolder) present */
     gestalt_set(fourcc("fs  "), 0x2);         /* FSSpec calls */
     gestalt_set(fourcc("stdf"), 0x1);         /* Standard File 5.8 calls */
-    gestalt_set(fourcc("icon"), 0x1);         /* Icon Utilities present */
+    /* The Icon Utilities, with Icon Services' 48-pixel icons, 32-bit
+     * colour and 8-bit masks, and Icon Services itself (IconServicesLib). */
+    gestalt_set(fourcc("icon"), 0x1F);
     gestalt_set(fourcc("tmgr"), 3);           /* extended Time Manager */
     /* Sound Manager 3: stereo, stereo mixing, the Sound I/O Manager, a
      * built-in sound input device (the host's microphone), playing while

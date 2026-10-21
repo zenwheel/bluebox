@@ -2745,6 +2745,11 @@ bool fm_app_for_document(const char *doc, char *app, size_t appsize)
     if (!sidecar_finfo(doc, fi) && !host_file_type(doc, fi))
         return false;
     uint32_t creator = (uint32_t)fi[4] << 24 | (uint32_t)fi[5] << 16 | (uint32_t)fi[6] << 8 | fi[7];
+    return fm_app_for_creator(creator, app, appsize);
+}
+
+bool fm_app_for_creator(uint32_t creator, char *app, size_t appsize)
+{
     if (!creator)
         return false;
     find_appls();
