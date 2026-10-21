@@ -21,7 +21,8 @@ func isWireless(_ name: String) -> Bool {
 /// Per-application settings kept in the library (Settings.json), keyed by
 /// the application's file name.  `bluebox run` applies them unless the
 /// command line says otherwise; installed bundles run through it too.
-/// The cpu setting that means a fat application runs its PowerPC code.
+/// The cpu setting that means a fat application runs its PowerPC code (as it
+/// does without one; 68020 or 68040 runs its 68k code).
 let powerPCSetting = 750
 
 struct AppSettings: Codable {
@@ -42,7 +43,7 @@ struct AppSettings: Codable {
     }
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), "
-            + "cpu \(cpu.map { $0 == powerPCSetting ? "ppc" : String($0) } ?? "default (68040)"), "
+            + "cpu \(cpu.map { $0 == powerPCSetting ? "ppc" : String($0) } ?? "default (ppc if fat, else 68040)"), "
             + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
             + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)"), "
             + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
