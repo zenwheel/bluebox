@@ -35,6 +35,10 @@ uint32_t ev_mouse_global(void);
 void ev_wait_tick(void);
 
 static gaddr te(gaddr teh) { return rd32(teh); }
+/* A TEHandle a call can use: programs pass nil ones (Mac OS Setup
+ * Assistant's TECalText), which on a Mac read low memory as a record;
+ * here the call does nothing. */
+static bool te_ok(gaddr teh) { return teh && rd32(teh); }
 static int16_t te16(gaddr teh, uint32_t off) { return (int16_t)rd16(te(teh) + off); }
 static void set16(gaddr teh, uint32_t off, int16_t v) { wr16(te(teh) + off, (uint16_t)v); }
 static int text_len(gaddr teh) { return te16(teh, TERec_teLength_off); }
@@ -291,6 +295,8 @@ static void fix_runs_end(gaddr teh)
 
 void tb_TECalText(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     /* Apps may replace the text by resizing hText; its size is the length. */
     int32_t hsize = tb_GetHandleSize(TERec_hText(te(teh)));
     set16(teh, TERec_teLength_off, (int16_t)(hsize > 32767 ? 32767 : hsize));
@@ -405,6 +411,8 @@ static int offset_point(gaddr teh, int offset, int *h, int *v)
 
 int16_t tb_TEGetOffset(uint32_t pt, gaddr teh)
 {
+    if (!te_ok(teh))
+        return 0;
     port_state s = enter(teh);
     qrect dest = qrect_get(te(teh) + TERec_destRect_off);
     int n = nlines(teh), len = text_len(teh);
@@ -439,6 +447,8 @@ int16_t tb_TEGetOffset(uint32_t pt, gaddr teh)
 
 int32_t tb_TEGetPoint(int16_t offset, gaddr teh)
 {
+    if (!te_ok(teh))
+        return 0;
     port_state s = enter(teh);
     int h, v;
     int line = offset_point(teh, offset, &h, &v);
@@ -508,6 +518,8 @@ static void invert_range(gaddr teh, int a, int b)
  * programs test clicks against to start dragging the selection. */
 int16_t tb_TEGetHiliteRgn(gaddr region, gaddr teh)
 {
+    if (!te_ok(teh))
+        return 0;
     if (!region || !teh)
         return paramErr;
     port_state s = enter(teh);
@@ -610,6 +622,8 @@ static void draw_lines(gaddr teh, qrect area)
 
 void tb_TEUpdate(gaddr r, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     port_state s = enter(teh);
     gaddr clip;
     clip_to_view(teh, &clip);
@@ -631,6 +645,8 @@ static void redraw(gaddr teh)
 
 void tb_TEIdle(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (!te16(teh, TERec_active_off) || te16(teh, TERec_selStart_off) != te16(teh, TERec_selEnd_off))
         return;
     /* caretTime is when the caret next blinks; apps sleep until then. */
@@ -917,6 +933,8 @@ gaddr tb_TEStyleNew(gaddr dst, gaddr view)
 
 void tb_TEDispose(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     tb_TEAutoView(0, teh);
     if (styled(teh)) {
         gaddr sh = rd32(te(teh) + TERec_txFont_off), sr = rd32(sh);
@@ -935,6 +953,8 @@ void tb_TEDispose(gaddr teh)
 
 void tb_TESetText(gaddr p, int32_t ln, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     gaddr h = TERec_hText(te(teh));
     tb_SetHandleSize(h, ln);
     gmemcpy(rd32(h), p, (uint32_t)ln);
@@ -948,13 +968,15 @@ void tb_TESetText(gaddr p, int32_t ln, gaddr teh)
     tb_TECalText(teh);
 }
 
-gaddr tb_TEGetText(gaddr teh) { return TERec_hText(te(teh)); }
+gaddr tb_TEGetText(gaddr teh) { return te_ok(teh) ? TERec_hText(te(teh)) : 0; }
 
 /* ---------------------------------------------------------------------- */
 /* Selection and activation */
 
 void tb_TESetSelect(int32_t start, int32_t stop, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     int len = text_len(teh);
     if (start < 0)
         start = 0;
@@ -988,6 +1010,8 @@ void tb_TESetSelect(int32_t start, int32_t stop, gaddr teh)
 
 void tb_TEActivate(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (te16(teh, TERec_active_off))
         return;
     set16(teh, TERec_active_off, 1);
@@ -1002,6 +1026,8 @@ void tb_TEActivate(gaddr teh)
 
 void tb_TEDeactivate(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (!te16(teh, TERec_active_off))
         return;
     port_state s = enter(teh);
@@ -1074,6 +1100,8 @@ static void edit(gaddr teh, const uint8_t *bytes, int n)
 
 void tb_TEKey(int16_t thec, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     uint8_t c = (uint8_t)thec;
     int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
     int len = text_len(teh);
@@ -1114,6 +1142,8 @@ void tb_TEKey(int16_t thec, gaddr teh)
 
 void tb_TEInsert(gaddr p, int32_t ln, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     uint8_t *buf = malloc(ln > 0 ? (size_t)ln : 1);
     gget(buf, p, (uint32_t)(ln > 0 ? ln : 0));
     int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
@@ -1126,6 +1156,8 @@ void tb_TEInsert(gaddr p, int32_t ln, gaddr teh)
 
 void tb_TEDelete(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (te16(teh, TERec_selStart_off) != te16(teh, TERec_selEnd_off))
         edit(teh, NULL, 0);
 }
@@ -1160,6 +1192,8 @@ static void copy_styles_to_desk(gaddr teh)
 
 void tb_TECopy(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
     gaddr h = scrap_handle();
     tb_SetHandleSize(h, b - a);
@@ -1171,12 +1205,16 @@ void tb_TECopy(gaddr teh)
 
 void tb_TECut(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     tb_TECopy(teh);
     tb_TEDelete(teh);
 }
 
 void tb_TEPaste(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     gaddr h = scrap_handle();
     int n = (int16_t)rd16(LM_TEScrpLength);
     uint8_t *buf = malloc(n > 0 ? (size_t)n : 1);
@@ -1220,6 +1258,8 @@ int16_t tb_TEToScrap(void)
 
 void tb_TEClick(uint32_t p, int8_t ext, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     int16_t anchor = ext ? te16(teh, TERec_selStart_off) : tb_TEGetOffset(p, teh);
     int16_t off = tb_TEGetOffset(p, teh);
     /* Double-click selects a word. */
@@ -1259,6 +1299,8 @@ void tb_TEClick(uint32_t p, int8_t ext, gaddr teh)
 
 void tb_TEScroll(int16_t dh, int16_t dv, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (!dh && !dv)
         return;
     gaddr t = te(teh);
@@ -1273,6 +1315,8 @@ void tb_TEScroll(int16_t dh, int16_t dv, gaddr teh)
 
 void tb_TEPinScroll(int16_t dh, int16_t dv, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     /* Do not scroll past the last line. */
     qrect d = qrect_get(te(teh) + TERec_destRect_off), v = qrect_get(te(teh) + TERec_viewRect_off);
     int bottom = d.top + line_top(teh, nlines(teh));
@@ -1298,6 +1342,8 @@ static int auto_view_slot(gaddr teh)
 
 void tb_TEAutoView(int8_t autoflag, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     int i = auto_view_slot(teh);
     if (!autoflag && i >= 0)
         auto_view[i] = 0;
@@ -1307,6 +1353,8 @@ void tb_TEAutoView(int8_t autoflag, gaddr teh)
 
 void tb_TESelView(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (!teh || auto_view_slot(teh) < 0)
         return;
     port_state s = enter(teh);
@@ -1322,7 +1370,11 @@ void tb_TESelView(gaddr teh)
 }
 
 /* As in the ROM, the text isn't redrawn: the caller updates it. */
-void tb_TESetAlignment(int16_t j, gaddr teh) { set16(teh, TERec_just_off, j); }
+void tb_TESetAlignment(int16_t j, gaddr teh)
+{
+    if (te_ok(teh))
+        set16(teh, TERec_just_off, j);
+}
 
 void tb_TETextBox(gaddr p, int32_t ln, gaddr r, int16_t j)
 {
@@ -1337,6 +1389,8 @@ void tb_TETextBox(gaddr p, int32_t ln, gaddr r, int16_t j)
 /* teFAutoScroll (0) is TEAutoView's flag; the others are not kept. */
 int16_t tb_TEFeatureFlag(int16_t feature, int16_t action, gaddr t)
 {
+    if (!te_ok(t))
+        return 0;
     if (feature != 0)
         return 0;
     int16_t was = auto_view_slot(t) >= 0;
@@ -1471,11 +1525,15 @@ static void apply_style(gaddr teh, int mode, gaddr ns, bool draw, gaddr match)
 
 void tb_TESetStyle(int16_t mode, gaddr newStyle, int8_t redraw_now, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     apply_style(teh, mode, newStyle, redraw_now, 0);
 }
 
 void tb_TEReplaceStyle(int16_t mode, gaddr oldStyle, gaddr newStyle, int8_t redraw_now, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     apply_style(teh, mode, newStyle, redraw_now, oldStyle);
 }
 
@@ -1483,6 +1541,8 @@ void tb_TEReplaceStyle(int16_t mode, gaddr oldStyle, gaddr newStyle, int8_t redr
  * with its line's height and ascent. */
 void tb_TEGetStyle(int16_t offset, gaddr theStyle, gaddr lineHeight, gaddr fontAscent, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     int len = text_len(teh);
     int at = offset >= len && len > 0 ? len - 1 : offset < 0 ? 0 : offset;
     tstyle st;
@@ -1500,6 +1560,8 @@ void tb_TEGetStyle(int16_t offset, gaddr theStyle, gaddr lineHeight, gaddr fontA
  * selection; those that aren't are taken out of the mode. */
 int8_t tb_TEContinuousStyle(gaddr modep, gaddr thestyle, gaddr teh)
 {
+    if (!te_ok(teh))
+        return 0;
     int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
     int mode = modep ? (int16_t)rd16(modep) : 0;
     tstyle first;
@@ -1535,6 +1597,8 @@ int8_t tb_TEContinuousStyle(gaddr modep, gaddr thestyle, gaddr teh)
 
 int32_t tb_TEGetHeight(int32_t endLine, int32_t startLine, gaddr teh)
 {
+    if (!te_ok(teh))
+        return 0;
     if (endLine < startLine) {
         int32_t t = endLine;
         endLine = startLine;
@@ -1553,6 +1617,8 @@ int32_t tb_TEGetHeight(int32_t endLine, int32_t startLine, gaddr teh)
 
 int32_t tb_TENumStyles(int32_t start, int32_t stop, gaddr teh)
 {
+    if (!te_ok(teh))
+        return 0;
     if (!styled(teh))
         return 1;
     int n = 0;
@@ -1565,6 +1631,8 @@ int32_t tb_TENumStyles(int32_t start, int32_t stop, gaddr teh)
  * start counted from the selection's start. */
 gaddr tb_TEGetStyleScrapHandle(gaddr teh)
 {
+    if (!te_ok(teh))
+        return 0;
     int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
     int first = run_of(teh, a), last = b > a ? run_of(teh, b - 1) : first;
     int n = last - first + 1;
@@ -1591,6 +1659,8 @@ gaddr tb_TEGetStyleScrapHandle(gaddr teh)
 /* A style scrap's styles over [start, stop). */
 void tb_TEUseStyleScrap(int32_t start, int32_t stop, gaddr newstyles, int8_t redraw_now, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (!styled(teh) || !newstyles || !rd32(newstyles))
         return;
     int n = (int16_t)rd16(rd32(newstyles));
@@ -1621,6 +1691,8 @@ void tb_TEUseStyleScrap(int32_t start, int32_t stop, gaddr newstyles, int8_t red
 /* Text inserted before the selection, in a style scrap's styles. */
 void tb_TEStyleInsert(gaddr text, int32_t length, gaddr hST, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     int a = te16(teh, TERec_selStart_off);
     tb_TEInsert(text, length, teh);
     if (hST && styled(teh)) {
@@ -1632,6 +1704,8 @@ void tb_TEStyleInsert(gaddr text, int32_t length, gaddr hST, gaddr teh)
 /* The desk scrap's text with its styl styles, or the TextEdit scrap's. */
 void tb_TEStylePaste(gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (!styled(teh)) {
         tb_TEPaste(teh);
         return;
@@ -1662,10 +1736,12 @@ void tb_TEStylePaste(gaddr teh)
 
 void tb_TECustomHook(int16_t sel, gaddr addr, gaddr teh) {}
 
-gaddr tb_TEGetStyleHandle(gaddr teh) { return styled(teh) ? rd32(te(teh) + TERec_txFont_off) : 0; }
+gaddr tb_TEGetStyleHandle(gaddr teh) { return te_ok(teh) && styled(teh) ? rd32(te(teh) + TERec_txFont_off) : 0; }
 
 void tb_TESetStyleHandle(gaddr theHandle, gaddr teh)
 {
+    if (!te_ok(teh))
+        return;
     if (styled(teh) && theHandle) {
         wr32(te(teh) + TERec_txFont_off, theHandle);
         tb_TECalText(teh);

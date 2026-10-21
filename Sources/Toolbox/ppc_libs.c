@@ -1428,6 +1428,11 @@ static void ic_ICStart(ppc_cpu *c)
     RETURN(0);
 }
 static void ic_prefNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-666); }
+static void ic_FindConfigFile(ppc_cpu *c)
+{
+    ic_make_file();
+    RETURN(0);
+}
 /* The preferences, after the instance in r3: */
 static void ic_GetPref(ppc_cpu *c) { RETURN((uint32_t)(int32_t)ic_get_pref(R(1), R(2), R(3), R(4))); }
 static void ic_SetPref(ppc_cpu *c) { RETURN((uint32_t)(int32_t)ic_set_pref(R(1), R(3), (int32_t)R(4))); }
@@ -2770,8 +2775,8 @@ const ppc_export lib_exports[] = {
     { "FindWordBreaks", g_FindWordBreaks }, { "UppercaseStripDiacritics", g_UppercaseStripDiacritics },
     { "PBControlImmed", g_PBControlImmed },
     /* Internet Config */
-    { "ICStart", ic_ICStart }, { "ICStop", g_noErr }, { "ICFindConfigFile", g_noErr },
-    { "ICFindUserConfigFile", g_noErr }, { "ICGeneralFindConfigFile", g_noErr }, { "ICChooseConfig", g_noErr },
+    { "ICStart", ic_ICStart }, { "ICStop", g_noErr }, { "ICFindConfigFile", ic_FindConfigFile },
+    { "ICFindUserConfigFile", ic_FindConfigFile }, { "ICGeneralFindConfigFile", ic_FindConfigFile }, { "ICChooseConfig", g_noErr },
     { "ICBegin", g_noErr }, { "ICEnd", g_noErr }, { "ICGetPref", ic_GetPref },
     { "ICFindPrefHandle", ic_FindPrefHandle }, { "ICGetPrefHandle", ic_GetPrefHandle },
     { "ICSetPref", ic_SetPref }, { "ICSetPrefHandle", ic_SetPrefHandle }, { "ICCountPref", ic_CountPref },

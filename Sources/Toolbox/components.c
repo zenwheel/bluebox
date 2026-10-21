@@ -701,7 +701,7 @@ static void ic_file_name(gaddr str)
 /* An empty Internet Preferences file (a resource file) in the Preferences
  * folder, or a resource fork for one made without: programs open it
  * themselves and call it damaged when it has none (Internet Explorer). */
-static void ic_make_file(void)
+void ic_make_file(void)
 {
     gaddr tmp = tb_NewPtr(2 + 4 + 64 + FSSpec_SIZEOF, false, true);
     if (!tmp)

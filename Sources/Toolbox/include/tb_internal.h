@@ -93,6 +93,7 @@ bool process_open_url(const char *url);
  * the selection is empty) opened by the host; an Internet Config error. */
 int16_t ic_launch_url(gaddr data, int32_t len, int32_t a, int32_t b);
 /* Internet Config's preferences (components.c), for both CPUs. */
+void ic_make_file(void); /* ICFindConfigFile: the Internet Preferences file, made when missing */
 int16_t ic_get_pref(gaddr key, gaddr attr, gaddr buf, gaddr size);
 int16_t ic_get_pref_handle(gaddr key, gaddr attr, gaddr out, gaddr h);
 int16_t ic_set_pref(gaddr key, gaddr buf, int32_t len);
