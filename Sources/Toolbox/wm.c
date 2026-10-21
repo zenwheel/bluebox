@@ -2165,6 +2165,12 @@ void tb_InitWindows(void)
         tb_OpenPort(wp);
         tb_SetPort(saved);
     }
+    if (rd32(LM_WindowList)) {
+        /* Called again with windows open (Installer 4's licence viewer does
+           this after making its dialog, and goes on drawing in it): the
+           windows, the screen and the current port stay. */
+        return;
+    }
     wr32(LM_WindowList, 0);
     floats_hidden = false;
     float_layer = false;

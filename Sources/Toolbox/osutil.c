@@ -107,7 +107,9 @@ void tb_DebugStr(gaddr p)
 
 static uint32_t table_slot(uint16_t n, bool newTraps, bool tool)
 {
-    if (!newTraps) {
+    if (!newTraps && (n & 0xF000) == 0xA000) {
+        tool = (n & 0x0800) != 0; /* a whole trap word says which table */
+    } else if (!newTraps) {
         n &= 0x1FF;
         tool = n > 0x4F && n != 0x54 && n != 0x57;
     }
