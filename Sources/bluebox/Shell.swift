@@ -142,11 +142,20 @@ struct ShellNodeRows: View {
                 .help(app.folder.isEmpty ? app.name : app.folder + "/" + app.name)
                 .tag(ShellItem.app(app))
             } else {
+                // While searching, folders start open and close for this
+                // search only: the outline must always be told what it shows
+                // (refusing a collapse left it collapsing rows SwiftUI still
+                // had open, and the shell crashed).
                 DisclosureGroup(isExpanded: Binding(
-                    get: { searching || model.expanded.contains(node.id) },
+                    get: { searching ? !model.searchCollapsed.contains(node.id) : model.expanded.contains(node.id) },
                     set: { open in
-                        guard !searching else { return }
-                        if open { model.expanded.insert(node.id) } else { model.expanded.remove(node.id) }
+                        if searching {
+                            if open { model.searchCollapsed.remove(node.id) } else { model.searchCollapsed.insert(node.id) }
+                        } else if open {
+                            model.expanded.insert(node.id)
+                        } else {
+                            model.expanded.remove(node.id)
+                        }
                     })) {
                     ShellNodeRows(model: model, nodes: node.children ?? [], searching: searching, trashing: $trashing)
                 } label: {
@@ -177,6 +186,8 @@ enum ShellItem: Hashable {
 @MainActor final class ShellModel: ObservableObject {
     @Published var apps: [ShellApp] = []
     /// The sidebar's open folders, kept between runs.
+    /// Folders closed during the current search.
+    @Published var searchCollapsed: Set<String> = []
     @Published var expanded: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "expanded") ?? []) {
         didSet { UserDefaults.standard.set(Array(expanded), forKey: "expanded") }
     }
@@ -485,9 +496,13 @@ struct ShellView: View {
                     Text("No applications match").foregroundStyle(.secondary)
                 }
             }
+            // Searching is a new tree: the outline starts afresh rather than
+            // reconciling rows whose shape changed under it.
+            .id(search.isEmpty ? "all" : "search")
             // The search finds applications by name or folder; the folders
             // leading to them are shown open.
             .searchable(text: $search, placement: .sidebar, prompt: "Search applications")
+            .onChange(of: search) { _ in model.searchCollapsed = [] }
             // Double-clicking an application launches it; its context menu
             // launches it or shows it in the Finder.
             .contextMenu(forSelectionType: ShellItem.self) { items in
