@@ -1429,6 +1429,14 @@ static void ic_ICStart(ppc_cpu *c)
 }
 static void ic_prefNotFound(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-666); }
 
+/* ICLaunchURL(inst, hint, data, len, &selStart, &selEnd) */
+static void ic_LaunchURL(ppc_cpu *c)
+{
+    gaddr ps = R(4), pe = R(5);
+    int32_t len = (int32_t)R(3);
+    RETURN((uint32_t)(int32_t)ic_launch_url(R(2), len, ps ? (int32_t)rd32(ps) : 0, pe ? (int32_t)rd32(pe) : len));
+}
+
 /* The Display Manager: the one screen, which keeps its mode. */
 static void dm_GetFirstScreenDevice(ppc_cpu *c) { RETURN(rd32(LM_DeviceList)); }
 static void dm_GetNextScreenDevice(ppc_cpu *c) { RETURN(R(0) && rd32(R(0)) ? rd32(rd32(R(0)) + 30) : 0); }
@@ -2743,7 +2751,7 @@ const ppc_export lib_exports[] = {
     { "ICBegin", g_noErr }, { "ICEnd", g_noErr }, { "ICGetPref", ic_prefNotFound },
     { "ICFindPrefHandle", ic_prefNotFound }, { "ICGetPrefHandle", ic_prefNotFound },
     { "ICSetPref", g_noErr }, { "ICSetPrefHandle", g_noErr }, { "ICCountPref", g_noErr },
-    { "ICLaunchURL", ic_prefNotFound }, { "ICMapFilename", ic_prefNotFound }, { "ICMapTypeCreator", ic_prefNotFound },
+    { "ICLaunchURL", ic_LaunchURL }, { "ICMapFilename", ic_prefNotFound }, { "ICMapTypeCreator", ic_prefNotFound },
     { "ICGetSeed", g_noErr }, { "ICGetVersion", g_noErr }, { "ICGetConfigName", g_noErr },
     /* Movie controllers */
     { "MCActivate", cc_MCActivate }, { "MCAdjustCursor", cc_MCAdjustCursor }, { "MCClear", cc_MCClear },

@@ -126,6 +126,29 @@ extension BlueBox {
             #expect(ot("OTCloseProvider", ep) == 0)
         }
 
+        nonisolated(unsafe) static var opened: [String] = []
+
+        /// Internet Config's ICLaunchURL hands the selected URL, less its
+        /// "<URL:...>" wrapping, to the host (Skittles 2's home page link).
+        @Test func launchURLGoesToHost() {
+            launchTestApp()
+            Self.opened = []
+            machine_set_url_handler({ u, _ in
+                OpenTransportInet.opened.append(String(cString: u!))
+                return true
+            }, nil)
+            defer { machine_set_url_handler(nil, nil) }
+            let text = "see <URL:http://www.skittles2.com/> now"
+            let data = cstr(text), ps = tb_NewPtr(4, false, true), pe = tb_NewPtr(4, false, true)
+            wr32(ps, 4); wr32(pe, 35)
+            #expect(ot("ICLaunchURL", 0, 0, data, UInt32(text.utf8.count), ps, pe) == 0)
+            wr32(ps, 0); wr32(pe, 0) // no selection: the whole text
+            let bare = cstr("ftp://a.example/"), none = cstr("not a url")
+            #expect(ot("ICLaunchURL", 0, 0, bare, 16, ps, pe) == 0)
+            #expect(Int32(bitPattern: ot("ICLaunchURL", 0, 0, none, 9, ps, pe)) == -673) // icNoURLErr
+            #expect(Self.opened == ["http://www.skittles2.com/", "ftp://a.example/"])
+        }
+
         /// The run's own Gestalt answers (--gestalt) stand over the ones a
         /// PowerPC program is given (Spades Deluxe 2.0 wants Mac OS 8.1).
         @Test func gestaltOverrideKeptForPowerPC() {

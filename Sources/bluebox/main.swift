@@ -682,6 +682,12 @@ func runCommand(_ args: [String]) {
         print("launch: \(String(cString: pathPtr))" + docs.map { " \($0)" }.joined())
         return true
     }, nil)
+    // and a URL is not opened, only reported.
+    machine_set_url_handler({ urlPtr, _ in
+        guard let urlPtr else { return false }
+        print("open URL: \(String(cString: urlPtr))")
+        return true
+    }, nil)
 
     // Guest threads run on host threads of their own; host code they call
     // may wait for the main thread, which runs the machine here.

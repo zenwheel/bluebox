@@ -239,6 +239,17 @@ bool process_launch(const char *app, const char *const *docs, int ndocs)
     return launch_fn && launch_fn(app, docs, ndocs, launch_ctx);
 }
 
+static machine_url_fn url_fn;
+static void *url_ctx;
+
+void machine_set_url_handler(machine_url_fn fn, void *ctx)
+{
+    url_fn = fn;
+    url_ctx = ctx;
+}
+
+bool process_open_url(const char *url) { return url_fn && url_fn(url, url_ctx); }
+
 int16_t tb_LaunchApplication(gaddr pb)
 {
     char path[1024];

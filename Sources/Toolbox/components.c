@@ -537,7 +537,7 @@ enum {
     kICCBegin = 5, kICCGetPref = 6, kICCSetPref = 7, kICCCountPref = 8, kICCGetIndPref = 9, kICCEnd = 10,
     kICCDefaultFileName = 11,
     kICCDeletePref = 12, kICCGetPerm = 13, kICCFindUserConfigFile = 14, kICCGetPrefHandle = 26,
-    kICCFindPrefHandle = 36,
+    kICCFindPrefHandle = 36, kICCLaunchURL = 17,
     icPrefNotFoundErr = -666,
 };
 
@@ -564,6 +564,31 @@ static void ic_make_file(void)
     if (!e || e == fnfErr) /* adds a resource fork to a file with none; leaves one with a fork alone */
         tb_FSpCreateResFile(spec, (int32_t)fourcc("ICAp"), (int32_t)fourcc("ICAp"), 0);
     tb_DisposePtr(tmp);
+}
+
+int16_t ic_launch_url(gaddr data, int32_t len, int32_t a, int32_t b)
+{
+    if (a < 0 || b > len || a >= b)
+        a = 0, b = len;
+    char url[1024];
+    int n = 0;
+    for (int32_t i = a; i < b && n < (int)sizeof url - 1; i++) {
+        uint8_t ch = rd8(data + (uint32_t)i);
+        if (ch > ' ')
+            url[n++] = (char)ch;
+    }
+    url[n] = 0;
+    char *u = url; /* less any "<URL:...>" around it */
+    if (!strncmp(u, "<URL:", 5))
+        u += 5;
+    else if (*u == '<')
+        u++;
+    size_t ul = strlen(u);
+    if (ul && u[ul - 1] == '>')
+        u[--ul] = 0;
+    if (!ul || !strchr(u, ':'))
+        return -673; /* icNoURLErr */
+    return process_open_url(u) ? noErr : -668; /* icConfigNotFoundErr */
 }
 
 /* pascal ComponentResult (ComponentParameters *params, Handle storage) */
@@ -605,6 +630,12 @@ static void ic_component(cpu68k *c, uint16_t tw)
     case kICCGetPref: case kICCGetIndPref: case kICCGetPrefHandle: case kICCFindPrefHandle: case kICCDeletePref:
         r = icPrefNotFoundErr;
         break;
+    case kICCLaunchURL: { /* (hint, data, len, &selStart, &selEnd), last first */
+        gaddr ps = rd32(params + 8);
+        int32_t len = (int32_t)rd32(params + 12);
+        r = ic_launch_url(rd32(params + 16), len, ps ? (int32_t)rd32(ps) : 0, last ? (int32_t)rd32(last) : len);
+        break;
+    }
     default: /* open, close, start, stop, begin, end, finding the configuration ... */
         break;
     }

@@ -672,6 +672,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
   - The approach (2026-10-20): the JIT and the cache are built together. Blocks are translated on first execution and kept on disk under the hash of their code resource or fragment and their offset, so a second launch starts with everything the first one ran. Translation ahead of time only adds to that: `bluebox install` walks from the entry points (PowerPC fragments first: fixed-width code in known sections, with PEF's relocations; 68k code is harder to find statically, with jump tables, A5-relative calls, and data among the code). Code made or changed at run time (blitters copied into the heap, decrypted code, code resources from other files, self-modifying code) goes through the JIT or the interpreter, so the fallback stays.
   - Ahead-of-time gives no speed beyond the JIT's in the steady state (the same translator); it removes the warm-up, and leaves room for heavier optimisation offline: registers kept across blocks, and 68k condition codes not computed where nothing reads them (the biggest single win).
 - **Games:** InputSprocket → host gamepads, DrawSprocket → screen mode, and Sound input. Done (2026-10-20): InputSprocket on the keyboard, the mouse and up to four host game controllers (GameController.framework), DrawSprocket's context selection, and the Sound Input Manager on the host's microphone (SPB recording, SndRecord's dialog). Fixed the same day from the census: Star Chaos (disposed windows kept whole a while), Squark (depth-0 GWorlds), Safari 1.0 (the 68040's FSAVE frame), Bad Day on the Midway (case-blind catalog order, QuickTime time arithmetic), Prince of Persia 2 (drives in the drive queue, MemoryDispatch), the Star Trek demo (GetCTable 72), Squirt Derby! (SetupSndHeader), Space Madness (SaveEntries' request list), Shufflepuck Café (LoadSeg through a patched GetResource), Skittles 2, ShatterBat and StarCraft's Startup Options. StarGuardian's "rabbit" is a random-dot stereogram: not a bug. Solitaire of Champs fails only on its first run: it calls UseResFile(0) with a resource file it never opened, then finds no name for its preferences (the System file alone is searched, as on a Mac).
+- CarbonLib is deferred: Super Snake is the corpus's only Carbon application (2026-10-20), so a full CarbonLib waits for a reason beyond it.
+- Internet Config's ICLaunchURL (68k component and PowerPC library) opens a URL in the host's browser, or prints it on headless runs (2026-10-20): Skittles 2's home page launcher.
 - Compatibility carried from M9 (2026-10-20): OpenGL (OpenGLLibrary, at least what sixtyforce 0.5.5 needs, perhaps on Metal); Internet Explorer 5.1.7's early quit in MS Memory Library; Star Wars DroidWorks past its crawl (and with input); Spades Deluxe 2.0's NetSprocket Network menu.
 - Drawing problems seen in the census (2026-10-13), to investigate:
   - StarGuardian reaches "Click on rabbit to continue" but draws no rabbit. It is a HyperCard 2.x standalone (Stack Translators, Button Tasks): the card bitmap it copies to the screen (1-bit, 512×304) is blank, though every read of its data fork succeeds (2026-10-18), so HyperCard's own decoding of the card picture goes wrong. Belongs with M7.
@@ -750,6 +752,17 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Gestalt and folders:** `ascv` (AppleScript version), the Scripting Additions folder, and the Scripts folder's items in the Apple menu.
 
 **Exit:** the corpus's AppleScript applets run; Script Editor (from a System 7.5 disk image) compiles, runs, records and saves a script that drives the Finder-free parts of a scriptable application (SimpleText or Scriptable Text Editor); a script compiled on the oracle runs here with the same result, and one compiled here runs on the oracle.
+
+### M15: Stand-alone application bundles (macOS)
+
+**Goal:** a classic application packaged as a macOS application of its own: a `.app` that carries the classic program, its documents and preferences folder, and Blue Box itself, so it launches from the Finder or the Dock like any other application. After M12 (asked for 2026-10-20).
+
+- `bluebox bundle <app>`: an `.app` with the classic program (both forks, as AppleDouble or in a contained volume), the run's settings (architecture, depth, scale, appearance, screen or rootless mode, Gestalt overrides), its icon converted from the program's `ICN#`/`icl8`/`ic` resources, and its file types and creator mapped to `CFBundleDocumentTypes` so classic documents open in it.
+- Per-bundle System Folder and preferences under `~/Library/Application Support`, keyed by the bundle identifier; nothing written inside the bundle, so it stays signed.
+- The Blue Box executable inside the bundle, or a reference to an installed copy; code signing and notarization notes.
+- Apple software and third-party programs stay out of the repository: the tool builds bundles from the user's own copies.
+
+**Exit:** a bundled 68k and a bundled PowerPC application each launch from the Finder, open their documents by double-click and drag-and-drop, keep their preferences across launches, and show their own icon and name in the Dock and the menu bar.
 
 ## 6. Risks
 

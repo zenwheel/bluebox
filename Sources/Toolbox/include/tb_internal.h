@@ -88,6 +88,10 @@ int16_t rm_open_empty_system(void);
 /* Start another classic application (the host's launcher); false if
  * there is none or it failed. */
 bool process_launch(const char *app, const char *const *docs, int ndocs);
+bool process_open_url(const char *url);
+/* Internet Config's ICLaunchURL: the URL in data[a..b) (all len bytes when
+ * the selection is empty) opened by the host; an Internet Config error. */
+int16_t ic_launch_url(gaddr data, int32_t len, int32_t a, int32_t b);
 uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errlen);
 
 /* ---- Gestalt ---- */

@@ -716,6 +716,12 @@ func installLaunchHandler() {
         do { try p.run() } catch { return false }
         return true
     }, nil)
+    // A URL a program opens (Internet Config's ICLaunchURL) goes to the
+    // host's handler for its scheme: a web page to the default browser.
+    machine_set_url_handler({ urlPtr, _ in
+        guard let urlPtr, let url = URL(string: String(cString: urlPtr)), url.scheme != nil else { return false }
+        return NSWorkspace.shared.open(url)
+    }, nil)
 }
 
 /// The Color Picker's GetColor: an alert with a colour well (which opens the

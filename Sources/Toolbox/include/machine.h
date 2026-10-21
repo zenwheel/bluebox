@@ -423,6 +423,10 @@ void machine_set_main_thread_pump(void (*fn)(void));
 /* Start another application (with the documents it is to open). */
 typedef bool (*machine_launch_fn)(const char *path, const char *const *documents, int ndocuments, void *ctx);
 void machine_set_launch_handler(machine_launch_fn fn, void *ctx);
+/* Open a URL (Internet Config's ICLaunchURL): in the host's own browser or
+ * whatever handles its scheme.  Returns false if it could not. */
+typedef bool (*machine_url_fn)(const char *url, void *ctx);
+void machine_set_url_handler(machine_url_fn fn, void *ctx);
 
 /* ---- Color Picker ----
  * GetColor: show `prompt`, start from `in` (16-bit RGB), and on OK write the
