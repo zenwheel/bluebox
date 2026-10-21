@@ -87,6 +87,14 @@ void ot_complete(ppc_cpu *c, provider *p, uint32_t event, int32_t result, gaddr 
  * passing; false when the machine stopped or the provider closed. */
 bool ot_wait_slice(provider *p);
 
+/* Data given as a chain of OTData (fNext, fData, fLen) rather than one
+ * buffer: a TNetbuf's len, or OTSnd's byte count, kNetbufDataIsOTData. */
+enum { kNetbufDataIsOTData = 0xFFFFFFFEu };
+/* The bytes of data at buf (len of them, or an OTData chain). */
+uint32_t ot_data_len(gaddr buf, uint32_t len);
+/* Up to max of them copied out: the number copied. */
+uint32_t ot_data_get(uint8_t *out, gaddr buf, uint32_t len, uint32_t max);
+
 /* ot_appletalk.c */
 bool ota_kind(const char *config, provider_kind *kind);
 int32_t ota_open(provider *p);

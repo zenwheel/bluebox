@@ -124,6 +124,16 @@ extension BlueBox {
             let from = rd32(rd + 8)
             #expect(rd16(from) == 0x0100 && rd8(from + 4) == node() && rd8(from + 5) == sa && rd8(from + 6) == 77)
             #expect(err(ot("OTRcvUData", b, rd, flags)) == -3162) // kOTNoDataErr: nothing more
+
+            // The data as a chain of OTData (Shadow Warrior sends so).
+            let piece2 = tb_NewPtr(12, false, true), piece1 = tb_NewPtr(12, false, true)
+            wr32(piece2, 0); wr32(piece2 + 4, cstr("Talk")); wr32(piece2 + 8, 4)
+            wr32(piece1, piece2); wr32(piece1 + 4, cstr("Apple")); wr32(piece1 + 8, 5)
+            wr32(ud + 28, 0xFFFF_FFFE); wr32(ud + 32, piece1) // kNetbufDataIsOTData
+            #expect(ot("OTSndUData", a, ud) == 0)
+            netbuf(rd + 24, max: 32)
+            pump { r = ot("OTRcvUData", b, rd, flags); return r != UInt32(bitPattern: -3162) }
+            #expect(r == 0 && rd32(rd + 28) == 9 && bytes(rd32(rd + 32), 9) == "AppleTalk")
             #expect(ot("OTCloseProvider", a) == 0 && ot("OTCloseProvider", b) == 0)
         }
 

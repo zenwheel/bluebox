@@ -103,8 +103,10 @@ bool machine_snd_pcm(const uint8_t *snd, size_t len, int16_t **pcm, uint32_t *fr
 void machine_redraw_all(void);
 void machine_continue(uint64_t more);
 
-/* Override a Gestalt selector (before launch). */
+/* Set a Gestalt selector; gestalt_override's answers (the run's own,
+ * before launch) also stand over a PowerPC program's. */
 void gestalt_set(uint32_t selector, uint32_t value);
+void gestalt_override(uint32_t selector, uint32_t value);
 /* Logging mask (see log.h) and destination. */
 void machine_set_log(unsigned mask);
 

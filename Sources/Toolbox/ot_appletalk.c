@@ -672,13 +672,13 @@ void ota_SndUData(ppc_cpu *c, provider *p)
         RETURN((uint32_t)kOTBadAddressErr);
         return;
     }
-    uint32_t n = rd32(ud + 28);
+    uint32_t n = ot_data_len(rd32(ud + 32), rd32(ud + 28));
     if (n > DDP_MAX) {
         RETURN((uint32_t)kOTBadDataErr);
         return;
     }
     uint8_t data[DDP_MAX];
-    gget(data, rd32(ud + 32), n);
+    ot_data_get(data, rd32(ud + 32), rd32(ud + 28), n);
     uint8_t type = to.type ? to.type : a->ddptype;
     at_send_ddp(node ? node : at_node(), skt, a->skt, type, data, (int)n);
     appletalk_poll();
@@ -745,13 +745,13 @@ static void ota_SndURequest(ppc_cpu *c)
         RETURN((uint32_t)kOTBadAddressErr);
         return;
     }
-    uint32_t n = rd32(req + 28);
+    uint32_t n = ot_data_len(rd32(req + 32), rd32(req + 28));
     if (n > 4 + ATP_MAX) {
         RETURN((uint32_t)kOTBadDataErr);
         return;
     }
     uint8_t data[4 + ATP_MAX] = { 0 };
-    gget(data, rd32(req + 32), n);
+    ot_data_get(data, rd32(req + 32), rd32(req + 28), n);
     asked *q = NULL;
     for (int i = 0; i < MAX_OUT && !q; i++)
         if (!a->out[i].used)
@@ -914,14 +914,14 @@ static void ota_SndUReply(ppc_cpu *c)
         RETURN((uint32_t)kOTBadSequenceErr);
         return;
     }
-    uint32_t n = rd32(reply + 16);
+    uint32_t n = ot_data_len(rd32(reply + 20), rd32(reply + 16));
     if (n > 4 + 8 * ATP_MAX) {
         RETURN((uint32_t)kOTBadDataErr);
         return;
     }
     static uint8_t data[4 + 8 * ATP_MAX];
     memset(data, 0, 4);
-    gget(data, rd32(reply + 20), n);
+    ot_data_get(data, rd32(reply + 20), rd32(reply + 16), n);
     uint8_t (*pkts)[578] = calloc(8, sizeof *pkts);
     int lens[8] = { 0 }, count = 0;
     uint32_t users[8] = { (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 | data[3] };
@@ -1182,6 +1182,23 @@ void ota_Snd(ppc_cpu *c, provider *p)
     }
     if (p->state != T_DATAXFER && p->state != T_INREL) {
         RETURN((uint32_t)(p->disconnected || p->eof ? kOTLookErr : kOTOutStateErr));
+        return;
+    }
+    if (n == kNetbufDataIsOTData) { /* the chain in one guest buffer, sent from there */
+        n = ot_data_len(buf, n);
+        gaddr flat = tb_NewPtr((int32_t)(n ? n : 1), false, true);
+        if (!flat) {
+            RETURN((uint32_t)kOTOutOfMemoryErr);
+            return;
+        }
+        uint8_t *tmp = malloc(n ? n : 1);
+        ot_data_get(tmp, buf, kNetbufDataIsOTData, n);
+        gput(flat, tmp, n);
+        free(tmp);
+        R(1) = flat;
+        R(2) = n;
+        ota_Snd(c, p);
+        tb_DisposePtr(flat);
         return;
     }
     if (R(3) & T_EXPEDITED) { /* an attention message: its code, then data */
@@ -2112,3 +2129,4 @@ const ppc_export ota_exports[] = {
     { "OTExtractNBPZone", ota_ExtractNBPZone },
 };
 const unsigned ota_export_count = sizeof ota_exports / sizeof ota_exports[0];
+
