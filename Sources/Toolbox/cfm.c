@@ -1065,12 +1065,44 @@ static void trace_instruction(ppc_cpu *c)
             c->gpr[5], c->lr);
 }
 
-bool cfm_launch(const char *app_path, char *err, size_t errlen)
+static bool ppc_cpu_ready;
+
+/* A launch starts the Code Fragment Manager afresh: no fragments, no
+ * native glue, no PowerPC processor set up yet. */
+void cfm_reset(void)
 {
     nnatives = 0;
     glue_area = 0;
     missing_len = missing_count = 0;
     nfrags = ninit = init_next = ndata_blocks = 0;
+    ppc_cpu_ready = false;
+}
+
+/* The PowerPC processor, set up once per launch: a stack of its own (1 MB,
+ * the back chain ending in 0) and our native calls.  A 68k program gets it
+ * when it first calls PowerPC code through a routine descriptor, as on a
+ * Power Mac (Installer VISE's own PowerPC routines). */
+bool cfm_ppc_cpu(void)
+{
+    if (ppc_cpu_ready)
+        return true;
+    const uint32_t stack_size = 1024 * 1024;
+    gaddr stack = tb_NewPtr((int32_t)stack_size, false, true);
+    if (!stack)
+        return false;
+    ppc_init(&g_ppc);
+    g_ppc.native = dispatch_native;
+    if (getenv("BLUEBOX_PPC_TRACE"))
+        g_ppc.trace = trace_instruction;
+    g_ppc.gpr[1] = (stack + stack_size - 64) & ~15u;
+    wr32(g_ppc.gpr[1], 0);
+    ppc_cpu_ready = true;
+    return true;
+}
+
+bool cfm_launch(const char *app_path, char *err, size_t errlen)
+{
+    cfm_reset();
     inputsprocket_reset();
     snprintf(app_dir, sizeof app_dir, "%s", app_path);
     snprintf(app_file, sizeof app_file, "%s", app_path);
@@ -1101,19 +1133,10 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
     g_cpu->a[5] = a5;
     g_cpu->a[7] = a5 - 64;
 
-    /* A stack of its own: 1 MB, the back chain ending in 0. */
-    const uint32_t stack_size = 1024 * 1024;
-    gaddr stack = tb_NewPtr((int32_t)stack_size, false, true);
-    if (!stack) {
+    if (!cfm_ppc_cpu()) {
         snprintf(err, errlen, "no memory for the PowerPC stack");
         return false;
     }
-    ppc_init(&g_ppc);
-    g_ppc.native = dispatch_native;
-    if (getenv("BLUEBOX_PPC_TRACE"))
-        g_ppc.trace = trace_instruction;
-    g_ppc.gpr[1] = (stack + stack_size - 64) & ~15u;
-    wr32(g_ppc.gpr[1], 0);
     done_code = rd32(native_tvector(main_returned, "main returned"));
     chain_code = rd32(native_tvector(run_next_init, "next init"));
     run_next_init(&g_ppc);

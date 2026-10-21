@@ -647,6 +647,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     snprintf(name, sizeof name, "%.*s", rd8(LM_CurApName), (const char *)gptr(LM_CurApName + 1));
     if (is_installer(name, g_app_creator))
         gestalt_powerpc();
+    cfm_reset();
     uint32_t a5;
     start_jit(app_path);
     uint32_t entry = seg_launch(rn, &a5, err, errlen);

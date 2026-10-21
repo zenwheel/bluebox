@@ -229,8 +229,8 @@ static void mixed_mode_native(cpu68k *c, uint16_t tw)
         cpu_push32(c, proc); /* returned to: the 68k routine, the caller's return under it */
         return;
     }
-    if (!g_ppc_mode) {
-        cpu_halt(c, "Mixed Mode: PowerPC routine %08X called with no PowerPC fragment", proc);
+    if (!g_ppc_mode && !cfm_ppc_cpu()) {
+        cpu_halt(c, "Mixed Mode: no memory to run PowerPC routine %08X", proc);
         return;
     }
     int conv = (int)(pi & 0xF), rcode = (int)((pi >> 4) & 3);

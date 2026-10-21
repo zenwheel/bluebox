@@ -441,6 +441,8 @@ struct ppc_cpu;
 extern struct ppc_cpu g_ppc;
 extern bool g_ppc_mode;
 bool cfm_has_ppc(void);
+void cfm_reset(void);   /* a launch: no fragments, no PowerPC processor yet */
+bool cfm_ppc_cpu(void); /* the PowerPC processor, set up when first needed */
 void gestalt_powerpc(void);
 const char *fm_system_folder_host(void);
 /* The Appearance Manager's StandardAlert (dialog.c). */

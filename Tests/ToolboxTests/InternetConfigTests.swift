@@ -30,5 +30,28 @@ extension BlueBox {
             #expect(q.component(ic, 12, [other]) == 0)
             #expect(q.component(ic, 26, [other, attr, hp]) == -666)
         }
+
+        /// A 68k program calls a PowerPC routine through its routine
+        /// descriptor, as on a Power Mac (Installer VISE's own PowerPC
+        /// code): the PowerPC processor is set up when first needed.
+        @Test func sixtyEightKCallsPowerPCRoutine() {
+            launchTestApp()
+            let q = QTTune()
+            q.install()
+            let code = tb_NewPtr(8, false, true), tv = tb_NewPtr(8, false, true)
+            wr32(code, 0x3863_0001) // addi r3, r3, 1
+            wr32(code + 4, 0x4E80_0020) // blr
+            wr32(tv, code)
+            wr32(tv + 4, 0)
+            // NewRoutineDescriptor(tv, pascal: one long in, a long out, PowerPC)
+            withUnsafeMutableBytes(of: &g_ppc.gpr) { raw in
+                for (i, a) in [tv, 0xF0, 1].enumerated() { raw.storeBytes(of: UInt32(a), toByteOffset: (3 + i) * 4, as: UInt32.self) }
+            }
+            cfm_export_fn("NewRoutineDescriptor")!(&g_ppc)
+            let rd = g_ppc.gpr.3
+            #expect(rd16(rd) == 0xAAFE)
+            #expect(q.call([0x4EB9, UInt16(rd >> 16), UInt16(rd & 0xFFFF)], [41]) == 42) // jsr rd
+            #expect(!g_cpu!.pointee.halted)
+        }
     }
 }
