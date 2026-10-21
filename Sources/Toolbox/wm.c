@@ -1078,6 +1078,14 @@ static gaddr active_window;
 static gaddr old_window;
 static hrgn old_struc, old_cont;
 
+/* ShowHide and BringToFront: a program managing its windows itself (with
+ * HiliteWindow) gets no activate events from them, as on a Mac, so the
+ * window in front afterwards is taken as the active one.  Otherwise the
+ * next window made would bring an activate for it (Squirt Derby! shows
+ * its window that way, then rebuilt its buffers on the activate and
+ * crashed disposing them). */
+static void took_front(void) { active_window = front_active(); }
+
 /* Make the frontmost visible window the active one, queuing activate events. */
 static void update_active(void)
 {
@@ -1374,11 +1382,12 @@ void tb_ShowHide(gaddr w, int8_t flag)
     rgn_read(WindowRecord_strucRgn(w), &s);
     repaint(&s);
     hrgn_free(&s);
+    took_front();
 }
 
 void tb_HiliteWindow(gaddr w, int8_t flag) { set_hilite(w, flag != 0); }
 
-void tb_BringToFront(gaddr w)
+static void bring_to_front(gaddr w)
 {
     if (wlist() == w)
         return;
@@ -1387,9 +1396,15 @@ void tb_BringToFront(gaddr w)
     repaint_rgn_of(w);
 }
 
+void tb_BringToFront(gaddr w)
+{
+    bring_to_front(w);
+    took_front();
+}
+
 void tb_SelectWindow(gaddr w)
 {
-    tb_BringToFront(w);
+    bring_to_front(w);
     update_active();
 }
 
