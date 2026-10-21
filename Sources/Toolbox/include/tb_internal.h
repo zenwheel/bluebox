@@ -285,6 +285,7 @@ bool native_draw_scrollbar(gaddr ch, qrect r, bool vertical, int hilite, bool en
 /* Where the host last drew a scroll bar's knob and its slot, along the bar. */
 bool native_scroll_knob(gaddr ch, int *knob_lo, int *knob_hi, int *slot_lo, int *slot_hi);
 void native_forget_control(gaddr ch);
+void qd_forget_control_colors(gaddr ctl);
 bool native_draw_popup(qrect r, const uint8_t *item, int n, bool pressed, bool disabled);
 bool native_draw_edit_frame(qrect r, bool focused);
 

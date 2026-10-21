@@ -813,11 +813,14 @@ static gaddr system_palette;
 
 void tb_InitPalettes(void) { memset(window_pal, 0, sizeof window_pal); }
 
+static void qd_control_colors_reset(void);
+
 void qd_palettes_reset(void)
 {
     memset(window_pal, 0, sizeof window_pal);
     default_tried = false;
     system_palette = 0;
+    qd_control_colors_reset();
 }
 
 static gaddr entry(gaddr pal, int i) { return rd32(pal) + Palette_pmInfo_off + (uint32_t)i * ColorInfo_SIZEOF; }
@@ -1178,44 +1181,88 @@ void tb_ResizePalette(gaddr pal, int16_t size)
 /* ---------------------------------------------------------------------- */
 /* Auxiliary records: the standard colours */
 
-/* One per control, made when first asked for; SetControlColor's table is
- * kept in it (controls still draw in the standard colours). */
+/* The default record (owner nil) holds the standard control colours, the
+ * System's cctb 0: black frame and text on a white body and thumb.  A
+ * control has a record of its own only once it is given colours
+ * (SetControlColor, or a cctb resource with its CNTL's ID); GetAuxCtl
+ * answers false and the default for the others, as on a Mac, so a CDEF
+ * that tells custom colours from the standard ones by the table sees
+ * the standard one (Grayscale Buttons' radio buttons drew on black). */
 static struct {
     gaddr control, aux;
 } auxes[128];
+static gaddr default_aux_h;
 
-static gaddr aux_for(gaddr c)
+static gaddr default_aux(void)
 {
-    int free_slot = -1;
-    for (int i = 0; i < 128; i++) {
-        if (auxes[i].control == c && auxes[i].aux && rd32(auxes[i].aux))
-            return auxes[i].aux;
-        if (free_slot < 0 && (!auxes[i].control || !auxes[i].aux || !rd32(auxes[i].aux)))
-            free_slot = i;
+    gaddr h = default_aux_h;
+    if (h && rd32(h))
+        return h;
+    static const uint16_t rgb[4] = { 0x0000, 0xFFFF, 0x0000, 0xFFFF }; /* frame, body, text, thumb */
+    gaddr ct = tb_NewHandle(8 + 4 * 8, true, true);
+    wr32(rd32(ct), 0);                                           /* ctSeed */
+    wr16(rd32(ct) + 4, 0);                                       /* ctFlags */
+    wr16(rd32(ct) + 6, 3);                                       /* ctSize: entries less one */
+    for (int i = 0; i < 4; i++) {
+        gaddr e = rd32(ct) + 8 + (uint32_t)i * 8;
+        wr16(e, (uint16_t)i);
+        wr16(e + 2, rgb[i]), wr16(e + 4, rgb[i]), wr16(e + 6, rgb[i]);
     }
-    gaddr h = tb_NewHandle(AuxCtlRec_SIZEOF, false, true);
-    wr32(rd32(h) + AuxCtlRec_acOwner_off, c);
-    wr32(rd32(h) + AuxCtlRec_acCTable_off, tb_GetCTable(1));
-    if (free_slot < 0)
-        free_slot = (int)(c % 128);
-    auxes[free_slot].control = c;
-    auxes[free_slot].aux = h;
+    h = default_aux_h = tb_NewHandle(AuxCtlRec_SIZEOF, true, true);
+    wr32(rd32(h) + AuxCtlRec_acCTable_off, ct);
     return h;
+}
+
+static int aux_slot(gaddr c)
+{
+    for (int i = 0; i < 128; i++)
+        if (c && auxes[i].control == c && auxes[i].aux && rd32(auxes[i].aux))
+            return i;
+    return -1;
 }
 
 int8_t tb_GetAuxiliaryControlRecord(gaddr c, gaddr acHndl)
 {
-    wr32(acHndl, aux_for(c));
-    return 1;
+    int i = aux_slot(c);
+    wr32(acHndl, i >= 0 ? auxes[i].aux : default_aux());
+    return i >= 0;
 }
 
 void tb_SetControlColor(gaddr ctl, gaddr ctab)
 {
     if (!ctl)
         return;
-    gaddr h = aux_for(ctl);
-    if (h && rd32(h))
-        wr32(rd32(h) + AuxCtlRec_acCTable_off, ctab);
+    int i = aux_slot(ctl);
+    if (i < 0) {
+        for (i = 0; i < 128 && auxes[i].control && auxes[i].aux && rd32(auxes[i].aux); i++)
+            ;
+        if (i == 128)
+            i = (int)(ctl % 128);
+        else if (auxes[i].aux)
+            tb_DisposeHandle(auxes[i].aux);
+        gaddr h = tb_NewHandle(AuxCtlRec_SIZEOF, false, true);
+        wr32(rd32(h) + AuxCtlRec_acOwner_off, ctl);
+        auxes[i].control = ctl;
+        auxes[i].aux = h;
+    }
+    wr32(rd32(auxes[i].aux) + AuxCtlRec_acCTable_off, ctab);
+}
+
+/* A new heap: the records went with the old one. */
+static void qd_control_colors_reset(void)
+{
+    memset(auxes, 0, sizeof auxes);
+    default_aux_h = 0;
+}
+
+/* DisposeControl: its colours go with it. */
+void qd_forget_control_colors(gaddr ctl)
+{
+    int i = aux_slot(ctl);
+    if (i < 0)
+        return;
+    tb_DisposeHandle(auxes[i].aux);
+    auxes[i].control = auxes[i].aux = 0;
 }
 
 

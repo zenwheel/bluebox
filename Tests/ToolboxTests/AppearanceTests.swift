@@ -236,6 +236,30 @@ extension BlueBox {
             #expect(tb_IsValidControlHandle(bar) != 0 && tb_IsValidControlHandle(w) == 0)
         }
 
+        /// A control without colours of its own has no auxiliary record:
+        /// GetAuxiliaryControlRecord answers false and the default record,
+        /// whose table is the standard one (white body), shared by all.
+        @Test func controlColorsDefaultUntilSet() {
+            launchTestApp()
+            _ = initToolbox()
+            let w = window()
+            let one = tb_NewControl(w, rect(10, 10, 30, 100), pstr("A"), 1, 0, 0, 1, 2, 0)
+            let two = tb_NewControl(w, rect(40, 10, 60, 100), pstr("B"), 1, 0, 0, 1, 2, 0)
+            let h1 = tb_NewPtr(4, false, true), h2 = tb_NewPtr(4, false, true)
+            #expect(tb_GetAuxiliaryControlRecord(one, h1) == 0 && tb_GetAuxiliaryControlRecord(two, h2) == 0)
+            #expect(rd32(h1) != 0 && rd32(h1) == rd32(h2))
+            let table = rd32(rd32(rd32(h1)) + 8) // acCTable
+            let body = rd32(table) + 8 + 8 // entry 1: cBodyColor
+            #expect(rd16(body) == 1 && rd16(body + 2) == 0xFFFF)
+            let mine = tb_NewHandle(16, false, true)
+            tb_SetControlColor(one, mine)
+            #expect(tb_GetAuxiliaryControlRecord(one, h1) != 0 && rd32(rd32(rd32(h1)) + 8) == mine)
+            #expect(rd32(rd32(rd32(h1)) + 4) == one) // acOwner
+            #expect(tb_GetAuxiliaryControlRecord(two, h2) == 0)
+            tb_DisposeControl(one)
+            #expect(tb_GetAuxiliaryControlRecord(one, h1) == 0)
+        }
+
         @Test func embeddingFollowsTheRoot() {
             launchTestApp()
             _ = initToolbox()

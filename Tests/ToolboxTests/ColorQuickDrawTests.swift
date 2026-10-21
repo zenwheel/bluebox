@@ -282,8 +282,9 @@ extension BlueBox {
             launchTestApp()
             _ = initToolbox()
             let h = tb_NewPtr(4, false, true)
-            #expect(tb_GetAuxiliaryControlRecord(0x1000, h) != 0)
-            #expect(rd32(h) != 0 && rd32(rd32(rd32(h)) + 4) == 0x1000)
+            // No colours of its own: false, and the default record (owner nil).
+            #expect(tb_GetAuxiliaryControlRecord(0x1000, h) == 0)
+            #expect(rd32(h) != 0 && rd32(rd32(rd32(h)) + 4) == 0)
         }
     }
 }

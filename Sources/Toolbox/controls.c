@@ -1175,6 +1175,9 @@ gaddr tb_GetNewControl(int16_t cid, gaddr wst)
     gaddr ch = tb_NewControl(wst, p, p + 22, rd16(p + 10) != 0, (int16_t)rd16(p + 8), (int16_t)rd16(p + 14),
                              (int16_t)rd16(p + 12), (int16_t)rd16(p + 16), (int32_t)rd32(p + 18));
     tb_HUnlock(h);
+    gaddr colors = ch ? tb_GetResource((int32_t)fourcc("cctb"), cid) : 0; /* its colours, by the same ID */
+    if (colors && rd32(colors))
+        tb_SetControlColor(ch, colors);
     return ch;
 }
 
@@ -1204,6 +1207,7 @@ void tb_DisposeControl(gaddr ch)
     tb_HideControl(ch);
     call_cdef(ch, dispCntl, 0);
     native_forget_control(ch);
+    qd_forget_control_colors(ch);
     unlink_control(w, ch);
     int wi = win_index(w, false);
     if (wi >= 0) {
