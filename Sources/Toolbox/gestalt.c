@@ -131,13 +131,16 @@ void gestalt_init(void)
 #endif
 }
 
-/* A PowerPC application: a PowerPC Mac's answers (a G3 with System 7.6.1,
- * the Code Fragment Manager, Mixed Mode, QuickTime's PowerPC library). */
+/* A PowerPC application: a PowerPC Mac's answers (a G3 with Mac OS 8.1,
+ * the Code Fragment Manager, Mixed Mode, QuickTime's PowerPC library).
+ * 8.1, as the Appearance Manager, Navigation Services, Contextual Menus
+ * and Open Transport are there: Setback, Spades and sixtyforce ask for
+ * it, and 8.5 would have programs look for Icon Services. */
 void gestalt_powerpc(void)
 {
     gestalt_set(fourcc("sysa"), 2);      /* gestaltPowerPC */
-    gestalt_set(fourcc("sysv"), 0x0761);
-    wr16(LM_SysVersion, 0x0761);         /* SysEnvirons reads it */
+    gestalt_set(fourcc("sysv"), 0x0810);
+    wr16(LM_SysVersion, 0x0810);         /* SysEnvirons reads it */
     gestalt_set(fourcc("qtrs"), 0x1);    /* gestaltPPCQuickTimeLibPresent */
     gestalt_set(fourcc("dplv"), 0x00020000); /* the Display Manager, 2.0 */
     gestalt_set(fourcc("dply"), 0x1);    /* gestaltDisplayMgrPresent */
