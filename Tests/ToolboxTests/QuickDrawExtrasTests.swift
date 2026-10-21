@@ -29,6 +29,30 @@ extension BlueBox {
             return rd16(c) == 0 && rd16(c + 2) == 0
         }
 
+        /// Text in srcCopy paints each character's whole cell: a number
+        /// drawn over the last one leaves none of it (Maelstrom's score).
+        @Test func copyModeTextPaintsTheWholeCell() {
+            _ = offscreen()
+            tb_TextFont(3)
+            tb_TextSize(9)
+            tb_TextMode(0) // srcCopy
+            func digit(_ s: String) -> Set<Int> {
+                let str = tb_NewPtr(4, false, true)
+                guestPString(s, at: str)
+                tb_MoveTo(10, 20)
+                tb_DrawString(str)
+                var on = Set<Int>()
+                for v in 8..<24 { for h in 8..<20 where black(h, v) { on.insert(v * 40 + h) } }
+                return on
+            }
+            tb_EraseRect(rect(0, 0, 40, 40))
+            let one = digit("1")
+            #expect(!one.isEmpty)
+            tb_EraseRect(rect(0, 0, 40, 40))
+            _ = digit("8")
+            #expect(digit("1") == one)
+        }
+
         func color(_ h: Int, _ v: Int) -> [UInt16] {
             let c = tb_NewPtr(6, false, true)
             tb_GetCPixel(Int16(h), Int16(v), c)

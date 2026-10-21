@@ -238,6 +238,28 @@ static void draw_glyph(const strike *s, int idx, int x, int top, const pixdst *d
     }
 }
 
+/* srcCopy and notSrcCopy paint a character's whole cell, its advance wide
+ * from the ascent to the descent, the glyph's unset pixels in the
+ * background: programs redraw a number over the last one so (Maelstrom's
+ * score and lives), and the old digits must not show through. */
+static void paint_cell(const strike *s, int x, int w, int base, const pixdst *d, const hrgn *clip, int mode,
+                       uint32_t fg, uint32_t bk)
+{
+    for (int y = base - s->ascent; y < base + s->descent; y++) {
+        int n;
+        const int16_t *xs = hrgn_row(clip, y, &n);
+        if (!xs)
+            continue;
+        for (int j = 0; j < n; j += 2) {
+            int x0 = xs[j] > x ? xs[j] : x, x1 = xs[j + 1] < x + w ? xs[j + 1] : x + w;
+            for (int xx = x0; xx < x1; xx++) {
+                int dc = xx - d->bounds.left, dr = y - d->bounds.top;
+                put_px(d, dc, dr, apply_mode(mode, 0, get_px(d, dc, dr), fg, bk, px_mask(d->depth)));
+            }
+        }
+    }
+}
+
 void qd_draw_text(gaddr port, const uint8_t *text, int len)
 {
     strike s;
@@ -266,8 +288,11 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
         for (int i = 0; i < len; i++) {
             int off, w;
             int idx = glyph_index(&s, text[i], &off, &w);
+            int adv = char_advance(&s, text[i], port);
+            if ((mode & 3) == 0)
+                paint_cell(&s, x, adv, base, &d, &clip, mode, fg, bk);
             draw_glyph(&s, idx, x + off, base - s.ascent, &d, &clip, mode, fg, bk);
-            x += char_advance(&s, text[i], port);
+            x += adv;
         }
         if ((s.face & underline) && x > start) {
             hrgn line;
