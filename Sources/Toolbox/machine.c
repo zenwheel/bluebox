@@ -13,6 +13,8 @@
 #include "tb_internal.h"
 #include "sysres_gen.h"
 #include "machine.h"
+#include "jit.h"
+#include "m68k.h"
 #include "ppc.h"
 
 cpu68k *g_cpu;
@@ -472,6 +474,74 @@ static void build_app_parms(void)
 static bool prefer_ppc;
 void machine_set_prefer_ppc(bool on) { prefer_ppc = on; }
 
+static bool jit_on;
+static char jit_cache_dir[1024];
+
+bool machine_set_jit(bool on, const char *cache_dir)
+{
+    if (on && !(ppc_jit_available() && cpu_jit_available()))
+        return false;
+    jit_on = on;
+    snprintf(jit_cache_dir, sizeof jit_cache_dir, "%s", cache_dir ? cache_dir : "");
+    if (!on) {
+        ppc_jit_enable(false, NULL, NULL);
+        cpu_jit_enable(false, NULL, NULL);
+    }
+    return true;
+}
+
+/* The JITs for the application at path (68k code runs in PowerPC
+ * programs too): their cache files are named after a hash of the path
+ * (blocks are checked against their code anyway). */
+static void start_jit(const char *path)
+{
+    if (!jit_on)
+        return;
+    const char *dir = jit_cache_dir[0] ? jit_cache_dir : NULL;
+    unsigned long long h = (unsigned long long)jit_hash(path, strlen(path), 0);
+    char name[64];
+    snprintf(name, sizeof name, "%016llx-ppc.bbjit", h);
+    ppc_jit_enable(true, dir, name);
+    snprintf(name, sizeof name, "%016llx-68k.bbjit", h);
+    cpu_jit_enable(true, dir, name);
+}
+
+/* One CPU's line of the report, appended to buf (nothing if it ran no
+ * instructions). */
+static void jit_line(char *buf, size_t len, const char *cpu, uint64_t translated, uint64_t from_cache, uint64_t ns,
+                     uint64_t jitted, uint64_t interpreted, uint64_t blocks, uint64_t chained, uint64_t invalidated,
+                     uint64_t flushes)
+{
+    uint64_t all = jitted + interpreted;
+    size_t at = strlen(buf);
+    if (!all || at + 1 >= len)
+        return;
+    snprintf(buf + at, len - at,
+             "%sjit (%s): %llu blocks translated (%llu from the cache) in %.1f ms, %.1f%% of %llu instructions "
+             "translated, %llu block runs, %llu chained, %llu invalidated, %llu flushes",
+             at ? "\n" : "", cpu, (unsigned long long)(translated + from_cache), (unsigned long long)from_cache,
+             (double)ns / 1e6, 100.0 * (double)jitted / (double)all, (unsigned long long)all,
+             (unsigned long long)blocks, (unsigned long long)chained, (unsigned long long)invalidated,
+             (unsigned long long)flushes);
+}
+
+void machine_jit_report(char *buf, size_t len)
+{
+    if (!len)
+        return;
+    buf[0] = 0;
+    if (!jit_on)
+        return;
+    cpu_jit_stats k;
+    cpu_jit_get_stats(&k);
+    jit_line(buf, len, "68k", k.translated, k.from_cache, k.translate_ns, k.jitted, k.interpreted, k.blocks,
+             k.chained, k.invalidated, k.flushes);
+    ppc_jit_stats p;
+    ppc_jit_get_stats(&p);
+    jit_line(buf, len, "ppc", p.translated, p.from_cache, p.translate_ns, p.jitted, p.interpreted, p.blocks,
+             p.chained, p.invalidated, p.flushes);
+}
+
 static int cmp_names(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
 /* The font files in the System Folder's Fonts folder (the user's own, from
@@ -548,9 +618,12 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
      * fragment when PowerPC is preferred. */
     g_ppc_mode = false;
     bool has_68k = tb_Get1Resource((int32_t)fourcc("CODE"), 0) != 0;
-    if (cfm_has_ppc() && (!has_68k || prefer_ppc))
+    if (cfm_has_ppc() && (!has_68k || prefer_ppc)) {
+        start_jit(app_path);
         return cfm_launch(app_path, err, errlen);
+    }
     uint32_t a5;
+    start_jit(app_path);
     uint32_t entry = seg_launch(rn, &a5, err, errlen);
     if (!entry)
         return false;

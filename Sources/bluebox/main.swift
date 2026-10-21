@@ -38,6 +38,17 @@ nonisolated(unsafe) var headlessFileAnswers: [String] = []
 /// --speech: system (NSSpeechSynthesizer), avspeech (AVSpeechSynthesizer) or record:FILE.
 nonisolated(unsafe) var speechBackend = "system"
 
+/// Where --jit keeps translations: the user's caches folder.
+func defaultJITCache() -> String {
+    let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
+    #if os(macOS)
+    return home + "/Library/Caches/Blue Box/JIT"
+    #else
+    let base = ProcessInfo.processInfo.environment["XDG_CACHE_HOME"] ?? home + "/.cache"
+    return base + "/bluebox/jit"
+    #endif
+}
+
 func usage() -> Never {
     eprint("""
     usage:
@@ -63,6 +74,9 @@ func usage() -> Never {
           --ppc      run a fat application's PowerPC code (the default; PowerPC-only ones
                      always run it)
           --68k      run a fat application's 68k code (as a cpu setting of 68020 or 68040 does)
+          --jit      translate 68k and PowerPC code to host code (experimental), keeping
+                     translations in ~/Library/Caches/Blue Box/JIT between runs
+          --jit-cache D  keep them in folder D instead; --no-jit-cache: don't keep them
           --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
                      application can still switch depth itself with SetDepth).  Without --depth,
                      a game known to need another depth gets it (unless it has a depth setting),
@@ -355,6 +369,8 @@ func runCommand(_ args: [String]) {
     var screenshot: String?
     var screenDepth: Int32?
     var preferPPC: Bool? /* nil: the application's setting */
+    var useJIT = false
+    var jitCache: String? /* nil: the default folder, "": none */
     var scaleOption: Double?
     var redrawCheck: String?
     var cpuModel: Int32?
@@ -425,6 +441,12 @@ func runCommand(_ args: [String]) {
                 fail("--scale expects 1, 1.5 or 2")
             }
             scaleOption = v
+        case "--jit": useJIT = true
+        case "--jit-cache":
+            i += 1
+            guard i < args.count else { usage() }
+            jitCache = args[i]
+        case "--no-jit-cache": jitCache = ""
         case "--ppc": preferPPC = true
         case "--68k": preferPPC = false
         case "--depth":
@@ -585,6 +607,10 @@ func runCommand(_ args: [String]) {
     if let m = processor, m != Int32(powerPCSetting) { machine_set_cpu(m) }
     machine_set_depth_alerts(depthRelaunch != nil)
     machine_set_prefer_ppc(preferPPC ?? (processor == nil || processor == Int32(powerPCSetting)))
+    if useJIT {
+        let dir = jitCache ?? defaultJITCache()
+        guard machine_set_jit(true, dir.isEmpty ? nil : dir) else { fail("--jit: no JIT on this host") }
+    }
     #if canImport(AppKit)
     // The host's double-click and key-repeat times, in ticks (headless runs
     // keep the defaults, so they repeat exactly).
@@ -734,6 +760,9 @@ func runCommand(_ args: [String]) {
     var regs = [CChar](repeating: 0, count: 1024)
     machine_describe_cpu(&regs, regs.count)
     print(str(regs))
+    var jitLine = [CChar](repeating: 0, count: 1024)
+    machine_jit_report(&jitLine, jitLine.count)
+    if jitLine[0] != 0 { print(str(jitLine)) }
 
     var rows = [census_row](repeating: census_row(), count: 4096)
     let n = Int(machine_census(&rows, UInt32(rows.count)))

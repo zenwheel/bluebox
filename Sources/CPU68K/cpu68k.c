@@ -1962,6 +1962,8 @@ void cpu_init(cpu68k *c)
     c->model = 68020;
 }
 
+static void execute(cpu68k *c, uint16_t op);
+
 void cpu_step(cpu68k *c)
 {
     if (c->trace)
@@ -1970,7 +1972,20 @@ void cpu_step(cpu68k *c)
     uint16_t op = fetch16(c);
     c->op = op;
     c->icount++;
+    execute(c, op);
+}
 
+void cpu_execute_at(cpu68k *c, uint32_t pc)
+{
+    c->pc = pc;
+    c->op_pc = pc;
+    uint16_t op = fetch16(c);
+    c->op = op;
+    execute(c, op);
+}
+
+static void execute(cpu68k *c, uint16_t op)
+{
     switch (op >> 12) {
     case 0x0: op_line0(c, op); break;
     case 0x1:
@@ -2007,6 +2022,8 @@ void cpu_step(cpu68k *c)
 
 uint64_t cpu_run(cpu68k *c, uint64_t max)
 {
+    if (cpu_jit_enabled && !c->trace)
+        return cpu_jit_run(c, max);
     uint64_t start = c->icount;
     while (!c->halted && !c->stopped && c->icount - start < max)
         cpu_step(c);

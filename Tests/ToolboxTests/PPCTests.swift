@@ -25,6 +25,57 @@ extension BlueBox {
 
         @Test(arguments: ppcCases.map(\.name))
         func instructionCase(_ name: String) {
+            runCase(name)
+        }
+
+        /// The same cases through the JIT (where the host has one).
+        @Test(arguments: ppcCases.map(\.name))
+        func instructionCaseJIT(_ name: String) {
+            guard ppc_jit_available() else { return }
+            ppc_jit_enable(true, nil, nil)
+            defer { ppc_jit_enable(false, nil, nil) }
+            runCase(name)
+        }
+
+        /// Random blocks of translated instructions: the interpreter and the
+        /// JIT from the same state end with the same registers and memory.
+        @Test func jitMatchesInterpreterOnRandomBlocks() {
+            guard ppc_jit_available() else { return }
+            bootMachine()
+            var why = [CChar](repeating: 0, count: 1024)
+            var before = ppc_jit_stats()
+            ppc_jit_get_stats(&before)
+            let bad = ppc_jit_selftest(0x1234_5678, 10000, Self.codeAt, 0x6000_0000, &why, Int32(why.count))
+            #expect(bad == 0, "\(bad) mismatches; first: \(String(cString: why))")
+            var after = ppc_jit_stats()
+            ppc_jit_get_stats(&after)
+            #expect(after.translated - before.translated >= 10000 && after.jitted > before.jitted)
+        }
+
+        /// A store into the block being run (the next instruction but one)
+        /// takes effect, as under the interpreter.
+        @Test func jitSeesCodeItStoresAhead() {
+            guard ppc_jit_available() else { return }
+            bootMachine()
+            let code: [UInt32] = [0x908A_0008, 0x6000_0000, 0x3860_0000, 0x4800_0000] // stw r4,8(r10); nop; li r3,0; b .
+            for jit in [false, true] {
+                for (i, w) in code.enumerated() { wr32(Self.codeAt + UInt32(i * 4), w) }
+                var c = ppc_cpu()
+                ppc_init(&c)
+                c.pc = Self.codeAt
+                withUnsafeMutableBytes(of: &c.gpr) {
+                    $0.storeBytes(of: 0x3860_0005 as UInt32, toByteOffset: 4 * 4, as: UInt32.self) // r4: li r3,5
+                    $0.storeBytes(of: Self.codeAt, toByteOffset: 10 * 4, as: UInt32.self)
+                }
+                ppc_jit_enable(jit, nil, nil)
+                _ = ppc_run(&c, 4)
+                ppc_jit_enable(false, nil, nil)
+                let r3 = withUnsafeBytes(of: c.gpr) { $0.load(fromByteOffset: 3 * 4, as: UInt32.self) }
+                #expect(r3 == 5 && c.icount == 4, "jit \(jit): r3 \(r3), \(c.icount) instructions")
+            }
+        }
+
+        func runCase(_ name: String) {
             bootMachine()
             let t = ppcCases.first { $0.name == name }!
             for i in 0..<0x40 { wr32(0x6000_0000 + UInt32(i * 4), 0) }

@@ -52,7 +52,32 @@ void ppc_init(ppc_cpu *c);
 /* Run until halted or `max` instructions have executed; returns the count. */
 uint64_t ppc_run(ppc_cpu *c, uint64_t max);
 void ppc_step(ppc_cpu *c);
+/* Execute instruction `op` as if fetched (pc already past it), without
+ * counting it: the JIT's way to run an instruction it doesn't translate. */
+void ppc_execute(ppc_cpu *c, uint32_t op);
 void ppc_halt(ppc_cpu *c, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+
+/* The JIT (ppc_jit.c): off by default.  When on, ppc_run translates the
+ * blocks it meets into host code and runs them, the interpreter taking the
+ * instructions it doesn't translate.  Only on arm64 hosts for now. */
+extern bool ppc_jit_enabled;
+bool ppc_jit_available(void);
+/* Turn the JIT on or off; `cache_dir`, when not NULL, keeps translations
+ * between runs in a file there named after `cache_name`. */
+void ppc_jit_enable(bool on, const char *cache_dir, const char *cache_name);
+uint64_t ppc_jit_run(ppc_cpu *c, uint64_t max);
+/* Drop every translation (the code changed in a way stores didn't show). */
+void ppc_jit_flush(void);
+typedef struct ppc_jit_stats {
+    uint64_t blocks, translated, from_cache, invalidated, flushes, chained, interpreted, jitted;
+    uint64_t translate_ns;
+} ppc_jit_stats;
+void ppc_jit_get_stats(ppc_jit_stats *s);
+/* Differential test: random blocks of the instructions the JIT translates,
+ * run by the interpreter and by the JIT from the same state, registers and
+ * a scratch area of memory (at `scratch`, 64 KB) compared.  Returns the
+ * number of mismatches; describes the first in `why`. */
+int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scratch, char *why, int whylen);
 
 #include <string.h>
 static inline double ppc_fpr(const ppc_cpu *c, int n)

@@ -17,6 +17,13 @@ bool machine_boot(bool census);
 bool machine_launch(const char *app_path, char *err, size_t errlen);
 /* Run a fat application's PowerPC code rather than its 68k code. */
 void machine_set_prefer_ppc(bool on);
+/* The JIT (off by default): translate the program's 68k and PowerPC code
+ * to host code; false if this host has no JIT (arm64 only for now).
+ * cache_dir, if not NULL, keeps translations between runs (files per
+ * application there). */
+bool machine_set_jit(bool on, const char *cache_dir);
+/* A line per CPU about what the JIT did (empty when it was off). */
+void machine_jit_report(char *buf, size_t len);
 /* Before launching: a host folder becomes a volume of its own, named name
  * (UTF-8; the folder's name if empty), as the disk an application came on. */
 void machine_mount_folder(const char *path, const char *name);

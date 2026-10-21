@@ -719,6 +719,11 @@ void ppc_step(ppc_cpu *c)
     c->pc += 4;
     c->icount++;
     c->tb++;
+    ppc_execute(c, op);
+}
+
+void ppc_execute(ppc_cpu *c, uint32_t op)
+{
     int d = RD(op), a = RA(op);
     switch (OPCD(op)) {
     case 1: /* NATIVE */
@@ -879,6 +884,8 @@ void ppc_step(ppc_cpu *c)
 
 uint64_t ppc_run(ppc_cpu *c, uint64_t max)
 {
+    if (ppc_jit_enabled && !c->trace)
+        return ppc_jit_run(c, max);
     uint64_t start = c->icount;
     while (!c->halted && c->icount - start < max)
         ppc_step(c);
