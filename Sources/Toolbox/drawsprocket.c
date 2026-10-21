@@ -261,10 +261,14 @@ static void dsp_Release(ppc_cpu *c)
     RETURN(0);
 }
 
+/* One page (pageCount 1): no back buffer to swap, the program draws on
+ * the display itself (Star Wars DroidWorks blits each frame into it). */
+static bool single_buffered(void) { return rd32(ctx + 48) <= 1 && rd32(ctx + CTX_WINDOW); }
+
 static void dsp_GetBackBuffer(ppc_cpu *c)
 {
     if (R(2))
-        wr32(R(2), is_context(R(0)) ? rd32(ctx + CTX_GWORLD) : 0);
+        wr32(R(2), !is_context(R(0)) ? 0 : single_buffered() ? rd32(ctx + CTX_WINDOW) : rd32(ctx + CTX_GWORLD));
     RETURN(is_context(R(0)) ? 0 : kDSpInvalidContextErr);
 }
 static void dsp_GetFrontBuffer(ppc_cpu *c)
@@ -327,8 +331,9 @@ static void copy_rect(gaddr from, gaddr to, qrect q)
 static void dsp_SwapBuffers(ppc_cpu *c)
 {
     if (is_context(R(0))) {
-        swap();
-        gaddr back = rd32(ctx + CTX_GWORLD);
+        if (!single_buffered())
+            swap();
+        gaddr back = single_buffered() ? rd32(ctx + CTX_WINDOW) : rd32(ctx + CTX_GWORLD);
         if (is_alt(underlay) && back && dirty.bottom > dirty.top && dirty.right > dirty.left)
             copy_rect(rd32(underlay + ALT_GWORLD), back, dirty);
         dirty = (qrect){ 0, 0, 0, 0 };
