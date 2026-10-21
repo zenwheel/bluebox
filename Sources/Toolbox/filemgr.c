@@ -528,7 +528,15 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
     int i = 0;
     /* A full path "Volume:..." starts at the root. */
     bool has_colon = memchr(name, ':', (size_t)n) != NULL;
-    if (has_colon && name[0] != ':') {
+    /* So does a volume's name in the root's parent (fsRtParID), as
+     * FSMakeFSSpec gives a volume. */
+    bool volume = false;
+    if (hfs && dirid == 1 && !has_colon) {
+        volume = vol_name[0] == n && !mac_char_cmp(name, (const uint8_t *)vol_name + 1, n);
+        for (int k = 0; k < nmounts && !volume; k++)
+            volume = mounts[k].name[0] == n && !mac_char_cmp(name, (const uint8_t *)mounts[k].name + 1, n);
+    }
+    if ((has_colon || volume) && name[0] != ':') {
         while (i < n && name[i] != ':')
             i++;
         snprintf(path, sizeof path, "%s", root_path);

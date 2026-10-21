@@ -420,6 +420,21 @@ extension BlueBox {
             wr32(pb + 48, 1)
             #expect(tb_PBGetCatInfo(pb, false) == -43)
         }
+
+        /// In it, the volume's name names the root, as in a volume's FSSpec
+        /// (Greg's Browser looks the disk up that way).
+        @Test func volumeNameInTheRootParentIsTheRoot() {
+            launchTestApp()
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(64, false, true)
+            guestPString("Macintosh HD", at: name)
+            wr32(pb + 18, name)
+            wr32(pb + 48, 1)
+            #expect(tb_PBGetCatInfo(pb, false) == 0)
+            #expect(rd8(pb + 30) & 0x10 != 0 && rd32(pb + 48) == 2) // a directory, the root
+            guestPString("Elsewhere", at: name)
+            wr32(pb + 48, 1)
+            #expect(tb_PBGetCatInfo(pb, false) == -43)
+        }
     }
 
     @Suite struct LongNames {
