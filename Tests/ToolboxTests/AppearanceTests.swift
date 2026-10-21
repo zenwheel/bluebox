@@ -219,6 +219,23 @@ extension BlueBox {
             return (rd16(c), rd16(c + 2), rd16(c + 4))
         }
 
+        /// Mac OS 8.5's ControlsLib calls: 32-bit settings within the
+        /// record's 16 bits, and a scroll bar's view size (ZTerm sets it
+        /// once Gestalt says Appearance 1.1).
+        @Test func controlsLibThirtyTwoBitCalls() {
+            launchTestApp()
+            _ = initToolbox()
+            let w = window()
+            let bar = tb_NewControl(w, rect(10, 10, 110, 26), pstr(""), 1, 0, 0, 100, 16, 0)
+            tb_SetControl32BitMaximum(bar, 100_000)
+            #expect(tb_GetControl32BitMaximum(bar) == 32767)
+            tb_SetControl32BitValue(bar, 500)
+            #expect(tb_GetControl32BitValue(bar) == 500 && tb_GetControlValue(bar) == 500)
+            tb_SetControlViewSize(bar, 40)
+            #expect(tb_GetControlViewSize(bar) == 40)
+            #expect(tb_IsValidControlHandle(bar) != 0 && tb_IsValidControlHandle(w) == 0)
+        }
+
         @Test func embeddingFollowsTheRoot() {
             launchTestApp()
             _ = initToolbox()

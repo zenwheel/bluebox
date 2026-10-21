@@ -14494,6 +14494,73 @@ static void ppcglue_IsWindowModified(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetControl32BitValue(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int32_t a_newValue = (int32_t)c->gpr[4];
+    tb_SetControl32BitValue(a_theControl, a_newValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControl32BitValue(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControl32BitValue(a_theControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControl32BitMinimum(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int32_t a_newMinimum = (int32_t)c->gpr[4];
+    tb_SetControl32BitMinimum(a_theControl, a_newMinimum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControl32BitMinimum(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControl32BitMinimum(a_theControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControl32BitMaximum(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int32_t a_newMaximum = (int32_t)c->gpr[4];
+    tb_SetControl32BitMaximum(a_theControl, a_newMaximum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControl32BitMaximum(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControl32BitMaximum(a_theControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlViewSize(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int32_t a_newViewSize = (int32_t)c->gpr[4];
+    tb_SetControlViewSize(a_theControl, a_newViewSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlViewSize(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlViewSize(a_theControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsValidControlHandle(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsValidControlHandle(a_theControl);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMoviesError(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMoviesError();
@@ -26997,6 +27064,9 @@ const ppc_export ppc_exports[] = {
     {"GetCompressedPixMapInfo", ppctrap_GetCompressedPixMapInfo},
     {"GetCompressionInfo", ppctrap_GetCompressionInfo},
     {"GetCompressionTime", ppcglue_GetCompressionTime},
+    {"GetControl32BitMaximum", ppcglue_GetControl32BitMaximum},
+    {"GetControl32BitMinimum", ppcglue_GetControl32BitMinimum},
+    {"GetControl32BitValue", ppcglue_GetControl32BitValue},
     {"GetControlAction", ppcglue_GetControlAction},
     {"GetControlData", ppcglue_GetControlData},
     {"GetControlDataSize", ppcglue_GetControlDataSize},
@@ -27007,6 +27077,7 @@ const ppc_export ppc_exports[] = {
     {"GetControlTitle", ppcglue_GetControlTitle},
     {"GetControlValue", ppcglue_GetControlValue},
     {"GetControlVariant", ppcglue_GetControlVariant},
+    {"GetControlViewSize", ppcglue_GetControlViewSize},
     {"GetCurrentProcess", ppcglue_GetCurrentProcess},
     {"GetCurrentThread", ppcglue_GetCurrentThread},
     {"GetCursor", ppcglue_GetCursor},
@@ -27540,6 +27611,7 @@ const ppc_export ppc_exports[] = {
     {"IsShowContextualMenuClick", ppcglue_IsShowContextualMenuClick},
     {"IsThemeInColor", ppcglue_IsThemeInColor},
     {"IsValidAppearanceFileType", ppcglue_IsValidAppearanceFileType},
+    {"IsValidControlHandle", ppcglue_IsValidControlHandle},
     {"IsValidIconRef", ppcglue_IsValidIconRef},
     {"IsValidWindowPtr", ppcglue_IsValidWindowPtr},
     {"IsWindowCollapsable", ppcglue_IsWindowCollapsable},
@@ -28897,6 +28969,9 @@ const ppc_export ppc_exports[] = {
     {"SetCollectionExceptionProc", ppctrap_SetCollectionExceptionProc},
     {"SetCollectionItemInfo", ppctrap_SetCollectionItemInfo},
     {"SetCompressedPixMapInfo", ppctrap_SetCompressedPixMapInfo},
+    {"SetControl32BitMaximum", ppcglue_SetControl32BitMaximum},
+    {"SetControl32BitMinimum", ppcglue_SetControl32BitMinimum},
+    {"SetControl32BitValue", ppcglue_SetControl32BitValue},
     {"SetControlAction", ppcglue_SetControlAction},
     {"SetControlColor", ppcglue_SetControlColor},
     {"SetControlData", ppcglue_SetControlData},
@@ -28907,6 +28982,7 @@ const ppc_export ppc_exports[] = {
     {"SetControlSupervisor", ppcglue_SetControlSupervisor},
     {"SetControlTitle", ppcglue_SetControlTitle},
     {"SetControlValue", ppcglue_SetControlValue},
+    {"SetControlViewSize", ppcglue_SetControlViewSize},
     {"SetControlVisibility", ppcglue_SetControlVisibility},
     {"SetCursor", ppcglue_SetCursor},
     {"SetCustomIconsEnabled", ppcglue_SetCustomIconsEnabled},

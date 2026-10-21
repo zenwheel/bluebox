@@ -339,6 +339,7 @@ typedef struct {
     uint8_t saved_hilite;
     int8_t new_msgs; /* takes Control Manager 2.0's messages: -1 not asked yet */
     uint8_t font[24];
+    int32_t view_size; /* SetControlViewSize's */
     void *ap;
 } ctl_info;
 typedef struct {
