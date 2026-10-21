@@ -599,6 +599,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** SimpleText PPC and HyperCard 2.4 (PPC) reach parity with their 68k runs from M3 and M7. A fat app picks PPC by default; the profile can force 68k.
 
+**Status (2026-10-20): done.** HyperCard 2.4.1, PowerPC and 68k, runs the Home stack, moves between cards (Go menu keys, the card buttons, the message box), opens the Practice and Addresses stacks and shows the Tools palette and the Navigator, with the same screen pixel for pixel either way. That took: generated InterfaceLib glue going through the trap table for a Toolbox trap the program has patched (HyperCard patches SelectWindow and ShowWindow); WaitNextEvent taking its events through a program's GetNextEvent patch; an activate event whenever the front window becomes the active one; a 'KCHR' 0 in the System file (HyperCard wants one before it takes Return in the message box); SaveOld and DrawNew repainting what a window leaves when the program moves it itself. SimpleText was never PowerPC code: every copy in the corpus and on the Mac OS 8 and 9 disks (1.3, 1.4) is 68k only, so it runs as at M3 whatever the setting. A fat application runs its PowerPC code unless its cpu setting is 68020 or 68040 (or `--68k`). Internet Explorer 5.1 now runs as PowerPC code (fragments' exports are known before the libraries they import, which a cycle between its C++ and memory libraries needs; MathLib's float classification calls; OSDispatch $40 and $41), so no fat application in the census works only as 68k. Census (2026-10-20, the 68k one run with `--68k`): 178 of 225 PowerPC runs and 790 of 1,036 68k runs reach their event loop; of the 158 fat applications, 126 do as PowerPC code and 120 as 68k code.
+
 **Status (2026-10-16):**
 
 - **Done:**
@@ -622,12 +624,11 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Census:** of the 225 PowerPC and fat applications in the corpus, run as PowerPC, 167 reach their event loop (`--ppc`); of the 1,036 68k ones, 780 (2026-10-18). The corpus, the lists and the scripts are kept outside the repository (macOS's /tmp cleaner took an earlier copy); `run_census.sh <dir> <binary> <name>` runs both.
   - Of the 157 fat ones, 110+ reach it either way, and only a handful only as 68k.
 - **Next:**
-  - Make PowerPC the default for fat applications once the last 68k-only cases are understood (Shockwave Demo, Internet Explorer 5, Portfolio Browser).
   - Report Mac OS 8.1 to applications that require it. That depends on M9's Appearance Manager and Navigation Services, because Setback, Spades, sixtyforce and Sound Studio check for them.
   - StarCraft's display check: Storm enumerates modes and still refuses 640×480×8.
   - Open Transport's libraries (M9).
   - The rest of the missing imports, ranked by the PowerPC census (`imports` column).
-  - SimpleText PPC and HyperCard PPC against the exit criteria.
+  - HyperCard 2.4's Practice stack sometimes leaves the background title off its second card, as PowerPC or 68k code alike.
   - A PowerPC oracle (SheepShaver with a New World ROM).
 - **Status (2026-10-20):** the census's missing imports are in (Slot Manager, sound conversion, Carbon-era helpers, StdCLib file calls, the CursorDevice calls, and more), StarCraft's Display Manager modes carry their timing flags where Storm reads them, and the ContextualMenu library is ours. Census at the end of that day (Appearance and games merged, Word, PopChar and Shards fixed): 177 of 225 PowerPC runs and 790 of 1,036 68k runs reach their event loop.
 - **Known:** Star Chaos and Smashing Windows II run wild in a VBL task. Space Debris spends its headless budget mixing sound in its double-buffer callback (the headless clock gives 100 ns an instruction).
