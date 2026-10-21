@@ -552,13 +552,114 @@ static void dsp_GetDirtyRectGridSize(ppc_cpu *c)
 }
 static void dsp_unsupported(ppc_cpu *c) { RETURN(-30450); } /* kDSpFeatureNotImplementedErr */
 
+/* DSpBlit_Fastest and DSpBlit_Faster(info, asyncOK): DSpBlitInfo is
+ * completionFlag 0, completionProc 4, srcContext 8, srcBuffer 12,
+ * srcRect 16, srcKey 24, dstContext 28, dstBuffer 32, dstRect 36,
+ * dstKey 44, mode 48 (1: srcKey, 2: dstKey, 4: interpolate).  Done at once:
+ * pixel by pixel between buffers of one depth and size, keys honoured;
+ * otherwise by CopyBits.  The completion flag is set, the routine not
+ * called (asynchronous blits are never left running). */
+enum { kDSpBlitMode_SrcKey = 1, kDSpBlitMode_DstKey = 2 };
+
+static bool buffer_pixels(gaddr port, gaddr *base, uint32_t *row_bytes, int *depth, qrect *bounds)
+{
+    if (!port || !qd_port_is_color(port))
+        return false;
+    gaddr h = rd32(port + CGrafPort_portPixMap_off);
+    gaddr pm = h ? rd32(h) : 0;
+    if (!pm)
+        return false;
+    *base = PixMap_baseAddr(pm);
+    *row_bytes = (uint32_t)(PixMap_rowBytes(pm) & 0x3FFF);
+    *depth = PixMap_pixelSize(pm);
+    *bounds = qrect_get(pm + PixMap_bounds_off);
+    return *base != 0;
+}
+
+static uint32_t get_pixel(gaddr row, int x, int depth)
+{
+    switch (depth) {
+    case 8: return rd8(row + (uint32_t)x);
+    case 16: return rd16(row + (uint32_t)x * 2);
+    case 32: return rd32(row + (uint32_t)x * 4);
+    default: {
+        uint32_t bit = (uint32_t)x * (uint32_t)depth;
+        return (rd8(row + bit / 8) >> (8 - depth - bit % 8)) & ((1u << depth) - 1);
+    }
+    }
+}
+
+static void put_pixel(gaddr row, int x, int depth, uint32_t v)
+{
+    switch (depth) {
+    case 8: wr8(row + (uint32_t)x, (uint8_t)v); break;
+    case 16: wr16(row + (uint32_t)x * 2, (uint16_t)v); break;
+    case 32: wr32(row + (uint32_t)x * 4, v); break;
+    default: {
+        uint32_t bit = (uint32_t)x * (uint32_t)depth, sh = 8 - (uint32_t)depth - bit % 8;
+        uint8_t m = (uint8_t)(((1u << depth) - 1) << sh);
+        wr8(row + bit / 8, (uint8_t)((rd8(row + bit / 8) & ~m) | ((v << sh) & m)));
+    }
+    }
+}
+
+static void dsp_Blit(ppc_cpu *c)
+{
+    gaddr info = R(0);
+    if (!info)
+        RETURN(paramErr);
+    else {
+        gaddr src = rd32(info + 12), dst = rd32(info + 32);
+        qrect sr = qrect_get(info + 16), dr = qrect_get(info + 36);
+        uint32_t mode = rd32(info + 48), skey = rd32(info + 24), dkey = rd32(info + 44);
+        gaddr sb, db;
+        uint32_t srb, drb;
+        int sd, dd;
+        qrect sbn, dbn;
+        int w = sr.right - sr.left, h = sr.bottom - sr.top;
+        if (buffer_pixels(src, &sb, &srb, &sd, &sbn) && buffer_pixels(dst, &db, &drb, &dd, &dbn) && sd == dd &&
+            w == dr.right - dr.left && h == dr.bottom - dr.top) {
+            for (int y = 0; y < h; y++) {
+                int sy = sr.top + y - sbn.top, dy = dr.top + y - dbn.top;
+                if (sy < 0 || dy < 0 || sy >= sbn.bottom - sbn.top || dy >= dbn.bottom - dbn.top)
+                    continue;
+                gaddr srow = sb + (uint32_t)sy * srb, drow = db + (uint32_t)dy * drb;
+                for (int x = 0; x < w; x++) {
+                    int sx = sr.left + x - sbn.left, dx = dr.left + x - dbn.left;
+                    if (sx < 0 || dx < 0 || sx >= sbn.right - sbn.left || dx >= dbn.right - dbn.left)
+                        continue;
+                    uint32_t v = get_pixel(srow, sx, sd);
+                    if ((mode & kDSpBlitMode_SrcKey) && v == skey)
+                        continue;
+                    if ((mode & kDSpBlitMode_DstKey) && get_pixel(drow, dx, dd) != dkey)
+                        continue;
+                    put_pixel(drow, dx, dd, v);
+                }
+            }
+        } else if (src && dst) {
+            gaddr r = tb_NewPtr(16, true, true);
+            qrect_put(r, sr);
+            qrect_put(r + 8, dr);
+            gaddr saved = tb_NewPtr(8, false, true);
+            tb_GetGWorld(saved, saved + 4);
+            tb_SetGWorld(dst, 0);
+            tb_CopyBits(src + CGrafPort_portPixMap_off, dst + CGrafPort_portPixMap_off, r, r + 8, 0, 0);
+            tb_SetGWorld(rd32(saved), rd32(saved + 4));
+            tb_DisposePtr(saved);
+            tb_DisposePtr(r);
+        }
+        wr8(info, 1); /* completionFlag */
+        RETURN(0);
+    }
+}
+
 const ppc_export dsp_exports[] = {
     { "DSpAltBuffer_Dispose", dsp_AltBufferDispose },
     { "DSpAltBuffer_GetCGrafPtr", dsp_AltBufferGetCGrafPtr },
     { "DSpAltBuffer_InvalRect", dsp_noErr },
     { "DSpAltBuffer_New", dsp_AltBufferNew },
-    { "DSpBlit_Faster", dsp_unsupported },
-    { "DSpBlit_Fastest", dsp_unsupported },
+    { "DSpBlit_Faster", dsp_Blit },
+    { "DSpBlit_Fastest", dsp_Blit },
     { "DSpContext_Dispose", dsp_noErr },
     { "DSpContext_Flatten", dsp_Flatten },
     { "DSpContext_GetDirtyRectGridSize", dsp_GetDirtyRectGridSize },
