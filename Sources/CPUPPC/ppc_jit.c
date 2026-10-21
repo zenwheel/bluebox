@@ -11,7 +11,10 @@
  * interpreter's ppc_execute for that one instruction.
  *
  * Guest state stays in the ppc_cpu structure; translated code loads and
- * stores it there.  Host registers while a block runs:
+ * stores it there, except that the five GPRs a block uses most are kept
+ * in x24-x28 while it runs (loaded on entry, written back before an
+ * instruction goes to the interpreter and before the block's exits).
+ * Host registers while a block runs:
  *   x19  the ppc_cpu
  *   x20  the guest memory arena (g_mem)
  *   x21  the JIT context (helpers, the exit, the screen watch, lookups)
@@ -85,7 +88,7 @@ int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
 enum { HC = 19, HM = 20, HX = 21, HB = 22, HMAP = 23 };
 enum { MAX_INSN = 64, CODE_SIZE = 64 << 20, FAST_BITS = 14, PC_BUCKETS = 1 << 16, RG_BUCKETS = 1 << 16 };
 /* Bumped whenever translated code changes shape (the cache's build). */
-#define TRANSLATOR_VERSION 1
+#define TRANSLATOR_VERSION 2
 
 /* ------------------------------------------------------------------ */
 /* State */
@@ -281,10 +284,43 @@ typedef struct tctx {
     int sets_flags;              /* ... or set them for this field */
     uint8_t cr_dead[MAX_INSN];   /* fields written that nothing reads */
     int at;                      /* index of the instruction */
+    int8_t host[32];             /* the host register caching a GPR, or -1 */
+    bool dirty[32];              /* ... changed since it was loaded */
 } tctx;
 
-static void ldg(tctx *t, int w, int r) { a64_ldst(&t->b, A64_LDRW, w, HC, GPR(r)); }
-static void stg(tctx *t, int w, int r) { a64_ldst(&t->b, A64_STRW, w, HC, GPR(r)); }
+/* GPRs: through the host register caching them, if any. */
+static void ldg(tctx *t, int w, int r)
+{
+    if (t->host[r] >= 0)
+        a64_mov(&t->b, false, w, t->host[r]);
+    else
+        a64_ldst(&t->b, A64_LDRW, w, HC, GPR(r));
+}
+static void stg(tctx *t, int w, int r)
+{
+    if (t->host[r] >= 0) {
+        a64_mov(&t->b, false, t->host[r], w);
+        t->dirty[r] = true;
+    } else {
+        a64_ldst(&t->b, A64_STRW, w, HC, GPR(r));
+    }
+}
+/* The cached GPRs written back to the ppc_cpu (before the interpreter
+ * runs an instruction, and at the block's end). */
+static void cache_flush(tctx *t)
+{
+    for (int r = 0; r < 32; r++)
+        if (t->host[r] >= 0 && t->dirty[r]) {
+            a64_ldst(&t->b, A64_STRW, t->host[r], HC, GPR(r));
+            t->dirty[r] = false;
+        }
+}
+static void cache_load(tctx *t)
+{
+    for (int r = 0; r < 32; r++)
+        if (t->host[r] >= 0)
+            a64_ldst(&t->b, A64_LDRW, t->host[r], HC, GPR(r));
+}
 static void ldf(tctx *t, int w, uint32_t off) { a64_ldst(&t->b, A64_LDRW, w, HC, off); }
 static void stf(tctx *t, int w, uint32_t off) { a64_ldst(&t->b, A64_STRW, w, HC, off); }
 /* rA, or 0 for register 0 where the instruction says so. */
@@ -1300,22 +1336,46 @@ static block *translate(uint32_t pc)
         live = (uint8_t)((live & ~wr) | rd);
     }
 
+    /* The GPRs used most in the block's translated instructions live in
+     * x24-x28 while it runs. */
+    int uses[32] = { 0 };
+    for (uint32_t i = 0; i < n; i++)
+        if (kinds[i] == K_NATIVE) {
+            uses[RD(ops[i])]++;
+            uses[RA(ops[i])]++;
+            uses[RB(ops[i])]++;
+        }
+    memset(t.host, -1, sizeof t.host);
+    for (int h = 24; h <= 28; h++) {
+        int best = -1;
+        for (int r = 0; r < 32; r++)
+            if (t.host[r] < 0 && uses[r] >= 2 && (best < 0 || uses[r] > uses[best]))
+                best = r;
+        if (best < 0)
+            break;
+        t.host[best] = (int8_t)h;
+    }
+
     a64_buf *b = &t.b;
     a64_addsub_imm(b, A64_SUBSI, true, HB, HB, n);
     uint32_t to_over = a64_here(b);
     a64_bcond(b, A64_LT, 0);
+    cache_load(&t);
 
     for (uint32_t i = 0; i < n; i++) {
         uint32_t op = ops[i], ipc = pc + 4 * i;
         t.at = (int)i;
         t.last_pc = ipc;
         if (kinds[i] == K_BRANCH) {
+            cache_flush(&t);
             emit_branch(&t, op, ipc);
             break;
         }
         bool ok = kinds[i] == K_NATIVE && emit(&t, op, ipc);
         if (!ok) {
+            cache_flush(&t);
             execute(&t, op);
+            cache_load(&t);
             t.keeps_flags = false;
             t.sets_flags = -1;
         }
@@ -1325,6 +1385,7 @@ static block *translate(uint32_t pc)
             t.flags_crf = -1;
     }
     if (!ends_in_branch) {
+        cache_flush(&t);
         t.last_pc = pc + 4 * (n - 1);
         exit_to(&t, pc + 4 * n);
     }
@@ -1363,10 +1424,12 @@ static bool setup(void)
     uint32_t words[64];
     a64_buf b = { words, 0, 64, false };
     /* enter(cpu x0, ctx x1, budget x2, entry x3) -> budget left */
-    a64_stp_pre(&b, 29, 30, A64_SP, -64);
+    a64_stp_pre(&b, 29, 30, A64_SP, -96);
     a64_stp(&b, 19, 20, A64_SP, 16);
     a64_stp(&b, 21, 22, A64_SP, 32);
     a64_stp(&b, 23, 24, A64_SP, 48);
+    a64_stp(&b, 25, 26, A64_SP, 64);
+    a64_stp(&b, 27, 28, A64_SP, 80);
     a64_addsub_imm(&b, A64_ADDI, true, 29, A64_SP, 0);
     a64_mov(&b, true, HC, 0);
     a64_mov(&b, true, HX, 1);
@@ -1377,10 +1440,12 @@ static bool setup(void)
     uint32_t exit_at = b.n;
     a64_ldst(&b, A64_STRX, 1, HX, CTX(last_stub));
     a64_mov(&b, true, 0, HB);
+    a64_ldp(&b, 27, 28, A64_SP, 80);
+    a64_ldp(&b, 25, 26, A64_SP, 64);
     a64_ldp(&b, 23, 24, A64_SP, 48);
     a64_ldp(&b, 21, 22, A64_SP, 32);
     a64_ldp(&b, 19, 20, A64_SP, 16);
-    a64_ldp_post(&b, 29, 30, A64_SP, 64);
+    a64_ldp_post(&b, 29, 30, A64_SP, 96);
     a64_ret(&b);
     uint32_t *at = jit_code_alloc(&J.code, b.n * 4);
     jit_code_write_begin(&J.code);
