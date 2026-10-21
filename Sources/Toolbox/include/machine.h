@@ -562,6 +562,61 @@ void machine_open_documents(const char *const *paths, int n, bool print);
  * Manager handlers see it at its next event call. */
 enum { MACHINE_DRAG_ENTER, MACHINE_DRAG_MOVE, MACHINE_DRAG_LEAVE, MACHINE_DRAG_DROP };
 void machine_host_drag(int kind, int x, int y, const char *const *files, int nfiles, const char *text);
+
+/* Drags out of the machine: a program's TrackDrag that leaves its windows
+ * for the host.  While a TrackDrag follows the mouse (machine_drag_out_
+ * tracking), the host says whether the pointer is outside the machine's
+ * windows; once it is, the drag is handed to the host's handler (on the
+ * emulator thread, which must not block: the host copies what it needs and
+ * starts its own drag session).  Each item's flavors come converted:
+ * 'TEXT' as UTF-8 text, 'TEXT' with 'styl' as RTF, 'hfs ' as the file's
+ * host path, 'PICT' as RGBA pixels, 'phfs' (a promised file) as a file the
+ * sender writes into a folder the host names.  A representation without
+ * data (promised, or costly to make) is fetched with machine_drag_out_data,
+ * from any thread but the emulator's, which calls the sender's send
+ * procedure.  The host reports the pointer back over the machine's windows
+ * (machine_drag_out_over) and how the drag ended (machine_drag_out_end):
+ * TrackDrag then returns, with the drop location the program asks for. */
+enum { MACHINE_FLAVOR_TEXT, MACHINE_FLAVOR_RTF, MACHINE_FLAVOR_FILE, MACHINE_FLAVOR_IMAGE, MACHINE_FLAVOR_PROMISED_FILE };
+typedef struct {
+    int kind;                    /* MACHINE_FLAVOR_* */
+    uint32_t type;               /* the classic flavor it comes from */
+    const uint8_t *data;         /* NULL: ask machine_drag_out_data */
+    size_t size;                 /* TEXT, RTF: the bytes; FILE: a UTF-8 path */
+    uint32_t file_type, file_creator; /* PROMISED_FILE: the file to come */
+} machine_drag_rep;
+typedef struct {
+    int nreps;
+    const machine_drag_rep *reps;
+} machine_drag_item;
+typedef struct {
+    int nitems;
+    const machine_drag_item *items;
+    int16_t h, v;                /* where it left, Mac global */
+} machine_drag_export;
+/* False refuses the drag: it goes on inside the machine. */
+typedef bool (*machine_drag_out_fn)(const machine_drag_export *drag, void *ctx);
+void machine_set_drag_out_handler(machine_drag_out_fn fn, void *ctx);
+bool machine_drag_out_tracking(void);
+void machine_drag_out_pointer(bool outside);
+/* A representation's data (*data malloc'd; IMAGE: width * height * 4
+ * bytes of RGBA).  PROMISED_FILE: folder is where the file is to go (the
+ * drop location the sender sees), and *data the path it wrote.  False if
+ * the sender could not give it, or the drag is over. */
+typedef struct {
+    uint8_t *data;
+    size_t size;
+    int width, height;
+} machine_drag_data;
+bool machine_drag_out_data(int item, int kind, const char *folder, machine_drag_data *out);
+/* The host's drag over the machine's windows again at x, y (inside), or
+ * away from them. */
+void machine_drag_out_over(bool inside, int x, int y);
+/* DROPPED: the host took it (folder: where it went, if a folder; or NULL);
+ * INSIDE: dropped back on the machine's windows at x, y; CANCELLED. */
+enum { MACHINE_DRAG_OUT_DROPPED, MACHINE_DRAG_OUT_INSIDE, MACHINE_DRAG_OUT_CANCELLED };
+void machine_drag_out_end(int how, int x, int y, const char *folder);
+
 void machine_send_open_application(void);
 void machine_send_quit(void);
 /* Ask the app to quit (Quit Application event, or its own Quit command). */

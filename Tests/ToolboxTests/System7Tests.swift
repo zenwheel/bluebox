@@ -252,6 +252,188 @@ extension BlueBox {
             #expect(!opened())
         }
 
+        /// What the host was given, as it would copy it.
+        struct Exported {
+            var reps: [[(kind: Int32, type: UInt32, data: Data?)]] = []
+            var at = (h: Int16(0), v: Int16(0))
+        }
+        nonisolated(unsafe) static var exported = Exported()
+        nonisolated(unsafe) static var fetched: [String] = []
+        nonisolated(unsafe) static var hostSide: (() -> Void)?
+
+        /// The host's side of a drag out: copy what it was given, then (from
+        /// another thread, as the host's main thread would) ask for data and
+        /// end the drag.
+        static let dragOutHandler: machine_drag_out_fn = { x, _ in
+            guard let x = x?.pointee else { return false }
+            var e = Exported()
+            e.at = (x.h, x.v)
+            for i in 0..<Int(x.nitems) {
+                let item = x.items[i]
+                e.reps.append((0..<Int(item.nreps)).map { k in
+                    let r = item.reps[k]
+                    return (r.kind, r.type, r.data.map { Data(bytes: $0, count: r.size) })
+                })
+            }
+            exported = e
+            if let side = hostSide { Thread.detachNewThread(side) }
+            return true
+        }
+
+        static func fetch(_ item: Int32, _ kind: Int32, folder: String? = nil) -> String? {
+            var out = machine_drag_data()
+            guard machine_drag_out_data(item, kind, folder, &out) else { return nil }
+            defer { free(out.data) }
+            return String(decoding: Data(bytes: out.data, count: out.size), as: UTF8.self)
+        }
+
+        /// A drag that leaves the windows goes to the host with its flavors
+        /// converted, promised data fetched through the send procedure on
+        /// request, and the drop location the host gives.
+        @Test func dragsOutToTheHost() {
+            let dir = launchTestApp()
+            _ = initToolbox()
+            let file = hostFile("note.txt", "hi", in: dir)
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [100, 100, 300, 400].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            _ = tb_NewWindow(0, r, tb_NewPtr(2, false, true), 1, 0, 0xFFFF_FFFF, 0, 0)
+            let refp = tb_NewPtr(4, false, true)
+            #expect(tb_NewDrag(refp) == 0)
+            let drag = rd32(refp)
+            func flavor(_ item: UInt32, _ type: String, _ bytes: [UInt8]?) {
+                var p: UInt32 = 0
+                if let bytes {
+                    p = tb_NewPtr(Int32(max(bytes.count, 1)), false, false)
+                    for (i, b) in bytes.enumerated() { wr8(p + UInt32(i), b) }
+                }
+                #expect(tb_AddDragItemFlavor(drag, item, Int32(bitPattern: fourCC(type)), p,
+                                             Int32(bytes?.count ?? 0), 0) == 0)
+            }
+            // 1: styled text ("caf" plain, "é!" bold in Geneva 12, red)
+            flavor(1, "TEXT", [0x63, 0x61, 0x66, 0x8E, 0x21, 0x0D, 0x7B])
+            var styl: [UInt8] = [0, 2]
+            for (start, face, red) in [(0, 0, 0), (3, 1, 0xFFFF)] {
+                styl += [0, 0, 0, UInt8(start), 0, 16, 0, 12, 0, 3, UInt8(face), 0, 0, 12,
+                         UInt8(red >> 8), UInt8(red & 0xFF), 0, 0, 0, 0]
+            }
+            flavor(1, "styl", styl)
+            // 2: a file
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            fm_spec_for_path(file.path, spec)
+            var hfs = [UInt8](repeating: 0, count: 10 + Int(FSSpec_SIZEOF))
+            for i in 0..<Int(FSSpec_SIZEOF) { hfs[10 + i] = rd8(spec + UInt32(i)) }
+            flavor(2, "hfs ", hfs)
+            // 3: promised text, from the send procedure
+            flavor(3, "TEXT", nil)
+            let late = tb_NewPtr(4, false, false)
+            for (i, b) in "late".utf8.enumerated() { wr8(late + UInt32(i), b) }
+            let words: [UInt16] = [0x4267,                         // CLR.W -(SP): result
+                                   0x2F2F, 0x0006,                 // theDrag
+                                   0x2F2F, 0x000E,                 // theItemRef
+                                   0x2F2F, 0x001A,                 // theType
+                                   0x4879, UInt16(late >> 16), UInt16(late & 0xFFFF),
+                                   0x2F3C, 0x0000, 0x0004,         // dataSize 4
+                                   0x42A7,                         // dataOffset 0
+                                   0x303C, 0x0009, 0xABED,         // SetDragItemFlavorData
+                                   0x548F,                         // ADDQ.L #2,SP
+                                   0x426F, 0x0014,                 // CLR.W 20(SP): noErr
+                                   0x205F, 0x4FEF, 0x0010, 0x4ED0] // pop and return
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            #expect(tb_SetDragSendProc(drag, code, 0) == 0)
+            // 4: a picture (version 1, a 12 by 10 frame, a painted rectangle)
+            flavor(4, "PICT", [0, 22, 0, 0, 0, 0, 0, 10, 0, 12, 0x11, 0x01,
+                               0x31, 0, 0, 0, 0, 0, 5, 0, 12, 0xFF])
+
+            Self.fetched = []
+            Self.hostSide = {
+                Self.fetched.append(Self.fetch(2, Int32(MACHINE_FLAVOR_TEXT)) ?? "-")
+                var image = machine_drag_data()
+                if machine_drag_out_data(3, Int32(MACHINE_FLAVOR_IMAGE), nil, &image) {
+                    Self.fetched.append("\(image.width)x\(image.height) \(image.data[0]) \(image.data[9 * 48])")
+                    free(image.data)
+                }
+                machine_drag_out_end(Int32(MACHINE_DRAG_OUT_DROPPED), 0, 0, dir.path)
+            }
+            machine_set_drag_out_handler(Self.dragOutHandler, nil)
+            defer { machine_set_drag_out_handler(nil, nil) }
+            machine_post_mouse(150, 150, 1)
+            #expect(!machine_drag_out_tracking())
+            machine_drag_out_pointer(true)
+            let event = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            wr32(event + 10, 150 << 16 | 150)
+            #expect(tb_TrackDrag(drag, event, 0) == 0)
+            machine_post_mouse(150, 150, 0)
+
+            let e = Self.exported
+            #expect(e.at == (150, 150))
+            #expect(e.reps.count == 4)
+            let rtf = e.reps[0].first { $0.kind == Int32(MACHINE_FLAVOR_RTF) }?.data
+                .map { String(decoding: $0, as: UTF8.self) } ?? ""
+            #expect(rtf.hasPrefix("{\\rtf1\\mac"))
+            #expect(rtf.contains("Geneva;"))
+            #expect(rtf.contains("\\red255\\green0\\blue0;"))
+            #expect(rtf.contains("{\\f0\\fs24\\cf1 caf}"))
+            #expect(rtf.contains("{\\f0\\fs24\\cf2\\b \\'8e!\\par\n\\{}"))
+            let text = e.reps[0].first { $0.kind == Int32(MACHINE_FLAVOR_TEXT) }?.data
+            #expect(text == Data("café!\n{".utf8))
+            #expect(e.reps[1].map(\.kind) == [Int32(MACHINE_FLAVOR_FILE)])
+            let path = e.reps[1][0].data.map { String(decoding: $0, as: UTF8.self) } ?? ""
+            #expect(URL(fileURLWithPath: path).resolvingSymlinksInPath() == file.resolvingSymlinksInPath())
+            #expect(e.reps[2].count == 1 && e.reps[2][0].data == nil) // promised: on request
+            #expect(e.reps[3].map(\.kind) == [Int32(MACHINE_FLAVOR_IMAGE)])
+            #expect(Self.fetched == ["late", "12x10 0 255"]) // black above, white below
+            // Dropped in a host folder: an alias to it.
+            let loc = tb_NewPtr(8, false, true)
+            #expect(tb_GetDropLocation(drag, loc) == 0 && rd32(loc) == fourCC("alis") && rd32(loc + 4) != 0)
+            #expect(Self.fetch(0, Int32(MACHINE_FLAVOR_TEXT)) == nil) // over: no more requests
+            #expect(tb_DisposeDrag(drag) == 0)
+        }
+
+        /// Brought back over a window and dropped there, the drag goes to
+        /// the window's receive handlers; cancelled, TrackDrag says so.
+        @Test func dragsOutAndBack() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [100, 100, 300, 400].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            _ = tb_NewWindow(0, r, tb_NewPtr(2, false, true), 1, 0, 0xFFFF_FFFF, 0, 0)
+            let got = tb_NewPtr(4, false, true)
+            let words: [UInt16] = [0x23EF, 0x0004, UInt16(got >> 16), UInt16(got & 0xFFFF), // MOVE.L 4(SP),got
+                                   0x426F, 0x0010,                                        // CLR.W 16(SP): noErr
+                                   0x205F, 0x4FEF, 0x000C, 0x4ED0]                         // pop and return
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            #expect(tb_InstallReceiveHandler(code, 0, 0) == 0)
+            let refp = tb_NewPtr(4, false, true)
+            #expect(tb_NewDrag(refp) == 0)
+            let drag = rd32(refp)
+            let p = tb_NewPtr(2, false, false)
+            wr16(p, 0x6869)
+            #expect(tb_AddDragItemFlavor(drag, 1, Int32(bitPattern: fourCC("TEXT")), p, 2, 0) == 0)
+            machine_set_drag_out_handler(Self.dragOutHandler, nil)
+            defer { machine_set_drag_out_handler(nil, nil) }
+            let event = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            wr32(event + 10, 150 << 16 | 150)
+
+            Self.hostSide = {
+                machine_drag_out_over(true, 200, 200)
+                machine_drag_out_end(Int32(MACHINE_DRAG_OUT_INSIDE), 210, 210, nil)
+            }
+            machine_post_mouse(150, 150, 1)
+            machine_drag_out_pointer(true)
+            #expect(tb_TrackDrag(drag, event, 0) == 0)
+            #expect(rd32(got) == drag)
+            let loc = tb_NewPtr(8, false, true)
+            #expect(tb_GetDropLocation(drag, loc) == 0 && rd32(loc) == fourCC("null"))
+
+            Self.hostSide = { machine_drag_out_end(Int32(MACHINE_DRAG_OUT_CANCELLED), 0, 0, nil) }
+            machine_drag_out_pointer(true)
+            #expect(tb_TrackDrag(drag, event, 0) == -128) // userCanceledErr
+            machine_post_mouse(150, 150, 0)
+            #expect(tb_DisposeDrag(drag) == 0)
+        }
+
         @Test func hiliteRegionCoversTheSelection() {
             launchTestApp()
             _ = initToolbox()
