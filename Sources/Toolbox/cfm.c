@@ -164,6 +164,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < mm_export_count; i++)
         if (!strcmp(mm_exports[i].name, name))
             return mm_exports[i].fn;
+    for (unsigned i = 0; i < tec_export_count; i++)
+        if (!strcmp(tec_exports[i].name, name))
+            return tec_exports[i].fn;
     for (unsigned i = 0; i < ppc_glue_export_count; i++)
         if (!strcmp(ppc_glue_exports[i].name, name))
             return ppc_glue_exports[i].fn;
@@ -450,17 +453,14 @@ static const char *const native_libraries[] = {
     "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
     "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
     "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
+    "TextCommon", "UnicodeConverter", "TextEncodingConverter",
 };
 
 /* Apple libraries left unloaded even where an installer put them: the
- * Text Encoding Converter (Internet Explorer 4's installer adds it) builds
- * its tables at startup in a loop that doesn't end here, so programs are
- * told it isn't installed, as they were without it, and do without. */
-static bool unloaded_library(const char *name)
-{
-    return !strcmp(name, "TextCommon") || !strcmp(name, "TextCommonGlobals") || !strcmp(name, "UnicodeConverter")
-        || !strcmp(name, "TextEncodingConverter");
-}
+ * Text Encoding Converter's globals (Internet Explorer 4's installer adds
+ * it), which its own libraries found through a table its boot-time code
+ * made.  The converter is ours (tec.c), and has no use for them. */
+static bool unloaded_library(const char *name) { return !strcmp(name, "TextCommonGlobals"); }
 
 static bool core_library(const char *name)
 {

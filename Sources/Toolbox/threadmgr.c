@@ -219,11 +219,20 @@ static void wait_turn(host_thread *h)
     bool serve = main_pump && on_main_thread();
     while (!h->run) {
         if (serve) {
-            struct timespec ts = { 0, 2000000 };
+            /* Pumped every 2 ms, but woken at once when its turn comes. */
             pthread_mutex_unlock(&baton);
             main_pump();
-            nanosleep(&ts, NULL);
             pthread_mutex_lock(&baton);
+            if (h->run)
+                break;
+            struct timespec until;
+            clock_gettime(CLOCK_REALTIME, &until);
+            until.tv_nsec += 2000000;
+            if (until.tv_nsec >= 1000000000) {
+                until.tv_sec++;
+                until.tv_nsec -= 1000000000;
+            }
+            pthread_cond_timedwait(&h->cv, &baton, &until);
         } else {
             pthread_cond_wait(&h->cv, &baton);
         }
