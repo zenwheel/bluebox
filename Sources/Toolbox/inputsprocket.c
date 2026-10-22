@@ -36,6 +36,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <pthread.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "forks.h"
@@ -519,6 +520,8 @@ static void reset_delta(element *e)
     e->mouse_carry = 0;
 }
 
+static void load_controls(void);
+
 /* ISpElement_NewVirtualFromNeeds(count, needs, *elements, flags) */
 static void isp_NewVirtualFromNeeds(ppc_cpu *c)
 {
@@ -564,6 +567,9 @@ static void isp_NewVirtualFromNeeds(ppc_cpu *c)
             elements[i].mouse = true;
             break;
         }
+    load_controls();
+    for (int i = first; i < nelements; i++)
+        elements[i].last = state_of(&elements[i]);
     RETURN(0);
 }
 
@@ -1103,6 +1109,77 @@ static void isp_TimeToMicroseconds(ppc_cpu *c)
 
 /* ---- The configuration dialog ---- */
 
+static bool configurable(const element *e) { return e->kind == kButton || e->kind == kAxis; }
+
+/* The player's choices for a program, kept as InputSprocket kept them: a
+ * file in the Preferences folder ("<program> Controls"), each need's keys
+ * by its place, kind, label and name, and whether the mouse steers. */
+static bool controls_path(char *out, size_t size)
+{
+    gaddr tmp = tb_NewPtr(2 + 4 + 64, false, true);
+    if (!tmp)
+        return false;
+    gaddr vref = tmp, dir = tmp + 2, name = tmp + 6;
+    char app[32];
+    int n = rd8(LM_CurApName);
+    n = n > 22 ? 22 : n;
+    for (int i = 0; i < n; i++)
+        app[i] = (char)rd8(LM_CurApName + 1 + (gaddr)i);
+    app[n] = 0;
+    char file[40];
+    snprintf(file, sizeof file, "%s Controls", n ? app : "Game");
+    pstr_from_c(name, file);
+    bool ok = !tb_FindFolder(-32768, (int32_t)fourcc("pref"), 1, vref, dir) &&
+              fm_host_path((int16_t)rd16(vref), (int32_t)rd32(dir), name, true, out, size);
+    tb_DisposePtr(tmp);
+    return ok;
+}
+
+static void save_controls(void)
+{
+    char path[1024];
+    if (!controls_path(path, sizeof path))
+        return;
+    FILE *f = fopen(path, "w");
+    if (!f)
+        return;
+    fprintf(f, "mouse %d\n", !mouse_refused);
+    for (int i = 0; i < config_count; i++) {
+        const element *e = &elements[config_first + i];
+        if (configurable(e))
+            fprintf(f, "need %d %08X %08X %02X %02X %.*s\n", i, e->kind, e->label, e->key, e->key2, e->name[0],
+                    (const char *)e->name + 1);
+    }
+    fclose(f);
+}
+
+/* The saved choices, for needs made as they were when they were saved. */
+static void load_controls(void)
+{
+    char path[1024], line[256];
+    if (!controls_path(path, sizeof path))
+        return;
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return;
+    while (fgets(line, sizeof line, f)) {
+        int on, i, used;
+        unsigned kind, label, key, key2;
+        if (sscanf(line, "mouse %d", &on) == 1) {
+            mouse_refused = !on;
+        } else if (sscanf(line, "need %d %x %x %x %x %n", &i, &kind, &label, &key, &key2, &used) == 5 && i >= 0 &&
+                   i < config_count) {
+            element *e = &elements[config_first + i];
+            char *name = line + used;
+            name[strcspn(name, "\r\n")] = 0;
+            if (e->kind == kind && e->label == label && strlen(name) == e->name[0] &&
+                !memcmp(name, e->name + 1, e->name[0]) && configurable(e))
+                e->key = (uint8_t)key, e->key2 = (uint8_t)key2;
+        }
+    }
+    fclose(f);
+}
+
 /* A key's name (a US keyboard's), for the dialog. */
 static const char *key_name(uint8_t code)
 {
@@ -1137,8 +1214,6 @@ enum { CAPTURED = 999 }; /* ModalDialog's item when a key was taken */
 static gaddr config_dialog;
 static int capturing = -1, capture_stage; /* the need taking a key, and which of an axis's two */
 static uint8_t capture_keys[16];          /* the keys down when it started */
-
-static bool configurable(const element *e) { return e->kind == kButton || e->kind == kAxis; }
 
 static bool uses_mouse(void)
 {
@@ -1357,6 +1432,8 @@ static void isp_Configure(ppc_cpu *c)
         for (int row = 0; row < rows; row++)
             elements[config_first + row].key = keys[row][0], elements[config_first + row].key2 = keys[row][1];
         mouse_refused = was_refused;
+    } else {
+        save_controls();
     }
     tb_DisposeDialog(config_dialog);
     config_dialog = 0;
