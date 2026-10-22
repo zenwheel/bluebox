@@ -10,8 +10,9 @@
  * pad for movement, the right stick for looking, A to fire, B to jump, Menu
  * to start or pause, Options to quit and the other buttons for the rest.
  * A need for player 1 or 2 reads that controller, one for no player any of
- * them.  Delta needs follow the mouse.  The configuration dialog accepts
- * this mapping.
+ * them.  Delta needs follow the mouse's own motion (not the cursor), and
+ * in a game that has them the fire button is the mouse's button as well.
+ * The configuration dialog accepts this mapping.
  *
  * The devices are the keyboard, the mouse and each connected controller,
  * each with elements of its own (keys; the button and the two deltas; the
@@ -149,7 +150,7 @@ typedef struct {
     int8_t stick;   /* a button's stick direction (axis * 2, +1 for the positive end), an axis's stick; -1 none */
     bool mouse;     /* the mouse button, or a delta following the mouse */
     uint32_t last;  /* the state last reported */
-    int16_t mouse_at; /* a delta: the mouse coordinate it was last read at */
+    int32_t mouse_at; /* a delta: the mouse's motion (ev_mouse_raw) when it was last read */
     uint32_t refcon;
 } element;
 
@@ -365,7 +366,15 @@ static float pad_axis(const element *e, int axis)
     return v;
 }
 
-static bool mouse_down(void) { return !devices[DEV_MOUSE].inactive && !(rd8(LM_MBState) & 0x80); }
+static bool mouse_down(void)
+{
+    if (devices[DEV_MOUSE].inactive)
+        return false;
+    int32_t h, v;
+    bool down;
+    ev_mouse_raw(&h, &v, &down, false);
+    return down;
+}
 
 static uint32_t axis_value(float v)
 {
@@ -423,13 +432,25 @@ static bool button_state(const element *e)
     return false;
 }
 
+/* The mouse's own motion on a delta's axis, as InputSprocket reads it
+ * from the mouse: not the cursor, which stops at the screen's edge and
+ * which a program may be moving, nor low memory, which a game's loop
+ * that never calls the Event Manager never brings up to date. */
+static int32_t mouse_motion(const element *e, bool capture)
+{
+    int32_t h, v;
+    bool down;
+    ev_mouse_raw(&h, &v, &down, capture);
+    return e->label == FOURCC('y', 'a', 'x', 'i') ? v : h;
+}
+
 /* A delta's movement since it was last read (Fixed points; up positive). */
 static int32_t delta_state(element *e, bool consume)
 {
     if (devices[DEV_MOUSE].inactive)
         return 0;
     bool y = e->label == FOURCC('y', 'a', 'x', 'i');
-    int16_t at = (int16_t)rd16(LM_MouseLocation + (y ? 0 : 2));
+    int32_t at = mouse_motion(e, true);
     int32_t d = y ? e->mouse_at - at : at - e->mouse_at;
     if (consume)
         e->mouse_at = at;
@@ -450,11 +471,7 @@ static uint32_t state_of(element *e)
 
 /* ---- Making elements ---- */
 
-static void reset_delta(element *e)
-{
-    bool y = e->label == FOURCC('y', 'a', 'x', 'i');
-    e->mouse_at = (int16_t)rd16(LM_MouseLocation + (y ? 0 : 2));
-}
+static void reset_delta(element *e) { e->mouse_at = mouse_motion(e, false); }
 
 /* ISpElement_NewVirtualFromNeeds(count, needs, *elements, flags) */
 static void isp_NewVirtualFromNeeds(ppc_cpu *c)
@@ -485,6 +502,16 @@ static void isp_NewVirtualFromNeeds(ppc_cpu *c)
         if (out)
             wr32(out + i * 4, e->ref);
     }
+    /* A game steered by the mouse fires with its button too (Apeiron). */
+    int first = nelements - (int)count;
+    bool steered = false;
+    for (int i = first; i < nelements; i++)
+        steered |= elements[i].kind == kDelta;
+    for (int i = first; steered && i < nelements; i++)
+        if (elements[i].kind == kButton && elements[i].key == K_SPACE) {
+            elements[i].mouse = true;
+            break;
+        }
     RETURN(0);
 }
 

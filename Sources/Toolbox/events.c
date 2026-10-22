@@ -51,6 +51,10 @@ static double frac_h, frac_v; /* captured motion's fractions of a pixel */
  * reading ADB packets and recentring the cursor, as Apeiron does, would
  * otherwise see each recentring as the mouse moving back). */
 static int motion_h, motion_v;
+/* All of the mouse's own motion since boot, for InputSprocket's deltas,
+ * and when a program last read it (the host then captures the mouse). */
+static int32_t total_h, total_v;
+static uint64_t last_relative_ns;
 #define LM_CrsrNew 0x08CEu    /* Byte: nonzero when the cursor must be redrawn at RawMouse */
 static bool button_down;
 static uint32_t presses, key_presses; /* counted, so a quick click is never missed */
@@ -292,6 +296,8 @@ void machine_post_mouse(int x, int y, int button)
     pthread_mutex_lock(&lock);
     motion_h += x - mouse_h;
     motion_v += y - mouse_v;
+    total_h += x - mouse_h;
+    total_v += y - mouse_v;
     mouse_h = (int16_t)x;
     mouse_v = (int16_t)y;
     if (button >= 0 && (button != 0) != button_down) {
@@ -319,6 +325,8 @@ void machine_post_mouse_delta(double dx, double dy)
     frac_v -= iv;
     motion_h += ih; /* all of it, at the screen's edge too, as a mouse reports */
     motion_v += iv;
+    total_h += ih;
+    total_v += iv;
     int nh = mouse_h + ih, nv = mouse_v + iv;
     nh = nh < 0 ? 0 : nh >= w ? w - 1 : nh;
     nv = nv < 0 ? 0 : nv >= h ? h - 1 : nv;
@@ -363,9 +371,28 @@ uint32_t machine_mouse_state(int *x, int *y, bool *relative)
     *x = mouse_h;
     *y = mouse_v;
     uint32_t n = warps;
-    *relative = warps && machine_time_ns() - last_warp_ns < 2000000000ull;
+    uint64_t now = machine_time_ns();
+    *relative = (warps && now - last_warp_ns < 2000000000ull) ||
+                (last_relative_ns && now - last_relative_ns < 2000000000ull);
     pthread_mutex_unlock(&lock);
     return n;
+}
+
+/* The mouse's own motion since boot and its button, read as a mouse
+ * (InputSprocket): the cursor and low memory play no part.  A program
+ * reading the motion (capture) has the host capture the mouse for a
+ * while, so the motion never stops at the screen's edge. */
+void ev_mouse_raw(int32_t *h, int32_t *v, bool *down, bool capture)
+{
+    if (!host_attached && g_cpu && !g_cpu->halted)
+        events_script_pump(g_cpu->icount);
+    pthread_mutex_lock(&lock);
+    *h = total_h;
+    *v = total_v;
+    *down = button_down;
+    if (capture)
+        last_relative_ns = machine_time_ns();
+    pthread_mutex_unlock(&lock);
 }
 
 /* The host stopped seeing the keyboard (it went to the background): keys
@@ -977,6 +1004,7 @@ void events_reset(void)
     qhead = qtail = 0;
     qversion++;
     button_down = false;
+    last_relative_ns = 0;
     key_mods = 0;
     memset(keymap, 0, sizeof keymap);
     key_last = 0;

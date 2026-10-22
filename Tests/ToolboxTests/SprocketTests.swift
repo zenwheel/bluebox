@@ -80,6 +80,35 @@ extension BlueBox {
             #expect(rd32(Self.buf + 8) == fire && rd32(Self.buf + 16) == 0)
         }
 
+        /// Delta needs read the mouse's own motion: low memory left as it was
+        /// (a game loop that never calls the Event Manager) and the mouse
+        /// pushed on past the screen's edge; with them, fire is its button.
+        @Test func deltasFollowTheMouseItself() {
+            bootMachine()
+            inputsprocket_reset()
+            machine_post_mouse(100, 100, 0)
+            writeNeeds([("Horizontal", "dlta", "xaxi", 0), ("Vertical", "dlta", "yaxi", 0), ("Fire", "butn", "fire", 0)])
+            #expect(isp("ISpElement_NewVirtualFromNeeds", [3, Self.needs, Self.out, 0]) == 0)
+            let x = rd32(Self.out), y = rd32(Self.out + 4), fire = rd32(Self.out + 8)
+            #expect(state(x) == 0 && state(y) == 0)
+
+            machine_post_mouse(110, 95, -1)
+            #expect(isp("ISpElement_GetNextEvent", [x, 20, Self.buf, Self.buf + 32]) == 0 && rd8(Self.buf + 32) == 1)
+            #expect(Int32(bitPattern: rd32(Self.buf + 16)) == 10 << 16 && state(x) == 0)
+            #expect(Int32(bitPattern: state(y)) == 5 << 16) // up is positive
+
+            var w: Int32 = 0, h: Int32 = 0
+            machine_screen_size(&w, &h)
+            machine_post_mouse(w - 1, 95, -1)
+            _ = isp("ISpElement_GetNextEvent", [x, 20, Self.buf, Self.buf + 32])
+            machine_post_mouse_delta(40, 0)
+            #expect(Int32(bitPattern: state(x)) == 40 << 16)
+
+            machine_post_mouse(w - 1, 95, 1)
+            #expect(state(fire) == 1)
+            machine_post_mouse(w - 1, 95, 0)
+        }
+
         @Test func devicesAndTheirElements() {
             bootMachine()
             inputsprocket_reset()

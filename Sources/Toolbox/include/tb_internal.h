@@ -200,6 +200,9 @@ void gx_reset(void); /* QuickDraw GX (gx.c) */
 /* The mouse's own motion for ADB packets (events.c). */
 bool ev_take_motion(int *dh, int *dv, int limit);
 bool ev_motion_pending(void);
+/* All the mouse's own motion since boot, and its button (InputSprocket);
+ * capture: the program is reading the motion, so the host captures it. */
+void ev_mouse_raw(int32_t *h, int32_t *v, bool *down, bool capture);
 /* After a Toolbox trap from the program, not a callback (display.c). */
 void display_trap_done(void);
 /* A pop-up menu's area while it is up (display.c), for rootless hosts. */
