@@ -213,6 +213,27 @@ extension BlueBox {
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("otan")), &answer) == 0 && answer & 1 != 0) // Open Transport
         }
 
+        /// OTList and its helpers (NetSprocket's lists): first and last,
+        /// removal, membership, index; OTInetStringToHost parses a dotted
+        /// address.
+        @Test func listsAndStringToHost() {
+            launchTestApp()
+            let list = tb_NewPtr(4, false, true)
+            let links = (0..<3).map { _ in tb_NewPtr(8, false, true) }
+            ot("OTAddLast", list, links[1])
+            ot("OTAddFirst", list, links[0])
+            ot("OTAddLast", list, links[2])
+            #expect(ot("OTGetFirst", list) == links[0] && ot("OTGetLast", list) == links[2])
+            #expect(ot("OTGetIndexedLink", list, 1) == links[1])
+            #expect(ot("OTIsInList", list, links[1]) == 1)
+            #expect(ot("OTRemoveLink", list, links[1]) == 1 && ot("OTIsInList", list, links[1]) == 0)
+            #expect(ot("OTRemoveLast", list) == links[2] && ot("OTRemoveFirst", list) == links[0])
+            #expect(ot("OTGetFirst", list) == 0)
+            let host = tb_NewPtr(4, false, true)
+            #expect(ot("OTInetStringToHost", cstr("192.168.1.20"), host) == 0 && rd32(host) == 0xC0A8_0114)
+            #expect(Int32(bitPattern: ot("OTInetStringToHost", cstr("not an address"), host)) == -3150)
+        }
+
         /// The run's own Gestalt answers (--gestalt) stand over the ones a
         /// PowerPC program is given (Spades Deluxe 2.0 wants Mac OS 8.1).
         @Test func gestaltOverrideKeptForPowerPC() {

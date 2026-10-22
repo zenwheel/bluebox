@@ -1091,6 +1091,24 @@ static void ot_InetHostToString(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* OTInetStringToHost(str, &host): a dotted address (NetSprocket's, from
+ * Spades Deluxe 2.0, reading its own address) to an InetHost. */
+static void ot_InetStringToHost(ppc_cpu *c)
+{
+    char s[64] = "";
+    for (int i = 0; i < 63 && R(0); i++)
+        if (!(s[i] = (char)rd8(R(0) + (uint32_t)i)))
+            break;
+    struct in_addr a;
+    if (inet_aton(s, &a) == 0) {
+        RETURN((uint32_t)(int32_t)-3150); /* kOTBadAddressErr */
+        return;
+    }
+    if (R(1))
+        wr32(R(1), ntohl(a.s_addr));
+    RETURN(0);
+}
+
 /* OTInitInetAddress(addr, port, host) */
 static void ot_InitInetAddress(ppc_cpu *c)
 {
@@ -1245,6 +1263,101 @@ static void ot_LIFOStealList(ppc_cpu *c)
         wr32(R(0), 0);
     RETURN(h);
 }
+/* OTList: a pointer to the first OTLink (fHead), each link pointing on
+ * (fNext); the head of the list is first.  NetSprocket keeps its endpoints
+ * and messages in these. */
+static gaddr list_last(gaddr list)
+{
+    gaddr l = rd32(list);
+    while (l && rd32(l))
+        l = rd32(l);
+    return l;
+}
+static bool list_remove(gaddr list, gaddr link)
+{
+    for (gaddr at = list; rd32(at); at = rd32(at))
+        if (rd32(at) == link) {
+            wr32(at, rd32(link));
+            wr32(link, 0);
+            return true;
+        }
+    return false;
+}
+static void ot_AddFirst(ppc_cpu *c)
+{
+    if (R(0) && R(1)) {
+        wr32(R(1), rd32(R(0)));
+        wr32(R(0), R(1));
+    }
+    c->pc = c->lr;
+}
+static void ot_AddLast(ppc_cpu *c)
+{
+    if (R(0) && R(1)) {
+        wr32(R(1), 0);
+        gaddr last = list_last(R(0));
+        wr32(last ? last : R(0), R(1));
+    }
+    c->pc = c->lr;
+}
+static void ot_RemoveFirst(ppc_cpu *c)
+{
+    gaddr h = R(0) ? rd32(R(0)) : 0;
+    if (h) {
+        wr32(R(0), rd32(h));
+        wr32(h, 0);
+    }
+    RETURN(h);
+}
+static void ot_RemoveLast(ppc_cpu *c)
+{
+    gaddr last = R(0) ? list_last(R(0)) : 0;
+    if (last)
+        list_remove(R(0), last);
+    RETURN(last);
+}
+static void ot_GetFirst(ppc_cpu *c) { RETURN(R(0) ? rd32(R(0)) : 0); }
+static void ot_GetLast(ppc_cpu *c) { RETURN(R(0) ? list_last(R(0)) : 0); }
+static void ot_IsInList(ppc_cpu *c)
+{
+    gaddr l = R(0) ? rd32(R(0)) : 0;
+    while (l && l != R(1))
+        l = rd32(l);
+    RETURN(l != 0);
+}
+static void ot_RemoveLink(ppc_cpu *c) { RETURN(R(0) && R(1) && list_remove(R(0), R(1))); }
+static void ot_GetIndexedLink(ppc_cpu *c)
+{
+    gaddr l = R(0) ? rd32(R(0)) : 0;
+    for (uint32_t i = R(1); l && i; i--)
+        l = rd32(l);
+    RETURN(l);
+}
+/* OTFindLink(list, proc, ref): the first link proc(ref, link) says yes to. */
+static gaddr list_find(gaddr list, gaddr proc, gaddr ref)
+{
+    for (gaddr l = list ? rd32(list) : 0; l; l = rd32(l)) {
+        uint32_t args[2] = { ref, l };
+        if (proc && (ppc_call(proc, args, 2) & 0xFF))
+            return l;
+    }
+    return 0;
+}
+static void ot_FindLink(ppc_cpu *c)
+{
+    gaddr list = R(0), proc = R(1), ref = R(2);
+    gaddr l = list_find(list, proc, ref);
+    RETURN(l);
+}
+static void ot_FindAndRemoveLink(ppc_cpu *c)
+{
+    gaddr list = R(0), proc = R(1), ref = R(2);
+    gaddr l = list_find(list, proc, ref);
+    if (l)
+        list_remove(list, l);
+    RETURN(l);
+}
+
 static void ot_ReverseList(ppc_cpu *c)
 {
     gaddr l = R(0), prev = 0;
@@ -1430,7 +1543,7 @@ const ppc_export ot_exports[] = {
     { "OTAsyncOpenInternetServicesPriv", ot_AsyncOpenInternetServices },
     { "OTAsyncOpenInternetServicesInContext", ot_AsyncOpenInternetServices },
     { "OTInetStringToAddress", ot_InetStringToAddress }, { "OTInetMailExchange", ot_InetMailExchange },
-    { "OTInetHostToString", ot_InetHostToString }, { "OTInitInetAddress", ot_InitInetAddress },
+    { "OTInetHostToString", ot_InetHostToString }, { "OTInetStringToHost", ot_InetStringToHost }, { "OTInitInetAddress", ot_InitInetAddress },
     { "OTInitDNSAddress", ot_InitDNSAddress },
     { "OTInetGetInterfaceInfo", ot_InetGetInterfaceInfo },
     /* OTUtilityLib */
@@ -1442,6 +1555,10 @@ const ppc_export ot_exports[] = {
     { "OTAllocMemPriv", ot_AllocMem }, { "OTFreeMemPriv", ot_FreeMem }, { "OTAllocMemInContext", ot_AllocMem },
     { "OTFreeMemInContext", ot_FreeMem }, { "OTLIFOEnqueue", ot_LIFOEnqueue }, { "OTLIFODequeue", ot_LIFODequeue },
     { "OTLIFOStealList", ot_LIFOStealList }, { "OTReverseList", ot_ReverseList },
+    { "OTAddFirst", ot_AddFirst }, { "OTAddLast", ot_AddLast }, { "OTRemoveFirst", ot_RemoveFirst },
+    { "OTRemoveLast", ot_RemoveLast }, { "OTGetFirst", ot_GetFirst }, { "OTGetLast", ot_GetLast },
+    { "OTIsInList", ot_IsInList }, { "OTRemoveLink", ot_RemoveLink }, { "OTGetIndexedLink", ot_GetIndexedLink },
+    { "OTFindLink", ot_FindLink }, { "OTFindAndRemoveLink", ot_FindAndRemoveLink },
     { "OTAtomicSetBit", ot_AtomicSetBit }, { "OTAtomicClearBit", ot_AtomicClearBit },
     { "OTAtomicTestBit", ot_AtomicTestBit }, { "OTAtomicAdd32", ot_AtomicAdd32 }, { "OTAtomicAdd16", ot_AtomicAdd16 },
     { "OTAtomicAdd8", ot_AtomicAdd8 }, { "OTCompareAndSwap32", ot_CompareAndSwap32 },
