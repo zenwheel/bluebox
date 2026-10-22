@@ -712,6 +712,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** a defined game corpus runs at full original speed or better, including QuickTime playback from M4 at full frame rate.
 
+**Status (2026-10-22): done.** The game corpus is `scripts/games-m10.sh`'s 18 games (ten 68k: Glider+, Shufflepuck 1.5, Prince of Persia, Spectre, Bolo, Crystal Quest, Solarian II, SimTower, Snood, Star Chaos; eight PowerPC: Squirt Derby!, DroidWorks, Sirtet Voyager, StarCraft, Tetris Max, Snood, Spades Deluxe 2.0, Star Chaos): all 18 keep running and execute faster than the Mac they were written for (a 40 MHz 68040, 35 million instructions a second; a 400 MHz G3, 600 million), from 54 to 1,500 million a second interpreted and more with the JIT; SimTower, the slowest, went from 37 to 54 million when CopyBits stopped searching colour tables at every pixel. `bluebox movie-speed` decodes 545 of the corpus's 547 movies at 10x real time or more (most over 1,000x; two use a codec only VLC plays). sixtyforce draws through OpenGL. The JIT stays off by default, as a setting (`bluebox set … jit on`, the shell's Machine section) until it has had more interactive use. Spades Deluxe 2.0's missing Network menu is its own: it deletes the menu while its preference 'PREF' 20016 is 1, its default until registered (NetSprocket's OTList and OTInetStringToHost calls work now). What's left moved to M12 (the x86-64 JIT back end, Linux OpenGL) and to the backlog below.
+
 ### M11: Native 64-bit SDK
 
 **Goal:** new software can be written against the classic Toolbox as native 64-bit host code.
@@ -739,6 +741,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Linux launching:** `bluebox install` on Linux produces a `.desktop` file, a PNG icon and shared-mime-info XML.
 - ~~**Our own HFS+ reader**~~ done 2026-10-16 (`Sources/ForkStore/hfs.c`: HFS+ and HFSX, bare or in an HFS wrapper, behind a partition map; Unicode names to MacRoman; hard links).
 - **CI:** Linux CI, headless probe runs on both platforms.
+- **From M10:** the JIT's x86-64 back end (Intel Macs and Linux), and OpenGL on Linux (Mesa) for OpenGLLibrary.
 
 **Exit:** the applications that run on macOS run on Linux under both Wayland and X11, installed as desktop applications.
 
@@ -789,6 +792,18 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - Apple's and DataViz's software stays out of the repository.
 
 **Exit:** Document Converter converts a ClarisWorks and a Word 5 document to RTF with the MacLinkPlus translators; SimpleText opens a foreign text document through the Translation Manager; DataViz FileView shows a Word document.
+
+### Backlog
+
+Work found along the way that belongs to no milestone yet (2026-10-22):
+
+- **JIT:** CR lookahead across PowerPC blocks, registers kept across blocks, ahead-of-time translation in `bluebox install`, translated floating point, the 68020's memory-indirect modes; turning it on by default once it has run the corpus interactively.
+- **QuickDraw speed:** DrawPicture's decoding (SimTower's scenery) and the general CopyBits path beyond 8-bit srcCopy.
+- **Redraw check:** about 200 programs redraw differently from their first drawing (`--redraw-check`, 2026-10-16), many as a Mac did; to be judged against the oracle.
+- **Converters and international resources:** a program's own Unicode fallback handler, stateful encodings (ISO-2022, HZ, UTF-7) across calls, a better sniffer, CountUnicodeMappings and the TEC plug-in interface; itlm, itl5, IUDateString with itl1's abbreviations, StyledLineBreak on the line-break table, IntlTokenize; and the loop in Apple's own Text Encoding Converter (its INIT's slot in the international globals).
+- **OpenGL:** colour-index mode, accumulation buffers, the imaging subset, GLU's tessellators and NURBS, aglSetFullScreen changing the display's resolution.
+- **Programs:** sixtyforce's Video Settings dialog draws empty (its filter takes the update event with BeginUpdate and EndUpdate for a dialog it keeps in a local; whether Mac OS 8's Dialog Manager drew the items anyway needs a PowerPC oracle); the Warlock demos' WindowHider WDEF reads a CGrafPort's grafVars as portBits.bounds (find on the oracle why that works); StarGuardian's AddColor XCMD fails on pathnames of 128 characters or more (granted folders shown nearer the root would avoid it); Internet Explorer 4.01's drawing into a disposed port (now harmless).
+- **Deferred on purpose:** CFM-68K (68k programs in PEF containers; IE 4.01's 68k build), CarbonLib (Super Snake alone).
 
 ## 6. Risks
 
