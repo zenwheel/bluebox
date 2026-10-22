@@ -1438,9 +1438,9 @@ static void isp_Configure(ppc_cpu *c)
             mouse_refused = false;
         }
         config_show();
-    } while (n != itemOK && n != itemCancel);
+    } while (n != itemOK && n != itemCancel && !g_cpu->halted); /* halted: the run's end, as Cancel */
     capturing = -1;
-    if (n == itemCancel) {
+    if (n != itemOK) {
         for (int row = 0; row < rows; row++)
             elements[config_first + row].key = keys[row][0], elements[config_first + row].key2 = keys[row][1];
         mouse_refused = was_refused;

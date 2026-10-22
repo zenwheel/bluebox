@@ -884,7 +884,7 @@ static bool record_dialog_run(gaddr filter, uint32_t corner, uint32_t limit)
             }
         }
         show_state(true);
-    } while (n != itemCancel && !(n == itemSave && !rec.active && rec.done));
+    } while (n != itemCancel && !(n == itemSave && !rec.active && rec.done) && !g_cpu->halted);
     if (rec.active) {
         record_pump();
         stop_recording(noErr);
