@@ -90,6 +90,7 @@ extension BlueBox {
             writeNeeds([("Horizontal", "dlta", "xaxi", 0), ("Vertical", "dlta", "yaxi", 0), ("Fire", "butn", "fire", 0)])
             #expect(isp("ISpElement_NewVirtualFromNeeds", [3, Self.needs, Self.out, 0]) == 0)
             let x = rd32(Self.out), y = rd32(Self.out + 4), fire = rd32(Self.out + 8)
+            isp("ISpDevices_ActivateClass", [fourCC("mous")])
             #expect(state(x) == 0 && state(y) == 0)
 
             machine_post_mouse(110, 95, -1)
@@ -107,6 +108,32 @@ extension BlueBox {
             machine_post_mouse(w - 1, 95, 1)
             #expect(state(fire) == 1)
             machine_post_mouse(w - 1, 95, 0)
+        }
+
+        /// An x axis follows the mouse as a joystick: pushed by its motion
+        /// since the last read (16 pixels to the end, more kept for later
+        /// reads), back in the middle when it stops; keys held override it.
+        /// Only once the game has turned the mouse on.
+        @Test func axesFollowTheMouseAsAJoystick() {
+            bootMachine()
+            inputsprocket_reset()
+            machine_release_keys()
+            machine_post_mouse(100, 100, 0)
+            writeNeeds([("Move", "axis", "xaxi", 0)])
+            #expect(isp("ISpElement_NewVirtualFromNeeds", [1, Self.needs, Self.out, 0]) == 0)
+            let x = rd32(Self.out)
+            machine_post_mouse(108, 100, -1)
+            #expect(state(x) == 0x7FFF_FFFF) // not until the game turns the mouse on
+            isp("ISpDevices_ActivateClass", [fourCC("mous")])
+            machine_post_mouse(100, 100, -1)
+            #expect(state(x) == 0x7FFF_FFFF)
+            machine_post_mouse(108, 100, -1)
+            #expect(state(x) > 0xBFFF_0000 && state(x) == 0x7FFF_FFFF) // half way to the right, then back
+            machine_post_mouse(68, 100, -1) // 40 left: two reads at the end, then half way
+            #expect(state(x) == 0 && state(x) == 0 && state(x) < 0x4000_0000 && state(x) == 0x7FFF_FFFF)
+            machine_post_key(-1, 0x7C, 0, 1, 0)
+            #expect(state(x) == 0xFFFF_FFFF)
+            machine_release_keys()
         }
 
         @Test func devicesAndTheirElements() {

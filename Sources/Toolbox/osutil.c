@@ -575,9 +575,16 @@ static void adb_talk(int k, int reg, gaddr buf)
     } else if (reg == 0 && adb_devices[k].type == 1) {
         /* The mouse's motion since the last packet (not the cursor's: a
          * program moving the cursor is no motion), as much as a packet
-         * holds; the rest goes in the next. */
+         * holds; the rest goes in the next.  Halved, as an ADB mouse
+         * counted far fewer steps an inch than the host's pointer moves
+         * (Apeiron steered at the pointer's rate was touchy); the odd
+         * step is kept for the next packet. */
+        static int odd_h, odd_v;
         int dh, dv;
-        ev_take_motion(&dh, &dv, 64);
+        ev_take_motion(&dh, &dv, 128);
+        dh += odd_h, dv += odd_v;
+        odd_h = dh % 2, odd_v = dv % 2;
+        dh /= 2, dv /= 2;
         bool down = tb_Button();
         adb_last_button = down;
         b[0] = (uint8_t)((down ? 0 : 0x80) | (dv & 0x7F));

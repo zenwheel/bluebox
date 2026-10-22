@@ -11,7 +11,8 @@
  * to start or pause, Options to quit and the other buttons for the rest.
  * A need for player 1 or 2 reads that controller, one for no player any of
  * them.  Delta needs follow the mouse's own motion (not the cursor), and
- * in a game that has them the fire button is the mouse's button as well.
+ * once the game turns the mouse on, x and y axes are pushed by it as by a
+ * joystick (Apeiron's ship) and the fire button is its button as well.
  * The configuration dialog accepts this mapping.
  *
  * The devices are the keyboard, the mouse and each connected controller,
@@ -148,9 +149,10 @@ typedef struct {
     uint8_t key, key2; /* a button's key; an axis's low and high keys */
     uint32_t pad, pad2; /* a button's controller buttons; an axis's low and high buttons */
     int8_t stick;   /* a button's stick direction (axis * 2, +1 for the positive end), an axis's stick; -1 none */
-    bool mouse;     /* the mouse button, or a delta following the mouse */
+    bool mouse;     /* the mouse button, or a delta or an x or y axis following the mouse */
     uint32_t last;  /* the state last reported */
-    int32_t mouse_at; /* a delta: the mouse's motion (ev_mouse_raw) when it was last read */
+    int32_t mouse_at; /* a delta or axis: the mouse's motion (ev_mouse_raw) when it was last read */
+    int32_t mouse_carry; /* an axis: motion beyond its end, for the next reads */
     uint32_t refcon;
 } element;
 
@@ -159,6 +161,9 @@ static element elements[MAX_ELEMENTS];
 static int nelements, spare, spare_button;
 static gaddr ref_block;
 static bool suspended;
+/* The game turned the mouse on (ISpDevices_ActivateClass or Activate), as
+ * InputSprocket wanted before the mouse drove its axes and fire button. */
+static bool mouse_wanted;
 
 static element *new_element(uint32_t kind, uint32_t label)
 {
@@ -276,8 +281,8 @@ static void map_axis(element *e, const char *name)
 {
     bool horizontal;
     switch (e->label) {
-    case FOURCC('x', 'a', 'x', 'i'): e->stick = MACHINE_PAD_LX; horizontal = true; break;
-    case FOURCC('y', 'a', 'x', 'i'): e->stick = MACHINE_PAD_LY; horizontal = false; break;
+    case FOURCC('x', 'a', 'x', 'i'): e->stick = MACHINE_PAD_LX; horizontal = true; e->mouse = true; break;
+    case FOURCC('y', 'a', 'x', 'i'): e->stick = MACHINE_PAD_LY; horizontal = false; e->mouse = true; break;
     case FOURCC('r', 'x', 'a', 'x'): e->stick = MACHINE_PAD_RX; horizontal = true; break;
     case FOURCC('r', 'y', 'a', 'x'): e->stick = MACHINE_PAD_RY; horizontal = false; break;
     /* Moving along z (forward and back) and rolling: the left stick, which
@@ -423,7 +428,7 @@ static uint32_t axis_state(const element *e, int stick, uint8_t key_lo, uint8_t 
 
 static bool button_state(const element *e)
 {
-    if (key_down(e->key) || pad_button(e, e->pad) || (e->mouse && mouse_down()))
+    if (key_down(e->key) || pad_button(e, e->pad) || (e->mouse && (e->device >= 0 || mouse_wanted) && mouse_down()))
         return true;
     if (e->stick >= 0) {
         float v = pad_axis(e, e->stick / 2);
@@ -457,13 +462,44 @@ static int32_t delta_state(element *e, bool consume)
     return d * 65536;
 }
 
+/* Pixels of the mouse's motion between two reads that push an axis to
+ * its end (Apeiron's ship then moves about half as far as the mouse did:
+ * one for one was touchy), and the most kept for later reads when it
+ * moves faster. */
+enum { MOUSE_AXIS_FULL = 16, MOUSE_AXIS_CARRY = 4 * MOUSE_AXIS_FULL };
+
+/* An x or y axis need follows the mouse as a joystick would: its motion
+ * since the axis was last read sets how far the axis is pushed, and the
+ * axis is back in the middle when the mouse stops (Apeiron moves its ship
+ * at the axis's speed).  Keys, a pad or a stick held override it. */
+static uint32_t mouse_axis_state(element *e)
+{
+    bool following = mouse_wanted && !devices[DEV_MOUSE].inactive;
+    int32_t at = mouse_motion(e, following);
+    if (!following)
+        at = e->mouse_at, e->mouse_carry = 0;
+    int32_t d = at - e->mouse_at;
+    e->mouse_at = at;
+    if (e->label == FOURCC('y', 'a', 'x', 'i'))
+        d = -d; /* down the screen is down the axis */
+    d += e->mouse_carry;
+    int32_t push = d < -MOUSE_AXIS_FULL ? -MOUSE_AXIS_FULL : d > MOUSE_AXIS_FULL ? MOUSE_AXIS_FULL : d;
+    int32_t carry = d - push;
+    e->mouse_carry = carry < -MOUSE_AXIS_CARRY ? -MOUSE_AXIS_CARRY : carry > MOUSE_AXIS_CARRY ? MOUSE_AXIS_CARRY : carry;
+    uint32_t held = axis_state(e, e->stick, e->key, e->key2, e->pad, e->pad2);
+    if (held != (uint32_t)AXIS_MID)
+        return held;
+    return axis_value((float)push / MOUSE_AXIS_FULL);
+}
+
 static uint32_t state_of(element *e)
 {
     if (suspended)
         return e->kind == kAxis ? (uint32_t)AXIS_MID : 0;
     switch (e->kind) {
     case kDPad: case kMovement: return dpad_state(e);
-    case kAxis: return axis_state(e, e->stick, e->key, e->key2, e->pad, e->pad2);
+    case kAxis:
+        return e->mouse ? mouse_axis_state(e) : axis_state(e, e->stick, e->key, e->key2, e->pad, e->pad2);
     case kDelta: return (uint32_t)delta_state(e, false);
     default: return button_state(e);
     }
@@ -471,7 +507,11 @@ static uint32_t state_of(element *e)
 
 /* ---- Making elements ---- */
 
-static void reset_delta(element *e) { e->mouse_at = mouse_motion(e, false); }
+static void reset_delta(element *e)
+{
+    e->mouse_at = mouse_motion(e, false);
+    e->mouse_carry = 0;
+}
 
 /* ISpElement_NewVirtualFromNeeds(count, needs, *elements, flags) */
 static void isp_NewVirtualFromNeeds(ppc_cpu *c)
@@ -497,6 +537,10 @@ static void isp_NewVirtualFromNeeds(ppc_cpu *c)
         e->player = rd8(n + 66);
         e->group = rd8(n + 67);
         map_need(e, name);
+        LOGF(LOG_TRAPS, "  need \"%s\": %c%c%c%c %c%c%c%c, player %d, key %02X, mouse %d\n", name,
+             (int)(e->kind >> 24), (int)(e->kind >> 16 & 0xFF), (int)(e->kind >> 8 & 0xFF), (int)(e->kind & 0xFF),
+             (int)(e->label >> 24), (int)(e->label >> 16 & 0xFF), (int)(e->label >> 8 & 0xFF),
+             (int)(e->label & 0xFF), e->player, e->key, e->mouse);
         reset_delta(e);
         e->last = state_of(e);
         if (out)
@@ -506,7 +550,7 @@ static void isp_NewVirtualFromNeeds(ppc_cpu *c)
     int first = nelements - (int)count;
     bool steered = false;
     for (int i = first; i < nelements; i++)
-        steered |= elements[i].kind == kDelta;
+        steered |= elements[i].kind == kDelta || (elements[i].kind == kAxis && elements[i].mouse);
     for (int i = first; steered && i < nelements; i++)
         if (elements[i].kind == kButton && elements[i].key == K_SPACE) {
             elements[i].mouse = true;
@@ -994,6 +1038,8 @@ static void set_active(ppc_cpu *c, bool on)
         int d = device_of(rd32(R(1) + i * 4));
         if (d >= 0)
             devices[d].inactive = !on;
+        if (d == DEV_MOUSE)
+            mouse_wanted = on;
     }
     RETURN(0);
 }
@@ -1003,9 +1049,13 @@ static void isp_DevicesDeactivate(ppc_cpu *c) { set_active(c, false); }
 /* ISpDevices_ActivateClass(class) and DeactivateClass */
 static void set_class_active(ppc_cpu *c, bool on)
 {
+    LOGF(LOG_TRAPS, "  class %c%c%c%c %s\n", (int)(R(0) >> 24), (int)(R(0) >> 16 & 0xFF), (int)(R(0) >> 8 & 0xFF),
+         (int)(R(0) & 0xFF), on ? "on" : "off");
     for (int d = 0; d < NDEVICES; d++)
         if (device_class(d) == R(0))
             devices[d].inactive = !on;
+    if (R(0) == kClassMouse)
+        mouse_wanted = on;
     RETURN(0);
 }
 static void isp_DevicesActivateClass(ppc_cpu *c) { set_class_active(c, true); }
@@ -1063,6 +1113,8 @@ static void isp_Resume(ppc_cpu *c)
     suspended = false;
     read_pads();
     for (int i = 0; i < nelements; i++) {
+        if (elements[i].kind == kAxis && elements[i].mouse) /* the mouse's moves meanwhile are none */
+            reset_delta(&elements[i]);
         elements[i].last = state_of(&elements[i]);
         if (elements[i].kind == kDelta)
             delta_state(&elements[i], true);
@@ -1083,7 +1135,7 @@ void inputsprocket_reset(void)
 {
     nelements = spare = spare_button = nlists = 0;
     ref_block = device_block = global_list = km = 0;
-    suspended = false;
+    suspended = mouse_wanted = false;
     memset(lists, 0, sizeof lists);
     memset(devices, 0, sizeof devices);
 }

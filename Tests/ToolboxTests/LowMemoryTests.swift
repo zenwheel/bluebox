@@ -175,8 +175,9 @@ extension BlueBox {
             events_sync_lowmem()
             adb_pump()
             #expect(rd16(out + 2) == 0)
-            // The mouse moves 5 right: one packet saying so.
-            machine_post_mouse_delta(5, 0)
+            // The mouse moves 10 right: one packet saying 5 (an ADB mouse's
+            // steps are half the pointer's).
+            machine_post_mouse_delta(10, 0)
             events_sync_lowmem()
             adb_pump()
             #expect(rd16(out + 2) == 1)
