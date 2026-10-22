@@ -375,7 +375,7 @@ enum {
 };
 typedef struct {
     int channel, op;
-    const char *voice;       /* a classic voice name: Fred, Kathy, Zarvox ... */
+    const char *voice;       /* the classic voice asked for (Fred, Victoria ...); hosts speak with the system voice */
     double rate;             /* words per minute */
     double pitch;            /* base pitch, as SetSpeechPitch's (about 30 to 65) */
     double modulation, volume;

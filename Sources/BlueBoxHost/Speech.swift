@@ -1,12 +1,16 @@
 // Speech: the Speech Manager's channels as NSSpeechSynthesizers.
 //
 // NSSpeechSynthesizer speaks through the same engine the classic Speech
-// Manager grew into: it understands the classic embedded commands
-// ([[rate 200]], [[pbas 40]], [[slnc 500]] ...) and macOS still has the
-// MacinTalk voices by name (Fred, Ralph, Kathy, Junior, Zarvox, Whisper,
-// Bad News ...).  Requests come on the emulator thread and are done on the
-// main thread without waiting; words, sync messages, phonemes and the end
-// of each utterance go back as machine_speech_event.
+// Manager grew into and understands the classic embedded commands
+// ([[rate 200]], [[pbas 40]], [[slnc 500]] ...).  Every classic voice
+// speaks with the system voice (the one chosen in Spoken Content, else
+// the language's default; Siri voices aren't open to other programs): the
+// classic voices that macOS still has by name are novelties, and programs
+// ask for ones it lacks.
+// Requests come on the emulator thread and are done on the main thread
+// without waiting; words, sync messages and the end of each utterance go
+// back as machine_speech_event.  macOS reports no phonemes any more (the
+// Speech Manager makes them up from the words).
 
 #if canImport(AppKit)
 import AppKit
@@ -62,18 +66,6 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
         }, nil)
     }
 
-    /// The macOS voice standing for a classic one: the same name, else the default.
-    private func voiceIdentifier(_ name: String?) -> NSSpeechSynthesizer.VoiceName? {
-        guard let name else { return nil }
-        let wanted = name.lowercased().replacingOccurrences(of: " ", with: "")
-        for v in NSSpeechSynthesizer.availableVoices {
-            let attrs = NSSpeechSynthesizer.attributes(forVoice: v)
-            let vname = (attrs[.name] as? String ?? "").lowercased().replacingOccurrences(of: " ", with: "")
-            if vname == wanted { return v }
-        }
-        return nil
-    }
-
     @MainActor private func synth(_ channel: Int32) -> NSSpeechSynthesizer {
         if let s = synths[channel] { return s }
         let s = NSSpeechSynthesizer()
@@ -89,7 +81,6 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
         case Int(MACHINE_SPEECH_SPEAK):
             let s = synth(channel)
             if s.isSpeaking { s.stopSpeaking() }
-            if let v = voiceIdentifier(voice) { _ = s.setVoice(v) }
             if rate > 0 { s.rate = Float(rate) }
             s.volume = Float(max(0, min(1, volume)))
             if pitch > 0 { try? s.setObject(NSNumber(value: pitch), forProperty: .pitchBase) }
@@ -112,9 +103,7 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
     }
 
     @MainActor private func phonemes(_ text: String, voice: String?) -> String {
-        let s = NSSpeechSynthesizer()
-        if let v = voiceIdentifier(voice) { _ = s.setVoice(v) }
-        return s.phonemes(from: text)
+        NSSpeechSynthesizer().phonemes(from: text)
     }
 
     private func channel(_ s: NSSpeechSynthesizer) -> Int32? { channelOf[ObjectIdentifier(s)] }
@@ -151,7 +140,8 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
 /// commands, so an utterance is cut at each: rate, pitch base and volume
 /// become the next piece's settings, silence its pause, and a sync is
 /// reported when the speech reaches it.  Words come from willSpeakRange,
-/// placed back in the original text; phonemes aren't reported.
+/// placed back in the original text; phonemes aren't reported.  Utterances
+/// have no voice of their own, so they speak with the system voice.
 final class AVSpeech: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
     private struct Piece {
         var text: String
@@ -162,14 +152,6 @@ final class AVSpeech: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
     }
     private var synths: [Int32: AVSpeechSynthesizer] = [:]
     private var current: [ObjectIdentifier: (channel: Int32, offsets: [ObjectIdentifier: Int], syncs: [ObjectIdentifier: [Int32]], last: ObjectIdentifier?)] = [:]
-
-    private func voice(_ name: String?) -> AVSpeechSynthesisVoice? {
-        guard let name else { return nil }
-        let wanted = name.lowercased().replacingOccurrences(of: " ", with: "")
-        return AVSpeechSynthesisVoice.speechVoices().first {
-            $0.name.lowercased().replacingOccurrences(of: " ", with: "") == wanted
-        }
-    }
 
     /// The text cut at its embedded commands.
     private func split(_ text: String, rate: Double, pitch: Double, volume: Double) -> [Piece] {
@@ -237,10 +219,8 @@ final class AVSpeech: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
                               volume: max(0, min(1, volume)))
             var state = (channel: channel, offsets: [ObjectIdentifier: Int](), syncs: [ObjectIdentifier: [Int32]](),
                          last: ObjectIdentifier?.none)
-            let v = self.voice(name)
             for p in parts {
                 let ut = AVSpeechUtterance(string: p.text)
-                if let v { ut.voice = v }
                 // About 180 words a minute is AV's default rate.
                 ut.rate = Float(max(Double(AVSpeechUtteranceMinimumSpeechRate),
                                     min(Double(AVSpeechUtteranceMaximumSpeechRate),
