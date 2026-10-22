@@ -50,7 +50,7 @@ walk_one() {
 	elif [ "$status" -ge 128 ] || [ "$status" -eq 124 ]; then
 		end="host exit $status"
 	else
-		end=$(grep -a -m 1 -E '^stopped:|^bluebox:|^instruction limit' "$log" | sed -E 's/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//' | cut -c1-120)
+		end=$(grep -a -m 1 -E '^stopped:|^bluebox:|^instruction limit|^several applications' "$log" | sed -E 's/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//' | cut -c1-120)
 	fi
 	step=$(grep -a '^walk: menu' "$log" | tail -n 1 | sed 's/^walk: //')
 	items=$(grep -a -c '^walk: menu' "$log" || true)

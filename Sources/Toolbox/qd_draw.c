@@ -851,6 +851,8 @@ static void poly_add(gaddr poly, int h, int v)
 {
     int32_t size = (int16_t)rd16(rd32(poly));
     tb_SetHandleSize(poly, size + 4);
+    if (tb_GetHandleSize(poly) < size + 4)
+        return; /* a locked polygon that can't grow: the point is left out */
     gaddr p = rd32(poly);
     wr32(p + (uint32_t)size, make_pt((int16_t)v, (int16_t)h));
     wr16(p, (uint16_t)(size + 4));

@@ -1410,6 +1410,18 @@ void tb_SelectWindow(gaddr w)
 
 void tb_SendBehind(gaddr w, gaddr behind)
 {
+    /* No window, or one to go behind that isn't in the list (Snoop, whose
+     * only window was hidden, sent FrontWindow's nil behind a pointer that
+     * was no window): nothing to move, and nothing written through them. */
+    if (!w)
+        return;
+    if (behind && behind != IN_FRONT) {
+        gaddr x = wlist();
+        while (x && x != behind)
+            x = WindowRecord_nextWindow(x);
+        if (!x || behind == w)
+            return;
+    }
     hrgn s;
     hrgn_init(&s);
     rgn_read(WindowRecord_strucRgn(w), &s);
@@ -1439,6 +1451,8 @@ void tb_SetWTitle(gaddr w, gaddr t)
     gaddr h = WindowRecord_titleHandle(w);
     uint32_t n = (uint32_t)rd8(t) + 1;
     tb_SetHandleSize(h, (int32_t)n);
+    if (tb_GetHandleSize(h) < (int32_t)n)
+        return; /* a locked title that can't grow keeps the old one */
     gmemcpy(rd32(h), t, n);
     WindowRecord_set_titleWidth(w, tb_StringWidth(t));
     if (wvisible(w)) {

@@ -378,6 +378,8 @@ void rgn_write(gaddr rh, const hrgn *r)
     bool rect = r->nbands == 0 || (r->nbands == 1 && r->bands[0].n == 2);
     if (rect) {
         tb_SetHandleSize(rh, 10);
+        if (tb_GetHandleSize(rh) < 10)
+            return;
         gaddr p = rd32(rh);
         wr16(p, 10);
         qrect_put(p + 2, bbox);
@@ -424,6 +426,20 @@ void rgn_write(gaddr rh, const hrgn *r)
     if (size > 32767)
         size = 32767; /* QuickDraw's limit; damaged region rather than overflow */
     tb_SetHandleSize(rh, (int32_t)size);
+    int32_t got = tb_GetHandleSize(rh);
+    if (got < (int32_t)size) {
+        /* A locked region that can't grow (a block after it): its bounding
+         * box, which fits, rather than the region written over the next
+         * block (Snoop's windows, sent behind, broke the heap). */
+        if (got >= 10) {
+            gaddr p = rd32(rh);
+            wr16(p, 10);
+            qrect_put(p + 2, bbox);
+        }
+        free(diff);
+        free(buf);
+        return;
+    }
     gaddr p = rd32(rh);
     wr16(p, (uint16_t)size);
     qrect_put(p + 2, bbox);
