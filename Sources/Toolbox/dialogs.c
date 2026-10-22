@@ -527,6 +527,68 @@ static void apply_dftb(gaddr d, int16_t id)
     }
 }
 
+/* 'ictb' (the item list's ID, with a 'dctb'): for each item its data and
+ * offset words; a text item's data says which fields of the 20-byte text
+ * style at the offset apply (bit 0 font, 1 face, 2 size, 3 colour, 4 the
+ * size added, 15 the font by the name at an offset).  Text items take the
+ * font, face and size, kept as 'dftb' styles are; an item 'dftb' styled
+ * keeps that. */
+static void apply_ictb(gaddr d, int16_t id)
+{
+    gaddr h = tb_GetResource((int32_t)fourcc("ictb"), id);
+    if (!h || !rd32(h))
+        return;
+    uint32_t len = (uint32_t)tb_GetHandleSize(h);
+    int n = item_count(d);
+    int x = extra_index(d, true);
+    if (x < 0 || n <= 0)
+        return;
+    if (extras[x].nfonts < n) {
+        extras[x].fonts = realloc(extras[x].fonts, (size_t)n * 24);
+        memset(extras[x].fonts + extras[x].nfonts, 0, (size_t)(n - extras[x].nfonts) * 24);
+        extras[x].nfonts = n;
+    }
+    for (int i = 1; i <= n && (uint32_t)i * 4 <= len; i++) {
+        int type = item_type(d, i) & 0x7F;
+        gaddr p = rd32(h);
+        int data = rd16(p + (uint32_t)(i - 1) * 4);
+        uint32_t off = rd16(p + (uint32_t)(i - 1) * 4 + 2);
+        uint8_t *f = extras[x].fonts[i - 1];
+        if ((type != statText && type != editText) || !(data & 0x8017) || off + 20 > len || (f[0] | f[1]))
+            continue;
+        int flags = 0;
+        int16_t font = (int16_t)rd16(p + off);
+        if (data & 0x8000) { /* the font by name */
+            uint32_t at = (uint16_t)font;
+            if (at < len && at + 1 + rd8(p + at) <= len) {
+                gaddr name = tb_NewPtr(256, false, true), num = tb_NewPtr(2, false, true);
+                gmemcpy(name, rd32(h) + at, rd8(rd32(h) + at) + 1u);
+                tb_GetFNum(name, num);
+                font = (int16_t)rd16(num);
+                flags |= 1;
+                tb_DisposePtr(num);
+                tb_DisposePtr(name);
+                p = rd32(h);
+            }
+        } else if (data & 1) {
+            flags |= 1;
+        }
+        if (data & 2)
+            flags |= 2;
+        if (data & 0x14)
+            flags |= (data & 0x10) ? 0x104 : 4;
+        int16_t size = (int16_t)rd16(p + off + 4);
+        f[0] = (uint8_t)(flags >> 8);
+        f[1] = (uint8_t)flags;
+        f[2] = (uint8_t)(font >> 8);
+        f[3] = (uint8_t)font;
+        f[4] = (uint8_t)(size >> 8);
+        f[5] = (uint8_t)size;
+        f[6] = 0;
+        f[7] = (uint8_t)rd16(p + off + 2);
+    }
+}
+
 gaddr tb_NewColorDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t procid, gaddr behind, int8_t gaflag,
                         int32_t rc, gaddr items)
 {
@@ -540,7 +602,8 @@ gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override
     gaddr dlog = tb_GetResource((int32_t)fourcc("DLOG"), id);
     if (!dlog || !rd32(dlog))
         return 0;
-    gaddr ditl = tb_GetResource((int32_t)fourcc("DITL"), (int16_t)rd16(rd32(dlog) + 18));
+    int16_t ditl_id = (int16_t)rd16(rd32(dlog) + 18);
+    gaddr ditl = tb_GetResource((int32_t)fourcc("DITL"), ditl_id);
     if (!ditl || !rd32(ditl))
         return 0;
     uint32_t items = ditl;
@@ -563,6 +626,8 @@ gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override
         tb_SetWinColor(d, dctb);
     if (d)
         apply_dftb(d, id);
+    if (d && color)
+        apply_ictb(d, ditl_id);
     if (d && vis)
         tb_ShowWindow(d);
     return d;

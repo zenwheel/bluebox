@@ -84,6 +84,36 @@ extension BlueBox {
             #expect(isColour(n))
         }
 
+        /// An 'ictb' (with a 'dctb') gives text items their font, face and
+        /// size: PopChar Pro's installer sets its static texts in Geneva 9.
+        @Test func itemColourTableSetsTheTextStyle() {
+            func textRight(_ ictb: [UInt8]?) -> Int {
+                var res = [TestResource(type: "DLOG", id: 200, data: dlog(items: 200)),
+                           TestResource(type: "DITL", id: 200, data: Self.items),
+                           TestResource(type: "dctb", id: 200, data: cat(be32(0), be16(0), be16(0xFFFF)))]
+                if let ictb { res.append(TestResource(type: "ictb", id: 200, data: ictb)) }
+                launchTestApp(res)
+                _ = initToolbox()
+                let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+                tb_SetPort(d)
+                tb_DrawDialog(d)
+                let c = tb_NewPtr(6, false, true)
+                var right = 0
+                for v in 50..<66 { for h in 20..<280 {
+                    tb_GetCPixel(Int16(h), Int16(v), c)
+                    if rd16(c) < 0x8000 { right = max(right, h) }
+                } }
+                tb_DisposeDialog(d)
+                return right
+            }
+            // Items 1, 2 none; item 3 the size (bit 2) from the style at 20.
+            let style = cat(be16(0), be16(0), be16(9), [UInt8](repeating: 0, count: 14))
+            let ictb = cat(be32(0), be32(0), be16(0x0004), be16(20), be32(0), be32(0), style)
+            let plain = textRight(nil), small = textRight(ictb)
+            #expect(plain > 0 && small > 0)
+            #expect(small < plain)
+        }
+
         @Test func setTextAndHideItems() {
             let d = open()
             tb_SetPort(d)
