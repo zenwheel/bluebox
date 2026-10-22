@@ -2,9 +2,11 @@
 // macOS window, and the classic menu bar is the native menu bar.
 //
 // The Mac screen is a hidden framebuffer the size of the host display's
-// visible area divided by the display scale, plus the classic menu bar's 20
-// pixels, which are never shown.  Mac global (x, y) maps to host screen
-// (visibleFrame.minX + x * scale, visibleFrame.maxY - (y - 20) * scale).
+// visible area divided by the display scale (its width rounded down to 64),
+// plus the classic menu bar's 20 pixels, which are never shown.  It is
+// centred: Mac global (x, y) maps to host screen
+// (left + x * scale, visibleFrame.maxY - (y - 20) * scale), left being
+// rootlessMacLeft().
 
 #if canImport(AppKit)
 import AppKit
@@ -39,14 +41,23 @@ let classicMenuBarHeight: CGFloat = 20
             Int32((vf.height / displayScale).rounded(.down) + classicMenuBarHeight))
 }
 
+/// The host x of the Mac screen's left edge: the Mac screen centred in the
+/// visible area, the width it leaves (its rounding to 64) shared by both
+/// sides; a program with the whole screen has black there (the backdrop).
+@MainActor func rootlessMacLeft() -> CGFloat {
+    let vf = rootlessScreenFrame()
+    let (w, _) = rootlessMacScreenSize()
+    return vf.minX + ((vf.width - CGFloat(w) * displayScale) / 2).rounded(.down)
+}
+
 @MainActor func macToHost(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
     let vf = rootlessScreenFrame()
-    return NSPoint(x: vf.minX + x * displayScale, y: vf.maxY - (y - classicMenuBarHeight) * displayScale)
+    return NSPoint(x: rootlessMacLeft() + x * displayScale, y: vf.maxY - (y - classicMenuBarHeight) * displayScale)
 }
 
 @MainActor func hostToMac(_ p: NSPoint) -> (Int32, Int32) {
     let vf = rootlessScreenFrame()
-    return (Int32(((p.x - vf.minX) / displayScale).rounded(.down)),
+    return (Int32(((p.x - rootlessMacLeft()) / displayScale).rounded(.down)),
             Int32(((vf.maxY - p.y) / displayScale + classicMenuBarHeight).rounded(.down)))
 }
 
@@ -179,7 +190,8 @@ final class TransientView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let s = displayScale
-        menuLayer.frame = CGRect(x: CGFloat(left) * s, y: (CGFloat(top) - classicMenuBarHeight) * s,
+        let inset = rootlessMacLeft() - rootlessScreenFrame().minX /* the Mac screen is centred */
+        menuLayer.frame = CGRect(x: inset + CGFloat(left) * s, y: (CGFloat(top) - classicMenuBarHeight) * s,
                                  width: CGFloat(w) * s, height: CGFloat(h) * s)
         menuLayer.contents = image
         CATransaction.commit()
