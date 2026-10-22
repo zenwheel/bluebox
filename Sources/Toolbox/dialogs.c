@@ -1542,3 +1542,10 @@ int16_t tb_AppendDialogItemList(gaddr d, int16_t id, int16_t method)
     tb_AppendDITL(d, ditl, method);
     return noErr;
 }
+
+/* The front window if it is a dialog (the menu walker dismisses it), or 0. */
+gaddr dialog_in_front(void)
+{
+    gaddr w = tb_FrontWindow();
+    return is_dialog(w) ? w : 0;
+}

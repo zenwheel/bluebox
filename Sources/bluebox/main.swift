@@ -57,7 +57,10 @@ func usage() -> Never {
           (data file + ._ sidecar) or a .bin/.sit/.sea/.cpt/.hqx file, which is first
           added to the library; --app picks one when the archive holds several.
           --headless run without a window (the default on Linux for now)
-          --realtime a headless run's clock follows real time, not the instructions
+          --walk-menus  a headless run chooses every menu item it can, dismissing the
+                 dialogs they open, and says each step (for finding what breaks;
+                 BLUEBOX_HEAPCHECK=n also checks the heaps after every nth call)
+      --realtime a headless run's clock follows real time, not the instructions
                      run (for networked programs talking to other copies)
           --screen-window  show the whole classic screen in one window instead of
                      rootless windows (implied by --screen)
@@ -393,6 +396,7 @@ func runCommand(_ args: [String]) {
         case "--census": census = true
         case "--headless": headless = true
         case "--realtime": machine_set_realtime(true)
+        case "--walk-menus": machine_set_menu_walk(true)
         case "--screen-window": screenWindow = true
         case "--fonts":
             i += 1

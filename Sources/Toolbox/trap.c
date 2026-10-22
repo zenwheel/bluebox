@@ -514,6 +514,9 @@ void machine_idle(void)
         return;
     last_idle = c->icount;
     c->icount += 1000;
+    walker_idle(c->icount);
+    if (c->halted)
+        return;
     /* Waiting: scripted input comes now, or the clock moves on to it. */
     uint64_t next = events_script_next_at();
     if (next > c->icount && (!icount_cap || next < icount_cap))

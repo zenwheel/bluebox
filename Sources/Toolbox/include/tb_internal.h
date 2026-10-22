@@ -71,6 +71,12 @@ extern uint32_t g_mem_report_cap;
 bool mm_check_zone(gaddr zone);
 /* BLUEBOX_HEAPCHECK: the zones checked after a Toolbox call; false if damaged. */
 bool mm_debug_after_call(const char *name);
+/* The menu bar for the menu walker (menu.c, dialogs.c, walker.c). */
+int menu_bar_count(void);
+int16_t menu_bar_id(int i);
+bool menu_bar_item(int i, int n, char *text, size_t size, bool *enabled, bool *submenu);
+gaddr dialog_in_front(void);
+void walker_idle(uint64_t now);
 
 /* ---- Resource Manager internals ---- */
 
