@@ -67,6 +67,9 @@ struct ShellNode: Identifiable, Hashable {
     /// label such as "Journeyman.toast_.zip/Journeyman").
     var place = ""
     var folder = ""
+    /// A folder's applications, at any depth (for its menu, without
+    /// searching the whole library).
+    var paths: [String] = []
 }
 
 /// The applications a sidebar search finds: those whose folder and name
@@ -110,7 +113,7 @@ func shellTree(_ apps: [ShellApp], prefix: String = "") -> [ShellNode] {
         } else {
             let place = inside.first?.place ?? ""
             folderNodes.append(ShellNode(id: "folder:" + place + "/" + path, name: label, app: nil,
-                                         children: children, place: place, folder: path))
+                                         children: children, place: place, folder: path, paths: inside.map(\.path)))
         }
     }
     let byName: (ShellNode, ShellNode) -> Bool = { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -161,7 +164,7 @@ struct ShellNodeRows: View {
                 } label: {
                     Label(node.name, systemImage: "folder").lineLimit(1)
                         .contextMenu {
-                            let running = model.apps(in: node).contains { model.running[$0.path] != nil }
+                            let running = node.paths.contains { model.running[$0] != nil }
                             Button("Move to Trash…") { trashing = node }
                                 .disabled(running || !model.canTrash(node))
                                 .help(running ? "Quit its applications first" : "Move the whole folder to the Trash")
@@ -184,10 +187,12 @@ enum ShellItem: Hashable {
 }
 
 @MainActor final class ShellModel: ObservableObject {
-    @Published var apps: [ShellApp] = []
-    /// The sidebar's open folders, kept between runs.
+    @Published var apps: [ShellApp] = [] {
+        didSet { sidebarCache = nil }
+    }
     /// Folders closed during the current search.
     @Published var searchCollapsed: Set<String> = []
+    /// The sidebar's open folders, kept between runs.
     @Published var expanded: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "expanded") ?? []) {
         didSet { UserDefaults.standard.set(Array(expanded), forKey: "expanded") }
     }
@@ -204,15 +209,55 @@ enum ShellItem: Hashable {
         .filter { FileManager.default.fileExists(atPath: $0) }
     private var watchers: [DispatchSourceFileSystemObject] = []
     private var iconCache: [String: NSImage] = [:]
+    private var iconsLoading: Set<String> = []
+    private var iconsPublishPending = false
+    /// Bumped when icons have arrived, so the rows showing them redraw.
+    @Published private(set) var iconsVersion = 0
+    private var sidebarCache: (query: String, places: [(place: String, nodes: [ShellNode])])?
     let library = defaultLibrary()
+    private static let genericIcon = NSImage(systemSymbolName: "app", accessibilityDescription: nil) ?? NSImage()
 
-    /// An application's own Finder icon (from its bundle), or a generic one.
+    /// An application's own Finder icon (from its bundle), or a generic one
+    /// while it is read: off the main thread, as reading a few hundred
+    /// resource forks when a search opens every folder stalled typing.
     func icon(_ app: ShellApp) -> NSImage {
         if let cached = iconCache[app.path] { return cached }
-        let image = dockImage(finderBundle(applicationAt: app.path).appIcons)
-            ?? NSImage(systemSymbolName: "app", accessibilityDescription: nil) ?? NSImage()
-        iconCache[app.path] = image
-        return image
+        if iconsLoading.insert(app.path).inserted {
+            let path = app.path
+            DispatchQueue.global(qos: .userInitiated).async {
+                let image = dockImage(finderBundle(applicationAt: path).appIcons)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self.iconCache[path] = image ?? Self.genericIcon
+                        self.iconsLoading.remove(path)
+                        // One redraw for a batch of icons, not one each.
+                        if !self.iconsPublishPending {
+                            self.iconsPublishPending = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                MainActor.assumeIsolated {
+                                    self.iconsPublishPending = false
+                                    self.iconsVersion += 1
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return Self.genericIcon
+    }
+
+    /// The sidebar's places and their trees for a search, built once per
+    /// search and library rather than on every redraw.
+    func sidebar(_ query: String) -> [(place: String, nodes: [ShellNode])] {
+        if let cache = sidebarCache, cache.query == query { return cache.places }
+        let found = shellSearch(apps, query)
+        let places = ["Library", "Macintosh HD"].compactMap { place -> (place: String, nodes: [ShellNode])? in
+            let here = found.filter { $0.place == place }
+            return here.isEmpty ? nil : (place, shellTree(here))
+        }
+        sidebarCache = (query, places)
+        return places
     }
 
     init() {
@@ -473,6 +518,8 @@ struct ShellView: View {
     }()
     @State private var dropTargeted = false
     @State private var search = ""
+    /// The search the sidebar shows: the typed one, once typing pauses.
+    @State private var query = ""
     @State private var trashing: ShellNode?
 
     var body: some View {
@@ -482,27 +529,31 @@ struct ShellView: View {
                     Label("Defaults", systemImage: "slider.horizontal.3").tag(ShellItem.defaults)
                     Label("System Folder", systemImage: "folder.badge.gearshape").tag(ShellItem.systemFolder)
                 }
-                let found = shellSearch(model.apps, search)
-                ForEach(["Library", "Macintosh HD"], id: \.self) { place in
-                    let here = found.filter { $0.place == place }
-                    if !here.isEmpty {
-                        Section(place) {
-                            ShellNodeRows(model: model, nodes: shellTree(here), searching: !search.isEmpty,
-                                          trashing: $trashing)
-                        }
+                let places = model.sidebar(query)
+                ForEach(places, id: \.place) { entry in
+                    Section(entry.place) {
+                        ShellNodeRows(model: model, nodes: entry.nodes, searching: !query.isEmpty, trashing: $trashing)
                     }
                 }
-                if found.isEmpty && !search.isEmpty {
+                if places.isEmpty && !query.isEmpty {
                     Text("No applications match").foregroundStyle(.secondary)
                 }
             }
             // Searching is a new tree: the outline starts afresh rather than
             // reconciling rows whose shape changed under it.
-            .id(search.isEmpty ? "all" : "search")
+            .id(query.isEmpty ? "all" : "search")
             // The search finds applications by name or folder; the folders
             // leading to them are shown open.
             .searchable(text: $search, placement: .sidebar, prompt: "Search applications")
-            .onChange(of: search) { _ in model.searchCollapsed = [] }
+            .task(id: search) {
+                // The search applies when typing pauses; clearing it, at once.
+                if !search.isEmpty {
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    if Task.isCancelled { return }
+                }
+                model.searchCollapsed = []
+                query = search
+            }
             // Double-clicking an application launches it; its context menu
             // launches it or shows it in the Finder.
             .contextMenu(forSelectionType: ShellItem.self) { items in
