@@ -76,6 +76,7 @@ sh scripts/make-app.sh          # makes build/Blue Box.app
 
 - the program, with its fonts built in;
 - The Unarchiver's `unar`, when it's installed here (Homebrew), so archives import without it;
+- [Sparkle](https://sparkle-project.org), with which the shell checks for updates (Blue Box ▸ Check for Updates…);
 - its icon (drawn by `bluebox make-iconset`) and the licences.
 
 Opening it shows the shell. Dropping archives or disk images on its icon
@@ -89,6 +90,28 @@ use it from Terminal (with no arguments it opens the shell):
 ```sh
 sudo ln -s "/Applications/Blue Box.app/Contents/MacOS/bluebox" /usr/local/bin/bluebox
 ```
+
+### Releases
+
+`scripts/release.sh` (or `make release`) builds `Blue Box.app` with a version
+number, signs it with the Developer ID certificate and the hardened runtime
+(`scripts/BlueBox.entitlements`) and zips it:
+
+```sh
+make release VERSION=1.2                                # build/BlueBox-1.2.zip, for testing
+NOTARY_PROFILE=zenwheel-notary make release VERSION=1.2 # the release itself
+```
+
+With `NOTARY_PROFILE` (a `notarytool` keychain profile) set, it notarizes and
+staples the app, zips it to `releases/BlueBox-1.2.zip`, and runs Sparkle's
+`generate_appcast`, which signs the zip with the EdDSA key in the login
+keychain, makes deltas from the older zips in `releases/` and rewrites
+`releases/appcast.xml`. It publishes nothing: copy `releases/` to
+`~/Developer/zenwheel-site/static/software/bluebox/` and run that site's
+`deploy.sh`. The shell reads the appcast from
+<https://www.zenwheel.com/software/bluebox/appcast.xml>. `releases/` is not
+in git (it is backed up separately); keep the old zips there for the deltas.
+`scripts/release.sh -h` says more.
 
 ## Running classic applications
 

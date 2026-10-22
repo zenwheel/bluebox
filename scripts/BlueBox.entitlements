@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Blue Box.app's program, signed with the hardened runtime (scripts/make-app.sh). -->
+	<!-- The PowerPC and 68K translators write code into a MAP_JIT region (CCore/jit.c). -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<!-- QuickTime movies play through libvlc, opened with dlopen from VLC.app
+	     (another team's signature) or Homebrew (ad hoc) (Toolbox/qt_vlc.c). -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<!-- The Sound Input Manager records from the microphone (BlueBoxHost/SoundInput.swift). -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>
