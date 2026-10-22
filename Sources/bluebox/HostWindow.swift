@@ -12,6 +12,18 @@ import Toolbox
 /// Host points per Mac pixel: 1, 1.5 or 2 (--scale, or the app's setting).
 nonisolated(unsafe) var displayScale: CGFloat = 1
 
+/// An image of RGBA pixels that owns a copy of them.  A bitmap context's
+/// makeImage shares the buffer until the context draws again, and ours
+/// never does: the next refresh wrote over pixels a layer was still showing,
+/// so a moving sprite flashed back to where it had been (Bachman).
+func rgbaImage(_ rgba: [UInt32], width: Int, height: Int) -> CGImage? {
+    let data = rgba.withUnsafeBytes { Data($0) } as CFData
+    guard let provider = CGDataProvider(data: data) else { return nil }
+    return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                   provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+}
+
 final class ScreenView: NSView, MacScreenView {
     private var timer: Timer?
     private var rgba = [UInt32]()
@@ -90,20 +102,14 @@ final class ScreenView: NSView, MacScreenView {
         machine_screen_size(&w, &h)
         let width = Int(w), height = Int(h)
         guard rgba.count == width * height else { return }
-        let space = CGColorSpaceCreateDeviceRGB()
-        rgba.withUnsafeMutableBytes { buf in
-            guard let ctx = CGContext(data: buf.baseAddress, width: width, height: height, bitsPerComponent: 8,
-                                      bytesPerRow: width * 4, space: space,
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-                  let image = ctx.makeImage(),
-                  let gc = NSGraphicsContext.current?.cgContext else { return }
-            gc.interpolationQuality = .none
-            gc.saveGState()
-            gc.translateBy(x: 0, y: bounds.height)
-            gc.scaleBy(x: 1, y: -1)
-            gc.draw(image, in: CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height))
-            gc.restoreGState()
-        }
+        guard let image = rgbaImage(rgba, width: width, height: height),
+              let gc = NSGraphicsContext.current?.cgContext else { return }
+        gc.interpolationQuality = .none
+        gc.saveGState()
+        gc.translateBy(x: 0, y: bounds.height)
+        gc.scaleBy(x: 1, y: -1)
+        gc.draw(image, in: CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height))
+        gc.restoreGState()
     }
 
     // MARK: Mouse

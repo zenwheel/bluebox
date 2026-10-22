@@ -127,12 +127,7 @@ final class MacWindowView: NSView, MacScreenView {
         lastHash = hash
         // Transparent outside the window's shape.
         for k in 0..<(w * h) where mask[k] == 0 { rgba[k] = 0 }
-        let space = CGColorSpaceCreateDeviceRGB()
-        let image: CGImage? = rgba.withUnsafeMutableBytes { buf in
-            CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
-        }
-        layer?.contents = image
+        layer?.contents = rgbaImage(rgba, width: w, height: h)
     }
 
     private func post(_ event: NSEvent, button: Int32) { postHostMouse(button: button) }
@@ -174,11 +169,7 @@ final class TransientView: NSView {
         rgba.withUnsafeMutableBytes { raw in
             machine_screen_rgba(Int32(left), Int32(top), Int32(w), Int32(h), raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
         }
-        let image: CGImage? = rgba.withUnsafeMutableBytes { buf in
-            CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                      space: CGColorSpaceCreateDeviceRGB(),
-                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
-        }
+        let image = rgbaImage(rgba, width: w, height: h)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let s = displayScale
