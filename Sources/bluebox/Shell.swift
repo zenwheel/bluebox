@@ -539,9 +539,6 @@ struct ShellView: View {
                     Text("No applications match").foregroundStyle(.secondary)
                 }
             }
-            // Searching is a new tree: the outline starts afresh rather than
-            // reconciling rows whose shape changed under it.
-            .id(query.isEmpty ? "all" : "search")
             // The search finds applications by name or folder; the folders
             // leading to them are shown open.
             .searchable(text: $search, placement: .sidebar, prompt: "Search applications")
