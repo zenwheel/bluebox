@@ -186,6 +186,29 @@ static int char_advance(const strike *s, uint8_t c, gaddr port)
     return adv;
 }
 
+/* CharExtra's widening of every character but the space, as a Fixed
+ * number of pixels. The colour port keeps it in chExtra as 4.12 per point
+ * of txSize, so it scales with the size; a basic port has no chExtra. */
+static int32_t char_extra(gaddr port)
+{
+    if (!qd_port_is_color(port))
+        return 0;
+    int family, size, face;
+    port_font(port, &family, &size, &face);
+    return (int32_t)CGrafPort_chExtra(port) * size * 16;
+}
+
+/* Where each character starts, from the start of the text: the extra is
+ * fractional, so it accumulates as a Fixed and is rounded once per
+ * character rather than lost on each one, and measuring and drawing step
+ * through the same positions. */
+static int pen_offset(int32_t fixed) { return (int)((fixed + 0x8000) >> 16); }
+
+static int32_t char_step(const strike *s, uint8_t c, gaddr port, int32_t extra)
+{
+    return ((int32_t)char_advance(s, c, port) << 16) + (c == ' ' ? 0 : extra);
+}
+
 static void note_width_table(const strike *s, gaddr port);
 
 int qd_text_width(gaddr port, const uint8_t *text, int len)
@@ -193,10 +216,10 @@ int qd_text_width(gaddr port, const uint8_t *text, int len)
     strike s;
     if (load_strike(port, &s))
         note_width_table(&s, port);
-    int w = 0;
+    int32_t extra = char_extra(port), w = 0;
     for (int i = 0; i < len; i++)
-        w += char_advance(&s, text[i], port);
-    return w;
+        w += char_step(&s, text[i], port, extra);
+    return pen_offset(w);
 }
 
 /* Draw one glyph's bitmap with its top-left at (x, top) in local coordinates. */
@@ -270,10 +293,12 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
     int x = pt_h(loc), base = pt_v(loc);
     int start = x;
     qd_pic_text(port, x, base, text, len);
+    int32_t extra = char_extra(port), at = 0;
     if (have && GrafPort_pnVis(port) < 0) {
         /* A hidden pen (a picture being recorded) draws nothing. */
         for (int i = 0; i < len; i++)
-            x += char_advance(&s, text[i], port);
+            at += char_step(&s, text[i], port, extra);
+        x = start + pen_offset(at);
     } else if (have) {
         int8_t st = tb_HGetState(s.handle);
         tb_HLock(s.handle);
@@ -288,8 +313,9 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
         for (int i = 0; i < len; i++) {
             int off, w;
             int idx = glyph_index(&s, text[i], &off, &w);
-            int adv = char_advance(&s, text[i], port);
-            if ((mode & 3) == 0)
+            at += char_step(&s, text[i], port, extra);
+            int adv = start + pen_offset(at) - x;
+            if ((mode & 3) == 0 && adv > 0)
                 paint_cell(&s, x, adv, base, &d, &clip, mode, fg, bk);
             draw_glyph(&s, idx, x + off, base - s.ascent, &d, &clip, mode, fg, bk);
             x += adv;
@@ -322,7 +348,19 @@ void tb_TextFace(int16_t thef) { GrafPort_set_txFace(qd_port(), (uint8_t)thef); 
 void tb_TextMode(int16_t m) { GrafPort_set_txMode(qd_port(), m); }
 void tb_TextSize(int16_t s) { GrafPort_set_txSize(qd_port(), s); }
 void tb_SpaceExtra(int32_t e) { GrafPort_set_spExtra(qd_port(), e); }
-void tb_CharExtra(int32_t extra) {}
+/* CharExtra keeps the extra per point of the current size, in 4.12 (Inside
+ * Macintosh: Text), which is why programs set the size first; a colour port
+ * alone has the field, and a basic port ignores the call. */
+void tb_CharExtra(int32_t extra)
+{
+    gaddr port = qd_port();
+    if (!qd_port_is_color(port))
+        return;
+    int family, size, face;
+    port_font(port, &family, &size, &face);
+    int64_t v = ((int64_t)extra / size + 8) >> 4;
+    CGrafPort_set_chExtra(port, (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v));
+}
 
 static void draw_guest(gaddr p, int n)
 {
@@ -613,18 +651,292 @@ void tb_MeasureText(int16_t count, gaddr text, gaddr locs)
 }
 
 /* ---------------------------------------------------------------------- */
-/* The outline font calls (FontDispatch): the fonts are bitmaps. */
+/* The outline font calls (FontDispatch).
+ *
+ * Blue Box draws only bitmap strikes: there is no TrueType rasteriser, and
+ * the built-in families have no 'sfnt'. A family a program or the System
+ * file brings with an 'sfnt' (a FOND entry of size 0) still has its
+ * outline metrics in the font's own tables, so IsOutline answers as the
+ * Font Manager would choose (the outline when outlines are preferred or no
+ * strike has the exact size), and OutlineMetrics measures the glyphs from
+ * hmtx and the glyph headers in glyf: unhinted, and without the
+ * algorithmic styles. The text itself is still drawn from the nearest
+ * strike. */
+
+enum { fontNotOutlineErr = -32615 };
 
 static bool outline_preferred, preserve_glyph;
 
-int8_t tb_IsOutline(uint32_t numer, uint32_t denom) { return false; }
+typedef struct {
+    gaddr base;
+    uint32_t len;
+    uint32_t head, hhea, hmtx, maxp, cmap, loca, glyf;
+    uint32_t glyf_len;
+    int units_per_em, long_loca, num_glyphs, num_hmetrics;
+    uint32_t map; /* the Macintosh Roman (1, 0) cmap subtable */
+    gaddr handle;
+    int8_t state;
+} sfnt;
+
+static uint32_t sf16(const sfnt *f, uint32_t at) { return at + 2 <= f->len ? rd16(f->base + at) : 0; }
+static uint32_t sf32(const sfnt *f, uint32_t at) { return at + 4 <= f->len ? rd32(f->base + at) : 0; }
+
+/* The 'sfnt' of a family, by the size-0 entry of its FOND. */
+static gaddr sfnt_resource(int family)
+{
+    gaddr fond = tb_GetResource((int32_t)fourcc("FOND"), (int16_t)family);
+    if (!fond || !rd32(fond))
+        return 0;
+    gaddr assoc = rd32(fond) + FamRec_SIZEOF;
+    int n = (int)rd16(assoc) + 1;
+    for (int i = 0; i < n; i++) {
+        gaddr e = assoc + 2 + (uint32_t)i * 6;
+        if (rd16s(e) == 0) {
+            gaddr h = tb_GetResource((int32_t)fourcc("sfnt"), rd16s(e + 4));
+            if (h && rd32(h))
+                return h;
+        }
+    }
+    return 0;
+}
+
+/* Find the tables the metrics come from; false if any is missing or the
+ * font is not one this can read (no Macintosh Roman cmap of format 0, 4 or
+ * 6), and then the family is not counted as an outline font. */
+static bool sfnt_open(gaddr h, sfnt *f)
+{
+    int8_t state = f->state;
+    memset(f, 0, sizeof *f);
+    f->handle = h;
+    f->state = state;
+    f->base = rd32(h);
+    f->len = (uint32_t)tb_GetHandleSize(h);
+    uint32_t version = sf32(f, 0);
+    if (version != 0x00010000 && version != fourcc("true"))
+        return false;
+    int n = (int)sf16(f, 4);
+    for (int i = 0; i < n; i++) {
+        uint32_t e = 12 + (uint32_t)i * 16, tag = sf32(f, e), off = sf32(f, e + 8), len = sf32(f, e + 12);
+        if (off > f->len || len > f->len - off)
+            continue;
+        if (tag == fourcc("head"))
+            f->head = off;
+        else if (tag == fourcc("hhea"))
+            f->hhea = off;
+        else if (tag == fourcc("hmtx"))
+            f->hmtx = off;
+        else if (tag == fourcc("maxp"))
+            f->maxp = off;
+        else if (tag == fourcc("cmap"))
+            f->cmap = off;
+        else if (tag == fourcc("loca"))
+            f->loca = off;
+        else if (tag == fourcc("glyf"))
+            f->glyf = off, f->glyf_len = len;
+    }
+    if (!f->head || !f->hhea || !f->hmtx || !f->maxp || !f->cmap || !f->loca || !f->glyf)
+        return false;
+    f->units_per_em = (int)sf16(f, f->head + 18);
+    f->long_loca = sf16(f, f->head + 50) != 0;
+    f->num_glyphs = (int)sf16(f, f->maxp + 4);
+    f->num_hmetrics = (int)sf16(f, f->hhea + 34);
+    if (f->units_per_em == 0 || f->num_hmetrics == 0)
+        return false;
+    int subtables = (int)sf16(f, f->cmap + 2);
+    for (int i = 0; i < subtables; i++) {
+        uint32_t e = f->cmap + 4 + (uint32_t)i * 8;
+        if (sf16(f, e) == 1 && sf16(f, e + 2) == 0) {
+            uint32_t at = f->cmap + sf32(f, e + 4);
+            uint32_t format = sf16(f, at);
+            if (format == 0 || format == 4 || format == 6)
+                f->map = at;
+        }
+    }
+    return f->map != 0;
+}
+
+/* A Macintosh Roman character's glyph, 0 (the missing glyph) if none. */
+static int sfnt_glyph(const sfnt *f, uint8_t c)
+{
+    uint32_t m = f->map;
+    int g = 0;
+    switch (sf16(f, m)) {
+    case 0:
+        g = m + 6 + c < f->len ? rd8(f->base + m + 6 + c) : 0;
+        break;
+    case 6: {
+        uint32_t first = sf16(f, m + 6), count = sf16(f, m + 8);
+        if (c >= first && c < first + count)
+            g = (int)sf16(f, m + 10 + (c - first) * 2);
+        break;
+    }
+    case 4: {
+        uint32_t segs = sf16(f, m + 6) / 2;
+        uint32_t ends = m + 14, starts = ends + segs * 2 + 2, deltas = starts + segs * 2, ranges = deltas + segs * 2;
+        for (uint32_t i = 0; i < segs; i++) {
+            if (c > sf16(f, ends + i * 2))
+                continue;
+            uint32_t start = sf16(f, starts + i * 2), range = sf16(f, ranges + i * 2);
+            if (c < start)
+                break;
+            uint32_t delta = sf16(f, deltas + i * 2);
+            if (range == 0)
+                g = (int)((c + delta) & 0xFFFF);
+            else if ((g = (int)sf16(f, ranges + i * 2 + range + (c - start) * 2)) != 0)
+                g = (int)((g + delta) & 0xFFFF);
+            break;
+        }
+        break;
+    }
+    }
+    return g < f->num_glyphs ? g : 0;
+}
+
+/* A glyph's advance and left side bearing in font units (hmtx), and its
+ * bounding box from the glyph's header in glyf; false for a glyph with no
+ * outline (a space), whose box is empty. */
+static bool sfnt_metrics(const sfnt *f, int g, int *aw, int *lsb, int box[4])
+{
+    int last = f->num_hmetrics - 1;
+    *aw = (int)sf16(f, f->hmtx + (uint32_t)(g < last ? g : last) * 4);
+    *lsb = g <= last ? (int16_t)sf16(f, f->hmtx + (uint32_t)g * 4 + 2)
+                     : (int16_t)sf16(f, f->hmtx + (uint32_t)f->num_hmetrics * 4 + (uint32_t)(g - f->num_hmetrics) * 2);
+    uint32_t from, to;
+    if (f->long_loca) {
+        from = sf32(f, f->loca + (uint32_t)g * 4);
+        to = sf32(f, f->loca + (uint32_t)g * 4 + 4);
+    } else {
+        from = sf16(f, f->loca + (uint32_t)g * 2) * 2;
+        to = sf16(f, f->loca + (uint32_t)g * 2 + 2) * 2;
+    }
+    if (to <= from || to > f->glyf_len) {
+        box[0] = box[1] = box[2] = box[3] = 0;
+        return false;
+    }
+    uint32_t at = f->glyf + from;
+    for (int k = 0; k < 4; k++)
+        box[k] = (int16_t)sf16(f, at + 2 + (uint32_t)k * 2); /* xMin, yMin, xMax, yMax */
+    return true;
+}
+
+/* Whether the family has a plain bitmap strike of exactly this size. */
+static bool has_strike(int family, int size)
+{
+    gaddr fond = tb_GetResource((int32_t)fourcc("FOND"), (int16_t)family);
+    if (fond && rd32(fond)) {
+        gaddr assoc = rd32(fond) + FamRec_SIZEOF;
+        int n = (int)rd16(assoc) + 1;
+        for (int i = 0; i < n; i++) {
+            gaddr e = assoc + 2 + (uint32_t)i * 6;
+            if (rd16s(e) == size && rd16s(e + 2) == 0)
+                return true;
+        }
+    }
+    return tb_GetResource((int32_t)fourcc("FONT"), (int16_t)(family * 128 + size)) != 0;
+}
+
+/* The current port's outline font, if the Font Manager would draw this
+ * size from it: numer and denom (Points, vertical first) scale the size
+ * as they scale the text. The 'sfnt' is left locked until outline_done. */
+static bool outline_font(uint32_t numer, uint32_t denom, sfnt *f, int *hsize, int *vsize)
+{
+    int family, size, face;
+    port_font(qd_port(), &family, &size, &face);
+    int nv = pt_v(numer), nh = pt_h(numer), dv = pt_v(denom), dh = pt_h(denom);
+    *vsize = dv > 0 && nv > 0 ? size * nv / dv : size;
+    *hsize = dh > 0 && nh > 0 ? size * nh / dh : size;
+    uint8_t saved = rd8(LM_ResLoad);
+    uint16_t res_err = rd16(LM_ResErr); /* asking leaves ResErr alone, as measuring does */
+    wr8(LM_ResLoad, 1);
+    gaddr h = sfnt_resource(family);
+    int k;
+    if (!h && (k = classic_index(family)) >= 0 && classic_fonts[k].drawn_as != family) {
+        family = classic_fonts[k].drawn_as;
+        h = sfnt_resource(family);
+    }
+    bool bitmap = h && !outline_preferred && has_strike(family, *vsize);
+    wr8(LM_ResLoad, saved);
+    wr16(LM_ResErr, res_err);
+    if (!h || bitmap)
+        return false;
+    f->state = tb_HGetState(h);
+    tb_HLock(h);
+    if (!sfnt_open(h, f)) {
+        tb_HSetState(h, f->state);
+        return false;
+    }
+    return true;
+}
+
+static void outline_done(sfnt *f) { tb_HSetState(f->handle, f->state); }
+
+/* Font units to a Fixed number of pixels at this many pixels per em. */
+static int32_t units_px(const sfnt *f, int units, int ppem)
+{
+    return (int32_t)((int64_t)units * ppem * 65536 / f->units_per_em);
+}
+
+static int px_floor(int32_t fixed) { return (int)(fixed >> 16); }
+static int px_ceil(int32_t fixed) { return (int)((fixed + 0xFFFF) >> 16); }
+
+int8_t tb_IsOutline(uint32_t numer, uint32_t denom)
+{
+    sfnt f;
+    int hsize, vsize;
+    if (!outline_font(numer, denom, &f, &hsize, &vsize))
+        return false;
+    outline_done(&f);
+    return true;
+}
+
 void tb_SetOutlinePreferred(int8_t on) { outline_preferred = on != 0; }
 int8_t tb_GetOutlinePreferred(void) { return outline_preferred; }
 void tb_SetPreserveGlyph(int8_t on) { preserve_glyph = on != 0; }
 int8_t tb_GetPreserveGlyph(void) { return preserve_glyph; }
 int16_t tb_FlushFonts(void) { return noErr; }
+
+/* Each glyph's advance (whole pixels unless FractEnable), left side
+ * bearing (never rounded) and bounding box, the box in pixels about the
+ * glyph's origin with y growing upwards as IM: Text describes it: so top
+ * is the glyph's highest point and bottom its lowest. yMax and yMin are
+ * the extremes over the whole text. */
 int16_t tb_OutlineMetrics(int16_t byte_count, gaddr text, uint32_t numer, uint32_t denom, gaddr y_max, gaddr y_min,
                           gaddr aw_array, gaddr lsb_array, gaddr bounds_array)
 {
-    return -32615; /* fontNotOutlineErr */
+    sfnt f;
+    int hsize, vsize;
+    if (!outline_font(numer, denom, &f, &hsize, &vsize))
+        return fontNotOutlineErr;
+    bool fract = rd8(LM_FractEnable) != 0;
+    int top = 0, bottom = 0;
+    bool any = false;
+    for (int i = 0; i < byte_count; i++) {
+        int aw, lsb, box[4];
+        bool inked = sfnt_metrics(&f, sfnt_glyph(&f, rd8(text + (uint32_t)i)), &aw, &lsb, box);
+        int32_t adv = units_px(&f, aw, hsize);
+        if (!fract)
+            adv = (adv + 0x8000) & ~0xFFFF;
+        if (aw_array)
+            wr32(aw_array + (uint32_t)i * 4, (uint32_t)adv);
+        if (lsb_array)
+            wr32(lsb_array + (uint32_t)i * 4, (uint32_t)units_px(&f, lsb, hsize));
+        qrect r = { 0, 0, 0, 0 };
+        if (inked) {
+            r.left = (int16_t)px_floor(units_px(&f, box[0], hsize));
+            r.bottom = (int16_t)px_floor(units_px(&f, box[1], vsize));
+            r.right = (int16_t)px_ceil(units_px(&f, box[2], hsize));
+            r.top = (int16_t)px_ceil(units_px(&f, box[3], vsize));
+            top = any && top > r.top ? top : r.top;
+            bottom = any && bottom < r.bottom ? bottom : r.bottom;
+            any = true;
+        }
+        if (bounds_array)
+            qrect_put(bounds_array + (uint32_t)i * 8, r);
+    }
+    if (y_max)
+        wr16(y_max, (uint16_t)top);
+    if (y_min)
+        wr16(y_min, (uint16_t)bottom);
+    outline_done(&f);
+    return noErr;
 }
