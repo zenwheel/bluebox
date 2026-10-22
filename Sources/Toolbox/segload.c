@@ -195,8 +195,24 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
         return 0;
     }
     /* A5 world at the top of the address space reserved for it; the stack
-     * grows down from just below it. */
-    gaddr a5 = (GA_A5WORLD_TOP - above) & ~3u;
+     * grows down from just below it.  A program whose SIZE resource doesn't
+     * say it is 32-bit compatible gets its A5 world and stack below 16 MB,
+     * where a Mac in 24-bit mode (or one with less memory) put them, and
+     * the heap under them: such programs keep flags in the top byte of
+     * addresses, or clear it.  Cribbage 2.5 clears one byte too many of a
+     * local array, the top byte of its saved frame pointer, and returned
+     * to address 0 when that byte wasn't already 0. */
+    gaddr top = GA_A5WORLD_TOP;
+    if (!(g_app_size_flags & 0x0080) && (uint64_t)above + below + GA_STACK_24 < GA_A5WORLD_TOP_24 - GA_APPHEAP) {
+        gaddr limit = ((GA_A5WORLD_TOP_24 - above) & ~3u) - below - GA_STACK_24;
+        if (Zone_bkLim(rd32(LM_ApplZone)) < limit) {
+            top = GA_A5WORLD_TOP_24;
+            wr32(LM_BufPtr, top);
+            wr32(LM_ApplLimit, limit);
+            mm_set_appl_growth(limit);
+        }
+    }
+    gaddr a5 = (top - above) & ~3u;
     /* CurStackBase is exactly A5 less the globals: MPW's runtime unpacks
      * DATA 0 from there up to A5 and stops only on reaching it. */
     gaddr base = a5 - below;

@@ -269,5 +269,26 @@ extension BlueBox {
             #expect(g_cpu!.pointee.d.1 == 9)  // CODE 2 ran
             #expect(g_cpu!.pointee.d.2 == 1)  // through the patch, once
         }
+
+        /// A program not marked 32-bit compatible gets its stack, A5 world
+        /// and heap below 16 MB, as in 24-bit mode (Cribbage 2.5 clears the
+        /// top byte of a saved frame pointer); a 32-bit clean one doesn't.
+        @Test func partitionBelow16MBUnless32BitCompatible() throws {
+            launchTestApp(sizeFlags: 0)
+            let a5 = rd32(UInt32(LM_CurrentA5))
+            let stackBase = rd32(UInt32(LM_CurStackBase))
+            let limit = rd32(UInt32(LM_ApplLimit))
+            #expect(a5 < 0x0100_0000)
+            #expect(g_cpu!.pointee.a.7 < 0x0100_0000)
+            #expect(rd32(UInt32(LM_BufPtr)) <= 0x0100_0000)
+            #expect(limit < stackBase && stackBase - limit >= 0x10_0000)
+            tb_MaxApplZone()
+            #expect(rd32(UInt32(LM_HeapEnd)) <= limit)
+            #expect(tb_StackSpace() > 0xF_0000)
+
+            launchTestApp(sizeFlags: 0x0080) // is32BitCompatible
+            #expect(rd32(UInt32(LM_CurrentA5)) >= 0x0100_0000)
+            #expect(g_cpu!.pointee.a.7 >= 0x0100_0000)
+        }
     }
 }
