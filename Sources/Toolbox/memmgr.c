@@ -15,6 +15,7 @@
  * The application zone can grow on demand up to its limit, so there is no
  * fixed partition: memory is committed by the host only when touched.
  */
+#include <stdlib.h>
 #include <stdio.h>
 
 #include "tb_internal.h"
@@ -1001,6 +1002,34 @@ bool mm_check_zone(gaddr z)
         log_printf("mm: zone %08X: blocks end at %08X, bkLim is %08X\n", z, b, lim);
         return false;
     }
+    return true;
+}
+
+/* BLUEBOX_HEAPCHECK=N: the system and application zones checked after
+ * every Nth Toolbox call (1, or nothing, for every one), so a call that
+ * damages a heap is named rather than whatever trips over it later (an
+ * "accepted" Boolean written through a stray pointer broke a menu icon's
+ * master pointer, and the crash came two redraws on).  False, with the
+ * damage logged, when a zone is damaged. */
+static int every = -1;
+
+void machine_set_heap_check(int n) { every = n > 0 ? n : 0; }
+
+bool mm_debug_after_call(const char *name)
+{
+    static unsigned calls;
+    if (every < 0) {
+        const char *e = getenv("BLUEBOX_HEAPCHECK");
+        every = e ? (atoi(e) > 0 ? atoi(e) : 1) : 0;
+    }
+    if (!every || ++calls % (unsigned)every)
+        return true;
+    gaddr zones[2] = { rd32(LM_SysZone), rd32(LM_ApplZone) };
+    for (int i = 0; i < 2; i++)
+        if (zones[i] && !mm_check_zone(zones[i])) {
+            log_printf("mm: the zone was damaged by %s (or within the %d calls before it)\n", name, every - 1);
+            return false;
+        }
     return true;
 }
 

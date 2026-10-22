@@ -677,7 +677,7 @@ uint32_t ctb_choose(uint16_t sel, const uint32_t *a)
             tb_SetDialogItemText(rd32(item), str);
             tb_DisposePtr(str);
         }
-    } while (n != itemOK && n != itemCancel);
+    } while (n != itemOK && n != itemCancel && !g_cpu->halted);
     gaddr str = tb_NewPtr(256, false, false);
     tb_GetDialogItem(d, itemSettings, itype, item, r);
     tb_GetDialogItemText(rd32(item), str);
@@ -685,7 +685,7 @@ uint32_t ctb_choose(uint16_t sel, const uint32_t *a)
     tb_DisposePtr(str);
     tb_DisposeDialog(d);
     tb_DisposePtr(scratch);
-    if (n == itemCancel)
+    if (n != itemOK) /* Cancel, or the run ended */
         return chooseCancel;
     uint32_t result = chooseOKMinor;
     if (chosen != (int16_t)rd16(rd32(h) + REC_procID)) {

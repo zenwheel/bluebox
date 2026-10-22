@@ -163,6 +163,20 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// The heap check names the call after which a master pointer stopped
+        /// pointing at its block (a Boolean written through a stray pointer).
+        @Test func heapCheckFindsABrokenMasterPointer() {
+            let h = tb_NewHandle(32, false, true)
+            machine_set_heap_check(1)
+            defer { machine_set_heap_check(0) }
+            #expect(mm_debug_after_call("Fine"))
+            wr8(h + 1, rd8(h + 1) ^ 0x01) // as ISpConfigure's "accepted" once did
+            #expect(!mm_debug_after_call("Stray"))
+            wr8(h + 1, rd8(h + 1) ^ 0x01)
+            #expect(mm_debug_after_call("Fine"))
+            tb_DisposeHandle(h)
+        }
+
         @Test func badHandlesSetErrors() {
             tb_HLock(0)
             #expect(memErr() == -109) // nilHandleErr

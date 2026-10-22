@@ -1790,3 +1790,29 @@ void menu_apply_xmnu(gaddr mh, int16_t id)
         o += 28;
     }
 }
+
+/* ---------------------------------------------------------------------- */
+/* The menu bar as the menu walker (walker.c) sees it */
+
+int menu_bar_count(void) { return mlist() && rd32(mlist()) ? nmenus() : 0; }
+
+int16_t menu_bar_id(int i) { return MenuInfo_menuID(menu_ptr(menu_at(i))); }
+
+/* Item n of the menu bar's menu i (1-based items): its text, whether it
+ * can be chosen (enabled, in an enabled menu, not a separator) and whether
+ * it opens a submenu.  False past the last item. */
+bool menu_bar_item(int i, int n, char *text, size_t size, bool *enabled, bool *submenu)
+{
+    gaddr mh = menu_at(i);
+    gaddr it = item_addr(mh, n);
+    if (!it)
+        return false;
+    int len = rd8(it);
+    int k = 0;
+    for (; k < len && k + 1 < (int)size; k++)
+        text[k] = (char)rd8(it + 1 + (gaddr)k);
+    text[k] = 0;
+    *submenu = rd8(it + 1 + (gaddr)len + 1) == 0x1B;
+    *enabled = item_enabled(mh, n) && !(len && rd8(it + 1) == '-');
+    return true;
+}
