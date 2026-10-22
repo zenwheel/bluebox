@@ -189,6 +189,7 @@ static void apply_lowmem_overrides(void)
 
 void threads_reset(void);
 void help_reset(void);
+void scriptmgr_reset(void);
 void dialog_reset(void);
 void wdef0_native(cpu68k *c, uint16_t tw);
 void wdef124_native(cpu68k *c, uint16_t tw);
@@ -358,6 +359,7 @@ bool machine_boot(bool census)
     gx_reset();
     aem_reset();
     aem_reset_handlers();
+    scriptmgr_reset(); /* from the System's 'itlc' */
     dialogs_reset();
     sound_reset();
     components_reset();

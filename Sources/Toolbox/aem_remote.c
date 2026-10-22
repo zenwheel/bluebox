@@ -8,7 +8,9 @@
  * don't meet.  Events travel flattened (aem_flatten): a message is its
  * length (4 bytes, big-endian), the send mode (4 bytes) and the event; the
  * reply comes back on the same connection framed the same way, the
- * handler's result in place of the mode.
+ * handler's result in place of the mode.  High-level events other than
+ * Apple Events (PostHighLevelEvent) go the same way with no reply, in a
+ * flattened form of their own (aem.c, raw_flatten).
  */
 #include <errno.h>
 #include <dirent.h>

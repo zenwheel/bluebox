@@ -137,37 +137,87 @@ uint8_t *aem_build_flat(uint32_t cls, uint32_t id, const char *const *files, int
 
 typedef struct {
     uint32_t cls, id;
-    uint8_t *flat;       /* the event, as aem_flatten makes them */
+    uint8_t *flat;       /* the event, as aem_flatten makes them; a raw event's message */
     uint32_t flatlen;
     machine_ae_reply_fn reply;  /* who wants the reply, if anyone */
     void *reply_ctx;
+    /* A high-level event other than an Apple Event (PostHighLevelEvent):
+     * its message is the program's own bytes, read with
+     * AcceptHighLevelEvent, perhaps a piece at a time. */
+    bool raw;
+    bool self;           /* posted by this program to itself */
+    bool accepted;       /* AcceptHighLevelEvent has taken (some of) it */
+    bool receipt;        /* a return receipt, its result in modifiers */
+    uint16_t modifiers;
+    uint32_t taken;      /* the bytes of the message accepted so far */
+    uint32_t refcon, options;
+    int sender_pid;      /* the sender, for its TargetID and its receipt */
+    uint32_t sender_sig;
+    uint8_t sender_name[32];
 } pending_ae;
+
+enum { procNotFound = -600, bufferIsSmall = -607, noOutstandingHLE = -608, connectionInvalid = -609 };
+enum {
+    nAttnMsg = 0x0001, nReturnReceipt = 0x0200, receiverIDMask = 0xF000, receiverIDisTargetID = 0x5000,
+    receiverIDisSessionID = 0x6000, receiverIDisSignature = 0x7000, receiverIDisPSN = 0x8000,
+};
+enum { msgWasNotAccepted = 0, msgWasFullyAccepted = 1, msgWasPartiallyAccepted = 2 };
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pending_ae queue[16];
 static int qn;
 static pending_ae current; /* delivered to the app, waiting for AEProcessAppleEvent */
 
+/* Return receipts owed for raw events that are done with.  Events are
+ * freed with and without the queue's lock held, so the receipts wait here
+ * (under a lock of their own) and go out once the queue's lock is free. */
+static pthread_mutex_t outbox_lock = PTHREAD_MUTEX_INITIALIZER;
+static pending_ae outbox[16];
+static int nout;
+
 static void free_event(pending_ae *e, bool unanswered)
 {
     if (unanswered && e->reply)
         e->reply(e->reply_ctx, NULL, 0, errAEEventNotHandled);
+    if (e->raw && (e->options & nReturnReceipt)) {
+        /* The receipt says how much of the message the receiver took. */
+        uint16_t result = !e->accepted ? msgWasNotAccepted
+                          : e->taken >= e->flatlen ? msgWasFullyAccepted
+                                                   : msgWasPartiallyAccepted;
+        pthread_mutex_lock(&outbox_lock);
+        if (nout < 16)
+            outbox[nout++] = (pending_ae){ .cls = e->cls, .id = e->id, .refcon = e->refcon,
+                                           .modifiers = result, .sender_pid = e->sender_pid,
+                                           .sender_sig = e->sender_sig };
+        pthread_mutex_unlock(&outbox_lock);
+    }
     free(e->flat);
     memset(e, 0, sizeof *e);
 }
 
-static void enqueue(pending_ae *e)
+/* Into the queue, an urgent event (nAttnMsg) at its head; false if it is
+ * full, and the event is then dropped. */
+static bool enqueue(pending_ae *e)
 {
     pthread_mutex_lock(&lock);
     bool full = qn >= 16;
-    if (!full)
-        queue[qn++] = *e;
+    if (!full) {
+        if (e->raw && (e->options & nAttnMsg)) {
+            memmove(queue + 1, queue, (size_t)qn * sizeof *queue);
+            queue[0] = *e;
+            qn++;
+        } else
+            queue[qn++] = *e;
+    }
     pthread_mutex_unlock(&lock);
     if (full)
         free_event(e, true);
     void ev_wake(void);
     ev_wake();
+    return !full;
 }
+
+static void send_receipts(void);
 
 static void queue_event(uint32_t cls, uint32_t id, const char *const *files, int n, const char *text,
                         machine_ae_reply_fn reply, void *ctx)
@@ -192,9 +242,55 @@ void machine_send_apple_event(uint32_t cls, uint32_t id, const char *const *file
     queue_event(cls, id, files, nfiles, text, reply, ctx);
 }
 
-/* An event from another process, flattened (aem_flatten). */
+/* A raw high-level event between processes: a header, then the message.
+ *   'BHLE', class, ID, refCon, posting options, the sender's process ID
+ *   and signature (4 bytes each), a receipt's result (2), 0 (2), the
+ *   sender's name (Str31, 32 bytes) */
+enum { RAW_TAG = 0x42484C45 /* 'BHLE' */, RAW_HEAD = 64 };
+
+static uint8_t *raw_flatten(const pending_ae *e, const uint8_t *msg, uint32_t len, uint32_t *len_out)
+{
+    uint8_t *buf = calloc(1, RAW_HEAD + len);
+    put32(buf, RAW_TAG);
+    put32(buf + 4, e->cls);
+    put32(buf + 8, e->id);
+    put32(buf + 12, e->refcon);
+    put32(buf + 16, e->options);
+    put32(buf + 20, (uint32_t)e->sender_pid);
+    put32(buf + 24, e->sender_sig);
+    buf[28] = (uint8_t)(e->modifiers >> 8), buf[29] = (uint8_t)e->modifiers;
+    buf[30] = e->receipt;
+    memcpy(buf + 32, e->sender_name, 32);
+    if (len)
+        memcpy(buf + RAW_HEAD, msg, len);
+    *len_out = RAW_HEAD + len;
+    return buf;
+}
+
+static void queue_raw(const uint8_t *data, uint32_t len)
+{
+    pending_ae e = { .cls = rd32be(data + 4), .id = rd32be(data + 8), .raw = true,
+                     .refcon = rd32be(data + 12), .options = rd32be(data + 16),
+                     .sender_pid = (int)rd32be(data + 20), .sender_sig = rd32be(data + 24),
+                     .modifiers = (uint16_t)(data[28] << 8 | data[29]), .receipt = data[30] != 0 };
+    memcpy(e.sender_name, data + 32, 32);
+    e.sender_name[0] = e.sender_name[0] > 31 ? 31 : e.sender_name[0];
+    e.flatlen = len - RAW_HEAD;
+    e.flat = malloc(e.flatlen ? e.flatlen : 1); /* never NULL: an empty message is still an event */
+    memcpy(e.flat, data + RAW_HEAD, e.flatlen);
+    enqueue(&e);
+}
+
+/* An event from another process, flattened (aem_flatten), or a raw
+ * high-level event (raw_flatten). */
 void aem_queue_flat(const uint8_t *data, uint32_t len, machine_ae_reply_fn reply, void *ctx)
 {
+    if (len >= RAW_HEAD && rd32be(data) == RAW_TAG) {
+        queue_raw(data, len);
+        if (reply) /* nothing answers a raw event */
+            reply(ctx, NULL, 0, noErr);
+        return;
+    }
     if (len < 12 || rd32be(data) != RECO_TAG) {
         if (reply)
             reply(ctx, NULL, 0, -1704);
@@ -241,16 +337,26 @@ void machine_request_quit(void)
     machine_post_key('q', 12, 0x0100, 0, 0);
 }
 
-/* For the Event Manager: take the next queued event (true if one was waiting). */
+/* For the Event Manager: take the next queued event (true if one was
+ * waiting), with the modifiers a return receipt carries (else -1). */
 
-bool aem_next_event(uint32_t *cls, uint32_t *id, bool remove)
+bool aem_next_event(uint32_t *cls, uint32_t *id, int32_t *modifiers, bool remove)
 {
+    /* A raw event the program asked for the next one without accepting is
+     * gone, its sender told so (perhaps itself, in time for this call) if
+     * it wanted a receipt. */
+    pthread_mutex_lock(&lock);
+    if (remove && current.raw)
+        free_event(&current, false);
+    pthread_mutex_unlock(&lock);
+    send_receipts();
     pthread_mutex_lock(&lock);
     /* High-level events go to apps that say they take them (SIZE) or that
      * installed a handler.  Others got their documents at launch
-     * (AppParmHandle), as with the System 7 Finder; drop the rest. */
+     * (AppParmHandle), as with the System 7 Finder; drop the rest.  A
+     * program that posts itself events takes them, whatever its SIZE says. */
     bool aware = (g_app_size_flags & 0x0040) != 0;
-    while (qn > 0 && !aware && !has_handler(queue[0].cls, queue[0].id)) {
+    while (qn > 0 && !aware && !(queue[0].raw ? queue[0].self : has_handler(queue[0].cls, queue[0].id))) {
         free_event(&queue[0], true);
         memmove(queue, queue + 1, (size_t)(qn - 1) * sizeof *queue);
         qn--;
@@ -259,6 +365,8 @@ bool aem_next_event(uint32_t *cls, uint32_t *id, bool remove)
     if (have) {
         *cls = queue[0].cls;
         *id = queue[0].id;
+        if (modifiers)
+            *modifiers = queue[0].receipt ? queue[0].modifiers : -1;
         if (remove) {
             free_event(&current, true);
             current = queue[0];
@@ -267,6 +375,7 @@ bool aem_next_event(uint32_t *cls, uint32_t *id, bool remove)
         }
     }
     pthread_mutex_unlock(&lock);
+    send_receipts();
     return have;
 }
 
@@ -280,6 +389,9 @@ void aem_reset(void)
     qn = 0;
     free_event(&current, true);
     pthread_mutex_unlock(&lock);
+    pthread_mutex_lock(&outbox_lock);
+    nout = 0; /* the program that was owed them is gone */
+    pthread_mutex_unlock(&outbox_lock);
     forget_suspended();
 }
 
@@ -1292,7 +1404,12 @@ int16_t tb_AEProcessAppleEvent(gaddr evt)
 {
     pthread_mutex_lock(&lock);
     pending_ae e = current;
-    memset(&current, 0, sizeof current);
+    /* A raw high-level event is no Apple Event: it stays for
+     * AcceptHighLevelEvent. */
+    if (e.raw)
+        e.flat = NULL;
+    else
+        memset(&current, 0, sizeof current);
     pthread_mutex_unlock(&lock);
     if (!e.flat)
         return errAEEventNotHandled;
@@ -2033,46 +2150,290 @@ static uint8_t *wire_event(gaddr evt, uint32_t *len_out)
     return buf;
 }
 
+/* The event AcceptHighLevelEvent takes: the one WaitNextEvent returned
+ * last (-1), or the queued one a GetSpecificHighLevelEvent filter is
+ * looking at (its index). */
+static int examining = -1;
+static bool examined_gone; /* the filter accepted all of it */
+
+static pending_ae *accepting(void)
+{
+    if (examining >= 0)
+        return examining < qn ? &queue[examining] : NULL;
+    return current.flat ? &current : NULL;
+}
+
+/* An event's message: a raw event's own bytes, or an Apple Event in its
+ * wire format.  *owned when the caller frees it. */
+static uint8_t *event_message(const pending_ae *e, uint32_t *len, bool *owned)
+{
+    *owned = !e->raw;
+    if (e->raw) {
+        *len = e->flatlen;
+        return e->flat;
+    }
+    gaddr evt = tb_NewPtr(AEDesc_SIZEOF, false, true);
+    build_event(e, evt);
+    uint8_t *buf = wire_event(evt, len);
+    tb_AEDisposeDesc(evt);
+    tb_DisposePtr(evt);
+    return buf;
+}
+
+static void our_name(uint8_t name[32])
+{
+    gget(name, LM_CurApName, 32);
+    if (name[0] > 31)
+        name[0] = 31;
+}
+
+/* The sender's TargetID: its session (Blue Box's are process IDs), and its
+ * port as the Process Manager names them (GetPortNameFromProcessSerialNumber),
+ * on this machine.  Apple Events from the host come from no one. */
+static void put_sender(gaddr target, const pending_ae *e)
+{
+    gmemset(target, 0, TargetID_SIZEOF);
+    if (!e->raw)
+        return;
+    gaddr port = target + TargetID_name_off;
+    wr32(target + TargetID_sessionID_off, (uint32_t)e->sender_pid);
+    gput(port + PPCPortRec_name_off, e->sender_name, 32);
+    PPCPortRec_set_portKindsSelector(port, 1); /* ppcByCreatorAndType */
+    wr32(port + PPCPortRec_u_port_creator_off, e->sender_sig);
+    wr32(port + PPCPortRec_u_port_type_off, T("ep01"));
+}
+
+/* Take the event out of the queue once it is accepted in full: a raw
+ * event, or an Apple Event a filter took (one WaitNextEvent returned stays
+ * for AEProcessAppleEvent, which Blue Box does not route through here). */
+static void accepted_in_full(pending_ae *p)
+{
+    if (p == &current) {
+        if (p->raw)
+            free_event(p, false);
+        return;
+    }
+    int i = (int)(p - queue);
+    free_event(p, true);
+    memmove(queue + i, queue + i + 1, (size_t)(qn - i - 1) * sizeof *queue);
+    qn--;
+    examined_gone = true;
+}
+
 int16_t tb_AcceptHighLevelEvent(gaddr sender_id_return, gaddr refcon_return, gaddr msg_buf, gaddr msg_length_return)
 {
     pthread_mutex_lock(&lock);
-    pending_ae e = current;
+    pending_ae *p = accepting();
+    pending_ae e = p ? *p : (pending_ae){ 0 };
     pthread_mutex_unlock(&lock);
-    if (!e.flat)
-        return -615; /* noOutstandingHLE */
+    if (!p)
+        return noOutstandingHLE;
     if (refcon_return)
-        wr32(refcon_return, 0);
+        wr32(refcon_return, e.refcon);
     if (sender_id_return)
-        gmemset(sender_id_return, 0, TargetID_SIZEOF);
-    gaddr evt = tb_NewPtr(AEDesc_SIZEOF, false, true);
-    build_event(&e, evt);
+        put_sender(sender_id_return, &e);
+    /* As much as the buffer holds; with bufferIsSmall, msgLen is what is
+     * left, for another call to take. */
+    bool owned;
     uint32_t len;
-    uint8_t *buf = wire_event(evt, &len);
-    tb_AEDisposeDesc(evt);
-    tb_DisposePtr(evt);
-    int16_t err = noErr;
-    if (msg_length_return) {
-        if (!msg_buf || rd32(msg_length_return) < len)
-            err = -607; /* bufferIsSmall */
-        else
-            gput(msg_buf, buf, len);
-        wr32(msg_length_return, len);
+    uint8_t *msg = event_message(&e, &len, &owned);
+    uint32_t at = e.taken < len ? e.taken : len, rest = len - at;
+    uint32_t room = msg_buf && msg_length_return ? rd32(msg_length_return) : 0;
+    uint32_t n = rest < room ? rest : room;
+    if (n)
+        gput(msg_buf, msg + at, n);
+    int16_t err = n < rest ? bufferIsSmall : noErr;
+    if (msg_length_return)
+        wr32(msg_length_return, err ? rest - n : n);
+    if (owned)
+        free(msg);
+    pthread_mutex_lock(&lock);
+    p = accepting(); /* the queue may have grown meanwhile; entries stay put */
+    if (p) {
+        p->accepted = true;
+        p->taken = at + n;
+        if (!err)
+            accepted_in_full(p);
     }
-    free(buf);
+    pthread_mutex_unlock(&lock);
+    send_receipts();
     return err;
 }
 
+/* The filter sees each event in the queue (the one WaitNextEvent returned
+ * first) as a HighLevelEventMsg and the sender's TargetID; it may accept
+ * the event it is looking at. */
 int8_t tb_GetSpecificHighLevelEvent(gaddr fn, gaddr data, gaddr err_return)
 {
     if (err_return)
         wr16(err_return, noErr);
-    return 0;
+    pthread_mutex_lock(&lock);
+    bool any = current.flat || qn > 0;
+    pthread_mutex_unlock(&lock);
+    if (!any) {
+        if (err_return)
+            wr16(err_return, noOutstandingHLE);
+        return 0;
+    }
+    gaddr msg = tb_NewPtr(HighLevelEventMsg_SIZEOF, false, true), sender = tb_NewPtr(TargetID_SIZEOF, false, true);
+    bool found = false;
+    for (int i = current.flat ? -1 : 0; !found; ) {
+        pthread_mutex_lock(&lock);
+        bool have = i < 0 ? current.flat != NULL : i < qn;
+        pending_ae e = have ? i < 0 ? current : queue[i] : (pending_ae){ 0 };
+        pthread_mutex_unlock(&lock);
+        if (!have)
+            break;
+        bool owned;
+        uint32_t len;
+        uint8_t *bytes = event_message(&e, &len, &owned);
+        if (owned)
+            free(bytes);
+        gmemset(msg, 0, HighLevelEventMsg_SIZEOF);
+        HighLevelEventMsg_set_HighLevelEventMsgHeaderlength(msg, HighLevelEventMsg_SIZEOF);
+        gaddr ev = msg + HighLevelEventMsg_theMsgEvent_off;
+        wr16(ev, 23); /* kHighLevelEvent */
+        wr32(ev + EventRecord_message_off, e.cls);
+        wr32(ev + EventRecord_when_off, rd32(LM_Ticks));
+        wr32(ev + EventRecord_where_off, e.id);
+        wr16(ev + EventRecord_modifiers_off, e.receipt ? e.modifiers : 0);
+        HighLevelEventMsg_set_userRefCon(msg, (int32_t)e.refcon);
+        HighLevelEventMsg_set_postingOptions(msg, (int32_t)e.options);
+        HighLevelEventMsg_set_msgLength(msg, (int32_t)(len - (e.taken < len ? e.taken : len)));
+        put_sender(sender, &e);
+        examining = i;
+        examined_gone = false;
+        uint32_t args[3] = { data, msg, sender };
+        found = (aem_call_proc(fn, 0x00000FD0 /* pascal Boolean (ptr, ptr, ptr) */, args, 3) & 0xFF) != 0;
+        examining = -1;
+        if (!examined_gone || i < 0)
+            i++;
+    }
+    tb_DisposePtr(msg);
+    tb_DisposePtr(sender);
+    return found;
 }
 
+/* Our serial number: kCurrentProcess or the one GetCurrentProcess gives. */
+static bool psn_is_us(uint32_t hi, uint32_t lo) { return hi == 0 && (lo == 2 || lo == 0x1000); }
+
+/* The other run an event goes to, by an address as AESend's ('sign',
+ * 'kpid', 'psn '); procNotFound if none listens. */
+static int16_t post_to_run(const pending_ae *e, uint32_t atype, uint32_t a0, uint32_t a1, gaddr msg_buf,
+                           uint32_t msg_len)
+{
+    uint8_t addr[8];
+    put32(addr, a0);
+    put32(addr + 4, a1);
+    uint8_t *msg = malloc(msg_len ? msg_len : 1);
+    if (msg_len)
+        gget(msg, msg_buf, msg_len);
+    uint32_t len;
+    uint8_t *flat = raw_flatten(e, msg, msg_len, &len);
+    free(msg);
+    uint8_t *reply = NULL;
+    uint32_t reply_len = 0;
+    int16_t err = aem_remote_send(addr, atype, atype == T("psn ") ? 8 : 4, flat, len, kAENoReply, 0, &reply,
+                                  &reply_len);
+    free(reply);
+    free(flat);
+    return err;
+}
+
+/* To this program itself, into its own queue (a common use), or to
+ * another Blue Box run through the Apple Events' sockets, addressed by
+ * serial number ({1, its process ID}), signature, session (a process ID,
+ * as the sender's TargetID gives it) or a TargetID's port (by creator).
+ * There are no other machines to reach. */
 int16_t tb_PostHighLevelEvent(gaddr evt, gaddr receiver_id, int32_t refcon, gaddr msg_buf, int32_t msg_length,
                               int32_t post_options)
 {
-    return -903; /* noPortErr: there is no one else to talk to */
+    if (!evt || msg_length < 0 || (msg_length && !msg_buf))
+        return paramErr;
+    uint32_t options = (uint32_t)post_options;
+    pending_ae e = { .cls = rd32(evt + EventRecord_message_off), .id = rd32(evt + EventRecord_where_off),
+                     .raw = true, .refcon = (uint32_t)refcon, .options = options, .sender_pid = getpid(),
+                     .sender_sig = g_app_creator };
+    our_name(e.sender_name);
+    bool self = false;
+    uint32_t atype = 0, a0 = 0, a1 = 0;
+    int16_t missing = procNotFound;
+    switch (options & receiverIDMask) {
+    case receiverIDisPSN:
+        a0 = rd32(receiver_id), a1 = rd32(receiver_id + 4);
+        self = psn_is_us(a0, a1);
+        atype = T("psn ");
+        break;
+    case receiverIDisSignature:
+        a0 = receiver_id;
+        self = a0 == g_app_creator;
+        atype = T("sign");
+        break;
+    case receiverIDisSessionID:
+        a0 = receiver_id;
+        self = a0 == (uint32_t)getpid();
+        atype = T("kpid");
+        missing = connectionInvalid;
+        break;
+    case receiverIDisTargetID: {
+        gaddr port = receiver_id + TargetID_name_off;
+        if (PPCPortRec_portKindsSelector(port) != 1 /* ppcByCreatorAndType */)
+            return procNotFound;
+        a0 = rd32(port + PPCPortRec_u_port_creator_off);
+        self = a0 == g_app_creator;
+        atype = T("sign");
+        break;
+    }
+    default:
+        return paramErr;
+    }
+    if (!self) {
+        int16_t err = post_to_run(&e, atype, a0, a1, msg_buf, (uint32_t)msg_length);
+        return err == procNotFound ? missing : err;
+    }
+    e.self = true;
+    e.flatlen = (uint32_t)msg_length;
+    e.flat = malloc(e.flatlen ? e.flatlen : 1); /* never NULL: an empty message is still an event */
+    if (e.flatlen)
+        gget(e.flat, msg_buf, e.flatlen);
+    pthread_mutex_lock(&lock);
+    bool full = qn >= 16;
+    pthread_mutex_unlock(&lock);
+    if (full) {
+        free(e.flat);
+        return memFullErr;
+    }
+    enqueue(&e);
+    return noErr;
+}
+
+/* The receipts owed, to their senders: as a 'jaym' 'rtrn' event with the
+ * original's refCon and the result in its modifiers. */
+static void send_receipts(void)
+{
+    pthread_mutex_lock(&outbox_lock);
+    pending_ae owed[16];
+    int n = nout;
+    memcpy(owed, outbox, (size_t)n * sizeof *owed);
+    nout = 0;
+    pthread_mutex_unlock(&outbox_lock);
+    for (int i = 0; i < n; i++) {
+        pending_ae r = { .cls = T("jaym"), .id = T("rtrn"), .raw = true, .receipt = true,
+                         .modifiers = owed[i].modifiers, .refcon = owed[i].refcon, .sender_pid = getpid(),
+                         .sender_sig = g_app_creator };
+        our_name(r.sender_name);
+        if (owed[i].sender_pid == getpid()) {
+            r.self = true;
+            r.flat = malloc(1);
+            enqueue(&r);
+            continue;
+        }
+        uint32_t len, reply_len;
+        uint8_t *flat = raw_flatten(&r, NULL, 0, &len), *reply = NULL;
+        machine_ae_send(owed[i].sender_pid, owed[i].sender_sig, flat, len, kAENoReply, 0, &reply, &reply_len);
+        free(reply);
+        free(flat);
+    }
 }
 
 /* ---------------------------------------------------------------------- */

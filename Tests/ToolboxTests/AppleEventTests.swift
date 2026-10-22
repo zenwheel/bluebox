@@ -721,3 +721,246 @@ extension BlueBox {
 
 private nonisolated(unsafe) var launched: [String] = []
 private nonisolated(unsafe) var hostReplies: [([UInt8], Int16)] = []
+
+extension BlueBox {
+    /// High-level events other than Apple Events: PostHighLevelEvent,
+    /// AcceptHighLevelEvent and GetSpecificHighLevelEvent.
+    @Suite struct PostedHighLevelEvents {
+        static let receiverIDisPSN: Int32 = 0x8000, receiverIDisSignature: Int32 = 0x7000
+        static let receiverIDisSessionID: Int32 = 0x6000, receiverIDisTargetID: Int32 = 0x5000
+        static let nReturnReceipt: Int32 = 0x200, nAttnMsg: Int32 = 1
+
+        func takeEvent() -> UInt32? {
+            let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            guard tb_GetNextEvent(0x0400, e) != 0, rd16(e) == 23 else { return nil }
+            return e
+        }
+
+        /// An event record for a class and ID, as PostHighLevelEvent takes.
+        func hle(_ cls: String, _ id: String) -> UInt32 {
+            let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            wr16(e, 23)
+            wr32(e + 2, fourCC(cls))
+            wr32(e + 10, fourCC(id))
+            return e
+        }
+
+        func ourSignature() -> UInt32 {
+            let psn = tb_NewPtr(8, false, true), port = tb_NewPtr(Int32(PPCPortRec_SIZEOF), false, true)
+            _ = tb_GetCurrentProcess(psn)
+            _ = tb_GetPortNameFromProcessSerialNumber(port, psn)
+            return rd32(port + UInt32(PPCPortRec_u_port_creator_off))
+        }
+
+        /// A program posts itself an event by serial number; the message is
+        /// accepted a piece at a time, and the receipt comes back.
+        @Test func postToSelf() {
+            launchTestApp()
+            let psn = tb_NewPtr(8, false, true)
+            wr32(psn + 4, 2) // kCurrentProcess
+            let text = Array("hello world".utf8)
+            #expect(tb_PostHighLevelEvent(hle("Blue", "Test"), psn, 77, guestBytes(text), Int32(text.count),
+                                          Self.receiverIDisPSN | Self.nReturnReceipt) == 0)
+            guard let e = takeEvent() else { Issue.record("no event"); return }
+            #expect(rd32(e + 2) == fourCC("Blue") && rd32(e + 10) == fourCC("Test"))
+            // Not an Apple Event: AEProcessAppleEvent leaves it alone.
+            #expect(tb_AEProcessAppleEvent(e) == -1708)
+
+            let sender = tb_NewPtr(Int32(TargetID_SIZEOF), false, true), refcon = tb_NewPtr(4, false, true)
+            let buf = tb_NewPtr(32, false, true), len = tb_NewPtr(4, false, true)
+            wr32(len, 4)
+            #expect(tb_AcceptHighLevelEvent(sender, refcon, buf, len) == -607) // bufferIsSmall
+            #expect((0..<4).map { rd8(buf + $0) } == Array("hell".utf8) && rd32(len) == 7)
+            wr32(len, 32)
+            #expect(tb_AcceptHighLevelEvent(sender, refcon, buf, len) == 0)
+            #expect((0..<7).map { rd8(buf + $0) } == Array("o world".utf8) && rd32(len) == 7)
+            #expect(rd32(refcon) == 77)
+            // From us: our session (the process ID) and our port.
+            #expect(rd32(sender) == UInt32(getpid()))
+            let port = sender + UInt32(TargetID_name_off)
+            #expect(pstring(at: port + UInt32(PPCPortRec_name_off)) == "Test App")
+            #expect(rd32(port + UInt32(PPCPortRec_u_port_creator_off)) == ourSignature())
+            // Accepted: nothing more outstanding.
+            #expect(tb_AcceptHighLevelEvent(sender, refcon, buf, len) == -608) // noOutstandingHLE
+
+            // The receipt: fully accepted, with the original refCon.
+            guard let r = takeEvent() else { Issue.record("no receipt"); return }
+            #expect(rd32(r + 2) == fourCC("jaym") && rd32(r + 10) == fourCC("rtrn"))
+            #expect(rd16(r + 14) == 1) // msgWasFullyAccepted
+            wr32(len, 32)
+            #expect(tb_AcceptHighLevelEvent(sender, refcon, buf, len) == 0)
+            #expect(rd32(refcon) == 77 && rd32(len) == 0)
+
+            // Unaccepted, the receipt says so.
+            #expect(tb_PostHighLevelEvent(hle("Blue", "Skip"), psn, 5, 0, 0,
+                                          Self.receiverIDisPSN | Self.nReturnReceipt) == 0)
+            _ = takeEvent()
+            let skipped = takeEvent() // the next event drops the one not accepted
+            #expect(skipped.map { rd32($0 + 10) } == fourCC("rtrn") && skipped.map { rd16($0 + 14) } == 0)
+        }
+
+        /// The receiver by signature, by session and by target ID; who is
+        /// not there.
+        @Test func addressing() {
+            launchTestApp()
+            let sig = ourSignature()
+            #expect(tb_PostHighLevelEvent(hle("Blue", "sign"), sig, 1, 0, 0, Self.receiverIDisSignature) == 0)
+            #expect(tb_PostHighLevelEvent(hle("Blue", "sess"), UInt32(getpid()), 2, 0, 0,
+                                          Self.receiverIDisSessionID) == 0)
+            let target = tb_NewPtr(Int32(TargetID_SIZEOF), false, true)
+            let port = target + UInt32(TargetID_name_off)
+            wr16(port + UInt32(PPCPortRec_portKindsSelector_off), 1) // ppcByCreatorAndType
+            wr32(port + UInt32(PPCPortRec_u_port_creator_off), sig)
+            #expect(tb_PostHighLevelEvent(hle("Blue", "targ"), target, 3, 0, 0, Self.receiverIDisTargetID) == 0)
+            // An urgent one goes first.
+            #expect(tb_PostHighLevelEvent(hle("Blue", "attn"), sig, 4, 0, 0,
+                                          Self.receiverIDisSignature | Self.nAttnMsg) == 0)
+            var ids: [UInt32] = []
+            while let e = takeEvent() { ids.append(rd32(e + 10)) }
+            #expect(ids == ["attn", "sign", "sess", "targ"].map(fourCC))
+
+            #expect(tb_PostHighLevelEvent(hle("Blue", "none"), fourCC("Nobd"), 0, 0, 0,
+                                          Self.receiverIDisSignature) == -600) // procNotFound
+            let other = tb_NewPtr(8, false, true)
+            wr32(other, 1)
+            wr32(other + 4, 1) // launchd: no run of ours
+            #expect(tb_PostHighLevelEvent(hle("Blue", "none"), other, 0, 0, 0, Self.receiverIDisPSN) == -600)
+            #expect(tb_PostHighLevelEvent(hle("Blue", "none"), 1, 0, 0, 0, Self.receiverIDisSessionID) == -609)
+            #expect(tb_PostHighLevelEvent(hle("Blue", "none"), sig, 0, 0, 0, 0) == -50)
+        }
+
+        /// The filter looks at each queued event and accepts the one it wants.
+        @Test func specificEvents() {
+            launchTestApp()
+            guestStack()
+            let err = tb_NewPtr(2, false, true)
+            nonisolated(unsafe) var seen: [UInt32] = []
+            let none = pascalProc([4, 4, 4]) { _ in 0 }
+            #expect(tb_GetSpecificHighLevelEvent(none, 0, err) == 0)
+            #expect(Int16(bitPattern: rd16(err)) == -608)
+
+            let sig = ourSignature()
+            for (i, id) in ["one ", "two ", "thre"].enumerated() {
+                let msg = Array(id.utf8)
+                #expect(tb_PostHighLevelEvent(hle("Blue", id), sig, Int32(i + 1), guestBytes(msg), 4,
+                                              Self.receiverIDisSignature) == 0)
+            }
+            let buf = tb_NewPtr(8, false, true), len = tb_NewPtr(4, false, true)
+            let filter = pascalProc([4, 4, 4]) { a in
+                let refcon = rd32(a[1] + UInt32(HighLevelEventMsg_userRefCon_off))
+                seen.append(refcon)
+                #expect(rd32(a[1] + UInt32(HighLevelEventMsg_msgLength_off)) == 4)
+                #expect(rd32(a[2]) == UInt32(getpid()))
+                guard refcon == a[0] else { return 0 }
+                wr32(len, 8)
+                _ = tb_AcceptHighLevelEvent(0, 0, buf, len)
+                return 0x0100 // true
+            }
+            #expect(tb_GetSpecificHighLevelEvent(filter, 2, err) == 1)
+            #expect(rd16(err) == 0 && seen == [1, 2])
+            #expect(rd32(len) == 4 && rd32(buf) == fourCC("two "))
+            var ids: [UInt32] = []
+            while let e = takeEvent() { ids.append(rd32(e + 10)) }
+            #expect(ids == ["one ", "thre"].map(fourCC))
+        }
+
+        /// From another run: the flattened form travels through a run's
+        /// socket and arrives with its sender.
+        @Test func fromAnotherRun() {
+            launchTestApp(sizeFlags: 0x0040)
+            #expect(machine_listen_for_apple_events())
+            let sig = ourSignature()
+            var name = [UInt8](repeating: 0, count: 32)
+            name[0] = 5
+            name.replaceSubrange(1...5, with: Array("Other".utf8))
+            let flat = be32(fourCC("BHLE")) + be32(fourCC("Blue")) + be32(fourCC("Remo")) + be32(9) + be32(0)
+                + be32(4242) + be32(fourCC("OthR")) + [0, 0, 0, 0] + name + Array("data".utf8)
+            let done = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) var err: Int16 = 1
+            Thread.detachNewThread {
+                var reply: UnsafeMutablePointer<UInt8>?
+                var rlen: UInt32 = 0
+                err = flat.withUnsafeBufferPointer {
+                    machine_ae_send(getpid(), sig, $0.baseAddress, UInt32($0.count), 1, 1000, &reply, &rlen)
+                }
+                done.signal()
+            }
+            #expect(done.wait(timeout: .now() + 5) == .success)
+            #expect(err == 0)
+            var got: UInt32?
+            for _ in 0..<200 where got == nil {
+                if let e = takeEvent() { got = e } else { usleep(10000) }
+            }
+            guard let e = got else { Issue.record("no event"); return }
+            #expect(rd32(e + 2) == fourCC("Blue") && rd32(e + 10) == fourCC("Remo"))
+            let sender = tb_NewPtr(Int32(TargetID_SIZEOF), false, true), refcon = tb_NewPtr(4, false, true)
+            let buf = tb_NewPtr(8, false, true), len = tb_NewPtr(4, false, true)
+            wr32(len, 8)
+            #expect(tb_AcceptHighLevelEvent(sender, refcon, buf, len) == 0)
+            #expect(rd32(len) == 4 && rd32(buf) == fourCC("data") && rd32(refcon) == 9)
+            #expect(rd32(sender) == 4242)
+            let port = sender + UInt32(TargetID_name_off)
+            #expect(pstring(at: port + UInt32(PPCPortRec_name_off)) == "Other")
+            #expect(rd32(port + UInt32(PPCPortRec_u_port_creator_off)) == fourCC("OthR"))
+        }
+
+        /// To another run: a stand-in listens at a run's socket (a live
+        /// process's ID, the signature 'OthR') and reads what arrives.
+        @Test func toAnotherRun() throws {
+            launchTestApp(sizeFlags: 0x0040)
+            #expect(machine_listen_for_apple_events())
+            let folder = FileManager.default.temporaryDirectory.path
+            guard let ours = (try? FileManager.default.contentsOfDirectory(atPath: folder))?
+                .filter({ $0.hasPrefix("bluebox-ae-") })
+                .map({ folder + "/" + $0 })
+                .first(where: { ((try? FileManager.default.contentsOfDirectory(atPath: $0)) ?? []).contains { $0.hasPrefix("\(getpid()).") } })
+            else { Issue.record("no socket folder"); return }
+            let sleeper = Process()
+            sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
+            sleeper.arguments = ["10"]
+            try sleeper.run()
+            defer { sleeper.terminate() }
+            let path = ours + "/\(sleeper.processIdentifier).4F746852" // 'OthR'
+            defer { unlink(path) }
+            let sock = socket(AF_UNIX, SOCK_STREAM, 0)
+            defer { close(sock) }
+            var sa = sockaddr_un()
+            sa.sun_family = sa_family_t(AF_UNIX)
+            withUnsafeMutableBytes(of: &sa.sun_path) { dst in
+                _ = path.utf8CString.withUnsafeBytes { src in memcpy(dst.baseAddress, src.baseAddress, src.count) }
+            }
+            let bound = withUnsafePointer(to: &sa) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(sock, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+            }
+            #expect(bound == 0 && listen(sock, 1) == 0)
+            nonisolated(unsafe) var received: [UInt8] = []
+            let done = DispatchSemaphore(value: 0)
+            Thread.detachNewThread {
+                let fd = accept(sock, nil, nil)
+                var buf = [UInt8](repeating: 0, count: 256)
+                var n = 0
+                while n < buf.count {
+                    let k = buf.withUnsafeMutableBytes { read(fd, $0.baseAddress! + n, 256 - n) }
+                    if k <= 0 { break }
+                    n += k
+                }
+                received = Array(buf.prefix(n))
+                close(fd)
+                done.signal()
+            }
+            let msg = Array("ping".utf8)
+            #expect(tb_PostHighLevelEvent(hle("Blue", "Ping"), fourCC("OthR"), 31, guestBytes(msg), 4,
+                                          Self.receiverIDisSignature) == 0)
+            #expect(done.wait(timeout: .now() + 5) == .success)
+            // Framed as Apple Events are (length, mode kAENoReply), then the
+            // raw event: class, ID, refCon, the sender, the message.
+            #expect(received.count == 8 + 64 + 4)
+            guard received.count == 76 else { return }
+            let body = Array(received[8...])
+            #expect(Array(received[4..<8]) == be32(1))
+            #expect(Array(body[0..<16]) == be32(fourCC("BHLE")) + be32(fourCC("Blue")) + be32(fourCC("Ping")) + be32(31))
+            #expect(Array(body[20..<28]) == be32(UInt32(getpid())) + be32(ourSignature()))
+            #expect(Array(body[64...]) == msg)
+        }
+    }
+}
