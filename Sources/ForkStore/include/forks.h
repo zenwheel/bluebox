@@ -21,6 +21,8 @@ typedef struct {
     bool has_finder_info;
     char name[64];           /* Mac name (MacRoman), when known */
     uint32_t create_date, modify_date; /* Mac epoch seconds; 0 if unknown */
+    uint8_t comment[200];    /* the Finder's comment (MacRoman), as the desktop database holds it */
+    uint8_t comment_len;
 } mac_file;
 
 void mac_file_free(mac_file *f);

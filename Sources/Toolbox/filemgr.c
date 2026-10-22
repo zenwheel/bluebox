@@ -855,6 +855,7 @@ static void fcb_sync(int16_t rn)
 
 static const char *disk_path(void);
 static const char *system_folder_path(void);
+static void dt_reset(void);
 
 void fm_init(const char *app_dir)
 {
@@ -877,6 +878,7 @@ void fm_init(const char *app_dir)
     for (int i = 0; i < MAX_FCBS; i++)
         free(fcbs[i].buf);
     memset(fcbs, 0, sizeof fcbs);
+    dt_reset();
     char app[PATH_MAX];
     if (!realpath(app_dir, app))
         snprintf(app, sizeof app, "%s", app_dir);
@@ -996,7 +998,7 @@ static int implied_type(const char *path, uint8_t finfo[16])
 static bool sidecar_redundant(const char *path, const mac_file *mf)
 {
     uint8_t implied[16];
-    if (implied_type(path, implied) != 2 || mf->rsrc_len)
+    if (implied_type(path, implied) != 2 || mf->rsrc_len || mf->comment_len)
         return false;
     if (!mf->has_finder_info)
         return true;
@@ -2236,6 +2238,11 @@ int16_t tb_FSpExchangeFiles(gaddr src, gaddr dst)
     na.has_finder_info = fa.has_finder_info;
     memcpy(nb.finder_info, fb.finder_info, sizeof nb.finder_info);
     nb.has_finder_info = fb.has_finder_info;
+    /* Comments too: the desktop database has them by name. */
+    memcpy(na.comment, fa.comment, sizeof na.comment);
+    na.comment_len = fa.comment_len;
+    memcpy(nb.comment, fb.comment, sizeof nb.comment);
+    nb.comment_len = fb.comment_len;
     bool ok = appledouble_write(a, &na, msg, sizeof msg) && appledouble_write(b, &nb, msg, sizeof msg);
     mac_file_free(&fa);
     mac_file_free(&fb);
@@ -2613,10 +2620,15 @@ int16_t tb_PBHGetDirAccess(gaddr pb, bool async) { return paramErr; }
 int16_t tb_PBSetVInfo(gaddr pb, bool async) { return noErr; }
 
 /* ---------------------------------------------------------------------- */
-/* The Desktop Manager (PBDT calls): applications by creator, for opening
- * documents; no icon or comment database of its own. */
+/* The Desktop Manager (PBDT calls).  Each volume has a desktop database,
+ * its refnum the volume's negated: the applications on it by creator, for
+ * opening documents; the icons of their bundles (BNDL, FREF and the icon
+ * resources they name), read from an application when its creator is
+ * first asked about, with the icons programs add kept beside them for the
+ * run; and comments, a file's in its AppleDouble sidecar as the Finder's
+ * comment entry, a folder's (which has no sidecar) for the run. */
 
-enum { afpItemNotFound = -5018 };
+enum { afpItemNotFound = -5018, afpIconTypeError = -5030 };
 
 /* The Finder information in a file's AppleDouble sidecar, read without
  * loading the forks. */
@@ -2683,6 +2695,8 @@ static void scan_appls(const char *dir, int depth)
     closedir(d);
 }
 
+/* Mounted volumes' roots are granted trees, so their applications are
+ * found with the host's. */
 static void find_appls(void)
 {
     if (appls_scanned)
@@ -2694,31 +2708,47 @@ static void find_appls(void)
             scan_appls(grants[i].path, 0);
 }
 
+/* A desktop database's volume.  A refnum that names none is taken for the
+ * main volume's, as every database was one before. */
+static int16_t dt_vref(gaddr dtp)
+{
+    int16_t vref = (int16_t)-(int16_t)rd16(dtp + DTPBRec_ioDTRefNum_off);
+    return mount_of_vref(vref) ? vref : VREF;
+}
+
 int16_t tb_PBDTGetPath(gaddr dtp)
 {
-    wr16(dtp + DTPBRec_ioDTRefNum_off, 1); /* one desktop database, for the one volume */
+    gaddr namep = rd32(dtp + DTPBRec_ioNamePtr_off);
+    int16_t vref = (int16_t)rd16(dtp + DTPBRec_ioVRefNum_off);
+    mount *m;
+    if (!(namep && rd8(namep) && vinfo_volume(-1, vref, namep, &m)) && !vinfo_volume(0, vref, 0, &m))
+        return nsvErr;
+    wr16(dtp + DTPBRec_ioDTRefNum_off, (uint16_t)-(m ? m->vref : VREF));
     return noErr;
 }
 
 int16_t tb_PBDTOpenInform(gaddr dtp)
 {
-    wr16(dtp + DTPBRec_ioDTRefNum_off, 1);
-    wr32(dtp + DTPBRec_ioTagInfo_off, 0); /* not newly created */
-    return noErr;
+    int16_t err = tb_PBDTGetPath(dtp);
+    if (!err)
+        wr32(dtp + DTPBRec_ioTagInfo_off, 0); /* not newly created */
+    return err;
 }
 
 int16_t tb_PBDTCloseDown(gaddr dtp) { return noErr; }
 
-/* The index-th (1-based; 0 the first) application with a creator. */
+/* The index-th (1-based; 0 the first) application with a creator on the
+ * database's volume. */
 int16_t tb_PBDTGetAPPL(gaddr dtp, bool async)
 {
     find_appls();
     uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
+    int16_t vref = dt_vref(dtp);
     int want = (int16_t)rd16(dtp + DTPBRec_ioIndex_off);
     if (want < 1)
         want = 1;
     for (int i = 0, k = 0; i < nappls; i++) {
-        if (appls[i].creator != creator || ++k != want)
+        if (appls[i].creator != creator || vref_of_path(appls[i].path) != vref || ++k != want)
             continue;
         if (!exists(appls[i].path))
             break;
@@ -2730,12 +2760,22 @@ int16_t tb_PBDTGetAPPL(gaddr dtp, bool async)
     return afpItemNotFound;
 }
 
-int16_t tb_PBDTAddAPPL(gaddr dtp, bool async)
+static int ndt_read;
+
+/* The applications looked for again next time, and their bundles read
+ * again (adding only the icons not there). */
+static void forget_appls(void)
 {
-    appls_scanned = false; /* look again next time */
+    appls_scanned = false;
     for (int i = 0; i < nappls; i++)
         free(appls[i].path);
     nappls = 0;
+    ndt_read = 0;
+}
+
+int16_t tb_PBDTAddAPPL(gaddr dtp, bool async)
+{
+    forget_appls();
     return noErr;
 }
 
@@ -2952,18 +2992,408 @@ int16_t tb_PBDeleteFileIDRef(gaddr pb, bool async)
 }
 
 int16_t tb_PBDTRemoveAPPL(gaddr dtp, bool async) { return noErr; }
-int16_t tb_PBDTGetIcon(gaddr dtp, bool async) { return afpItemNotFound; }
-int16_t tb_PBDTGetIconInfo(gaddr dtp, bool async) { return afpItemNotFound; }
-int16_t tb_PBDTAddIcon(gaddr dtp, bool async) { return noErr; }
+
+/* ---------------------------------------------------------------------- */
+/* Desktop database icons: for each volume and creator, the icons of the
+ * file types it owns, by kind (ioIconType). */
+
+enum { kLargeIcon = 1, kLarge4BitIcon, kLarge8BitIcon, kSmallIcon, kSmall4BitIcon, kSmall8BitIcon };
+
+static const struct {
+    const char *type;
+    uint32_t size; /* the icon with its mask, for ICN# and ics# */
+} dt_kinds[] = {
+    [kLargeIcon] = { "ICN#", 256 }, [kLarge4BitIcon] = { "icl4", 512 }, [kLarge8BitIcon] = { "icl8", 1024 },
+    [kSmallIcon] = { "ics#", 64 },  [kSmall4BitIcon] = { "ics4", 128 }, [kSmall8BitIcon] = { "ics8", 256 },
+};
+
+typedef struct {
+    int16_t vref;
+    uint32_t creator, type, tag;
+    uint8_t kind;
+    uint8_t *data; /* dt_kinds[kind].size bytes */
+} dt_icon;
+static dt_icon *dt_icons;
+static int ndt_icons;
+
+/* The volumes and creators whose applications' bundles have been read. */
+static struct {
+    int16_t vref;
+    uint32_t creator;
+} *dt_read;
+
+static dt_icon *dt_find_icon(int16_t vref, uint32_t creator, uint32_t type, int kind)
+{
+    for (int i = 0; i < ndt_icons; i++)
+        if (dt_icons[i].vref == vref && dt_icons[i].creator == creator && dt_icons[i].type == type &&
+            dt_icons[i].kind == kind)
+            return &dt_icons[i];
+    return NULL;
+}
+
+/* An icon kept, replacing one of its kind for the type when `replace` is
+ * set (PBDTAddIcon) and otherwise leaving it (an earlier application's,
+ * or one a program added). */
+static void dt_put_icon(int16_t vref, uint32_t creator, uint32_t type, int kind, uint32_t tag, const uint8_t *d,
+                        bool replace)
+{
+    dt_icon *e = dt_find_icon(vref, creator, type, kind);
+    if (e && !replace)
+        return;
+    if (!e) {
+        dt_icons = realloc(dt_icons, (size_t)(ndt_icons + 1) * sizeof *dt_icons);
+        e = &dt_icons[ndt_icons++];
+        *e = (dt_icon){ .vref = vref, .creator = creator, .type = type, .kind = (uint8_t)kind,
+                        .data = malloc(dt_kinds[kind].size) };
+    }
+    e->tag = tag;
+    memcpy(e->data, d, dt_kinds[kind].size);
+}
+
+static uint32_t be32_at(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
+static int16_t be16_at(const uint8_t *p) { return (int16_t)(p[0] << 8 | p[1]); }
+
+/* A resource's data, decompressed if it is compressed; malloc'd. */
+static uint8_t *fork_resource(const uint8_t *fork, const rsrc_index *idx, uint32_t type, int16_t id, uint32_t *len)
+{
+    for (size_t i = 0; i < idx->count; i++) {
+        const rsrc_entry *e = &idx->entries[i];
+        if (e->type != type || e->id != id)
+            continue;
+        const uint8_t *d = rsrc_data(fork, idx, e);
+        if (!d)
+            return NULL;
+        uint8_t *out;
+        size_t n;
+        char err[64];
+        if (rsrc_is_compressed(d, e->data_len)) {
+            if (!rsrc_decompress(d, e->data_len, &out, &n, err, sizeof err))
+                return NULL;
+            *len = (uint32_t)n;
+            return out;
+        }
+        out = malloc(e->data_len ? e->data_len : 1);
+        memcpy(out, d, e->data_len);
+        *len = e->data_len;
+        return out;
+    }
+    return NULL;
+}
+
+/* An application's bundle, as the Finder copied it into the desktop
+ * database: its BNDL (the one its creator owns, else the first) maps the
+ * local IDs its FREFs give each file type to the ID of the type's icons. */
+static void dt_read_bundle(const char *path, int16_t vref, uint32_t creator)
+{
+    mac_file mf;
+    if (!appledouble_read_meta(path, &mf))
+        return;
+    rsrc_index idx;
+    char err[64];
+    if (!mf.rsrc_len || !rsrc_parse(mf.rsrc, mf.rsrc_len, &idx, err, sizeof err)) {
+        mac_file_free(&mf);
+        return;
+    }
+    uint8_t *bndl = NULL;
+    uint32_t blen = 0;
+    for (size_t i = 0; i < idx.count; i++) {
+        if (idx.entries[i].type != fourcc("BNDL"))
+            continue;
+        uint32_t n;
+        uint8_t *d = fork_resource(mf.rsrc, &idx, fourcc("BNDL"), idx.entries[i].id, &n);
+        if (!d || n < 8 || (bndl && be32_at(bndl) == creator)) {
+            free(d);
+            continue;
+        }
+        free(bndl);
+        bndl = d;
+        blen = n;
+    }
+    if (bndl) {
+        /* Owner, owner ID, type count - 1; then each type, its count - 1
+         * and (local ID, resource ID) pairs. */
+        int ntypes = be16_at(bndl + 6) + 1;
+        uint32_t icn_off = 0, fref_off = 0;
+        int icn_n = 0, fref_n = 0;
+        uint32_t off = 8;
+        for (int t = 0; t < ntypes && off + 6 <= blen; t++) {
+            uint32_t type = be32_at(bndl + off);
+            int count = be16_at(bndl + off + 4) + 1;
+            off += 6;
+            if (type == fourcc("ICN#")) {
+                icn_off = off;
+                icn_n = count;
+            } else if (type == fourcc("FREF")) {
+                fref_off = off;
+                fref_n = count;
+            }
+            off += 4 * (uint32_t)count;
+        }
+        for (int f = 0; f < fref_n && fref_off + 4 * (uint32_t)f + 4 <= blen; f++) {
+            uint32_t n;
+            uint8_t *fref = fork_resource(mf.rsrc, &idx, fourcc("FREF"), be16_at(bndl + fref_off + 4 * f + 2), &n);
+            if (!fref || n < 6) {
+                free(fref);
+                continue;
+            }
+            uint32_t ftype = be32_at(fref);
+            int16_t local = be16_at(fref + 4);
+            free(fref);
+            for (int k = 0; k < icn_n && icn_off + 4 * (uint32_t)k + 4 <= blen; k++) {
+                if (be16_at(bndl + icn_off + 4 * k) != local)
+                    continue;
+                int16_t id = be16_at(bndl + icn_off + 4 * k + 2);
+                for (int kind = kLargeIcon; kind <= kSmall8BitIcon; kind++) {
+                    uint8_t *d = fork_resource(mf.rsrc, &idx, fourcc(dt_kinds[kind].type), id, &n);
+                    if (d && n >= dt_kinds[kind].size)
+                        dt_put_icon(vref, creator, ftype, kind, 0, d, false);
+                    free(d);
+                }
+                break;
+            }
+        }
+        free(bndl);
+    }
+    rsrc_index_free(&idx);
+    mac_file_free(&mf);
+}
+
+/* The bundles of a creator's applications on a volume, read once. */
+static void dt_read_creator(int16_t vref, uint32_t creator)
+{
+    for (int i = 0; i < ndt_read; i++)
+        if (dt_read[i].vref == vref && dt_read[i].creator == creator)
+            return;
+    dt_read = realloc(dt_read, (size_t)(ndt_read + 1) * sizeof *dt_read);
+    dt_read[ndt_read].vref = vref;
+    dt_read[ndt_read].creator = creator;
+    ndt_read++;
+    find_appls();
+    for (int i = 0; i < nappls; i++)
+        if (appls[i].creator == creator && vref_of_path(appls[i].path) == vref)
+            dt_read_bundle(appls[i].path, vref, creator);
+}
+
+/* The icon of a kind for a creator and type: as much of it as the buffer
+ * holds, and its tag. */
+int16_t tb_PBDTGetIcon(gaddr dtp, bool async)
+{
+    int16_t vref = dt_vref(dtp);
+    uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
+    int kind = rd8(dtp + DTPBRec_ioIconType_off);
+    wr32(dtp + DTPBRec_ioDTActCount_off, 0);
+    if (kind < kLargeIcon || kind > kSmall8BitIcon)
+        return afpItemNotFound;
+    dt_read_creator(vref, creator);
+    dt_icon *e = dt_find_icon(vref, creator, rd32(dtp + DTPBRec_ioFileType_off), kind);
+    if (!e)
+        return afpItemNotFound;
+    int32_t want = (int32_t)rd32(dtp + DTPBRec_ioDTReqCount_off);
+    uint32_t n = want < 0 ? 0 : (uint32_t)want < dt_kinds[kind].size ? (uint32_t)want : dt_kinds[kind].size;
+    gaddr buf = rd32(dtp + DTPBRec_ioDTBuffer_off);
+    if (buf && n)
+        gput(buf, e->data, n);
+    wr32(dtp + DTPBRec_ioDTActCount_off, buf ? n : 0);
+    wr32(dtp + DTPBRec_ioTagInfo_off, e->tag);
+    return noErr;
+}
+
+/* The index-th (1-based) icon a creator has: its type, kind, size and tag. */
+int16_t tb_PBDTGetIconInfo(gaddr dtp, bool async)
+{
+    int16_t vref = dt_vref(dtp);
+    uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
+    int want = (int16_t)rd16(dtp + DTPBRec_ioIndex_off);
+    dt_read_creator(vref, creator);
+    for (int i = 0, k = 0; i < ndt_icons && want >= 1; i++) {
+        dt_icon *e = &dt_icons[i];
+        if (e->vref != vref || e->creator != creator || ++k != want)
+            continue;
+        wr32(dtp + DTPBRec_ioFileType_off, e->type);
+        wr8(dtp + DTPBRec_ioIconType_off, e->kind);
+        wr32(dtp + DTPBRec_ioDTActCount_off, dt_kinds[e->kind].size);
+        wr32(dtp + DTPBRec_ioTagInfo_off, e->tag);
+        return noErr;
+    }
+    return afpItemNotFound;
+}
+
+/* An icon for a creator and type, in place of the one of its kind there
+ * was; its size must be its kind's. */
+int16_t tb_PBDTAddIcon(gaddr dtp, bool async)
+{
+    int16_t vref = dt_vref(dtp);
+    uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
+    int kind = rd8(dtp + DTPBRec_ioIconType_off);
+    gaddr buf = rd32(dtp + DTPBRec_ioDTBuffer_off);
+    if (kind < kLargeIcon || kind > kSmall8BitIcon || rd32(dtp + DTPBRec_ioDTReqCount_off) != dt_kinds[kind].size)
+        return afpIconTypeError;
+    if (!buf)
+        return paramErr;
+    dt_read_creator(vref, creator); /* so its bundle's icon doesn't come back over this one */
+    uint8_t d[1024];
+    gget(d, buf, dt_kinds[kind].size);
+    dt_put_icon(vref, creator, rd32(dtp + DTPBRec_ioFileType_off), kind, rd32(dtp + DTPBRec_ioTagInfo_off), d, true);
+    return noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Desktop database comments: at most 200 characters, as the Finder's. */
+
+enum { kMaxCommentLength = 200 };
+
+static struct {
+    char *path;
+    uint8_t len;
+    uint8_t text[kMaxCommentLength];
+} *folder_comments;
+static int nfolder_comments;
+
+static int folder_comment(const char *path)
+{
+    for (int i = 0; i < nfolder_comments; i++)
+        if (!strcmp(folder_comments[i].path, path))
+            return i;
+    return -1;
+}
+
+/* The file or folder a comment call names: ioDirID and ioNamePtr on the
+ * database's volume. */
+static int16_t dt_item(gaddr dtp, char *path, size_t size)
+{
+    int16_t err = resolve(dt_vref(dtp), (int32_t)rd32(dtp + DTPBRec_ioDirID_off), rd32(dtp + DTPBRec_ioNamePtr_off),
+                          true, path, size);
+    if (!err && !exists(path))
+        err = fnfErr;
+    return err;
+}
+
+/* A file's comment into its sidecar (none to remove it); the sidecar goes
+ * when nothing else needs it. */
+static int16_t set_file_comment(const char *path, const uint8_t *text, uint8_t len)
+{
+    if (!writable(path))
+        return wPrErr;
+    as_ensure_file(path);
+    mac_file mf;
+    char e[256];
+    if (!appledouble_read(path, &mf, e, sizeof e))
+        return ioErrF;
+    if (mf.comment_len == len && !memcmp(mf.comment, text, len)) {
+        mac_file_free(&mf);
+        return noErr;
+    }
+    memcpy(mf.comment, text, len);
+    mf.comment_len = len;
+    if (sidecar_redundant(path, &mf)) {
+        mac_file_free(&mf);
+        char *side = appledouble_sidecar_path(path);
+        if (side)
+            unlink(side);
+        free(side);
+        return noErr;
+    }
+    bool ok = appledouble_write(path, &mf, e, sizeof e);
+    mac_file_free(&mf);
+    if (ok)
+        as_file_changed(path);
+    return ok ? noErr : ioErrF;
+}
+
+static int16_t set_comment(gaddr dtp, const uint8_t *text, uint8_t len)
+{
+    char path[PATH_MAX];
+    int16_t err = dt_item(dtp, path, sizeof path);
+    if (err)
+        return err;
+    if (!is_dir(path))
+        return set_file_comment(path, text, len);
+    int i = folder_comment(path);
+    if (i < 0) {
+        if (!len)
+            return noErr;
+        folder_comments = realloc(folder_comments, (size_t)(nfolder_comments + 1) * sizeof *folder_comments);
+        i = nfolder_comments++;
+        folder_comments[i].path = strdup(path);
+    }
+    folder_comments[i].len = len;
+    memcpy(folder_comments[i].text, text, len);
+    return noErr;
+}
 
 int16_t tb_PBDTGetComment(gaddr dtp, bool async)
 {
     wr32(dtp + DTPBRec_ioDTActCount_off, 0);
-    return afpItemNotFound;
+    char path[PATH_MAX];
+    int16_t err = dt_item(dtp, path, sizeof path);
+    if (err)
+        return err;
+    uint8_t text[kMaxCommentLength];
+    uint8_t len = 0;
+    if (is_dir(path)) {
+        int i = folder_comment(path);
+        if (i >= 0) {
+            len = folder_comments[i].len;
+            memcpy(text, folder_comments[i].text, len);
+        }
+    } else {
+        mac_file mf;
+        if (appledouble_read_meta(path, &mf)) {
+            len = mf.comment_len;
+            memcpy(text, mf.comment, len);
+            mac_file_free(&mf);
+        }
+    }
+    if (!len)
+        return afpItemNotFound;
+    int32_t want = (int32_t)rd32(dtp + DTPBRec_ioDTReqCount_off);
+    uint32_t n = want < 0 ? 0 : (uint32_t)want < len ? (uint32_t)want : len;
+    gaddr buf = rd32(dtp + DTPBRec_ioDTBuffer_off);
+    if (!buf)
+        n = 0;
+    if (n)
+        gput(buf, text, n);
+    wr32(dtp + DTPBRec_ioDTActCount_off, n);
+    return noErr;
 }
 
-int16_t tb_PBDTSetComment(gaddr dtp, bool async) { return noErr; }
-int16_t tb_PBDTRemoveComment(gaddr dtp, bool async) { return noErr; }
+/* Longer comments are cut to the Finder's 200 characters. */
+int16_t tb_PBDTSetComment(gaddr dtp, bool async)
+{
+    int32_t want = (int32_t)rd32(dtp + DTPBRec_ioDTReqCount_off);
+    gaddr buf = rd32(dtp + DTPBRec_ioDTBuffer_off);
+    uint8_t len = want < 0 || !buf ? 0 : want > kMaxCommentLength ? kMaxCommentLength : (uint8_t)want;
+    uint8_t text[kMaxCommentLength];
+    if (len)
+        gget(text, buf, len);
+    return set_comment(dtp, text, len);
+}
+
+int16_t tb_PBDTRemoveComment(gaddr dtp, bool async)
+{
+    static const uint8_t none[1];
+    return set_comment(dtp, none, 0);
+}
+
+/* What the desktop databases hold for the run, forgotten for the next. */
+static void dt_reset(void)
+{
+    forget_appls();
+    for (int i = 0; i < ndt_icons; i++)
+        free(dt_icons[i].data);
+    free(dt_icons);
+    dt_icons = NULL;
+    ndt_icons = 0;
+    free(dt_read);
+    dt_read = NULL;
+    ndt_read = 0;
+    for (int i = 0; i < nfolder_comments; i++)
+        free(folder_comments[i].path);
+    free(folder_comments);
+    folder_comments = NULL;
+    nfolder_comments = 0;
+}
+
 int16_t tb_PBDTFlush(gaddr dtp, bool async) { return noErr; }
 int16_t tb_PBDTReset(gaddr dtp, bool async) { return noErr; }
 int16_t tb_PBDTDelete(gaddr dtp, bool async) { return noErr; }

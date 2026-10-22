@@ -15,6 +15,7 @@ enum {
     AD_DATA = 1,
     AD_RSRC = 2,
     AD_NAME = 3,
+    AD_COMMENT = 4,
     AD_DATES = 8,
     AD_FINDER = 9,
 };
@@ -82,6 +83,10 @@ bool appledouble_decode(const uint8_t *b, size_t len, mac_file *out, char *err, 
                 out->modify_date = be32(b + off + 4) + AD_EPOCH_DELTA;
             }
             break;
+        case AD_COMMENT:
+            out->comment_len = (uint8_t)(elen < sizeof out->comment ? elen : sizeof out->comment);
+            memcpy(out->comment, b + off, out->comment_len);
+            break;
         case AD_NAME: {
             size_t m = elen < sizeof out->name - 1 ? elen : sizeof out->name - 1;
             memcpy(out->name, b + off, m);
@@ -97,10 +102,10 @@ bool appledouble_decode(const uint8_t *b, size_t len, mac_file *out, char *err, 
 
 uint8_t *appledouble_encode(const mac_file *f, size_t *len_out)
 {
-    unsigned n = 3 + (f->name[0] ? 1 : 0);
+    unsigned n = 3 + (f->name[0] ? 1 : 0) + (f->comment_len ? 1 : 0);
     size_t namelen = strlen(f->name);
     size_t hdr = 26 + n * 12;
-    size_t total = hdr + 32 + 16 + namelen + f->rsrc_len;
+    size_t total = hdr + 32 + 16 + namelen + f->comment_len + f->rsrc_len;
     uint8_t *b = calloc(1, total);
     if (!b)
         return NULL;
@@ -124,6 +129,11 @@ uint8_t *appledouble_encode(const mac_file *f, size_t *len_out)
         put32(e, AD_NAME); put32(e + 4, (uint32_t)off); put32(e + 8, (uint32_t)namelen); e += 12;
         memcpy(b + off, f->name, namelen);
         off += namelen;
+    }
+    if (f->comment_len) {
+        put32(e, AD_COMMENT); put32(e + 4, (uint32_t)off); put32(e + 8, f->comment_len); e += 12;
+        memcpy(b + off, f->comment, f->comment_len);
+        off += f->comment_len;
     }
     /* Resource fork last, so it can grow without moving anything else. */
     put32(e, AD_RSRC); put32(e + 4, (uint32_t)off); put32(e + 8, (uint32_t)f->rsrc_len);
