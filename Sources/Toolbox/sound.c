@@ -14,7 +14,10 @@
  * (8-bit unsigned and 16-bit signed, mono and stereo); compressed headers
  * in IMA 4:1 and the uncompressed 'twos'/'sowt'/'raw ' formats; square-wave
  * and wave-table notes; SysBeep.  MACE 3:1 and 6:1 decode through the
- * MACE target (FFmpeg's decoder, LGPL).
+ * MACE target (FFmpeg's decoder, LGPL).  A program's modifier routines
+ * (SndAddModifier) see each command before the synthesizer.  The output
+ * device's settings (SndGetInfo, GetSoundOutputInfo) are kept here; its
+ * volume and mute apply to all that plays.
  */
 #include <math.h>
 #include <pthread.h>
@@ -31,8 +34,8 @@
 void machine_advance_ticks(void);
 
 enum {
-    nullCmd = 0, quietCmd = 3, flushCmd = 4, reInitCmd = 5, waitCmd = 10, pauseCmd = 11, resumeCmd = 12,
-    callBackCmd = 13, syncCmd = 14, availableCmd = 24, versionCmd = 25, totalLoadCmd = 26, loadCmd = 27,
+    nullCmd = 0, initCmd = 1, freeCmd = 2, quietCmd = 3, flushCmd = 4, reInitCmd = 5, waitCmd = 10, pauseCmd = 11, resumeCmd = 12,
+    callBackCmd = 13, syncCmd = 14, requestNextCmd = 21, availableCmd = 24, versionCmd = 25, totalLoadCmd = 26, loadCmd = 27,
     freqDurationCmd = 40, restCmd = 41, freqCmd = 42, ampCmd = 43, timbreCmd = 44, getAmpCmd = 45, volumeCmd = 46,
     getVolumeCmd = 47, waveTableCmd = 60, soundCmd = 80, bufferCmd = 81, rateCmd = 82, continueCmd = 83,
     doubleBufferCmd = 84, getRateCmd = 85, rateMultiplierCmd = 86, getRateMultiplierCmd = 87, sizeCmd = 90,
@@ -41,7 +44,10 @@ enum {
 };
 enum { dataPointerFlag = 0x8000 };
 enum { squareWaveSynth = 1, waveTableSynth = 3, sampledSynth = 5 };
-enum { badChannel = -205, queueFull = -203, badFormat = -206, notEnoughHardwareErr = -201 };
+enum {
+    badChannel = -205, queueFull = -203, resProblem = -204, badFormat = -206, notEnoughHardwareErr = -201,
+    siInvalidSampleRate = -225, siInvalidSampleSize = -226, siUnknownInfoType = -231,
+};
 
 #define MAX_CHANNELS 32
 #define QUEUE_LEN 128
@@ -70,6 +76,7 @@ typedef struct {
     gaddr file_buffer;   /* SndStartFilePlay: the sound read from a file */
     gaddr file_completion;
     bool file_playing;
+    uint32_t rate_mult;  /* rateMultiplierCmd's UnsignedFixed, 0x00010000 = as recorded */
 } channel;
 
 static channel chans[MAX_CHANNELS];
@@ -78,6 +85,40 @@ static machine_sound_fn sound_fn;
 static void *sound_ctx;
 static uint16_t beep_state = 1;
 static uint32_t beep_volume = 0x01000100;
+
+/* The sound output device, as its component's GetInfo and SetInfo see it:
+ * what a program reads back is what it set, and the volume and mute
+ * apply to everything played, as the hardware's did.  The format is only
+ * reported; the host mixes whatever is played to its own. */
+static struct {
+    uint32_t rate;     /* UnsignedFixed */
+    int16_t size;      /* bits */
+    int16_t channels;
+    uint32_t quality;
+    uint32_t volume;   /* left in low word, right in high, 0x0100 = full */
+    bool hardware_mute;
+    bool speaker_mute;
+} out;
+
+static void output_reset(void)
+{
+    out.rate = 0xAC440000u; /* 44100 Hz */
+    out.size = 16;
+    out.channels = 2;
+    out.quality = 4; /* the best interpolation */
+    out.volume = 0x01000100;
+    out.hardware_mute = out.speaker_mute = false;
+}
+
+/* The device's share of every channel's loudness, 1.0 at full volume. */
+static float output_gain(void)
+{
+    if (!out.rate)
+        output_reset();
+    if (out.hardware_mute || out.speaker_mute)
+        return 0.0f;
+    return (float)((out.volume & 0xFFFF) + (out.volume >> 16)) / 2.0f / 256.0f;
+}
 
 void machine_set_sound_handler(machine_sound_fn fn, void *ctx)
 {
@@ -105,6 +146,7 @@ static channel *add(gaddr chan, bool owned)
             chans[i].id = next_id++;
             chans[i].amp = 255;
             chans[i].volume = 0x01000100;
+            chans[i].rate_mult = 0x00010000;
             return &chans[i];
         }
     return NULL;
@@ -117,10 +159,14 @@ static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rat
 {
     if (frames <= 0 || rate <= 0)
         return;
+    /* rateMultiplierCmd plays everything faster or slower, pitch and all. */
+    if (c->rate_mult)
+        rate *= (double)c->rate_mult / 65536.0;
     uint64_t start = c->busy_until > now_ns() ? c->busy_until : now_ns();
     c->busy_until = start + (uint64_t)((double)frames / rate * 1e9);
     if (sound_fn) {
-        float vol = (float)((c->volume & 0xFFFF) + (c->volume >> 16)) / 2.0f / 256.0f * (float)c->amp / 255.0f;
+        float vol = (float)((c->volume & 0xFFFF) + (c->volume >> 16)) / 2.0f / 256.0f * (float)c->amp / 255.0f *
+                    output_gain();
         sound_fn(c->id, pcm, frames, nch, rate, vol, sound_ctx);
     }
 }
@@ -144,7 +190,7 @@ void sound_host_midi(int id, const machine_midi_event *events, int n)
 void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume)
 {
     if (sound_fn && frames > 0)
-        sound_fn(id, pcm, frames, nch, rate, volume, sound_ctx);
+        sound_fn(id, pcm, frames, nch, rate, volume * output_gain(), sound_ctx);
 }
 
 void sound_host_stop(int id)
@@ -338,6 +384,11 @@ static void play_header(channel *c, gaddr h)
 /* ---------------------------------------------------------------------- */
 /* Commands */
 
+static sndcmd read_cmd(gaddr p)
+{
+    return (sndcmd){ rd16(p), (int16_t)rd16(p + 2), (int32_t)rd32(p + 4) };
+}
+
 static void call_back(channel *c, sndcmd cmd)
 {
     gaddr proc = rd32(c->chan + SndChannel_callBack_off);
@@ -403,10 +454,76 @@ static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
     case availableCmd: if (result_cmd) wr16(result_cmd + 2, 1); break;
     case versionCmd: if (result_cmd) wr32(result_cmd + 4, 0x00030000); break;
     case getRateCmd: if (cmd.p2) wr32((gaddr)cmd.p2, 0x00010000); break;
-    case getRateMultiplierCmd: if (cmd.p2) wr32((gaddr)cmd.p2, 0x00010000); break;
+    case rateMultiplierCmd: /* 0 would never finish; taken as 1.0 */
+        c->rate_mult = (uint32_t)cmd.p2 ? (uint32_t)cmd.p2 : 0x00010000;
+        break;
+    case getRateMultiplierCmd: if (cmd.p2) wr32((gaddr)cmd.p2, c->rate_mult); break;
     case filePlayDoneCmd: file_play_done(c, true); break;
     default: break;
     }
+}
+
+/* Modifiers (SndAddModifier): each sees a command before the ones after
+ * it in the chain and the synthesizer, as FUNCTION Modifier(chan; VAR cmd;
+ * mod: ModifierStubPtr): BOOLEAN.  It may change the command, or make it
+ * nullCmd to drop it; TRUE asks to be called again, with requestNextCmd
+ * (param1 counting the calls), to send another command of its own. */
+enum { Stub_nextStub = 0, Stub_code = 4, Stub_userInfo = 8, Stub_count = 12, Stub_every = 16, Stub_flags = 20,
+       Stub_hState = 21, Stub_SIZEOF = 22 };
+#define MAX_REQUESTS 64 /* requestNextCmds in a row, for a modifier that never says it's done */
+
+/* One call of a modifier; returns its BOOLEAN and leaves the command as it
+ * left it in *cmd. */
+static bool call_modifier(gaddr chan, gaddr stub, sndcmd *cmd)
+{
+    gaddr cp = tb_NewPtr(SndCommand_SIZEOF, false, true);
+    if (!cp)
+        return false;
+    wr16(cp, cmd->cmd);
+    wr16(cp + 2, (uint16_t)cmd->p1);
+    wr32(cp + 4, (uint32_t)cmd->p2);
+    cpu_push16(g_cpu, 0);
+    cpu_push32(g_cpu, chan);
+    cpu_push32(g_cpu, cp);
+    cpu_push32(g_cpu, stub);
+    guest_call(rd32(stub + Stub_code));
+    bool more = (cpu_pop16(g_cpu) >> 8) != 0;
+    *cmd = read_cmd(cp);
+    tb_DisposePtr(cp);
+    return more;
+}
+
+/* A command through the modifiers from stub on, then to the synthesizer. */
+static void through(channel *c, sndcmd cmd, gaddr stub, gaddr result_cmd, int depth)
+{
+    if (!stub || depth > 16) {
+        exec(c, cmd, result_cmd);
+        return;
+    }
+    gaddr chan = c->chan, next = rd32(stub + Stub_nextStub);
+    for (int n = 1; n <= MAX_REQUESTS; n++) {
+        bool more = rd32(stub + Stub_code) && call_modifier(chan, stub, &cmd);
+        /* The modifier may have disposed of the channel. */
+        if (find(chan) != c)
+            return;
+        if (cmd.cmd != nullCmd)
+            through(c, cmd, next, n == 1 ? result_cmd : 0, depth + 1);
+        if (!more)
+            return;
+        cmd = (sndcmd){ requestNextCmd, (int16_t)n, 0 };
+    }
+}
+
+/* A command for the channel: its own (filePlayDoneCmd) straight to us,
+ * the program's through its modifiers. */
+static void dispatch(channel *c, sndcmd cmd, gaddr result_cmd)
+{
+    /* SndPlay's and SysBeep's private channels have no record. */
+    gaddr first = c->chan >= 0xFFFFFFFEu ? 0 : rd32(c->chan + SndChannel_firstMod_off);
+    if (cmd.cmd == filePlayDoneCmd || !first)
+        exec(c, cmd, result_cmd);
+    else
+        through(c, cmd, first, result_cmd, 0);
 }
 
 /* Double buffering: each ready buffer goes to the host a little before the
@@ -479,7 +596,7 @@ static void pump(channel *c)
     while (!c->paused && c->head != end && c->head != c->tail && now_ns() >= c->busy_until) {
         sndcmd cmd = c->q[c->head];
         c->head = (c->head + 1) % QUEUE_LEN;
-        exec(c, cmd, 0);
+        dispatch(c, cmd, 0);
     }
 }
 
@@ -522,11 +639,6 @@ static int16_t enqueue(channel *c, sndcmd cmd)
     return noErr;
 }
 
-static sndcmd read_cmd(gaddr p)
-{
-    return (sndcmd){ rd16(p), (int16_t)rd16(p + 2), (int32_t)rd32(p + 4) };
-}
-
 /* Wait (really) until the channel has played everything queued. */
 static void drain(channel *c)
 {
@@ -562,6 +674,7 @@ int16_t tb_SndNewChannel(gaddr chanpp, int16_t synth, int32_t init, gaddr userro
         wr32(chanpp, chan);
     }
     wr32(chan + SndChannel_callBack_off, userroutinep);
+    wr32(chan + SndChannel_firstMod_off, 0);
     wr16(chan + SndChannel_qLength_off, 128);
     if (!add(chan, owned))
         return notEnoughHardwareErr;
@@ -577,6 +690,18 @@ int16_t tb_SndDisposeChannel(gaddr chan, int8_t quitnow)
         stop_host(c);
     else
         drain(c);
+    /* Each modifier hears freeCmd, then its stub goes. */
+    for (gaddr stub = rd32(chan + SndChannel_firstMod_off), next; stub; stub = next) {
+        next = rd32(stub + Stub_nextStub);
+        sndcmd cmd = { freeCmd, 0, 0 };
+        if (rd32(stub + Stub_code))
+            call_modifier(chan, stub, &cmd);
+        tb_DisposePtr(stub);
+    }
+    wr32(chan + SndChannel_firstMod_off, 0);
+    c = find(chan);
+    if (!c)
+        return noErr;
     bool owned = c->owned;
     c->chan = 0;
     if (owned)
@@ -628,7 +753,7 @@ int16_t tb_SndDoImmediate(gaddr chan, gaddr cmdp)
     channel *c = find(chan);
     if (!c)
         return badChannel;
-    exec(c, read_cmd(cmdp), cmdp);
+    dispatch(c, read_cmd(cmdp), cmdp);
     return noErr;
 }
 
@@ -642,7 +767,30 @@ int16_t tb_SndControl(int16_t id, gaddr cmdp)
     return noErr;
 }
 
-int16_t tb_SndAddModifier(gaddr chan, gaddr mod, int16_t id, int32_t init) { return noErr; }
+/* SndAddModifier(chan, modifier, id, init).  A modifier routine goes in
+ * front of the channel's others and is sent initCmd with init.  Without
+ * one, Sound Manager 3 takes only a synthesizer's id, which sets the kind
+ * of data the channel plays: ours play every kind, so there is nothing to
+ * change.  Any other id named a 'snth' resource, whose code was written for
+ * Sound Manager 2's synthesizer interface and has no place to run here:
+ * resProblem, as for a resource that won't load. */
+int16_t tb_SndAddModifier(gaddr chan, gaddr mod, int16_t id, int32_t init)
+{
+    channel *c = find(chan);
+    if (!c)
+        return badChannel;
+    if (!mod)
+        return id == squareWaveSynth || id == waveTableSynth || id == sampledSynth ? noErr : resProblem;
+    gaddr stub = tb_NewPtr(Stub_SIZEOF, false, true);
+    if (!stub)
+        return memFullErr;
+    wr32(stub + Stub_nextStub, rd32(chan + SndChannel_firstMod_off));
+    wr32(stub + Stub_code, mod);
+    wr32(chan + SndChannel_firstMod_off, stub);
+    sndcmd cmd = { initCmd, 0, init };
+    call_modifier(chan, stub, &cmd);
+    return noErr;
+}
 
 /* The commands of a 'snd ' resource (format 1 or 2), with buffer and sound
  * commands pointing into the resource. */
@@ -731,11 +879,140 @@ int16_t tb_SndManagerStatus(int16_t length, gaddr statusp)
 /* 3.0 with System 7.1; a PowerPC Mac's System 7.6.1 had 3.2.1. */
 int32_t tb_SndSoundManagerVersion(void) { return g_ppc_mode ? 0x03218000 : 0x03008000; }
 
-/* A channel's settings by selector (Sound Manager 3.1): ours know none,
- * so reading one is siUnknownInfoType, and setting one (a pre-mixer
- * component, 'prmx', for Speed Demon) is taken and has no effect. */
-int16_t tb_SndGetInfo(gaddr chan, int32_t selector, gaddr infoPtr) { return -231; }
-int16_t tb_SndSetInfo(gaddr chan, int32_t selector, gaddr infoPtr) { return noErr; }
+/* A SoundInfoList: the count, then a handle to the n items of size bytes. */
+static void put_list(gaddr info, const uint32_t *items, int n, int size)
+{
+    gaddr h = tb_NewHandle((int32_t)(n * size), false, true);
+    wr16(info, (uint16_t)n);
+    wr32(info + 2, h);
+    for (int i = 0; h && i < n; i++) {
+        if (size == 2)
+            wr16(rd32(h) + (uint32_t)(i * 2), (uint16_t)items[i]);
+        else
+            wr32(rd32(h) + (uint32_t)(i * 4), items[i]);
+    }
+}
+
+/* The output device's settings by selector (GetSoundOutputInfo, and
+ * SndGetInfo for what a channel passes on to its device). */
+int16_t sound_output_get_info(uint32_t sel, gaddr info)
+{
+    if (!out.rate)
+        output_reset();
+    if (!info)
+        return paramErr;
+    if (sel == fourcc("srat")) {
+        wr32(info, out.rate);
+    } else if (sel == fourcc("ssiz")) {
+        wr16(info, (uint16_t)out.size);
+    } else if (sel == fourcc("chan")) {
+        wr16(info, (uint16_t)out.channels);
+    } else if (sel == fourcc("comp")) {
+        wr32(info, fourcc("NONE"));
+    } else if (sel == fourcc("qual")) {
+        wr32(info, out.quality);
+    } else if (sel == fourcc("volu") || sel == fourcc("hvol")) {
+        wr32(info, out.volume);
+    } else if (sel == fourcc("hmut")) {
+        wr16(info, out.hardware_mute);
+    } else if (sel == fourcc("smut")) {
+        wr16(info, out.speaker_mute);
+    } else if (sel == fourcc("srav")) {
+        /* No rates listed: the first two are the ends of a continuous range. */
+        uint32_t range[2] = { 0x03E80000u, 0xBB800000u }; /* 1000 to 48000 Hz */
+        put_list(info, range, 2, 4);
+        wr16(info, 0);
+    } else if (sel == fourcc("ssav")) {
+        uint32_t sizes[2] = { 8, 16 };
+        put_list(info, sizes, 2, 2);
+    } else if (sel == fourcc("chav")) {
+        uint32_t chans_[2] = { 1, 2 };
+        put_list(info, chans_, 2, 2);
+    } else if (sel == fourcc("cmav")) {
+        uint32_t none = fourcc("NONE");
+        put_list(info, &none, 1, 4);
+    } else {
+        return siUnknownInfoType;
+    }
+    return noErr;
+}
+
+int16_t sound_output_set_info(uint32_t sel, gaddr info)
+{
+    if (!out.rate)
+        output_reset();
+    if (!info)
+        return paramErr;
+    if (sel == fourcc("srat")) {
+        uint32_t r = rd32(info);
+        if (r < 0x03E80000u || r > 0xBB800000u)
+            return siInvalidSampleRate;
+        out.rate = r;
+    } else if (sel == fourcc("ssiz")) {
+        int16_t n = (int16_t)rd16(info);
+        if (n != 8 && n != 16)
+            return siInvalidSampleSize;
+        out.size = n;
+    } else if (sel == fourcc("chan")) {
+        int16_t n = (int16_t)rd16(info);
+        if (n != 1 && n != 2)
+            return paramErr;
+        out.channels = n;
+    } else if (sel == fourcc("qual")) {
+        out.quality = rd32(info); /* the host interpolates as it will */
+    } else if (sel == fourcc("volu") || sel == fourcc("hvol")) {
+        out.volume = rd32(info);
+    } else if (sel == fourcc("hmut")) {
+        out.hardware_mute = rd16(info) != 0;
+    } else if (sel == fourcc("smut")) {
+        out.speaker_mute = rd16(info) != 0;
+    } else {
+        return siUnknownInfoType;
+    }
+    return noErr;
+}
+
+/* A channel's settings by selector (Sound Manager 3.1).  The channel's
+ * own are its volume ('volu', what volumeCmd sets) and rate multiplier
+ * ('rmul', rateMultiplierCmd's); the rest go on to the output device, as
+ * the channel's component chain passed them on.  A pre-mixer component
+ * ('prmx', for Speed Demon) is taken and has no effect: none of ours
+ * sits in a chain to be replaced. */
+int16_t tb_SndGetInfo(gaddr chan, int32_t selector, gaddr infoPtr)
+{
+    channel *c = find(chan);
+    if (!c)
+        return badChannel;
+    uint32_t sel = (uint32_t)selector;
+    if (!infoPtr)
+        return paramErr;
+    if (sel == fourcc("volu"))
+        wr32(infoPtr, c->volume);
+    else if (sel == fourcc("rmul"))
+        wr32(infoPtr, c->rate_mult);
+    else
+        return sound_output_get_info(sel, infoPtr);
+    return noErr;
+}
+
+int16_t tb_SndSetInfo(gaddr chan, int32_t selector, gaddr infoPtr)
+{
+    channel *c = find(chan);
+    if (!c)
+        return badChannel;
+    uint32_t sel = (uint32_t)selector;
+    if (sel == fourcc("prmx"))
+        return noErr;
+    if (!infoPtr)
+        return paramErr;
+    if (sel == fourcc("volu"))
+        c->volume = rd32(infoPtr);
+    else if (sel == fourcc("rmul"))
+        c->rate_mult = rd32(infoPtr) ? rd32(infoPtr) : 0x00010000;
+    else
+        return sound_output_set_info(sel, infoPtr);
+    return noErr;
+}
 int32_t tb_MACEVersion(void) { return 0x03008000; }
 int32_t tb_SPBVersion(void) { return 0x03008000; }
 
@@ -743,8 +1020,22 @@ void tb_SndGetSysBeepState(gaddr statep) { wr16(statep, beep_state); }
 int16_t tb_SndSetSysBeepState(int16_t state) { beep_state = (uint16_t)state; return noErr; }
 int16_t tb_GetSysBeepVolume(gaddr levelp) { wr32(levelp, beep_volume); return noErr; }
 int16_t tb_SetSysBeepVolume(int32_t level) { beep_volume = (uint32_t)level; return noErr; }
-int16_t tb_GetDefaultOutputVolume(gaddr levelp) { wr32(levelp, 0x01000100); return noErr; }
-int16_t tb_SetDefaultOutputVolume(int32_t level) { return noErr; }
+/* The default output device's volume: its hardware volume ('hvol'). */
+int16_t tb_GetDefaultOutputVolume(gaddr levelp)
+{
+    if (!out.rate)
+        output_reset();
+    wr32(levelp, out.volume);
+    return noErr;
+}
+
+int16_t tb_SetDefaultOutputVolume(int32_t level)
+{
+    if (!out.rate)
+        output_reset();
+    out.volume = (uint32_t)level;
+    return noErr;
+}
 int16_t tb_GetSoundHeaderOffset(gaddr sndh, gaddr offset)
 {
     gaddr p = rd32(sndh);
@@ -1133,6 +1424,7 @@ void sound_reset(void)
         if (chans[i].chan)
             stop_host(&chans[i]);
     memset(chans, 0, sizeof chans);
+    output_reset();
     sound_input_reset();
 }
 
