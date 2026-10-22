@@ -1,5 +1,9 @@
 /*
- * Script Manager, for the Roman script only (System 7.1 U.S.).
+ * Script Manager.  The System is 7.1 U.S., so Roman is the one script
+ * installed; any other is installed when the System file has its bundle
+ * ('itlb' with the script's code for its ID), and then the 2-byte scripts
+ * (Japanese, the two Chineses, Korean) have their characters' first bytes
+ * told apart, as their encodings define them.
  *
  * Text measurement goes through the current port's font; FindWord follows
  * the break tables of the U.S. 'itl2'.
@@ -11,30 +15,141 @@
 #include "qd_internal.h"
 #include "tb_internal.h"
 
-enum { smRoman = 0 };
+enum {
+    smSystemScript = -1, smCurrentScript = -2, smRoman = 0, smJapanese = 1, smTradChinese = 2, smKorean = 3,
+    smArabic = 4, smHebrew = 5, smSimpChinese = 25, smUninterp = 32,
+};
 enum { smBreakWord = 0, smBreakChar = 1, smBreakOverflow = 2 };
 enum { smCharPunct = 0x0000, smCharAscii = 0x0001, smCharEuro = 0x0007 };
-enum { smCharLower = 0x0000, smCharUpper = 0x4000 };
+enum {
+    smCharKatakana = 0x0002, smCharHiragana = 0x0003, smCharIdeographic = 0x0004, smCharTwoByteGreek = 0x0005,
+    smCharTwoByteRussian = 0x0006, smCharHangul = 0x000C, smCharJamo = 0x000D, smCharBopomofo = 0x000E,
+};
+enum { smIdeographicLevel1 = 0x0000, smIdeographicLevel2 = 0x0100 };
+enum { smCharLower = 0x0000, smCharUpper = 0x4000, smChar2byte = 0x8000 };
 enum { smPunctNormal = 0x0000, smPunctNumber = 0x0100, smPunctSymbol = 0x0200, smPunctBlank = 0x0300 };
+enum { smFirstByte = -1, smSingleByte = 0, smLastByte = 1 };
+
+/* Script Manager variables (GetScriptManagerVariable's selectors). */
+enum {
+    smVersion = 0, smMunged = 2, smEnabled = 4, smBidirect = 6, smFontForce = 8, smIntlForce = 10, smForced = 12,
+    smDefault = 14, smSysScript = 18, smLastScript = 20, smKeyScript = 22, smSysRef = 24, smGenFlags = 30,
+    smCharPortion = 34, smDoubleByte = 36, smRegionCode = 40, smKeyDisableState = 42,
+};
+
+/* KeyScript's codes below 0. */
+enum {
+    smKeyNextScript = -1, smKeySysScript = -2, smKeySwapScript = -3, smKeyDisableKybds = -6, smKeyEnableKybds = -7,
+    smKeyToggleDirection = -9, smKeyDisableKybdSwitch = -12, smKeySetDirLeftRight = -15,
+    smKeySetDirRightLeft = -16, smKeyRoman = -17,
+};
 
 static int32_t fond_size(int fond, int size) { return (int32_t)((uint32_t)fond << 16 | (uint16_t)size); }
+
+/* The variables, set at startup from the system script's 'itlc'. */
+static struct {
+    int16_t sys_script, key_script, last_script, region;
+    uint8_t font_force, intl_force, forced, defaulted, key_disable;
+    int32_t munged, gen_flags;
+} sm;
+
+/* Whether a script is installed: Roman always, others by their bundle in
+ * the System file. */
+static bool script_enabled(int script)
+{
+    if (script == smRoman)
+        return true;
+    if (script < 0 || script > smUninterp)
+        return false;
+    int16_t saved = tb_CurResFile(), err = (int16_t)rd16(LM_ResErr);
+    uint8_t load = rd8(LM_ResLoad);
+    tb_UseResFile((int16_t)rd16(LM_SysMap));
+    tb_SetResLoad(false);
+    gaddr h = tb_Get1Resource((int32_t)fourcc("itlb"), (int16_t)script);
+    tb_SetResLoad(load);
+    tb_UseResFile(saved);
+    wr16(LM_ResErr, (uint16_t)err);
+    return h != 0;
+}
+
+static bool double_byte(int script)
+{
+    return script == smJapanese || script == smTradChinese || script == smKorean || script == smSimpChinese;
+}
+
+void scriptmgr_reset(void)
+{
+    memset(&sm, 0, sizeof sm);
+    gaddr h = tb_GetResource((int32_t)fourcc("itlc"), 0);
+    if (h && rd32(h) && tb_GetHandleSize(h) >= 12) {
+        gaddr p = rd32(h);
+        sm.sys_script = (int16_t)rd16(p);
+        sm.font_force = rd8(p + 4);
+        sm.intl_force = rd8(p + 5);
+        sm.gen_flags = (int32_t)((uint32_t)rd8(p + 7) << 24);
+        sm.region = (int16_t)rd16(p + 10);
+    }
+    if (!script_enabled(sm.sys_script))
+        sm.sys_script = smRoman;
+    sm.key_script = sm.last_script = sm.sys_script;
+}
 
 int32_t tb_GetScriptManagerVariable(int16_t verb)
 {
     switch (verb) {
-    case 0: return 0x0710;      /* smVersion */
-    case 4: return 1;           /* smEnabled: scripts enabled */
-    case 34: return 0x0333;     /* smCharPortion */
-    default: return 0;          /* Roman everywhere, US region */
+    case smVersion: return 0x0710;
+    case smMunged: return sm.munged;
+    case smEnabled: {
+        int n = 0;
+        for (int s = 0; s <= smUninterp; s++)
+            n += script_enabled(s);
+        return n;
+    }
+    case smBidirect: return script_enabled(smArabic) || script_enabled(smHebrew) ? 0xFF : 0;
+    case smFontForce: return sm.font_force;
+    case smIntlForce: return sm.intl_force;
+    case smForced: return sm.forced;
+    case smDefault: return sm.defaulted;
+    case smSysScript: return sm.sys_script;
+    case smLastScript: return sm.last_script;
+    case smKeyScript: return sm.key_script;
+    case smGenFlags: return sm.gen_flags;
+    case smCharPortion: return 0x0333;
+    case smDoubleByte: {
+        static const int scripts[] = { smJapanese, smTradChinese, smKorean, smSimpChinese };
+        for (int i = 0; i < 4; i++)
+            if (script_enabled(scripts[i]))
+                return 0xFF;
+        return 0;
+    }
+    case smRegionCode: return sm.region;
+    case smKeyDisableState: return sm.key_disable;
+    default: return 0;
     }
 }
 
-int16_t tb_SetScriptManagerVariable(int16_t verb, int32_t param) { return noErr; }
+/* The flags and the keyboard script may be set (the latter properly with
+ * KeyScript); the rest are the Script Manager's own. */
+int16_t tb_SetScriptManagerVariable(int16_t verb, int32_t param)
+{
+    switch (verb) {
+    case smFontForce: sm.font_force = (uint8_t)param; break;
+    case smIntlForce: sm.intl_force = (uint8_t)param; break;
+    case smKeyScript: sm.key_script = (int16_t)param; break;
+    case smGenFlags: sm.gen_flags = param; break;
+    case smKeyDisableState: sm.key_disable = (uint8_t)param; break;
+    default: return noErr;
+    }
+    sm.munged++;
+    return noErr;
+}
 
 int32_t tb_GetScriptVariable(int16_t script, int16_t verb)
 {
+    if (script == smSystemScript)
+        script = sm.sys_script;
     if (script != smRoman)
-        return 0;
+        return verb == 4 && script_enabled(script) ? 1 : 0; /* smScriptEnabled; the rest are its own */
     switch (verb) {
     case 0: return 0x0710;                  /* smScriptVersion */
     case 4: return 1;                       /* smScriptEnabled */
@@ -52,12 +167,173 @@ int32_t tb_GetScriptVariable(int16_t script, int16_t verb)
 }
 
 int16_t tb_SetScriptVariable(int16_t script, int16_t verb, int32_t param) { return noErr; }
-int16_t tb_FontScript(void) { return smRoman; }
-int16_t tb_IntlScript(void) { return smRoman; }
-int16_t tb_FontToScript(int16_t fontnum) { return smRoman; }
-void tb_KeyScript(int16_t scriptcode) {}
-int16_t tb_CharByte(gaddr textBuf, int16_t textOffset) { return 0; } /* single-byte script */
-int16_t tb_CharacterByteType(gaddr textBuf, int16_t textOffset, int16_t script) { return 0; }
+
+/* ---- Script codes from fonts ----
+ * As Inside Macintosh: Text describes (6-22): font 0 and 1 are the system
+ * and application fonts; IDs from $4000 to $BFFF belong to non-Roman
+ * scripts, 512 to each ((ID - 16384) / 512 + 1), the rest are Roman.  A
+ * Roman font is the system script's when the font force flag is set (for
+ * IntlScript, any font when the international resources selection flag
+ * is), and a script that isn't installed gives way to the system script. */
+
+static int16_t script_for(int16_t font, bool intl)
+{
+    sm.forced = sm.defaulted = 0;
+    if (font == 0)
+        font = (int16_t)rd16(LM_SysFontFam);
+    else if (font == 1)
+        font = (int16_t)rd16(LM_ApFontID);
+    uint16_t id = (uint16_t)font;
+    int script = id >= 0x4000 && id <= 0xBFFF ? (id - 0x4000) / 512 + 1 : smRoman;
+    if (intl ? sm.intl_force && script != sm.sys_script : script == smRoman && sm.font_force && sm.sys_script) {
+        script = sm.sys_script;
+        sm.forced = 0xFF;
+    }
+    if (!script_enabled(script)) {
+        script = sm.sys_script;
+        sm.forced = 0;
+        sm.defaulted = 0xFF;
+    }
+    return (int16_t)script;
+}
+
+static int16_t port_font(void)
+{
+    gaddr port = qd_port();
+    return port ? (int16_t)rd16(port + GrafPort_txFont_off) : 0;
+}
+
+int16_t tb_FontScript(void) { return script_for(port_font(), false); }
+int16_t tb_IntlScript(void) { return script_for(port_font(), true); }
+int16_t tb_FontToScript(int16_t fontnum) { return script_for(fontnum, false); }
+
+/* ---- The keyboard script ---- */
+
+static bool key_allowed(int script)
+{
+    if (!script_enabled(script))
+        return false;
+    /* smKeyDisableKybds leaves Roman and the system script. */
+    return sm.key_disable != 0xFF || script == smRoman || script == sm.sys_script;
+}
+
+static void set_key_script(int script)
+{
+    if (sm.key_disable == 1 || !key_allowed(script)) /* switching disabled, or not there */
+        return;
+    if (script != sm.key_script) {
+        sm.last_script = sm.key_script;
+        sm.key_script = (int16_t)script;
+    }
+    sm.munged++;
+}
+
+void tb_KeyScript(int16_t code)
+{
+    switch (code) {
+    case smKeyNextScript: /* the next one, in script code order, round to the first */
+        for (int i = 1; i <= smUninterp; i++) {
+            int s = (sm.key_script + i) % (smUninterp + 1);
+            if (key_allowed(s)) {
+                set_key_script(s);
+                break;
+            }
+        }
+        break;
+    case smKeySysScript: set_key_script(sm.sys_script); break;
+    case smKeySwapScript: set_key_script(sm.last_script); break;
+    case smKeyDisableKybds:
+        sm.key_disable = 0xFF;
+        if (!key_allowed(sm.key_script))
+            set_key_script(sm.sys_script);
+        break;
+    case smKeyEnableKybds: sm.key_disable = 0; break;
+    case smKeyDisableKybdSwitch: sm.key_disable = 1; break;
+    case smKeyRoman: /* only when there is something else */
+        if (tb_GetScriptManagerVariable(smEnabled) > 1)
+            set_key_script(smRoman);
+        break;
+    case smKeyToggleDirection: /* line direction: with a bidirectional script */
+    case smKeySetDirLeftRight:
+    case smKeySetDirRightLeft:
+        if (tb_GetScriptManagerVariable(smBidirect)) {
+            int16_t dir = code == smKeySetDirLeftRight ? 0 : code == smKeySetDirRightLeft ? -1
+                                                                                   : (int16_t)~tb_GetSysDirection();
+            tb_SetSysDirection(dir);
+        }
+        break;
+    default: /* a script code; the keyboard layouts and input methods are one each */
+        if (code >= 0)
+            set_key_script(code);
+        break;
+    }
+}
+
+/* ---- Character sizes ----
+ * The 2-byte scripts' first bytes, as the Macintosh encodings define them
+ * (the rest are 1-byte characters): Shift-JIS's, and EUC's for the others
+ * up to $FC or $FE, where the Chinese encodings keep 1-byte symbols (©,
+ * ™, …) at $FD-$FF. */
+
+static bool first_byte(int script, uint8_t c)
+{
+    switch (script) {
+    case smJapanese: return (c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xFC);
+    case smTradChinese:
+    case smSimpChinese: return c >= 0xA1 && c <= 0xFC;
+    case smKorean: return c >= 0xA1 && c <= 0xFE;
+    default: return false;
+    }
+}
+
+/* The script a script-aware call means: the font script for
+ * smCurrentScript, the system script for smSystemScript; Roman (all 1-byte)
+ * for one not installed. */
+static int text_script(int16_t script)
+{
+    int s = script == smCurrentScript ? tb_FontScript() : script == smSystemScript ? sm.sys_script : script;
+    return script_enabled(s) ? s : smRoman;
+}
+
+/* From the start of the text, as Inside Macintosh says: offset 0 begins a
+ * character, and each first byte takes the next with it. */
+static int16_t byte_type(gaddr text, int offset, int script)
+{
+    if (!double_byte(script) || offset < 0)
+        return smSingleByte;
+    int i = 0;
+    while (i < offset)
+        i += first_byte(script, rd8(text + (uint32_t)i)) ? 2 : 1;
+    if (i > offset)
+        return smLastByte;
+    return first_byte(script, rd8(text + (uint32_t)offset)) ? smFirstByte : smSingleByte;
+}
+
+int16_t tb_CharacterByteType(gaddr textBuf, int16_t textOffset, int16_t script)
+{
+    return byte_type(textBuf, textOffset, text_script(script));
+}
+
+int16_t tb_CharByte(gaddr textBuf, int16_t textOffset) { return tb_CharacterByteType(textBuf, textOffset, smCurrentScript); }
+
+/* The length of the character at the start of text (1 or 2 bytes), for
+ * the routines that must not cut one in two. */
+static int char_len(int script, const uint8_t *text, int len)
+{
+    return len >= 2 && double_byte(script) && first_byte(script, text[0]) ? 2 : 1;
+}
+
+/* Always TRUE: 1 for a byte that begins a 2-byte character, 0 for the
+ * others (every byte, in a 1-byte script). */
+int8_t tb_FillParseTable(gaddr table, int16_t script)
+{
+    int s = text_script(script);
+    for (int c = 0; c < 256; c++)
+        wr8(table + (uint32_t)c, double_byte(s) && first_byte(s, (uint8_t)c) ? 1 : 0);
+    return 1;
+}
+
+int8_t tb_ParseTable(gaddr table) { return tb_FillParseTable(table, smCurrentScript); }
 
 /* CharacterType by the 'itl2' type list: the type in bits 0-3 of the
  * character's class entry, the punctuation class in bits 4-6, upper case
@@ -73,8 +349,65 @@ static int16_t char_type(uint8_t c)
     return (int16_t)((t & 0x0F) | (t & 0x70) << 4 | (t & 0x80 ? smCharUpper : smCharLower));
 }
 
-int16_t tb_CharType(gaddr textbufp, int16_t offset) { return char_type(rd8(textbufp + (uint32_t)offset)); }
-int16_t tb_CharacterType(gaddr textbufp, int16_t offset, int16_t script) { return tb_CharType(textbufp, offset); }
+int host_text_decode(uint32_t enc, const uint8_t *in, size_t n, size_t *used, uint16_t *out, size_t cap,
+                     size_t *produced);
+
+/* A 2-byte character's type, from what the host's tables make of it (the
+ * Macintosh text encodings have the script codes' numbers): kana,
+ * ideographs (Shift-JIS's level 2 from $989F), Hangul and its letters,
+ * Bopomofo, Greek and Cyrillic, full-width letters and digits; anything
+ * else is punctuation. */
+static int16_t wide_type(int script, const uint8_t ch[2])
+{
+    uint16_t u = 0;
+    size_t used, got = 0;
+    host_text_decode((uint32_t)script, ch, 2, &used, &u, 1, &got);
+    int16_t t = smCharPunct;
+    if (!got) /* not a character the encoding has */
+        return (int16_t)(t | smChar2byte);
+    if (u >= 0x3041 && u <= 0x309F)
+        t = smCharHiragana;
+    else if ((u >= 0x30A1 && u <= 0x30FF) || (u >= 0xFF66 && u <= 0xFF9F))
+        t = smCharKatakana;
+    else if ((u >= 0x4E00 && u <= 0x9FFF) || (u >= 0x3400 && u <= 0x4DBF) || (u >= 0xF900 && u <= 0xFAFF))
+        t = smCharIdeographic |
+            (script == smJapanese && (ch[0] << 8 | ch[1]) >= 0x989F ? smIdeographicLevel2 : smIdeographicLevel1);
+    else if (u >= 0xAC00 && u <= 0xD7A3)
+        t = smCharHangul;
+    else if ((u >= 0x3131 && u <= 0x318E) || (u >= 0x1100 && u <= 0x11FF))
+        t = smCharJamo;
+    else if (u >= 0x3105 && u <= 0x312F)
+        t = smCharBopomofo;
+    else if (u >= 0x0391 && u <= 0x03C9)
+        t = smCharTwoByteGreek | (u <= 0x03A9 ? smCharUpper : smCharLower);
+    else if (u >= 0x0401 && u <= 0x045F)
+        t = smCharTwoByteRussian | ((u <= 0x042F) ? smCharUpper : smCharLower);
+    else if (u >= 0xFF21 && u <= 0xFF3A)
+        t = smCharAscii | smCharUpper;
+    else if (u >= 0xFF41 && u <= 0xFF5A)
+        t = smCharAscii;
+    else if (u >= 0xFF10 && u <= 0xFF19)
+        t = smCharPunct | smPunctNumber;
+    else if (u == 0x3000)
+        t = smCharPunct | smPunctBlank;
+    return (int16_t)(t | smChar2byte);
+}
+
+/* A byte of a 2-byte character, either one, gives the character's type;
+ * 1-byte characters go by the U.S. 'itl2' (the 2-byte scripts' 'itl5'
+ * tables are not here). */
+int16_t tb_CharacterType(gaddr textbufp, int16_t offset, int16_t script)
+{
+    int s = text_script(script);
+    int16_t bt = byte_type(textbufp, offset, s);
+    if (bt == smSingleByte)
+        return char_type(rd8(textbufp + (uint32_t)offset));
+    uint8_t ch[2];
+    gget(ch, textbufp + (uint32_t)(bt == smLastByte ? offset - 1 : offset), 2);
+    return wide_type(s, ch);
+}
+
+int16_t tb_CharType(gaddr textbufp, int16_t offset) { return tb_CharacterType(textbufp, offset, smCurrentScript); }
 
 /* ---- Measuring ---- */
 
@@ -289,27 +622,31 @@ void tb_HiliteText(gaddr textbufp, int16_t firstoffset, int16_t secondoffset, ga
         wr16(offsets + (uint32_t)i * 2, 0);
 }
 
+/* A 2-byte character is measured and broken as one. */
 uint8_t tb_StyledLineBreak(gaddr textp, int32_t length, int32_t text_start, int32_t text_end, int32_t flags,
                            gaddr text_width_fp, gaddr text_offset)
 {
     int32_t avail = (int32_t)rd32(text_width_fp) >> 16;
     bool first_on_line = rd32(text_offset) != 0;
+    int script = text_script(smCurrentScript);
     int x = 0, last_break = -1;
-    for (int32_t i = text_start; i < text_end; i++) {
+    for (int32_t i = text_start; i < text_end;) {
         uint8_t c = rd8(textp + (uint32_t)i);
         if (c == '\r') {
             wr32(text_offset, (uint32_t)(i + 1));
             return smBreakWord;
         }
-        int w = width_of(textp + (uint32_t)i, 1);
+        int n = i + 1 < text_end && double_byte(script) && first_byte(script, c) ? 2 : 1;
+        int w = width_of(textp + (uint32_t)i, n);
         if (x + w > avail && c != ' ') {
-            int32_t at = last_break > text_start ? last_break : (first_on_line ? (i > text_start ? i : i + 1) : text_start);
+            int32_t at = last_break > text_start ? last_break : (first_on_line ? (i > text_start ? i : i + n) : text_start);
             wr32(text_offset, (uint32_t)at);
             return last_break > text_start || !first_on_line ? smBreakWord : smBreakChar;
         }
         x += w;
         if (c == ' ')
             last_break = i + 1;
+        i += n;
     }
     wr32(text_offset, (uint32_t)text_end);
     wr32(text_width_fp, (uint32_t)((avail - x) << 16));
@@ -327,7 +664,8 @@ int32_t tb_VisibleLength(gaddr textp, int32_t len)
     return len;
 }
 
-/* Truncate a Pascal string to fit width, ending (truncEnd) or middle with an ellipsis. */
+/* Truncate a Pascal string to fit width, ending (truncEnd) or middle with
+ * an ellipsis, keeping 2-byte characters whole. */
 int16_t tb_TruncString(int16_t width, gaddr string, int16_t code)
 {
     int n = rd8(string);
@@ -335,22 +673,29 @@ int16_t tb_TruncString(int16_t width, gaddr string, int16_t code)
         return 0;
     uint8_t buf[256];
     gget(buf, string + 1, (uint32_t)n);
+    /* Where each character starts (and the end). */
+    int script = text_script(smCurrentScript), starts[257], chars = 0;
+    for (int i = 0; i < n; i += char_len(script, buf + i, n - i))
+        starts[chars++] = i;
+    starts[chars] = n;
     int ell = qd_text_width(qd_port(), (const uint8_t *)"\xC9", 1);
     if (code == 0) { /* truncEnd */
-        while (n > 0 && qd_text_width(qd_port(), buf, n) + ell > width)
-            n--;
+        int k = chars;
+        while (k > 0 && qd_text_width(qd_port(), buf, starts[k]) + ell > width)
+            k--;
+        n = starts[k];
         buf[n++] = 0xC9;
     } else { /* truncMiddle */
-        int keep = n;
+        int keep = chars;
         while (keep > 0) {
-            int left = (keep + 1) / 2, right = keep / 2;
+            int left = starts[(keep + 1) / 2], right = n - starts[chars - keep / 2];
             uint8_t t[256];
             memcpy(t, buf, (size_t)left);
             t[left] = 0xC9;
             memcpy(t + left + 1, buf + n - right, (size_t)right);
-            if (qd_text_width(qd_port(), t, keep + 1) <= width) {
-                memcpy(buf, t, (size_t)keep + 1);
-                n = keep + 1;
+            if (qd_text_width(qd_port(), t, left + right + 1) <= width) {
+                memcpy(buf, t, (size_t)(left + right + 1));
+                n = left + right + 1;
                 break;
             }
             keep--;
@@ -385,14 +730,6 @@ int16_t tb_TransliterateText(gaddr srch, gaddr dsth, int16_t target, int32_t src
 {
     return tb_Transliterate(srch, dsth, target, srcmask);
 }
-
-int8_t tb_ParseTable(gaddr table)
-{
-    gmemset(table, 0, 256);
-    return 1;
-}
-
-int8_t tb_FillParseTable(gaddr table, int16_t script) { return tb_ParseTable(table); }
 
 /* Replace every occurrence of key (a Str15) in base_text with subst_text. */
 int16_t tb_ReplaceText(gaddr base_text, gaddr subst_text, gaddr key)
