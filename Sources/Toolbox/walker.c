@@ -20,13 +20,17 @@
 #include "machine.h"
 #include "tb_internal.h"
 
-enum { SETTLE = 3000000 }; /* instructions between steps: the program's own work */
+/* Instructions between steps (the program's own work), and from the menu
+ * bar's first appearance to the first choice (a program's opening, while
+ * it keeps its menus disabled: Glider's title). */
+enum { SETTLE = 3000000, WARM_UP = 30000000, WAITS = 18 };
 
 static bool walking;
 static int menu_i, item_n;  /* the next item to try */
 static int tries;           /* attempts at the dialog in front */
+static int waits;           /* steps with every item left disabled */
 static gaddr left_open;     /* one that stayed: a modeless window, walked past */
-static uint64_t next_at;
+static uint64_t next_at, menus_at;
 static unsigned chosen, dialogs, left;
 static char last[128];
 
@@ -35,8 +39,8 @@ void machine_set_menu_walk(bool on)
     walking = on;
     menu_i = 0;
     item_n = 1;
-    tries = 0;
-    next_at = 0;
+    tries = waits = 0;
+    next_at = menus_at = 0;
     chosen = dialogs = left = 0;
     left_open = 0;
     snprintf(last, sizeof last, "the start");
@@ -105,22 +109,53 @@ void walker_idle(uint64_t now)
     tries = 0;
     if (!menu_bar_count())
         return; /* no menu bar yet: the program is still starting */
-    for (; menu_i < menu_bar_count(); menu_i++, item_n = 1) {
-        for (;; item_n++) {
+    if (!menus_at)
+        menus_at = now;
+    if (now - menus_at < WARM_UP)
+        return;
+    /* The next item that can be chosen, from where the walk is.  Items
+     * disabled now are not given up on: a program keeps its menus disabled
+     * while it shows a screen of its own (Glider's About), so the walk
+     * waits for them, nudging the program on (Return, a click, Escape),
+     * and ends only when nothing becomes enabled. */
+    bool waiting_for = false;
+    for (int mi = menu_i, n = item_n; mi < menu_bar_count(); mi++, n = 1) {
+        for (;; n++) {
             char text[64];
             bool enabled, submenu;
-            if (!menu_bar_item(menu_i, item_n, text, sizeof text, &enabled, &submenu))
+            if (!menu_bar_item(mi, n, text, sizeof text, &enabled, &submenu))
                 break;
-            if (!enabled || submenu || passed_over(text) || (menu_i == 0 && item_n > 1))
+            bool candidate = !submenu && !passed_over(text) && !(mi == 0 && n > 1) && text[0] != '-';
+            if (!candidate || !enabled) {
+                LOGF(LOG_TRAPS, "  walk passes menu %d item %d \"%s\"%s\n", menu_bar_id(mi), n, text,
+                     enabled ? "" : " (disabled)");
+                waiting_for |= candidate;
                 continue;
-            int16_t id = menu_bar_id(menu_i);
-            snprintf(last, sizeof last, "menu %d item %d \"%s\"", id, item_n, text);
+            }
+            int16_t id = menu_bar_id(mi);
+            snprintf(last, sizeof last, "menu %d item %d \"%s\"", id, n, text);
             say(last);
             chosen++;
-            item_n++;
-            machine_choose_menu(id, (int16_t)(item_n - 1));
+            menu_i = mi;
+            item_n = n + 1;
+            waits = 0;
+            machine_choose_menu(id, (int16_t)n);
             return;
         }
+    }
+    if (waiting_for && waits < WAITS) {
+        int w = 0, h = 0;
+        switch (waits++ % 6) {
+        case 1: key(0x0D, 0x24, 0); break;
+        case 3: /* pressed for a step, as a program polling Button sees it */
+        case 4:
+            machine_screen_size(&w, &h);
+            machine_post_mouse(w / 2, h / 2, waits % 6 == 4);
+            break;
+        case 5: key(0x1B, 0x35, 0); break;
+        default: break;
+        }
+        return;
     }
     printf("walk: %u items chosen, %u dialogs, %u left open\n", chosen, dialogs, left);
     fflush(stdout);
