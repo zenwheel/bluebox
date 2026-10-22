@@ -777,6 +777,17 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** a self-contained 68k bundle and PowerPC bundle each run from a different folder and on a second Mac without Blue Box installed, open documents dropped on them, keep their preferences across launches, and show their own icon and name in the Dock and the menu bar.
 
+### M16: The Translation Manager and document translators
+
+**Goal:** Macintosh Easy Open's Translation Manager, so classic programs open documents of other types through translators, and DataViz's MacLinkPlus 9.0 (Mac OS 8's Apple Extras: Document Converter, DataViz FileView) converts old documents (ClarisWorks, Word 5, MacWrite, WordPerfect and the rest) as it did. Asked for 2026-10-22, when Document Converter said Easy Open must be in the Extensions folder.
+
+- **The Translation Manager:** Gestalt `xlat` (gestaltTranslationAttr), `_TranslationDispatch` ($ABFC) for 68k code and TranslationLib for PowerPC code: GetFileTypesThatAppCanNativelyOpen, ExtendedOpenFile, ExtendedTranslateFile, GetFileTranslationPaths, GetPathFromTranslationDialog, TranslateFile, GetDocumentKindString, GetTranslationExtensionName and the scrap calls; the Finder's open-with-translation (Apple Events from the host) and the translation choice dialog.
+- **Translators:** translator extensions (Inside Macintosh: More Macintosh Toolbox, "Translation Manager") found in the System Folder's translators folder and loaded and called as Easy Open did, 68k or PowerPC; MacLinkPlus's translators installed from the user's own Mac OS 8 disk (never from the repository).
+- **The host as a translator (optional):** conversions macOS can do itself (RTF, plain text, images through ImageIO) offered as translators, so classic programs open modern files.
+- Apple's and DataViz's software stays out of the repository.
+
+**Exit:** Document Converter converts a ClarisWorks and a Word 5 document to RTF with the MacLinkPlus translators; SimpleText opens a foreign text document through the Translation Manager; DataViz FileView shows a Word document.
+
 ## 6. Risks
 
 | Risk | Mitigation |
