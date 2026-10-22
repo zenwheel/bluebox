@@ -19,6 +19,7 @@ enum { patCopy = 8, patOr, patXor, patBic, notPatCopy, notPatOr, notPatXor, notP
 
 bool qd_region_recording(void);
 void qd_region_record(const hrgn *shape);
+void qd_region_record_line(int h0, int v0, int h1, int v1);
 
 /* Fill one row span [c0, c1) of bitmap row `row`. */
 static void fill_span_1bpp(const pixdst *d, int row, int c0, int c1, uint8_t pat, int mode, uint32_t fg, uint32_t bk)
@@ -91,8 +92,6 @@ static bool fill_region_arith(gaddr port, const hrgn *r, const pixdst *d, const 
 
 void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mode)
 {
-    if (qd_region_recording())
-        qd_region_record(shape);
     hrgn r;
     hrgn_init(&r);
     qd_port_clip(port, &r);
@@ -161,8 +160,6 @@ static bool fill_region_pixpat(gaddr port, const hrgn *shape, gaddr pp, int mode
         px[i] = qd_rgb_px(d.depth, d.ctab, c);
     }
     free(rgb);
-    if (qd_region_recording())
-        qd_region_record(shape);
     hrgn r;
     hrgn_init(&r);
     qd_port_clip(port, &r);
@@ -792,6 +789,7 @@ static void line_to(int h, int v)
             poly_add(poly, pt_h(loc), pt_v(loc));
         poly_add(poly, h, v);
     }
+    qd_region_record_line(pt_h(loc), pt_v(loc), h, v);
     qd_pic_line(port, pt_h(loc), pt_v(loc), h, v);
     if (GrafPort_pnVis(port) >= 0) {
         int pw, ph;
@@ -916,51 +914,16 @@ static void poly_region(gaddr poly, hrgn *out)
     hrgn_rect(out, (qrect){ 0, 0, 0, 0 });
     if (n < 3)
         return;
-    int *vs = malloc((size_t)n * sizeof *vs), *hs = malloc((size_t)n * sizeof *hs);
+    int (*e)[4] = malloc((size_t)n * sizeof *e);
     for (int i = 0; i < n; i++) {
-        uint32_t pt = rd32(p + 10 + (uint32_t)i * 4);
-        vs[i] = pt_v(pt);
-        hs[i] = pt_h(pt);
+        uint32_t a = rd32(p + 10 + (uint32_t)i * 4), c = rd32(p + 10 + (uint32_t)((i + 1) % n) * 4);
+        e[i][0] = pt_h(a);
+        e[i][1] = pt_v(a);
+        e[i][2] = pt_h(c);
+        e[i][3] = pt_v(c);
     }
-    qrect b = qrect_get(p + 2);
-    double *xs = malloc((size_t)n * sizeof *xs);
-    hrgn row;
-    hrgn_init(&row);
-    for (int y = b.top; y < b.bottom; y++) {
-        double ys = y + 0.5;
-        int k = 0;
-        for (int i = 0; i < n; i++) {
-            int j = (i + 1) % n;
-            double y0 = vs[i], y1 = vs[j];
-            if ((y0 <= ys && ys < y1) || (y1 <= ys && ys < y0))
-                xs[k++] = hs[i] + (ys - y0) * (hs[j] - hs[i]) / (y1 - y0);
-        }
-        for (int a = 1; a < k; a++) /* insertion sort: few crossings */
-            for (int c = a; c > 0 && xs[c - 1] > xs[c]; c--) {
-                double t = xs[c];
-                xs[c] = xs[c - 1];
-                xs[c - 1] = t;
-            }
-        int16_t runs[64];
-        int nr = 0;
-        for (int a = 0; a + 1 < k && nr + 2 <= 64; a += 2) {
-            int x0 = (int)(xs[a] + 0.5), x1 = (int)(xs[a + 1] + 0.5);
-            if (x1 <= x0)
-                continue;
-            if (nr && runs[nr - 1] >= x0) { /* touching: extend the last run */
-                if (x1 > runs[nr - 1])
-                    runs[nr - 1] = (int16_t)x1;
-                continue;
-            }
-            runs[nr++] = (int16_t)x0;
-            runs[nr++] = (int16_t)x1;
-        }
-        hrgn_add_runs(out, y, runs, nr);
-    }
-    hrgn_free(&row);
-    free(xs);
-    free(vs);
-    free(hs);
+    hrgn_even_odd(out, (const int (*)[4])e, n);
+    free(e);
 }
 
 static void verb_poly(int verb, gaddr poly, gaddr pat)

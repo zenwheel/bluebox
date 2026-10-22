@@ -20,12 +20,52 @@
 
 enum { srcCopy = 0 };
 
+/* A picture's data in guest memory, from p to end.  A picture spooled in
+ * through the port's getPicProc (the handle holds only picSize and
+ * picFrame) is read into a buffer, base to cap, as it is needed; end is
+ * how far it has been filled. */
 typedef struct {
     gaddr p, end;
     bool v2;
+    gaddr proc, base, cap;
 } reader;
 
-static int r8(reader *r) { return r->p < r->end ? rd8(r->p++) : 0; }
+/* Make n bytes from p available, reading them through getPicProc. */
+static void need(reader *r, uint32_t n)
+{
+    if (!r->proc || r->p + n <= r->end)
+        return;
+    uint32_t want = r->p + n - r->end;
+    if (want > r->cap - r->end)
+        want = r->cap - r->end;
+    while (want) {
+        uint16_t k = want > 0x7FFF ? 0x7FFF : (uint16_t)want;
+        cpu_push32(g_cpu, r->end);
+        cpu_push16(g_cpu, k);
+        guest_call(r->proc);
+        r->end += k;
+        want -= k;
+    }
+}
+
+/* Between opcodes, what is still unread moves to the start of the buffer
+ * (keeping its alignment) once less than half of it is left. */
+static void compact(reader *r)
+{
+    if (!r->proc || r->cap - r->p >= (r->cap - r->base) / 2)
+        return;
+    uint32_t shift = (r->p - r->base) & ~1u;
+    gmemcpy(r->base, r->base + shift, r->end - r->base - shift);
+    r->p -= shift;
+    r->end -= shift;
+}
+
+static int r8(reader *r)
+{
+    if (r->p >= r->end)
+        need(r, 1);
+    return r->p < r->end ? rd8(r->p++) : 0;
+}
 static int r16(reader *r)
 {
     int v = (int16_t)(r8(r) << 8);
@@ -36,7 +76,11 @@ static uint32_t r32(reader *r)
     uint32_t hi = (uint16_t)r16(r);
     return hi << 16 | (uint16_t)r16(r);
 }
-static void skip(reader *r, uint32_t n) { r->p = r->p + n < r->end ? r->p + n : r->end; }
+static void skip(reader *r, uint32_t n)
+{
+    need(r, n);
+    r->p = r->p + n < r->end ? r->p + n : r->end;
+}
 static qrect rrect(reader *r)
 {
     qrect q;
@@ -94,6 +138,8 @@ static void read_region(reader *r, const mapping *m, hrgn *out)
     int size = (uint16_t)r16(r);
     if (size < 10)
         size = 10;
+    r->p = start;
+    need(r, (uint32_t)size);
     gaddr h = tb_NewHandle(size, false, false);
     gmemcpy(rd32(h), start, (uint32_t)size);
     r->p = start;
@@ -217,7 +263,8 @@ static void read_row(reader *r, uint8_t *row, int row_bytes, int unit, bool pack
         return;
     }
     int count = row_bytes > 250 ? (uint16_t)r16(r) : r8(r);
-    reader sub = { r->p, r->p + (uint32_t)count, r->v2 };
+    need(r, (uint32_t)count);
+    reader sub = { r->p, r->p + (uint32_t)count, r->v2, 0, 0, 0 };
     unpack_bits(&sub, row, row_bytes, unit);
     skip(r, (uint32_t)count);
 }
@@ -276,7 +323,8 @@ static void decode_pixels(reader *r, const pixinfo *pi, bool packed, image *img)
                 int n = img->w * planes;
                 if (packed && rb >= 8) {
                     int count = rb > 250 ? (uint16_t)r16(r) : r8(r);
-                    reader sub = { r->p, r->p + (uint32_t)count, r->v2 };
+                    need(r, (uint32_t)count);
+                    reader sub = { r->p, r->p + (uint32_t)count, r->v2, 0, 0, 0 };
                     uint8_t *buf = calloc((size_t)n + 1, 1);
                     unpack_bits(&sub, buf, n, 1);
                     skip(r, (uint32_t)count);
@@ -592,7 +640,11 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
     hrgn_init(&ls.rgn);
     memset(ls.fill_pat, 0xFF, 8);
     int text_h = 0, text_v = 0;
-    while (r->p < r->end) {
+    for (;;) {
+        compact(r);
+        need(r, r->v2 ? 2 : 1);
+        if (r->p >= r->end)
+            break;
         int op = r->v2 ? (uint16_t)r16(r) : r8(r);
         if (op == 0xFF || (r->v2 && op == 0x00FF))
             break;
@@ -731,8 +783,9 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0x0C00: skip(r, 24); break;
         case 0x8200: { /* CompressedQuickTime: matrix, matte, mode, srcRect, accuracy, mask, then the image */
             uint32_t len = r32(r);
+            need(r, len);
             gaddr q = r->p;
-            if (len >= 66) {
+            if (len >= 66 && q + len <= r->end) {
                 qrect src = qrect_get(q + 50);
                 uint32_t matte = rd32(q + 36), mask = rd32(q + 62);
                 gaddr desc = q + 66 + matte + mask;
@@ -801,11 +854,33 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
     gaddr p = rd32(pic);
     int32_t size = tb_GetHandleSize(pic);
     mapping m = { qrect_get(p + 2), qrect_get(dst) };
-    reader r = { p + 10, p + (uint32_t)size, false };
+    reader r = { p + 10, p + (uint32_t)size, false, 0, 0, 0 };
+    /* After picSize and picFrame, a port whose getPicProc is the program's
+     * own reads the picture through it (spooling from a file, as Director
+     * does), into a buffer of ours. */
+    gaddr procs = GrafPort_grafProcs(port), get = procs ? rd32(procs + QDProcs_getPicProc_off) : 0;
+    gaddr spool = 0;
+    if (get && native_index_for(get) < 0) {
+        static const int32_t sizes[] = { 4 << 20, 1 << 20, 256 << 10 };
+        int32_t cap = 0;
+        for (int i = 0; i < 3 && !spool; i++) {
+            cap = sizes[i];
+            spool = tb_NewPtr(cap, true, false);
+            if (!spool)
+                spool = tb_NewPtr(cap, false, false);
+        }
+        if (spool)
+            r = (reader){ spool, spool, false, get, spool, spool + (uint32_t)cap };
+    }
     /* Version: 0x11 0x01 (v1) or 0x0011 0x02FF (v2). */
-    if (rd8(p + 10) == 0x00 && rd8(p + 11) == 0x11 && rd8(p + 12) == 0x02 && rd8(p + 13) == 0xFF) {
+    need(&r, 2);
+    gaddr v = r.p;
+    if (rd8(v) == 0x00 && rd8(v + 1) == 0x11)
+        need(&r, 4);
+    if (rd8(v) == 0x00 && rd8(v + 1) == 0x11 && rd8(v + 2) == 0x02 && rd8(v + 3) == 0xFF) {
         r.v2 = true;
-        r.p = p + 14;
+        r.p = v + 4;
+        need(&r, 2 + 12 + 8);
         if (rd16(r.p) == 0x0C00) {
             int16_t version = (int16_t)rd16(r.p + 2);
             /* Extended version 2: after version, reserved, hRes and vRes,
@@ -813,8 +888,8 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
             if (version == -2)
                 m.src = qrect_get(r.p + 2 + 12);
         }
-    } else if (rd8(p + 10) == 0x11 && rd8(p + 11) == 0x01) {
-        r.p = p + 12;
+    } else if (rd8(v) == 0x11 && rd8(v + 1) == 0x01) {
+        r.p = v + 2;
     }
     /* The picture draws with its own pen and text state. */
     uint8_t saved[GrafPort_SIZEOF];
@@ -852,6 +927,8 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
     }
     GrafPort_set_visRgn(port, vis);
     GrafPort_set_clipRgn(port, clip);
+    if (spool)
+        tb_DisposePtr(spool);
     tb_HSetState(pic, state);
 }
 

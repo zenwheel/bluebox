@@ -590,10 +590,63 @@ int8_t tb_EmptyRgn(gaddr rh)
     return qrect_empty(qrect_get(p + 2));
 }
 
-/* OpenRgn/CloseRgn record drawing into a region; minimal: collect frames of
- * rectangles drawn while open. */
+/* The area inside a set of edges (h0, v0, h1, v1), even-odd, sampled at
+ * each row's centre: polygons, and the lines drawn while a region is open. */
+void hrgn_even_odd(hrgn *out, const int (*e)[4], int n)
+{
+    hrgn_rect(out, (qrect){ 0, 0, 0, 0 });
+    if (n < 2)
+        return;
+    int top = e[0][1], bottom = e[0][1];
+    for (int i = 0; i < n; i++)
+        for (int k = 1; k < 4; k += 2) {
+            if (e[i][k] < top)
+                top = e[i][k];
+            if (e[i][k] > bottom)
+                bottom = e[i][k];
+        }
+    double *xs = malloc((size_t)n * sizeof *xs);
+    for (int y = top; y < bottom; y++) {
+        double ys = y + 0.5;
+        int k = 0;
+        for (int i = 0; i < n; i++) {
+            double y0 = e[i][1], y1 = e[i][3];
+            if ((y0 <= ys && ys < y1) || (y1 <= ys && ys < y0))
+                xs[k++] = e[i][0] + (ys - y0) * (e[i][2] - e[i][0]) / (y1 - y0);
+        }
+        for (int a = 1; a < k; a++) /* insertion sort: few crossings */
+            for (int c = a; c > 0 && xs[c - 1] > xs[c]; c--) {
+                double t = xs[c];
+                xs[c] = xs[c - 1];
+                xs[c - 1] = t;
+            }
+        int16_t runs[64];
+        int nr = 0;
+        for (int a = 0; a + 1 < k && nr + 2 <= 64; a += 2) {
+            int x0 = (int)(xs[a] + 0.5), x1 = (int)(xs[a + 1] + 0.5);
+            if (x1 <= x0)
+                continue;
+            if (nr && runs[nr - 1] >= x0) { /* touching: extend the last run */
+                if (x1 > runs[nr - 1])
+                    runs[nr - 1] = (int16_t)x1;
+                continue;
+            }
+            runs[nr++] = (int16_t)x0;
+            runs[nr++] = (int16_t)x1;
+        }
+        hrgn_add_runs(out, y, runs, nr);
+    }
+    free(xs);
+}
+
+/* OpenRgn/CloseRgn record drawing into a region, as QuickDraw did: the
+ * lines drawn bound it (even-odd, so a closed outline encloses its inside)
+ * and framed shapes go in exclusive-or with the rest.  The pen is hidden
+ * while the region is open. */
 static bool recording;
 static hrgn recorded;
+static int (*rec_edges)[4];
+static int rec_nedges, rec_cap;
 
 bool qd_region_recording(void) { return recording; }
 void qd_region_record(const hrgn *shape)
@@ -602,16 +655,41 @@ void qd_region_record(const hrgn *shape)
         hrgn_op(&recorded, &recorded, shape, RGN_XOR);
 }
 
+void qd_region_record_line(int h0, int v0, int h1, int v1)
+{
+    if (!recording || v0 == v1) /* a level line crosses no row */
+        return;
+    if (rec_nedges == rec_cap) {
+        rec_cap = rec_cap ? rec_cap * 2 : 64;
+        rec_edges = realloc(rec_edges, (size_t)rec_cap * sizeof *rec_edges);
+    }
+    int *e = rec_edges[rec_nedges++];
+    e[0] = h0;
+    e[1] = v0;
+    e[2] = h1;
+    e[3] = v1;
+}
+
 void tb_OpenRgn(void)
 {
     hrgn_free(&recorded);
     hrgn_init(&recorded);
+    rec_nedges = 0;
     recording = true;
+    tb_HidePen();
 }
 
 void tb_CloseRgn(gaddr rh)
 {
+    if (recording)
+        tb_ShowPen();
     recording = false;
+    hrgn lines;
+    hrgn_init(&lines);
+    hrgn_even_odd(&lines, (const int (*)[4])rec_edges, rec_nedges);
+    hrgn_op(&recorded, &recorded, &lines, RGN_XOR);
+    hrgn_free(&lines);
+    rec_nedges = 0;
     rgn_write(rh, &recorded);
     hrgn_free(&recorded);
 }

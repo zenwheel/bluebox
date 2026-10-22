@@ -237,6 +237,32 @@ extension BlueBox {
             tb_KillPoly(poly)
         }
 
+        /// Lines drawn while a region is open bound it, as polygons do, and
+        /// draw nothing: the pen is hidden until CloseRgn (Shards erases its
+        /// flying pieces through regions made of their edges).
+        @Test func openRegionLinesEncloseTheirInside() {
+            _ = offscreen()
+            tb_EraseRect(rect(0, 0, 40, 40))
+            let rgn = tb_NewRgn()
+            tb_OpenRgn()
+            tb_MoveTo(5, 5)
+            tb_LineTo(35, 5)
+            tb_LineTo(5, 35)
+            tb_LineTo(5, 5)
+            tb_FrameRect(rect(20, 20, 30, 30)) // exclusive-or with the rest
+            tb_CloseRgn(rgn)
+            func inside(_ h: Int, _ v: Int) -> Bool { tb_PtInRgn(UInt32(v) << 16 | UInt32(h), rgn) != 0 }
+            #expect(inside(8, 8))     // inside the triangle
+            #expect(!inside(30, 12))  // beyond the diagonal
+            #expect(inside(25, 25))   // inside the framed square only
+            #expect(!inside(25, 18))  // ...but not above it
+            #expect(!black(5, 5) && !black(20, 5)) // nothing drawn
+            tb_MoveTo(0, 38)
+            tb_LineTo(39, 38)
+            #expect(black(10, 38))    // the pen shows again
+            tb_DisposeRgn(rgn)
+        }
+
         @Test func rectProcBottleneckSeesCalls() {
             _ = offscreen()
             let port = tb_NewPtr(4, false, true)
@@ -258,6 +284,44 @@ extension BlueBox {
             #expect(rd32(count) == 1)
             #expect(black(15, 15))
             GrafPort_set_grafProcs(rd32(port), 0)
+        }
+
+        /// A picture spooled in through the port's getPicProc: the handle
+        /// holds only picSize and picFrame, the rest comes through the
+        /// proc (Bad Day on the Midway draws its scenes from files so).
+        @Test func drawPictureReadsThroughGetPicProc() {
+            _ = offscreen()
+            tb_EraseRect(rect(0, 0, 40, 40))
+            let port = tb_NewPtr(4, false, true)
+            tb_GetPort(port)
+            // Version 1: paintRect (2,2,10,10), then the end.
+            let data: [UInt8] = [0x11, 0x01, 0x31, 0, 2, 0, 2, 0, 10, 0, 10, 0xFF]
+            let src = tb_NewPtr(64, false, true)
+            for (i, b) in data.enumerated() { wr8(src + UInt32(i), b) }
+            let cursor = tb_NewPtr(4, false, true)
+            wr32(cursor, src)
+            // getPicProc(dataPtr: Ptr; byteCount: INTEGER): copies from *cursor.
+            let words: [UInt16] = [
+                0x205F, 0x301F, 0x225F, 0x2F08,                     // ret, count, dataPtr; ret back
+                0x2079, UInt16(cursor >> 16), UInt16(cursor & 0xFFFF), // MOVEA.L cursor,A0
+                0x6002, 0x12D8, 0x51C8, 0xFFFC,                     // copy count bytes
+                0x23C8, UInt16(cursor >> 16), UInt16(cursor & 0xFFFF), // MOVE.L A0,cursor
+                0x4E75,
+            ]
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let procs = tb_NewPtr(Int32(CQDProcs_SIZEOF), false, true)
+            tb_SetStdCProcs(procs)
+            wr32(procs + UInt32(QDProcs_getPicProc_off), code)
+            GrafPort_set_grafProcs(rd32(port), procs)
+            let pic = tb_NewHandle(10, false, true)
+            wr16(rd32(pic), 22)
+            for (i, v) in [0, 0, 20, 20].enumerated() { wr16(rd32(pic) + 2 + UInt32(i * 2), UInt16(v)) }
+            tb_DrawPicture(pic, rect(0, 0, 20, 20))
+            GrafPort_set_grafProcs(rd32(port), 0)
+            #expect(rd32(cursor) == src + UInt32(data.count)) // read to its end, no further
+            #expect(black(5, 5))
+            #expect(!black(15, 15))
         }
 
         @Test func seedFillAndColourMask() {
