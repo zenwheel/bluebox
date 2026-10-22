@@ -62,7 +62,10 @@ static gaddr make_ctab(const uint16_t (*rgb)[3], int n, int32_t seed)
 
 static uint32_t row_bytes_for(int depth, int width)
 {
-    return (uint32_t)((width * depth + 31) / 32 * 4); /* whole longs */
+    /* Whole words, as QuickDraw asks and a Mac's video drivers gave (at 1
+     * bit a 1200-pixel row is 150 bytes, not 152); the same as whole longs
+     * on the widths a rootless screen has (multiples of 64). */
+    return (uint32_t)((width * depth + 15) / 16 * 2);
 }
 
 /* The main device's pixel map, colour table and type for screen_depth. */

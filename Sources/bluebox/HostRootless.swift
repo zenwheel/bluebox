@@ -27,9 +27,15 @@ let classicMenuBarHeight: CGFloat = 20
 
 /// The Mac screen's size for the host's visible area at the display scale:
 /// the classic menu bar's 20 pixels on top, which are never shown.
+/// The Mac screen for the host display: as wide as a whole number of 64
+/// pixels, as every Mac's was (512, 640, 832, 1024, 1152, 1280), so that a
+/// window centred on it starts on a long word.  Programs relied on it:
+/// Bachman centres its 512-wide window and draws in long words, and on a
+/// 1200-wide screen (an 1800-point display at 1.5) the window sat 344
+/// pixels in and his picture jumped back every few frames.
 @MainActor func rootlessMacScreenSize() -> (Int32, Int32) {
     let vf = rootlessScreenFrame()
-    return (Int32((vf.width / displayScale).rounded(.down)),
+    return (Int32((vf.width / displayScale).rounded(.down)) / 64 * 64,
             Int32((vf.height / displayScale).rounded(.down) + classicMenuBarHeight))
 }
 

@@ -116,7 +116,7 @@ static uint32_t put_vpblock(image *im, int depth)
     be(b, sizeof b, 4);
     uint8_t *vp = b + 4;
     int w = g_screen_width, h = g_screen_height;
-    be(vp + 4, (uint32_t)((w * depth + 31) / 32 * 4), 2); /* vpRowBytes */
+    be(vp + 4, (uint32_t)((w * depth + 15) / 16 * 2), 2); /* vpRowBytes: as the screen's (qd_screen.c) */
     be(vp + 10, (uint32_t)h, 2);                           /* vpBounds.bottom */
     be(vp + 12, (uint32_t)w, 2);                           /* vpBounds.right */
     be(vp + 18, 0, 4);                                     /* vpPackSize */
