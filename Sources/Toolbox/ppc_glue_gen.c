@@ -7069,11 +7069,33 @@ static void ppcglue_HMSetFontSize(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_HMSetDialogResID(ppc_cpu *c)
+{
+    int16_t a_resid = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMSetDialogResID(a_resid);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HMGetDialogResID(ppc_cpu *c)
+{
+    gaddr a_residp = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMGetDialogResID(a_residp);
+    c->pc = c->lr;
+}
+
 static void ppcglue_HMSetMenuResID(ppc_cpu *c)
 {
     int16_t a_menuid = (int16_t)c->gpr[3];
     int16_t a_resid = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMSetMenuResID(a_menuid, a_resid);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HMGetMenuResID(ppc_cpu *c)
+{
+    gaddr a_menuidp = (gaddr)c->gpr[3];
+    gaddr a_residp = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMGetMenuResID(a_menuidp, a_residp);
     c->pc = c->lr;
 }
 
@@ -7083,6 +7105,22 @@ static void ppcglue_HMScanTemplateItems(ppc_cpu *c)
     int16_t a_whicresfile = (int16_t)c->gpr[4];
     int32_t a_whictype = (int32_t)c->gpr[5];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMScanTemplateItems(a_whichid, a_whicresfile, a_whictype);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HMBalloonRect(ppc_cpu *c)
+{
+    gaddr a_messp = (gaddr)c->gpr[3];
+    gaddr a_rectp = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMBalloonRect(a_messp, a_rectp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HMBalloonPict(ppc_cpu *c)
+{
+    gaddr a_messp = (gaddr)c->gpr[3];
+    gaddr a_pictp = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMBalloonPict(a_messp, a_pictp);
     c->pc = c->lr;
 }
 
@@ -7101,6 +7139,23 @@ static void ppcglue_HMExtractHelpMsg(ppc_cpu *c)
     int16_t a_state = (int16_t)c->gpr[6];
     gaddr a_helpmsgp = (gaddr)c->gpr[7];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMExtractHelpMsg(a_type, a_resid, a_msg, a_state, a_helpmsgp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HMGetIndHelpMsg(ppc_cpu *c)
+{
+    int32_t a_type = (int32_t)c->gpr[3];
+    int16_t a_resid = (int16_t)c->gpr[4];
+    int16_t a_msg = (int16_t)c->gpr[5];
+    int16_t a_state = (int16_t)c->gpr[6];
+    gaddr a_options = (gaddr)c->gpr[7];
+    uint32_t a_tip = (uint32_t)c->gpr[8];
+    gaddr a_altrectp = (gaddr)c->gpr[9];
+    gaddr a_theprocp = (gaddr)c->gpr[10];
+    gaddr a_variantp = (gaddr)rd32(c->gpr[1] + 56);
+    gaddr a_helpmsgp = (gaddr)rd32(c->gpr[1] + 60);
+    gaddr a_count = (gaddr)rd32(c->gpr[1] + 64);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HMGetIndHelpMsg(a_type, a_resid, a_msg, a_state, a_options, a_tip, a_altrectp, a_theprocp, a_variantp, a_helpmsgp, a_count);
     c->pc = c->lr;
 }
 
@@ -25020,97 +25075,6 @@ static void ppctrap_ReplaceGestalt(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_HMSetDialogResID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x10Cu);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA830));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HMGetDialogResID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x213u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA830));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HMGetMenuResID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x314u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA830));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HMBalloonRect(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x40Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA830));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HMBalloonPict(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x40Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA830));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HMGetIndHelpMsg(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1306u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap_push(4, rd32(c->gpr[1] + 64));
-    ppc_trap((uint16_t)(0xA830));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_IconMethodToRgn(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -35790,22 +35754,22 @@ const ppc_export ppc_exports[] = {
     {"HCreateResFile", ppcglue_HCreateResFile},
     {"HGetState", ppcglue_HGetState},
     {"HLock", ppcglue_HLock},
-    {"HMBalloonPict", ppctrap_HMBalloonPict},
-    {"HMBalloonRect", ppctrap_HMBalloonRect},
+    {"HMBalloonPict", ppcglue_HMBalloonPict},
+    {"HMBalloonRect", ppcglue_HMBalloonRect},
     {"HMExtractHelpMsg", ppcglue_HMExtractHelpMsg},
     {"HMGetBalloonWindow", ppcglue_HMGetBalloonWindow},
     {"HMGetBalloons", ppcglue_HMGetBalloons},
-    {"HMGetDialogResID", ppctrap_HMGetDialogResID},
+    {"HMGetDialogResID", ppcglue_HMGetDialogResID},
     {"HMGetFont", ppcglue_HMGetFont},
     {"HMGetFontSize", ppcglue_HMGetFontSize},
     {"HMGetHelpMenuHandle", ppcglue_HMGetHelpMenuHandle},
-    {"HMGetIndHelpMsg", ppctrap_HMGetIndHelpMsg},
-    {"HMGetMenuResID", ppctrap_HMGetMenuResID},
+    {"HMGetIndHelpMsg", ppcglue_HMGetIndHelpMsg},
+    {"HMGetMenuResID", ppcglue_HMGetMenuResID},
     {"HMIsBalloon", ppcglue_HMIsBalloon},
     {"HMRemoveBalloon", ppcglue_HMRemoveBalloon},
     {"HMScanTemplateItems", ppcglue_HMScanTemplateItems},
     {"HMSetBalloons", ppcglue_HMSetBalloons},
-    {"HMSetDialogResID", ppctrap_HMSetDialogResID},
+    {"HMSetDialogResID", ppcglue_HMSetDialogResID},
     {"HMSetFont", ppcglue_HMSetFont},
     {"HMSetFontSize", ppcglue_HMSetFontSize},
     {"HMSetMenuResID", ppcglue_HMSetMenuResID},

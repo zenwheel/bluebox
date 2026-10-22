@@ -66,4 +66,92 @@ int16_t tb_HMGetBalloonWindow(gaddr windowpp)
 }
 int16_t tb_HMExtractHelpMsg(int32_t type, int16_t resid, int16_t msg, int16_t state, gaddr helpmsgp) { return resNotFound; }
 
-int16_t tb_HMSetMenuResID(int16_t menuid, int16_t resid) { return noErr; }
+
+
+/* The resource IDs a program names for its menus' and dialogs' help ('hmnu',
+ * 'hdlg'), kept for it to read back; balloons themselves are not shown. */
+static int16_t dialog_res_id = -1;
+static struct {
+    int16_t menu, res;
+} menu_res[32];
+static int nmenu_res;
+
+int16_t tb_HMSetDialogResID(int16_t resid)
+{
+    dialog_res_id = resid;
+    return noErr;
+}
+
+int16_t tb_HMGetDialogResID(gaddr residp)
+{
+    if (residp)
+        wr16(residp, (uint16_t)dialog_res_id);
+    return noErr;
+}
+
+int16_t tb_HMSetMenuResID(int16_t menuid, int16_t resid)
+{
+    int i = 0;
+    while (i < nmenu_res && menu_res[i].menu != menuid)
+        i++;
+    if (i == 32)
+        return noErr;
+    if (i == nmenu_res)
+        nmenu_res++;
+    menu_res[i].menu = menuid;
+    menu_res[i].res = resid;
+    return noErr;
+}
+
+int16_t tb_HMGetMenuResID(gaddr menuidp, gaddr residp)
+{
+    int16_t menu = menuidp ? (int16_t)rd16(menuidp) : 0;
+    for (int i = 0; i < nmenu_res; i++)
+        if (menu_res[i].menu == menu) {
+            if (residp)
+                wr16(residp, (uint16_t)menu_res[i].res);
+            return noErr;
+        }
+    if (residp)
+        wr16(residp, 0xFFFF);
+    return resNotFound;
+}
+
+/* The rectangle a balloon for the message would take (Internet Explorer 5
+ * asks, for its toolbar's tips): its text in the help font, wrapped at 240
+ * pixels, with a margin; a fixed size for a picture or resource message. */
+int16_t tb_HMBalloonRect(gaddr messp, gaddr rectp)
+{
+    int w = 200, h = 60;
+    if (messp && (int16_t)rd16(messp) == 1) { /* khmmString: a Str255 */
+        int width = tb_StringWidth(messp + 2);
+        int lines = width / 224 + 1;
+        w = (width < 224 ? width : 224) + 16;
+        h = lines * 12 + 16;
+    }
+    if (rectp) {
+        wr16(rectp, 0);
+        wr16(rectp + 2, 0);
+        wr16(rectp + 4, (uint16_t)h);
+        wr16(rectp + 6, (uint16_t)w);
+    }
+    return noErr;
+}
+
+/* No balloon is drawn, so no picture of one: hmBalloonAborted. */
+int16_t tb_HMBalloonPict(gaddr messp, gaddr pictp)
+{
+    if (pictp)
+        wr32(pictp, 0);
+    return hmBalloonAborted;
+}
+
+/* No 'hmnu' or 'hdlg' messages are read: none found. */
+int16_t tb_HMGetIndHelpMsg(int32_t type, int16_t resid, int16_t msg, int16_t state, gaddr options, uint32_t tip,
+                           gaddr altrectp, gaddr theprocp, gaddr variantp, gaddr helpmsgp, gaddr count)
+{
+    if (count)
+        wr16(count, 0);
+    return resNotFound;
+}
+

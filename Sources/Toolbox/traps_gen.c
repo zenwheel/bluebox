@@ -8817,6 +8817,28 @@ static void glue_HLock(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_HMBalloonPict(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pictp = (gaddr)cpu_pop32(c);
+    gaddr a_messp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_HMBalloonPict(a_messp, a_pictp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HMBalloonRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_rectp = (gaddr)cpu_pop32(c);
+    gaddr a_messp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_HMBalloonRect(a_messp, a_rectp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_HMExtractHelpMsg(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8850,6 +8872,16 @@ static void glue_HMGetBalloons(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_HMGetDialogResID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_residp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_HMGetDialogResID(a_residp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_HMGetFont(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8876,6 +8908,37 @@ static void glue_HMGetHelpMenuHandle(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_mhp = (gaddr)cpu_pop32(c);
     int16_t r = tb_HMGetHelpMenuHandle(a_mhp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HMGetIndHelpMsg(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_count = (gaddr)cpu_pop32(c);
+    gaddr a_helpmsgp = (gaddr)cpu_pop32(c);
+    gaddr a_variantp = (gaddr)cpu_pop32(c);
+    gaddr a_theprocp = (gaddr)cpu_pop32(c);
+    gaddr a_altrectp = (gaddr)cpu_pop32(c);
+    uint32_t a_tip = (uint32_t)cpu_pop32(c);
+    gaddr a_options = (gaddr)cpu_pop32(c);
+    int16_t a_state = (int16_t)cpu_pop16(c);
+    int16_t a_msg = (int16_t)cpu_pop16(c);
+    int16_t a_resid = (int16_t)cpu_pop16(c);
+    int32_t a_type = (int32_t)cpu_pop32(c);
+    int16_t r = tb_HMGetIndHelpMsg(a_type, a_resid, a_msg, a_state, a_options, a_tip, a_altrectp, a_theprocp, a_variantp, a_helpmsgp, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HMGetMenuResID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_residp = (gaddr)cpu_pop32(c);
+    gaddr a_menuidp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_HMGetMenuResID(a_menuidp, a_residp);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -8916,6 +8979,16 @@ static void glue_HMSetBalloons(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int8_t a_flag = (int8_t)(cpu_pop16(c) >> 8);
     int16_t r = tb_HMSetBalloons(a_flag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HMSetDialogResID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_resid = (int16_t)cpu_pop16(c);
+    int16_t r = tb_HMSetDialogResID(a_resid);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -20357,21 +20430,21 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA830, (int32_t)0x104u, "HMSetBalloons", CONV_STACK, 2, 2, glue_HMSetBalloons},
     {0xA830, (int32_t)0x108u, "HMSetFont", CONV_STACK, 2, 2, glue_HMSetFont},
     {0xA830, (int32_t)0x109u, "HMSetFontSize", CONV_STACK, 2, 2, glue_HMSetFontSize},
-    {0xA830, (int32_t)0x10Cu, "HMSetDialogResID", CONV_STACK, 2, 2, 0},
+    {0xA830, (int32_t)0x10Cu, "HMSetDialogResID", CONV_STACK, 2, 2, glue_HMSetDialogResID},
     {0xA830, (int32_t)0x200u, "HMGetHelpMenuHandle", CONV_STACK, 4, 2, glue_HMGetHelpMenuHandle},
     {0xA830, (int32_t)0x20Au, "HMGetFont", CONV_STACK, 4, 2, glue_HMGetFont},
     {0xA830, (int32_t)0x20Bu, "HMGetFontSize", CONV_STACK, 4, 2, glue_HMGetFontSize},
     {0xA830, (int32_t)0x20Du, "HMSetMenuResID", CONV_STACK, 4, 2, glue_HMSetMenuResID},
-    {0xA830, (int32_t)0x213u, "HMGetDialogResID", CONV_STACK, 4, 2, 0},
+    {0xA830, (int32_t)0x213u, "HMGetDialogResID", CONV_STACK, 4, 2, glue_HMGetDialogResID},
     {0xA830, (int32_t)0x215u, "HMGetBalloonWindow", CONV_STACK, 4, 2, glue_HMGetBalloonWindow},
-    {0xA830, (int32_t)0x314u, "HMGetMenuResID", CONV_STACK, 8, 2, 0},
-    {0xA830, (int32_t)0x40Eu, "HMBalloonRect", CONV_STACK, 8, 2, 0},
-    {0xA830, (int32_t)0x40Fu, "HMBalloonPict", CONV_STACK, 8, 2, 0},
+    {0xA830, (int32_t)0x314u, "HMGetMenuResID", CONV_STACK, 8, 2, glue_HMGetMenuResID},
+    {0xA830, (int32_t)0x40Eu, "HMBalloonRect", CONV_STACK, 8, 2, glue_HMBalloonRect},
+    {0xA830, (int32_t)0x40Fu, "HMBalloonPict", CONV_STACK, 8, 2, glue_HMBalloonPict},
     {0xA830, (int32_t)0x410u, "HMScanTemplateItems", CONV_STACK, 8, 2, glue_HMScanTemplateItems},
     {0xA830, (int32_t)0x711u, "HMExtractHelpMsg", CONV_STACK, 14, 2, glue_HMExtractHelpMsg},
     {0xA830, (int32_t)0xB01u, "HMShowBalloon", CONV_STACK, 22, 2, glue_HMShowBalloon},
     {0xA830, (int32_t)0xE05u, "HMShowMenuBalloon", CONV_STACK, 28, 2, glue_HMShowMenuBalloon},
-    {0xA830, (int32_t)0x1306u, "HMGetIndHelpMsg", CONV_STACK, 38, 2, 0},
+    {0xA830, (int32_t)0x1306u, "HMGetIndHelpMsg", CONV_STACK, 38, 2, glue_HMGetIndHelpMsg},
     {0xA831, (int32_t)0x206u, "DisposePictInfo", CONV_STACK, 4, 2, 0},
     {0xA831, (int32_t)0x403u, "RecordPictInfo", CONV_STACK, 8, 2, 0},
     {0xA831, (int32_t)0x404u, "RecordPixMapInfo", CONV_STACK, 8, 2, 0},

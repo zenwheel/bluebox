@@ -73,6 +73,25 @@ extension BlueBox {
             #expect(tb_GetHandleSize(out) == 10 && tb_EmptyRgn(out) != 0)
         }
 
+        /// Balloon help: HMBalloonRect sizes a string's balloon (Internet
+        /// Explorer 5 asks for its toolbar's tips) and the help resource IDs
+        /// read back as set.
+        @Test func helpManagerBalloonRectAndResIDs() {
+            launchTestApp()
+            _ = initToolbox()
+            let msg = tb_NewPtr(260, false, true), rect = tb_NewPtr(8, false, true)
+            wr16(msg, 1) // khmmString
+            let text = Array("Go back to the previous page".utf8)
+            wr8(msg + 2, UInt8(text.count))
+            for (i, b) in text.enumerated() { wr8(msg + 3 + UInt32(i), b) }
+            #expect(tb_HMBalloonRect(msg, rect) == 0)
+            #expect(rd16(rect + 4) > 12 && rd16(rect + 6) > 16 && rd16(rect + 6) <= 240)
+            #expect(tb_HMSetMenuResID(130, 1300) == 0)
+            let m = tb_NewPtr(2, false, true), r = tb_NewPtr(2, false, true)
+            wr16(m, 130)
+            #expect(tb_HMGetMenuResID(m, r) == 0 && rd16(r) == 1300)
+        }
+
         @Test func insertDeleteAndStyle() {
             launchTestApp()
             _ = initToolbox()
