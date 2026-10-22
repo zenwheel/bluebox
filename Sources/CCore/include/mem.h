@@ -31,6 +31,11 @@ enum {
     /* Not at 2 GB itself: far-model jump tables end at A5 + their size,
      * which signed comparisons must still see as positive. */
     GA_A5WORLD_TOP   = 0x7FF00000u, /* A5 world ends here; stack below it */
+    /* A program not marked 32-bit clean gets its partition below 16 MB, as
+     * on a Mac in 24-bit mode: the A5 world ends here, and the heap may
+     * grow to GA_STACK_24 below the stack's base. */
+    GA_A5WORLD_TOP_24 = 0x01000000u,
+    GA_STACK_24      = 0x00100000u,
     GA_ROM           = 0xF0000000u, /* fake ROM: header + native stubs */
     GA_ROM_SIZE      = 0x00100000u,
     GA_SCREEN        = 0xF8000000u, /* framebuffer */
