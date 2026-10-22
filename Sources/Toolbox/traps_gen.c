@@ -4526,6 +4526,36 @@ static void glue_ExitMovies(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_Exp1to3(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_whichchannel = (int32_t)cpu_pop32(c);
+    int32_t a_numchannels = (int32_t)cpu_pop32(c);
+    gaddr a_outstatep = (gaddr)cpu_pop32(c);
+    gaddr a_instatep = (gaddr)cpu_pop32(c);
+    int32_t a_cnt = (int32_t)cpu_pop32(c);
+    gaddr a_outp = (gaddr)cpu_pop32(c);
+    gaddr a_inp = (gaddr)cpu_pop32(c);
+    tb_Exp1to3(a_inp, a_outp, a_cnt, a_instatep, a_outstatep, a_numchannels, a_whichchannel);
+    cpu_push32(c, ret);
+}
+
+static void glue_Exp1to6(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_whichchannel = (int32_t)cpu_pop32(c);
+    int32_t a_numchannels = (int32_t)cpu_pop32(c);
+    gaddr a_outstatep = (gaddr)cpu_pop32(c);
+    gaddr a_instatep = (gaddr)cpu_pop32(c);
+    int32_t a_cnt = (int32_t)cpu_pop32(c);
+    gaddr a_outp = (gaddr)cpu_pop32(c);
+    gaddr a_inp = (gaddr)cpu_pop32(c);
+    tb_Exp1to6(a_inp, a_outp, a_cnt, a_instatep, a_outstatep, a_numchannels, a_whichchannel);
+    cpu_push32(c, ret);
+}
+
 static void glue_ExtendedToString(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -21405,12 +21435,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x40004u, "FinaleUnknown2", CONV_STACK, 16, 2, glue_FinaleUnknown2},
     {0xA800, (int32_t)0x40010u, "Comp3to1", CONV_STACK, 28, 0, 0},
     {0xA800, (int32_t)0x80004u, "MIDISignOut", CONV_STACK, 4, 0, glue_MIDISignOut},
-    {0xA800, (int32_t)0x80010u, "Exp1to3", CONV_STACK, 28, 0, 0},
+    {0xA800, (int32_t)0x80010u, "Exp1to3", CONV_STACK, 28, 0, glue_Exp1to3},
     {0xA800, (int32_t)0xC0004u, "MIDIGetClients", CONV_STACK, 0, 4, glue_MIDIGetClients},
     {0xA800, (int32_t)0xC0008u, "SndSoundManagerVersion", CONV_STACK, 0, 4, glue_SndSoundManagerVersion},
     {0xA800, (int32_t)0xC0010u, "Comp6to1", CONV_STACK, 28, 0, 0},
     {0xA800, (int32_t)0x100004u, "MIDIGetClientName", CONV_STACK, 8, 0, glue_MIDIGetClientName},
-    {0xA800, (int32_t)0x100010u, "Exp1to6", CONV_STACK, 28, 0, 0},
+    {0xA800, (int32_t)0x100010u, "Exp1to6", CONV_STACK, 28, 0, glue_Exp1to6},
     {0xA800, (int32_t)0x140004u, "MIDISetClientName", CONV_STACK, 8, 0, glue_MIDISetClientName},
     {0xA800, (int32_t)0x180004u, "MIDIGetPorts", CONV_STACK, 4, 4, glue_MIDIGetPorts},
     {0xA800, (int32_t)0x1C0004u, "DirectorUnknown4", CONV_STACK, 14, 2, glue_DirectorUnknown4},

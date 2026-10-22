@@ -23,6 +23,7 @@ uint32_t mac_now(void)
 
 uint32_t tb_TickCount(void)
 {
+    machine_tick_polled();
     sound_pump();
     return rd32(LM_Ticks);
 }

@@ -358,6 +358,8 @@ void tb_EraseRoundRect(gaddr r, int16_t ow, int16_t oh);
 void tb_ErrorSound(gaddr sp);
 int8_t tb_EventAvail(int16_t em, gaddr evt);
 void tb_ExitMovies(void);
+void tb_Exp1to3(gaddr inp, gaddr outp, int32_t cnt, gaddr instatep, gaddr outstatep, int32_t numchannels, int32_t whichchannel);
+void tb_Exp1to6(gaddr inp, gaddr outp, int32_t cnt, gaddr instatep, gaddr outstatep, int32_t numchannels, int32_t whichchannel);
 int16_t tb_ExtendedToString(gaddr xp, gaddr formatp, gaddr partsp, gaddr string);
 int16_t tb_FCompressImage(int32_t src, gaddr srcRect, int16_t colorDepth, int32_t quality, int32_t cType, int32_t codec, int32_t ctable, int16_t flags, int32_t bufferSize, int32_t flushProc, int32_t progressProc, int32_t desc, int32_t data);
 int16_t tb_FCompressPicture(int32_t srcPicture, int32_t dstPicture, int16_t colorDepth, int32_t ctable, int32_t quality, int16_t doDither, int16_t compressAgain, int32_t progressProc, int32_t cType, int32_t codec);

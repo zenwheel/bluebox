@@ -90,12 +90,27 @@ static bool fill_region_arith(gaddr port, const hrgn *r, const pixdst *d, const 
     return true;
 }
 
+/* A region's area in pixels, for the time drawing it takes. */
+static uint64_t region_area(const hrgn *r)
+{
+    uint64_t n = 0;
+    for (int i = 0; i < r->nbands; i++) {
+        const rband *b = &r->bands[i];
+        uint64_t w = 0;
+        for (int k = 0; k + 1 < b->n; k += 2)
+            w += (uint64_t)(b->x[k + 1] - b->x[k]);
+        n += w * (uint64_t)(b->bottom - b->top);
+    }
+    return n;
+}
+
 void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mode)
 {
     hrgn r;
     hrgn_init(&r);
     qd_port_clip(port, &r);
     hrgn_op(&r, shape, &r, RGN_SECT);
+    machine_charge_pixels(region_area(&r));
     pixdst d = qd_port_pixels(port);
     if (fill_region_arith(port, &r, &d, pat, mode)) {
         hrgn_free(&r);
@@ -1106,6 +1121,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
     }
     if (mask)
         hrgn_op(&clip, &clip, mask, RGN_SECT);
+    machine_charge_pixels(region_area(&clip));
     int sw = sr.right - sr.left, sh = sr.bottom - sr.top;
     int dw = dr.right - dr.left, dh = dr.bottom - dr.top;
     if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) {

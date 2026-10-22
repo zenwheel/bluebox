@@ -1637,3 +1637,49 @@ int16_t tb_SndStopFilePlay(gaddr chan, int8_t quietNow)
     }
     return noErr;
 }
+
+/* ---------------------------------------------------------------------- */
+/* MACE expansion for programs that call it themselves (Diamonds) */
+
+/* Exp1to3 and Exp1to6: cnt packets of MACE (2 bytes for 3:1, 1 for 6:1,
+ * six samples each) for channel whichChannel of numChannels, whose packets
+ * alternate, into 8-bit offset samples in the output, interleaved as the
+ * channels are, so a program calls once a channel.  Each call decodes on
+ * its own: the state buffers, which carried the predictor from one call
+ * to the next, are left alone, and a long sound expanded a few packets at
+ * a time may click where the calls meet. */
+static void mace_expand(gaddr inp, gaddr outp, int32_t cnt, int32_t nch, int32_t which, bool mace3)
+{
+    if (cnt <= 0 || nch < 1 || which < 1 || which > nch)
+        return;
+    uint32_t per = mace3 ? 2 : 1;
+    uint32_t bytes = (uint32_t)cnt * per;
+    uint8_t *in = malloc(bytes);
+    int16_t *pcm = malloc((size_t)cnt * 6 * sizeof *pcm);
+    if (!in || !pcm) {
+        free(in);
+        free(pcm);
+        return;
+    }
+    for (int32_t k = 0; k < cnt; k++) /* this channel's packets */
+        gget(in + (size_t)k * per, inp + ((uint32_t)k * (uint32_t)nch + (uint32_t)(which - 1)) * per, per);
+    size_t frames = mace_decode(in, bytes, 1, mace3, pcm);
+    for (size_t i = 0; i < frames; i++)
+        wr8(outp + (uint32_t)(i * (size_t)nch + (size_t)(which - 1)), (uint8_t)((pcm[i] >> 8) + 128));
+    free(in);
+    free(pcm);
+}
+
+void tb_Exp1to3(gaddr inp, gaddr outp, int32_t cnt, gaddr instatep, gaddr outstatep, int32_t numchannels,
+                int32_t whichchannel)
+{
+    (void)instatep, (void)outstatep;
+    mace_expand(inp, outp, cnt, numchannels, whichchannel, true);
+}
+
+void tb_Exp1to6(gaddr inp, gaddr outp, int32_t cnt, gaddr instatep, gaddr outstatep, int32_t numchannels,
+                int32_t whichchannel)
+{
+    (void)instatep, (void)outstatep;
+    mace_expand(inp, outp, cnt, numchannels, whichchannel, false);
+}

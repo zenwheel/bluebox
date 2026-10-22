@@ -1051,6 +1051,15 @@ static void replace_styled(gaddr teh, const uint8_t *bytes, int n, const tstyle 
     int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
     int len = text_len(teh);
     gaddr h = TERec_hText(te(teh));
+    if (!h || !rd32(h))
+        return;
+    int size = tb_GetHandleSize(h);
+    len = len < 0 ? 0 : len > size ? size : len;
+    /* The selection pinned to the text, as TextEdit pinned it: a program
+     * that set it past the end (Star Patrol, before Cut) would otherwise
+     * move a negative length's worth of bytes. */
+    a = a < 0 ? 0 : a > len ? len : a;
+    b = b < a ? a : b > len ? len : b;
     int newlen = len - (b - a) + n;
     if (newlen > 32767)
         return; /* TextEdit's limit */

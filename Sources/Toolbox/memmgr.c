@@ -991,8 +991,13 @@ bool mm_check_zone(gaddr z)
         }
         if (b_use(b) == USE_REL) {
             gaddr mp = z + b_loc(b);
-            if (rd32(mp) != b + HDR) {
-                log_printf("mm: zone %08X: block %08X master pointer %08X does not point back\n", z, b, mp);
+            /* The top byte may be the handle's flags, set as programs of
+             * the 24-bit days set them (Shufflepuck locks its handles with
+             * BSET #7), harmless to blocks below 16 MB. */
+            uint32_t v = rd32(mp);
+            if (v != b + HDR && ((v & 0x00FFFFFFu) != b + HDR || b + HDR > 0x00FFFFFFu)) {
+                log_printf("mm: zone %08X: block %08X master pointer %08X does not point back (it holds %08X)\n", z, b,
+                           mp, rd32(mp));
                 return false;
             }
         }

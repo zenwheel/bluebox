@@ -676,6 +676,39 @@ uint64_t machine_time_ns(void)
 
 void machine_skip_time(uint64_t ns) { skipped_ns += ns; }
 
+/* QuickDraw's work takes time on the instruction clock as it did on a
+ * Mac (10 ns a pixel, a 68040's fills): a trap counts as one instruction
+ * however much it draws, and a program drawing until the tick changes
+ * (Diamonds' title) otherwise drew a whole screen a few hundred thousand
+ * times a tick and never got on.  The wall clock needs nothing. */
+/* Headless, a program polling TickCount in a tight loop is waiting for
+ * the next tick (Diamonds, between frames): after a few polls the time
+ * to it passes at once, as the wait would on a Mac, rather than tens of
+ * thousands of trips around the loop a tick. */
+void machine_tick_polled(void)
+{
+    static uint64_t last;
+    static int polls;
+    if (events_host_attached() || realtime)
+        return;
+    uint64_t ic = cpu.icount;
+    polls = ic - last < 200 ? polls + 1 : 0;
+    last = ic;
+    if (polls < 8)
+        return;
+    polls = 0;
+    uint64_t now = machine_time_ns();
+    uint64_t next = (now * 60 / 1000000000u + 1) * 1000000000u / 60 + 1;
+    skipped_ns += next - now;
+    machine_advance_ticks();
+}
+
+void machine_charge_pixels(uint64_t n)
+{
+    if (!events_host_attached() && !realtime)
+        skipped_ns += n * 10u;
+}
+
 /* Bring the 60 Hz tick counter up to the machine's time. */
 void machine_advance_ticks(void)
 {

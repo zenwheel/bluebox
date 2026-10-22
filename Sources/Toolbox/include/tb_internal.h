@@ -200,6 +200,10 @@ bool ev_still_down(void);
 uint32_t ev_mouse_global(void);
 uint16_t ev_modifiers(void);
 void ev_wait_tick(void);
+/* Headless, n pixels' worth of QuickDraw time passes (machine.c). */
+void machine_charge_pixels(uint64_t n);
+/* TickCount polled: headless, a tight loop of polls skips to the next tick. */
+void machine_tick_polled(void);
 gaddr wm_window_at(uint32_t p);
 void drag_reset(void); /* Drag Manager (drag.c): a fresh machine */
 void print_reset(void); /* Printing Manager (print.c) */

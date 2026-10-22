@@ -901,7 +901,7 @@ static void track_scroll(gaddr list, gaddr ctl, uint32_t pt, int16_t part, bool 
             tb_LScroll(vertical ? 0 : (int16_t)step, vertical ? (int16_t)step : 0, list);
             next = tb_TickCount() + 4;
         }
-        machine_advance_ticks();
+        ev_wait_tick(); /* a tick passes, headless too: the run's end and scripted input come */
     } while (tb_StillDown());
     tb_HiliteControl(ctl, 0);
 }
@@ -1023,7 +1023,7 @@ int8_t tb_LClick(uint32_t pt, int16_t mods, gaddr list)
             break;
         tb_GetMouse(mp);
         cur = rd32(mp);
-        machine_advance_ticks();
+        ev_wait_tick();
     }
     tb_SetPort(rd32(saved));
     tb_DisposePtr(saved);

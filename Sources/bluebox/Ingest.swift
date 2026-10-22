@@ -405,8 +405,10 @@ func walkFiles(_ root: String) -> [String] {
         guard let d = opendir(dirPath) else { return }
         defer { closedir(d) }
         while let e = readdir(d) {
-            let name = withUnsafeBytes(of: e.pointee.d_name) { raw in
-                String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+            // In place, up to its NUL: readdir's entry is only as long as
+            // its name, so copying the whole d_name field reads past it.
+            let name = withUnsafePointer(to: &e.pointee.d_name) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(e.pointee.d_namlen) + 1) { String(cString: $0) }
             }
             if name == "." || name == ".." { continue }
             let child = rel.isEmpty ? name : rel + "/" + name

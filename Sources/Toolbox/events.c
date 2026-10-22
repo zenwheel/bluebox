@@ -979,6 +979,12 @@ void tb_GetKeys(gaddr keys)
     keys_seen(now);
     pthread_mutex_unlock(&lock);
     gput(keys, now, 16);
+    /* A program waiting for a key by polling (Diamonds' title, which never
+     * calls the Event Manager) is waiting for input: a menu walk takes its
+     * turn.  Nothing else changes, so scripted runs keep their timing. */
+    static const uint8_t none[16];
+    if (!host_attached && g_cpu && !memcmp(now, none, sizeof now))
+        walker_idle(g_cpu->icount);
 }
 
 int32_t tb_GetDblTime(void) { return (int32_t)rd32(LM_DoubleTime); }

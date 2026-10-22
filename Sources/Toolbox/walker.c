@@ -20,17 +20,20 @@
 #include "machine.h"
 #include "tb_internal.h"
 
-/* Instructions between steps (the program's own work), and from the menu
- * bar's first appearance to the first choice (a program's opening, while
- * it keeps its menus disabled: Glider's title). */
-enum { SETTLE = 3000000, WARM_UP = 30000000, WAITS = 18 };
+/* Time between steps (the program's own work), and from the menu bar's
+ * first appearance to the first choice (a program's opening, while it
+ * keeps its menus disabled: Glider's title), in the machine's time, which
+ * drawing moves on as well as instructions (Diamonds draws a screenful
+ * between polls of the keyboard). */
+enum { WAITS = 18 };
+static const uint64_t SETTLE = 300000000, WARM_UP = 3000000000; /* ns */
 
 static bool walking;
 static int menu_i, item_n;  /* the next item to try */
 static int tries;           /* attempts at the dialog in front */
 static int waits;           /* steps with every item left disabled */
 static gaddr left_open;     /* one that stayed: a modeless window, walked past */
-static uint64_t next_at, menus_at;
+static uint64_t next_at, menus_at, started_at;
 static unsigned chosen, dialogs, left;
 static char last[128];
 
@@ -40,7 +43,7 @@ void machine_set_menu_walk(bool on)
     menu_i = 0;
     item_n = 1;
     tries = waits = 0;
-    next_at = menus_at = 0;
+    next_at = menus_at = started_at = 0;
     chosen = dialogs = left = 0;
     left_open = 0;
     snprintf(last, sizeof last, "the start");
@@ -68,8 +71,33 @@ static void say(const char *what)
     fflush(stdout);
 }
 
-void walker_idle(uint64_t now)
+/* The program nudged on from a screen of its own, every other step:
+ * Return, a click, Escape.  False when it has been nudged enough. */
+static bool nudge(void)
 {
+    if (waits >= WAITS)
+        return false;
+    int w = 0, h = 0;
+    switch (waits++ % 6) {
+    case 1: key(0x0D, 0x24, 0); break;
+    case 3:
+        /* Pressed, and let go a while later as scripted input, which a
+         * Toolbox loop tracking the press (LClick) sees too: a program
+         * polling Button finds it down. */
+        machine_screen_size(&w, &h);
+        machine_post_mouse(w / 2, h / 2, 1);
+        machine_script_add(g_cpu->icount + 1000000, 1, w / 2, h / 2, 0); /* scripts go by instructions */
+        break;
+    case 5: key(0x1B, 0x35, 0); break;
+    default: break;
+    }
+    return true;
+}
+
+void walker_idle(uint64_t icount)
+{
+    (void)icount;
+    uint64_t now = machine_time_ns();
     if (!walking || !g_cpu || g_cpu->halted || now < next_at)
         return;
     next_at = now + SETTLE;
@@ -107,8 +135,19 @@ void walker_idle(uint64_t now)
         }
     }
     tries = 0;
-    if (!menu_bar_count())
-        return; /* no menu bar yet: the program is still starting */
+    if (!started_at)
+        started_at = now;
+    if (!menu_bar_count()) {
+        /* No menu bar yet: the program is starting, or showing a title of
+         * its own that waits for a key or a click (Diamonds). */
+        if (now - started_at < WARM_UP || nudge())
+            return;
+        printf("walk: no menu bar appeared\n");
+        fflush(stdout);
+        walking = false;
+        cpu_halt(g_cpu, "menu walk found no menu bar");
+        return;
+    }
     if (!menus_at)
         menus_at = now;
     if (now - menus_at < WARM_UP)
@@ -143,20 +182,8 @@ void walker_idle(uint64_t now)
             return;
         }
     }
-    if (waiting_for && waits < WAITS) {
-        int w = 0, h = 0;
-        switch (waits++ % 6) {
-        case 1: key(0x0D, 0x24, 0); break;
-        case 3: /* pressed for a step, as a program polling Button sees it */
-        case 4:
-            machine_screen_size(&w, &h);
-            machine_post_mouse(w / 2, h / 2, waits % 6 == 4);
-            break;
-        case 5: key(0x1B, 0x35, 0); break;
-        default: break;
-        }
+    if (waiting_for && nudge())
         return;
-    }
     printf("walk: %u items chosen, %u dialogs, %u left open\n", chosen, dialogs, left);
     fflush(stdout);
     walking = false;
