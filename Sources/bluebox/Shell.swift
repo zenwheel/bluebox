@@ -1108,6 +1108,14 @@ func shellCommand(_ args: [String]) -> Never {
     let appItem = NSMenuItem()
     main.addItem(appItem)
     let appMenu = NSMenu()
+    appMenu.addItem(withTitle: "About Blue Box", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                    keyEquivalent: "")
+    appMenu.addItem(.separator())
+    appMenu.addItem(withTitle: "Hide Blue Box", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+    appMenu.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)),
+                    keyEquivalent: "h").keyEquivalentModifierMask = [.command, .option]
+    appMenu.addItem(withTitle: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+    appMenu.addItem(.separator())
     appMenu.addItem(withTitle: "Quit Blue Box", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     appItem.submenu = appMenu
     let fileItem = NSMenuItem()
@@ -1123,10 +1131,25 @@ func shellCommand(_ args: [String]) -> Never {
     fileItem.submenu = file
     let editItem = NSMenuItem()
     main.addItem(editItem)
+    // The standard Edit menu, sent to whatever has the focus (the search
+    // field, the settings' text fields).
     let edit = NSMenu(title: "Edit")
+    edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+    edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z").keyEquivalentModifierMask = [.command, .shift]
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
     edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
     edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    edit.addItem(withTitle: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: "")
+    edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
     editItem.submenu = edit
+    let windowItem = NSMenuItem()
+    main.addItem(windowItem)
+    let window = NSMenu(title: "Window")
+    window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+    window.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+    windowItem.submenu = window
+    NSApp.windowsMenu = window
     return main
 }
 #endif
