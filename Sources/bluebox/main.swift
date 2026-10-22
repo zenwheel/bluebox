@@ -122,7 +122,7 @@ func usage() -> Never {
                      escape, delete or an arrow: left, right, up, down; or shift,
                      option, control or command, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
-                     in a window, wait:N is N/1000 ms and snap:F.png saves the screen
+                     snap:F.png saves the screen; in a window, wait:N is N/1000 ms
       bluebox send [--to PID|SIGNATURE] [--no-wait] odoc|pdoc FILE... | oapp | quit | dosc TEXT | CLASSID [TEXT]
           Send an Apple Event to a running classic application (the only one, or the
           one --to names by process ID or creator): open or print documents, open,
@@ -297,6 +297,10 @@ func queueScript(_ script: [String], start: UInt64) {
         }
         if let (menu, item) = menuStep(step) {
             add(2, Int32(menu), Int32(item), after: 200_000)
+            continue
+        }
+        if step.hasPrefix("snap:") {
+            machine_script_add_snap(at, String(step.dropFirst(5)))
             continue
         }
         // Mouse: down:x/y, move:x/y, up:x/y, click:x/y (press and release),

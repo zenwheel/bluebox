@@ -132,6 +132,8 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
  * -1 unchanged), 2 a menu choice (a = menu ID, b = item), applied once the
  * instruction count reaches at. */
 void machine_script_add(uint64_t at, int kind, int a, int b, int c);
+/* A scripted screenshot at an instruction count (snap:F.png, headless). */
+void machine_script_add_snap(uint64_t at, const char *path);
 /* Tell the Event Manager a host is attached (it may then sleep for input). */
 void machine_attach_host(bool attached);
 

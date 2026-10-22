@@ -113,7 +113,7 @@ void machine_attach_host(bool attached)
 
 typedef struct {
     uint64_t at;
-    int kind; /* 0 key, 1 mouse, 2 menu, 3 key down, 4 key up */
+    int kind; /* 0 key, 1 mouse, 2 menu, 3 key down, 4 key up, 5 screenshot (a: its path's index) */
     int a, b, c;
 } script_step;
 
@@ -124,6 +124,16 @@ void machine_script_add(uint64_t at, int kind, int a, int b, int c)
 {
     script = realloc(script, (size_t)(nscript + 1) * sizeof *script);
     script[nscript++] = (script_step){ at, kind, a, b, c };
+}
+
+static char **snap_paths;
+static int nsnap_paths;
+
+void machine_script_add_snap(uint64_t at, const char *path)
+{
+    snap_paths = realloc(snap_paths, (size_t)(nsnap_paths + 1) * sizeof *snap_paths);
+    snap_paths[nsnap_paths] = strdup(path);
+    machine_script_add(at, 5, nsnap_paths++, 0, 0);
 }
 
 /* The next step not yet applied: its instruction count, or 0. */
@@ -151,6 +161,7 @@ void events_script_pump(uint64_t now)
         case 4: machine_post_key(s.a, s.c, (unsigned)s.b, 0, 0); break; /* released */
         case 1: machine_post_mouse(s.a, s.b, s.c); break;
         case 2: machine_choose_menu((int16_t)s.a, (int16_t)s.b); break;
+        case 5: machine_screenshot(snap_paths[s.a]); break;
         }
     }
 }
