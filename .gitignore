@@ -7,3 +7,4 @@ Software/
 Themes/
 build/
 releases/
+.build-asan/
