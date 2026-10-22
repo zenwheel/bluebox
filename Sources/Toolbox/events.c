@@ -26,6 +26,7 @@ typedef struct {
     uint32_t when;
     uint32_t where;
     uint16_t modifiers;
+    bool menubar; /* a press in the menu bar for a host menu, not yet seen by Button */
 } event;
 
 #define QSIZE 64
@@ -531,6 +532,7 @@ void ev_post_menubar_click(void)
     mouse_v = 1;
     button_down = true;
     enqueue(mouseDown, 0);
+    queue[(qtail + QSIZE - 1) % QSIZE].menubar = true;
     button_down = false;
     enqueue(mouseUp, 0);
     mouse_h = h;
@@ -892,6 +894,18 @@ int8_t tb_Button(void)
      * The button as it is, mouse events waiting or not (a program polling
      * Button never takes them from the queue). */
     bool down = button_now();
+    /* A press in the menu bar for a host menu is over at once, but a
+     * program polling Button sees it, as it would the user's press there:
+     * MacMan's game ends on a press, so that the menus can be used. */
+    if (!down) {
+        pthread_mutex_lock(&lock);
+        for (int i = qhead; !down && i != qtail; i = (i + 1) % QSIZE)
+            if (queue[i].what == mouseDown && queue[i].menubar) {
+                queue[i].menubar = false;
+                down = true;
+            }
+        pthread_mutex_unlock(&lock);
+    }
     if (!down && !host_attached)
         machine_idle();
     return down;

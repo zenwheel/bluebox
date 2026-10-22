@@ -628,14 +628,21 @@ void guest_call(gaddr fn)
 /* ---------------------------------------------------------------------- */
 /* Setup */
 
-/* OS traps with separate glue for their HFS variant: [slot][bit $0200]. */
-static native_fn os_variants[256][2];
+/* OS traps with separate glue for a variant in their flag bits, as
+ * [slot][bits $0600 >> 9]: the HFS variant (bit $0200: PBHOpen beside
+ * PBOpen …), or InsXTime beside InsTime (bit $0400). */
+static native_fn os_variants[256][4];
 
 static void os_variant_native(cpu68k *c, uint16_t tw)
 {
-    native_fn fn = os_variants[tw & 0xFF][(tw & 0x0200) ? 1 : 0];
+    /* Bit $0400 is otherwise a flag of the call (async, sys, clear): the
+     * glue without it, then whichever there is. */
+    unsigned v = (tw >> 9) & 3u;
+    native_fn fn = os_variants[tw & 0xFF][v];
     if (!fn)
-        fn = os_variants[tw & 0xFF][(tw & 0x0200) ? 0 : 1];
+        fn = os_variants[tw & 0xFF][v & 1u];
+    for (unsigned i = 0; !fn && i < 4; i++)
+        fn = os_variants[tw & 0xFF][i];
     fn(c, tw);
 }
 
@@ -658,8 +665,11 @@ void trap_init(void)
         wr32(TB_TRAP_TABLE + i * 4, unimpl_stub);
 
     /* Generated glue for implemented, undispatched traps.  OS traps whose
-     * HFS variant (bit $0200: PBHOpen beside PBOpen …) has its own glue
-     * share a slot, so the slot goes to a native that picks by that bit. */
+     * variant has its own glue share a slot, so the slot goes to a native
+     * that picks by the flag bits.  Picking by bit $0200 alone gave
+     * InsTime InsXTime's glue, and an ordinary task primed again went on
+     * from its last wake-up: MacMan, primed after a three-second pause,
+     * then ran a frame every slice until it had caught up. */
     memset(os_variants, 0, sizeof os_variants);
     for (unsigned i = 0; i < trap_sig_count; i++) {
         const trap_sig *s = &trap_sigs[i];
@@ -671,9 +681,11 @@ void trap_init(void)
             continue;
         }
         unsigned slot = s->trap & 0xFFu;
-        os_variants[slot][(s->trap & 0x0200) ? 1 : 0] = s->glue;
-        native_fn other = os_variants[slot][(s->trap & 0x0200) ? 0 : 1];
-        if (other && other != s->glue)
+        os_variants[slot][(s->trap >> 9) & 3u] = s->glue;
+        bool shared = false;
+        for (unsigned v = 0; v < 4; v++)
+            shared |= os_variants[slot][v] && os_variants[slot][v] != s->glue;
+        if (shared)
             wr32(OS_TRAP_TABLE + slot * 4, native_register(os_variant_native, s->name, (uint16_t)(0xA000 | slot)));
         else
             wr32(OS_TRAP_TABLE + slot * 4, native_register(s->glue, s->name, s->trap));

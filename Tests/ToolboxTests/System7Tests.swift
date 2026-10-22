@@ -833,6 +833,28 @@ extension BlueBox {
             #expect(select.wait(2) == menuChoice(3, 4))
         }
 
+        /// A choice made while the app is busy in a loop of its own (MacMan's
+        /// game): the press shows to Button, as the user's press in the menu
+        /// bar would, and the click comes again after the app flushes it,
+        /// so the choice still reaches MenuSelect.
+        @Test func choiceMadeWhileTheAppIsBusyComesLater() {
+            launchTestApp()
+            setUpMenus()
+            machine_menu_tracking_begin()
+            machine_choose_menu(3, 4)
+            machine_menu_tracking_end()
+            #expect(tb_Button() != 0)
+            #expect(tb_Button() == 0)                    // once
+            tb_FlushEvents(-1, 0)
+            machine_skip_time(500_000_000)
+            machine_advance_ticks()
+            let evt = tb_NewPtr(16, false, true)
+            #expect(tb_GetNextEvent(-1, evt) != 0)
+            #expect(rd16(evt) == 1)                      // mouseDown, in the menu bar
+            let select = menuSelectInBackground()
+            #expect(select.wait(2) == menuChoice(3, 4))
+        }
+
         @Test func closingWithoutAChoiceReturnsZero() {
             launchTestApp()
             setUpMenus()

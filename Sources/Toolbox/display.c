@@ -287,7 +287,15 @@ void machine_menu_tracking_end(void)
         track_done = true;
         pthread_cond_broadcast(&track_cond);
     } else {
-        tracking = false; /* the app has not got there yet: any choice stays pending */
+        /* The app has not got there yet: any choice stays pending, and the
+         * click is posted again while it waits.  MacMan's game loop never
+         * takes events and flushes them when the game ends, which lost the
+         * click, and the item chosen (Set Keys) never came. */
+        tracking = false;
+        if (pending_choice) {
+            choice_clicks = 1;
+            choice_click_ticks = rd32(LM_Ticks);
+        }
     }
     pthread_mutex_unlock(&lock);
 }

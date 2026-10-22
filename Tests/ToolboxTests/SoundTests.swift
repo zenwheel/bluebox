@@ -137,6 +137,34 @@ extension BlueBox {
             #expect(abs((Self.played.first?.rate ?? 0) - 22254.5) < 1)
         }
 
+        /// freqCmd changes the pitch and takes none of the channel's time:
+        /// MacMan sends one a frame for its siren, and waited in SndDoCommand
+        /// once they filled the queue.  A noteCmd after them plays at once.
+        @Test func freqCmdTakesNoTime() {
+            launchTestApp()
+            install()
+            defer { machine_set_sound_handler(nil, nil) }
+            let chanp = tb_NewPtr(4, false, true)
+            #expect(tb_SndNewChannel(chanp, 3, 0, 0) == 0)       // waveTableSynth
+            let chan = rd32(chanp)
+            let cmd = tb_NewPtr(8, false, true)
+            let start = machine_time_ns()
+            for i in 0..<300 {
+                wr16(cmd, 42)                                    // freqCmd
+                wr32(cmd + 4, UInt32(60 + i % 12))
+                #expect(tb_SndDoCommand(chan, cmd, 0) == 0)
+            }
+            #expect(machine_time_ns() - start < 1_000_000)
+            #expect(Self.played.count == 300)
+            wr16(cmd, 40)                                        // noteCmd: half a second
+            wr16(cmd + 2, 1000)
+            wr32(cmd + 4, 69)
+            #expect(tb_SndDoCommand(chan, cmd, 0) == 0)
+            #expect(Self.played.count == 301)
+            #expect(abs(Double(Self.played.last?.frames ?? 0) / (Self.played.last?.rate ?? 1) - 0.5) < 0.01)
+            #expect(tb_SndDisposeChannel(chan, 1) == 0)
+        }
+
         /// SetupSndHeader builds a 'snd ' a program fills with samples and plays.
         @Test func setupSndHeaderMakesAPlayableSound() {
             launchTestApp()
