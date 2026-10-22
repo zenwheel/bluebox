@@ -2,16 +2,21 @@
  * Speech Manager (MacinTalk).
  *
  * Channels keep their voice, rate, pitch, volume, modes and callbacks here;
- * the host speaks (macOS: NSSpeechSynthesizer, which understands the
- * classic embedded commands and still has the classic voices) and reports
- * words and the end of each utterance.  Callbacks reach the program at the
- * Event Manager's safe points.  Without a host an utterance ends at the
- * next safe point, so headless runs see the same sequence of calls.
+ * the host speaks and reports words and the end of each utterance.  Every
+ * classic voice speaks with the host's system voice: programs look voices
+ * up by name or VoiceSpec and give up if theirs is missing (Mouth wants
+ * "Victoria, high quality"), so all of them are here and any VoiceSpec at
+ * all opens a channel.  macOS no longer reports phonemes, so a channel's
+ * phoneme callbacks are made up from each word as it is spoken.  Callbacks
+ * reach the program at the Event Manager's safe points.  Without a host an
+ * utterance ends at the next safe point, so headless runs see the same
+ * sequence of calls.
  */
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "forks.h"
 #include "machine.h"
@@ -23,7 +28,8 @@ enum { voiceNotFound = -244, siUnknownInfoType = -231 };
 #define FIXED(x) ((int32_t)((x) * 65536))
 
 /* The classic voices (MacinTalk 3 and Pro), in GetIndVoice order: creator
- * 'gala', IDs of our own, and the host voice that stands for each. */
+ * 'gala' and IDs of our own.  All of them speak with the host's voice; the
+ * name only tells the program what it found. */
 static const struct {
     const char *name;
     int16_t gender; /* 0 neuter, 1 male, 2 female */
@@ -35,11 +41,17 @@ static const struct {
     { "Hysterical", 1, 30 }, { "Junior", 1, 8 },    { "Kathy", 2, 30 },    { "Pipe Organ", 0, 0 },
     { "Princess", 2, 8 },  { "Ralph", 1, 50 },      { "Trinoids", 0, 0 },  { "Victoria", 2, 35 },
     { "Whisper", 0, 0 },   { "Zarvox", 0, 0 },
+    /* MacinTalk Pro's, after the others so that their IDs stay put. */
+    { "Agnes, high quality", 2, 35 }, { "Bruce, high quality", 1, 30 }, { "Victoria, high quality", 2, 35 },
 };
 #define NVOICES ((int)(sizeof voices / sizeof voices[0]))
 #define VOICE_CREATOR 0x67616C61u /* 'gala' */
 #define DEFAULT_VOICE 10            /* Fred */
 
+/* Any VoiceSpec is a voice: one of ours, or else the default, since they
+ * all sound the same and a program that names a voice we don't list (a
+ * third-party synthesizer's, or one it remembers from another Mac) would
+ * otherwise not speak at all. */
 static int voice_index(gaddr spec)
 {
     if (!spec)
@@ -47,8 +59,94 @@ static int voice_index(gaddr spec)
     uint32_t creator = rd32(spec);
     int32_t id = (int32_t)rd32(spec + 4);
     if (creator != VOICE_CREATOR || id < 1 || id > NVOICES)
-        return -1;
+        return DEFAULT_VOICE;
     return id - 1;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Phonemes made up from the spoken words */
+
+/* The MacinTalk phoneme opcodes (American English). */
+enum {
+    PH_SILENCE, PH_BREATH, PH_AE, PH_EY, PH_AO, PH_AX, PH_IY, PH_EH, PH_IH, PH_AY, PH_IX, PH_AA, PH_UW, PH_UH,
+    PH_UX, PH_OW, PH_AW, PH_OY, PH_b, PH_C, PH_d, PH_D, PH_f, PH_g, PH_h, PH_J, PH_k, PH_l, PH_m, PH_n, PH_N,
+    PH_p, PH_r, PH_s, PH_S, PH_t, PH_T, PH_v, PH_w, PH_y, PH_z, PH_Z,
+};
+
+static bool vowel(int ch) { return ch == 'a' || ch == 'e' || ch == 'i' || ch == 'o' || ch == 'u'; }
+
+/* A word's phonemes by rough letter-to-sound rules: enough to move a
+ * cartoon mouth (closed for m, b and p, round for o and w ...), not to
+ * speak with. */
+static int word_phonemes(const uint8_t *text, int len, uint8_t *out, int max)
+{
+    static const struct {
+        const char *letters;
+        uint8_t ph[2];
+    } groups[] = {
+        { "tch", { PH_C } }, { "igh", { PH_AY } }, { "sh", { PH_S } },  { "ch", { PH_C } },  { "th", { PH_T } },
+        { "ph", { PH_f } },  { "ng", { PH_N } },   { "ck", { PH_k } },  { "wh", { PH_w } },  { "qu", { PH_k, PH_w } },
+        { "ee", { PH_IY } }, { "ea", { PH_IY } },  { "ie", { PH_IY } }, { "oo", { PH_UW } }, { "ou", { PH_AW } },
+        { "ow", { PH_AW } }, { "oi", { PH_OY } },  { "oy", { PH_OY } }, { "ai", { PH_EY } }, { "ay", { PH_EY } },
+        { "ei", { PH_EY } }, { "ey", { PH_EY } },  { "au", { PH_AO } }, { "aw", { PH_AO } }, { "oa", { PH_OW } },
+    };
+    static const uint8_t single[26] = {
+        PH_AE, PH_b, PH_k, PH_d, PH_EH, PH_f, PH_g, PH_h, PH_IH, PH_J, PH_k, PH_l, PH_m,
+        PH_n, PH_AA, PH_p, PH_k, PH_r, PH_s, PH_t, PH_AX, PH_v, PH_w, PH_k, PH_IY, PH_z,
+    };
+    char w[64];
+    int n = 0;
+    for (int i = 0; i < len && n < (int)sizeof w; i++)
+        if ((text[i] | 0x20) >= 'a' && (text[i] | 0x20) <= 'z')
+            w[n++] = (char)(text[i] | 0x20);
+    int vowels = 0;
+    for (int i = 0; i < n; i++)
+        vowels += vowel(w[i]);
+    int k = 0;
+    for (int i = 0; i < n && k < max;) {
+        size_t g = 0;
+        for (; g < sizeof groups / sizeof groups[0]; g++) {
+            size_t gl = strlen(groups[g].letters);
+            if (i + (int)gl <= n && !memcmp(w + i, groups[g].letters, gl))
+                break;
+        }
+        if (g < sizeof groups / sizeof groups[0]) {
+            for (int j = 0; j < 2 && groups[g].ph[j] && k < max; j++)
+                out[k++] = groups[g].ph[j];
+            i += (int)strlen(groups[g].letters);
+            continue;
+        }
+        int ch = w[i];
+        if (i > 0 && ch == w[i - 1] && !vowel(ch)) { /* a doubled consonant is one sound */
+            i++;
+            continue;
+        }
+        if (ch == 'e' && i == n - 1 && i > 0) { /* final e: silent, unless it is the only vowel (he, the) */
+            if (vowels == 1)
+                out[k++] = PH_IY;
+            i++;
+            continue;
+        }
+        if (ch == 'c' && i + 1 < n && (w[i + 1] == 'e' || w[i + 1] == 'i' || w[i + 1] == 'y'))
+            out[k++] = PH_s;
+        else if (ch == 'y' && i == 0)
+            out[k++] = PH_y;
+        else if (ch == 'x') {
+            out[k++] = PH_k;
+            if (k < max)
+                out[k++] = PH_s;
+        } else
+            out[k++] = single[ch - 'a'];
+        i++;
+    }
+    return k;
+}
+
+static double now_seconds(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + ts.tv_nsec / 1e9;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -66,6 +164,12 @@ typedef struct {
     bool busy, paused;
     gaddr text;     /* the text being spoken (the program's buffer) */
     uint32_t text_len;
+    /* The current word's made-up phonemes, said one by one as time passes;
+     * none once the host has reported phonemes of its own. */
+    uint8_t ph[64];
+    int nph, iph;
+    double ph_next, ph_step;
+    bool host_phonemes, said_phonemes;
 } channel;
 
 static channel channels[MAX_CHANNELS];
@@ -140,6 +244,47 @@ static void host_request(channel *c, int op, const char *text)
 
 enum { EV_DONE, EV_WORD, EV_SYNC, EV_PHONEME };
 
+/* PhonemeCallBack(chan, refCon, phonemeOpcode) */
+static void say_phoneme(channel *c, int opcode)
+{
+    cpu_push32(g_cpu, c->chan);
+    cpu_push32(g_cpu, (uint32_t)c->refcon);
+    cpu_push16(g_cpu, (uint16_t)opcode);
+    guest_call(c->phoneme_proc);
+}
+
+/* The made-up phonemes that are due, or all of them. */
+static void phonemes_due(channel *c, bool all)
+{
+    double now = all ? 0 : now_seconds();
+    while (c->iph < c->nph && c->phoneme_proc && (all || now >= c->ph_next)) {
+        say_phoneme(c, c->ph[c->iph++]);
+        c->ph_next += c->ph_step;
+        c->said_phonemes = true;
+    }
+    if (c->iph >= c->nph || !c->phoneme_proc)
+        c->nph = c->iph = 0;
+}
+
+/* A word is starting: the last one's phonemes are over, and this one's
+ * are spread over most of the time a word takes at the channel's rate. */
+static void word_started(channel *c, int32_t pos, int32_t len)
+{
+    phonemes_due(c, true);
+    if (!c->phoneme_proc || c->host_phonemes || pos < 0 || len <= 0 || (uint32_t)pos >= c->text_len)
+        return;
+    uint8_t w[64];
+    uint32_t n = (uint32_t)len < sizeof w ? (uint32_t)len : sizeof w;
+    if (n > c->text_len - (uint32_t)pos)
+        n = c->text_len - (uint32_t)pos;
+    gget(w, c->text + (uint32_t)pos, n);
+    c->nph = word_phonemes(w, (int)n, c->ph, (int)sizeof c->ph);
+    c->iph = 0;
+    double wpm = c->rate > 0 ? c->rate / 65536.0 : 180;
+    c->ph_step = c->nph ? 60.0 / wpm * 0.8 / c->nph : 0;
+    c->ph_next = now_seconds();
+}
+
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 typedef struct {
     int channel, kind;
@@ -162,6 +307,11 @@ static void finish(channel *c)
         return;
     c->busy = false;
     c->paused = false;
+    /* The rest of the made-up phonemes, then the silence that closes the mouth. */
+    phonemes_due(c, true);
+    if (c->said_phonemes && c->phoneme_proc && !c->host_phonemes)
+        say_phoneme(c, PH_SILENCE);
+    c->said_phonemes = false;
     if (c->text_done_proc) { /* TextDone(chan, refCon, &nextBuf, &byteLen, &controlFlags) */
         gaddr out = tb_NewPtr(12, true, true);
         cpu_push32(g_cpu, c->chan);
@@ -204,13 +354,16 @@ void speech_pump(void)
             finish(c);
             break;
         case EV_WORD: /* WordCallBack(chan, refCon, wordPos, wordLen) */
-            if (c->word_proc && c->busy) {
+            if (!c->busy)
+                break;
+            if (c->word_proc) {
                 cpu_push32(g_cpu, c->chan);
                 cpu_push32(g_cpu, (uint32_t)c->refcon);
                 cpu_push32(g_cpu, (uint32_t)evs[i].a);
                 cpu_push16(g_cpu, (uint16_t)evs[i].b);
                 guest_call(c->word_proc);
             }
+            word_started(c, evs[i].a, evs[i].b);
             break;
         case EV_SYNC: /* SyncCallBack(chan, refCon, syncMessage) */
             if (c->sync_proc && c->busy) {
@@ -220,16 +373,17 @@ void speech_pump(void)
                 guest_call(c->sync_proc);
             }
             break;
-        case EV_PHONEME: /* PhonemeCallBack(chan, refCon, phonemeOpcode) */
-            if (c->phoneme_proc && c->busy) {
-                cpu_push32(g_cpu, c->chan);
-                cpu_push32(g_cpu, (uint32_t)c->refcon);
-                cpu_push16(g_cpu, (uint16_t)evs[i].a);
-                guest_call(c->phoneme_proc);
-            }
+        case EV_PHONEME: /* the host's own: no more made-up ones */
+            c->host_phonemes = true;
+            c->nph = c->iph = 0;
+            if (c->phoneme_proc && c->busy)
+                say_phoneme(c, evs[i].a);
             break;
         }
     }
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (channels[i].chan && channels[i].busy && !channels[i].paused && channels[i].nph)
+            phonemes_due(&channels[i], false);
 }
 
 void speech_reset(void)
@@ -250,6 +404,8 @@ static int16_t speak(channel *c, gaddr text, uint32_t len)
         host_request(c, MACHINE_SPEECH_STOP, NULL);
     c->busy = len > 0;
     c->paused = false;
+    c->nph = c->iph = 0;
+    c->said_phonemes = false;
     c->text = text;
     c->text_len = len;
     if (!len)
@@ -329,8 +485,6 @@ static void describe(int v, gaddr info, int32_t len)
 int16_t tb_GetVoiceDescription(gaddr voice, gaddr info, int32_t infoLength)
 {
     int v = voice_index(voice);
-    if (v < 0)
-        return voiceNotFound;
     if (info && infoLength > 0)
         describe(v, info, infoLength);
     return noErr;
@@ -339,8 +493,6 @@ int16_t tb_GetVoiceDescription(gaddr voice, gaddr info, int32_t infoLength)
 int16_t tb_GetVoiceInfo(gaddr voice, int32_t selector, gaddr voiceInfo)
 {
     int v = voice_index(voice);
-    if (v < 0)
-        return voiceNotFound;
     if (!voiceInfo)
         return paramErr;
     if ((uint32_t)selector == 0x696E666Fu) { /* 'info': VoiceDescription */
@@ -358,8 +510,6 @@ int16_t tb_GetVoiceInfo(gaddr voice, int32_t selector, gaddr voiceInfo)
 int16_t tb_NewSpeechChannel(gaddr voice, gaddr chan)
 {
     int v = voice_index(voice);
-    if (v < 0)
-        return voiceNotFound;
     channel *c = new_channel(v);
     if (!c)
         return memFullErr;
@@ -419,6 +569,7 @@ int16_t tb_StopSpeech(gaddr chan)
     if (c->busy) {
         host_request(c, MACHINE_SPEECH_STOP, NULL);
         c->busy = c->paused = false;
+        c->nph = c->iph = 0;
     }
     return noErr;
 }
@@ -546,13 +697,9 @@ int16_t tb_SetSpeechInfo(gaddr chan, int32_t selector, gaddr info)
     case 0x72736574u: /* 'rset' */
         defaults(c, c->voice);
         return noErr;
-    case 0x6376786Fu: { /* 'cvox' */
-        int v = voice_index(info);
-        if (v < 0)
-            return voiceNotFound;
-        c->voice = v;
+    case 0x63766F78u: /* 'cvox' */
+        c->voice = voice_index(info);
         return noErr;
-    }
     default:
         return siUnknownInfoType;
     }
