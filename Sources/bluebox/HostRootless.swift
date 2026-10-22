@@ -346,7 +346,9 @@ final class TransientView: NSView {
 
     func tick() {
         if machine_halted() {
+            timer?.invalidate() /* one report, not one each tick */
             relaunchAtWantedDepth()
+            reportUnexpectedStop()
             NSApp.terminate(nil)
             return
         }

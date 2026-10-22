@@ -55,7 +55,9 @@ final class ScreenView: NSView, MacScreenView {
                 CursorSync.shared.tick()
                 DragOut.shared.tick()
                 if machine_halted() {
+                    self?.timer?.invalidate() /* one report, not one each tick */
                     relaunchAtWantedDepth()
+                    reportUnexpectedStop()
                     NSApp.terminate(nil)
                 }
             }

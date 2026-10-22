@@ -705,6 +705,7 @@ func runCommand(_ args: [String]) {
         }
     }
     if interactive {
+        runningApp = app
         let title = (app as NSString).lastPathComponent
         let script = keyScript
         let icons = finderBundle(applicationAt: app).appIcons
@@ -815,6 +816,45 @@ nonisolated(unsafe) var depthRelaunch: (app: String, save: Bool)?
 /// After the machine stops: if the program asked for another screen depth
 /// (machine_wanted_depth), keep that as its setting and start it again at
 /// that depth, in this process.  Returns only if it didn't ask.
+/// The application a windowed run is running, for reporting its stop.
+nonisolated(unsafe) var runningApp = ""
+
+/// A windowed run's program stopped: a quit (ExitToShell, main returning)
+/// says nothing; anything else is said in an alert, as a Mac said "… has
+/// unexpectedly quit", and written to ~/Library/Logs/Blue Box/Blue Box.log
+/// with the application, so the reason outlives the window.
+func reportUnexpectedStop() {
+    let reason = String(cString: machine_halt_reason())
+    guard !reason.hasPrefix("ExitToShell") else { return }
+    let name = (runningApp as NSString).lastPathComponent
+    let logs = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Logs/Blue Box")
+    let log = (logs as NSString).appendingPathComponent("Blue Box.log")
+    try? FileManager.default.createDirectory(atPath: logs, withIntermediateDirectories: true)
+    let line = "\(ISO8601DateFormatter().string(from: Date())) \(runningApp): stopped: \(reason)\n"
+    if let h = FileHandle(forWritingAtPath: log) {
+        h.seekToEndOfFile()
+        h.write(Data(line.utf8))
+        h.closeFile()
+    } else {
+        FileManager.default.createFile(atPath: log, contents: Data(line.utf8))
+    }
+    eprint("stopped: \(reason)\n")
+    #if canImport(AppKit)
+    MainActor.assumeIsolated {
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "\(name) has unexpectedly quit."
+        alert.informativeText = "\(reason)\n\nThis is noted in ~/Library/Logs/Blue Box/Blue Box.log."
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Show Log")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertSecondButtonReturn {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: log)])
+        }
+    }
+    #endif
+}
+
 func relaunchAtWantedDepth() {
     let depth = Int(machine_wanted_depth())
     guard depth > 0, let (app, save) = depthRelaunch, let me = Bundle.main.executablePath else { return }
