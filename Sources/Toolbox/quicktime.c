@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 #include <zlib.h>
 
@@ -2246,3 +2247,71 @@ int16_t tb_EndFullScreen(int32_t fullState, int32_t flags)
     return noErr;
 }
 
+
+/* ---------------------------------------------------------------------- */
+/* bluebox movie-speed: how fast our decoders play a movie.  Its pictures
+ * and sound are decoded back to back from start to end, as playing it
+ * would, and timed against its own length. */
+
+static uint32_t mvhd_ms(const uint8_t *moov, uint32_t len)
+{
+    for (uint32_t at = 8; at + 8 <= len;) {
+        uint32_t size = be32(moov + at);
+        if (size < 8 || at + size > len)
+            break;
+        if (!memcmp(moov + at + 4, "mvhd", 4) && size >= 28) {
+            uint32_t scale = be32(moov + at + 20), duration = be32(moov + at + 24);
+            return scale ? (uint32_t)((uint64_t)duration * 1000 / scale) : 0;
+        }
+        at += size;
+    }
+    return 0;
+}
+
+bool machine_movie_speed(const char *path, machine_movie_speed_result *r, char *err, size_t errlen)
+{
+    memset(r, 0, sizeof *r);
+    uint32_t len = 0;
+    int16_t id = 0;
+    uint8_t *moov = moov_resource(path, &id, &len);
+    if (!moov)
+        moov = moov_in_data(path, 0, &len);
+    if (moov)
+        moov = uncompress_moov(moov, &len);
+    if (!moov) {
+        snprintf(err, errlen, "no movie in %s", path);
+        return false;
+    }
+    r->length_ms = mvhd_ms(moov, len);
+    qt_native *p = qt_native_open(moov, len, path, 600, NULL, 0);
+    free(moov);
+    if (!p) {
+        snprintf(err, errlen, "a track our decoders don't play (VLC would)");
+        return false;
+    }
+    r->video = qt_native_has_video(p);
+    r->sound = qt_native_has_sound(p);
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    uint32_t serial = 0;
+    uint8_t *rgba = NULL;
+    int w = 0, h = 0;
+    for (int64_t ms = 0; ms < r->length_ms; ms += 100) {
+        for (int64_t f = ms; r->video && f < ms + 100; f += 5)
+            if (qt_native_frame(p, f, &serial, &rgba, &w, &h))
+                r->frames++;
+        int16_t *pcm = NULL;
+        int ch = 0;
+        double rate = 0;
+        if (r->sound)
+            qt_native_sound(p, ms, ms + 100, &pcm, &ch, &rate);
+        free(pcm);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    free(rgba);
+    qt_native_close(p);
+    r->width = w;
+    r->height = h;
+    r->decode_ms = (double)(t1.tv_sec - t0.tv_sec) * 1000 + (double)(t1.tv_nsec - t0.tv_nsec) / 1e6;
+    return true;
+}

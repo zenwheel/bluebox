@@ -166,6 +166,10 @@ func usage() -> Never {
           List the themes (Kaleidoscope schemes) in the library.
       bluebox rsrc <file>
           List the resources in a file (AppleDouble or MacBinary).
+      bluebox movie-speed <movie>...
+          Decode a QuickTime movie's pictures and sound with Blue Box's own
+          decoders, back to back, and say how many times faster than real time
+          that is (1x or better plays at full frame rate).
       bluebox inspect <file> [--export dir] [--type T] [--id N]
           List a file's resources (AppleDouble or MacBinary, or an application
           as bluebox apps lists it) with what they hold: strings, picture and
@@ -1278,6 +1282,31 @@ let argv = Array(CommandLine.arguments.dropFirst()).filter { !$0.hasPrefix("-psn
 // Blue Box.app opened from the Finder or the Dock: the shell.
 if argv.isEmpty && Bundle.main.bundleIdentifier == shellBundleIdentifier { shellCommand([]) }
 #endif
+/// bluebox movie-speed <movie>...: how many times faster than the movie
+/// plays our decoders decode it (1x or better is full frame rate).
+func movieSpeedCommand(_ args: [String]) {
+    guard !args.isEmpty else { usage() }
+    var slow = false
+    for path in args {
+        var r = machine_movie_speed_result()
+        var err = [CChar](repeating: 0, count: 256)
+        let name = (path as NSString).lastPathComponent
+        guard machine_movie_speed(path, &r, &err, err.count) else {
+            print("\(name): \(str(err))")
+            continue
+        }
+        let seconds = Double(r.length_ms) / 1000
+        let speed = r.decode_ms > 0 ? seconds * 1000 / r.decode_ms : .infinity
+        let fps = seconds > 0 ? Double(r.frames) / seconds : 0
+        let what = [r.video ? "\(r.width)x\(r.height), \(r.frames) frames (\(String(format: "%.1f", fps)) a second)" : nil,
+                    r.sound ? "sound" : nil].compactMap { $0 }.joined(separator: ", ")
+        print("\(name): \(String(format: "%.1f", seconds)) s, \(what): decoded in \(String(format: "%.0f", r.decode_ms)) ms, "
+              + "\(String(format: "%.1f", speed))x real time")
+        if speed < 1 { slow = true }
+    }
+    exit(slow ? 1 : 0)
+}
+
 guard let command = argv.first else { usage() }
 let rest = Array(argv.dropFirst())
 switch command {
@@ -1293,6 +1322,7 @@ case "rsrc": rsrcCommand(rest)
 case "inspect": inspectCommand(rest)
 case "themes": themesCommand(rest)
 case "fonts": fontsCommand(rest)
+case "movie-speed": movieSpeedCommand(rest)
 case "bpf-helper": /* run as root by bridged AppleTalk: not for people */
     guard rest.count == 2 else { usage() }
     exit(machine_bpf_helper(rest[0], rest[1]))

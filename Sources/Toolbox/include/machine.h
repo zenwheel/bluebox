@@ -438,6 +438,16 @@ void machine_set_url_handler(machine_url_fn fn, void *ctx);
  * settings): key as Internet Config names it ("Email", "UseHTTPProxy",
  * "HTTPProxyHost"), data in its format (a Pascal string in MacRoman, a
  * Boolean byte, a STR# list).  Set before or while the machine runs. */
+/* bluebox movie-speed: a movie's pictures and sound decoded by our own
+ * decoders back to back; false (and why) when they don't play it. */
+typedef struct {
+    uint32_t length_ms;          /* the movie's length */
+    uint32_t frames;             /* distinct pictures */
+    int width, height;
+    bool video, sound;
+    double decode_ms;            /* the time decoding all of it took */
+} machine_movie_speed_result;
+bool machine_movie_speed(const char *path, machine_movie_speed_result *r, char *err, size_t errlen);
 void machine_set_internet_pref(const char *key, const uint8_t *data, int32_t len);
 
 /* ---- Color Picker ----
