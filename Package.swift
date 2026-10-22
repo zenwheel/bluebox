@@ -14,6 +14,10 @@ let package = Package(
     products: [
         .executable(name: "bluebox", targets: ["bluebox"]),
     ],
+    dependencies: [
+        // Software updates for Blue Box.app's shell (macOS only).
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
+    ],
     targets: [
         // Guest memory arena, logging, generated low-memory and struct definitions.
         .target(name: "CCore", cSettings: warnings),
@@ -36,7 +40,16 @@ let package = Package(
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
         .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
         // Command-line tool: run, import, install, apps, rsrc, inspect.
-        .executableTarget(name: "bluebox", dependencies: ["BlueBoxHost", "Toolbox", "ForkStore", "CCore"]),
+        // Sparkle is weakly linked: the program also runs on its own, outside
+        // Blue Box.app (copied onto the PATH), where there is no framework;
+        // in the app it is found in Contents/Frameworks.
+        .executableTarget(name: "bluebox",
+                          dependencies: ["BlueBoxHost", "Toolbox", "ForkStore", "CCore",
+                                         .product(name: "Sparkle", package: "Sparkle",
+                                                  condition: .when(platforms: [.macOS]))],
+                          linkerSettings: [.unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "Sparkle",
+                                                         "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"],
+                                                        .when(platforms: [.macOS]))]),
         // Runner for the SingleStepTests CPU vectors (test-only).
         .target(name: "CPUTestSupport", dependencies: ["CPU68K", "CCore"], path: "Tests/CPUTestSupport",
                 cSettings: warnings),

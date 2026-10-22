@@ -12,6 +12,9 @@
 import AppKit
 import BlueBoxHost
 import SwiftUI
+#if canImport(Sparkle)
+import Sparkle
+#endif
 
 /// An application the shell can launch.
 struct ShellApp: Identifiable, Hashable {
@@ -988,12 +991,33 @@ struct HighlightPicker: View {
 
 // MARK: - The application
 
-@MainActor final class ShellDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+@MainActor final class ShellDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
     var window: NSWindow?
     var statusItem: NSStatusItem?
     let model = ShellModel()
+#if canImport(Sparkle)
+    /// Software updates: only the shell checks for them, and only in
+    /// Blue Box.app, whose Info.plist names the feed and whose Frameworks
+    /// folder holds Sparkle (weakly linked: a copy of the program on the
+    /// PATH runs without it).  Started once the shell has launched.
+    let updates: SPUStandardUpdaterController? =
+        Bundle.main.bundleIdentifier == shellBundleIdentifier
+            && Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil
+            && NSClassFromString("SPUStandardUpdaterController") != nil
+        ? SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil) : nil
+#endif
+    var checksForUpdates: Bool {
+#if canImport(Sparkle)
+        return updates != nil
+#else
+        return false
+#endif
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+#if canImport(Sparkle)
+        updates?.startUpdater()
+#endif
         showWindow()
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Blue Box")
@@ -1051,6 +1075,19 @@ struct HighlightPicker: View {
     @objc func importFiles(_ sender: Any?) { model.chooseImport() }
     @objc func importFonts(_ sender: Any?) { model.chooseFontImport() }
     @objc func refreshLibrary(_ sender: Any?) { model.refresh() }
+    @objc func checkForUpdates(_ sender: Any?) {
+#if canImport(Sparkle)
+        updates?.checkForUpdates(sender)
+#endif
+    }
+
+    /// Check for Updates… is dimmed while a check or an install is under way.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+#if canImport(Sparkle)
+        if item.action == #selector(checkForUpdates(_:)) { return updates?.updater.canCheckForUpdates ?? false }
+#endif
+        return true
+    }
 
     /// Clicking the Dock icon brings the window back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -1101,19 +1138,24 @@ func shellCommand(_ args: [String]) -> Never {
         app.applicationIconImage = blueBoxIconImage()
         let delegate = ShellDelegate()
         app.delegate = delegate
-        app.mainMenu = shellMenu()
+        app.mainMenu = shellMenu(updates: delegate.checksForUpdates)
         withExtendedLifetime(delegate) { app.run() }
     }
     exit(0)
 }
 
-@MainActor private func shellMenu() -> NSMenu {
+@MainActor private func shellMenu(updates: Bool) -> NSMenu {
     let main = NSMenu()
     let appItem = NSMenuItem()
     main.addItem(appItem)
     let appMenu = NSMenu()
     appMenu.addItem(withTitle: "About Blue Box", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                     keyEquivalent: "")
+    if updates {
+        // Sent up the responder chain to the application's delegate.
+        appMenu.addItem(withTitle: "Check for Updates…", action: #selector(ShellDelegate.checkForUpdates(_:)),
+                        keyEquivalent: "")
+    }
     appMenu.addItem(.separator())
     appMenu.addItem(withTitle: "Hide Blue Box", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
     appMenu.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)),
