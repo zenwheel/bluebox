@@ -62,6 +62,8 @@ void hrgn_add_row(hrgn *r, int y, int x0, int x1);
 void hrgn_add_runs(hrgn *r, int y, const int16_t *x, int n);
 /* Build from a per-row list of intervals: rows[y - top] = {x0, x1} (empty if x0 >= x1). */
 void hrgn_from_rows(hrgn *r, int top, int nrows, const int16_t (*rows)[2]);
+/* The area inside edges {h0, v0, h1, v1}, even-odd, sampled at row centres. */
+void hrgn_even_odd(hrgn *out, const int (*edges)[4], int n);
 
 /* Guest region handles. */
 void rgn_read(gaddr rh, hrgn *out);

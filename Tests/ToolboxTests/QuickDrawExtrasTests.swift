@@ -237,6 +237,32 @@ extension BlueBox {
             tb_KillPoly(poly)
         }
 
+        /// Lines drawn while a region is open bound it, as polygons do, and
+        /// draw nothing: the pen is hidden until CloseRgn (Shards erases its
+        /// flying pieces through regions made of their edges).
+        @Test func openRegionLinesEncloseTheirInside() {
+            _ = offscreen()
+            tb_EraseRect(rect(0, 0, 40, 40))
+            let rgn = tb_NewRgn()
+            tb_OpenRgn()
+            tb_MoveTo(5, 5)
+            tb_LineTo(35, 5)
+            tb_LineTo(5, 35)
+            tb_LineTo(5, 5)
+            tb_FrameRect(rect(20, 20, 30, 30)) // exclusive-or with the rest
+            tb_CloseRgn(rgn)
+            func inside(_ h: Int, _ v: Int) -> Bool { tb_PtInRgn(UInt32(v) << 16 | UInt32(h), rgn) != 0 }
+            #expect(inside(8, 8))     // inside the triangle
+            #expect(!inside(30, 12))  // beyond the diagonal
+            #expect(inside(25, 25))   // inside the framed square only
+            #expect(!inside(25, 18))  // ...but not above it
+            #expect(!black(5, 5) && !black(20, 5)) // nothing drawn
+            tb_MoveTo(0, 38)
+            tb_LineTo(39, 38)
+            #expect(black(10, 38))    // the pen shows again
+            tb_DisposeRgn(rgn)
+        }
+
         @Test func rectProcBottleneckSeesCalls() {
             _ = offscreen()
             let port = tb_NewPtr(4, false, true)
