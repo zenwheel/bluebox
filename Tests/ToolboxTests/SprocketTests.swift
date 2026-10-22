@@ -111,7 +111,7 @@ extension BlueBox {
         }
 
         /// An x axis follows the mouse as a joystick: pushed by its motion
-        /// since the last read (16 pixels to the end, more kept for later
+        /// since the last read (32 pixels to the end, more kept for later
         /// reads), back in the middle when it stops; keys held override it.
         /// Only once the game has turned the mouse on.
         @Test func axesFollowTheMouseAsAJoystick() {
@@ -122,18 +122,22 @@ extension BlueBox {
             writeNeeds([("Move", "axis", "xaxi", 0)])
             #expect(isp("ISpElement_NewVirtualFromNeeds", [1, Self.needs, Self.out, 0]) == 0)
             let x = rd32(Self.out)
-            machine_post_mouse(108, 100, -1)
+            machine_post_mouse(116, 100, -1)
             #expect(state(x) == 0x7FFF_FFFF) // not until the game turns the mouse on
             isp("ISpDevices_ActivateClass", [fourCC("mous")])
             machine_post_mouse(100, 100, -1)
             #expect(state(x) == 0x7FFF_FFFF)
-            machine_post_mouse(108, 100, -1)
+            machine_post_mouse(116, 100, -1)
             #expect(state(x) > 0xBFFF_0000 && state(x) == 0x7FFF_FFFF) // half way to the right, then back
-            machine_post_mouse(68, 100, -1) // 40 left: two reads at the end, then half way
+            machine_post_mouse(36, 100, -1) // 80 left: two reads at the end, then half way
             #expect(state(x) == 0 && state(x) == 0 && state(x) < 0x4000_0000 && state(x) == 0x7FFF_FFFF)
             machine_post_key(-1, 0x7C, 0, 1, 0)
             #expect(state(x) == 0xFFFF_FFFF)
             machine_release_keys()
+            // Reading it has the host capture the mouse.
+            var mx: Int32 = 0, my: Int32 = 0, relative = false
+            _ = machine_mouse_state(&mx, &my, &relative)
+            #expect(relative)
         }
 
         @Test func devicesAndTheirElements() {

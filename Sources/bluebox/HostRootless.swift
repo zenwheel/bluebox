@@ -250,6 +250,9 @@ final class TransientView: NSView {
 
     var captured = false
     var hidingChrome = false
+    /// BLUEBOX_DEBUG_MOUSE: say why the mouse is captured or not.
+    static let debugMouse = ProcessInfo.processInfo.environment["BLUEBOX_DEBUG_MOUSE"] != nil
+    var debugActive = false, debugRelative = false
     var backdrop: NSWindow?
     var motionMonitor: Any?
     var programWarps: UInt32 = 0
@@ -260,6 +263,12 @@ final class TransientView: NSView {
         let active = NSApp.isActive && openMenus == 0 && transientWindow == nil
         setChromeHidden(active && screenWindow != nil)
         let wasCaptured = captured
+        if Self.debugMouse, active != debugActive || relative != debugRelative {
+            debugActive = active
+            debugRelative = relative
+            FileHandle.standardError.write(Data(("mouse: active \(active) (app \(NSApp.isActive), menus \(openMenus), "
+                + "pop-up \(transientWindow != nil)), program reading motion \(relative)\n").utf8))
+        }
         setCaptured(active && relative)
         // The program moved the cursor: the host's pointer goes there, but
         // not while captured: macOS counts a warp in the next motion it

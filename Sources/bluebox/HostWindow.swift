@@ -64,6 +64,7 @@ final class ScreenView: NSView, MacScreenView {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refreshIfChanged()
+                self?.updateCapture()
                 CursorSync.shared.tick()
                 DragOut.shared.tick()
                 if machine_halted() {
@@ -113,8 +114,75 @@ final class ScreenView: NSView, MacScreenView {
     }
 
     // MARK: Mouse
+    //
+    // As in rootless windows: a program reading the mouse's motion (moving
+    // the cursor itself, or through InputSprocket) gets the mouse captured
+    // while we are the active window, its motion given in Mac pixels, so
+    // it never stops at the display's edge; the pointer catches up after.
+
+    private var captured = false
+    private var motionMonitor: Any?
+    private var programWarps: UInt32 = 0
+
+    /// Host points per Mac pixel across the view.
+    private var pointsPerPixel: CGFloat {
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
+        return w > 0 ? bounds.width / CGFloat(w) : 1
+    }
+
+    func updateCapture() {
+        var x: Int32 = 0, y: Int32 = 0, relative = false
+        let warps = machine_mouse_state(&x, &y, &relative)
+        let active = NSApp.isActive && window?.isKeyWindow == true
+        let wasCaptured = captured
+        setCaptured(active && relative)
+        if warps != programWarps {
+            programWarps = warps
+            if active && !captured { warpHostPointer(to: x, y) }
+        } else if wasCaptured && !captured {
+            warpHostPointer(to: x, y)
+        }
+    }
+
+    private func setCaptured(_ on: Bool) {
+        guard on != captured else { return }
+        captured = on
+        CGAssociateMouseAndMouseCursorPosition(on ? 0 : 1)
+        if on && motionMonitor == nil {
+            motionMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+            ) { [weak self] event in
+                MainActor.assumeIsolated {
+                    if let self, self.captured {
+                        let scale = self.pointsPerPixel
+                        machine_post_mouse_delta(Double(event.deltaX / scale), Double(event.deltaY / scale))
+                    }
+                }
+                return event
+            }
+        }
+    }
+
+    /// Put the host's pointer where the Mac's mouse is.
+    private func warpHostPointer(to x: Int32, _ y: Int32) {
+        guard let window else { return }
+        let scale = pointsPerPixel
+        let inView = NSPoint(x: (CGFloat(x) + 0.5) * scale, y: (CGFloat(y) + 0.5) * scale)
+        let onScreen = window.convertPoint(toScreen: convert(inView, to: nil))
+        let top = NSScreen.screens.first?.frame.maxY ?? 0
+        CGWarpMouseCursorPosition(CGPoint(x: onScreen.x, y: top - onScreen.y))
+        CGAssociateMouseAndMouseCursorPosition(captured ? 0 : 1)
+    }
 
     private func post(_ event: NSEvent, button: Int32) {
+        if captured { /* the pointer is still: the button only, where the Mac's mouse is */
+            guard button >= 0 else { return }
+            var x: Int32 = 0, y: Int32 = 0, relative = false
+            _ = machine_mouse_state(&x, &y, &relative)
+            machine_post_mouse(x, y, button)
+            return
+        }
         let p = convert(event.locationInWindow, from: nil)
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)

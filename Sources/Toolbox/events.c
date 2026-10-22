@@ -54,6 +54,7 @@ static int motion_h, motion_v;
 /* All of the mouse's own motion since boot, for InputSprocket's deltas,
  * and when a program last read it (the host then captures the mouse). */
 static int32_t total_h, total_v;
+static bool relative_read;
 static uint64_t last_relative_ns;
 #define LM_CrsrNew 0x08CEu    /* Byte: nonzero when the cursor must be redrawn at RawMouse */
 static bool button_down;
@@ -373,7 +374,7 @@ uint32_t machine_mouse_state(int *x, int *y, bool *relative)
     uint32_t n = warps;
     uint64_t now = machine_time_ns();
     *relative = (warps && now - last_warp_ns < 2000000000ull) ||
-                (last_relative_ns && now - last_relative_ns < 2000000000ull);
+                (relative_read && now - last_relative_ns < 2000000000ull);
     pthread_mutex_unlock(&lock);
     return n;
 }
@@ -391,7 +392,7 @@ void ev_mouse_raw(int32_t *h, int32_t *v, bool *down, bool capture)
     *v = total_v;
     *down = button_down;
     if (capture)
-        last_relative_ns = machine_time_ns();
+        relative_read = true, last_relative_ns = machine_time_ns();
     pthread_mutex_unlock(&lock);
 }
 
@@ -1004,7 +1005,7 @@ void events_reset(void)
     qhead = qtail = 0;
     qversion++;
     button_down = false;
-    last_relative_ns = 0;
+    relative_read = false;
     key_mods = 0;
     memset(keymap, 0, sizeof keymap);
     key_last = 0;

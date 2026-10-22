@@ -42,7 +42,9 @@
 #include "lowmem_gen.h"
 #include "machine.h"
 #include "ppc_bridge.h"
+#include "qd_internal.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 #define R(n) (c->gpr[3 + (n)])
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; } while (0)
@@ -153,6 +155,7 @@ typedef struct {
     uint32_t last;  /* the state last reported */
     int32_t mouse_at; /* a delta or axis: the mouse's motion (ev_mouse_raw) when it was last read */
     int32_t mouse_carry; /* an axis: motion beyond its end, for the next reads */
+    uint8_t def_key, def_key2; /* as the need was first mapped (the dialog's Defaults) */
     uint32_t refcon;
 } element;
 
@@ -162,8 +165,11 @@ static int nelements, spare, spare_button;
 static gaddr ref_block;
 static bool suspended;
 /* The game turned the mouse on (ISpDevices_ActivateClass or Activate), as
- * InputSprocket wanted before the mouse drove its axes and fire button. */
-static bool mouse_wanted;
+ * InputSprocket wanted before the mouse drove its axes and fire button;
+ * the player can turn it off in the configuration dialog. */
+static bool mouse_wanted, mouse_refused;
+/* The needs the game made last: what the configuration dialog shows. */
+static int config_first, config_count;
 
 static element *new_element(uint32_t kind, uint32_t label)
 {
@@ -428,7 +434,7 @@ static uint32_t axis_state(const element *e, int stick, uint8_t key_lo, uint8_t 
 
 static bool button_state(const element *e)
 {
-    if (key_down(e->key) || pad_button(e, e->pad) || (e->mouse && (e->device >= 0 || mouse_wanted) && mouse_down()))
+    if (key_down(e->key) || pad_button(e, e->pad) || (e->mouse && (e->device >= 0 || (mouse_wanted && !mouse_refused)) && mouse_down()))
         return true;
     if (e->stick >= 0) {
         float v = pad_axis(e, e->stick / 2);
@@ -463,10 +469,10 @@ static int32_t delta_state(element *e, bool consume)
 }
 
 /* Pixels of the mouse's motion between two reads that push an axis to
- * its end (Apeiron's ship then moves about half as far as the mouse did:
- * one for one was touchy), and the most kept for later reads when it
- * moves faster. */
-enum { MOUSE_AXIS_FULL = 16, MOUSE_AXIS_CARRY = 4 * MOUSE_AXIS_FULL };
+ * its end (Apeiron's ship then moves about a quarter as far as the mouse
+ * did: more was touchy), and the most kept for later reads when it moves
+ * faster. */
+enum { MOUSE_AXIS_FULL = 32, MOUSE_AXIS_CARRY = 4 * MOUSE_AXIS_FULL };
 
 /* An x or y axis need follows the mouse as a joystick would: its motion
  * since the axis was last read sets how far the axis is pushed, and the
@@ -474,7 +480,7 @@ enum { MOUSE_AXIS_FULL = 16, MOUSE_AXIS_CARRY = 4 * MOUSE_AXIS_FULL };
  * at the axis's speed).  Keys, a pad or a stick held override it. */
 static uint32_t mouse_axis_state(element *e)
 {
-    bool following = mouse_wanted && !devices[DEV_MOUSE].inactive;
+    bool following = mouse_wanted && !mouse_refused && !devices[DEV_MOUSE].inactive;
     int32_t at = mouse_motion(e, following);
     if (!following)
         at = e->mouse_at, e->mouse_carry = 0;
@@ -537,6 +543,7 @@ static void isp_NewVirtualFromNeeds(ppc_cpu *c)
         e->player = rd8(n + 66);
         e->group = rd8(n + 67);
         map_need(e, name);
+        e->def_key = e->key, e->def_key2 = e->key2;
         LOGF(LOG_TRAPS, "  need \"%s\": %c%c%c%c %c%c%c%c, player %d, key %02X, mouse %d\n", name,
              (int)(e->kind >> 24), (int)(e->kind >> 16 & 0xFF), (int)(e->kind >> 8 & 0xFF), (int)(e->kind & 0xFF),
              (int)(e->label >> 24), (int)(e->label >> 16 & 0xFF), (int)(e->label >> 8 & 0xFF),
@@ -548,6 +555,7 @@ static void isp_NewVirtualFromNeeds(ppc_cpu *c)
     }
     /* A game steered by the mouse fires with its button too (Apeiron). */
     int first = nelements - (int)count;
+    config_first = first, config_count = (int)count;
     bool steered = false;
     for (int i = first; i < nelements; i++)
         steered |= elements[i].kind == kDelta || (elements[i].kind == kAxis && elements[i].mouse);
@@ -1093,11 +1101,268 @@ static void isp_TimeToMicroseconds(ppc_cpu *c)
     RETURN(0);
 }
 
-/* ISpConfigure(eventProc, *accepted): no dialog; the mapping stands. */
+/* ---- The configuration dialog ---- */
+
+/* A key's name (a US keyboard's), for the dialog. */
+static const char *key_name(uint8_t code)
+{
+    static const char *const names[128] = {
+        [0x00] = "A", [0x01] = "S", [0x02] = "D", [0x03] = "F", [0x04] = "H", [0x05] = "G", [0x06] = "Z",
+        [0x07] = "X", [0x08] = "C", [0x09] = "V", [0x0B] = "B", [0x0C] = "Q", [0x0D] = "W", [0x0E] = "E",
+        [0x0F] = "R", [0x10] = "Y", [0x11] = "T", [0x12] = "1", [0x13] = "2", [0x14] = "3", [0x15] = "4",
+        [0x16] = "6", [0x17] = "5", [0x18] = "=", [0x19] = "9", [0x1A] = "7", [0x1B] = "-", [0x1C] = "8",
+        [0x1D] = "0", [0x1E] = "]", [0x1F] = "O", [0x20] = "U", [0x21] = "[", [0x22] = "I", [0x23] = "P",
+        [0x24] = "Return", [0x25] = "L", [0x26] = "J", [0x27] = "'", [0x28] = "K", [0x29] = ";", [0x2A] = "\\",
+        [0x2B] = ",", [0x2C] = "/", [0x2D] = "N", [0x2E] = "M", [0x2F] = ".", [0x30] = "Tab", [0x31] = "Space",
+        [0x32] = "`", [0x33] = "Delete", [0x35] = "Escape", [0x37] = "Command", [0x38] = "Shift",
+        [0x3A] = "Option", [0x3B] = "Control", [0x41] = "Keypad .", [0x43] = "Keypad *", [0x45] = "Keypad +",
+        [0x47] = "Clear", [0x4B] = "Keypad /", [0x4C] = "Enter", [0x4E] = "Keypad -", [0x51] = "Keypad =",
+        [0x52] = "Keypad 0", [0x53] = "Keypad 1", [0x54] = "Keypad 2", [0x55] = "Keypad 3", [0x56] = "Keypad 4",
+        [0x57] = "Keypad 5", [0x58] = "Keypad 6", [0x59] = "Keypad 7", [0x5B] = "Keypad 8", [0x5C] = "Keypad 9",
+        [0x60] = "F5", [0x61] = "F6", [0x62] = "F7", [0x63] = "F3", [0x64] = "F8", [0x65] = "F9",
+        [0x67] = "F11", [0x6D] = "F10", [0x6F] = "F12", [0x73] = "Home", [0x74] = "Page Up",
+        [0x75] = "Forward Delete", [0x76] = "F4", [0x77] = "End", [0x78] = "F2", [0x79] = "Page Down",
+        [0x7A] = "F1", [0x7B] = "Left Arrow", [0x7C] = "Right Arrow", [0x7D] = "Down Arrow", [0x7E] = "Up Arrow",
+    };
+    if (code == K_NONE)
+        return "none";
+    return code < 128 && names[code] ? names[code] : "a key";
+}
+
+/* Items: OK, Cancel, Defaults, the mouse box, the heading, then a name and
+ * a button for each need. */
+enum { itemOK = 1, itemCancel, itemDefaults, itemMouse, itemHeading, itemNeeds, CONFIG_ROWS = 14 };
+enum { CAPTURED = 999 }; /* ModalDialog's item when a key was taken */
+
+static gaddr config_dialog;
+static int capturing = -1, capture_stage; /* the need taking a key, and which of an axis's two */
+static uint8_t capture_keys[16];          /* the keys down when it started */
+
+static bool configurable(const element *e) { return e->kind == kButton || e->kind == kAxis; }
+
+static bool uses_mouse(void)
+{
+    for (int i = config_first; i < config_first + config_count; i++)
+        if (elements[i].mouse || elements[i].kind == kDelta)
+            return true;
+    return false;
+}
+
+static int16_t config_item(gaddr p, qrect r, uint8_t type, const char *text)
+{
+    size_t n = strlen(text);
+    wr32(p, 0);
+    qrect_put(p + 4, r);
+    wr8(p + 12, type);
+    wr8(p + 13, (uint8_t)n);
+    gput(p + 14, text, (uint32_t)n);
+    return (int16_t)(14 + (((uint32_t)n + 1) & ~1u));
+}
+
+static gaddr config_handle(int item)
+{
+    gaddr scratch = tb_NewPtr(16, false, true);
+    tb_GetDialogItem(config_dialog, (int16_t)item, scratch, scratch + 2, scratch + 6);
+    gaddr h = rd32(scratch + 2);
+    tb_DisposePtr(scratch);
+    return h;
+}
+
+/* What a need's button says: its keys, the mouse, or what to press. */
+static void config_label(const element *e, int row, char *out, size_t size)
+{
+    bool mouse = e->mouse && mouse_wanted && !mouse_refused;
+    if (capturing == row)
+        snprintf(out, size, e->kind == kAxis ? (capture_stage ? (e->label == FOURCC('y', 'a', 'x', 'i') ? "Press a key for up" : "Press a key for right") : (e->label == FOURCC('y', 'a', 'x', 'i') ? "Press a key for down" : "Press a key for left")) : "Press a key");
+    else if (e->kind == kAxis)
+        snprintf(out, size, "%s, %s%s", key_name(e->key), key_name(e->key2), mouse ? ", mouse" : "");
+    else if (e->kind == kButton)
+        snprintf(out, size, "%s%s", key_name(e->key), mouse ? ", mouse button" : "");
+    else if (e->kind == kDelta)
+        snprintf(out, size, "Mouse");
+    else
+        snprintf(out, size, "Arrow keys");
+}
+
+static void config_show(void)
+{
+    char text[64];
+    gaddr title = tb_NewPtr(256, false, true);
+    int rows = config_count < CONFIG_ROWS ? config_count : CONFIG_ROWS;
+    for (int row = 0; row < rows; row++) {
+        config_label(&elements[config_first + row], row, text, sizeof text);
+        pstr_from_c(title, text);
+        gaddr h = config_handle(itemNeeds + row * 2 + 1);
+        if (h)
+            tb_SetControlTitle(h, title);
+    }
+    gaddr box = config_handle(itemMouse);
+    if (box)
+        tb_SetControlValue(box, !mouse_refused);
+    tb_DisposePtr(title);
+}
+
+/* A key newly down since the capture started (modifiers too, which make
+ * no key event): KeyMap's bit order, as GetKeys gives it. */
+static int new_key(void)
+{
+    gaddr km_now = tb_NewPtr(16, true, true);
+    tb_GetKeys(km_now);
+    int found = -1;
+    for (int code = 0; code < 128 && found < 0; code++) {
+        bool down = (rd8(km_now + (code >> 3)) >> (code & 7)) & 1, was = (capture_keys[code >> 3] >> (code & 7)) & 1;
+        if (down && !was && code != 0x39 /* caps lock */)
+            found = code;
+    }
+    for (int i = 0; i < 16; i++) /* a key let go may be pressed again */
+        capture_keys[i] &= rd8(km_now + (gaddr)i);
+    tb_DisposePtr(km_now);
+    return found;
+}
+
+static void start_capture(int row)
+{
+    capturing = row;
+    capture_stage = 0;
+    gaddr km_now = tb_NewPtr(16, true, true);
+    tb_GetKeys(km_now);
+    gget(capture_keys, km_now, 16);
+    tb_DisposePtr(km_now);
+}
+
+/* The dialog's filter: while a need waits for a key, the next key pressed
+ * is its (no key reaches the dialog then, Return and Escape included). */
+static void config_filter(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    uint32_t ret = cpu_pop32(c);
+    gaddr itemp = cpu_pop32(c), evt = cpu_pop32(c), d = cpu_pop32(c);
+    (void)d;
+    bool r = false;
+    if (capturing >= 0) {
+        int code = new_key();
+        if (code >= 0) {
+            element *e = &elements[config_first + capturing];
+            if (e->kind == kAxis && capture_stage == 0) {
+                e->key = (uint8_t)code;
+                capture_stage = 1;
+            } else {
+                if (e->kind == kAxis)
+                    e->key2 = (uint8_t)code;
+                else
+                    e->key = (uint8_t)code;
+                capturing = -1;
+            }
+            wr16(itemp, CAPTURED);
+            r = true;
+        } else if (rd16(evt) == 3 || rd16(evt) == 5) { /* keyDown, autoKey: taken above or next time */
+            wr16(evt, 0);
+        }
+    }
+    wr16(c->a[7], r ? 0x0100 : 0);
+    cpu_push32(c, ret);
+}
+
+/* ISpConfigure(eventProc, *accepted): the needs the game made last, each
+ * with its keys to change (an axis takes two, its low end first), whether
+ * the mouse steers, and Defaults; Cancel puts things back. */
 static void isp_Configure(ppc_cpu *c)
 {
-    if (R(1))
-        wr8(R(1), 1);
+    gaddr accepted = R(1);
+    int rows = config_count < CONFIG_ROWS ? config_count : CONFIG_ROWS;
+    bool mouse = uses_mouse();
+    int list_bottom = 60 + rows * 24;
+    int height = list_bottom + 8 + 20 + 16 + 20 + 14;
+    int width = 460;
+    int16_t top = (int16_t)((g_screen_height - height) / 3), left = (int16_t)((g_screen_width - width) / 2);
+    if (top < 40)
+        top = 40;
+    gaddr ditl = tb_NewHandle(2 + (itemNeeds + rows * 2) * (14 + 64), false, true);
+    gaddr scratch = tb_NewPtr(32, false, true);
+    if (!ditl || !scratch) {
+        if (accepted)
+            wr8(accepted, 1);
+        RETURN(0);
+        return;
+    }
+    int16_t box = (int16_t)(list_bottom + 8), bottom = (int16_t)(box + 36);
+    gaddr p = rd32(ditl) + 2;
+    p += (gaddr)config_item(p, (qrect){ bottom, 370, (int16_t)(bottom + 20), 440 }, 4, "OK");
+    p += (gaddr)config_item(p, (qrect){ bottom, 288, (int16_t)(bottom + 20), 358 }, 4, "Cancel");
+    p += (gaddr)config_item(p, (qrect){ bottom, 20, (int16_t)(bottom + 20), 100 }, 4, "Defaults");
+    p += (gaddr)config_item(p, (qrect){ box, 20, (int16_t)(box + 18), 440 }, mouse ? 5 : 5 | 0x80,
+                            mouse ? "Use the mouse to steer and fire" : "");
+    p += (gaddr)config_item(p, (qrect){ 14, 20, 50, 440 }, 8 | 0x80,
+                            rows ? "Click a control's keys, then press the key to use (an axis takes two)."
+                                 : "This game has no controls to configure.");
+    for (int row = 0; row < rows; row++) {
+        element *e = &elements[config_first + row];
+        char name[64];
+        int n = e->name[0];
+        memcpy(name, e->name + 1, (size_t)n);
+        name[n] = 0;
+        int16_t y = (int16_t)(60 + row * 24);
+        p += (gaddr)config_item(p, (qrect){ (int16_t)(y + 2), 20, (int16_t)(y + 18), 180 }, 8 | 0x80, name);
+        p += (gaddr)config_item(p, (qrect){ y, 186, (int16_t)(y + 20), 440 }, configurable(e) ? 4 : 4 | 0x80, "");
+    }
+    wr16(rd32(ditl), (uint16_t)(itemNeeds + rows * 2 - 1));
+    qrect_put(scratch, (qrect){ top, left, (int16_t)(top + height), (int16_t)(left + width) });
+    config_dialog = tb_NewDialog(0, scratch, scratch + 8, 1, 1 /* dBoxProc */, 0xFFFFFFFF, 0, 0, ditl);
+    if (!config_dialog) {
+        tb_DisposePtr(scratch);
+        if (accepted)
+            wr8(accepted, 1);
+        RETURN(0);
+        return;
+    }
+    if (!mouse) {
+        gaddr box = config_handle(itemMouse);
+        if (box)
+            tb_HiliteControl(box, 255);
+    }
+    tb_SetDialogDefaultItem(config_dialog, itemOK);
+    tb_SetDialogCancelItem(config_dialog, itemCancel);
+    static gaddr filter_stub;
+    if (!filter_stub)
+        filter_stub = native_register(config_filter, "ISpConfigureFilter", 0);
+    /* What Cancel puts back. */
+    uint8_t keys[CONFIG_ROWS][2];
+    for (int row = 0; row < rows; row++)
+        keys[row][0] = elements[config_first + row].key, keys[row][1] = elements[config_first + row].key2;
+    bool was_refused = mouse_refused;
+    capturing = -1;
+    config_show();
+    gaddr hit = scratch + 16;
+    int16_t n;
+    do {
+        tb_ModalDialog(filter_stub, hit);
+        n = (int16_t)rd16(hit);
+        if (n >= itemNeeds && (n - itemNeeds) % 2 == 1) {
+            int row = (n - itemNeeds) / 2;
+            if (configurable(&elements[config_first + row]))
+                start_capture(row);
+        } else if (n == itemMouse && mouse) {
+            mouse_refused = !mouse_refused;
+        } else if (n == itemDefaults) {
+            capturing = -1;
+            for (int row = 0; row < rows; row++)
+                elements[config_first + row].key = elements[config_first + row].def_key,
+                elements[config_first + row].key2 = elements[config_first + row].def_key2;
+            mouse_refused = false;
+        }
+        config_show();
+    } while (n != itemOK && n != itemCancel);
+    capturing = -1;
+    if (n == itemCancel) {
+        for (int row = 0; row < rows; row++)
+            elements[config_first + row].key = keys[row][0], elements[config_first + row].key2 = keys[row][1];
+        mouse_refused = was_refused;
+    }
+    tb_DisposeDialog(config_dialog);
+    config_dialog = 0;
+    tb_DisposePtr(scratch);
+    if (accepted)
+        wr8(accepted, n == itemOK);
     RETURN(0);
 }
 
@@ -1135,7 +1400,8 @@ void inputsprocket_reset(void)
 {
     nelements = spare = spare_button = nlists = 0;
     ref_block = device_block = global_list = km = 0;
-    suspended = mouse_wanted = false;
+    suspended = mouse_wanted = mouse_refused = false;
+    config_first = config_count = 0;
     memset(lists, 0, sizeof lists);
     memset(devices, 0, sizeof devices);
 }
