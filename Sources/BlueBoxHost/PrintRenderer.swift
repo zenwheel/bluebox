@@ -3,7 +3,8 @@
 // Shapes become paths with QuickDraw's pen and frame rules, patterns become
 // grey levels, and text runs are set in a host font (with the LaserWriter's
 // classic substitutions) scaled to the width the classic metrics gave, so
-// lines break and align as they did on screen.
+// lines break and align as they did on screen; text a TextBegin picture
+// comment rotates or flips is turned about its centre.
 
 #if canImport(AppKit)
 import AppKit
@@ -232,6 +233,14 @@ public enum ClassicPrint {
         let line = CTLineCreateWithAttributedString(NSAttributedString(string: s, attributes: attrs))
         let hostWidth = CTLineGetTypographicBounds(line, nil, nil, nil)
         let sx = hostWidth > 0 && op.width > 0 ? CGFloat(op.width) / CGFloat(hostWidth) : 1
+        ctx.saveGState()
+        defer { ctx.restoreGState() }
+        if op.angle != 0 || op.flip_h || op.flip_v {      // TextBegin's rotation or flip, about its centre
+            ctx.translateBy(x: CGFloat(op.rot_h), y: CGFloat(op.rot_v))
+            ctx.rotate(by: CGFloat(op.angle) * .pi / 180)  // clockwise, with y down
+            ctx.scaleBy(x: op.flip_h ? -1 : 1, y: op.flip_v ? -1 : 1)
+            ctx.translateBy(x: -CGFloat(op.rot_h), y: -CGFloat(op.rot_v))
+        }
         ctx.saveGState()
         ctx.translateBy(x: CGFloat(op.h0), y: CGFloat(op.v0))
         ctx.scaleBy(x: sx, y: -1)                        // undo the page flip for glyphs

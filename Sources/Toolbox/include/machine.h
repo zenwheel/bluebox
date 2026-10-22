@@ -326,6 +326,9 @@ typedef struct {
     uint8_t face;
     int len;
     uint8_t *text;               /* MacRoman */
+    double angle;                /* text: degrees clockwise about rot_h, rot_v (TextBegin) */
+    double rot_h, rot_v;
+    bool flip_h, flip_v;         /* text: mirrored about the same point */
     int image_w, image_h;        /* images: RGBA pixels shown in r */
     uint8_t *image;
 } machine_print_op;

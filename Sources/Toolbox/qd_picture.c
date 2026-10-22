@@ -6,8 +6,7 @@
  * and pixmap opcodes are decoded to RGB, dithered for the 1-bit screen, and
  * recorded in full colour when the port is printing.
  *
- * OpenPicture/ClosePicture produce a valid empty picture of the right frame;
- * recording drawing into pictures is not done yet.
+ * Drawing between OpenPicture and ClosePicture is recorded (qd_picsave.c).
  */
 #include <stdlib.h>
 #include <string.h>
@@ -633,6 +632,22 @@ static void set_pat(void (*fn)(gaddr), const uint8_t pat[8])
     tb_DisposePtr(p);
 }
 
+/* A long comment's data goes to the commentProc in a handle of its own, as
+ * PicComment takes it. */
+static void play_comment(reader *r, int kind, int n)
+{
+    gaddr h = tb_NewHandle(n, false, false);
+    if (!h || !rd32(h)) {
+        skip(r, (uint32_t)n);
+        return;
+    }
+    need(r, (uint32_t)n);
+    for (int i = 0; i < n; i++)
+        wr8(rd32(h) + (uint32_t)i, (uint8_t)r8(r));
+    tb_PicComment((int16_t)kind, (int16_t)n, h);
+    tb_DisposeHandle(h);
+}
+
 static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
 {
     last_shapes ls;
@@ -778,8 +793,12 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0x90: case 0x91: case 0x98: case 0x99: case 0x9A: case 0x9B:
             bits_op(r, m, op);
             break;
-        case 0xA0: r16(r); break;
-        case 0xA1: { r16(r); skip(r, (uint16_t)r16(r)); break; }
+        case 0xA0: tb_PicComment((int16_t)r16(r), 0, 0); break;
+        case 0xA1: {
+            int kind = r16(r), n = (uint16_t)r16(r);
+            play_comment(r, kind, n);
+            break;
+        }
         case 0x0C00: skip(r, 24); break;
         case 0x8200: { /* CompressedQuickTime: matrix, matte, mode, srcRect, accuracy, mask, then the image */
             uint32_t len = r32(r);
@@ -934,14 +953,17 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
 
 void tb_KillPicture(gaddr pic) { if (pic) tb_DisposeHandle(pic); }
 /* Comments go to the port's commentProc when the application installed one
- * (print drivers and picture parsers do); StdComment has nothing to do. */
+ * (print drivers and picture parsers do), as every comment in a picture
+ * being drawn does too; StdComment writes them into the picture being
+ * recorded and gives them to the printing port (qd_rec_comment says which
+ * it heeds). */
 void tb_PicComment(int16_t kind, int16_t size, gaddr data)
 {
     gaddr port = qd_port();
     gaddr procs = port ? GrafPort_grafProcs(port) : 0;
     gaddr proc = procs ? rd32(procs + QDProcs_commentProc_off) : 0;
     if (!proc || native_index_for(proc) >= 0) {
-        qd_pic_comment(port, kind, size, data);
+        tb_StdComment(kind, size, data);
         return;
     }
     cpu_push16(g_cpu, (uint16_t)kind);
@@ -950,7 +972,15 @@ void tb_PicComment(int16_t kind, int16_t size, gaddr data)
     guest_call(proc);
 }
 
-void tb_StdComment(int16_t kind, int16_t size, gaddr data) {}
+void tb_StdComment(int16_t kind, int16_t size, gaddr data)
+{
+    gaddr port = qd_port();
+    if (!port)
+        return;
+    qd_pic_comment(port, kind, size, data);
+    if (qd_rec_active(port))
+        qd_rec_comment(port, kind, size, data);
+}
 
 /* Pictures are read and written whole here, so these only move bytes. */
 void tb_StdGetPic(gaddr dp, int16_t bc) { gmemset(dp, 0, (uint32_t)(bc > 0 ? bc : 0)); }

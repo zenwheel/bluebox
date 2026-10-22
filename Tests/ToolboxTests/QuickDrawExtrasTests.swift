@@ -324,6 +324,66 @@ extension BlueBox {
             #expect(!black(15, 15))
         }
 
+        /// A comment with data, in a handle of its own.
+        func commentData(_ bytes: [UInt8]) -> UInt32 {
+            let h = tb_NewHandle(Int32(bytes.count), false, true)
+            for (i, b) in bytes.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+            return h
+        }
+
+        /// PicComment writes ShortComment and LongComment opcodes into the
+        /// picture being recorded.
+        @Test func recordedPicturesKeepComments() {
+            _ = offscreen()
+            let pic = tb_OpenPicture(rect(0, 0, 40, 40))
+            tb_PicComment(130, 0, 0)                                  // picDwgBeg
+            tb_PicComment(1000, 3, commentData([0xDE, 0xAD, 0x42]))
+            tb_ClosePicture()
+            let p = rd32(pic), size = Int(tb_GetHandleSize(pic))
+            let bytes = (0..<size).map { rd8(p + UInt32($0)) }
+            func has(_ seq: [UInt8]) -> Bool {
+                (0...(bytes.count - seq.count)).contains { Array(bytes[$0..<($0 + seq.count)]) == seq }
+            }
+            #expect(has([0x00, 0xA0, 0x00, 130]))
+            #expect(has([0x00, 0xA1, 0x03, 0xE8, 0x00, 0x03, 0xDE, 0xAD, 0x42]))
+            tb_KillPicture(pic)
+        }
+
+        /// Drawing a picture gives its comments to the port's commentProc,
+        /// a long comment's data in a handle.
+        @Test func drawPictureCallsTheCommentProc() {
+            _ = offscreen()
+            let pic = tb_OpenPicture(rect(0, 0, 40, 40))
+            tb_PicComment(130, 0, 0)
+            tb_PicComment(1000, 4, commentData([1, 2, 3, 4]))
+            tb_ClosePicture()
+
+            let port = tb_NewPtr(4, false, true)
+            tb_GetPort(port)
+            // commentProc(kind, dataSize: INTEGER; dataHandle: Handle): counts
+            // its calls and keeps the last kind, size and data's first long.
+            let vars = tb_NewPtr(12, false, true) // count.L, kind.W, size.W, data.L
+            func abs(_ a: UInt32) -> [UInt16] { [UInt16(a >> 16), UInt16(a & 0xFFFF)] }
+            let words: [UInt16] = [0x205F, 0x225F, 0x301F, 0x321F]  // ret, data, size, kind
+                + [0x52B9] + abs(vars)                              // ADDQ.L #1,count
+                + [0x33C1] + abs(vars + 4)                          // MOVE.W D1,kind
+                + [0x33C0] + abs(vars + 6)                          // MOVE.W D0,size
+                + [0x2409, 0x6708, 0x2251] + [0x23D1] + abs(vars + 8) // if data: MOVE.L (*data),data
+                + [0x4ED0]                                          // JMP (A0)
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let procs = tb_NewPtr(Int32(CQDProcs_SIZEOF), false, true)
+            tb_SetStdCProcs(procs)
+            wr32(procs + UInt32(QDProcs_commentProc_off), code)
+            GrafPort_set_grafProcs(rd32(port), procs)
+            tb_DrawPicture(pic, rect(0, 0, 40, 40))
+            GrafPort_set_grafProcs(rd32(port), 0)
+            #expect(rd32(vars) == 2)
+            #expect(rd16(vars + 4) == 1000 && rd16(vars + 6) == 4)
+            #expect(rd32(vars + 8) == 0x0102_0304)
+            tb_KillPicture(pic)
+        }
+
         @Test func seedFillAndColourMask() {
             let gw = offscreen()
             tb_FrameRect(rect(5, 5, 15, 15))

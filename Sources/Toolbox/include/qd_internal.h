@@ -213,6 +213,8 @@ void qd_rec_shape(gaddr port, int kind, int verb, qrect r, int a, int b, const h
                   int mode);
 void qd_rec_line(gaddr port, int h0, int v0, int h1, int v1, const uint8_t pat[8], int mode);
 void qd_rec_text(gaddr port, int family, int size, int face, int x, int y, const uint8_t *text, int len, int width);
+/* A picture comment reaching StdComment in the printing port. */
+void qd_rec_comment(gaddr port, int kind, int size, gaddr data);
 /* An RGBA image (w x h) whose src part is shown in dst (local coordinates). */
 void qd_rec_image(gaddr port, int w, int h, const uint8_t *rgba, qrect src, qrect dst);
 /* CopyBits does not record while suppressed (the caller recorded already). */

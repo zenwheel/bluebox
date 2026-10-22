@@ -198,6 +198,35 @@ extension BlueBox {
             #expect(tb_CountDragItems(drag, n) == -1850)                       // badDragRefErr
         }
 
+        /// ZoomRects and ZoomRegion draw their outlines a tick at a time and
+        /// leave the screen as it was.
+        @Test func zoomsLeaveTheScreenAsItWas() {
+            launchTestApp()
+            _ = initToolbox()
+            var w: Int32 = 0, h: Int32 = 0
+            machine_screen_size(&w, &h)
+            let base = rd32(UInt32(LM_ScrnBase)), n = Int(qd_screen_row_bytes()) * Int(h)
+            func screen() -> [UInt8] {
+                var b = [UInt8](repeating: 0, count: n)
+                b.withUnsafeMutableBytes { gget($0.baseAddress, base, UInt32(n)) }
+                return b
+            }
+            let before = screen()
+            let from = tb_NewPtr(8, false, true), to = tb_NewPtr(8, false, true)
+            for (i, v) in [100, 100, 132, 132].enumerated() { wr16(from + UInt32(i * 2), UInt16(v)) }
+            for (i, v) in [40, 200, 240, 500].enumerated() { wr16(to + UInt32(i * 2), UInt16(v)) }
+            let ticks = rd32(UInt32(LM_Ticks))
+            #expect(tb_ZoomRects(from, to, 12, 2) == 0)                        // kZoomDecelerate
+            #expect(rd32(UInt32(LM_Ticks)) - ticks >= 10)                     // about a tick a step
+            #expect(screen() == before)
+            let rgn = tb_NewRgn()
+            tb_RectRgn(rgn, from)
+            #expect(tb_ZoomRegion(rgn, 0x0050_0080, 8, 1) == 0)                // 80 down, 128 across
+            #expect(screen() == before)
+            #expect(tb_ZoomRects(from, to, 0, 0) == 0)                         // no steps, nothing drawn
+            tb_DisposeRgn(rgn)
+        }
+
         /// A drag from the host: its files as 'hfs ' flavors and its text as
         /// 'TEXT', tracked and dropped through the program's handlers; files
         /// a window takes no drags for become an Open Documents event.

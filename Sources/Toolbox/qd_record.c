@@ -23,6 +23,18 @@ static machine_print_page *pages;
 static int npages, cap_pages;
 static bool page_open;
 
+/* What the picture comments said, for the text that follows them. */
+static struct {
+    bool text;           /* between TextBegin and TextEnd */
+    double angle;        /* degrees clockwise */
+    bool flip_h, flip_v;
+    bool centred;        /* TextCenter gave an offset ... */
+    double dh, dv;       /* ... from the first run's pen position */
+    bool placed;         /* the centre is fixed for the rest of the block */
+    double ch, cv;       /* in device coordinates */
+    bool postscript;     /* text is PostScript (TextIsPostScript) until PostScriptEnd */
+} cm;
+
 void qd_rec_begin(gaddr port)
 {
     qd_rec_end();
@@ -49,6 +61,7 @@ void qd_rec_end(void)
     free(pages);
     pages = NULL;
     npages = cap_pages = 0;
+    memset(&cm, 0, sizeof cm);
     page_open = false;
     rec_port = 0;
 }
@@ -159,6 +172,8 @@ void qd_rec_line(gaddr port, int h0, int v0, int h1, int v1, const uint8_t pat[8
 
 void qd_rec_text(gaddr port, int family, int size, int face, int x, int y, const uint8_t *text, int len, int width)
 {
+    if (cm.postscript)
+        return;
     machine_print_op *op = new_op(port, MACHINE_PRINT_TEXT);
     int dh, dv;
     device_offset(port, &dh, &dv);
@@ -178,6 +193,87 @@ void qd_rec_text(gaddr port, int family, int size, int face, int x, int y, const
     op->len = len;
     op->text = malloc(len ? (size_t)len : 1);
     memcpy(op->text, text, (size_t)len);
+    if (cm.text && (cm.angle != 0 || cm.flip_h || cm.flip_v)) {
+        if (!cm.placed) {
+            cm.ch = op->h0 + (cm.centred ? cm.dh : 0);
+            cm.cv = op->v0 + (cm.centred ? cm.dv : 0);
+            cm.placed = true;
+        }
+        op->angle = cm.angle;
+        op->flip_h = cm.flip_h;
+        op->flip_v = cm.flip_v;
+        op->rot_h = cm.ch;
+        op->rot_v = cm.cv;
+    }
+}
+
+/* Picture comments, as the LaserWriter driver took them, where a PDF can
+ * show what they ask for (the numbers are Apple's, from Inside Macintosh:
+ * Imaging With QuickDraw, appendix B):
+ *
+ *   TextBegin (150) and TextEnd (151) bracket text to be rotated or
+ *   flipped: TTxtPicRec is tJus, tFlip (1 horizontal, 2 vertical), tAngle
+ *   (whole degrees clockwise), tLine, tCmnt and tAngleFixed (the same
+ *   angle as a Fixed; here it wins when it is not zero, for its finer
+ *   steps).  TextCenter (154), a TCenterRec of
+ *   Fixed y and x, is the offset from the pen position to the centre of
+ *   rotation; it is taken at the first run of text after it, and the
+ *   centre stays there for the rest of the block, so every line of a
+ *   rotated paragraph turns about the same point.  Without TextCenter the
+ *   first run's pen position is the centre.  Justification and line
+ *   layout are not needed: the runs are placed as QuickDraw placed them.
+ *
+ *   PostScriptBegin (190) and PSBeginNoSave (196) to PostScriptEnd (191)
+ *   bracket PostScript for a PostScript printer with QuickDraw drawing for
+ *   any other; there is no PostScript interpreter here, so the QuickDraw
+ *   drawing is what prints, as on an ImageWriter, and PostScriptHandle
+ *   (192), PostScriptFile (193) and ResourcePS (195) are ignored.  Text
+ *   drawn after TextIsPostScript (194), up to PostScriptEnd, is PostScript
+ *   source, not words to show, so it is left out.
+ *
+ *   Everything else (the drawing, group and bitmap brackets 130-143, the
+ *   polygon smoothing comments 160-165, dashed lines and line widths
+ *   180-182, SetGrayLevel 197, RotateBegin 200-202, forms printing 210-211
+ *   and applications' own kinds) changes nothing in the output. */
+void qd_rec_comment(gaddr port, int kind, int size, gaddr data)
+{
+    gaddr p = data && size > 0 ? rd32(data) : 0;
+    switch (kind) {
+    case 150: { /* TextBegin */
+        bool ps = cm.postscript;
+        memset(&cm, 0, sizeof cm);
+        cm.postscript = ps;
+        cm.text = true;
+        if (p && size >= 4) {
+            int flip = rd8(p + 1);
+            cm.flip_h = flip == 1;
+            cm.flip_v = flip == 2;
+            cm.angle = (int16_t)rd16(p + 2);
+        }
+        if (p && size >= 10 && rd32(p + 6))
+            cm.angle = (int32_t)rd32(p + 6) / 65536.0;
+        break;
+    }
+    case 151: /* TextEnd */
+        cm.text = false;
+        break;
+    case 154: /* TextCenter */
+        if (p && size >= 8) {
+            cm.dv = (int32_t)rd32(p) / 65536.0;
+            cm.dh = (int32_t)rd32(p + 4) / 65536.0;
+            cm.centred = true;
+            cm.placed = false;
+        }
+        break;
+    case 191: /* PostScriptEnd */
+        cm.postscript = false;
+        break;
+    case 194: /* TextIsPostScript */
+        cm.postscript = true;
+        break;
+    default:
+        break;
+    }
 }
 
 void qd_rec_image(gaddr port, int w, int h, const uint8_t *rgba, qrect src, qrect dst)
