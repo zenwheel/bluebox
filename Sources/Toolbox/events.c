@@ -290,7 +290,7 @@ void ev_wake(void)
     pthread_mutex_unlock(&lock);
 }
 
-bool aem_next_event(uint32_t *cls, uint32_t *id, bool remove);
+bool aem_next_event(uint32_t *cls, uint32_t *id, int32_t *modifiers, bool remove);
 
 void machine_post_mouse(int x, int y, int button)
 {
@@ -648,12 +648,16 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     if (key_event)
         gput(LM_KeyMap, keys, sizeof keys);
     mirror_queue();
-    /* High-level events (Apple Events): message = class, where = ID. */
+    /* High-level events (Apple Events and others): message = class, where
+     * = ID; a return receipt says in its modifiers whether it was accepted. */
     uint32_t cls, aeid;
-    if (!found && !os_only && (mask & 0x0400) && aem_next_event(&cls, &aeid, remove)) {
+    int32_t mods;
+    if (!found && !os_only && (mask & 0x0400) && aem_next_event(&cls, &aeid, &mods, remove)) {
         e.what = 23;
         e.message = cls;
         e.where = aeid;
+        if (mods >= 0)
+            e.modifiers = (uint16_t)mods;
         found = true;
     }
     if (!found && !os_only && (mask & (1 << updateEvt))) {
@@ -784,7 +788,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
             if (busy && ns > 5000000)
                 ns = 5000000; /* 5 ms */
             uint32_t c0, i0;
-            bool hle = (mask & 0x0400) && aem_next_event(&c0, &i0, false);
+            bool hle = (mask & 0x0400) && aem_next_event(&c0, &i0, NULL, false);
             pthread_mutex_lock(&lock);
             bool waiting = qhead == qtail && !hle;
             if (waiting) {
