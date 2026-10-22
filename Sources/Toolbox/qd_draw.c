@@ -1174,9 +1174,10 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
          * they are (how programs put palette slots' indices on the screen). */
         bool same_seed = s.ctab && d.ctab && rd32(s.ctab) && rd32(d.ctab) && rd32(rd32(s.ctab)) == rd32(rd32(d.ctab));
         bool same_table = s.depth == d.depth && (s.ctab == d.ctab || same_seed) && !(m & 4);
+        uint16_t colours[256][3];
+        qd_px_rgb_all(s.depth, s.ctab, colours);
         for (int v = 0; v < nv; v++) {
-            uint16_t rgb[3];
-            qd_px_rgb(s.depth, s.ctab, (uint32_t)v, rgb);
+            uint16_t rgb[3] = { colours[v][0], colours[v][1], colours[v][2] };
             if (m & 4) {
                 rgb[0] = (uint16_t)~rgb[0];
                 rgb[1] = (uint16_t)~rgb[1];
@@ -1185,6 +1186,26 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
             lut_white[v] = rgb[0] == 0xFFFF && rgb[1] == 0xFFFF && rgb[2] == 0xFFFF;
             lut_conv[v] = same_table ? (uint32_t)v : qd_rgb_px(d.depth, d.ctab, rgb);
         }
+    }
+    /* The arithmetic modes work in RGB: an indexed side's colours decoded
+     * once for the call, not searched for at every pixel (SimTower's
+     * transparent copies spent most of its time there). */
+    uint16_t (*s_rgb)[3] = NULL, (*d_rgb)[3] = NULL;
+    if (arith_mode && s.depth <= 8) {
+        s_rgb = malloc(sizeof *s_rgb << s.depth);
+        if (s.depth == 1)
+            for (uint32_t v = 0; v < 2; v++)
+                qd_px_rgb(1, s.ctab, v, s_rgb[v]);
+        else
+            qd_px_rgb_all(s.depth, s.ctab, s_rgb);
+    }
+    if (arith_mode && arith_mode != transparent && d.depth <= 8) {
+        d_rgb = malloc(sizeof *d_rgb << d.depth);
+        if (d.depth == 1)
+            for (uint32_t v = 0; v < 2; v++)
+                qd_px_rgb(1, d.ctab, v, d_rgb[v]);
+        else
+            qd_px_rgb_all(d.depth, d.ctab, d_rgb);
     }
     uint32_t inv = px_mask(d.depth);
     /* Read source rows first when source and destination overlap. */
@@ -1199,7 +1220,29 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
                 snap[(size_t)y * (size_t)sw + (size_t)x] = ok ? get_px(&s, sx, sy) : 0;
             }
     }
-    for (int i = 0; i < clip.nbands; i++) {
+    /* The usual game copy: 8 bits to 8 bits, srcCopy, unscaled, the source
+     * wholly inside its bitmap and apart from the destination: each run of
+     * a row through the table at once rather than a pixel at a time. */
+    bool rows8 = lut_conv && !arith_mode && (m & 3) == 0 && !snap && s.depth == 8 && d.depth == 8 && sw == dw &&
+                 sh == dh && sr.left >= s.bounds.left && sr.top >= s.bounds.top && sr.right <= s.bounds.right &&
+                 sr.bottom <= s.bounds.bottom;
+    uint8_t *run = rows8 ? malloc((size_t)sw) : NULL;
+    for (int i = 0; run && i < clip.nbands; i++) {
+        const rband *b = &clip.bands[i];
+        for (int y = b->top; y < b->bottom; y++) {
+            gaddr srow = s.base + (uint32_t)(sr.top + (y - dr.top) - s.bounds.top) * s.row_bytes;
+            gaddr drow = d.base + (uint32_t)(y - d.bounds.top) * d.row_bytes;
+            for (int k = 0; k < b->n; k += 2) {
+                int x0 = b->x[k], n = b->x[k + 1] - x0;
+                gaddr from = srow + (uint32_t)(sr.left + (x0 - dr.left) - s.bounds.left);
+                gget(run, from, (uint32_t)n);
+                for (int x = 0; x < n; x++)
+                    run[x] = (uint8_t)lut_conv[run[x]];
+                gput(drow + (uint32_t)(x0 - d.bounds.left), run, (uint32_t)n);
+            }
+        }
+    }
+    for (int i = 0; !run && i < clip.nbands; i++) {
         const rband *b = &clip.bands[i];
         for (int y = b->top; y < b->bottom; y++) {
             int syo = (int)((int64_t)(y - dr.top) * sh / dh);
@@ -1218,13 +1261,20 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
                     int col = x - d.bounds.left, row = y - d.bounds.top;
                     if (arith_mode) {
                         uint16_t sc[3], dc[3];
-                        qd_px_rgb(s.depth, s.ctab, sv, sc);
+                        if (s_rgb)
+                            memcpy(sc, s_rgb[sv & ((1u << s.depth) - 1)], sizeof sc);
+                        else
+                            qd_px_rgb(s.depth, s.ctab, sv, sc);
                         if (arith_mode == transparent) {
                             if (memcmp(sc, bk_rgb, sizeof sc))
                                 put_px(&d, col, row, qd_rgb_px(d.depth, d.ctab, sc));
                             continue;
                         }
-                        qd_px_rgb(d.depth, d.ctab, get_px(&d, col, row), dc);
+                        uint32_t dv = get_px(&d, col, row);
+                        if (d_rgb)
+                            memcpy(dc, d_rgb[dv & ((1u << d.depth) - 1)], sizeof dc);
+                        else
+                            qd_px_rgb(d.depth, d.ctab, dv, dc);
                         for (int c = 0; c < 3; c++)
                             dc[c] = arith(arith_mode, sc[c], dc[c], op_color[c]);
                         put_px(&d, col, row, qd_rgb_px(d.depth, d.ctab, dc));
@@ -1248,8 +1298,11 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
         }
     }
     free(snap);
+    free(run);
     free(lut_conv);
     free(lut_white);
+    free(s_rgb);
+    free(d_rgb);
     hrgn_free(&clip);
     hrgn_free(&tmp);
 }

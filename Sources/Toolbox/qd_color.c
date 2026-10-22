@@ -91,6 +91,30 @@ void qd_px_rgb(int depth, gaddr ctab, uint32_t v, uint16_t rgb[3])
     std_rgb(depth, v, rgb);
 }
 
+/* Every value's colour at an indexed depth (2, 4 or 8), as qd_px_rgb gives
+ * each, in one pass over the table instead of a search per value: the
+ * first entry with a value wins, as in qd_px_rgb. */
+void qd_px_rgb_all(int depth, gaddr ctab, uint16_t (*rgb)[3])
+{
+    uint32_t n = 1u << depth;
+    for (uint32_t v = 0; v < n; v++)
+        std_rgb(depth, v, rgb[v]);
+    if (!ctab || !rd32(ctab))
+        return;
+    gaddr t = rd32(ctab);
+    int count = (int16_t)rd16(t + 6) + 1;
+    bool device = (rd16(t + 4) & 0x8000) != 0;
+    for (int i = count - 1; i >= 0; i--) {
+        gaddr e = t + 8 + (uint32_t)i * 8;
+        uint32_t v = device ? (uint32_t)i : rd16(e);
+        if (v < n) {
+            rgb[v][0] = rd16(e + 2);
+            rgb[v][1] = rd16(e + 4);
+            rgb[v][2] = rd16(e + 6);
+        }
+    }
+}
+
 static uint32_t dist(const uint16_t a[3], const uint16_t b[3])
 {
     int dr = (a[0] >> 8) - (b[0] >> 8), dg = (a[1] >> 8) - (b[1] >> 8), db = (a[2] >> 8) - (b[2] >> 8);
