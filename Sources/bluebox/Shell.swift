@@ -799,6 +799,13 @@ struct SettingsForm: View {
                 Text(cpuName(68020)).tag(Int?.some(68020))
                 Text(cpuName(powerPCSetting)).tag(Int?.some(powerPCSetting))
             }
+            Picker("Translate code (JIT)", selection: $settings.jit) {
+                Text("\(inherit) (\(fallback.jit == true ? "on" : "off"))").tag(Bool?.none)
+                Text("On").tag(Bool?.some(true))
+                Text("Off").tag(Bool?.some(false))
+            }
+            .help("Translate the program's 68k or PowerPC code to this Mac's own as it runs, three to ten times "
+                  + "faster than interpreting it (experimental). The translations are kept between runs.")
         }
         Section("Network and ports") {
             Picker("AppleTalk", selection: $settings.appletalk) {

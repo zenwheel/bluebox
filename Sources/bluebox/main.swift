@@ -138,7 +138,7 @@ func usage() -> Never {
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
                 [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
-                [appleshare S|none|default] [display rootless|screen|default]
+                [appleshare S|none|default] [display rootless|screen|default] [jit on|off|default]
                 [real-name|email|organization|mail-account|smtp-host|news-host|
                  home-page|search-page TEXT|default]
                 [http-proxy|ftp-proxy|gopher-proxy|socks HOST:PORT|none|default]
@@ -611,6 +611,7 @@ func runCommand(_ args: [String]) {
     if let m = processor, m != Int32(powerPCSetting) { machine_set_cpu(m) }
     machine_set_depth_alerts(depthRelaunch != nil)
     machine_set_prefer_ppc(preferPPC ?? (processor == nil || processor == Int32(powerPCSetting)))
+    if saved.jit == true { useJIT = true } /* the jit setting; --jit turns it on for a run */
     if useJIT {
         let dir = jitCache ?? defaultJITCache()
         guard machine_set_jit(true, dir.isEmpty ? nil : dir) else { fail("--jit: no JIT on this host") }

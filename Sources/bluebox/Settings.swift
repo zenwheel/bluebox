@@ -37,10 +37,12 @@ struct AppSettings: Codable {
     var printFolder: String? /* printed pages saved there as PDF files, without the print panel ("": the panel) */
     var appleShare: String? /* an AppleShare volume to mount (machine_mount_appleshare's spec; "": none) */
     var display: String? /* rootless, or screen (the whole Mac screen in one window); chosen by itself when unset */
+    var jit: Bool? /* translate the program's code to host code (--jit) */
     var internet: InternetSettings? /* Internet Config's preferences */
     var isEmpty: Bool {
         depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
             && modemPort == nil && printerPort == nil && printFolder == nil && appleShare == nil && display == nil
+            && jit == nil
             && (internet?.isEmpty ?? true)
     }
     var summary: String {
@@ -52,7 +54,8 @@ struct AppSettings: Codable {
             + "printer-port \(printerPort ?? "default (none)"), "
             + "print-folder \(printFolder.map { $0.isEmpty ? "panel" : $0 } ?? "default (the print panel)"), "
             + "appleshare \(appleShare.map { $0.isEmpty ? "none" : $0 } ?? "default (none)"), "
-            + "display \(display ?? "default (rootless, the whole screen when the program wants it)")"
+            + "display \(display ?? "default (rootless, the whole screen when the program wants it)"), "
+            + "jit \(jit.map { $0 ? "on" : "off" } ?? "default (off)")"
             + (internet.map { $0.isEmpty ? "" : ", " + $0.summary } ?? "")
     }
 
@@ -63,7 +66,7 @@ struct AppSettings: Codable {
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
                            appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
-                           appleShare: appleShare ?? f.appleShare, display: display ?? f.display,
+                           appleShare: appleShare ?? f.appleShare, display: display ?? f.display, jit: jit ?? f.jit,
                            internet: internet.map { $0.over(f.internet) } ?? f.internet)
     }
 }
@@ -237,6 +240,7 @@ func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 ///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
 ///     [print-folder <folder>|panel|default] [appleshare <spec>|none|default] [display rootless|screen|default]
+///     [jit on|off|default]
 ///     [real-name|email|organization|mail-account|smtp-host|news-host|home-page|search-page <text>|default]
 ///     [http-proxy|ftp-proxy|gopher-proxy|socks <host:port>|none|default] [no-proxy <domains>|default]
 ///     [passive-ftp on|off|default]
@@ -339,6 +343,9 @@ func setCommand(_ args: [String]) {
         case "display":
             guard ["rootless", "screen", "default"].contains(value) else { fail("display expects rootless, screen or default") }
             s.display = value == "default" ? nil : value
+        case "jit":
+            guard ["on", "off", "default"].contains(value) else { fail("jit expects on, off or default") }
+            s.jit = value == "default" ? nil : value == "on"
         case "passive-ftp":
             guard ["on", "off", "default"].contains(value) else { fail("passive-ftp expects on, off or default") }
             var i = s.internet ?? InternetSettings()
@@ -354,7 +361,7 @@ func setCommand(_ args: [String]) {
             s.internet = i.isEmpty ? nil : i
         default:
             fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, "
-                 + "modem-port, printer-port, print-folder, appleshare, display, "
+                 + "modem-port, printer-port, print-folder, appleshare, display, jit, "
                  + InternetSettings.fields.map(\.name).joined(separator: ", ") + ", passive-ftp)")
         }
     }
