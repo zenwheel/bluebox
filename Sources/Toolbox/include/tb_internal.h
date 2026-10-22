@@ -274,6 +274,10 @@ void sound_input_reset(void);
 /* PCM straight to the host on a channel id of the caller's (movies). */
 void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume);
 void sound_host_stop(int id);
+/* The sound output device's settings by SndGetInfo/SndSetInfo selector
+ * (GetSoundOutputInfo and SetSoundOutputInfo). */
+int16_t sound_output_get_info(uint32_t sel, gaddr info);
+int16_t sound_output_set_info(uint32_t sel, gaddr info);
 /* MIDI to the host's synthesizer id (n 0: silence it). */
 void sound_host_midi(int id, const machine_midi_event *events, int n);
 

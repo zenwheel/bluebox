@@ -182,6 +182,131 @@ extension BlueBox {
             #expect(tb_SndDisposeChannel(chan, 1) == 0)
         }
 
+        nonisolated(unsafe) static var modified: [(cmd: UInt16, p1: Int16, p2: UInt32)] = []
+
+        /// FUNCTION Modifier(chan; VAR cmd; mod): BOOLEAN.  It halves
+        /// volumeCmd's volume, drops callBackCmd, and answers ampCmd by
+        /// asking to send one of its own: volumeCmd at a quarter.
+        static let modifier: native_fn = { c, _ in
+            guard let c else { return }
+            let ret = cpu_pop32(c)
+            _ = cpu_pop32(c)                               // the stub
+            let cmdp = cpu_pop32(c)
+            _ = cpu_pop32(c)                               // the channel
+            let cmd = rd16(cmdp), p1 = Int16(bitPattern: rd16(cmdp + 2))
+            SoundManager.modified.append((cmd, p1, rd32(cmdp + 4)))
+            var more = false
+            switch cmd {
+            case 46: wr32(cmdp + 4, 0x0080_0080)          // volumeCmd: half
+            case 13: wr16(cmdp, 0)                         // callBackCmd: dropped
+            case 43: more = true                           // ampCmd: then another
+            case 21 where p1 == 1:                         // requestNextCmd
+                wr16(cmdp, 46); wr32(cmdp + 4, 0x0040_0040)
+            default: break
+            }
+            _ = cpu_pop16(c)
+            cpu_push16(c, more ? 0x0100 : 0)
+            cpu_push32(c, ret)
+        }
+
+        /// A modifier sees initCmd, then each command before the synthesizer,
+        /// changing it, dropping it or adding to it; freeCmd at the end.
+        @Test func modifiersChangeDropAndAddCommands() {
+            launchTestApp()
+            install()
+            defer { machine_set_sound_handler(nil, nil) }
+            let stack = tb_NewPtr(65536, false, true)
+            g_cpu!.pointee.a.7 = stack + 65536 - 16
+            Self.modified = []
+            Self.callbacks = 0
+            let proc = native_register(Self.callback, "test sound callback", 0)
+            let mod = native_register(Self.modifier, "test sound modifier", 0)
+            let chanp = tb_NewPtr(4, false, true)
+            #expect(tb_SndNewChannel(chanp, 5, 0, proc) == 0)
+            let chan = rd32(chanp)
+            #expect(tb_SndAddModifier(chan, mod, 0, 1234) == 0)
+            #expect(Self.modified.count == 1 && Self.modified[0].cmd == 1 && Self.modified[0].p2 == 1234)
+            let stub = rd32(chan + UInt32(SndChannel_firstMod_off))
+            #expect(stub != 0 && rd32(stub + 4) == mod)
+            let cmd = tb_NewPtr(8, false, true), result = tb_NewPtr(4, false, true)
+            func immediate(_ c: UInt16, _ p2: UInt32) {
+                wr16(cmd, c); wr16(cmd + 2, 0); wr32(cmd + 4, p2)
+                #expect(tb_SndDoImmediate(chan, cmd) == 0)
+            }
+            immediate(46, 0x0100_0100)                           // volumeCmd
+            immediate(47, result)                                // getVolumeCmd
+            #expect(rd32(result) == 0x0080_0080)
+            immediate(13, 0)                                     // callBackCmd
+            #expect(Self.callbacks == 0)
+            immediate(43, 200)                                   // ampCmd
+            immediate(47, result)
+            #expect(rd32(result) == 0x0040_0040)                 // the modifier's own volumeCmd
+            #expect(Self.modified.contains { $0.cmd == 21 && $0.p1 == 1 })
+            #expect(tb_SndDisposeChannel(chan, 1) == 0)
+            #expect(Self.modified.last?.cmd == 2)                // freeCmd
+            // Without a routine, only a synthesizer's id: no 'snth' code runs here.
+            #expect(tb_SndNewChannel(chanp, 5, 0, 0) == 0)
+            #expect(tb_SndAddModifier(rd32(chanp), 0, 5, 0) == 0)
+            #expect(tb_SndAddModifier(rd32(chanp), 0, 128, 0) == -204)
+            #expect(tb_SndDisposeChannel(rd32(chanp), 1) == 0)
+        }
+
+        nonisolated(unsafe) static var volumes: [Float] = []
+
+        /// SndGetInfo and SndSetInfo: the channel's volume and rate
+        /// multiplier, and the output device's settings behind it.
+        @Test func channelAndDeviceInfo() {
+            launchTestApp()
+            Self.played = []
+            Self.volumes = []
+            machine_set_sound_handler({ _, pcm, frames, channels, rate, volume, _ in
+                guard pcm != nil else { return }
+                SoundManager.played.append((frames, channels, rate))
+                SoundManager.volumes.append(volume)
+            }, nil)
+            defer { machine_set_sound_handler(nil, nil) }
+            let chanp = tb_NewPtr(4, false, true)
+            #expect(tb_SndNewChannel(chanp, 5, 0, 0) == 0)
+            let chan = rd32(chanp)
+            let info = tb_NewPtr(16, false, true)
+            func get(_ sel: String) -> Int16 { tb_SndGetInfo(chan, Int32(bitPattern: fourCC(sel)), info) }
+            func set(_ sel: String) -> Int16 { tb_SndSetInfo(chan, Int32(bitPattern: fourCC(sel)), info) }
+            #expect(get("srat") == 0 && rd32(info) == 0xAC44_0000)
+            #expect(get("ssiz") == 0 && rd16(info) == 16)
+            #expect(get("chan") == 0 && rd16(info) == 2)
+            #expect(get("ssav") == 0 && rd16(info) == 2 && rd16(rd32(rd32(info + 2)) + 2) == 16)
+            #expect(get("what") == -231)
+            #expect(set("what") == -231)
+            wr16(info, 12)
+            #expect(set("ssiz") == -226)
+            wr32(info, 0x0080_0080)
+            #expect(set("volu") == 0)                            // the channel's
+            #expect(get("volu") == 0 && rd32(info) == 0x0080_0080)
+            wr32(info, 0x0080_0080)
+            #expect(set("hvol") == 0)                            // the device's
+            #expect(tb_GetDefaultOutputVolume(info) == 0 && rd32(info) == 0x0080_0080)
+            wr32(info, 0x0002_0000)
+            #expect(set("rmul") == 0)                            // twice as fast
+            let cmd = tb_NewPtr(8, false, true)
+            wr16(cmd, 87); wr32(cmd + 4, info)                   // getRateMultiplierCmd
+            #expect(tb_SndDoImmediate(chan, cmd) == 0 && rd32(info) == 0x0002_0000)
+            let data = Self.snd(samples: 2225)
+            let h = tb_NewHandle(Int32(data.count), false, false)
+            for (i, b) in data.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+            #expect(tb_SndPlay(chan, h, 0) == 0)
+            #expect(abs((Self.played.first?.rate ?? 0) - 2 * 22254.5) < 2)
+            #expect(abs((Self.volumes.first ?? 0) - 0.25) < 0.01)  // half the channel's, half the device's
+            wr16(info, 1)
+            #expect(set("smut") == 0)
+            #expect(tb_SndPlay(chan, h, 0) == 0)
+            #expect(Self.volumes.last == 0)
+            wr16(info, 0)
+            #expect(set("smut") == 0)
+            #expect(tb_SetDefaultOutputVolume(0x0100_0100) == 0)
+            #expect(tb_SndDisposeChannel(chan, 1) == 0)
+            #expect(tb_SndGetInfo(chan, Int32(bitPattern: fourCC("volu")), info) == -205)
+        }
+
         /// The Sound Driver: StartSound's asynchronous free-form write stays
         /// in progress while it plays, then completes (StuntCopter).
         @Test func soundDriverPlaysFreeFormAsynchronously() {

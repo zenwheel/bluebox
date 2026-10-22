@@ -17,6 +17,10 @@
  * instead (qt_native.c), headless runs included: frames for the movie's
  * clock, and sound sent to the host a second ahead.  VLC is the fallback.
  *
+ * Time bases (NewTimeBase, GetMovieTimeBase) keep time from the machine's
+ * clock or from a master time base, so one movie can follow another's time
+ * and rate (SetMovieMasterTimeBase).
+ *
  * The movie controller is a component of our own: a play/pause button and a
  * time slider under the movie, with the standard actions and action filters.
  */
@@ -78,7 +82,14 @@ typedef struct {
     int32_t rate, pref_rate; /* Fixed */
     int16_t volume, pref_volume;
     int64_t base_ms;     /* time when stopped, or at start_ns */
-    uint64_t start_ns;
+    int64_t start_ns;    /* the time source's (the machine's, or the master's), ns */
+    gaddr timebase;      /* the TimeBase GetMovieTimeBase gives */
+    gaddr master;        /* SetMovieMasterTimeBase's, or 0 for the clock */
+    gaddr clock;         /* SetMovieMasterClock's component (ours keep machine time) */
+    bool vlc_held;       /* VLC paused while the master stands still */
+    gaddr clip;          /* SetMovieClipRgn's, in the movie's coordinates (ours) */
+    gaddr display_clip;  /* SetMovieDisplayClipRgn's, in the port's (ours) */
+    uint32_t created, modified; /* the 'mvhd' atom's, seconds since 1904 */
     qt_vlc_player *player;
     qt_native *native;   /* our decoders, when they cover the movie */
     uint8_t *moov;       /* the description, edited in place of the file's */
@@ -205,10 +216,14 @@ static bool describe(movie *m, uint8_t *moov, uint32_t len)
     uint8_t *mvhd = find_atom(moov + 8, end, "mvhd", &n);
     if (!mvhd || n < 32)
         return false;
-    if (mvhd[8] == 1 && n >= 44) { /* 64-bit times */
+    if (mvhd[8] == 1 && n >= 44) { /* 64-bit times: their low halves fit a classic Mac's */
+        m->created = be32(mvhd + 16);
+        m->modified = be32(mvhd + 24);
         m->scale = (int32_t)be32(mvhd + 28);
         m->duration = (int32_t)be32(mvhd + 36);
     } else {
+        m->created = be32(mvhd + 12);
+        m->modified = be32(mvhd + 16);
         m->scale = (int32_t)be32(mvhd + 20);
         m->duration = (int32_t)be32(mvhd + 24);
     }
@@ -475,16 +490,28 @@ static movie *new_movie(void)
         m->volume = m->pref_volume = 0x0100;
         m->port = qd_port();
         m->gdh = tb_GetGDevice();
+        m->timebase = tb_NewHandle(4, false, true);
+        wr32(rd32(m->timebase), 0x74626173); /* 'tbas' */
+        m->start_ns = (int64_t)machine_time_ns();
         return m;
     }
     return NULL;
 }
 
 static void stop_sound(movie *m);
+static void release_slaves(gaddr tb);
 
 static void free_movie(movie *m)
 {
     stop_sound(m);
+    release_slaves(m->handle);
+    release_slaves(m->timebase);
+    if (m->timebase)
+        tb_DisposeHandle(m->timebase);
+    if (m->clip)
+        tb_DisposeRgn(m->clip);
+    if (m->display_clip)
+        tb_DisposeRgn(m->display_clip);
     qt_native_close(m->native);
     free(m->moov);
     free(m->data_path);
@@ -577,28 +604,55 @@ static int16_t open_movie(const char *path, int16_t *resid, uint32_t data_offset
 
 /* ---- Time ---- */
 
-static int64_t now_ms(void) { return (int64_t)(machine_time_ns() / 1000000u); }
-
 static int64_t duration_ms(const movie *m) { return (int64_t)m->duration * 1000 / m->scale; }
 
-static int64_t movie_ms(movie *m)
+/* A movie keeps time from a source: the machine's clock, or the time base
+ * it is slaved to (SetMovieMasterTimeBase), so that it follows that one's
+ * time and rate.  Masters can chain; a loop of them ends at the clock. */
+#define MAX_MASTERS 8
+
+static int64_t timebase_ns(gaddr tb, int depth);
+static int32_t timebase_effective_rate(gaddr tb, int depth);
+
+static int64_t source_ns(const movie *m, int depth)
+{
+    if (m->master && depth < MAX_MASTERS)
+        return timebase_ns(m->master, depth + 1);
+    return (int64_t)machine_time_ns();
+}
+
+static int64_t movie_ms_at(movie *m, int depth)
 {
     int64_t t;
-    if (m->player && m->playing)
+    if (m->player && m->playing && !m->master)
         t = qt_vlc_time(m->player);
     else if (m->playing)
-        t = m->base_ms + (now_ms() - (int64_t)(m->start_ns / 1000000u)) * m->rate / 0x10000;
+        t = m->base_ms + (int64_t)((__int128)(source_ns(m, depth) - m->start_ns) * m->rate / 0x10000 / 1000000);
     else
         t = m->base_ms;
     int64_t d = duration_ms(m);
     return t > d ? d : t < 0 ? 0 : t;
 }
 
+static int64_t movie_ms(movie *m) { return movie_ms_at(m, 0); }
+
+/* The rate the movie's time really moves at: its own times its master's. */
+static int32_t movie_effective_rate_at(movie *m, int depth)
+{
+    if (!m->playing)
+        return 0;
+    if (!m->master || depth >= MAX_MASTERS)
+        return m->rate;
+    return (int32_t)((int64_t)m->rate * timebase_effective_rate(m->master, depth + 1) / 0x10000);
+}
+
+static int32_t movie_effective_rate(movie *m) { return movie_effective_rate_at(m, 0); }
+
 static bool movie_done(movie *m)
 {
     if (!m->playing)
         return movie_ms(m) >= duration_ms(m);
-    if (m->player)
+    if (m->player && !m->master)
         return qt_vlc_ended(m->player);
     return movie_ms(m) >= duration_ms(m);
 }
@@ -621,7 +675,7 @@ static void stop_sound(movie *m)
  * Notes the movie's volume makes quieter go out softer. */
 static void feed_music(movie *m)
 {
-    if (!m->native || !qt_native_has_music(m->native) || !m->playing || m->rate != 0x10000 || m->volume <= 0)
+    if (!m->native || !qt_native_has_music(m->native) || movie_effective_rate(m) != 0x10000 || m->volume <= 0)
         return;
     int64_t now = movie_ms(m);
     if (!m->music_on || m->music_ms < now - 100 || m->music_ms > now + 1000) { /* starting, behind, or rewound */
@@ -660,7 +714,7 @@ static void feed_music(movie *m)
 /* Keep a second of sound queued ahead of the clock (normal speed only). */
 static void feed_sound(movie *m)
 {
-    if (!m->native || !qt_native_has_sound(m->native) || !m->playing || m->rate != 0x10000 || !plays(m, "soun") ||
+    if (!m->native || !qt_native_has_sound(m->native) || movie_effective_rate(m) != 0x10000 || !plays(m, "soun") ||
         m->volume <= 0)
         return;
     int64_t now = movie_ms(m), end = duration_ms(m);
@@ -705,11 +759,19 @@ static void start(movie *m, int32_t rate)
     }
     if (rate != m->rate)
         stop_sound(m);
+    if (m->playing)
+        m->base_ms = movie_ms(m); /* a new rate from where it is */
     m->rate = rate;
-    if (movie_done(m) && !m->playing)
+    if (movie_done(m) && !m->playing && !m->master)
         m->base_ms = 0; /* playing a finished movie starts it again */
     ensure_player(m);
-    if (m->player) {
+    if (m->player && m->master) {
+        /* VLC keeps its own clock: put it where the master says; task keeps
+         * it there. */
+        qt_vlc_play(m->player);
+        qt_vlc_seek(m->player, m->base_ms);
+        m->vlc_held = false;
+    } else if (m->player) {
         if (m->base_ms == 0)
             qt_vlc_rewind(m->player);
         qt_vlc_play(m->player);
@@ -718,7 +780,7 @@ static void start(movie *m, int32_t rate)
         if (rate != 0x10000)
             qt_vlc_set_rate(m->player, (float)rate / 65536.0f);
     }
-    m->start_ns = machine_time_ns();
+    m->start_ns = source_ns(m, 0);
     m->playing = true;
     feed_sound(m);
     feed_music(m);
@@ -728,7 +790,7 @@ static void seek(movie *m, int64_t ms)
 {
     stop_sound(m);
     m->base_ms = ms;
-    m->start_ns = machine_time_ns();
+    m->start_ns = source_ns(m, 0);
     if (m->player) {
         if (ms == 0 && !m->playing)
             qt_vlc_rewind(m->player);
@@ -756,6 +818,31 @@ static void draw_frame(movie *m, bool force)
         return;
     gaddr saved = qd_port();
     tb_SetPort(m->port);
+    /* The movie's clip (in its own coordinates, moved to its box) and its
+     * display clip (the port's) narrow the port's for the frame. */
+    gaddr port_clip = 0;
+    if (m->clip || m->display_clip) {
+        port_clip = tb_NewRgn();
+        tb_GetClip(port_clip);
+        gaddr clip = tb_NewRgn();
+        tb_CopyRgn(port_clip, clip);
+        if (m->clip) {
+            gaddr r = tb_NewRgn(), from = tb_NewPtr(8, false, false), to = tb_NewPtr(8, false, false);
+            tb_CopyRgn(m->clip, r);
+            qrect_put(from, m->natural);
+            qrect_put(to, m->box);
+            if (m->natural.right > m->natural.left && m->natural.bottom > m->natural.top)
+                tb_MapRgn(r, from, to);
+            tb_SectRgn(clip, r, clip);
+            tb_DisposeRgn(r);
+            tb_DisposePtr(from);
+            tb_DisposePtr(to);
+        }
+        if (m->display_clip)
+            tb_SectRgn(clip, m->display_clip, clip);
+        tb_SetClip(clip);
+        tb_DisposeRgn(clip);
+    }
     if (m->frame_indexed) {
         /* The port's colours at the movie's depth, else the standard ones. */
         pixdst d = qd_port_pixels(m->port);
@@ -778,17 +865,50 @@ static void draw_frame(movie *m, bool force)
     } else {
         qd_draw_rgba(m->frame, m->fw, m->fh, m->box);
     }
+    if (port_clip) {
+        tb_SetClip(port_clip);
+        tb_DisposeRgn(port_clip);
+    }
     tb_SetPort(saved);
+}
+
+/* A slaved movie that VLC plays: VLC keeps its own clock, so it is held
+ * while the master stands still and put back where the master says when
+ * it strays. */
+static void follow_master(movie *m)
+{
+    if (!m->player || !m->master || !m->playing)
+        return;
+    if (movie_effective_rate(m) == 0) {
+        if (!m->vlc_held)
+            qt_vlc_pause(m->player);
+        m->vlc_held = true;
+        return;
+    }
+    int64_t want = movie_ms(m);
+    if (m->vlc_held) {
+        qt_vlc_play(m->player);
+        qt_vlc_seek(m->player, want);
+        m->vlc_held = false;
+    } else if (llabs(qt_vlc_time(m->player) - want) > 250) {
+        qt_vlc_seek(m->player, want);
+    }
 }
 
 static void task(movie *m)
 {
     if (!m->playing)
         return;
+    follow_master(m);
     draw_frame(m, false);
+    /* Sound plays a second ahead at normal speed: a master that stops or
+     * changes speed leaves it behind. */
+    if (movie_effective_rate(m) != 0x10000)
+        stop_sound(m);
     feed_sound(m);
     feed_music(m);
-    if (movie_done(m)) {
+    /* A slaved movie goes where its master takes it, back again included. */
+    if (!m->master && movie_done(m)) {
         if (m->looping) {
             m->base_ms = 0;
             if (m->player)
@@ -910,9 +1030,13 @@ int16_t tb_NewMovieFromHandle(gaddr moviep, int32_t h, int16_t flags, gaddr chan
     return set_error(noErr);
 }
 
+uint32_t mac_now(void);
+
 int32_t tb_NewMovie(int32_t flags)
 {
     movie *m = new_movie();
+    if (m)
+        m->created = m->modified = mac_now();
     set_error(m ? noErr : memFullErr);
     return m ? (int32_t)m->handle : 0;
 }
@@ -1504,23 +1628,6 @@ void tb_SetMovieTime(int32_t h, gaddr tr)
     seek(m, (int64_t)(int32_t)rd32(tr + 4) * 1000 / (scale > 0 ? scale : m->scale));
 }
 
-int32_t tb_GetMovieTimeBase(int32_t h) { return h; } /* the movie stands for its time base */
-
-int32_t tb_GetTimeBaseTime(int32_t tb, int32_t scale, gaddr tr)
-{
-    movie *m = movie_of((gaddr)tb);
-    if (!m)
-        return 0;
-    int32_t v = (int32_t)(movie_ms(m) * (scale > 0 ? scale : m->scale) / 1000);
-    if (tr) {
-        wr32(tr, 0);
-        wr32(tr + 4, (uint32_t)v);
-        wr32(tr + 8, (uint32_t)scale);
-        wr32(tr + 12, (uint32_t)tb);
-    }
-    return v;
-}
-
 /* A TimeRecord's value in another scale, rounded toward zero. */
 static int64_t time_in_scale(gaddr tr, int32_t scale)
 {
@@ -1558,8 +1665,486 @@ void tb_SubtractTime(gaddr dst, gaddr src)
         set_time_value(dst, time_in_scale(dst, 0) - time_in_scale(src, (int32_t)rd32(dst + 8)));
 }
 
-void tb_SetTimeBaseRate(int32_t tb, int32_t rate) { tb_SetMovieRate(tb, rate); }
-void tb_SetMovieMasterTimeBase(int32_t h, int32_t tb, gaddr zero) {}
+/* ---- Time bases ---- */
+
+/* A time base of the program's own (NewTimeBase).  Its time is value (in
+ * scale) when its source stood at anchor_ns, moving on from there at rate
+ * times the source's: the machine's clock, or a master time base.  Keeping
+ * the value as it was set means a stopped time base reads back exactly. */
+#define MAX_TIMEBASES 32
+#define NS_SCALE 1000000000
+
+enum { loopTimeBase = 1, palindromeLoopTimeBase = 2 };
+enum { timeBaseBeforeStartTime = 1, timeBaseAfterStopTime = 2 };
+
+typedef struct {
+    bool used;
+    gaddr handle; /* the TimeBase the program holds */
+    int32_t rate; /* Fixed */
+    int64_t value;
+    int32_t scale;
+    int64_t anchor_ns;
+    int32_t own_scale; /* the program's last, for times asked for in scale 0 */
+    gaddr master, clock;
+    int64_t start, stop;
+    int32_t start_scale, stop_scale; /* 0: not set */
+    int32_t flags;
+} timebase;
+
+static timebase timebases[MAX_TIMEBASES];
+
+static timebase *timebase_of(gaddr tb)
+{
+    for (int i = 0; tb && i < MAX_TIMEBASES; i++)
+        if (timebases[i].used && timebases[i].handle == tb)
+            return &timebases[i];
+    return NULL;
+}
+
+/* A movie's time base: the one GetMovieTimeBase gave, or (as before there
+ * were time bases) the movie itself. */
+static movie *movie_of_timebase(gaddr tb)
+{
+    for (int i = 0; tb && i < MAX_MOVIES; i++)
+        if (movies[i].used && (movies[i].timebase == tb || movies[i].handle == tb))
+            return &movies[i];
+    return NULL;
+}
+
+/* n / d to the nearest whole number. */
+static int64_t div_round(__int128 n, __int128 d)
+{
+    if (d < 0)
+        n = -n, d = -d;
+    return (int64_t)(n >= 0 ? (n + d / 2) / d : (n - d / 2) / d);
+}
+
+static int64_t tbs_source_ns(const timebase *t, int depth)
+{
+    if (t->master && depth < MAX_MASTERS)
+        return timebase_ns(t->master, depth + 1);
+    return (int64_t)machine_time_ns();
+}
+
+/* The time in scale s, as it would be without start and stop times. */
+static int64_t tbs_unpinned(const timebase *t, int32_t s, int depth)
+{
+    __int128 elapsed = (__int128)(tbs_source_ns(t, depth) - t->anchor_ns) * t->rate / 0x10000;
+    return div_round(((__int128)t->value * NS_SCALE + elapsed * t->scale) * s, (__int128)t->scale * NS_SCALE);
+}
+
+/* The time in scale s: held between the start and stop times, or going
+ * round between them when the time base loops. */
+static int64_t tbs_time(const timebase *t, int32_t s, int depth, int32_t *status)
+{
+    int64_t v = tbs_unpinned(t, s, depth);
+    bool has_start = t->start_scale > 0, has_stop = t->stop_scale > 0;
+    int64_t start = has_start ? div_round((__int128)t->start * s, t->start_scale) : 0;
+    int64_t stop = has_stop ? div_round((__int128)t->stop * s, t->stop_scale) : 0;
+    if (has_start && has_stop && stop > start && (t->flags & (loopTimeBase | palindromeLoopTimeBase))) {
+        int64_t span = stop - start, k = (v - start) / span, r = (v - start) % span;
+        if (r < 0)
+            r += span, k--;
+        bool back = (t->flags & palindromeLoopTimeBase) && (k & 1);
+        return back ? stop - r : start + r;
+    }
+    if (has_start && v < start) {
+        if (status)
+            *status |= timeBaseBeforeStartTime;
+        return start;
+    }
+    if (has_stop && v > stop) {
+        if (status)
+            *status |= timeBaseAfterStopTime;
+        return stop;
+    }
+    return v;
+}
+
+/* Any time base's time in scale s, and in nanoseconds. */
+static int64_t timebase_time_in(gaddr tb, int32_t s, int depth)
+{
+    movie *m = movie_of_timebase(tb);
+    if (m)
+        return div_round((__int128)movie_ms_at(m, depth) * s, 1000);
+    timebase *t = timebase_of(tb);
+    return t ? tbs_time(t, s, depth, NULL) : 0;
+}
+
+static int64_t timebase_ns(gaddr tb, int depth) { return timebase_time_in(tb, NS_SCALE, depth); }
+
+static int32_t timebase_effective_rate(gaddr tb, int depth)
+{
+    movie *m = movie_of_timebase(tb);
+    if (m)
+        return movie_effective_rate_at(m, depth);
+    timebase *t = timebase_of(tb);
+    if (!t)
+        return 0;
+    if (!t->master || depth >= MAX_MASTERS)
+        return t->rate;
+    return (int32_t)((int64_t)t->rate * timebase_effective_rate(t->master, depth + 1) / 0x10000);
+}
+
+/* Start counting from now, at the time it has now (for a new rate). */
+static void tbs_reanchor(timebase *t)
+{
+    int64_t src = tbs_source_ns(t, 0);
+    if (t->rate && src != t->anchor_ns) {
+        t->value = tbs_time(t, NS_SCALE, 0, NULL);
+        t->scale = NS_SCALE;
+    }
+    t->anchor_ns = src;
+}
+
+/* A TimeRecord's scale, or the fallback when it has none. */
+static int32_t record_scale(gaddr tr, int32_t fallback)
+{
+    int32_t s = (int32_t)rd32(tr + 8);
+    return s > 0 ? s : fallback;
+}
+
+/* Where a time base stands on a new source: its time is the source's less
+ * slaveZero (in the master's scale), so with no zero a slave reads as its
+ * master does.  A clock with no zero leaves the time where it was. */
+static void tbs_set_source(timebase *t, gaddr master, gaddr clock, gaddr zero)
+{
+    if (master && (master == t->handle || timebase_of(master) == t))
+        master = 0;
+    int64_t was = tbs_time(t, NS_SCALE, 0, NULL);
+    t->master = master;
+    t->clock = master ? 0 : clock;
+    int64_t src = tbs_source_ns(t, 0);
+    if (zero) {
+        int32_t zs = record_scale(zero, 600);
+        t->value = div_round((__int128)src * zs, NS_SCALE) - (int64_t)((uint64_t)rd32(zero) << 32 | rd32(zero + 4));
+        t->scale = zs;
+    } else {
+        t->value = master ? src : was;
+        t->scale = NS_SCALE;
+    }
+    t->anchor_ns = src;
+}
+
+/* The same for a movie: its time from the new source on. */
+static void movie_set_source(movie *m, gaddr master, gaddr clock, gaddr zero)
+{
+    if (master && movie_of_timebase(master) == m)
+        master = 0;
+    int64_t was = movie_ms(m);
+    m->master = master;
+    m->clock = master ? 0 : clock;
+    int64_t src = source_ns(m, 0);
+    if (zero) {
+        int32_t zs = record_scale(zero, 600);
+        int64_t z = (int64_t)((uint64_t)rd32(zero) << 32 | rd32(zero + 4));
+        m->base_ms = src / 1000000 - div_round((__int128)z * 1000, zs);
+    } else {
+        m->base_ms = master ? src / 1000000 : was;
+    }
+    m->start_ns = src;
+    stop_sound(m);
+    if (m->player && !master && m->playing) {
+        /* Back on VLC's own clock, from where the master left it. */
+        qt_vlc_play(m->player);
+        qt_vlc_seek(m->player, movie_ms(m));
+        m->vlc_held = false;
+    }
+}
+
+/* Time bases and movies slaved to one that is going: on the clock, where
+ * they are. */
+static void release_slaves(gaddr tb)
+{
+    if (!tb)
+        return;
+    for (int i = 0; i < MAX_MOVIES; i++)
+        if (movies[i].used && movies[i].master == tb)
+            movie_set_source(&movies[i], 0, 0, 0);
+    for (int i = 0; i < MAX_TIMEBASES; i++)
+        if (timebases[i].used && timebases[i].master == tb)
+            tbs_set_source(&timebases[i], 0, 0, 0);
+}
+
+int32_t tb_GetMovieTimeBase(int32_t theMovie)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    return m ? (int32_t)m->timebase : 0;
+}
+
+int32_t tb_NewTimeBase(void)
+{
+    for (int i = 0; i < MAX_TIMEBASES; i++) {
+        timebase *t = &timebases[i];
+        if (t->used)
+            continue;
+        memset(t, 0, sizeof *t);
+        t->handle = tb_NewHandle(4, false, true);
+        if (!t->handle)
+            break;
+        wr32(rd32(t->handle), 0x74626173); /* 'tbas' */
+        t->used = true;
+        t->scale = t->own_scale = 600;
+        t->anchor_ns = (int64_t)machine_time_ns();
+        set_error(noErr);
+        return (int32_t)t->handle;
+    }
+    set_error(memFullErr);
+    return 0;
+}
+
+void tb_DisposeTimeBase(int32_t tb)
+{
+    timebase *t = timebase_of((gaddr)tb);
+    if (!t) /* a movie's goes with the movie */
+        return;
+    release_slaves(t->handle);
+    tb_DisposeHandle(t->handle);
+    t->used = false;
+}
+
+/* TimeRecord: value (wide), scale, base.  A scale of 0 is the time base's own. */
+int32_t tb_GetTimeBaseTime(int32_t tb, int32_t s, gaddr tr)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    timebase *t = m ? NULL : timebase_of((gaddr)tb);
+    if (!m && !t)
+        return 0;
+    if (s <= 0)
+        s = m ? m->scale : t->own_scale;
+    int64_t v = timebase_time_in((gaddr)tb, s, 0);
+    if (tr) {
+        set_time_value(tr, v);
+        wr32(tr + 8, (uint32_t)s);
+        wr32(tr + 12, (uint32_t)tb);
+    }
+    return (int32_t)v;
+}
+
+void tb_SetTimeBaseValue(int32_t tb, int32_t t, int32_t s)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    if (m) {
+        seek(m, div_round((__int128)t * 1000, s > 0 ? s : m->scale));
+        return;
+    }
+    timebase *b = timebase_of((gaddr)tb);
+    if (!b)
+        return;
+    b->value = t;
+    b->scale = b->own_scale = s > 0 ? s : b->own_scale;
+    b->anchor_ns = tbs_source_ns(b, 0);
+}
+
+void tb_SetTimeBaseTime(int32_t tb, gaddr tr)
+{
+    if (!tr)
+        return;
+    movie *m = movie_of_timebase((gaddr)tb);
+    if (m) {
+        seek(m, div_round((__int128)time_in_scale(tr, 0) * 1000, record_scale(tr, m->scale)));
+        return;
+    }
+    timebase *b = timebase_of((gaddr)tb);
+    if (!b)
+        return;
+    b->value = time_in_scale(tr, 0);
+    b->scale = b->own_scale = record_scale(tr, b->own_scale);
+    b->anchor_ns = tbs_source_ns(b, 0);
+}
+
+int32_t tb_GetTimeBaseRate(int32_t tb)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    if (m)
+        return m->playing ? m->rate : 0;
+    timebase *t = timebase_of((gaddr)tb);
+    return t ? t->rate : 0;
+}
+
+void tb_SetTimeBaseRate(int32_t tb, int32_t r)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    if (m) {
+        start(m, r);
+        return;
+    }
+    timebase *t = timebase_of((gaddr)tb);
+    if (!t)
+        return;
+    tbs_reanchor(t);
+    t->rate = r;
+}
+
+int32_t tb_GetTimeBaseEffectiveRate(int32_t tb) { return timebase_effective_rate((gaddr)tb, 0); }
+
+/* Start and stop times: a movie's are its beginning and end. */
+static int32_t get_limit(int32_t tb, int32_t s, gaddr tr, bool stop)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    timebase *t = m ? NULL : timebase_of((gaddr)tb);
+    if (!m && !t)
+        return 0;
+    if (s <= 0)
+        s = m ? m->scale : t->own_scale;
+    int64_t v = 0;
+    if (m)
+        v = stop ? div_round((__int128)m->duration * s, m->scale) : 0;
+    else if (stop ? t->stop_scale : t->start_scale)
+        v = div_round((__int128)(stop ? t->stop : t->start) * s, stop ? t->stop_scale : t->start_scale);
+    if (tr) {
+        set_time_value(tr, v);
+        wr32(tr + 8, (uint32_t)s);
+        wr32(tr + 12, (uint32_t)tb);
+    }
+    return (int32_t)v;
+}
+
+static void set_limit(int32_t tb, gaddr tr, bool stop)
+{
+    timebase *t = timebase_of((gaddr)tb);
+    if (!t || !tr)
+        return;
+    tbs_reanchor(t);
+    int64_t v = time_in_scale(tr, 0);
+    int32_t s = record_scale(tr, t->own_scale);
+    if (stop)
+        t->stop = v, t->stop_scale = s;
+    else
+        t->start = v, t->start_scale = s;
+}
+
+int32_t tb_GetTimeBaseStartTime(int32_t tb, int32_t s, gaddr tr) { return get_limit(tb, s, tr, false); }
+int32_t tb_GetTimeBaseStopTime(int32_t tb, int32_t s, gaddr tr) { return get_limit(tb, s, tr, true); }
+void tb_SetTimeBaseStartTime(int32_t tb, gaddr tr) { set_limit(tb, tr, false); }
+void tb_SetTimeBaseStopTime(int32_t tb, gaddr tr) { set_limit(tb, tr, true); }
+
+int32_t tb_GetTimeBaseFlags(int32_t tb)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    if (m)
+        return m->looping ? loopTimeBase : 0;
+    timebase *t = timebase_of((gaddr)tb);
+    return t ? t->flags : 0;
+}
+
+void tb_SetTimeBaseFlags(int32_t tb, int32_t timeBaseFlags)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    if (m) {
+        m->looping = (timeBaseFlags & loopTimeBase) != 0;
+        return;
+    }
+    timebase *t = timebase_of((gaddr)tb);
+    if (t) {
+        tbs_reanchor(t);
+        t->flags = timeBaseFlags;
+    }
+}
+
+/* Whether the time base is held at its start or stop time, and the time
+ * it would have without them. */
+int32_t tb_GetTimeBaseStatus(int32_t tb, gaddr unpinnedTime)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    timebase *t = m ? NULL : timebase_of((gaddr)tb);
+    int32_t status = 0, s = m ? m->scale : t ? t->own_scale : 600;
+    int64_t v = 0;
+    if (t) {
+        tbs_time(t, s, 0, &status);
+        v = tbs_unpinned(t, s, 0);
+    } else if (m) {
+        v = div_round((__int128)movie_ms(m) * s, 1000);
+    }
+    if (unpinnedTime) {
+        set_time_value(unpinnedTime, v);
+        wr32(unpinnedTime + 8, (uint32_t)s);
+        wr32(unpinnedTime + 12, (uint32_t)tb);
+    }
+    return status;
+}
+
+void tb_SetTimeBaseMasterTimeBase(int32_t slave, int32_t master, gaddr slaveZero)
+{
+    movie *m = movie_of_timebase((gaddr)slave);
+    timebase *t = m ? NULL : timebase_of((gaddr)slave);
+    if (m)
+        movie_set_source(m, (gaddr)master, 0, slaveZero);
+    else if (t)
+        tbs_set_source(t, (gaddr)master, 0, slaveZero);
+}
+
+int32_t tb_GetTimeBaseMasterTimeBase(int32_t tb)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    timebase *t = m ? NULL : timebase_of((gaddr)tb);
+    return (int32_t)(m ? m->master : t ? t->master : 0);
+}
+
+/* A clock component as the source: whichever it is, the machine's clock
+ * keeps the time (the tick clock's, finer). */
+void tb_SetTimeBaseMasterClock(int32_t slave, int32_t clockMeister, gaddr slaveZero)
+{
+    movie *m = movie_of_timebase((gaddr)slave);
+    timebase *t = m ? NULL : timebase_of((gaddr)slave);
+    if (m)
+        movie_set_source(m, 0, (gaddr)clockMeister, slaveZero);
+    else if (t)
+        tbs_set_source(t, 0, (gaddr)clockMeister, slaveZero);
+}
+
+int32_t tb_GetTimeBaseMasterClock(int32_t tb)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    timebase *t = m ? NULL : timebase_of((gaddr)tb);
+    return (int32_t)(m ? m->clock : t ? t->clock : 0);
+}
+
+/* SetTimeBaseZero: a new offset from the same source. */
+void tb_SetTimeBaseZero(int32_t tb, gaddr zero)
+{
+    movie *m = movie_of_timebase((gaddr)tb);
+    timebase *t = m ? NULL : timebase_of((gaddr)tb);
+    if (m)
+        movie_set_source(m, m->master, m->clock, zero);
+    else if (t)
+        tbs_set_source(t, t->master, t->clock, zero);
+}
+
+/* ConvertTime: the time in another time base at the moment the record's
+ * own reads that time, both going on at their present rates. */
+void tb_ConvertTime(gaddr inout, int32_t newBase)
+{
+    if (!inout)
+        return;
+    gaddr from = rd32(inout + 12);
+    int32_t s = record_scale(inout, 600);
+    if (from && (movie_of_timebase(from) || timebase_of(from)) && newBase) {
+        int64_t v = div_round((__int128)time_in_scale(inout, 0) * NS_SCALE, s);
+        int64_t from_now = timebase_ns(from, 0), to_now = timebase_ns((gaddr)newBase, 0);
+        int32_t from_rate = timebase_effective_rate(from, 0), to_rate = timebase_effective_rate((gaddr)newBase, 0);
+        int64_t to = from_rate ? to_now + (int64_t)((__int128)(v - from_now) * to_rate / from_rate) : to_now;
+        set_time_value(inout, div_round((__int128)to * s, NS_SCALE));
+    }
+    wr32(inout + 12, (uint32_t)newBase);
+}
+
+/* SetMovieMasterTimeBase(movie, master, slaveZero): the movie follows the
+ * master's time and rate (its own rate still multiplying), nil for its own
+ * clock again.  SetMovieMasterClock gives it a clock instead. */
+void tb_SetMovieMasterTimeBase(int32_t theMovie, int32_t tb, gaddr slaveZero)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (m)
+        movie_set_source(m, (gaddr)tb, 0, slaveZero);
+}
+
+void tb_SetMovieMasterClock(int32_t theMovie, int32_t clockMeister, gaddr slaveZero)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (m)
+        movie_set_source(m, 0, (gaddr)clockMeister, slaveZero);
+}
 
 int32_t tb_GetMovieTrackCount(int32_t h)
 {
@@ -1655,9 +2240,68 @@ int32_t tb_GetMovieStatus(int32_t h, gaddr track_out)
     return noErr;
 }
 
-int32_t tb_GetMovieCreationTime(int32_t h) { return 0; }
+/* The 'mvhd' atom's dates; a movie made by NewMovie was made now. */
+int32_t tb_GetMovieCreationTime(int32_t theMovie)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    return m ? (int32_t)m->created : 0;
+}
+
+int32_t tb_GetMovieModificationTime(int32_t theMovie)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    return m ? (int32_t)m->modified : 0;
+}
+
+/* Clip regions: ours are copies, and the Get calls give a copy of them
+ * (nil for none), which the program disposes of. */
+static void keep_clip(gaddr *mine, gaddr theirs)
+{
+    if (*mine)
+        tb_DisposeRgn(*mine);
+    *mine = 0;
+    if (theirs) {
+        *mine = tb_NewRgn();
+        tb_CopyRgn(theirs, *mine);
+    }
+}
+
+static int32_t copy_clip(gaddr mine)
+{
+    if (!mine)
+        return 0;
+    gaddr r = tb_NewRgn();
+    tb_CopyRgn(mine, r);
+    return (int32_t)r;
+}
+
+int32_t tb_GetMovieClipRgn(int32_t theMovie)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    return m ? copy_clip(m->clip) : 0;
+}
+
+void tb_SetMovieClipRgn(int32_t theMovie, int32_t theClip)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (m)
+        keep_clip(&m->clip, (gaddr)theClip);
+}
+
+int32_t tb_GetMovieDisplayClipRgn(int32_t theMovie)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    return m ? copy_clip(m->display_clip) : 0;
+}
+
+void tb_SetMovieDisplayClipRgn(int32_t theMovie, int32_t theClip)
+{
+    movie *m = movie_of((gaddr)theMovie);
+    if (m)
+        keep_clip(&m->display_clip, (gaddr)theClip);
+}
+
 void tb_SetMoviePlayHints(int32_t h, int32_t flags, int32_t mask) {}
-void tb_SetMovieDisplayClipRgn(int32_t h, int32_t clip) {}
 void tb_ShowMoviePoster(int32_t h) {}
 int32_t tb_GetMoviePict(int32_t h, int32_t time) { return 0; }
 int32_t tb_GetMoviePosterPict(int32_t h) { return 0; }
@@ -2183,6 +2827,7 @@ void quicktime_reset(void)
         if (movies[i].used && movies[i].temp_file && movies[i].play_path)
             unlink(movies[i].play_path);
     memset(movies, 0, sizeof movies);
+    memset(timebases, 0, sizeof timebases);
     memset(controllers, 0, sizeof controllers);
     mc_component = 0;
     movies_error = sticky_error = 0;

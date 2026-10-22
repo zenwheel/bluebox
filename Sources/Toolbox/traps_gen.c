@@ -2661,6 +2661,16 @@ static void glue_ContinueSpeech(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ConvertTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_newBase = (int32_t)cpu_pop32(c);
+    gaddr a_inout = (gaddr)cpu_pop32(c);
+    tb_ConvertTime(a_inout, a_newBase);
+    cpu_push32(c, ret);
+}
+
 static void glue_ConvertTimeScale(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3640,6 +3650,15 @@ static void glue_DisposeThread(cpu68k *c, uint16_t trapword)
     int32_t a_threadToDump = (int32_t)cpu_pop32(c);
     int16_t r = tb_DisposeThread(a_threadToDump, a_threadResult, a_recycleThread);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DisposeTimeBase(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    tb_DisposeTimeBase(a_tb);
     cpu_push32(c, ret);
 }
 
@@ -7413,6 +7432,16 @@ static void glue_GetMovieBox(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetMovieClipRgn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetMovieClipRgn(a_theMovie);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetMovieCreationTime(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7431,6 +7460,16 @@ static void glue_GetMovieDataSize(cpu68k *c, uint16_t trapword)
     int32_t a_startTime = (int32_t)cpu_pop32(c);
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int32_t r = tb_GetMovieDataSize(a_theMovie, a_startTime, a_duration);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMovieDisplayClipRgn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetMovieDisplayClipRgn(a_theMovie);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -7476,6 +7515,16 @@ static void glue_GetMovieIndTrackType(cpu68k *c, uint16_t trapword)
     int32_t a_index = (int32_t)cpu_pop32(c);
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int32_t r = tb_GetMovieIndTrackType(a_theMovie, a_index, a_trackType, a_flags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMovieModificationTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetMovieModificationTime(a_theMovie);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -8584,6 +8633,91 @@ static void glue_GetThreadStateGivenTaskRef(cpu68k *c, uint16_t trapword)
     int32_t a_threadTRef = (int32_t)cpu_pop32(c);
     int16_t r = tb_GetThreadStateGivenTaskRef(a_threadTRef, a_threadToGet, a_threadState);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTimeBaseEffectiveRate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetTimeBaseEffectiveRate(a_tb);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTimeBaseFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetTimeBaseFlags(a_tb);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTimeBaseMasterClock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetTimeBaseMasterClock(a_tb);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTimeBaseMasterTimeBase(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetTimeBaseMasterTimeBase(a_tb);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTimeBaseRate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetTimeBaseRate(a_tb);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTimeBaseStartTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tr = (gaddr)cpu_pop32(c);
+    int32_t a_s = (int32_t)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetTimeBaseStartTime(a_tb, a_s, a_tr);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTimeBaseStatus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_unpinnedTime = (gaddr)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetTimeBaseStatus(a_tb, a_unpinnedTime);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTimeBaseStopTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tr = (gaddr)cpu_pop32(c);
+    int32_t a_s = (int32_t)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetTimeBaseStopTime(a_tb, a_s, a_tr);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -11748,6 +11882,15 @@ static void glue_NewThread(cpu68k *c, uint16_t trapword)
     int32_t a_threadStyle = (int32_t)cpu_pop32(c);
     int16_t r = tb_NewThread(a_threadStyle, a_threadEntry, a_threadParam, a_stackSize, a_options, a_threadResult, a_threadMade);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewTimeBase(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_NewTimeBase();
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -15668,6 +15811,16 @@ static void glue_SetMovieBox(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetMovieClipRgn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theClip = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    tb_SetMovieClipRgn(a_theMovie, a_theClip);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetMovieDisplayClipRgn(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15686,6 +15839,17 @@ static void glue_SetMovieGWorld(cpu68k *c, uint16_t trapword)
     gaddr a_cgrafp = (gaddr)cpu_pop32(c);
     gaddr a_movie = (gaddr)cpu_pop32(c);
     tb_SetMovieGWorld(a_movie, a_cgrafp, a_gdh);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMovieMasterClock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slaveZero = (gaddr)cpu_pop32(c);
+    int32_t a_clockMeister = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    tb_SetMovieMasterClock(a_theMovie, a_clockMeister, a_slaveZero);
     cpu_push32(c, ret);
 }
 
@@ -16270,6 +16434,38 @@ static void glue_SetThreadTerminator(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetTimeBaseFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_timeBaseFlags = (int32_t)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    tb_SetTimeBaseFlags(a_tb, a_timeBaseFlags);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTimeBaseMasterClock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slaveZero = (gaddr)cpu_pop32(c);
+    int32_t a_clockMeister = (int32_t)cpu_pop32(c);
+    int32_t a_slave = (int32_t)cpu_pop32(c);
+    tb_SetTimeBaseMasterClock(a_slave, a_clockMeister, a_slaveZero);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTimeBaseMasterTimeBase(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slaveZero = (gaddr)cpu_pop32(c);
+    int32_t a_master = (int32_t)cpu_pop32(c);
+    int32_t a_slave = (int32_t)cpu_pop32(c);
+    tb_SetTimeBaseMasterTimeBase(a_slave, a_master, a_slaveZero);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetTimeBaseRate(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16277,6 +16473,57 @@ static void glue_SetTimeBaseRate(cpu68k *c, uint16_t trapword)
     int32_t a_r = (int32_t)cpu_pop32(c);
     int32_t a_tb = (int32_t)cpu_pop32(c);
     tb_SetTimeBaseRate(a_tb, a_r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTimeBaseStartTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tr = (gaddr)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    tb_SetTimeBaseStartTime(a_tb, a_tr);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTimeBaseStopTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tr = (gaddr)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    tb_SetTimeBaseStopTime(a_tb, a_tr);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTimeBaseTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tr = (gaddr)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    tb_SetTimeBaseTime(a_tb, a_tr);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTimeBaseValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_s = (int32_t)cpu_pop32(c);
+    int32_t a_t = (int32_t)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    tb_SetTimeBaseValue(a_tb, a_t, a_s);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTimeBaseZero(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_zero = (gaddr)cpu_pop32(c);
+    int32_t a_tb = (int32_t)cpu_pop32(c);
+    tb_SetTimeBaseZero(a_tb, a_zero);
     cpu_push32(c, ret);
 }
 
@@ -20680,7 +20927,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x22u, "PutMovieIntoHandle", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x23u, "DisposeMovie", CONV_STACK, 4, 0, glue_DisposeMovie},
     {0xAAAA, (int32_t)0x26u, "GetMovieCreationTime", CONV_STACK, 4, 4, glue_GetMovieCreationTime},
-    {0xAAAA, (int32_t)0x27u, "GetMovieModificationTime", CONV_STACK, 4, 4, 0},
+    {0xAAAA, (int32_t)0x27u, "GetMovieModificationTime", CONV_STACK, 4, 4, glue_GetMovieModificationTime},
     {0xAAAA, (int32_t)0x29u, "GetMovieTimeScale", CONV_STACK, 4, 4, glue_GetMovieTimeScale},
     {0xAAAA, (int32_t)0x2Au, "SetMovieTimeScale", CONV_STACK, 8, 0, 0},
     {0xAAAA, (int32_t)0x2Bu, "GetMovieDuration", CONV_STACK, 4, 4, glue_GetMovieDuration},
@@ -20770,24 +21017,24 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x9Eu, "GetUserData", CONV_STACK, 16, 2, 0},
     {0xAAAA, (int32_t)0x9Fu, "AddUserData", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0xA0u, "RemoveUserData", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0xA5u, "NewTimeBase", CONV_STACK, 0, 4, 0},
+    {0xAAAA, (int32_t)0xA5u, "NewTimeBase", CONV_STACK, 0, 4, glue_NewTimeBase},
     {0xAAAA, (int32_t)0xA6u, "GetTimeBaseTime", CONV_STACK, 12, 4, glue_GetTimeBaseTime},
-    {0xAAAA, (int32_t)0xA7u, "SetTimeBaseTime", CONV_STACK, 8, 0, 0},
-    {0xAAAA, (int32_t)0xA8u, "SetTimeBaseValue", CONV_STACK, 12, 0, 0},
-    {0xAAAA, (int32_t)0xA9u, "GetTimeBaseRate", CONV_STACK, 4, 4, 0},
+    {0xAAAA, (int32_t)0xA7u, "SetTimeBaseTime", CONV_STACK, 8, 0, glue_SetTimeBaseTime},
+    {0xAAAA, (int32_t)0xA8u, "SetTimeBaseValue", CONV_STACK, 12, 0, glue_SetTimeBaseValue},
+    {0xAAAA, (int32_t)0xA9u, "GetTimeBaseRate", CONV_STACK, 4, 4, glue_GetTimeBaseRate},
     {0xAAAA, (int32_t)0xAAu, "SetTimeBaseRate", CONV_STACK, 8, 0, glue_SetTimeBaseRate},
-    {0xAAAA, (int32_t)0xABu, "GetTimeBaseStartTime", CONV_STACK, 12, 4, 0},
-    {0xAAAA, (int32_t)0xACu, "SetTimeBaseStartTime", CONV_STACK, 8, 0, 0},
-    {0xAAAA, (int32_t)0xADu, "GetTimeBaseStopTime", CONV_STACK, 12, 4, 0},
-    {0xAAAA, (int32_t)0xAEu, "SetTimeBaseStopTime", CONV_STACK, 8, 0, 0},
-    {0xAAAA, (int32_t)0xAFu, "GetTimeBaseMasterTimeBase", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0xB0u, "GetTimeBaseMasterClock", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0xB1u, "GetTimeBaseFlags", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0xB2u, "SetTimeBaseFlags", CONV_STACK, 8, 0, 0},
-    {0xAAAA, (int32_t)0xB3u, "SetTimeBaseMasterClock", CONV_STACK, 12, 0, 0},
-    {0xAAAA, (int32_t)0xB4u, "SetTimeBaseMasterTimeBase", CONV_STACK, 12, 0, 0},
-    {0xAAAA, (int32_t)0xB5u, "ConvertTime", CONV_STACK, 8, 0, 0},
-    {0xAAAA, (int32_t)0xB6u, "DisposeTimeBase", CONV_STACK, 4, 0, 0},
+    {0xAAAA, (int32_t)0xABu, "GetTimeBaseStartTime", CONV_STACK, 12, 4, glue_GetTimeBaseStartTime},
+    {0xAAAA, (int32_t)0xACu, "SetTimeBaseStartTime", CONV_STACK, 8, 0, glue_SetTimeBaseStartTime},
+    {0xAAAA, (int32_t)0xADu, "GetTimeBaseStopTime", CONV_STACK, 12, 4, glue_GetTimeBaseStopTime},
+    {0xAAAA, (int32_t)0xAEu, "SetTimeBaseStopTime", CONV_STACK, 8, 0, glue_SetTimeBaseStopTime},
+    {0xAAAA, (int32_t)0xAFu, "GetTimeBaseMasterTimeBase", CONV_STACK, 4, 4, glue_GetTimeBaseMasterTimeBase},
+    {0xAAAA, (int32_t)0xB0u, "GetTimeBaseMasterClock", CONV_STACK, 4, 4, glue_GetTimeBaseMasterClock},
+    {0xAAAA, (int32_t)0xB1u, "GetTimeBaseFlags", CONV_STACK, 4, 4, glue_GetTimeBaseFlags},
+    {0xAAAA, (int32_t)0xB2u, "SetTimeBaseFlags", CONV_STACK, 8, 0, glue_SetTimeBaseFlags},
+    {0xAAAA, (int32_t)0xB3u, "SetTimeBaseMasterClock", CONV_STACK, 12, 0, glue_SetTimeBaseMasterClock},
+    {0xAAAA, (int32_t)0xB4u, "SetTimeBaseMasterTimeBase", CONV_STACK, 12, 0, glue_SetTimeBaseMasterTimeBase},
+    {0xAAAA, (int32_t)0xB5u, "ConvertTime", CONV_STACK, 8, 0, glue_ConvertTime},
+    {0xAAAA, (int32_t)0xB6u, "DisposeTimeBase", CONV_STACK, 4, 0, glue_DisposeTimeBase},
     {0xAAAA, (int32_t)0xB7u, "ConvertTimeScale", CONV_STACK, 8, 0, glue_ConvertTimeScale},
     {0xAAAA, (int32_t)0xB8u, "CallMeWhen", CONV_STACK, 24, 2, 0},
     {0xAAAA, (int32_t)0xB9u, "CancelCallBack", CONV_STACK, 4, 0, 0},
@@ -20819,12 +21066,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0xF9u, "GetMovieBox", CONV_STACK, 8, 0, glue_GetMovieBox},
     {0xAAAA, (int32_t)0xFAu, "SetMovieBox", CONV_STACK, 8, 0, glue_SetMovieBox},
     {0xAAAA, (int32_t)0xFBu, "GetMovieDisplayBoundsRgn", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0xFCu, "GetMovieDisplayClipRgn", CONV_STACK, 4, 4, 0},
+    {0xAAAA, (int32_t)0xFCu, "GetMovieDisplayClipRgn", CONV_STACK, 4, 4, glue_GetMovieDisplayClipRgn},
     {0xAAAA, (int32_t)0xFDu, "SetMovieDisplayClipRgn", CONV_STACK, 8, 0, glue_SetMovieDisplayClipRgn},
     {0xAAAA, (int32_t)0xFEu, "GetMovieBoundsRgn", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0xFFu, "GetTrackMovieBoundsRgn", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0x100u, "GetMovieClipRgn", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0x101u, "SetMovieClipRgn", CONV_STACK, 8, 0, 0},
+    {0xAAAA, (int32_t)0x100u, "GetMovieClipRgn", CONV_STACK, 4, 4, glue_GetMovieClipRgn},
+    {0xAAAA, (int32_t)0x101u, "SetMovieClipRgn", CONV_STACK, 8, 0, glue_SetMovieClipRgn},
     {0xAAAA, (int32_t)0x102u, "GetTrackClipRgn", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x103u, "SetTrackClipRgn", CONV_STACK, 8, 0, 0},
     {0xAAAA, (int32_t)0x104u, "NewMovieEditState", CONV_STACK, 4, 4, 0},
@@ -20833,7 +21080,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x107u, "NewTrackEditState", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x108u, "UseTrackEditState", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x109u, "DisposeTrackEditState", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x10Bu, "GetTimeBaseStatus", CONV_STACK, 8, 4, 0},
+    {0xAAAA, (int32_t)0x10Bu, "GetTimeBaseStatus", CONV_STACK, 8, 4, glue_GetTimeBaseStatus},
     {0xAAAA, (int32_t)0x10Cu, "AddTime", CONV_STACK, 8, 0, glue_AddTime},
     {0xAAAA, (int32_t)0x10Du, "SubtractTime", CONV_STACK, 8, 0, glue_SubtractTime},
     {0xAAAA, (int32_t)0x10Eu, "GetMovieNextInterestingTime", CONV_STACK, 28, 0, glue_GetMovieNextInterestingTime},
@@ -20846,10 +21093,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x121u, "SetMediaShadowSync", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x122u, "GetMediaShadowSync", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x123u, "GetTrackEditRate", CONV_STACK, 8, 4, 0},
-    {0xAAAA, (int32_t)0x124u, "GetTimeBaseEffectiveRate", CONV_STACK, 4, 4, 0},
+    {0xAAAA, (int32_t)0x124u, "GetTimeBaseEffectiveRate", CONV_STACK, 4, 4, glue_GetTimeBaseEffectiveRate},
     {0xAAAA, (int32_t)0x126u, "GetUserDataItem", CONV_STACK, 20, 2, 0},
     {0xAAAA, (int32_t)0x127u, "GetTrackID", CONV_STACK, 4, 4, 0},
-    {0xAAAA, (int32_t)0x128u, "SetTimeBaseZero", CONV_STACK, 8, 0, 0},
+    {0xAAAA, (int32_t)0x128u, "SetTimeBaseZero", CONV_STACK, 8, 0, glue_SetTimeBaseZero},
     {0xAAAA, (int32_t)0x129u, "AddCallBackToTimeBase", CONV_STACK, 4, 2, 0},
     {0xAAAA, (int32_t)0x12Au, "RemoveCallBackFromTimeBase", CONV_STACK, 4, 2, 0},
     {0xAAAA, (int32_t)0x12Bu, "GetFirstCallBack", CONV_STACK, 4, 4, 0},
@@ -20874,7 +21121,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x15Eu, "SetAutoTrackAlternatesEnabled", CONV_STACK, 6, 0, 0},
     {0xAAAA, (int32_t)0x15Fu, "SelectMovieAlternates", CONV_STACK, 4, 0, 0},
     {0xAAAA, (int32_t)0x167u, "SetMovieMasterTimeBase", CONV_STACK, 12, 0, glue_SetMovieMasterTimeBase},
-    {0xAAAA, (int32_t)0x168u, "SetMovieMasterClock", CONV_STACK, 12, 0, 0},
+    {0xAAAA, (int32_t)0x168u, "SetMovieMasterClock", CONV_STACK, 12, 0, glue_SetMovieMasterClock},
     {0xAAAA, (int32_t)0x16Bu, "GetTrackSegmentDisplayBoundsRgn", CONV_STACK, 12, 4, 0},
     {0xAAAA, (int32_t)0x16Cu, "GetMovieSegmentDisplayBoundsRgn", CONV_STACK, 12, 4, 0},
     {0xAAAA, (int32_t)0x16Du, "GetMediaNextInterestingTime", CONV_STACK, 22, 0, 0},
