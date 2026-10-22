@@ -524,7 +524,15 @@ void tb_PlotCIcon(gaddr rect, gaddr icon)
 {
     if (!icon || !rd32(icon))
         return;
-    uint32_t len = (uint32_t)tb_GetHandleSize(icon);
+    /* Not a handle the Memory Manager knows (one already disposed): its
+     * size is an error, and nothing is drawn. */
+    int32_t size = tb_GetHandleSize(icon);
+    if (size <= 0 || size > 0x1000000) {
+        LOGF(LOG_UNIMPL, "PlotCIcon: %08X is no colour icon (size %d; it points at %08X: %08X %08X %08X)\n", icon, size,
+             rd32(icon), rd32(rd32(icon) - 12), rd32(rd32(icon) - 8), rd32(rd32(icon) - 4));
+        return;
+    }
+    uint32_t len = (uint32_t)size;
     uint8_t *bytes = malloc(len);
     gget(bytes, rd32(icon), len);
     int w, h;

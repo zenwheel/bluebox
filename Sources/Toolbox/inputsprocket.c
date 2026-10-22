@@ -1343,7 +1343,17 @@ static void config_filter(cpu68k *c, uint16_t tw)
  * the mouse steers, and Defaults; Cancel puts things back. */
 static void isp_Configure(ppc_cpu *c)
 {
-    gaddr accepted = R(1);
+    /* The dialog runs the program's own code meanwhile (its timers, its
+     * update handlers), which leaves the registers as it likes: where to
+     * return, the stack and the TOC are kept here. */
+    uint32_t lr = c->lr, sp = c->gpr[1], toc = c->gpr[2];
+    /* InputSprocket 1.0's ISpConfigure took the event procedure alone, and
+     * programs written for it (Apeiron) leave whatever was in r4: answered
+     * only in a Boolean in the caller's stack frame (from the stack pointer
+     * to its back chain), as a local is, never through a stray pointer
+     * (Apeiron's was inside its master pointers, and an icon's handle
+     * broke). */
+    gaddr accepted = R(1) >= sp && R(1) < rd32(sp) ? R(1) : 0;
     int rows = config_count < CONFIG_ROWS ? config_count : CONFIG_ROWS;
     bool mouse = uses_mouse();
     int list_bottom = 60 + rows * 24;
@@ -1357,6 +1367,7 @@ static void isp_Configure(ppc_cpu *c)
     if (!ditl || !scratch) {
         if (accepted)
             wr8(accepted, 1);
+        c->gpr[1] = sp, c->gpr[2] = toc, c->lr = lr;
         RETURN(0);
         return;
     }
@@ -1387,6 +1398,7 @@ static void isp_Configure(ppc_cpu *c)
         tb_DisposePtr(scratch);
         if (accepted)
             wr8(accepted, 1);
+        c->gpr[1] = sp, c->gpr[2] = toc, c->lr = lr;
         RETURN(0);
         return;
     }
@@ -1440,6 +1452,7 @@ static void isp_Configure(ppc_cpu *c)
     tb_DisposePtr(scratch);
     if (accepted)
         wr8(accepted, n == itemOK);
+    c->gpr[1] = sp, c->gpr[2] = toc, c->lr = lr;
     RETURN(0);
 }
 

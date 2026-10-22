@@ -551,6 +551,7 @@ void tb_DisposeHandle(gaddr h)
         set_mem_err(nilHandleErr);
         return;
     }
+    LOGF(LOG_MEM, "DisposeHandle(%08X)\n", h);
     gaddr p = rd32(h);
     gaddr z = 0;
     if (p) {
