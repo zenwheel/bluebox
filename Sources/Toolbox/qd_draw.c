@@ -1155,15 +1155,64 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
         bool same_table = s.depth == d.depth && (s.ctab == d.ctab || same_seed) && !(m & 4);
         uint16_t colours[256][3];
         qd_px_rgb_all(s.depth, s.ctab, colours);
-        for (int v = 0; v < nv; v++) {
-            uint16_t rgb[3] = { colours[v][0], colours[v][1], colours[v][2] };
-            if (m & 4) {
-                rgb[0] = (uint16_t)~rgb[0];
-                rgb[1] = (uint16_t)~rgb[1];
-                rgb[2] = (uint16_t)~rgb[2];
+        /* The last few conversions kept, by both sides' colours and the
+         * destination's table: a program copying from several tables in
+         * turn (Sail Away's sprites) otherwise matched every colour of the
+         * source against the destination's table at every call. */
+        enum { NLUTS = 8 };
+        static struct {
+            bool used;
+            uint64_t hash;
+            gaddr dctab;
+            uint32_t dseed;
+            int sdepth, ddepth, inverted;
+            uint32_t conv[256];
+            uint8_t white[256];
+        } luts[NLUTS];
+        static int next_lut;
+        uint64_t hash = 1469598103934665603ull;
+        for (int v = 0; v < nv; v++)
+            for (int c = 0; c < 3; c++)
+                hash = (hash ^ colours[v][c]) * 1099511628211ull;
+        if (d.depth > 1 && d.depth <= 8) { /* the destination's colours, which palette animation changes */
+            uint16_t dcolours[256][3];
+            qd_px_rgb_all(d.depth, d.ctab, dcolours);
+            for (int v = 0; v < (1 << d.depth); v++)
+                for (int c = 0; c < 3; c++)
+                    hash = (hash ^ dcolours[v][c]) * 1099511628211ull;
+        }
+        uint32_t dseed = d.ctab && rd32(d.ctab) ? rd32(rd32(d.ctab)) : 0;
+        int hit = -1;
+        for (int i = 0; i < NLUTS && hit < 0 && !same_table; i++)
+            if (luts[i].used && luts[i].hash == hash && luts[i].dctab == d.ctab && luts[i].dseed == dseed &&
+                luts[i].sdepth == s.depth && luts[i].ddepth == d.depth && luts[i].inverted == (m & 4))
+                hit = i;
+        if (hit >= 0) {
+            memcpy(lut_conv, luts[hit].conv, sizeof *lut_conv * (size_t)nv);
+            memcpy(lut_white, luts[hit].white, (size_t)nv);
+        } else {
+            for (int v = 0; v < nv; v++) {
+                uint16_t rgb[3] = { colours[v][0], colours[v][1], colours[v][2] };
+                if (m & 4) {
+                    rgb[0] = (uint16_t)~rgb[0];
+                    rgb[1] = (uint16_t)~rgb[1];
+                    rgb[2] = (uint16_t)~rgb[2];
+                }
+                lut_white[v] = rgb[0] == 0xFFFF && rgb[1] == 0xFFFF && rgb[2] == 0xFFFF;
+                lut_conv[v] = same_table ? (uint32_t)v : qd_rgb_px(d.depth, d.ctab, rgb);
             }
-            lut_white[v] = rgb[0] == 0xFFFF && rgb[1] == 0xFFFF && rgb[2] == 0xFFFF;
-            lut_conv[v] = same_table ? (uint32_t)v : qd_rgb_px(d.depth, d.ctab, rgb);
+            if (!same_table) {
+                int i = next_lut++ % NLUTS;
+                luts[i].used = true;
+                luts[i].hash = hash;
+                luts[i].dctab = d.ctab;
+                luts[i].dseed = dseed;
+                luts[i].sdepth = s.depth;
+                luts[i].ddepth = d.depth;
+                luts[i].inverted = m & 4;
+                memcpy(luts[i].conv, lut_conv, sizeof *lut_conv * (size_t)nv);
+                memcpy(luts[i].white, lut_white, (size_t)nv);
+            }
         }
     }
     /* The arithmetic modes work in RGB: an indexed side's colours decoded

@@ -49,12 +49,46 @@ static int classic_index(int num)
 /* The font resource ID for a family and size, through its FOND if any. */
 static gaddr font_resource_of(int family, int size);
 
-static gaddr font_resource(int family, int size)
+static gaddr font_resource_lookup(int family, int size)
 {
     gaddr h = font_resource_of(family, size);
     int k;
     if (!h && (k = classic_index(family)) >= 0 && classic_fonts[k].drawn_as != family)
         h = font_resource_of(classic_fonts[k].drawn_as, size);
+    return h;
+}
+
+/* The last few answers kept: every measurement loads the strike, and
+ * finding it searched the open resource files each time (TextEdit placing
+ * its caret measured the line again for every character inserted, and
+ * Sirtet's Keys text took minutes).  An answer holds while the resource
+ * files in use are the same and its handle still holds the same data. */
+static gaddr font_resource(int family, int size)
+{
+    enum { NFONTS = 16 };
+    static struct {
+        int family, size;
+        uint32_t top;
+        uint16_t cur;
+        gaddr h, data;
+    } fonts[NFONTS];
+    static int next;
+    uint32_t top = rd32(LM_TopMapHndl);
+    uint16_t cur = rd16(LM_CurMap);
+    for (int i = 0; i < NFONTS; i++)
+        if (fonts[i].h && fonts[i].family == family && fonts[i].size == size && fonts[i].top == top &&
+            fonts[i].cur == cur && rd32(fonts[i].h) == fonts[i].data)
+            return fonts[i].h;
+    gaddr h = font_resource_lookup(family, size);
+    if (h && rd32(h)) {
+        int i = next++ % NFONTS;
+        fonts[i].family = family;
+        fonts[i].size = size;
+        fonts[i].top = top;
+        fonts[i].cur = cur;
+        fonts[i].h = h;
+        fonts[i].data = rd32(h);
+    }
     return h;
 }
 

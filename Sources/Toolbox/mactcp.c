@@ -117,6 +117,11 @@ static struct {
     int16_t err;
 } answers[16];
 static int nanswers;
+/* Whether anything is open or under way (a stream, an early connection,
+ * an operation, a resolver's answer): mactcp_poll runs with every event
+ * call, and a program polling the queue in a loop otherwise paid for
+ * walking every empty slot each time (Spacestation Pheta). */
+static bool active;
 static bool polling;
 
 static uint64_t now_ns(void) { return machine_time_ns(); }
@@ -229,6 +234,7 @@ static void listen_early(const uint8_t *buf, uint32_t len)
     }
     set_nonblocking(fd);
     early[slot].used = true;
+    active = true;
     early[slot].fd = fd;
     early[slot].port = port;
     early[slot].made = now_ns();
@@ -617,6 +623,7 @@ static int16_t run(gaddr pb, int code, int s, uint32_t timeout_s, bool async)
     for (int i = 0; i < MAX_OPS; i++) {
         if (!ops[i].used) {
             ops[i] = o;
+            active = true;
             wr16(pb + IOParam_ioResult_off, ioInProgress);
             return ioInProgress;
         }
@@ -652,6 +659,7 @@ static int16_t new_stream(gaddr pb, bool udp)
         mstream *m = &streams[i];
         memset(m, 0, sizeof *m);
         m->used = true;
+        active = true;
         m->udp = udp;
         m->stream = buf;
         m->rcvbuf = buf;
@@ -811,7 +819,7 @@ static void call_result_procs(void)
 
 void mactcp_poll(void)
 {
-    if (polling || !g_cpu)
+    if (polling || !g_cpu || (!active && !nanswers))
         return;
     polling = true;
     expire_early(false);
@@ -853,6 +861,14 @@ void mactcp_poll(void)
             notify(m, m->reset ? TCPTerminate : TCPClosing, m->reset ? TCPRemoteAbort : 0);
         }
     }
+    bool any = false;
+    for (int i = 0; i < MAX_OPS && !any; i++)
+        any = ops[i].used;
+    for (int i = 0; i < MAX_STREAMS && !any; i++)
+        any = streams[i].used;
+    for (int i = 0; i < MAX_EARLY && !any; i++)
+        any = early[i].used;
+    active = any;
     polling = false;
 }
 
@@ -874,7 +890,7 @@ void mactcp_reset(void)
     booted = true;
     memset(ops, 0, sizeof ops);
     nanswers = 0;
-    polling = false;
+    polling = active = false;
     stub = native_register(dnr_native, "DNR", 0); /* natives start over at each boot */
     gestalt_set(fourcc("mtcp"), 0x02068000); /* MacTCP 2.0.6, as NumVersion */
 }

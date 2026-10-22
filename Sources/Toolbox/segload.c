@@ -224,6 +224,7 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
 /* Hand-written trap natives (see trap.c). */
 const raw_trap raw_traps[] = {
     { 0xA019, "InitZone", raw_InitZone },
+    { 0xA02F, "PostEvent", raw_PostEvent },
     { 0xA03C, "CmpString", raw_CmpString },
     { 0xA03D, "DrvrInstall", raw_DrvrInstall },
     { 0xA051, "ReadXPRam", raw_ReadXPRam },

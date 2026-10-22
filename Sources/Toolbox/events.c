@@ -716,10 +716,20 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
     return 0;
 }
 
+/* An empty poll of the queue by a program waiting for input in a loop of
+ * its own: a menu walk takes its turn (nothing else changes, so scripted
+ * runs keep their timing). */
+static bool polled(bool got)
+{
+    if (!got && !host_attached && g_cpu)
+        walker_idle(g_cpu->icount);
+    return got;
+}
+
 int8_t tb_EventAvail(int16_t em, gaddr evt)
 {
     display_sync();
-    return next_event(em, evt, false, false);
+    return polled(next_event(em, evt, false, false));
 }
 
 /* A program's patch on GetNextEvent, if it has one.  System 7's
@@ -820,8 +830,8 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     return 0;
 }
 
-bool tb_GetOSEvent(int16_t evmask, gaddr eventp) { return next_event(evmask, eventp, true, true); }
-bool tb_OSEventAvail(int16_t evmask, gaddr eventp) { return next_event(evmask, eventp, false, true); }
+bool tb_GetOSEvent(int16_t evmask, gaddr eventp) { return polled(next_event(evmask, eventp, true, true)); }
+bool tb_OSEventAvail(int16_t evmask, gaddr eventp) { return polled(next_event(evmask, eventp, false, true)); }
 
 void tb_FlushEvents(int16_t evmask, int16_t stopmask)
 {
@@ -850,6 +860,19 @@ int16_t tb_PostEvent(int16_t evcode, int32_t evmsg)
     pthread_mutex_unlock(&lock);
     mirror_queue();
     return noErr;
+}
+
+/* _PostEvent (A02F): A0 the event code, D0 the message, the result in D0;
+ * with bit 8 of the trap word, PPostEvent, the queue element back in A0
+ * (Glider 4 posts its own events). */
+void raw_PostEvent(cpu68k *c, uint16_t tw)
+{
+    int16_t code = (int16_t)c->a[0];
+    int32_t msg = (int32_t)c->d[0];
+    int16_t err = tb_PostEvent(code, msg);
+    if (tw & 0x0100)
+        c->a[0] = rd32(LM_EventQueue + 6);
+    c->d[0] = (uint32_t)(int32_t)err;
 }
 
 /* PPostEvent: the same, answering the queue element (the queue's last). */
@@ -980,11 +1003,9 @@ void tb_GetKeys(gaddr keys)
     pthread_mutex_unlock(&lock);
     gput(keys, now, 16);
     /* A program waiting for a key by polling (Diamonds' title, which never
-     * calls the Event Manager) is waiting for input: a menu walk takes its
-     * turn.  Nothing else changes, so scripted runs keep their timing. */
+     * calls the Event Manager) is waiting for input too. */
     static const uint8_t none[16];
-    if (!host_attached && g_cpu && !memcmp(now, none, sizeof now))
-        walker_idle(g_cpu->icount);
+    polled(memcmp(now, none, sizeof now) != 0);
 }
 
 int32_t tb_GetDblTime(void) { return (int32_t)rd32(LM_DoubleTime); }

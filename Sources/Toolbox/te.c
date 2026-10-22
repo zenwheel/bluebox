@@ -1614,10 +1614,19 @@ int32_t tb_TEGetHeight(int32_t endLine, int32_t startLine, gaddr teh)
         startLine = t;
     }
     int n = nlines(teh);
+    /* At least a line's worth: no text is still the caret's line high,
+     * and lines before the first are the first (Apple's Installer, scrolling
+     * up a line at a time, asks for line 0 at the top and divides by it). */
+    if (n == 0)
+        return line_height(teh, 0);
     if (endLine > n)
         endLine = n;
     if (startLine < 1)
         startLine = 1;
+    if (startLine > n)
+        startLine = n;
+    if (endLine < startLine)
+        endLine = startLine;
     int32_t h = 0;
     for (int i = startLine - 1; i < endLine; i++)
         h += line_height(teh, i);
