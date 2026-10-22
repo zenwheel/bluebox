@@ -61,6 +61,26 @@ extension BlueBox {
             #expect(tb_GetHandleSize(cpu.pointee.d.7) == 100)
         }
 
+        /// InsTime and InsXTime share a slot, told apart by bit $0400: an
+        /// ordinary task stays ordinary (MacMan's frame timer, which went
+        /// on from its last wake-up as an extended one would).
+        @Test func insTimeAndInsXTimeShareASlot() {
+            let tm = tb_NewPtr(Int32(TMTask_SIZEOF), false, true)
+            let xtm = tb_NewPtr(Int32(TMTask_SIZEOF), false, true)
+            let reason = run([
+                0x207C, hi(tm), lo(tm),         // MOVEA.L #tm,A0
+                0xA058,                         // _InsTime
+                0x207C, hi(xtm), lo(xtm),       // MOVEA.L #xtm,A0
+                0xA458,                         // _InsXTime
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(rd16(tm + 4) & 0x4000 == 0)
+            #expect(rd16(xtm + 4) & 0x4000 != 0)
+            tb_RmvTime(tm)
+            tb_RmvTime(xtm)
+        }
+
         @Test func osTrapWithoutA0ResultPreservesA0() {
             let h = tb_NewHandle(77, false, false)
             let reason = run([

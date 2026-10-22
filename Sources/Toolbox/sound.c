@@ -77,6 +77,7 @@ typedef struct {
     gaddr file_completion;
     bool file_playing;
     uint32_t rate_mult;  /* rateMultiplierCmd's UnsignedFixed, 0x00010000 = as recorded */
+    bool sustained;      /* freqCmd's tone is sounding: it gives way to the next sound */
 } channel;
 
 static channel chans[MAX_CHANNELS];
@@ -155,6 +156,8 @@ static channel *add(gaddr chan, bool owned)
 /* ---------------------------------------------------------------------- */
 /* Output */
 
+static void stop_host(channel *c);
+
 static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rate)
 {
     if (frames <= 0 || rate <= 0)
@@ -162,6 +165,10 @@ static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rat
     /* rateMultiplierCmd plays everything faster or slower, pitch and all. */
     if (c->rate_mult)
         rate *= (double)c->rate_mult / 65536.0;
+    if (c->sustained) {
+        c->sustained = false;
+        stop_host(c);
+    }
     uint64_t start = c->busy_until > now_ns() ? c->busy_until : now_ns();
     c->busy_until = start + (uint64_t)((double)frames / rate * 1e9);
     if (sound_fn) {
@@ -202,6 +209,7 @@ void sound_host_stop(int id)
 static void stop_host(channel *c)
 {
     c->busy_until = 0;
+    c->sustained = false;
     if (sound_fn)
         sound_fn(c->id, NULL, 0, 0, 0, 0, sound_ctx); /* NULL: stop */
 }
@@ -430,7 +438,19 @@ static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
             play_note(c, note, secs);
         break;
     }
-    case freqCmd: play_note(c, (int)(cmd.p2 & 0xFF), 0.25); break;
+    /* A pitch with no duration: it sounds until the next sound or
+     * quietCmd, and the commands after it run at once.  Taking a quarter
+     * second of the channel each made MacMan, which sends one a frame for
+     * its siren, fill the queue and then run at four frames a second,
+     * waiting in SndDoCommand for room.  The host gets a few seconds of
+     * the tone, cut off by whatever comes next. */
+    case freqCmd: {
+        uint64_t until = c->busy_until;
+        play_note(c, (int)(cmd.p2 & 0xFF), 2.0);
+        c->busy_until = until;
+        c->sustained = true;
+        break;
+    }
     case restCmd: {
         uint64_t start = c->busy_until > now_ns() ? c->busy_until : now_ns();
         c->busy_until = start + (uint64_t)(uint16_t)cmd.p1 * 500000u;
@@ -686,10 +706,10 @@ int16_t tb_SndDisposeChannel(gaddr chan, int8_t quitnow)
     channel *c = find(chan);
     if (!c)
         return badChannel;
-    if (quitnow)
-        stop_host(c);
-    else
+    if (!quitnow)
         drain(c);
+    if (quitnow || c->sustained) /* a freqCmd's tone ends with its channel */
+        stop_host(c);
     /* Each modifier hears freeCmd, then its stub goes. */
     for (gaddr stub = rd32(chan + SndChannel_firstMod_off), next; stub; stub = next) {
         next = rd32(stub + Stub_nextStub);
