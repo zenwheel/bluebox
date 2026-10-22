@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 
 #include "forks.h"
+#include "hostgl.h"
 #include "machine.h"
 #include "ppc_bridge.h"
 #include "tb_internal.h"
@@ -170,6 +171,14 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ppc_glue_export_count; i++)
         if (!strcmp(ppc_glue_exports[i].name, name))
             return ppc_glue_exports[i].fn;
+    if (name[0] == 'a' && name[1] == 'g' && name[2] == 'l')
+        for (unsigned i = 0; i < agl_export_count; i++)
+            if (!strcmp(agl_exports[i].name, name))
+                return agl_exports[i].fn;
+    if (name[0] == 'g' && name[1] == 'l')
+        for (unsigned i = 0; i < gl_export_count; i++)
+            if (!strcmp(gl_exports[i].name, name))
+                return gl_exports[i].fn;
     unsigned lo = 0, hi = ppc_export_count;
     while (lo < hi) {
         unsigned mid = (lo + hi) / 2;
@@ -469,6 +478,9 @@ static bool core_library(const char *name)
 
 static bool is_native_library(const char *name)
 {
+    /* Apple's OpenGL, where the host has one to draw with (opengl.c). */
+    if (!strcmp(name, "OpenGLLibrary") || !strcmp(name, "OpenGLUtility"))
+        return hostgl_available();
     for (unsigned i = 0; i < sizeof native_libraries / sizeof native_libraries[0]; i++)
         if (!strcmp(native_libraries[i], name))
             return true;
