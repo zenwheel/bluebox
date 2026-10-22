@@ -102,6 +102,37 @@
     selector: 0x39
     returnreg: D0
 
+# Sound Manager 3.1's output device settings (Sound.h): SoundDispatch
+# tool $18, routines $44 and $48.  Programs built with older interfaces
+# leave the parameter size byte zero (Save the World), which the
+# dispatcher's mask allows for.
+
+- function:
+    name: GetSoundOutputInfo
+    return: OSErr
+    args:
+      - name: outputDevice
+        type: Component
+      - name: selector
+        type: OSType
+      - name: infoPtr
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x06440018
+
+- function:
+    name: SetSoundOutputInfo
+    return: OSErr
+    args:
+      - name: outputDevice
+        type: Component
+      - name: selector
+        type: OSType
+      - name: infoPtr
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x06480018
+
 # MIDI Manager: SoundDispatch tool 4, (routine << 16) | 4 in D0.
 # MIDISignIn (FinaleUnknown2), MIDIAddPort (DirectorUnknown4) and the
 # version call (DirectorUnknown3) are in multiversal under other names;
@@ -619,6 +650,57 @@
 # The Thread Manager (Threads.h): an extension for System 7.1, built in
 # from 7.5. Selectors from the header's inline glue; YieldToAnyThread is
 # YieldToThread(kNoThreadID).
+# Mac OS 7.5's Gestalt values (Gestalt.h): _GestaltValueDispatch with the
+# selector in D0, its parameters' size in words then the routine
+# (MOVE.W #$0401,D0 for NewGestaltValue, #$0203 for DeleteGestaltValue).  Installers set
+# their own (SoundJam MP's).
+- dispatcher:
+    name: GestaltValueDispatch
+    trap: 0xABF1
+    selector-location: D0W
+
+- function:
+    name: NewGestaltValue
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+      - name: newValue
+        type: LONGINT
+    dispatcher: GestaltValueDispatch
+    selector: 0x0401
+
+- function:
+    name: ReplaceGestaltValue
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+      - name: replacementValue
+        type: LONGINT
+    dispatcher: GestaltValueDispatch
+    selector: 0x0402
+
+- function:
+    name: SetGestaltValue
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+      - name: newValue
+        type: LONGINT
+    dispatcher: GestaltValueDispatch
+    selector: 0x0404
+
+- function:
+    name: DeleteGestaltValue
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+    dispatcher: GestaltValueDispatch
+    selector: 0x0203
+
 - dispatcher:
     name: ThreadDispatch
     trap: 0xABF2

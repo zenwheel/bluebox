@@ -20801,6 +20801,24 @@ static void ppcglue_PBHOpenRFDenyAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetSoundOutputInfo(ppc_cpu *c)
+{
+    gaddr a_outputDevice = (gaddr)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_infoPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetSoundOutputInfo(a_outputDevice, a_selector, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSoundOutputInfo(ppc_cpu *c)
+{
+    gaddr a_outputDevice = (gaddr)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_infoPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSoundOutputInfo(a_outputDevice, a_selector, a_infoPtr);
+    c->pc = c->lr;
+}
+
 static void ppcglue_FinaleUnknown2(ppc_cpu *c)
 {
     int32_t a_clientID = (int32_t)c->gpr[3];
@@ -21198,6 +21216,37 @@ static void ppcglue_CreateRangeDescriptor(ppc_cpu *c)
     int8_t a_disposeInputs = (int8_t)c->gpr[5];
     gaddr a_theDescriptor = (gaddr)c->gpr[6];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateRangeDescriptor(a_rangeStart, a_rangeStop, a_disposeInputs, a_theDescriptor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewGestaltValue(ppc_cpu *c)
+{
+    int32_t a_selector = (int32_t)c->gpr[3];
+    int32_t a_newValue = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewGestaltValue(a_selector, a_newValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ReplaceGestaltValue(ppc_cpu *c)
+{
+    int32_t a_selector = (int32_t)c->gpr[3];
+    int32_t a_replacementValue = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ReplaceGestaltValue(a_selector, a_replacementValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetGestaltValue(ppc_cpu *c)
+{
+    int32_t a_selector = (int32_t)c->gpr[3];
+    int32_t a_newValue = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetGestaltValue(a_selector, a_newValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteGestaltValue(ppc_cpu *c)
+{
+    int32_t a_selector = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteGestaltValue(a_selector);
     c->pc = c->lr;
 }
 
@@ -34828,6 +34877,7 @@ const ppc_export ppc_exports[] = {
     {"DelSearch", ppcglue_DelSearch},
     {"Delay", ppctrap_Delay},
     {"DeleteEditionContainerFile", ppctrap_DeleteEditionContainerFile},
+    {"DeleteGestaltValue", ppcglue_DeleteGestaltValue},
     {"DeleteMCEntries", ppcglue_DeleteMCEntries},
     {"DeleteMenu", ppcglue_DeleteMenu},
     {"DeleteMenuItem", ppcglue_DeleteMenuItem},
@@ -35517,6 +35567,7 @@ const ppc_export ppc_exports[] = {
     {"GetSimilarity", ppctrap_GetSimilarity},
     {"GetSoundDescriptionExtension", ppctrap_GetSoundDescriptionExtension},
     {"GetSoundHeaderOffset", ppcglue_GetSoundHeaderOffset},
+    {"GetSoundOutputInfo", ppcglue_GetSoundOutputInfo},
     {"GetSoundPreference", ppctrap_GetSoundPreference},
     {"GetSpecificFreeThreadCount", ppcglue_GetSpecificFreeThreadCount},
     {"GetSpecificHighLevelEvent", ppcglue_GetSpecificHighLevelEvent},
@@ -36450,6 +36501,7 @@ const ppc_export ppc_exports[] = {
     {"NewGDevice", ppcglue_NewGDevice},
     {"NewGWorld", ppcglue_NewGWorld},
     {"NewGestalt", ppcglue_NewGestalt},
+    {"NewGestaltValue", ppcglue_NewGestaltValue},
     {"NewHandle", ppcglue_NewHandle},
     {"NewHandleClear", ppcglue_NewHandleClear},
     {"NewHandleSys", ppcglue_NewHandleSys},
@@ -37068,6 +37120,7 @@ const ppc_export ppc_exports[] = {
     {"RemoveWindowProxy", ppcglue_RemoveWindowProxy},
     {"ReplaceDSequenceImageDescription", ppctrap_ReplaceDSequenceImageDescription},
     {"ReplaceGestalt", ppctrap_ReplaceGestalt},
+    {"ReplaceGestaltValue", ppcglue_ReplaceGestaltValue},
     {"ReplaceIndexedCollectionItem", ppcglue_ReplaceIndexedCollectionItem},
     {"ReplaceIndexedCollectionItemHdl", ppctrap_ReplaceIndexedCollectionItemHdl},
     {"ReplaceText", ppcglue_ReplaceText},
@@ -37225,6 +37278,7 @@ const ppc_export ppc_exports[] = {
     {"SetFrontProcess", ppcglue_SetFrontProcess},
     {"SetGDevice", ppcglue_SetGDevice},
     {"SetGWorld", ppcglue_SetGWorld},
+    {"SetGestaltValue", ppcglue_SetGestaltValue},
     {"SetGrowZone", ppcglue_SetGrowZone},
     {"SetHandleSize", ppcglue_SetHandleSize},
     {"SetIconCacheData", ppctrap_SetIconCacheData},
@@ -37329,6 +37383,7 @@ const ppc_export ppc_exports[] = {
     {"SetScriptManagerVariable", ppcglue_SetScriptManagerVariable},
     {"SetScriptVariable", ppcglue_SetScriptVariable},
     {"SetSequenceProgressProc", ppctrap_SetSequenceProgressProc},
+    {"SetSoundOutputInfo", ppcglue_SetSoundOutputInfo},
     {"SetSoundPreference", ppctrap_SetSoundPreference},
     {"SetSpeechInfo", ppcglue_SetSpeechInfo},
     {"SetSpeechPitch", ppcglue_SetSpeechPitch},

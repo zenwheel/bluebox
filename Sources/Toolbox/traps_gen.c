@@ -722,6 +722,7 @@ const char *const tb_trap_names[1024] = {
     [0x3CA] = "DeviceLoop",
     [0x3EB] = "DisplayDispatch",
     [0x3ED] = "DragDispatch",
+    [0x3F1] = "GestaltValueDispatch",
     [0x3F2] = "ThreadDispatch",
     [0x3F6] = "CollectionDispatch",
     [0x3FE] = "GXPrintingDispatch",
@@ -3262,6 +3263,16 @@ static void glue_Delay(cpu68k *c, uint16_t trapword)
     uint32_t a_ftp = 0;
     tb_Delay(a_n, &a_ftp);
     c->d[0] = a_ftp;
+}
+
+static void glue_DeleteGestaltValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DeleteGestaltValue(a_selector);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_DeleteMCEntries(cpu68k *c, uint16_t trapword)
@@ -8159,6 +8170,18 @@ static void glue_GetSoundHeaderOffset(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetSoundOutputInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    gaddr a_outputDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetSoundOutputInfo(a_outputDevice, a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetSpecificFreeThreadCount(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11675,6 +11698,17 @@ static void glue_NewGestalt(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_NewGestaltValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_newValue = (int32_t)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int16_t r = tb_NewGestaltValue(a_selector, a_newValue);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewHandle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14080,6 +14114,17 @@ static void glue_ReplaceGestalt(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_ReplaceGestaltValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_replacementValue = (int32_t)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int16_t r = tb_ReplaceGestaltValue(a_selector, a_replacementValue);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ReplaceIndexedCollectionItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15537,6 +15582,17 @@ static void glue_SetGWorld(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetGestaltValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_newValue = (int32_t)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetGestaltValue(a_selector, a_newValue);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetGrowZone(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16204,6 +16260,18 @@ static void glue_SetScriptVariable(cpu68k *c, uint16_t trapword)
     int16_t a_verb = (int16_t)cpu_pop16(c);
     int16_t a_script = (int16_t)cpu_pop16(c);
     int16_t r = tb_SetScriptVariable(a_script, a_verb, a_param);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetSoundOutputInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    gaddr a_outputDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetSoundOutputInfo(a_outputDevice, a_selector, a_infoPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -20363,6 +20431,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA1AD, (int32_t)0x0u, "Gestalt", CONV_REG, 0, 0, glue_Gestalt},
     {0xA1AD, (int32_t)0x200u, "NewGestalt", CONV_REG, 0, 0, glue_NewGestalt},
     {0xA1AD, (int32_t)0x400u, "ReplaceGestalt", CONV_REG, 0, 0, glue_ReplaceGestalt},
+    {0xABF1, (int32_t)0x203u, "DeleteGestaltValue", CONV_STACK, 4, 2, glue_DeleteGestaltValue},
+    {0xABF1, (int32_t)0x401u, "NewGestaltValue", CONV_STACK, 8, 2, glue_NewGestaltValue},
+    {0xABF1, (int32_t)0x402u, "ReplaceGestaltValue", CONV_STACK, 8, 2, glue_ReplaceGestaltValue},
+    {0xABF1, (int32_t)0x404u, "SetGestaltValue", CONV_STACK, 8, 2, glue_SetGestaltValue},
     {0xAA52, (int32_t)0x1u, "FSMakeFSSpec", CONV_STACK, 14, 2, glue_FSMakeFSSpec},
     {0xAA52, (int32_t)0x2u, "FSpOpenDF", CONV_STACK, 10, 2, glue_FSpOpenDF},
     {0xAA52, (int32_t)0x3u, "FSpOpenRF", CONV_STACK, 10, 2, glue_FSpOpenRF},
@@ -21527,6 +21599,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x63C0014u, "SPBSetDeviceInfo", CONV_STACK, 12, 2, glue_SPBSetDeviceInfo},
     {0xA800, (int32_t)0x63C0018u, "SndGetInfo", CONV_STACK, 12, 2, glue_SndGetInfo},
     {0xA800, (int32_t)0x6400018u, "SndSetInfo", CONV_STACK, 12, 2, glue_SndSetInfo},
+    {0xA800, (int32_t)0x6440018u, "GetSoundOutputInfo", CONV_STACK, 12, 2, glue_GetSoundOutputInfo},
+    {0xA800, (int32_t)0x6480018u, "SetSoundOutputInfo", CONV_STACK, 12, 2, glue_SetSoundOutputInfo},
     {0xA800, (int32_t)0x654000Cu, "SetSpeechInfo", CONV_STACK, 12, 2, glue_SetSpeechInfo},
     {0xA800, (int32_t)0x658000Cu, "GetSpeechInfo", CONV_STACK, 12, 2, glue_GetSpeechInfo},
     {0xA800, (int32_t)0x7080014u, "SndRecordToFile", CONV_STACK, 14, 2, glue_SndRecordToFile},
@@ -21593,6 +21667,7 @@ const dispatcher_info dispatchers[] = {
     {0xA832, "GXGraphicsDispatch", "D0W"},
     {0xABFE, "GXPrintingDispatch", "D0L"},
     {0xA1AD, "GestaltDispatch", "TrapBits"},
+    {0xABF1, "GestaltValueDispatch", "D0W"},
     {0xAA52, "HighLevelFSDispatch", "D0<0xF>"},
     {0xABC9, "IconDispatch", "D0W"},
     {0xAAA3, "ImageCompressionDispatch", "D0W"},

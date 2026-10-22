@@ -1328,10 +1328,6 @@ static void g_PBControlImmed(ppc_cpu *c) { RETURN((uint32_t)(int32_t)tb_PBContro
 
 /* TruncText(width, textPtr, short *length, truncWhere): the text cut to
  * fit width with an ellipsis, as TruncString cuts a Pascal string. */
-/* GetSoundOutputInfo(outputDevice, selector, infoPtr): the sound output
- * device's settings, as the Sound Manager 3 output component reports them
- * (SndGetInfo's selectors, for the device rather than a channel). */
-static void g_GetSoundOutputInfo(ppc_cpu *c) { RETURN((uint32_t)(int32_t)sound_output_get_info(R(1), R(2))); }
 
 /* The Script Manager's older names: GetScript and SetScript are
  * Get/SetScriptVariable, GetEnvirons and SetEnvirons the Script Manager
@@ -1347,10 +1343,6 @@ static void g_SetEnvirons(ppc_cpu *c)
     RETURN((uint32_t)(int32_t)tb_SetScriptManagerVariable((int16_t)R(0), (int32_t)R(1)));
 }
 
-
-/* SetSoundOutputInfo(outputDevice, selector, infoPtr): the same settings,
- * kept for reading back; the volume and mute apply to all that plays. */
-static void g_SetSoundOutputInfo(ppc_cpu *c) { RETURN((uint32_t)(int32_t)sound_output_set_info(R(1), R(2))); }
 
 static void g_TruncText(ppc_cpu *c)
 {
@@ -1651,39 +1643,6 @@ static void cs_newcwindow(ppc_cpu *c) { with_pascals(c, "NewCWindow", 4); }
 static void cs_setwtitle(ppc_cpu *c) { with_pascals(c, "SetWTitle", 2); }
 static void cs_getwtitle(ppc_cpu *c) { with_pascal(c, "GetWTitle", -1, 1); }
 static void cs_newcontrol(ppc_cpu *c) { with_pascals(c, "NewControl", 8); }
-/* The Gestalt value calls (Mac OS 7.6): selectors with plain values. */
-static void g_NewGestaltValue(ppc_cpu *c)
-{
-    if (gestalt_exists(R(0))) {
-        RETURN((uint32_t)(int32_t)-5552); /* gestaltDupSelectorErr */
-        return;
-    }
-    gestalt_set(R(0), R(1));
-    RETURN(0);
-}
-static void g_ReplaceGestaltValue(ppc_cpu *c)
-{
-    if (!gestalt_exists(R(0))) {
-        RETURN((uint32_t)(int32_t)-5551); /* gestaltUndefSelectorErr */
-        return;
-    }
-    gestalt_set(R(0), R(1));
-    RETURN(0);
-}
-static void g_SetGestaltValue(ppc_cpu *c)
-{
-    gestalt_set(R(0), R(1));
-    RETURN(0);
-}
-static void g_DeleteGestaltValue(ppc_cpu *c)
-{
-    if (!gestalt_exists(R(0))) {
-        RETURN((uint32_t)(int32_t)-5551);
-        return;
-    }
-    gestalt_delete(R(0));
-    RETURN(0);
-}
 /* The alert sound's 'snd ' ID (Sound control panel): kept, not used. */
 static int16_t alert_beep_id = 1;
 static void g_GetAlertBeepResID(ppc_cpu *c) { RETURN((int32_t)alert_beep_id); }
@@ -2704,8 +2663,8 @@ const ppc_export lib_exports[] = {
     { "newwindow", cs_newwindow }, { "newcwindow", cs_newcwindow }, { "setwtitle", cs_setwtitle },
     { "getwtitle", cs_getwtitle }, { "newcontrol", cs_newcontrol },
     { "GetAlertBeepResID", g_GetAlertBeepResID }, { "SetAlertBeepResID", g_SetAlertBeepResID },
-    { "YieldToAnyThread", g_YieldToAnyThread }, { "NewGestaltValue", g_NewGestaltValue }, { "ReplaceGestaltValue", g_ReplaceGestaltValue },
-    { "SetGestaltValue", g_SetGestaltValue }, { "DeleteGestaltValue", g_DeleteGestaltValue },
+    { "YieldToAnyThread", g_YieldToAnyThread },
+   
     { "openresfile", cs_openresfile }, { "createresfile", cs_createresfile },
     { "getnamedresource", cs_getnamedresource }, { "InitZone", g_InitZone },
     { "appendmenu", cs_appendmenu }, { "debugstr", cs_debugstr }, { "drawstring", cs_drawstring },
@@ -2761,9 +2720,8 @@ const ppc_export lib_exports[] = {
     { "GetVideoDefault", g_GetVideoDefault }, { "MPPOpen", g_portNotCf }, { "PPCInit", g_noErr },
     { "OpenXPP", g_portNotCf }, { "ATPLoad", g_portNotCf }, { "MPPClose", g_noErr },
     { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },
-    { "GetSoundOutputInfo", g_GetSoundOutputInfo },
     { "GetScript", g_GetScript }, { "SetScript", g_SetScript }, { "GetEnvirons", g_GetEnvirons },
-    { "SetEnvirons", g_SetEnvirons }, { "SetSoundOutputInfo", g_SetSoundOutputInfo },
+    { "SetEnvirons", g_SetEnvirons },
     { "FindWordBreaks", g_FindWordBreaks }, { "UppercaseStripDiacritics", g_UppercaseStripDiacritics },
     { "PBControlImmed", g_PBControlImmed },
     /* Internet Config */

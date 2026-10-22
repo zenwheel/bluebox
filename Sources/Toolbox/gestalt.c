@@ -223,6 +223,43 @@ int16_t tb_NewGestalt(int32_t selector, gaddr selFunc)
     return noErr;
 }
 
+/* Mac OS 7.5's values (_GestaltValueDispatch, and InterfaceLib's): a
+ * selector answered with a value rather than a function.  New fails on one
+ * that exists, Replace and Delete on one that doesn't, Set does either. */
+int16_t tb_NewGestaltValue(int32_t selector, int32_t newValue)
+{
+    if (gestalt_exists((uint32_t)selector))
+        return -5552; /* gestaltDupSelectorErr */
+    if (count >= MAX_GESTALT)
+        return memFullErr;
+    gestalt_set((uint32_t)selector, (uint32_t)newValue);
+    return noErr;
+}
+
+int16_t tb_ReplaceGestaltValue(int32_t selector, int32_t replacementValue)
+{
+    if (!gestalt_exists((uint32_t)selector))
+        return -5551; /* gestaltUndefSelectorErr */
+    gestalt_set((uint32_t)selector, (uint32_t)replacementValue);
+    return noErr;
+}
+
+int16_t tb_SetGestaltValue(int32_t selector, int32_t newValue)
+{
+    if (!gestalt_exists((uint32_t)selector) && count >= MAX_GESTALT)
+        return memFullErr;
+    gestalt_set((uint32_t)selector, (uint32_t)newValue);
+    return noErr;
+}
+
+int16_t tb_DeleteGestaltValue(int32_t selector)
+{
+    if (!gestalt_exists((uint32_t)selector))
+        return -5551; /* gestaltUndefSelectorErr */
+    gestalt_delete((uint32_t)selector);
+    return noErr;
+}
+
 int16_t tb_ReplaceGestalt(int32_t selector, gaddr selFunc, uint32_t *oldSelFuncp)
 {
     for (unsigned i = 0; i < count; i++) {

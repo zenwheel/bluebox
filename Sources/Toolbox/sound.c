@@ -876,8 +876,11 @@ int16_t tb_SndManagerStatus(int16_t length, gaddr statusp)
     return noErr;
 }
 
-/* 3.0 with System 7.1; a PowerPC Mac's System 7.6.1 had 3.2.1. */
-int32_t tb_SndSoundManagerVersion(void) { return g_ppc_mode ? 0x03218000 : 0x03008000; }
+/* 3.2.1 for every program, 68k too: it shipped for 68k Macs as well (an
+ * extension for System 7.1 and 7.5, built into 7.6 and 8), programs only
+ * ask for at least a version, and the one Sound Manager here does the
+ * same for all (SoundJam MP's installer, a 68k program, wanted 3.2). */
+int32_t tb_SndSoundManagerVersion(void) { return 0x03218000; }
 
 /* A SoundInfoList: the count, then a handle to the n items of size bytes. */
 static void put_list(gaddr info, const uint32_t *items, int n, int size)
@@ -935,6 +938,22 @@ int16_t sound_output_get_info(uint32_t sel, gaddr info)
         return siUnknownInfoType;
     }
     return noErr;
+}
+
+/* GetSoundOutputInfo(outputDevice, selector, infoPtr) and Set: the output
+ * device's settings, as the Sound Manager 3 output component reports them
+ * (SndGetInfo's selectors, for the device rather than a channel); for 68k
+ * programs through SoundDispatch, PowerPC ones through SoundLib. */
+int16_t tb_GetSoundOutputInfo(gaddr outputDevice, int32_t selector, gaddr infoPtr)
+{
+    (void)outputDevice;
+    return sound_output_get_info((uint32_t)selector, infoPtr);
+}
+
+int16_t tb_SetSoundOutputInfo(gaddr outputDevice, int32_t selector, gaddr infoPtr)
+{
+    (void)outputDevice;
+    return sound_output_set_info((uint32_t)selector, infoPtr);
 }
 
 int16_t sound_output_set_info(uint32_t sel, gaddr info)
@@ -1013,8 +1032,8 @@ int16_t tb_SndSetInfo(gaddr chan, int32_t selector, gaddr infoPtr)
         return sound_output_set_info(sel, infoPtr);
     return noErr;
 }
-int32_t tb_MACEVersion(void) { return 0x03008000; }
-int32_t tb_SPBVersion(void) { return 0x03008000; }
+int32_t tb_MACEVersion(void) { return 0x03218000; }
+int32_t tb_SPBVersion(void) { return 0x03218000; }
 
 void tb_SndGetSysBeepState(gaddr statep) { wr16(statep, beep_state); }
 int16_t tb_SndSetSysBeepState(int16_t state) { beep_state = (uint16_t)state; return noErr; }
