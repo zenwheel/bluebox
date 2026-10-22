@@ -30,7 +30,9 @@ let package = Package(
                 linkerSettings: [.linkedLibrary("z"), // zlib: QuickTime 3's compressed movie headers
                                  // EtherTalk: an interface's own Ethernet address
                                  .linkedFramework("IOKit", .when(platforms: [.macOS])),
-                                 .linkedFramework("CoreFoundation", .when(platforms: [.macOS]))]),
+                                 .linkedFramework("CoreFoundation", .when(platforms: [.macOS])),
+                                 // Apple's OpenGL for Mac OS 9, on the host's (opengl.c)
+                                 .linkedFramework("OpenGL", .when(platforms: [.macOS]))]),
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
         .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
         // Command-line tool: run, import, install, apps, rsrc, inspect.

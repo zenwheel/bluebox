@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include "forks.h"
+#include "hostgl.h"
 #include "qd_internal.h"
 #include "qt_codec.h"
 #include "sysfonts.h"
@@ -376,6 +377,7 @@ bool machine_boot(bool census)
     cursor_devices_reset();
     notify_reset();
     iconservices_reset();
+    agl_reset(); /* OpenGL's contexts, on the host */
 
     qd_screen_init(screen_w, screen_h);
     /* CrsrPin: the mouse stays on the screen. */
