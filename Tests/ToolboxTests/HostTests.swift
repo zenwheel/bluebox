@@ -120,7 +120,8 @@ import Toolbox
 /// The Printing Manager records a page; the host renders it as PDF.
 extension BlueBox {
     @Suite struct Printing {
-        nonisolated(unsafe) static var ops: [(kind: Int32, verb: Int32, text: String, font: Int16, rect: mprect)] = []
+        nonisolated(unsafe) static var ops: [(kind: Int32, verb: Int32, text: String, font: Int16, rect: mprect,
+                                               angle: Double, centre: (h: Double, v: Double))] = []
         nonisolated(unsafe) static var pdf = Data()
         nonisolated(unsafe) static var pages = 0
 
@@ -135,7 +136,7 @@ extension BlueBox {
                 for i in 0..<Int(page.nops) {
                     let op = page.ops[i]
                     let text = op.len > 0 ? String(decoding: UnsafeBufferPointer(start: op.text, count: Int(op.len)), as: UTF8.self) : ""
-                    Printing.ops.append((op.kind, op.verb, text, op.font_id, op.r))
+                    Printing.ops.append((op.kind, op.verb, text, op.font_id, op.r, op.angle, (op.rot_h, op.rot_v)))
                 }
                 Printing.pdf = ClassicPrint.pdf(job)
                 return true
@@ -181,6 +182,58 @@ extension BlueBox {
             let doc = try #require(PDFDocument(data: Self.pdf))
             #expect(doc.pageCount == 1)
             #expect(doc.page(at: 0)?.string?.contains("Hello, printer") == true) // real text, not pixels
+        }
+
+        /// Text between TextBegin and TextEnd comments is turned about the
+        /// centre TextCenter gives, also from a picture drawn on the page;
+        /// text that is PostScript is left out.
+        @Test func textCommentsRotateTextAndPostScriptIsLeftOut() throws {
+            launchTestApp()
+            _ = initToolbox()
+            func handle(_ bytes: [UInt8]) -> UInt32 {
+                let h = tb_NewHandle(Int32(bytes.count), false, true)
+                for (i, b) in bytes.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+                return h
+            }
+            let textBegin = handle([0, 0, 0, 90, 0, 0, 0, 0, 0, 0])        // tAngle 90
+            let textCenter = handle([0, 10, 0, 0, 0, 20, 0, 0])            // y 10, x 20
+            let r = tb_NewPtr(8, false, true)
+            qrectPut(r, 0, 0, 100, 100)
+            let pic = tb_OpenPicture(r)
+            tb_PicComment(150, 10, handle([0, 0, 0, 45, 0, 0, 0, 0, 0, 0]))
+            tb_MoveTo(10, 50)
+            tb_DrawString(guestString("Pictured"))
+            tb_PicComment(151, 0, 0)
+            tb_ClosePicture()
+            printPage {
+                tb_TextFont(3)
+                tb_TextSize(12)
+                tb_PicComment(150, 10, textBegin)
+                tb_PicComment(154, 8, textCenter)
+                tb_MoveTo(100, 100)
+                tb_DrawString(guestString("Turned"))
+                tb_MoveTo(100, 115)
+                tb_DrawString(guestString("Also"))
+                tb_PicComment(151, 0, 0)
+                tb_MoveTo(100, 200)
+                tb_DrawString(guestString("Level"))
+                tb_PicComment(190, 0, 0)                                   // PostScriptBegin
+                tb_PicComment(194, 0, 0)                                   // TextIsPostScript
+                tb_DrawString(guestString("0 0 moveto"))
+                tb_PicComment(191, 0, 0)                                   // PostScriptEnd
+                qrectPut(r, 300, 0, 400, 100)
+                tb_DrawPicture(pic, r)
+            }
+            let turned = try #require(Self.ops.first { $0.text == "Turned" })
+            #expect(turned.angle == 90)
+            #expect(turned.centre.h == 120 && turned.centre.v == 110)      // the pen, plus the offset
+            let also = try #require(Self.ops.first { $0.text == "Also" })
+            #expect(also.angle == 90 && also.centre.h == 120 && also.centre.v == 110)
+            #expect(Self.ops.first { $0.text == "Level" }?.angle == 0)
+            #expect(!Self.ops.contains { $0.text.contains("moveto") })
+            #expect(Self.ops.first { $0.text == "Pictured" }?.angle == 45)
+            let doc = try #require(PDFDocument(data: Self.pdf))
+            #expect(doc.page(at: 0)?.string?.contains("Turned") == true)
         }
 
         @Test func prGeneralSetsTheResolution() throws {
