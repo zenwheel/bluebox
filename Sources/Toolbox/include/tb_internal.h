@@ -69,6 +69,8 @@ gaddr mm_new_ptr_in(gaddr zone, uint32_t size, bool clear);
 extern uint32_t g_mem_report_cap;
 /* Check that the zone's blocks tile it correctly; returns false and logs on damage. */
 bool mm_check_zone(gaddr zone);
+/* BLUEBOX_HEAPCHECK: the zones checked after a Toolbox call; false if damaged. */
+bool mm_debug_after_call(const char *name);
 
 /* ---- Resource Manager internals ---- */
 

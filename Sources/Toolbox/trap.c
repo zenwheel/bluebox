@@ -421,6 +421,8 @@ void trap_aline(cpu68k *c, uint16_t op)
             natives[n].fn(c, op);
             last_trapword = saved;
             current_trap = 0;
+            if (!mm_debug_after_call(trap_name(op)))
+                cpu_halt(c, "heap damaged by %s", trap_name(op));
             if (tb_reg_traps[op & 0x3FF]) {
                 /* Register-based routines with Toolbox numbers (HandToHand,
                  * PtrToHand ...) leave the condition codes from D0.W, as
@@ -460,6 +462,8 @@ void trap_aline(cpu68k *c, uint16_t op)
         natives[n].fn(c, op);
         last_trapword = saved;
         current_trap = 0;
+        if (!mm_debug_after_call(trap_name(op)))
+            cpu_halt(c, "heap damaged by %s", trap_name(op));
         if (param_block_trap(op) && a0 && !c->halted)
             c->d[0] = (uint32_t)(int32_t)pb_call_done(a0, (int16_t)c->d[0], (op & 0x0400) != 0);
         c->a[1] = a1;

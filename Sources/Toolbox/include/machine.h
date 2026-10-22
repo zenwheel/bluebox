@@ -576,6 +576,10 @@ int machine_bpf_helper(const char *sockpath, const char *ifname);
  * run (10 million a second), so runs repeat exactly; real time instead
  * for programs that talk to other programs over the network. */
 void machine_set_realtime(bool on);
+/* The system and application heaps checked after every nth Toolbox call
+ * (0: never; BLUEBOX_HEAPCHECK=n sets it too): a call that damages one
+ * halts the run with its name. */
+void machine_set_heap_check(int n);
 
 /* A hard cap on instructions executed, also inside routines the Toolbox
  * calls back (filters, hooks); 0 for none.  For headless runs. */
