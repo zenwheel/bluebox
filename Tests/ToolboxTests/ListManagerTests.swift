@@ -91,5 +91,38 @@ extension BlueBox {
             #expect(tb_LNextCell(0, 1, c, list) == 0)
             tb_LDispose(list)
         }
+
+        /// An inactive list shows no selection, as System 7.1 draws it:
+        /// LActivate draws the selected cells plain or highlighted, cells
+        /// selected meanwhile aren't drawn, and drawing an inactive list
+        /// leaves them plain.  Greg's Browser sets lActive itself and
+        /// outlines the selection of an inactive list in hilite mode, which
+        /// over a highlighted cell left the highlight inset.
+        @Test func inactiveListShowsNoSelection() {
+            let (_, list) = makeList()
+            _ = tb_LAddRow(4, 0, list)
+            let r = tb_NewPtr(8, false, true)
+            // A pixel in the blank right part of a row (LDEF 0 inverts it).
+            func shown(_ v: Int) -> Bool {
+                tb_LRect(r, pt(v, 0), list)
+                return tb_GetPixel(Int16(rd16(r + 6)) - 3, Int16(rd16(r)) + 3) != 0
+            }
+            tb_LSetSelect(1, pt(1, 0), list)
+            #expect(shown(1))
+            tb_LActivate(0, list)
+            #expect(!shown(1))
+            tb_LSetSelect(1, pt(2, 0), list)
+            #expect(!shown(2))
+            tb_LUpdate(0, list)
+            tb_LDraw(pt(1, 0), list)
+            #expect(!shown(1) && !shown(2))
+            tb_LActivate(1, list)
+            #expect(shown(1) && shown(2) && !shown(0))
+            // Set by hand, as Greg's Browser does, the field alone decides.
+            wr8(rd32(list) + UInt32(ListRec_lActive_off), 0)
+            tb_LUpdate(0, list)
+            #expect(!shown(1) && !shown(2))
+            tb_LDispose(list)
+        }
     }
 }

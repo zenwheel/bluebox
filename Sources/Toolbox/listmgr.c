@@ -63,6 +63,13 @@ static void data_range(gaddr list, int i, uint32_t *off, uint32_t *len)
 }
 
 static bool is_selected(gaddr list, int i) { return rd16(array_entry(list, i)) & SELECTED; }
+static bool active(gaddr list) { return rd8(lp(list) + ListRec_lActive_off) != 0; }
+
+/* Whether a cell shows as selected: an inactive list shows no selection, as
+ * the ROM drew it (programs draw their own outline round the selection of
+ * an inactive list, Greg's Browser by inverting it in hilite mode, which
+ * over a highlighted cell left only an inset part of the highlight). */
+static bool shown_selected(gaddr list, int i) { return is_selected(list, i) && active(list); }
 
 /* ---------------------------------------------------------------------- */
 /* The grid in host memory */
@@ -269,7 +276,7 @@ static void draw_cell(gaddr list, int i)
     if (pt_v(cell) < vis.top || pt_v(cell) >= vis.bottom || pt_h(cell) < vis.left || pt_h(cell) >= vis.right)
         return;
     data_range(list, i, &off, &len);
-    call_ldef(list, lDrawMsg, is_selected(list, i), cell_rect(list, cell), cell, off, len);
+    call_ldef(list, lDrawMsg, shown_selected(list, i), cell_rect(list, cell), cell, off, len);
 }
 
 static void hilite_cell(gaddr list, int i)
@@ -279,7 +286,7 @@ static void hilite_cell(gaddr list, int i)
     if (pt_v(cell) < vis.top || pt_v(cell) >= vis.bottom || pt_h(cell) < vis.left || pt_h(cell) >= vis.right)
         return;
     data_range(list, i, &off, &len);
-    call_ldef(list, lHiliteMsg, is_selected(list, i), cell_rect(list, cell), cell, off, len);
+    call_ldef(list, lHiliteMsg, shown_selected(list, i), cell_rect(list, cell), cell, off, len);
 }
 
 /* Erase rView and draw every visible cell. */
@@ -316,7 +323,9 @@ static void set_selected(gaddr list, int i, bool on)
         return;
     gaddr e = array_entry(list, i);
     wr16(e, (uint16_t)((rd16(e) & 0x7FFF) | (on ? SELECTED : 0)));
-    redraw_one(list, i, true);
+    /* An inactive list's selection changes without being drawn. */
+    if (active(list))
+        redraw_one(list, i, true);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -834,6 +843,16 @@ void tb_LAutoScroll(gaddr list)
 void tb_LActivate(int8_t act, gaddr list)
 {
     wr8(lp(list) + ListRec_lActive_off, act ? 1 : 0);
+    /* The selected cells are drawn again, highlighted or not, every time
+     * (System 7 redraws them even when the state hasn't changed). */
+    if (drawing(list)) {
+        port_state s = enter(list);
+        int n = nrows(list) * ncols(list);
+        for (int i = 0; i < n; i++)
+            if (is_selected(list, i))
+                draw_cell(list, i);
+        leave(s);
+    }
     if (vscroll(list))
         tb_HiliteControl(vscroll(list), act ? 0 : 255);
     if (hscroll(list))
