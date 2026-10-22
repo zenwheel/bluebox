@@ -173,13 +173,21 @@ static bool item_enabled(gaddr mh, int item)
 }
 
 /* Insert raw bytes into the menu at offset `at` (from the master pointer). */
-static void menu_insert_bytes(gaddr mh, uint32_t at, const uint8_t *bytes, uint32_t n)
+static bool menu_insert_bytes(gaddr mh, uint32_t at, const uint8_t *bytes, uint32_t n)
 {
     int32_t size = tb_GetHandleSize(mh);
+    if (size < 0 || at > (uint32_t)size)
+        return false;
+    /* A locked menu may not grow (a block after it): it stays as it is,
+     * rather than the item spilling over the next block (Commotion's
+     * Window menu, given a window's title, broke the heap). */
     tb_SetHandleSize(mh, size + (int32_t)n);
+    if (tb_GetHandleSize(mh) < size + (int32_t)n)
+        return false;
     gaddr p = rd32(mh);
     gmemcpy(p + at + n, p + at, (uint32_t)size - at);
     gput(p + at, bytes, n);
+    return true;
 }
 
 static void menu_delete_bytes(gaddr mh, uint32_t at, uint32_t n)
@@ -314,7 +322,8 @@ static void append_items(gaddr mh, const uint8_t *s, int n, int after)
         rec[2 + nl] = key;
         rec[3 + nl] = mark;
         rec[4 + nl] = style;
-        menu_insert_bytes(mh, at, rec, (uint32_t)nl + 5);
+        if (!menu_insert_bytes(mh, at, rec, (uint32_t)nl + 5))
+            break;
         int index = (after < 0 || after >= count) ? count + 1 : after + 1;
         extras_inserted(mh, index);
         gaddr p = menu_ptr(mh);
@@ -456,7 +465,8 @@ static void res_menu(gaddr mh, int32_t restype, int after)
         rec[0] = (uint8_t)n;
         memcpy(rec + 1, buf, (size_t)n);
         memset(rec + 1 + n, 0, 4);
-        menu_insert_bytes(mh, at, rec, (uint32_t)n + 5);
+        if (!menu_insert_bytes(mh, at, rec, (uint32_t)n + 5))
+            break;
         gaddr p = menu_ptr(mh);
         int index = pos + 1;
         if (index <= 31)
@@ -1370,9 +1380,9 @@ void tb_SetMenuItemText(gaddr mh, int16_t item, gaddr str)
     uint32_t oldlen = rd8(it), newlen = rd8(str);
     uint8_t buf[256];
     gget(buf, str, newlen + 1);
-    if (newlen > oldlen)
-        menu_insert_bytes(mh, at + 1, buf + 1, newlen - oldlen);
-    else if (newlen < oldlen)
+    if (newlen > oldlen && !menu_insert_bytes(mh, at + 1, buf + 1, newlen - oldlen))
+        return; /* a locked menu that can't grow keeps the old text */
+    if (newlen < oldlen)
         menu_delete_bytes(mh, at + 1, oldlen - newlen);
     gput(rd32(mh) + at, buf, newlen + 1);
     tb_CalcMenuSize(mh);
