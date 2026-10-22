@@ -1521,9 +1521,118 @@ static int16_t out_follow(uint32_t ref, gaddr sender)
     return result;
 }
 
-/* The zoom animations: the drag snaps back at once. */
-int16_t tb_ZoomRects(gaddr fromRect, gaddr toRect, int16_t zoomSteps, int16_t acceleration) { return noErr; }
-int16_t tb_ZoomRegion(gaddr region, uint32_t zoomDistance, int16_t zoomSteps, int16_t acceleration) { return noErr; }
+/* ---------------------------------------------------------------------- */
+/* The zoom animations: an outline in gray, XORed on the screen through the
+ * Window Manager's port, moves step by step from where the drag began to
+ * where it ends (a rejected drag snapping back, a Finder icon flying to
+ * its window), each step shown for a tick and taken off again, so the
+ * screen is as it was afterwards.  Headless, Delay skips the clock ahead
+ * instead of waiting, so a run never waits on it. */
+
+enum { kZoomNoAcceleration = 0, kZoomAccelerate = 1, kZoomDecelerate = 2 };
+enum { MAX_ZOOM_STEPS = 25 }; /* a little under half a second at a tick a step */
+
+/* How far along the way step i of n is: accelerating starts slowly and
+ * speeds up, decelerating the reverse. */
+static double zoom_at(int i, int n, int acceleration)
+{
+    double t = (double)i / n;
+    if (acceleration == kZoomAccelerate)
+        return t * t;
+    if (acceleration == kZoomDecelerate)
+        return 1 - (1 - t) * (1 - t);
+    return t;
+}
+
+/* The one-pixel outline of a shape, as DragGrayRgn draws it. */
+static void outline(hrgn *shape)
+{
+    hrgn inner;
+    hrgn_init(&inner);
+    hrgn_copy(&inner, shape);
+    hrgn_inset(&inner, 1, 1);
+    hrgn_op(shape, shape, &inner, RGN_DIFF);
+    hrgn_free(&inner);
+}
+
+typedef void (*zoom_shape_fn)(double t, hrgn *out, const void *ctx);
+
+static void zoom(int steps, int acceleration, zoom_shape_fn shape_at, const void *ctx)
+{
+    gaddr port = wmgr_port();
+    if (!port || steps <= 0)
+        return;
+    if (steps > MAX_ZOOM_STEPS)
+        steps = MAX_ZOOM_STEPS;
+    hrgn shown, next;
+    hrgn_init(&shown);
+    hrgn_init(&next);
+    bool on = false;
+    for (int i = 1; i <= steps; i++) {
+        shape_at(zoom_at(i, steps, acceleration), &next, ctx);
+        outline(&next);
+        qd_fill_region(port, &next, qd_pat_gray, patXor);
+        if (on)
+            qd_fill_region(port, &shown, qd_pat_gray, patXor);
+        hrgn_copy(&shown, &next);
+        on = true;
+        uint32_t ticks;
+        tb_Delay(1, &ticks);
+    }
+    if (on)
+        qd_fill_region(port, &shown, qd_pat_gray, patXor);
+    hrgn_free(&shown);
+    hrgn_free(&next);
+}
+
+static void rect_at(double t, hrgn *out, const void *ctx)
+{
+    const qrect *q = ctx; /* from, to */
+    qrect r = {
+        (int16_t)(q[0].top + (q[1].top - q[0].top) * t + 0.5),
+        (int16_t)(q[0].left + (q[1].left - q[0].left) * t + 0.5),
+        (int16_t)(q[0].bottom + (q[1].bottom - q[0].bottom) * t + 0.5),
+        (int16_t)(q[0].right + (q[1].right - q[0].right) * t + 0.5),
+    };
+    hrgn_rect(out, r);
+}
+
+typedef struct {
+    hrgn shape;
+    int dh, dv;
+} region_zoom;
+
+static void region_at(double t, hrgn *out, const void *ctx)
+{
+    const region_zoom *z = ctx;
+    hrgn_copy(out, &z->shape);
+    hrgn_offset(out, (int)(z->dh * t + (z->dh < 0 ? -0.5 : 0.5)), (int)(z->dv * t + (z->dv < 0 ? -0.5 : 0.5)));
+}
+
+/* Both rectangles are in global coordinates. */
+int16_t tb_ZoomRects(gaddr fromRect, gaddr toRect, int16_t zoomSteps, int16_t acceleration)
+{
+    if (!fromRect || !toRect)
+        return paramErr;
+    qrect q[2] = { qrect_get(fromRect), qrect_get(toRect) };
+    zoom(zoomSteps, acceleration, rect_at, q);
+    return noErr;
+}
+
+/* The region (global coordinates) moves by zoomDistance on its way. */
+int16_t tb_ZoomRegion(gaddr region, uint32_t zoomDistance, int16_t zoomSteps, int16_t acceleration)
+{
+    if (!region || !rd32(region))
+        return paramErr;
+    region_zoom z;
+    hrgn_init(&z.shape);
+    rgn_read(region, &z.shape);
+    z.dh = pt_h(zoomDistance);
+    z.dv = pt_v(zoomDistance);
+    zoom(zoomSteps, acceleration, region_at, &z);
+    hrgn_free(&z.shape);
+    return noErr;
+}
 
 int16_t tb_SetDragImage(uint32_t theDrag, gaddr imagePixMap, gaddr imageRgn, uint32_t imageOffsetPt,
                         uint32_t theImageFlags)
