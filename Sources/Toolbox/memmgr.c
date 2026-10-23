@@ -511,6 +511,57 @@ static bool resize_in_place(gaddr z, gaddr b, uint32_t newsize)
     return true;
 }
 
+/* A free block of at least psize bytes outside [from, to). */
+static gaddr find_free_outside(gaddr z, uint32_t psize, gaddr from, gaddr to)
+{
+    gaddr lim = z_lim(z);
+    for (gaddr f = z_first(z); f < lim; f = b_next(f)) {
+        if (b_psize(f) < HDR)
+            return 0;
+        if (b_use(f) != USE_FREE || (f >= from && f < to))
+            continue;
+        coalesce(z, f);
+        if (b_psize(f) >= psize)
+            return f;
+    }
+    return 0;
+}
+
+/* Room for block b to grow in place to need bytes: the unlocked
+ * relocatable blocks after it moved elsewhere in the zone, as the Memory
+ * Manager moved them for a locked handle or a pointer that grew (Sirtet
+ * Info locks its TextEdit text, deletes it and inserts the next page). */
+static bool clear_after(gaddr z, gaddr b, uint32_t need)
+{
+    gaddr lim = z_lim(z), end = b + need;
+    if (!need || end < b)
+        return false;
+    if (end > lim && !(grow_zone(z, end - lim) && end <= (lim = z_lim(z))))
+        return false;
+    for (gaddr n = b + b_psize(b); n < end; n = b_next(n)) {
+        if (n >= lim || b_psize(n) < HDR)
+            return false;
+        if (b_use(n) != USE_FREE && (b_use(n) != USE_REL || (b_state(n) & ST_LOCK)))
+            return false; /* a pointer or a locked handle in the way */
+    }
+    for (gaddr n = b + b_psize(b); n < end;) {
+        uint32_t ps = b_psize(n);
+        if (b_use(n) == USE_REL) {
+            gaddr f = find_free_outside(z, ps, b, end);
+            if (!f && grow_zone(z, ps)) /* the application zone grows past the end */
+                f = find_free_outside(z, ps, b, end);
+            if (!f)
+                return false; /* what moved stays moved: the heap is whole */
+            carve(f, ps, USE_REL, b_state(n), b_lsize(n), b_loc(n));
+            gmemcpy(b_data(f), b_data(n), b_lsize(n));
+            wr32(z + b_loc(n), b_data(f)); /* the master pointer follows */
+            b_set(n, USE_FREE, 0, 0, ps, 0);
+        }
+        n += ps;
+    }
+    return true;
+}
+
 void tb_SetPtrSize(gaddr p, int32_t newsize)
 {
     gaddr b = p - HDR;
@@ -519,7 +570,8 @@ void tb_SetPtrSize(gaddr p, int32_t newsize)
         return;
     }
     gaddr z = b_loc(b);
-    if (!resize_in_place(z, b, (uint32_t)newsize)) {
+    if (!resize_in_place(z, b, (uint32_t)newsize) &&
+        !(clear_after(z, b, phys_for((uint32_t)newsize)) && resize_in_place(z, b, (uint32_t)newsize))) {
         set_mem_err(memFullErr);
         return;
     }
@@ -610,7 +662,10 @@ void tb_SetHandleSize(gaddr h, int32_t newsize)
         return;
     }
     if (b_state(b) & ST_LOCK) {
-        set_mem_err(memFullErr);
+        bool grew = clear_after(z, b, phys_for((uint32_t)newsize)) && resize_in_place(z, b, (uint32_t)newsize);
+        if (!grew)
+            LOGF(LOG_MEM, "SetHandleSize(%08X, %d): locked, no room after it\n", h, newsize);
+        set_mem_err(grew ? noErr : memFullErr);
         return;
     }
     /* Move the block: lock it while room is made so it stays put, then copy. */

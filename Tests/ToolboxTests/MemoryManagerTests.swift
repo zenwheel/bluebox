@@ -97,6 +97,25 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        @Test func lockedHandleGrowsByMovingTheHandlesAfterIt() {
+            // Sirtet Info: its TextEdit text, locked, emptied and filled again.
+            let a = tb_NewHandle(16, false, false)
+            let follower = tb_NewHandle(64, false, false) // most likely right after a
+            for i in 0..<64 { wr8(rd32(follower) + UInt32(i), UInt8(i)) }
+            tb_HLock(a)
+            let at = rd32(a)
+            tb_SetHandleSize(a, 0)
+            tb_SetHandleSize(a, 2000)
+            #expect(memErr() == 0)
+            #expect(tb_GetHandleSize(a) == 2000)
+            #expect(rd32(a) == at) // locked: grown where it is
+            #expect((0..<64).allSatisfy { rd8(rd32(follower) + UInt32($0)) == UInt8($0) })
+            #expect(mm_check_zone(appZone))
+            tb_HUnlock(a)
+            tb_DisposeHandle(a)
+            tb_DisposeHandle(follower)
+        }
+
         @Test func handleStateAndRecovery() {
             let h = tb_NewHandle(8, false, false)
             #expect(tb_HGetState(h) == 0)

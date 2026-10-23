@@ -183,7 +183,7 @@ static int width_of(gaddr teh, int from, int n)
         for (int i = from; i < from + n;) {
             int r = run_of(teh, i);
             int end = run_start(teh, r + 1);
-            if (end > from + n)
+            if (end > from + n || end <= i) /* the last run, or runs out of order */
                 end = from + n;
             tstyle st;
             get_style(teh, run_style(teh, r), &st);
@@ -1682,6 +1682,13 @@ void tb_TEUseStyleScrap(int32_t start, int32_t stop, gaddr newstyles, int8_t red
     if (!styled(teh) || !newstyles || !rd32(newstyles))
         return;
     int n = (int16_t)rd16(rd32(newstyles));
+    /* Styles for the text there is: a range past its end (an insertion
+     * that found no room) would leave runs past the end. */
+    int len = text_len(teh);
+    if (stop > len)
+        stop = len;
+    if (start < 0)
+        start = 0;
     gaddr ts = tb_NewPtr(TextStyle_SIZEOF, false, true);
     int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
     for (int i = 0; i < n; i++) {
