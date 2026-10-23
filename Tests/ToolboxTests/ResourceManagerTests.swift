@@ -492,6 +492,44 @@ extension BlueBox {
             #expect(names == ["badday.dxr", "CREDIT.DIR", "credits.aif", "CRXC.DIR"])
         }
     }
+
+    @Suite struct HostFolder {
+        /// The volume's own folder is not listed again inside Host, even
+        /// where a granted file beside it makes its host folder visible
+        /// (as the library beside Macintosh HD does): Greg's Browser adds up
+        /// a folder's size by walking it, and went round Macintosh HD:Host:
+        /// ...:Macintosh HD until its thread's stack overflowed.
+        @Test func volumeFolderIsNotInsideHost() throws {
+            // A short path: its names go through Host one by one, HFS names.
+            let tmp = realpath("/tmp", nil).map { p in defer { free(p) }; return String(cString: p) } ?? "/tmp"
+            let base = URL(fileURLWithPath: tmp + "/bluebox-\(UUID().uuidString.prefix(8))")
+            defer { try? FileManager.default.removeItem(at: base) }
+            let disk = base.appendingPathComponent("Macintosh HD")
+            try FileManager.default.createDirectory(at: disk, withIntermediateDirectories: true)
+            let doc = base.appendingPathComponent("Doc")
+            try Data("x".utf8).write(to: doc)
+            machine_set_disk(disk.path)
+            defer { machine_set_disk(nil) }
+            launchTestApp(documents: [doc.path])
+            // The folder holding both, by its path through Host.
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(256, false, true)
+            guestPString(":Host" + base.path.replacingOccurrences(of: "/", with: ":"), at: name)
+            wr32(pb + 18, name)
+            wr16(pb + 22, UInt16(bitPattern: -1)); wr32(pb + 48, 2)
+            #expect(tb_PBGetCatInfo(pb, false) == 0)
+            let dirID = rd32(pb + 48)
+            #expect(dirID != 2)
+            var names: [String] = []
+            for idx in 1...4 {
+                wr32(pb + 18, name)
+                wr16(pb + 22, UInt16(bitPattern: -1)); wr16(pb + 28, UInt16(idx)); wr32(pb + 48, dirID)
+                if tb_PBGetCatInfo(pb, false) != 0 { break }
+                names.append(pstring(at: name))
+                #expect(rd32(pb + 48) != 2) // no entry is the volume's root
+            }
+            #expect(names.contains("Doc") && !names.contains("Macintosh HD"))
+        }
+    }
 }
 }
 

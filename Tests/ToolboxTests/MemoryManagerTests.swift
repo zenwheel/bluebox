@@ -177,6 +177,21 @@ extension BlueBox {
             tb_DisposeHandle(h)
         }
 
+        /// The code check names the call after which loaded code changed
+        /// (Greg's Browser's thread stack ran down over its code), once.
+        @Test func codeCheckFindsChangedCode() {
+            let code = tb_NewPtr(64, false, true)
+            machine_set_code_check(1)
+            defer { machine_set_code_check(0) }
+            code_check_add(code, 64, "test code")
+            defer { code_check_remove(code) }
+            #expect(code_check_after_call("Fine"))
+            wr32(code + 8, 0x26)
+            #expect(!code_check_after_call("Stray"))
+            #expect(code_check_after_call("Fine"))
+            tb_DisposePtr(code)
+        }
+
         @Test func badHandlesSetErrors() {
             tb_HLock(0)
             #expect(memErr() == -109) // nilHandleErr

@@ -653,6 +653,14 @@ static int list_entries(const char *dir, bool files_only, char ***out)
             continue;
         if (!on_volume(full) && !visible(full))
             continue;
+        /* The volume's own folder is the volume, not a folder inside Host:
+         * listed in its host folder too (when a granted folder beside it,
+         * such as the library's, makes that one visible) it closed a loop,
+         * Macintosh HD:Host:Users:...:Blue Box:Macintosh HD.  Greg's Browser
+         * adds up a folder's size by walking it, and went round the loop
+         * until its thread's stack ran down over its code. */
+        if (!strcmp(full, root_path) && !on_volume(dir))
+            continue;
         if (root && !strcmp(name, host_folder))
             continue; /* the Host folder's name is taken */
         if (count == cap) {
