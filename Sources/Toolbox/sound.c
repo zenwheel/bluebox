@@ -397,6 +397,8 @@ static sndcmd read_cmd(gaddr p)
     return (sndcmd){ rd16(p), (int16_t)rd16(p + 2), (int32_t)rd32(p + 4) };
 }
 
+static void call_at_interrupt(gaddr fn);
+
 static void call_back(channel *c, sndcmd cmd)
 {
     gaddr proc = rd32(c->chan + SndChannel_callBack_off);
@@ -408,7 +410,7 @@ static void call_back(channel *c, sndcmd cmd)
     wr32(cp + 4, (uint32_t)cmd.p2);
     cpu_push32(g_cpu, c->chan);
     cpu_push32(g_cpu, cp);
-    guest_call(proc);
+    call_at_interrupt(proc);
     tb_DisposePtr(cp);
 }
 
@@ -546,6 +548,20 @@ static void dispatch(channel *c, sndcmd cmd, gaddr result_cmd)
         through(c, cmd, first, result_cmd, 0);
 }
 
+/* Call a program's sound routine (doubleBack, callBack, a completion) at
+ * interrupt level, where a Mac ran it: interrupt-time work waits until it
+ * returns.  Run at the program's level, the clock pump inside a long one
+ * (PlayerPRO's doubleBack mixes its music) refilled the same channel again
+ * from within, and the program's half-made buffer state crashed it. */
+static void call_at_interrupt(gaddr fn)
+{
+    uint16_t sr = g_cpu->sr;
+    if (!(sr & 0x0700))
+        g_cpu->sr = (uint16_t)((sr & ~0x0700) | 0x0100);
+    guest_call(fn);
+    g_cpu->sr = (uint16_t)((g_cpu->sr & ~0x0700) | (sr & 0x0700));
+}
+
 /* Double buffering: each ready buffer goes to the host a little before the
  * one playing ends, then the application's doubleBack refills it. */
 #define DB_LEAD_NS 100000000u
@@ -588,7 +604,7 @@ static void pump_double(channel *c)
         if (back) {
             cpu_push32(g_cpu, c->chan);
             cpu_push32(g_cpu, buf);
-            guest_call(back);
+            call_at_interrupt(back);
         }
     }
 }
@@ -1485,7 +1501,7 @@ static void file_play_done(channel *c, bool call_completion)
     c->file_completion = 0;
     if (call_completion && proc && c->chan && c->chan != 0xFFFFFFFFu) {
         cpu_push32(g_cpu, c->chan);
-        guest_call(proc);
+        call_at_interrupt(proc);
     }
 }
 
