@@ -232,5 +232,20 @@ extension BlueBox {
             raw_MemoryDispatch(&c, 0xA05C)
             #expect(Int32(bitPattern: c.d.0) == -50)
         }
+
+        /// A program of the 64K ROM's days grows its zone by hand, with
+        /// 24-bit block headers (Sword of Ages): the zone takes it in.
+        @Test func zoneGrownByHandWith24BitHeaders() {
+            let area = tb_NewPtr(64 * 1024, false, true)
+            let z = (area + 15) & ~15
+            mm_init_zone(z, z + 16 * 1024, 0)
+            let old = rd32(z) // bkLim: the trailer
+            let lim = (z + 60 * 1024) & ~3
+            wr32(old, lim - old) // a free block reaching the new trailer, tag clear
+            wr32(z, lim)
+            wr32(lim, 12) // the new trailer, 24-bit style
+            #expect(mm_check_zone(z))
+            #expect(rd32(old + 4) == lim - old)
+        }
     }
 }
