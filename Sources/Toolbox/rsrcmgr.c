@@ -266,8 +266,14 @@ static gaddr load_ref_direct(gaddr maph, uint32_t r, uint32_t type)
     uint32_t doff = rd32(m + r + 4) & 0x00FFFFFF;
     gaddr h = rd32(m + r + 8);
 
-    if (h && rd32(h))
-        return h; /* already loaded */
+    if (h && rd32(h)) {
+        /* Already loaded: found all the same, so no error is left over
+         * from a call before (Apple's Installer 4 quits when ResError
+         * after Get1Resource isn't noErr, and a failed Get1NamedResource
+         * came just before). */
+        set_res_err(noErr);
+        return h;
+    }
     if (!f) {
         set_res_err(mapReadErr);
         return 0;
@@ -371,8 +377,10 @@ static gaddr load_ref(gaddr maph, uint32_t r, uint32_t type)
     if (!c || native_index_for(stub) >= 0)
         return load_ref_direct(maph, r, type);
     gaddr h = rd32(mp_of(maph) + r + 8);
-    if (h && rd32(h))
-        return h; /* already loaded: the stub isn't consulted */
+    if (h && rd32(h)) { /* already loaded: the stub isn't consulted */
+        set_res_err(noErr);
+        return h;
+    }
     uint32_t d[8], a[8];
     memcpy(d, c->d, sizeof d);
     memcpy(a, c->a, sizeof a);

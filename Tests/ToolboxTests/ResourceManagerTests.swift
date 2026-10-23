@@ -73,6 +73,16 @@ extension BlueBox {
             #expect(resErr() == -192)
         }
 
+        /// Finding a resource already loaded clears an error left by the call
+        /// before (Apple's Installer 4 quit on it).
+        @Test func foundResourceClearsResError() {
+            let h = tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128)
+            #expect(h != 0)
+            #expect(tb_GetIndResource(Int32(bitPattern: fourCC("TEST")), 99) == 0 && resErr() == -192)
+            #expect(tb_Get1Resource(Int32(bitPattern: fourCC("TEST")), 128) == h)
+            #expect(resErr() == 0)
+        }
+
         @Test func namedAndIndexedAccess() {
             let name = tb_NewPtr(256, false, true)
             guestPString("HELLO", at: name) // names compare case-insensitively

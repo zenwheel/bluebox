@@ -14,7 +14,8 @@
 #   HEAPCHECK=n checks the heaps every nth call (default 1; 0 for none),
 #   CODECHECK=n checks a PowerPC program's code for changes every nth
 #   call (default 0, none),
-#   WALK_TIMEOUT=s gives each run s seconds (default 600).
+#   WALK_TIMEOUT=s gives each run s seconds (default 600), MAX=n instructions
+#   (default 4000000000), NOWALK=1 leaves the programs alone (no walk).
 set -eu
 LC_ALL=C
 export LC_ALL
@@ -43,8 +44,11 @@ walk_one() {
 	fi
 	cp -cR "$folder" "$home/copy" 2>/dev/null || cp -R "$folder" "$home/copy"
 	status=0
+	# NOWALK: the program left alone, to tell its own quits from the walk's.
+	walk=--walk-menus
+	[ -z "${NOWALK:-}" ] || walk=--census
 	HOME="$home" BLUEBOX_HEAPCHECK="${HEAPCHECK-1}" BLUEBOX_CODECHECK="${CODECHECK-0}" ASAN_OPTIONS=detect_leaks=0 timeout "${WALK_TIMEOUT:-600}" \
-		"$bin" run "$home/copy/$(basename "$rel")" --headless --census --walk-menus --max 4000000000 \
+		"$bin" run "$home/copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-4000000000}" \
 		>"$log" 2>&1 || status=$?
 	rm -rf "$home"
 	if grep -q 'ERROR: AddressSanitizer' "$log"; then
