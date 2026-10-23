@@ -101,6 +101,16 @@ extension BlueBox {
             wr16(form, 0); wr16(form + 2, 3) // floating, three digits
             tb_ROMlib_Fdec2str(form, dec, out)
             #expect(pstring(at: out) == "-1.23e+2")
+            // Pascal's decform keeps the style in its first byte ($0100):
+            // fixed (Star Patrol's speed field, "0.0e+0" was too long).
+            wr16(form, 0x0100); wr16(form + 2, 2)
+            tb_ROMlib_Fdec2str(form, dec, out)
+            #expect(pstring(at: out) == "-123.45")
+            let x = ext(0)
+            let code = pea(form) + pea(x) + pea(dec) + op(0x000B) + [0xA9F4] // FX2DEC
+            #expect(run(code) == "ExitToShell")
+            tb_ROMlib_Fdec2str(form, dec, out)
+            #expect(pstring(at: out) == "0.00")
         }
 
         @Test func floatingPointCoprocessor() {
