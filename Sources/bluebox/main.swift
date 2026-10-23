@@ -326,6 +326,11 @@ func queueScript(_ script: [String], start: UInt64) {
             at += 200_000
             continue
         }
+        // suspend and resume: the program sent to the background and back.
+        if step == "suspend" || step == "resume" {
+            add(6, step == "resume" ? 1 : 0, 0, after: 200_000)
+            continue
+        }
         if let colon = step.firstIndex(of: ":"), ["keydown", "keyup"].contains(String(step[..<colon])) {
             let name = String(step[step.index(after: colon)...])
             // A modifier: no key event, only the modifiers of what follows.

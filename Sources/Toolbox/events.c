@@ -168,6 +168,7 @@ void events_script_pump(uint64_t now)
         case 1: machine_post_mouse(s.a, s.b, s.c); break;
         case 2: machine_choose_menu((int16_t)s.a, (int16_t)s.b); break;
         case 5: machine_screenshot(snap_paths[s.a]); break;
+        case 6: machine_post_suspend_resume(s.a != 0, false); break; /* a: resume */
         }
     }
 }
