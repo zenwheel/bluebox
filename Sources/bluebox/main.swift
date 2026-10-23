@@ -543,7 +543,11 @@ func runCommand(_ args: [String]) {
         default:
             if a.hasPrefix("-psn_") { break } // LaunchServices process serial number
             if a.hasPrefix("-") { usage() }
-            if app == nil { app = a } else { documents.append(a) }
+            // Files by absolute path: a program finds what sits beside it
+            // (Starry Night's "Sky Data", a HyperCard standalone's stack)
+            // through paths made from its own, which a relative one broke.
+            let path = FileManager.default.fileExists(atPath: a) ? URL(fileURLWithPath: a).standardizedFileURL.path : a
+            if app == nil { app = path } else { documents.append(path) }
         }
         i += 1
     }
