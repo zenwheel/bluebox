@@ -108,6 +108,18 @@ extension BlueBox {
             tb_DisposeGWorld(rd32(gw))
         }
 
+        /// A direct screen's device table has 256 entries all the same, for
+        /// 256-colour games fading through it with SetEntries (Squish).
+        @Test func directScreenTableHas256Entries() {
+            launchTestApp()
+            _ = initToolbox()
+            let pm = rd32(GDevice_gdPMap(rd32(rd32(UInt32(LM_MainDevice)))))
+            guard PixMap_pixelSize(pm) > 8 else { return }
+            let ct = PixMap_pmTable(pm)
+            #expect(rd16(rd32(ct) + 6) == 255)
+            #expect(tb_GetHandleSize(ct) == 8 + 256 * 8)
+        }
+
         /// An 8-bit GWorld brings its own device: while it is current,
         /// Color2Index gives indices into its table, not 32-bit pixels.
         @Test func gworldHasItsOwnDevice() {
