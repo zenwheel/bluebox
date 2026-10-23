@@ -1352,6 +1352,11 @@ static bool host_alert_instead(gaddr d, gaddr itemp)
     return true;
 }
 
+/* The dialog a ModalDialog call is waiting in, for the menu walker. */
+static gaddr in_modal;
+
+bool dialog_modal(gaddr d) { return d && d == in_modal; }
+
 void tb_ModalDialog(gaddr filter, gaddr itemp)
 {
     gaddr d = tb_FrontWindow();
@@ -1373,6 +1378,8 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
         return;
     gaddr evt = tb_NewPtr(EventRecord_SIZEOF, false, true);
     gaddr dp = tb_NewPtr(4, false, true);
+    gaddr outer = in_modal;
+    in_modal = d;
     while (!g_cpu->halted) {
         /* Every event but high-level ones, which wait for the application. */
         bool got = tb_WaitNextEvent((int16_t)(0xFFFF & ~0x0400), evt, 6, 0) != 0;
@@ -1397,6 +1404,7 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
         if (tb_IsDialogEvent(evt) && tb_DialogSelect(evt, dp, itemp) && rd32(dp) == d)
             break;
     }
+    in_modal = outer;
     tb_DisposePtr(dp);
     tb_DisposePtr(evt);
 }
@@ -1554,4 +1562,49 @@ gaddr dialog_in_front(void)
 {
     gaddr w = tb_FrontWindow();
     return is_dialog(w) ? w : 0;
+}
+
+/* What tells the walker one dialog from another: its size and its items'
+ * kinds and places, the same when a program puts the dialog up anew (a
+ * registration notice asking again after a wrong code). */
+uint32_t dialog_signature(gaddr d)
+{
+    qrect pr = qrect_get(d + GrafPort_portRect_off);
+    uint32_t h = 2166136261u;
+    int16_t v[5];
+    int n = item_count(d);
+    for (int i = 0; i <= n; i++) {
+        qrect r = i ? item_rect(d, i) : pr;
+        v[0] = (int16_t)(i ? item_type(d, i) & 0x7F : n);
+        v[1] = r.top, v[2] = r.left, v[3] = r.bottom, v[4] = r.right;
+        for (int k = 0; k < 5; k++)
+            h = (h ^ (uint16_t)v[k]) * 16777619u;
+    }
+    return h;
+}
+
+/* Whether item n is a push button a click would press now (2: shown,
+ * active and enabled), one that may become so (1: dimmed, as a nag's "Not
+ * Yet" while it counts down), or neither (0); -1 past the last item.  For
+ * a button, its title and its centre on the screen. */
+int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y)
+{
+    if (n > item_count(d))
+        return -1;
+    int type = item_type(d, n);
+    gaddr h = item_handle(d, n);
+    qrect r = item_rect(d, n);
+    if ((type & 0x7F) != (ctrlItem | btnCtrl) || !h || !rd32(h) || r.left >= 8192 || !ControlRecord_contrlVis(rd32(h)))
+        return 0;
+    gaddr t = tb_NewPtr(256, false, true);
+    tb_GetControlTitle(h, t);
+    uint8_t text[256];
+    gget(text, t + 1, rd8(t));
+    title[0] = 0;
+    append_text(title, 0, size, text, rd8(t));
+    tb_DisposePtr(t);
+    pixdst px = qd_port_pixels(d);
+    *x = (r.left + r.right) / 2 - px.bounds.left;
+    *y = (r.top + r.bottom) / 2 - px.bounds.top;
+    return (type & itemDisable) || ControlRecord_contrlHilite(rd32(h)) == 255 ? 1 : 2;
 }
