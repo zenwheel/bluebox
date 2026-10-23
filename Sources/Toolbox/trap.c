@@ -853,3 +853,19 @@ void trap_init(void)
         wr32(v * 4, EXCEPTION_JMP);
     wr32(10 * 4, aline_vector_stub);
 }
+
+/* The interrupt autovectors (25..31, $64..$7F), which nothing here takes,
+ * through a JMP in the system heap: a Mac's pointed into ROM at $408xxxxx,
+ * a positive word, and a program reading a window's fields through nil
+ * finds windowKind ($6C) there.  Snoop, its only window hidden, sends the
+ * front window behind while its kind is negative (a desk accessory's). */
+void trap_autovectors(void)
+{
+    gaddr stub = mm_new_ptr_in(rd32(LM_SysZone), 6, false);
+    if (!stub)
+        return;
+    wr16(stub, 0x4EF9); /* JMP */
+    wr32(stub + 2, EXCEPTION_JMP);
+    for (unsigned v = 25; v < 32; v++)
+        wr32(v * 4, stub);
+}

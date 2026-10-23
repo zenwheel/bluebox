@@ -53,6 +53,7 @@ extern const unsigned dispatcher_count;
 
 /* Install natives, stubs, trap tables and exception vectors. */
 void trap_init(void);
+void trap_autovectors(void); /* once the system zone is there */
 
 /* Register a native routine; returns the guest address of its stub. */
 uint32_t native_register(native_fn fn, const char *name, uint16_t trapword);

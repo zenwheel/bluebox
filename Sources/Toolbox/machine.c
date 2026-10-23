@@ -331,6 +331,7 @@ bool machine_boot(bool census)
     wr32(LM_ApplLimit, GA_APPLLIMIT);
     wr32(LM_HeapEnd, Zone_bkLim(GA_APPHEAP));
     mm_set_appl_growth(GA_APPLLIMIT);
+    trap_autovectors();
     hardware_globals();
 
     /* The System file: built here, with our definition procedures as
