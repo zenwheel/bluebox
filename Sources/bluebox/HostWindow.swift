@@ -703,6 +703,108 @@ func installAlertHandler() {
         }
         return chosen
     }, nil)
+    installScriptDialogHandler()
+}
+
+/// MacRoman text into a C array of chars (LF becomes CR), cut to fit.
+func setMacRoman<T>(_ tuple: inout T, _ s: String) {
+    let bytes = Array((s.replacingOccurrences(of: "\n", with: "\r").data(using: .macOSRoman, allowLossyConversion: true) ?? Data()))
+    withUnsafeMutableBytes(of: &tuple) { raw in
+        let n = min(bytes.count, raw.count - 1)
+        for i in 0..<n { raw[i] = bytes[i] }
+        raw[n] = 0
+    }
+}
+
+/// AppleScript's display dialog and choose from list, from a script Blue
+/// Box's own AppleScript runs, as native alerts: the default answer in a
+/// text field, the list in a pop-up menu, giving up after its time.  Only
+/// the text shown and the answer pass between them.
+func installScriptDialogHandler() {
+    machine_set_script_dialog_handler({ dialogPtr, _ in
+        guard let d = dialogPtr else { return 0 }
+        let message = macRomanString(d.pointee.message)
+        var buttons: [String] = []
+        withUnsafeBytes(of: d.pointee.buttons) { raw in
+            for i in 0..<Int(d.pointee.nbuttons) {
+                let slice = raw[(i * 64)..<(i * 64 + 64)]
+                let bytes = slice.prefix { $0 != 0 }
+                buttons.append(String(data: Data(bytes), encoding: .macOSRoman) ?? "")
+            }
+        }
+        var items: [String] = []
+        if let list = d.pointee.items {
+            for i in 0..<Int(d.pointee.nitems) {
+                if let p = list[i] { items.append(String(cString: p, encoding: .macOSRoman) ?? "") }
+            }
+        }
+        let isList = d.pointee.kind == Int32(MACHINE_SCRIPT_LIST)
+        let defaultButton = Int(d.pointee.default_button), cancelButton = Int(d.pointee.cancel_button)
+        let hasAnswer = d.pointee.has_answer, answer = macRomanString(d.pointee.answer)
+        let givingUp = Int(d.pointee.giving_up), icon = d.pointee.icon
+        let selected = Int(d.pointee.selected)
+        var chosen: Int32 = 0
+        var typed = answer
+        var picked = selected
+        onMain {
+            MainActor.assumeIsolated {
+                let alert = NSAlert()
+                if let appIcon { alert.icon = appIcon }
+                alert.messageText = message
+                switch Int(icon) {
+                case Int(MACHINE_ALERT_STOP): alert.alertStyle = .critical
+                case Int(MACHINE_ALERT_CAUTION): alert.alertStyle = .warning
+                default: alert.alertStyle = .informational
+                }
+                // NSAlert's first button is the default, its buttons run right
+                // to left: the script's default first, then the others from
+                // the right.
+                var order: [Int] = []
+                if defaultButton > 0 { order.append(defaultButton) }
+                for i in stride(from: buttons.count, through: 1, by: -1) where i != defaultButton { order.append(i) }
+                for (k, b) in order.enumerated() {
+                    let button = alert.addButton(withTitle: buttons[b - 1])
+                    if k == 0 && defaultButton == 0 { button.keyEquivalent = "" }
+                    if b == cancelButton { button.keyEquivalent = "\u{1b}" }
+                }
+                var field: NSTextField?
+                var popup: NSPopUpButton?
+                if isList {
+                    let p = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 280, height: 26), pullsDown: false)
+                    p.addItems(withTitles: items)
+                    if picked >= 0 && picked < items.count { p.selectItem(at: picked) }
+                    alert.accessoryView = p
+                    popup = p
+                } else if hasAnswer {
+                    let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+                    f.stringValue = answer
+                    alert.accessoryView = f
+                    alert.window.initialFirstResponder = f
+                    field = f
+                }
+                var timer: Timer?
+                if givingUp > 0 {
+                    timer = Timer(timeInterval: TimeInterval(givingUp), repeats: false) { _ in
+                        MainActor.assumeIsolated { NSApp.abortModal() }
+                    }
+                    RunLoop.main.add(timer!, forMode: .modalPanel)
+                }
+                let response = alert.runModal()
+                timer?.invalidate()
+                if response == .abort {
+                    chosen = 0
+                } else {
+                    let k = response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+                    chosen = k >= 0 && k < order.count ? Int32(order[k]) : Int32(defaultButton)
+                }
+                if let field { typed = field.stringValue }
+                if let popup { picked = popup.indexOfSelectedItem }
+            }
+        }
+        if hasAnswer { setMacRoman(&d.pointee.answer, typed) }
+        d.pointee.selected = Int32(picked)
+        return chosen
+    }, nil)
 }
 #endif
 
