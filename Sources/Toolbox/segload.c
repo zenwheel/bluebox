@@ -204,7 +204,7 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
      * to address 0 when that byte wasn't already 0. */
     gaddr top = GA_A5WORLD_TOP;
     if (!(g_app_size_flags & 0x0080) && (uint64_t)above + below + GA_STACK_24 < GA_A5WORLD_TOP_24 - GA_APPHEAP) {
-        gaddr limit = ((GA_A5WORLD_TOP_24 - above) & ~3u) - below - GA_STACK_24;
+        gaddr limit = (((GA_A5WORLD_TOP_24 - above) & ~3u) - below - GA_STACK_24) & ~3u; /* whole longs */
         if (Zone_bkLim(rd32(LM_ApplZone)) < limit) {
             top = GA_A5WORLD_TOP_24;
             wr32(LM_BufPtr, top);

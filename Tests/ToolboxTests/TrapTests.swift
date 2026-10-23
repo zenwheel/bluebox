@@ -302,8 +302,10 @@ extension BlueBox {
             #expect(g_cpu!.pointee.a.7 < 0x0100_0000)
             #expect(rd32(UInt32(LM_BufPtr)) <= 0x0100_0000)
             #expect(limit < stackBase && stackBase - limit >= 0x10_0000)
+            #expect(limit & 3 == 0) // whole longs, or the zone grows by an odd amount
             tb_MaxApplZone()
             #expect(rd32(UInt32(LM_HeapEnd)) <= limit)
+            #expect(mm_check_zone(rd32(UInt32(LM_ApplZone))))
             #expect(tb_StackSpace() > 0xF_0000)
 
             launchTestApp(sizeFlags: 0x0080) // is32BitCompatible

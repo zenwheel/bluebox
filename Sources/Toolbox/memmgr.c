@@ -210,6 +210,10 @@ static bool grow_zone(gaddr z, uint32_t need)
     gaddr limit = rd32(LM_ApplLimit);
     if (limit > appl_max_limit || limit == 0)
         limit = appl_max_limit;
+    /* Blocks are whole longs: a limit that isn't (one set from the stack's
+     * place, as below 16 MB for programs not 32-bit clean) would leave the
+     * zone's last block an odd size. */
+    limit &= ~3u;
     if (lim + HDR >= limit)
         return false;
     uint64_t room = limit - HDR - lim;
@@ -793,6 +797,7 @@ static uint32_t growth_room(gaddr z)
     gaddr limit = rd32(LM_ApplLimit);
     if (limit > appl_max_limit || !limit)
         limit = appl_max_limit;
+    limit &= ~3u; /* blocks are whole longs, as grow_zone makes them */
     return limit > z_lim(z) + HDR ? limit - HDR - z_lim(z) : 0;
 }
 
