@@ -364,6 +364,7 @@ bool machine_boot(bool census)
     sound_reset();
     components_reset();
     icm_components_reset(); /* the Standard Image Compression component */
+    osa_register();         /* AppleScript, our own, and the applet shell */
     quicktime_reset();
     opentransport_reset();
     drivers_reset();

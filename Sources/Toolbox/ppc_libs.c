@@ -2345,12 +2345,36 @@ static void cs_getfnum(ppc_cpu *c) { with_pascals(c, "GetFNum", 1); }
 static void cs_getfontname(ppc_cpu *c) { with_pascal(c, "GetFontName", -1, 1); }
 
 /* AppleScriptLib: the Open Scripting Architecture's calls go to the
- * scripting component instance they're given; with no AppleScript
- * component there is none, and the Component Manager answers
- * badComponentInstance. */
-static void os_OSALoad(ppc_cpu *c) { instance_call(c, 1, "444"); }
-static void os_OSAExecute(ppc_cpu *c) { instance_call(c, 3, "4444"); }
-static void os_OSADispose(ppc_cpu *c) { instance_call(c, 6, "4"); }
+ * scripting component instance they're given (our AppleScript, osa.c). */
+static void os_OSALoad(ppc_cpu *c) { instance_call(c, 0x0001, "444"); }
+static void os_OSAStore(ppc_cpu *c) { instance_call(c, 0x0002, "4444"); }
+static void os_OSAExecute(ppc_cpu *c) { instance_call(c, 0x0003, "4444"); }
+static void os_OSADisplay(ppc_cpu *c) { instance_call(c, 0x0004, "4444"); }
+static void os_OSAScriptError(ppc_cpu *c) { instance_call(c, 0x0005, "444"); }
+static void os_OSADispose(ppc_cpu *c) { instance_call(c, 0x0006, "4"); }
+static void os_OSASetScriptInfo(ppc_cpu *c) { instance_call(c, 0x0007, "444"); }
+static void os_OSAGetScriptInfo(ppc_cpu *c) { instance_call(c, 0x0008, "444"); }
+static void os_OSASetActiveProc(ppc_cpu *c) { instance_call(c, 0x0009, "44"); }
+static void os_OSAGetActiveProc(ppc_cpu *c) { instance_call(c, 0x000A, "44"); }
+static void os_OSAScriptingComponentName(ppc_cpu *c) { instance_call(c, 0x0102, "4"); }
+static void os_OSAGetSource(ppc_cpu *c) { instance_call(c, 0x0201, "444"); }
+static void os_OSACompile(ppc_cpu *c) { instance_call(c, 0x0203, "444"); }
+static void os_OSACopyID(ppc_cpu *c) { instance_call(c, 0x0204, "44"); }
+static void os_OSACoerceFromDesc(ppc_cpu *c) { instance_call(c, 0x0301, "444"); }
+static void os_OSACoerceToDesc(ppc_cpu *c) { instance_call(c, 0x0302, "4444"); }
+static void os_OSASetSendProc(ppc_cpu *c) { instance_call(c, 0x0305, "44"); }
+static void os_OSAGetSendProc(ppc_cpu *c) { instance_call(c, 0x0306, "44"); }
+static void os_OSASetCreateProc(ppc_cpu *c) { instance_call(c, 0x0307, "44"); }
+static void os_OSAGetCreateProc(ppc_cpu *c) { instance_call(c, 0x0308, "44"); }
+static void os_OSASetDefaultTarget(ppc_cpu *c) { instance_call(c, 0x0309, "4"); }
+static void os_OSALoadExecute(ppc_cpu *c) { instance_call(c, 0x0501, "4444"); }
+static void os_OSACompileExecute(ppc_cpu *c) { instance_call(c, 0x0502, "4444"); }
+static void os_OSADoScript(ppc_cpu *c) { instance_call(c, 0x0503, "44444"); }
+static void os_OSASetResumeDispatchProc(ppc_cpu *c) { instance_call(c, 0x0507, "44"); }
+static void os_OSAGetResumeDispatchProc(ppc_cpu *c) { instance_call(c, 0x0508, "44"); }
+static void os_OSAExecuteEvent(ppc_cpu *c) { instance_call(c, 0x0509, "4444"); }
+static void os_OSADoEvent(ppc_cpu *c) { instance_call(c, 0x050A, "4444"); }
+static void os_OSAMakeContext(ppc_cpu *c) { instance_call(c, 0x050B, "444"); }
 
 /* The low-level I/O calls, MPW's: descriptors 0 to 2 are the console (what
  * is written goes to the log, reading finds nothing), the others files
@@ -2650,7 +2674,19 @@ const ppc_export lib_exports[] = {
     { "TrapAvailable", s_TrapAvailable }, { "MakeResolvedFSSpec", s_MakeResolvedFSSpec },
     { "__assertprint", s_assertprint },
     /* AppleScriptLib */
-    { "OSALoad", os_OSALoad }, { "OSAExecute", os_OSAExecute }, { "OSADispose", os_OSADispose },
+    { "OSALoad", os_OSALoad }, { "OSAStore", os_OSAStore }, { "OSAExecute", os_OSAExecute },
+    { "OSADisplay", os_OSADisplay }, { "OSAScriptError", os_OSAScriptError }, { "OSADispose", os_OSADispose },
+    { "OSASetScriptInfo", os_OSASetScriptInfo }, { "OSAGetScriptInfo", os_OSAGetScriptInfo },
+    { "OSASetActiveProc", os_OSASetActiveProc }, { "OSAGetActiveProc", os_OSAGetActiveProc },
+    { "OSAScriptingComponentName", os_OSAScriptingComponentName }, { "OSAGetSource", os_OSAGetSource },
+    { "OSACompile", os_OSACompile }, { "OSACopyID", os_OSACopyID }, { "OSACoerceFromDesc", os_OSACoerceFromDesc },
+    { "OSACoerceToDesc", os_OSACoerceToDesc }, { "OSASetSendProc", os_OSASetSendProc },
+    { "OSAGetSendProc", os_OSAGetSendProc }, { "OSASetCreateProc", os_OSASetCreateProc },
+    { "OSAGetCreateProc", os_OSAGetCreateProc }, { "OSASetDefaultTarget", os_OSASetDefaultTarget },
+    { "OSALoadExecute", os_OSALoadExecute }, { "OSACompileExecute", os_OSACompileExecute },
+    { "OSADoScript", os_OSADoScript }, { "OSASetResumeDispatchProc", os_OSASetResumeDispatchProc },
+    { "OSAGetResumeDispatchProc", os_OSAGetResumeDispatchProc }, { "OSAExecuteEvent", os_OSAExecuteEvent },
+    { "OSADoEvent", os_OSADoEvent }, { "OSAMakeContext", os_OSAMakeContext },
     /* Wide arithmetic */
     { "WideAdd", w_WideAdd }, { "WideBitShift", w_WideBitShift }, { "WideCompare", w_WideCompare },
     { "WideDivide", w_WideDivide }, { "WideMultiply", w_WideMultiply }, { "WideNegate", w_WideNegate },
