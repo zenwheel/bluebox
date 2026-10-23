@@ -618,6 +618,31 @@ extension BlueBox {
             tb_DisposeWindow(w)
         }
 
+        /// A WDEF that reads portBits.bounds finds the PixMap's bounds there
+        /// while it works out a colour window's regions (Total Distortion's
+        /// FinderHider WDEF); the grafVars handle is back afterwards.
+        @Test func oldWDEFsSeeBoundsInColourWindows() {
+            launchTestApp()
+            _ = initToolbox()
+            g_cpu!.pointee.a.7 = tb_NewPtr(65536, false, true) + 65536 - 16
+            let w = tb_NewCWindow(0, rect(100, 100, 200, 300), 0, 0, 2, 0xFFFF_FFFF, 0, 0)
+            let seen = tb_NewPtr(4, false, true)
+            // cmpi.w #2,8(a7); bne.s +8; movea.l 10(a7),a0 ... as a WDEF:
+            // on wCalcRgns, copy the long at 8(window) to seen; return 0.
+            let words: [UInt16] = [0x0C6F, 2, 8, 0x660C, 0x206F, 10, 0x23E8, 8, UInt16(seen >> 16), UInt16(seen & 0xFFFF),
+                                   0x4E71, 0x4E71, 0x205F, 0x4FEF, 12, 0x4ED0]
+            let code = tb_NewHandle(Int32(words.count * 2), false, false)
+            for (i, v) in words.enumerated() { wr16(rd32(code) + UInt32(i * 2), v) }
+            let grafVars = rd32(w + UInt32(CGrafPort_grafVars_off))
+            WindowRecord_set_windowDefProc(w, code)
+            tb_MoveWindow(w, 120, 140, 0)
+            // The window's top left, negated, as a BitMap port's bounds hold it.
+            #expect(rd32(seen) == UInt32(UInt16(bitPattern: -140)) << 16 | UInt32(UInt16(bitPattern: -120)))
+            #expect(rd32(w + UInt32(CGrafPort_grafVars_off)) == grafVars)
+            WindowRecord_set_windowDefProc(w, 0)
+            tb_DisposeWindow(w)
+        }
+
         /// After InitFloatingWindows the floating windows stay in front:
         /// documents brought forward or made go behind them, the front
         /// document is the active one and the floating ones stay highlighted.
