@@ -1356,6 +1356,12 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
 {
     gaddr d = tb_FrontWindow();
     if (!is_dialog(d)) {
+        /* No dialog to take events (SnoodEdit's About box, whose DLOG it
+         * doesn't have): time passes as it waits, so a program calling
+         * again till an item is hit waits rather than spins. */
+        gaddr evt = tb_NewPtr(EventRecord_SIZEOF, false, true);
+        tb_WaitNextEvent(0, evt, 6, 0);
+        tb_DisposePtr(evt);
         wr16(itemp, 0);
         return;
     }
