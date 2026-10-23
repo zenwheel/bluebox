@@ -62,6 +62,41 @@ static as_obj *text_param(as_obj *v)
 
 /* Ask the host, or answer as the user would at once when there is none
  * (headless runs): the default button, the default answer. */
+/* BLUEBOX_SCRIPT_ANSWERS: a headless run's answers to the dialogs, in
+ * order, separated by "|": a button's title chooses it, anything else is
+ * typed into the dialog's text field (or picks a list's item) and the
+ * default button chosen.  Once they run out, the defaults again. */
+static bool scripted_answer(machine_script_dialog *d, int *button)
+{
+    static const char *next;
+    static bool started;
+    if (!started) {
+        started = true;
+        next = getenv("BLUEBOX_SCRIPT_ANSWERS");
+    }
+    if (!next || !*next)
+        return false;
+    const char *end = strchr(next, '|');
+    size_t n = end ? (size_t)(end - next) : strlen(next);
+    char answer[256];
+    snprintf(answer, sizeof answer, "%.*s", (int)(n < 255 ? n : 255), next);
+    next = end ? end + 1 : next + n;
+    for (int i = 0; i < d->nbuttons; i++)
+        if (!strcmp(d->buttons[i], answer)) {
+            *button = i + 1;
+            return true;
+        }
+    if (d->kind == MACHINE_SCRIPT_LIST) {
+        for (int i = 0; i < d->nitems; i++)
+            if (!strcmp(d->items[i], answer))
+                d->selected = i;
+    } else if (d->has_answer) {
+        snprintf(d->answer, sizeof d->answer, "%s", answer);
+    }
+    *button = d->default_button ? d->default_button : 1;
+    return true;
+}
+
 int as_ask(machine_script_dialog *d)
 {
     if (dialog_fn)
@@ -82,10 +117,11 @@ int as_ask(machine_script_dialog *d)
         if (d->selected < 0)
             d->selected = 0;
     }
+    scripted_answer(d, &b);
     char msg[160];
     snprintf(msg, sizeof msg, "%s", d->message);
     for (char *p = msg; *p; p++)
-        if (*p == '\r')
+        if (*p == '\r' || *p == '\n')
             *p = ' ';
     if (d->kind == MACHINE_SCRIPT_DIALOG)
         LOGF(LOG_UNIMPL | LOG_TRAPS, "AppleScript: display dialog \"%s\" -> %s%s%s\n", msg,
