@@ -92,12 +92,20 @@ void tb_RmvTime(gaddr taskp)
     int i = find_timer(taskp);
     if (i < 0)
         return;
-    /* tmCount gets the time left, in negated microseconds. */
+    /* tmCount gets the time left: in negated microseconds when it fits,
+     * otherwise in positive milliseconds, as the Time Manager kept it.
+     * A Director 4 projector (Total Distortion) times its frames this
+     * way, priming a task for 16777215 ms and taking what is left from
+     * that: clamped to 2147 seconds of microseconds, every frame looked
+     * hours long and the score raced past its tempo settings. */
     int32_t left = 0;
     if (timers[i].active) {
         uint64_t t = now();
         uint64_t us = timers[i].due > t ? (timers[i].due - t) / 1000u : 0;
-        left = us > 0x7FFFFFFF ? -0x7FFFFFFF : -(int32_t)us;
+        if (us <= 0x7FFFFFFF)
+            left = -(int32_t)us;
+        else
+            left = us / 1000u > 0x7FFFFFFF ? 0x7FFFFFFF : (int32_t)(us / 1000u);
     }
     wr32(taskp + TMTask_tmCount_off, (uint32_t)left);
     wr16(taskp + TMTask_qType_off, rd16(taskp + TMTask_qType_off) & (uint16_t)~TM_ACTIVE);

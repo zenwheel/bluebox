@@ -52,6 +52,20 @@ extension BlueBox {
             #expect(left < -9_000_000 && left >= -10_000_000)
         }
 
+        /// Time left past what negated microseconds hold comes back in
+        /// positive milliseconds: Total Distortion's Director 4 projector
+        /// primes a task for 16777215 ms and times each frame by what is
+        /// left of it.
+        @Test func rmvTimeLeavesLongWaitsInMilliseconds() {
+            let tm = tb_NewPtr(Int32(TMTask_SIZEOF), false, true)
+            tb_InsTime(tm)
+            tb_PrimeTime(tm, 16_777_215)
+            machine_skip_time(200_000_000) // 200 ms
+            tb_RmvTime(tm)
+            let left = Int32(bitPattern: rd32(tm + UInt32(TMTask_tmCount_off)))
+            #expect(left > 16_777_000 && left <= 16_777_015)
+        }
+
         /// Time (seconds since 1904) moves on with the clock, as Ticks does.
         @Test func timeFollowsTheClock() {
             machine_advance_ticks()

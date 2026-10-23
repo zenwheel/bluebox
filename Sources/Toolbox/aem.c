@@ -315,12 +315,18 @@ void aem_queue_flat(const uint8_t *data, uint32_t len, machine_ae_reply_fn reply
 }
 
 /* Ask the app to quit as the System 7 Finder did: a Quit Application event
- * if it takes high-level events, otherwise its own Quit menu item. */
+ * if it takes high-level events, otherwise its own Quit menu item.  One
+ * whose SIZE says it takes them but that installed handlers for others
+ * and none for Quit Application couldn't act on it: a Director 4
+ * projector (Total Distortion) handles only Do Script and Evaluate, and
+ * reads no events through WaitNextEvent while a movie plays, but quits
+ * on Command-Q. */
 static bool has_handler(uint32_t cls, uint32_t id);
+static bool app_has_handlers(void);
 
 void machine_request_quit(void)
 {
-    bool aware = (g_app_size_flags & 0x0040) || has_handler(T("aevt"), T("quit"));
+    bool aware = has_handler(T("aevt"), T("quit")) || ((g_app_size_flags & 0x0040) && !app_has_handlers());
     if (aware) {
         machine_send_quit();
         return;
@@ -1157,6 +1163,8 @@ static bool has_handler(uint32_t cls, uint32_t id)
 {
     return find_handler_in(0, cls, id) || find_handler_in(1, cls, id);
 }
+
+static bool app_has_handlers(void) { return nhandlers[0] > 0 || nhandlers[1] > 0; }
 
 /* ---------------------------------------------------------------------- */
 /* Coercion and special handlers */

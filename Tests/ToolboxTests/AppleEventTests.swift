@@ -386,6 +386,29 @@ extension BlueBox {
             _ = tb_AESend(evt, 0, 1, 0, -1, 0, 0)
             #expect(results == [0, -1713, 0]) // errAENoUserInteraction from the host at kAEInteractWithSelf
         }
+
+        /// The host's Quit sends Quit Application to a program with a
+        /// handler for it.  One whose SIZE says it takes high-level events
+        /// but that handles only others (a Director 4 projector: Do Script
+        /// and Evaluate) gets Command-Q, which it quits on.
+        @Test func quitRequests() {
+            launchTestApp(sizeFlags: 0x0040)
+            guestStack()
+            let handler = pascalProc([4, 4, 4]) { _ in 0 }
+            _ = tb_AEInstallEventHandler(code("misc"), code("dosc"), handler, 0, 0)
+            tb_FlushEvents(-1, 0)
+            machine_request_quit()
+            #expect(takeEvent() == nil)
+            let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            #expect(tb_GetNextEvent(0x0008, e) != 0) // keyDownMask
+            #expect(rd16(e) == 3 && rd32(e + 2) & 0xFF == 0x71 && rd16(e + 14) & 0x0100 != 0) // 'q', cmdKey
+
+            _ = tb_AEInstallEventHandler(code("aevt"), code("quit"), handler, 0, 0)
+            tb_FlushEvents(-1, 0)
+            machine_request_quit()
+            let q = takeEvent()
+            #expect(q.map { rd32($0 + 2) } == fourCC("aevt") && q.map { rd32($0 + 10) } == fourCC("quit"))
+        }
     }
 }
 
