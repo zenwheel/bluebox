@@ -119,6 +119,33 @@ static int32_t cant_compile(void)
 
 #define ARG(k) rd32(params + 4 + 4 * (k)) /* the arguments, the last one first */
 
+/* The source styles: a TextEdit style table (STHandle) of nine
+ * (uncompiled text, normal text, language and application keywords,
+ * comments, literals, user symbols, object specifiers, reserved), as
+ * AppleScript set them out.  Script Editor asks for them at its start and
+ * takes a handle left unset for a damaged heap. */
+static int32_t source_styles(gaddr out)
+{
+    static const struct { int16_t font, size; uint8_t face; } st[9] = {
+        { 22, 10, 0 }, { 3, 10, 0 }, { 3, 10, 1 }, { 3, 10, 0 }, { 3, 9, 2 },
+        { 3, 10, 0 }, { 3, 10, 0 }, { 3, 10, 0 }, { 3, 10, 0 },
+    };
+    gaddr h = tb_NewHandle(9 * 18, false, true);
+    if (!h)
+        return memFullErr;
+    for (int i = 0; i < 9; i++) {
+        gaddr e = rd32(h) + (uint32_t)i * 18; /* STElement */
+        wr16(e, 1);                           /* stCount */
+        wr16(e + 2, (uint16_t)(st[i].size + 2));
+        wr16(e + 4, (uint16_t)st[i].size);    /* stAscent */
+        wr16(e + 6, (uint16_t)st[i].font);
+        wr8(e + 8, st[i].face);
+        wr16(e + 10, (uint16_t)st[i].size);   /* stColor stays black */
+    }
+    wr32(out, h);
+    return noErr;
+}
+
 static int32_t osa_call(int16_t what, gaddr params)
 {
     char text[2048];
@@ -269,8 +296,13 @@ static int32_t osa_call(int16_t what, gaddr params)
     case kOSASelectMakeContext: /* (contextName, parentContext, *resultingContextID) */
         return errOSABadSelector;
     }
-    if ((uint16_t)what >= 0x1000) /* AppleScript's own (ASInit, the source styles ...) */
+    switch ((uint16_t)what) {
+    case 0x1001: /* ASInit */
+    case 0x1002: /* ASSetSourceStyles: kept to itself */
         return noErr;
+    case 0x1003: /* ASGetSourceStyles (*resultingSourceStyles) */
+        return source_styles(ARG(0));
+    }
     return badComponentSelector;
 }
 
@@ -283,6 +315,7 @@ static void osa_component(cpu68k *c, uint16_t tw)
     gaddr params = cpu_pop32(c);
     int16_t what = (int16_t)rd16(params + 2);
     int32_t r = osa_call(what, params);
+    LOGF(LOG_TRAPS, "  AppleScript component: selector %04X -> %d\n", (uint16_t)what, r);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -488,14 +521,54 @@ static void applet_component(cpu68k *c, uint16_t tw)
     cpu_push32(c, ret);
 }
 
+/* The generic scripting component ('osa ' 'scpt'): its own calls name
+ * AppleScript as the scripting component there is (Script Editor asks for
+ * it by subtype and talks to it); the OSA's calls are AppleScript's. */
+enum { errOSAComponentMismatch = -1761 };
+static uint32_t ascr_component;
+
+static int32_t generic_call(int16_t what, gaddr params)
+{
+    switch ((uint16_t)what) {
+    case 0x1001: /* GSSGetDefaultScriptingComponent (*scriptingSubType) */
+    case 0x1004: /* GSSGetScriptingComponentFromStored (storedScriptID, *scriptingSubType) */
+        wr32(ARG(0), T("ascr"));
+        return noErr;
+    case 0x1002: /* GSSSetDefaultScriptingComponent (scriptingSubType) */
+        return ARG(0) == T("ascr") ? noErr : errOSAComponentMismatch;
+    case 0x1003: { /* GSSGetScriptingComponent (scriptingSubType, *scriptingInstance) */
+        uint32_t ci = ARG(1) == T("ascr") && ascr_component ? components_open(ascr_component) : 0;
+        wr32(ARG(0), ci);
+        return ci ? noErr : errOSAComponentMismatch;
+    }
+    case 0x1005: /* GSSGenericToRealID (*theScriptID, *theExactComponent) */
+    case 0x1006: /* GSSRealToGenericID (theScriptID, theExactComponent) */
+        return noErr; /* one component: the IDs are the same */
+    }
+    return osa_call(what, params);
+}
+
+static void generic_component(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    uint32_t ret = cpu_pop32(c);
+    cpu_pop32(c); /* storage */
+    gaddr params = cpu_pop32(c);
+    int16_t what = (int16_t)rd16(params + 2);
+    int32_t r = generic_call(what, params);
+    LOGF(LOG_TRAPS, "  generic scripting component: selector %04X -> %d\n", (uint16_t)what, r);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 /* Register the components (a new run). */
 void osa_register(void)
 {
     as_reset();
     active_proc = active_refcon = send_proc = send_refcon = create_proc = create_refcon = resume_proc = resume_refcon = 0;
     uint32_t osa = native_register(osa_component, "AppleScript", 0);
-    components_register_native(T("osa "), T("ascr"), T("appl"), osa);
-    components_register_native(T("osa "), T("scpt"), T("appl"), osa);
+    ascr_component = components_register_native(T("osa "), T("ascr"), T("appl"), osa);
+    components_register_native(T("osa "), T("scpt"), T("appl"), native_register(generic_component, "GenericScripting", 0));
     components_register_native(T("aplt"), T("scpt"), T("appl"), native_register(applet_component, "AppletShell", 0));
     /* AppleScript 1.1 is here (gestaltAppleScriptVersion, gestaltAppleScriptAttr). */
     gestalt_set(T("ascv"), 0x01108000);

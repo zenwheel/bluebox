@@ -248,9 +248,10 @@ static void component_call(cpu68k *c, uint32_t ret)
     uint32_t ci = rd32(params + 4 + size);
     instance *in = inst_of(ci);
     int32_t r;
-    if (!in)
+    if (!in) {
         r = badComponentInstance;
-    else
+        LOGF(LOG_TRAPS, "  component call %04X: %08X is no instance\n", rd16(params + 2), ci);
+    } else
         r = call_entry(in, params);
     if (in)
         in->error = (int16_t)(r & 0xFFFF) == r ? (int16_t)r : in->error;
@@ -281,6 +282,8 @@ static void call_function(cpu68k *c, uint32_t ret)
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw)
 {
     uint16_t sel = (uint16_t)c->d[0] & 0xFF;
+    if (sel)
+        LOGF(LOG_TRAPS, "  ComponentDispatch selector %02X\n", sel);
     uint32_t ret = cpu_pop32(c);
     int16_t err;
     component *k;
