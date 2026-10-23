@@ -84,6 +84,9 @@ int menu_bar_count(void);
 int16_t menu_bar_id(int i);
 bool menu_bar_item(int i, int n, char *text, size_t size, bool *enabled, bool *submenu);
 gaddr dialog_in_front(void);
+uint32_t dialog_signature(gaddr d);
+bool dialog_modal(gaddr d);
+int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y);
 void walker_idle(uint64_t now);
 
 /* ---- Resource Manager internals ---- */
