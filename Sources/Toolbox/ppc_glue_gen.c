@@ -34168,7 +34168,7 @@ static void ppclm_get_KeyMap(ppc_cpu *c) { c->gpr[3] = 0x174; c->pc = c->lr; }
 static void ppclm_set_KeyMap(ppc_cpu *c) { ppc_copy(0x174, c->gpr[3], 16); c->pc = c->lr; }
 static void ppclm_get_BootDrive(ppc_cpu *c) { c->gpr[3] = (uint32_t)(int32_t)(int16_t)rd16(0x210); c->pc = c->lr; }
 static void ppclm_set_BootDrive(ppc_cpu *c) { wr16(0x210, (uint16_t)c->gpr[3]); c->pc = c->lr; }
-static void ppclm_get_DrvQHdr(ppc_cpu *c) { ppc_copy(c->gpr[3], 0x308, 10); c->pc = c->lr; }
+static void ppclm_get_DrvQHdr(ppc_cpu *c) { c->gpr[3] = 0x308; c->pc = c->lr; }
 static void ppclm_set_DrvQHdr(ppc_cpu *c) { ppc_copy(0x308, c->gpr[3], 10); c->pc = c->lr; }
 static void ppclm_get_EjectNotify(ppc_cpu *c) { c->gpr[3] = rd32(0x338); c->pc = c->lr; }
 static void ppclm_set_EjectNotify(ppc_cpu *c) { wr32(0x338, (uint32_t)c->gpr[3]); c->pc = c->lr; }
@@ -34176,9 +34176,9 @@ static void ppclm_get_FCBSPtr(ppc_cpu *c) { c->gpr[3] = rd32(0x34E); c->pc = c->
 static void ppclm_set_FCBSPtr(ppc_cpu *c) { wr32(0x34E, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_DefVCBPtr(ppc_cpu *c) { c->gpr[3] = rd32(0x352); c->pc = c->lr; }
 static void ppclm_set_DefVCBPtr(ppc_cpu *c) { wr32(0x352, (uint32_t)c->gpr[3]); c->pc = c->lr; }
-static void ppclm_get_VCBQHdr(ppc_cpu *c) { ppc_copy(c->gpr[3], 0x356, 10); c->pc = c->lr; }
+static void ppclm_get_VCBQHdr(ppc_cpu *c) { c->gpr[3] = 0x356; c->pc = c->lr; }
 static void ppclm_set_VCBQHdr(ppc_cpu *c) { ppc_copy(0x356, c->gpr[3], 10); c->pc = c->lr; }
-static void ppclm_get_FSQHdr(ppc_cpu *c) { ppc_copy(c->gpr[3], 0x360, 10); c->pc = c->lr; }
+static void ppclm_get_FSQHdr(ppc_cpu *c) { c->gpr[3] = 0x360; c->pc = c->lr; }
 static void ppclm_set_FSQHdr(ppc_cpu *c) { ppc_copy(0x360, c->gpr[3], 10); c->pc = c->lr; }
 static void ppclm_get_WDCBsPtr(ppc_cpu *c) { c->gpr[3] = rd32(0x372); c->pc = c->lr; }
 static void ppclm_set_WDCBsPtr(ppc_cpu *c) { wr32(0x372, (uint32_t)c->gpr[3]); c->pc = c->lr; }
@@ -34322,7 +34322,7 @@ static void ppclm_get_MenuCInfo(ppc_cpu *c) { c->gpr[3] = rd32(0xD50); c->pc = c
 static void ppclm_set_MenuCInfo(ppc_cpu *c) { wr32(0xD50, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_SysEvtMask(ppc_cpu *c) { c->gpr[3] = (uint32_t)(int32_t)(int16_t)rd16(0x144); c->pc = c->lr; }
 static void ppclm_set_SysEvtMask(ppc_cpu *c) { wr16(0x144, (uint16_t)c->gpr[3]); c->pc = c->lr; }
-static void ppclm_get_EventQueue(ppc_cpu *c) { ppc_copy(c->gpr[3], 0x14A, 10); c->pc = c->lr; }
+static void ppclm_get_EventQueue(ppc_cpu *c) { c->gpr[3] = 0x14A; c->pc = c->lr; }
 static void ppclm_set_EventQueue(ppc_cpu *c) { ppc_copy(0x14A, c->gpr[3], 10); c->pc = c->lr; }
 static void ppclm_get_Ticks(ppc_cpu *c) { c->gpr[3] = rd32(0x16A); c->pc = c->lr; }
 static void ppclm_set_Ticks(ppc_cpu *c) { wr32(0x16A, (uint32_t)c->gpr[3]); c->pc = c->lr; }
@@ -34370,7 +34370,7 @@ static void ppclm_get_MMUType(ppc_cpu *c) { c->gpr[3] = rd8(0xCB1); c->pc = c->l
 static void ppclm_set_MMUType(ppc_cpu *c) { wr8(0xCB1, (uint8_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_MMU32Bit(ppc_cpu *c) { c->gpr[3] = rd8(0xCB2); c->pc = c->lr; }
 static void ppclm_set_MMU32Bit(ppc_cpu *c) { wr8(0xCB2, (uint8_t)c->gpr[3]); c->pc = c->lr; }
-static void ppclm_get_DTQueue(ppc_cpu *c) { ppc_copy(c->gpr[3], 0xD92, 10); c->pc = c->lr; }
+static void ppclm_get_DTQueue(ppc_cpu *c) { c->gpr[3] = 0xD92; c->pc = c->lr; }
 static void ppclm_set_DTQueue(ppc_cpu *c) { ppc_copy(0xD92, c->gpr[3], 10); c->pc = c->lr; }
 static void ppclm_get_JDTInstall(ppc_cpu *c) { c->gpr[3] = rd32(0xD9C); c->pc = c->lr; }
 static void ppclm_set_JDTInstall(ppc_cpu *c) { wr32(0xD9C, (uint32_t)c->gpr[3]); c->pc = c->lr; }
@@ -34530,7 +34530,7 @@ static void ppclm_get_JournalFlag(ppc_cpu *c) { c->gpr[3] = (uint32_t)(int32_t)(
 static void ppclm_set_JournalFlag(ppc_cpu *c) { wr16(0x8DE, (uint16_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_JournalRef(ppc_cpu *c) { c->gpr[3] = (uint32_t)(int32_t)(int16_t)rd16(0x8E8); c->pc = c->lr; }
 static void ppclm_set_JournalRef(ppc_cpu *c) { wr16(0x8E8, (uint16_t)c->gpr[3]); c->pc = c->lr; }
-static void ppclm_get_VBLQueue(ppc_cpu *c) { ppc_copy(c->gpr[3], 0x160, 10); c->pc = c->lr; }
+static void ppclm_get_VBLQueue(ppc_cpu *c) { c->gpr[3] = 0x160; c->pc = c->lr; }
 static void ppclm_set_VBLQueue(ppc_cpu *c) { ppc_copy(0x160, c->gpr[3], 10); c->pc = c->lr; }
 static void ppclm_get_JVBLTask(ppc_cpu *c) { c->gpr[3] = rd32(0xD28); c->pc = c->lr; }
 static void ppclm_set_JVBLTask(ppc_cpu *c) { wr32(0xD28, (uint32_t)c->gpr[3]); c->pc = c->lr; }

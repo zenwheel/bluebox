@@ -318,5 +318,38 @@ extension BlueBox {
             #expect(result16("CrsrDevDisposeDevice", [dev]) == 0)
             #expect(result16("CrsrDevNextDevice", [p]) == 0 && rd32(p) == 0)
         }
+
+        /// LMGetEventQueue and the other queue headers' getters take no
+        /// argument and answer the header's address; copying the header to
+        /// wherever r3 pointed overwrote Director 5's score in Squark.
+        @Test func queueHeaderGettersAnswerTheirAddress() {
+            bootMachine()
+            let p = bytes([UInt8](repeating: 0xA5, count: 16))
+            #expect(call("LMGetEventQueue", [p]) == 0x14A)
+            #expect(call("LMGetVBLQueue", [p]) == 0x160)
+            #expect(call("LMGetVCBQHdr", [p]) == 0x356)
+            #expect(read(p, 16) == [UInt8](repeating: 0xA5, count: 16))
+            // A Point still comes back through the pointer.
+            wr32(0x828, 0x0012_0034)
+            call("LMGetMTemp", [p])
+            #expect(rd32(p) == 0x0012_0034)
+        }
+
+        /// Microseconds follows the machine's clock, as Ticks does: in a
+        /// headless run that is the instructions executed (Director 5 paces
+        /// its frames by Microseconds and Lingo's timer by Ticks).
+        @Test func microsecondsFollowTheMachinesClock() {
+            bootMachine()
+            let p = tb_NewPtr(8, false, true)
+            func micros() -> UInt64 {
+                call("Microseconds", [p])
+                return UInt64(rd32(p)) << 32 | UInt64(rd32(p + 4))
+            }
+            let before = micros()
+            #expect(before <= machine_time_ns() / 1000 && machine_time_ns() / 1000 - before < 1000)
+            g_cpu!.pointee.icount += 10_000_000 // a second of instructions
+            let after = micros()
+            #expect(after - before >= 1_000_000 && after - before < 1_010_000)
+        }
     }
 }

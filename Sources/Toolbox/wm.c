@@ -148,7 +148,21 @@ static int32_t call_wdef(gaddr w, int16_t msg, int32_t param)
     cpu_push16(c, (uint16_t)msg);
     cpu_push32(c, (uint32_t)param);
     tb_HLock(h);
+    /* A WDEF written for black-and-white ports finds the window's place on
+     * the screen in portBits.bounds; in a colour window those bytes are the
+     * grafVars handle.  While it works out the regions they hold the
+     * PixMap's bounds' top left instead, which made Total Distortion's
+     * stage (Director 4, FinderHider WDEF) visible on a Power Mac and here
+     * left its content region thirty thousand pixels off the screen. */
+    gaddr gv_at = w + CGrafPort_grafVars_off;
+    uint32_t grafvars = rd32(gv_at);
+    gaddr pmh = rd32(w + CGrafPort_portPixMap_off);
+    bool stand_in = msg == wCalcRgns && qd_port_is_color(w) && pmh && rd32(pmh);
+    if (stand_in)
+        wr32(gv_at, rd32(rd32(pmh) + PixMap_bounds_off));
     guest_call(rd32(h));
+    if (stand_in)
+        wr32(gv_at, grafvars);
     tb_HUnlock(h);
     return (int32_t)cpu_pop32(c);
 }

@@ -705,6 +705,13 @@ def gen_ppc_lowmem():
                 val = f"(uint32_t)(int32_t)(int{ti.size * 8}_t){val}"
             out.append(f"static void {get}(ppc_cpu *c) {{ c->gpr[3] = {val}; c->pc = c->lr; }}\n")
             out.append(f"static void {set_}(ppc_cpu *c) {{ {wr}(0x{addr:X}, (uint{ti.size * 8}_t)c->gpr[3]); c->pc = c->lr; }}\n")
+        elif ti.struct and v["type"] == "QHdr":
+            # LowMem.h's queue headers come back as a QHdrPtr to the header
+            # in low memory, not copied out: LMGetEventQueue(void) has no
+            # argument, and copying to whatever r3 held overwrote ten bytes
+            # of Director 5's score (Squark).  LMSetX copies a header in.
+            out.append(f"static void {get}(ppc_cpu *c) {{ c->gpr[3] = 0x{addr:X}; c->pc = c->lr; }}\n")
+            out.append(f"static void {set_}(ppc_cpu *c) {{ ppc_copy(0x{addr:X}, c->gpr[3], {ti.size}); c->pc = c->lr; }}\n")
         elif ti.struct:
             out.append(f"static void {get}(ppc_cpu *c) {{ ppc_copy(c->gpr[3], 0x{addr:X}, {ti.size}); c->pc = c->lr; }}\n")
             out.append(f"static void {set_}(ppc_cpu *c) {{ ppc_copy(0x{addr:X}, c->gpr[3], {ti.size}); c->pc = c->lr; }}\n")
