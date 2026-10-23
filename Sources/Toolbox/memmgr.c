@@ -41,7 +41,10 @@ static inline uint8_t b_sizec(gaddr b) { return rd8(b + 3); }
 static inline uint32_t b_psize(gaddr b) { return rd32(b + 4); }
 static inline uint32_t b_loc(gaddr b) { return rd32(b + 8); }
 static inline uint32_t b_lsize(gaddr b) { return b_psize(b) - HDR - b_sizec(b); }
-static inline gaddr b_next(gaddr b) { return b + b_psize(b); }
+/* The block after b; a block too small to have a header is damage (a
+ * program writing over it), and ends the walk rather than standing still
+ * on it for good (Squark's heap, and MaxBlock never returned). */
+static inline gaddr b_next(gaddr b) { return b_psize(b) < HDR ? 0xFFFFFFF0u : b + b_psize(b); }
 static inline gaddr b_data(gaddr b) { return b + HDR; }
 
 static void b_set(gaddr b, unsigned use, uint8_t state, uint8_t sizec, uint32_t psize, uint32_t loc)
@@ -268,6 +271,11 @@ static uint32_t compact(gaddr z)
     for (gaddr b = z_first(z); b < lim;) {
         uint32_t ps = b_psize(b);
         unsigned use = b_use(b);
+        if (ps < HDR) { /* a damaged header: no way past it */
+            LOGF(LOG_MEM, "mm: zone %08X damaged at block %08X\n", z, b);
+            dst = 0;
+            break;
+        }
         if (use == USE_FREE) {
             if (!dst)
                 dst = b;
