@@ -466,12 +466,14 @@ static int32_t from_extended(gaddr x, double scale)
 int32_t tb_R_X2Fix(gaddr x) { return from_extended(x, 65536.0); }
 int32_t tb_R_X2Frac(gaddr x) { return from_extended(x, 1073741824.0); }
 
-/* Microseconds (A193): a 64-bit count, high half in A0 and low in D0. */
+/* Microseconds (A193): a 64-bit count, high half in A0 and low in D0.
+ * It is the machine's clock, as Ticks is: a headless run's follows the
+ * instructions, and Director 5 paces its frames by Microseconds while
+ * Lingo's timer counts Ticks, so a host clock here ran Squark's splash
+ * at a different speed from its scripts. */
 void raw_Microseconds(cpu68k *c, uint16_t tw)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    uint64_t us = (uint64_t)ts.tv_sec * 1000000u + (uint64_t)ts.tv_nsec / 1000u;
+    uint64_t us = machine_time_ns() / 1000u;
     c->a[0] = (uint32_t)(us >> 32);
     c->d[0] = (uint32_t)us;
 }

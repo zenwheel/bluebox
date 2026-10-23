@@ -334,5 +334,22 @@ extension BlueBox {
             call("LMGetMTemp", [p])
             #expect(rd32(p) == 0x0012_0034)
         }
+
+        /// Microseconds follows the machine's clock, as Ticks does: in a
+        /// headless run that is the instructions executed (Director 5 paces
+        /// its frames by Microseconds and Lingo's timer by Ticks).
+        @Test func microsecondsFollowTheMachinesClock() {
+            bootMachine()
+            let p = tb_NewPtr(8, false, true)
+            func micros() -> UInt64 {
+                call("Microseconds", [p])
+                return UInt64(rd32(p)) << 32 | UInt64(rd32(p + 4))
+            }
+            let before = micros()
+            #expect(before <= machine_time_ns() / 1000 && machine_time_ns() / 1000 - before < 1000)
+            g_cpu!.pointee.icount += 10_000_000 // a second of instructions
+            let after = micros()
+            #expect(after - before >= 1_000_000 && after - before < 1_010_000)
+        }
     }
 }
