@@ -241,6 +241,35 @@ typedef struct {
 typedef int (*machine_alert_fn)(const machine_alert *alert, void *ctx);
 void machine_set_alert_handler(machine_alert_fn fn, void *ctx);
 
+/* ---- AppleScript's dialogs (shown by the host) ----
+ * display dialog and choose from list, from a script our AppleScript runs:
+ * the host shows them as native dialogs and gives back the answer; only
+ * text goes back and forth.  Without a handler (headless runs) the default
+ * button and the default answer are taken. */
+
+enum { MACHINE_SCRIPT_DIALOG, MACHINE_SCRIPT_LIST };
+
+typedef struct {
+    int kind;                    /* MACHINE_SCRIPT_DIALOG or MACHINE_SCRIPT_LIST */
+    char message[2048];          /* MacRoman, CR between lines; a list's prompt */
+    int icon;                    /* MACHINE_ALERT_PLAIN, _STOP, _NOTE or _CAUTION */
+    int nbuttons;                /* 1 to 3, left to right (a list: OK and Cancel) */
+    char buttons[3][64];         /* MacRoman */
+    int default_button;          /* 1-based; 0 for none */
+    int cancel_button;           /* 1-based; 0 for none */
+    bool has_answer;             /* a text field, answer its default text ... */
+    char answer[1024];           /* ... and what was typed, on return (MacRoman) */
+    int giving_up;               /* seconds until the dialog answers itself; 0: never */
+    int nitems;                  /* a list's items (MacRoman) */
+    const char *const *items;
+    int selected;                /* a list: the item chosen (0-based), in: the default (-1 none) */
+} machine_script_dialog;
+
+/* Called on the emulator thread; returns the button chosen (1-based), or
+ * 0 when the dialog gave up.  The handler blocks until the user answers. */
+typedef int (*machine_script_dialog_fn)(machine_script_dialog *dialog, void *ctx);
+void machine_set_script_dialog_handler(machine_script_dialog_fn fn, void *ctx);
+
 /* ---- Standard File (open and save panels shown by the host) ---- */
 
 typedef struct {
