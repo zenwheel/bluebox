@@ -265,8 +265,14 @@ final class ScreenView: NSView, MacScreenView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        // Command keys belong to the classic app, not the host menu.
-        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers != "q" {
+        // Command keys belong to the classic app, not the host menu:
+        // Command-Q too, the keystroke a Mac delivered, which a program's
+        // MenuKey turns into its Quit item and a Director projector (Total
+        // Distortion) quits on itself; the Quit Apple Event the host menu's
+        // item sends went unread.  Command-Option-Q is the host's Force
+        // Quit, for a program that ignores it.
+        if event.modifierFlags.contains(.command)
+            && !(event.charactersIgnoringModifiers == "q" && event.modifierFlags.contains(.option)) {
             keyDown(with: event)
             return true
         }
@@ -621,7 +627,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
-    // Minimal app menu: Quit asks the app to quit; Option shows Force Quit.
+    // Minimal app menu: Quit, chosen with the mouse (Command-Q itself goes
+    // to the app as a keystroke), asks the app to quit; Option shows Force Quit.
     let menu = NSMenu()
     let appItem = NSMenuItem()
     menu.addItem(appItem)
