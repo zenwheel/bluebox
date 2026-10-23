@@ -577,8 +577,16 @@ void guest_call_regs(gaddr fn)
         int depth = ++call_depth;
         cpu_push32(c, guest_return_stub);
         c->pc = fn;
+        uint64_t pumped = c->icount;
         while (!c->halted && returned_depth != depth) {
             cpu_step(c);
+            /* Interrupt-time work goes on inside callbacks too: a program
+             * may wait there for Ticks to move or a VBL task's flag. */
+            if (c->icount - pumped >= 20000) {
+                pumped = c->icount;
+                machine_advance_ticks();
+                time_pump();
+            }
             if (icount_cap && c->icount >= icount_cap) {
                 if (machine_waiting_for_input()) /* an event loop inside a callback */
                     cpu_halt(c, "instruction limit reached waiting for input");

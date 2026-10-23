@@ -100,8 +100,14 @@ void ppc_trap(uint16_t trapword)
     trap_finished[depth] = false;
     c->pc = code;
     uint64_t cap = trap_instruction_limit();
+    uint64_t pumped = c->icount;
     while (!c->halted && !trap_finished[depth]) {
         cpu_step(c);
+        if (c->icount - pumped >= 20000) { /* Ticks and tasks go on, as in callbacks */
+            pumped = c->icount;
+            machine_advance_ticks();
+            time_pump();
+        }
         if (cap && c->icount >= cap && !trap_finished[depth]) {
             if (machine_waiting_for_input())
                 cpu_halt(c, "instruction limit reached waiting for input");
