@@ -1914,6 +1914,44 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
 
 int16_t tb_AEResetTimer(gaddr evt) { return noErr; }
 
+/* An event a script our AppleScript runs sends (tell application), waiting
+ * for the reply: to the program itself, or to another Blue Box run by its
+ * signature, and nowhere else.  Unlike AESend, it never goes to the host
+ * (the Finder's stand-in here opens things on it) whatever AESend comes
+ * to do: a script must not reach the host's applications. */
+int16_t aem_script_send(gaddr evt, gaddr reply)
+{
+    if (reply)
+        set_desc(reply, T("null"), 0);
+    if (desc_type(evt) != T("aevt") || shape(desc_handle(evt)) != RECORD)
+        return errAENotAEDesc;
+    if (to_finder(evt))
+        return procNotFound;
+    if (to_self(evt))
+        return send_to_self(evt, reply, kAEWaitReply);
+    gaddr h = desc_handle(evt);
+    uint32_t off = find_entry(h, T("addr"), true);
+    gaddr p = rd32(h) + off;
+    uint32_t atype = rd32(p + 4), alen = rd32(p + 8);
+    if (!off || atype != T("sign"))
+        return procNotFound;
+    uint8_t addr[4] = { 0 };
+    gget(addr, p + 12, alen > 4 ? 4 : alen);
+    uint8_t repq = 1, inte = (uint8_t)kAENeverInteract;
+    put_keyed(evt, true, T("repq"), T("bool"), 0, 1, &repq);
+    put_keyed(evt, true, T("inte"), T("byte"), 0, 1, &inte);
+    uint32_t len;
+    uint8_t *data = flatten_data(h, &len);
+    uint8_t *answer = NULL;
+    uint32_t answer_len = 0;
+    int16_t err = aem_remote_send(addr, atype, 4, data, len, kAEWaitReply, -1, &answer, &answer_len);
+    free(data);
+    if (answer && reply)
+        set_desc(reply, T("aevt"), unflatten_data(answer, answer_len));
+    free(answer);
+    return err;
+}
+
 void aem_reset_handlers(void)
 {
     for (int s = 0; s < 2; s++)

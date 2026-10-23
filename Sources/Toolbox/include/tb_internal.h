@@ -196,6 +196,8 @@ void as_idle(void); /* at event calls: idle sessions kept open */
 void notify_host(int id, const char *text); /* a host notification of ours (notify.c) */
 /* Components of our own (components.c). */
 uint32_t components_register_native(uint32_t type, uint32_t subtype, uint32_t manufacturer, gaddr entry);
+/* AppleScript's components and the applet shell (osa.c), each run. */
+void osa_register(void);
 uint32_t components_open(uint32_t component);
 void components_set_storage(uint32_t ci, gaddr storage);
 void components_close(uint32_t ci);
