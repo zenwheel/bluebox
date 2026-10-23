@@ -141,6 +141,11 @@ EOF
 # installer, downloader (keeping its entitlements), Autoupdate and
 # Updater.app, then the framework, unar, and the application with
 # BlueBox.entitlements.  Ad hoc unless SIGN_IDENTITY says otherwise.
+# No extended attributes inside the bundle (codesign refuses Finder
+# information): files copied in from a folder a classic program has
+# browsed, as the repository's own can be, carry them.
+xattr -cr "$app"
+
 echo "Signing with ${identity}..."
 sign() {
 	if [ "$identity" = - ]; then
