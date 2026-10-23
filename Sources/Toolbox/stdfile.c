@@ -100,9 +100,13 @@ static void draw_offscreen(gaddr d)
     int w = pr.right - pr.left, h = pr.bottom - pr.top;
     if (w <= 0 || h <= 0 || w > 2048 || h > 2048)
         return;
+    /* A colour port draws into a 32-bit world through its pixmap handle;
+     * an old GrafPort (Word 5's Open dialog) has its BitMap in that place,
+     * and draws into a 1-bit world's pixels through it. */
+    bool color = (rd16(d + 6) & 0xC000) == 0xC000;
     gaddr r = tb_NewPtr(8, false, true), gwp = tb_NewPtr(4, false, true);
     qrect_put(r, pr);
-    if (tb_NewGWorld(gwp, 32, r, 0, 0, 0) || !rd32(gwp)) {
+    if (tb_NewGWorld(gwp, color ? 32 : 1, r, 0, 0, 0) || !rd32(gwp)) {
         tb_DisposePtr(r);
         tb_DisposePtr(gwp);
         return;
@@ -110,12 +114,23 @@ static void draw_offscreen(gaddr d)
     gaddr gw = rd32(gwp);
     gaddr pmh = tb_GetGWorldPixMap(gw);
     tb_LockPixels(pmh);
+    gaddr pm = rd32(pmh);
+    gaddr base = rd32(pm + PixMap_baseAddr_off);
+    uint32_t row = rd16(pm + PixMap_rowBytes_off) & 0x3FFF;
     /* The dialog's port draws into the GWorld's pixels for a moment. */
-    gaddr saved_pm = rd32(d + 2), saved_vis = rd32(d + 24), saved_clip = rd32(d + 28);
+    uint8_t saved_bits[14];
+    gget(saved_bits, d + 2, sizeof saved_bits);
+    gaddr saved_vis = rd32(d + 24), saved_clip = rd32(d + 28);
     gaddr vis = tb_NewRgn(), clip = tb_NewRgn();
     tb_RectRgn(vis, r);
     tb_RectRgn(clip, r);
-    wr32(d + 2, pmh);
+    if (color) {
+        wr32(d + 2, pmh);
+    } else {
+        wr32(d + 2, base);
+        wr16(d + 6, (uint16_t)row);
+        qrect_put(d + 8, pr);
+    }
     wr32(d + 24, vis);
     wr32(d + 28, clip);
     gaddr saved_port = qd_port();
@@ -123,19 +138,20 @@ static void draw_offscreen(gaddr d)
     tb_EraseRect(r);
     tb_DrawDialog(d);
     tb_SetPort(saved_port);
-    wr32(d + 2, saved_pm);
+    gput(d + 2, saved_bits, sizeof saved_bits);
     wr32(d + 24, saved_vis);
     wr32(d + 28, saved_clip);
     tb_DisposeRgn(vis);
     tb_DisposeRgn(clip);
-    /* xRGB, big-endian, rows of rowBytes: to RGBA, white clear. */
-    gaddr pm = rd32(pmh);
-    gaddr base = rd32(pm + PixMap_baseAddr_off);
-    uint32_t row = rd16(pm + PixMap_rowBytes_off) & 0x3FFF;
+    /* To RGBA, white clear: xRGB big-endian, or bits set for black. */
     drawn = malloc((size_t)w * (size_t)h * 4);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
-            uint32_t px = rd32(base + (uint32_t)y * row + (uint32_t)x * 4);
+            uint32_t px;
+            if (color)
+                px = rd32(base + (uint32_t)y * row + (uint32_t)x * 4);
+            else
+                px = (rd8(base + (uint32_t)y * row + (uint32_t)x / 8) >> (7 - x % 8)) & 1 ? 0 : 0xFFFFFF;
             uint8_t *o = drawn + ((size_t)y * (size_t)w + (size_t)x) * 4;
             o[0] = (uint8_t)(px >> 16);
             o[1] = (uint8_t)(px >> 8);
