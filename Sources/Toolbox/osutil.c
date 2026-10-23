@@ -119,7 +119,9 @@ static uint32_t table_slot(uint16_t n, bool newTraps, bool tool)
 
 gaddr tb_GetTrapAddress(uint16_t n, bool newTraps, bool tool)
 {
-    return rd32(table_slot(n, newTraps, tool));
+    gaddr a = rd32(table_slot(n, newTraps, tool));
+    LOGF(LOG_TRAPS, "GetTrapAddress(%04X%s) = %08X\n", n, newTraps ? (tool ? ", tool" : ", OS") : "", a);
+    return a;
 }
 
 void tb_SetTrapAddress(gaddr addr, uint16_t n, bool newTraps, bool tool)
