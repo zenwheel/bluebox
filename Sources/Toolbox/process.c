@@ -1,9 +1,10 @@
 /*
  * Process Manager: one process per host process, so the app is the front
- * process.  Other runs that take Apple Events follow it in the process
- * list, as serial numbers {1, their process ID}, so programs can find each
- * other by signature and send events.  Temporary memory comes from the
- * growable application heap.
+ * process.  The Finder follows it in the process list (programs find it by
+ * its type and creator to send it events, which aem.c carries out), then
+ * the other runs that take Apple Events, as serial numbers {1, their
+ * process ID}, so programs can find each other by signature and send
+ * events.  Temporary memory comes from the growable application heap.
  */
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,7 +13,11 @@
 
 enum { procNotFound = -600 };
 #define OUR_PSN 0x1000u
+#define FINDER_PSN 0x1001u
 #define kCurrentProcess 2u
+
+bool process_is_finder(uint32_t hi, uint32_t lo) { return hi == 0 && lo == FINDER_PSN; }
+static bool is_finder(gaddr psn) { return process_is_finder(rd32(psn), rd32(psn + 4)); }
 
 static bool is_us(gaddr psn)
 {
@@ -53,8 +58,13 @@ int16_t tb_GetNextProcess(gaddr psn)
         put_us(psn);
         return noErr;
     }
+    if (is_us(psn)) { /* then the Finder */
+        wr32(psn, 0);
+        wr32(psn + 4, FINDER_PSN);
+        return noErr;
+    }
     /* Then the other runs, in process ID order. */
-    uint32_t after = is_us(psn) ? 0 : rd32(psn) == 1 ? rd32(psn + 4) : UINT32_MAX;
+    uint32_t after = is_finder(psn) ? 0 : rd32(psn) == 1 ? rd32(psn + 4) : UINT32_MAX;
     machine_ae_process procs[64];
     int n = machine_ae_processes(procs, 64);
     uint32_t next = UINT32_MAX;
@@ -100,6 +110,26 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
             gmemset(spec, 0, FSSpec_SIZEOF);
         return noErr;
     }
+    if (is_finder(psn)) {
+        gaddr name = ProcessInfoRec_processName(info);
+        if (name)
+            gput(name, "\006Finder", 7);
+        gmemcpy(info + ProcessInfoRec_processNumber_off, psn, 8);
+        ProcessInfoRec_set_processType(info, fourcc("FNDR"));
+        ProcessInfoRec_set_processSignature(info, fourcc("MACS"));
+        ProcessInfoRec_set_processMode(info, 0x0040); /* takes high-level events */
+        ProcessInfoRec_set_processLocation(info, 0);
+        ProcessInfoRec_set_processSize(info, 0);
+        ProcessInfoRec_set_processFreeMem(info, 0);
+        wr32(info + ProcessInfoRec_processLauncher_off, 0);
+        wr32(info + ProcessInfoRec_processLauncher_off + 4, 0);
+        ProcessInfoRec_set_processLaunchDate(info, 0);
+        ProcessInfoRec_set_processActiveTime(info, 0);
+        gaddr spec = ProcessInfoRec_processAppSpec(info);
+        if (spec)
+            gmemset(spec, 0, FSSpec_SIZEOF);
+        return noErr;
+    }
     if (!is_us(psn))
         return procNotFound;
     gaddr name = ProcessInfoRec_processName(info);
@@ -128,8 +158,8 @@ int16_t tb_SameProcess(gaddr a, gaddr b, gaddr same_out)
     return noErr;
 }
 
-int16_t tb_SetFrontProcess(gaddr psn) { return is_us(psn) ? noErr : procNotFound; }
-int16_t tb_WakeUpProcess(gaddr psn) { return is_us(psn) ? noErr : procNotFound; }
+int16_t tb_SetFrontProcess(gaddr psn) { return is_us(psn) || is_finder(psn) ? noErr : procNotFound; }
+int16_t tb_WakeUpProcess(gaddr psn) { return is_us(psn) || is_finder(psn) ? noErr : procNotFound; }
 int16_t tb_GetProcessSerialNumberFromPortName(gaddr port_name, gaddr psn) { return procNotFound; }
 
 /* Our high-level event port, named as the Process Manager names them: the

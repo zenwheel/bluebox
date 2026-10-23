@@ -1784,16 +1784,22 @@ static bool to_self(gaddr evt)
 }
 
 /* ---- The Finder ----
- * There is no Finder process, so the events applications send it to open
- * things (Open Documents, and the Finder's own Open Selection from file
- * browsers such as Greg's Browser) are carried out here: applications are
- * launched, documents opened with their creator's application. */
+ * The Finder is only a name in the Process Manager's list, so the events
+ * applications send it to open things (Open Documents, and the Finder's own
+ * Open Selection from file browsers such as Greg's Browser) are carried out
+ * here: applications are launched, documents opened with their creator's
+ * application. */
 
 static bool to_finder(gaddr evt)
 {
     gaddr h = desc_handle(evt);
     uint32_t off = find_entry(h, T("addr"), true);
-    return off && rd32(rd32(h) + off + 4) == T("sign") && rd32(rd32(h) + off + 12) == T("MACS");
+    if (!off)
+        return false;
+    gaddr p = rd32(h) + off;
+    if (rd32(p + 4) == T("psn ")) /* the serial number the Process Manager lists it under */
+        return process_is_finder(rd32(p + 12), rd32(p + 16));
+    return rd32(p + 4) == T("sign") && rd32(p + 12) == T("MACS");
 }
 
 /* Open one item as the Finder would. */

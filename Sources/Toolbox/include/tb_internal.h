@@ -104,6 +104,7 @@ int16_t rm_open_empty_system(void);
 /* Start another classic application (the host's launcher); false if
  * there is none or it failed. */
 bool process_launch(const char *app, const char *const *docs, int ndocs);
+bool process_is_finder(uint32_t hi, uint32_t lo); /* the Finder's serial number */
 bool process_open_url(const char *url);
 /* Internet Config's ICLaunchURL: the URL in data[a..b) (all len bytes when
  * the selection is empty) opened by the host; an Internet Config error. */
