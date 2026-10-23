@@ -1545,9 +1545,15 @@ void tb_CopyBits(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_r
         gaddr sb = resolve_bits(src_bitmap), db = resolve_bits(dst_bitmap);
         qrect sr = qrect_get(src_rect), dr = qrect_get(dst_rect), sbb = qrect_get(sb + 6), dbb = qrect_get(db + 6);
         log_printf("  CopyBits %08X rb %04X (%d,%d,%d,%d) [%d,%d,%d,%d] -> %08X rb %04X (%d,%d,%d,%d) [%d,%d,%d,%d] "
-                   "mode %d\n", rd32(sb), rd16(sb + 4), sbb.top, sbb.left, sbb.bottom, sbb.right, sr.top, sr.left,
+                   "mode %d", rd32(sb), rd16(sb + 4), sbb.top, sbb.left, sbb.bottom, sbb.right, sr.top, sr.left,
                    sr.bottom, sr.right, rd32(db), rd16(db + 4), dbb.top, dbb.left, dbb.bottom, dbb.right, dr.top, dr.left,
                    dr.bottom, dr.right, mode);
+        if (mask && rd32(mask)) {
+            gaddr m = rd32(mask);
+            log_printf(" mask (%d,%d,%d,%d) size %u", (int16_t)rd16(m + 2), (int16_t)rd16(m + 4), (int16_t)rd16(m + 6),
+                       (int16_t)rd16(m + 8), rd16(m));
+        }
+        log_printf("\n");
     }
     /* Into the current port: through its bitsProc, when it has one. */
     gaddr port = qd_port();
@@ -1779,13 +1785,66 @@ static void set_mask_bit(gaddr dst, int col, int row, bool on)
         put_px(&d, col, row, on ? 1 : 0);
 }
 
-static void flood(const pixdst *s, qrect sr, uint8_t *mark, bool (*pass)(uint32_t, uint32_t), uint32_t key,
-                  int sx, int sy)
+/* Which pixels a colour fill passes through.  Without a matchProc that is
+ * decided by the seed colour: SeedCFill fills through it, CalcCMask stops
+ * at it.  A matchProc is a colour search procedure, called with each
+ * pixel's colour while the matchData is in the device's gdRefCon: a
+ * position of 1 makes the pixel a boundary, as black is to SeedFill and
+ * CalcMask, and 0 lets the fill through.  Director's matte ink passes one
+ * that answers 1 for all but the background colour (Safari's tiles). */
+typedef struct {
+    const pixdst *s;
+    uint32_t key;
+    bool through_key; /* no matchProc: SeedCFill passes the key, CalcCMask all else */
+    gaddr proc;
+    uint32_t cache_v[256];
+    uint8_t cache_state[256]; /* 0 unknown, 1 passable, 2 boundary */
+} matcher;
+
+static bool proc_boundary(matcher *m, uint32_t v, bool *handled)
+{
+    cpu68k *c = g_cpu;
+    uint16_t rgb[3];
+    qd_px_rgb(m->s->depth, m->s->ctab, v, rgb);
+    c->a[7] -= 12;
+    gaddr rgbp = c->a[7], posp = c->a[7] + 8;
+    wr16(rgbp, rgb[0]);
+    wr16(rgbp + 2, rgb[1]);
+    wr16(rgbp + 4, rgb[2]);
+    wr32(posp, 0);
+    /* FUNCTION (VAR rgb: RGBColor; VAR position: LONGINT): BOOLEAN */
+    cpu_push16(c, 0);
+    cpu_push32(c, rgbp);
+    cpu_push32(c, posp);
+    guest_call(m->proc);
+    *handled = (cpu_pop16(c) >> 8) != 0;
+    bool boundary = rd32(posp) != 0;
+    c->a[7] += 12;
+    return boundary;
+}
+
+static bool passable(matcher *m, uint32_t v)
+{
+    if (!m->proc || g_cpu->halted)
+        return (v == m->key) == m->through_key;
+    unsigned slot = (v ^ (v >> 8) ^ (v >> 16)) & 255;
+    if (m->cache_state[slot] && m->cache_v[slot] == v)
+        return m->cache_state[slot] == 1;
+    bool handled;
+    bool boundary = proc_boundary(m, v, &handled);
+    bool pass = handled ? !boundary : (v == m->key) == m->through_key;
+    m->cache_v[slot] = v;
+    m->cache_state[slot] = pass ? 1 : 2;
+    return pass;
+}
+
+static void flood(matcher *m, qrect sr, uint8_t *mark, int sx, int sy)
 {
     /* Pixels are marked as they are pushed, so each is on the stack once. */
+    const pixdst *s = m->s;
     int w = sr.right - sr.left, h = sr.bottom - sr.top;
     if (sx < 0 || sy < 0 || sx >= w || sy >= h || mark[sy * w + sx] ||
-        !pass(get_px(s, sr.left + sx - s->bounds.left, sr.top + sy - s->bounds.top), key))
+        !passable(m, get_px(s, sr.left + sx - s->bounds.left, sr.top + sy - s->bounds.top)))
         return;
     int *stack = malloc(sizeof(int) * 2 * (size_t)(w * h));
     int n = 0;
@@ -1799,7 +1858,7 @@ static void flood(const pixdst *s, qrect sr, uint8_t *mark, bool (*pass)(uint32_
             int nx = nb[k], ny = nb[k + 1];
             if (nx < 0 || ny < 0 || nx >= w || ny >= h || mark[ny * w + nx])
                 continue;
-            if (!pass(get_px(s, sr.left + nx - s->bounds.left, sr.top + ny - s->bounds.top), key))
+            if (!passable(m, get_px(s, sr.left + nx - s->bounds.left, sr.top + ny - s->bounds.top)))
                 continue;
             mark[ny * w + nx] = 1;
             stack[n++] = nx;
@@ -1809,8 +1868,22 @@ static void flood(const pixdst *s, qrect sr, uint8_t *mark, bool (*pass)(uint32_
     free(stack);
 }
 
-static bool same_px(uint32_t v, uint32_t key) { return v == key; }
-static bool other_px(uint32_t v, uint32_t key) { return v != key; }
+/* The matchData goes in the current device's gdRefCon while a fill runs. */
+static gaddr match_device(gaddr proc, int32_t data, uint32_t *saved)
+{
+    gaddr gdh = rd32(LM_TheGDevice);
+    if (!proc || !gdh || !rd32(gdh))
+        return 0;
+    *saved = rd32(rd32(gdh) + GDevice_gdRefCon_off);
+    wr32(rd32(gdh) + GDevice_gdRefCon_off, (uint32_t)data);
+    return gdh;
+}
+
+static void match_done(gaddr gdh, uint32_t saved)
+{
+    if (gdh)
+        wr32(rd32(gdh) + GDevice_gdRefCon_off, saved);
+}
 
 /* SeedCFill: the area around (seedH, seedV) of the seed pixel's colour. */
 void tb_SeedCFill(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, int16_t seed_h, int16_t seed_v, gaddr proc,
@@ -1822,18 +1895,26 @@ void tb_SeedCFill(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, int16_t 
     if (w <= 0 || h <= 0 || seed_h < sr.left || seed_v < sr.top || seed_h >= sr.right || seed_v >= sr.bottom)
         return;
     uint8_t *mark = calloc((size_t)(w * h), 1);
-    uint32_t key = get_px(&s, seed_h - s.bounds.left, seed_v - s.bounds.top);
-    flood(&s, sr, mark, same_px, key, seed_h - sr.left, seed_v - sr.top);
+    matcher *m = calloc(1, sizeof *m);
+    m->s = &s;
+    m->key = get_px(&s, seed_h - s.bounds.left, seed_v - s.bounds.top);
+    m->through_key = true;
+    m->proc = proc;
+    uint32_t saved = 0;
+    gaddr gdh = match_device(proc, data, &saved);
+    flood(m, sr, mark, seed_h - sr.left, seed_v - sr.top);
+    match_done(gdh, saved);
     qrect dr = qrect_get(dst_rect);
     pixdst d = bits_at(resolve_bits(dst));
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
             set_mask_bit(dst, dr.left - d.bounds.left + x, dr.top - d.bounds.top + y, mark[y * w + x]);
+    free(m);
     free(mark);
 }
 
 /* CalcCMask: what can't be reached from the rectangle's edges without
- * crossing pixels of the seed colour. */
+ * crossing pixels of the seed colour (or the matchProc's boundary). */
 void tb_CalcCMask(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, gaddr seed_rgb, gaddr proc, int32_t data)
 {
     pixdst s = bits_at(resolve_bits(src));
@@ -1842,20 +1923,28 @@ void tb_CalcCMask(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, gaddr se
     if (w <= 0 || h <= 0)
         return;
     uint16_t rgb[3] = { rd16(seed_rgb), rd16(seed_rgb + 2), rd16(seed_rgb + 4) };
-    uint32_t key = qd_rgb_px(s.depth, s.ctab, rgb);
     uint8_t *mark = calloc((size_t)(w * h), 1);
+    matcher *m = calloc(1, sizeof *m);
+    m->s = &s;
+    m->key = qd_rgb_px(s.depth, s.ctab, rgb);
+    m->through_key = false;
+    m->proc = proc;
+    uint32_t saved = 0;
+    gaddr gdh = match_device(proc, data, &saved);
     for (int x = 0; x < w; x++) {
-        flood(&s, sr, mark, other_px, key, x, 0);
-        flood(&s, sr, mark, other_px, key, x, h - 1);
+        flood(m, sr, mark, x, 0);
+        flood(m, sr, mark, x, h - 1);
     }
     for (int y = 0; y < h; y++) {
-        flood(&s, sr, mark, other_px, key, 0, y);
-        flood(&s, sr, mark, other_px, key, w - 1, y);
+        flood(m, sr, mark, 0, y);
+        flood(m, sr, mark, w - 1, y);
     }
+    match_done(gdh, saved);
     qrect dr = qrect_get(dst_rect);
     pixdst d = bits_at(resolve_bits(dst));
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
             set_mask_bit(dst, dr.left - d.bounds.left + x, dr.top - d.bounds.top + y, !mark[y * w + x]);
+    free(m);
     free(mark);
 }

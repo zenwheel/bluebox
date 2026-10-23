@@ -400,6 +400,29 @@ extension BlueBox {
             let black = tb_NewPtr(6, false, true)
             tb_CalcCMask(src, bm, r, r, black, 0, 0)
             #expect(bit(10, 10) && bit(5, 5) && !bit(2, 2))
+
+            // A matchProc decides the boundary: Director's matte ink makes
+            // every colour but white one, so the white around the frame is
+            // left out and the frame and what it holds are kept.
+            // movea.l 4(a7),a0; movea.l 8(a7),a1; moveq #0,d0;
+            // cmpi.w #$FFFF,(a1); beq.s +2; moveq #1,d0; move.l d0,(a0);
+            // move.b #1,12(a7); movea.l (a7)+,a0; addq.l #8,a7; jmp (a0)
+            let words: [UInt16] = [0x206F, 4, 0x226F, 8, 0x7000, 0x0C51, 0xFFFF, 0x6702, 0x7001, 0x2080,
+                                   0x1F7C, 1, 12, 0x205F, 0x508F, 0x4ED0]
+            let proc = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(proc + UInt32(i * 2), w) }
+            let white = tb_NewPtr(6, false, true)
+            for i in 0..<3 { wr16(white + UInt32(i * 2), 0xFFFF) }
+            let gd = rd32(rd32(LM_TheGDevice)), refCon = gd + UInt32(GDevice_gdRefCon_off)
+            wr32(refCon, 1234)
+            for i in 0..<80 { wr8(bits + UInt32(i), 0) }
+            tb_CalcCMask(src, bm, r, r, white, proc, 99)
+            #expect(bit(10, 10) && bit(5, 5) && !bit(2, 2))
+            #expect(rd32(refCon) == 1234) // gdRefCon held the matchData only during the call
+            // Without it, white is the boundary and nothing can be reached.
+            for i in 0..<80 { wr8(bits + UInt32(i), 0) }
+            tb_CalcCMask(src, bm, r, r, white, 0, 0)
+            #expect(bit(2, 2) && bit(10, 10))
         }
 
         @Test func bitMapToRegion() {
