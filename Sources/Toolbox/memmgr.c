@@ -58,7 +58,34 @@ static void b_set(gaddr b, unsigned use, uint8_t state, uint8_t sizec, uint32_t 
 }
 
 static inline gaddr z_first(gaddr z) { return z + Zone_heapData_off; }
-static inline gaddr z_lim(gaddr z) { return Zone_bkLim(z); }
+
+/* Programs from the 64K ROM's days grow the application zone themselves
+ * (MaxApplZone's glue in Sword of Ages): they move bkLim and HeapEnd up
+ * to ApplLimit, turn the old trailer into a free block reaching the new
+ * one and write the new trailer, all with 24-bit headers (size in the
+ * first long's low three bytes).  When the trailer is such a header, find
+ * the old trailer the same way and rewrite both in the 32-bit format. */
+static void adopt_hand_growth(gaddr z, gaddr lim)
+{
+    for (gaddr b = z_first(z); b < lim; b += b_psize(b)) {
+        uint32_t ps = b_psize(b);
+        if (b_use(b) == USE_FREE && (rd32(b) & 0x00FFFFFFu) == lim - b && b + ps != lim) {
+            b_set(b, USE_FREE, 0, 0, lim - b, 0);
+            b_set(lim, USE_FREE, 0, 0, HDR, 0);
+            return;
+        }
+        if (ps < HDR || (ps & 3) || b + ps > lim)
+            return;
+    }
+}
+
+static inline gaddr z_lim(gaddr z)
+{
+    gaddr lim = Zone_bkLim(z);
+    if (__builtin_expect(rd32(lim) == HDR, 0) && rd32(lim + 4) != HDR && lim < 0x01000000u && lim > z)
+        adopt_hand_growth(z, lim);
+    return lim;
+}
 
 static inline gaddr cur_zone(void) { return rd32(LM_TheZone); }
 static inline gaddr sys_zone(void) { return rd32(LM_SysZone); }

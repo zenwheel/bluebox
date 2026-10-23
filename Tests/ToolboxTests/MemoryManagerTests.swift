@@ -232,5 +232,35 @@ extension BlueBox {
             raw_MemoryDispatch(&c, 0xA05C)
             #expect(Int32(bitPattern: c.d.0) == -50)
         }
+
+        /// A program of the 64K ROM's days grows its zone by hand, with
+        /// 24-bit block headers (Sword of Ages): the zone takes it in.
+        @Test func zoneGrownByHandWith24BitHeaders() {
+            let area = tb_NewPtr(64 * 1024, false, true)
+            let z = (area + 15) & ~15
+            mm_init_zone(z, z + 16 * 1024, 0)
+            let old = rd32(z) // bkLim: the trailer
+            let lim = (z + 60 * 1024) & ~3
+            wr32(old, lim - old) // a free block reaching the new trailer, tag clear
+            wr32(z, lim)
+            wr32(lim, 12) // the new trailer, 24-bit style
+            #expect(mm_check_zone(z))
+            #expect(rd32(old + 4) == lim - old)
+        }
+
+        /// DrvrInstall leaves the new entry's handle in A0, where programs
+        /// installing drivers of their own take it to fill the entry in.
+        @Test func drvrInstallReturnsTheEntryInA0() {
+            var c = cpu68k()
+            let refnum: Int16 = -40
+            c.a.0 = 0
+            c.d.0 = UInt32(bitPattern: Int32(refnum))
+            raw_DrvrInstall(&c, 0xA13D)
+            #expect(c.d.0 == 0)
+            let entry = rd32(rd32(UInt32(LM_UTableBase)) + 4 * 39)
+            #expect(entry != 0 && c.a.0 == entry)
+            #expect(Int16(bitPattern: rd16(rd32(entry) + 24)) == refnum) // dCtlRefNum
+            #expect(mm_check_zone(sysZone))
+        }
     }
 }

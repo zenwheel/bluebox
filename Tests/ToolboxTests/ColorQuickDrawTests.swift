@@ -90,6 +90,36 @@ extension BlueBox {
             tb_DisposeGWorld(port)
         }
 
+        /// Rows have a long word of room for realigning the image, and a
+        /// row more follows the last: an 8-bit world 32 pixels wide steps
+        /// by 36 (Space Pebbles), and a scroller's tile run off the last
+        /// row's end lands in the world's own memory (Slippy).
+        @Test func gworldRowsHaveRoomToSpare() {
+            launchTestApp()
+            _ = initToolbox()
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 8, rect(0, 0, 32, 32), 0, 0, 0) == 0)
+            let pm = rd32(tb_GetGWorldPixMap(rd32(gw)))
+            #expect(rd16(pm + 4) & 0x3FFF == 36)
+            #expect(tb_GetPtrSize(PixMap_baseAddr(pm)) >= 36 * 33)
+            tb_DisposeGWorld(rd32(gw))
+            #expect(tb_NewGWorld(gw, 32, rect(0, 0, 10, 10), 0, 0, 0) == 0)
+            #expect(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + 4) & 0x3FFF == 40)
+            tb_DisposeGWorld(rd32(gw))
+        }
+
+        /// A direct screen's device table has 256 entries all the same, for
+        /// 256-colour games fading through it with SetEntries (Squish).
+        @Test func directScreenTableHas256Entries() {
+            launchTestApp()
+            _ = initToolbox()
+            let pm = rd32(GDevice_gdPMap(rd32(rd32(UInt32(LM_MainDevice)))))
+            guard PixMap_pixelSize(pm) > 8 else { return }
+            let ct = PixMap_pmTable(pm)
+            #expect(rd16(rd32(ct) + 6) == 255)
+            #expect(tb_GetHandleSize(ct) == 8 + 256 * 8)
+        }
+
         /// An 8-bit GWorld brings its own device: while it is current,
         /// Color2Index gives indices into its table, not 32-bit pixels.
         @Test func gworldHasItsOwnDevice() {

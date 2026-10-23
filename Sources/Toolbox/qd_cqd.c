@@ -231,8 +231,16 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
     int w = r.right - r.left, h = r.bottom - r.top;
     if (w <= 0 || h <= 0)
         return false;
-    uint32_t rb = row_bytes_for(w, depth);
-    gaddr bits = tb_NewPtr((int32_t)(rb * (uint32_t)h), false, true);
+    /* Rows have room for the image to be realigned to the screen (by up to
+     * a long word less a pixel, as UpdateGWorld's alignPix does), so an
+     * 8-bit world 32 pixels wide has rowBytes 36.  Programs count on it:
+     * Space Pebbles steps its 32-pixel icon worlds by width + 4. */
+    int slack = depth < 32 ? 32 / depth - 1 : 0;
+    uint32_t rb = row_bytes_for(w + slack, depth);
+    /* And a row to spare after the last: tile scrollers copy whole tiles
+     * past the right edge, which on the last row runs off the end (Slippy
+     * and STARFIGHT write 15 bytes over, scrolled 15 pixels across). */
+    gaddr bits = tb_NewPtr((int32_t)(rb * (uint32_t)(h + 1)), false, true);
     if (!bits)
         return false;
     if (depth == 32)

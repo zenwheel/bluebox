@@ -79,7 +79,13 @@ static void describe_screen(gaddr gd, gaddr pm)
         PixMap_set_pixelType(pm, 16);       /* RGBDirect */
         PixMap_set_cmpCount(pm, 3);
         PixMap_set_cmpSize(pm, screen_depth == 16 ? 5 : 8);
-        screen_ctab = make_ctab(bw, 2, 1);  /* unused by direct pixels */
+        /* Unused by direct pixels, but a full 256 colours (the standard
+         * 8-bit ones): games written for 256 colours fade by writing all
+         * 256 entries into the device's table and calling SetEntries, and
+         * Squish wrote 2K past a two-entry table. */
+        for (int i = 0; i < 256; i++)
+            qd_px_rgb(8, 0, (uint32_t)i, std[i]);
+        screen_ctab = make_ctab(std, 256, 1);
     } else {
         PixMap_set_pixelType(pm, 0);
         PixMap_set_cmpCount(pm, 1);

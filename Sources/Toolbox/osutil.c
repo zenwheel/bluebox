@@ -342,8 +342,19 @@ void key_trans_native(cpu68k *c, uint16_t tw)
     c->d[0] = tb_KeyTranslate(0, keycode, 0) & 0xFF;
 }
 
-/* DrvrInstall (A03D): A0 the driver, D0 its refnum. */
-void raw_DrvrInstall(cpu68k *c, uint16_t tw) { c->d[0] = (uint32_t)(int32_t)driver_install(c->a[0], (int16_t)c->d[0]); }
+/* DrvrInstall (A03D): A0 the driver, D0 its refnum.  A0 returns the
+ * entry's handle, as the ROM leaves it: programs installing their own
+ * drivers fill in the entry through it (SPAM puts its driver's handle in
+ * dCtlDriver with MOVEA.L (A0),A4 and wrote over a master pointer). */
+void raw_DrvrInstall(cpu68k *c, uint16_t tw)
+{
+    int16_t refnum = (int16_t)c->d[0];
+    int16_t r = driver_install(c->a[0], refnum);
+    c->d[0] = (uint32_t)(int32_t)r;
+    gaddr h = r == noErr ? rd32(rd32(LM_UTableBase) + 4 * (uint32_t)(-1 - refnum)) : 0;
+    if (h)
+        c->a[0] = h;
+}
 
 /* The Cursor Device Manager: there are no cursor devices but the ones a
  * program makes (CursorDeviceNewDevice), which keep what is set in them
