@@ -27,10 +27,12 @@ bin=${3:-"$root/.build/release/bluebox"}
 jobs=${4:-8}
 mkdir -p "$work/logs" "$work/homes"
 
-# One program: its line of walk.tsv.
+# One program: its line of walk.tsv.  With a second argument, that one of
+# the applications an archive holds (--app).
 walk_one() {
 	rel=$1
-	name=$(printf '%s' "$rel" | tr '/ ' '__')
+	app=${2:-}
+	name=$(printf '%s%s' "$rel" "${app:+ $app}" | tr '/ ' '__')
 	home="$work/homes/$name"
 	log="$work/logs/$name.txt"
 	rm -rf "$home"
@@ -47,9 +49,10 @@ walk_one() {
 	# NOWALK: the program left alone, to tell its own quits from the walk's.
 	walk=--walk-menus
 	[ -z "${NOWALK:-}" ] || walk=--census
+	set -- "$home/copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-4000000000}"
+	[ -z "$app" ] || set -- "$@" --app "$app"
 	HOME="$home" BLUEBOX_HEAPCHECK="${HEAPCHECK-1}" BLUEBOX_CODECHECK="${CODECHECK-0}" ASAN_OPTIONS=detect_leaks=0 timeout "${WALK_TIMEOUT:-600}" \
-		"$bin" run "$home/copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-4000000000}" \
-		>"$log" 2>&1 || status=$?
+		"$bin" run "$@" >"$log" 2>&1 || status=$?
 	rm -rf "$home"
 	if grep -q 'ERROR: AddressSanitizer' "$log"; then
 		end="host memory error: $(grep -m 1 'ERROR: AddressSanitizer' "$log" | sed 's/.*AddressSanitizer: //' | cut -c1-80)"
@@ -58,9 +61,16 @@ walk_one() {
 	else
 		end=$(grep -a -m 1 -E '^stopped:|^bluebox:|^instruction limit|^several applications' "$log" | sed -E 's/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//' | cut -c1-120)
 	fi
+	# An archive of several applications: each of them in turn.
+	if [ -z "$app" ] && grep -q '^several applications' "$log"; then
+		sed -n '/^several applications/,$ s/^  //p' "$log" | while IFS= read -r one; do
+			walk_one "$rel" "$one"
+		done
+		return
+	fi
 	step=$(grep -a '^walk: menu' "$log" | tail -n 1 | sed 's/^walk: //')
 	items=$(grep -a -c '^walk: menu' "$log" || true)
-	printf '%s\t%s\t%s\t%s\n' "$rel" "${end:-none}" "${step:-}" "$items"
+	printf '%s\t%s\t%s\t%s\n' "$rel${app:+ [$app]}" "${end:-none}" "${step:-}" "$items"
 }
 
 if [ "${WALK_ONE:-}" ]; then
