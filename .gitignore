@@ -8,3 +8,4 @@ Themes/
 build/
 releases/
 .build-asan/
+.finf/
