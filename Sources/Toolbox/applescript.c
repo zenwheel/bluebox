@@ -2871,7 +2871,15 @@ static bool step(frame *f)
         push(as_undef());
         return true;
     }
-    case 0x11: /* ObjectAliasQuote */
+    case 0x11: /* ObjectAliasQuote: `a reference to`, which GetData leaves as it is */
+        a = pop();
+        if (a->kind == V_REF) {
+            v = as_new(V_REF);
+            *v = (as_obj){ .kind = V_REF, .btype = a->btype, .gc_next = v->gc_next, .i = 1,
+                           .a = a->a, .b = a->b, .c = a->c, .d = a->d };
+            a = v;
+        }
+        push(a);
         return true;
     case 0x12: /* Tell */
     {
@@ -2982,6 +2990,13 @@ static bool step(frame *f)
     case 0x28: /* GetData */
     case 0x45:
         a = pop();
+        if (a->kind == V_REF && a->i) { /* a reference to: the reference itself */
+            v = as_new(V_REF);
+            *v = (as_obj){ .kind = V_REF, .btype = a->btype, .gc_next = v->gc_next, .a = a->a, .b = a->b,
+                           .c = a->c, .d = a->d };
+            push(v);
+            return true;
+        }
         v = as_deref(a);
         if (!v)
             return false;
