@@ -50,10 +50,17 @@ static uint16_t arith(int mode, uint32_t s, uint32_t d, uint32_t op);
  * port: the pattern picks the foreground or background colour as the
  * source, combined with each pixel as CopyBits combines them (programs
  * tint and dim this way: Netscape Navigator's buttons).  transparent
- * leaves the background bits alone. */
+ * leaves alone the pixels whose source is the background colour: the
+ * pattern's 0 bits, and its 1 bits too when the foreground is the same
+ * colour.  Like the other pattern modes, 40..47 are 32..39 with the
+ * pattern bit (8) set, and Color QuickDraw ignores that bit: The
+ * Journeyman Project goes over its buttons in mode 44 with white on
+ * white, which leaves them as they are. */
 static bool fill_region_arith(gaddr port, const hrgn *r, const pixdst *d, const uint8_t pat[8], int mode)
 {
     int am = mode & 0x3F;
+    if (am >= 40 && am <= 47)
+        am -= 8;
     if (am < 32 || am > 39 || d->depth == 1 || !qd_port_is_color(port))
         return false;
     uint16_t fg[3], bk[3], op[3];
@@ -62,6 +69,7 @@ static bool fill_region_arith(gaddr port, const hrgn *r, const pixdst *d, const 
         bk[k] = rd16(port + CGrafPort_rgbBkColor_off + (uint32_t)k * 2);
     }
     qd_port_op_color(port, op);
+    bool fg_is_bk = qd_rgb_px(d->depth, d->ctab, fg) == qd_rgb_px(d->depth, d->ctab, bk);
     for (int i = 0; i < r->nbands; i++) {
         const rband *b = &r->bands[i];
         for (int y = b->top; y < b->bottom; y++) {
@@ -71,7 +79,7 @@ static bool fill_region_arith(gaddr port, const hrgn *r, const pixdst *d, const 
                 int c0 = b->x[k] - d->bounds.left, c1 = b->x[k + 1] - d->bounds.left;
                 for (int c = c0; c < c1; c++) {
                     int s = (p >> (7 - (c & 7))) & 1;
-                    if (am == 36 && !s) /* transparent */
+                    if (am == 36 && (!s || fg_is_bk)) /* transparent */
                         continue;
                     const uint16_t *src = s ? fg : bk;
                     uint16_t dc[3];

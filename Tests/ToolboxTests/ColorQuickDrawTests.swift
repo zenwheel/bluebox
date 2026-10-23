@@ -278,6 +278,46 @@ extension BlueBox {
             #expect((0..<rows).allSatisfy { rd16(dst + UInt32($0 * 2)) == 0xFFFF })
         }
 
+        /// Pen modes 40..47 are the arithmetic modes with the pattern bit, so
+        /// 44 is transparent: the pattern's 0 bits leave the pixels alone, and
+        /// so do its 1 bits when the foreground is the background colour (The
+        /// Journeyman Project goes over its buttons white on white).
+        @Test func transparentPenMode() {
+            launchTestApp()
+            _ = initToolbox()
+            let screen = tb_NewPtr(4, false, true), dev = tb_NewPtr(4, false, true)
+            tb_GetGWorld(screen, dev)
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 32, rect(0, 0, 16, 16), 0, 0, 0) == 0)
+            let port = rd32(gw)
+            tb_SetGWorld(port, 0)
+            _ = tb_LockPixels(tb_GetGWorldPixMap(port))
+            let all = rect(0, 0, 16, 16)
+            func pixel(_ h: Int16, _ v: Int16) -> [UInt16] {
+                let c = rgb(0, 0, 0)
+                tb_GetCPixel(h, v, c)
+                return [rd16(c), rd16(c + 2), rd16(c + 4)]
+            }
+            tb_RGBForeColor(rgb(0xFFFF, 0, 0))
+            tb_PaintRect(all)
+            let pat = tb_NewPtr(8, false, true)
+            wr16(pat + 6, 0xFFFF) // the last two rows of each eight
+            tb_PenPat(pat)
+            tb_PenMode(44)
+            tb_RGBForeColor(rgb(0xFFFF, 0xFFFF, 0xFFFF))
+            tb_RGBBackColor(rgb(0xFFFF, 0xFFFF, 0xFFFF))
+            tb_PaintRect(all)
+            #expect(pixel(3, 2) == [0xFFFF, 0, 0])
+            #expect(pixel(3, 7) == [0xFFFF, 0, 0])
+            tb_RGBForeColor(rgb(0, 0, 0xFFFF))
+            tb_PaintRect(all)
+            #expect(pixel(3, 2) == [0xFFFF, 0, 0])
+            #expect(pixel(3, 7) == [0, 0, 0xFFFF])
+            tb_PenNormal()
+            tb_SetGWorld(rd32(screen), rd32(dev))
+            tb_DisposeGWorld(port)
+        }
+
         @Test func auxiliaryControlRecord() {
             launchTestApp()
             _ = initToolbox()
