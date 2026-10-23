@@ -204,6 +204,8 @@ static int depth_of(gaddr ch)
 
 static int32_t call_cdef(gaddr ch, int16_t msg, int32_t param)
 {
+    if (!ctl_find(ch)) /* not a control: no definition to call */
+        return 0;
     gaddr h = ControlRecord_contrlDefProc(cp(ch));
     if (!h || !rd32(h))
         return 0;
@@ -1427,7 +1429,9 @@ int8_t tb_IsControlActive(gaddr ch) { return ch && chilite(ch) != 255; }
 
 void tb_HiliteControl(gaddr ch, int16_t state)
 {
-    if (chilite(ch) == (uint8_t)state)
+    /* Only a control: StuffIt Expander flashes item 2 of every dialog on
+     * Escape, a picture in its Deluxe Info one. */
+    if (!ctl_find(ch) || chilite(ch) == (uint8_t)state)
         return;
     gaddr subs[1];
     bool embedder = ctl_subcontrols(ch, subs, 1) > 0;
