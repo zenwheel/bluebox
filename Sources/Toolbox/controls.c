@@ -1427,6 +1427,11 @@ int8_t tb_IsControlActive(gaddr ch) { return ch && chilite(ch) != 255; }
 
 void tb_HiliteControl(gaddr ch, int16_t state)
 {
+    /* Not a control: Snood 2.1's alerts "press" their Cancel item on
+     * Command-period, which in a one-button alert is the static text.  Its
+     * handle has no record to mark or defproc to call. */
+    if (!ctl_find(ch))
+        return;
     if (chilite(ch) == (uint8_t)state)
         return;
     gaddr subs[1];
