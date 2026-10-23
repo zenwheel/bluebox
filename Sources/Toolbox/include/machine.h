@@ -583,6 +583,10 @@ void machine_set_realtime(bool on);
  * (0: never; BLUEBOX_HEAPCHECK=n sets it too): a call that damages one
  * halts the run with its name. */
 void machine_set_heap_check(int n);
+/* The program's loaded PowerPC code sections compared with a copy after
+ * every nth Toolbox call (0: never; BLUEBOX_CODECHECK=n sets it too): a
+ * call that changes them halts the run with its name. */
+void machine_set_code_check(int n);
 /* --walk-menus: a headless run chooses every menu item it can, one at a
  * time whenever the program waits for input, dismissing the dialogs they
  * open (Escape, Command-period, Return), and reports each step; it ends

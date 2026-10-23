@@ -76,6 +76,8 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
     natives[index].fn(c);
     if (!mm_debug_after_call(natives[index].name))
         ppc_halt(c, "heap damaged by %s", natives[index].name);
+    else if (!code_check_after_call(natives[index].name))
+        ppc_halt(c, "code changed by %s", natives[index].name);
 }
 
 static gaddr native_tvector(void (*fn)(ppc_cpu *), const char *name);
@@ -726,6 +728,9 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
         else if (sections[i].base && sections[i].kind != kConstant)
             f->data = sections[i].base, f->data_size = sections[i].size;
     }
+    for (int i = 0; i < ninst; i++)
+        if (sections[i].kind == kCode && sections[i].base)
+            code_check_add(sections[i].base, sections[i].size, f->name[0] ? f->name : "the application's code");
     /* C++ exception handling (MrCExceptionsLib) reads the exception
      * section from the container itself (FragFindOwnerOfPC). */
     f->container = 0;
@@ -1104,6 +1109,7 @@ void cfm_reset(void)
     missing_len = missing_count = 0;
     nfrags = ninit = init_next = ndata_blocks = 0;
     ppc_cpu_ready = false;
+    code_check_reset(); /* the last program's code */
 }
 
 /* The PowerPC processor, set up once per launch: a stack of its own (1 MB,

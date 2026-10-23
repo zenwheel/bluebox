@@ -71,6 +71,14 @@ extern uint32_t g_mem_report_cap;
 bool mm_check_zone(gaddr zone);
 /* BLUEBOX_HEAPCHECK: the zones checked after a Toolbox call; false if damaged. */
 bool mm_debug_after_call(const char *name);
+/* BLUEBOX_CODECHECK (codecheck.c): code loaded at base kept for comparing
+ * after Toolbox calls (what names it in the report), forgotten when it is
+ * unloaded or the next program launches; false after a call when some of
+ * it has changed. */
+void code_check_add(gaddr base, uint32_t size, const char *what);
+void code_check_remove(gaddr base);
+bool code_check_after_call(const char *name);
+void code_check_reset(void);
 /* The menu bar for the menu walker (menu.c, dialogs.c, walker.c). */
 int menu_bar_count(void);
 int16_t menu_bar_id(int i);

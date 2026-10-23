@@ -59,7 +59,8 @@ func usage() -> Never {
           --headless run without a window (the default on Linux for now)
           --walk-menus  a headless run chooses every menu item it can, dismissing the
                  dialogs they open, and says each step (for finding what breaks;
-                 BLUEBOX_HEAPCHECK=n also checks the heaps after every nth call)
+                 BLUEBOX_HEAPCHECK=n also checks the heaps after every nth call,
+                 BLUEBOX_CODECHECK=n its PowerPC code for changes)
       --realtime a headless run's clock follows real time, not the instructions
                      run (for networked programs talking to other copies)
           --screen-window  show the whole classic screen in one window instead of

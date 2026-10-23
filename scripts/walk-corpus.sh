@@ -12,6 +12,8 @@
 #   last step, items chosen) and <work dir>/report.txt (the failures by
 #   kind, most first); each run's output is kept in <work dir>/logs/.
 #   HEAPCHECK=n checks the heaps every nth call (default 1; 0 for none),
+#   CODECHECK=n checks a PowerPC program's code for changes every nth
+#   call (default 0, none),
 #   WALK_TIMEOUT=s gives each run s seconds (default 600).
 set -eu
 LC_ALL=C
@@ -41,7 +43,7 @@ walk_one() {
 	fi
 	cp -cR "$folder" "$home/copy" 2>/dev/null || cp -R "$folder" "$home/copy"
 	status=0
-	HOME="$home" BLUEBOX_HEAPCHECK="${HEAPCHECK-1}" ASAN_OPTIONS=detect_leaks=0 timeout "${WALK_TIMEOUT:-600}" \
+	HOME="$home" BLUEBOX_HEAPCHECK="${HEAPCHECK-1}" BLUEBOX_CODECHECK="${CODECHECK-0}" ASAN_OPTIONS=detect_leaks=0 timeout "${WALK_TIMEOUT:-600}" \
 		"$bin" run "$home/copy/$(basename "$rel")" --headless --census --walk-menus --max 4000000000 \
 		>"$log" 2>&1 || status=$?
 	rm -rf "$home"
@@ -66,10 +68,10 @@ grep -v '^$' "$dir/census_list.txt" | while IFS= read -r rel; do
 	printf '%s\0' "$rel"
 done | xargs -0 -P "$jobs" -I {} env WALK_ONE={} sh "$0" "$dir" "$work" "$bin" "$jobs" >"$work/walk.tsv" || true
 
-# The failures by kind: host errors, damaged heaps, missing routines,
+# The failures by kind: host errors, damaged heaps or code, missing routines,
 # CPU faults, then the rest; walks that finished or reached the limit
 # waiting for input are fine.
-cut -f2 "$work/walk.tsv" | sed -E 's/^(host memory error: [^ ]+ [^ ]+).*/\1/; s/^(heap damaged by [^ ]+).*/\1/; s/^(stopped: unimplemented: [^ ]+).*/\1/; s/^(stopped: menu walk stuck in a dialog).*/\1/' |
+cut -f2 "$work/walk.tsv" | sed -E 's/^(host memory error: [^ ]+ [^ ]+).*/\1/; s/^(heap damaged by [^ ]+).*/\1/; s/^(code changed by [^ ]+).*/\1/; s/^(stopped: unimplemented: [^ ]+).*/\1/; s/^(stopped: menu walk stuck in a dialog).*/\1/' |
 	grep -v -E 'menu walk finished|waiting for input|not in corpus' | sort | uniq -c | sort -rn >"$work/report.txt" || true
 printf '%s programs, %s finished their walk\n' "$(wc -l <"$work/walk.tsv" | tr -d ' ')" \
 	"$(grep -c 'menu walk finished' "$work/walk.tsv" || true)"
