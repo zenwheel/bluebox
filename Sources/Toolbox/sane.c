@@ -192,7 +192,14 @@ static void end(void)
 
 /* ---------------------------------------------------------------------- */
 /* Decimal records: sgn (byte), exp (word at 2), sig (Str20 at 4).
- * A decform is style (0 float, 1 fixed) and digits. */
+ * A decform is style (0 float, 1 fixed) and digits (word at 2). */
+
+/* The style is a byte, as Pascal lays out its enumerated type ($0100 in the
+ * word); a style written as a whole word (1) counts too. */
+static int decform_style(gaddr form)
+{
+    return rd8(form) || rd16(form) == 1;
+}
 
 static double dec_get(gaddr d)
 {
@@ -218,7 +225,7 @@ static double dec_get(gaddr d)
 
 static void dec_put(gaddr d, gaddr form, double v)
 {
-    int style = (int16_t)rd16(form), digits = (int16_t)rd16(form + 2);
+    int style = decform_style(form), digits = (int16_t)rd16(form + 2);
     char sig[64];
     int exp = 0;
     wr8(d, signbit(v) ? 1 : 0);
@@ -488,7 +495,7 @@ void raw_GetVideoDefault(cpu68k *c, uint16_t tw) { c->d[0] = 0; }
 void tb_ROMlib_Fdec2str(gaddr form, gaddr dec, gaddr out)
 {
     double v = dec_get(dec);
-    int style = (int16_t)rd16(form), digits = (int16_t)rd16(form + 2);
+    int style = decform_style(form), digits = (int16_t)rd16(form + 2);
     char buf[128];
     if (isnan(v))
         snprintf(buf, sizeof buf, "NAN(017)");

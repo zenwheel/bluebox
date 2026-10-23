@@ -236,6 +236,19 @@ extension BlueBox {
             #expect(tb_IsValidControlHandle(bar) != 0 && tb_IsValidControlHandle(w) == 0)
         }
 
+        /// HiliteControl on a handle that isn't a control (StuffIt Expander
+        /// flashes a dialog's picture item on Escape) changes nothing and
+        /// calls no definition through what its "contrlDefProc" holds.
+        @Test func hiliteControlIgnoresOtherHandles() {
+            launchTestApp()
+            _ = initToolbox()
+            let pict = tb_NewHandle(64, false, true)
+            wr8(rd32(pict) + 17, 0xFE)
+            wr32(rd32(pict) + 28, 0x0048_0000) // a version 2 header's hRes
+            tb_HiliteControl(pict, 1)
+            #expect(rd8(rd32(pict) + 17) == 0xFE)
+        }
+
         /// A control without colours of its own has no auxiliary record:
         /// GetAuxiliaryControlRecord answers false and the default record,
         /// whose table is the standard one (white body), shared by all.

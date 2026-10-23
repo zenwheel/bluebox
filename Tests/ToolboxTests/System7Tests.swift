@@ -656,6 +656,14 @@ extension BlueBox {
             guestPString("4096", at: s)
             tb_StringToNum(s, &v)
             #expect(Int32(bitPattern: v) == 4096)
+            // Each character's low four bits, as Inside Macintosh says:
+            // a space is 0 and "2:" is 30.
+            guestPString(" 137", at: s)
+            tb_StringToNum(s, &v)
+            #expect(Int32(bitPattern: v) == 137)
+            guestPString("2:", at: s)
+            tb_StringToNum(s, &v)
+            #expect(Int32(bitPattern: v) == 30)
         }
     }
 

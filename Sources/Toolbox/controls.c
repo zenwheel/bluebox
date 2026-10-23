@@ -204,6 +204,8 @@ static int depth_of(gaddr ch)
 
 static int32_t call_cdef(gaddr ch, int16_t msg, int32_t param)
 {
+    if (!ctl_find(ch)) /* not a control: no definition to call */
+        return 0;
     gaddr h = ControlRecord_contrlDefProc(cp(ch));
     if (!h || !rd32(h))
         return 0;
@@ -1427,12 +1429,11 @@ int8_t tb_IsControlActive(gaddr ch) { return ch && chilite(ch) != 255; }
 
 void tb_HiliteControl(gaddr ch, int16_t state)
 {
-    /* Not a control: Snood 2.1's alerts "press" their Cancel item on
-     * Command-period, which in a one-button alert is the static text.  Its
-     * handle has no record to mark or defproc to call. */
-    if (!ctl_find(ch))
-        return;
-    if (chilite(ch) == (uint8_t)state)
+    /* Not a control: dialogs "press" an item they take for a button, as
+     * Snood 2.1's alerts their Cancel item on Command-period (the static
+     * text, in a one-button alert) and StuffIt Expander item 2 on Escape (a
+     * picture in its Deluxe Info).  No record to mark, no defproc to call. */
+    if (!ctl_find(ch) || chilite(ch) == (uint8_t)state)
         return;
     gaddr subs[1];
     bool embedder = ctl_subcontrols(ch, subs, 1) > 0;
