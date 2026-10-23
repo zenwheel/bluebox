@@ -140,6 +140,25 @@ extension BlueBox {
             tb_DisposeDialog(d)
         }
 
+        /// Snood 2.1's alert filter "presses" its Cancel item on Command-period
+        /// with HiliteControl, which in its one-button alert is the static
+        /// text: the text's handle is no control record, nothing to change
+        /// in it or defproc to call.
+        @Test func hilitingAnItemThatIsNoControlLeavesItAlone() {
+            let d = open()
+            tb_SetPort(d)
+            let text = item(d, 3).handle
+            let s = tb_NewPtr(256, false, true)
+            guestPString("Codes are case sensitive. Please try again.", at: s)
+            tb_SetDialogItemText(text, s)
+            let before = (0..<tb_GetHandleSize(text)).map { rd8(rd32(text) + UInt32($0)) }
+            tb_HiliteControl(text, 1)
+            let after = (0..<tb_GetHandleSize(text)).map { rd8(rd32(text) + UInt32($0)) }
+            #expect(after == before)
+            #expect(!g_cpu!.pointee.halted)
+            tb_DisposeDialog(d)
+        }
+
         @Test func typingGoesToTheEditTextItem() {
             let d = open()
             tb_SelectWindow(d)
