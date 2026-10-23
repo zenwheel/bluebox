@@ -220,7 +220,9 @@ void tb_NumToString(int32_t l, gaddr s)
     gput(s + 1, buf, (uint32_t)n);
 }
 
-/* Like the ROM: no error checking; a leading sign, then digits. */
+/* Like the ROM: no error checking; a leading sign, then digits, each
+ * character's low four bits (so a space counts as 0: Slime Invaders' help
+ * text gives " 137" for its picture's ID). */
 void tb_StringToNum(gaddr s, uint32_t *lp)
 {
     int n = rd8(s), i = 0;
@@ -231,7 +233,7 @@ void tb_StringToNum(gaddr s, uint32_t *lp)
     }
     uint32_t v = 0;
     for (; i < n; i++)
-        v = v * 10 + (uint32_t)(rd8(s + 1 + (uint32_t)i) - '0');
+        v = v * 10 + (rd8(s + 1 + (uint32_t)i) & 15u);
     *lp = neg ? (uint32_t)-(int32_t)v : v;
 }
 
