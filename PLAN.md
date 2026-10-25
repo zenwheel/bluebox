@@ -799,7 +799,7 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 ### M17: The system libraries complete
 
-**Goal:** Blue Box's own MathLib, StdCLib and InterfaceLib export everything Mac OS 9's did, from the published interfaces rather than one program at a time, so no PowerPC program stops on a missing import from them. Asked for 2026-10-25. CarbonLib waits (2026-10-25); PrivateInterfaceLib was never published and stays on demand.
+**Goal:** Blue Box's own MathLib, StdCLib and InterfaceLib export everything Mac OS 9's did, from the published interfaces rather than one program at a time, so no PowerPC program stops on a missing import from them. Asked for 2026-10-25. CarbonLib is M20; PrivateInterfaceLib was never published and stays on demand.
 
 - **The checklist:** `bluebox exports` reads a library's exports (an Apple stub library or the library itself) and lists those Blue Box lacks. Against Universal Interfaces 3.4's stub libraries (2026-10-25): MathLib 83 of 149, StdCLib 80 of 256 (3.7: of 312), InterfaceLib 2,196 of 2,883. Signatures from Universal Interfaces 3.4 (MPW-GM with Apple's final updates), which the user keeps outside the repository; Retro68's ImportLibraries (3.4.1) name what 3.4 lacks.
 - **MathLib:** the long double routines (MathLib's long double is a double-double), classification, the environment and decimal conversions.
@@ -835,6 +835,18 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** a G4-only program and an AltiVec-using one run with their vector paths; vecLib's `bluebox exports --missing` lists nothing and its FFTs match Accelerate's; an H.264 QuickTime movie plays at full frame rate through VideoToolbox; a QuickDraw 3D and a RAVE program render through Metal.
 
+### M20: CarbonLib
+
+**Goal:** Carbon programs written for Mac OS 8.6–9 (CFM, importing CarbonLib) run, on Blue Box's own CarbonLib built over the classic Toolbox it already has, as Apple's was. Started 2026-10-25, once M17 had completed the classic libraries under it.
+
+- **The checklist:** `bluebox exports` against Universal Interfaces 3.4's CarbonLib stub (7,471 exports; 3,095 already Blue Box's at the start, most of Carbon being the classic Toolbox under the same names), Retro68's ImportLibraries for CarbonLib 1.3–1.4's additions.
+- **Phase 1 (2026-10-25, five areas at once):** QuickDraw's port and region accessors, windows, menus, lists, TextEdit and help tags; controls (the Create…Control family and data tags) and dialogs; Carbon Events (event refs, targets, handlers, the queue, timers, RunApplicationEventLoop, the standard handlers over the classic event loop), the Multiprocessing Services on the Thread Manager, and CarbonLib loadable with Gestalt 'cbon'; Core Foundation as CarbonLib had it (CFString, collections, CFURL, CFBundle, CFPreferences, the kCF data) and Math64; the Carbon Printing Manager on the existing printing, Navigation Services on the host panels Standard File uses, the Carbon Scrap Manager, MLTE on TextEdit, ATSUI.
+- **Phase 2:** QuickTime's Carbon exports (about 1,300 names in CarbonLib's list: components, codecs, movies, QuickTime VR, streaming, music), with M19's host decoders.
+- **Later, as programs need them:** ColorSync, HTML rendering, Keychain, speech recognition, Find By Content, URL Access, Open Transport's Carbon forms.
+- **Test programs:** Retro68's Carbon samples, small Carbon programs built with Retro68 for each area, and the corpus's Carbon programs (Super Snake, BBEdit Lite 6.1 for OS X).
+
+**Exit:** `bluebox exports --missing` lists only phase 2 and later names for CarbonLib; Retro68's Carbon samples, Super Snake and BBEdit Lite 6.1 run.
+
 ### Backlog
 
 Work found along the way that belongs to no milestone yet (2026-10-22):
@@ -846,7 +858,7 @@ Work found along the way that belongs to no milestone yet (2026-10-22):
 - **Programs:** sixtyforce's Video Settings dialog draws empty (its filter takes the update event with BeginUpdate and EndUpdate for a dialog it keeps in a local; whether Mac OS 8's Dialog Manager drew the items anyway needs a PowerPC oracle); the Warlock demos' WindowHider WDEF reads a CGrafPort's grafVars as portBits.bounds (find on the oracle why that works); StarGuardian's AddColor XCMD fails on pathnames of 128 characters or more (granted folders shown nearer the root would avoid it); Internet Explorer 4.01's drawing into a disposed port (now harmless).
 - **AppleShare volumes kept current:** the mirror (`appleshare.c`) lists the server's tree once when the session opens and each folder at most once after, so files others add, delete or rename on the server after that don't show until the session ends (asked 2026-10-25). Two complementary ways: (1) re-list a folder from the server when a program enumerates it (GetCatInfo by index, the host Open panel) and its listing is older than a few seconds, merging the difference into the cache folder (new placeholders, removed entries, renames by AFP file ID, changed sizes, dates and Finder information) without disturbing open forks or the program's own pending changes; (2) the server's own notices: AFP 2.1's attention codes and AFP 3's server notifications (FPZzz, the volume-modified attention) and a volume's modification date (FPGetVolParms) checked at the same time, so an unchanged volume costs one call. A file another client changed while the program has it open stays as the program read it, as on a Mac, until it is closed and reopened.
 - **Native dialogs:** alerts are shown as native host alerts, but a program's own modal dialogs are not; one made only of buttons, static text, icons and pictures (no user items, edit text or controls of its own, and a filter that draws nothing) could be shown natively too, its button the item ModalDialog returns. Apeiron's PowerPC registration dialog (DLOG 900) would not qualify: its text is drawn into user items, where the 68k build's ALRT 510 has static text.
-- **Deferred on purpose:** CFM-68K (68k programs in PEF containers; IE 4.01's 68k build), CarbonLib (Super Snake alone).
+- **Deferred on purpose:** CFM-68K (68k programs in PEF containers; IE 4.01's 68k build). CarbonLib is M20 (2026-10-25).
 
 ## 6. Risks
 
