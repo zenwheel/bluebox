@@ -449,8 +449,10 @@ extension BlueBox {
             let gw = tb_NewPtr(4, false, true)
             #expect(tb_NewGWorld(gw, 1, rect(0, 0, 4, 16), 0, 0, 0) == 0)
             let port = rd32(gw)
-            let pm = rd32(rd32(port + 2))
-            let base = rd32(pm), rb = UInt32(rd16(pm + 4) & 0x3FFF)
+            let pmh = rd32(port + 2), pm = rd32(pmh)
+            // GWorld pixels are a handle until locked, as QuickDraw's were
+            _ = tb_LockPixels(pmh)
+            let base = tb_GetPixBaseAddr(pmh), rb = UInt32(rd16(pm + 4) & 0x3FFF)
             wr8(base + rb, 0x0F); wr8(base + 2 * rb, 0x0F)
             let bm = tb_NewPtr(14, false, true)
             for i in 0..<14 { wr8(bm + UInt32(i), rd8(port + 2 + UInt32(i))) }
