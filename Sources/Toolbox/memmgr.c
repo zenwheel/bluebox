@@ -480,6 +480,7 @@ gaddr tb_NewPtr(int32_t size, bool sys_p, bool clear_p)
 
 void tb_DisposePtr(gaddr p)
 {
+    LOGF(LOG_MEM, "DisposePtr(%08X)\n", p);
     if (!p) {
         set_mem_err(noErr);
         return;
@@ -591,6 +592,7 @@ static bool clear_after(gaddr z, gaddr b, uint32_t need)
 
 void tb_SetPtrSize(gaddr p, int32_t newsize)
 {
+    LOGF(LOG_MEM, "SetPtrSize(%08X, %d)\n", p, newsize);
     gaddr b = p - HDR;
     if (!p || b_use(b) != USE_NREL || newsize < 0) {
         set_mem_err(newsize < 0 ? memFullErr : memWZErr);
