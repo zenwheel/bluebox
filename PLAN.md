@@ -809,12 +809,35 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** `bluebox exports --missing` lists nothing for MathLib, StdCLib and InterfaceLib; a census of the PowerPC programs reports no missing import from them.
 
+### M18: Speed on the host's processor and display
+
+**Goal:** heavy programs run well past their original Macs' speed without settings, from the CPU emulators, QuickDraw's pixel work and the display. Planned 2026-10-25, from a review of where the host's hardware could help.
+
+- **The JIT on by default** (from M10's left items and the backlog): CR lookahead across PowerPC blocks, registers kept across blocks, translated floating point for both CPUs, the 68020's memory-indirect modes, ahead-of-time translation in `bluebox install` keyed by fragment or code resource and offset, then on by default once the corpus walk and interactive use agree with the interpreter. The x86-64 back end stays in M12.
+- **QuickDraw on SIMD:** CopyBits (scaling, depth and colour conversion, the transfer modes and masks), large fills and DrawPicture's decoding (SimTower's scenery) on the host CPU's vector units: Accelerate's vImage on macOS, the compiler's NEON and SSE intrinsics elsewhere. The C paths stay as the reference, and tests compare their pixels.
+- **The display on the GPU:** the step from the classic framebuffer to the screen (depth conversion, palette lookup, the window's scale such as 1.5x, the screen window) done by the GPU in the presentation layer (Metal on macOS) instead of by the emulator thread. The framebuffer stays in guest memory; only what changed goes up each frame.
+- **Measuring:** `scripts/bench-jit.sh` and the game corpus of M10 (`scripts/games-m10.sh`) for the CPUs; a drawing benchmark (CopyBits and DrawPicture heavy programs headless) for QuickDraw; frame time in the windowed hosts for the display.
+- **Looked at and left (2026-10-25):** the CPU emulators on the GPU (instruction execution is a serial chain of dependent steps with unpredictable memory access, the opposite of what a GPU does well), and QuickDraw drawing itself on the GPU (keeping guest memory and the GPU in step would cost more than it saves except for whole-screen blits; revisit only if a measured case calls for it).
+
+**Exit:** the JIT is on by default with the corpus walk unchanged; the drawing benchmark and SimTower run at least twice as fast as the C paths; presenting a frame takes no measurable time on the emulator thread.
+
+### M19: Vector and media acceleration
+
+**Goal:** what Mac OS 9 programs did with AltiVec, vecLib, QuickTime's codecs and 3D runs on the host's own vector units, media engines and GPU. Planned 2026-10-25.
+
+- **AltiVec:** the PowerPC G4's vector instructions (Gestalt `ppcf` and `cpuf` saying so only once they exist), interpreted first, then translated by the JIT almost one to one onto NEON (arm64) and SSE (x86-64). Programs and libraries that test for a G4 and use it (games, QuickTime's codecs, MP3 players, Photoshop's filters) take their fast paths.
+- **vecLib on Accelerate:** Mac OS 9's vecLib (vDSP's FFTs and filters, vForce's array maths, vBLAS, vBigNum), a PowerPC library in M17's list, implemented on the host's Accelerate (macOS) and portable C elsewhere: big batches of work, where the host's vector units pay off.
+- **QuickTime's video on the host's decoders:** codecs the host has (H.264 and MPEG-4 in QuickTime 6 era movies, JPEG and Motion JPEG) decoded by VideoToolbox and ImageIO on macOS, with Blue Box's own decoders kept as the fallback and the reference.
+- **3D on Metal:** QuickDraw 3D's renderers and RAVE (`QuickDraw3DRAVELib`, Apple's 3D acceleration interface) drawn with Metal; OpenGL (today on the host's legacy OpenGL, M10) moved to Metal before macOS drops OpenGL.
+- **Looked at and left (2026-10-25):** MathLib on the GPU. Apple's GPUs have no 64-bit floating point in hardware, MathLib is double and double-double precision throughout, and programs call it one value at a time, so a GPU round trip (microseconds) would cost thousands of times a host call (nanoseconds). Its batch counterpart is vecLib, above.
+
+**Exit:** a G4-only program and an AltiVec-using one run with their vector paths; vecLib's `bluebox exports --missing` lists nothing and its FFTs match Accelerate's; an H.264 QuickTime movie plays at full frame rate through VideoToolbox; a QuickDraw 3D and a RAVE program render through Metal.
+
 ### Backlog
 
 Work found along the way that belongs to no milestone yet (2026-10-22):
 
-- **JIT:** CR lookahead across PowerPC blocks, registers kept across blocks, ahead-of-time translation in `bluebox install`, translated floating point, the 68020's memory-indirect modes; turning it on by default once it has run the corpus interactively.
-- **QuickDraw speed:** DrawPicture's decoding (SimTower's scenery) and the general CopyBits path beyond 8-bit srcCopy.
+- **JIT** and **QuickDraw speed:** moved to M18 (2026-10-25).
 - **Redraw check:** about 200 programs redraw differently from their first drawing (`--redraw-check`, 2026-10-16), many as a Mac did; to be judged against the oracle.
 - **Converters and international resources:** a program's own Unicode fallback handler, stateful encodings (ISO-2022, HZ, UTF-7) across calls, a better sniffer, CountUnicodeMappings and the TEC plug-in interface; itlm, itl5, IUDateString with itl1's abbreviations, StyledLineBreak on the line-break table, IntlTokenize; and the loop in Apple's own Text Encoding Converter (its INIT's slot in the international globals).
 - **OpenGL:** colour-index mode, accumulation buffers, the imaging subset, GLU's tessellators and NURBS, aglSetFullScreen changing the display's resolution.
