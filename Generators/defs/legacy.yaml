@@ -635,3 +635,329 @@
       - name: paramBlock
         type: Ptr
     cfm: InterfaceLib
+
+# ---- The Data Access Manager (dbaccess.c): _Pack13 ($A82F), Pascal
+# arguments, MOVE.W #selector,D0 (the arguments' size in words in its
+# high byte). ----
+- dispatcher:
+    name: Pack13
+    trap: 0xA82F
+    selector-location: D0W
+
+- function:
+    name: InitDBPack
+    return: OSErr
+    args:
+      - name: version
+        type: INTEGER
+    dispatcher: Pack13
+    selector: 0x0100
+
+- function:
+    name: DBInit
+    return: OSErr
+    args:
+      - name: sessID
+        type: Ptr
+      - name: ddevName
+        type: Ptr
+      - name: host
+        type: Ptr
+      - name: user
+        type: Ptr
+      - name: passwd
+        type: Ptr
+      - name: connStr
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0E02
+
+- function:
+    name: DBEnd
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0403
+
+- function:
+    name: DBGetConnInfo
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: sessNum
+        type: INTEGER
+      - name: returnedID
+        type: Ptr
+      - name: version
+        type: Ptr
+      - name: ddevName
+        type: Ptr
+      - name: host
+        type: Ptr
+      - name: user
+        type: Ptr
+      - name: network
+        type: Ptr
+      - name: connStr
+        type: Ptr
+      - name: start
+        type: Ptr
+      - name: state
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x1704
+
+- function:
+    name: DBGetSessionNum
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: sessNum
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0605
+
+- function:
+    name: DBSend
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: text
+        type: Ptr
+      - name: len
+        type: INTEGER
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0706
+
+- function:
+    name: DBSendItem
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: dataType
+        type: OSType
+      - name: len
+        type: INTEGER
+      - name: places
+        type: INTEGER
+      - name: flags
+        type: INTEGER
+      - name: buffer
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0B07
+
+- function:
+    name: DBExec
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0408
+
+- function:
+    name: DBState
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0409
+
+- function:
+    name: DBGetErr
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: err1
+        type: Ptr
+      - name: err2
+        type: Ptr
+      - name: item1
+        type: Ptr
+      - name: item2
+        type: Ptr
+      - name: errorMsg
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0E0A
+
+- function:
+    name: DBBreak
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: abort
+        type: Boolean
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x050B
+
+- function:
+    name: DBGetItem
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: timeout
+        type: LONGINT
+      - name: dataType
+        type: Ptr
+      - name: len
+        type: Ptr
+      - name: places
+        type: Ptr
+      - name: flags
+        type: Ptr
+      - name: buffer
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x100C
+
+- function:
+    name: DBUnGetItem
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x040D
+
+- function:
+    name: DBKill
+    return: OSErr
+    args:
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x020E
+
+- function:
+    name: DBGetNewQuery
+    return: OSErr
+    args:
+      - name: queryID
+        type: INTEGER
+      - name: query
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x030F
+
+- function:
+    name: DBDisposeQuery
+    return: OSErr
+    args:
+      - name: query
+        type: Handle
+    dispatcher: Pack13
+    selector: 0x0210
+
+- function:
+    name: DBStartQuery
+    return: OSErr
+    args:
+      - name: sessID
+        type: Ptr
+      - name: query
+        type: Handle
+      - name: statusProc
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0811
+
+- function:
+    name: DBGetQueryResults
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: results
+        type: Ptr
+      - name: timeout
+        type: LONGINT
+      - name: statusProc
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0A12
+
+- function:
+    name: DBResultsToText
+    return: OSErr
+    args:
+      - name: results
+        type: Ptr
+      - name: theText
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0413
+
+- function:
+    name: DBInstallResultHandler
+    return: OSErr
+    args:
+      - name: dataType
+        type: OSType
+      - name: theHandler
+        type: Ptr
+      - name: isSysHandler
+        type: Boolean
+    dispatcher: Pack13
+    selector: 0x0514
+
+- function:
+    name: DBRemoveResultHandler
+    return: OSErr
+    args:
+      - name: dataType
+        type: OSType
+    dispatcher: Pack13
+    selector: 0x0215
+
+- function:
+    name: DBGetResultHandler
+    return: OSErr
+    args:
+      - name: dataType
+        type: OSType
+      - name: theHandler
+        type: Ptr
+      - name: getSysHandler
+        type: Boolean
+    dispatcher: Pack13
+    selector: 0x0516

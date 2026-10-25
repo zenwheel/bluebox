@@ -160,6 +160,7 @@ const char *const tb_trap_names[1024] = {
     [0x028] = "ShowDialogItem",
     [0x02D] = "Pack11",
     [0x02E] = "Pack12",
+    [0x02F] = "Pack13",
     [0x030] = "Pack14",
     [0x031] = "Pack15",
     [0x032] = "GXGraphicsDispatch",
@@ -3047,6 +3048,276 @@ static void glue_CutMovieSelection(cpu68k *c, uint16_t trapword)
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int32_t r = tb_CutMovieSelection(a_theMovie);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBBreak(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    int8_t a_abort = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBBreak(a_sessID, a_abort, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBDisposeQuery(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_query = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DBDisposeQuery(a_query);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBEnd(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBEnd(a_sessID, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBExec(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBExec(a_sessID, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBGetConnInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    gaddr a_state = (gaddr)cpu_pop32(c);
+    gaddr a_start = (gaddr)cpu_pop32(c);
+    gaddr a_connStr = (gaddr)cpu_pop32(c);
+    gaddr a_network = (gaddr)cpu_pop32(c);
+    gaddr a_user = (gaddr)cpu_pop32(c);
+    gaddr a_host = (gaddr)cpu_pop32(c);
+    gaddr a_ddevName = (gaddr)cpu_pop32(c);
+    gaddr a_version = (gaddr)cpu_pop32(c);
+    gaddr a_returnedID = (gaddr)cpu_pop32(c);
+    int16_t a_sessNum = (int16_t)cpu_pop16(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBGetConnInfo(a_sessID, a_sessNum, a_returnedID, a_version, a_ddevName, a_host, a_user, a_network, a_connStr, a_start, a_state, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBGetErr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    gaddr a_errorMsg = (gaddr)cpu_pop32(c);
+    gaddr a_item2 = (gaddr)cpu_pop32(c);
+    gaddr a_item1 = (gaddr)cpu_pop32(c);
+    gaddr a_err2 = (gaddr)cpu_pop32(c);
+    gaddr a_err1 = (gaddr)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBGetErr(a_sessID, a_err1, a_err2, a_item1, a_item2, a_errorMsg, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBGetItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    gaddr a_flags = (gaddr)cpu_pop32(c);
+    gaddr a_places = (gaddr)cpu_pop32(c);
+    gaddr a_len = (gaddr)cpu_pop32(c);
+    gaddr a_dataType = (gaddr)cpu_pop32(c);
+    int32_t a_timeout = (int32_t)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBGetItem(a_sessID, a_timeout, a_dataType, a_len, a_places, a_flags, a_buffer, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBGetNewQuery(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_query = (gaddr)cpu_pop32(c);
+    int16_t a_queryID = (int16_t)cpu_pop16(c);
+    int16_t r = tb_DBGetNewQuery(a_queryID, a_query);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBGetQueryResults(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    gaddr a_statusProc = (gaddr)cpu_pop32(c);
+    int32_t a_timeout = (int32_t)cpu_pop32(c);
+    gaddr a_results = (gaddr)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBGetQueryResults(a_sessID, a_results, a_timeout, a_statusProc, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBGetResultHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_getSysHandler = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theHandler = (gaddr)cpu_pop32(c);
+    int32_t a_dataType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBGetResultHandler(a_dataType, a_theHandler, a_getSysHandler);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBGetSessionNum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    gaddr a_sessNum = (gaddr)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBGetSessionNum(a_sessID, a_sessNum, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBInit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    gaddr a_connStr = (gaddr)cpu_pop32(c);
+    gaddr a_passwd = (gaddr)cpu_pop32(c);
+    gaddr a_user = (gaddr)cpu_pop32(c);
+    gaddr a_host = (gaddr)cpu_pop32(c);
+    gaddr a_ddevName = (gaddr)cpu_pop32(c);
+    gaddr a_sessID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DBInit(a_sessID, a_ddevName, a_host, a_user, a_passwd, a_connStr, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBInstallResultHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_isSysHandler = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theHandler = (gaddr)cpu_pop32(c);
+    int32_t a_dataType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBInstallResultHandler(a_dataType, a_theHandler, a_isSysHandler);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBKill(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DBKill(a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBRemoveResultHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dataType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBRemoveResultHandler(a_dataType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBResultsToText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theText = (gaddr)cpu_pop32(c);
+    gaddr a_results = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DBResultsToText(a_results, a_theText);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBSend(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    int16_t a_len = (int16_t)cpu_pop16(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBSend(a_sessID, a_text, a_len, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBSendItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    int16_t a_flags = (int16_t)cpu_pop16(c);
+    int16_t a_places = (int16_t)cpu_pop16(c);
+    int16_t a_len = (int16_t)cpu_pop16(c);
+    int32_t a_dataType = (int32_t)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBSendItem(a_sessID, a_dataType, a_len, a_places, a_flags, a_buffer, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBStartQuery(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    gaddr a_statusProc = (gaddr)cpu_pop32(c);
+    gaddr a_query = (gaddr)cpu_pop32(c);
+    gaddr a_sessID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DBStartQuery(a_sessID, a_query, a_statusProc, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBState(a_sessID, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DBUnGetItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_asyncPB = (gaddr)cpu_pop32(c);
+    int32_t a_sessID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DBUnGetItem(a_sessID, a_asyncPB);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9826,6 +10097,16 @@ static void glue_InitCursor(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_InitCursor();
+    cpu_push32(c, ret);
+}
+
+static void glue_InitDBPack(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_version = (int16_t)cpu_pop16(c);
+    int16_t r = tb_InitDBPack(a_version);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -21048,6 +21329,28 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA82E, (int32_t)0x7u, "HSV2RGB", CONV_STACK, 8, 0, glue_HSV2RGB},
     {0xA82E, (int32_t)0x8u, "RGB2HSV", CONV_STACK, 8, 0, glue_RGB2HSV},
     {0xA82E, (int32_t)0x9u, "GetColor", CONV_STACK, 16, 2, glue_GetColor},
+    {0xA82F, (int32_t)0x100u, "InitDBPack", CONV_STACK, 2, 2, glue_InitDBPack},
+    {0xA82F, (int32_t)0x20Eu, "DBKill", CONV_STACK, 4, 2, glue_DBKill},
+    {0xA82F, (int32_t)0x210u, "DBDisposeQuery", CONV_STACK, 4, 2, glue_DBDisposeQuery},
+    {0xA82F, (int32_t)0x215u, "DBRemoveResultHandler", CONV_STACK, 4, 2, glue_DBRemoveResultHandler},
+    {0xA82F, (int32_t)0x30Fu, "DBGetNewQuery", CONV_STACK, 6, 2, glue_DBGetNewQuery},
+    {0xA82F, (int32_t)0x403u, "DBEnd", CONV_STACK, 8, 2, glue_DBEnd},
+    {0xA82F, (int32_t)0x408u, "DBExec", CONV_STACK, 8, 2, glue_DBExec},
+    {0xA82F, (int32_t)0x409u, "DBState", CONV_STACK, 8, 2, glue_DBState},
+    {0xA82F, (int32_t)0x40Du, "DBUnGetItem", CONV_STACK, 8, 2, glue_DBUnGetItem},
+    {0xA82F, (int32_t)0x413u, "DBResultsToText", CONV_STACK, 8, 2, glue_DBResultsToText},
+    {0xA82F, (int32_t)0x50Bu, "DBBreak", CONV_STACK, 10, 2, glue_DBBreak},
+    {0xA82F, (int32_t)0x514u, "DBInstallResultHandler", CONV_STACK, 10, 2, glue_DBInstallResultHandler},
+    {0xA82F, (int32_t)0x516u, "DBGetResultHandler", CONV_STACK, 10, 2, glue_DBGetResultHandler},
+    {0xA82F, (int32_t)0x605u, "DBGetSessionNum", CONV_STACK, 12, 2, glue_DBGetSessionNum},
+    {0xA82F, (int32_t)0x706u, "DBSend", CONV_STACK, 14, 2, glue_DBSend},
+    {0xA82F, (int32_t)0x811u, "DBStartQuery", CONV_STACK, 16, 2, glue_DBStartQuery},
+    {0xA82F, (int32_t)0xA12u, "DBGetQueryResults", CONV_STACK, 20, 2, glue_DBGetQueryResults},
+    {0xA82F, (int32_t)0xB07u, "DBSendItem", CONV_STACK, 22, 2, glue_DBSendItem},
+    {0xA82F, (int32_t)0xE02u, "DBInit", CONV_STACK, 28, 2, glue_DBInit},
+    {0xA82F, (int32_t)0xE0Au, "DBGetErr", CONV_STACK, 28, 2, glue_DBGetErr},
+    {0xA82F, (int32_t)0x100Cu, "DBGetItem", CONV_STACK, 32, 2, glue_DBGetItem},
+    {0xA82F, (int32_t)0x1704u, "DBGetConnInfo", CONV_STACK, 46, 2, glue_DBGetConnInfo},
     {0xA830, (int32_t)0x2u, "HMRemoveBalloon", CONV_STACK, 0, 2, glue_HMRemoveBalloon},
     {0xA830, (int32_t)0x3u, "HMGetBalloons", CONV_STACK, 0, 2, glue_HMGetBalloons},
     {0xA830, (int32_t)0x7u, "HMIsBalloon", CONV_STACK, 0, 2, glue_HMIsBalloon},
@@ -21976,6 +22279,7 @@ const dispatcher_info dispatchers[] = {
     {0xA9E7, "Pack0", "StackW"},
     {0xA82D, "Pack11", "D0W"},
     {0xA82E, "Pack12", "StackW"},
+    {0xA82F, "Pack13", "D0W"},
     {0xA830, "Pack14", "D0W"},
     {0xA831, "Pack15", "D0W"},
     {0xA9E9, "Pack2", "StackW"},

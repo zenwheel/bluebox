@@ -23183,6 +23183,220 @@ static void ppcglue_OpenSlotAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_InitDBPack(ppc_cpu *c)
+{
+    int16_t a_version = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitDBPack(a_version);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBInit(ppc_cpu *c)
+{
+    gaddr a_sessID = (gaddr)c->gpr[3];
+    gaddr a_ddevName = (gaddr)c->gpr[4];
+    gaddr a_host = (gaddr)c->gpr[5];
+    gaddr a_user = (gaddr)c->gpr[6];
+    gaddr a_passwd = (gaddr)c->gpr[7];
+    gaddr a_connStr = (gaddr)c->gpr[8];
+    gaddr a_asyncPB = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBInit(a_sessID, a_ddevName, a_host, a_user, a_passwd, a_connStr, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBEnd(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_asyncPB = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBEnd(a_sessID, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetConnInfo(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    int16_t a_sessNum = (int16_t)c->gpr[4];
+    gaddr a_returnedID = (gaddr)c->gpr[5];
+    gaddr a_version = (gaddr)c->gpr[6];
+    gaddr a_ddevName = (gaddr)c->gpr[7];
+    gaddr a_host = (gaddr)c->gpr[8];
+    gaddr a_user = (gaddr)c->gpr[9];
+    gaddr a_network = (gaddr)c->gpr[10];
+    gaddr a_connStr = (gaddr)rd32(c->gpr[1] + 56);
+    gaddr a_start = (gaddr)rd32(c->gpr[1] + 60);
+    gaddr a_state = (gaddr)rd32(c->gpr[1] + 64);
+    gaddr a_asyncPB = (gaddr)rd32(c->gpr[1] + 68);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetConnInfo(a_sessID, a_sessNum, a_returnedID, a_version, a_ddevName, a_host, a_user, a_network, a_connStr, a_start, a_state, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetSessionNum(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_sessNum = (gaddr)c->gpr[4];
+    gaddr a_asyncPB = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetSessionNum(a_sessID, a_sessNum, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBSend(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_text = (gaddr)c->gpr[4];
+    int16_t a_len = (int16_t)c->gpr[5];
+    gaddr a_asyncPB = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBSend(a_sessID, a_text, a_len, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBSendItem(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    int32_t a_dataType = (int32_t)c->gpr[4];
+    int16_t a_len = (int16_t)c->gpr[5];
+    int16_t a_places = (int16_t)c->gpr[6];
+    int16_t a_flags = (int16_t)c->gpr[7];
+    gaddr a_buffer = (gaddr)c->gpr[8];
+    gaddr a_asyncPB = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBSendItem(a_sessID, a_dataType, a_len, a_places, a_flags, a_buffer, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBExec(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_asyncPB = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBExec(a_sessID, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBState(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_asyncPB = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBState(a_sessID, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetErr(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_err1 = (gaddr)c->gpr[4];
+    gaddr a_err2 = (gaddr)c->gpr[5];
+    gaddr a_item1 = (gaddr)c->gpr[6];
+    gaddr a_item2 = (gaddr)c->gpr[7];
+    gaddr a_errorMsg = (gaddr)c->gpr[8];
+    gaddr a_asyncPB = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetErr(a_sessID, a_err1, a_err2, a_item1, a_item2, a_errorMsg, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBBreak(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    int8_t a_abort = (int8_t)c->gpr[4];
+    gaddr a_asyncPB = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBBreak(a_sessID, a_abort, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetItem(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    int32_t a_timeout = (int32_t)c->gpr[4];
+    gaddr a_dataType = (gaddr)c->gpr[5];
+    gaddr a_len = (gaddr)c->gpr[6];
+    gaddr a_places = (gaddr)c->gpr[7];
+    gaddr a_flags = (gaddr)c->gpr[8];
+    gaddr a_buffer = (gaddr)c->gpr[9];
+    gaddr a_asyncPB = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetItem(a_sessID, a_timeout, a_dataType, a_len, a_places, a_flags, a_buffer, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBUnGetItem(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_asyncPB = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBUnGetItem(a_sessID, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBKill(ppc_cpu *c)
+{
+    gaddr a_asyncPB = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBKill(a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetNewQuery(ppc_cpu *c)
+{
+    int16_t a_queryID = (int16_t)c->gpr[3];
+    gaddr a_query = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetNewQuery(a_queryID, a_query);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBDisposeQuery(ppc_cpu *c)
+{
+    gaddr a_query = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBDisposeQuery(a_query);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBStartQuery(ppc_cpu *c)
+{
+    gaddr a_sessID = (gaddr)c->gpr[3];
+    gaddr a_query = (gaddr)c->gpr[4];
+    gaddr a_statusProc = (gaddr)c->gpr[5];
+    gaddr a_asyncPB = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBStartQuery(a_sessID, a_query, a_statusProc, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetQueryResults(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_results = (gaddr)c->gpr[4];
+    int32_t a_timeout = (int32_t)c->gpr[5];
+    gaddr a_statusProc = (gaddr)c->gpr[6];
+    gaddr a_asyncPB = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetQueryResults(a_sessID, a_results, a_timeout, a_statusProc, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBResultsToText(ppc_cpu *c)
+{
+    gaddr a_results = (gaddr)c->gpr[3];
+    gaddr a_theText = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBResultsToText(a_results, a_theText);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBInstallResultHandler(ppc_cpu *c)
+{
+    int32_t a_dataType = (int32_t)c->gpr[3];
+    gaddr a_theHandler = (gaddr)c->gpr[4];
+    int8_t a_isSysHandler = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBInstallResultHandler(a_dataType, a_theHandler, a_isSysHandler);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBRemoveResultHandler(ppc_cpu *c)
+{
+    int32_t a_dataType = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBRemoveResultHandler(a_dataType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetResultHandler(ppc_cpu *c)
+{
+    int32_t a_dataType = (int32_t)c->gpr[3];
+    gaddr a_theHandler = (gaddr)c->gpr[4];
+    int8_t a_getSysHandler = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetResultHandler(a_dataType, a_theHandler, a_getSysHandler);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -35373,6 +35587,27 @@ const ppc_export ppc_exports[] = {
     {"CustomGetFilePreview", ppcglue_CustomGetFilePreview},
     {"CustomPutFile", ppcglue_CustomPutFile},
     {"CutMovieSelection", ppcglue_CutMovieSelection},
+    {"DBBreak", ppcglue_DBBreak},
+    {"DBDisposeQuery", ppcglue_DBDisposeQuery},
+    {"DBEnd", ppcglue_DBEnd},
+    {"DBExec", ppcglue_DBExec},
+    {"DBGetConnInfo", ppcglue_DBGetConnInfo},
+    {"DBGetErr", ppcglue_DBGetErr},
+    {"DBGetItem", ppcglue_DBGetItem},
+    {"DBGetNewQuery", ppcglue_DBGetNewQuery},
+    {"DBGetQueryResults", ppcglue_DBGetQueryResults},
+    {"DBGetResultHandler", ppcglue_DBGetResultHandler},
+    {"DBGetSessionNum", ppcglue_DBGetSessionNum},
+    {"DBInit", ppcglue_DBInit},
+    {"DBInstallResultHandler", ppcglue_DBInstallResultHandler},
+    {"DBKill", ppcglue_DBKill},
+    {"DBRemoveResultHandler", ppcglue_DBRemoveResultHandler},
+    {"DBResultsToText", ppcglue_DBResultsToText},
+    {"DBSend", ppcglue_DBSend},
+    {"DBSendItem", ppcglue_DBSendItem},
+    {"DBStartQuery", ppcglue_DBStartQuery},
+    {"DBState", ppcglue_DBState},
+    {"DBUnGetItem", ppcglue_DBUnGetItem},
     {"DIBadMount", ppcglue_DIBadMount},
     {"DIFormat", ppcglue_DIFormat},
     {"DILoad", ppcglue_DILoad},
@@ -36322,6 +36557,7 @@ const ppc_export ppc_exports[] = {
     {"InitCPort", ppcglue_InitCPort},
     {"InitContextualMenus", ppcglue_InitContextualMenus},
     {"InitCursor", ppcglue_InitCursor},
+    {"InitDBPack", ppcglue_InitDBPack},
     {"InitDateCache", ppcglue_InitDateCache},
     {"InitDialogs", ppcglue_InitDialogs},
     {"InitEditionPackVersion", ppcglue_InitEditionPackVersion},

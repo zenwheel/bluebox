@@ -284,4 +284,72 @@ extension BlueBox {
             #expect(ppcErr("SIntInstall", [el, 2]) == -337)
         }
     }
+
+    /// The Data Access Manager with no database extension installed.
+    @Suite struct DataAccessManager {
+        init() { bootMachine() }
+
+        @Test func noDdevToOpenASessionWith() {
+            let sess = tb_NewPtr(4, false, true), name = tb_NewPtr(64, false, true)
+            guestPString("DAL", at: name)
+            // DBInit before InitDBPack, then InitDBPack(4) and DBInit again.
+            let words: [UInt16] = [
+                0x4267, 0x2F3C, hiWord(sess), loWord(sess), 0x2F3C, hiWord(name), loWord(name),
+                0x42A7, 0x42A7, 0x42A7, 0x42A7, 0x42A7, 0x303C, 0x0E02, 0xA82F, 0x3E1F,
+                0x4267, 0x3F3C, 0x0004, 0x303C, 0x0100, 0xA82F, 0x3C1F,
+                0x4267, 0x2F3C, hiWord(sess), loWord(sess), 0x2F3C, hiWord(name), loWord(name),
+                0x42A7, 0x42A7, 0x42A7, 0x42A7, 0x42A7, 0x303C, 0x0E02, 0xA82F, 0x3A1F,
+                0xA9F4,
+            ]
+            #expect(run68k(words) == "ExitToShell")
+            #expect(Int16(bitPattern: UInt16(g_cpu!.pointee.d.7 & 0xFFFF)) == -813) // rcDBPackNotInited
+            #expect(g_cpu!.pointee.d.6 & 0xFFFF == 0)
+            #expect(Int16(bitPattern: UInt16(g_cpu!.pointee.d.5 & 0xFFFF)) == -808) // rcDBBadDDEV
+            #expect(ppcErr("DBEnd", [1, 0]) == -806 && ppcErr("DBExec", [1, 0]) == -806)
+            #expect(ppcErr("DBGetConnInfo", [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) == -807)
+            #expect(ppcErr("DBKill", [tb_NewPtr(16, false, true)]) == -810)
+            // An asynchronous call's block gets the result as well.
+            let apb = tb_NewPtr(16, false, true)
+            #expect(ppcErr("DBState", [5, apb]) == -806 && Int16(bitPattern: rd16(apb + 4)) == -806)
+            #expect(ppcErr("DBStartQuery", [sess, 0, 0, 0]) == -808)
+            let q = tb_NewPtr(4, false, true)
+            #expect(ppcErr("DBGetNewQuery", [128, q]) == -192 && rd32(q) == 0) // no 'qrsc' 128
+            let qh = tb_NewHandle(1118, false, true), list = tb_NewHandle(4, false, true)
+            wr32(rd32(list), tb_NewHandle(10, false, false))
+            wr16(rd32(qh) + 1098, 1)
+            wr32(rd32(qh) + 1100, list)
+            #expect(ppcErr("DBDisposeQuery", [qh]) == 0)
+        }
+
+        @Test func resultsBecomeTextThroughTheHandlers() {
+            #expect(ppcErr("InitDBPack", [4]) == 0)
+            // Two rows of a text column and a short column.
+            let types = tb_NewHandle(8, false, false), info = tb_NewHandle(24, false, false)
+            wr32(rd32(types), fourCC("TEXT")); wr32(rd32(types) + 4, fourCC("shor"))
+            let items: [(Int, [UInt8])] = [(2, Array("ab".utf8)), (2, be16(7)), (3, Array("xyz".utf8) + [0]), (2, be16(-1 & 0xFFFF))]
+            let data = tb_NewHandle(Int32(items.reduce(0) { $0 + $1.1.count }), false, false)
+            var at: UInt32 = 0
+            for (i, it) in items.enumerated() {
+                wr16(rd32(info) + UInt32(i * 6), UInt16(it.0)); wr16(rd32(info) + UInt32(i * 6 + 2), 0); wr16(rd32(info) + UInt32(i * 6 + 4), 0)
+                for b in it.1 { wr8(rd32(data) + at, b); at += 1 }
+            }
+            let rr = tb_NewPtr(16, false, true)
+            wr16(rr, 2); wr16(rr + 2, 2); wr32(rr + 4, types); wr32(rr + 8, data); wr32(rr + 12, info)
+            let out = tb_NewPtr(4, false, true)
+            #expect(ppcErr("DBResultsToText", [rr, out]) == 0)
+            let text = rd32(out)
+            let n = tb_GetHandleSize(text)
+            #expect(String(decoding: (0..<UInt32(n)).map { rd8(rd32(text) + $0) }, as: UTF8.self) == "ab\t7\rxyz\t-1\r")
+            wr32(rd32(types) + 4, fourCC("blob"))
+            #expect(ppcErr("DBResultsToText", [rr, out]) == -811) // rcDBNoHandler
+
+            // A program's handler, found and removed again.
+            let h = tb_NewPtr(2, false, true), got = tb_NewPtr(4, false, true)
+            #expect(ppcErr("DBInstallResultHandler", [fourCC("blob"), h, 0]) == 0)
+            #expect(ppcErr("DBGetResultHandler", [fourCC("blob"), got, 0]) == 0 && rd32(got) == h)
+            #expect(ppcErr("DBGetResultHandler", [fourCC("blob"), got, 1]) == -811)
+            #expect(ppcErr("DBRemoveResultHandler", [fourCC("blob")]) == 0)
+            #expect(ppcErr("DBRemoveResultHandler", [fourCC("blob")]) == -811)
+        }
+    }
 }

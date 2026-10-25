@@ -21,4 +21,7 @@ void startmgr_get_video(gaddr pb);
 /* scsi.c */
 void scsi_reset(void);
 
+/* dbaccess.c */
+void dbaccess_reset(void);
+
 #endif
