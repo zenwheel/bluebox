@@ -220,6 +220,7 @@ gaddr tb_TempTopMem(void) { return rd32(LM_ApplLimit); }
 gaddr tb_TempNewHandle(int32_t logical_size, gaddr result_code)
 {
     gaddr h = mm_new_handle_in(rd32(LM_ApplZone), (uint32_t)(logical_size < 0 ? 0 : logical_size), false);
+    LOGF(LOG_MEM, "TempNewHandle(%d) -> %08X\n", logical_size, h);
     if (result_code)
         wr16(result_code, rd16(LM_MemErr));
     return h;

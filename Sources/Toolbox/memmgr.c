@@ -1205,6 +1205,7 @@ void raw_InitZone(cpu68k *c, uint16_t tw)
     uint16_t more = rd16(pb + 8);
     gaddr grow = rd32(pb + 10);
     bool inner = zone_of(start) != 0;
+    LOGF(LOG_MEM, "InitZone(%08X..%08X)\n", start, limit);
     mm_init_zone(start, limit, more);
     if (inner && nsubzones < MAX_SUBZONES) {
         subzones[nsubzones].z = start;
