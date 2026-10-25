@@ -98,6 +98,10 @@ int16_t rm_open_path(const char *path, int8_t perm);
 void rm_create_path(const char *path, uint32_t type, uint32_t creator);
 bool rm_path_open(const char *path, bool *in_chain, int16_t *refnum);
 
+/* FSRefs (hfsplus.c): one made for a host path, and the path of one. */
+void hfs_make_fsref(gaddr ref, const char *path);
+int16_t hfs_fsref_path(gaddr ref, char *out, size_t outsize);
+
 /* The HFS Plus calls' state, cleared at each launch (hfsplus.c). */
 void hfsplus_reset(void);
 

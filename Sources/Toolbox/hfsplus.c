@@ -74,6 +74,10 @@ static int16_t ref_path(gaddr ref, char *out, size_t outsize)
     return fm_host_exists(out) && fm_visible(out) ? noErr : fnfErr;
 }
 
+/* For Core Foundation's URLs (carbon_cfurl.c). */
+void hfs_make_fsref(gaddr ref, const char *path) { make_ref(ref, path); }
+int16_t hfs_fsref_path(gaddr ref, char *out, size_t outsize) { return ref_path(ref, out, outsize); }
+
 /* A directory's host path from its FSRef. */
 static int16_t ref_dir(gaddr ref, char *out, size_t outsize)
 {
