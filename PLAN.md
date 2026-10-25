@@ -809,6 +809,8 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** `bluebox exports --missing` lists nothing for MathLib, StdCLib and InterfaceLib; a census of the PowerPC programs reports no missing import from them.
 
+**Status (2026-10-25):** MathLib 149 of 149 (`mathlib.c`; long doubles as double-double in f1/f2, the transcendentals on the head), StdCLib 256 of 256 and 3.7's 312 of 312 (`stdclib*.c`, MPW's `FILE` and `_iob` layouts, descriptors and device switch as StdCLib 3.5 had them), InterfaceLib 2,831 of 2,883: Mac OS 9's File Manager on FSRefs (`hfsplus.c`, also `_HFSDispatch` for 68k), Driver Services, low memory, Component Manager calls, the Dictionary, Text Services and Display Managers (`driverservices.c`, `dictionary.c`, `tsm.c`, `dmgr.c`, `ilmisc.c`), and old hardware as a Mac without it, or real where Blue Box can back it: the PPC Toolbox between runs, ASP and AFP on the AppleTalk stack, file mapping (`scsi.c`, `power.c`, `ppctoolbox.c`, `xpp.c`, `fmap.c` …). Left on purpose: the File System Manager's 50 `UT*` utilities (for file system plug-ins, which manage Apple's own volume and file control blocks), NQDMisc and SndDispVersion (no published signature). Gestalt doesn't yet set gestaltHasHFSPlusAPIs ('fs  ' bit 12), as the System Blue Box reports (7.1, or 8.1 for PowerPC) lacked those calls.
+
 ### M18: Speed on the host's processor and display
 
 **Goal:** heavy programs run well past their original Macs' speed without settings, from the CPU emulators, QuickDraw's pixel work and the display. Planned 2026-10-25, from a review of where the host's hardware could help.
