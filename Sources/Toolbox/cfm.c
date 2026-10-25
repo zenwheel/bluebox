@@ -199,6 +199,13 @@ static void (*export_fn(const char *name))(ppc_cpu *)
 
 void (*cfm_export_fn(const char *name))(ppc_cpu *) { return export_fn(name); }
 
+/* Whether a library's export is ours (bluebox exports), as an import of it
+ * is resolved: a routine by name, data by the data exports. */
+bool machine_provides_export(const char *name, bool data)
+{
+    return (!data && export_fn(name)) || ppc_data_export_known(name);
+}
+
 /* ---------------------------------------------------------------------- */
 /* PEF */
 

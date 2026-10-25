@@ -797,6 +797,18 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Exit:** Document Converter converts a ClarisWorks and a Word 5 document to RTF with the MacLinkPlus translators; SimpleText opens a foreign text document through the Translation Manager; DataViz FileView shows a Word document.
 
+### M17: The system libraries complete
+
+**Goal:** Blue Box's own MathLib, StdCLib and InterfaceLib export everything Mac OS 9's did, from the published interfaces rather than one program at a time, so no PowerPC program stops on a missing import from them. Asked for 2026-10-25. CarbonLib waits (2026-10-25); PrivateInterfaceLib was never published and stays on demand.
+
+- **The checklist:** `bluebox exports` reads a library's exports (an Apple stub library or the library itself) and lists those Blue Box lacks. Against Universal Interfaces 3.4's stub libraries (2026-10-25): MathLib 83 of 149, StdCLib 80 of 256 (3.7: of 312), InterfaceLib 2,196 of 2,883. Signatures from Universal Interfaces 3.4 (MPW-GM with Apple's final updates), which the user keeps outside the repository; Retro68's ImportLibraries (3.4.1) name what 3.4 lacks.
+- **MathLib:** the long double routines (MathLib's long double is a double-double), classification, the environment and decimal conversions.
+- **StdCLib:** MPW's C library whole: stdio with MPW's `FILE` layout (programs' `getc` and `putc` macros read it), files through the File Manager, time, locale, signals, the Pascal string routines.
+- **InterfaceLib:** Mac OS 9's File Manager (FSRef, forks, iterators, catalog information, Unicode names) and its Alias and Folder Manager calls; the utilities (time conversion, atomic operations, memory, low-memory accessors, component calls, the Display Manager, Text Services, Color Picker, Dictionary Manager); old hardware and networking (SCSI, Slot, Power and Data Access Managers, AppleTalk, PPC Toolbox) answering as a Mac without that hardware or service did, with the documented errors.
+- Every routine tested, as the rest.
+
+**Exit:** `bluebox exports --missing` lists nothing for MathLib, StdCLib and InterfaceLib; a census of the PowerPC programs reports no missing import from them.
+
 ### Backlog
 
 Work found along the way that belongs to no milestone yet (2026-10-22):

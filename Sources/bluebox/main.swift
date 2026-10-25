@@ -5,6 +5,7 @@
 //   bluebox import <macbinary-file> <dest-dir>
 //   bluebox rsrc <file>
 //   bluebox inspect <file> [--export DIR] [--type TYPE] [--id N]
+//   bluebox exports <PowerPC library>... [--missing]
 
 #if canImport(Darwin)
 import Darwin
@@ -174,6 +175,10 @@ func usage() -> Never {
           Decode a QuickTime movie's pictures and sound with Blue Box's own
           decoders, back to back, and say how many times faster than real time
           that is (1x or better plays at full frame rate).
+      bluebox exports <PowerPC library>... [--missing]
+          Read a PowerPC library's exports (a stub library from Universal
+          Interfaces, or the library itself) and say which Blue Box provides;
+          --missing lists every one it lacks.
       bluebox inspect <file> [--export dir] [--type T] [--id N]
           List a file's resources (AppleDouble or MacBinary, or an application
           as bluebox apps lists it) with what they hold: strings, picture and
@@ -1090,6 +1095,64 @@ func rsrcCommand(_ args: [String]) {
     }
 }
 
+/// bluebox exports: a PowerPC library's exports, from every PEF container in
+/// its data fork, against what Blue Box provides (an Apple stub library or
+/// the real one gives the list); --missing lists only those it lacks.
+func exportsCommand(_ args: [String]) {
+    var files: [String] = []
+    var missingOnly = false
+    for a in args {
+        if a == "--missing" { missingOnly = true } else if a.hasPrefix("-") { usage() } else { files.append(a) }
+    }
+    guard !files.isEmpty else { usage() }
+    for file in files {
+        guard let data = FileManager.default.contents(atPath: file) else { fail("can't read \(file)") }
+        let exports = pefExports([UInt8](data))
+        var missing: [String] = []
+        for (name, isData) in exports where !machine_provides_export(name, isData) {
+            missing.append(isData ? "\(name) (data)" : name)
+        }
+        print("\((file as NSString).lastPathComponent): \(exports.count) exports, \(exports.count - missing.count) provided, \(missing.count) missing")
+        if missingOnly || exports.count < 2000 {
+            for m in missing { print("  \(m)") }
+        }
+    }
+}
+
+/// The exported names of every PEF container in d, sorted, with whether
+/// each is data (classes 1 and 3: data and TOC) rather than code.
+func pefExports(_ d: [UInt8]) -> [(String, Bool)] {
+    func be32(_ o: Int) -> Int { Int(d[o]) << 24 | Int(d[o + 1]) << 16 | Int(d[o + 2]) << 8 | Int(d[o + 3]) }
+    func be16(_ o: Int) -> Int { Int(d[o]) << 8 | Int(d[o + 1]) }
+    var seen: [String: Bool] = [:]
+    let magic: [UInt8] = Array("Joy!peff".utf8)
+    var base = 0
+    while base + 40 <= d.count {
+        guard Array(d[base..<base + 8]) == magic else { base += 1; continue }
+        defer { base += 8 }
+        let nsec = be16(base + 32)
+        var loader: Int?
+        for i in 0..<nsec where base + 40 + (i + 1) * 28 <= d.count {
+            let h = base + 40 + i * 28
+            if d[h + 24] == 4 { loader = base + be32(h + 20) }
+        }
+        guard let l = loader, l + 56 <= d.count else { continue }
+        let strings = be32(l + 40), hashOffset = be32(l + 44), power = be32(l + 48), count = be32(l + 52)
+        let keys = l + hashOffset + 4 * (1 << power), syms = keys + 4 * count
+        guard power < 24, syms + 10 * count <= d.count else { continue }
+        for i in 0..<count {
+            let length = be32(keys + 4 * i) >> 16
+            let cn = be32(syms + 10 * i)
+            let o = l + strings + (cn & 0xFFFFFF)
+            guard o + length <= d.count else { continue }
+            let name = String(decoding: d[o..<o + length], as: UTF8.self)
+            let cls = (cn >> 24) & 0x0F
+            seen[name] = cls == 1 || cls == 3
+        }
+    }
+    return seen.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+}
+
 /// bluebox inspect: the resources with what is in them, or exported as
 /// host files (--export), all of them or those --type and --id choose.
 func inspectCommand(_ args: [String]) {
@@ -1339,6 +1402,7 @@ case "shell": shellCommand(rest)
 case "set": setCommand(rest)
 case "rsrc": rsrcCommand(rest)
 case "inspect": inspectCommand(rest)
+case "exports": exportsCommand(rest)
 case "themes": themesCommand(rest)
 case "fonts": fontsCommand(rest)
 case "movie-speed": movieSpeedCommand(rest)

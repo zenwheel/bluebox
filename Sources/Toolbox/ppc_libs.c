@@ -2949,6 +2949,18 @@ static gaddr ctype_table(void)
     return t + 1;
 }
 
+/* The data exports ppc_data_export makes, by name only. */
+bool ppc_data_export_known(const char *name)
+{
+    static const char *const names[] = { "__p_CType", "CallComponentUPP", "_DBL_EPSILON", "_DBL_MIN", "_DBL_MAX",
+                                         "pi", "errno", "_IntEnv", "_exit_status", "__target_for_exit", "__NubAt3",
+                                         "__C_phase", "_iob", "StandAlone", "__huge_val" };
+    for (unsigned i = 0; i < sizeof names / sizeof names[0]; i++)
+        if (!strcmp(name, names[i]))
+            return true;
+    return false;
+}
+
 gaddr ppc_data_export(const char *name)
 {
     if (!strcmp(name, "__p_CType")) {

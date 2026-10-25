@@ -13,6 +13,8 @@ typedef enum {
 
 /* Reset everything and set up an empty machine. Returns false on failure. */
 bool machine_boot(bool census);
+/* Whether Blue Box provides a PowerPC library's export (a routine, or data). */
+bool machine_provides_export(const char *name, bool data);
 /* Load an application (AppleDouble data-fork path) and prepare to run it. */
 bool machine_launch(const char *app_path, char *err, size_t errlen);
 /* Run a fat application's PowerPC code rather than its 68k code. */
