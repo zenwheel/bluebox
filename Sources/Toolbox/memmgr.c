@@ -1118,24 +1118,54 @@ bool mm_check_zone(gaddr z)
  * master pointer, and the crash came two redraws on).  False, with the
  * damage logged, when a zone is damaged. */
 static int every = -1;
+static const char *checked_after; /* the call the last check followed */
 
 void machine_set_heap_check(int n) { every = n > 0 ? n : 0; }
 
-bool mm_debug_after_call(const char *name)
+static int heap_check_every(void)
 {
-    static unsigned calls;
     if (every < 0) {
         const char *e = getenv("BLUEBOX_HEAPCHECK");
         every = e ? (atoi(e) > 0 ? atoi(e) : 1) : 0;
     }
-    if (!every || ++calls % (unsigned)every)
-        return true;
+    return every;
+}
+
+static bool zones_intact(void)
+{
     gaddr zones[2] = { rd32(LM_SysZone), rd32(LM_ApplZone) };
     for (int i = 0; i < 2; i++)
-        if (zones[i] && !mm_check_zone(zones[i])) {
-            log_printf("mm: the zone was damaged by %s (or within the %d calls before it)\n", name, every - 1);
+        if (zones[i] && !mm_check_zone(zones[i]))
             return false;
-        }
+    return true;
+}
+
+bool mm_debug_after_call(const char *name)
+{
+    static unsigned calls;
+    if (!heap_check_every() || ++calls % (unsigned)every)
+        return true;
+    checked_after = name;
+    if (!zones_intact()) {
+        log_printf("mm: the zone was damaged by %s (or within the %d calls before it)\n", name, every - 1);
+        return false;
+    }
+    return true;
+}
+
+/* With every call checked, the zones are checked on the way in too, so
+ * damage done by the program's own code between two calls is told from
+ * damage the call does. */
+bool mm_debug_before_call(const char *name)
+{
+    if (heap_check_every() != 1 || !checked_after)
+        return true;
+    if (!zones_intact()) {
+        log_printf("mm: the zone was damaged before %s, since the check after %s: by code run between the two"
+                   " (the program's own, an interrupt task's, or a call's that called back into the program)\n",
+                   name, checked_after);
+        return false;
+    }
     return true;
 }
 

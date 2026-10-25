@@ -75,6 +75,14 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
     }
     trap_set_current_word(0); /* not a trap: no HFS or async bits */
     LOGF(LOG_TRAPS, "%08X PowerPC %s\n", c->lr, natives[index].name);
+    if (!mm_debug_before_call(natives[index].name)) {
+        ppc_halt(c, "heap damaged before %s", natives[index].name);
+        return;
+    }
+    if (!code_check_before_call(natives[index].name)) {
+        ppc_halt(c, "code changed before %s", natives[index].name);
+        return;
+    }
     natives[index].fn(c);
     if (!mm_debug_after_call(natives[index].name))
         ppc_halt(c, "heap damaged by %s", natives[index].name);
