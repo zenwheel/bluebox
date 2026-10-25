@@ -664,6 +664,95 @@ extension BlueBox {
     }
 }
 
+extension BlueBox {
+    /// The Display Manager for the one screen, from PowerPC and 68k code.
+    @Suite struct DisplayManagerCalls {
+        init() { bootMachine() }
+
+        @Test func theOneDisplay() {
+            launchTestApp()
+            _ = initToolbox()
+            let main = rd32(UInt32(LM_MainDevice))
+            #expect(ilCall("DMGetFirstScreenDevice", [1]) == rd32(UInt32(LM_DeviceList)))
+            let id = tb_NewPtr(4, false, true), gd = tb_NewPtr(4, false, true)
+            #expect(ilCall16("DMGetDisplayIDByGDevice", [main, id, 0]) == 0 && rd32(id) == 1)
+            #expect(ilCall16("DMGetDisplayIDByGDevice", [0x1234, id, 0]) == -6229)
+            #expect(ilCall16("DMGetGDeviceByDisplayID", [1, gd, 0]) == 0 && rd32(gd) == main)
+            #expect(ilCall16("DMGetGDeviceByDisplayID", [7, gd, 1]) == 0 && rd32(gd) == main) // failToMain
+
+            // No mirroring, with nothing to mirror to.
+            let flag = tb_NewPtr(2, false, true)
+            #expect(ilCall16("DMQDIsMirroringCapable", [flag]) == 0 && rd8(flag) == 1)
+            #expect(ilCall16("DMCanMirrorNow", [flag]) == 0 && rd8(flag) == 0)
+            #expect(ilCall16("DMIsMirroringOn", [flag]) == 0 && rd8(flag) == 0)
+            #expect(ilCall16("DMMirrorDevices", [main, main, 0]) == -6222)
+            #expect(ilCall16("DMBlockMirroring", []) == 0)
+            #expect(ilCall16("DMMirrorDevices", [main, main, 0]) == -6223)
+            #expect(ilCall16("DMUnblockMirroring", []) == 0)
+            #expect(ilCall16("DMUnmirrorDevice", [main, 0]) == -6225)
+            #expect(ilCall16("DMGetNextMirroredDevice", [main, gd]) == 0 && rd32(gd) == 0)
+
+            // A configuration that changes nothing.
+            let state = tb_NewPtr(4, false, true)
+            #expect(ilCall16("DMBeginConfigureDisplays", [state]) == 0 && rd32(state) != 0)
+            #expect(ilCall16("DMMoveDisplay", [main, 0, 0, rd32(state)]) == 0)
+            #expect(ilCall16("DMMoveDisplay", [main, 10, 0, rd32(state)]) == -6231)
+            #expect(ilCall16("DMDisableDisplay", [main, rd32(state)]) == -6231)
+            #expect(ilCall16("DMRemoveDisplay", [main, rd32(state)]) == -6231)
+            #expect(ilCall16("DMDisposeDisplay", [0x1234, rd32(state)]) == -6229)
+            #expect(ilCall16("DMEnableDisplay", [main, rd32(state)]) == 0)
+            #expect(ilCall16("DMSetMainDisplay", [main, rd32(state)]) == 0)
+            #expect(ilCall16("DMAddDisplay", [main, 0, 0, 0, 0, 0, rd32(state)]) == -6230)
+            #expect(ilCall16("DMNewDisplay", [gd, UInt32(bitPattern: -50), 0, 0, 2, 0, rd32(state)]) == -6228 && rd32(gd) == 0)
+            #expect(ilCall16("DMEndConfigureDisplays", [rd32(state)]) == 0)
+
+            #expect(ilCall16("DMSetDisplayComponent", [main, 0xC10003]) == 0)
+            #expect(ilCall16("DMGetDisplayComponent", [main, id]) == 0 && rd32(id) == 0xC10003)
+            #expect(ilCall16("DMResolveDisplayComponents", []) == 0)
+            #expect(ilCall16("DMDisposePortComponent", [0xC10003]) == -6229)
+            #expect(ilCall16("DMRegisterExtendedNotifyProc", [0x5000, 7, 0, 0]) == 0)
+            #expect(ilCall16("DMRemoveExtendedNotifyProc", [0x5000, 7, 0, 0]) == 0)
+            #expect(ilCall16("DMRemoveExtendedNotifyProc", [0x5000, 7, 0, 0]) == -6229)
+            #expect(ilCall16("DMSendDependentNotification", [fourCC("dpnd"), fourCC("disp"), 1, 0]) == 0)
+            let a5 = tb_NewPtr(4, false, true)
+            #expect(ilCall16("DMGetDisplayMgrA5World", [a5]) == 0 && rd32(a5) == rd32(UInt32(LM_CurrentA5)))
+
+            // The desktop drawn where a rectangle meets it.
+            let r = tb_NewPtr(8, false, true)
+            wr16(r, 100); wr16(r + 2, 100); wr16(r + 4, 120); wr16(r + 6, 120)
+            ilCall("DMDrawDesktopRect", [r])
+            let rgn = tb_NewRgn()
+            tb_RectRgn(rgn, r)
+            ilCall("DMDrawDesktopRegion", [rgn])
+
+            // The mode it is in, which is all that can be set.
+            let sw = tb_NewPtr(12, false, true)
+            #expect(ilCall16("DMGetDisplayMode", [main, sw]) == 0 && rd32(sw + 2) == 0x80)
+            let depth = tb_NewPtr(4, false, true)
+            wr32(depth, UInt32(rd16(sw)))
+            #expect(ilCall16("DMSetDisplayMode", [main, 0x80, depth, 0, 0]) == 0)
+            #expect(ilCall16("DMSetDisplayMode", [main, 0x81, depth, 0, 0]) == -50)
+
+            // From 68k code: DMGetFirstScreenDevice and DMGetDeskRegion.
+            let desk = tb_NewPtr(4, false, true)
+            let reason = run68k([
+                0x42A7,                               // CLR.L -(SP)
+                0x1F3C, 0x0001,                       // MOVE.B #1,-(SP)  activeOnly
+                0x7000, 0xABEB,                       // MOVEQ #0,D0; _DisplayDispatch
+                0x2E1F,                               // MOVE.L (SP)+,D7
+                0x4267,                               // CLR.W -(SP)
+                0x2F3C, hiWord(desk), loWord(desk),   // MOVE.L #desk,-(SP)
+                0x303C, 0x0213, 0xABEB,               // DMGetDeskRegion
+                0x3C1F,                               // MOVE.W (SP)+,D6
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 == rd32(UInt32(LM_DeviceList)))
+            #expect(g_cpu!.pointee.d.6 & 0xFFFF == 0 && rd32(desk) == rd32(UInt32(LM_GrayRgn)))
+        }
+    }
+}
+
 nonisolated(unsafe) var avlDisposed: [UInt32] = []
 nonisolated(unsafe) var avlWalked: [(key: UInt32, level: UInt32)] = []
 

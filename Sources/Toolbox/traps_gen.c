@@ -3266,6 +3266,493 @@ static void glue_DIZero(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DMAddDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    uint32_t a_displayComponent = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_mode = (uint32_t)cpu_pop32(c);
+    int16_t a_driver = (int16_t)cpu_pop16(c);
+    gaddr a_newDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMAddDisplay(a_newDevice, a_driver, a_mode, a_reserved, a_displayID, a_displayComponent, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMBeginConfigureDisplays(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMBeginConfigureDisplays(a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMBlockMirroring(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_DMBlockMirroring();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMCanMirrorNow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_canMirrorNow = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMCanMirrorNow(a_canMirrorNow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMCheckDisplayMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_modeOk = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    gaddr a_switchFlags = (gaddr)cpu_pop32(c);
+    uint32_t a_depthMode = (uint32_t)cpu_pop32(c);
+    uint32_t a_mode = (uint32_t)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMCheckDisplayMode(a_theDevice, a_mode, a_depthMode, a_switchFlags, a_reserved, a_modeOk);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisableDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_disableDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMDisableDisplay(a_disableDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisposeAVComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theAVComponent = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMDisposeAVComponent(a_theAVComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisposeDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_disposeDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMDisposeDisplay(a_disposeDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisposeList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_panelList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMDisposeList(a_panelList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDrawDesktopRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_globalRect = (gaddr)cpu_pop32(c);
+    tb_DMDrawDesktopRect(a_globalRect);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDrawDesktopRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_globalRgn = (gaddr)cpu_pop32(c);
+    tb_DMDrawDesktopRegion(a_globalRgn);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMEnableDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_enableDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMEnableDisplay(a_enableDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMEndConfigureDisplays(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMEndConfigureDisplays(a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDeskRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desktopRegion = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDeskRegion(a_desktopRegion);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDisplayComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayComponent = (gaddr)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDisplayComponent(a_theDevice, a_displayComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDisplayIDByGDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_failToMain = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_displayID = (gaddr)cpu_pop32(c);
+    gaddr a_displayDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDisplayIDByGDevice(a_displayDevice, a_displayID, a_failToMain);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDisplayMgrA5World(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dmA5 = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDisplayMgrA5World(a_dmA5);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDisplayMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_switchInfo = (gaddr)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDisplayMode(a_theDevice, a_switchInfo);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetFirstScreenDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_activeOnly = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr r = tb_DMGetFirstScreenDevice(a_activeOnly);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetGDeviceByDisplayID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_failToMain = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_displayDevice = (gaddr)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetGDeviceByDisplayID(a_displayID, a_displayDevice, a_failToMain);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetIndexedDisplayModeFromList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_userData = (gaddr)cpu_pop32(c);
+    gaddr a_listIterator = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_itemIndex = (uint32_t)cpu_pop32(c);
+    gaddr a_panelList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetIndexedDisplayModeFromList(a_panelList, a_itemIndex, a_reserved, a_listIterator, a_userData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetNextMirroredDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_mirroredDevice = (gaddr)cpu_pop32(c);
+    gaddr a_gDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetNextMirroredDevice(a_gDevice, a_mirroredDevice);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetNextScreenDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_activeOnly = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    gaddr r = tb_DMGetNextScreenDevice(a_theDevice, a_activeOnly);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMIsMirroringOn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_isMirroringOn = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMIsMirroringOn(a_isMirroringOn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMMirrorDevices(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_gD2 = (gaddr)cpu_pop32(c);
+    gaddr a_gD1 = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMMirrorDevices(a_gD1, a_gD2, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMMoveDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t a_y = (int16_t)cpu_pop16(c);
+    int16_t a_x = (int16_t)cpu_pop16(c);
+    gaddr a_moveDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMMoveDisplay(a_moveDevice, a_x, a_y, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    uint32_t a_displayComponent = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_mode = (uint32_t)cpu_pop32(c);
+    int16_t a_driverRefNum = (int16_t)cpu_pop16(c);
+    gaddr a_newDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMNewDisplay(a_newDevice, a_driverRefNum, a_mode, a_reserved, a_displayID, a_displayComponent, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewDisplayModeList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_thePanelList = (gaddr)cpu_pop32(c);
+    gaddr a_thePanelCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_modeListFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewDisplayModeList(a_displayID, a_modeListFlags, a_reserved, a_thePanelCount, a_thePanelList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMQDIsMirroringCapable(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_qdIsMirroringCapable = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMQDIsMirroringCapable(a_qdIsMirroringCapable);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRegisterExtendedNotifyProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_whichPSN = (gaddr)cpu_pop32(c);
+    uint16_t a_notifyOnFlags = (uint16_t)cpu_pop16(c);
+    gaddr a_notifyUserData = (gaddr)cpu_pop32(c);
+    gaddr a_notifyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRegisterExtendedNotifyProc(a_notifyProc, a_notifyUserData, a_notifyOnFlags, a_whichPSN);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRegisterNotifyProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_psn = (gaddr)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRegisterNotifyProc(a_proc, a_psn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRemoveDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_removeDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRemoveDisplay(a_removeDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRemoveExtendedNotifyProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_removeFlags = (uint16_t)cpu_pop16(c);
+    gaddr a_whichPSN = (gaddr)cpu_pop32(c);
+    gaddr a_notifyUserData = (gaddr)cpu_pop32(c);
+    gaddr a_notifyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRemoveExtendedNotifyProc(a_notifyProc, a_notifyUserData, a_whichPSN, a_removeFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRemoveNotifyProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_psn = (gaddr)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRemoveNotifyProc(a_proc, a_psn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMResolveDisplayComponents(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_DMResolveDisplayComponents();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMResumeConfigure(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_reserved1 = (uint32_t)cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMResumeConfigure(a_displayState, a_reserved1);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSendDependentNotification(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_notifyComponent = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    uint32_t a_notifyClass = (uint32_t)cpu_pop32(c);
+    uint32_t a_notifyType = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMSendDependentNotification(a_notifyType, a_notifyClass, a_displayID, a_notifyComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetDisplayComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_displayComponent = (uint32_t)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSetDisplayComponent(a_theDevice, a_displayComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetDisplayMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    gaddr a_depthMode = (gaddr)cpu_pop32(c);
+    uint32_t a_mode = (uint32_t)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSetDisplayMode(a_theDevice, a_mode, a_depthMode, a_reserved, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetMainDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_newMainDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSetMainDisplay(a_newMainDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSuspendConfigure(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_reserved1 = (uint32_t)cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSuspendConfigure(a_displayState, a_reserved1);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMUnblockMirroring(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_DMUnblockMirroring();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMUnmirrorDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_gDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMUnmirrorDevice(a_gDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DTInstall(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20426,7 +20913,49 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA53, (int32_t)0x703u, "InsertRecordToDictionary", CONV_STACK, 14, 2, glue_InsertRecordToDictionary},
     {0xAA53, (int32_t)0x805u, "FindRecordInDictionary", CONV_STACK, 16, 2, glue_FindRecordInDictionary},
     {0xAA53, (int32_t)0xA06u, "FindRecordByIndexInDictionary", CONV_STACK, 20, 2, glue_FindRecordByIndexInDictionary},
-    {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, 0},
+    {0xABEB, (int32_t)0x0u, "DMGetFirstScreenDevice", CONV_STACK, 2, 4, glue_DMGetFirstScreenDevice},
+    {0xABEB, (int32_t)0x1u, "DMGetNextScreenDevice", CONV_STACK, 6, 4, glue_DMGetNextScreenDevice},
+    {0xABEB, (int32_t)0x2u, "DMDrawDesktopRect", CONV_STACK, 4, 0, glue_DMDrawDesktopRect},
+    {0xABEB, (int32_t)0x3u, "DMDrawDesktopRegion", CONV_STACK, 4, 0, glue_DMDrawDesktopRegion},
+    {0xABEB, (int32_t)0x1Cu, "DMBlockMirroring", CONV_STACK, 0, 2, glue_DMBlockMirroring},
+    {0xABEB, (int32_t)0x1Du, "DMUnblockMirroring", CONV_STACK, 0, 2, glue_DMUnblockMirroring},
+    {0xABEB, (int32_t)0x25u, "DMResolveDisplayComponents", CONV_STACK, 0, 2, glue_DMResolveDisplayComponents},
+    {0xABEB, (int32_t)0x206u, "DMBeginConfigureDisplays", CONV_STACK, 4, 2, glue_DMBeginConfigureDisplays},
+    {0xABEB, (int32_t)0x207u, "DMEndConfigureDisplays", CONV_STACK, 4, 2, glue_DMEndConfigureDisplays},
+    {0xABEB, (int32_t)0x213u, "DMGetDeskRegion", CONV_STACK, 4, 2, glue_DMGetDeskRegion},
+    {0xABEB, (int32_t)0x216u, "DMQDIsMirroringCapable", CONV_STACK, 4, 2, glue_DMQDIsMirroringCapable},
+    {0xABEB, (int32_t)0x217u, "DMCanMirrorNow", CONV_STACK, 4, 2, glue_DMCanMirrorNow},
+    {0xABEB, (int32_t)0x218u, "DMIsMirroringOn", CONV_STACK, 4, 2, glue_DMIsMirroringOn},
+    {0xABEB, (int32_t)0x21Eu, "DMGetDisplayMgrA5World", CONV_STACK, 4, 2, glue_DMGetDisplayMgrA5World},
+    {0xABEB, (int32_t)0x22Cu, "DMDisposeList", CONV_STACK, 4, 2, glue_DMDisposeList},
+    {0xABEB, (int32_t)0x231u, "DMDisposeAVComponent", CONV_STACK, 4, 2, glue_DMDisposeAVComponent},
+    {0xABEB, (int32_t)0x40Au, "DMDisableDisplay", CONV_STACK, 8, 2, glue_DMDisableDisplay},
+    {0xABEB, (int32_t)0x40Bu, "DMEnableDisplay", CONV_STACK, 8, 2, glue_DMEnableDisplay},
+    {0xABEB, (int32_t)0x40Cu, "DMRemoveDisplay", CONV_STACK, 8, 2, glue_DMRemoveDisplay},
+    {0xABEB, (int32_t)0x410u, "DMSetMainDisplay", CONV_STACK, 8, 2, glue_DMSetMainDisplay},
+    {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, glue_DMRegisterNotifyProc},
+    {0xABEB, (int32_t)0x415u, "DMRemoveNotifyProc", CONV_STACK, 8, 2, glue_DMRemoveNotifyProc},
+    {0xABEB, (int32_t)0x41Au, "DMUnmirrorDevice", CONV_STACK, 8, 2, glue_DMUnmirrorDevice},
+    {0xABEB, (int32_t)0x41Bu, "DMGetNextMirroredDevice", CONV_STACK, 8, 2, glue_DMGetNextMirroredDevice},
+    {0xABEB, (int32_t)0x421u, "DMSetDisplayComponent", CONV_STACK, 8, 2, glue_DMSetDisplayComponent},
+    {0xABEB, (int32_t)0x422u, "DMGetDisplayComponent", CONV_STACK, 8, 2, glue_DMGetDisplayComponent},
+    {0xABEB, (int32_t)0x424u, "DMDisposeDisplay", CONV_STACK, 8, 2, glue_DMDisposeDisplay},
+    {0xABEB, (int32_t)0x43Eu, "DMGetDisplayMode", CONV_STACK, 8, 2, glue_DMGetDisplayMode},
+    {0xABEB, (int32_t)0x4E8u, "DMResumeConfigure", CONV_STACK, 8, 2, glue_DMResumeConfigure},
+    {0xABEB, (int32_t)0x4E9u, "DMSuspendConfigure", CONV_STACK, 8, 2, glue_DMSuspendConfigure},
+    {0xABEB, (int32_t)0x51Fu, "DMGetDisplayIDByGDevice", CONV_STACK, 10, 2, glue_DMGetDisplayIDByGDevice},
+    {0xABEB, (int32_t)0x520u, "DMGetGDeviceByDisplayID", CONV_STACK, 10, 2, glue_DMGetGDeviceByDisplayID},
+    {0xABEB, (int32_t)0x609u, "DMMoveDisplay", CONV_STACK, 12, 2, glue_DMMoveDisplay},
+    {0xABEB, (int32_t)0x619u, "DMMirrorDevices", CONV_STACK, 12, 2, glue_DMMirrorDevices},
+    {0xABEB, (int32_t)0x726u, "DMRemoveExtendedNotifyProc", CONV_STACK, 14, 2, glue_DMRemoveExtendedNotifyProc},
+    {0xABEB, (int32_t)0x7EFu, "DMRegisterExtendedNotifyProc", CONV_STACK, 14, 2, glue_DMRegisterExtendedNotifyProc},
+    {0xABEB, (int32_t)0x830u, "DMSendDependentNotification", CONV_STACK, 16, 2, glue_DMSendDependentNotification},
+    {0xABEB, (int32_t)0xA11u, "DMSetDisplayMode", CONV_STACK, 20, 2, glue_DMSetDisplayMode},
+    {0xABEB, (int32_t)0xA36u, "DMNewDisplayModeList", CONV_STACK, 20, 2, glue_DMNewDisplayModeList},
+    {0xABEB, (int32_t)0xA37u, "DMGetIndexedDisplayModeFromList", CONV_STACK, 20, 2, glue_DMGetIndexedDisplayModeFromList},
+    {0xABEB, (int32_t)0xC12u, "DMCheckDisplayMode", CONV_STACK, 24, 2, glue_DMCheckDisplayMode},
+    {0xABEB, (int32_t)0xD08u, "DMAddDisplay", CONV_STACK, 26, 2, glue_DMAddDisplay},
+    {0xABEB, (int32_t)0xD23u, "DMNewDisplay", CONV_STACK, 26, 2, glue_DMNewDisplay},
     {0xABED, (int32_t)0x1u, "InstallTrackingHandler", CONV_STACK, 12, 2, glue_InstallTrackingHandler},
     {0xABED, (int32_t)0x2u, "InstallReceiveHandler", CONV_STACK, 12, 2, glue_InstallReceiveHandler},
     {0xABED, (int32_t)0x3u, "RemoveTrackingHandler", CONV_STACK, 8, 2, glue_RemoveTrackingHandler},

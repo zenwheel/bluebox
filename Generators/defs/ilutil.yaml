@@ -622,3 +622,495 @@
         type: WindowPtr*
     dispatcher: TSMDispatch
     selector: 0x001A
+
+# The Display Manager's calls (Displays.h) on _DisplayDispatch ($ABEB,
+# multiversal's dispatcher), the selector in D0.
+
+- function:
+    name: DMGetFirstScreenDevice
+    return: GDHandle
+    args:
+      - name: activeOnly
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0000
+
+- function:
+    name: DMGetNextScreenDevice
+    return: GDHandle
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: activeOnly
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0001
+
+- function:
+    name: DMDrawDesktopRect
+    args:
+      - name: globalRect
+        type: Rect*
+    dispatcher: DisplayDispatch
+    selector: 0x0002
+
+- function:
+    name: DMDrawDesktopRegion
+    args:
+      - name: globalRgn
+        type: RgnHandle
+    dispatcher: DisplayDispatch
+    selector: 0x0003
+
+- function:
+    name: DMBeginConfigureDisplays
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle*
+    dispatcher: DisplayDispatch
+    selector: 0x0206
+
+- function:
+    name: DMEndConfigureDisplays
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0207
+
+- function:
+    name: DMAddDisplay
+    return: OSErr
+    args:
+      - name: newDevice
+        type: GDHandle
+      - name: driver
+        type: int16_t
+      - name: mode
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: displayID
+        type: uint32_t
+      - name: displayComponent
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0D08
+
+- function:
+    name: DMMoveDisplay
+    return: OSErr
+    args:
+      - name: moveDevice
+        type: GDHandle
+      - name: x
+        type: int16_t
+      - name: y
+        type: int16_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0609
+
+- function:
+    name: DMDisableDisplay
+    return: OSErr
+    args:
+      - name: disableDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x040A
+
+- function:
+    name: DMEnableDisplay
+    return: OSErr
+    args:
+      - name: enableDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x040B
+
+- function:
+    name: DMRemoveDisplay
+    return: OSErr
+    args:
+      - name: removeDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x040C
+
+- function:
+    name: DMSetMainDisplay
+    return: OSErr
+    args:
+      - name: newMainDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0410
+
+- function:
+    name: DMSetDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: mode
+        type: uint32_t
+      - name: depthMode
+        type: uint32_t*
+      - name: reserved
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0A11
+
+- function:
+    name: DMCheckDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: mode
+        type: uint32_t
+      - name: depthMode
+        type: uint32_t
+      - name: switchFlags
+        type: uint32_t*
+      - name: reserved
+        type: uint32_t
+      - name: modeOk
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0C12
+
+- function:
+    name: DMGetDeskRegion
+    return: OSErr
+    args:
+      - name: desktopRegion
+        type: RgnHandle*
+    dispatcher: DisplayDispatch
+    selector: 0x0213
+
+- function:
+    name: DMRemoveNotifyProc
+    return: OSErr
+    args:
+      - name: proc
+        type: ProcPtr
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: DisplayDispatch
+    selector: 0x0415
+
+- function:
+    name: DMQDIsMirroringCapable
+    return: OSErr
+    args:
+      - name: qdIsMirroringCapable
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0216
+
+- function:
+    name: DMCanMirrorNow
+    return: OSErr
+    args:
+      - name: canMirrorNow
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0217
+
+- function:
+    name: DMIsMirroringOn
+    return: OSErr
+    args:
+      - name: isMirroringOn
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0218
+
+- function:
+    name: DMMirrorDevices
+    return: OSErr
+    args:
+      - name: gD1
+        type: GDHandle
+      - name: gD2
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0619
+
+- function:
+    name: DMUnmirrorDevice
+    return: OSErr
+    args:
+      - name: gDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x041A
+
+- function:
+    name: DMGetNextMirroredDevice
+    return: OSErr
+    args:
+      - name: gDevice
+        type: GDHandle
+      - name: mirroredDevice
+        type: GDHandle*
+    dispatcher: DisplayDispatch
+    selector: 0x041B
+
+- function:
+    name: DMBlockMirroring
+    return: OSErr
+    dispatcher: DisplayDispatch
+    selector: 0x001C
+
+- function:
+    name: DMUnblockMirroring
+    return: OSErr
+    dispatcher: DisplayDispatch
+    selector: 0x001D
+
+- function:
+    name: DMGetDisplayMgrA5World
+    return: OSErr
+    args:
+      - name: dmA5
+        type: Ptr*
+    dispatcher: DisplayDispatch
+    selector: 0x021E
+
+- function:
+    name: DMGetDisplayIDByGDevice
+    return: OSErr
+    args:
+      - name: displayDevice
+        type: GDHandle
+      - name: displayID
+        type: uint32_t*
+      - name: failToMain
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x051F
+
+- function:
+    name: DMGetGDeviceByDisplayID
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: displayDevice
+        type: GDHandle*
+      - name: failToMain
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0520
+
+- function:
+    name: DMSetDisplayComponent
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: displayComponent
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0421
+
+- function:
+    name: DMGetDisplayComponent
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: displayComponent
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x0422
+
+- function:
+    name: DMNewDisplay
+    return: OSErr
+    args:
+      - name: newDevice
+        type: GDHandle*
+      - name: driverRefNum
+        type: int16_t
+      - name: mode
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: displayID
+        type: uint32_t
+      - name: displayComponent
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0D23
+
+- function:
+    name: DMDisposeDisplay
+    return: OSErr
+    args:
+      - name: disposeDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0424
+
+- function:
+    name: DMResolveDisplayComponents
+    return: OSErr
+    dispatcher: DisplayDispatch
+    selector: 0x0025
+
+- function:
+    name: DMRegisterExtendedNotifyProc
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: ProcPtr
+      - name: notifyUserData
+        type: void*
+      - name: notifyOnFlags
+        type: uint16_t
+      - name: whichPSN
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x07EF
+
+- function:
+    name: DMRemoveExtendedNotifyProc
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: ProcPtr
+      - name: notifyUserData
+        type: void*
+      - name: whichPSN
+        type: void*
+      - name: removeFlags
+        type: uint16_t
+    dispatcher: DisplayDispatch
+    selector: 0x0726
+
+- function:
+    name: DMDisposeList
+    return: OSErr
+    args:
+      - name: panelList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x022C
+
+- function:
+    name: DMSendDependentNotification
+    return: OSErr
+    args:
+      - name: notifyType
+        type: uint32_t
+      - name: notifyClass
+        type: uint32_t
+      - name: displayID
+        type: uint32_t
+      - name: notifyComponent
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0830
+
+- function:
+    name: DMDisposeAVComponent
+    return: OSErr
+    args:
+      - name: theAVComponent
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0231
+
+- function:
+    name: DMNewDisplayModeList
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: modeListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: thePanelCount
+        type: uint32_t*
+      - name: thePanelList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A36
+
+- function:
+    name: DMGetIndexedDisplayModeFromList
+    return: OSErr
+    args:
+      - name: panelList
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: ProcPtr
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A37
+
+- function:
+    name: DMGetDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: switchInfo
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x043E
+
+- function:
+    name: DMSuspendConfigure
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle
+      - name: reserved1
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x04E9
+
+- function:
+    name: DMResumeConfigure
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle
+      - name: reserved1
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x04E8

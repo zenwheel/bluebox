@@ -74,6 +74,9 @@ static void lm_set_TheCursor(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* DMDisposePortComponent: DMDisposeAVComponent's first name. */
+static void il_DMDisposePortComponent(ppc_cpu *c) { RETURN((int32_t)tb_DMDisposeAVComponent(R(0))); }
+
 /* GetEventQueue: the Event Manager's queue header, in low memory. */
 static void il_GetEventQueue(ppc_cpu *c) { RETURN(LM_EventQueue); }
 
@@ -83,7 +86,7 @@ static const ppc_export lm_exports[] = {
     LM(KeyTime), LM(MBTicks), LM(MouseButtonState), LM(PortAInfo), LM(ROMMapHandle), LM(ROMMapInsert),
     LM(StackLowPoint), LM(UnitTableEntryCount), LM(WordRedraw), LM(MouseTemp), LM(RawMouseLocation),
     LM(TheCursor),
-    { "GetEventQueue", il_GetEventQueue },
+    { "GetEventQueue", il_GetEventQueue }, { "DMDisposePortComponent", il_DMDisposePortComponent },
 };
 #undef LM
 static const unsigned lm_export_count = sizeof lm_exports / sizeof lm_exports[0];
@@ -242,12 +245,14 @@ static const export_table tables[] = {
 
 void dictionary_reset(void);
 void tsm_reset(void);
+void dmgr_reset(void);
 
 /* A fresh machine. */
 void ilutil_reset(void)
 {
     dictionary_reset();
     tsm_reset();
+    dmgr_reset();
 }
 
 void (*ilutil_export_fn(const char *name))(ppc_cpu *)
