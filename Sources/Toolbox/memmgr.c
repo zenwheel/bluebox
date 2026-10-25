@@ -1096,7 +1096,12 @@ bool mm_check_zone(gaddr z)
              * the 24-bit days set them (Shufflepuck locks its handles with
              * BSET #7), harmless to blocks below 16 MB. */
             uint32_t v = rd32(mp);
-            if (v != b + HDR && ((v & 0x00FFFFFFu) != b + HDR || b + HDR > 0x00FFFFFFu)) {
+            /* A locked block is never moved, so its master pointer is not
+             * the Memory Manager's to read: programs step it through the
+             * block for a while (Bloodsuckers steps past a length word with
+             * ADDQ.L #4,(A4) and puts it back before it disposes). */
+            bool stepped = (b_state(b) & ST_LOCK) && v > b + HDR && v <= b + ps;
+            if (v != b + HDR && !stepped && ((v & 0x00FFFFFFu) != b + HDR || b + HDR > 0x00FFFFFFu)) {
                 log_printf("mm: zone %08X: block %08X master pointer %08X does not point back (it holds %08X)\n", z, b,
                            mp, rd32(mp));
                 return false;

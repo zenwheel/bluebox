@@ -32,6 +32,26 @@ extension BlueBox {
             #expect(memErr() == 0)
         }
 
+        /// A locked handle's master pointer stepped into its own block is
+        /// the program's business (Bloodsuckers steps it past a length
+        /// word); an unlocked one's, or one pointing elsewhere, is damage.
+        @Test func zoneCheckLetsALockedHandleBeStepped() {
+            let h = tb_NewHandle(64, false, false)
+            let p = rd32(h)
+            tb_HLock(h)
+            wr32(h, p + 4)
+            #expect(mm_check_zone(appZone))
+            wr32(h, p + 0x10000)
+            #expect(!mm_check_zone(appZone))
+            wr32(h, p)
+            tb_HUnlock(h)
+            wr32(h, p + 4)
+            #expect(!mm_check_zone(appZone))
+            wr32(h, p)
+            #expect(mm_check_zone(appZone))
+            tb_DisposeHandle(h)
+        }
+
         @Test func clearedAllocationsAreZero() {
             let h = tb_NewHandle(64, false, true)
             #expect((0..<64).allSatisfy { rd8(rd32(h) + UInt32($0)) == 0 })
