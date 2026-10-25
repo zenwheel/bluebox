@@ -1045,6 +1045,15 @@ static int library_named(const char *name, char *err, size_t errlen)
     return -1;
 }
 
+/* Whether the program runs on CarbonLib (imports from it). */
+bool cfm_imports_carbonlib(void)
+{
+    for (int i = 0; i < nfrags; i++)
+        if (!strcmp(frags[i].name, "CarbonLib"))
+            return true;
+    return false;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Launching */
 

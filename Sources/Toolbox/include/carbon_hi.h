@@ -103,6 +103,10 @@ void hi_cf_release(gaddr cf);
  * with these arguments; its r3, and whether it was there. */
 uint32_t hi_call(const char *name, const uint32_t *args, int nargs, bool *found);
 
+/* Whether the program runs on CarbonLib (cfm.c): its windows are all
+ * colour windows, as CarbonLib's were. */
+bool cfm_imports_carbonlib(void);
+
 /* For a new launch. */
 void carbonhi_reset(void);
 void carbonqd_reset(void);

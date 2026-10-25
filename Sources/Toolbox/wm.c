@@ -1192,6 +1192,10 @@ static gaddr new_window(gaddr storage, qrect bounds, gaddr title, bool vis, int1
     gaddr w = storage ? storage : tb_NewPtr(WindowRecord_SIZEOF, false, true);
     if (!w)
         return 0;
+    /* (CarbonLib's NewWindow made colour windows as NewCWindow does; a
+     * Carbon program's storage, if any, is a CWindowRecord's size) */
+    if (cfm_imports_carbonlib())
+        color = true;
     if (color)
         tb_OpenCPort(w);
     else
