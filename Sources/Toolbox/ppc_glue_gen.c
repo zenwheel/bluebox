@@ -22672,6 +22672,157 @@ static void ppcglue_IsDataAvailableInIconRef(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PMSelectorCount(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PMSelectorCount();
+    c->pc = c->lr;
+}
+
+static void ppcglue_PMFeatures(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_PMFeatures();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSleepTimeout(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetSleepTimeout();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BatteryCount(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BatteryCount();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDimmingTimeout(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetDimmingTimeout();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BatteryStatus(ppc_cpu *c)
+{
+    gaddr a_status = (gaddr)c->gpr[3];
+    gaddr a_power = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BatteryStatus(a_status, a_power);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ModemStatus(ppc_cpu *c)
+{
+    gaddr a_status = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ModemStatus(a_status);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWUTime(ppc_cpu *c)
+{
+    gaddr a_wuTime = (gaddr)c->gpr[3];
+    gaddr a_wuFlag = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWUTime(a_wuTime, a_wuFlag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWUTime(ppc_cpu *c)
+{
+    int32_t a_wuTime = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWUTime(a_wuTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisableWUTime(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisableWUTime();
+    c->pc = c->lr;
+}
+
+static void ppcglue_AOn(ppc_cpu *c)
+{
+    tb_AOn();
+    c->pc = c->lr;
+}
+
+static void ppcglue_AOnIgnoreModem(ppc_cpu *c)
+{
+    tb_AOnIgnoreModem();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BOn(ppc_cpu *c)
+{
+    tb_BOn();
+    c->pc = c->lr;
+}
+
+static void ppcglue_AOff(ppc_cpu *c)
+{
+    tb_AOff();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BOff(ppc_cpu *c)
+{
+    tb_BOff();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCPUSpeed(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetCPUSpeed();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDefaultStartup(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_GetDefaultStartup(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDefaultStartup(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetDefaultStartup(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetVideoDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetVideoDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetOSDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetOSDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetOSDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_GetOSDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTimeout(ppc_cpu *c)
+{
+    gaddr a_count = (gaddr)c->gpr[3];
+    tb_GetTimeout(a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTimeout(ppc_cpu *c)
+{
+    int16_t a_count = (int16_t)c->gpr[3];
+    tb_SetTimeout(a_count);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -34627,6 +34778,9 @@ const ppc_export ppc_exports[] = {
     {"AESizeOfNthItem", ppcglue_AESizeOfNthItem},
     {"AESizeOfParam", ppcglue_AESizeOfParam},
     {"AESuspendTheCurrentEvent", ppcglue_AESuspendTheCurrentEvent},
+    {"AOff", ppcglue_AOff},
+    {"AOn", ppcglue_AOn},
+    {"AOnIgnoreModem", ppcglue_AOnIgnoreModem},
     {"AbortPrePrerollMovie", ppctrap_AbortPrePrerollMovie},
     {"AcceptHighLevelEvent", ppcglue_AcceptHighLevelEvent},
     {"AcquireIconRef", ppcglue_AcquireIconRef},
@@ -34677,9 +34831,13 @@ const ppc_export ppc_exports[] = {
     {"AssociateSection", ppctrap_AssociateSection},
     {"AutoEmbedControl", ppcglue_AutoEmbedControl},
     {"AutoSizeDialog", ppcglue_AutoSizeDialog},
+    {"BOff", ppcglue_BOff},
+    {"BOn", ppcglue_BOn},
     {"BackColor", ppcglue_BackColor},
     {"BackPat", ppcglue_BackPat},
     {"BackPixPat", ppcglue_BackPixPat},
+    {"BatteryCount", ppcglue_BatteryCount},
+    {"BatteryStatus", ppcglue_BatteryStatus},
     {"BeginFullScreen", ppcglue_BeginFullScreen},
     {"BeginMediaEdits", ppctrap_BeginMediaEdits},
     {"BeginSystemMode", ppcglue_BeginSystemMode},
@@ -34896,6 +35054,7 @@ const ppc_export ppc_exports[] = {
     {"DirectorUnknown4", ppcglue_DirectorUnknown4},
     {"DisableItem", ppcglue_DisableItem},
     {"DisableMenuItemIcon", ppcglue_DisableMenuItemIcon},
+    {"DisableWUTime", ppcglue_DisableWUTime},
     {"DiskEject", ppcglue_DiskEject},
     {"DisposeAllSprites", ppctrap_DisposeAllSprites},
     {"DisposeCCursor", ppcglue_DisposeCCursor},
@@ -35284,6 +35443,7 @@ const ppc_export ppc_exports[] = {
     {"GetBevelButtonMenuValue", ppcglue_GetBevelButtonMenuValue},
     {"GetCCursor", ppcglue_GetCCursor},
     {"GetCIcon", ppcglue_GetCIcon},
+    {"GetCPUSpeed", ppcglue_GetCPUSpeed},
     {"GetCPixel", ppcglue_GetCPixel},
     {"GetCSequenceDataRateParams", ppcglue_GetCSequenceDataRateParams},
     {"GetCSequenceFrameNumber", ppcglue_GetCSequenceFrameNumber},
@@ -35334,11 +35494,13 @@ const ppc_export ppc_exports[] = {
     {"GetDateTime", ppcglue_GetDateTime},
     {"GetDblTime", ppcglue_GetDblTime},
     {"GetDefaultOutputVolume", ppcglue_GetDefaultOutputVolume},
+    {"GetDefaultStartup", ppcglue_GetDefaultStartup},
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
     {"GetDialogItem", ppcglue_GetDialogItem},
     {"GetDialogItemAsControl", ppcglue_GetDialogItemAsControl},
     {"GetDialogItemText", ppcglue_GetDialogItemText},
+    {"GetDimmingTimeout", ppcglue_GetDimmingTimeout},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
     {"GetDragAttributes", ppcglue_GetDragAttributes},
     {"GetDragHiliteColor", ppcglue_GetDragHiliteColor},
@@ -35528,6 +35690,7 @@ const ppc_export ppc_exports[] = {
     {"GetNextTrackForCompositing", ppctrap_GetNextTrackForCompositing},
     {"GetNextTrackReferenceType", ppctrap_GetNextTrackReferenceType},
     {"GetNextUserDataType", ppctrap_GetNextUserDataType},
+    {"GetOSDefault", ppcglue_GetOSDefault},
     {"GetOSEvent", ppcglue_GetOSEvent},
     {"GetOSTrapAddress", ppcglue_GetOSTrapAddress},
     {"GetOutlinePreferred", ppcglue_GetOutlinePreferred},
@@ -35565,6 +35728,7 @@ const ppc_export ppc_exports[] = {
     {"GetScriptVariable", ppcglue_GetScriptVariable},
     {"GetSharedLibrary", ppctrap_GetSharedLibrary},
     {"GetSimilarity", ppctrap_GetSimilarity},
+    {"GetSleepTimeout", ppcglue_GetSleepTimeout},
     {"GetSoundDescriptionExtension", ppctrap_GetSoundDescriptionExtension},
     {"GetSoundHeaderOffset", ppcglue_GetSoundHeaderOffset},
     {"GetSoundOutputInfo", ppcglue_GetSoundOutputInfo},
@@ -35626,6 +35790,7 @@ const ppc_export ppc_exports[] = {
     {"GetTimeBaseStatus", ppcglue_GetTimeBaseStatus},
     {"GetTimeBaseStopTime", ppcglue_GetTimeBaseStopTime},
     {"GetTimeBaseTime", ppcglue_GetTimeBaseTime},
+    {"GetTimeout", ppcglue_GetTimeout},
     {"GetToolTrapAddress", ppcglue_GetToolTrapAddress},
     {"GetTrackAlternate", ppctrap_GetTrackAlternate},
     {"GetTrackBoundsRgn", ppctrap_GetTrackBoundsRgn},
@@ -35668,6 +35833,7 @@ const ppc_export ppc_exports[] = {
     {"GetWMgrPort", ppcglue_GetWMgrPort},
     {"GetWRefCon", ppcglue_GetWRefCon},
     {"GetWTitle", ppcglue_GetWTitle},
+    {"GetWUTime", ppcglue_GetWUTime},
     {"GetWVariant", ppcglue_GetWVariant},
     {"GetWindowAttributes", ppcglue_GetWindowAttributes},
     {"GetWindowClass", ppcglue_GetWindowClass},
@@ -36448,6 +36614,7 @@ const ppc_export ppc_exports[] = {
     {"MenuKey", ppcglue_MenuKey},
     {"MenuSelect", ppcglue_MenuSelect},
     {"ModalDialog", ppcglue_ModalDialog},
+    {"ModemStatus", ppcglue_ModemStatus},
     {"MoreMasters", ppcglue_MoreMasters},
     {"Move", ppcglue_Move},
     {"MoveControl", ppcglue_MoveControl},
@@ -36822,6 +36989,8 @@ const ppc_export ppc_exports[] = {
     {"PBWrite", ppcglue_PBWrite},
     {"PBWriteAsync", ppcglue_PBWriteAsync},
     {"PBWriteSync", ppcglue_PBWriteSync},
+    {"PMFeatures", ppcglue_PMFeatures},
+    {"PMSelectorCount", ppcglue_PMSelectorCount},
     {"PMgrVersion", ppcglue_PMgrVersion},
     {"PPCDispatch", ppcglue_PPCDispatch},
     {"PPostEvent", ppcglue_PPostEvent},
@@ -37246,6 +37415,7 @@ const ppc_export ppc_exports[] = {
     {"SetDateTime", ppctrap_SetDateTime},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},
+    {"SetDefaultStartup", ppcglue_SetDefaultStartup},
     {"SetDepth", ppcglue_SetDepth},
     {"SetDeskCPat", ppcglue_SetDeskCPat},
     {"SetDeviceAttribute", ppcglue_SetDeviceAttribute},
@@ -37356,6 +37526,7 @@ const ppc_export ppc_exports[] = {
     {"SetMovieVideoOutput", ppctrap_SetMovieVideoOutput},
     {"SetMovieVolume", ppcglue_SetMovieVolume},
     {"SetMoviesErrorProc", ppctrap_SetMoviesErrorProc},
+    {"SetOSDefault", ppcglue_SetOSDefault},
     {"SetOSTrapAddress", ppcglue_SetOSTrapAddress},
     {"SetOrigin", ppcglue_SetOrigin},
     {"SetOutlinePreferred", ppcglue_SetOutlinePreferred},
@@ -37422,6 +37593,7 @@ const ppc_export ppc_exports[] = {
     {"SetTimeBaseTime", ppcglue_SetTimeBaseTime},
     {"SetTimeBaseValue", ppcglue_SetTimeBaseValue},
     {"SetTimeBaseZero", ppcglue_SetTimeBaseZero},
+    {"SetTimeout", ppcglue_SetTimeout},
     {"SetToolTrapAddress", ppcglue_SetToolTrapAddress},
     {"SetTrackAlternate", ppctrap_SetTrackAlternate},
     {"SetTrackClipRgn", ppctrap_SetTrackClipRgn},
@@ -37440,8 +37612,10 @@ const ppc_export ppc_exports[] = {
     {"SetTrapAddress", ppcglue_SetTrapAddress},
     {"SetUpControlBackground", ppcglue_SetUpControlBackground},
     {"SetUserDataItem", ppctrap_SetUserDataItem},
+    {"SetVideoDefault", ppcglue_SetVideoDefault},
     {"SetWRefCon", ppcglue_SetWRefCon},
     {"SetWTitle", ppcglue_SetWTitle},
+    {"SetWUTime", ppcglue_SetWUTime},
     {"SetWinColor", ppcglue_SetWinColor},
     {"SetWindowContentColor", ppcglue_SetWindowContentColor},
     {"SetWindowModified", ppcglue_SetWindowModified},

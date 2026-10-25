@@ -19,6 +19,7 @@
 #include <time.h>
 
 #include "m68k.h"
+#include "legacy.h"
 #include "tb_internal.h"
 
 enum { F_EXT = 0, F_DBL, F_SGL, F_EXT96, F_INT, F_LONG, F_COMP };
@@ -485,8 +486,14 @@ void raw_Microseconds(cpu68k *c, uint16_t tw)
     c->d[0] = (uint32_t)us;
 }
 
-/* GetVideoDefault (A080): no slot video parameters to report. */
-void raw_GetVideoDefault(cpu68k *c, uint16_t tw) { c->d[0] = 0; }
+/* GetVideoDefault (A080): A0 the DefVideoRec, as SetVideoDefault left it
+ * (power.c). */
+void raw_GetVideoDefault(cpu68k *c, uint16_t tw)
+{
+    if (c->a[0])
+        startmgr_get_video(c->a[0]);
+    c->d[0] = 0;
+}
 
 /* ---------------------------------------------------------------------- */
 /* Pack7's decimal string conversions */

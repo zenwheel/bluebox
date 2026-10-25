@@ -102,9 +102,15 @@ const char *const os_trap_names[256] = {
     [0x79] = "GetADBInfo",
     [0x7A] = "SetADBInfo",
     [0x7B] = "ADBReInit",
+    [0x7D] = "GetDefaultStartup",
+    [0x7E] = "SetDefaultStartup",
+    [0x81] = "SetVideoDefault",
     [0x82] = "DTInstall",
+    [0x83] = "SetOSDefault",
+    [0x84] = "GetOSDefault",
     [0x90] = "SysEnvirons",
     [0x98] = "HWPriv",
+    [0x9E] = "PowerDispatch",
     [0xAD] = "GestaltDispatch",
     [0xBD] = "FlushCodeCache",
     [0xDD] = "PPCDispatch",
@@ -1775,6 +1781,13 @@ static void glue_BackPixPat(cpu68k *c, uint16_t trapword)
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_BackPixPat(a_arg0);
     cpu_push32(c, ret);
+}
+
+static void glue_BatteryCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_BatteryCount();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_BeginFullScreen(cpu68k *c, uint16_t trapword)
@@ -6596,6 +6609,13 @@ static void glue_GetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDefaultStartup(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_paramBlock = (gaddr)c->a[0];
+    tb_GetDefaultStartup(a_paramBlock);
+}
+
 static void glue_GetDefaultThreadStackSize(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6649,6 +6669,13 @@ static void glue_GetDialogItemText(cpu68k *c, uint16_t trapword)
     gaddr a_item = (gaddr)cpu_pop32(c);
     tb_GetDialogItemText(a_item, a_text);
     cpu_push32(c, ret);
+}
+
+static void glue_GetDimmingTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint8_t r = tb_GetDimmingTimeout();
+    c->d[0] = (uint32_t)r;
 }
 
 static void glue_GetDragAttributes(cpu68k *c, uint16_t trapword)
@@ -7847,6 +7874,13 @@ static void glue_GetNextProcess(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetOSDefault(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_paramBlock = (gaddr)c->a[0];
+    tb_GetOSDefault(a_paramBlock);
+}
+
 static void glue_GetOSEvent(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8157,6 +8191,13 @@ static void glue_GetScriptVariable(cpu68k *c, uint16_t trapword)
     int32_t r = tb_GetScriptVariable(a_script, a_verb);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_GetSleepTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint8_t r = tb_GetSleepTimeout();
+    c->d[0] = (uint32_t)r;
 }
 
 static void glue_GetSoundHeaderOffset(cpu68k *c, uint16_t trapword)
@@ -12856,6 +12897,20 @@ static void glue_PBWrite(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PMFeatures(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t r = tb_PMFeatures();
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_PMSelectorCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_PMSelectorCount();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PMgrVersion(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15255,6 +15310,13 @@ static void glue_SetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDefaultStartup(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_paramBlock = (gaddr)c->a[0];
+    tb_SetDefaultStartup(a_paramBlock);
+}
+
 static void glue_SetDepth(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16032,6 +16094,13 @@ static void glue_SetMovieVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetOSDefault(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_paramBlock = (gaddr)c->a[0];
+    tb_SetOSDefault(a_paramBlock);
+}
+
 static void glue_SetOrigin(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16655,6 +16724,13 @@ static void glue_SetUpControlBackground(cpu68k *c, uint16_t trapword)
     int16_t r = tb_SetUpControlBackground(a_control, a_depth, a_isColorDevice);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_SetVideoDefault(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_paramBlock = (gaddr)c->a[0];
+    tb_SetVideoDefault(a_paramBlock);
 }
 
 static void glue_SetWRefCon(cpu68k *c, uint16_t trapword)
@@ -19068,7 +19144,12 @@ const trap_sig trap_sigs[] = {
     {0xA079, -1, "GetADBInfo", CONV_REG, 0, 0, glue_GetADBInfo},
     {0xA07A, -1, "SetADBInfo", CONV_REG, 0, 0, glue_SetADBInfo},
     {0xA07B, -1, "ADBReInit", CONV_STACK, 0, 0, glue_ADBReInit},
+    {0xA07D, -1, "GetDefaultStartup", CONV_REG, 0, 0, glue_GetDefaultStartup},
+    {0xA07E, -1, "SetDefaultStartup", CONV_REG, 0, 0, glue_SetDefaultStartup},
+    {0xA081, -1, "SetVideoDefault", CONV_REG, 0, 0, glue_SetVideoDefault},
     {0xA082, -1, "DTInstall", CONV_REG, 0, 0, glue_DTInstall},
+    {0xA083, -1, "SetOSDefault", CONV_REG, 0, 0, glue_SetOSDefault},
+    {0xA084, -1, "GetOSDefault", CONV_REG, 0, 0, glue_GetOSDefault},
     {0xA090, -1, "SysEnvirons", CONV_REG, 0, 0, glue_SysEnvirons},
     {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, 0},
     {0xA0DD, -1, "PPCDispatch", CONV_REG, 0, 0, glue_PPCDispatch},
@@ -20956,6 +21037,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA2, (int32_t)0xA13u, "SetDepth", CONV_STACK, 10, 2, glue_SetDepth},
     {0xAAA2, (int32_t)0xA14u, "HasDepth", CONV_STACK, 10, 2, glue_HasDepth},
     {0xAAA2, (int32_t)0xC19u, "GetGray", CONV_STACK, 12, 2, glue_GetGray},
+    {0xA09E, (int32_t)0x0u, "PMSelectorCount", CONV_REG, 0, 0, glue_PMSelectorCount},
+    {0xA09E, (int32_t)0x1u, "PMFeatures", CONV_REG, 0, 0, glue_PMFeatures},
+    {0xA09E, (int32_t)0x2u, "GetSleepTimeout", CONV_REG, 0, 0, glue_GetSleepTimeout},
+    {0xA09E, (int32_t)0x1Au, "BatteryCount", CONV_REG, 0, 0, glue_BatteryCount},
+    {0xA09E, (int32_t)0x1Du, "GetDimmingTimeout", CONV_REG, 0, 0, glue_GetDimmingTimeout},
     {0xA8FD, (int32_t)0x4000C00u, "PrOpenDoc", CONV_STACK, 12, 4, glue_PrOpenDoc},
     {0xA8FD, (int32_t)0x8000484u, "PrCloseDoc", CONV_STACK, 4, 0, glue_PrCloseDoc},
     {0xA8FD, (int32_t)0x10000808u, "PrOpenPage", CONV_STACK, 8, 0, glue_PrOpenPage},
@@ -21688,6 +21774,7 @@ const dispatcher_info dispatchers[] = {
     {0xA9EE, "Pack7", "StackW"},
     {0xA816, "Pack8", "D0W"},
     {0xAAA2, "PaletteDispatch", "D0<0xFF>"},
+    {0xA09E, "PowerDispatch", "D0W"},
     {0xA8FD, "PrGlue", "StackL"},
     {0xAB1D, "QDExtensions", "D0L"},
     {0xAAAA, "QuickTime", "D0W"},

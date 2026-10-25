@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "forks.h"
+#include "legacy.h"
 #include "machine.h"
 #include "ppc_bridge.h"
 #include "qd_internal.h"
@@ -1498,7 +1499,7 @@ static void g_portNotCf(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
 static void g_GetVideoDefault(ppc_cpu *c)
 {
     if (R(0))
-        gmemset(R(0), 0, 4);
+        startmgr_get_video(R(0));
     c->pc = c->lr;
 }
 

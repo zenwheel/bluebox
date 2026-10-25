@@ -1,0 +1,171 @@
+# The old hardware and networking managers (Power.h, Start.h, SCSI.h,
+# Slots.h, DatabaseAccess.h, AppleTalk.h, ENET.h, PPCToolbox.h, Devices.h,
+# DiskInit.h, FileMapping.h ...): InterfaceLib's calls, and the 68k traps
+# and selectors Apple gave them.  Same schema as Defs/multiversal/defs.
+
+# ---- The Power Manager (power.c) ----
+
+# _PowerDispatch ($A09E): MOVEQ #selector,D0; the answer in D0.
+- dispatcher:
+    name: PowerDispatch
+    trap: 0xA09E
+    selector-location: D0W
+
+- function:
+    name: PMSelectorCount
+    return: INTEGER
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0000
+
+- function:
+    name: PMFeatures
+    return: uint32_t
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0001
+
+- function:
+    name: GetSleepTimeout
+    return: uint8_t
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0002
+
+- function:
+    name: BatteryCount
+    return: INTEGER
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x001A
+
+- function:
+    name: GetDimmingTimeout
+    return: uint8_t
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x001D
+
+# The PMgrOp family ($A085 and its flag variants) is a portable's; on the
+# desktop Blue Box presents these are InterfaceLib's alone.
+- function:
+    name: BatteryStatus
+    return: OSErr
+    args:
+      - name: status
+        type: Ptr
+      - name: power
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: ModemStatus
+    return: OSErr
+    args:
+      - name: status
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: GetWUTime
+    return: OSErr
+    args:
+      - name: wuTime
+        type: Ptr
+      - name: wuFlag
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SetWUTime
+    return: OSErr
+    args:
+      - name: wuTime
+        type: LONGINT
+    cfm: InterfaceLib
+
+- function:
+    name: DisableWUTime
+    return: OSErr
+    cfm: InterfaceLib
+
+- function:
+    name: AOn
+    cfm: InterfaceLib
+
+- function:
+    name: AOnIgnoreModem
+    cfm: InterfaceLib
+
+- function:
+    name: BOn
+    cfm: InterfaceLib
+
+- function:
+    name: AOff
+    cfm: InterfaceLib
+
+- function:
+    name: BOff
+    cfm: InterfaceLib
+
+- function:
+    name: GetCPUSpeed
+    return: LONGINT
+    cfm: InterfaceLib
+
+# ---- The Start Manager (power.c): A0 the record ----
+
+- function:
+    name: GetDefaultStartup
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA07D
+
+- function:
+    name: SetDefaultStartup
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA07E
+
+- function:
+    name: SetVideoDefault
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA081
+
+- function:
+    name: SetOSDefault
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA083
+
+- function:
+    name: GetOSDefault
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA084
+
+- function:
+    name: GetTimeout
+    args:
+      - name: count
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SetTimeout
+    args:
+      - name: count
+        type: INTEGER
+    cfm: InterfaceLib
