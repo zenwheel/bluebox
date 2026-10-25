@@ -109,6 +109,27 @@ extension BlueBox {
             #expect(tb_GetResourceSizeOnDisk(h) == 5)
         }
 
+        /// SizeResource (GetResourceSizeOnDisk) is a loaded resource's
+        /// handle size and an unloaded one's size in the file, as the
+        /// Resource Manager's was: DeadEnd walks a resource it has just
+        /// added up to that size.
+        @Test func sizeOnDiskIsTheHandlesWhileLoaded() {
+            tb_SetResLoad(0)
+            let unloaded = tb_GetResource(Int32(bitPattern: fourCC("STR ")), 1)
+            tb_SetResLoad(1)
+            #expect(rd32(unloaded) == 0)
+            #expect(tb_GetResourceSizeOnDisk(unloaded) == 4)
+            let h = tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128)
+            tb_SetHandleSize(h, 9)
+            #expect(tb_GetResourceSizeOnDisk(h) == 9)
+            let added = tb_NewHandle(3, false, true)
+            let name = tb_NewPtr(256, false, true)
+            guestPString("", at: name)
+            tb_AddResource(added, Int32(bitPattern: fourCC("LEVL")), 200, name)
+            #expect(tb_GetResourceSizeOnDisk(added) == 3)
+            #expect(tb_GetResourceSizeOnDisk(tb_NewHandle(3, false, true)) == -1) // not a resource
+        }
+
         @Test func purgeableAttributeMakesHandlePurgeable() {
             let h = tb_GetResource(Int32(bitPattern: fourCC("PURG")), 7)
             #expect(UInt8(bitPattern: tb_HGetState(h)) & 0x40 != 0)
