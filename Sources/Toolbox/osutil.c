@@ -12,13 +12,33 @@
 /* Seconds between 1904-01-01 and 1970-01-01. */
 #define MAC_EPOCH_OFFSET 2082844800u
 
+static int64_t clock_set; /* SetDateTime's change to the host's clock */
+
 uint32_t mac_now(void)
 {
     time_t t = time(NULL);
     struct tm lt;
     localtime_r(&t, &lt);
     /* Mac time is local time. */
-    return (uint32_t)((int64_t)t + lt.tm_gmtoff + MAC_EPOCH_OFFSET);
+    return (uint32_t)((int64_t)t + lt.tm_gmtoff + MAC_EPOCH_OFFSET + clock_set);
+}
+
+/* SetDateTime: the clock set, for the session (the host's stays). */
+int16_t tb_SetDateTime(uint32_t secs)
+{
+    clock_set += (int64_t)secs - (int64_t)mac_now();
+    machine_set_time(secs);
+    return noErr;
+}
+
+/* SetTime: SetDateTime from a date. */
+void tb_SetTime(gaddr d)
+{
+    uint32_t secs = 0;
+    if (d) {
+        tb_DateToSeconds(d, &secs);
+        tb_SetDateTime(secs);
+    }
 }
 
 uint32_t tb_TickCount(void)
@@ -93,7 +113,15 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
 
 gaddr tb_StripAddress(gaddr p) { return g_cpu ? p & g_cpu->addr_mask : p; }
 void tb_SwapMMUMode(uint32_t *bp) { *bp = 1; }
-void tb_HWPriv(int32_t d0, int32_t a0) { g_cpu->d[0] = 0; }
+/* HWPriv: no caches to turn off or flush; translated code already goes
+ * when it is stored over, and FlushCodeCacheRange (9: A0 address, A1
+ * count) drops what was translated from the range all the same. */
+void tb_HWPriv(int32_t d0, int32_t a0)
+{
+    if ((d0 & 0xFFFF) == 9 && g_code_map && g_cpu->a[1])
+        mem_code_range((gaddr)a0, g_cpu->a[1]);
+    g_cpu->d[0] = 0;
+}
 
 void tb_Debugger(void) { cpu_halt(g_cpu, "Debugger() called"); }
 
@@ -466,7 +494,9 @@ void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw)
  * on a Mac with virtual memory off. */
 void raw_MemoryDispatch(cpu68k *c, uint16_t tw)
 {
-    c->d[0] = (uint16_t)c->d[0] <= 4 ? 0 : (uint32_t)-50; /* noErr; paramErr */
+    uint32_t a0 = c->a[0];
+    c->d[0] = (uint32_t)(int32_t)memory_dispatch((uint16_t)c->d[0], c->a[0], c->a[1], &a0);
+    c->a[0] = a0;
 }
 
 /* Operating System queues: a header of qFlags (word), qHead and qTail; each

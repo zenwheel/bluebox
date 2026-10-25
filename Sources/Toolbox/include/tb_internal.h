@@ -241,6 +241,7 @@ void machine_advance_ticks(void);
 /* The machine's clock (ns): wall clock with a host, instructions without. */
 uint64_t machine_time_ns(void);
 void machine_skip_time(uint64_t ns);
+void machine_set_time(uint32_t secs); /* SetDateTime: Time counts from secs */
 bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
@@ -266,6 +267,10 @@ void raw_SlotManager(cpu68k *c, uint16_t tw);
 int16_t slot_manager(uint16_t sel, gaddr spb);
 void slots_reset(void);
 void raw_MemoryDispatch(cpu68k *c, uint16_t tw);
+/* Virtual memory's calls by _MemoryDispatch selector (driverservices.c);
+ * *a0_out is A0 after. */
+int16_t memory_dispatch(uint16_t sel, uint32_t a0, uint32_t a1, uint32_t *a0_out);
+void raw_IdleUpdate(cpu68k *c, uint16_t tw);
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
 /* A MacRoman character's comparison key. */
 int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);
@@ -621,6 +626,10 @@ void ppc_glue_reset(void); /* ppc_glue.c */
 void ppc_libs_reset(void); /* ppc_libs.c */
 void sound_converters_reset(void); /* sndconvert.c */
 void carbon_reset(void); /* carbon.c */
+void ilutil_reset(void); /* InterfaceLib's utilities (ilutil.c) */
+/* Whether every Pascal form InterfaceLib's C forms call is there; the
+ * missing named (cglue.c). */
+bool cglue_check(char *missing, size_t size);
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);
 bool rm_host_path(int16_t rn, char *out, size_t outsize);

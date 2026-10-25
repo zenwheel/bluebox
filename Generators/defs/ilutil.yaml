@@ -1,0 +1,1866 @@
+# InterfaceLib's utility calls (M17) that multiversal lacks: the debugger
+# utility trap, the Dictionary Manager, AVL trees, the Text Services
+# Manager and the rest.  Same schema as Defs/multiversal/defs.  Written
+# from the published interfaces' trap words and selectors.
+
+# _DebugUtil ($A08D), selector in D0 (MOVEQ #n,D0), arguments in A0/A1.
+- dispatcher:
+    name: DebugUtil
+    trap: 0xA08D
+    selector-location: D0W
+
+- function:
+    name: DebuggerGetMax
+    return: int32_t
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0000
+
+- function:
+    name: DebuggerEnter
+    dispatcher: DebugUtil
+    selector: 0x0001
+
+- function:
+    name: DebuggerExit
+    dispatcher: DebugUtil
+    selector: 0x0002
+
+- function:
+    name: DebuggerPoll
+    dispatcher: DebugUtil
+    selector: 0x0003
+
+- function:
+    name: GetPageState
+    return: int16_t
+    args:
+      - name: address
+        type: void*
+        register: A0
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0004
+
+- function:
+    name: PageFaultFatal
+    return: Boolean
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0005
+
+- function:
+    name: DebuggerLockMemory
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0006
+
+- function:
+    name: DebuggerUnlockMemory
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0007
+
+- function:
+    name: EnterSupervisorMode
+    return: int16_t
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0008
+
+# The Dictionary Manager: _DictionaryDispatch ($AA53), the selector in D0
+# (the parameters' size in words in its high byte), Pascal arguments.
+- dispatcher:
+    name: DictionaryDispatch
+    trap: 0xAA53
+    selector-location: D0W
+
+- function:
+    name: InitializeDictionary
+    return: OSErr
+    args:
+      - name: spec
+        type: FSSpec*
+      - name: maximumKeyLength
+        type: int16_t
+      - name: keyAttributes
+        type: int8_t
+      - name: script
+        type: int16_t
+    dispatcher: DictionaryDispatch
+    selector: 0x0500
+
+- function:
+    name: OpenDictionary
+    return: OSErr
+    args:
+      - name: spec
+        type: FSSpec*
+      - name: accessPermission
+        type: int8_t
+      - name: dictionaryReference
+        type: int32_t*
+    dispatcher: DictionaryDispatch
+    selector: 0x0501
+
+- function:
+    name: CloseDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+    dispatcher: DictionaryDispatch
+    selector: 0x0202
+
+- function:
+    name: InsertRecordToDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: key
+        type: ConstStr255Param
+      - name: recordDataHandle
+        type: Handle
+      - name: whichMode
+        type: int16_t
+    dispatcher: DictionaryDispatch
+    selector: 0x0703
+
+- function:
+    name: DeleteRecordFromDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: key
+        type: ConstStr255Param
+    dispatcher: DictionaryDispatch
+    selector: 0x0404
+
+- function:
+    name: FindRecordInDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: key
+        type: ConstStr255Param
+      - name: requestedAttributeTablePointer
+        type: void*
+      - name: recordDataHandle
+        type: Handle
+    dispatcher: DictionaryDispatch
+    selector: 0x0805
+
+- function:
+    name: FindRecordByIndexInDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: recordIndex
+        type: int32_t
+      - name: requestedAttributeTablePointer
+        type: void*
+      - name: recordKey
+        type: StringPtr
+      - name: recordDataHandle
+        type: Handle
+    dispatcher: DictionaryDispatch
+    selector: 0x0A06
+
+- function:
+    name: GetDictionaryInformation
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: theDictionaryInformation
+        type: void*
+    dispatcher: DictionaryDispatch
+    selector: 0x0407
+
+- function:
+    name: CompactDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+    dispatcher: DictionaryDispatch
+    selector: 0x0208
+
+# AVL trees (AVLTree.h): _AVLTreeDispatch ($AA80), the selector in D0 as
+# the Dictionary Manager's, Pascal arguments.
+- dispatcher:
+    name: AVLTreeDispatch
+    trap: 0xAA80
+    selector-location: D0W
+
+- function:
+    name: AVLInit
+    return: OSErr
+    args:
+      - name: flags
+        type: uint32_t
+      - name: compareItemsProc
+        type: ProcPtr
+      - name: sizeItemProc
+        type: ProcPtr
+      - name: disposeItemProc
+        type: ProcPtr
+      - name: refCon
+        type: void*
+      - name: tree
+        type: void*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0C01
+
+- function:
+    name: AVLDispose
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: order
+        type: uint16_t
+    dispatcher: AVLTreeDispatch
+    selector: 0x0302
+
+- function:
+    name: AVLWalk
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: walkProc
+        type: ProcPtr
+      - name: order
+        type: uint16_t
+      - name: walkRefCon
+        type: void*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0703
+
+- function:
+    name: AVLCount
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: count
+        type: uint32_t*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0804
+
+- function:
+    name: AVLGetIndItem
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: index
+        type: uint32_t
+      - name: dataPtr
+        type: void*
+      - name: itemSize
+        type: uint32_t*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0805
+
+- function:
+    name: AVLInsert
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: data
+        type: void*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0406
+
+- function:
+    name: AVLRemove
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: key
+        type: void*
+      - name: dataPtr
+        type: void*
+      - name: itemSize
+        type: uint32_t*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0807
+
+- function:
+    name: AVLFind
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: key
+        type: void*
+      - name: dataPtr
+        type: void*
+      - name: itemSize
+        type: uint32_t*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0808
+
+- function:
+    name: AVLGetRefcon
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: refCon
+        type: void*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0409
+
+# The Text Services Manager: _TSMDispatch ($AA54), the selector in D0
+# (MOVEQ #n,D0), Pascal arguments.
+- dispatcher:
+    name: TSMDispatch
+    trap: 0xAA54
+    selector-location: D0W
+
+- function:
+    name: NewTSMDocument
+    return: OSErr
+    args:
+      - name: numOfInterface
+        type: int16_t
+      - name: supportedInterfaceTypes
+        type: OSType*
+      - name: idocID
+        type: void*
+      - name: refcon
+        type: int32_t
+    dispatcher: TSMDispatch
+    selector: 0x0000
+
+- function:
+    name: DeleteTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x0001
+
+- function:
+    name: ActivateTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x0002
+
+- function:
+    name: DeactivateTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x0003
+
+- function:
+    name: TSMEvent
+    return: Boolean
+    args:
+      - name: event
+        type: EventRecord*
+    dispatcher: TSMDispatch
+    selector: 0x0004
+
+- function:
+    name: TSMMenuSelect
+    return: Boolean
+    args:
+      - name: menuResult
+        type: int32_t
+    dispatcher: TSMDispatch
+    selector: 0x0005
+
+- function:
+    name: SetTSMCursor
+    return: Boolean
+    args:
+      - name: mousePos
+        type: Point
+    dispatcher: TSMDispatch
+    selector: 0x0006
+
+- function:
+    name: FixTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x0007
+
+- function:
+    name: GetServiceList
+    return: OSErr
+    args:
+      - name: numOfInterface
+        type: int16_t
+      - name: supportedInterfaceTypes
+        type: OSType*
+      - name: serviceInfo
+        type: Handle*
+      - name: seedValue
+        type: int32_t*
+    dispatcher: TSMDispatch
+    selector: 0x0008
+
+- function:
+    name: OpenTextService
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+      - name: aComponent
+        type: uint32_t
+      - name: aComponentInstance
+        type: uint32_t*
+    dispatcher: TSMDispatch
+    selector: 0x0009
+
+- function:
+    name: CloseTextService
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+      - name: aComponentInstance
+        type: uint32_t
+    dispatcher: TSMDispatch
+    selector: 0x000A
+
+- function:
+    name: SendAEFromTSMComponent
+    return: OSErr
+    args:
+      - name: theAppleEvent
+        type: AEDesc*
+      - name: reply
+        type: AEDesc*
+      - name: sendMode
+        type: int32_t
+      - name: sendPriority
+        type: int16_t
+      - name: timeOutInTicks
+        type: int32_t
+      - name: idleProc
+        type: ProcPtr
+      - name: filterProc
+        type: ProcPtr
+    dispatcher: TSMDispatch
+    selector: 0x000B
+
+- function:
+    name: SetDefaultInputMethod
+    return: OSErr
+    args:
+      - name: ts
+        type: uint32_t
+      - name: slRecordPtr
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x000C
+
+- function:
+    name: GetDefaultInputMethod
+    return: OSErr
+    args:
+      - name: ts
+        type: uint32_t*
+      - name: slRecordPtr
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x000D
+
+- function:
+    name: SetTextServiceLanguage
+    return: OSErr
+    args:
+      - name: slRecordPtr
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x000E
+
+- function:
+    name: GetTextServiceLanguage
+    return: OSErr
+    args:
+      - name: slRecordPtr
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x000F
+
+- function:
+    name: UseInputWindow
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+      - name: useWindow
+        type: Boolean
+    dispatcher: TSMDispatch
+    selector: 0x0010
+
+- function:
+    name: NewServiceWindow
+    return: OSErr
+    args:
+      - name: wStorage
+        type: void*
+      - name: boundsRect
+        type: Rect*
+      - name: title
+        type: ConstStr255Param
+      - name: visible
+        type: Boolean
+      - name: theProc
+        type: int16_t
+      - name: behind
+        type: WindowPtr
+      - name: goAwayFlag
+        type: Boolean
+      - name: ts
+        type: uint32_t
+      - name: window
+        type: WindowPtr*
+    dispatcher: TSMDispatch
+    selector: 0x0011
+
+- function:
+    name: CloseServiceWindow
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: TSMDispatch
+    selector: 0x0012
+
+- function:
+    name: GetFrontServiceWindow
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr*
+    dispatcher: TSMDispatch
+    selector: 0x0013
+
+- function:
+    name: InitTSMAwareApplication
+    return: OSErr
+    dispatcher: TSMDispatch
+    selector: 0x0014
+
+- function:
+    name: CloseTSMAwareApplication
+    return: OSErr
+    dispatcher: TSMDispatch
+    selector: 0x0015
+
+- function:
+    name: FindServiceWindow
+    return: int16_t
+    args:
+      - name: thePoint
+        type: Point
+      - name: theWindow
+        type: WindowPtr*
+    dispatcher: TSMDispatch
+    selector: 0x0017
+
+- function:
+    name: NewCServiceWindow
+    return: OSErr
+    args:
+      - name: wStorage
+        type: void*
+      - name: boundsRect
+        type: Rect*
+      - name: title
+        type: ConstStr255Param
+      - name: visible
+        type: Boolean
+      - name: theProc
+        type: int16_t
+      - name: behind
+        type: WindowPtr
+      - name: goAwayFlag
+        type: Boolean
+      - name: ts
+        type: uint32_t
+      - name: window
+        type: WindowPtr*
+    dispatcher: TSMDispatch
+    selector: 0x001A
+
+# The Display Manager's calls (Displays.h) on _DisplayDispatch ($ABEB,
+# multiversal's dispatcher), the selector in D0.
+
+- function:
+    name: DMGetFirstScreenDevice
+    return: GDHandle
+    args:
+      - name: activeOnly
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0000
+
+- function:
+    name: DMGetNextScreenDevice
+    return: GDHandle
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: activeOnly
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0001
+
+- function:
+    name: DMDrawDesktopRect
+    args:
+      - name: globalRect
+        type: Rect*
+    dispatcher: DisplayDispatch
+    selector: 0x0002
+
+- function:
+    name: DMDrawDesktopRegion
+    args:
+      - name: globalRgn
+        type: RgnHandle
+    dispatcher: DisplayDispatch
+    selector: 0x0003
+
+- function:
+    name: DMBeginConfigureDisplays
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle*
+    dispatcher: DisplayDispatch
+    selector: 0x0206
+
+- function:
+    name: DMEndConfigureDisplays
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0207
+
+- function:
+    name: DMAddDisplay
+    return: OSErr
+    args:
+      - name: newDevice
+        type: GDHandle
+      - name: driver
+        type: int16_t
+      - name: mode
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: displayID
+        type: uint32_t
+      - name: displayComponent
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0D08
+
+- function:
+    name: DMMoveDisplay
+    return: OSErr
+    args:
+      - name: moveDevice
+        type: GDHandle
+      - name: x
+        type: int16_t
+      - name: y
+        type: int16_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0609
+
+- function:
+    name: DMDisableDisplay
+    return: OSErr
+    args:
+      - name: disableDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x040A
+
+- function:
+    name: DMEnableDisplay
+    return: OSErr
+    args:
+      - name: enableDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x040B
+
+- function:
+    name: DMRemoveDisplay
+    return: OSErr
+    args:
+      - name: removeDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x040C
+
+- function:
+    name: DMSetMainDisplay
+    return: OSErr
+    args:
+      - name: newMainDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0410
+
+- function:
+    name: DMSetDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: mode
+        type: uint32_t
+      - name: depthMode
+        type: uint32_t*
+      - name: reserved
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0A11
+
+- function:
+    name: DMCheckDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: mode
+        type: uint32_t
+      - name: depthMode
+        type: uint32_t
+      - name: switchFlags
+        type: uint32_t*
+      - name: reserved
+        type: uint32_t
+      - name: modeOk
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0C12
+
+- function:
+    name: DMGetDeskRegion
+    return: OSErr
+    args:
+      - name: desktopRegion
+        type: RgnHandle*
+    dispatcher: DisplayDispatch
+    selector: 0x0213
+
+- function:
+    name: DMRemoveNotifyProc
+    return: OSErr
+    args:
+      - name: proc
+        type: ProcPtr
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: DisplayDispatch
+    selector: 0x0415
+
+- function:
+    name: DMQDIsMirroringCapable
+    return: OSErr
+    args:
+      - name: qdIsMirroringCapable
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0216
+
+- function:
+    name: DMCanMirrorNow
+    return: OSErr
+    args:
+      - name: canMirrorNow
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0217
+
+- function:
+    name: DMIsMirroringOn
+    return: OSErr
+    args:
+      - name: isMirroringOn
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x0218
+
+- function:
+    name: DMMirrorDevices
+    return: OSErr
+    args:
+      - name: gD1
+        type: GDHandle
+      - name: gD2
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0619
+
+- function:
+    name: DMUnmirrorDevice
+    return: OSErr
+    args:
+      - name: gDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x041A
+
+- function:
+    name: DMGetNextMirroredDevice
+    return: OSErr
+    args:
+      - name: gDevice
+        type: GDHandle
+      - name: mirroredDevice
+        type: GDHandle*
+    dispatcher: DisplayDispatch
+    selector: 0x041B
+
+- function:
+    name: DMBlockMirroring
+    return: OSErr
+    dispatcher: DisplayDispatch
+    selector: 0x001C
+
+- function:
+    name: DMUnblockMirroring
+    return: OSErr
+    dispatcher: DisplayDispatch
+    selector: 0x001D
+
+- function:
+    name: DMGetDisplayMgrA5World
+    return: OSErr
+    args:
+      - name: dmA5
+        type: Ptr*
+    dispatcher: DisplayDispatch
+    selector: 0x021E
+
+- function:
+    name: DMGetDisplayIDByGDevice
+    return: OSErr
+    args:
+      - name: displayDevice
+        type: GDHandle
+      - name: displayID
+        type: uint32_t*
+      - name: failToMain
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x051F
+
+- function:
+    name: DMGetGDeviceByDisplayID
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: displayDevice
+        type: GDHandle*
+      - name: failToMain
+        type: Boolean
+    dispatcher: DisplayDispatch
+    selector: 0x0520
+
+- function:
+    name: DMSetDisplayComponent
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: displayComponent
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0421
+
+- function:
+    name: DMGetDisplayComponent
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: displayComponent
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x0422
+
+- function:
+    name: DMNewDisplay
+    return: OSErr
+    args:
+      - name: newDevice
+        type: GDHandle*
+      - name: driverRefNum
+        type: int16_t
+      - name: mode
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: displayID
+        type: uint32_t
+      - name: displayComponent
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0D23
+
+- function:
+    name: DMDisposeDisplay
+    return: OSErr
+    args:
+      - name: disposeDevice
+        type: GDHandle
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0424
+
+- function:
+    name: DMResolveDisplayComponents
+    return: OSErr
+    dispatcher: DisplayDispatch
+    selector: 0x0025
+
+- function:
+    name: DMRegisterExtendedNotifyProc
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: ProcPtr
+      - name: notifyUserData
+        type: void*
+      - name: notifyOnFlags
+        type: uint16_t
+      - name: whichPSN
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x07EF
+
+- function:
+    name: DMRemoveExtendedNotifyProc
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: ProcPtr
+      - name: notifyUserData
+        type: void*
+      - name: whichPSN
+        type: void*
+      - name: removeFlags
+        type: uint16_t
+    dispatcher: DisplayDispatch
+    selector: 0x0726
+
+- function:
+    name: DMDisposeList
+    return: OSErr
+    args:
+      - name: panelList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x022C
+
+- function:
+    name: DMSendDependentNotification
+    return: OSErr
+    args:
+      - name: notifyType
+        type: uint32_t
+      - name: notifyClass
+        type: uint32_t
+      - name: displayID
+        type: uint32_t
+      - name: notifyComponent
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0830
+
+- function:
+    name: DMDisposeAVComponent
+    return: OSErr
+    args:
+      - name: theAVComponent
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0231
+
+- function:
+    name: DMNewDisplayModeList
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: modeListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: thePanelCount
+        type: uint32_t*
+      - name: thePanelList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A36
+
+- function:
+    name: DMGetIndexedDisplayModeFromList
+    return: OSErr
+    args:
+      - name: panelList
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: ProcPtr
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A37
+
+- function:
+    name: DMGetDisplayMode
+    return: OSErr
+    args:
+      - name: theDevice
+        type: GDHandle
+      - name: switchInfo
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x043E
+
+- function:
+    name: DMSuspendConfigure
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle
+      - name: reserved1
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x04E9
+
+- function:
+    name: DMResumeConfigure
+    return: OSErr
+    args:
+      - name: displayState
+        type: Handle
+      - name: reserved1
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x04E8
+
+# Color Picker 2.0's PickColor and 2.1's NPickColor (Pack12).
+- function:
+    name: PickColor
+    return: OSErr
+    args:
+      - name: theColorInfo
+        type: void*
+    dispatcher: Pack12
+    selector: 0x0213
+
+- function:
+    name: NPickColor
+    return: OSErr
+    args:
+      - name: theColorInfo
+        type: void*
+    dispatcher: Pack12
+    selector: 0x0227
+
+# The Script Manager's remaining ScriptUtil calls and Pack6's orders.
+
+- function:
+    name: IntlTokenize
+    return: int16_t
+    args:
+      - name: tokenParam
+        type: void*
+    dispatcher: ScriptUtil
+    selector: 0x8204FFFA
+
+- function:
+    name: NFindWord
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: textLength
+        type: int16_t
+      - name: offset
+        type: int16_t
+      - name: leadingEdge
+        type: Boolean
+      - name: nbreaks
+        type: void*
+      - name: offsets
+        type: void*
+    dispatcher: ScriptUtil
+    selector: 0x8012FFE2
+
+- function:
+    name: PortionText
+    return: int32_t
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: textLength
+        type: int32_t
+    dispatcher: ScriptUtil
+    selector: 0x84080024
+
+- function:
+    name: FormatRecToString
+    return: int16_t
+    args:
+      - name: myCanonical
+        type: void*
+      - name: partsTable
+        type: void*
+      - name: outString
+        type: StringPtr
+      - name: positions
+        type: void*
+    dispatcher: ScriptUtil
+    selector: 0x8210FFEA
+
+- function:
+    name: GetScriptUtilityAddress
+    return: ProcPtr
+    args:
+      - name: selector
+        type: int16_t
+      - name: before
+        type: Boolean
+      - name: script
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0xC4040038
+
+- function:
+    name: SetScriptUtilityAddress
+    args:
+      - name: selector
+        type: int16_t
+      - name: before
+        type: Boolean
+      - name: routineAddr
+        type: ProcPtr
+      - name: script
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0xC008003A
+
+- function:
+    name: GetScriptQDPatchAddress
+    return: ProcPtr
+    args:
+      - name: trapNum
+        type: int16_t
+      - name: before
+        type: Boolean
+      - name: forPrinting
+        type: Boolean
+      - name: script
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0xC406003C
+
+- function:
+    name: SetScriptQDPatchAddress
+    args:
+      - name: trapNum
+        type: int16_t
+      - name: before
+        type: Boolean
+      - name: forPrinting
+        type: Boolean
+      - name: routineAddr
+        type: ProcPtr
+      - name: script
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0xC00A003E
+
+# The Font Manager's FontDispatch ($A854, the selector in D0's low nibble).
+
+- function:
+    name: QDTextBounds
+    args:
+      - name: byteCount
+        type: int16_t
+      - name: textAddr
+        type: void*
+      - name: bounds
+        type: Rect*
+    dispatcher: FontDispatch
+    selector: 0x0013
+
+- function:
+    name: FetchFontInfo
+    return: OSErr
+    args:
+      - name: fontID
+        type: int16_t
+      - name: fontSize
+        type: int16_t
+      - name: fontStyle
+        type: int16_t
+      - name: info
+        type: void*
+    dispatcher: FontDispatch
+    selector: 0x0014
+
+# The Menu Manager's font and international resource menus.
+
+- function:
+    name: InsertFontResMenu
+    args:
+      - name: theMenu
+        type: MenuHandle
+      - name: afterItem
+        type: int16_t
+      - name: scriptFilter
+        type: int16_t
+    dispatcher: MenuDispatch
+    selector: 0x0400
+
+- function:
+    name: InsertIntlResMenu
+    args:
+      - name: theMenu
+        type: MenuHandle
+      - name: theType
+        type: uint32_t
+      - name: afterItem
+        type: int16_t
+      - name: scriptFilter
+        type: int16_t
+    dispatcher: MenuDispatch
+    selector: 0x0601
+
+# QuickDraw's extensions ($AB1D, the selector in D0).
+
+- function:
+    name: GetPixRowBytes
+    return: int32_t
+    args:
+      - name: pm
+        type: PixMapHandle
+    dispatcher: QDExtensions
+    selector: 0x00040018
+
+- function:
+    name: GetPortCustomXFerProc
+    return: OSErr
+    args:
+      - name: port
+        type: CGrafPtr
+      - name: proc
+        type: ProcPtr*
+      - name: flags
+        type: uint32_t*
+      - name: refCon
+        type: uint32_t*
+    dispatcher: QDExtensions
+    selector: 0x00100019
+
+- function:
+    name: SetPortCustomXFerProc
+    return: OSErr
+    args:
+      - name: port
+        type: CGrafPtr
+      - name: proc
+        type: ProcPtr
+      - name: flags
+        type: uint32_t
+      - name: refCon
+        type: uint32_t
+    dispatcher: QDExtensions
+    selector: 0x0010001A
+
+# Cursor components (Quickdraw.h): $ABE0, the selector in D0.
+- dispatcher:
+    name: CursorComponentDispatch
+    trap: 0xABE0
+    selector-location: D0L
+
+- function:
+    name: OpenCursorComponent
+    return: OSErr
+    args:
+      - name: c
+        type: uint32_t
+      - name: ci
+        type: uint32_t*
+    dispatcher: CursorComponentDispatch
+    selector: 0x0008000B
+
+- function:
+    name: CloseCursorComponent
+    return: OSErr
+    args:
+      - name: ci
+        type: uint32_t
+    dispatcher: CursorComponentDispatch
+    selector: 0x0004000C
+
+- function:
+    name: SetCursorComponent
+    return: OSErr
+    args:
+      - name: ci
+        type: uint32_t
+    dispatcher: CursorComponentDispatch
+    selector: 0x0004000D
+
+- function:
+    name: CursorComponentChanged
+    return: OSErr
+    args:
+      - name: ci
+        type: uint32_t
+    dispatcher: CursorComponentDispatch
+    selector: 0x0004000E
+
+- function:
+    name: CursorComponentSetData
+    return: OSErr
+    args:
+      - name: ci
+        type: uint32_t
+      - name: data
+        type: int32_t
+    dispatcher: CursorComponentDispatch
+    selector: 0x0008000F
+
+# Start.h's parameter RAM calls and the Extension Manager ($AA7D) are in
+# legacy.yaml.
+
+# The Printing Manager's driver: loaded, and never purged.
+
+- function:
+    name: PrLoadDriver
+    return: int16_t
+    dispatcher: PrGlue
+    selector: 0xD8000000
+
+- function:
+    name: PrNoPurge
+    dispatcher: PrGlue
+    selector: 0xB0000000
+
+- function:
+    name: PrPurge
+    dispatcher: PrGlue
+    selector: 0xA8000000
+
+# The Process Manager's desk accessory and control panel launching
+# (_OSDispatch, $A88F).
+- function:
+    name: LaunchDeskAccessory
+    return: OSErr
+    args:
+      - name: pFileSpec
+        type: FSSpec*
+      - name: pDAName
+        type: ConstStr255Param
+    dispatcher: OSDispatch
+    selector: 0x0036
+
+- function:
+    name: LaunchControlPanel
+    return: OSErr
+    args:
+      - name: pFileSpec
+        type: FSSpec*
+    dispatcher: OSDispatch
+    selector: 0x007B
+
+# The rest of _DisplayDispatch: display lists, AV devices, gamma, prefs.
+
+- function:
+    name: DMDisplayGestalt
+    return: OSErr
+    args:
+      - name: theDisplayID
+        type: uint32_t
+      - name: displayGestaltSelector
+        type: uint32_t
+      - name: displayGestaltResponse
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x06D3
+
+- function:
+    name: DMUseScreenPrefs
+    return: OSErr
+    args:
+      - name: usePrefs
+        type: Boolean
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x03EC
+
+- function:
+    name: DMSetGammaByAVID
+    return: OSErr
+    args:
+      - name: gammaAVID
+        type: uint32_t
+      - name: setGammaFlags
+        type: uint32_t
+      - name: theGamma
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x06D1
+
+- function:
+    name: DMGetGammaByAVID
+    return: OSErr
+    args:
+      - name: gammaAVID
+        type: uint32_t
+      - name: getGammaFlags
+        type: uint32_t
+      - name: theGamma
+        type: Handle*
+    dispatcher: DisplayDispatch
+    selector: 0x06D0
+
+- function:
+    name: DMGetMakeAndModelByAVID
+    return: OSErr
+    args:
+      - name: theAVID
+        type: uint32_t
+      - name: theMakeAndModel
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x04D7
+
+- function:
+    name: DMNewDisplayList
+    return: OSErr
+    args:
+      - name: displayListIncludeFlags
+        type: uint32_t
+      - name: reserved1
+        type: uint32_t
+      - name: reserved2
+        type: uint32_t
+      - name: theCount
+        type: uint32_t*
+      - name: theDisplayList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0AD6
+
+- function:
+    name: DMGetIndexedDisplayFromList
+    return: OSErr
+    args:
+      - name: theDisplayList
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: ProcPtr
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0AD5
+
+- function:
+    name: DMNewProfileListByAVID
+    return: OSErr
+    args:
+      - name: theAVID
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: profileCount
+        type: uint32_t*
+      - name: profileList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x08DC
+
+- function:
+    name: DMGetIndexedProfileFromList
+    return: OSErr
+    args:
+      - name: profileList
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: ProcPtr
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0ADB
+
+- function:
+    name: DMNewAVPanelList
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: panelType
+        type: uint32_t
+      - name: minimumFidelity
+        type: uint32_t
+      - name: panelListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: thePanelCount
+        type: uint32_t*
+      - name: thePanelList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0C27
+
+- function:
+    name: DMNewAVEngineList
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: engineType
+        type: uint32_t
+      - name: minimumFidelity
+        type: uint32_t
+      - name: engineListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: engineCount
+        type: uint32_t*
+      - name: engineList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0C28
+
+- function:
+    name: DMNewAVDeviceList
+    return: OSErr
+    args:
+      - name: deviceType
+        type: uint32_t
+      - name: deviceListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: deviceCount
+        type: uint32_t*
+      - name: deviceList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A29
+
+- function:
+    name: DMNewAVPortListByPortType
+    return: OSErr
+    args:
+      - name: subType
+        type: uint32_t
+      - name: portListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: devicePortCount
+        type: uint32_t*
+      - name: theDevicePortList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A2A
+
+- function:
+    name: DMGetIndexedComponentFromList
+    return: OSErr
+    args:
+      - name: panelList
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: ProcPtr
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A2B
+
+- function:
+    name: DMGetNameByAVID
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: nameFlags
+        type: uint32_t
+      - name: name
+        type: StringPtr
+    dispatcher: DisplayDispatch
+    selector: 0x062D
+
+- function:
+    name: DMNewAVIDByPortComponent
+    return: OSErr
+    args:
+      - name: thePortComponent
+        type: uint32_t
+      - name: portKind
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: newID
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x082E
+
+- function:
+    name: DMGetPortComponentByAVID
+    return: OSErr
+    args:
+      - name: thePortID
+        type: uint32_t
+      - name: thePortComponent
+        type: uint32_t*
+      - name: theDesciption
+        type: void*
+      - name: thePortKind
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x082F
+
+- function:
+    name: DMSaveScreenPrefs
+    return: OSErr
+    args:
+      - name: reserved1
+        type: uint32_t
+      - name: saveFlags
+        type: uint32_t
+      - name: reserved2
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0632
+
+- function:
+    name: DMNewAVIDByDeviceComponent
+    return: OSErr
+    args:
+      - name: theDeviceComponent
+        type: uint32_t
+      - name: portKind
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: newID
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x0833
+
+- function:
+    name: DMNewAVPortListByDeviceAVID
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: minimumFidelity
+        type: uint32_t
+      - name: portListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: devicePortCount
+        type: uint32_t*
+      - name: theDevicePortList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0C34
+
+- function:
+    name: DMGetDeviceComponentByAVID
+    return: OSErr
+    args:
+      - name: theDeviceID
+        type: uint32_t
+      - name: theDeviceComponent
+        type: uint32_t*
+      - name: theDesciption
+        type: void*
+      - name: theDeviceKind
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x0835
+
+- function:
+    name: DMGetGraphicInfoByAVID
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: theAVPcit
+        type: Handle*
+      - name: theAVIconSuite
+        type: Handle*
+      - name: theAVLocation
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0838
+
+- function:
+    name: DMGetAVPowerState
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: getPowerState
+        type: void*
+      - name: reserved1
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0839
+
+- function:
+    name: DMSetAVPowerState
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: setPowerState
+        type: void*
+      - name: powerFlags
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x083A
+
+- function:
+    name: DMGetDeviceAVIDByPortAVID
+    return: OSErr
+    args:
+      - name: portAVID
+        type: uint32_t
+      - name: deviceAVID
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x043B
+
+- function:
+    name: DMGetEnableByAVID
+    return: OSErr
+    args:
+      - name: theAVID
+        type: uint32_t
+      - name: isAVIDEnabledNow
+        type: Boolean*
+      - name: canChangeEnableNow
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x063C
+
+- function:
+    name: DMSetEnableByAVID
+    return: OSErr
+    args:
+      - name: theAVID
+        type: uint32_t
+      - name: doEnable
+        type: Boolean
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x053D
+
+- function:
+    name: DMConfirmConfiguration
+    return: OSErr
+    args:
+      - name: filterProc
+        type: ProcPtr
+      - name: confirmFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x083F

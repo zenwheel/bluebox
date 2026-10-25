@@ -378,6 +378,7 @@ bool machine_boot(bool census)
     ppc_libs_reset();
     sound_converters_reset();
     carbon_reset();
+    ilutil_reset();
     slots_reset();
     cursor_devices_reset();
     legacy_reset();
@@ -724,6 +725,13 @@ void machine_advance_ticks(void)
     uint32_t secs = boot_time + (uint32_t)(ns / 1000000000u);
     if (secs > rd32(LM_Time))
         wr32(LM_Time, secs);
+}
+
+/* SetDateTime: Time from now on counts from secs. */
+void machine_set_time(uint32_t secs)
+{
+    boot_time = secs - (uint32_t)(machine_time_ns() / 1000000000u);
+    wr32(LM_Time, secs);
 }
 
 run_status machine_run(uint64_t max)

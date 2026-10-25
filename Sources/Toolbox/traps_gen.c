@@ -114,6 +114,7 @@ const char *const os_trap_names[256] = {
     [0x83] = "SetOSDefault",
     [0x84] = "GetOSDefault",
     [0x89] = "SCSIAtomic",
+    [0x8D] = "DebugUtil",
     [0x8F] = "DeferUserFn",
     [0x90] = "SysEnvirons",
     [0x98] = "HWPriv",
@@ -699,6 +700,8 @@ const char *const tb_trap_names[1024] = {
     [0x250] = "SeedCFill",
     [0x251] = "CopyDeepMask",
     [0x252] = "HighLevelFSDispatch",
+    [0x253] = "DictionaryDispatch",
+    [0x254] = "TSMDispatch",
     [0x259] = "MixedModeDispatch",
     [0x25A] = "CodeFragmentDispatch",
     [0x260] = "DeleteMCEntries",
@@ -713,6 +716,7 @@ const char *const tb_trap_names[1024] = {
     [0x273] = "ControlDispatch",
     [0x274] = "AppearanceDispatch",
     [0x27D] = "ExtensionsDispatch",
+    [0x280] = "AVLTreeDispatch",
     [0x281] = "FileMappingDispatch",
     [0x290] = "InitPalettes",
     [0x291] = "NewPalette",
@@ -739,6 +743,7 @@ const char *const tb_trap_names[1024] = {
     [0x3C2] = "MatrixDispatch",
     [0x3C9] = "IconDispatch",
     [0x3CA] = "DeviceLoop",
+    [0x3E0] = "CursorComponentDispatch",
     [0x3EB] = "DisplayDispatch",
     [0x3ED] = "DragDispatch",
     [0x3F1] = "GestaltValueDispatch",
@@ -1462,6 +1467,117 @@ static void glue_AESuspendTheCurrentEvent(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AVLCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_count = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLCount(a_tree, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLDispose(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_order = (uint16_t)cpu_pop16(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLDispose(a_tree, a_order);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLFind(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLFind(a_tree, a_key, a_dataPtr, a_itemSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLGetIndItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    uint32_t a_index = (uint32_t)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLGetIndItem(a_tree, a_index, a_dataPtr, a_itemSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLGetRefcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLGetRefcon(a_tree, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLInit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_disposeItemProc = (gaddr)cpu_pop32(c);
+    gaddr a_sizeItemProc = (gaddr)cpu_pop32(c);
+    gaddr a_compareItemsProc = (gaddr)cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_AVLInit(a_flags, a_compareItemsProc, a_sizeItemProc, a_disposeItemProc, a_refCon, a_tree);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLInsert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLInsert(a_tree, a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLRemove(a_tree, a_key, a_dataPtr, a_itemSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLWalk(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_walkRefCon = (gaddr)cpu_pop32(c);
+    uint16_t a_order = (uint16_t)cpu_pop16(c);
+    gaddr a_walkProc = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLWalk(a_tree, a_walkProc, a_order, a_walkRefCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AcceptHighLevelEvent(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1491,6 +1607,16 @@ static void glue_ActivatePalette(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_ActivatePalette(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_ActivateTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ActivateTSMDocument(a_idocID);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2347,6 +2473,16 @@ static void glue_CloseCPort(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CloseCursorComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_ci = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_CloseCursorComponent(a_ci);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CloseDeskAcc(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2362,6 +2498,16 @@ static void glue_CloseDialog(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_dp = (gaddr)cpu_pop32(c);
     tb_CloseDialog(a_dp);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CloseDictionary(a_dictionaryReference);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2425,6 +2571,36 @@ static void glue_CloseRgn(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_rh = (gaddr)cpu_pop32(c);
     tb_CloseRgn(a_rh);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CloseServiceWindow(a_window);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseTSMAwareApplication(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_CloseTSMAwareApplication();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseTextService(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_aComponentInstance = (uint32_t)cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CloseTextService(a_idocID, a_aComponentInstance);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2601,6 +2777,16 @@ static void glue_CompSub(cpu68k *c, uint16_t trapword)
     gaddr a_dst = (gaddr)cpu_pop32(c);
     gaddr a_src = (gaddr)cpu_pop32(c);
     tb_CompSub(a_src, a_dst);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompactDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CompactDictionary(a_dictionaryReference);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -3020,6 +3206,27 @@ static void glue_CurResFile(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_CurResFile();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CursorComponentChanged(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_ci = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_CursorComponentChanged(a_ci);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CursorComponentSetData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    uint32_t a_ci = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_CursorComponentSetData(a_ci, a_data);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -3460,6 +3667,857 @@ static void glue_DIZero(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DMAddDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    uint32_t a_displayComponent = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_mode = (uint32_t)cpu_pop32(c);
+    int16_t a_driver = (int16_t)cpu_pop16(c);
+    gaddr a_newDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMAddDisplay(a_newDevice, a_driver, a_mode, a_reserved, a_displayID, a_displayComponent, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMBeginConfigureDisplays(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMBeginConfigureDisplays(a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMBlockMirroring(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_DMBlockMirroring();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMCanMirrorNow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_canMirrorNow = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMCanMirrorNow(a_canMirrorNow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMCheckDisplayMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_modeOk = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    gaddr a_switchFlags = (gaddr)cpu_pop32(c);
+    uint32_t a_depthMode = (uint32_t)cpu_pop32(c);
+    uint32_t a_mode = (uint32_t)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMCheckDisplayMode(a_theDevice, a_mode, a_depthMode, a_switchFlags, a_reserved, a_modeOk);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMConfirmConfiguration(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_confirmFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_filterProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMConfirmConfiguration(a_filterProc, a_confirmFlags, a_reserved, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisableDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_disableDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMDisableDisplay(a_disableDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisplayGestalt(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayGestaltResponse = (gaddr)cpu_pop32(c);
+    uint32_t a_displayGestaltSelector = (uint32_t)cpu_pop32(c);
+    uint32_t a_theDisplayID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMDisplayGestalt(a_theDisplayID, a_displayGestaltSelector, a_displayGestaltResponse);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisposeAVComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theAVComponent = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMDisposeAVComponent(a_theAVComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisposeDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_disposeDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMDisposeDisplay(a_disposeDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDisposeList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_panelList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMDisposeList(a_panelList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDrawDesktopRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_globalRect = (gaddr)cpu_pop32(c);
+    tb_DMDrawDesktopRect(a_globalRect);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMDrawDesktopRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_globalRgn = (gaddr)cpu_pop32(c);
+    tb_DMDrawDesktopRegion(a_globalRgn);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMEnableDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_enableDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMEnableDisplay(a_enableDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMEndConfigureDisplays(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMEndConfigureDisplays(a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetAVPowerState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_reserved1 = (uint32_t)cpu_pop32(c);
+    gaddr a_getPowerState = (gaddr)cpu_pop32(c);
+    uint32_t a_theID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetAVPowerState(a_theID, a_getPowerState, a_reserved1);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDeskRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_desktopRegion = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDeskRegion(a_desktopRegion);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDeviceAVIDByPortAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_deviceAVID = (gaddr)cpu_pop32(c);
+    uint32_t a_portAVID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetDeviceAVIDByPortAVID(a_portAVID, a_deviceAVID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDeviceComponentByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDeviceKind = (gaddr)cpu_pop32(c);
+    gaddr a_theDesciption = (gaddr)cpu_pop32(c);
+    gaddr a_theDeviceComponent = (gaddr)cpu_pop32(c);
+    uint32_t a_theDeviceID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetDeviceComponentByAVID(a_theDeviceID, a_theDeviceComponent, a_theDesciption, a_theDeviceKind);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDisplayComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayComponent = (gaddr)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDisplayComponent(a_theDevice, a_displayComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDisplayIDByGDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_failToMain = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_displayID = (gaddr)cpu_pop32(c);
+    gaddr a_displayDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDisplayIDByGDevice(a_displayDevice, a_displayID, a_failToMain);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDisplayMgrA5World(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dmA5 = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDisplayMgrA5World(a_dmA5);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetDisplayMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_switchInfo = (gaddr)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetDisplayMode(a_theDevice, a_switchInfo);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetEnableByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_canChangeEnableNow = (gaddr)cpu_pop32(c);
+    gaddr a_isAVIDEnabledNow = (gaddr)cpu_pop32(c);
+    uint32_t a_theAVID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetEnableByAVID(a_theAVID, a_isAVIDEnabledNow, a_canChangeEnableNow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetFirstScreenDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_activeOnly = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr r = tb_DMGetFirstScreenDevice(a_activeOnly);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetGDeviceByDisplayID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_failToMain = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_displayDevice = (gaddr)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetGDeviceByDisplayID(a_displayID, a_displayDevice, a_failToMain);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetGammaByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theGamma = (gaddr)cpu_pop32(c);
+    uint32_t a_getGammaFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_gammaAVID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetGammaByAVID(a_gammaAVID, a_getGammaFlags, a_theGamma);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetGraphicInfoByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theAVLocation = (gaddr)cpu_pop32(c);
+    gaddr a_theAVIconSuite = (gaddr)cpu_pop32(c);
+    gaddr a_theAVPcit = (gaddr)cpu_pop32(c);
+    uint32_t a_theID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetGraphicInfoByAVID(a_theID, a_theAVPcit, a_theAVIconSuite, a_theAVLocation);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetIndexedComponentFromList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_userData = (gaddr)cpu_pop32(c);
+    gaddr a_listIterator = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_itemIndex = (uint32_t)cpu_pop32(c);
+    gaddr a_panelList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetIndexedComponentFromList(a_panelList, a_itemIndex, a_reserved, a_listIterator, a_userData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetIndexedDisplayFromList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_userData = (gaddr)cpu_pop32(c);
+    gaddr a_listIterator = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_itemIndex = (uint32_t)cpu_pop32(c);
+    gaddr a_theDisplayList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetIndexedDisplayFromList(a_theDisplayList, a_itemIndex, a_reserved, a_listIterator, a_userData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetIndexedDisplayModeFromList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_userData = (gaddr)cpu_pop32(c);
+    gaddr a_listIterator = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_itemIndex = (uint32_t)cpu_pop32(c);
+    gaddr a_panelList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetIndexedDisplayModeFromList(a_panelList, a_itemIndex, a_reserved, a_listIterator, a_userData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetIndexedProfileFromList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_userData = (gaddr)cpu_pop32(c);
+    gaddr a_listIterator = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_itemIndex = (uint32_t)cpu_pop32(c);
+    gaddr a_profileList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetIndexedProfileFromList(a_profileList, a_itemIndex, a_reserved, a_listIterator, a_userData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetMakeAndModelByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theMakeAndModel = (gaddr)cpu_pop32(c);
+    uint32_t a_theAVID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetMakeAndModelByAVID(a_theAVID, a_theMakeAndModel);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetNameByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    uint32_t a_nameFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_theID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetNameByAVID(a_theID, a_nameFlags, a_name);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetNextMirroredDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_mirroredDevice = (gaddr)cpu_pop32(c);
+    gaddr a_gDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetNextMirroredDevice(a_gDevice, a_mirroredDevice);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetNextScreenDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_activeOnly = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    gaddr r = tb_DMGetNextScreenDevice(a_theDevice, a_activeOnly);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMGetPortComponentByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_thePortKind = (gaddr)cpu_pop32(c);
+    gaddr a_theDesciption = (gaddr)cpu_pop32(c);
+    gaddr a_thePortComponent = (gaddr)cpu_pop32(c);
+    uint32_t a_thePortID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMGetPortComponentByAVID(a_thePortID, a_thePortComponent, a_theDesciption, a_thePortKind);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMIsMirroringOn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_isMirroringOn = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMIsMirroringOn(a_isMirroringOn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMMirrorDevices(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_gD2 = (gaddr)cpu_pop32(c);
+    gaddr a_gD1 = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMMirrorDevices(a_gD1, a_gD2, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMMoveDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t a_y = (int16_t)cpu_pop16(c);
+    int16_t a_x = (int16_t)cpu_pop16(c);
+    gaddr a_moveDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMMoveDisplay(a_moveDevice, a_x, a_y, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewAVDeviceList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_deviceList = (gaddr)cpu_pop32(c);
+    gaddr a_deviceCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_deviceListFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_deviceType = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewAVDeviceList(a_deviceType, a_deviceListFlags, a_reserved, a_deviceCount, a_deviceList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewAVEngineList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_engineList = (gaddr)cpu_pop32(c);
+    gaddr a_engineCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_engineListFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_minimumFidelity = (uint32_t)cpu_pop32(c);
+    uint32_t a_engineType = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewAVEngineList(a_displayID, a_engineType, a_minimumFidelity, a_engineListFlags, a_reserved, a_engineCount, a_engineList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewAVIDByDeviceComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newID = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_portKind = (uint32_t)cpu_pop32(c);
+    uint32_t a_theDeviceComponent = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewAVIDByDeviceComponent(a_theDeviceComponent, a_portKind, a_reserved, a_newID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewAVIDByPortComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newID = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_portKind = (uint32_t)cpu_pop32(c);
+    uint32_t a_thePortComponent = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewAVIDByPortComponent(a_thePortComponent, a_portKind, a_reserved, a_newID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewAVPanelList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_thePanelList = (gaddr)cpu_pop32(c);
+    gaddr a_thePanelCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_panelListFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_minimumFidelity = (uint32_t)cpu_pop32(c);
+    uint32_t a_panelType = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewAVPanelList(a_displayID, a_panelType, a_minimumFidelity, a_panelListFlags, a_reserved, a_thePanelCount, a_thePanelList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewAVPortListByDeviceAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDevicePortList = (gaddr)cpu_pop32(c);
+    gaddr a_devicePortCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_portListFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_minimumFidelity = (uint32_t)cpu_pop32(c);
+    uint32_t a_theID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewAVPortListByDeviceAVID(a_theID, a_minimumFidelity, a_portListFlags, a_reserved, a_devicePortCount, a_theDevicePortList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewAVPortListByPortType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDevicePortList = (gaddr)cpu_pop32(c);
+    gaddr a_devicePortCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_portListFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_subType = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewAVPortListByPortType(a_subType, a_portListFlags, a_reserved, a_devicePortCount, a_theDevicePortList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    uint32_t a_displayComponent = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_mode = (uint32_t)cpu_pop32(c);
+    int16_t a_driverRefNum = (int16_t)cpu_pop16(c);
+    gaddr a_newDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMNewDisplay(a_newDevice, a_driverRefNum, a_mode, a_reserved, a_displayID, a_displayComponent, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewDisplayList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDisplayList = (gaddr)cpu_pop32(c);
+    gaddr a_theCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved2 = (uint32_t)cpu_pop32(c);
+    uint32_t a_reserved1 = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayListIncludeFlags = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewDisplayList(a_displayListIncludeFlags, a_reserved1, a_reserved2, a_theCount, a_theDisplayList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewDisplayModeList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_thePanelList = (gaddr)cpu_pop32(c);
+    gaddr a_thePanelCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_modeListFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewDisplayModeList(a_displayID, a_modeListFlags, a_reserved, a_thePanelCount, a_thePanelList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMNewProfileListByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_profileList = (gaddr)cpu_pop32(c);
+    gaddr a_profileCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    uint32_t a_theAVID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMNewProfileListByAVID(a_theAVID, a_reserved, a_profileCount, a_profileList);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMQDIsMirroringCapable(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_qdIsMirroringCapable = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMQDIsMirroringCapable(a_qdIsMirroringCapable);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRegisterExtendedNotifyProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_whichPSN = (gaddr)cpu_pop32(c);
+    uint16_t a_notifyOnFlags = (uint16_t)cpu_pop16(c);
+    gaddr a_notifyUserData = (gaddr)cpu_pop32(c);
+    gaddr a_notifyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRegisterExtendedNotifyProc(a_notifyProc, a_notifyUserData, a_notifyOnFlags, a_whichPSN);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRegisterNotifyProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_psn = (gaddr)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRegisterNotifyProc(a_proc, a_psn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRemoveDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_removeDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRemoveDisplay(a_removeDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRemoveExtendedNotifyProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_removeFlags = (uint16_t)cpu_pop16(c);
+    gaddr a_whichPSN = (gaddr)cpu_pop32(c);
+    gaddr a_notifyUserData = (gaddr)cpu_pop32(c);
+    gaddr a_notifyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRemoveExtendedNotifyProc(a_notifyProc, a_notifyUserData, a_whichPSN, a_removeFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMRemoveNotifyProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_psn = (gaddr)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMRemoveNotifyProc(a_proc, a_psn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMResolveDisplayComponents(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_DMResolveDisplayComponents();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMResumeConfigure(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_reserved1 = (uint32_t)cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMResumeConfigure(a_displayState, a_reserved1);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSaveScreenPrefs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_reserved2 = (uint32_t)cpu_pop32(c);
+    uint32_t a_saveFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_reserved1 = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMSaveScreenPrefs(a_reserved1, a_saveFlags, a_reserved2);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSendDependentNotification(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_notifyComponent = (uint32_t)cpu_pop32(c);
+    uint32_t a_displayID = (uint32_t)cpu_pop32(c);
+    uint32_t a_notifyClass = (uint32_t)cpu_pop32(c);
+    uint32_t a_notifyType = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMSendDependentNotification(a_notifyType, a_notifyClass, a_displayID, a_notifyComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetAVPowerState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    uint32_t a_powerFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_setPowerState = (gaddr)cpu_pop32(c);
+    uint32_t a_theID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMSetAVPowerState(a_theID, a_setPowerState, a_powerFlags, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetDisplayComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_displayComponent = (uint32_t)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSetDisplayComponent(a_theDevice, a_displayComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetDisplayMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    uint32_t a_reserved = (uint32_t)cpu_pop32(c);
+    gaddr a_depthMode = (gaddr)cpu_pop32(c);
+    uint32_t a_mode = (uint32_t)cpu_pop32(c);
+    gaddr a_theDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSetDisplayMode(a_theDevice, a_mode, a_depthMode, a_reserved, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetEnableByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int8_t a_doEnable = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_theAVID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMSetEnableByAVID(a_theAVID, a_doEnable, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetGammaByAVID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theGamma = (gaddr)cpu_pop32(c);
+    uint32_t a_setGammaFlags = (uint32_t)cpu_pop32(c);
+    uint32_t a_gammaAVID = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_DMSetGammaByAVID(a_gammaAVID, a_setGammaFlags, a_theGamma);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetMainDisplay(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_newMainDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSetMainDisplay(a_newMainDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSuspendConfigure(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_reserved1 = (uint32_t)cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSuspendConfigure(a_displayState, a_reserved1);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMUnblockMirroring(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_DMUnblockMirroring();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMUnmirrorDevice(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    gaddr a_gDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMUnmirrorDevice(a_gDevice, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMUseScreenPrefs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_displayState = (gaddr)cpu_pop32(c);
+    int8_t a_usePrefs = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t r = tb_DMUseScreenPrefs(a_usePrefs, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DTInstall(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3487,6 +4545,16 @@ static void glue_DeactivateControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DeactivateTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DeactivateTSMDocument(a_idocID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DebugStr(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3502,6 +4570,55 @@ static void glue_Debugger(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     tb_Debugger();
     cpu_push32(c, ret);
+}
+
+static void glue_DebuggerEnter(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_DebuggerEnter();
+    cpu_push32(c, ret);
+}
+
+static void glue_DebuggerExit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_DebuggerExit();
+    cpu_push32(c, ret);
+}
+
+static void glue_DebuggerGetMax(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t r = tb_DebuggerGetMax();
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_DebuggerLockMemory(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_address = (gaddr)c->a[0];
+    uint32_t a_count = (uint32_t)c->a[1];
+    int16_t r = tb_DebuggerLockMemory(a_address, a_count);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_DebuggerPoll(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_DebuggerPoll();
+    cpu_push32(c, ret);
+}
+
+static void glue_DebuggerUnlockMemory(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_address = (gaddr)c->a[0];
+    uint32_t a_count = (uint32_t)c->a[1];
+    int16_t r = tb_DebuggerUnlockMemory(a_address, a_count);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_DecompressImage(cpu68k *c, uint16_t trapword)
@@ -3690,6 +4807,27 @@ static void glue_DeleteMovieSegment(cpu68k *c, uint16_t trapword)
     int32_t a_startTime = (int32_t)cpu_pop32(c);
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int16_t r = tb_DeleteMovieSegment(a_theMovie, a_startTime, a_duration);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DeleteRecordFromDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DeleteRecordFromDictionary(a_dictionaryReference, a_key);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DeleteTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DeleteTSMDocument(a_idocID);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -4791,6 +5929,13 @@ static void glue_EnterMovies(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_EnterSupervisorMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_EnterSupervisorMode();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_Entry2Index(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5834,6 +6979,19 @@ static void glue_FSpSetFInfo(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FetchFontInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    int16_t a_fontStyle = (int16_t)cpu_pop16(c);
+    int16_t a_fontSize = (int16_t)cpu_pop16(c);
+    int16_t a_fontID = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FetchFontInfo(a_fontID, a_fontSize, a_fontStyle, a_info);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FillArc(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6064,6 +7222,33 @@ static void glue_FindFolderExtended(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindRecordByIndexInDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_recordDataHandle = (gaddr)cpu_pop32(c);
+    gaddr a_recordKey = (gaddr)cpu_pop32(c);
+    gaddr a_requestedAttributeTablePointer = (gaddr)cpu_pop32(c);
+    int32_t a_recordIndex = (int32_t)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FindRecordByIndexInDictionary(a_dictionaryReference, a_recordIndex, a_requestedAttributeTablePointer, a_recordKey, a_recordDataHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FindRecordInDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_recordDataHandle = (gaddr)cpu_pop32(c);
+    gaddr a_requestedAttributeTablePointer = (gaddr)cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FindRecordInDictionary(a_dictionaryReference, a_key, a_requestedAttributeTablePointer, a_recordDataHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FindScriptRun(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6072,6 +7257,17 @@ static void glue_FindScriptRun(cpu68k *c, uint16_t trapword)
     int32_t a_textLen = (int32_t)cpu_pop32(c);
     gaddr a_textPtr = (gaddr)cpu_pop32(c);
     int16_t r = tb_FindScriptRun(a_textPtr, a_textLen, a_lenUsedp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FindServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    uint32_t a_thePoint = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_FindServiceWindow(a_thePoint, a_theWindow);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -6228,6 +7424,16 @@ static void glue_FixRound(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FixTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FixTSMDocument(a_idocID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FlashMenuBar(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6336,6 +7542,19 @@ static void glue_ForeColor(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t a_c = (int32_t)cpu_pop32(c);
     tb_ForeColor(a_c);
+    cpu_push32(c, ret);
+}
+
+static void glue_FormatRecToString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_positions = (gaddr)cpu_pop32(c);
+    gaddr a_outString = (gaddr)cpu_pop32(c);
+    gaddr a_partsTable = (gaddr)cpu_pop32(c);
+    gaddr a_myCanonical = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FormatRecToString(a_myCanonical, a_partsTable, a_outString, a_positions);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -7667,6 +8886,17 @@ static void glue_GetDblTime(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDefaultInputMethod(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slRecordPtr = (gaddr)cpu_pop32(c);
+    gaddr a_ts = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDefaultInputMethod(a_ts, a_slRecordPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7736,6 +8966,17 @@ static void glue_GetDialogItemText(cpu68k *c, uint16_t trapword)
     gaddr a_text = (gaddr)cpu_pop32(c);
     gaddr a_item = (gaddr)cpu_pop32(c);
     tb_GetDialogItemText(a_item, a_text);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDictionaryInformation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDictionaryInformation = (gaddr)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetDictionaryInformation(a_dictionaryReference, a_theDictionaryInformation);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8006,6 +9247,16 @@ static void glue_GetFrontProcess(cpu68k *c, uint16_t trapword)
     int32_t a_dummy = (int32_t)cpu_pop32(c);
     gaddr a_serial_number = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetFrontProcess(a_serial_number, a_dummy);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFrontServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFrontServiceWindow(a_window);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -9033,6 +10284,14 @@ static void glue_GetOutlinePreferred(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetPageState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_address = (gaddr)c->a[0];
+    int16_t r = tb_GetPageState(a_address);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_GetPalette(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9141,6 +10400,16 @@ static void glue_GetPixPat(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetPixRowBytes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pm = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetPixRowBytes(a_pm);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetPixel(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9168,6 +10437,19 @@ static void glue_GetPort(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_pp = (gaddr)cpu_pop32(c);
     tb_GetPort(a_pp);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetPortCustomXFerProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_flags = (gaddr)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    gaddr a_port = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetPortCustomXFerProc(a_port, a_proc, a_flags, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9316,6 +10598,31 @@ static void glue_GetScriptManagerVariable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetScriptQDPatchAddress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    int8_t a_forPrinting = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_before = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_trapNum = (int16_t)cpu_pop16(c);
+    gaddr r = tb_GetScriptQDPatchAddress(a_trapNum, a_before, a_forPrinting, a_script);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetScriptUtilityAddress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    int8_t a_before = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_selector = (int16_t)cpu_pop16(c);
+    gaddr r = tb_GetScriptUtilityAddress(a_selector, a_before, a_script);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetScriptVariable(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9324,6 +10631,19 @@ static void glue_GetScriptVariable(cpu68k *c, uint16_t trapword)
     int16_t a_script = (int16_t)cpu_pop16(c);
     int32_t r = tb_GetScriptVariable(a_script, a_verb);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetServiceList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_seedValue = (gaddr)cpu_pop32(c);
+    gaddr a_serviceInfo = (gaddr)cpu_pop32(c);
+    gaddr a_supportedInterfaceTypes = (gaddr)cpu_pop32(c);
+    int16_t a_numOfInterface = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetServiceList(a_numOfInterface, a_supportedInterfaceTypes, a_serviceInfo, a_seedValue);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9491,6 +10811,25 @@ static void glue_GetSysDirection(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_GetSysDirection();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetSysPPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_GetSysPPtr();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTextServiceLanguage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slRecordPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetTextServiceLanguage(a_slRecordPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -10777,6 +12116,17 @@ static void glue_IULTimeString(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IULangOrder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_l2 = (int16_t)cpu_pop16(c);
+    int16_t a_l1 = (int16_t)cpu_pop16(c);
+    int16_t r = tb_IULangOrder(a_l1, a_l2);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_IUMagIDPString(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10827,6 +12177,17 @@ static void glue_IUMagString(cpu68k *c, uint16_t trapword)
     gaddr a_ptr2 = (gaddr)cpu_pop32(c);
     gaddr a_ptr1 = (gaddr)cpu_pop32(c);
     int16_t r = tb_IUMagString(a_ptr1, a_ptr2, a_len1, a_len2);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IUScriptOrder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script2 = (int16_t)cpu_pop16(c);
+    int16_t a_script1 = (int16_t)cpu_pop16(c);
+    int16_t r = tb_IUScriptOrder(a_script1, a_script2);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -11078,6 +12439,15 @@ static void glue_InitResources(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InitTSMAwareApplication(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_InitTSMAwareApplication();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InitUtil(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11090,6 +12460,19 @@ static void glue_InitWindows(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_InitWindows();
+    cpu_push32(c, ret);
+}
+
+static void glue_InitializeDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    int8_t a_keyAttributes = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_maximumKeyLength = (int16_t)cpu_pop16(c);
+    gaddr a_spec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_InitializeDictionary(a_spec, a_maximumKeyLength, a_keyAttributes, a_script);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -11116,6 +12499,29 @@ static void glue_InsertEmptyMovieSegment(cpu68k *c, uint16_t trapword)
     int32_t a_dstMovie = (int32_t)cpu_pop32(c);
     int16_t r = tb_InsertEmptyMovieSegment(a_dstMovie, a_dstIn, a_dstDuration);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InsertFontResMenu(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_scriptFilter = (int16_t)cpu_pop16(c);
+    int16_t a_afterItem = (int16_t)cpu_pop16(c);
+    gaddr a_theMenu = (gaddr)cpu_pop32(c);
+    tb_InsertFontResMenu(a_theMenu, a_afterItem, a_scriptFilter);
+    cpu_push32(c, ret);
+}
+
+static void glue_InsertIntlResMenu(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_scriptFilter = (int16_t)cpu_pop16(c);
+    int16_t a_afterItem = (int16_t)cpu_pop16(c);
+    uint32_t a_theType = (uint32_t)cpu_pop32(c);
+    gaddr a_theMenu = (gaddr)cpu_pop32(c);
+    tb_InsertIntlResMenu(a_theMenu, a_theType, a_afterItem, a_scriptFilter);
     cpu_push32(c, ret);
 }
 
@@ -11150,6 +12556,19 @@ static void glue_InsertMovieSegment(cpu68k *c, uint16_t trapword)
     int32_t a_dstMovie = (int32_t)cpu_pop32(c);
     int32_t a_srcMovie = (int32_t)cpu_pop32(c);
     int16_t r = tb_InsertMovieSegment(a_srcMovie, a_dstMovie, a_srcIn, a_srcDuration, a_dstIn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InsertRecordToDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_whichMode = (int16_t)cpu_pop16(c);
+    gaddr a_recordDataHandle = (gaddr)cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_InsertRecordToDictionary(a_dictionaryReference, a_key, a_recordDataHandle, a_whichMode);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -11245,6 +12664,16 @@ static void glue_IntlScript(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_IntlScript();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IntlTokenize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tokenParam = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IntlTokenize(a_tokenParam);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -11856,6 +13285,27 @@ static void glue_LaunchApplication(cpu68k *c, uint16_t trapword)
     gaddr a_params = (gaddr)c->a[0];
     int16_t r = tb_LaunchApplication(a_params);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_LaunchControlPanel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pFileSpec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_LaunchControlPanel(a_pFileSpec);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_LaunchDeskAccessory(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pDAName = (gaddr)cpu_pop32(c);
+    gaddr a_pFileSpec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_LaunchDeskAccessory(a_pFileSpec, a_pDAName);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_Line(cpu68k *c, uint16_t trapword)
@@ -12725,6 +14175,20 @@ static void glue_Munger(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NFindWord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_offsets = (gaddr)cpu_pop32(c);
+    gaddr a_nbreaks = (gaddr)cpu_pop32(c);
+    int8_t a_leadingEdge = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_offset = (int16_t)cpu_pop16(c);
+    int16_t a_textLength = (int16_t)cpu_pop16(c);
+    gaddr a_textPtr = (gaddr)cpu_pop32(c);
+    tb_NFindWord(a_textPtr, a_textLength, a_offset, a_leadingEdge, a_nbreaks, a_offsets);
+    cpu_push32(c, ret);
+}
+
 static void glue_NMInstall(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12739,6 +14203,16 @@ static void glue_NMRemove(cpu68k *c, uint16_t trapword)
     gaddr a_nmptr = (gaddr)c->a[0];
     int16_t r = tb_NMRemove(a_nmptr);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_NPickColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theColorInfo = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NPickColor(a_theColorInfo);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_NSetPalette(cpu68k *c, uint16_t trapword)
@@ -12785,6 +14259,24 @@ static void glue_NewAliasMinimalFromFullPath(cpu68k *c, uint16_t trapword)
     gaddr a_fullpath = (gaddr)cpu_pop32(c);
     int16_t a_fullpathLength = (int16_t)cpu_pop16(c);
     int16_t r = tb_NewAliasMinimalFromFullPath(a_fullpathLength, a_fullpath, a_zoneName, a_serverName, a_alias);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewCServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    uint32_t a_ts = (uint32_t)cpu_pop32(c);
+    int8_t a_goAwayFlag = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int16_t a_theProc = (int16_t)cpu_pop16(c);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_wStorage = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewCServiceWindow(a_wStorage, a_boundsRect, a_title, a_visible, a_theProc, a_behind, a_goAwayFlag, a_ts, a_window);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -13133,6 +14625,24 @@ static void glue_NewScreenBuffer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    uint32_t a_ts = (uint32_t)cpu_pop32(c);
+    int8_t a_goAwayFlag = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int16_t a_theProc = (int16_t)cpu_pop16(c);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_wStorage = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewServiceWindow(a_wStorage, a_boundsRect, a_title, a_visible, a_theProc, a_behind, a_goAwayFlag, a_ts, a_window);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewSpeechChannel(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13160,6 +14670,19 @@ static void glue_NewSubscriberDialog(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_reply = (gaddr)cpu_pop32(c);
     int16_t r = tb_NewSubscriberDialog(a_reply);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refcon = (int32_t)cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    gaddr a_supportedInterfaceTypes = (gaddr)cpu_pop32(c);
+    int16_t a_numOfInterface = (int16_t)cpu_pop16(c);
+    int16_t r = tb_NewTSMDocument(a_numOfInterface, a_supportedInterfaceTypes, a_idocID, a_refcon);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -13343,12 +14866,35 @@ static void glue_OpenCPort(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_OpenCursorComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_ci = (gaddr)cpu_pop32(c);
+    uint32_t a_c = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_OpenCursorComponent(a_c, a_ci);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_OpenDeskAcc(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     gaddr a_acc = (gaddr)cpu_pop32(c);
     int16_t r = tb_OpenDeskAcc(a_acc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dictionaryReference = (gaddr)cpu_pop32(c);
+    int8_t a_accessPermission = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_spec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OpenDictionary(a_spec, a_accessPermission, a_dictionaryReference);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -13447,6 +14993,18 @@ static void glue_OpenRgn(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_OpenRgn();
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenTextService(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_aComponentInstance = (gaddr)cpu_pop32(c);
+    uint32_t a_aComponent = (uint32_t)cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OpenTextService(a_idocID, a_aComponent, a_aComponentInstance);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -14504,6 +16062,13 @@ static void glue_PackBits(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PageFaultFatal(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_PageFaultFatal();
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_PaintArc(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14688,6 +16253,16 @@ static void glue_PicComment(cpu68k *c, uint16_t trapword)
     int16_t a_size = (int16_t)cpu_pop16(c);
     int16_t a_kind = (int16_t)cpu_pop16(c);
     tb_PicComment(a_kind, a_size, a_hand);
+    cpu_push32(c, ret);
+}
+
+static void glue_PickColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theColorInfo = (gaddr)cpu_pop32(c);
+    int16_t r = tb_PickColor(a_theColorInfo);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -14926,6 +16501,17 @@ static void glue_PortionLine(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PortionText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_textPtr = (gaddr)cpu_pop32(c);
+    int32_t r = tb_PortionText(a_textPtr, a_textLength);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_PostEvent(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15073,6 +16659,23 @@ static void glue_PrJobInit(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PrLoadDriver(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_PrLoadDriver();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_PrNoPurge(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_PrNoPurge();
+    cpu_push32(c, ret);
+}
+
 static void glue_PrOpen(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15113,6 +16716,14 @@ static void glue_PrPicFile(cpu68k *c, uint16_t trapword)
     gaddr a_pPrPort = (gaddr)cpu_pop32(c);
     gaddr a_hPrint = (gaddr)cpu_pop32(c);
     tb_PrPicFile(a_hPrint, a_pPrPort, a_pIOBuf, a_pDevBuf, a_prStatus);
+    cpu_push32(c, ret);
+}
+
+static void glue_PrPurge(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_PrPurge();
     cpu_push32(c, ret);
 }
 
@@ -15373,6 +16984,17 @@ static void glue_QDError(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_QDError();
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QDTextBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr a_textAddr = (gaddr)cpu_pop32(c);
+    int16_t a_byteCount = (int16_t)cpu_pop16(c);
+    tb_QDTextBounds(a_byteCount, a_textAddr, a_bounds);
     cpu_push32(c, ret);
 }
 
@@ -16632,6 +18254,22 @@ static void glue_SelectWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SendAEFromTSMComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_filterProc = (gaddr)cpu_pop32(c);
+    gaddr a_idleProc = (gaddr)cpu_pop32(c);
+    int32_t a_timeOutInTicks = (int32_t)cpu_pop32(c);
+    int16_t a_sendPriority = (int16_t)cpu_pop16(c);
+    int32_t a_sendMode = (int32_t)cpu_pop32(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    gaddr a_theAppleEvent = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SendAEFromTSMComponent(a_theAppleEvent, a_reply, a_sendMode, a_sendPriority, a_timeOutInTicks, a_idleProc, a_filterProc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SendBehind(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17004,6 +18642,16 @@ static void glue_SetCursor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetCursorComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_ci = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_SetCursorComponent(a_ci);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDSequenceAccuracy(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17096,6 +18744,14 @@ static void glue_SetDSequenceTransferMode(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t a_mactime = (uint32_t)c->d[0];
+    int16_t r = tb_SetDateTime(a_mactime);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_SetDebuggerNotificationProcs(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17104,6 +18760,17 @@ static void glue_SetDebuggerNotificationProcs(cpu68k *c, uint16_t trapword)
     gaddr a_notifyDisposeThread = (gaddr)cpu_pop32(c);
     gaddr a_notifyNewThread = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetDebuggerNotificationProcs(a_notifyNewThread, a_notifyDisposeThread, a_notifyThreadScheduler);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDefaultInputMethod(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slRecordPtr = (gaddr)cpu_pop32(c);
+    uint32_t a_ts = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_SetDefaultInputMethod(a_ts, a_slRecordPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -18020,6 +19687,19 @@ static void glue_SetPortBits(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetPortCustomXFerProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_refCon = (uint32_t)cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    gaddr a_port = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetPortCustomXFerProc(a_port, a_proc, a_flags, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetPortPix(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18163,6 +19843,31 @@ static void glue_SetScriptManagerVariable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetScriptQDPatchAddress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    gaddr a_routineAddr = (gaddr)cpu_pop32(c);
+    int8_t a_forPrinting = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_before = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_trapNum = (int16_t)cpu_pop16(c);
+    tb_SetScriptQDPatchAddress(a_trapNum, a_before, a_forPrinting, a_routineAddr, a_script);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetScriptUtilityAddress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    gaddr a_routineAddr = (gaddr)cpu_pop32(c);
+    int8_t a_before = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_selector = (int16_t)cpu_pop16(c);
+    tb_SetScriptUtilityAddress(a_selector, a_before, a_routineAddr, a_script);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetScriptVariable(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18279,6 +19984,16 @@ static void glue_SetSysDirection(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetTSMCursor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_mousePos = (uint32_t)cpu_pop32(c);
+    int8_t r = tb_SetTSMCursor(a_mousePos);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_SetTabEnabled(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18287,6 +20002,26 @@ static void glue_SetTabEnabled(cpu68k *c, uint16_t trapword)
     int16_t a_tab = (int16_t)cpu_pop16(c);
     gaddr a_tabs = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetTabEnabled(a_tabs, a_tab, a_enabled);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTagBuffer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetTagBuffer(a_bp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTextServiceLanguage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slRecordPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetTextServiceLanguage(a_slRecordPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -18440,6 +20175,15 @@ static void glue_SetThreadTerminator(cpu68k *c, uint16_t trapword)
     int32_t a_thread = (int32_t)cpu_pop32(c);
     int16_t r = tb_SetThreadTerminator(a_thread, a_threadTerminator, a_terminationProcParam);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_d = (gaddr)cpu_pop32(c);
+    tb_SetTime(a_d);
     cpu_push32(c, ret);
 }
 
@@ -20002,6 +21746,16 @@ static void glue_TESetText(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TESetWordBreak(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_teh = (gaddr)cpu_pop32(c);
+    gaddr a_wb = (gaddr)cpu_pop32(c);
+    tb_TESetWordBreak(a_wb, a_teh);
+    cpu_push32(c, ret);
+}
+
 static void glue_TEStyleInsert(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20075,6 +21829,26 @@ static void glue_TEUseStyleScrap(cpu68k *c, uint16_t trapword)
     int32_t a_stop = (int32_t)cpu_pop32(c);
     int32_t a_start = (int32_t)cpu_pop32(c);
     tb_TEUseStyleScrap(a_start, a_stop, a_newstyles, a_redraw, a_teh);
+    cpu_push32(c, ret);
+}
+
+static void glue_TSMEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_event = (gaddr)cpu_pop32(c);
+    int8_t r = tb_TSMEvent(a_event);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_TSMMenuSelect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_menuResult = (int32_t)cpu_pop32(c);
+    int8_t r = tb_TSMMenuSelect(a_menuResult);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -20277,6 +22051,15 @@ static void glue_TickCount(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     uint32_t r = tb_TickCount();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TopMem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_TopMem();
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -20640,6 +22423,17 @@ static void glue_UseDictionary(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UseInputWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_useWindow = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UseInputWindow(a_idocID, a_useWindow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UseResFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20957,7 +22751,7 @@ const trap_sig trap_sigs[] = {
     {0xA036, -1, "MoreMasters", CONV_STACK, 0, 0, glue_MoreMasters},
     {0xA038, -1, "WriteParam", CONV_REG, 0, 0, glue_WriteParam},
     {0xA039, -1, "ReadDateTime", CONV_REG, 0, 0, glue_ReadDateTime},
-    {0xA03A, -1, "SetDateTime", CONV_REG, 0, 0, 0},
+    {0xA03A, -1, "SetDateTime", CONV_REG, 0, 0, glue_SetDateTime},
     {0xA03B, -1, "Delay", CONV_REG, 0, 0, glue_Delay},
     {0xA03E, -1, "DrvrRemove", CONV_REG, 0, 0, glue_DrvrRemove},
     {0xA03F, -1, "InitUtil", CONV_REG, 0, 0, glue_InitUtil},
@@ -21614,6 +23408,15 @@ const trap_sig trap_sigs[] = {
 const unsigned trap_sig_count = sizeof trap_sigs / sizeof trap_sigs[0];
 
 const dispatch_sig dispatch_sigs[] = {
+    {0xAA80, (int32_t)0x302u, "AVLDispose", CONV_STACK, 6, 2, glue_AVLDispose},
+    {0xAA80, (int32_t)0x406u, "AVLInsert", CONV_STACK, 8, 2, glue_AVLInsert},
+    {0xAA80, (int32_t)0x409u, "AVLGetRefcon", CONV_STACK, 8, 2, glue_AVLGetRefcon},
+    {0xAA80, (int32_t)0x703u, "AVLWalk", CONV_STACK, 14, 2, glue_AVLWalk},
+    {0xAA80, (int32_t)0x804u, "AVLCount", CONV_STACK, 8, 2, glue_AVLCount},
+    {0xAA80, (int32_t)0x805u, "AVLGetIndItem", CONV_STACK, 16, 2, glue_AVLGetIndItem},
+    {0xAA80, (int32_t)0x807u, "AVLRemove", CONV_STACK, 16, 2, glue_AVLRemove},
+    {0xAA80, (int32_t)0x808u, "AVLFind", CONV_STACK, 16, 2, glue_AVLFind},
+    {0xAA80, (int32_t)0xC01u, "AVLInit", CONV_STACK, 24, 2, glue_AVLInit},
     {0xA823, (int32_t)0x0u, "FindFolder", CONV_STACK, 16, 2, glue_FindFolder},
     {0xA823, (int32_t)0x2u, "NewAlias", CONV_STACK, 12, 2, glue_NewAlias},
     {0xA823, (int32_t)0x3u, "ResolveAlias", CONV_STACK, 16, 2, glue_ResolveAlias},
@@ -21764,6 +23567,20 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA73, (int32_t)0x1Cu, "SetControlFontStyle", CONV_STACK, 8, 2, glue_SetControlFontStyle},
     {0xAA73, (int32_t)0x1Du, "SetUpControlBackground", CONV_STACK, 8, 2, glue_SetUpControlBackground},
     {0xAA73, (int32_t)0x1Eu, "SetControlVisibility", CONV_STACK, 8, 2, glue_SetControlVisibility},
+    {0xABE0, (int32_t)0x4000Cu, "CloseCursorComponent", CONV_STACK, 4, 2, glue_CloseCursorComponent},
+    {0xABE0, (int32_t)0x4000Du, "SetCursorComponent", CONV_STACK, 4, 2, glue_SetCursorComponent},
+    {0xABE0, (int32_t)0x4000Eu, "CursorComponentChanged", CONV_STACK, 4, 2, glue_CursorComponentChanged},
+    {0xABE0, (int32_t)0x8000Bu, "OpenCursorComponent", CONV_STACK, 8, 2, glue_OpenCursorComponent},
+    {0xABE0, (int32_t)0x8000Fu, "CursorComponentSetData", CONV_STACK, 8, 2, glue_CursorComponentSetData},
+    {0xA08D, (int32_t)0x0u, "DebuggerGetMax", CONV_REG, 0, 0, glue_DebuggerGetMax},
+    {0xA08D, (int32_t)0x1u, "DebuggerEnter", CONV_STACK, 0, 0, glue_DebuggerEnter},
+    {0xA08D, (int32_t)0x2u, "DebuggerExit", CONV_STACK, 0, 0, glue_DebuggerExit},
+    {0xA08D, (int32_t)0x3u, "DebuggerPoll", CONV_STACK, 0, 0, glue_DebuggerPoll},
+    {0xA08D, (int32_t)0x4u, "GetPageState", CONV_REG, 0, 0, glue_GetPageState},
+    {0xA08D, (int32_t)0x5u, "PageFaultFatal", CONV_REG, 0, 0, glue_PageFaultFatal},
+    {0xA08D, (int32_t)0x6u, "DebuggerLockMemory", CONV_REG, 0, 0, glue_DebuggerLockMemory},
+    {0xA08D, (int32_t)0x7u, "DebuggerUnlockMemory", CONV_REG, 0, 0, glue_DebuggerUnlockMemory},
+    {0xA08D, (int32_t)0x8u, "EnterSupervisorMode", CONV_REG, 0, 0, glue_EnterSupervisorMode},
     {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
     {0xAA68, (int32_t)0x20Du, "AutoSizeDialog", CONV_STACK, 4, 2, glue_AutoSizeDialog},
     {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},
@@ -21775,7 +23592,86 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA68, (int32_t)0x511u, "SizeDialogItem", CONV_STACK, 10, 2, glue_SizeDialogItem},
     {0xAA68, (int32_t)0x90Eu, "StandardAlert", CONV_STACK, 18, 2, glue_StandardAlert},
     {0xAA68, (int32_t)0x110Cu, "NewFeaturesDialog", CONV_STACK, 34, 4, glue_NewFeaturesDialog},
-    {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, 0},
+    {0xAA53, (int32_t)0x202u, "CloseDictionary", CONV_STACK, 4, 2, glue_CloseDictionary},
+    {0xAA53, (int32_t)0x208u, "CompactDictionary", CONV_STACK, 4, 2, glue_CompactDictionary},
+    {0xAA53, (int32_t)0x404u, "DeleteRecordFromDictionary", CONV_STACK, 8, 2, glue_DeleteRecordFromDictionary},
+    {0xAA53, (int32_t)0x407u, "GetDictionaryInformation", CONV_STACK, 8, 2, glue_GetDictionaryInformation},
+    {0xAA53, (int32_t)0x500u, "InitializeDictionary", CONV_STACK, 10, 2, glue_InitializeDictionary},
+    {0xAA53, (int32_t)0x501u, "OpenDictionary", CONV_STACK, 10, 2, glue_OpenDictionary},
+    {0xAA53, (int32_t)0x703u, "InsertRecordToDictionary", CONV_STACK, 14, 2, glue_InsertRecordToDictionary},
+    {0xAA53, (int32_t)0x805u, "FindRecordInDictionary", CONV_STACK, 16, 2, glue_FindRecordInDictionary},
+    {0xAA53, (int32_t)0xA06u, "FindRecordByIndexInDictionary", CONV_STACK, 20, 2, glue_FindRecordByIndexInDictionary},
+    {0xABEB, (int32_t)0x0u, "DMGetFirstScreenDevice", CONV_STACK, 2, 4, glue_DMGetFirstScreenDevice},
+    {0xABEB, (int32_t)0x1u, "DMGetNextScreenDevice", CONV_STACK, 6, 4, glue_DMGetNextScreenDevice},
+    {0xABEB, (int32_t)0x2u, "DMDrawDesktopRect", CONV_STACK, 4, 0, glue_DMDrawDesktopRect},
+    {0xABEB, (int32_t)0x3u, "DMDrawDesktopRegion", CONV_STACK, 4, 0, glue_DMDrawDesktopRegion},
+    {0xABEB, (int32_t)0x1Cu, "DMBlockMirroring", CONV_STACK, 0, 2, glue_DMBlockMirroring},
+    {0xABEB, (int32_t)0x1Du, "DMUnblockMirroring", CONV_STACK, 0, 2, glue_DMUnblockMirroring},
+    {0xABEB, (int32_t)0x25u, "DMResolveDisplayComponents", CONV_STACK, 0, 2, glue_DMResolveDisplayComponents},
+    {0xABEB, (int32_t)0x206u, "DMBeginConfigureDisplays", CONV_STACK, 4, 2, glue_DMBeginConfigureDisplays},
+    {0xABEB, (int32_t)0x207u, "DMEndConfigureDisplays", CONV_STACK, 4, 2, glue_DMEndConfigureDisplays},
+    {0xABEB, (int32_t)0x213u, "DMGetDeskRegion", CONV_STACK, 4, 2, glue_DMGetDeskRegion},
+    {0xABEB, (int32_t)0x216u, "DMQDIsMirroringCapable", CONV_STACK, 4, 2, glue_DMQDIsMirroringCapable},
+    {0xABEB, (int32_t)0x217u, "DMCanMirrorNow", CONV_STACK, 4, 2, glue_DMCanMirrorNow},
+    {0xABEB, (int32_t)0x218u, "DMIsMirroringOn", CONV_STACK, 4, 2, glue_DMIsMirroringOn},
+    {0xABEB, (int32_t)0x21Eu, "DMGetDisplayMgrA5World", CONV_STACK, 4, 2, glue_DMGetDisplayMgrA5World},
+    {0xABEB, (int32_t)0x22Cu, "DMDisposeList", CONV_STACK, 4, 2, glue_DMDisposeList},
+    {0xABEB, (int32_t)0x231u, "DMDisposeAVComponent", CONV_STACK, 4, 2, glue_DMDisposeAVComponent},
+    {0xABEB, (int32_t)0x3ECu, "DMUseScreenPrefs", CONV_STACK, 6, 2, glue_DMUseScreenPrefs},
+    {0xABEB, (int32_t)0x40Au, "DMDisableDisplay", CONV_STACK, 8, 2, glue_DMDisableDisplay},
+    {0xABEB, (int32_t)0x40Bu, "DMEnableDisplay", CONV_STACK, 8, 2, glue_DMEnableDisplay},
+    {0xABEB, (int32_t)0x40Cu, "DMRemoveDisplay", CONV_STACK, 8, 2, glue_DMRemoveDisplay},
+    {0xABEB, (int32_t)0x410u, "DMSetMainDisplay", CONV_STACK, 8, 2, glue_DMSetMainDisplay},
+    {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, glue_DMRegisterNotifyProc},
+    {0xABEB, (int32_t)0x415u, "DMRemoveNotifyProc", CONV_STACK, 8, 2, glue_DMRemoveNotifyProc},
+    {0xABEB, (int32_t)0x41Au, "DMUnmirrorDevice", CONV_STACK, 8, 2, glue_DMUnmirrorDevice},
+    {0xABEB, (int32_t)0x41Bu, "DMGetNextMirroredDevice", CONV_STACK, 8, 2, glue_DMGetNextMirroredDevice},
+    {0xABEB, (int32_t)0x421u, "DMSetDisplayComponent", CONV_STACK, 8, 2, glue_DMSetDisplayComponent},
+    {0xABEB, (int32_t)0x422u, "DMGetDisplayComponent", CONV_STACK, 8, 2, glue_DMGetDisplayComponent},
+    {0xABEB, (int32_t)0x424u, "DMDisposeDisplay", CONV_STACK, 8, 2, glue_DMDisposeDisplay},
+    {0xABEB, (int32_t)0x43Bu, "DMGetDeviceAVIDByPortAVID", CONV_STACK, 8, 2, glue_DMGetDeviceAVIDByPortAVID},
+    {0xABEB, (int32_t)0x43Eu, "DMGetDisplayMode", CONV_STACK, 8, 2, glue_DMGetDisplayMode},
+    {0xABEB, (int32_t)0x4D7u, "DMGetMakeAndModelByAVID", CONV_STACK, 8, 2, glue_DMGetMakeAndModelByAVID},
+    {0xABEB, (int32_t)0x4E8u, "DMResumeConfigure", CONV_STACK, 8, 2, glue_DMResumeConfigure},
+    {0xABEB, (int32_t)0x4E9u, "DMSuspendConfigure", CONV_STACK, 8, 2, glue_DMSuspendConfigure},
+    {0xABEB, (int32_t)0x51Fu, "DMGetDisplayIDByGDevice", CONV_STACK, 10, 2, glue_DMGetDisplayIDByGDevice},
+    {0xABEB, (int32_t)0x520u, "DMGetGDeviceByDisplayID", CONV_STACK, 10, 2, glue_DMGetGDeviceByDisplayID},
+    {0xABEB, (int32_t)0x53Du, "DMSetEnableByAVID", CONV_STACK, 10, 2, glue_DMSetEnableByAVID},
+    {0xABEB, (int32_t)0x609u, "DMMoveDisplay", CONV_STACK, 12, 2, glue_DMMoveDisplay},
+    {0xABEB, (int32_t)0x619u, "DMMirrorDevices", CONV_STACK, 12, 2, glue_DMMirrorDevices},
+    {0xABEB, (int32_t)0x62Du, "DMGetNameByAVID", CONV_STACK, 12, 2, glue_DMGetNameByAVID},
+    {0xABEB, (int32_t)0x632u, "DMSaveScreenPrefs", CONV_STACK, 12, 2, glue_DMSaveScreenPrefs},
+    {0xABEB, (int32_t)0x63Cu, "DMGetEnableByAVID", CONV_STACK, 12, 2, glue_DMGetEnableByAVID},
+    {0xABEB, (int32_t)0x6D0u, "DMGetGammaByAVID", CONV_STACK, 12, 2, glue_DMGetGammaByAVID},
+    {0xABEB, (int32_t)0x6D1u, "DMSetGammaByAVID", CONV_STACK, 12, 2, glue_DMSetGammaByAVID},
+    {0xABEB, (int32_t)0x6D3u, "DMDisplayGestalt", CONV_STACK, 12, 2, glue_DMDisplayGestalt},
+    {0xABEB, (int32_t)0x726u, "DMRemoveExtendedNotifyProc", CONV_STACK, 14, 2, glue_DMRemoveExtendedNotifyProc},
+    {0xABEB, (int32_t)0x7EFu, "DMRegisterExtendedNotifyProc", CONV_STACK, 14, 2, glue_DMRegisterExtendedNotifyProc},
+    {0xABEB, (int32_t)0x82Eu, "DMNewAVIDByPortComponent", CONV_STACK, 16, 2, glue_DMNewAVIDByPortComponent},
+    {0xABEB, (int32_t)0x82Fu, "DMGetPortComponentByAVID", CONV_STACK, 16, 2, glue_DMGetPortComponentByAVID},
+    {0xABEB, (int32_t)0x830u, "DMSendDependentNotification", CONV_STACK, 16, 2, glue_DMSendDependentNotification},
+    {0xABEB, (int32_t)0x833u, "DMNewAVIDByDeviceComponent", CONV_STACK, 16, 2, glue_DMNewAVIDByDeviceComponent},
+    {0xABEB, (int32_t)0x835u, "DMGetDeviceComponentByAVID", CONV_STACK, 16, 2, glue_DMGetDeviceComponentByAVID},
+    {0xABEB, (int32_t)0x838u, "DMGetGraphicInfoByAVID", CONV_STACK, 16, 2, glue_DMGetGraphicInfoByAVID},
+    {0xABEB, (int32_t)0x839u, "DMGetAVPowerState", CONV_STACK, 12, 2, glue_DMGetAVPowerState},
+    {0xABEB, (int32_t)0x83Au, "DMSetAVPowerState", CONV_STACK, 16, 2, glue_DMSetAVPowerState},
+    {0xABEB, (int32_t)0x83Fu, "DMConfirmConfiguration", CONV_STACK, 16, 2, glue_DMConfirmConfiguration},
+    {0xABEB, (int32_t)0x8DCu, "DMNewProfileListByAVID", CONV_STACK, 16, 2, glue_DMNewProfileListByAVID},
+    {0xABEB, (int32_t)0xA11u, "DMSetDisplayMode", CONV_STACK, 20, 2, glue_DMSetDisplayMode},
+    {0xABEB, (int32_t)0xA29u, "DMNewAVDeviceList", CONV_STACK, 20, 2, glue_DMNewAVDeviceList},
+    {0xABEB, (int32_t)0xA2Au, "DMNewAVPortListByPortType", CONV_STACK, 20, 2, glue_DMNewAVPortListByPortType},
+    {0xABEB, (int32_t)0xA2Bu, "DMGetIndexedComponentFromList", CONV_STACK, 20, 2, glue_DMGetIndexedComponentFromList},
+    {0xABEB, (int32_t)0xA36u, "DMNewDisplayModeList", CONV_STACK, 20, 2, glue_DMNewDisplayModeList},
+    {0xABEB, (int32_t)0xA37u, "DMGetIndexedDisplayModeFromList", CONV_STACK, 20, 2, glue_DMGetIndexedDisplayModeFromList},
+    {0xABEB, (int32_t)0xAD5u, "DMGetIndexedDisplayFromList", CONV_STACK, 20, 2, glue_DMGetIndexedDisplayFromList},
+    {0xABEB, (int32_t)0xAD6u, "DMNewDisplayList", CONV_STACK, 20, 2, glue_DMNewDisplayList},
+    {0xABEB, (int32_t)0xADBu, "DMGetIndexedProfileFromList", CONV_STACK, 20, 2, glue_DMGetIndexedProfileFromList},
+    {0xABEB, (int32_t)0xC12u, "DMCheckDisplayMode", CONV_STACK, 24, 2, glue_DMCheckDisplayMode},
+    {0xABEB, (int32_t)0xC27u, "DMNewAVPanelList", CONV_STACK, 28, 2, glue_DMNewAVPanelList},
+    {0xABEB, (int32_t)0xC28u, "DMNewAVEngineList", CONV_STACK, 28, 2, glue_DMNewAVEngineList},
+    {0xABEB, (int32_t)0xC34u, "DMNewAVPortListByDeviceAVID", CONV_STACK, 24, 2, glue_DMNewAVPortListByDeviceAVID},
+    {0xABEB, (int32_t)0xD08u, "DMAddDisplay", CONV_STACK, 26, 2, glue_DMAddDisplay},
+    {0xABEB, (int32_t)0xD23u, "DMNewDisplay", CONV_STACK, 26, 2, glue_DMNewDisplay},
     {0xABED, (int32_t)0x1u, "InstallTrackingHandler", CONV_STACK, 12, 2, glue_InstallTrackingHandler},
     {0xABED, (int32_t)0x2u, "InstallReceiveHandler", CONV_STACK, 12, 2, glue_InstallReceiveHandler},
     {0xABED, (int32_t)0x3u, "RemoveTrackingHandler", CONV_STACK, 8, 2, glue_RemoveTrackingHandler},
@@ -21921,6 +23817,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA854, (int32_t)0xAu, "SetPreserveGlyph", CONV_STACK, 2, 0, glue_SetPreserveGlyph},
     {0xA854, (int32_t)0xBu, "GetPreserveGlyph", CONV_STACK, 0, 2, glue_GetPreserveGlyph},
     {0xA854, (int32_t)0xCu, "FlushFonts", CONV_STACK, 0, 2, glue_FlushFonts},
+    {0xA854, (int32_t)0x13u, "QDTextBounds", CONV_STACK, 10, 0, glue_QDTextBounds},
+    {0xA854, (int32_t)0x14u, "FetchFontInfo", CONV_STACK, 10, 2, glue_FetchFontInfo},
     {0xA832, (int32_t)0x59u, "GXNewGraphicsClient", CONV_REG, 12, 0, glue_GXNewGraphicsClient},
     {0xA832, (int32_t)0x5Au, "GXGetGraphicsClient", CONV_REG, 0, 0, glue_GXGetGraphicsClient},
     {0xA832, (int32_t)0x5Bu, "GXSetGraphicsClient", CONV_REG, 4, 0, glue_GXSetGraphicsClient},
@@ -22709,6 +24607,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA825, (int32_t)0x19u, "EnableMenuItemIcon", CONV_STACK, 6, 0, glue_EnableMenuItemIcon},
     {0xA825, (int32_t)0x20u, "DisableMenuItemIcon", CONV_STACK, 6, 0, glue_DisableMenuItemIcon},
     {0xA825, (int32_t)0x20Cu, "MenuEvent", CONV_STACK, 4, 4, glue_MenuEvent},
+    {0xA825, (int32_t)0x400u, "InsertFontResMenu", CONV_STACK, 8, 0, glue_InsertFontResMenu},
     {0xA825, (int32_t)0x404u, "SetMenuItemModifiers", CONV_STACK, 8, 2, glue_SetMenuItemModifiers},
     {0xA825, (int32_t)0x408u, "SetMenuItemTextEncoding", CONV_STACK, 10, 2, glue_SetMenuItemTextEncoding},
     {0xA825, (int32_t)0x40Du, "SetMenuItemHierarchicalID", CONV_STACK, 8, 2, glue_SetMenuItemHierarchicalID},
@@ -22725,6 +24624,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA825, (int32_t)0x512u, "GetMenuItemRefCon2", CONV_STACK, 10, 2, glue_GetMenuItemRefCon2},
     {0xA825, (int32_t)0x513u, "SetMenuItemKeyGlyph", CONV_STACK, 8, 2, glue_SetMenuItemKeyGlyph},
     {0xA825, (int32_t)0x514u, "GetMenuItemKeyGlyph", CONV_STACK, 10, 2, glue_GetMenuItemKeyGlyph},
+    {0xA825, (int32_t)0x601u, "InsertIntlResMenu", CONV_STACK, 12, 0, glue_InsertIntlResMenu},
     {0xA825, (int32_t)0x606u, "SetMenuItemIconHandle", CONV_STACK, 12, 2, glue_SetMenuItemIconHandle},
     {0xA825, (int32_t)0x707u, "GetMenuItemIconHandle", CONV_STACK, 14, 2, glue_GetMenuItemIconHandle},
     {0xAA59, (int32_t)0x0u, "NewRoutineDescriptor", CONV_STACK, 10, 4, 0},
@@ -22745,6 +24645,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x33u, "AcceptHighLevelEvent", CONV_STACK, 16, 2, glue_AcceptHighLevelEvent},
     {0xA88F, (int32_t)0x34u, "PostHighLevelEvent", CONV_STACK, 24, 2, glue_PostHighLevelEvent},
     {0xA88F, (int32_t)0x35u, "GetProcessSerialNumberFromPortName", CONV_STACK, 8, 2, glue_GetProcessSerialNumberFromPortName},
+    {0xA88F, (int32_t)0x36u, "LaunchDeskAccessory", CONV_STACK, 8, 2, glue_LaunchDeskAccessory},
     {0xA88F, (int32_t)0x37u, "GetCurrentProcess", CONV_STACK, 4, 2, glue_GetCurrentProcess},
     {0xA88F, (int32_t)0x38u, "GetNextProcess", CONV_STACK, 4, 2, glue_GetNextProcess},
     {0xA88F, (int32_t)0x39u, "GetFrontProcess", CONV_STACK, 8, 2, glue_GetFrontProcess},
@@ -22756,6 +24657,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x41u, "EndSystemMode", CONV_STACK, 0, 2, glue_EndSystemMode},
     {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, glue_GetPortNameFromProcessSerialNumber},
+    {0xA88F, (int32_t)0x7Bu, "LaunchControlPanel", CONV_STACK, 4, 2, glue_LaunchControlPanel},
     {0xA9E7, (int32_t)0x0u, "LActivate", CONV_STACK, 6, 0, glue_LActivate},
     {0xA9E7, (int32_t)0x4u, "LAddColumn", CONV_STACK, 8, 2, glue_LAddColumn},
     {0xA9E7, (int32_t)0x8u, "LAddRow", CONV_STACK, 8, 2, glue_LAddRow},
@@ -22821,6 +24723,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA82E, (int32_t)0x7u, "HSV2RGB", CONV_STACK, 8, 0, glue_HSV2RGB},
     {0xA82E, (int32_t)0x8u, "RGB2HSV", CONV_STACK, 8, 0, glue_RGB2HSV},
     {0xA82E, (int32_t)0x9u, "GetColor", CONV_STACK, 16, 2, glue_GetColor},
+    {0xA82E, (int32_t)0x213u, "PickColor", CONV_STACK, 4, 2, glue_PickColor},
+    {0xA82E, (int32_t)0x227u, "NPickColor", CONV_STACK, 4, 2, glue_NPickColor},
     {0xA82F, (int32_t)0x100u, "InitDBPack", CONV_STACK, 2, 2, glue_InitDBPack},
     {0xA82F, (int32_t)0x20Eu, "DBKill", CONV_STACK, 4, 2, glue_DBKill},
     {0xA82F, (int32_t)0x210u, "DBDisposeQuery", CONV_STACK, 4, 2, glue_DBDisposeQuery},
@@ -22948,8 +24852,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9ED, (int32_t)0x18u, "ClearIntlResourceCache", CONV_STACK, 0, 0, glue_ClearIntlResourceCache},
     {0xA9ED, (int32_t)0x1Au, "IUMagPString", CONV_STACK, 16, 2, glue_IUMagPString},
     {0xA9ED, (int32_t)0x1Cu, "IUMagIDPString", CONV_STACK, 16, 2, glue_IUMagIDPString},
-    {0xA9ED, (int32_t)0x1Eu, "IUScriptOrder", CONV_STACK, 4, 2, 0},
-    {0xA9ED, (int32_t)0x20u, "IULangOrder", CONV_STACK, 4, 2, 0},
+    {0xA9ED, (int32_t)0x1Eu, "IUScriptOrder", CONV_STACK, 4, 2, glue_IUScriptOrder},
+    {0xA9ED, (int32_t)0x20u, "IULangOrder", CONV_STACK, 4, 2, glue_IULangOrder},
     {0xA9ED, (int32_t)0x22u, "IUTextOrder", CONV_STACK, 20, 2, glue_IUTextOrder},
     {0xA9ED, (int32_t)0x24u, "GetIntlResourceTable", CONV_STACK, 16, 0, glue_GetIntlResourceTable},
     {0xA9EE, (int32_t)0x0u, "NumToString", CONV_REG, 0, 0, glue_NumToString},
@@ -23053,10 +24957,13 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8FD, (int32_t)0x94000000u, "PrDrvrDCE", CONV_STACK, 0, 4, glue_PrDrvrDCE},
     {0xA8FD, (int32_t)0x9A000000u, "PrDrvrVers", CONV_STACK, 0, 2, glue_PrDrvrVers},
     {0xA8FD, (int32_t)0xA0000E00u, "PrCtlCall", CONV_STACK, 14, 0, glue_PrCtlCall},
+    {0xA8FD, (int32_t)0xA8000000u, "PrPurge", CONV_STACK, 0, 0, glue_PrPurge},
+    {0xA8FD, (int32_t)0xB0000000u, "PrNoPurge", CONV_STACK, 0, 0, glue_PrNoPurge},
     {0xA8FD, (int32_t)0xBA000000u, "PrError", CONV_STACK, 0, 2, glue_PrError},
     {0xA8FD, (int32_t)0xC0000200u, "PrSetError", CONV_STACK, 2, 0, glue_PrSetError},
     {0xA8FD, (int32_t)0xC8000000u, "PrOpen", CONV_STACK, 0, 0, glue_PrOpen},
     {0xA8FD, (int32_t)0xD0000000u, "PrClose", CONV_STACK, 0, 0, glue_PrClose},
+    {0xA8FD, (int32_t)0xD8000000u, "PrLoadDriver", CONV_STACK, 0, 2, glue_PrLoadDriver},
     {0xAB1D, (int32_t)0x14u, "OffscreenVersion", CONV_STACK, 0, 4, glue_OffscreenVersion},
     {0xAB1D, (int32_t)0x40001u, "LockPixels", CONV_STACK, 4, 2, glue_LockPixels},
     {0xAB1D, (int32_t)0x40002u, "UnlockPixels", CONV_STACK, 4, 0, glue_UnlockPixels},
@@ -23074,11 +24981,14 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAB1D, (int32_t)0x40013u, "QDDone", CONV_STACK, 4, 2, glue_QDDone},
     {0xAB1D, (int32_t)0x40016u, "PixMap32Bit", CONV_STACK, 4, 2, glue_PixMap32Bit},
     {0xAB1D, (int32_t)0x40017u, "GetGWorldPixMap", CONV_STACK, 4, 4, glue_GetGWorldPixMap},
+    {0xAB1D, (int32_t)0x40018u, "GetPixRowBytes", CONV_STACK, 4, 4, glue_GetPixRowBytes},
     {0xAB1D, (int32_t)0x80005u, "GetGWorld", CONV_STACK, 8, 0, glue_GetGWorld},
     {0xAB1D, (int32_t)0x80006u, "SetGWorld", CONV_STACK, 8, 0, glue_SetGWorld},
     {0xAB1D, (int32_t)0x8000Eu, "SetPixelsState", CONV_STACK, 8, 0, glue_SetPixelsState},
     {0xAB1D, (int32_t)0xE0010u, "NewScreenBuffer", CONV_STACK, 14, 2, glue_NewScreenBuffer},
     {0xAB1D, (int32_t)0xE0015u, "NewTempScreenBuffer", CONV_STACK, 14, 2, glue_NewTempScreenBuffer},
+    {0xAB1D, (int32_t)0x100019u, "GetPortCustomXFerProc", CONV_STACK, 16, 2, glue_GetPortCustomXFerProc},
+    {0xAB1D, (int32_t)0x10001Au, "SetPortCustomXFerProc", CONV_STACK, 16, 2, glue_SetPortCustomXFerProc},
     {0xAB1D, (int32_t)0x160000u, "NewGWorld", CONV_STACK, 22, 2, glue_NewGWorld},
     {0xAB1D, (int32_t)0x160003u, "UpdateGWorld", CONV_STACK, 22, 4, glue_UpdateGWorld},
     {0xAAAA, (int32_t)0x1u, "EnterMovies", CONV_STACK, 0, 2, glue_EnterMovies},
@@ -23561,6 +25471,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x800C0020u, "MeasureJust", CONV_STACK, 12, 0, glue_MeasureJust},
     {0xA8B5, (int32_t)0x800E001Cu, "HiliteText", CONV_STACK, 12, 0, glue_HiliteText},
     {0xA8B5, (int32_t)0x8012001Au, "FindWord", CONV_STACK, 18, 0, glue_FindWord},
+    {0xA8B5, (int32_t)0x8012FFE2u, "NFindWord", CONV_STACK, 18, 0, glue_NFindWord},
     {0xA8B5, (int32_t)0x80160032u, "DrawJustified", CONV_STACK, 22, 0, glue_DrawJustified},
     {0xA8B5, (int32_t)0x801A0034u, "MeasureJustified", CONV_STACK, 26, 0, glue_MeasureJustified},
     {0xA8B5, (int32_t)0x82000000u, "FontScript", CONV_STACK, 0, 2, glue_FontScript},
@@ -23568,6 +25479,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x82020006u, "FontToScript", CONV_STACK, 2, 2, glue_FontToScript},
     {0xA8B5, (int32_t)0x82040022u, "ParseTable", CONV_STACK, 4, 2, glue_ParseTable},
     {0xA8B5, (int32_t)0x8204FFF8u, "InitDateCache", CONV_STACK, 4, 2, glue_InitDateCache},
+    {0xA8B5, (int32_t)0x8204FFFAu, "IntlTokenize", CONV_STACK, 4, 2, glue_IntlTokenize},
     {0xA8B5, (int32_t)0x8206000Au, "SetScriptManagerVariable", CONV_STACK, 6, 2, glue_SetScriptManagerVariable},
     {0xA8B5, (int32_t)0x82060010u, "CharByte", CONV_STACK, 6, 2, glue_CharByte},
     {0xA8B5, (int32_t)0x82060012u, "CharType", CONV_STACK, 6, 2, glue_CharType},
@@ -23582,6 +25494,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x820EFFEEu, "ToggleDate", CONV_STACK, 14, 2, 0},
     {0xA8B5, (int32_t)0x8210FFE6u, "StringToExtended", CONV_STACK, 16, 2, glue_StringToExtended},
     {0xA8B5, (int32_t)0x8210FFE8u, "ExtendedToString", CONV_STACK, 16, 2, glue_ExtendedToString},
+    {0xA8B5, (int32_t)0x8210FFEAu, "FormatRecToString", CONV_STACK, 16, 2, glue_FormatRecToString},
     {0xA8B5, (int32_t)0x8214FFF4u, "StringToTime", CONV_STACK, 20, 2, 0},
     {0xA8B5, (int32_t)0x8214FFF6u, "StringToDate", CONV_STACK, 20, 2, 0},
     {0xA8B5, (int32_t)0x821C0030u, "CharToPixel", CONV_STACK, 28, 2, glue_CharToPixel},
@@ -23589,12 +25502,17 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x8222002Eu, "PixelToChar", CONV_STACK, 34, 2, glue_PixelToChar},
     {0xA8B5, (int32_t)0x84020008u, "GetScriptManagerVariable", CONV_STACK, 2, 4, glue_GetScriptManagerVariable},
     {0xA8B5, (int32_t)0x8404000Cu, "GetScriptVariable", CONV_STACK, 4, 4, glue_GetScriptVariable},
+    {0xA8B5, (int32_t)0x84080024u, "PortionText", CONV_STACK, 8, 4, glue_PortionText},
     {0xA8B5, (int32_t)0x84080028u, "VisibleLength", CONV_STACK, 8, 4, glue_VisibleLength},
     {0xA8B5, (int32_t)0x84120036u, "PortionLine", CONV_STACK, 18, 4, glue_PortionLine},
+    {0xA8B5, (int32_t)0xC008003Au, "SetScriptUtilityAddress", CONV_STACK, 10, 0, glue_SetScriptUtilityAddress},
+    {0xA8B5, (int32_t)0xC00A003Eu, "SetScriptQDPatchAddress", CONV_STACK, 12, 0, glue_SetScriptQDPatchAddress},
     {0xA8B5, (int32_t)0xC2040022u, "FillParseTable", CONV_STACK, 6, 2, glue_FillParseTable},
     {0xA8B5, (int32_t)0xC2060010u, "CharacterByteType", CONV_STACK, 8, 2, glue_CharacterByteType},
     {0xA8B5, (int32_t)0xC2060012u, "CharacterType", CONV_STACK, 8, 2, glue_CharacterType},
     {0xA8B5, (int32_t)0xC20E0018u, "TransliterateText", CONV_STACK, 16, 2, glue_TransliterateText},
+    {0xA8B5, (int32_t)0xC4040038u, "GetScriptUtilityAddress", CONV_STACK, 6, 4, glue_GetScriptUtilityAddress},
+    {0xA8B5, (int32_t)0xC406003Cu, "GetScriptQDPatchAddress", CONV_STACK, 8, 4, glue_GetScriptQDPatchAddress},
     {0xA895, (int32_t)0x1u, "ShutDwnPower", CONV_STACK, 0, 0, 0},
     {0xA895, (int32_t)0x2u, "ShutDwnStart", CONV_STACK, 0, 0, 0},
     {0xA895, (int32_t)0x3u, "ShutDwnInstall", CONV_STACK, 6, 0, 0},
@@ -23728,6 +25646,30 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA83D, (int32_t)0xDu, "TENumStyles", CONV_STACK, 12, 4, glue_TENumStyles},
     {0xA83D, (int32_t)0xEu, "TEFeatureFlag", CONV_STACK, 8, 2, glue_TEFeatureFlag},
     {0xA83D, (int32_t)0xFu, "TEGetHiliteRgn", CONV_STACK, 8, 2, glue_TEGetHiliteRgn},
+    {0xAA54, (int32_t)0x0u, "NewTSMDocument", CONV_STACK, 14, 2, glue_NewTSMDocument},
+    {0xAA54, (int32_t)0x1u, "DeleteTSMDocument", CONV_STACK, 4, 2, glue_DeleteTSMDocument},
+    {0xAA54, (int32_t)0x2u, "ActivateTSMDocument", CONV_STACK, 4, 2, glue_ActivateTSMDocument},
+    {0xAA54, (int32_t)0x3u, "DeactivateTSMDocument", CONV_STACK, 4, 2, glue_DeactivateTSMDocument},
+    {0xAA54, (int32_t)0x4u, "TSMEvent", CONV_STACK, 4, 2, glue_TSMEvent},
+    {0xAA54, (int32_t)0x5u, "TSMMenuSelect", CONV_STACK, 4, 2, glue_TSMMenuSelect},
+    {0xAA54, (int32_t)0x6u, "SetTSMCursor", CONV_STACK, 4, 2, glue_SetTSMCursor},
+    {0xAA54, (int32_t)0x7u, "FixTSMDocument", CONV_STACK, 4, 2, glue_FixTSMDocument},
+    {0xAA54, (int32_t)0x8u, "GetServiceList", CONV_STACK, 14, 2, glue_GetServiceList},
+    {0xAA54, (int32_t)0x9u, "OpenTextService", CONV_STACK, 12, 2, glue_OpenTextService},
+    {0xAA54, (int32_t)0xAu, "CloseTextService", CONV_STACK, 8, 2, glue_CloseTextService},
+    {0xAA54, (int32_t)0xBu, "SendAEFromTSMComponent", CONV_STACK, 26, 2, glue_SendAEFromTSMComponent},
+    {0xAA54, (int32_t)0xCu, "SetDefaultInputMethod", CONV_STACK, 8, 2, glue_SetDefaultInputMethod},
+    {0xAA54, (int32_t)0xDu, "GetDefaultInputMethod", CONV_STACK, 8, 2, glue_GetDefaultInputMethod},
+    {0xAA54, (int32_t)0xEu, "SetTextServiceLanguage", CONV_STACK, 4, 2, glue_SetTextServiceLanguage},
+    {0xAA54, (int32_t)0xFu, "GetTextServiceLanguage", CONV_STACK, 4, 2, glue_GetTextServiceLanguage},
+    {0xAA54, (int32_t)0x10u, "UseInputWindow", CONV_STACK, 6, 2, glue_UseInputWindow},
+    {0xAA54, (int32_t)0x11u, "NewServiceWindow", CONV_STACK, 30, 2, glue_NewServiceWindow},
+    {0xAA54, (int32_t)0x12u, "CloseServiceWindow", CONV_STACK, 4, 2, glue_CloseServiceWindow},
+    {0xAA54, (int32_t)0x13u, "GetFrontServiceWindow", CONV_STACK, 4, 2, glue_GetFrontServiceWindow},
+    {0xAA54, (int32_t)0x14u, "InitTSMAwareApplication", CONV_STACK, 0, 2, glue_InitTSMAwareApplication},
+    {0xAA54, (int32_t)0x15u, "CloseTSMAwareApplication", CONV_STACK, 0, 2, glue_CloseTSMAwareApplication},
+    {0xAA54, (int32_t)0x17u, "FindServiceWindow", CONV_STACK, 8, 2, glue_FindServiceWindow},
+    {0xAA54, (int32_t)0x1Au, "NewCServiceWindow", CONV_STACK, 30, 2, glue_NewCServiceWindow},
     {0xABF2, (int32_t)0xBu, "ThreadBeginCritical", CONV_STACK, 0, 2, glue_ThreadBeginCritical},
     {0xABF2, (int32_t)0xCu, "ThreadEndCritical", CONV_STACK, 0, 2, glue_ThreadEndCritical},
     {0xABF2, (int32_t)0x205u, "YieldToThread", CONV_STACK, 4, 2, glue_YieldToThread},
@@ -23753,13 +25695,17 @@ const dispatch_sig dispatch_sigs[] = {
 const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[0];
 
 const dispatcher_info dispatchers[] = {
+    {0xAA80, "AVLTreeDispatch", "D0W"},
     {0xA823, "AliasDispatch", "D0W"},
     {0xAA74, "AppearanceDispatch", "D0W"},
     {0xAA5A, "CodeFragmentDispatch", "StackW"},
     {0xABF6, "CollectionDispatch", "D0W"},
     {0xAA72, "ContextualMenuDispatch", "D0W"},
     {0xAA73, "ControlDispatch", "D0W"},
+    {0xABE0, "CursorComponentDispatch", "D0L"},
+    {0xA08D, "DebugUtil", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
+    {0xAA53, "DictionaryDispatch", "D0W"},
     {0xABEB, "DisplayDispatch", "D0W"},
     {0xABED, "DragDispatch", "D0W"},
     {0xAA7D, "ExtensionsDispatch", "D0W"},
@@ -23804,6 +25750,7 @@ const dispatcher_info dispatchers[] = {
     {0xA895, "ShutDown", "StackW"},
     {0xA800, "SoundDispatch", "D0<0xFFFFFF>"},
     {0xA83D, "TEDispatch", "StackW"},
+    {0xAA54, "TSMDispatch", "D0W"},
     {0xABF2, "ThreadDispatch", "D0W"},
 };
 const unsigned dispatcher_count = sizeof dispatchers / sizeof dispatchers[0];

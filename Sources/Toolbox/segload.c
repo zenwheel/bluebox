@@ -252,6 +252,7 @@ const raw_trap raw_traps[] = {
     { 0xA054, "UprString", raw_UprString },
     { 0xA0FC, "ResourceStub", raw_ResourceStub },
     { 0xA080, "GetVideoDefault", raw_GetVideoDefault },
+    { 0xA085, "IdleUpdate", raw_IdleUpdate },
     { 0xA093, "Microseconds", raw_Microseconds },
     { 0xA82A, "ComponentDispatch", raw_ComponentDispatch },
     { 0xA843, "Fix2X", raw_Fix2X },

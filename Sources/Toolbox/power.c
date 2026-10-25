@@ -52,6 +52,7 @@ void startmgr_reset(void)
 {
     memset(def_startup, 0, sizeof def_startup);
     memset(def_os, 0, sizeof def_os);
+    def_os[1] = 1; /* DefOSRec's osType: Mac OS */
     memset(def_video, 0, sizeof def_video);
     scsi_timeout = 0;
 }

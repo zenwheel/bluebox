@@ -891,29 +891,6 @@ static void ic_LaunchURL(ppc_cpu *c)
     RETURN((uint32_t)(int32_t)ic_launch_url(R(2), len, ps ? (int32_t)rd32(ps) : 0, pe ? (int32_t)rd32(pe) : len));
 }
 
-/* The Display Manager: the one screen, which keeps its mode. */
-static void dm_GetFirstScreenDevice(ppc_cpu *c) { RETURN(rd32(LM_DeviceList)); }
-static void dm_GetNextScreenDevice(ppc_cpu *c) { RETURN(R(0) && rd32(R(0)) ? rd32(rd32(R(0)) + 30) : 0); }
-static void dm_GetDisplayIDByGDevice(ppc_cpu *c)
-{
-    if (R(1))
-        wr32(R(1), 1);
-    RETURN(0);
-}
-static void dm_GetGDeviceByDisplayID(ppc_cpu *c)
-{
-    if (R(1))
-        wr32(R(1), rd32(LM_MainDevice));
-    RETURN(0);
-}
-static void dm_GetDeskRegion(ppc_cpu *c)
-{
-    if (R(0))
-        wr32(R(0), rd32(LM_GrayRgn));
-    RETURN(0);
-}
-static void dm_paramErr(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-50); }
-
 /* C-string forms of the comparisons. */
 static gaddr temp_pstring(gaddr cstr)
 {
@@ -1172,133 +1149,6 @@ static void cs_paramtext(ppc_cpu *c)
 /* ---------------------------------------------------------------------- */
 /* Assorted */
 
-/* The Display Manager's modes: the one mode the screen is in. */
-static void dm_GetDisplayMode(ppc_cpu *c)
-{
-    /* VDSwitchInfoRec: csMode (word), csData (long), csPage, csBaseAddr */
-    gaddr r = R(1);
-    gaddr gd = R(0) ? R(0) : rd32(LM_MainDevice);
-    gaddr pm = gd && rd32(gd) ? rd32(rd32(gd) + GDevice_gdPMap_off) : 0;
-    int depth = pm && rd32(pm) ? (int16_t)rd16(rd32(pm) + PixMap_pixelSize_off) : 8;
-    if (r) {
-        wr16(r, (uint16_t)(0x80 + (depth == 1 ? 0 : depth == 2 ? 1 : depth == 4 ? 2 : depth == 8 ? 3 : depth == 16 ? 4 : 5)));
-        wr32(r + 2, 0x80); /* the display mode */
-        wr16(r + 6, 0);
-        wr32(r + 8, pm && rd32(pm) ? rd32(rd32(pm) + PixMap_baseAddr_off) : 0);
-    }
-    RETURN(0);
-}
-/* DMCheckDisplayMode(gd, mode, depth, *switchFlags, reserved, *modeOk) */
-static void dm_CheckDisplayMode(ppc_cpu *c)
-{
-    if (R(3))
-        wr32(R(3), 0);
-    if (R(5))
-        wr8(R(5), R(1) == 0x80);
-    RETURN(0);
-}
-/* Display mode lists: the sizes up to the screen's (a smaller display is
- * centred, as DrawSprocket does it), each at 8, 16 and 32 bits.  A list is
- * a guest block holding its count. */
-static const struct { int16_t w, h; } mode_sizes[] = { { 640, 480 }, { 800, 600 }, { 832, 624 }, { 1024, 768 },
-                                                       { 1152, 870 }, { 1280, 1024 } };
-
-static int mode_count(int *sizes)
-{
-    int n = 0;
-    for (unsigned i = 0; i < sizeof mode_sizes / sizeof mode_sizes[0]; i++)
-        if (mode_sizes[i].w <= g_screen_width && mode_sizes[i].h <= g_screen_height)
-            sizes[n++] = (int)i;
-    return n;
-}
-
-/* DMNewDisplayModeList(displayID, flags, info, *count, *list) */
-static void dm_NewDisplayModeList(ppc_cpu *c)
-{
-    int sizes[8];
-    int n = mode_count(sizes);
-    gaddr list = tb_NewPtr(4, true, true);
-    wr32(list, (uint32_t)n);
-    if (R(3))
-        wr32(R(3), (uint32_t)n);
-    if (R(4))
-        wr32(R(4), list);
-    RETURN(0);
-}
-
-/* DMGetIndexedDisplayModeFromList(list, index, flags, iterator, userData):
- * the iterator gets a DMDisplayModeListEntryRec describing the mode. */
-static void dm_GetIndexedDisplayModeFromList(ppc_cpu *c)
-{
-    int sizes[8];
-    int n = mode_count(sizes);
-    uint32_t index = R(1);
-    if (index >= (uint32_t)n) {
-        RETURN((uint32_t)(int32_t)-6229); /* kDMModeNotFoundErr */
-        return;
-    }
-    int w = mode_sizes[sizes[index]].w, h = mode_sizes[sizes[index]].h;
-    static const int depths[3] = { 8, 16, 32 };
-    /* entry 28, name 256, timing 80 (20 used), depth block 20, 3 depth infos 20 each,
-     * 3 switch infos 16 each, 3 VPBlocks 42 each, resolution 32 */
-    gaddr m = tb_NewPtr(28 + 256 + 80 + 20 + 3 * (20 + 16 + 42) + 32, true, true);
-    gaddr entry = m, name = m + 28, timing = name + 256, block = timing + 80, infos = block + 20;
-    gaddr switches = infos + 3 * 20, vps = switches + 3 * 16;
-    char text[32];
-    int len = snprintf(text, sizeof text, "%d x %d", w, h);
-    wr8(name, (uint8_t)len);
-    gput(name + 1, text, (uint32_t)len);
-    /* VDTimingInfoRec: the mode, the format ('decl'), and csTimingFlags
-     * kModeValid and kModeSafe (StarCraft's Storm keeps only valid modes). */
-    wr32(timing, 0x80 + index);
-    wr32(timing + 8, 0x6465636C);
-    wr32(timing + 16, 0x3);
-    wr32(block, 3);             /* depthBlockCount */
-    wr32(block + 4, infos);     /* depthVPBlock */
-    for (int i = 0; i < 3; i++) {
-        gaddr info = infos + 20 * (gaddr)i, sw = switches + 16 * (gaddr)i, vp = vps + 42 * (gaddr)i;
-        int d = depths[i];
-        wr32(info, sw);
-        wr32(info + 4, vp);
-        wr16(sw, (uint16_t)(0x80 + i + 3)); /* csMode */
-        wr32(sw + 2, 0x80 + index);          /* csData: the display mode */
-        wr16(vp + 4, (uint16_t)(w * d / 8));
-        wr16(vp + 10, (uint16_t)h);
-        wr16(vp + 12, (uint16_t)w);
-        wr32(vp + 22, 72u << 16);
-        wr32(vp + 26, 72u << 16);
-        wr16(vp + 30, d > 8 ? 16 : 0); /* RGBDirect or indexed */
-        wr16(vp + 32, (uint16_t)d);
-        wr16(vp + 34, d > 8 ? 3 : 1);
-        wr16(vp + 36, (uint16_t)(d == 16 ? 5 : d == 32 ? 8 : d));
-    }
-    /* VDResolutionInfoRec: previous mode, mode, width, height, refresh
-     * rate, deepest depth mode, flags. */
-    gaddr res = vps + 3 * 42;
-    wr32(res + 4, 0x80 + index);
-    wr32(res + 8, (uint32_t)w);
-    wr32(res + 12, (uint32_t)h);
-    wr32(res + 16, 60u << 16);
-    wr16(res + 20, 0x85);
-    /* DMDisplayModeListEntryRec: flags, name, resolution, timing, depths, version */
-    wr32(entry, 0);
-    wr32(entry + 4, name);
-    wr32(entry + 8, res);
-    wr32(entry + 12, timing);
-    wr32(entry + 16, block);
-    /* pascal void (void *userData, DMListIndexType index, DMDisplayModeListEntryPtr) */
-    uint32_t args[3] = { R(4), index, entry };
-    mm_call(R(3), 0x00000FC0, args, 3);
-    tb_DisposePtr(m);
-    RETURN(0);
-}
-static void dm_DisposeList(ppc_cpu *c)
-{
-    if (R(0))
-        tb_DisposePtr(R(0));
-    RETURN(0);
-}
-
 /* TextEdit's click loop is a field. */
 static void g_TESetClickLoop(ppc_cpu *c)
 {
@@ -1332,13 +1182,6 @@ static void g_IUEqualPString(ppc_cpu *c) { g_IUEqualString(c); }
 static void g_IUCompPString(ppc_cpu *c) { g_IUCompString(c); }
 static void g_GetComponentVersion(ppc_cpu *c) { instance_call(c, -4, ""); }
 static void g_false(ppc_cpu *c) { RETURN(0); }
-/* NewTSMDocument(count, types, *docID, refcon): a document that does nothing. */
-static void g_NewTSMDocument(ppc_cpu *c)
-{
-    if (R(2))
-        wr32(R(2), 1);
-    RETURN(0);
-}
 /* The serial driver's calls, on a port that is always idle. */
 /* The Serial Manager: Control and Status calls on the driver, csParam
  * filled before and read after. */
@@ -1604,85 +1447,6 @@ static void g_GetFormatOrder(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-/* Service windows: the Text Services Manager's floating windows for input
- * methods.  There are no input methods, but a program can make them; they
- * are windows in front of its others. */
-enum { MAX_SERVICE_WINDOWS = 16 };
-static gaddr service_windows[MAX_SERVICE_WINDOWS];
-
-static bool is_service_window(gaddr w)
-{
-    for (int i = 0; i < MAX_SERVICE_WINDOWS; i++)
-        if (w && service_windows[i] == w)
-            return true;
-    return false;
-}
-
-/* NewServiceWindow(wStorage, bounds, title, visible, theProc, behind,
- * goAwayFlag, ts, *window) */
-static void g_NewServiceWindow(ppc_cpu *c)
-{
-    gaddr out = arg_word(c, 8);
-    int slot = -1;
-    for (int i = 0; i < MAX_SERVICE_WINDOWS && slot < 0; i++)
-        if (!service_windows[i])
-            slot = i;
-    if (out)
-        wr32(out, 0);
-    if (slot < 0) {
-        RETURN((int32_t)memFullErr);
-        return;
-    }
-    gaddr w = tb_NewCWindow(R(0), R(1), R(2), (int8_t)R(3), (int16_t)R(4), (gaddr)-1, (int8_t)R(6), (int32_t)R(7));
-    if (!w) {
-        RETURN((int32_t)memFullErr);
-        return;
-    }
-    service_windows[slot] = w;
-    if (out)
-        wr32(out, w);
-    RETURN(0);
-}
-
-static void g_CloseServiceWindow(ppc_cpu *c)
-{
-    for (int i = 0; i < MAX_SERVICE_WINDOWS; i++)
-        if (R(0) && service_windows[i] == R(0)) {
-            service_windows[i] = 0;
-            tb_DisposeWindow(R(0));
-            RETURN(0);
-            return;
-        }
-    RETURN((int32_t)paramErr);
-}
-
-/* GetFrontServiceWindow(*window): the frontmost of them, or nil. */
-static void g_GetFrontServiceWindow(ppc_cpu *c)
-{
-    gaddr w = rd32(LM_WindowList);
-    while (w && !is_service_window(w))
-        w = WindowRecord_nextWindow(w);
-    if (R(0))
-        wr32(R(0), w);
-    RETURN(0);
-}
-
-/* FindServiceWindow(where, *window): the part of a service window there,
- * as FindWindow says it; inDesk when there is none. */
-static void g_FindServiceWindow(ppc_cpu *c)
-{
-    gaddr tmp = tb_NewPtr(4, false, true);
-    int16_t part = tmp ? tb_FindWindow(R(0), tmp) : 0;
-    gaddr w = tmp ? rd32(tmp) : 0;
-    if (tmp)
-        tb_DisposePtr(tmp);
-    if (!is_service_window(w))
-        part = 0, w = 0;
-    if (R(1))
-        wr32(R(1), w);
-    RETURN(part);
-}
-
 /* ValidDate(const LongDateRec *, flags, LongDateTime *newSecs): the first
  * field (of those flags names, by mask bit) out of range, or -1
  * (validDateFields) and the date's seconds.  smallDateBit (31) keeps the
@@ -1833,7 +1597,6 @@ static void os_OSAMakeContext(ppc_cpu *c) { instance_call(c, 0x050B, "444"); }
 /* A new run: the guest blocks went with the old heap. */
 void ppc_libs_reset(void)
 {
-    memset(service_windows, 0, sizeof service_windows);
     memset(location, 0, sizeof location);
     stdclib_reset();
     aa_enabled = false;
@@ -1863,8 +1626,7 @@ const ppc_export lib_exports[] = {
     { "CursorDeviceUnitsPerInch", g_CrsrDevUnitsPerInch }, { "CursorDeviceNextDevice", g_CrsrDevNextDevice },
     { "CursorDeviceNewDevice", g_CrsrDevNewDevice }, { "CursorDeviceDisposeDevice", g_CrsrDevDisposeDevice },
     /* Assorted InterfaceLib */
-    { "GetFormatOrder", g_GetFormatOrder }, { "NewServiceWindow", g_NewServiceWindow },
-    { "CloseServiceWindow", g_CloseServiceWindow }, { "GetFrontServiceWindow", g_GetFrontServiceWindow },
+    { "GetFormatOrder", g_GetFormatOrder },
     { "ValidDate", g_ValidDate }, { "IdleUpdate", g_IdleUpdate }, { "FollowFinderAlias", g_FollowFinderAlias },
     { "DrvrInstall", g_DrvrInstall }, { "BuildBDS", g_BuildBDS }, { "WriteLocation", g_WriteLocation },
     { "LwrText", g_LowerText }, { "IPCListPortsAsync", g_IPCListPortsAsync },
@@ -1911,10 +1673,6 @@ const ppc_export lib_exports[] = {
     { "paramtext", cs_paramtext }, { "setcontroltitle", cs_setcontroltitle },
     { "setdialogitemtext", cs_setdialogitemtext }, { "setmenuitemtext", cs_setmenuitemtext },
     { "stringtonum", cs_stringtonum }, { "stringwidth", cs_stringwidth }, { "upperstring", cs_upperstring },
-    /* Display Manager modes */
-    { "DMGetDisplayMode", dm_GetDisplayMode }, { "DMCheckDisplayMode", dm_CheckDisplayMode },
-    { "DMNewDisplayModeList", dm_NewDisplayModeList }, { "DMGetIndexedDisplayModeFromList", dm_GetIndexedDisplayModeFromList },
-    { "DMDisposeList", dm_DisposeList }, { "DMSuspendConfigure", g_noErr }, { "DMResumeConfigure", g_noErr },
     /* Assorted */
     { "TESetClickLoop", g_TESetClickLoop }, { "InlineGetHandleSize", g_InlineGetHandleSize },
     { "GetHandleSize", g_GetHandleSize }, { "GetPtrSize", g_GetPtrSize },
@@ -1924,11 +1682,6 @@ const ppc_export lib_exports[] = {
     { "GetComponentVersion", g_GetComponentVersion },
     { "HoldMemory", g_noErr }, { "UnholdMemory", g_noErr }, { "LockMemory", g_noErr }, { "UnlockMemory", g_noErr },
     { "LockMemoryContiguous", g_noErr },
-    /* The Text Services Manager, with no input methods */
-    { "InitTSMAwareApplication", g_noErr }, { "CloseTSMAwareApplication", g_noErr },
-    { "NewTSMDocument", g_NewTSMDocument }, { "DeleteTSMDocument", g_noErr }, { "ActivateTSMDocument", g_noErr },
-    { "DeactivateTSMDocument", g_noErr }, { "FixTSMDocument", g_noErr }, { "TSMEvent", g_false },
-    { "TSMMenuSelect", g_false }, { "SetTSMCursor", g_false }, { "UseInputWindow", g_noErr },
     /* Serial ports */
     { "SerReset", g_SerReset }, { "SerHShake", g_SerHShake }, { "SerSetBuf", g_SerSetBuf }, { "SerSetBrk", g_SerSetBrk },
     { "SerClrBrk", g_SerClrBrk }, { "SerGetBuf", g_SerGetBuf }, { "SerStatus", g_SerStatus },
@@ -1945,15 +1698,9 @@ const ppc_export lib_exports[] = {
     { "PNSendRequest", g_PNSendRequest }, { "PGetRequest", g_PGetRequest }, { "PSendResponse", g_PSendResponse },
     { "PAddResponse", g_PAddResponse }, { "PRelTCB", g_PRelTCB }, { "PRelRspCB", g_PRelRspCB },
     { "PKillSendReq", g_PKillSendReq }, { "PKillGetReq", g_PKillGetReq },
-    /* Display Manager */
-    { "DMGetFirstScreenDevice", dm_GetFirstScreenDevice }, { "DMGetNextScreenDevice", dm_GetNextScreenDevice },
-    { "DMGetDisplayIDByGDevice", dm_GetDisplayIDByGDevice }, { "DMGetGDeviceByDisplayID", dm_GetGDeviceByDisplayID },
-    { "DMGetDeskRegion", dm_GetDeskRegion }, { "DMRegisterNotifyProc", g_noErr }, { "DMRemoveNotifyProc", g_noErr },
-    { "DMBeginConfigureDisplays", g_noErr }, { "DMEndConfigureDisplays", g_noErr },
-    { "DMSetDisplayMode", dm_paramErr }, { "DMSetMainDisplay", dm_paramErr },
     /* Odds and ends */
     { "equalstring", g_equalstring }, { "relstring", g_relstring }, { "SVersion", g_SVersion },
-    { "MIDIVersion", g_MIDIVersion }, { "InstallExceptionHandler", g_noErr }, { "FindServiceWindow", g_FindServiceWindow },
+    { "MIDIVersion", g_MIDIVersion }, { "InstallExceptionHandler", g_noErr },
     { "GetVideoDefault", g_GetVideoDefault }, { "MPPOpen", g_portNotCf }, { "PPCInit", g_noErr },
     { "OpenXPP", g_portNotCf }, { "ATPLoad", g_portNotCf }, { "MPPClose", g_noErr },
     { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },

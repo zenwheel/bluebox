@@ -44,6 +44,33 @@ int8_t tb_GetColor(uint32_t where, gaddr prompt, gaddr in, gaddr out)
     return ok;
 }
 
+/* PickColor(ColorPickerInfo *) and NPickColor(NColorPickerInfo *): the
+ * host's colour panel, as GetColor, on the record's RGB colour
+ * (theColor.color at 4) and prompt (at 42); newColorChosen (at 310) says
+ * whether one was.  Cancelling is no error. */
+static int16_t pick_color(gaddr info)
+{
+    if (!info)
+        return paramErr;
+    gaddr rgb = info + 4;
+    uint16_t in[3] = { rd16(rgb), rd16(rgb + 2), rd16(rgb + 4) };
+    gaddr out = tb_NewPtr(6, false, true);
+    if (!out)
+        return memFullErr;
+    bool ok = tb_GetColor(rd32(info + 22), info + 42, rgb, out);
+    if (ok)
+        gmemcpy(rgb, out, 6);
+    else
+        for (int i = 0; i < 3; i++)
+            wr16(rgb + 2 * (gaddr)i, in[i]);
+    tb_DisposePtr(out);
+    wr8(info + 310, ok);
+    return noErr;
+}
+
+int16_t tb_PickColor(gaddr theColorInfo) { return pick_color(theColorInfo); }
+int16_t tb_NPickColor(gaddr theColorInfo) { return pick_color(theColorInfo); }
+
 /* SmallFract: an unsigned 16-bit fraction of one. */
 uint16_t tb_Fix2SmallFract(int32_t f) { return f >= 0x10000 ? 0xFFFF : f <= 0 ? 0 : (uint16_t)f; }
 int32_t tb_SmallFract2Fix(uint16_t s) { return s; }
