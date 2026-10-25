@@ -166,6 +166,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbongaps_export_count; i++) /* CarbonLib's small additions */
         if (!strcmp(carbongaps_exports[i].name, name))
             return carbongaps_exports[i].fn;
+    for (unsigned i = 0; i < carbonuser_export_count; i++) /* CarbonLib's user and machine names */
+        if (!strcmp(carbonuser_exports[i].name, name))
+            return carbonuser_exports[i].fn;
     void (*svc)(ppc_cpu *) = carbonsvc_export_fn(name);
     if (svc)
         return svc;
