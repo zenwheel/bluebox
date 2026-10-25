@@ -731,7 +731,9 @@ def gen_ppc(impl, sigs):
     table = []
     for fn in functions:
         name = fn["name"]
-        if name not in impl or name not in sigs:
+        # ppc: false -- the PowerPC export is written by hand (a 64-bit
+        # value argument, which the 68k form takes by address).
+        if name not in impl or name not in sigs or fn.get("ppc") is False:
             continue
         sig = sigs[name]
         variants = list(fn.get("variants") or [])
@@ -777,7 +779,8 @@ def gen_ppc(impl, sigs):
         name = fn["name"]
         # (C-convention routines are not run as 68k traps from PowerPC: only
         # the implemented ones, called directly above, are exported.)
-        if name not in sigs or sigs[name]["conv"] == "c" or (trap_num(fn) is None and not fn.get("dispatcher")):
+        if name not in sigs or sigs[name]["conv"] == "c" or (trap_num(fn) is None and not fn.get("dispatcher")) \
+                or fn.get("ppc") is False:
             continue
         sig = sigs[name]
         variants = list(fn.get("variants") or [])

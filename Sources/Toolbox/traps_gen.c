@@ -105,6 +105,8 @@ const char *const os_trap_names[256] = {
     [0x82] = "DTInstall",
     [0x90] = "SysEnvirons",
     [0x98] = "HWPriv",
+    [0xA8] = "FSForkIODispatch",
+    [0xAC] = "FSMDispatch",
     [0xAD] = "GestaltDispatch",
     [0xBD] = "FlushCodeCache",
     [0xDD] = "PPCDispatch",
@@ -4654,6 +4656,363 @@ static void glue_FMSwapFont(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FSAllocateFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_actualCount = (gaddr)cpu_pop32(c);
+    gaddr a_requestCount = (gaddr)cpu_pop32(c);
+    gaddr a_positionOffset = (gaddr)cpu_pop32(c);
+    uint16_t a_positionMode = (uint16_t)cpu_pop16(c);
+    uint16_t a_flags = (uint16_t)cpu_pop16(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSAllocateFork(a_forkRefNum, a_flags, a_positionMode, a_positionOffset, a_requestCount, a_actualCount);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSCatalogSearch(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_names = (gaddr)cpu_pop32(c);
+    gaddr a_specs = (gaddr)cpu_pop32(c);
+    gaddr a_refs = (gaddr)cpu_pop32(c);
+    gaddr a_catalogInfos = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    gaddr a_containerChanged = (gaddr)cpu_pop32(c);
+    gaddr a_actualObjects = (gaddr)cpu_pop32(c);
+    uint32_t a_maximumObjects = (uint32_t)cpu_pop32(c);
+    gaddr a_searchCriteria = (gaddr)cpu_pop32(c);
+    uint32_t a_iterator = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_FSCatalogSearch(a_iterator, a_searchCriteria, a_maximumObjects, a_actualObjects, a_containerChanged, a_whichInfo, a_catalogInfos, a_refs, a_specs, a_names);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSCloseFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSCloseFork(a_forkRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSCloseIterator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_iterator = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_FSCloseIterator(a_iterator);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSCompareFSRefs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_ref2 = (gaddr)cpu_pop32(c);
+    gaddr a_ref1 = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSCompareFSRefs(a_ref1, a_ref2);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSCreateDirectoryUnicode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newDirID = (gaddr)cpu_pop32(c);
+    gaddr a_newSpec = (gaddr)cpu_pop32(c);
+    gaddr a_newRef = (gaddr)cpu_pop32(c);
+    gaddr a_catalogInfo = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    uint32_t a_nameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_parentRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSCreateDirectoryUnicode(a_parentRef, a_nameLength, a_name, a_whichInfo, a_catalogInfo, a_newRef, a_newSpec, a_newDirID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSCreateFileUnicode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newSpec = (gaddr)cpu_pop32(c);
+    gaddr a_newRef = (gaddr)cpu_pop32(c);
+    gaddr a_catalogInfo = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    uint32_t a_nameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_parentRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSCreateFileUnicode(a_parentRef, a_nameLength, a_name, a_whichInfo, a_catalogInfo, a_newRef, a_newSpec);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSCreateFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_forkName = (gaddr)cpu_pop32(c);
+    uint32_t a_forkNameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSCreateFork(a_ref, a_forkNameLength, a_forkName);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSCreateResFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newSpec = (gaddr)cpu_pop32(c);
+    gaddr a_newRef = (gaddr)cpu_pop32(c);
+    gaddr a_catalogInfo = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    uint32_t a_nameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_parentRef = (gaddr)cpu_pop32(c);
+    tb_FSCreateResFile(a_parentRef, a_nameLength, a_name, a_whichInfo, a_catalogInfo, a_newRef, a_newSpec);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSDeleteFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_forkName = (gaddr)cpu_pop32(c);
+    uint32_t a_forkNameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSDeleteFork(a_ref, a_forkNameLength, a_forkName);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSDeleteObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSDeleteObject(a_ref);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSExchangeObjects(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_destRef = (gaddr)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSExchangeObjects(a_ref, a_destRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSFindFolder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_foundRef = (gaddr)cpu_pop32(c);
+    int8_t a_createFolder = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_folderType = (uint32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSFindFolder(a_vRefNum, a_folderType, a_createFolder, a_foundRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSFindFolderExtended(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_foundRef = (gaddr)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    int8_t a_createFolder = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_foldType = (uint32_t)cpu_pop32(c);
+    int16_t a_vol = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSFindFolderExtended(a_vol, a_foldType, a_createFolder, a_flags, a_data, a_foundRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSFlushFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSFlushFork(a_forkRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSFollowFinderAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasChanged = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    int8_t a_logon = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSFollowFinderAlias(a_fromFile, a_alias, a_logon, a_target, a_wasChanged);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSGetCatalogInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_parentRef = (gaddr)cpu_pop32(c);
+    gaddr a_fsSpec = (gaddr)cpu_pop32(c);
+    gaddr a_outName = (gaddr)cpu_pop32(c);
+    gaddr a_catalogInfo = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSGetCatalogInfo(a_ref, a_whichInfo, a_catalogInfo, a_outName, a_fsSpec, a_parentRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSGetCatalogInfoBulk(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_names = (gaddr)cpu_pop32(c);
+    gaddr a_specs = (gaddr)cpu_pop32(c);
+    gaddr a_refs = (gaddr)cpu_pop32(c);
+    gaddr a_catalogInfos = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    gaddr a_containerChanged = (gaddr)cpu_pop32(c);
+    gaddr a_actualObjects = (gaddr)cpu_pop32(c);
+    uint32_t a_maximumObjects = (uint32_t)cpu_pop32(c);
+    uint32_t a_iterator = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_FSGetCatalogInfoBulk(a_iterator, a_maximumObjects, a_actualObjects, a_containerChanged, a_whichInfo, a_catalogInfos, a_refs, a_specs, a_names);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSGetDataForkName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dataForkName = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSGetDataForkName(a_dataForkName);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSGetForkCBInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outForkName = (gaddr)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    gaddr a_forkInfo = (gaddr)cpu_pop32(c);
+    gaddr a_actualRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_iterator = (gaddr)cpu_pop32(c);
+    int16_t a_volume = (int16_t)cpu_pop16(c);
+    int16_t a_desiredRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSGetForkCBInfo(a_desiredRefNum, a_volume, a_iterator, a_actualRefNum, a_forkInfo, a_ref, a_outForkName);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSGetForkPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_position = (gaddr)cpu_pop32(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSGetForkPosition(a_forkRefNum, a_position);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSGetForkSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_forkSize = (gaddr)cpu_pop32(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSGetForkSize(a_forkRefNum, a_forkSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSGetResourceForkName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_resourceForkName = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSGetResourceForkName(a_resourceForkName);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSGetVolumeInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_rootDirectory = (gaddr)cpu_pop32(c);
+    gaddr a_volumeName = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    gaddr a_actualVolume = (gaddr)cpu_pop32(c);
+    uint32_t a_volumeIndex = (uint32_t)cpu_pop32(c);
+    int16_t a_volume = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSGetVolumeInfo(a_volume, a_volumeIndex, a_actualVolume, a_whichInfo, a_info, a_volumeName, a_rootDirectory);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSIsAliasFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_folderFlag = (gaddr)cpu_pop32(c);
+    gaddr a_aliasFileFlag = (gaddr)cpu_pop32(c);
+    gaddr a_fileRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSIsAliasFile(a_fileRef, a_aliasFileFlag, a_folderFlag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSIterateForks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_forkPhysicalSize = (gaddr)cpu_pop32(c);
+    gaddr a_forkSize = (gaddr)cpu_pop32(c);
+    gaddr a_forkName = (gaddr)cpu_pop32(c);
+    gaddr a_forkIterator = (gaddr)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSIterateForks(a_ref, a_forkIterator, a_forkName, a_forkSize, a_forkPhysicalSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSMakeFSRefUnicode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newRef = (gaddr)cpu_pop32(c);
+    uint32_t a_textEncodingHint = (uint32_t)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    uint32_t a_nameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_parentRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSMakeFSRefUnicode(a_parentRef, a_nameLength, a_name, a_textEncodingHint, a_newRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FSMakeFSSpec(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4663,6 +5022,249 @@ static void glue_FSMakeFSSpec(cpu68k *c, uint16_t trapword)
     int32_t a_dir_id = (int32_t)cpu_pop32(c);
     int16_t a_vRefNum = (int16_t)cpu_pop16(c);
     int16_t r = tb_FSMakeFSSpec(a_vRefNum, a_dir_id, a_file_name, a_spec);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSMoveObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newRef = (gaddr)cpu_pop32(c);
+    gaddr a_destDirectory = (gaddr)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSMoveObject(a_ref, a_destDirectory, a_newRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSNewAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inAlias = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSNewAlias(a_fromFile, a_target, a_inAlias);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSNewAliasMinimal(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inAlias = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSNewAliasMinimal(a_target, a_inAlias);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSOpenFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_forkRefNum = (gaddr)cpu_pop32(c);
+    int8_t a_permissions = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_forkName = (gaddr)cpu_pop32(c);
+    uint32_t a_forkNameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSOpenFork(a_ref, a_forkNameLength, a_forkName, a_permissions, a_forkRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSOpenIterator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_iterator = (gaddr)cpu_pop32(c);
+    uint32_t a_iteratorFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_container = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSOpenIterator(a_container, a_iteratorFlags, a_iterator);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSOpenResFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_permission = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSOpenResFile(a_ref, a_permission);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSReadFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_actualCount = (gaddr)cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    uint32_t a_requestCount = (uint32_t)cpu_pop32(c);
+    gaddr a_positionOffset = (gaddr)cpu_pop32(c);
+    uint16_t a_positionMode = (uint16_t)cpu_pop16(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSReadFork(a_forkRefNum, a_positionMode, a_positionOffset, a_requestCount, a_buffer, a_actualCount);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSRenameUnicode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newRef = (gaddr)cpu_pop32(c);
+    uint32_t a_textEncodingHint = (uint32_t)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    uint32_t a_nameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSRenameUnicode(a_ref, a_nameLength, a_name, a_textEncodingHint, a_newRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSResolveAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasChanged = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSResolveAlias(a_fromFile, a_alias, a_target, a_wasChanged);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSResolveAliasFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasAliased = (gaddr)cpu_pop32(c);
+    gaddr a_targetIsFolder = (gaddr)cpu_pop32(c);
+    int8_t a_resolveAliasChains = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSResolveAliasFile(a_theRef, a_resolveAliasChains, a_targetIsFolder, a_wasAliased);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSResolveAliasFileWithMountFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_mountFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_wasAliased = (gaddr)cpu_pop32(c);
+    gaddr a_targetIsFolder = (gaddr)cpu_pop32(c);
+    int8_t a_resolveAliasChains = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSResolveAliasFileWithMountFlags(a_theRef, a_resolveAliasChains, a_targetIsFolder, a_wasAliased, a_mountFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSResolveAliasWithMountFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_mountFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_wasChanged = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_inAlias = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSResolveAliasWithMountFlags(a_fromFile, a_inAlias, a_target, a_wasChanged, a_mountFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSResourceFileAlreadyOpen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refNum = (gaddr)cpu_pop32(c);
+    gaddr a_inChain = (gaddr)cpu_pop32(c);
+    gaddr a_resourceFileRef = (gaddr)cpu_pop32(c);
+    int8_t r = tb_FSResourceFileAlreadyOpen(a_resourceFileRef, a_inChain, a_refNum);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_FSSetCatalogInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_catalogInfo = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSSetCatalogInfo(a_ref, a_whichInfo, a_catalogInfo);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSSetForkPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_positionOffset = (gaddr)cpu_pop32(c);
+    uint16_t a_positionMode = (uint16_t)cpu_pop16(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSSetForkPosition(a_forkRefNum, a_positionMode, a_positionOffset);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSSetForkSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_positionOffset = (gaddr)cpu_pop32(c);
+    uint16_t a_positionMode = (uint16_t)cpu_pop16(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSSetForkSize(a_forkRefNum, a_positionMode, a_positionOffset);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSSetVolumeInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint32_t a_whichInfo = (uint32_t)cpu_pop32(c);
+    int16_t a_volume = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSSetVolumeInfo(a_volume, a_whichInfo, a_info);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSUpdateAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasChanged = (gaddr)cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSUpdateAlias(a_fromFile, a_target, a_alias, a_wasChanged);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSWriteFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_actualCount = (gaddr)cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    uint32_t a_requestCount = (uint32_t)cpu_pop32(c);
+    gaddr a_positionOffset = (gaddr)cpu_pop32(c);
+    uint16_t a_positionMode = (uint16_t)cpu_pop16(c);
+    int16_t a_forkRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FSWriteFork(a_forkRefNum, a_positionMode, a_positionOffset, a_requestCount, a_buffer, a_actualCount);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -4747,6 +5349,17 @@ static void glue_FSpGetFInfo(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FSpMakeFSRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newRef = (gaddr)cpu_pop32(c);
+    gaddr a_source = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSpMakeFSRef(a_source, a_newRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FSpOpenDF(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4790,6 +5403,18 @@ static void glue_FSpRename(cpu68k *c, uint16_t trapword)
     gaddr a_spec = (gaddr)cpu_pop32(c);
     int16_t r = tb_FSpRename(a_spec, a_new_name);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FSpResourceFileAlreadyOpen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refNum = (gaddr)cpu_pop32(c);
+    gaddr a_inChain = (gaddr)cpu_pop32(c);
+    gaddr a_resourceFile = (gaddr)cpu_pop32(c);
+    int8_t r = tb_FSpResourceFileAlreadyOpen(a_resourceFile, a_inChain, a_refNum);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -5018,6 +5643,22 @@ static void glue_FindFolder(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindFolderExtended(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dirID = (gaddr)cpu_pop32(c);
+    gaddr a_vRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    int8_t a_createFolder = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_foldType = (uint32_t)cpu_pop32(c);
+    int16_t a_vol = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FindFolderExtended(a_vol, a_foldType, a_createFolder, a_flags, a_data, a_vRefNum, a_dirID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FindScriptRun(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5204,6 +5845,41 @@ static void glue_FlushFonts(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_FlushFonts();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FolderManagerRegisterCallNotificationProcs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_options = (uint32_t)cpu_pop32(c);
+    gaddr a_arg = (gaddr)cpu_pop32(c);
+    uint32_t a_message = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_FolderManagerRegisterCallNotificationProcs(a_message, a_arg, a_options);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FolderManagerRegisterNotificationProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_options = (uint32_t)cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_notificationProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FolderManagerRegisterNotificationProc(a_notificationProc, a_refCon, a_options);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FolderManagerUnregisterNotificationProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_notificationProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FolderManagerUnregisterNotificationProc(a_notificationProc, a_refCon);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -10002,6 +10678,14 @@ static void glue_InsetRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InstallFS(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_fsdPtr = (gaddr)c->a[0];
+    int16_t r = tb_InstallFS(a_fsdPtr);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_InstallReceiveHandler(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10136,6 +10820,18 @@ static void glue_InvertRoundRect(cpu68k *c, uint16_t trapword)
     int16_t a_ow = (int16_t)cpu_pop16(c);
     gaddr a_r = (gaddr)cpu_pop32(c);
     tb_InvertRoundRect(a_r, a_ow, a_oh);
+    cpu_push32(c, ret);
+}
+
+static void glue_IsAliasFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_folderFlag = (gaddr)cpu_pop32(c);
+    gaddr a_aliasFileFlag = (gaddr)cpu_pop32(c);
+    gaddr a_fileFSSpec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IsAliasFile(a_fileFSSpec, a_aliasFileFlag, a_folderFlag);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -12197,12 +12893,30 @@ static void glue_OutlineMetrics(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PBAllocContig(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBAllocContig(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBAllocate(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBAllocate(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBAllocateFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBAllocateFork(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12224,6 +12938,15 @@ static void glue_PBCatSearch(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBCatalogSearch(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCatalogSearch(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBClose(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12233,12 +12956,39 @@ static void glue_PBClose(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBCloseFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCloseFork(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBCloseIterator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCloseIterator(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBCloseWD(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBCloseWD(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBCompareFSRefs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCompareFSRefs(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12260,12 +13010,39 @@ static void glue_PBCreate(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBCreateDirectoryUnicode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCreateDirectoryUnicode(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBCreateFileIDRef(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBCreateFileIDRef(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBCreateFileUnicode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCreateFileUnicode(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBCreateFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBCreateFork(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12428,6 +13205,24 @@ static void glue_PBDeleteFileIDRef(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBDeleteFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDeleteFork(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBDeleteObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBDeleteObject(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBDirCreate(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12445,12 +13240,30 @@ static void glue_PBEject(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBExchangeObjects(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBExchangeObjects(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBFlushFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBFlushFile(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBFlushFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBFlushFork(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12469,6 +13282,24 @@ static void glue_PBGetCatInfo(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBGetCatInfo(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBGetCatalogInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBGetCatalogInfo(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBGetCatalogInfoBulk(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBGetCatalogInfoBulk(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12508,6 +13339,33 @@ static void glue_PBGetFPos(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBGetForkCBInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBGetForkCBInfo(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBGetForkPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBGetForkPosition(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBGetForkSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBGetForkSize(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBGetVInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12526,12 +13384,30 @@ static void glue_PBGetVol(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBGetVolumeInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBGetVolumeInfo(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBGetWDInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBGetWDInfo(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBGetXCatInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBGetXCatInfo(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12670,6 +13546,23 @@ static void glue_PBHSetVol(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBHTrashVolumeCaches(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    int16_t r = tb_PBHTrashVolumeCaches(a_pb);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBIterateForks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBIterateForks(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBKillIO(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12679,11 +13572,47 @@ static void glue_PBKillIO(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBMakeFSRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBMakeFSRef(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBMakeFSRefUnicode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBMakeFSRefUnicode(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBMakeFSSpec(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBMakeFSSpec(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBMountVol(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     gaddr a_pb = (gaddr)c->a[0];
     int16_t r = tb_PBMountVol(a_pb);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBMoveObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBMoveObject(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12710,6 +13639,24 @@ static void glue_PBOpenDF(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBOpenDF(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBOpenFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBOpenFork(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBOpenIterator(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBOpenIterator(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12740,12 +13687,30 @@ static void glue_PBRead(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBReadFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBReadFork(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBRename(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBRename(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBRenameUnicode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBRenameUnicode(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12773,6 +13738,15 @@ static void glue_PBSetCatInfo(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBSetCatInfo(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBSetCatalogInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBSetCatalogInfo(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12812,6 +13786,24 @@ static void glue_PBSetFPos(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBSetForkPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBSetForkPosition(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBSetForkSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBSetForkSize(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBSetVInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12827,6 +13819,15 @@ static void glue_PBSetVol(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBSetVol(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBSetVolumeInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBSetVolumeInfo(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -12853,6 +13854,24 @@ static void glue_PBWrite(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBWrite(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBWriteFork(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBWriteFork(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBXGetVolInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBXGetVolInfo(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -14051,6 +15070,17 @@ static void glue_RegisterSection(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ReleaseFolder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_folderType = (uint32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_ReleaseFolder(a_vRefNum, a_folderType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ReleaseResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14070,6 +15100,14 @@ static void glue_RemoveCollectionItem(cpu68k *c, uint16_t trapword)
     int16_t r = tb_RemoveCollectionItem(a_c, a_tag, a_id);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_RemoveFS(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_fsid = (int16_t)c->a[0];
+    int16_t r = tb_RemoveFS(a_fsid);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_RemoveReceiveHandler(cpu68k *c, uint16_t trapword)
@@ -14218,6 +15256,34 @@ static void glue_ResolveAliasFile(cpu68k *c, uint16_t trapword)
     int8_t a_resolveAliasChains = (int8_t)(cpu_pop16(c) >> 8);
     gaddr a_theSpec = (gaddr)cpu_pop32(c);
     int16_t r = tb_ResolveAliasFile(a_theSpec, a_resolveAliasChains, a_targetIsFolder, a_wasAliased);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ResolveAliasFileWithMountFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_mountFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_wasAliased = (gaddr)cpu_pop32(c);
+    gaddr a_targetIsFolder = (gaddr)cpu_pop32(c);
+    int8_t a_resolveAliasChains = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theSpec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ResolveAliasFileWithMountFlags(a_theSpec, a_resolveAliasChains, a_targetIsFolder, a_wasAliased, a_mountFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ResolveAliasWithMountFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_mountFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_wasChanged = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ResolveAliasWithMountFlags(a_fromFile, a_alias, a_target, a_wasChanged, a_mountFlags);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -19090,6 +20156,8 @@ const trap_sig trap_sigs[] = {
     {0xA20B, -1, "PBHRename", CONV_REG, 0, 0, glue_PBHRename},
     {0xA20C, -1, "PBHGetFInfo", CONV_REG, 0, 0, glue_PBHGetFInfo},
     {0xA20D, -1, "PBHSetFInfo", CONV_REG, 0, 0, glue_PBHSetFInfo},
+    {0xA210, -1, "PBAllocContig", CONV_REG, 0, 0, glue_PBAllocContig},
+    {0xA213, -1, "PBHTrashVolumeCaches", CONV_REG, 0, 0, glue_PBHTrashVolumeCaches},
     {0xA214, -1, "PBHGetVol", CONV_REG, 0, 0, glue_PBHGetVol},
     {0xA215, -1, "PBHSetVol", CONV_REG, 0, 0, glue_PBHSetVol},
     {0xA241, -1, "PBHSetFLock", CONV_REG, 0, 0, 0},
@@ -19681,7 +20749,26 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA823, (int32_t)0x7u, "GetAliasInfo", CONV_STACK, 10, 2, glue_GetAliasInfo},
     {0xA823, (int32_t)0x8u, "NewAliasMinimal", CONV_STACK, 8, 2, glue_NewAliasMinimal},
     {0xA823, (int32_t)0x9u, "NewAliasMinimalFromFullPath", CONV_STACK, 18, 2, glue_NewAliasMinimalFromFullPath},
+    {0xA823, (int32_t)0xBu, "ReleaseFolder", CONV_STACK, 6, 2, glue_ReleaseFolder},
     {0xA823, (int32_t)0xCu, "ResolveAliasFile", CONV_STACK, 14, 2, glue_ResolveAliasFile},
+    {0xA823, (int32_t)0x29u, "ResolveAliasFileWithMountFlags", CONV_STACK, 18, 2, glue_ResolveAliasFileWithMountFlags},
+    {0xA823, (int32_t)0x2Au, "IsAliasFile", CONV_STACK, 12, 2, glue_IsAliasFile},
+    {0xA823, (int32_t)0x2Bu, "ResolveAliasWithMountFlags", CONV_STACK, 20, 2, glue_ResolveAliasWithMountFlags},
+    {0xA823, (int32_t)0x34u, "FSFindFolder", CONV_STACK, 12, 2, glue_FSFindFolder},
+    {0xA823, (int32_t)0x35u, "FSFindFolderExtended", CONV_STACK, 20, 2, glue_FSFindFolderExtended},
+    {0xA823, (int32_t)0x36u, "FSNewAlias", CONV_STACK, 12, 2, glue_FSNewAlias},
+    {0xA823, (int32_t)0x37u, "FSNewAliasMinimal", CONV_STACK, 8, 2, glue_FSNewAliasMinimal},
+    {0xA823, (int32_t)0x38u, "FSIsAliasFile", CONV_STACK, 12, 2, glue_FSIsAliasFile},
+    {0xA823, (int32_t)0x39u, "FSResolveAliasWithMountFlags", CONV_STACK, 20, 2, glue_FSResolveAliasWithMountFlags},
+    {0xA823, (int32_t)0x3Au, "FSResolveAlias", CONV_STACK, 16, 2, glue_FSResolveAlias},
+    {0xA823, (int32_t)0x3Bu, "FSResolveAliasFileWithMountFlags", CONV_STACK, 18, 2, glue_FSResolveAliasFileWithMountFlags},
+    {0xA823, (int32_t)0x3Cu, "FSResolveAliasFile", CONV_STACK, 14, 2, glue_FSResolveAliasFile},
+    {0xA823, (int32_t)0x3Du, "FSFollowFinderAlias", CONV_STACK, 18, 2, glue_FSFollowFinderAlias},
+    {0xA823, (int32_t)0x3Eu, "FSUpdateAlias", CONV_STACK, 16, 2, glue_FSUpdateAlias},
+    {0xA823, (int32_t)0x430u, "FolderManagerUnregisterNotificationProc", CONV_STACK, 8, 2, glue_FolderManagerUnregisterNotificationProc},
+    {0xA823, (int32_t)0x62Fu, "FolderManagerRegisterNotificationProc", CONV_STACK, 12, 2, glue_FolderManagerRegisterNotificationProc},
+    {0xA823, (int32_t)0x631u, "FolderManagerRegisterCallNotificationProcs", CONV_STACK, 12, 4, glue_FolderManagerRegisterCallNotificationProcs},
+    {0xA823, (int32_t)0xB2Cu, "FindFolderExtended", CONV_STACK, 24, 2, glue_FindFolderExtended},
     {0xAA74, (int32_t)0xFFFFFFFFu, "IsAppearanceClient", CONV_STACK, 4, 2, glue_IsAppearanceClient},
     {0xAA74, (int32_t)0x1u, "SetThemePen", CONV_STACK, 6, 4, glue_SetThemePen},
     {0xAA74, (int32_t)0x2u, "SetThemeBackground", CONV_STACK, 6, 4, glue_SetThemeBackground},
@@ -19866,6 +20953,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0xBu, "PBSetVInfo", CONV_REG, 0, 0, glue_PBSetVInfo},
     {0xA060, (int32_t)0x10u, "PBLockRange", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x11u, "PBUnlockRange", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x12u, "PBXGetVolInfo", CONV_REG, 0, 0, glue_PBXGetVolInfo},
     {0xA060, (int32_t)0x14u, "PBCreateFileIDRef", CONV_REG, 0, 0, glue_PBCreateFileIDRef},
     {0xA060, (int32_t)0x15u, "PBDeleteFileIDRef", CONV_REG, 0, 0, glue_PBDeleteFileIDRef},
     {0xA060, (int32_t)0x16u, "PBResolveFileIDRef", CONV_REG, 0, 0, glue_PBResolveFileIDRef},
@@ -19873,6 +20961,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x18u, "PBCatSearch", CONV_REG, 0, 0, glue_PBCatSearch},
     {0xA060, (int32_t)0x1Au, "PBOpenDF", CONV_REG, 0, 0, glue_PBOpenDF},
     {0xA060, (int32_t)0x1Au, "PBHOpenDF", CONV_REG, 0, 0, glue_PBHOpenDF},
+    {0xA060, (int32_t)0x1Bu, "PBMakeFSSpec", CONV_REG, 0, 0, glue_PBMakeFSSpec},
+    {0xA060, (int32_t)0x1Du, "PBGetVolumeInfo", CONV_REG, 0, 0, glue_PBGetVolumeInfo},
+    {0xA060, (int32_t)0x1Eu, "PBSetVolumeInfo", CONV_REG, 0, 0, glue_PBSetVolumeInfo},
     {0xA060, (int32_t)0x20u, "PBDTGetPath", CONV_REG, 0, 0, glue_PBDTGetPath},
     {0xA060, (int32_t)0x21u, "PBDTCloseDown", CONV_REG, 0, 0, glue_PBDTCloseDown},
     {0xA060, (int32_t)0x22u, "PBDTAddIcon", CONV_REG, 0, 0, glue_PBDTAddIcon},
@@ -19899,6 +20990,38 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x37u, "PBHMoveRename", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x38u, "PBHOpenDeny", CONV_REG, 0, 0, glue_PBHOpenDeny},
     {0xA060, (int32_t)0x39u, "PBHOpenRFDeny", CONV_REG, 0, 0, glue_PBHOpenRFDeny},
+    {0xA060, (int32_t)0x3Au, "PBGetXCatInfo", CONV_REG, 0, 0, glue_PBGetXCatInfo},
+    {0xA060, (int32_t)0x53u, "PBGetForkPosition", CONV_REG, 0, 0, glue_PBGetForkPosition},
+    {0xA060, (int32_t)0x54u, "PBSetForkPosition", CONV_REG, 0, 0, glue_PBSetForkPosition},
+    {0xA060, (int32_t)0x55u, "PBGetForkSize", CONV_REG, 0, 0, glue_PBGetForkSize},
+    {0xA060, (int32_t)0x56u, "PBSetForkSize", CONV_REG, 0, 0, glue_PBSetForkSize},
+    {0xA060, (int32_t)0x57u, "PBAllocateFork", CONV_REG, 0, 0, glue_PBAllocateFork},
+    {0xA060, (int32_t)0x58u, "PBFlushFork", CONV_REG, 0, 0, glue_PBFlushFork},
+    {0xA060, (int32_t)0x59u, "PBCloseFork", CONV_REG, 0, 0, glue_PBCloseFork},
+    {0xA060, (int32_t)0x5Au, "PBGetForkCBInfo", CONV_REG, 0, 0, glue_PBGetForkCBInfo},
+    {0xA060, (int32_t)0x5Bu, "PBCloseIterator", CONV_REG, 0, 0, glue_PBCloseIterator},
+    {0xA060, (int32_t)0x5Cu, "PBGetCatalogInfoBulk", CONV_REG, 0, 0, glue_PBGetCatalogInfoBulk},
+    {0xA060, (int32_t)0x5Du, "PBCatalogSearch", CONV_REG, 0, 0, glue_PBCatalogSearch},
+    {0xA060, (int32_t)0x6Eu, "PBMakeFSRef", CONV_REG, 0, 0, glue_PBMakeFSRef},
+    {0xA060, (int32_t)0x70u, "PBCreateFileUnicode", CONV_REG, 0, 0, glue_PBCreateFileUnicode},
+    {0xA060, (int32_t)0x71u, "PBCreateDirectoryUnicode", CONV_REG, 0, 0, glue_PBCreateDirectoryUnicode},
+    {0xA060, (int32_t)0x72u, "PBDeleteObject", CONV_REG, 0, 0, glue_PBDeleteObject},
+    {0xA060, (int32_t)0x73u, "PBMoveObject", CONV_REG, 0, 0, glue_PBMoveObject},
+    {0xA060, (int32_t)0x74u, "PBRenameUnicode", CONV_REG, 0, 0, glue_PBRenameUnicode},
+    {0xA060, (int32_t)0x75u, "PBExchangeObjects", CONV_REG, 0, 0, glue_PBExchangeObjects},
+    {0xA060, (int32_t)0x76u, "PBGetCatalogInfo", CONV_REG, 0, 0, glue_PBGetCatalogInfo},
+    {0xA060, (int32_t)0x77u, "PBSetCatalogInfo", CONV_REG, 0, 0, glue_PBSetCatalogInfo},
+    {0xA060, (int32_t)0x78u, "PBOpenIterator", CONV_REG, 0, 0, glue_PBOpenIterator},
+    {0xA060, (int32_t)0x79u, "PBOpenFork", CONV_REG, 0, 0, glue_PBOpenFork},
+    {0xA060, (int32_t)0x7Au, "PBMakeFSRefUnicode", CONV_REG, 0, 0, glue_PBMakeFSRefUnicode},
+    {0xA060, (int32_t)0x7Cu, "PBCompareFSRefs", CONV_REG, 0, 0, glue_PBCompareFSRefs},
+    {0xA060, (int32_t)0x7Du, "PBCreateFork", CONV_REG, 0, 0, glue_PBCreateFork},
+    {0xA060, (int32_t)0x7Eu, "PBDeleteFork", CONV_REG, 0, 0, glue_PBDeleteFork},
+    {0xA060, (int32_t)0x7Fu, "PBIterateForks", CONV_REG, 0, 0, glue_PBIterateForks},
+    {0xA0A8, (int32_t)0x51u, "PBReadFork", CONV_REG, 0, 0, glue_PBReadFork},
+    {0xA0A8, (int32_t)0x52u, "PBWriteFork", CONV_REG, 0, 0, glue_PBWriteFork},
+    {0xA0AC, (int32_t)0x0u, "InstallFS", CONV_REG, 0, 0, glue_InstallFS},
+    {0xA0AC, (int32_t)0x1u, "RemoveFS", CONV_REG, 0, 0, glue_RemoveFS},
     {0xA854, (int32_t)0x0u, "IsOutline", CONV_STACK, 8, 2, glue_IsOutline},
     {0xA854, (int32_t)0x1u, "SetOutlinePreferred", CONV_STACK, 2, 0, glue_SetOutlinePreferred},
     {0xA854, (int32_t)0x8u, "OutlineMetrics", CONV_STACK, 34, 2, glue_OutlineMetrics},
@@ -20450,6 +21573,39 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA52, (int32_t)0xDu, "FSpOpenResFile", CONV_STACK, 6, 2, glue_FSpOpenResFile},
     {0xAA52, (int32_t)0xEu, "FSpCreateResFile", CONV_STACK, 14, 0, glue_FSpCreateResFile},
     {0xAA52, (int32_t)0xFu, "FSpExchangeFiles", CONV_STACK, 8, 2, glue_FSpExchangeFiles},
+    {0xAA52, (int32_t)0x130u, "FSFlushFork", CONV_STACK, 2, 2, glue_FSFlushFork},
+    {0xAA52, (int32_t)0x131u, "FSCloseFork", CONV_STACK, 2, 2, glue_FSCloseFork},
+    {0xAA52, (int32_t)0x218u, "FSGetDataForkName", CONV_STACK, 4, 2, glue_FSGetDataForkName},
+    {0xAA52, (int32_t)0x219u, "FSGetResourceForkName", CONV_STACK, 4, 2, glue_FSGetResourceForkName},
+    {0xAA52, (int32_t)0x21Eu, "FSDeleteObject", CONV_STACK, 4, 2, glue_FSDeleteObject},
+    {0xAA52, (int32_t)0x225u, "FSCloseIterator", CONV_STACK, 4, 2, glue_FSCloseIterator},
+    {0xAA52, (int32_t)0x32Bu, "FSGetForkPosition", CONV_STACK, 6, 2, glue_FSGetForkPosition},
+    {0xAA52, (int32_t)0x32Du, "FSGetForkSize", CONV_STACK, 6, 2, glue_FSGetForkSize},
+    {0xAA52, (int32_t)0x41Au, "FSpMakeFSRef", CONV_STACK, 8, 2, glue_FSpMakeFSRef},
+    {0xAA52, (int32_t)0x421u, "FSExchangeObjects", CONV_STACK, 8, 2, glue_FSExchangeObjects},
+    {0xAA52, (int32_t)0x42Cu, "FSSetForkPosition", CONV_STACK, 8, 2, glue_FSSetForkPosition},
+    {0xAA52, (int32_t)0x42Eu, "FSSetForkSize", CONV_STACK, 8, 2, glue_FSSetForkSize},
+    {0xAA52, (int32_t)0x435u, "FSCompareFSRefs", CONV_STACK, 8, 2, glue_FSCompareFSRefs},
+    {0xAA52, (int32_t)0x534u, "FSSetVolumeInfo", CONV_STACK, 10, 2, glue_FSSetVolumeInfo},
+    {0xAA52, (int32_t)0x61Fu, "FSMoveObject", CONV_STACK, 12, 2, glue_FSMoveObject},
+    {0xAA52, (int32_t)0x623u, "FSSetCatalogInfo", CONV_STACK, 12, 2, glue_FSSetCatalogInfo},
+    {0xAA52, (int32_t)0x624u, "FSOpenIterator", CONV_STACK, 12, 2, glue_FSOpenIterator},
+    {0xAA52, (int32_t)0x636u, "FSCreateFork", CONV_STACK, 12, 2, glue_FSCreateFork},
+    {0xAA52, (int32_t)0x637u, "FSDeleteFork", CONV_STACK, 12, 2, glue_FSDeleteFork},
+    {0xAA52, (int32_t)0x928u, "FSOpenFork", CONV_STACK, 18, 2, glue_FSOpenFork},
+    {0xAA52, (int32_t)0x92Fu, "FSAllocateFork", CONV_STACK, 18, 2, glue_FSAllocateFork},
+    {0xAA52, (int32_t)0xA1Bu, "FSMakeFSRefUnicode", CONV_STACK, 20, 2, glue_FSMakeFSRefUnicode},
+    {0xAA52, (int32_t)0xA20u, "FSRenameUnicode", CONV_STACK, 20, 2, glue_FSRenameUnicode},
+    {0xAA52, (int32_t)0xA29u, "FSReadFork", CONV_STACK, 20, 2, glue_FSReadFork},
+    {0xAA52, (int32_t)0xA2Au, "FSWriteFork", CONV_STACK, 20, 2, glue_FSWriteFork},
+    {0xAA52, (int32_t)0xA38u, "FSIterateForks", CONV_STACK, 20, 2, glue_FSIterateForks},
+    {0xAA52, (int32_t)0xC22u, "FSGetCatalogInfo", CONV_STACK, 24, 2, glue_FSGetCatalogInfo},
+    {0xAA52, (int32_t)0xC32u, "FSGetForkCBInfo", CONV_STACK, 24, 2, glue_FSGetForkCBInfo},
+    {0xAA52, (int32_t)0xD33u, "FSGetVolumeInfo", CONV_STACK, 26, 2, glue_FSGetVolumeInfo},
+    {0xAA52, (int32_t)0xE1Cu, "FSCreateFileUnicode", CONV_STACK, 28, 2, glue_FSCreateFileUnicode},
+    {0xAA52, (int32_t)0x101Du, "FSCreateDirectoryUnicode", CONV_STACK, 32, 2, glue_FSCreateDirectoryUnicode},
+    {0xAA52, (int32_t)0x1226u, "FSGetCatalogInfoBulk", CONV_STACK, 36, 2, glue_FSGetCatalogInfoBulk},
+    {0xAA52, (int32_t)0x1427u, "FSCatalogSearch", CONV_STACK, 40, 2, glue_FSCatalogSearch},
     {0xABC9, (int32_t)0x207u, "NewIconSuite", CONV_STACK, 4, 2, glue_NewIconSuite},
     {0xABC9, (int32_t)0x217u, "GetSuiteLabel", CONV_STACK, 4, 2, glue_GetSuiteLabel},
     {0xABC9, (int32_t)0x302u, "DisposeIconSuite", CONV_STACK, 6, 2, glue_DisposeIconSuite},
@@ -21453,6 +22609,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA822, (int32_t)0x7u, "SetScanOverride", CONV_STACK, 2, 0, glue_SetScanOverride},
     {0xA822, (int32_t)0x8u, "GetScanOverride", CONV_STACK, 0, 2, glue_GetScanOverride},
     {0xA822, (int32_t)0xAu, "GetNextFOND", CONV_STACK, 4, 4, 0},
+    {0xA822, (int32_t)0x10u, "FSpResourceFileAlreadyOpen", CONV_STACK, 12, 2, glue_FSpResourceFileAlreadyOpen},
+    {0xA822, (int32_t)0x13u, "FSOpenResFile", CONV_STACK, 6, 2, glue_FSOpenResFile},
+    {0xA822, (int32_t)0x14u, "FSCreateResFile", CONV_STACK, 28, 0, glue_FSCreateResFile},
+    {0xA822, (int32_t)0x15u, "FSResourceFileAlreadyOpen", CONV_STACK, 12, 2, glue_FSResourceFileAlreadyOpen},
     {0xA8B5, (int32_t)0x80020004u, "KeyScript", CONV_STACK, 2, 0, glue_KeyScript},
     {0xA8B5, (int32_t)0x8008001Eu, "DrawJust", CONV_STACK, 8, 0, glue_DrawJust},
     {0xA8B5, (int32_t)0x8008FFF0u, "LongSecondsToDate", CONV_STACK, 8, 0, glue_LongSecondsToDate},
@@ -21663,12 +22823,14 @@ const dispatcher_info dispatchers[] = {
     {0xABEB, "DisplayDispatch", "D0W"},
     {0xABED, "DragDispatch", "D0W"},
     {0xA060, "FSDispatch", "D0W"},
+    {0xA0A8, "FSForkIODispatch", "D0W"},
+    {0xA0AC, "FSMDispatch", "D0W"},
     {0xA854, "FontDispatch", "D0<0xF>"},
     {0xA832, "GXGraphicsDispatch", "D0W"},
     {0xABFE, "GXPrintingDispatch", "D0L"},
     {0xA1AD, "GestaltDispatch", "TrapBits"},
     {0xABF1, "GestaltValueDispatch", "D0W"},
-    {0xAA52, "HighLevelFSDispatch", "D0<0xF>"},
+    {0xAA52, "HighLevelFSDispatch", "D0<0xFF>"},
     {0xABC9, "IconDispatch", "D0W"},
     {0xAAA3, "ImageCompressionDispatch", "D0W"},
     {0xABC2, "MatrixDispatch", "D0W"},
@@ -21691,7 +22853,7 @@ const dispatcher_info dispatchers[] = {
     {0xA8FD, "PrGlue", "StackL"},
     {0xAB1D, "QDExtensions", "D0L"},
     {0xAAAA, "QuickTime", "D0W"},
-    {0xA822, "ResourceDispatch", "D0<0xF>"},
+    {0xA822, "ResourceDispatch", "D0<0xFF>"},
     {0xA8B5, "ScriptUtil", "StackL"},
     {0xA895, "ShutDown", "StackW"},
     {0xA800, "SoundDispatch", "D0<0xFFFFFF>"},
