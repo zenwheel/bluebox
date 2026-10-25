@@ -169,3 +169,197 @@
       - name: count
         type: INTEGER
     cfm: InterfaceLib
+
+# ---- The SCSI Manager (scsi.c) ----
+
+# _SCSIDispatch ($A815): Pascal arguments, then MOVE.W #selector,-(SP).
+- dispatcher:
+    name: SCSIDispatch
+    trap: 0xA815
+    selector-location: StackW
+
+- function:
+    name: SCSIReset
+    return: OSErr
+    dispatcher: SCSIDispatch
+    selector: 0x0000
+
+- function:
+    name: SCSIGet
+    return: OSErr
+    dispatcher: SCSIDispatch
+    selector: 0x0001
+
+- function:
+    name: SCSISelect
+    return: OSErr
+    args:
+      - name: targetID
+        type: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x0002
+
+- function:
+    name: SCSICmd
+    return: OSErr
+    args:
+      - name: buffer
+        type: Ptr
+      - name: count
+        type: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x0003
+
+- function:
+    name: SCSIComplete
+    return: OSErr
+    args:
+      - name: stat
+        type: Ptr
+      - name: message
+        type: Ptr
+      - name: wait
+        type: uint32_t
+    dispatcher: SCSIDispatch
+    selector: 0x0004
+
+- function:
+    name: SCSIRead
+    return: OSErr
+    args:
+      - name: tibPtr
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x0005
+
+- function:
+    name: SCSIWrite
+    return: OSErr
+    args:
+      - name: tibPtr
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x0006
+
+- function:
+    name: SCSIRBlind
+    return: OSErr
+    args:
+      - name: tibPtr
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x0008
+
+- function:
+    name: SCSIWBlind
+    return: OSErr
+    args:
+      - name: tibPtr
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x0009
+
+- function:
+    name: SCSIStat
+    return: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x000A
+
+- function:
+    name: SCSISelAtn
+    return: OSErr
+    args:
+      - name: targetID
+        type: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x000B
+
+- function:
+    name: SCSIMsgIn
+    return: OSErr
+    args:
+      - name: message
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x000C
+
+- function:
+    name: SCSIMsgOut
+    return: OSErr
+    args:
+      - name: message
+        type: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x000D
+
+# SCSI Manager 4.3's _SCSIAtomic ($A089): MOVEQ #selector,D0, A0 the
+# parameter block, the result in D0.
+- dispatcher:
+    name: SCSIAtomic
+    trap: 0xA089
+    selector-location: D0W
+
+- function:
+    name: SCSIAction
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0001
+
+- function:
+    name: SCSIRegisterBus
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0002
+
+- function:
+    name: SCSIDeregisterBus
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0003
+
+- function:
+    name: SCSIReregisterBus
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0004
+
+- function:
+    name: SCSIKillXPT
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0005
+
+# The ATA Manager: a G3's, for PowerPC programs ($AAF1 stays the Quadra
+# 800's unimplemented trap).
+- function:
+    name: ataManager
+    return: INTEGER
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib

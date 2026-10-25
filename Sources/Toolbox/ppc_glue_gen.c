@@ -22823,6 +22823,139 @@ static void ppcglue_SetTimeout(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SCSIReset(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIReset();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIGet(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIGet();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSISelect(ppc_cpu *c)
+{
+    int16_t a_targetID = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSISelect(a_targetID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSICmd(ppc_cpu *c)
+{
+    gaddr a_buffer = (gaddr)c->gpr[3];
+    int16_t a_count = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSICmd(a_buffer, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIComplete(ppc_cpu *c)
+{
+    gaddr a_stat = (gaddr)c->gpr[3];
+    gaddr a_message = (gaddr)c->gpr[4];
+    uint32_t a_wait = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIComplete(a_stat, a_message, a_wait);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIRead(ppc_cpu *c)
+{
+    gaddr a_tibPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIRead(a_tibPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIWrite(ppc_cpu *c)
+{
+    gaddr a_tibPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIWrite(a_tibPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIRBlind(ppc_cpu *c)
+{
+    gaddr a_tibPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIRBlind(a_tibPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIWBlind(ppc_cpu *c)
+{
+    gaddr a_tibPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIWBlind(a_tibPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIStat(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIStat();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSISelAtn(ppc_cpu *c)
+{
+    int16_t a_targetID = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSISelAtn(a_targetID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIMsgIn(ppc_cpu *c)
+{
+    gaddr a_message = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIMsgIn(a_message);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIMsgOut(ppc_cpu *c)
+{
+    int16_t a_message = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIMsgOut(a_message);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIAction(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIAction(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIRegisterBus(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIRegisterBus(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIDeregisterBus(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIDeregisterBus(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIReregisterBus(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIReregisterBus(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIKillXPT(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIKillXPT(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ataManager(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ataManager(a_pb);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -37313,6 +37446,24 @@ const ppc_export ppc_exports[] = {
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"RstFLock", ppcglue_RstFLock},
+    {"SCSIAction", ppcglue_SCSIAction},
+    {"SCSICmd", ppcglue_SCSICmd},
+    {"SCSIComplete", ppcglue_SCSIComplete},
+    {"SCSIDeregisterBus", ppcglue_SCSIDeregisterBus},
+    {"SCSIGet", ppcglue_SCSIGet},
+    {"SCSIKillXPT", ppcglue_SCSIKillXPT},
+    {"SCSIMsgIn", ppcglue_SCSIMsgIn},
+    {"SCSIMsgOut", ppcglue_SCSIMsgOut},
+    {"SCSIRBlind", ppcglue_SCSIRBlind},
+    {"SCSIRead", ppcglue_SCSIRead},
+    {"SCSIRegisterBus", ppcglue_SCSIRegisterBus},
+    {"SCSIReregisterBus", ppcglue_SCSIReregisterBus},
+    {"SCSIReset", ppcglue_SCSIReset},
+    {"SCSISelAtn", ppcglue_SCSISelAtn},
+    {"SCSISelect", ppcglue_SCSISelect},
+    {"SCSIStat", ppcglue_SCSIStat},
+    {"SCSIWBlind", ppcglue_SCSIWBlind},
+    {"SCSIWrite", ppcglue_SCSIWrite},
     {"SFGetFile", ppcglue_SFGetFile},
     {"SFGetFilePreview", ppcglue_SFGetFilePreview},
     {"SFPGetFile", ppcglue_SFPGetFile},
@@ -37866,5 +38017,6 @@ const ppc_export ppc_exports[] = {
     {"_AE_hdlr_install", ppcglue__AE_hdlr_install},
     {"_AE_hdlr_lookup", ppcglue__AE_hdlr_lookup},
     {"_AE_hdlr_table_alloc", ppcglue__AE_hdlr_table_alloc},
+    {"ataManager", ppcglue_ataManager},
 };
 const unsigned ppc_export_count = sizeof ppc_exports / sizeof ppc_exports[0];

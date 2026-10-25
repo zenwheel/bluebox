@@ -7,4 +7,5 @@
 void legacy_reset(void)
 {
     startmgr_reset();
+    scsi_reset();
 }

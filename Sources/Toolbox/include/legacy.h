@@ -18,4 +18,7 @@ void legacy_reset(void);
 void startmgr_reset(void);
 void startmgr_get_video(gaddr pb);
 
+/* scsi.c */
+void scsi_reset(void);
+
 #endif

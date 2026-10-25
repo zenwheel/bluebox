@@ -108,6 +108,7 @@ const char *const os_trap_names[256] = {
     [0x82] = "DTInstall",
     [0x83] = "SetOSDefault",
     [0x84] = "GetOSDefault",
+    [0x89] = "SCSIAtomic",
     [0x90] = "SysEnvirons",
     [0x98] = "HWPriv",
     [0x9E] = "PowerDispatch",
@@ -138,6 +139,7 @@ const char *const tb_trap_names[1024] = {
     [0x012] = "TEPinScroll",
     [0x013] = "TEAutoView",
     [0x014] = "SetFractEnable",
+    [0x015] = "SCSIDispatch",
     [0x016] = "Pack8",
     [0x017] = "CopyMask",
     [0x018] = "FixATan2",
@@ -14363,6 +14365,176 @@ static void glue_RstFLock(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SCSIAction(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_parameterBlock = (gaddr)c->a[0];
+    int16_t r = tb_SCSIAction(a_parameterBlock);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_SCSICmd(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_count = (int16_t)cpu_pop16(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SCSICmd(a_buffer, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIComplete(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_wait = (uint32_t)cpu_pop32(c);
+    gaddr a_message = (gaddr)cpu_pop32(c);
+    gaddr a_stat = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SCSIComplete(a_stat, a_message, a_wait);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIDeregisterBus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_parameterBlock = (gaddr)c->a[0];
+    int16_t r = tb_SCSIDeregisterBus(a_parameterBlock);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_SCSIGet(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_SCSIGet();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIKillXPT(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_parameterBlock = (gaddr)c->a[0];
+    int16_t r = tb_SCSIKillXPT(a_parameterBlock);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_SCSIMsgIn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_message = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SCSIMsgIn(a_message);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIMsgOut(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_message = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SCSIMsgOut(a_message);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIRBlind(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tibPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SCSIRBlind(a_tibPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIRead(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tibPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SCSIRead(a_tibPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIRegisterBus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_parameterBlock = (gaddr)c->a[0];
+    int16_t r = tb_SCSIRegisterBus(a_parameterBlock);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_SCSIReregisterBus(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_parameterBlock = (gaddr)c->a[0];
+    int16_t r = tb_SCSIReregisterBus(a_parameterBlock);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_SCSIReset(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_SCSIReset();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSISelAtn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_targetID = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SCSISelAtn(a_targetID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSISelect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_targetID = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SCSISelect(a_targetID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIStat(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_SCSIStat();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIWBlind(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tibPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SCSIWBlind(a_tibPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SCSIWrite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tibPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SCSIWrite(a_tibPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SFGetFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -21539,6 +21711,24 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA822, (int32_t)0x7u, "SetScanOverride", CONV_STACK, 2, 0, glue_SetScanOverride},
     {0xA822, (int32_t)0x8u, "GetScanOverride", CONV_STACK, 0, 2, glue_GetScanOverride},
     {0xA822, (int32_t)0xAu, "GetNextFOND", CONV_STACK, 4, 4, 0},
+    {0xA089, (int32_t)0x1u, "SCSIAction", CONV_REG, 0, 0, glue_SCSIAction},
+    {0xA089, (int32_t)0x2u, "SCSIRegisterBus", CONV_REG, 0, 0, glue_SCSIRegisterBus},
+    {0xA089, (int32_t)0x3u, "SCSIDeregisterBus", CONV_REG, 0, 0, glue_SCSIDeregisterBus},
+    {0xA089, (int32_t)0x4u, "SCSIReregisterBus", CONV_REG, 0, 0, glue_SCSIReregisterBus},
+    {0xA089, (int32_t)0x5u, "SCSIKillXPT", CONV_REG, 0, 0, glue_SCSIKillXPT},
+    {0xA815, (int32_t)0x0u, "SCSIReset", CONV_STACK, 0, 2, glue_SCSIReset},
+    {0xA815, (int32_t)0x1u, "SCSIGet", CONV_STACK, 0, 2, glue_SCSIGet},
+    {0xA815, (int32_t)0x2u, "SCSISelect", CONV_STACK, 2, 2, glue_SCSISelect},
+    {0xA815, (int32_t)0x3u, "SCSICmd", CONV_STACK, 6, 2, glue_SCSICmd},
+    {0xA815, (int32_t)0x4u, "SCSIComplete", CONV_STACK, 12, 2, glue_SCSIComplete},
+    {0xA815, (int32_t)0x5u, "SCSIRead", CONV_STACK, 4, 2, glue_SCSIRead},
+    {0xA815, (int32_t)0x6u, "SCSIWrite", CONV_STACK, 4, 2, glue_SCSIWrite},
+    {0xA815, (int32_t)0x8u, "SCSIRBlind", CONV_STACK, 4, 2, glue_SCSIRBlind},
+    {0xA815, (int32_t)0x9u, "SCSIWBlind", CONV_STACK, 4, 2, glue_SCSIWBlind},
+    {0xA815, (int32_t)0xAu, "SCSIStat", CONV_STACK, 0, 2, glue_SCSIStat},
+    {0xA815, (int32_t)0xBu, "SCSISelAtn", CONV_STACK, 2, 2, glue_SCSISelAtn},
+    {0xA815, (int32_t)0xCu, "SCSIMsgIn", CONV_STACK, 4, 2, glue_SCSIMsgIn},
+    {0xA815, (int32_t)0xDu, "SCSIMsgOut", CONV_STACK, 2, 2, glue_SCSIMsgOut},
     {0xA8B5, (int32_t)0x80020004u, "KeyScript", CONV_STACK, 2, 0, glue_KeyScript},
     {0xA8B5, (int32_t)0x8008001Eu, "DrawJust", CONV_STACK, 8, 0, glue_DrawJust},
     {0xA8B5, (int32_t)0x8008FFF0u, "LongSecondsToDate", CONV_STACK, 8, 0, glue_LongSecondsToDate},
@@ -21779,6 +21969,8 @@ const dispatcher_info dispatchers[] = {
     {0xAB1D, "QDExtensions", "D0L"},
     {0xAAAA, "QuickTime", "D0W"},
     {0xA822, "ResourceDispatch", "D0<0xF>"},
+    {0xA089, "SCSIAtomic", "D0W"},
+    {0xA815, "SCSIDispatch", "StackW"},
     {0xA8B5, "ScriptUtil", "StackL"},
     {0xA895, "ShutDown", "StackW"},
     {0xA800, "SoundDispatch", "D0<0xFFFFFF>"},

@@ -93,4 +93,81 @@ extension BlueBox {
             #expect(rd16(back) == 15)
         }
     }
+
+    /// The SCSI Manager for a bus with only the Mac on it, and an ATA
+    /// Manager with no buses.
+    @Suite struct SCSIManager {
+        init() { bootMachine() }
+
+        @Test func noTargetAnswersSelection() {
+            let reason = run68k([
+                0x4267, 0x3F3C, 0x0001, 0xA815, 0x3E1F,         // SCSIGet -> D7
+                0x4267, 0x3F3C, 0x0003, 0x3F3C, 0x0002, 0xA815, 0x3C1F, // SCSISelect(3) -> D6
+                0x4267, 0x42A7, 0x3F3C, 0x0006, 0x3F3C, 0x0003, 0xA815, 0x3A1F, // SCSICmd(nil, 6) -> D5
+                0x4267, 0x3F3C, 0x000A, 0xA815, 0x381F,         // SCSIStat -> D4
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell")
+            let c = g_cpu!.pointee
+            #expect(c.d.7 & 0xFFFF == 0)   // the bus is ours
+            #expect(c.d.6 & 0xFFFF == 2)   // scCommErr: selection timed out
+            #expect(c.d.5 & 0xFFFF == 8)   // scSequenceErr: nobody connected
+            #expect(c.d.4 & 0xFFFF == 0)   // no lines asserted
+            #expect(ppcErr("SCSISelect", [1]) == 8) // without SCSIGet
+            #expect(ppcErr("SCSIGet", []) == 0 && ppcErr("SCSIGet", []) == 7) // scMgrBusyErr
+            #expect(ppcErr("SCSIComplete", [0, 0, 60]) == 8)
+            #expect(ppcErr("SCSIGet", []) == 0 && ppcErr("SCSIReset", []) == 0 && ppcErr("SCSIGet", []) == 0)
+        }
+
+        @Test func scsiManager43SeesOneEmptyBus() {
+            var r: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("scsi")), &r) == 0 && r & 1 == 1)
+            let pb = tb_NewPtr(176, false, true)
+            wr16(pb + 6, 176)
+            wr8(pb + 8, 3)                   // SCSIBusInquiry
+            #expect(run68k([0x207C, hiWord(pb), loWord(pb), 0x7001, 0xA089, 0x3E00, 0xA9F4]) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0)
+            #expect(rd8(pb + 69) == 7 && rd8(pb + 68) == 0 && rd16(pb + 84) == 7 && rd16(pb + 44) == 176)
+            wr8(pb + 8, 1)                   // SCSIExecIO to target 2
+            wr32(pb + 12, 0x0000_0200)
+            wr32(pb + 44, 512)               // scsiDataLength
+            #expect(ppcErr("SCSIAction", [pb]) == -7926) // scsiSelectTimeout
+            #expect(Int16(bitPattern: rd16(pb + 10)) == -7926 && rd32(pb + 64) == 512)
+            wr32(pb + 12, 0x0000_0700)       // the Mac itself
+            #expect(ppcErr("SCSIAction", [pb]) == -7868)
+            wr32(pb + 12, 0x0001_0200)       // bus 1
+            #expect(ppcErr("SCSIAction", [pb]) == -7869)
+            wr8(pb + 8, 0x80)                // SCSIGetVirtualIDInfo: ID 4 isn't there
+            wr16(pb + 36, 4)
+            wr8(pb + 38, 1)
+            #expect(ppcErr("SCSIAction", [pb]) == 0 && rd8(pb + 38) == 0 && rd8(pb + 14) == 4)
+            // A driver's cross-reference, looked up and removed.
+            wr8(pb + 8, 0x85)
+            wr32(pb + 12, 0x0000_0300)
+            wr16(pb + 36, UInt16(bitPattern: -40))
+            #expect(ppcErr("SCSIAction", [pb]) == 0)
+            wr16(pb + 36, 0)
+            wr8(pb + 8, 0x86)
+            #expect(ppcErr("SCSIAction", [pb]) == 0 && Int16(bitPattern: rd16(pb + 36)) == -40)
+            #expect(rd32(pb + 40) == 0xFFFF_FFFF)
+            wr8(pb + 8, 0x87)
+            #expect(ppcErr("SCSIAction", [pb]) == 0)
+            wr8(pb + 8, 0x86)
+            #expect(ppcErr("SCSIAction", [pb]) == -7882) // scsiNoSuchXref
+            #expect(ppcErr("SCSIRegisterBus", [pb]) == -7871 && ppcErr("SCSIKillXPT", [pb]) == -7871)
+            #expect(ppcErr("SCSIDeregisterBus", [pb]) == -7869)
+        }
+
+        @Test func ataManagerHasNoBuses() {
+            let pb = tb_NewPtr(96, false, true)
+            wr8(pb + 6, 1)
+            wr8(pb + 18, 0x90) // kATAMgrManagerInquiry
+            #expect(ppcErr("ataManager", [pb]) == 0)
+            #expect(rd8(pb + 52) == 1 && rd16(pb + 54) == 0 && rd16(pb + 56) == 0)
+            wr8(pb + 18, 0x01) // kATAMgrExecIO
+            #expect(ppcErr("ataManager", [pb]) == -9406 + 0x2F)
+            wr8(pb + 18, 0x77)
+            #expect(ppcErr("ataManager", [pb]) == -9406 + 0x30)
+        }
+    }
 }
