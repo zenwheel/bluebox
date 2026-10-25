@@ -160,6 +160,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ctb_export_count; i++)
         if (!strcmp(ctb_exports[i].name, name))
             return ctb_exports[i].fn;
+    for (unsigned i = 0; i < ml_export_count; i++)
+        if (!strcmp(ml_exports[i].name, name))
+            return ml_exports[i].fn;
     for (unsigned i = 0; i < lib_export_count; i++)
         if (!strcmp(lib_exports[i].name, name))
             return lib_exports[i].fn;
