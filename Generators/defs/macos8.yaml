@@ -463,3 +463,16 @@
       - name: theControl
         type: ControlHandle
     cfm: ControlsLib
+
+# Appearance 1.1 (ControlsLib 8.5); no trap.
+- function:
+    name: GetControlRegion
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inPart
+        type: int16_t
+      - name: outRegion
+        type: RgnHandle
+    cfm: ControlsLib

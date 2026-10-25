@@ -782,6 +782,7 @@ int16_t tb_GetControlFeatures(gaddr control, gaddr features);
 int16_t tb_GetControlMaximum(gaddr c);
 int16_t tb_GetControlMinimum(gaddr c);
 int32_t tb_GetControlReference(gaddr c);
+int32_t tb_GetControlRegion(gaddr inControl, int16_t inPart, gaddr outRegion);
 void tb_GetControlTitle(gaddr c, gaddr t);
 int16_t tb_GetControlValue(gaddr c);
 int16_t tb_GetControlVariant(gaddr c);

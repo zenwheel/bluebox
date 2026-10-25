@@ -261,6 +261,50 @@ extension BlueBox {
             tb_CloseResFile(rn3)
         }
 
+        /// A resource fork copied in by FSRead and FSWrite through the
+        /// numbers OpenResFile gave: Starry Night Backyard makes its
+        /// preferences so from its "Factory Defaults", and wrote nothing,
+        /// round its copying loop for ever.
+        @Test func forkCopiedThroughResourceFileNumbers() {
+            launchTestApp()
+            let from = pname("Defaults"), to = pname("Copy")
+            tb_CreateResFile(from)
+            let src = tb_OpenResFile(from)
+            tb_AddResource(handle(Array("factory".utf8)), type, 128, 0)
+            tb_CloseResFile(src)
+            tb_CreateResFile(to)
+            let a = tb_OpenResFile(from), b = tb_OpenResFile(to)
+            #expect(a > 0 && b > 0)
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            func io(_ rn: Int16, _ buf: UInt32, _ n: UInt32) {
+                wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: rn))
+                wr32(pb + UInt32(IOParam_ioBuffer_off), buf)
+                wr32(pb + UInt32(IOParam_ioReqCount_off), n)
+                wr16(pb + UInt32(IOParam_ioPosMode_off), 0) // fsAtMark
+            }
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: a))
+            #expect(tb_PBGetEOF(pb, false) == 0)
+            let len = rd32(pb + UInt32(IOParam_ioMisc_off))
+            let buf = tb_NewPtr(Int32(len), false, true)
+            io(a, buf, len)
+            #expect(tb_PBRead(pb, false) == 0)
+            io(b, buf, len)
+            #expect(tb_PBWrite(pb, false) == 0)
+            #expect(rd32(pb + UInt32(IOParam_ioActCount_off)) == len)
+            #expect(tb_PBGetEOF(pb, false) == 0 && rd32(pb + UInt32(IOParam_ioMisc_off)) == len)
+            tb_CloseResFile(a)
+            tb_CloseResFile(b)
+            let c = tb_OpenResFile(to)
+            let res = tb_Get1Resource(type, 128)
+            #expect(res != 0 && bytes(res) == Array("factory".utf8))
+            tb_CloseResFile(c)
+            // Opened read-only, the fork can't be written.
+            let ro = tb_OpenRFPerm(to, 0, 1) // fsRdPerm
+            io(ro, buf, 4)
+            #expect(tb_PBWrite(pb, false) == -61) // wrPermErr
+            tb_CloseResFile(ro)
+        }
+
         @Test func fspCreateResFileSetsTypeAndCreator() {
             let dir = launchTestApp()
             let spec = tb_NewPtr(70, false, true)

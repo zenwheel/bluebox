@@ -236,6 +236,30 @@ extension BlueBox {
             #expect(tb_IsValidControlHandle(bar) != 0 && tb_IsValidControlHandle(w) == 0)
         }
 
+        /// Appearance 1.1's GetControlRegion, which ControlsLib exports
+        /// (Sound Studio calls it once Gestalt says 1.1; unresolved, it
+        /// jumped to 0): the structure is the control's rectangle, the
+        /// content only an embedder's, a plain part code is not known.
+        @Test func controlRegions() {
+            launchTestApp()
+            _ = initToolbox()
+            #expect(cfm_export_fn("GetControlRegion") != nil)
+            let w = window()
+            let out = tb_NewPtr(4, false, true)
+            _ = tb_CreateRootControl(w, out)
+            let button = tb_NewControl(w, rect(20, 30, 40, 110), pstr("OK"), 1, 0, 0, 1, 368, 0)
+            let group = tb_NewControl(w, rect(60, 10, 150, 250), pstr("Group"), 1, 0, 0, 0, 160, 0)
+            let rgn = tb_NewRgn()
+            func bbox() -> [Int16] { (0..<4).map { Int16(bitPattern: rd16(rd32(rgn) + 2 + UInt32($0 * 2))) } }
+            #expect(tb_GetControlRegion(button, -1, rgn) == 0) // kControlStructureMetaPart
+            #expect(bbox() == [20, 30, 40, 110])
+            #expect(tb_GetControlRegion(group, -2, rgn) == 0) // kControlContentMetaPart
+            #expect(bbox() == [60, 10, 150, 250])
+            #expect(tb_GetControlRegion(button, -2, rgn) == -30588) // errInvalidPartCode
+            #expect(tb_GetControlRegion(w, -1, rgn) == -30584) // errUnknownControl
+            tb_DisposeWindow(w)
+        }
+
         /// HiliteControl on a handle that isn't a control (StuffIt Expander
         /// flashes a dialog's picture item on Escape) changes nothing and
         /// calls no definition through what its "contrlDefProc" holds.
