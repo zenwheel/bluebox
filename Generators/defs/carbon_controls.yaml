@@ -537,3 +537,547 @@
         type: DialogPtr
       - name: outMask
         type: UInt16*
+
+
+# ControlDefinitions.h: the Create...Control calls
+- function:
+    name: CreatePushButtonControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePushButtonWithIconControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: icon
+        type: void*
+      - name: iconAlignment
+        type: UInt16
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateCheckBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: initialValue
+        type: SInt32
+      - name: autoToggle
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateRadioButtonControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: initialValue
+        type: SInt32
+      - name: autoToggle
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateRadioGroupControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateBevelButtonControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: thickness
+        type: UInt16
+      - name: behavior
+        type: UInt16
+      - name: info
+        type: void*
+      - name: menuID
+        type: SInt16
+      - name: menuBehavior
+        type: UInt16
+      - name: menuPlacement
+        type: UInt16
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateScrollBarControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: value
+        type: SInt32
+      - name: minimum
+        type: SInt32
+      - name: maximum
+        type: SInt32
+      - name: viewSize
+        type: SInt32
+      - name: liveTracking
+        type: Boolean
+      - name: liveTrackingProc
+        type: ProcPtr
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateSliderControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: value
+        type: SInt32
+      - name: minimum
+        type: SInt32
+      - name: maximum
+        type: SInt32
+      - name: orientation
+        type: UInt16
+      - name: numTickMarks
+        type: UInt16
+      - name: liveTracking
+        type: Boolean
+      - name: liveTrackingProc
+        type: ProcPtr
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateProgressBarControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: value
+        type: SInt32
+      - name: minimum
+        type: SInt32
+      - name: maximum
+        type: SInt32
+      - name: indeterminate
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateLittleArrowsControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: value
+        type: SInt32
+      - name: minimum
+        type: SInt32
+      - name: maximum
+        type: SInt32
+      - name: increment
+        type: SInt32
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateChasingArrowsControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateDisclosureTriangleControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: orientation
+        type: UInt16
+      - name: title
+        type: void*
+      - name: initialValue
+        type: SInt32
+      - name: drawTitle
+        type: Boolean
+      - name: autoToggles
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateTabsControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: size
+        type: UInt16
+      - name: direction
+        type: UInt16
+      - name: numTabs
+        type: UInt16
+      - name: tabArray
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateSeparatorControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateGroupBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: primary
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateCheckGroupBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: initialValue
+        type: SInt32
+      - name: primary
+        type: Boolean
+      - name: autoToggle
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePopupGroupBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: primary
+        type: Boolean
+      - name: menuID
+        type: SInt16
+      - name: variableWidth
+        type: Boolean
+      - name: titleWidth
+        type: SInt16
+      - name: titleJustification
+        type: SInt16
+      - name: titleStyle
+        type: UInt8
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateImageWellControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: info
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePictureControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: content
+        type: const void*
+      - name: dontTrack
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateIconControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: icon
+        type: const void*
+      - name: dontTrack
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePopupArrowControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: orientation
+        type: UInt16
+      - name: size
+        type: UInt16
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePopupButtonControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: menuID
+        type: SInt16
+      - name: variableWidth
+        type: Boolean
+      - name: titleWidth
+        type: SInt16
+      - name: titleJustification
+        type: SInt16
+      - name: titleStyle
+        type: UInt8
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePlacardControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateClockControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: clockType
+        type: UInt16
+      - name: clockFlags
+        type: UInt32
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateUserPaneControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: features
+        type: UInt32
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateWindowHeaderControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: isListHeader
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateEditTextControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: text
+        type: void*
+      - name: isPassword
+        type: Boolean
+      - name: useInlineInput
+        type: Boolean
+      - name: style
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateStaticTextControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: text
+        type: void*
+      - name: style
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateScrollingTextBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: contentResID
+        type: SInt16
+      - name: autoScroll
+        type: Boolean
+      - name: delayBeforeAutoScroll
+        type: UInt32
+      - name: delayBetweenAutoScroll
+        type: UInt32
+      - name: autoScrollAmount
+        type: UInt16
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateListBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: autoSize
+        type: Boolean
+      - name: numRows
+        type: SInt16
+      - name: numColumns
+        type: SInt16
+      - name: horizScroll
+        type: Boolean
+      - name: vertScroll
+        type: Boolean
+      - name: cellHeight
+        type: SInt16
+      - name: cellWidth
+        type: SInt16
+      - name: hasGrowSpace
+        type: Boolean
+      - name: listDef
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: GetTabContentRect
+    return: OSErr
+    args:
+      - name: inTabControl
+        type: ControlHandle
+      - name: outContentRect
+        type: Rect*
+
+- function:
+    name: GetImageWellContentInfo
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlHandle
+      - name: outContent
+        type: void*

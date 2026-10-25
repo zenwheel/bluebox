@@ -256,6 +256,235 @@ extension BlueBox {
         }
     }
 
+    /// The Create...Control calls: each standard control made with its
+    /// arguments, as NewControl and the data tags make it.
+    @Suite(.serialized) struct CarbonCreateControls {
+        let t = CarbonControls()
+
+        func data(_ ch: UInt32, _ tag: String, part: Int16 = 0, _ n: Int = 4) -> [UInt8] {
+            let buf = t.ptr(n), size = t.ptr()
+            #expect(tb_GetControlData(ch, part, Int32(bitPattern: fourCC(tag)), Int32(n), buf, size) == 0, "\(tag)")
+            return (0..<min(n, Int(rd32(size)))).map { rd8(buf + UInt32($0)) }
+        }
+
+        func cdefID(_ ch: UInt32) -> Int16 {
+            // The definition's resource ID.
+            let defh = rd32(rd32(ch) + UInt32(ControlRecord_contrlDefProc_off))
+            let id = t.ptr(2), type = t.ptr(4), name = t.ptr(256)
+            tb_GetResInfo(defh, id, type, name)
+            return Int16(bitPattern: rd16(id))
+        }
+
+        /// Each test's window (set up once, before what the controls are made from).
+        static var window: UInt32 = 0
+
+        func start() { Self.window = t.setUp() }
+
+        func make(_ body: (UInt32, UInt32, UInt32) -> Int32) -> UInt32 {
+            if Self.window == 0 { start() }
+            let w = Self.window
+            let out = t.ptr()
+            #expect(body(w, t.rect(10, 10, 60, 200), out) == 0)
+            let ch = rd32(out)
+            #expect(tb_IsValidControlHandle(ch) != 0 && tb_IsControlVisible(ch) != 0)
+            return ch
+        }
+
+        @Test func buttons() {
+            start()
+            let push = make { w, r, out in tb_CreatePushButtonControl(w, r, t.cfString("Go"), out) }
+            #expect(cdefID(push) == 23 && tb_GetControlVariant(push) == 0)
+            #expect(pstring(at: rd32(push) + UInt32(ControlRecord_contrlTitle_off)) == "Go")
+            let check = make { w, r, out in tb_CreateCheckBoxControl(w, r, t.cfString("On"), 1, 1, out) }
+            #expect(tb_GetControlVariant(check) == 3 && tb_GetControlValue(check) == 1)
+            let radio = make { w, r, out in tb_CreateRadioButtonControl(w, r, t.cfString("A"), 0, 0, out) }
+            #expect(tb_GetControlVariant(radio) == 2 && tb_GetControlValue(radio) == 0)
+            let group = make { w, r, out in tb_CreateRadioGroupControl(w, r, out) }
+            #expect(cdefID(group) == 26)
+            // A push button with an icon: the content kept for drawing.
+            let info = t.ptr(6)
+            wr16(info, 1) // kControlContentIconSuiteRes
+            let iconic = make { w, r, out in tb_CreatePushButtonWithIconControl(w, r, t.cfString("I"), info, 7, out) }
+            #expect(tb_GetControlVariant(iconic) == 7)
+            let out = t.ptr()
+            #expect(tb_CreatePushButtonControl(0, t.rect(0, 0, 10, 10), 0, out) == -50 && rd32(out) == 0)
+        }
+
+        @Test func scrollBarsAndSliders() {
+            start()
+            let action = t.ptr(8)
+            let bar = make { w, r, out in tb_CreateScrollBarControl(w, r, 5, 0, 100_000, 40, 1, action, out) }
+            #expect(cdefID(bar) == 24 && tb_GetControlVariant(bar) == 2)
+            #expect(tb_GetControlValue(bar) == 5 && tb_GetControlMaximum(bar) == 32767)
+            #expect(tb_GetControlViewSize(bar) == 40 && tb_GetControlAction(bar) == action)
+            let slider = make { w, r, out in tb_CreateSliderControl(w, r, 3, 0, 10, 1, 5, 1, 0, out) }
+            #expect(cdefID(slider) == 3 && tb_GetControlVariant(slider) == 1 | 2 | 4)
+            let plain = make { w, r, out in tb_CreateSliderControl(w, r, 0, 0, 10, 2, 0, 0, 0, out) }
+            #expect(tb_GetControlVariant(plain) == 8)
+            let progress = make { w, r, out in tb_CreateProgressBarControl(w, r, 2, 0, 9, 1, out) }
+            #expect(cdefID(progress) == 5 && data(progress, "inde", 1) == [1])
+            #expect(data(progress, "anim", 1) == [1])
+            let arrows = make { w, r, out in tb_CreateLittleArrowsControl(w, r, 4, 1, 8, 2, out) }
+            #expect(cdefID(arrows) == 6 && tb_GetControlValue(arrows) == 4 && tb_GetControlMinimum(arrows) == 1)
+            let chasing = make { w, r, out in tb_CreateChasingArrowsControl(w, r, out) }
+            #expect(cdefID(chasing) == 7 && data(chasing, "anim", 1) == [1])
+            let still = t.ptr(1)
+            #expect(tb_SetControlData(chasing, 0, Int32(bitPattern: fourCC("anim")), 1, still) == 0)
+            #expect(data(chasing, "anim", 1) == [0])
+        }
+
+        @Test func tabsTriangleGroups() {
+            start()
+            // Three tabs, the second disabled, named by CFStrings.
+            let tabs = t.ptr(30)
+            for (i, name) in ["One", "Two", "Three"].enumerated() {
+                wr32(tabs + UInt32(i * 10) + 4, t.cfString(name))
+                wr8(tabs + UInt32(i * 10) + 8, i == 1 ? 0 : 1)
+            }
+            let tab = make { w, r, out in tb_CreateTabsControl(w, r, 1, 0, 3, tabs, out) }
+            #expect(cdefID(tab) == 8 && tb_GetControlVariant(tab) == 1)
+            #expect(tb_GetControlMaximum(tab) == 3 && tb_GetControlValue(tab) == 1)
+            let info = data(tab, "tabi", part: 3, 260)
+            #expect(String(decoding: info[5..<(5 + Int(info[4]))], as: UTF8.self) == "Three")
+            #expect(data(tab, "enab", part: 2, 1) == [0] && data(tab, "enab", part: 1, 1) == [1])
+            let content = t.ptr(8)
+            #expect(tb_GetTabContentRect(tab, content) == 0 && t.rectOf(content)[0] > 10)
+            let tri = make { w, r, out in tb_CreateDisclosureTriangleControl(w, r, 2, t.cfString("More"), 1, 1, 1, out) }
+            #expect(cdefID(tri) == 4 && tb_GetControlVariant(tri) == 3 && tb_GetControlValue(tri) == 1)
+            let box = make { w, r, out in tb_CreateGroupBoxControl(w, r, t.cfString("Box"), 0, out) }
+            #expect(cdefID(box) == 10 && tb_GetControlVariant(box) == 4)
+            let checkBox = make { w, r, out in tb_CreateCheckGroupBoxControl(w, r, t.cfString("Use"), 1, 1, 1, out) }
+            #expect(tb_GetControlVariant(checkBox) == 1 && tb_GetControlValue(checkBox) == 1)
+            // A pop-up group box: its menu, the first item current.
+            let menu = tb_NewMenu(300, t.pstr("Kinds"))
+            tb_AppendMenu(menu, t.pstr("Alpha;Beta"))
+            tb_InsertMenu(menu, -1)
+            let pop = make { w, r, out in tb_CreatePopupGroupBoxControl(w, r, t.cfString("K"), 1, 300, 1, 40, 0, 0, out) }
+            #expect(tb_GetControlVariant(pop) == 2 && tb_GetControlValue(pop) == 1 && tb_GetControlMaximum(pop) == 2)
+            #expect(data(pop, "mhan") == be32(menu))
+            #expect(cdefID(make { w, r, out in tb_CreateSeparatorControl(w, r, out) }) == 9)
+            #expect(cdefID(make { w, r, out in tb_CreatePlacardControl(w, r, out) }) == 14)
+            let header = make { w, r, out in tb_CreateWindowHeaderControl(w, r, 1, out) }
+            #expect(cdefID(header) == 21 && tb_GetControlVariant(header) == 1)
+            let arrow = make { w, r, out in tb_CreatePopupArrowControl(w, r, 3, 1, out) }
+            #expect(cdefID(arrow) == 12 && tb_GetControlVariant(arrow) == 7)
+        }
+
+        @Test func imagesClocksPanes() {
+            start()
+            let pict = tb_NewHandle(10, false, true)
+            let info = t.ptr(6)
+            wr16(info, 131) // kControlContentPictHandle
+            wr32(info + 2, pict)
+            let well = make { w, r, out in tb_CreateImageWellControl(w, r, info, out) }
+            let back = t.ptr(6)
+            #expect(tb_GetImageWellContentInfo(well, back) == 0 && rd16(back) == 131 && rd32(back + 2) == pict)
+            let picture = make { w, r, out in tb_CreatePictureControl(w, r, info, 1, out) }
+            #expect(cdefID(picture) == 19 && tb_GetControlVariant(picture) == 1 && data(picture, "pich") == be32(pict))
+            let icon = make { w, r, out in tb_CreateIconControl(w, r, info, 0, out) }
+            #expect(cdefID(icon) == 20)
+            let clock = make { w, r, out in tb_CreateClockControl(w, r, 2, 3, out) }
+            #expect(cdefID(clock) == 15 && tb_GetControlVariant(clock) == 2 && tb_GetControlValue(clock) == 0)
+            #expect(data(clock, "anim", 1) == [1]) // live
+            let features = t.ptr()
+            let pane = make { w, r, out in tb_CreateUserPaneControl(w, r, 0x16, out) }
+            #expect(tb_GetControlFeatures(pane, features) == 0 && rd32(features) & 0x16 == 0x16)
+            // A bevel button with a menu at the right.
+            let menu = tb_NewMenu(301, t.pstr("B"))
+            tb_InsertMenu(menu, -1)
+            let bevel = make { w, r, out in tb_CreateBevelButtonControl(w, r, t.cfString("B"), 2, 0x100, 0, 301, 0x4000, 4, out) }
+            #expect(cdefID(bevel) == 2 && tb_GetControlVariant(bevel) == 2 | 4)
+            #expect(data(bevel, "mhnd") == be32(menu))
+        }
+
+        @Test func textAndLists() {
+            start()
+            let style = t.ptr(24)
+            wr16(style, 0x0003) // kControlUseFontMask | kControlUseFaceMask
+            wr16(style + 2, 3)
+            let edit = make { w, r, out in tb_CreateEditTextControl(w, r, t.cfString("hello"), 0, 0, style, out) }
+            #expect(cdefID(edit) == 17 && data(edit, "text", 64) == Array("hello".utf8))
+            #expect(data(edit, "font", 24)[3] == 3)
+            let pass = make { w, r, out in tb_CreateEditTextControl(w, r, t.cfString("pw"), 1, 0, 0, out) }
+            #expect(tb_GetControlVariant(pass) == 2 && data(pass, "pass", 16) == Array("pw".utf8))
+            let stat = make { w, r, out in tb_CreateStaticTextControl(w, r, t.cfString("Label"), 0, out) }
+            #expect(cdefID(stat) == 18 && data(stat, "text", 64) == Array("Label".utf8))
+            // A list box: 4 rows, 2 columns, 16 by 50 cells.
+            let list = make { w, r, out in tb_CreateListBoxControl(w, r, 0, 4, 2, 0, 1, 16, 50, 0, 0, out) }
+            #expect(cdefID(list) == 22)
+            let lh = UInt32(bigEndian: data(list, "lhan").withUnsafeBytes { $0.load(as: UInt32.self) })
+            #expect(lh != 0)
+            let lr = rd32(lh)
+            #expect(t.rectOf(lr + UInt32(ListRec_dataBounds_off)) == [0, 0, 4, 2])
+            #expect(rd16(lr + UInt32(ListRec_cellSize_off)) == 16 && rd16(lr + UInt32(ListRec_cellSize_off) + 2) == 50)
+        }
+
+        /// A scrolling text box: its 'TEXT' in a TERec; the plain one with
+        /// a scroll bar of its own, the auto-scrolling one moving at idle.
+        @Test func scrollingTextBox() {
+            let text = Array(String(repeating: "A line of credits\r", count: 30).utf8)
+            launchTestApp([TestResource(type: "TEXT", id: 500, data: text)])
+            _ = initToolbox()
+            let w = t.window()
+            let out = t.ptr()
+            #expect(tb_CreateScrollingTextBoxControl(w, t.rect(10, 10, 110, 210), 500, 0, 0, 0, 0, out) == 0)
+            let plain = rd32(out)
+            #expect(cdefID(plain) == 27)
+            let bar = WindowRecord_controlList(w) // the newest: the box's scroll bar
+            #expect(bar != plain && tb_GetControlReference(bar) == Int32(bitPattern: plain))
+            #expect(tb_GetControlMaximum(bar) > 0 && t.rectOf(rd32(bar) + 8) == [10, 194, 110, 210])
+            #expect(tb_CreateScrollingTextBoxControl(w, t.rect(120, 10, 220, 210), 500, 1, 0, 2, 3, out) == 0)
+            let auto = rd32(out)
+            #expect(tb_GetControlVariant(auto) == 1 && data(auto, "samt", 2) == [0, 3])
+            #expect(data(auto, "anim", 1) == [1])
+            // Idle time after the delay: the text moves up by the amount.
+            func rows() -> [UInt16] {
+                let c = t.ptr(6)
+                return (124..<140).flatMap { v in (12..<60).map { h in tb_GetCPixel(Int16(h), Int16(v), c); return rd16(c) } }
+            }
+            let before = rows()
+            let ticks = UInt32(LM_Ticks)
+            for _ in 1...3 {
+                wr32(ticks, rd32(ticks) + 10)
+                tb_IdleControls(w)
+            }
+            #expect(rows() != before)
+            tb_DisposeControl(plain)
+            #expect(tb_IsValidControlHandle(bar) == 0)
+        }
+
+        @Test func popupButtonTags() {
+            let w = t.setUp()
+            let menu = tb_NewMenu(302, t.pstr("P"))
+            tb_AppendMenu(menu, t.pstr("One;Two;Three"))
+            tb_InsertMenu(menu, -1)
+            let out = t.ptr()
+            #expect(tb_CreatePopupButtonControl(w, t.rect(10, 10, 30, 200), t.cfString("Pick:"), 302, 1, 50, 0, 1, out) == 0)
+            let pop = rd32(out)
+            #expect(cdefID(pop) == 25 && tb_GetControlVariant(pop) == 2)
+            #expect(tb_GetControlPopupMenuHandle(pop) == menu && tb_GetControlMaximum(pop) == 3)
+            #expect(data(pop, "mnid", 2) == [0x01, 0x2E])
+            #expect(data(pop, "chck", 1) == [1])
+            let no = t.ptr(1)
+            #expect(tb_SetControlData(pop, 0, Int32(bitPattern: fourCC("chck")), 1, no) == 0)
+            #expect(data(pop, "chck", 1) == [0])
+            let extra = t.ptr(2)
+            wr16(extra, 6)
+            #expect(tb_SetControlData(pop, 0, Int32(bitPattern: fourCC("exht")), 2, extra) == 0)
+            let best = t.ptr(8), base = t.ptr(2)
+            _ = tb_GetBestControlRect(pop, best, base)
+            #expect(t.rectOf(best)[2] - t.rectOf(best)[0] == 26)
+            // A menu the control owns goes with it.
+            let owned = tb_NewMenu(303, t.pstr("O"))
+            let mp = t.ptr()
+            wr32(mp, owned)
+            #expect(tb_SetControlData(pop, 0, Int32(bitPattern: fourCC("omrf")), 4, mp) == 0)
+            #expect(tb_GetControlPopupMenuHandle(pop) == owned)
+            tb_DisposeControl(pop)
+            #expect(tb_GetHandleSize(owned) == 0 || memErr() != 0)
+        }
+    }
+
     /// CarbonLib's Dialog Manager calls: the accessors, items inserted and
     /// removed, ParamText read back, timeouts and the event mask.
     @Suite(.serialized) struct CarbonDialogs {

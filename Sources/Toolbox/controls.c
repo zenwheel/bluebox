@@ -623,7 +623,10 @@ void cdef1_native(cpu68k *c, uint16_t tw) { cdef_entry(c, true); }
 enum { popupFixedWidth = 1, popupVariableWidth = 2, popupUseAddResMenu = 4 };
 enum { inPopUpMenu = 2 }; /* kControlMenuPart */
 enum { popupTitleLeftJust = 0, popupTitleCenterJust = 1, popupTitleRightJust = 0xFF };
-#define POPUP_DATA_SIZE 10 /* mHandle, mID, title style, title width */
+#define POPUP_DATA_SIZE 14 /* mHandle, mID, title style, title width; flags, extra height */
+enum { popupOwnsMenu = 1, popupNoCheck = 2 }; /* the flags: 'omrf', 'chck' */
+
+static uint16_t popup_flags(gaddr d) { return d ? rd16(d + 10) : 0; }
 
 static gaddr popup_data(gaddr ch)
 {
@@ -870,11 +873,12 @@ static void popup_track(gaddr ch)
     tb_LocalToGlobal(pt);
     uint32_t g = rd32(pt);
     tb_DisposePtr(pt);
-    /* The item marked is the current one. */
+    /* The item marked is the current one (unless 'chck' said not). */
     int16_t cur = cvalue(ch);
     int items = tb_CountMItems(mh);
-    for (int i = 1; i <= items; i++)
-        tb_SetItemMark(mh, (int16_t)i, i == cur ? 0x12 : 0);
+    if (!(popup_flags(popup_data(ch)) & popupNoCheck))
+        for (int i = 1; i <= items; i++)
+            tb_SetItemMark(mh, (int16_t)i, i == cur ? 0x12 : 0);
     tb_HiliteControl(ch, inPopUpMenu);
     int32_t r = tb_PopUpMenuSelect(mh, (int16_t)pt_v(g), (int16_t)pt_h(g), cur);
     tb_HiliteControl(ch, 0);
@@ -894,8 +898,29 @@ static int32_t popup_data_access(gaddr ch, gaddr rec, bool set)
     gaddr d = popup_data(ch);
     if (!d)
         return errDataNotSupported;
-    if (tag == fourcc("mhan") || tag == fourcc("mnid")) {
-        bool handle = tag == fourcc("mhan");
+    if (tag == fourcc("chck") || tag == fourcc("exht")) {
+        bool chck = tag == fourcc("chck");
+        int32_t want = chck ? 1 : 2;
+        if (!set) {
+            if (data && size >= want) {
+                if (chck)
+                    wr8(data, !(popup_flags(d) & popupNoCheck));
+                else
+                    wr16(data, rd16(d + 12));
+            }
+            wr32(rec + 8, (uint32_t)want);
+            return noErr;
+        }
+        if (size < want)
+            return -30591; /* errDataSizeMismatch */
+        if (chck)
+            wr16(d + 10, (uint16_t)(rd8(data) ? popup_flags(d) & ~popupNoCheck : popup_flags(d) | popupNoCheck));
+        else
+            wr16(d + 12, rd16(data));
+        return noErr;
+    }
+    if (tag == fourcc("mhan") || tag == fourcc("mnid") || tag == fourcc("omrf")) {
+        bool handle = tag != fourcc("mnid");
         int32_t want = handle ? 4 : 2;
         if (!set) {
             if (data && size >= want) {
@@ -916,8 +941,11 @@ static int32_t popup_data_access(gaddr ch, gaddr rec, bool set)
                 tb_InsertMenu(mh, -1);
         }
         d = popup_data(ch);
+        if ((popup_flags(d) & popupOwnsMenu) && rd32(d) && rd32(d) != mh)
+            tb_DisposeMenu(rd32(d));
         wr32(d, mh);
         wr16(d + 4, mh ? (uint16_t)MenuInfo_menuID(rd32(mh)) : 0);
+        wr16(d + 10, (uint16_t)(tag == fourcc("omrf") ? popup_flags(d) | popupOwnsMenu : popup_flags(d) & ~popupOwnsMenu));
         ControlRecord_set_contrlMax(cp(ch), (int16_t)(mh ? tb_CountMItems(mh) : 0));
         return noErr;
     }
@@ -946,6 +974,9 @@ void cdef63_native(cpu68k *c, uint16_t tw)
     case initCntl: popup_init(ch); break;
     case dispCntl: {
         gaddr dh = ControlRecord_contrlData(cp(ch));
+        gaddr d = popup_data(ch);
+        if (d && (popup_flags(d) & popupOwnsMenu) && rd32(d))
+            tb_DisposeMenu(rd32(d));
         if (dh)
             tb_DisposeHandle(dh);
         ControlRecord_set_contrlData(cp(ch), 0);
@@ -953,13 +984,16 @@ void cdef63_native(cpu68k *c, uint16_t tw)
     }
     case autoTrack: popup_track(ch); break;
     case kControlMsgTestNewMsgSupport: result = NEW_MSG_OK; break;
-    case kControlMsgGetFeatures: result = kControlWantsActivate | kControlSupportsDataAccess; break;
+    case kControlMsgGetFeatures:
+        result = kControlWantsActivate | kControlSupportsDataAccess | kControlSupportsCalcBestRect;
+        break;
     case kControlMsgSetData: result = popup_data_access(ch, (gaddr)param, true); break;
     case kControlMsgGetData: result = popup_data_access(ch, (gaddr)param, false); break;
     case kControlMsgCalcBestRect: {
         qrect title, box;
         popup_parts(ch, &title, &box);
-        wr16((gaddr)param, 20);
+        gaddr d = popup_data(ch);
+        wr16((gaddr)param, (uint16_t)(20 + (d ? (int16_t)rd16(d + 12) : 0))); /* 'exht' */
         wr16((gaddr)param + 2, (uint16_t)(box.right - title.left));
         wr16((gaddr)param + 4, 0);
         break;

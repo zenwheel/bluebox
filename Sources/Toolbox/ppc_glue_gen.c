@@ -21242,6 +21242,389 @@ static void ppcglue_GetModalDialogEventMask(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_CreatePushButtonControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreatePushButtonControl(a_window, a_boundsRect, a_title, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePushButtonWithIconControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    gaddr a_icon = (gaddr)c->gpr[6];
+    uint16_t a_iconAlignment = (uint16_t)c->gpr[7];
+    gaddr a_outControl = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_CreatePushButtonWithIconControl(a_window, a_boundsRect, a_title, a_icon, a_iconAlignment, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateCheckBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int32_t a_initialValue = (int32_t)c->gpr[6];
+    int8_t a_autoToggle = (int8_t)c->gpr[7];
+    gaddr a_outControl = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_CreateCheckBoxControl(a_window, a_boundsRect, a_title, a_initialValue, a_autoToggle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateRadioButtonControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int32_t a_initialValue = (int32_t)c->gpr[6];
+    int8_t a_autoToggle = (int8_t)c->gpr[7];
+    gaddr a_outControl = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_CreateRadioButtonControl(a_window, a_boundsRect, a_title, a_initialValue, a_autoToggle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateRadioGroupControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CreateRadioGroupControl(a_window, a_boundsRect, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateBevelButtonControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    uint16_t a_thickness = (uint16_t)c->gpr[6];
+    uint16_t a_behavior = (uint16_t)c->gpr[7];
+    gaddr a_info = (gaddr)c->gpr[8];
+    int16_t a_menuID = (int16_t)c->gpr[9];
+    uint16_t a_menuBehavior = (uint16_t)c->gpr[10];
+    uint16_t a_menuPlacement = (uint16_t)rd32(c->gpr[1] + 56);
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)tb_CreateBevelButtonControl(a_window, a_boundsRect, a_title, a_thickness, a_behavior, a_info, a_menuID, a_menuBehavior, a_menuPlacement, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateScrollBarControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_value = (int32_t)c->gpr[5];
+    int32_t a_minimum = (int32_t)c->gpr[6];
+    int32_t a_maximum = (int32_t)c->gpr[7];
+    int32_t a_viewSize = (int32_t)c->gpr[8];
+    int8_t a_liveTracking = (int8_t)c->gpr[9];
+    gaddr a_liveTrackingProc = (gaddr)c->gpr[10];
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)tb_CreateScrollBarControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_viewSize, a_liveTracking, a_liveTrackingProc, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateSliderControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_value = (int32_t)c->gpr[5];
+    int32_t a_minimum = (int32_t)c->gpr[6];
+    int32_t a_maximum = (int32_t)c->gpr[7];
+    uint16_t a_orientation = (uint16_t)c->gpr[8];
+    uint16_t a_numTickMarks = (uint16_t)c->gpr[9];
+    int8_t a_liveTracking = (int8_t)c->gpr[10];
+    gaddr a_liveTrackingProc = (gaddr)rd32(c->gpr[1] + 56);
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)tb_CreateSliderControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_orientation, a_numTickMarks, a_liveTracking, a_liveTrackingProc, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateProgressBarControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_value = (int32_t)c->gpr[5];
+    int32_t a_minimum = (int32_t)c->gpr[6];
+    int32_t a_maximum = (int32_t)c->gpr[7];
+    int8_t a_indeterminate = (int8_t)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateProgressBarControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_indeterminate, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateLittleArrowsControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_value = (int32_t)c->gpr[5];
+    int32_t a_minimum = (int32_t)c->gpr[6];
+    int32_t a_maximum = (int32_t)c->gpr[7];
+    int32_t a_increment = (int32_t)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateLittleArrowsControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_increment, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateChasingArrowsControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CreateChasingArrowsControl(a_window, a_boundsRect, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateDisclosureTriangleControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint16_t a_orientation = (uint16_t)c->gpr[5];
+    gaddr a_title = (gaddr)c->gpr[6];
+    int32_t a_initialValue = (int32_t)c->gpr[7];
+    int8_t a_drawTitle = (int8_t)c->gpr[8];
+    int8_t a_autoToggles = (int8_t)c->gpr[9];
+    gaddr a_outControl = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)tb_CreateDisclosureTriangleControl(a_window, a_boundsRect, a_orientation, a_title, a_initialValue, a_drawTitle, a_autoToggles, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateTabsControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint16_t a_size = (uint16_t)c->gpr[5];
+    uint16_t a_direction = (uint16_t)c->gpr[6];
+    uint16_t a_numTabs = (uint16_t)c->gpr[7];
+    gaddr a_tabArray = (gaddr)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateTabsControl(a_window, a_boundsRect, a_size, a_direction, a_numTabs, a_tabArray, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateSeparatorControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CreateSeparatorControl(a_window, a_boundsRect, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateGroupBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int8_t a_primary = (int8_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateGroupBoxControl(a_window, a_boundsRect, a_title, a_primary, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateCheckGroupBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int32_t a_initialValue = (int32_t)c->gpr[6];
+    int8_t a_primary = (int8_t)c->gpr[7];
+    int8_t a_autoToggle = (int8_t)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateCheckGroupBoxControl(a_window, a_boundsRect, a_title, a_initialValue, a_primary, a_autoToggle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePopupGroupBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int8_t a_primary = (int8_t)c->gpr[6];
+    int16_t a_menuID = (int16_t)c->gpr[7];
+    int8_t a_variableWidth = (int8_t)c->gpr[8];
+    int16_t a_titleWidth = (int16_t)c->gpr[9];
+    int16_t a_titleJustification = (int16_t)c->gpr[10];
+    uint8_t a_titleStyle = (uint8_t)rd32(c->gpr[1] + 56);
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)tb_CreatePopupGroupBoxControl(a_window, a_boundsRect, a_title, a_primary, a_menuID, a_variableWidth, a_titleWidth, a_titleJustification, a_titleStyle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateImageWellControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreateImageWellControl(a_window, a_boundsRect, a_info, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePictureControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_content = (gaddr)c->gpr[5];
+    int8_t a_dontTrack = (int8_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreatePictureControl(a_window, a_boundsRect, a_content, a_dontTrack, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateIconControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_icon = (gaddr)c->gpr[5];
+    int8_t a_dontTrack = (int8_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateIconControl(a_window, a_boundsRect, a_icon, a_dontTrack, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePopupArrowControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint16_t a_orientation = (uint16_t)c->gpr[5];
+    uint16_t a_size = (uint16_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreatePopupArrowControl(a_window, a_boundsRect, a_orientation, a_size, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePopupButtonControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int16_t a_menuID = (int16_t)c->gpr[6];
+    int8_t a_variableWidth = (int8_t)c->gpr[7];
+    int16_t a_titleWidth = (int16_t)c->gpr[8];
+    int16_t a_titleJustification = (int16_t)c->gpr[9];
+    uint8_t a_titleStyle = (uint8_t)c->gpr[10];
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)tb_CreatePopupButtonControl(a_window, a_boundsRect, a_title, a_menuID, a_variableWidth, a_titleWidth, a_titleJustification, a_titleStyle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePlacardControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CreatePlacardControl(a_window, a_boundsRect, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateClockControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint16_t a_clockType = (uint16_t)c->gpr[5];
+    uint32_t a_clockFlags = (uint32_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateClockControl(a_window, a_boundsRect, a_clockType, a_clockFlags, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateUserPaneControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint32_t a_features = (uint32_t)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreateUserPaneControl(a_window, a_boundsRect, a_features, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateWindowHeaderControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int8_t a_isListHeader = (int8_t)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreateWindowHeaderControl(a_window, a_boundsRect, a_isListHeader, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateEditTextControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_text = (gaddr)c->gpr[5];
+    int8_t a_isPassword = (int8_t)c->gpr[6];
+    int8_t a_useInlineInput = (int8_t)c->gpr[7];
+    gaddr a_style = (gaddr)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateEditTextControl(a_window, a_boundsRect, a_text, a_isPassword, a_useInlineInput, a_style, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateStaticTextControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_text = (gaddr)c->gpr[5];
+    gaddr a_style = (gaddr)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateStaticTextControl(a_window, a_boundsRect, a_text, a_style, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateScrollingTextBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int16_t a_contentResID = (int16_t)c->gpr[5];
+    int8_t a_autoScroll = (int8_t)c->gpr[6];
+    uint32_t a_delayBeforeAutoScroll = (uint32_t)c->gpr[7];
+    uint32_t a_delayBetweenAutoScroll = (uint32_t)c->gpr[8];
+    uint16_t a_autoScrollAmount = (uint16_t)c->gpr[9];
+    gaddr a_outControl = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)tb_CreateScrollingTextBoxControl(a_window, a_boundsRect, a_contentResID, a_autoScroll, a_delayBeforeAutoScroll, a_delayBetweenAutoScroll, a_autoScrollAmount, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateListBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int8_t a_autoSize = (int8_t)c->gpr[5];
+    int16_t a_numRows = (int16_t)c->gpr[6];
+    int16_t a_numColumns = (int16_t)c->gpr[7];
+    int8_t a_horizScroll = (int8_t)c->gpr[8];
+    int8_t a_vertScroll = (int8_t)c->gpr[9];
+    int16_t a_cellHeight = (int16_t)c->gpr[10];
+    int16_t a_cellWidth = (int16_t)rd32(c->gpr[1] + 56);
+    int8_t a_hasGrowSpace = (int8_t)rd32(c->gpr[1] + 60);
+    gaddr a_listDef = (gaddr)rd32(c->gpr[1] + 64);
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 68);
+    c->gpr[3] = (uint32_t)tb_CreateListBoxControl(a_window, a_boundsRect, a_autoSize, a_numRows, a_numColumns, a_horizScroll, a_vertScroll, a_cellHeight, a_cellWidth, a_hasGrowSpace, a_listDef, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTabContentRect(ppc_cpu *c)
+{
+    gaddr a_inTabControl = (gaddr)c->gpr[3];
+    gaddr a_outContentRect = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTabContentRect(a_inTabControl, a_outContentRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetImageWellContentInfo(ppc_cpu *c)
+{
+    gaddr a_inButton = (gaddr)c->gpr[3];
+    gaddr a_outContent = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetImageWellContentInfo(a_inButton, a_outContent);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -39430,9 +39813,21 @@ const ppc_export ppc_exports[] = {
     {"CountTypes", ppcglue_CountTypes},
     {"CountUserDataType", ppctrap_CountUserDataType},
     {"CountVoices", ppcglue_CountVoices},
+    {"CreateBevelButtonControl", ppcglue_CreateBevelButtonControl},
+    {"CreateChasingArrowsControl", ppcglue_CreateChasingArrowsControl},
+    {"CreateCheckBoxControl", ppcglue_CreateCheckBoxControl},
+    {"CreateCheckGroupBoxControl", ppcglue_CreateCheckGroupBoxControl},
+    {"CreateClockControl", ppcglue_CreateClockControl},
     {"CreateCompDescriptor", ppcglue_CreateCompDescriptor},
     {"CreateCustomControl", ppcglue_CreateCustomControl},
+    {"CreateDisclosureTriangleControl", ppcglue_CreateDisclosureTriangleControl},
+    {"CreateEditTextControl", ppcglue_CreateEditTextControl},
     {"CreateEditionContainerFile", ppctrap_CreateEditionContainerFile},
+    {"CreateGroupBoxControl", ppcglue_CreateGroupBoxControl},
+    {"CreateIconControl", ppcglue_CreateIconControl},
+    {"CreateImageWellControl", ppcglue_CreateImageWellControl},
+    {"CreateListBoxControl", ppcglue_CreateListBoxControl},
+    {"CreateLittleArrowsControl", ppcglue_CreateLittleArrowsControl},
     {"CreateLogicalDescriptor", ppcglue_CreateLogicalDescriptor},
     {"CreateMovieControl", ppctrap_CreateMovieControl},
     {"CreateMovieFile", ppctrap_CreateMovieFile},
@@ -39440,11 +39835,29 @@ const ppc_export ppc_exports[] = {
     {"CreateNewWindow", ppcglue_CreateNewWindow},
     {"CreateObjSpecifier", ppcglue_CreateObjSpecifier},
     {"CreateOffsetDescriptor", ppcglue_CreateOffsetDescriptor},
+    {"CreatePictureControl", ppcglue_CreatePictureControl},
+    {"CreatePlacardControl", ppcglue_CreatePlacardControl},
+    {"CreatePopupArrowControl", ppcglue_CreatePopupArrowControl},
+    {"CreatePopupButtonControl", ppcglue_CreatePopupButtonControl},
+    {"CreatePopupGroupBoxControl", ppcglue_CreatePopupGroupBoxControl},
+    {"CreateProgressBarControl", ppcglue_CreateProgressBarControl},
+    {"CreatePushButtonControl", ppcglue_CreatePushButtonControl},
+    {"CreatePushButtonWithIconControl", ppcglue_CreatePushButtonWithIconControl},
+    {"CreateRadioButtonControl", ppcglue_CreateRadioButtonControl},
+    {"CreateRadioGroupControl", ppcglue_CreateRadioGroupControl},
     {"CreateRangeDescriptor", ppcglue_CreateRangeDescriptor},
     {"CreateResFile", ppcglue_CreateResFile},
     {"CreateRootControl", ppcglue_CreateRootControl},
+    {"CreateScrollBarControl", ppcglue_CreateScrollBarControl},
+    {"CreateScrollingTextBoxControl", ppcglue_CreateScrollingTextBoxControl},
+    {"CreateSeparatorControl", ppcglue_CreateSeparatorControl},
     {"CreateShortcutMovieFile", ppctrap_CreateShortcutMovieFile},
+    {"CreateSliderControl", ppcglue_CreateSliderControl},
+    {"CreateStaticTextControl", ppcglue_CreateStaticTextControl},
+    {"CreateTabsControl", ppcglue_CreateTabsControl},
     {"CreateThreadPool", ppcglue_CreateThreadPool},
+    {"CreateUserPaneControl", ppcglue_CreateUserPaneControl},
+    {"CreateWindowHeaderControl", ppcglue_CreateWindowHeaderControl},
     {"CurResFile", ppcglue_CurResFile},
     {"CursorComponentChanged", ppcglue_CursorComponentChanged},
     {"CursorComponentSetData", ppcglue_CursorComponentSetData},
@@ -40196,6 +40609,7 @@ const ppc_export ppc_exports[] = {
     {"GetIconSuite", ppcglue_GetIconSuite},
     {"GetImageDescriptionCTable", ppcglue_GetImageDescriptionCTable},
     {"GetImageDescriptionExtension", ppctrap_GetImageDescriptionExtension},
+    {"GetImageWellContentInfo", ppcglue_GetImageWellContentInfo},
     {"GetIndADB", ppcglue_GetIndADB},
     {"GetIndPattern", ppcglue_GetIndPattern},
     {"GetIndResource", ppcglue_GetIndResource},
@@ -40407,6 +40821,7 @@ const ppc_export ppc_exports[] = {
     {"GetSysBeepVolume", ppcglue_GetSysBeepVolume},
     {"GetSysDirection", ppcglue_GetSysDirection},
     {"GetSysPPtr", ppcglue_GetSysPPtr},
+    {"GetTabContentRect", ppcglue_GetTabContentRect},
     {"GetTaggedCollectionItem", ppctrap_GetTaggedCollectionItem},
     {"GetTaggedCollectionItemInfo", ppctrap_GetTaggedCollectionItemInfo},
     {"GetTextServiceLanguage", ppcglue_GetTextServiceLanguage},

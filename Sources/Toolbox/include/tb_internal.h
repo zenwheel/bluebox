@@ -455,6 +455,14 @@ void ap_after_track(gaddr ch, int16_t part);
 gaddr ap_item_control(gaddr dialog, int item, int kind);
 void ap_forget_dialog(gaddr dialog);
 void ap_items_shifted(gaddr dialog, int from, int delta);
+/* What CarbonLib's Create...Control calls set beyond NewControl's
+ * arguments: content (push buttons with icons), a slider's tick marks, a
+ * list box's list made to the arguments. */
+void ap_set_content(gaddr ch, gaddr info);
+void ap_set_ticks(gaddr ch, int n);
+enum { AP_AUTO_TOGGLE = 1, AP_DRAWS_TITLE = 2 }; /* check box group boxes, disclosure triangles */
+void ap_set_behavior(gaddr ch, int16_t bits);
+bool ap_list_setup(gaddr ch, int rows, int cols, int cell_h, int cell_w, bool hs, bool vs, bool grow, gaddr ldef_upp);
 bool ap_item_draw(gaddr dialog, int item);
 int16_t ap_item_click(gaddr dialog, int item, uint32_t pt, int16_t modifiers);
 void ap_cdefs_reset(void);

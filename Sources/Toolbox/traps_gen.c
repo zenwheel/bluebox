@@ -3194,6 +3194,82 @@ static void glue_CountVoices(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CreateBevelButtonControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint16_t a_menuPlacement = (uint16_t)cpu_pop16(c);
+    uint16_t a_menuBehavior = (uint16_t)cpu_pop16(c);
+    int16_t a_menuID = (int16_t)cpu_pop16(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint16_t a_behavior = (uint16_t)cpu_pop16(c);
+    uint16_t a_thickness = (uint16_t)cpu_pop16(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateBevelButtonControl(a_window, a_boundsRect, a_title, a_thickness, a_behavior, a_info, a_menuID, a_menuBehavior, a_menuPlacement, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateChasingArrowsControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateChasingArrowsControl(a_window, a_boundsRect, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateCheckBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_autoToggle = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_initialValue = (int32_t)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateCheckBoxControl(a_window, a_boundsRect, a_title, a_initialValue, a_autoToggle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateCheckGroupBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_autoToggle = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_primary = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_initialValue = (int32_t)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateCheckGroupBoxControl(a_window, a_boundsRect, a_title, a_initialValue, a_primary, a_autoToggle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateClockControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint32_t a_clockFlags = (uint32_t)cpu_pop32(c);
+    uint16_t a_clockType = (uint16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateClockControl(a_window, a_boundsRect, a_clockType, a_clockFlags, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CreateCustomControl(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3204,6 +3280,265 @@ static void glue_CreateCustomControl(cpu68k *c, uint16_t trapword)
     gaddr a_contBounds = (gaddr)cpu_pop32(c);
     gaddr a_owningWindow = (gaddr)cpu_pop32(c);
     int32_t r = tb_CreateCustomControl(a_owningWindow, a_contBounds, a_def, a_initData, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateDisclosureTriangleControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_autoToggles = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_drawTitle = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_initialValue = (int32_t)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    uint16_t a_orientation = (uint16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateDisclosureTriangleControl(a_window, a_boundsRect, a_orientation, a_title, a_initialValue, a_drawTitle, a_autoToggles, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateEditTextControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    int8_t a_useInlineInput = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_isPassword = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateEditTextControl(a_window, a_boundsRect, a_text, a_isPassword, a_useInlineInput, a_style, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateGroupBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_primary = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateGroupBoxControl(a_window, a_boundsRect, a_title, a_primary, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateIconControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_dontTrack = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_icon = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateIconControl(a_window, a_boundsRect, a_icon, a_dontTrack, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateImageWellControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateImageWellControl(a_window, a_boundsRect, a_info, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateListBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_listDef = (gaddr)cpu_pop32(c);
+    int8_t a_hasGrowSpace = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_cellWidth = (int16_t)cpu_pop16(c);
+    int16_t a_cellHeight = (int16_t)cpu_pop16(c);
+    int8_t a_vertScroll = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_horizScroll = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_numColumns = (int16_t)cpu_pop16(c);
+    int16_t a_numRows = (int16_t)cpu_pop16(c);
+    int8_t a_autoSize = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateListBoxControl(a_window, a_boundsRect, a_autoSize, a_numRows, a_numColumns, a_horizScroll, a_vertScroll, a_cellHeight, a_cellWidth, a_hasGrowSpace, a_listDef, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateLittleArrowsControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int32_t a_increment = (int32_t)cpu_pop32(c);
+    int32_t a_maximum = (int32_t)cpu_pop32(c);
+    int32_t a_minimum = (int32_t)cpu_pop32(c);
+    int32_t a_value = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateLittleArrowsControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_increment, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePictureControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_dontTrack = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePictureControl(a_window, a_boundsRect, a_content, a_dontTrack, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePlacardControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePlacardControl(a_window, a_boundsRect, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePopupArrowControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint16_t a_size = (uint16_t)cpu_pop16(c);
+    uint16_t a_orientation = (uint16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePopupArrowControl(a_window, a_boundsRect, a_orientation, a_size, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePopupButtonControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint8_t a_titleStyle = (uint8_t)(cpu_pop16(c) >> 8);
+    int16_t a_titleJustification = (int16_t)cpu_pop16(c);
+    int16_t a_titleWidth = (int16_t)cpu_pop16(c);
+    int8_t a_variableWidth = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_menuID = (int16_t)cpu_pop16(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePopupButtonControl(a_window, a_boundsRect, a_title, a_menuID, a_variableWidth, a_titleWidth, a_titleJustification, a_titleStyle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePopupGroupBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint8_t a_titleStyle = (uint8_t)(cpu_pop16(c) >> 8);
+    int16_t a_titleJustification = (int16_t)cpu_pop16(c);
+    int16_t a_titleWidth = (int16_t)cpu_pop16(c);
+    int8_t a_variableWidth = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_menuID = (int16_t)cpu_pop16(c);
+    int8_t a_primary = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePopupGroupBoxControl(a_window, a_boundsRect, a_title, a_primary, a_menuID, a_variableWidth, a_titleWidth, a_titleJustification, a_titleStyle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateProgressBarControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_indeterminate = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_maximum = (int32_t)cpu_pop32(c);
+    int32_t a_minimum = (int32_t)cpu_pop32(c);
+    int32_t a_value = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateProgressBarControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_indeterminate, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePushButtonControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePushButtonControl(a_window, a_boundsRect, a_title, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePushButtonWithIconControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint16_t a_iconAlignment = (uint16_t)cpu_pop16(c);
+    gaddr a_icon = (gaddr)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePushButtonWithIconControl(a_window, a_boundsRect, a_title, a_icon, a_iconAlignment, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateRadioButtonControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_autoToggle = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_initialValue = (int32_t)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateRadioButtonControl(a_window, a_boundsRect, a_title, a_initialValue, a_autoToggle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateRadioGroupControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateRadioGroupControl(a_window, a_boundsRect, a_outControl);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -3228,6 +3563,102 @@ static void glue_CreateRootControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CreateScrollBarControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_liveTrackingProc = (gaddr)cpu_pop32(c);
+    int8_t a_liveTracking = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_viewSize = (int32_t)cpu_pop32(c);
+    int32_t a_maximum = (int32_t)cpu_pop32(c);
+    int32_t a_minimum = (int32_t)cpu_pop32(c);
+    int32_t a_value = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateScrollBarControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_viewSize, a_liveTracking, a_liveTrackingProc, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateScrollingTextBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint16_t a_autoScrollAmount = (uint16_t)cpu_pop16(c);
+    uint32_t a_delayBetweenAutoScroll = (uint32_t)cpu_pop32(c);
+    uint32_t a_delayBeforeAutoScroll = (uint32_t)cpu_pop32(c);
+    int8_t a_autoScroll = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_contentResID = (int16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateScrollingTextBoxControl(a_window, a_boundsRect, a_contentResID, a_autoScroll, a_delayBeforeAutoScroll, a_delayBetweenAutoScroll, a_autoScrollAmount, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateSeparatorControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateSeparatorControl(a_window, a_boundsRect, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateSliderControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_liveTrackingProc = (gaddr)cpu_pop32(c);
+    int8_t a_liveTracking = (int8_t)(cpu_pop16(c) >> 8);
+    uint16_t a_numTickMarks = (uint16_t)cpu_pop16(c);
+    uint16_t a_orientation = (uint16_t)cpu_pop16(c);
+    int32_t a_maximum = (int32_t)cpu_pop32(c);
+    int32_t a_minimum = (int32_t)cpu_pop32(c);
+    int32_t a_value = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateSliderControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_orientation, a_numTickMarks, a_liveTracking, a_liveTrackingProc, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateStaticTextControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateStaticTextControl(a_window, a_boundsRect, a_text, a_style, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateTabsControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_tabArray = (gaddr)cpu_pop32(c);
+    uint16_t a_numTabs = (uint16_t)cpu_pop16(c);
+    uint16_t a_direction = (uint16_t)cpu_pop16(c);
+    uint16_t a_size = (uint16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateTabsControl(a_window, a_boundsRect, a_size, a_direction, a_numTabs, a_tabArray, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CreateThreadPool(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3237,6 +3668,32 @@ static void glue_CreateThreadPool(cpu68k *c, uint16_t trapword)
     int32_t a_threadStyle = (int32_t)cpu_pop32(c);
     int16_t r = tb_CreateThreadPool(a_threadStyle, a_numToCreate, a_stackSize);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateUserPaneControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint32_t a_features = (uint32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateUserPaneControl(a_window, a_boundsRect, a_features, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateWindowHeaderControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_isListHeader = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateWindowHeaderControl(a_window, a_boundsRect, a_isListHeader, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9648,6 +10105,17 @@ static void glue_GetImageDescriptionCTable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetImageWellContentInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outContent = (gaddr)cpu_pop32(c);
+    gaddr a_inButton = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetImageWellContentInfo(a_inButton, a_outContent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetIndADB(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11127,6 +11595,17 @@ static void glue_GetSysPPtr(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_GetSysPPtr();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTabContentRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outContentRect = (gaddr)cpu_pop32(c);
+    gaddr a_inTabControl = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetTabContentRect(a_inTabControl, a_outContentRect);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
