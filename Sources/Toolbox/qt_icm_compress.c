@@ -43,7 +43,7 @@ static bool source_of(gaddr pmh, gaddr rect, source *s)
         return false;
     gaddr pm = rd32(pmh);
     uint16_t rb = (uint16_t)rd16(pm + 4);
-    s->d.base = rd32(pm);
+    s->d.base = qd_pixmap_base(pm, true);
     s->d.row_bytes = rb & 0x3FFF;
     s->d.bounds = qrect_get(pm + 6);
     s->d.depth = rb & 0x8000 ? PixMap_pixelSize(pm) : 1;
@@ -429,7 +429,7 @@ int16_t tb_GetCSequencePrevBuffer(int32_t seqID, gaddr gworld)
     }
     if (q->prev) {
         gaddr pm = rd32(tb_GetGWorldPixMap(q->prev_gw));
-        pixdst d = { PixMap_baseAddr(pm), (uint16_t)PixMap_rowBytes(pm) & 0x3FFF, qrect_get(pm + PixMap_bounds_off),
+        pixdst d = { qd_pixmap_base(pm, true), (uint16_t)PixMap_rowBytes(pm) & 0x3FFF, qrect_get(pm + PixMap_bounds_off),
                      PixMap_pixelSize(pm), PixMap_pmTable(pm) };
         for (int y = 0; y < q->f.height; y++)
             for (int x = 0; x < q->f.width; x++) {

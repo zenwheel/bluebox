@@ -40,6 +40,46 @@ extension BlueBox {
             tb_DisposeGWorld(port)
         }
 
+        /// BackPixPat and PenPixPat put the program's own pattern in the port:
+        /// a program that reads it back and disposes of it before setting the
+        /// next (Chromosomethingorother) leaves the heap whole, BackPat goes
+        /// back to the port's own pattern, and CloseCPort disposes only that.
+        @Test func pixPatsGoInThePortAsTheyAre() {
+            launchTestApp()
+            _ = initToolbox()
+            let zone = rd32(UInt32(LM_ApplZone))
+            let saved = tb_NewPtr(4, false, true)
+            tb_GetPort(saved)
+            let port = tb_NewPtr(108, true, true)
+            tb_OpenCPort(port)
+            let bkOff: UInt32 = 32, pnOff: UInt32 = 58
+            let own = rd32(port + bkOff)
+            let first = tb_NewPixPat()
+            tb_BackPixPat(first)
+            #expect(rd32(port + bkOff) == first)
+            tb_DisposePixPat(rd32(port + bkOff))
+            let second = tb_NewPixPat()
+            tb_BackPixPat(second)
+            #expect(rd32(port + bkOff) == second)
+            #expect(mm_check_zone(zone))
+            let white = tb_NewPtr(8, true, true)
+            for i in 0..<8 { wr8(white + UInt32(i), 0) }
+            tb_BackPat(white)
+            #expect(rd32(port + bkOff) == own)
+            #expect(rd16(rd32(second)) == 1) // still the program's pixel pattern
+            let pen = tb_NewPixPat()
+            tb_PenPixPat(pen)
+            #expect(rd32(port + pnOff) == pen)
+            tb_PenNormal()
+            #expect(rd32(port + pnOff) != pen)
+            tb_SetPort(rd32(saved))
+            tb_CloseCPort(port)
+            #expect(rd32(second) != 0 && rd32(pen) != 0) // not the port's to dispose
+            tb_DisposePixPat(second)
+            tb_DisposePixPat(pen)
+            #expect(mm_check_zone(zone))
+        }
+
         /// At depth 0 the rectangle is global, only to choose the screen: the
         /// world starts at 0,0 (Squark draws at 0,0 into a world made from
         /// its window's global rectangle).  A given depth keeps the rectangle.
@@ -101,11 +141,68 @@ extension BlueBox {
             #expect(tb_NewGWorld(gw, 8, rect(0, 0, 32, 32), 0, 0, 0) == 0)
             let pm = rd32(tb_GetGWorldPixMap(rd32(gw)))
             #expect(rd16(pm + 4) & 0x3FFF == 36)
-            #expect(tb_GetPtrSize(PixMap_baseAddr(pm)) >= 36 * 33)
+            #expect(tb_GetHandleSize(PixMap_baseAddr(pm)) >= 36 * 33)
             tb_DisposeGWorld(rd32(gw))
             #expect(tb_NewGWorld(gw, 32, rect(0, 0, 10, 10), 0, 0, 0) == 0)
             #expect(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + 4) & 0x3FFF == 40)
             tb_DisposeGWorld(rd32(gw))
+        }
+
+        /// System 7.5's QuickDraw and later round rows up to 16 bytes: the
+        /// Mac OS 8 that PowerPC programs see (Angel Egg reads backgrounds
+        /// saved 400 bytes a row straight into a 384-pixel 8-bit world).
+        @Test func gworldRowsRoundTo16BytesFromSystem75() {
+            launchTestApp()
+            _ = initToolbox()
+            let saved = rd16(UInt32(LM_SysVersion))
+            wr16(UInt32(LM_SysVersion), 0x0810)
+            defer { wr16(UInt32(LM_SysVersion), saved) }
+            let gw = tb_NewPtr(4, false, true)
+            for (depth, rb) in [(8, 400), (16, 784), (32, 1552)] {
+                #expect(tb_NewGWorld(gw, Int16(depth), rect(0, 0, 582, 384), 0, 0, 0) == 0)
+                #expect(Int(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + 4) & 0x3FFF) == rb)
+                tb_DisposeGWorld(rd32(gw))
+            }
+        }
+
+        /// A GWorld's pixels are a handle, held in baseAddr until LockPixels
+        /// puts their address there (pmVersion 2, then 1), as QuickDraw's
+        /// were.  HunterDeer moves its pixels into a handle of its own by it;
+        /// drawing then stays inside them.
+        @Test func gworldPixelsAreAHandleUntilLocked() {
+            launchTestApp()
+            _ = initToolbox()
+            let zone = rd32(UInt32(LM_ApplZone))
+            let screen = tb_NewPtr(4, false, true), dev = tb_NewPtr(4, false, true)
+            tb_GetGWorld(screen, dev)
+            let gw = tb_NewPtr(4, false, true)
+            let bounds = rect(0, 0, 40, 60)
+            #expect(tb_NewGWorld(gw, 8, bounds, 0, 0, 0) == 0)
+            let port = rd32(gw), pmh = tb_GetGWorldPixMap(port), pm = rd32(pmh)
+            let h = PixMap_baseAddr(pm)
+            #expect(rd16(pm + 14) == 2)
+            let size = tb_GetHandleSize(h)
+            #expect(size >= 40 * Int32(rd16(pm + 4) & 0x3FFF))
+            #expect(tb_GetPixBaseAddr(pmh) == rd32(h))
+            #expect(tb_LockPixels(pmh) != 0)
+            #expect(PixMap_baseAddr(pm) == rd32(h) && rd16(pm + 14) == 1)
+            #expect(tb_GetPixelsState(pmh) & 0x80 != 0)
+            tb_UnlockPixels(pmh)
+            #expect(PixMap_baseAddr(pm) == h && rd16(pm + 14) == 2)
+            #expect(tb_GetPixelsState(pmh) & 0x80 == 0)
+            // The pixels moved into a handle of the program's own.
+            tb_DisposeHandle(h)
+            let mine = tb_NewHandle(size, false, false)
+            wr32(pm, mine)
+            #expect(tb_LockPixels(pmh) != 0)
+            #expect(PixMap_baseAddr(pm) == rd32(mine))
+            tb_SetGWorld(port, 0)
+            tb_EraseRect(bounds)
+            #expect(rd8(rd32(mine)) == 0) // white, at 8 bits
+            #expect(mm_check_zone(zone))
+            tb_SetGWorld(rd32(screen), rd32(dev))
+            tb_DisposeGWorld(port)
+            #expect(mm_check_zone(zone))
         }
 
         /// A direct screen's device table has 256 entries all the same, for

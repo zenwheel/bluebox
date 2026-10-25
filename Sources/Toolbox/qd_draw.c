@@ -1026,7 +1026,7 @@ static pixdst bits_at(gaddr bm)
 {
     pixdst d;
     uint16_t rb = (uint16_t)rd16(bm + 4);
-    d.base = rd32(bm);
+    d.base = (rb & 0x8000) ? qd_pixmap_base(bm, true) : rd32(bm);
     d.row_bytes = rb & 0x3FFF;
     d.bounds = qrect_get(bm + 6);
     d.depth = (rb & 0x8000) ? PixMap_pixelSize(bm) : 1;

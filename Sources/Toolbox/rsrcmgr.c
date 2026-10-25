@@ -693,7 +693,21 @@ static int32_t size_on_disk(gaddr res, bool decompressed)
     return (int32_t)len;
 }
 
-int32_t tb_GetResourceSizeOnDisk(gaddr res) { return size_on_disk(res, false); }
+/* SizeResource, as the Resource Manager's: a resource in memory is its
+ * handle's size, one purged or not loaded the size it decompresses to from
+ * the file.  DeadEnd adds pasted level data with AddResource and walks it
+ * byte by byte up to GetResourceSizeOnDisk, which read a length from the
+ * file for a resource not yet in it. */
+int32_t tb_GetResourceSizeOnDisk(gaddr res)
+{
+    gaddr maph;
+    uint32_t r;
+    if (find_handle(res, &maph, &r, NULL) && rd32(res)) {
+        set_res_err(noErr);
+        return tb_GetHandleSize(res);
+    }
+    return size_on_disk(res, true);
+}
 
 int32_t tb_GetMaxResourceSize(gaddr h)
 {

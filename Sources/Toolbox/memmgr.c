@@ -19,6 +19,7 @@
 #include <stdio.h>
 
 #include "tb_internal.h"
+#include "ppc.h"
 
 enum { USE_FREE = 0, USE_NREL = 1, USE_REL = 2 };
 enum { ST_LOCK = 0x80, ST_PURGE = 0x40, ST_RSRC = 0x20 };
@@ -480,6 +481,7 @@ gaddr tb_NewPtr(int32_t size, bool sys_p, bool clear_p)
 
 void tb_DisposePtr(gaddr p)
 {
+    LOGF(LOG_MEM, "DisposePtr(%08X)\n", p);
     if (!p) {
         set_mem_err(noErr);
         return;
@@ -591,6 +593,7 @@ static bool clear_after(gaddr z, gaddr b, uint32_t need)
 
 void tb_SetPtrSize(gaddr p, int32_t newsize)
 {
+    LOGF(LOG_MEM, "SetPtrSize(%08X, %d)\n", p, newsize);
     gaddr b = p - HDR;
     if (!p || b_use(b) != USE_NREL || newsize < 0) {
         set_mem_err(newsize < 0 ? memFullErr : memWZErr);
@@ -1083,20 +1086,28 @@ int16_t tb_HandAndHand(gaddr h1, gaddr h2)
 bool mm_check_zone(gaddr z)
 {
     gaddr lim = z_lim(z);
-    gaddr b = z_first(z);
+    gaddr b = z_first(z), prev = 0;
     while (b < lim) {
         uint32_t ps = b_psize(b);
         if (ps < HDR || b + ps > lim || (ps & 3)) {
-            log_printf("mm: zone %08X damaged at block %08X (size %u)\n", z, b, ps);
+            /* The block before says where this one starts: its size may be
+             * what was damaged. */
+            log_printf("mm: zone %08X damaged at block %08X (size %u; the block before is %08X)\n", z, b, ps, prev);
             return false;
         }
+        prev = b;
         if (b_use(b) == USE_REL) {
             gaddr mp = z + b_loc(b);
             /* The top byte may be the handle's flags, set as programs of
              * the 24-bit days set them (Shufflepuck locks its handles with
              * BSET #7), harmless to blocks below 16 MB. */
             uint32_t v = rd32(mp);
-            if (v != b + HDR && ((v & 0x00FFFFFFu) != b + HDR || b + HDR > 0x00FFFFFFu)) {
+            /* A locked block is never moved, so its master pointer is not
+             * the Memory Manager's to read: programs step it through the
+             * block for a while (Bloodsuckers steps past a length word with
+             * ADDQ.L #4,(A4) and puts it back before it disposes). */
+            bool stepped = (b_state(b) & ST_LOCK) && v > b + HDR && v <= b + ps;
+            if (v != b + HDR && !stepped && ((v & 0x00FFFFFFu) != b + HDR || b + HDR > 0x00FFFFFFu)) {
                 log_printf("mm: zone %08X: block %08X master pointer %08X does not point back (it holds %08X)\n", z, b,
                            mp, rd32(mp));
                 return false;
@@ -1118,24 +1129,70 @@ bool mm_check_zone(gaddr z)
  * master pointer, and the crash came two redraws on).  False, with the
  * damage logged, when a zone is damaged. */
 static int every = -1;
+static const char *checked_after; /* the call the last check followed */
 
 void machine_set_heap_check(int n) { every = n > 0 ? n : 0; }
 
-bool mm_debug_after_call(const char *name)
+static int heap_check_every(void)
 {
-    static unsigned calls;
     if (every < 0) {
         const char *e = getenv("BLUEBOX_HEAPCHECK");
         every = e ? (atoi(e) > 0 ? atoi(e) : 1) : 0;
     }
-    if (!every || ++calls % (unsigned)every)
-        return true;
+    return every;
+}
+
+/* Damage a stack did, run past its end by a recursion too deep (XContact's
+ * walk up its folders, Game Atlas's search asked to start again and again),
+ * is said so. */
+static void note_stack_overrun(void)
+{
+    gaddr r1 = g_ppc.gpr[1];
+    if (cfm_ppc_stack_lo && r1 && r1 < cfm_ppc_stack_lo && r1 > cfm_ppc_stack_lo - 0x100000)
+        log_printf("mm: the PowerPC stack has run %u bytes below its block at %08X (r1 %08X): a recursion too deep\n",
+                   cfm_ppc_stack_lo - r1, cfm_ppc_stack_lo, r1);
+    gaddr a7 = g_cpu ? g_cpu->a[7] : 0, limit = rd32(LM_ApplLimit);
+    if (a7 && limit && a7 < limit && a7 > rd32(LM_ApplZone))
+        log_printf("mm: the 68k stack has run below ApplLimit %08X (a7 %08X) into the heap\n", limit, a7);
+}
+
+static bool zones_intact(void)
+{
     gaddr zones[2] = { rd32(LM_SysZone), rd32(LM_ApplZone) };
     for (int i = 0; i < 2; i++)
         if (zones[i] && !mm_check_zone(zones[i])) {
-            log_printf("mm: the zone was damaged by %s (or within the %d calls before it)\n", name, every - 1);
+            note_stack_overrun();
             return false;
         }
+    return true;
+}
+
+bool mm_debug_after_call(const char *name)
+{
+    static unsigned calls;
+    if (!heap_check_every() || ++calls % (unsigned)every)
+        return true;
+    checked_after = name;
+    if (!zones_intact()) {
+        log_printf("mm: the zone was damaged by %s (or within the %d calls before it)\n", name, every - 1);
+        return false;
+    }
+    return true;
+}
+
+/* With every call checked, the zones are checked on the way in too, so
+ * damage done by the program's own code between two calls is told from
+ * damage the call does. */
+bool mm_debug_before_call(const char *name)
+{
+    if (heap_check_every() != 1 || !checked_after)
+        return true;
+    if (!zones_intact()) {
+        log_printf("mm: the zone was damaged before %s, since the check after %s: by code run between the two"
+                   " (the program's own, an interrupt task's, or a call's that called back into the program)\n",
+                   name, checked_after);
+        return false;
+    }
     return true;
 }
 
@@ -1148,6 +1205,7 @@ void raw_InitZone(cpu68k *c, uint16_t tw)
     uint16_t more = rd16(pb + 8);
     gaddr grow = rd32(pb + 10);
     bool inner = zone_of(start) != 0;
+    LOGF(LOG_MEM, "InitZone(%08X..%08X)\n", start, limit);
     mm_init_zone(start, limit, more);
     if (inner && nsubzones < MAX_SUBZONES) {
         subzones[nsubzones].z = start;

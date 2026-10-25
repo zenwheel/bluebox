@@ -255,7 +255,7 @@ static void draw_pass(const qt_text *t, const sample *s, gaddr text, qrect dest,
 static void read_pixels(gaddr gw, int w, int h, uint32_t *out)
 {
     gaddr pm = rd32(tb_GetGWorldPixMap(gw));
-    gaddr base = rd32(pm + PixMap_baseAddr_off);
+    gaddr base = qd_pixmap_base(pm, true);
     uint32_t row = rd16(pm + PixMap_rowBytes_off) & 0x3FFF;
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
@@ -307,7 +307,7 @@ bool qt_text_draw(qt_text *t, const uint8_t *data, uint32_t len, uint8_t *rgba)
         box = bounds;
     qrect view = (t->flags & dfClipToTextBox) ? box : bounds;
     tb_EraseRect(r);
-    uint32_t bgpx = rd32(rd32(rd32(tb_GetGWorldPixMap(gw)) + PixMap_baseAddr_off)) & 0xFFFFFF;
+    uint32_t bgpx = rd32(qd_pixmap_base(rd32(tb_GetGWorldPixMap(gw)), true)) & 0xFFFFFF;
     if (shade) {
         /* The shadow: black text on white, wherever it is not white. */
         gaddr white = tb_NewPtr(6, false, false);

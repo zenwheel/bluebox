@@ -223,6 +223,8 @@ bool qd_rec_suppressed(void);
 
 /* A PixPat handle for a black-and-white pattern. */
 gaddr qd_pixpat_for(const uint8_t pat[8]);
+/* A PixMap's pixels, through the handle an unlocked GWorld's baseAddr holds. */
+gaddr qd_pixmap_base(gaddr pm, bool lock);
 bool qd_pixpat_image(gaddr pp, int *w, int *h, uint16_t (**rgb)[3]);
 /* The pixel pattern a FillC... call fills with, while it does. */
 extern gaddr qd_fill_pixpat;
@@ -239,6 +241,7 @@ int qd_text_width(gaddr port, const uint8_t *text, int len);
 /* Screen. */
 void qd_screen_init(int width, int height);
 void qd_gworlds_reset(void);
+void qd_port_pats_reset(void);
 void qd_palettes_reset(void); /* windows' palettes and the default one, for a new launch */
 void qd_device_itable(gaddr gdh); /* an indexed device's inverse table, made again */
 /* The pixel value the current device's search procedures give a colour

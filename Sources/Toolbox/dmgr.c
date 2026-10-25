@@ -291,7 +291,7 @@ int16_t tb_DMGetDisplayMode(gaddr theDevice, gaddr switchInfo)
         wr16(switchInfo, (uint16_t)depth_mode(current_depth(gd)));
         wr32(switchInfo + 2, 0x80);
         wr16(switchInfo + 6, 0);
-        wr32(switchInfo + 8, pm && rd32(pm) ? rd32(rd32(pm) + PixMap_baseAddr_off) : 0);
+        wr32(switchInfo + 8, pm && rd32(pm) ? qd_pixmap_base(rd32(pm), true) : 0);
     }
     return noErr;
 }

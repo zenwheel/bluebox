@@ -415,6 +415,14 @@ void trap_aline(cpu68k *c, uint16_t op)
         if (!(op & 0x0400))
             cpu_push32(c, c->pc);
         if (n >= 0) {
+            if (!mm_debug_before_call(trap_name(op))) {
+                cpu_halt(c, "heap damaged before %s", trap_name(op));
+                return;
+            }
+            if (!code_check_before_call(trap_name(op))) {
+                cpu_halt(c, "code changed before %s", trap_name(op));
+                return;
+            }
             current_trap = op;
             uint16_t saved = last_trapword;
             last_trapword = op;
@@ -456,6 +464,14 @@ void trap_aline(cpu68k *c, uint16_t op)
         census_note(op, -1, entry != unimpl_stub);
     LOGF(LOG_TRAPS, "%08X %s\n", c->op_pc, trap_name(op));
     if (n >= 0) {
+        if (!mm_debug_before_call(trap_name(op))) {
+            cpu_halt(c, "heap damaged before %s", trap_name(op));
+            return;
+        }
+        if (!code_check_before_call(trap_name(op))) {
+            cpu_halt(c, "code changed before %s", trap_name(op));
+            return;
+        }
         uint32_t a0 = c->a[0], a1 = c->a[1], d1 = c->d[1], d2 = c->d[2];
         c->d[1] = op;
         current_trap = op;

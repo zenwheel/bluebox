@@ -738,7 +738,7 @@ int16_t tb_BitMapToRegion(gaddr rgn, gaddr bm)
     uint16_t rb = rd16(bm + 4);
     if ((rb & 0x8000) && rd16(bm + PixMap_pixelSize_off) != 1)
         return -148; /* pixmapTooDeepErr */
-    gaddr base = rd32(bm);
+    gaddr base = (rb & 0x8000) ? qd_pixmap_base(bm, true) : rd32(bm);
     uint32_t rowbytes = rb & 0x3FFF;
     qrect b = qrect_get(bm + 6);
     int w = b.right - b.left;

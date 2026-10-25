@@ -32,6 +32,41 @@ extension BlueBox {
             #expect(memErr() == 0)
         }
 
+        /// A locked handle's master pointer stepped into its own block is
+        /// the program's business (Bloodsuckers steps it past a length
+        /// word); an unlocked one's, or one pointing elsewhere, is damage.
+        @Test func zoneCheckLetsALockedHandleBeStepped() {
+            let h = tb_NewHandle(64, false, false)
+            let p = rd32(h)
+            tb_HLock(h)
+            wr32(h, p + 4)
+            #expect(mm_check_zone(appZone))
+            wr32(h, p + 0x10000)
+            #expect(!mm_check_zone(appZone))
+            wr32(h, p)
+            tb_HUnlock(h)
+            wr32(h, p + 4)
+            #expect(!mm_check_zone(appZone))
+            wr32(h, p)
+            #expect(mm_check_zone(appZone))
+            tb_DisposeHandle(h)
+        }
+
+        /// With every call checked, damage done between two calls is found
+        /// on the way into the second, not laid on it.
+        @Test func heapCheckLooksBeforeACallToo() {
+            machine_set_heap_check(1)
+            defer { machine_set_heap_check(0) }
+            #expect(mm_debug_after_call("first"))
+            let h = tb_NewHandle(64, false, false)
+            let p = rd32(h)
+            wr32(h, p + 8) // the program's own store, between the calls
+            #expect(!mm_debug_before_call("second"))
+            wr32(h, p)
+            #expect(mm_debug_before_call("second"))
+            tb_DisposeHandle(h)
+        }
+
         @Test func clearedAllocationsAreZero() {
             let h = tb_NewHandle(64, false, true)
             #expect((0..<64).allSatisfy { rd8(rd32(h) + UInt32($0)) == 0 })

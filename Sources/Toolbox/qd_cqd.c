@@ -46,7 +46,7 @@ int32_t tb_Color2Index(gaddr c)
     uint16_t rgb[3];
     uint32_t v;
     rgb_get(c, rgb);
-    if (qd_search_color(PixMap_baseAddr(pm), rgb, &v))
+    if (qd_search_color(qd_pixmap_base(pm, false), rgb, &v))
         return (int32_t)v;
     return (int32_t)qd_rgb_px(PixMap_pixelSize(pm), PixMap_pmTable(pm), rgb);
 }
@@ -237,15 +237,24 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
      * Space Pebbles steps its 32-pixel icon worlds by width + 4. */
     int slack = depth < 32 ? 32 / depth - 1 : 0;
     uint32_t rb = row_bytes_for(w + slack, depth);
+    /* System 7.5's QuickDraw and later give every depth a long to spare
+     * and round rows up to 16 bytes (for video digitizers): the Mac OS 8 of
+     * PowerPC programs.  Angel Egg reads its 384-pixel 8-bit backgrounds,
+     * saved 400 bytes a row, straight into its world when the file's rows
+     * are the world's. */
+    if (rd16(LM_SysVersion) >= 0x0750)
+        rb = ((uint32_t)((w * depth + 30) / 32 + 1) * 4 + 15) & ~15u;
     /* And a row to spare after the last: tile scrollers copy whole tiles
      * past the right edge, which on the last row runs off the end (Slippy
      * and STARFIGHT write 15 bytes over, scrolled 15 pixels across). */
-    gaddr bits = tb_NewPtr((int32_t)(rb * (uint32_t)(h + 1)), false, true);
-    if (!bits)
+    /* The pixels are a handle, unlocked (pmVersion 2) until LockPixels. */
+    gaddr bits = tb_NewHandle((int32_t)(rb * (uint32_t)(h + 1)), false, true);
+    if (!bits || !rd32(bits))
         return false;
     if (depth == 32)
-        gmemset(bits, 0xFF, rb * (uint32_t)h); /* white */
+        gmemset(rd32(bits), 0xFF, rb * (uint32_t)h); /* white */
     PixMap_set_baseAddr(pm, bits);
+    PixMap_set_pmVersion(pm, 2);
     PixMap_set_rowBytes(pm, (int16_t)(rb | 0x8000));
     qrect_put(pm + PixMap_bounds_off, r);
     PixMap_set_pixelSize(pm, (int16_t)depth);
@@ -339,6 +348,18 @@ static void remove_gworld(gaddr port)
     *g = gworlds[--ngworlds];
 }
 
+/* The handle holding a GWorld's pixels (whichever the program put there),
+ * or 0 for pixels of its own. */
+static gaddr pixels_handle(gaddr pm)
+{
+    gaddr base = PixMap_baseAddr(pm);
+    if (PixMap_pmVersion(pm) == 2)
+        return base;
+    if (PixMap_pmVersion(pm) == 1 && base)
+        return tb_RecoverHandle(base, false);
+    return 0;
+}
+
 int16_t tb_NewGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect, gaddr cTable, gaddr aGDevice,
                      int32_t flags)
 {
@@ -382,11 +403,15 @@ int32_t tb_UpdateGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsR
         set_port_rect(port, pr);
         return 0;
     }
-    gaddr old = PixMap_baseAddr(pm);
+    bool locked = PixMap_pmVersion(pm) == 1;
+    gaddr old = pixels_handle(pm);
     if (!set_pixels(port, r, depth, cTable))
         return memFullErr;
     set_port_rect(port, pr);
-    tb_DisposePtr(old);
+    if (old)
+        tb_DisposeHandle(old);
+    if (locked)
+        tb_LockPixels(rd32(port + CGrafPort_portPixMap_off));
     struct gworld_dev *g = gworld_of(port);
     if (g && g->own)
         describe_offscreen_device(g->gdh, port);
@@ -398,14 +423,15 @@ void tb_DisposeGWorld(gaddr port)
     if (!port)
         return;
     gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
-    gaddr bits = PixMap_baseAddr(pm);
+    gaddr bits = pixels_handle(pm);
     if (PixMap_pmTable(pm))
         tb_DisposeHandle(PixMap_pmTable(pm));
     if (qd_port() == port)
         tb_SetPort(rd32(LM_WMgrPort));
     remove_gworld(port);
     tb_CloseCPort(port);
-    tb_DisposePtr(bits);
+    if (bits)
+        tb_DisposeHandle(bits);
     tb_DisposePtr(port);
 }
 
@@ -429,13 +455,52 @@ void tb_SetGWorld(gaddr port, gaddr gdh)
         wr32(LM_TheGDevice, gdh);
 }
 
-int8_t tb_LockPixels(gaddr pm) { return 1; }
-void tb_UnlockPixels(gaddr pm) {}
+/* As QuickDraw's: LockPixels locks the handle and puts the pixels' address
+ * in baseAddr (pmVersion 1); UnlockPixels puts the handle back (2).  Other
+ * versions are pixels of the program's own, left alone.  The pixels are
+ * never purged. */
+int8_t tb_LockPixels(gaddr pmh)
+{
+    gaddr pm = pmh ? rd32(pmh) : 0;
+    if (!pm || PixMap_pmVersion(pm) != 2)
+        return 1;
+    gaddr h = PixMap_baseAddr(pm);
+    if (!h || !rd32(h))
+        return 0;
+    PixMap_set_baseAddr(pm, rd32(h));
+    PixMap_set_pmVersion(pm, 1);
+    tb_HLock(h);
+    return 1;
+}
+
+void tb_UnlockPixels(gaddr pmh)
+{
+    gaddr pm = pmh ? rd32(pmh) : 0;
+    if (!pm || PixMap_pmVersion(pm) != 1)
+        return;
+    gaddr h = tb_RecoverHandle(PixMap_baseAddr(pm), false);
+    if (!h)
+        return;
+    tb_HUnlock(h);
+    PixMap_set_baseAddr(pm, h);
+    PixMap_set_pmVersion(pm, 2);
+}
+
 void tb_AllowPurgePixels(gaddr pm) {}
 void tb_NoPurgePixels(gaddr pm) {}
-int32_t tb_GetPixelsState(gaddr pm) { return 0x80; /* pixelsLocked */ }
-void tb_SetPixelsState(gaddr pm, int32_t state) {}
-gaddr tb_GetPixBaseAddr(gaddr pm) { return pm && rd32(pm) ? PixMap_baseAddr(rd32(pm)) : 0; }
+int32_t tb_GetPixelsState(gaddr pmh)
+{
+    gaddr pm = pmh ? rd32(pmh) : 0;
+    return pm && PixMap_pmVersion(pm) == 2 ? 0 : 0x80; /* pixelsLocked */
+}
+void tb_SetPixelsState(gaddr pm, int32_t state)
+{
+    if (state & 0x80)
+        tb_LockPixels(pm);
+    else
+        tb_UnlockPixels(pm);
+}
+gaddr tb_GetPixBaseAddr(gaddr pm) { return pm && rd32(pm) ? qd_pixmap_base(rd32(pm), false) : 0; }
 int8_t tb_PixMap32Bit(gaddr pm) { return 0; }
 gaddr tb_GetGWorldPixMap(gaddr port)
 {
@@ -686,17 +751,16 @@ void tb_DisposePixPat(gaddr pp)
         tb_DisposeHandle(pp);
 }
 
+/* The pattern itself goes in a colour port, as QuickDraw put it: programs
+ * read it back from the port and dispose of it before setting the next
+ * (Chromosomethingorother's DisposePixPat, then BackPixPat). */
 static void set_port_pixpat(uint32_t color_off, uint32_t old_off, gaddr pp)
 {
     gaddr port = qd_port();
     if (!pp || !rd32(pp))
         return;
     if (qd_port_is_color(port)) {
-        gaddr cur = rd32(port + color_off);
-        if (cur && rd32(cur) && cur != pp)
-            gmemcpy(rd32(cur), rd32(pp), PixPat_SIZEOF);
-        else if (!cur)
-            wr32(port + color_off, pp);
+        wr32(port + color_off, pp);
     } else {
         gmemcpy(port + old_off, rd32(pp) + PixPat_pat1Data_off, 8);
     }
@@ -1489,7 +1553,7 @@ bool qd_search_color(gaddr base, const uint16_t rgb[3], uint32_t *out)
         return false;
     gaddr h = rd32(rd32(gdh) + GDevice_gdSearchProc_off);
     gaddr pmh = GDevice_gdPMap(rd32(gdh));
-    if (!h || !pmh || !rd32(pmh) || PixMap_baseAddr(rd32(pmh)) != base)
+    if (!h || !pmh || !rd32(pmh) || qd_pixmap_base(rd32(pmh), false) != base)
         return false;
     cpu68k *c = g_cpu;
     busy = true;

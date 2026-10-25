@@ -68,11 +68,31 @@ void code_check_reset(void)
         free(regions[--nregions].copy);
 }
 
+static const char *checked_after; /* the call the last check followed */
+
+static bool unchanged(const char *name, const char *when);
+
 bool code_check_after_call(const char *name)
 {
     static unsigned calls;
     if (!enabled() || !nregions || ++calls % (unsigned)every)
         return true;
+    checked_after = name;
+    return unchanged(name, NULL);
+}
+
+/* With every call checked, the code is checked on the way in too, so a
+ * change the program's own code makes between two calls is told from one
+ * the call makes. */
+bool code_check_before_call(const char *name)
+{
+    if (!enabled() || every != 1 || !nregions || !checked_after)
+        return true;
+    return unchanged(name, checked_after);
+}
+
+static bool unchanged(const char *name, const char *since)
+{
     for (int i = 0; i < nregions; i++) {
         code_region *r = &regions[i];
         if (!memcmp(r->copy, g_mem + r->base, r->size))
@@ -88,9 +108,14 @@ bool code_check_after_call(const char *name)
             was = was << 8 | r->copy[w + k];
             now = now << 8 | g_mem[r->base + w + k];
         }
-        log_printf("code: %s changed at %08X..%08X (%u bytes; the word at %08X was %08X, now %08X) by %s"
-                   " (or within the %d calls before it)\n",
-                   r->what, r->base + lo, r->base + hi - 1, hi - lo, r->base + w, was, now, name, every - 1);
+        if (since)
+            log_printf("code: %s changed at %08X..%08X (%u bytes; the word at %08X was %08X, now %08X) before %s,"
+                       " since the check after %s: by code run between the two\n",
+                       r->what, r->base + lo, r->base + hi - 1, hi - lo, r->base + w, was, now, name, since);
+        else
+            log_printf("code: %s changed at %08X..%08X (%u bytes; the word at %08X was %08X, now %08X) by %s"
+                       " (or within the %d calls before it)\n",
+                       r->what, r->base + lo, r->base + hi - 1, hi - lo, r->base + w, was, now, name, every - 1);
         /* Report each change once: the run may be let go on. */
         memcpy(r->copy, g_mem + r->base, r->size);
         return false;
