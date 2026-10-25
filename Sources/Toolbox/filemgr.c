@@ -2376,6 +2376,13 @@ int16_t tb_PBKillIO(gaddr pbp, bool a)
 
 int16_t tb_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id, gaddr file_name, gaddr spec)
 {
+    /* The root's parent (fsRtParID) is no directory of its own: only a
+     * volume's name names something there.  Programs find their way up
+     * to the root by this error (XContact's FSMakeFSSpec of each parent
+     * in turn, which here went on for ever and ran its stack into its
+     * code). */
+    if (dir_id == 1 && (!file_name || !rd8(file_name)))
+        return dirNFErr;
     char path[PATH_MAX];
     int16_t err = resolve(vRefNum, dir_id, file_name, true, path, sizeof path);
     if (err)

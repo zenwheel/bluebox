@@ -102,6 +102,13 @@ extension BlueBox {
             let rootSpec = ptr(UInt32(FSSpec_SIZEOF))
             #expect(tb_FSMakeFSSpec(-1, 2, 0, rootSpec) == 0)
             #expect(rd32(rootSpec + UInt32(FSSpec_parID_off)) == 1)
+            // The root's parent is no directory: walking up stops there
+            // (XContact's walk went on for ever).  The volume's name in it
+            // is the root.
+            let above = ptr(UInt32(FSSpec_SIZEOF))
+            #expect(tb_FSMakeFSSpec(-1, 1, 0, above) == -120) // dirNFErr
+            #expect(tb_FSMakeFSSpec(-1, 1, rootSpec + UInt32(FSSpec_name_off), above) == 0)
+            #expect(rd32(above + UInt32(FSSpec_parID_off)) == 1)
             let root = ptr(80)
             #expect(tb_FSpMakeFSRef(rootSpec, root) == 0)
             let rci = catInfo(root)
