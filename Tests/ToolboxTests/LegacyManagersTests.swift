@@ -654,7 +654,7 @@ extension BlueBox {
             // An I/O already done; one that never ends times out.
             let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
             wr16(pb + UInt32(IOParam_ioResult_off), UInt16(bitPattern: -43))
-            #expect(ppcErr("PBWaitIOComplete", [pb, 10]) == -43)
+            #expect(ppcErr("PBWaitIOComplete", [pb, 10]) == 0) // done: the result in ioResult
             wr16(pb + UInt32(IOParam_ioResult_off), 1)
             #expect(ppcErr("PBWaitIOComplete", [pb, 5]) == -29296)
             #expect(ppcErr("AttachVBL", [0]) == 0 && ppcErr("AttachVBL", [9]) == -360)

@@ -34,6 +34,12 @@ void (*cfm_export_fn(const char *name))(ppc_cpu *);
 /* The address of an exported data symbol (allocated on first use), or 0. */
 gaddr ppc_data_export(const char *name);
 bool ppc_data_export_known(const char *name);
+/* MathLib's long double, classification, environment and decimal calls
+ * (mathlib.c), and its data (_FE_DFL_ENV). */
+extern const ppc_export ml_exports[];
+extern const unsigned ml_export_count;
+bool ml_data_export_known(const char *name);
+gaddr ml_data_export(const char *name);
 /* The Sound Converter and ParseSndHeader (sndconvert.c). */
 extern const ppc_export snd_exports[];
 extern const unsigned snd_export_count;
@@ -65,6 +71,10 @@ extern const unsigned ctb_export_count;
  * TextEncodingConverter (tec.c). */
 extern const ppc_export tec_exports[];
 extern const unsigned tec_export_count;
+
+/* The HFS Plus calls' hand-written exports (hfsplus.c). */
+extern const ppc_export hfs_exports[];
+extern const unsigned hfs_export_count;
 /* Mixed Mode (mixedmode.c). */
 extern const ppc_export mm_exports[];
 extern const unsigned mm_export_count;

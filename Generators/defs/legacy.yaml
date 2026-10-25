@@ -1546,16 +1546,6 @@
     cfm: InterfaceLib
 
 - function:
-    name: PBWaitIOComplete
-    return: OSErr
-    args:
-      - name: paramBlock
-        type: Ptr
-      - name: timeout
-        type: LONGINT
-    cfm: InterfaceLib
-
-- function:
     name: AddDrive
     args:
       - name: drvrRefNum

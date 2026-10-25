@@ -5,7 +5,6 @@
  * File Transfer Manager's System 7.5 calls: what InterfaceLib had for them.
  */
 #include <string.h>
-#include <unistd.h>
 
 #include "ctb.h"
 #include "legacy.h"
@@ -13,7 +12,6 @@
 
 enum {
     qErr = -1, badUnitErr = -21, dRemovErr = -25, nsDrvErr = -56, noDriveErr = -64, slotNumErr = -360,
-    kMPTimeoutErr = -29296,
 };
 
 /* ---- Drivers ---- */
@@ -47,27 +45,6 @@ int16_t tb_PBReadImmed(gaddr paramBlock) { return tb_PBRead(paramBlock, false); 
 int16_t tb_PBWriteImmed(gaddr paramBlock) { return tb_PBWrite(paramBlock, false); }
 int16_t tb_PBStatusImmed(gaddr paramBlock) { return tb_PBStatus(paramBlock, false); }
 int16_t tb_PBKillIOImmed(gaddr paramBlock) { return tb_PBKillIO(paramBlock, false); }
-
-/* PBWaitIOComplete: until an asynchronous call's ioResult is final, or
- * the Duration (milliseconds, or negative microseconds) passes;
- * interrupt-time work goes on meanwhile. */
-int16_t tb_PBWaitIOComplete(gaddr paramBlock, int32_t timeout)
-{
-    if (!paramBlock)
-        return paramErr;
-    uint64_t limit_us = timeout == 0x7FFFFFFF ? UINT64_MAX : timeout < 0 ? (uint64_t)-(int64_t)timeout
-                                                                          : (uint64_t)timeout * 1000;
-    uint64_t waited = 0;
-    while ((int16_t)rd16(paramBlock + IOParam_ioResult_off) > 0) {
-        if (waited >= limit_us || !g_cpu || g_cpu->halted)
-            return kMPTimeoutErr;
-        usleep(1000);
-        waited += 1000;
-        machine_advance_ticks();
-        time_pump();
-    }
-    return (int16_t)rd16(paramBlock + IOParam_ioResult_off);
-}
 
 /* ---- The drive queue ---- */
 

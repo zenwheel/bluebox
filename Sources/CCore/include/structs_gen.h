@@ -1562,6 +1562,338 @@ static inline void FMetricRec_set_widMax(gaddr p, int32_t v) { wr32(p + 12u, (ui
 static inline gaddr FMetricRec_wTabHandle(gaddr p) { return (gaddr)rd32(p + 16u); }
 static inline void FMetricRec_set_wTabHandle(gaddr p, gaddr v) { wr32(p + 16u, (uint32_t)v); }
 
+/* FSCatalogBulkParam */
+#define FSCatalogBulkParam_SIZEOF 64u
+#define FSCatalogBulkParam_qLink_off 0u
+#define FSCatalogBulkParam_qType_off 4u
+#define FSCatalogBulkParam_ioTrap_off 6u
+#define FSCatalogBulkParam_ioCmdAddr_off 8u
+#define FSCatalogBulkParam_ioCompletion_off 12u
+#define FSCatalogBulkParam_ioResult_off 16u
+#define FSCatalogBulkParam_containerChanged_off 18u
+#define FSCatalogBulkParam_reserved_off 19u
+#define FSCatalogBulkParam_iteratorFlags_off 20u
+#define FSCatalogBulkParam_iterator_off 24u
+#define FSCatalogBulkParam_container_off 28u
+#define FSCatalogBulkParam_maximumItems_off 32u
+#define FSCatalogBulkParam_actualItems_off 36u
+#define FSCatalogBulkParam_whichInfo_off 40u
+#define FSCatalogBulkParam_catalogInfo_off 44u
+#define FSCatalogBulkParam_refs_off 48u
+#define FSCatalogBulkParam_specs_off 52u
+#define FSCatalogBulkParam_names_off 56u
+#define FSCatalogBulkParam_searchParams_off 60u
+static inline gaddr FSCatalogBulkParam_qLink(gaddr p) { return (gaddr)rd32(p + 0u); }
+static inline void FSCatalogBulkParam_set_qLink(gaddr p, gaddr v) { wr32(p + 0u, (uint32_t)v); }
+static inline int16_t FSCatalogBulkParam_qType(gaddr p) { return (int16_t)rd16(p + 4u); }
+static inline void FSCatalogBulkParam_set_qType(gaddr p, int16_t v) { wr16(p + 4u, (uint16_t)v); }
+static inline int16_t FSCatalogBulkParam_ioTrap(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void FSCatalogBulkParam_set_ioTrap(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline gaddr FSCatalogBulkParam_ioCmdAddr(gaddr p) { return (gaddr)rd32(p + 8u); }
+static inline void FSCatalogBulkParam_set_ioCmdAddr(gaddr p, gaddr v) { wr32(p + 8u, (uint32_t)v); }
+static inline gaddr FSCatalogBulkParam_ioCompletion(gaddr p) { return (gaddr)rd32(p + 12u); }
+static inline void FSCatalogBulkParam_set_ioCompletion(gaddr p, gaddr v) { wr32(p + 12u, (uint32_t)v); }
+static inline int16_t FSCatalogBulkParam_ioResult(gaddr p) { return (int16_t)rd16(p + 16u); }
+static inline void FSCatalogBulkParam_set_ioResult(gaddr p, int16_t v) { wr16(p + 16u, (uint16_t)v); }
+static inline uint8_t FSCatalogBulkParam_containerChanged(gaddr p) { return (uint8_t)rd8(p + 18u); }
+static inline void FSCatalogBulkParam_set_containerChanged(gaddr p, uint8_t v) { wr8(p + 18u, (uint8_t)v); }
+static inline uint8_t FSCatalogBulkParam_reserved(gaddr p) { return (uint8_t)rd8(p + 19u); }
+static inline void FSCatalogBulkParam_set_reserved(gaddr p, uint8_t v) { wr8(p + 19u, (uint8_t)v); }
+static inline uint32_t FSCatalogBulkParam_iteratorFlags(gaddr p) { return (uint32_t)rd32(p + 20u); }
+static inline void FSCatalogBulkParam_set_iteratorFlags(gaddr p, uint32_t v) { wr32(p + 20u, (uint32_t)v); }
+static inline uint32_t FSCatalogBulkParam_iterator(gaddr p) { return (uint32_t)rd32(p + 24u); }
+static inline void FSCatalogBulkParam_set_iterator(gaddr p, uint32_t v) { wr32(p + 24u, (uint32_t)v); }
+static inline gaddr FSCatalogBulkParam_container(gaddr p) { return (gaddr)rd32(p + 28u); }
+static inline void FSCatalogBulkParam_set_container(gaddr p, gaddr v) { wr32(p + 28u, (uint32_t)v); }
+static inline uint32_t FSCatalogBulkParam_maximumItems(gaddr p) { return (uint32_t)rd32(p + 32u); }
+static inline void FSCatalogBulkParam_set_maximumItems(gaddr p, uint32_t v) { wr32(p + 32u, (uint32_t)v); }
+static inline uint32_t FSCatalogBulkParam_actualItems(gaddr p) { return (uint32_t)rd32(p + 36u); }
+static inline void FSCatalogBulkParam_set_actualItems(gaddr p, uint32_t v) { wr32(p + 36u, (uint32_t)v); }
+static inline uint32_t FSCatalogBulkParam_whichInfo(gaddr p) { return (uint32_t)rd32(p + 40u); }
+static inline void FSCatalogBulkParam_set_whichInfo(gaddr p, uint32_t v) { wr32(p + 40u, (uint32_t)v); }
+static inline gaddr FSCatalogBulkParam_catalogInfo(gaddr p) { return (gaddr)rd32(p + 44u); }
+static inline void FSCatalogBulkParam_set_catalogInfo(gaddr p, gaddr v) { wr32(p + 44u, (uint32_t)v); }
+static inline gaddr FSCatalogBulkParam_refs(gaddr p) { return (gaddr)rd32(p + 48u); }
+static inline void FSCatalogBulkParam_set_refs(gaddr p, gaddr v) { wr32(p + 48u, (uint32_t)v); }
+static inline gaddr FSCatalogBulkParam_specs(gaddr p) { return (gaddr)rd32(p + 52u); }
+static inline void FSCatalogBulkParam_set_specs(gaddr p, gaddr v) { wr32(p + 52u, (uint32_t)v); }
+static inline gaddr FSCatalogBulkParam_names(gaddr p) { return (gaddr)rd32(p + 56u); }
+static inline void FSCatalogBulkParam_set_names(gaddr p, gaddr v) { wr32(p + 56u, (uint32_t)v); }
+static inline gaddr FSCatalogBulkParam_searchParams(gaddr p) { return (gaddr)rd32(p + 60u); }
+static inline void FSCatalogBulkParam_set_searchParams(gaddr p, gaddr v) { wr32(p + 60u, (uint32_t)v); }
+
+/* FSCatalogInfo */
+#define FSCatalogInfo_SIZEOF 144u
+#define FSCatalogInfo_nodeFlags_off 0u
+#define FSCatalogInfo_volume_off 2u
+#define FSCatalogInfo_parentDirID_off 4u
+#define FSCatalogInfo_nodeID_off 8u
+#define FSCatalogInfo_sharingFlags_off 12u
+#define FSCatalogInfo_userPrivileges_off 13u
+#define FSCatalogInfo_reserved1_off 14u
+#define FSCatalogInfo_reserved2_off 15u
+#define FSCatalogInfo_createDate_off 16u
+#define FSCatalogInfo_contentModDate_off 24u
+#define FSCatalogInfo_attributeModDate_off 32u
+#define FSCatalogInfo_accessDate_off 40u
+#define FSCatalogInfo_backupDate_off 48u
+#define FSCatalogInfo_permissions_off 56u
+#define FSCatalogInfo_finderInfo_off 72u
+#define FSCatalogInfo_extFinderInfo_off 88u
+#define FSCatalogInfo_dataLogicalSize_off 104u
+#define FSCatalogInfo_dataPhysicalSize_off 112u
+#define FSCatalogInfo_rsrcLogicalSize_off 120u
+#define FSCatalogInfo_rsrcPhysicalSize_off 128u
+#define FSCatalogInfo_valence_off 136u
+#define FSCatalogInfo_textEncodingHint_off 140u
+static inline uint16_t FSCatalogInfo_nodeFlags(gaddr p) { return (uint16_t)rd16(p + 0u); }
+static inline void FSCatalogInfo_set_nodeFlags(gaddr p, uint16_t v) { wr16(p + 0u, (uint16_t)v); }
+static inline int16_t FSCatalogInfo_volume(gaddr p) { return (int16_t)rd16(p + 2u); }
+static inline void FSCatalogInfo_set_volume(gaddr p, int16_t v) { wr16(p + 2u, (uint16_t)v); }
+static inline uint32_t FSCatalogInfo_parentDirID(gaddr p) { return (uint32_t)rd32(p + 4u); }
+static inline void FSCatalogInfo_set_parentDirID(gaddr p, uint32_t v) { wr32(p + 4u, (uint32_t)v); }
+static inline uint32_t FSCatalogInfo_nodeID(gaddr p) { return (uint32_t)rd32(p + 8u); }
+static inline void FSCatalogInfo_set_nodeID(gaddr p, uint32_t v) { wr32(p + 8u, (uint32_t)v); }
+static inline uint8_t FSCatalogInfo_sharingFlags(gaddr p) { return (uint8_t)rd8(p + 12u); }
+static inline void FSCatalogInfo_set_sharingFlags(gaddr p, uint8_t v) { wr8(p + 12u, (uint8_t)v); }
+static inline uint8_t FSCatalogInfo_userPrivileges(gaddr p) { return (uint8_t)rd8(p + 13u); }
+static inline void FSCatalogInfo_set_userPrivileges(gaddr p, uint8_t v) { wr8(p + 13u, (uint8_t)v); }
+static inline uint8_t FSCatalogInfo_reserved1(gaddr p) { return (uint8_t)rd8(p + 14u); }
+static inline void FSCatalogInfo_set_reserved1(gaddr p, uint8_t v) { wr8(p + 14u, (uint8_t)v); }
+static inline uint8_t FSCatalogInfo_reserved2(gaddr p) { return (uint8_t)rd8(p + 15u); }
+static inline void FSCatalogInfo_set_reserved2(gaddr p, uint8_t v) { wr8(p + 15u, (uint8_t)v); }
+static inline uint32_t FSCatalogInfo_valence(gaddr p) { return (uint32_t)rd32(p + 136u); }
+static inline void FSCatalogInfo_set_valence(gaddr p, uint32_t v) { wr32(p + 136u, (uint32_t)v); }
+static inline uint32_t FSCatalogInfo_textEncodingHint(gaddr p) { return (uint32_t)rd32(p + 140u); }
+static inline void FSCatalogInfo_set_textEncodingHint(gaddr p, uint32_t v) { wr32(p + 140u, (uint32_t)v); }
+
+/* FSForkCBInfoParam */
+#define FSForkCBInfoParam_SIZEOF 38u
+#define FSForkCBInfoParam_qLink_off 0u
+#define FSForkCBInfoParam_qType_off 4u
+#define FSForkCBInfoParam_ioTrap_off 6u
+#define FSForkCBInfoParam_ioCmdAddr_off 8u
+#define FSForkCBInfoParam_ioCompletion_off 12u
+#define FSForkCBInfoParam_ioResult_off 16u
+#define FSForkCBInfoParam_desiredRefNum_off 18u
+#define FSForkCBInfoParam_volumeRefNum_off 20u
+#define FSForkCBInfoParam_iterator_off 22u
+#define FSForkCBInfoParam_actualRefNum_off 24u
+#define FSForkCBInfoParam_ref_off 26u
+#define FSForkCBInfoParam_forkInfo_off 30u
+#define FSForkCBInfoParam_forkName_off 34u
+static inline gaddr FSForkCBInfoParam_qLink(gaddr p) { return (gaddr)rd32(p + 0u); }
+static inline void FSForkCBInfoParam_set_qLink(gaddr p, gaddr v) { wr32(p + 0u, (uint32_t)v); }
+static inline int16_t FSForkCBInfoParam_qType(gaddr p) { return (int16_t)rd16(p + 4u); }
+static inline void FSForkCBInfoParam_set_qType(gaddr p, int16_t v) { wr16(p + 4u, (uint16_t)v); }
+static inline int16_t FSForkCBInfoParam_ioTrap(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void FSForkCBInfoParam_set_ioTrap(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline gaddr FSForkCBInfoParam_ioCmdAddr(gaddr p) { return (gaddr)rd32(p + 8u); }
+static inline void FSForkCBInfoParam_set_ioCmdAddr(gaddr p, gaddr v) { wr32(p + 8u, (uint32_t)v); }
+static inline gaddr FSForkCBInfoParam_ioCompletion(gaddr p) { return (gaddr)rd32(p + 12u); }
+static inline void FSForkCBInfoParam_set_ioCompletion(gaddr p, gaddr v) { wr32(p + 12u, (uint32_t)v); }
+static inline int16_t FSForkCBInfoParam_ioResult(gaddr p) { return (int16_t)rd16(p + 16u); }
+static inline void FSForkCBInfoParam_set_ioResult(gaddr p, int16_t v) { wr16(p + 16u, (uint16_t)v); }
+static inline int16_t FSForkCBInfoParam_desiredRefNum(gaddr p) { return (int16_t)rd16(p + 18u); }
+static inline void FSForkCBInfoParam_set_desiredRefNum(gaddr p, int16_t v) { wr16(p + 18u, (uint16_t)v); }
+static inline int16_t FSForkCBInfoParam_volumeRefNum(gaddr p) { return (int16_t)rd16(p + 20u); }
+static inline void FSForkCBInfoParam_set_volumeRefNum(gaddr p, int16_t v) { wr16(p + 20u, (uint16_t)v); }
+static inline int16_t FSForkCBInfoParam_iterator(gaddr p) { return (int16_t)rd16(p + 22u); }
+static inline void FSForkCBInfoParam_set_iterator(gaddr p, int16_t v) { wr16(p + 22u, (uint16_t)v); }
+static inline int16_t FSForkCBInfoParam_actualRefNum(gaddr p) { return (int16_t)rd16(p + 24u); }
+static inline void FSForkCBInfoParam_set_actualRefNum(gaddr p, int16_t v) { wr16(p + 24u, (uint16_t)v); }
+static inline gaddr FSForkCBInfoParam_ref(gaddr p) { return (gaddr)rd32(p + 26u); }
+static inline void FSForkCBInfoParam_set_ref(gaddr p, gaddr v) { wr32(p + 26u, (uint32_t)v); }
+static inline gaddr FSForkCBInfoParam_forkInfo(gaddr p) { return (gaddr)rd32(p + 30u); }
+static inline void FSForkCBInfoParam_set_forkInfo(gaddr p, gaddr v) { wr32(p + 30u, (uint32_t)v); }
+static inline gaddr FSForkCBInfoParam_forkName(gaddr p) { return (gaddr)rd32(p + 34u); }
+static inline void FSForkCBInfoParam_set_forkName(gaddr p, gaddr v) { wr32(p + 34u, (uint32_t)v); }
+
+/* FSForkIOParam */
+#define FSForkIOParam_SIZEOF 92u
+#define FSForkIOParam_qLink_off 0u
+#define FSForkIOParam_qType_off 4u
+#define FSForkIOParam_ioTrap_off 6u
+#define FSForkIOParam_ioCmdAddr_off 8u
+#define FSForkIOParam_ioCompletion_off 12u
+#define FSForkIOParam_ioResult_off 16u
+#define FSForkIOParam_reserved1_off 18u
+#define FSForkIOParam_reserved2_off 22u
+#define FSForkIOParam_forkRefNum_off 24u
+#define FSForkIOParam_reserved3_off 26u
+#define FSForkIOParam_permissions_off 27u
+#define FSForkIOParam_ref_off 28u
+#define FSForkIOParam_buffer_off 32u
+#define FSForkIOParam_requestCount_off 36u
+#define FSForkIOParam_actualCount_off 40u
+#define FSForkIOParam_positionMode_off 44u
+#define FSForkIOParam_positionOffset_off 46u
+#define FSForkIOParam_allocationFlags_off 54u
+#define FSForkIOParam_allocationAmount_off 56u
+#define FSForkIOParam_forkNameLength_off 64u
+#define FSForkIOParam_forkName_off 68u
+#define FSForkIOParam_forkIterator_off 72u
+#define FSForkIOParam_outForkName_off 88u
+static inline gaddr FSForkIOParam_qLink(gaddr p) { return (gaddr)rd32(p + 0u); }
+static inline void FSForkIOParam_set_qLink(gaddr p, gaddr v) { wr32(p + 0u, (uint32_t)v); }
+static inline int16_t FSForkIOParam_qType(gaddr p) { return (int16_t)rd16(p + 4u); }
+static inline void FSForkIOParam_set_qType(gaddr p, int16_t v) { wr16(p + 4u, (uint16_t)v); }
+static inline int16_t FSForkIOParam_ioTrap(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void FSForkIOParam_set_ioTrap(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline gaddr FSForkIOParam_ioCmdAddr(gaddr p) { return (gaddr)rd32(p + 8u); }
+static inline void FSForkIOParam_set_ioCmdAddr(gaddr p, gaddr v) { wr32(p + 8u, (uint32_t)v); }
+static inline gaddr FSForkIOParam_ioCompletion(gaddr p) { return (gaddr)rd32(p + 12u); }
+static inline void FSForkIOParam_set_ioCompletion(gaddr p, gaddr v) { wr32(p + 12u, (uint32_t)v); }
+static inline int16_t FSForkIOParam_ioResult(gaddr p) { return (int16_t)rd16(p + 16u); }
+static inline void FSForkIOParam_set_ioResult(gaddr p, int16_t v) { wr16(p + 16u, (uint16_t)v); }
+static inline gaddr FSForkIOParam_reserved1(gaddr p) { return (gaddr)rd32(p + 18u); }
+static inline void FSForkIOParam_set_reserved1(gaddr p, gaddr v) { wr32(p + 18u, (uint32_t)v); }
+static inline int16_t FSForkIOParam_reserved2(gaddr p) { return (int16_t)rd16(p + 22u); }
+static inline void FSForkIOParam_set_reserved2(gaddr p, int16_t v) { wr16(p + 22u, (uint16_t)v); }
+static inline int16_t FSForkIOParam_forkRefNum(gaddr p) { return (int16_t)rd16(p + 24u); }
+static inline void FSForkIOParam_set_forkRefNum(gaddr p, int16_t v) { wr16(p + 24u, (uint16_t)v); }
+static inline uint8_t FSForkIOParam_reserved3(gaddr p) { return (uint8_t)rd8(p + 26u); }
+static inline void FSForkIOParam_set_reserved3(gaddr p, uint8_t v) { wr8(p + 26u, (uint8_t)v); }
+static inline int8_t FSForkIOParam_permissions(gaddr p) { return (int8_t)rd8(p + 27u); }
+static inline void FSForkIOParam_set_permissions(gaddr p, int8_t v) { wr8(p + 27u, (uint8_t)v); }
+static inline gaddr FSForkIOParam_ref(gaddr p) { return (gaddr)rd32(p + 28u); }
+static inline void FSForkIOParam_set_ref(gaddr p, gaddr v) { wr32(p + 28u, (uint32_t)v); }
+static inline gaddr FSForkIOParam_buffer(gaddr p) { return (gaddr)rd32(p + 32u); }
+static inline void FSForkIOParam_set_buffer(gaddr p, gaddr v) { wr32(p + 32u, (uint32_t)v); }
+static inline uint32_t FSForkIOParam_requestCount(gaddr p) { return (uint32_t)rd32(p + 36u); }
+static inline void FSForkIOParam_set_requestCount(gaddr p, uint32_t v) { wr32(p + 36u, (uint32_t)v); }
+static inline uint32_t FSForkIOParam_actualCount(gaddr p) { return (uint32_t)rd32(p + 40u); }
+static inline void FSForkIOParam_set_actualCount(gaddr p, uint32_t v) { wr32(p + 40u, (uint32_t)v); }
+static inline uint16_t FSForkIOParam_positionMode(gaddr p) { return (uint16_t)rd16(p + 44u); }
+static inline void FSForkIOParam_set_positionMode(gaddr p, uint16_t v) { wr16(p + 44u, (uint16_t)v); }
+static inline uint16_t FSForkIOParam_allocationFlags(gaddr p) { return (uint16_t)rd16(p + 54u); }
+static inline void FSForkIOParam_set_allocationFlags(gaddr p, uint16_t v) { wr16(p + 54u, (uint16_t)v); }
+static inline uint32_t FSForkIOParam_forkNameLength(gaddr p) { return (uint32_t)rd32(p + 64u); }
+static inline void FSForkIOParam_set_forkNameLength(gaddr p, uint32_t v) { wr32(p + 64u, (uint32_t)v); }
+static inline gaddr FSForkIOParam_forkName(gaddr p) { return (gaddr)rd32(p + 68u); }
+static inline void FSForkIOParam_set_forkName(gaddr p, gaddr v) { wr32(p + 68u, (uint32_t)v); }
+static inline gaddr FSForkIOParam_outForkName(gaddr p) { return (gaddr)rd32(p + 88u); }
+static inline void FSForkIOParam_set_outForkName(gaddr p, gaddr v) { wr32(p + 88u, (uint32_t)v); }
+
+/* FSForkInfo */
+#define FSForkInfo_SIZEOF 48u
+#define FSForkInfo_flags_off 0u
+#define FSForkInfo_permissions_off 1u
+#define FSForkInfo_volume_off 2u
+#define FSForkInfo_reserved2_off 4u
+#define FSForkInfo_nodeID_off 8u
+#define FSForkInfo_forkID_off 12u
+#define FSForkInfo_currentPosition_off 16u
+#define FSForkInfo_logicalEOF_off 24u
+#define FSForkInfo_physicalEOF_off 32u
+#define FSForkInfo_process_off 40u
+static inline int8_t FSForkInfo_flags(gaddr p) { return (int8_t)rd8(p + 0u); }
+static inline void FSForkInfo_set_flags(gaddr p, int8_t v) { wr8(p + 0u, (uint8_t)v); }
+static inline int8_t FSForkInfo_permissions(gaddr p) { return (int8_t)rd8(p + 1u); }
+static inline void FSForkInfo_set_permissions(gaddr p, int8_t v) { wr8(p + 1u, (uint8_t)v); }
+static inline int16_t FSForkInfo_volume(gaddr p) { return (int16_t)rd16(p + 2u); }
+static inline void FSForkInfo_set_volume(gaddr p, int16_t v) { wr16(p + 2u, (uint16_t)v); }
+static inline uint32_t FSForkInfo_reserved2(gaddr p) { return (uint32_t)rd32(p + 4u); }
+static inline void FSForkInfo_set_reserved2(gaddr p, uint32_t v) { wr32(p + 4u, (uint32_t)v); }
+static inline uint32_t FSForkInfo_nodeID(gaddr p) { return (uint32_t)rd32(p + 8u); }
+static inline void FSForkInfo_set_nodeID(gaddr p, uint32_t v) { wr32(p + 8u, (uint32_t)v); }
+static inline uint32_t FSForkInfo_forkID(gaddr p) { return (uint32_t)rd32(p + 12u); }
+static inline void FSForkInfo_set_forkID(gaddr p, uint32_t v) { wr32(p + 12u, (uint32_t)v); }
+
+/* FSRef */
+#define FSRef_SIZEOF 80u
+#define FSRef_hidden_off 0u
+
+/* FSRefParam */
+#define FSRefParam_SIZEOF 72u
+#define FSRefParam_qLink_off 0u
+#define FSRefParam_qType_off 4u
+#define FSRefParam_ioTrap_off 6u
+#define FSRefParam_ioCmdAddr_off 8u
+#define FSRefParam_ioCompletion_off 12u
+#define FSRefParam_ioResult_off 16u
+#define FSRefParam_ioNamePtr_off 18u
+#define FSRefParam_ioVRefNum_off 22u
+#define FSRefParam_reserved1_off 24u
+#define FSRefParam_reserved2_off 26u
+#define FSRefParam_reserved3_off 27u
+#define FSRefParam_ref_off 28u
+#define FSRefParam_whichInfo_off 32u
+#define FSRefParam_catInfo_off 36u
+#define FSRefParam_nameLength_off 40u
+#define FSRefParam_name_off 44u
+#define FSRefParam_ioDirID_off 48u
+#define FSRefParam_spec_off 52u
+#define FSRefParam_parentRef_off 56u
+#define FSRefParam_newRef_off 60u
+#define FSRefParam_textEncodingHint_off 64u
+#define FSRefParam_outName_off 68u
+static inline gaddr FSRefParam_qLink(gaddr p) { return (gaddr)rd32(p + 0u); }
+static inline void FSRefParam_set_qLink(gaddr p, gaddr v) { wr32(p + 0u, (uint32_t)v); }
+static inline int16_t FSRefParam_qType(gaddr p) { return (int16_t)rd16(p + 4u); }
+static inline void FSRefParam_set_qType(gaddr p, int16_t v) { wr16(p + 4u, (uint16_t)v); }
+static inline int16_t FSRefParam_ioTrap(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void FSRefParam_set_ioTrap(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline gaddr FSRefParam_ioCmdAddr(gaddr p) { return (gaddr)rd32(p + 8u); }
+static inline void FSRefParam_set_ioCmdAddr(gaddr p, gaddr v) { wr32(p + 8u, (uint32_t)v); }
+static inline gaddr FSRefParam_ioCompletion(gaddr p) { return (gaddr)rd32(p + 12u); }
+static inline void FSRefParam_set_ioCompletion(gaddr p, gaddr v) { wr32(p + 12u, (uint32_t)v); }
+static inline int16_t FSRefParam_ioResult(gaddr p) { return (int16_t)rd16(p + 16u); }
+static inline void FSRefParam_set_ioResult(gaddr p, int16_t v) { wr16(p + 16u, (uint16_t)v); }
+static inline gaddr FSRefParam_ioNamePtr(gaddr p) { return (gaddr)rd32(p + 18u); }
+static inline void FSRefParam_set_ioNamePtr(gaddr p, gaddr v) { wr32(p + 18u, (uint32_t)v); }
+static inline int16_t FSRefParam_ioVRefNum(gaddr p) { return (int16_t)rd16(p + 22u); }
+static inline void FSRefParam_set_ioVRefNum(gaddr p, int16_t v) { wr16(p + 22u, (uint16_t)v); }
+static inline int16_t FSRefParam_reserved1(gaddr p) { return (int16_t)rd16(p + 24u); }
+static inline void FSRefParam_set_reserved1(gaddr p, int16_t v) { wr16(p + 24u, (uint16_t)v); }
+static inline uint8_t FSRefParam_reserved2(gaddr p) { return (uint8_t)rd8(p + 26u); }
+static inline void FSRefParam_set_reserved2(gaddr p, uint8_t v) { wr8(p + 26u, (uint8_t)v); }
+static inline uint8_t FSRefParam_reserved3(gaddr p) { return (uint8_t)rd8(p + 27u); }
+static inline void FSRefParam_set_reserved3(gaddr p, uint8_t v) { wr8(p + 27u, (uint8_t)v); }
+static inline gaddr FSRefParam_ref(gaddr p) { return (gaddr)rd32(p + 28u); }
+static inline void FSRefParam_set_ref(gaddr p, gaddr v) { wr32(p + 28u, (uint32_t)v); }
+static inline uint32_t FSRefParam_whichInfo(gaddr p) { return (uint32_t)rd32(p + 32u); }
+static inline void FSRefParam_set_whichInfo(gaddr p, uint32_t v) { wr32(p + 32u, (uint32_t)v); }
+static inline gaddr FSRefParam_catInfo(gaddr p) { return (gaddr)rd32(p + 36u); }
+static inline void FSRefParam_set_catInfo(gaddr p, gaddr v) { wr32(p + 36u, (uint32_t)v); }
+static inline uint32_t FSRefParam_nameLength(gaddr p) { return (uint32_t)rd32(p + 40u); }
+static inline void FSRefParam_set_nameLength(gaddr p, uint32_t v) { wr32(p + 40u, (uint32_t)v); }
+static inline gaddr FSRefParam_name(gaddr p) { return (gaddr)rd32(p + 44u); }
+static inline void FSRefParam_set_name(gaddr p, gaddr v) { wr32(p + 44u, (uint32_t)v); }
+static inline int32_t FSRefParam_ioDirID(gaddr p) { return (int32_t)rd32(p + 48u); }
+static inline void FSRefParam_set_ioDirID(gaddr p, int32_t v) { wr32(p + 48u, (uint32_t)v); }
+static inline gaddr FSRefParam_spec(gaddr p) { return (gaddr)rd32(p + 52u); }
+static inline void FSRefParam_set_spec(gaddr p, gaddr v) { wr32(p + 52u, (uint32_t)v); }
+static inline gaddr FSRefParam_parentRef(gaddr p) { return (gaddr)rd32(p + 56u); }
+static inline void FSRefParam_set_parentRef(gaddr p, gaddr v) { wr32(p + 56u, (uint32_t)v); }
+static inline gaddr FSRefParam_newRef(gaddr p) { return (gaddr)rd32(p + 60u); }
+static inline void FSRefParam_set_newRef(gaddr p, gaddr v) { wr32(p + 60u, (uint32_t)v); }
+static inline uint32_t FSRefParam_textEncodingHint(gaddr p) { return (uint32_t)rd32(p + 64u); }
+static inline void FSRefParam_set_textEncodingHint(gaddr p, uint32_t v) { wr32(p + 64u, (uint32_t)v); }
+static inline gaddr FSRefParam_outName(gaddr p) { return (gaddr)rd32(p + 68u); }
+static inline void FSRefParam_set_outName(gaddr p, gaddr v) { wr32(p + 68u, (uint32_t)v); }
+
+/* FSSearchParams */
+#define FSSearchParams_SIZEOF 24u
+#define FSSearchParams_searchTime_off 0u
+#define FSSearchParams_searchBits_off 4u
+#define FSSearchParams_searchNameLength_off 8u
+#define FSSearchParams_searchName_off 12u
+#define FSSearchParams_searchInfo1_off 16u
+#define FSSearchParams_searchInfo2_off 20u
+static inline int32_t FSSearchParams_searchTime(gaddr p) { return (int32_t)rd32(p + 0u); }
+static inline void FSSearchParams_set_searchTime(gaddr p, int32_t v) { wr32(p + 0u, (uint32_t)v); }
+static inline uint32_t FSSearchParams_searchBits(gaddr p) { return (uint32_t)rd32(p + 4u); }
+static inline void FSSearchParams_set_searchBits(gaddr p, uint32_t v) { wr32(p + 4u, (uint32_t)v); }
+static inline uint32_t FSSearchParams_searchNameLength(gaddr p) { return (uint32_t)rd32(p + 8u); }
+static inline void FSSearchParams_set_searchNameLength(gaddr p, uint32_t v) { wr32(p + 8u, (uint32_t)v); }
+static inline gaddr FSSearchParams_searchName(gaddr p) { return (gaddr)rd32(p + 12u); }
+static inline void FSSearchParams_set_searchName(gaddr p, gaddr v) { wr32(p + 12u, (uint32_t)v); }
+static inline gaddr FSSearchParams_searchInfo1(gaddr p) { return (gaddr)rd32(p + 16u); }
+static inline void FSSearchParams_set_searchInfo1(gaddr p, gaddr v) { wr32(p + 16u, (uint32_t)v); }
+static inline gaddr FSSearchParams_searchInfo2(gaddr p) { return (gaddr)rd32(p + 20u); }
+static inline void FSSearchParams_set_searchInfo2(gaddr p, gaddr v) { wr32(p + 20u, (uint32_t)v); }
+
 /* FSSpec */
 #define FSSpec_SIZEOF 70u
 #define FSSpec_vRefNum_off 0u
@@ -1571,6 +1903,100 @@ static inline int16_t FSSpec_vRefNum(gaddr p) { return (int16_t)rd16(p + 0u); }
 static inline void FSSpec_set_vRefNum(gaddr p, int16_t v) { wr16(p + 0u, (uint16_t)v); }
 static inline int32_t FSSpec_parID(gaddr p) { return (int32_t)rd32(p + 2u); }
 static inline void FSSpec_set_parID(gaddr p, int32_t v) { wr32(p + 2u, (uint32_t)v); }
+
+/* FSVolumeInfo */
+#define FSVolumeInfo_SIZEOF 126u
+#define FSVolumeInfo_createDate_off 0u
+#define FSVolumeInfo_modifyDate_off 8u
+#define FSVolumeInfo_backupDate_off 16u
+#define FSVolumeInfo_checkedDate_off 24u
+#define FSVolumeInfo_fileCount_off 32u
+#define FSVolumeInfo_folderCount_off 36u
+#define FSVolumeInfo_totalBytes_off 40u
+#define FSVolumeInfo_freeBytes_off 48u
+#define FSVolumeInfo_blockSize_off 56u
+#define FSVolumeInfo_totalBlocks_off 60u
+#define FSVolumeInfo_freeBlocks_off 64u
+#define FSVolumeInfo_nextAllocation_off 68u
+#define FSVolumeInfo_rsrcClumpSize_off 72u
+#define FSVolumeInfo_dataClumpSize_off 76u
+#define FSVolumeInfo_nextCatalogID_off 80u
+#define FSVolumeInfo_finderInfo_off 84u
+#define FSVolumeInfo_flags_off 116u
+#define FSVolumeInfo_filesystemID_off 118u
+#define FSVolumeInfo_signature_off 120u
+#define FSVolumeInfo_driveNumber_off 122u
+#define FSVolumeInfo_driverRefNum_off 124u
+static inline uint32_t FSVolumeInfo_fileCount(gaddr p) { return (uint32_t)rd32(p + 32u); }
+static inline void FSVolumeInfo_set_fileCount(gaddr p, uint32_t v) { wr32(p + 32u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfo_folderCount(gaddr p) { return (uint32_t)rd32(p + 36u); }
+static inline void FSVolumeInfo_set_folderCount(gaddr p, uint32_t v) { wr32(p + 36u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfo_blockSize(gaddr p) { return (uint32_t)rd32(p + 56u); }
+static inline void FSVolumeInfo_set_blockSize(gaddr p, uint32_t v) { wr32(p + 56u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfo_totalBlocks(gaddr p) { return (uint32_t)rd32(p + 60u); }
+static inline void FSVolumeInfo_set_totalBlocks(gaddr p, uint32_t v) { wr32(p + 60u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfo_freeBlocks(gaddr p) { return (uint32_t)rd32(p + 64u); }
+static inline void FSVolumeInfo_set_freeBlocks(gaddr p, uint32_t v) { wr32(p + 64u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfo_nextAllocation(gaddr p) { return (uint32_t)rd32(p + 68u); }
+static inline void FSVolumeInfo_set_nextAllocation(gaddr p, uint32_t v) { wr32(p + 68u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfo_rsrcClumpSize(gaddr p) { return (uint32_t)rd32(p + 72u); }
+static inline void FSVolumeInfo_set_rsrcClumpSize(gaddr p, uint32_t v) { wr32(p + 72u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfo_dataClumpSize(gaddr p) { return (uint32_t)rd32(p + 76u); }
+static inline void FSVolumeInfo_set_dataClumpSize(gaddr p, uint32_t v) { wr32(p + 76u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfo_nextCatalogID(gaddr p) { return (uint32_t)rd32(p + 80u); }
+static inline void FSVolumeInfo_set_nextCatalogID(gaddr p, uint32_t v) { wr32(p + 80u, (uint32_t)v); }
+static inline uint16_t FSVolumeInfo_flags(gaddr p) { return (uint16_t)rd16(p + 116u); }
+static inline void FSVolumeInfo_set_flags(gaddr p, uint16_t v) { wr16(p + 116u, (uint16_t)v); }
+static inline uint16_t FSVolumeInfo_filesystemID(gaddr p) { return (uint16_t)rd16(p + 118u); }
+static inline void FSVolumeInfo_set_filesystemID(gaddr p, uint16_t v) { wr16(p + 118u, (uint16_t)v); }
+static inline uint16_t FSVolumeInfo_signature(gaddr p) { return (uint16_t)rd16(p + 120u); }
+static inline void FSVolumeInfo_set_signature(gaddr p, uint16_t v) { wr16(p + 120u, (uint16_t)v); }
+static inline uint16_t FSVolumeInfo_driveNumber(gaddr p) { return (uint16_t)rd16(p + 122u); }
+static inline void FSVolumeInfo_set_driveNumber(gaddr p, uint16_t v) { wr16(p + 122u, (uint16_t)v); }
+static inline int16_t FSVolumeInfo_driverRefNum(gaddr p) { return (int16_t)rd16(p + 124u); }
+static inline void FSVolumeInfo_set_driverRefNum(gaddr p, int16_t v) { wr16(p + 124u, (uint16_t)v); }
+
+/* FSVolumeInfoParam */
+#define FSVolumeInfoParam_SIZEOF 44u
+#define FSVolumeInfoParam_qLink_off 0u
+#define FSVolumeInfoParam_qType_off 4u
+#define FSVolumeInfoParam_ioTrap_off 6u
+#define FSVolumeInfoParam_ioCmdAddr_off 8u
+#define FSVolumeInfoParam_ioCompletion_off 12u
+#define FSVolumeInfoParam_ioResult_off 16u
+#define FSVolumeInfoParam_ioNamePtr_off 18u
+#define FSVolumeInfoParam_ioVRefNum_off 22u
+#define FSVolumeInfoParam_volumeIndex_off 24u
+#define FSVolumeInfoParam_whichInfo_off 28u
+#define FSVolumeInfoParam_volumeInfo_off 32u
+#define FSVolumeInfoParam_volumeName_off 36u
+#define FSVolumeInfoParam_ref_off 40u
+static inline gaddr FSVolumeInfoParam_qLink(gaddr p) { return (gaddr)rd32(p + 0u); }
+static inline void FSVolumeInfoParam_set_qLink(gaddr p, gaddr v) { wr32(p + 0u, (uint32_t)v); }
+static inline int16_t FSVolumeInfoParam_qType(gaddr p) { return (int16_t)rd16(p + 4u); }
+static inline void FSVolumeInfoParam_set_qType(gaddr p, int16_t v) { wr16(p + 4u, (uint16_t)v); }
+static inline int16_t FSVolumeInfoParam_ioTrap(gaddr p) { return (int16_t)rd16(p + 6u); }
+static inline void FSVolumeInfoParam_set_ioTrap(gaddr p, int16_t v) { wr16(p + 6u, (uint16_t)v); }
+static inline gaddr FSVolumeInfoParam_ioCmdAddr(gaddr p) { return (gaddr)rd32(p + 8u); }
+static inline void FSVolumeInfoParam_set_ioCmdAddr(gaddr p, gaddr v) { wr32(p + 8u, (uint32_t)v); }
+static inline gaddr FSVolumeInfoParam_ioCompletion(gaddr p) { return (gaddr)rd32(p + 12u); }
+static inline void FSVolumeInfoParam_set_ioCompletion(gaddr p, gaddr v) { wr32(p + 12u, (uint32_t)v); }
+static inline int16_t FSVolumeInfoParam_ioResult(gaddr p) { return (int16_t)rd16(p + 16u); }
+static inline void FSVolumeInfoParam_set_ioResult(gaddr p, int16_t v) { wr16(p + 16u, (uint16_t)v); }
+static inline gaddr FSVolumeInfoParam_ioNamePtr(gaddr p) { return (gaddr)rd32(p + 18u); }
+static inline void FSVolumeInfoParam_set_ioNamePtr(gaddr p, gaddr v) { wr32(p + 18u, (uint32_t)v); }
+static inline int16_t FSVolumeInfoParam_ioVRefNum(gaddr p) { return (int16_t)rd16(p + 22u); }
+static inline void FSVolumeInfoParam_set_ioVRefNum(gaddr p, int16_t v) { wr16(p + 22u, (uint16_t)v); }
+static inline uint32_t FSVolumeInfoParam_volumeIndex(gaddr p) { return (uint32_t)rd32(p + 24u); }
+static inline void FSVolumeInfoParam_set_volumeIndex(gaddr p, uint32_t v) { wr32(p + 24u, (uint32_t)v); }
+static inline uint32_t FSVolumeInfoParam_whichInfo(gaddr p) { return (uint32_t)rd32(p + 28u); }
+static inline void FSVolumeInfoParam_set_whichInfo(gaddr p, uint32_t v) { wr32(p + 28u, (uint32_t)v); }
+static inline gaddr FSVolumeInfoParam_volumeInfo(gaddr p) { return (gaddr)rd32(p + 32u); }
+static inline void FSVolumeInfoParam_set_volumeInfo(gaddr p, gaddr v) { wr32(p + 32u, (uint32_t)v); }
+static inline gaddr FSVolumeInfoParam_volumeName(gaddr p) { return (gaddr)rd32(p + 36u); }
+static inline void FSVolumeInfoParam_set_volumeName(gaddr p, gaddr v) { wr32(p + 36u, (uint32_t)v); }
+static inline gaddr FSVolumeInfoParam_ref(gaddr p) { return (gaddr)rd32(p + 40u); }
+static inline void FSVolumeInfoParam_set_ref(gaddr p, gaddr v) { wr32(p + 40u, (uint32_t)v); }
 
 /* FTRecord */
 #define FTRecord_SIZEOF 414u
@@ -2099,6 +2525,13 @@ static inline int32_t HFSFlavor_fileCreator(gaddr p) { return (int32_t)rd32(p + 
 static inline void HFSFlavor_set_fileCreator(gaddr p, int32_t v) { wr32(p + 4u, (uint32_t)v); }
 static inline uint16_t HFSFlavor_fdFlags(gaddr p) { return (uint16_t)rd16(p + 8u); }
 static inline void HFSFlavor_set_fdFlags(gaddr p, uint16_t v) { wr16(p + 8u, (uint16_t)v); }
+
+/* HFSUniStr255 */
+#define HFSUniStr255_SIZEOF 512u
+#define HFSUniStr255_length_off 0u
+#define HFSUniStr255_unicode_off 2u
+static inline uint16_t HFSUniStr255_length(gaddr p) { return (uint16_t)rd16(p + 0u); }
+static inline void HFSUniStr255_set_length(gaddr p, uint16_t v) { wr16(p + 0u, (uint16_t)v); }
 
 /* HFileInfo */
 #define HFileInfo_SIZEOF 108u
@@ -5281,6 +5714,18 @@ static inline void Tone_set_amplitude(gaddr p, int16_t v) { wr16(p + 2u, (uint16
 static inline int16_t Tone_tduration(gaddr p) { return (int16_t)rd16(p + 4u); }
 static inline void Tone_set_tduration(gaddr p, int16_t v) { wr16(p + 4u, (uint16_t)v); }
 
+/* UTCDateTime */
+#define UTCDateTime_SIZEOF 8u
+#define UTCDateTime_highSeconds_off 0u
+#define UTCDateTime_lowSeconds_off 2u
+#define UTCDateTime_fraction_off 6u
+static inline uint16_t UTCDateTime_highSeconds(gaddr p) { return (uint16_t)rd16(p + 0u); }
+static inline void UTCDateTime_set_highSeconds(gaddr p, uint16_t v) { wr16(p + 0u, (uint16_t)v); }
+static inline uint32_t UTCDateTime_lowSeconds(gaddr p) { return (uint32_t)rd32(p + 2u); }
+static inline void UTCDateTime_set_lowSeconds(gaddr p, uint32_t v) { wr32(p + 2u, (uint32_t)v); }
+static inline uint16_t UTCDateTime_fraction(gaddr p) { return (uint16_t)rd16(p + 6u); }
+static inline void UTCDateTime_set_fraction(gaddr p, uint16_t v) { wr16(p + 6u, (uint16_t)v); }
+
 /* VBLTask */
 #define VBLTask_SIZEOF 14u
 #define VBLTask_qLink_off 0u
@@ -5790,6 +6235,12 @@ static inline gaddr WindowRecord_windowPic(gaddr p) { return (gaddr)rd32(p + 148
 static inline void WindowRecord_set_windowPic(gaddr p, gaddr v) { wr32(p + 148u, (uint32_t)v); }
 static inline int32_t WindowRecord_refCon(gaddr p) { return (int32_t)rd32(p + 152u); }
 static inline void WindowRecord_set_refCon(gaddr p, int32_t v) { wr32(p + 152u, (uint32_t)v); }
+
+/* XVolumeParam */
+#define XVolumeParam_SIZEOF 138u
+#define XVolumeParam_hvp_off 0u
+#define XVolumeParam_ioVTotalBytes_off 122u
+#define XVolumeParam_ioVFreeBytes_off 130u
 
 /* Zone */
 #define Zone_SIZEOF 54u
