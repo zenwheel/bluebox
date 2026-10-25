@@ -210,6 +210,41 @@ static uint32_t register_thng(gaddr h, int16_t resfile)
                               name, info, icon, resfile);
 }
 
+/* A public resource of a component (QuickTime 4): asked of the component
+ * itself, when it can do kComponentGetPublicResourceSelect (-10); none
+ * of ours has a public resource map.  A handle the caller disposes, or 0. */
+gaddr components_public_resource(uint32_t cid, uint32_t type, int16_t id)
+{
+    int16_t err;
+    uint32_t ci = open_component(cid, &err);
+    instance *in = inst_of(ci);
+    if (!in)
+        return 0;
+    gaddr h = 0;
+    gaddr p = tb_NewPtr(22, false, true);
+    if (p) {
+        wr8(p + 1, 2); /* kComponentCanDoSelect (ftnNumber) */
+        wr16(p + 2, (uint16_t)-3);
+        wr16(p + 4, (uint16_t)-10);
+        wr32(p + 6, ci); /* the instance after the parameters, as on the stack */
+        if (call_entry(in, p)) {
+            /* (type, id, &h): the last argument first */
+            wr8(p + 1, 10);
+            wr16(p + 2, (uint16_t)-10);
+            wr32(p + 4, p + 18);
+            wr16(p + 8, (uint16_t)id);
+            wr32(p + 10, type);
+            wr32(p + 14, ci);
+            wr32(p + 18, 0);
+            if (!call_entry(in, p))
+                h = rd32(p + 18);
+        }
+        tb_DisposePtr(p);
+    }
+    close_component(ci);
+    return h;
+}
+
 /* Copy a handle's contents into another handle the caller supplied. */
 static void copy_handle(gaddr from, gaddr to)
 {
@@ -500,6 +535,47 @@ void raw_ComponentDispatch(cpu68k *c, uint16_t tw)
             wr8(ARG32(4), 0);
         finish(c, ret, 12, 2, (uint16_t)resFNotFound);
         return;
+    case 0x38: { /* GetComponentPublicResource(c, type, id, *h): OSErr */
+        gaddr h = comp_of(ARG32(10)) ? components_public_resource(ARG32(10), ARG32(6), (int16_t)ARG16(4)) : 0;
+        if (ARG32(0))
+            wr32(ARG32(0), h);
+        finish(c, ret, 14, 2, h ? noErr : (uint16_t)resNotFound);
+        return;
+    }
+    case 0x39: { /* GetComponentPublicResourceList(type, id, flags, cd, missingProc, refCon, atomContainerPtr) */
+        /* An atom container with nothing in it: no component has public
+         * resources to list (its root 'sean' atom after a 12-byte header). */
+        gaddr out = ARG32(0), h = tb_NewHandle(32, false, true);
+        if (h && out) {
+            gaddr p = rd32(h);
+            wr32(p + 12, 20);
+            wr32(p + 16, fourcc("sean"));
+            wr32(p + 20, 1);
+            wr32(out, h);
+        }
+        finish(c, ret, 26, 2, h ? noErr : (uint16_t)memFullErr);
+        return;
+    }
+    case 0x3A: { /* GetComponentPublicIndString(c, str, id, index): OSErr */
+        gaddr str = ARG32(4);
+        int16_t index = (int16_t)ARG16(0);
+        gaddr h = comp_of(ARG32(8)) ? components_public_resource(ARG32(8), fourcc("STR#"), (int16_t)ARG16(2)) : 0;
+        bool found = false;
+        if (str)
+            wr8(str, 0);
+        if (h && rd32(h) && index >= 1 && index <= (int16_t)rd16(rd32(h))) {
+            gaddr q = rd32(h) + 2;
+            for (int i = 1; i < index; i++)
+                q += 1u + rd8(q);
+            if (str)
+                gmemcpy(str, q, 1u + rd8(q));
+            found = true;
+        }
+        if (h)
+            tb_DisposeHandle(h);
+        finish(c, ret, 12, 2, found ? noErr : (uint16_t)resNotFound);
+        return;
+    }
     case 0xFF:
         call_function(c, ret);
         return;

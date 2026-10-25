@@ -12,6 +12,8 @@
 #define R(n) (c->gpr[3 + (n)])
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; return; } while (0)
 
+enum { badComponentSelector = (int32_t)0x80008002 };
+
 /* ---------------------------------------------------------------------- */
 /* Low memory: LowMem.h's accessors for the globals multiversal names no
  * accessor for, on the globals themselves. */
@@ -86,6 +88,125 @@ static const ppc_export lm_exports[] = {
 #undef LM
 static const unsigned lm_export_count = sizeof lm_exports / sizeof lm_exports[0];
 
+/* ---------------------------------------------------------------------- */
+/* The Component Manager's calls of components (CallComponentOpen ...) and
+ * its public resources (QuickTime 4). */
+
+/* A call to an instance (ComponentCallNow): the instance and the
+ * parameters (sizes 4 or 2, as a string), then the parameter size and
+ * selector; _ComponentDispatch with D0 = 0. */
+static void instance_call(ppc_cpu *c, int16_t what, const char *args)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, 0);
+    ppc_trap_push(4, R(0));
+    uint32_t size = 0;
+    for (int i = 0; args[i]; i++) {
+        int n = args[i] - '0';
+        ppc_trap_push(n, R(1 + i));
+        size += n == 4 ? 4 : 2;
+    }
+    ppc_trap_push(4, size << 16 | (uint16_t)what);
+    ppc_trap_set(0, 0);
+    ppc_trap(0xA82A);
+    uint32_t r = ppc_trap_result(4);
+    ppc_trap_end();
+    RETURN(r);
+}
+
+#define INSTANCE(name, what, args) static void cc_##name(ppc_cpu *c) { instance_call(c, what, args); }
+INSTANCE(CallComponentOpen, -1, "4")
+INSTANCE(CallComponentClose, -2, "4")
+INSTANCE(CallComponentCanDo, -3, "2")
+INSTANCE(CallComponentVersion, -4, "")
+INSTANCE(CallComponentRegister, -5, "")
+INSTANCE(CallComponentTarget, -6, "4")
+INSTANCE(CallComponentUnregister, -7, "")
+INSTANCE(CallComponentGetMPWorkFunction, -8, "44")
+INSTANCE(CallComponentGetPublicResource, -10, "424")
+#undef INSTANCE
+
+/* _ComponentDispatch with the selector in D0, Pascal arguments, an OSErr. */
+static void component_trap(ppc_cpu *c, uint8_t sel, const char *args)
+{
+    ppc_trap_begin();
+    ppc_trap_push(2, 0);
+    for (int i = 0; args[i]; i++)
+        ppc_trap_push(args[i] - '0', R(i));
+    ppc_trap_set(0, sel);
+    ppc_trap(0xA82A);
+    uint32_t r = ppc_trap_result(2);
+    ppc_trap_end();
+    RETURN((int32_t)(int16_t)r);
+}
+static void cc_GetComponentPublicResource(ppc_cpu *c) { component_trap(c, 0x38, "4424"); }
+static void cc_GetComponentPublicResourceList(ppc_cpu *c) { component_trap(c, 0x39, "4244444"); }
+static void cc_GetComponentPublicIndString(ppc_cpu *c) { component_trap(c, 0x3A, "4422"); }
+
+/* CallComponentFunction(params, func) and the WithStorage forms: the
+ * function gets the original call's arguments (after the storage, for
+ * those), as its procInfo describes them, from the ComponentParameters
+ * (flags, size, what, then the arguments as a 68k caller pushed them:
+ * the first highest, a byte or word in two bytes). */
+enum { RD_PROCINFO = 12 };
+
+static int call_args(gaddr params, uint32_t pi, int first, uint32_t *args, int max)
+{
+    uint32_t off = rd8(params + 1);
+    int n = first;
+    for (int i = first; i < max; i++) {
+        unsigned code = (pi >> (6 + 2 * i)) & 3;
+        if (!code)
+            break;
+        uint32_t sz = code == 3 ? 4 : 2;
+        if (off < sz)
+            break;
+        off -= sz;
+        gaddr at = params + 4 + off;
+        args[i] = code == 3 ? rd32(at) : code == 2 ? (uint32_t)(int32_t)(int16_t)rd16(at) : rd8(at);
+        n = i + 1;
+    }
+    return n;
+}
+
+static uint32_t call_function(gaddr func, uint32_t pi, gaddr params, bool storage, gaddr h)
+{
+    uint32_t args[13] = { 0 };
+    if (mm_is_descriptor(func))
+        pi = rd32(func + RD_PROCINFO);
+    if (storage)
+        args[0] = h;
+    int n = call_args(params, pi, storage ? 1 : 0, args, 13);
+    if (!func)
+        return (uint32_t)badComponentSelector;
+    /* A bare pointer from PowerPC code is a transition vector. */
+    return mm_is_descriptor(func) ? mm_call(func, pi, args, n) : ppc_call(func, args, n);
+}
+
+static void cc_CallComponentFunction(ppc_cpu *c) { RETURN(call_function(R(1), 0, R(0), false, 0)); }
+static void cc_CallComponentFunctionWithStorage(ppc_cpu *c) { RETURN(call_function(R(2), 0, R(1), true, R(0))); }
+static void cc_CallComponentFunctionWithStorageProcInfo(ppc_cpu *c)
+{
+    RETURN(call_function(R(2), R(3), R(1), true, R(0)));
+}
+
+static const ppc_export cc_exports[] = {
+    { "CallComponentOpen", cc_CallComponentOpen }, { "CallComponentClose", cc_CallComponentClose },
+    { "CallComponentCanDo", cc_CallComponentCanDo }, { "ComponentFunctionImplemented", cc_CallComponentCanDo },
+    { "CallComponentVersion", cc_CallComponentVersion }, { "CallComponentRegister", cc_CallComponentRegister },
+    { "CallComponentTarget", cc_CallComponentTarget }, { "ComponentSetTarget", cc_CallComponentTarget },
+    { "CallComponentUnregister", cc_CallComponentUnregister },
+    { "CallComponentGetMPWorkFunction", cc_CallComponentGetMPWorkFunction },
+    { "CallComponentGetPublicResource", cc_CallComponentGetPublicResource },
+    { "GetComponentPublicResource", cc_GetComponentPublicResource },
+    { "GetComponentPublicResourceList", cc_GetComponentPublicResourceList },
+    { "GetComponentPublicIndString", cc_GetComponentPublicIndString },
+    { "CallComponentFunction", cc_CallComponentFunction },
+    { "CallComponentFunctionWithStorage", cc_CallComponentFunctionWithStorage },
+    { "CallComponentFunctionWithStorageProcInfo", cc_CallComponentFunctionWithStorageProcInfo },
+};
+static const unsigned cc_export_count = sizeof cc_exports / sizeof cc_exports[0];
+
 extern const ppc_export dsl_exports[];
 extern const unsigned dsl_export_count;
 
@@ -97,6 +218,7 @@ typedef struct {
 static const export_table tables[] = {
     { dsl_exports, &dsl_export_count },
     { lm_exports, &lm_export_count },
+    { cc_exports, &cc_export_count },
 };
 
 void (*ilutil_export_fn(const char *name))(ppc_cpu *)

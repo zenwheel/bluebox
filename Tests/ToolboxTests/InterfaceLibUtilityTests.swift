@@ -302,4 +302,135 @@ extension BlueBox {
             #expect(ilCall("GetEventQueue", []) == UInt32(LM_EventQueue))
         }
     }
+
+    /// The Component Manager's calls of components from PowerPC code, and
+    /// public resources.
+    @Suite struct ComponentCalls {
+        init() { bootMachine() }
+
+        /// A 68k routine descriptor for a native stub.
+        func descriptor68k(_ proc: UInt32, _ procInfo: UInt32) -> UInt32 {
+            let rd = tb_NewPtr(32, false, true)
+            wr16(rd, 0xAAFE)
+            wr8(rd + 2, 7)
+            wr32(rd + 12, procInfo)
+            wr32(rd + 20, proc)
+            return rd
+        }
+
+        @Test func callsOfAComponent() {
+            guestStack()
+            testTarget = 0
+            let entry = native_register(testComponent, "TestComponent", 0)
+            let cd = tb_NewPtr(20, false, true)
+            wr32(cd, fourCC("tEst"))
+            let comp = ilCall("RegisterComponent", [cd, entry, 0, 0, 0, 0])
+            #expect(comp != 0)
+            let ci = ilCall("OpenComponent", [comp])
+            #expect(ci != 0)
+
+            #expect(ilCall("CallComponentVersion", [ci]) == 0x0002_0003)
+            #expect(ilCall("CallComponentCanDo", [ci, UInt32(bitPattern: -10)]) == 1)
+            #expect(ilCall("ComponentFunctionImplemented", [ci, 7]) == 0)
+            #expect(ilCall("CallComponentTarget", [ci, 0x1234]) == 0 && testTarget == 0x1234)
+            #expect(ilCall("ComponentSetTarget", [ci, 0x5678]) == 0 && testTarget == 0x5678)
+            #expect(ilCall("CallComponentRegister", [ci]) == 0)
+            #expect(ilCall("CallComponentUnregister", [ci]) == 0)
+            let h = tb_NewPtr(4, false, true)
+            #expect(ilCall("CallComponentGetPublicResource", [ci, fourCC("STR#"), 128, h]) == 0 && rd32(h) != 0)
+            #expect(ilCall("CallComponentGetMPWorkFunction", [ci, h, h]) == UInt32(bitPattern: -2009)) // not one of its calls
+
+            // Public resources: asked of the component.
+            wr32(h, 0)
+            #expect(ilCall16("GetComponentPublicResource", [comp, fourCC("STR#"), 128, h]) == 0)
+            #expect(rd32(h) != 0 && tb_GetHandleSize(rd32(h)) > 2)
+            #expect(ilCall16("GetComponentPublicResource", [comp, fourCC("PICT"), 128, h]) == -192 && rd32(h) == 0)
+            let str = tb_NewPtr(256, false, true)
+            #expect(ilCall16("GetComponentPublicIndString", [comp, str, 128, 2]) == 0 && pstring(at: str) == "two")
+            #expect(ilCall16("GetComponentPublicIndString", [comp, str, 128, 3]) == -192 && rd8(str) == 0)
+            #expect(ilCall16("GetComponentPublicResourceList", [fourCC("STR#"), 128, 0, cd, 0, 0, h]) == 0)
+            #expect(tb_GetHandleSize(rd32(h)) == 32 && rd32(rd32(rd32(h)) + 16) == fourCC("sean"))
+
+            // CallComponentFunctionWithStorage: the storage, then the call's
+            // arguments (a long, then a short) from its parameters.
+            ilCall("SetComponentInstanceStorage", [ci, 1000])
+            let params = tb_NewPtr(16, false, true)
+            wr8(params + 1, 6)
+            wr16(params + 2, 1)
+            wr32(params + 6, 7)  // the first argument, highest
+            wr16(params + 4, 3)  // the second
+            wr32(params + 10, ci)
+            let fn = native_register(storageFunction, "StorageFunction", 0)
+            let upp = descriptor68k(fn, 0xBF0) // pascal long (long, long, short)
+            #expect(ilCall("CallComponentFunctionWithStorage", [1000, params, upp]) == 1073)
+            // A PowerPC function by its procInfo.
+            _ = cfm_ppc_cpu()
+            let tv = cfm_native_tvector({ c in
+                guard let c else { return }
+                withUnsafeMutableBytes(of: &c.pointee.gpr) { g in
+                    let a = g.load(fromByteOffset: 12, as: UInt32.self), b = g.load(fromByteOffset: 16, as: UInt32.self)
+                    let d = g.load(fromByteOffset: 20, as: UInt32.self)
+                    g.storeBytes(of: a + b * 10 + d, toByteOffset: 12, as: UInt32.self)
+                }
+                c.pointee.pc = c.pointee.lr
+            }, "PPCFunction")
+            #expect(ilCall("CallComponentFunctionWithStorageProcInfo", [2000, params, tv, 0xBF0]) == 2073)
+            // Without storage: the arguments alone.
+            let upp2 = descriptor68k(native_register(plainFunction, "PlainFunction", 0), 0x2F0)
+            #expect(ilCall("CallComponentFunction", [params, upp2]) == 73)
+
+            #expect(ilCall("CallComponentClose", [ci, ci]) == 0)
+            #expect(ilCall16("CloseComponent", [ci]) == 0)
+        }
+    }
+}
+
+nonisolated(unsafe) var testTarget: UInt32 = 0
+
+/// A component: pascal long (ComponentParameters *params, Handle storage).
+let testComponent: native_fn = { c, _ in
+    guard let c else { return }
+    let ret = cpu_pop32(c)
+    _ = cpu_pop32(c)
+    let params = cpu_pop32(c)
+    let what = Int16(bitPattern: rd16(params + 2))
+    var r: UInt32 = 0
+    switch what {
+    case -3: r = [-1, -2, -3, -4, -5, -6, -7, -10].contains(Int16(bitPattern: rd16(params + 4))) ? 1 : 0
+    case -4: r = 0x0002_0003
+    case -6: testTarget = rd32(params + 4)
+    case -10:
+        if rd32(params + 10) == fourCC("STR#") && rd16(params + 8) == 128 {
+            let h = tb_NewHandle(10, false, true)
+            let p = rd32(h)
+            wr16(p, 2)
+            wr8(p + 2, 3); wr8(p + 3, 0x6F); wr8(p + 4, 0x6E); wr8(p + 5, 0x65) // "one"
+            wr8(p + 6, 3); wr8(p + 7, 0x74); wr8(p + 8, 0x77); wr8(p + 9, 0x6F) // "two"
+            wr32(rd32(params + 4), h)
+        } else {
+            r = UInt32(bitPattern: -192)
+        }
+    case -1, -2, -5, -7: r = 0
+    default: r = UInt32(bitPattern: -2009) // badComponentSelector's low word, say
+    }
+    wr32(c.pointee.a.7, r)
+    cpu_push32(c, ret)
+}
+
+/// pascal long (Handle storage, long a, short b): storage + a * 10 + b.
+let storageFunction: native_fn = { c, _ in
+    guard let c else { return }
+    let ret = cpu_pop32(c)
+    let b = UInt32(cpu_pop16(c)), a = cpu_pop32(c), storage = cpu_pop32(c)
+    wr32(c.pointee.a.7, storage + a * 10 + b)
+    cpu_push32(c, ret)
+}
+
+/// pascal long (long a, short b): a * 10 + b.
+let plainFunction: native_fn = { c, _ in
+    guard let c else { return }
+    let ret = cpu_pop32(c)
+    let b = UInt32(cpu_pop16(c)), a = cpu_pop32(c)
+    wr32(c.pointee.a.7, a * 10 + b)
+    cpu_push32(c, ret)
 }
