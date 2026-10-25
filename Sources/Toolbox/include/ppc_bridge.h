@@ -40,6 +40,14 @@ extern const ppc_export ml_exports[];
 extern const unsigned ml_export_count;
 bool ml_data_export_known(const char *name);
 gaddr ml_data_export(const char *name);
+/* StdCLib, MPW's C library (stdclib.c, stdclib_io.c, stdclib_stdio.c): its
+ * routines, its data, a new program's library, and the streams flushed and
+ * closed when a program ends without exit. */
+void (*stdclib_export_fn(const char *name))(ppc_cpu *);
+bool stdclib_data_known(const char *name);
+gaddr stdclib_data_export(const char *name);
+void stdclib_reset(void);
+void stdclib_terminate(void);
 /* The Sound Converter and ParseSndHeader (sndconvert.c). */
 extern const ppc_export snd_exports[];
 extern const unsigned snd_export_count;
