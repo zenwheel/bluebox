@@ -23643,6 +23643,172 @@ static void ppcglue_ATPreFlightEvent(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PPCOpenSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCOpenSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCOpenAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCOpenAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCStartSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCStartSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCStartAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCStartAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCInformSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCInformSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCInformAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCInformAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCAcceptSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCAcceptSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCAcceptAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCAcceptAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCRejectSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCRejectSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCRejectAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCRejectAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCWriteSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCWriteSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCWriteAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCWriteAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCReadSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCReadSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCReadAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCReadAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCEndSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCEndSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCEndAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCEndAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCCloseSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCCloseSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCCloseAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCCloseAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IPCListPortsSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IPCListPortsSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IPCListPortsAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IPCListPortsAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IPCKillListPorts(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IPCKillListPorts(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteUserIdentity(ppc_cpu *c)
+{
+    uint32_t a_userRef = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteUserIdentity(a_userRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_StartSecureSession(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    gaddr a_userName = (gaddr)c->gpr[4];
+    int8_t a_useDefault = (int8_t)c->gpr[5];
+    int8_t a_allowGuest = (int8_t)c->gpr[6];
+    gaddr a_guestSelected = (gaddr)c->gpr[7];
+    gaddr a_prompt = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_StartSecureSession(a_pb, a_userName, a_useDefault, a_allowGuest, a_guestSelected, a_prompt);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -35899,6 +36065,7 @@ const ppc_export ppc_exports[] = {
     {"DeleteMovieStorage", ppctrap_DeleteMovieStorage},
     {"DeleteTrackReference", ppctrap_DeleteTrackReference},
     {"DeleteTrackSegment", ppctrap_DeleteTrackSegment},
+    {"DeleteUserIdentity", ppcglue_DeleteUserIdentity},
     {"DeltaPoint", ppcglue_DeltaPoint},
     {"Dequeue", ppcglue_Dequeue},
     {"DetachResource", ppcglue_DetachResource},
@@ -36790,6 +36957,9 @@ const ppc_export ppc_exports[] = {
     {"ICMShieldSequenceCursor", ppctrap_ICMShieldSequenceCursor},
     {"INVALID_GetTrapAddress", ppcglue_INVALID_GetTrapAddress},
     {"INVALID_SetTrapAddress", ppcglue_INVALID_SetTrapAddress},
+    {"IPCKillListPorts", ppcglue_IPCKillListPorts},
+    {"IPCListPortsAsync", ppcglue_IPCListPortsAsync},
+    {"IPCListPortsSync", ppcglue_IPCListPortsSync},
     {"ITextAddString", ppctrap_ITextAddString},
     {"ITextGetString", ppctrap_ITextGetString},
     {"ITextRemoveString", ppctrap_ITextRemoveString},
@@ -37869,7 +38039,25 @@ const ppc_export ppc_exports[] = {
     {"PMFeatures", ppcglue_PMFeatures},
     {"PMSelectorCount", ppcglue_PMSelectorCount},
     {"PMgrVersion", ppcglue_PMgrVersion},
+    {"PPCAcceptAsync", ppcglue_PPCAcceptAsync},
+    {"PPCAcceptSync", ppcglue_PPCAcceptSync},
+    {"PPCCloseAsync", ppcglue_PPCCloseAsync},
+    {"PPCCloseSync", ppcglue_PPCCloseSync},
     {"PPCDispatch", ppcglue_PPCDispatch},
+    {"PPCEndAsync", ppcglue_PPCEndAsync},
+    {"PPCEndSync", ppcglue_PPCEndSync},
+    {"PPCInformAsync", ppcglue_PPCInformAsync},
+    {"PPCInformSync", ppcglue_PPCInformSync},
+    {"PPCOpenAsync", ppcglue_PPCOpenAsync},
+    {"PPCOpenSync", ppcglue_PPCOpenSync},
+    {"PPCReadAsync", ppcglue_PPCReadAsync},
+    {"PPCReadSync", ppcglue_PPCReadSync},
+    {"PPCRejectAsync", ppcglue_PPCRejectAsync},
+    {"PPCRejectSync", ppcglue_PPCRejectSync},
+    {"PPCStartAsync", ppcglue_PPCStartAsync},
+    {"PPCStartSync", ppcglue_PPCStartSync},
+    {"PPCWriteAsync", ppcglue_PPCWriteAsync},
+    {"PPCWriteSync", ppcglue_PPCWriteSync},
     {"PPostEvent", ppcglue_PPostEvent},
     {"PWriteLAP", ppcglue_PWriteLAP},
     {"PackBits", ppcglue_PackBits},
@@ -38611,6 +38799,7 @@ const ppc_export ppc_exports[] = {
     {"StandardGetFilePreview", ppcglue_StandardGetFilePreview},
     {"StandardPutFile", ppcglue_StandardPutFile},
     {"StartMovie", ppcglue_StartMovie},
+    {"StartSecureSession", ppcglue_StartSecureSession},
     {"StdArc", ppcglue_StdArc},
     {"StdBits", ppcglue_StdBits},
     {"StdComment", ppcglue_StdComment},

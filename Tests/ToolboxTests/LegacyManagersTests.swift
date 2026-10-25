@@ -482,4 +482,134 @@ extension BlueBox {
             }
         }
     }
+
+    /// The PPC Toolbox: ports and sessions within a run (between runs the
+    /// same sockets carry them).
+    @Suite struct PPCToolbox {
+        init() { bootMachine() }
+
+        /// A PPCPortRec: smRoman, the name, ppcByString and the type.
+        func portName(_ name: String, _ type: String = "Test") -> UInt32 {
+            let p = tb_NewPtr(72, false, true)
+            guestPString(name, at: p + 2)
+            guestPString(type, at: p + 38)
+            return p
+        }
+
+        func open(_ name: String) -> UInt16 {
+            let pb = tb_NewPtr(64, false, true)
+            wr8(pb + 44, 1) // ppcServiceRealTime
+            wr32(pb + 46, portName(name))
+            #expect(ppcErr("PPCOpenSync", [pb]) == 0)
+            return rd16(pb + 38)
+        }
+
+        func pump() {
+            for _ in 0..<200 { usleep(2000); ppc_toolbox_poll() }
+        }
+
+        @Test func sessionsBetweenTwoPorts() {
+            let a = open("Alpha"), b = open("Beta")
+            #expect(a != 0 && b != 0 && a != b)
+            let dup = tb_NewPtr(64, false, true)
+            wr8(dup + 44, 1); wr32(dup + 46, portName("Beta"))
+            #expect(ppcErr("PPCOpenSync", [dup]) == -910) // portNameExistsErr
+
+            // Beta waits for a session, accepting it as it comes.
+            let inform = tb_NewPtr(64, false, true), who = tb_NewPtr(72, false, true)
+            wr16(inform + 38, b); wr8(inform + 45, 1); wr32(inform + 46, who)
+            #expect(ppcErr("PPCInformAsync", [inform]) == 0 && rd16(inform + 16) == 1)
+            let start = tb_NewPtr(70, false, true)
+            wr16(start + 38, a); wr32(start + 46, portName("Beta")); wr32(start + 58, 0x1234)
+            #expect(ppcErr("PPCStartSync", [start]) == 0)
+            let sa = rd32(start + 40)
+            pump()
+            #expect(rd16(inform + 16) == 0 && rd32(inform + 58) == 0x1234 && rd8(inform + 62) == 1)
+            #expect(pstring(at: who + 2) == "Alpha")
+            let sb = rd32(inform + 40)
+
+            // A block from Alpha, read whole by Beta.
+            let w = tb_NewPtr(70, false, true), r = tb_NewPtr(70, false, true), buf = tb_NewPtr(64, false, true)
+            let text = tb_NewPtr(16, false, true)
+            for (i, c) in Array("hello".utf8).enumerated() { wr8(text + UInt32(i), c) }
+            wr32(w + 40, sa); wr32(w + 44, 5); wr32(w + 52, text); wr32(w + 58, 7)
+            wr32(w + 62, fourCC("BBOX")); wr32(w + 66, fourCC("TEXT"))
+            #expect(ppcErr("PPCWriteSync", [w]) == 0 && rd32(w + 48) == 5)
+            wr32(r + 40, sb); wr32(r + 44, 64); wr32(r + 52, buf)
+            #expect(ppcErr("PPCReadSync", [r]) == 0)
+            #expect(rd32(r + 48) == 5 && rd8(r + 56) == 0 && rd32(r + 58) == 7 && rd32(r + 66) == fourCC("TEXT"))
+            #expect(String(decoding: (0..<5).map { rd8(buf + UInt32($0)) }, as: UTF8.self) == "hello")
+
+            // A block in two writes, read three bytes at a time.
+            wr8(w + 56, 1)
+            #expect(ppcErr("PPCWriteSync", [w]) == 0)
+            wr8(w + 56, 0); wr32(w + 44, 2)
+            #expect(ppcErr("PPCWriteSync", [w]) == 0)
+            var got = [UInt8](), mores = [UInt8]()
+            for _ in 0..<3 {
+                wr32(r + 44, 3)
+                #expect(ppcErr("PPCReadSync", [r]) == 0)
+                got += (0..<rd32(r + 48)).map { rd8(buf + $0) }
+                mores.append(rd8(r + 56))
+            }
+            #expect(String(decoding: got, as: UTF8.self) == "hellohe" && mores == [1, 1, 0])
+
+            // An asynchronous read finishes when Alpha ends the session.
+            #expect(ppcErr("PPCReadAsync", [r]) == 0 && rd16(r + 16) == 1)
+            let end = tb_NewPtr(64, false, true)
+            wr32(end + 40, sa)
+            #expect(ppcErr("PPCEndSync", [end]) == 0)
+            pump()
+            #expect(Int16(bitPattern: rd16(r + 16)) == -917) // sessClosedErr
+            #expect(ppcErr("PPCEndSync", [end]) == -908)      // noSessionErr
+
+            // Ports listed, then a request rejected.
+            let list = tb_NewPtr(64, false, true), infos = tb_NewPtr(74 * 4, false, true)
+            wr16(list + 42, 4); wr32(list + 46, portName("=")); wr32(list + 54, infos)
+            #expect(ppcErr("IPCListPortsSync", [list]) == 0)
+            let names = (0..<Int(rd16(list + 44))).map { pstring(at: infos + UInt32($0 * 74) + 4) }
+            #expect(names.contains("Alpha") && names.contains("Beta"))
+            wr8(inform + 45, 0)
+            #expect(ppcErr("PPCInformAsync", [inform]) == 0)
+            #expect(ppcErr("PPCStartAsync", [start]) == 0 && rd16(start + 16) == 1)
+            pump()
+            #expect(rd16(inform + 16) == 0)
+            let rej = tb_NewPtr(64, false, true)
+            wr32(rej + 40, rd32(inform + 40)); wr32(rej + 54, 42)
+            #expect(ppcErr("PPCRejectSync", [rej]) == 0)
+            pump()
+            #expect(Int16(bitPattern: rd16(start + 16)) == -912 && rd32(start + 54) == 42) // userRejectErr
+            wr32(start + 46, portName("Nobody"))
+            #expect(ppcErr("PPCStartSync", [start]) == -906) // destPortErr
+
+            // Closing a port ends the call waiting on it.
+            #expect(ppcErr("PPCInformAsync", [inform]) == 0)
+            let close = tb_NewPtr(64, false, true)
+            wr16(close + 38, b)
+            #expect(ppcErr("PPCCloseSync", [close]) == 0)
+            pump()
+            #expect(Int16(bitPattern: rd16(inform + 16)) == -916) // portClosedErr
+            #expect(ppcErr("PPCCloseSync", [close]) == -903)
+            #expect(ppcErr("DeleteUserIdentity", [1]) == 0 && ppcErr("DeleteUserIdentity", [99]) == -924)
+            wr16(close + 38, a)
+            #expect(ppcErr("PPCCloseSync", [close]) == 0)
+        }
+
+        @Test func the68kTrapTakesItsAsyncBit() {
+            let pb = tb_NewPtr(64, false, true)
+            wr8(pb + 44, 1)
+            wr32(pb + 46, portName("Gamma"))
+            let reason = run68k([0x207C, hiWord(pb), loWord(pb), 0x7001, 0xA0DD, 0x3E00, 0xA9F4])
+            #expect(reason == "ExitToShell" && g_cpu!.pointee.d.7 & 0xFFFF == 0 && rd16(pb + 38) != 0)
+            let inform = tb_NewPtr(64, false, true)
+            wr16(inform + 38, rd16(pb + 38))
+            // _PPC with the async bit: PPCInformAsync waits on.
+            #expect(run68k([0x207C, hiWord(inform), loWord(inform), 0x7003, 0xA4DD, 0x3E00, 0xA9F4]) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0 && rd16(inform + 16) == 1)
+            wr16(pb + 38, rd16(pb + 38))
+            #expect(run68k([0x207C, hiWord(pb), loWord(pb), 0x7009, 0xA0DD, 0xA9F4]) == "ExitToShell")
+            ppc_toolbox_poll()
+            #expect(Int16(bitPattern: rd16(inform + 16)) == -916)
+        }
+    }
 }

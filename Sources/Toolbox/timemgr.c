@@ -17,6 +17,7 @@
 #include <time.h>
 
 #include "m68k.h"
+#include "legacy.h"
 #include "tb_internal.h"
 
 #define MAX_TASKS 64
@@ -314,6 +315,7 @@ void time_pump(void)
     serial_poll();        /* serial reads waiting for their bytes */
     ctb_poll();           /* Communications Toolbox connections and their completion routines */
     appletalk_poll();     /* datagrams for socket listeners, NBP's answers */
+    ppc_toolbox_poll();   /* PPC Toolbox sessions: requests, answers and blocks */
     adb_pump();
     uint64_t t = now();
     for (int i = 0; i < MAX_TASKS; i++) {

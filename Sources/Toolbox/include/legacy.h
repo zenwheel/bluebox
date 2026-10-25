@@ -28,4 +28,8 @@ void dbaccess_reset(void);
 void xpp_reset(void);
 int16_t xpp_asp_control(gaddr pb, bool async);
 
+/* ppctoolbox.c */
+void ppc_toolbox_reset(void);
+void ppc_toolbox_poll(void);
+
 #endif

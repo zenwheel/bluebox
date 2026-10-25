@@ -1266,3 +1266,200 @@
       - name: infoPtr
         type: Ptr
     cfm: InterfaceLib
+
+# ---- The PPC Toolbox (ppctoolbox.c): InterfaceLib's calls; 68k code
+# reaches them through _PPC ($A0DD, PPCDispatch in extras.yaml) ----
+
+- function:
+    name: PPCOpenSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCOpenAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCStartSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCStartAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCInformSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCInformAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCAcceptSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCAcceptAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCRejectSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCRejectAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCWriteSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCWriteAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCReadSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCReadAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCEndSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCEndAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCCloseSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCCloseAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: IPCListPortsSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: IPCListPortsAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: IPCKillListPorts
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: DeleteUserIdentity
+    return: OSErr
+    args:
+      - name: userRef
+        type: uint32_t
+    cfm: InterfaceLib
+
+- function:
+    name: StartSecureSession
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+      - name: userName
+        type: Ptr
+      - name: useDefault
+        type: Boolean
+      - name: allowGuest
+        type: Boolean
+      - name: guestSelected
+        type: Ptr
+      - name: prompt
+        type: Ptr
+    cfm: InterfaceLib

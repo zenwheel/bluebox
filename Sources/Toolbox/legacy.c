@@ -10,4 +10,5 @@ void legacy_reset(void)
     scsi_reset();
     dbaccess_reset();
     xpp_reset();
+    ppc_toolbox_reset();
 }

@@ -195,8 +195,8 @@ extension BlueBox {
             #expect(rd32(info) == fourCC("TWIT"))
             #expect(cpu.pointee.d.7 & 0xFFFF == 1 && rd16(info + 8) == 1)
             #expect(cpu.pointee.d.6 & 0xFFFF == 0)
-            #expect(Int16(bitPattern: UInt16(cpu.pointee.d.5 & 0xFFFF)) == -903) // noPortErr
-            #expect(Int16(bitPattern: rd16(pb + 16)) == -903)
+            #expect(Int16(bitPattern: UInt16(cpu.pointee.d.5 & 0xFFFF)) == -919) // badPortNameErr: no name
+            #expect(Int16(bitPattern: rd16(pb + 16)) == -919)
 
             // Our high-level event port's name, as the Process Manager gives it.
             let psn = tb_NewPtr(8, false, true), port = tb_NewPtr(Int32(PPCPortRec_SIZEOF), false, true)
