@@ -117,6 +117,25 @@ extension BlueBox {
             #expect(ppc_call(tv, nil, 0) == tv)
         }
 
+        /// CallUniversalProc to a PowerPC routine moves every argument down
+        /// two registers, however many the procInfo counts: Amadeus II
+        /// passes its plug-ins a sixth (where to keep their data) under a
+        /// procInfo for five, as the Mixed Mode it was written on allowed.
+        @Test func callUniversalProcPassesEveryArgument() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            let tv = bytes([0, 0, 0, 0, 0, 0, 0, 0])
+            wr32(tv, bytes([0x4E, 0x80, 0x00, 0x20])) // blr
+            // A descriptor of one PowerPC routine taking six longs (Pascal).
+            let rd = bytes([0xAA, 0xFE, 7, 0] + [UInt8](repeating: 0, count: 8 + 20))
+            wr32(rd + 12, 0x3FFC0)
+            wr8(rd + 17, 1) // kPowerPCISA
+            wr32(rd + 20, tv)
+            call("CallUniversalProc", [rd, 0xFFC0, 1, 2, 3, 4, 5, 6])
+            #expect(g_ppc.pc == rd32(tv) && g_ppc.gpr.12 == tv)
+            #expect([g_ppc.gpr.3, g_ppc.gpr.4, g_ppc.gpr.5, g_ppc.gpr.6, g_ppc.gpr.7, g_ppc.gpr.8] == [1, 2, 3, 4, 5, 6])
+        }
+
         // MARK: Slot Manager
 
         /// SpBlock: spResult 0, spsPointer 4, spParamData 24, spRefNum 38,

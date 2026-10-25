@@ -437,15 +437,23 @@ static void ppc_CallUniversalProc(ppc_cpu *c)
             return;
         }
         if (isa == kPowerPCISA) {
-            /* A PowerPC routine: go straight there, returning to our caller. */
-            for (int i = 0; i < n; i++) {
+            /* A PowerPC routine: go straight there, returning to our caller,
+             * with every argument moved down two places whatever either
+             * procInfo counts (Amadeus II passes its plug-ins six with a
+             * procInfo that says five), and r12 at the vector. */
+            int most = arg_count(pi) > n ? arg_count(pi) : n;
+            if (most < 6)
+                most = 6;
+            for (int i = 0; i < most && i < 13; i++) {
+                uint32_t a = i + 2 < 8 ? c->gpr[5 + i] : rd32(c->gpr[1] + 24 + 4 * (uint32_t)(i + 2));
                 if (i < 8)
-                    c->gpr[3 + i] = args[i];
+                    c->gpr[3 + i] = a;
                 else
-                    wr32(c->gpr[1] + 24 + 4 * (uint32_t)i, args[i]);
+                    wr32(c->gpr[1] + 24 + 4 * (uint32_t)i, a);
             }
             c->pc = rd32(code);
             c->gpr[2] = rd32(code + 4);
+            c->gpr[12] = code;
             return;
         }
     }
