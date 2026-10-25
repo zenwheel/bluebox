@@ -261,6 +261,28 @@ extension BlueBox {
             tb_CloseResFile(rn3)
         }
 
+        /// A resource added and then disposed of with DisposeHandle (after a
+        /// ReleaseResource that keeps changed resources): Bubblomania does
+        /// so with its preferences, and closing the file read the dead
+        /// handle's error as a size and crashed the host.
+        @Test func addedResourceDisposedBeforeClose() throws {
+            _ = launchTestApp()
+            let name = pname("Disposed Prefs")
+            tb_CreateResFile(name)
+            let rn = tb_OpenResFile(name)
+            #expect(rn > 0)
+            let h = handle([5, 6, 7])
+            tb_AddResource(h, type, 128, 0)
+            tb_AddResource(handle([8]), type, 129, 0)
+            tb_ReleaseResource(h)
+            tb_DisposeHandle(h)
+            tb_CloseResFile(rn)
+            let rn2 = tb_OpenResFile(name)
+            #expect(rn2 > 0)
+            #expect(bytes(tb_Get1Resource(type, 129)) == [8])
+            tb_CloseResFile(rn2)
+        }
+
         /// A resource fork copied in by FSRead and FSWrite through the
         /// numbers OpenResFile gave: Starry Night Backyard makes its
         /// preferences so from its "Factory Defaults", and wrote nothing,

@@ -1172,8 +1172,12 @@ static uint8_t *build_fork(resfile *f, ref_list *l, uint16_t attrs, uint32_t *le
         const uint8_t *src = NULL;
         uint32_t n = 0;
         uint8_t *tmp = NULL;
-        if ((e->attrs & RES_CHANGED) && e->h && rd32(e->h)) {
-            n = (uint32_t)tb_GetHandleSize(e->h);
+        /* A changed resource whose handle the program disposed of
+         * (DisposeHandle, not ReleaseResource: Bubblomania) has no size;
+         * it keeps what the file had. */
+        int32_t hsize = (e->attrs & RES_CHANGED) && e->h && rd32(e->h) ? tb_GetHandleSize(e->h) : -1;
+        if (hsize >= 0) {
+            n = (uint32_t)hsize;
             src = tmp = malloc(n ? n : 1);
             gget(tmp, rd32(e->h), n);
             e->attrs &= (uint8_t)~RES_COMPRESSED;
