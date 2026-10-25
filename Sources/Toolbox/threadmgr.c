@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "carbon_events.h"
 #include "machine.h"
 #include "ppc.h"
 #include "tb_internal.h"
@@ -69,6 +70,8 @@ typedef struct {
     gaddr switch_in, switch_in_param, switch_out, switch_out_param;
     exec_ctx *ctx;
     host_thread *host;
+    void (*exit_hook)(uint32_t id, uint32_t result); /* native code told it ended */
+    uint32_t exit_to;                                /* the thread to run then */
 } thread;
 
 static thread threads[MAX_THREADS];
@@ -290,16 +293,22 @@ static void finish_thread(int i, uint32_t result_value, bool store)
     if (store && t->result)
         wr32(t->result, result_value);
     call_proc(t->terminator, t->id, t->term_param);
+    if (t->exit_hook)
+        t->exit_hook(t->id, result_value);
     t->used = false;
     t->state = kStoppedThreadState;
 }
 
-/* After a thread has finished: the next one, or the application's. */
-static int successor(void)
+/* After thread i has finished: the one it said to hand back to, the next
+ * one, or the application's. */
+static int successor(int i)
 {
     if (g_cpu->halted)
         return 0; /* the machine is stopping: the application thread unwinds */
-    int to = next_ready();
+    int to = threads[i].exit_to ? find((int32_t)threads[i].exit_to) : -1;
+    if (to >= 0 && to != i && threads[to].used && threads[to].state == kReadyThreadState)
+        return to;
+    to = next_ready();
     if (to < 0) {
         to = 0; /* the application thread is always there */
         if (threads[0].state == kStoppedThreadState)
@@ -339,7 +348,7 @@ static void *host_main(void *arg)
     if (stack && !g_cpu->halted)
         tb_DisposePtr(stack);
     free_thread(&threads[i]);
-    switch_to(successor(), true);
+    switch_to(successor(i), true);
     return NULL;
 }
 
@@ -438,6 +447,19 @@ int16_t tb_NewThread(int32_t style, gaddr entry, gaddr param, int32_t stack_size
         wr32(madep, t->id);
     return noErr;
 }
+
+/* Multiprocessing Services' tasks run as threads (multiprocessing.c): its
+ * code is told when one ends, and the thread to hand back to then. */
+void thread_set_exit(uint32_t id, void (*hook)(uint32_t id, uint32_t result), uint32_t exit_to)
+{
+    int i = find((int32_t)id);
+    if (i > 0) {
+        threads[i].exit_hook = hook;
+        threads[i].exit_to = exit_to;
+    }
+}
+
+uint32_t thread_current_id(void) { return threads[current].id; }
 
 int16_t tb_SetThreadScheduler(gaddr proc) { return noErr; }
 
