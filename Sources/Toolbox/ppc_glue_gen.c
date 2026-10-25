@@ -22956,6 +22956,233 @@ static void ppcglue_ataManager(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SIntInstall(ppc_cpu *c)
+{
+    gaddr a_sIntQElemPtr = (gaddr)c->gpr[3];
+    int16_t a_theSlot = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SIntInstall(a_sIntQElemPtr, a_theSlot);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SIntRemove(ppc_cpu *c)
+{
+    gaddr a_sIntQElemPtr = (gaddr)c->gpr[3];
+    int16_t a_theSlot = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SIntRemove(a_sIntQElemPtr, a_theSlot);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SReadInfo(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SReadInfo(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SReadPRAMRec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SReadPRAMRec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SPutPRAMRec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SPutPRAMRec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SReadFHeader(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SReadFHeader(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCkCardStat(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCkCardStat(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SFindDevBase(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SFindDevBase(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SFindBigDevBase(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SFindBigDevBase(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitSDeclMgr(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitSDeclMgr(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SPrimaryInit(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SPrimaryInit(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCardChanged(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCardChanged(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SExec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SExec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SOffsetData(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SOffsetData(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SInitPRAMRecs(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SInitPRAMRecs(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SReadPBSize(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SReadPBSize(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCalcStep(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCalcStep(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SInitSRsrcTable(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SInitSRsrcTable(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SSearchSRT(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SSearchSRT(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SUpdateSRT(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SUpdateSRT(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCalcSPointer(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCalcSPointer(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SGetDriver(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SGetDriver(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SPtrToSlot(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SPtrToSlot(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SFindSInfoRecPtr(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SFindSInfoRecPtr(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SFindSRsrcPtr(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SFindSRsrcPtr(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SDeleteSRTRec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SDeleteSRTRec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSRsrcState(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSRsrcState(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertSRTRec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InsertSRTRec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SGetSRsrcPtr(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SGetSRsrcPtr(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenSlot(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenSlot(a_paramBlock, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenSlotSync(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenSlotSync(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenSlotAsync(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenSlotAsync(a_paramBlock);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -36108,6 +36335,7 @@ const ppc_export ppc_exports[] = {
     {"InitPort", ppcglue_InitPort},
     {"InitProcMenu", ppcglue_InitProcMenu},
     {"InitResources", ppcglue_InitResources},
+    {"InitSDeclMgr", ppcglue_InitSDeclMgr},
     {"InitUtil", ppcglue_InitUtil},
     {"InitWindows", ppcglue_InitWindows},
     {"InsTime", ppcglue_InsTime},
@@ -36119,6 +36347,7 @@ const ppc_export ppc_exports[] = {
     {"InsertMenuItem", ppcglue_InsertMenuItem},
     {"InsertMovieSegment", ppcglue_InsertMovieSegment},
     {"InsertResMenu", ppcglue_InsertResMenu},
+    {"InsertSRTRec", ppcglue_InsertSRTRec},
     {"InsertTrackSegment", ppctrap_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
@@ -36875,6 +37104,9 @@ const ppc_export ppc_exports[] = {
     {"OpenRFPerm", ppcglue_OpenRFPerm},
     {"OpenResFile", ppcglue_OpenResFile},
     {"OpenRgn", ppcglue_OpenRgn},
+    {"OpenSlot", ppcglue_OpenSlot},
+    {"OpenSlotAsync", ppcglue_OpenSlotAsync},
+    {"OpenSlotSync", ppcglue_OpenSlotSync},
     {"OutlineMetrics", ppcglue_OutlineMetrics},
     {"OverrideIconRef", ppcglue_OverrideIconRef},
     {"OverrideIconRefFromResource", ppcglue_OverrideIconRefFromResource},
@@ -37464,12 +37696,29 @@ const ppc_export ppc_exports[] = {
     {"SCSIStat", ppcglue_SCSIStat},
     {"SCSIWBlind", ppcglue_SCSIWBlind},
     {"SCSIWrite", ppcglue_SCSIWrite},
+    {"SCalcSPointer", ppcglue_SCalcSPointer},
+    {"SCalcStep", ppcglue_SCalcStep},
+    {"SCardChanged", ppcglue_SCardChanged},
+    {"SCkCardStat", ppcglue_SCkCardStat},
+    {"SDeleteSRTRec", ppcglue_SDeleteSRTRec},
+    {"SExec", ppcglue_SExec},
     {"SFGetFile", ppcglue_SFGetFile},
     {"SFGetFilePreview", ppcglue_SFGetFilePreview},
     {"SFPGetFile", ppcglue_SFPGetFile},
     {"SFPGetFilePreview", ppcglue_SFPGetFilePreview},
     {"SFPPutFile", ppcglue_SFPPutFile},
     {"SFPutFile", ppcglue_SFPutFile},
+    {"SFindBigDevBase", ppcglue_SFindBigDevBase},
+    {"SFindDevBase", ppcglue_SFindDevBase},
+    {"SFindSInfoRecPtr", ppcglue_SFindSInfoRecPtr},
+    {"SFindSRsrcPtr", ppcglue_SFindSRsrcPtr},
+    {"SGetDriver", ppcglue_SGetDriver},
+    {"SGetSRsrcPtr", ppcglue_SGetSRsrcPtr},
+    {"SInitPRAMRecs", ppcglue_SInitPRAMRecs},
+    {"SInitSRsrcTable", ppcglue_SInitSRsrcTable},
+    {"SIntInstall", ppcglue_SIntInstall},
+    {"SIntRemove", ppcglue_SIntRemove},
+    {"SOffsetData", ppcglue_SOffsetData},
     {"SPBBytesToMilliseconds", ppcglue_SPBBytesToMilliseconds},
     {"SPBCloseDevice", ppcglue_SPBCloseDevice},
     {"SPBGetDeviceInfo", ppcglue_SPBGetDeviceInfo},
@@ -37486,6 +37735,15 @@ const ppc_export ppc_exports[] = {
     {"SPBSignOutDevice", ppcglue_SPBSignOutDevice},
     {"SPBStopRecording", ppcglue_SPBStopRecording},
     {"SPBVersion", ppcglue_SPBVersion},
+    {"SPrimaryInit", ppcglue_SPrimaryInit},
+    {"SPtrToSlot", ppcglue_SPtrToSlot},
+    {"SPutPRAMRec", ppcglue_SPutPRAMRec},
+    {"SReadFHeader", ppcglue_SReadFHeader},
+    {"SReadInfo", ppcglue_SReadInfo},
+    {"SReadPBSize", ppcglue_SReadPBSize},
+    {"SReadPRAMRec", ppcglue_SReadPRAMRec},
+    {"SSearchSRT", ppcglue_SSearchSRT},
+    {"SUpdateSRT", ppcglue_SUpdateSRT},
     {"SameProcess", ppcglue_SameProcess},
     {"SampleNumToMediaTime", ppctrap_SampleNumToMediaTime},
     {"SaveBack", ppcglue_SaveBack},
@@ -37701,6 +37959,7 @@ const ppc_export ppc_exports[] = {
     {"SetResLoad", ppcglue_SetResLoad},
     {"SetResPurge", ppcglue_SetResPurge},
     {"SetResourceSize", ppcglue_SetResourceSize},
+    {"SetSRsrcState", ppcglue_SetSRsrcState},
     {"SetScanOverride", ppcglue_SetScanOverride},
     {"SetScriptManagerVariable", ppcglue_SetScriptManagerVariable},
     {"SetScriptVariable", ppcglue_SetScriptVariable},

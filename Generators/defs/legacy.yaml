@@ -363,3 +363,275 @@
       - name: pb
         type: Ptr
     cfm: InterfaceLib
+
+# ---- The Slot Manager (slots.c): _SlotManager ($A06E) is a raw trap,
+# the selector in D0 and the SpBlock in A0; these are its InterfaceLib
+# calls, and the slot interrupt queue's traps. ----
+
+- function:
+    name: SIntInstall
+    return: OSErr
+    args:
+      - name: sIntQElemPtr
+        type: Ptr
+        register: A0
+      - name: theSlot
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA075
+
+- function:
+    name: SIntRemove
+    return: OSErr
+    args:
+      - name: sIntQElemPtr
+        type: Ptr
+        register: A0
+      - name: theSlot
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA076
+
+- function:
+    name: SReadInfo
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SReadPRAMRec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SPutPRAMRec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SReadFHeader
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SCkCardStat
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SFindDevBase
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SFindBigDevBase
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: InitSDeclMgr
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SPrimaryInit
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SCardChanged
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SExec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SOffsetData
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SInitPRAMRecs
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SReadPBSize
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SCalcStep
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SInitSRsrcTable
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SSearchSRT
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SUpdateSRT
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SCalcSPointer
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SGetDriver
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SPtrToSlot
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SFindSInfoRecPtr
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SFindSRsrcPtr
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SDeleteSRTRec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SetSRsrcState
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: InsertSRTRec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SGetSRsrcPtr
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: OpenSlot
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: OpenSlotSync
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: OpenSlotAsync
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib

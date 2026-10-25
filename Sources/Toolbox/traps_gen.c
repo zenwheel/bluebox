@@ -97,6 +97,8 @@ const char *const os_trap_names[256] = {
     [0x6A] = "HSetState",
     [0x6F] = "SlotVInstall",
     [0x70] = "SlotVRemove",
+    [0x75] = "SIntInstall",
+    [0x76] = "SIntRemove",
     [0x77] = "CountADBs",
     [0x78] = "GetIndADB",
     [0x79] = "GetADBInfo",
@@ -14627,6 +14629,24 @@ static void glue_SFPutFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SIntInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_sIntQElemPtr = (gaddr)c->a[0];
+    int16_t a_theSlot = (int16_t)c->d[0];
+    int16_t r = tb_SIntInstall(a_sIntQElemPtr, a_theSlot);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_SIntRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_sIntQElemPtr = (gaddr)c->a[0];
+    int16_t a_theSlot = (int16_t)c->d[0];
+    int16_t r = tb_SIntRemove(a_sIntQElemPtr, a_theSlot);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_SPBBytesToMilliseconds(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19311,6 +19331,8 @@ const trap_sig trap_sigs[] = {
     {0xA06A, -1, "HSetState", CONV_REG, 0, 0, glue_HSetState},
     {0xA06F, -1, "SlotVInstall", CONV_REG, 0, 0, glue_SlotVInstall},
     {0xA070, -1, "SlotVRemove", CONV_REG, 0, 0, glue_SlotVRemove},
+    {0xA075, -1, "SIntInstall", CONV_REG, 0, 0, glue_SIntInstall},
+    {0xA076, -1, "SIntRemove", CONV_REG, 0, 0, glue_SIntRemove},
     {0xA077, -1, "CountADBs", CONV_REG, 0, 0, glue_CountADBs},
     {0xA078, -1, "GetIndADB", CONV_REG, 0, 0, glue_GetIndADB},
     {0xA079, -1, "GetADBInfo", CONV_REG, 0, 0, glue_GetADBInfo},

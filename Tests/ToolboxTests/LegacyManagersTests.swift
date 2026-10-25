@@ -170,4 +170,118 @@ extension BlueBox {
             #expect(ppcErr("ataManager", [pb]) == -9406 + 0x30)
         }
     }
+
+    /// The Slot Manager's declaration ROM, slot information and table.
+    /// SpBlock: spResult 0, spsPointer 4, spSize 8, spOffsetData 12,
+    /// spParamData 24, spRefNum 38, spCategory 40, spCType 42, spSlot 49,
+    /// spID 50, spExtDev 51, spByteLanes 53, spFlags 54.
+    @Suite struct SlotManager {
+        init() { bootMachine() }
+
+        func spBlock(slot: UInt8 = 0, id: UInt8 = 0) -> UInt32 {
+            let spb = tb_NewPtr(56, false, true)
+            wr8(spb + 49, slot)
+            wr8(spb + 50, id)
+            return spb
+        }
+
+        @Test func theBuiltInSlotAndEmptyNuBusSlots() {
+            let info = tb_NewPtr(24, false, true), spb = spBlock()
+            wr32(spb, info)
+            #expect(ppcErr("SReadInfo", [spb]) == 0)
+            let dir = rd32(info)
+            #expect(ppcErr("SCkCardStat", [spb]) == 0)
+            wr8(spb + 49, 9)
+            #expect(ppcErr("SReadInfo", [spb]) == -300 && ppcErr("SCkCardStat", [spb]) == -300) // smEmptySlot
+            wr8(spb + 49, 3)
+            #expect(ppcErr("SReadInfo", [spb]) == -337) // smSlotOOBErr
+
+            // The format block at the top of the ROM, its directory offset
+            // leading to the directory SReadInfo gave.
+            let fh = tb_NewPtr(20, false, true)
+            wr8(spb + 49, 0)
+            wr32(spb, fh)
+            #expect(ppcErr("SReadFHeader", [spb]) == 0)
+            #expect(rd32(fh + 14) == 0x5A93_2BC7 && rd8(fh + 13) == 1 && rd8(fh + 19) == 0x0F)
+            #expect(ppcErr("SFindSInfoRecPtr", [spb]) == 0 && rd32(rd32(spb)) == dir)
+            // The video's entry in the directory, and its list.
+            wr32(spb + 4, dir)
+            wr8(spb + 50, 0x80)
+            #expect(ppcErr("SFindStruct", [spb]) == 0)
+            let vlist = rd32(spb + 4)
+            #expect(ppcErr("SFindSRsrcPtr", [spb]) == 0 && rd32(spb + 4) == vlist)
+            #expect(ppcErr("SPtrToSlot", [spb]) == 0 && rd8(spb + 49) == 0)
+            // Its device base is the screen's.
+            #expect(ppcErr("SFindDevBase", [spb]) == 0 && rd32(spb) == rd32(UInt32(LM_ScrnBase)))
+            wr8(spb + 50, 1)
+            #expect(ppcErr("SFindDevBase", [spb]) == -330) // the board has no device memory
+            #expect(ppcErr("SCardChanged", [spb]) == 0 && rd32(spb) == 0)
+            #expect(ppcErr("SExec", [spb]) != 0)
+            #expect(slot_manager(0x7F, spb) == -338) // smSelOOBErr
+        }
+
+        @Test func sResourcesDisabledInsertedAndDeleted() {
+            let spb = spBlock(slot: 0, id: 0x80)
+            wr32(spb + 24, 1) // disable
+            #expect(ppcErr("SetSRsrcState", [spb]) == 0)
+            let find = spBlock()
+            wr16(find + 40, 3); wr16(find + 42, 1); wr16(find + 44, 1); wr8(find + 48, 1)
+            #expect(ppcErr("SGetTypeSRsrc", [find]) == -344)
+            wr32(find + 24, 1) // fall: disabled ones too
+            wr8(find + 50, 0)
+            #expect(ppcErr("SGetTypeSRsrc", [find]) == 0 && rd8(find + 50) == 0x80)
+            wr32(spb + 24, 0)
+            #expect(ppcErr("SetSRsrcState", [spb]) == 0)
+            #expect(ppcErr("SRsrcInfo", [spb]) == 0)
+
+            // A program's own sResource from a list in RAM: catDisplay,
+            // typeVideo, its name.
+            let type = tb_NewPtr(8, false, true)
+            wr16(type, 3); wr16(type + 2, 1); wr16(type + 4, 0x55); wr16(type + 6, 2)
+            let name = tb_NewPtr(8, false, true)
+            for (i, b) in Array("Mine".utf8).enumerated() { wr8(name + UInt32(i), b) }
+            let list = tb_NewPtr(16, false, true)
+            wr32(list, 0x0100_0000 | ((type &- list) & 0xFFFFFF))
+            wr32(list + 4, 0x0200_0000 | ((name &- (list + 4)) & 0xFFFFFF))
+            wr32(list + 8, 0xFF00_0000)
+            let ins = spBlock(slot: 0, id: 0x90)
+            wr32(ins + 4, list)
+            wr16(ins + 38, UInt16(bitPattern: -60))
+            #expect(ppcErr("InsertSRTRec", [ins]) == 0)
+            let q = spBlock(slot: 0, id: 0x90)
+            #expect(ppcErr("SRsrcInfo", [q]) == 0)
+            #expect(rd16(q + 44) == 0x55 && Int16(bitPattern: rd16(q + 38)) == -60 && rd32(q + 4) == list)
+            let str = tb_NewPtr(256, false, true)
+            wr32(q, str)
+            #expect(ppcErr("SReadDrvrName", [q]) == 0 && pstring(at: str) == ".Mine")
+            #expect(ppcErr("SDeleteSRTRec", [q]) == 0 && ppcErr("SRsrcInfo", [q]) == -351)
+            wr8(ins + 49, 10)
+            #expect(ppcErr("InsertSRTRec", [ins]) == -300) // nothing in slot $A
+            // Built again from the ROM at startup.
+            #expect(ppcErr("SInitSRsrcTable", [spb]) == 0 && ppcErr("SRsrcInfo", [spBlock(slot: 0, id: 0x80)]) == 0)
+        }
+
+        @Test func blocksAndSlotInterrupts() {
+            let spb = spBlock(slot: 0, id: 0x80)
+            #expect(ppcErr("SFindSRsrcPtr", [spb]) == 0)
+            wr8(spb + 50, 0x83) // the 8-bit mode's list
+            #expect(ppcErr("SFindStruct", [spb]) == 0)
+            wr8(spb + 50, 1)    // mVidParams: a block
+            #expect(ppcErr("SReadPBSize", [spb]) == 0 && rd32(spb + 8) == 46)
+            #expect(ppcErr("SOffsetData", [spb]) == 0 && rd8(spb + 53) == 0x0F)
+            wr8(spb + 54, 0)
+            #expect(ppcErr("SCalcStep", [spb]) == 0 && rd32(spb) == 4)
+            let el = tb_NewPtr(16, false, true)
+            let reason = run68k([
+                0x207C, hiWord(el), loWord(el), 0x700B, 0xA075, 0x3E00, // SIntInstall(el, $B)
+                0x207C, hiWord(el), loWord(el), 0x700B, 0xA076, 0x3C00, // SIntRemove
+                0x207C, hiWord(el), loWord(el), 0x700B, 0xA076, 0x3A00, // again: not there
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0 && g_cpu!.pointee.d.6 & 0xFFFF == 0)
+            #expect(Int16(bitPattern: UInt16(g_cpu!.pointee.d.5 & 0xFFFF)) == -1) // qErr
+            #expect(ppcErr("SIntInstall", [el, 2]) == -337)
+        }
+    }
 }
