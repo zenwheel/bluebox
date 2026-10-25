@@ -54,6 +54,12 @@ extern const unsigned snd_export_count;
 /* CarbonLib's Core Foundation basics and accessors (carbon.c). */
 extern const ppc_export carbon_exports[];
 extern const unsigned carbon_export_count;
+/* Its Core Foundation and Math64 (carbon_cf*.c): routines, data, and the
+ * state a launch starts without. */
+void (*carbon_cf_export_fn(const char *name))(ppc_cpu *);
+bool carbon_cf_data_known(const char *name);
+gaddr carbon_cf_data_export(const char *name);
+void carbon_cf_reset(void);
 /* DrawSprocket (drawsprocket.c). */
 extern const ppc_export dsp_exports[];
 extern const unsigned dsp_export_count;
