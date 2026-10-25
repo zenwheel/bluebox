@@ -1,0 +1,258 @@
+import CCore
+import CPUPPC
+import Foundation
+import Testing
+import Toolbox
+
+extension BlueBox {
+    /// CarbonLib's Control Manager and Dialog Manager calls, on the classic
+    /// Control Manager's records: accessors, ControlIDs, properties, custom
+    /// definitions, the Create...Control calls, the UPPs and the Data
+    /// Browser.
+    @Suite(.serialized) struct CarbonControls {
+        func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
+            let p = tb_NewPtr(8, false, true)
+            for (i, v) in [t, l, b, r].enumerated() { wr16(p + UInt32(i * 2), UInt16(bitPattern: Int16(v))) }
+            return p
+        }
+
+        func rectOf(_ p: UInt32) -> [Int] { (0..<4).map { Int(Int16(bitPattern: rd16(p + UInt32($0 * 2)))) } }
+
+        func pstr(_ s: String) -> UInt32 {
+            let p = tb_NewPtr(256, false, true)
+            guestPString(s, at: p)
+            return p
+        }
+
+        func window() -> UInt32 {
+            let w = tb_NewCWindow(0, rect(40, 40, 340, 440), pstr("Test"), 1, 0, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            return w
+        }
+
+        func ptr(_ n: Int = 4) -> UInt32 { tb_NewPtr(Int32(n), false, true) }
+
+        /// Call an export with its arguments in r3 on (the ninth on in the
+        /// caller's parameter area); r3 after.
+        @discardableResult
+        func call(_ name: String, _ args: [UInt32]) -> UInt32 {
+            let sp = tb_NewPtr(8192, false, true) + 4096
+            withUnsafeMutableBytes(of: &g_ppc.gpr) { gpr in
+                gpr.storeBytes(of: sp, toByteOffset: 4, as: UInt32.self)
+                for (i, a) in args.enumerated() where i < 8 { gpr.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+            }
+            for (i, a) in args.enumerated() where i >= 8 { wr32(sp + 24 + UInt32(i * 4), a) }
+            guard let fn = cfm_export_fn(name) else {
+                Issue.record("no export \(name)")
+                return 0
+            }
+            fn(&g_ppc)
+            return withUnsafeBytes(of: g_ppc.gpr) { $0.load(fromByteOffset: 12, as: UInt32.self) }
+        }
+
+        func cfString(_ s: String) -> UInt32 {
+            let c = tb_NewPtr(Int32(s.utf8.count + 1), false, true)
+            for (i, b) in s.utf8.enumerated() { wr8(c + UInt32(i), b) }
+            return call("CFStringCreateWithCString", [0, c, 0x0800_0100]) // kCFStringEncodingUTF8
+        }
+
+        func text(_ cf: UInt32) -> String {
+            let n = call("CFStringGetLength", [cf])
+            let buf = tb_NewPtr(Int32(n * 2 + 2), false, true)
+            call("CFStringGetCharacters", [cf, 0, n, buf])
+            return String(utf16CodeUnits: (0..<Int(n)).map { rd16(buf + UInt32($0 * 2)) }, count: Int(n))
+        }
+
+        /// A machine with PowerPC code able to run (callbacks) and a window.
+        func setUp() -> UInt32 {
+            launch()
+            _ = initToolbox()
+            return window()
+        }
+
+        func launch() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            g_cpu!.pointee.halted = false // the test application never ran
+        }
+
+        @Test func accessorsReadTheRecord() {
+            let w = setUp()
+            let ch = tb_NewControl(w, rect(10, 10, 30, 100), pstr("OK"), 1, 0, 0, 1, 0, 0)
+            let b = ptr(8)
+            #expect(tb_GetControlBounds(ch, b) == b && rectOf(b) == [10, 10, 30, 100])
+            tb_SetControlBounds(ch, rect(20, 30, 40, 130))
+            #expect(rectOf(rd32(ch) + 8) == [20, 30, 40, 130])
+            #expect(tb_GetControlOwner(ch) == w)
+            #expect(tb_IsControlHilited(ch) == 0 && tb_GetControlHilite(ch) == 0)
+            tb_HiliteControl(ch, 10)
+            #expect(tb_IsControlHilited(ch) != 0 && tb_GetControlHilite(ch) == 10)
+            tb_HiliteControl(ch, 255)
+            #expect(tb_IsControlHilited(ch) == 0)
+            let h = tb_NewHandle(4, false, true)
+            tb_SetControlDataHandle(ch, h)
+            #expect(tb_GetControlDataHandle(ch) == h)
+            tb_SetControlDataHandle(ch, 0)
+        }
+
+        @Test func popupMenuAccessors() {
+            let w = setUp()
+            let menu = tb_NewMenu(200, pstr("Pop"))
+            tb_InsertMenu(menu, -1)
+            let pop = tb_NewControl(w, rect(10, 10, 30, 200), pstr("Kind:"), 1, 0, 200, 40, 1008, 0)
+            #expect(tb_GetControlPopupMenuHandle(pop) == menu && tb_GetControlPopupMenuID(pop) == 200)
+            let other = tb_NewMenu(201, pstr("Other"))
+            tb_SetControlPopupMenuHandle(pop, other)
+            tb_SetControlPopupMenuID(pop, 201)
+            #expect(tb_GetControlPopupMenuHandle(pop) == other && tb_GetControlPopupMenuID(pop) == 201)
+        }
+
+        @Test func controlIDsFindControls() {
+            let w = setUp()
+            let a = tb_NewControl(w, rect(10, 10, 30, 100), pstr("A"), 1, 0, 0, 1, 0, 0)
+            let b = tb_NewControl(w, rect(40, 10, 60, 100), pstr("B"), 1, 0, 0, 1, 0, 0)
+            let id = ptr(8)
+            wr32(id, fourCC("Test"))
+            wr32(id + 4, 2)
+            #expect(tb_SetControlID(b, id) == 0)
+            wr32(id + 4, 1)
+            #expect(tb_SetControlID(a, id) == 0)
+            let out = ptr(), got = ptr(8)
+            wr32(id + 4, 2)
+            #expect(tb_GetControlByID(w, id, out) == 0 && rd32(out) == b)
+            #expect(tb_GetControlID(b, got) == 0 && rd32(got) == fourCC("Test") && rd32(got + 4) == 2)
+            wr32(id + 4, 3)
+            #expect(tb_GetControlByID(w, id, out) == -30584 && rd32(out) == 0) // errUnknownControl
+            #expect(tb_SetControlCommandID(a, fourCC("ok  ")) == 0)
+            #expect(tb_GetControlCommandID(a, out) == 0 && rd32(out) == fourCC("ok  "))
+            #expect(tb_GetControlCommandID(b, out) == 0 && rd32(out) == 0)
+            #expect(tb_GetControlCommandID(w, out) == -30584)
+        }
+
+        @Test func propertiesKeepTheirBytes() {
+            let w = setUp()
+            let ch = tb_NewControl(w, rect(10, 10, 30, 100), pstr("A"), 1, 0, 0, 1, 0, 0)
+            let creator = Int32(bitPattern: fourCC("Blue")), tag = Int32(bitPattern: fourCC("data"))
+            let data = ptr(6)
+            for i in 0..<6 { wr8(data + UInt32(i), UInt8(i + 1)) }
+            #expect(tb_SetControlProperty(ch, creator, tag, 6, data) == 0)
+            let size = ptr(), buf = ptr(16)
+            #expect(tb_GetControlPropertySize(ch, creator, tag, size) == 0 && rd32(size) == 6)
+            #expect(tb_GetControlProperty(ch, creator, tag, 4, size, buf) == -30591) // errDataSizeMismatch
+            #expect(tb_GetControlProperty(ch, creator, tag, 16, size, buf) == 0)
+            #expect((0..<6).map { rd8(buf + UInt32($0)) } == [1, 2, 3, 4, 5, 6])
+            #expect(tb_ChangeControlPropertyAttributes(ch, creator, tag, 1, 0) == 0)
+            #expect(tb_GetControlPropertyAttributes(ch, creator, tag, size) == 0 && rd32(size) == 1)
+            #expect(tb_RemoveControlProperty(ch, creator, tag) == 0)
+            #expect(tb_GetControlPropertySize(ch, creator, tag, size) == -5604) // controlPropertyNotFoundErr
+            #expect(tb_RemoveControlProperty(ch, creator, tag) == -5604)
+        }
+
+        @Test func regionsAndTitles() {
+            let w = setUp()
+            let ch = tb_NewControl(w, rect(10, 20, 30, 120), pstr("Title"), 1, 0, 0, 1, 0, 0)
+            let rgn = tb_NewRgn()
+            #expect(tb_GetControlRegion(ch, -1, rgn) == 0)
+            #expect(rectOf(rd32(rgn) + 2) == [10, 20, 30, 120])
+            #expect(tb_GetControlRegion(ch, 10, rgn) == -30588) // errInvalidPartCode
+            let out = ptr()
+            #expect(tb_CopyControlTitleAsCFString(ch, out) == 0 && text(rd32(out)) == "Title")
+            #expect(tb_SetControlTitleWithCFString(ch, cfString("Caf\u{E9}")) == 0)
+            let title = rd32(ch) + UInt32(ControlRecord_contrlTitle_off)
+            #expect(rd8(title) == 4 && rd8(title + 4) == 0x8E) // MacRoman e-acute
+        }
+
+        /// New...UPP makes a routine descriptor for the PowerPC routine;
+        /// Invoke...UPP calls it with the arguments before the UPP.
+        @Test func universalProcedurePointers() {
+            launch()
+            let code = ptr(8), tv = ptr(8)
+            wr32(code, 0x7C63_2214) // add r3, r3, r4
+            wr32(code + 4, 0x4E80_0020) // blr
+            wr32(tv, code)
+            let upp = call("NewControlUserPaneHitTestUPP", [tv])
+            #expect(rd16(upp) == 0xAAFE && rd32(upp + 12) == 0x3E0 && rd32(upp + 20) == tv)
+            #expect(call("InvokeControlUserPaneHitTestUPP", [40, 2, upp]) == 42)
+            // The result is a 16-bit one: sign-extended.
+            #expect(call("InvokeControlUserPaneHitTestUPP", [0xFFFF, 0, upp]) == 0xFFFF_FFFF)
+            call("DisposeControlUserPaneHitTestUPP", [upp])
+            for name in ["NewModalFilterUPP", "NewUserItemUPP", "NewControlActionUPP", "NewDataBrowserItemDataUPP",
+                         "InvokeModalFilterYDUPP", "DisposeControlKeyFilterUPP", "InvokeDataBrowserTrackingUPP"] {
+                #expect(cfm_export_fn(name) != nil, "\(name)")
+            }
+            // Nine arguments: the ninth from the parameter area.
+            let nine = call("NewControlCNTLToCollectionUPP", [tv])
+            #expect(call("InvokeControlCNTLToCollectionUPP", [1, 2, 3, 4, 5, 6, 7, 8, 9, nine]) == 3)
+        }
+
+        /// A definition procedure of the program's own, by CreateCustomControl
+        /// and by NewControl through RegisterControlDefinition: the Control
+        /// Manager calls it through its UPP.
+        @Test func customDefinitions() {
+            let w = setUp()
+            // A CDEF: returns the message plus 100 (testCntl answers 101).
+            let code = ptr(12), tv = ptr(8)
+            wr32(code, 0x3865_0064) // addi r3, r5, 100
+            wr32(code + 4, 0x4E80_0020) // blr
+            wr32(tv, code)
+            let def = call("NewControlDefUPP", [tv])
+            let spec = ptr(8)
+            wr32(spec + 4, def)
+            let coll = tb_NewCollection()
+            let v = ptr(4)
+            wr32(v, 7)
+            _ = tb_AddCollectionItem(coll, Int32(bitPattern: fourCC("valu")), 0, 4, v)
+            wr32(v, 9)
+            _ = tb_AddCollectionItem(coll, Int32(bitPattern: fourCC("max ")), 0, 4, v)
+            let out = ptr()
+            #expect(tb_CreateCustomControl(w, rect(10, 10, 50, 50), spec, coll, out) == 0)
+            let ch = rd32(out)
+            #expect(tb_GetControlValue(ch) == 7 && tb_GetControlMaximum(ch) == 9)
+            #expect(tb_TestControl(ch, 0x0014_0014) == 101)
+            #expect(tb_RegisterControlDefinition(300, spec, 0) == 0)
+            let viaNew = tb_NewControl(w, rect(60, 10, 80, 50), pstr(""), 1, 0, 0, 1, 300 * 16, 0)
+            #expect(tb_TestControl(viaNew, 0x0046_0014) == 101)
+            #expect(tb_RegisterControlDefinition(300, 0, 0) == 0)
+        }
+
+        /// The colour procedure answers SetUpControlBackground and
+        /// SetUpControlTextColor for its control.
+        @Test func colorProcedure() {
+            let w = setUp()
+            let ch = tb_NewControl(w, rect(10, 10, 30, 100), pstr("A"), 1, 0, 0, 1, 0, 0)
+            // OSStatus proc(control, message, depth, isColor): stores the message, returns 0.
+            let slot = ptr()
+            let code = ptr(20), tv = ptr(8)
+            wr32(code, 0x3D20_0000 | (slot >> 16)) // lis r9, slot@h
+            wr32(code + 4, 0x6129_0000 | (slot & 0xFFFF)) // ori r9, r9, slot@l
+            wr32(code + 8, 0x9089_0000) // stw r4, 0(r9)
+            wr32(code + 12, 0x3860_0000) // li r3, 0
+            wr32(code + 16, 0x4E80_0020) // blr
+            wr32(tv, code)
+            let upp = call("NewControlColorUPP", [tv])
+            #expect(tb_SetControlColorProc(ch, upp) == 0)
+            #expect(tb_SetUpControlTextColor(ch, 8, 1) == 0 && rd32(slot) == 30)
+            #expect(tb_SetUpControlBackground(ch, 8, 1) == 0 && rd32(slot) == 23)
+        }
+
+        /// Without a definition that handles them, the Carbon messages
+        /// answer "nothing done".
+        @Test func carbonMessagesDefaultToNothing() {
+            let w = setUp()
+            let ch = tb_NewControl(w, rect(10, 10, 30, 100), pstr("A"), 1, 0, 0, 1, 0, 0)
+            let b = ptr()
+            wr8(b, 1)
+            #expect(tb_HandleControlSetCursor(ch, 0x0014_0014, 0, b) == 0 && rd8(b) == 0)
+            wr8(b, 1)
+            #expect(tb_HandleControlContextualMenuClick(ch, 0x0014_0014, b) == 0 && rd8(b) == 0)
+            #expect(tb_GetControlClickActivation(ch, 0x0014_0014, 0, b) == 0 && rd32(b) == 2)
+            #expect(tb_SetControlDragTrackingEnabled(ch, 1) == 0)
+            #expect(tb_IsControlDragTrackingEnabled(ch, b) == 0 && rd8(b) == 1)
+            #expect(tb_SetAutomaticControlDragTrackingEnabledForWindow(w, 1) == 0)
+            #expect(tb_IsAutomaticControlDragTrackingEnabledForWindow(w, b) == 0 && rd8(b) == 1)
+            #expect(tb_SetAutomaticControlDragTrackingEnabledForWindow(w, 0) == 0)
+            #expect(tb_IsAutomaticControlDragTrackingEnabledForWindow(w, b) == 0 && rd8(b) == 0)
+            #expect(tb_HandleControlDragReceive(ch, 0) == -30580) // errMessageNotSupported
+        }
+    }
+}

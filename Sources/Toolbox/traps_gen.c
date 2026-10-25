@@ -2256,6 +2256,20 @@ static void glue_CautionAlert(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ChangeControlPropertyAttributes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_attributesToClear = (uint32_t)cpu_pop32(c);
+    uint32_t a_attributesToSet = (uint32_t)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_ChangeControlPropertyAttributes(a_control, a_propertyCreator, a_propertyTag, a_attributesToSet, a_attributesToClear);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ChangeDragBehaviors(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2939,6 +2953,17 @@ static void glue_CopyBits(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CopyControlTitleAsCFString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outString = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CopyControlTitleAsCFString(a_inControl, a_outString);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CopyDeepMask(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3166,6 +3191,20 @@ static void glue_CountVoices(cpu68k *c, uint16_t trapword)
     gaddr a_numVoices = (gaddr)cpu_pop32(c);
     int16_t r = tb_CountVoices(a_numVoices);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateCustomControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_initData = (gaddr)cpu_pop32(c);
+    gaddr a_def = (gaddr)cpu_pop32(c);
+    gaddr a_contBounds = (gaddr)cpu_pop32(c);
+    gaddr a_owningWindow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateCustomControl(a_owningWindow, a_contBounds, a_def, a_initData, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8737,6 +8776,53 @@ static void glue_GetControlAction(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetControlBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetControlBounds(a_control, a_bounds);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlByID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_inID = (gaddr)cpu_pop32(c);
+    gaddr a_inWindow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlByID(a_inWindow, a_inID, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlClickActivation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outResult = (gaddr)cpu_pop32(c);
+    uint16_t a_inModifiers = (uint16_t)cpu_pop16(c);
+    uint32_t a_inWhere = (uint32_t)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlClickActivation(a_inControl, a_inWhere, a_inModifiers, a_outResult);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlCommandID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outCommandID = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlCommandID(a_inControl, a_outCommandID);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetControlData(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8749,6 +8835,16 @@ static void glue_GetControlData(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetControlData(a_control, a_part, a_tag, a_bufferSize, a_buffer, a_actualSize);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlDataHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetControlDataHandle(a_control);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8776,6 +8872,27 @@ static void glue_GetControlFeatures(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetControlHilite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    uint16_t r = tb_GetControlHilite(a_control);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outID = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlID(a_inControl, a_outID);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetControlMaximum(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8796,12 +8913,95 @@ static void glue_GetControlMinimum(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetControlOwner(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetControlOwner(a_control);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlPopupMenuHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetControlPopupMenuHandle(a_control);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlPopupMenuID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetControlPopupMenuID(a_control);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyBuffer = (gaddr)cpu_pop32(c);
+    gaddr a_actualSize = (gaddr)cpu_pop32(c);
+    uint32_t a_bufferSize = (uint32_t)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlProperty(a_control, a_propertyCreator, a_propertyTag, a_bufferSize, a_actualSize, a_propertyBuffer);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlPropertyAttributes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_attributes = (gaddr)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlPropertyAttributes(a_control, a_propertyCreator, a_propertyTag, a_attributes);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlPropertySize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_size = (gaddr)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlPropertySize(a_control, a_propertyCreator, a_propertyTag, a_size);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetControlReference(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     int32_t r = tb_GetControlReference(a_c);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlRegion(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outRegion = (gaddr)cpu_pop32(c);
+    int16_t a_inPart = (int16_t)cpu_pop16(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlRegion(a_inControl, a_inPart, a_outRegion);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -11872,6 +12072,42 @@ static void glue_HandleControlClick(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_HandleControlContextualMenuClick(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_menuDisplayed = (gaddr)cpu_pop32(c);
+    uint32_t a_inWhere = (uint32_t)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HandleControlContextualMenuClick(a_inControl, a_inWhere, a_menuDisplayed);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HandleControlDragReceive(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inDrag = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HandleControlDragReceive(a_inControl, a_inDrag);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HandleControlDragTracking(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outLikesDrag = (gaddr)cpu_pop32(c);
+    gaddr a_inDrag = (gaddr)cpu_pop32(c);
+    int16_t a_inMessage = (int16_t)cpu_pop16(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HandleControlDragTracking(a_inControl, a_inMessage, a_inDrag, a_outLikesDrag);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_HandleControlKey(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11882,6 +12118,19 @@ static void glue_HandleControlKey(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_HandleControlKey(a_control, a_keyCode, a_charCode, a_modifiers);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HandleControlSetCursor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_cursorWasSet = (gaddr)cpu_pop32(c);
+    uint16_t a_modifiers = (uint16_t)cpu_pop16(c);
+    uint32_t a_localPoint = (uint32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HandleControlSetCursor(a_control, a_localPoint, a_modifiers, a_cursorWasSet);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -12804,12 +13053,44 @@ static void glue_IsAppearanceClient(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsAutomaticControlDragTrackingEnabledForWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tracks = (gaddr)cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_IsAutomaticControlDragTrackingEnabledForWindow(a_theWindow, a_tracks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_IsControlActive(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     gaddr a_control = (gaddr)cpu_pop32(c);
     int8_t r = tb_IsControlActive(a_control);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsControlDragTrackingEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tracks = (gaddr)cpu_pop32(c);
+    gaddr a_theControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_IsControlDragTrackingEnabled(a_theControl, a_tracks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IsControlHilited(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsControlHilited(a_control);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -17269,6 +17550,18 @@ static void glue_RegisterAppearanceClient(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RegisterControlDefinition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inConversionProc = (gaddr)cpu_pop32(c);
+    gaddr a_inControlDef = (gaddr)cpu_pop32(c);
+    int16_t a_inCDEFResID = (int16_t)cpu_pop16(c);
+    int32_t r = tb_RegisterControlDefinition(a_inCDEFResID, a_inControlDef, a_inConversionProc);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RegisterSection(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17310,6 +17603,18 @@ static void glue_RemoveCollectionItem(cpu68k *c, uint16_t trapword)
     gaddr a_c = (gaddr)cpu_pop32(c);
     int16_t r = tb_RemoveCollectionItem(a_c, a_tag, a_id);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveControlProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RemoveControlProperty(a_control, a_propertyCreator, a_propertyTag);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18328,6 +18633,17 @@ static void glue_SetApplLimit(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_SetAutomaticControlDragTrackingEnabledForWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_tracks = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetAutomaticControlDragTrackingEnabledForWindow(a_theWindow, a_tracks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetBevelButtonContentInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18525,6 +18841,16 @@ static void glue_SetControlAction(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetControlBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_SetControlBounds(a_control, a_bounds);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetControlColor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18532,6 +18858,28 @@ static void glue_SetControlColor(cpu68k *c, uint16_t trapword)
     gaddr a_ctab = (gaddr)cpu_pop32(c);
     gaddr a_ctl = (gaddr)cpu_pop32(c);
     tb_SetControlColor(a_ctl, a_ctab);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlColorProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inProc = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlColorProc(a_inControl, a_inProc);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlCommandID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_inCommandID = (uint32_t)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlCommandID(a_inControl, a_inCommandID);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18549,6 +18897,27 @@ static void glue_SetControlData(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetControlDataHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dataHandle = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_SetControlDataHandle(a_control, a_dataHandle);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlDragTrackingEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_tracks = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlDragTrackingEnabled(a_theControl, a_tracks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetControlFontStyle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18557,6 +18926,17 @@ static void glue_SetControlFontStyle(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetControlFontStyle(a_control, a_style);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inID = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlID(a_inControl, a_inID);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18577,6 +18957,40 @@ static void glue_SetControlMinimum(cpu68k *c, uint16_t trapword)
     int16_t a_v = (int16_t)cpu_pop16(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     tb_SetControlMinimum(a_c, a_v);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlPopupMenuHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_popupMenu = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_SetControlPopupMenuHandle(a_control, a_popupMenu);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlPopupMenuID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_menuID = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_SetControlPopupMenuID(a_control, a_menuID);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyData = (gaddr)cpu_pop32(c);
+    uint32_t a_propertySize = (uint32_t)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlProperty(a_control, a_propertyCreator, a_propertyTag, a_propertySize, a_propertyData);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18608,6 +19022,17 @@ static void glue_SetControlTitle(cpu68k *c, uint16_t trapword)
     gaddr a_t = (gaddr)cpu_pop32(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     tb_SetControlTitle(a_c, a_t);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlTitleWithCFString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inString = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlTitleWithCFString(a_inControl, a_inString);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -20308,6 +20733,18 @@ static void glue_SetUpControlBackground(cpu68k *c, uint16_t trapword)
     int16_t a_depth = (int16_t)cpu_pop16(c);
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetUpControlBackground(a_control, a_depth, a_isColorDevice);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetUpControlTextColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_inIsColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_inDepth = (int16_t)cpu_pop16(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetUpControlTextColor(a_inControl, a_inDepth, a_inIsColorDevice);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }

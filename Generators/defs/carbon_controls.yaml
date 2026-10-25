@@ -1,0 +1,400 @@
+# CarbonLib's Control Manager and Dialog Manager additions (Controls.h,
+# ControlDefinitions.h and Dialogs.h, Universal Interfaces 3.4): the
+# accessors, ControlIDs, properties, custom definitions, the Create...Control
+# calls and the Data Browser.  CarbonLib exports only: none of these had a
+# 68k trap.  Same schema as Defs/multiversal/defs.
+
+# Controls.h: accessors
+- function:
+    name: GetControlBounds
+    return: Rect*
+    args:
+      - name: control
+        type: ControlHandle
+      - name: bounds
+        type: Rect*
+
+- function:
+    name: SetControlBounds
+    args:
+      - name: control
+        type: ControlHandle
+      - name: bounds
+        type: const Rect*
+
+- function:
+    name: IsControlHilited
+    return: Boolean
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: GetControlHilite
+    return: UInt16
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: GetControlOwner
+    return: WindowPtr
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: GetControlDataHandle
+    return: Handle
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: SetControlDataHandle
+    args:
+      - name: control
+        type: ControlHandle
+      - name: dataHandle
+        type: Handle
+
+- function:
+    name: GetControlPopupMenuHandle
+    return: MenuHandle
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: GetControlPopupMenuID
+    return: SInt16
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: SetControlPopupMenuHandle
+    args:
+      - name: control
+        type: ControlHandle
+      - name: popupMenu
+        type: MenuHandle
+
+- function:
+    name: SetControlPopupMenuID
+    args:
+      - name: control
+        type: ControlHandle
+      - name: menuID
+        type: SInt16
+
+
+# Control IDs and command IDs
+- function:
+    name: SetControlID
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inID
+        type: const void*
+
+- function:
+    name: GetControlID
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: outID
+        type: void*
+
+- function:
+    name: GetControlByID
+    return: OSStatus
+    args:
+      - name: inWindow
+        type: WindowPtr
+      - name: inID
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: SetControlCommandID
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inCommandID
+        type: UInt32
+
+- function:
+    name: GetControlCommandID
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: outCommandID
+        type: UInt32*
+
+
+# Properties
+- function:
+    name: GetControlProperty
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: bufferSize
+        type: UInt32
+      - name: actualSize
+        type: UInt32*
+      - name: propertyBuffer
+        type: void*
+
+- function:
+    name: GetControlPropertySize
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: size
+        type: UInt32*
+
+- function:
+    name: SetControlProperty
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: propertySize
+        type: UInt32
+      - name: propertyData
+        type: void*
+
+- function:
+    name: RemoveControlProperty
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+
+- function:
+    name: GetControlPropertyAttributes
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: attributes
+        type: UInt32*
+
+- function:
+    name: ChangeControlPropertyAttributes
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: attributesToSet
+        type: UInt32
+      - name: attributesToClear
+        type: UInt32
+
+
+# Regions, titles, colours
+- function:
+    name: GetControlRegion
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inPart
+        type: SInt16
+      - name: outRegion
+        type: RgnHandle
+
+- function:
+    name: CopyControlTitleAsCFString
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: outString
+        type: void*
+
+- function:
+    name: SetControlTitleWithCFString
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inString
+        type: void*
+
+- function:
+    name: SetUpControlTextColor
+    return: OSErr
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inDepth
+        type: SInt16
+      - name: inIsColorDevice
+        type: Boolean
+
+- function:
+    name: SetControlColorProc
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inProc
+        type: ProcPtr
+
+
+# Clicks, cursors, contextual menus, drag and drop
+- function:
+    name: GetControlClickActivation
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inWhere
+        type: Point
+      - name: inModifiers
+        type: UInt16
+      - name: outResult
+        type: UInt32*
+
+- function:
+    name: HandleControlContextualMenuClick
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inWhere
+        type: Point
+      - name: menuDisplayed
+        type: Boolean*
+
+- function:
+    name: HandleControlSetCursor
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: localPoint
+        type: Point
+      - name: modifiers
+        type: UInt16
+      - name: cursorWasSet
+        type: Boolean*
+
+- function:
+    name: HandleControlDragTracking
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inMessage
+        type: SInt16
+      - name: inDrag
+        type: void*
+      - name: outLikesDrag
+        type: Boolean*
+
+- function:
+    name: HandleControlDragReceive
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inDrag
+        type: void*
+
+- function:
+    name: SetControlDragTrackingEnabled
+    return: OSStatus
+    args:
+      - name: theControl
+        type: ControlHandle
+      - name: tracks
+        type: Boolean
+
+- function:
+    name: IsControlDragTrackingEnabled
+    return: OSStatus
+    args:
+      - name: theControl
+        type: ControlHandle
+      - name: tracks
+        type: Boolean*
+
+- function:
+    name: SetAutomaticControlDragTrackingEnabledForWindow
+    return: OSStatus
+    args:
+      - name: theWindow
+        type: WindowPtr
+      - name: tracks
+        type: Boolean
+
+- function:
+    name: IsAutomaticControlDragTrackingEnabledForWindow
+    return: OSStatus
+    args:
+      - name: theWindow
+        type: WindowPtr
+      - name: tracks
+        type: Boolean*
+
+
+# Custom definitions
+- function:
+    name: CreateCustomControl
+    return: OSStatus
+    args:
+      - name: owningWindow
+        type: WindowPtr
+      - name: contBounds
+        type: const Rect*
+      - name: def
+        type: const void*
+      - name: initData
+        type: void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: RegisterControlDefinition
+    return: OSStatus
+    args:
+      - name: inCDEFResID
+        type: SInt16
+      - name: inControlDef
+        type: const void*
+      - name: inConversionProc
+        type: ProcPtr

@@ -20793,6 +20793,333 @@ static void ppcglue_SetMenuExcludesMarkColumn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetControlBounds(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_bounds = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetControlBounds(a_control, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlBounds(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_bounds = (gaddr)c->gpr[4];
+    tb_SetControlBounds(a_control, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsControlHilited(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsControlHilited(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlHilite(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlHilite(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlOwner(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlOwner(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlDataHandle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlDataHandle(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlDataHandle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_dataHandle = (gaddr)c->gpr[4];
+    tb_SetControlDataHandle(a_control, a_dataHandle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlPopupMenuHandle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlPopupMenuHandle(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlPopupMenuID(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlPopupMenuID(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlPopupMenuHandle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_popupMenu = (gaddr)c->gpr[4];
+    tb_SetControlPopupMenuHandle(a_control, a_popupMenu);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlPopupMenuID(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_menuID = (int16_t)c->gpr[4];
+    tb_SetControlPopupMenuID(a_control, a_menuID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlID(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_inID = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlID(a_inControl, a_inID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlID(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_outID = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetControlID(a_inControl, a_outID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlByID(ppc_cpu *c)
+{
+    gaddr a_inWindow = (gaddr)c->gpr[3];
+    gaddr a_inID = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetControlByID(a_inWindow, a_inID, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlCommandID(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    uint32_t a_inCommandID = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlCommandID(a_inControl, a_inCommandID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlCommandID(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_outCommandID = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetControlCommandID(a_inControl, a_outCommandID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlProperty(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    uint32_t a_bufferSize = (uint32_t)c->gpr[6];
+    gaddr a_actualSize = (gaddr)c->gpr[7];
+    gaddr a_propertyBuffer = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_GetControlProperty(a_control, a_propertyCreator, a_propertyTag, a_bufferSize, a_actualSize, a_propertyBuffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlPropertySize(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    gaddr a_size = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetControlPropertySize(a_control, a_propertyCreator, a_propertyTag, a_size);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlProperty(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    uint32_t a_propertySize = (uint32_t)c->gpr[6];
+    gaddr a_propertyData = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_SetControlProperty(a_control, a_propertyCreator, a_propertyTag, a_propertySize, a_propertyData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveControlProperty(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_RemoveControlProperty(a_control, a_propertyCreator, a_propertyTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlPropertyAttributes(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    gaddr a_attributes = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetControlPropertyAttributes(a_control, a_propertyCreator, a_propertyTag, a_attributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ChangeControlPropertyAttributes(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    uint32_t a_attributesToSet = (uint32_t)c->gpr[6];
+    uint32_t a_attributesToClear = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_ChangeControlPropertyAttributes(a_control, a_propertyCreator, a_propertyTag, a_attributesToSet, a_attributesToClear);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlRegion(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    int16_t a_inPart = (int16_t)c->gpr[4];
+    gaddr a_outRegion = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetControlRegion(a_inControl, a_inPart, a_outRegion);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyControlTitleAsCFString(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_outString = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_CopyControlTitleAsCFString(a_inControl, a_outString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlTitleWithCFString(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_inString = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlTitleWithCFString(a_inControl, a_inString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetUpControlTextColor(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    int16_t a_inDepth = (int16_t)c->gpr[4];
+    int8_t a_inIsColorDevice = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetUpControlTextColor(a_inControl, a_inDepth, a_inIsColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlColorProc(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_inProc = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlColorProc(a_inControl, a_inProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlClickActivation(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    uint32_t a_inWhere = (uint32_t)c->gpr[4];
+    uint16_t a_inModifiers = (uint16_t)c->gpr[5];
+    gaddr a_outResult = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetControlClickActivation(a_inControl, a_inWhere, a_inModifiers, a_outResult);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlContextualMenuClick(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    uint32_t a_inWhere = (uint32_t)c->gpr[4];
+    gaddr a_menuDisplayed = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_HandleControlContextualMenuClick(a_inControl, a_inWhere, a_menuDisplayed);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlSetCursor(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    uint32_t a_localPoint = (uint32_t)c->gpr[4];
+    uint16_t a_modifiers = (uint16_t)c->gpr[5];
+    gaddr a_cursorWasSet = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_HandleControlSetCursor(a_control, a_localPoint, a_modifiers, a_cursorWasSet);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlDragTracking(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    int16_t a_inMessage = (int16_t)c->gpr[4];
+    gaddr a_inDrag = (gaddr)c->gpr[5];
+    gaddr a_outLikesDrag = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_HandleControlDragTracking(a_inControl, a_inMessage, a_inDrag, a_outLikesDrag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlDragReceive(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_inDrag = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_HandleControlDragReceive(a_inControl, a_inDrag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlDragTrackingEnabled(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int8_t a_tracks = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlDragTrackingEnabled(a_theControl, a_tracks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsControlDragTrackingEnabled(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    gaddr a_tracks = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_IsControlDragTrackingEnabled(a_theControl, a_tracks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetAutomaticControlDragTrackingEnabledForWindow(ppc_cpu *c)
+{
+    gaddr a_theWindow = (gaddr)c->gpr[3];
+    int8_t a_tracks = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetAutomaticControlDragTrackingEnabledForWindow(a_theWindow, a_tracks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsAutomaticControlDragTrackingEnabledForWindow(ppc_cpu *c)
+{
+    gaddr a_theWindow = (gaddr)c->gpr[3];
+    gaddr a_tracks = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_IsAutomaticControlDragTrackingEnabledForWindow(a_theWindow, a_tracks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateCustomControl(ppc_cpu *c)
+{
+    gaddr a_owningWindow = (gaddr)c->gpr[3];
+    gaddr a_contBounds = (gaddr)c->gpr[4];
+    gaddr a_def = (gaddr)c->gpr[5];
+    gaddr a_initData = (gaddr)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateCustomControl(a_owningWindow, a_contBounds, a_def, a_initData, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RegisterControlDefinition(ppc_cpu *c)
+{
+    int16_t a_inCDEFResID = (int16_t)c->gpr[3];
+    gaddr a_inControlDef = (gaddr)c->gpr[4];
+    gaddr a_inConversionProc = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_RegisterControlDefinition(a_inCDEFResID, a_inControlDef, a_inConversionProc);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -38865,6 +39192,7 @@ const ppc_export ppc_exports[] = {
     {"CancelCallBack", ppctrap_CancelCallBack},
     {"CancelSwitch", ppcglue_CancelSwitch},
     {"CautionAlert", ppcglue_CautionAlert},
+    {"ChangeControlPropertyAttributes", ppcglue_ChangeControlPropertyAttributes},
     {"ChangeDragBehaviors", ppcglue_ChangeDragBehaviors},
     {"ChangedResource", ppcglue_ChangedResource},
     {"Char2Pixel", ppcglue_Char2Pixel},
@@ -38945,6 +39273,7 @@ const ppc_export ppc_exports[] = {
     {"ConvertTimeScale", ppcglue_ConvertTimeScale},
     {"CopyBits", ppcglue_CopyBits},
     {"CopyCollection", ppctrap_CopyCollection},
+    {"CopyControlTitleAsCFString", ppcglue_CopyControlTitleAsCFString},
     {"CopyDeepMask", ppcglue_CopyDeepMask},
     {"CopyMask", ppcglue_CopyMask},
     {"CopyMatrix", ppcglue_CopyMatrix},
@@ -38980,6 +39309,7 @@ const ppc_export ppc_exports[] = {
     {"CountUserDataType", ppctrap_CountUserDataType},
     {"CountVoices", ppcglue_CountVoices},
     {"CreateCompDescriptor", ppcglue_CreateCompDescriptor},
+    {"CreateCustomControl", ppcglue_CreateCustomControl},
     {"CreateEditionContainerFile", ppctrap_CreateEditionContainerFile},
     {"CreateLogicalDescriptor", ppcglue_CreateLogicalDescriptor},
     {"CreateMovieControl", ppctrap_CreateMovieControl},
@@ -39638,12 +39968,26 @@ const ppc_export ppc_exports[] = {
     {"GetControl32BitMinimum", ppcglue_GetControl32BitMinimum},
     {"GetControl32BitValue", ppcglue_GetControl32BitValue},
     {"GetControlAction", ppcglue_GetControlAction},
+    {"GetControlBounds", ppcglue_GetControlBounds},
+    {"GetControlByID", ppcglue_GetControlByID},
+    {"GetControlClickActivation", ppcglue_GetControlClickActivation},
+    {"GetControlCommandID", ppcglue_GetControlCommandID},
     {"GetControlData", ppcglue_GetControlData},
+    {"GetControlDataHandle", ppcglue_GetControlDataHandle},
     {"GetControlDataSize", ppcglue_GetControlDataSize},
     {"GetControlFeatures", ppcglue_GetControlFeatures},
+    {"GetControlHilite", ppcglue_GetControlHilite},
+    {"GetControlID", ppcglue_GetControlID},
     {"GetControlMaximum", ppcglue_GetControlMaximum},
     {"GetControlMinimum", ppcglue_GetControlMinimum},
+    {"GetControlOwner", ppcglue_GetControlOwner},
+    {"GetControlPopupMenuHandle", ppcglue_GetControlPopupMenuHandle},
+    {"GetControlPopupMenuID", ppcglue_GetControlPopupMenuID},
+    {"GetControlProperty", ppcglue_GetControlProperty},
+    {"GetControlPropertyAttributes", ppcglue_GetControlPropertyAttributes},
+    {"GetControlPropertySize", ppcglue_GetControlPropertySize},
     {"GetControlReference", ppcglue_GetControlReference},
+    {"GetControlRegion", ppcglue_GetControlRegion},
     {"GetControlTitle", ppcglue_GetControlTitle},
     {"GetControlValue", ppcglue_GetControlValue},
     {"GetControlVariant", ppcglue_GetControlVariant},
@@ -40075,7 +40419,11 @@ const ppc_export ppc_exports[] = {
     {"HandAndHand", ppcglue_HandAndHand},
     {"HandToHand", ppctrap_HandToHand},
     {"HandleControlClick", ppcglue_HandleControlClick},
+    {"HandleControlContextualMenuClick", ppcglue_HandleControlContextualMenuClick},
+    {"HandleControlDragReceive", ppcglue_HandleControlDragReceive},
+    {"HandleControlDragTracking", ppcglue_HandleControlDragTracking},
     {"HandleControlKey", ppcglue_HandleControlKey},
+    {"HandleControlSetCursor", ppcglue_HandleControlSetCursor},
     {"HandleZone", ppcglue_HandleZone},
     {"HasDepth", ppcglue_HasDepth},
     {"HasMovieChanged", ppcglue_HasMovieChanged},
@@ -40210,7 +40558,10 @@ const ppc_export ppc_exports[] = {
     {"InvertRoundRect", ppcglue_InvertRoundRect},
     {"IsAliasFile", ppcglue_IsAliasFile},
     {"IsAppearanceClient", ppcglue_IsAppearanceClient},
+    {"IsAutomaticControlDragTrackingEnabledForWindow", ppcglue_IsAutomaticControlDragTrackingEnabledForWindow},
     {"IsControlActive", ppcglue_IsControlActive},
+    {"IsControlDragTrackingEnabled", ppcglue_IsControlDragTrackingEnabled},
+    {"IsControlHilited", ppcglue_IsControlHilited},
     {"IsControlVisible", ppcglue_IsControlVisible},
     {"IsDataAvailableInIconRef", ppcglue_IsDataAvailableInIconRef},
     {"IsDialogEvent", ppcglue_IsDialogEvent},
@@ -41629,6 +41980,7 @@ const ppc_export ppc_exports[] = {
     {"RectMatrix", ppcglue_RectMatrix},
     {"RectRgn", ppcglue_RectRgn},
     {"RegisterAppearanceClient", ppcglue_RegisterAppearanceClient},
+    {"RegisterControlDefinition", ppcglue_RegisterControlDefinition},
     {"RegisterIconRefFromIconFamily", ppcglue_RegisterIconRefFromIconFamily},
     {"RegisterIconRefFromIconFile", ppcglue_RegisterIconRefFromIconFile},
     {"RegisterIconRefFromResource", ppcglue_RegisterIconRefFromResource},
@@ -41638,6 +41990,7 @@ const ppc_export ppc_exports[] = {
     {"ReleaseResource", ppcglue_ReleaseResource},
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
+    {"RemoveControlProperty", ppcglue_RemoveControlProperty},
     {"RemoveExtensionNotificationProc", ppcglue_RemoveExtensionNotificationProc},
     {"RemoveExtensionTableHandlerProc", ppcglue_RemoveExtensionTableHandlerProc},
     {"RemoveFS", ppcglue_RemoveFS},
@@ -41779,6 +42132,7 @@ const ppc_export ppc_exports[] = {
     {"SetApplBase", ppcglue_SetApplBase},
     {"SetApplLimit", ppcglue_SetApplLimit},
     {"SetAutoTrackAlternatesEnabled", ppctrap_SetAutoTrackAlternatesEnabled},
+    {"SetAutomaticControlDragTrackingEnabledForWindow", ppcglue_SetAutomaticControlDragTrackingEnabledForWindow},
     {"SetBevelButtonContentInfo", ppcglue_SetBevelButtonContentInfo},
     {"SetBevelButtonGraphicAlignment", ppcglue_SetBevelButtonGraphicAlignment},
     {"SetBevelButtonMenuValue", ppcglue_SetBevelButtonMenuValue},
@@ -41804,14 +42158,24 @@ const ppc_export ppc_exports[] = {
     {"SetControl32BitMinimum", ppcglue_SetControl32BitMinimum},
     {"SetControl32BitValue", ppcglue_SetControl32BitValue},
     {"SetControlAction", ppcglue_SetControlAction},
+    {"SetControlBounds", ppcglue_SetControlBounds},
     {"SetControlColor", ppcglue_SetControlColor},
+    {"SetControlColorProc", ppcglue_SetControlColorProc},
+    {"SetControlCommandID", ppcglue_SetControlCommandID},
     {"SetControlData", ppcglue_SetControlData},
+    {"SetControlDataHandle", ppcglue_SetControlDataHandle},
+    {"SetControlDragTrackingEnabled", ppcglue_SetControlDragTrackingEnabled},
     {"SetControlFontStyle", ppcglue_SetControlFontStyle},
+    {"SetControlID", ppcglue_SetControlID},
     {"SetControlMaximum", ppcglue_SetControlMaximum},
     {"SetControlMinimum", ppcglue_SetControlMinimum},
+    {"SetControlPopupMenuHandle", ppcglue_SetControlPopupMenuHandle},
+    {"SetControlPopupMenuID", ppcglue_SetControlPopupMenuID},
+    {"SetControlProperty", ppcglue_SetControlProperty},
     {"SetControlReference", ppcglue_SetControlReference},
     {"SetControlSupervisor", ppcglue_SetControlSupervisor},
     {"SetControlTitle", ppcglue_SetControlTitle},
+    {"SetControlTitleWithCFString", ppcglue_SetControlTitleWithCFString},
     {"SetControlValue", ppcglue_SetControlValue},
     {"SetControlViewSize", ppcglue_SetControlViewSize},
     {"SetControlVisibility", ppcglue_SetControlVisibility},
@@ -42039,6 +42403,7 @@ const ppc_export ppc_exports[] = {
     {"SetTrackVolume", ppctrap_SetTrackVolume},
     {"SetTrapAddress", ppcglue_SetTrapAddress},
     {"SetUpControlBackground", ppcglue_SetUpControlBackground},
+    {"SetUpControlTextColor", ppcglue_SetUpControlTextColor},
     {"SetUserDataItem", ppctrap_SetUserDataItem},
     {"SetVideoDefault", ppcglue_SetVideoDefault},
     {"SetWRefCon", ppcglue_SetWRefCon},

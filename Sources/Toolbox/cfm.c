@@ -146,6 +146,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbon_export_count; i++)
         if (!strcmp(carbon_exports[i].name, name))
             return carbon_exports[i].fn;
+    for (unsigned i = 0; i < carbon_ctl_export_count; i++)
+        if (!strcmp(carbon_ctl_exports[i].name, name))
+            return carbon_ctl_exports[i].fn;
     for (unsigned i = 0; i < snd_export_count; i++)
         if (!strcmp(snd_exports[i].name, name))
             return snd_exports[i].fn;

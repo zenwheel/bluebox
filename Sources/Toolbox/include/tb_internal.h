@@ -394,6 +394,7 @@ typedef struct {
     uint8_t font[24];
     int32_t view_size; /* SetControlViewSize's */
     void *ap;
+    void *carbon; /* CarbonLib's: its ID, command, properties (carbon_controls.c) */
 } ctl_info;
 typedef struct {
     int16_t font, size, mode;
@@ -412,6 +413,29 @@ uint32_t ctl_local_mouse(gaddr ch);
 void ctl_call_action(gaddr action, gaddr ch, int16_t part);
 void controls_reset(void);
 void controls_forget_window(gaddr w);
+gaddr ctl_new(gaddr wst, gaddr r, gaddr title, bool vis, int16_t value, int16_t min, int16_t max, int16_t var,
+              int16_t cdef_id, gaddr defh, int32_t rc, int32_t init_param);
+/* Called with the part a click on a control ended in (TrackControl,
+ * HandleControlClick): for the Carbon Event Manager's kEventControlHit
+ * and the control's command (carbon_ctl_command).  NULL until set. */
+extern void (*ctl_hit_hook)(gaddr ch, int16_t part, uint16_t modifiers);
+/* CarbonLib's controls (carbon_controls.c): a control's Carbon state
+ * freed, its command ID and ControlID, the definition a program
+ * registered for a CDEF ID (the initCntl parameter, a Collection made for
+ * it, in *init; _done disposes of it), and the colour procedure a
+ * program set (true when it set the colours). */
+void carbon_ctl_free(ctl_info *c);
+uint32_t carbon_ctl_command(gaddr ch);
+bool carbon_ctl_id(gaddr ch, uint32_t *signature, int32_t *id);
+gaddr carbon_registered_cdef(int16_t id, gaddr w, gaddr r, gaddr title, bool vis, int16_t value, int16_t min,
+                             int16_t max, int16_t procid, int32_t rc, int32_t *init);
+void carbon_registered_cdef_done(int32_t init);
+bool carbon_ctl_color(gaddr ch, int16_t msg, int16_t depth, bool color);
+void carbon_controls_reset(void);
+/* CFStrings to and from MacRoman, through CarbonLib's own calls. */
+void carbon_cfstring_to_pstr(gaddr cf, uint8_t out[256]);
+gaddr carbon_cfstring_from_text(const uint8_t *text, size_t n);
+void carbon_cfrelease(gaddr cf);
 /* The Appearance CDEFs (cdefs_appearance.c): their entry, the standard
  * buttons drawn in Platinum (kind 0 push, 1 check box, 2 radio), tracking
  * of their own (false when the Control Manager's will do), and what
