@@ -39,6 +39,9 @@ struct asp_session {
     uint16_t write_seq;
     const uint8_t *wdata;
     int wlen;
+    /* the workstation's attention routine, if it has one */
+    void (*attn)(void *ctx, uint16_t code);
+    void *attn_ctx;
 };
 
 static uint32_t user_bytes(int fn, int b1, int word) { return (uint32_t)fn << 24 | (uint32_t)(b1 & 0xFF) << 16 | (uint16_t)word; }
@@ -57,6 +60,8 @@ static void incoming(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_
     case TICKLE: break; /* the server is there; no response */
     case ATTENTION:
         atp_host_respond(skt, node, rskt, tid, 1, (const uint8_t(*)[ATP_PKT])pkts, lens, NULL);
+        if (s->attn)
+            s->attn(s->attn_ctx, (uint16_t)user);
         break;
     case CLOSE_SESS:
         s->open = false;
@@ -80,6 +85,76 @@ static void incoming(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_
         break;
     }
     }
+}
+
+/* GetStatus at a server's SLS, from a socket of its own. */
+static void ignore(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user, const uint8_t *data,
+                   int len)
+{
+}
+
+int16_t asp_status_at(uint8_t node, uint8_t sls, uint8_t *status, int cap, int *status_len)
+{
+    if (status_len)
+        *status_len = 0;
+    int skt = atp_host_open(ignore, NULL);
+    if (!skt)
+        return -1098; /* tooManySkts */
+    static atp_reply r;
+    int16_t e = atp_host_request(skt, node, sls, user_bytes(GET_STATUS, 0, 0), NULL, 0, false, 8, 1000, 3, &r);
+    atp_host_close(skt);
+    if (e != noErr)
+        return e;
+    int n = 0;
+    for (int i = 0; i < r.count; i++) {
+        int k = r.len[i];
+        if (n + k > cap)
+            k = cap - n;
+        if (k > 0 && status)
+            memcpy(status + n, r.data[i], (size_t)k);
+        n += k > 0 ? k : 0;
+    }
+    if (status_len)
+        *status_len = n;
+    return noErr;
+}
+
+asp_session *asp_open_at(uint8_t node, uint8_t sls, int interval_ms, int tries, int16_t *err)
+{
+    asp_session *s = calloc(1, sizeof *s);
+    if (!s) {
+        *err = memFullErr;
+        return NULL;
+    }
+    s->node = node;
+    s->sls = sls;
+    s->wss = atp_host_open(incoming, s);
+    if (!s->wss) {
+        *err = -1098; /* tooManySkts */
+        free(s);
+        return NULL;
+    }
+    static atp_reply r;
+    int16_t e = atp_host_request(s->wss, node, sls, user_bytes(OPEN_SESS, s->wss, ASP_VERSION), NULL, 0, true, 1,
+                                 interval_ms, tries, &r);
+    int16_t spe = e == noErr ? (int16_t)(r.user[0] & 0xFFFF) : e;
+    if (spe != noErr) {
+        *err = spe;
+        atp_host_close(s->wss);
+        free(s);
+        return NULL;
+    }
+    s->sss = (uint8_t)(r.user[0] >> 24);
+    s->sid = (uint8_t)(r.user[0] >> 16);
+    s->open = true;
+    *err = noErr;
+    return s;
+}
+
+void asp_set_attention(asp_session *s, void (*fn)(void *ctx, uint16_t code), void *ctx)
+{
+    s->attn = fn;
+    s->attn_ctx = ctx;
 }
 
 asp_session *asp_open(const char *nbp_name, uint8_t *status, int *status_len, char *err, size_t errlen)
@@ -120,42 +195,16 @@ asp_session *asp_open(const char *nbp_name, uint8_t *status, int *status_len, ch
             snprintf(err, errlen, "no %s:%s@%s on the network", obj, type, zone);
         return NULL;
     }
-    asp_session *s = calloc(1, sizeof *s);
-    if (!s)
-        return NULL;
-    s->node = node;
-    s->sls = sls;
-    s->wss = atp_host_open(incoming, s);
-    if (!s->wss) {
-        snprintf(err, errlen, "no ATP socket");
-        free(s);
-        return NULL;
-    }
-    static atp_reply r;
-    if (atp_host_request(s->wss, node, sls, user_bytes(GET_STATUS, 0, 0), NULL, 0, false, 8, 1000, 3, &r) == noErr) {
-        int n = 0;
-        for (int i = 0; i < r.count; i++) {
-            if (status && n + r.len[i] <= ASP_QUANTUM)
-                memcpy(status + n, r.data[i], (size_t)r.len[i]);
-            n += r.len[i];
-        }
-        if (status_len)
-            *status_len = n;
-    } else if (status_len) {
-        *status_len = 0;
-    }
-    int16_t e = atp_host_request(s->wss, node, sls, user_bytes(OPEN_SESS, s->wss, ASP_VERSION), NULL, 0, true, 1,
-                                 1000, 5, &r);
-    int16_t spe = e == noErr ? (int16_t)(r.user[0] & 0xFFFF) : e;
-    if (spe != noErr) {
-        snprintf(err, errlen, "the server didn't open a session (%d)", spe);
-        atp_host_close(s->wss);
-        free(s);
+    asp_status_at(node, sls, status, ASP_QUANTUM, status_len);
+    int16_t e;
+    asp_session *s = asp_open_at(node, sls, 1000, 5, &e);
+    if (!s) {
+        if (e == -1098)
+            snprintf(err, errlen, "no ATP socket");
+        else
+            snprintf(err, errlen, "the server didn't open a session (%d)", e);
         return NULL;
     }
-    s->sss = (uint8_t)(r.user[0] >> 24);
-    s->sid = (uint8_t)(r.user[0] >> 16);
-    s->open = true;
     return s;
 }
 

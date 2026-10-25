@@ -13,6 +13,16 @@ static void ppcglue_ADBReInit(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ADBOp(ppc_cpu *c)
+{
+    gaddr a_data = (gaddr)c->gpr[3];
+    gaddr a_procp = (gaddr)c->gpr[4];
+    gaddr a_buffer = (gaddr)c->gpr[5];
+    int16_t a_command = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ADBOp(a_data, a_procp, a_buffer, a_command);
+    c->pc = c->lr;
+}
+
 static void ppcglue_CountADBs(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountADBs();
@@ -23990,6 +24000,1485 @@ static void ppcglue_IsDataAvailableInIconRef(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PMSelectorCount(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PMSelectorCount();
+    c->pc = c->lr;
+}
+
+static void ppcglue_PMFeatures(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_PMFeatures();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSleepTimeout(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetSleepTimeout();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BatteryCount(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BatteryCount();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDimmingTimeout(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetDimmingTimeout();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BatteryStatus(ppc_cpu *c)
+{
+    gaddr a_status = (gaddr)c->gpr[3];
+    gaddr a_power = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BatteryStatus(a_status, a_power);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ModemStatus(ppc_cpu *c)
+{
+    gaddr a_status = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ModemStatus(a_status);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetWUTime(ppc_cpu *c)
+{
+    gaddr a_wuTime = (gaddr)c->gpr[3];
+    gaddr a_wuFlag = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetWUTime(a_wuTime, a_wuFlag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetWUTime(ppc_cpu *c)
+{
+    int32_t a_wuTime = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetWUTime(a_wuTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisableWUTime(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisableWUTime();
+    c->pc = c->lr;
+}
+
+static void ppcglue_AOn(ppc_cpu *c)
+{
+    tb_AOn();
+    c->pc = c->lr;
+}
+
+static void ppcglue_AOnIgnoreModem(ppc_cpu *c)
+{
+    tb_AOnIgnoreModem();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BOn(ppc_cpu *c)
+{
+    tb_BOn();
+    c->pc = c->lr;
+}
+
+static void ppcglue_AOff(ppc_cpu *c)
+{
+    tb_AOff();
+    c->pc = c->lr;
+}
+
+static void ppcglue_BOff(ppc_cpu *c)
+{
+    tb_BOff();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCPUSpeed(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetCPUSpeed();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDefaultStartup(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_GetDefaultStartup(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDefaultStartup(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetDefaultStartup(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetVideoDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetVideoDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetOSDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetOSDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetOSDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_GetOSDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTimeout(ppc_cpu *c)
+{
+    gaddr a_count = (gaddr)c->gpr[3];
+    tb_GetTimeout(a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTimeout(ppc_cpu *c)
+{
+    int16_t a_count = (int16_t)c->gpr[3];
+    tb_SetTimeout(a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIReset(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIReset();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIGet(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIGet();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSISelect(ppc_cpu *c)
+{
+    int16_t a_targetID = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSISelect(a_targetID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSICmd(ppc_cpu *c)
+{
+    gaddr a_buffer = (gaddr)c->gpr[3];
+    int16_t a_count = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSICmd(a_buffer, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIComplete(ppc_cpu *c)
+{
+    gaddr a_stat = (gaddr)c->gpr[3];
+    gaddr a_message = (gaddr)c->gpr[4];
+    uint32_t a_wait = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIComplete(a_stat, a_message, a_wait);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIRead(ppc_cpu *c)
+{
+    gaddr a_tibPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIRead(a_tibPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIWrite(ppc_cpu *c)
+{
+    gaddr a_tibPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIWrite(a_tibPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIRBlind(ppc_cpu *c)
+{
+    gaddr a_tibPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIRBlind(a_tibPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIWBlind(ppc_cpu *c)
+{
+    gaddr a_tibPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIWBlind(a_tibPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIStat(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIStat();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSISelAtn(ppc_cpu *c)
+{
+    int16_t a_targetID = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSISelAtn(a_targetID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIMsgIn(ppc_cpu *c)
+{
+    gaddr a_message = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIMsgIn(a_message);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIMsgOut(ppc_cpu *c)
+{
+    int16_t a_message = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIMsgOut(a_message);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIAction(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIAction(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIRegisterBus(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIRegisterBus(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIDeregisterBus(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIDeregisterBus(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIReregisterBus(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIReregisterBus(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCSIKillXPT(ppc_cpu *c)
+{
+    gaddr a_parameterBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCSIKillXPT(a_parameterBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ataManager(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ataManager(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SIntInstall(ppc_cpu *c)
+{
+    gaddr a_sIntQElemPtr = (gaddr)c->gpr[3];
+    int16_t a_theSlot = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SIntInstall(a_sIntQElemPtr, a_theSlot);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SIntRemove(ppc_cpu *c)
+{
+    gaddr a_sIntQElemPtr = (gaddr)c->gpr[3];
+    int16_t a_theSlot = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SIntRemove(a_sIntQElemPtr, a_theSlot);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SReadInfo(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SReadInfo(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SReadPRAMRec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SReadPRAMRec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SPutPRAMRec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SPutPRAMRec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SReadFHeader(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SReadFHeader(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCkCardStat(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCkCardStat(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SFindDevBase(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SFindDevBase(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SFindBigDevBase(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SFindBigDevBase(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitSDeclMgr(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitSDeclMgr(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SPrimaryInit(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SPrimaryInit(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCardChanged(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCardChanged(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SExec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SExec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SOffsetData(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SOffsetData(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SInitPRAMRecs(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SInitPRAMRecs(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SReadPBSize(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SReadPBSize(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCalcStep(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCalcStep(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SInitSRsrcTable(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SInitSRsrcTable(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SSearchSRT(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SSearchSRT(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SUpdateSRT(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SUpdateSRT(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SCalcSPointer(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SCalcSPointer(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SGetDriver(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SGetDriver(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SPtrToSlot(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SPtrToSlot(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SFindSInfoRecPtr(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SFindSInfoRecPtr(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SFindSRsrcPtr(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SFindSRsrcPtr(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SDeleteSRTRec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SDeleteSRTRec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSRsrcState(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSRsrcState(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertSRTRec(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InsertSRTRec(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SGetSRsrcPtr(ppc_cpu *c)
+{
+    gaddr a_spBlkPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SGetSRsrcPtr(a_spBlkPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenSlot(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenSlot(a_paramBlock, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenSlotSync(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenSlotSync(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenSlotAsync(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenSlotAsync(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitDBPack(ppc_cpu *c)
+{
+    int16_t a_version = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitDBPack(a_version);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBInit(ppc_cpu *c)
+{
+    gaddr a_sessID = (gaddr)c->gpr[3];
+    gaddr a_ddevName = (gaddr)c->gpr[4];
+    gaddr a_host = (gaddr)c->gpr[5];
+    gaddr a_user = (gaddr)c->gpr[6];
+    gaddr a_passwd = (gaddr)c->gpr[7];
+    gaddr a_connStr = (gaddr)c->gpr[8];
+    gaddr a_asyncPB = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBInit(a_sessID, a_ddevName, a_host, a_user, a_passwd, a_connStr, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBEnd(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_asyncPB = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBEnd(a_sessID, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetConnInfo(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    int16_t a_sessNum = (int16_t)c->gpr[4];
+    gaddr a_returnedID = (gaddr)c->gpr[5];
+    gaddr a_version = (gaddr)c->gpr[6];
+    gaddr a_ddevName = (gaddr)c->gpr[7];
+    gaddr a_host = (gaddr)c->gpr[8];
+    gaddr a_user = (gaddr)c->gpr[9];
+    gaddr a_network = (gaddr)c->gpr[10];
+    gaddr a_connStr = (gaddr)rd32(c->gpr[1] + 56);
+    gaddr a_start = (gaddr)rd32(c->gpr[1] + 60);
+    gaddr a_state = (gaddr)rd32(c->gpr[1] + 64);
+    gaddr a_asyncPB = (gaddr)rd32(c->gpr[1] + 68);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetConnInfo(a_sessID, a_sessNum, a_returnedID, a_version, a_ddevName, a_host, a_user, a_network, a_connStr, a_start, a_state, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetSessionNum(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_sessNum = (gaddr)c->gpr[4];
+    gaddr a_asyncPB = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetSessionNum(a_sessID, a_sessNum, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBSend(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_text = (gaddr)c->gpr[4];
+    int16_t a_len = (int16_t)c->gpr[5];
+    gaddr a_asyncPB = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBSend(a_sessID, a_text, a_len, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBSendItem(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    int32_t a_dataType = (int32_t)c->gpr[4];
+    int16_t a_len = (int16_t)c->gpr[5];
+    int16_t a_places = (int16_t)c->gpr[6];
+    int16_t a_flags = (int16_t)c->gpr[7];
+    gaddr a_buffer = (gaddr)c->gpr[8];
+    gaddr a_asyncPB = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBSendItem(a_sessID, a_dataType, a_len, a_places, a_flags, a_buffer, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBExec(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_asyncPB = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBExec(a_sessID, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBState(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_asyncPB = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBState(a_sessID, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetErr(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_err1 = (gaddr)c->gpr[4];
+    gaddr a_err2 = (gaddr)c->gpr[5];
+    gaddr a_item1 = (gaddr)c->gpr[6];
+    gaddr a_item2 = (gaddr)c->gpr[7];
+    gaddr a_errorMsg = (gaddr)c->gpr[8];
+    gaddr a_asyncPB = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetErr(a_sessID, a_err1, a_err2, a_item1, a_item2, a_errorMsg, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBBreak(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    int8_t a_abort = (int8_t)c->gpr[4];
+    gaddr a_asyncPB = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBBreak(a_sessID, a_abort, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetItem(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    int32_t a_timeout = (int32_t)c->gpr[4];
+    gaddr a_dataType = (gaddr)c->gpr[5];
+    gaddr a_len = (gaddr)c->gpr[6];
+    gaddr a_places = (gaddr)c->gpr[7];
+    gaddr a_flags = (gaddr)c->gpr[8];
+    gaddr a_buffer = (gaddr)c->gpr[9];
+    gaddr a_asyncPB = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetItem(a_sessID, a_timeout, a_dataType, a_len, a_places, a_flags, a_buffer, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBUnGetItem(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_asyncPB = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBUnGetItem(a_sessID, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBKill(ppc_cpu *c)
+{
+    gaddr a_asyncPB = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBKill(a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetNewQuery(ppc_cpu *c)
+{
+    int16_t a_queryID = (int16_t)c->gpr[3];
+    gaddr a_query = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetNewQuery(a_queryID, a_query);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBDisposeQuery(ppc_cpu *c)
+{
+    gaddr a_query = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBDisposeQuery(a_query);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBStartQuery(ppc_cpu *c)
+{
+    gaddr a_sessID = (gaddr)c->gpr[3];
+    gaddr a_query = (gaddr)c->gpr[4];
+    gaddr a_statusProc = (gaddr)c->gpr[5];
+    gaddr a_asyncPB = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBStartQuery(a_sessID, a_query, a_statusProc, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetQueryResults(ppc_cpu *c)
+{
+    int32_t a_sessID = (int32_t)c->gpr[3];
+    gaddr a_results = (gaddr)c->gpr[4];
+    int32_t a_timeout = (int32_t)c->gpr[5];
+    gaddr a_statusProc = (gaddr)c->gpr[6];
+    gaddr a_asyncPB = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetQueryResults(a_sessID, a_results, a_timeout, a_statusProc, a_asyncPB);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBResultsToText(ppc_cpu *c)
+{
+    gaddr a_results = (gaddr)c->gpr[3];
+    gaddr a_theText = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBResultsToText(a_results, a_theText);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBInstallResultHandler(ppc_cpu *c)
+{
+    int32_t a_dataType = (int32_t)c->gpr[3];
+    gaddr a_theHandler = (gaddr)c->gpr[4];
+    int8_t a_isSysHandler = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBInstallResultHandler(a_dataType, a_theHandler, a_isSysHandler);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBRemoveResultHandler(ppc_cpu *c)
+{
+    int32_t a_dataType = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBRemoveResultHandler(a_dataType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DBGetResultHandler(ppc_cpu *c)
+{
+    int32_t a_dataType = (int32_t)c->gpr[3];
+    gaddr a_theHandler = (gaddr)c->gpr[4];
+    int8_t a_getSysHandler = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DBGetResultHandler(a_dataType, a_theHandler, a_getSysHandler);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPOpenSession(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPOpenSession(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPCloseSession(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPCloseSession(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPAbortOS(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPAbortOS(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPGetParms(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPGetParms(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPCloseAll(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPCloseAll(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPUserWrite(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPUserWrite(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPUserCommand(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPUserCommand(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPGetStatus(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPGetStatus(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AFPCommand(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AFPCommand(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetLocalZones(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetLocalZones(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetZoneList(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetZoneList(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PAttachPH(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PAttachPH(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PDetachPH(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PDetachPH(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PWriteLAP(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PWriteLAP(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ATPKillAllGetReq(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ATPKillAllGetReq(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EWrite(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EWrite(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EAttachPH(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EAttachPH(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EDetachPH(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EDetachPH(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ERead(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ERead(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ERdCancel(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ERdCancel(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EGetInfo(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EGetInfo(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ESetGeneral(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ESetGeneral(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EAddMulti(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EAddMulti(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EDelMulti(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EDelMulti(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_BuildLAPwds(ppc_cpu *c)
+{
+    gaddr a_wdsPtr = (gaddr)c->gpr[3];
+    gaddr a_dataPtr = (gaddr)c->gpr[4];
+    int16_t a_destHost = (int16_t)c->gpr[5];
+    int16_t a_prototype = (int16_t)c->gpr[6];
+    int16_t a_frameLen = (int16_t)c->gpr[7];
+    tb_BuildLAPwds(a_wdsPtr, a_dataPtr, a_destHost, a_prototype, a_frameLen);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBridgeAddress(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBridgeAddress();
+    c->pc = c->lr;
+}
+
+static void ppcglue_ATPUnload(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ATPUnload();
+    c->pc = c->lr;
+}
+
+static void ppcglue_LAPAddATQ(ppc_cpu *c)
+{
+    gaddr a_theATQEntry = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LAPAddATQ(a_theATQEntry);
+    c->pc = c->lr;
+}
+
+static void ppcglue_LAPRmvATQ(ppc_cpu *c)
+{
+    gaddr a_theATQEntry = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LAPRmvATQ(a_theATQEntry);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ATEvent(ppc_cpu *c)
+{
+    int32_t a_event = (int32_t)c->gpr[3];
+    gaddr a_infoPtr = (gaddr)c->gpr[4];
+    tb_ATEvent(a_event, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ATPreFlightEvent(ppc_cpu *c)
+{
+    int32_t a_event = (int32_t)c->gpr[3];
+    int32_t a_cancel = (int32_t)c->gpr[4];
+    gaddr a_infoPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ATPreFlightEvent(a_event, a_cancel, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCOpenSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCOpenSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCOpenAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCOpenAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCStartSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCStartSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCStartAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCStartAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCInformSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCInformSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCInformAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCInformAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCAcceptSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCAcceptSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCAcceptAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCAcceptAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCRejectSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCRejectSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCRejectAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCRejectAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCWriteSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCWriteSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCWriteAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCWriteAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCReadSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCReadSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCReadAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCReadAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCEndSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCEndSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCEndAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCEndAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCCloseSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCCloseSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCCloseAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCCloseAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IPCListPortsSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IPCListPortsSync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IPCListPortsAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IPCListPortsAsync(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IPCKillListPorts(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IPCKillListPorts(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteUserIdentity(ppc_cpu *c)
+{
+    uint32_t a_userRef = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteUserIdentity(a_userRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_StartSecureSession(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    gaddr a_userName = (gaddr)c->gpr[4];
+    int8_t a_useDefault = (int8_t)c->gpr[5];
+    int8_t a_allowGuest = (int8_t)c->gpr[6];
+    gaddr a_guestSelected = (gaddr)c->gpr[7];
+    gaddr a_prompt = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_StartSecureSession(a_pb, a_userName, a_useDefault, a_allowGuest, a_guestSelected, a_prompt);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DriverInstall(ppc_cpu *c)
+{
+    gaddr a_drvrPtr = (gaddr)c->gpr[3];
+    int16_t a_refNum = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DriverInstall(a_drvrPtr, a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DriverInstallReserveMem(ppc_cpu *c)
+{
+    gaddr a_drvrPtr = (gaddr)c->gpr[3];
+    int16_t a_refNum = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DriverInstallReserveMem(a_drvrPtr, a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrvrRemove(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DrvrRemove(a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBOpenImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCloseImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCloseImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBReadImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBReadImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBWriteImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBWriteImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBStatusImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBStatusImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBKillIOImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBKillIOImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddDrive(ppc_cpu *c)
+{
+    int16_t a_drvrRefNum = (int16_t)c->gpr[3];
+    int16_t a_drvNum = (int16_t)c->gpr[4];
+    gaddr a_qEl = (gaddr)c->gpr[5];
+    tb_AddDrive(a_drvrRefNum, a_drvNum, a_qEl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DriveStatus(ppc_cpu *c)
+{
+    int16_t a_drvNum = (int16_t)c->gpr[3];
+    gaddr a_status = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DriveStatus(a_drvNum, a_status);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AttachVBL(ppc_cpu *c)
+{
+    int16_t a_theSlot = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AttachVBL(a_theSlot);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DoVBLTask(ppc_cpu *c)
+{
+    int16_t a_theSlot = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DoVBLTask(a_theSlot);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeferUserFn(ppc_cpu *c)
+{
+    gaddr a_userFunction = (gaddr)c->gpr[3];
+    gaddr a_argument = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeferUserFn(a_userFunction, a_argument);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DIXFormat(ppc_cpu *c)
+{
+    int16_t a_drvNum = (int16_t)c->gpr[3];
+    int8_t a_fmtFlag = (int8_t)c->gpr[4];
+    uint32_t a_fmtArg = (uint32_t)c->gpr[5];
+    gaddr a_actSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DIXFormat(a_drvNum, a_fmtFlag, a_fmtArg, a_actSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DIXZero(ppc_cpu *c)
+{
+    int16_t a_drvNum = (int16_t)c->gpr[3];
+    gaddr a_volName = (gaddr)c->gpr[4];
+    int16_t a_fsid = (int16_t)c->gpr[5];
+    int16_t a_mediaStatus = (int16_t)c->gpr[6];
+    int16_t a_volTypeSelector = (int16_t)c->gpr[7];
+    uint32_t a_volSize = (uint32_t)c->gpr[8];
+    gaddr a_extendedInfoPtr = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DIXZero(a_drvNum, a_volName, a_fsid, a_mediaStatus, a_volTypeSelector, a_volSize, a_extendedInfoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DIReformat(ppc_cpu *c)
+{
+    int16_t a_drvNum = (int16_t)c->gpr[3];
+    int16_t a_fsid = (int16_t)c->gpr[4];
+    gaddr a_volName = (gaddr)c->gpr[5];
+    gaddr a_msgText = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DIReformat(a_drvNum, a_fsid, a_volName, a_msgText);
+    c->pc = c->lr;
+}
+
+static void ppcglue_dizero(ppc_cpu *c)
+{
+    int16_t a_drvnum = (int16_t)c->gpr[3];
+    gaddr a_volName = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_dizero(a_drvnum, a_volName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_dibadmount(ppc_cpu *c)
+{
+    gaddr a_where = (gaddr)c->gpr[3];
+    int32_t a_evtMessage = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_dibadmount(a_where, a_evtMessage);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallExtensionNotificationProc(ppc_cpu *c)
+{
+    gaddr a_extNotificationProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallExtensionNotificationProc(a_extNotificationProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveExtensionNotificationProc(ppc_cpu *c)
+{
+    gaddr a_extNotificationProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveExtensionNotificationProc(a_extNotificationProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallExtensionTableHandlerProc(ppc_cpu *c)
+{
+    gaddr a_extMgrProc = (gaddr)c->gpr[3];
+    gaddr a_extTable = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallExtensionTableHandlerProc(a_extMgrProc, a_extTable);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveExtensionTableHandlerProc(ppc_cpu *c)
+{
+    gaddr a_extMgrProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveExtensionTableHandlerProc(a_extMgrProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FTSendAsync(ppc_cpu *c)
+{
+    gaddr a_hFT = (gaddr)c->gpr[3];
+    int16_t a_numFiles = (int16_t)c->gpr[4];
+    gaddr a_pFSSpec = (gaddr)c->gpr[5];
+    gaddr a_notifyProc = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FTSendAsync(a_hFT, a_numFiles, a_pFSSpec, a_notifyProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FTReceiveAsync(ppc_cpu *c)
+{
+    gaddr a_hFT = (gaddr)c->gpr[3];
+    gaddr a_pFSSpec = (gaddr)c->gpr[4];
+    gaddr a_notifyProc = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FTReceiveAsync(a_hFT, a_pFSSpec, a_notifyProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FTCompletionAsync(ppc_cpu *c)
+{
+    gaddr a_hFT = (gaddr)c->gpr[3];
+    uint16_t a_completionCall = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FTCompletionAsync(a_hFT, a_completionCall);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenMappedFile(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    uint32_t a_forkNameLength = (uint32_t)c->gpr[4];
+    gaddr a_forkName = (gaddr)c->gpr[5];
+    uint32_t a_privileges = (uint32_t)c->gpr[6];
+    gaddr a_backingFile = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenMappedFile(a_ref, a_forkNameLength, a_forkName, a_privileges, a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSpOpenMappedFile(ppc_cpu *c)
+{
+    gaddr a_spec = (gaddr)c->gpr[3];
+    int8_t a_mapResFork = (int8_t)c->gpr[4];
+    uint32_t a_privileges = (uint32_t)c->gpr[5];
+    gaddr a_backingFile = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSpOpenMappedFile(a_spec, a_mapResFork, a_privileges, a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenMappedScratchFile(ppc_cpu *c)
+{
+    int16_t a_volume = (int16_t)c->gpr[3];
+    uint32_t a_fileSize = (uint32_t)c->gpr[4];
+    uint32_t a_privileges = (uint32_t)c->gpr[5];
+    gaddr a_backingFile = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenMappedScratchFile(a_volume, a_fileSize, a_privileges, a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseMappedFile(ppc_cpu *c)
+{
+    uint32_t a_backingFile = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseMappedFile(a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMappedFileInformation(ppc_cpu *c)
+{
+    uint32_t a_backingFile = (uint32_t)c->gpr[3];
+    uint32_t a_version = (uint32_t)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMappedFileInformation(a_backingFile, a_version, a_info);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextMappedFile(ppc_cpu *c)
+{
+    gaddr a_backingFile = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetNextMappedFile(a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMappedFileSize(ppc_cpu *c)
+{
+    uint32_t a_backingFile = (uint32_t)c->gpr[3];
+    uint16_t a_positionMode = (uint16_t)c->gpr[4];
+    gaddr a_positionOffset = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMappedFileSize(a_backingFile, a_positionMode, a_positionOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFileViewAccessOptions(ppc_cpu *c)
+{
+    gaddr a_access = (gaddr)c->gpr[3];
+    gaddr a_options = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFileViewAccessOptions(a_access, a_options);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MapFileView(ppc_cpu *c)
+{
+    uint32_t a_backingFile = (uint32_t)c->gpr[3];
+    gaddr a_backingBase = (gaddr)c->gpr[4];
+    uint32_t a_backingLength = (uint32_t)c->gpr[5];
+    uint32_t a_access = (uint32_t)c->gpr[6];
+    uint32_t a_guardLength = (uint32_t)c->gpr[7];
+    uint32_t a_options = (uint32_t)c->gpr[8];
+    gaddr a_viewBase = (gaddr)c->gpr[9];
+    gaddr a_viewLength = (gaddr)c->gpr[10];
+    gaddr a_theView = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MapFileView(a_backingFile, a_backingBase, a_backingLength, a_access, a_guardLength, a_options, a_viewBase, a_viewLength, a_theView);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UnmapFileView(ppc_cpu *c)
+{
+    uint32_t a_theView = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UnmapFileView(a_theView);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFileViewInformation(ppc_cpu *c)
+{
+    uint32_t a_theView = (uint32_t)c->gpr[3];
+    uint32_t a_version = (uint32_t)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFileViewInformation(a_theView, a_version, a_info);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFileViewFromAddress(ppc_cpu *c)
+{
+    gaddr a_address = (gaddr)c->gpr[3];
+    gaddr a_theView = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFileViewFromAddress(a_address, a_theView);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextFileView(ppc_cpu *c)
+{
+    gaddr a_theView = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetNextFileView(a_theView);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetFileViewAccess(ppc_cpu *c)
+{
+    uint32_t a_theView = (uint32_t)c->gpr[3];
+    uint32_t a_access = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetFileViewAccess(a_theView, a_access);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetFileViewBackingBase(ppc_cpu *c)
+{
+    uint32_t a_theView = (uint32_t)c->gpr[3];
+    gaddr a_newBackingBase = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetFileViewBackingBase(a_theView, a_newBackingBase);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -35889,6 +37378,7 @@ static void ppclm_set_AuxWinHead(ppc_cpu *c) { wr32(0xCD0, (uint32_t)c->gpr[3]);
 static void ppclm_get_DeskCPat(ppc_cpu *c) { c->gpr[3] = rd32(0xCD8); c->pc = c->lr; }
 static void ppclm_set_DeskCPat(ppc_cpu *c) { wr32(0xCD8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 const ppc_export ppc_exports[] = {
+    {"ADBOp", ppcglue_ADBOp},
     {"ADBReInit", ppcglue_ADBReInit},
     {"AECallObjectAccessor", ppcglue_AECallObjectAccessor},
     {"AECoerceDesc", ppcglue_AECoerceDesc},
@@ -35945,6 +37435,22 @@ const ppc_export ppc_exports[] = {
     {"AESizeOfNthItem", ppcglue_AESizeOfNthItem},
     {"AESizeOfParam", ppcglue_AESizeOfParam},
     {"AESuspendTheCurrentEvent", ppcglue_AESuspendTheCurrentEvent},
+    {"AFPCommand", ppcglue_AFPCommand},
+    {"AOff", ppcglue_AOff},
+    {"AOn", ppcglue_AOn},
+    {"AOnIgnoreModem", ppcglue_AOnIgnoreModem},
+    {"ASPAbortOS", ppcglue_ASPAbortOS},
+    {"ASPCloseAll", ppcglue_ASPCloseAll},
+    {"ASPCloseSession", ppcglue_ASPCloseSession},
+    {"ASPGetParms", ppcglue_ASPGetParms},
+    {"ASPGetStatus", ppcglue_ASPGetStatus},
+    {"ASPOpenSession", ppcglue_ASPOpenSession},
+    {"ASPUserCommand", ppcglue_ASPUserCommand},
+    {"ASPUserWrite", ppcglue_ASPUserWrite},
+    {"ATEvent", ppcglue_ATEvent},
+    {"ATPKillAllGetReq", ppcglue_ATPKillAllGetReq},
+    {"ATPUnload", ppcglue_ATPUnload},
+    {"ATPreFlightEvent", ppcglue_ATPreFlightEvent},
     {"AbortPrePrerollMovie", ppctrap_AbortPrePrerollMovie},
     {"AcceptHighLevelEvent", ppcglue_AcceptHighLevelEvent},
     {"AcquireIconRef", ppcglue_AcquireIconRef},
@@ -35956,6 +37462,7 @@ const ppc_export ppc_exports[] = {
     {"AddCollectionItemHdl", ppctrap_AddCollectionItemHdl},
     {"AddComp", ppcglue_AddComp},
     {"AddDragItemFlavor", ppcglue_AddDragItemFlavor},
+    {"AddDrive", ppcglue_AddDrive},
     {"AddEmptyTrackToMovie", ppctrap_AddEmptyTrackToMovie},
     {"AddFilePreview", ppcglue_AddFilePreview},
     {"AddIconToSuite", ppcglue_AddIconToSuite},
@@ -35994,11 +37501,16 @@ const ppc_export ppc_exports[] = {
     {"ApplyThemeBackground", ppcglue_ApplyThemeBackground},
     {"AreFloatingWindowsVisible", ppcglue_AreFloatingWindowsVisible},
     {"AssociateSection", ppctrap_AssociateSection},
+    {"AttachVBL", ppcglue_AttachVBL},
     {"AutoEmbedControl", ppcglue_AutoEmbedControl},
     {"AutoSizeDialog", ppcglue_AutoSizeDialog},
+    {"BOff", ppcglue_BOff},
+    {"BOn", ppcglue_BOn},
     {"BackColor", ppcglue_BackColor},
     {"BackPat", ppcglue_BackPat},
     {"BackPixPat", ppcglue_BackPixPat},
+    {"BatteryCount", ppcglue_BatteryCount},
+    {"BatteryStatus", ppcglue_BatteryStatus},
     {"BeginFullScreen", ppcglue_BeginFullScreen},
     {"BeginMediaEdits", ppctrap_BeginMediaEdits},
     {"BeginSystemMode", ppcglue_BeginSystemMode},
@@ -36016,6 +37528,7 @@ const ppc_export ppc_exports[] = {
     {"BlockMove", ppcglue_BlockMove},
     {"BlockMoveData", ppcglue_BlockMoveData},
     {"BringToFront", ppcglue_BringToFront},
+    {"BuildLAPwds", ppcglue_BuildLAPwds},
     {"Button", ppcglue_Button},
     {"CDSequenceBusy", ppcglue_CDSequenceBusy},
     {"CDSequenceChangedSourceData", ppctrap_CDSequenceChangedSourceData},
@@ -36076,6 +37589,7 @@ const ppc_export ppc_exports[] = {
     {"CloseDeskAcc", ppcglue_CloseDeskAcc},
     {"CloseDialog", ppcglue_CloseDialog},
     {"CloseEdition", ppctrap_CloseEdition},
+    {"CloseMappedFile", ppcglue_CloseMappedFile},
     {"CloseMovieFile", ppcglue_CloseMovieFile},
     {"CloseMovieStorage", ppctrap_CloseMovieStorage},
     {"ClosePicture", ppcglue_ClosePicture},
@@ -36174,11 +37688,35 @@ const ppc_export ppc_exports[] = {
     {"CustomGetFilePreview", ppcglue_CustomGetFilePreview},
     {"CustomPutFile", ppcglue_CustomPutFile},
     {"CutMovieSelection", ppcglue_CutMovieSelection},
+    {"DBBreak", ppcglue_DBBreak},
+    {"DBDisposeQuery", ppcglue_DBDisposeQuery},
+    {"DBEnd", ppcglue_DBEnd},
+    {"DBExec", ppcglue_DBExec},
+    {"DBGetConnInfo", ppcglue_DBGetConnInfo},
+    {"DBGetErr", ppcglue_DBGetErr},
+    {"DBGetItem", ppcglue_DBGetItem},
+    {"DBGetNewQuery", ppcglue_DBGetNewQuery},
+    {"DBGetQueryResults", ppcglue_DBGetQueryResults},
+    {"DBGetResultHandler", ppcglue_DBGetResultHandler},
+    {"DBGetSessionNum", ppcglue_DBGetSessionNum},
+    {"DBInit", ppcglue_DBInit},
+    {"DBInstallResultHandler", ppcglue_DBInstallResultHandler},
+    {"DBKill", ppcglue_DBKill},
+    {"DBRemoveResultHandler", ppcglue_DBRemoveResultHandler},
+    {"DBResultsToText", ppcglue_DBResultsToText},
+    {"DBSend", ppcglue_DBSend},
+    {"DBSendItem", ppcglue_DBSendItem},
+    {"DBStartQuery", ppcglue_DBStartQuery},
+    {"DBState", ppcglue_DBState},
+    {"DBUnGetItem", ppcglue_DBUnGetItem},
     {"DIBadMount", ppcglue_DIBadMount},
     {"DIFormat", ppcglue_DIFormat},
     {"DILoad", ppcglue_DILoad},
+    {"DIReformat", ppcglue_DIReformat},
     {"DIUnload", ppcglue_DIUnload},
     {"DIVerify", ppcglue_DIVerify},
+    {"DIXFormat", ppcglue_DIXFormat},
+    {"DIXZero", ppcglue_DIXZero},
     {"DIZero", ppcglue_DIZero},
     {"DMRegisterNotifyProc", ppctrap_DMRegisterNotifyProc},
     {"DTInstall", ppcglue_DTInstall},
@@ -36192,6 +37730,7 @@ const ppc_export ppc_exports[] = {
     {"DecompressSequenceFrame", ppcglue_DecompressSequenceFrame},
     {"DecompressSequenceFrameS", ppcglue_DecompressSequenceFrameS},
     {"DecompressSequenceFrameWhen", ppcglue_DecompressSequenceFrameWhen},
+    {"DeferUserFn", ppcglue_DeferUserFn},
     {"DelComp", ppcglue_DelComp},
     {"DelSearch", ppcglue_DelSearch},
     {"Delay", ppctrap_Delay},
@@ -36205,6 +37744,7 @@ const ppc_export ppc_exports[] = {
     {"DeleteMovieStorage", ppctrap_DeleteMovieStorage},
     {"DeleteTrackReference", ppctrap_DeleteTrackReference},
     {"DeleteTrackSegment", ppctrap_DeleteTrackSegment},
+    {"DeleteUserIdentity", ppcglue_DeleteUserIdentity},
     {"DeltaPoint", ppcglue_DeltaPoint},
     {"Dequeue", ppcglue_Dequeue},
     {"DetachResource", ppcglue_DetachResource},
@@ -36215,6 +37755,7 @@ const ppc_export ppc_exports[] = {
     {"DirectorUnknown4", ppcglue_DirectorUnknown4},
     {"DisableItem", ppcglue_DisableItem},
     {"DisableMenuItemIcon", ppcglue_DisableMenuItemIcon},
+    {"DisableWUTime", ppcglue_DisableWUTime},
     {"DiskEject", ppcglue_DiskEject},
     {"DisposeAllSprites", ppctrap_DisposeAllSprites},
     {"DisposeCCursor", ppcglue_DisposeCCursor},
@@ -36255,6 +37796,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeTrackMedia", ppctrap_DisposeTrackMedia},
     {"DisposeUserData", ppctrap_DisposeUserData},
     {"DisposeWindow", ppcglue_DisposeWindow},
+    {"DoVBLTask", ppcglue_DoVBLTask},
     {"DragAlignedGrayRgn", ppctrap_DragAlignedGrayRgn},
     {"DragAlignedWindow", ppcglue_DragAlignedWindow},
     {"DragControl", ppcglue_DragControl},
@@ -36310,7 +37852,20 @@ const ppc_export ppc_exports[] = {
     {"DrawThemeWindowListViewHeader", ppcglue_DrawThemeWindowListViewHeader},
     {"DrawTrimmedPicture", ppctrap_DrawTrimmedPicture},
     {"DrawTrimmedPictureFile", ppctrap_DrawTrimmedPictureFile},
+    {"DriveStatus", ppcglue_DriveStatus},
+    {"DriverInstall", ppcglue_DriverInstall},
+    {"DriverInstallReserveMem", ppcglue_DriverInstallReserveMem},
+    {"DrvrRemove", ppcglue_DrvrRemove},
     {"DumpControlHierarchy", ppcglue_DumpControlHierarchy},
+    {"EAddMulti", ppcglue_EAddMulti},
+    {"EAttachPH", ppcglue_EAttachPH},
+    {"EDelMulti", ppcglue_EDelMulti},
+    {"EDetachPH", ppcglue_EDetachPH},
+    {"EGetInfo", ppcglue_EGetInfo},
+    {"ERdCancel", ppcglue_ERdCancel},
+    {"ERead", ppcglue_ERead},
+    {"ESetGeneral", ppcglue_ESetGeneral},
+    {"EWrite", ppcglue_EWrite},
     {"EditionHasFormat", ppctrap_EditionHasFormat},
     {"EmbedControl", ppcglue_EmbedControl},
     {"EmptyCollection", ppctrap_EmptyCollection},
@@ -36402,6 +37957,7 @@ const ppc_export ppc_exports[] = {
     {"FSpGetFInfo", ppcglue_FSpGetFInfo},
     {"FSpMakeFSRef", ppcglue_FSpMakeFSRef},
     {"FSpOpenDF", ppcglue_FSpOpenDF},
+    {"FSpOpenMappedFile", ppcglue_FSpOpenMappedFile},
     {"FSpOpenRF", ppcglue_FSpOpenRF},
     {"FSpOpenResFile", ppcglue_FSpOpenResFile},
     {"FSpRename", ppcglue_FSpRename},
@@ -36409,6 +37965,9 @@ const ppc_export ppc_exports[] = {
     {"FSpRstFLock", ppctrap_FSpRstFLock},
     {"FSpSetFInfo", ppcglue_FSpSetFInfo},
     {"FSpSetFLock", ppctrap_FSpSetFLock},
+    {"FTCompletionAsync", ppcglue_FTCompletionAsync},
+    {"FTReceiveAsync", ppcglue_FTReceiveAsync},
+    {"FTSendAsync", ppcglue_FTSendAsync},
     {"FillArc", ppcglue_FillArc},
     {"FillCArc", ppcglue_FillCArc},
     {"FillCOval", ppcglue_FillCOval},
@@ -36648,8 +38207,10 @@ const ppc_export ppc_exports[] = {
     {"GetBevelButtonContentInfo", ppcglue_GetBevelButtonContentInfo},
     {"GetBevelButtonMenuHandle", ppcglue_GetBevelButtonMenuHandle},
     {"GetBevelButtonMenuValue", ppcglue_GetBevelButtonMenuValue},
+    {"GetBridgeAddress", ppcglue_GetBridgeAddress},
     {"GetCCursor", ppcglue_GetCCursor},
     {"GetCIcon", ppcglue_GetCIcon},
+    {"GetCPUSpeed", ppcglue_GetCPUSpeed},
     {"GetCPixel", ppcglue_GetCPixel},
     {"GetCSequenceDataRateParams", ppcglue_GetCSequenceDataRateParams},
     {"GetCSequenceFrameNumber", ppcglue_GetCSequenceFrameNumber},
@@ -36700,11 +38261,13 @@ const ppc_export ppc_exports[] = {
     {"GetDateTime", ppcglue_GetDateTime},
     {"GetDblTime", ppcglue_GetDblTime},
     {"GetDefaultOutputVolume", ppcglue_GetDefaultOutputVolume},
+    {"GetDefaultStartup", ppcglue_GetDefaultStartup},
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
     {"GetDialogItem", ppcglue_GetDialogItem},
     {"GetDialogItemAsControl", ppcglue_GetDialogItemAsControl},
     {"GetDialogItemText", ppcglue_GetDialogItemText},
+    {"GetDimmingTimeout", ppcglue_GetDimmingTimeout},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
     {"GetDragAttributes", ppcglue_GetDragAttributes},
     {"GetDragHiliteColor", ppcglue_GetDragHiliteColor},
@@ -36721,6 +38284,9 @@ const ppc_export ppc_exports[] = {
     {"GetEntryUsage", ppcglue_GetEntryUsage},
     {"GetFNum", ppcglue_GetFNum},
     {"GetFSInfo", ppcglue_GetFSInfo},
+    {"GetFileViewAccessOptions", ppcglue_GetFileViewAccessOptions},
+    {"GetFileViewFromAddress", ppcglue_GetFileViewFromAddress},
+    {"GetFileViewInformation", ppcglue_GetFileViewInformation},
     {"GetFirstCallBack", ppctrap_GetFirstCallBack},
     {"GetFlavorData", ppcglue_GetFlavorData},
     {"GetFlavorDataSize", ppcglue_GetFlavorDataSize},
@@ -36776,9 +38342,11 @@ const ppc_export ppc_exports[] = {
     {"GetKeys", ppcglue_GetKeys},
     {"GetLabel", ppcglue_GetLabel},
     {"GetLastEditionContainerUsed", ppcglue_GetLastEditionContainerUsed},
+    {"GetLocalZones", ppcglue_GetLocalZones},
     {"GetMCEntry", ppcglue_GetMCEntry},
     {"GetMCInfo", ppcglue_GetMCInfo},
     {"GetMainDevice", ppcglue_GetMainDevice},
+    {"GetMappedFileInformation", ppcglue_GetMappedFileInformation},
     {"GetMaskTable", ppctrap_GetMaskTable},
     {"GetMatrixType", ppcglue_GetMatrixType},
     {"GetMaxCompressionSize", ppcglue_GetMaxCompressionSize},
@@ -36890,11 +38458,14 @@ const ppc_export ppc_exports[] = {
     {"GetNextDevice", ppcglue_GetNextDevice},
     {"GetNextEvent", ppcglue_GetNextEvent},
     {"GetNextFOND", ppctrap_GetNextFOND},
+    {"GetNextFileView", ppcglue_GetNextFileView},
     {"GetNextImageDescriptionExtensionType", ppctrap_GetNextImageDescriptionExtensionType},
+    {"GetNextMappedFile", ppcglue_GetNextMappedFile},
     {"GetNextProcess", ppcglue_GetNextProcess},
     {"GetNextTrackForCompositing", ppctrap_GetNextTrackForCompositing},
     {"GetNextTrackReferenceType", ppctrap_GetNextTrackReferenceType},
     {"GetNextUserDataType", ppctrap_GetNextUserDataType},
+    {"GetOSDefault", ppcglue_GetOSDefault},
     {"GetOSEvent", ppcglue_GetOSEvent},
     {"GetOSTrapAddress", ppcglue_GetOSTrapAddress},
     {"GetOutlinePreferred", ppcglue_GetOutlinePreferred},
@@ -36932,6 +38503,7 @@ const ppc_export ppc_exports[] = {
     {"GetScriptVariable", ppcglue_GetScriptVariable},
     {"GetSharedLibrary", ppctrap_GetSharedLibrary},
     {"GetSimilarity", ppctrap_GetSimilarity},
+    {"GetSleepTimeout", ppcglue_GetSleepTimeout},
     {"GetSoundDescriptionExtension", ppctrap_GetSoundDescriptionExtension},
     {"GetSoundHeaderOffset", ppcglue_GetSoundHeaderOffset},
     {"GetSoundOutputInfo", ppcglue_GetSoundOutputInfo},
@@ -36993,6 +38565,7 @@ const ppc_export ppc_exports[] = {
     {"GetTimeBaseStatus", ppcglue_GetTimeBaseStatus},
     {"GetTimeBaseStopTime", ppcglue_GetTimeBaseStopTime},
     {"GetTimeBaseTime", ppcglue_GetTimeBaseTime},
+    {"GetTimeout", ppcglue_GetTimeout},
     {"GetToolTrapAddress", ppcglue_GetToolTrapAddress},
     {"GetTrackAlternate", ppctrap_GetTrackAlternate},
     {"GetTrackBoundsRgn", ppctrap_GetTrackBoundsRgn},
@@ -37035,6 +38608,7 @@ const ppc_export ppc_exports[] = {
     {"GetWMgrPort", ppcglue_GetWMgrPort},
     {"GetWRefCon", ppcglue_GetWRefCon},
     {"GetWTitle", ppcglue_GetWTitle},
+    {"GetWUTime", ppcglue_GetWUTime},
     {"GetWVariant", ppcglue_GetWVariant},
     {"GetWindowAttributes", ppcglue_GetWindowAttributes},
     {"GetWindowClass", ppcglue_GetWindowClass},
@@ -37048,6 +38622,7 @@ const ppc_export ppc_exports[] = {
     {"GetWindowProxyIcon", ppcglue_GetWindowProxyIcon},
     {"GetWindowRegion", ppcglue_GetWindowRegion},
     {"GetZone", ppcglue_GetZone},
+    {"GetZoneList", ppcglue_GetZoneList},
     {"GlobalToLocal", ppcglue_GlobalToLocal},
     {"GoToBeginningOfMovie", ppcglue_GoToBeginningOfMovie},
     {"GoToEndOfMovie", ppctrap_GoToEndOfMovie},
@@ -37124,6 +38699,9 @@ const ppc_export ppc_exports[] = {
     {"ICMShieldSequenceCursor", ppctrap_ICMShieldSequenceCursor},
     {"INVALID_GetTrapAddress", ppcglue_INVALID_GetTrapAddress},
     {"INVALID_SetTrapAddress", ppcglue_INVALID_SetTrapAddress},
+    {"IPCKillListPorts", ppcglue_IPCKillListPorts},
+    {"IPCListPortsAsync", ppcglue_IPCListPortsAsync},
+    {"IPCListPortsSync", ppcglue_IPCListPortsSync},
     {"ITextAddString", ppctrap_ITextAddString},
     {"ITextGetString", ppctrap_ITextGetString},
     {"ITextRemoveString", ppctrap_ITextRemoveString},
@@ -37165,6 +38743,7 @@ const ppc_export ppc_exports[] = {
     {"InitCPort", ppcglue_InitCPort},
     {"InitContextualMenus", ppcglue_InitContextualMenus},
     {"InitCursor", ppcglue_InitCursor},
+    {"InitDBPack", ppcglue_InitDBPack},
     {"InitDateCache", ppcglue_InitDateCache},
     {"InitDialogs", ppcglue_InitDialogs},
     {"InitEditionPackVersion", ppcglue_InitEditionPackVersion},
@@ -37178,6 +38757,7 @@ const ppc_export ppc_exports[] = {
     {"InitPort", ppcglue_InitPort},
     {"InitProcMenu", ppcglue_InitProcMenu},
     {"InitResources", ppcglue_InitResources},
+    {"InitSDeclMgr", ppcglue_InitSDeclMgr},
     {"InitUtil", ppcglue_InitUtil},
     {"InitWindows", ppcglue_InitWindows},
     {"InsTime", ppcglue_InsTime},
@@ -37189,9 +38769,12 @@ const ppc_export ppc_exports[] = {
     {"InsertMenuItem", ppcglue_InsertMenuItem},
     {"InsertMovieSegment", ppcglue_InsertMovieSegment},
     {"InsertResMenu", ppcglue_InsertResMenu},
+    {"InsertSRTRec", ppcglue_InsertSRTRec},
     {"InsertTrackSegment", ppctrap_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
+    {"InstallExtensionNotificationProc", ppcglue_InstallExtensionNotificationProc},
+    {"InstallExtensionTableHandlerProc", ppcglue_InstallExtensionTableHandlerProc},
     {"InstallFS", ppcglue_InstallFS},
     {"InstallReceiveHandler", ppcglue_InstallReceiveHandler},
     {"InstallTrackingHandler", ppcglue_InstallTrackingHandler},
@@ -37239,6 +38822,8 @@ const ppc_export ppc_exports[] = {
     {"KillControls", ppcglue_KillControls},
     {"KillPicture", ppcglue_KillPicture},
     {"KillPoly", ppcglue_KillPoly},
+    {"LAPAddATQ", ppcglue_LAPAddATQ},
+    {"LAPRmvATQ", ppcglue_LAPRmvATQ},
     {"LActivate", ppcglue_LActivate},
     {"LAddColumn", ppcglue_LAddColumn},
     {"LAddRow", ppcglue_LAddRow},
@@ -37799,6 +39384,7 @@ const ppc_export ppc_exports[] = {
     {"MakeThumbnailFromPixMap", ppctrap_MakeThumbnailFromPixMap},
     {"MakeTrackTimeTable", ppctrap_MakeTrackTimeTable},
     {"MakeVoiceSpec", ppcglue_MakeVoiceSpec},
+    {"MapFileView", ppcglue_MapFileView},
     {"MapMatrix", ppcglue_MapMatrix},
     {"MapPoly", ppcglue_MapPoly},
     {"MapPt", ppcglue_MapPt},
@@ -37819,6 +39405,7 @@ const ppc_export ppc_exports[] = {
     {"MenuKey", ppcglue_MenuKey},
     {"MenuSelect", ppcglue_MenuSelect},
     {"ModalDialog", ppcglue_ModalDialog},
+    {"ModemStatus", ppcglue_ModemStatus},
     {"MoreMasters", ppcglue_MoreMasters},
     {"Move", ppcglue_Move},
     {"MoveControl", ppcglue_MoveControl},
@@ -37937,6 +39524,8 @@ const ppc_export ppc_exports[] = {
     {"OpenCPort", ppcglue_OpenCPort},
     {"OpenDeskAcc", ppcglue_OpenDeskAcc},
     {"OpenEdition", ppctrap_OpenEdition},
+    {"OpenMappedFile", ppcglue_OpenMappedFile},
+    {"OpenMappedScratchFile", ppcglue_OpenMappedScratchFile},
     {"OpenMovieFile", ppcglue_OpenMovieFile},
     {"OpenMovieStorage", ppctrap_OpenMovieStorage},
     {"OpenNewEdition", ppctrap_OpenNewEdition},
@@ -37946,9 +39535,13 @@ const ppc_export ppc_exports[] = {
     {"OpenRFPerm", ppcglue_OpenRFPerm},
     {"OpenResFile", ppcglue_OpenResFile},
     {"OpenRgn", ppcglue_OpenRgn},
+    {"OpenSlot", ppcglue_OpenSlot},
+    {"OpenSlotAsync", ppcglue_OpenSlotAsync},
+    {"OpenSlotSync", ppcglue_OpenSlotSync},
     {"OutlineMetrics", ppcglue_OutlineMetrics},
     {"OverrideIconRef", ppcglue_OverrideIconRef},
     {"OverrideIconRefFromResource", ppcglue_OverrideIconRefFromResource},
+    {"PAttachPH", ppcglue_PAttachPH},
     {"PBAllocContig", ppcglue_PBAllocContig},
     {"PBAllocContigAsync", ppcglue_PBAllocContigAsync},
     {"PBAllocContigSync", ppcglue_PBAllocContigSync},
@@ -37972,6 +39565,7 @@ const ppc_export ppc_exports[] = {
     {"PBCloseFork", ppcglue_PBCloseFork},
     {"PBCloseForkAsync", ppcglue_PBCloseForkAsync},
     {"PBCloseForkSync", ppcglue_PBCloseForkSync},
+    {"PBCloseImmed", ppcglue_PBCloseImmed},
     {"PBCloseIterator", ppcglue_PBCloseIterator},
     {"PBCloseIteratorAsync", ppcglue_PBCloseIteratorAsync},
     {"PBCloseIteratorSync", ppcglue_PBCloseIteratorSync},
@@ -38194,6 +39788,7 @@ const ppc_export ppc_exports[] = {
     {"PBIterateForksSync", ppcglue_PBIterateForksSync},
     {"PBKillIO", ppcglue_PBKillIO},
     {"PBKillIOAsync", ppcglue_PBKillIOAsync},
+    {"PBKillIOImmed", ppcglue_PBKillIOImmed},
     {"PBKillIOSync", ppcglue_PBKillIOSync},
     {"PBLockRange", ppctrap_PBLockRange},
     {"PBLockRangeAsync", ppctrap_PBLockRangeAsync},
@@ -38220,6 +39815,7 @@ const ppc_export ppc_exports[] = {
     {"PBOpenFork", ppcglue_PBOpenFork},
     {"PBOpenForkAsync", ppcglue_PBOpenForkAsync},
     {"PBOpenForkSync", ppcglue_PBOpenForkSync},
+    {"PBOpenImmed", ppcglue_PBOpenImmed},
     {"PBOpenIterator", ppcglue_PBOpenIterator},
     {"PBOpenIteratorAsync", ppcglue_PBOpenIteratorAsync},
     {"PBOpenIteratorSync", ppcglue_PBOpenIteratorSync},
@@ -38235,6 +39831,7 @@ const ppc_export ppc_exports[] = {
     {"PBReadFork", ppcglue_PBReadFork},
     {"PBReadForkAsync", ppcglue_PBReadForkAsync},
     {"PBReadForkSync", ppcglue_PBReadForkSync},
+    {"PBReadImmed", ppcglue_PBReadImmed},
     {"PBReadSync", ppcglue_PBReadSync},
     {"PBRename", ppcglue_PBRename},
     {"PBRenameAsync", ppcglue_PBRenameAsync},
@@ -38286,6 +39883,7 @@ const ppc_export ppc_exports[] = {
     {"PBSetVolumeInfoSync", ppcglue_PBSetVolumeInfoSync},
     {"PBStatus", ppcglue_PBStatus},
     {"PBStatusAsync", ppcglue_PBStatusAsync},
+    {"PBStatusImmed", ppcglue_PBStatusImmed},
     {"PBStatusSync", ppcglue_PBStatusSync},
     {"PBUnlockRange", ppctrap_PBUnlockRange},
     {"PBUnlockRangeAsync", ppctrap_PBUnlockRangeAsync},
@@ -38297,13 +39895,36 @@ const ppc_export ppc_exports[] = {
     {"PBWriteFork", ppcglue_PBWriteFork},
     {"PBWriteForkAsync", ppcglue_PBWriteForkAsync},
     {"PBWriteForkSync", ppcglue_PBWriteForkSync},
+    {"PBWriteImmed", ppcglue_PBWriteImmed},
     {"PBWriteSync", ppcglue_PBWriteSync},
     {"PBXGetVolInfo", ppcglue_PBXGetVolInfo},
     {"PBXGetVolInfoAsync", ppcglue_PBXGetVolInfoAsync},
     {"PBXGetVolInfoSync", ppcglue_PBXGetVolInfoSync},
+    {"PDetachPH", ppcglue_PDetachPH},
+    {"PMFeatures", ppcglue_PMFeatures},
+    {"PMSelectorCount", ppcglue_PMSelectorCount},
     {"PMgrVersion", ppcglue_PMgrVersion},
+    {"PPCAcceptAsync", ppcglue_PPCAcceptAsync},
+    {"PPCAcceptSync", ppcglue_PPCAcceptSync},
+    {"PPCCloseAsync", ppcglue_PPCCloseAsync},
+    {"PPCCloseSync", ppcglue_PPCCloseSync},
     {"PPCDispatch", ppcglue_PPCDispatch},
+    {"PPCEndAsync", ppcglue_PPCEndAsync},
+    {"PPCEndSync", ppcglue_PPCEndSync},
+    {"PPCInformAsync", ppcglue_PPCInformAsync},
+    {"PPCInformSync", ppcglue_PPCInformSync},
+    {"PPCOpenAsync", ppcglue_PPCOpenAsync},
+    {"PPCOpenSync", ppcglue_PPCOpenSync},
+    {"PPCReadAsync", ppcglue_PPCReadAsync},
+    {"PPCReadSync", ppcglue_PPCReadSync},
+    {"PPCRejectAsync", ppcglue_PPCRejectAsync},
+    {"PPCRejectSync", ppcglue_PPCRejectSync},
+    {"PPCStartAsync", ppcglue_PPCStartAsync},
+    {"PPCStartSync", ppcglue_PPCStartSync},
+    {"PPCWriteAsync", ppcglue_PPCWriteAsync},
+    {"PPCWriteSync", ppcglue_PPCWriteSync},
     {"PPostEvent", ppcglue_PPostEvent},
+    {"PWriteLAP", ppcglue_PWriteLAP},
     {"PackBits", ppcglue_PackBits},
     {"PaintArc", ppcglue_PaintArc},
     {"PaintBehind", ppcglue_PaintBehind},
@@ -38585,6 +40206,8 @@ const ppc_export ppc_exports[] = {
     {"ReleaseResource", ppcglue_ReleaseResource},
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
+    {"RemoveExtensionNotificationProc", ppcglue_RemoveExtensionNotificationProc},
+    {"RemoveExtensionTableHandlerProc", ppcglue_RemoveExtensionTableHandlerProc},
     {"RemoveFS", ppcglue_RemoveFS},
     {"RemoveIconRefOverride", ppcglue_RemoveIconRefOverride},
     {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
@@ -38627,12 +40250,47 @@ const ppc_export ppc_exports[] = {
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"RstFLock", ppcglue_RstFLock},
+    {"SCSIAction", ppcglue_SCSIAction},
+    {"SCSICmd", ppcglue_SCSICmd},
+    {"SCSIComplete", ppcglue_SCSIComplete},
+    {"SCSIDeregisterBus", ppcglue_SCSIDeregisterBus},
+    {"SCSIGet", ppcglue_SCSIGet},
+    {"SCSIKillXPT", ppcglue_SCSIKillXPT},
+    {"SCSIMsgIn", ppcglue_SCSIMsgIn},
+    {"SCSIMsgOut", ppcglue_SCSIMsgOut},
+    {"SCSIRBlind", ppcglue_SCSIRBlind},
+    {"SCSIRead", ppcglue_SCSIRead},
+    {"SCSIRegisterBus", ppcglue_SCSIRegisterBus},
+    {"SCSIReregisterBus", ppcglue_SCSIReregisterBus},
+    {"SCSIReset", ppcglue_SCSIReset},
+    {"SCSISelAtn", ppcglue_SCSISelAtn},
+    {"SCSISelect", ppcglue_SCSISelect},
+    {"SCSIStat", ppcglue_SCSIStat},
+    {"SCSIWBlind", ppcglue_SCSIWBlind},
+    {"SCSIWrite", ppcglue_SCSIWrite},
+    {"SCalcSPointer", ppcglue_SCalcSPointer},
+    {"SCalcStep", ppcglue_SCalcStep},
+    {"SCardChanged", ppcglue_SCardChanged},
+    {"SCkCardStat", ppcglue_SCkCardStat},
+    {"SDeleteSRTRec", ppcglue_SDeleteSRTRec},
+    {"SExec", ppcglue_SExec},
     {"SFGetFile", ppcglue_SFGetFile},
     {"SFGetFilePreview", ppcglue_SFGetFilePreview},
     {"SFPGetFile", ppcglue_SFPGetFile},
     {"SFPGetFilePreview", ppcglue_SFPGetFilePreview},
     {"SFPPutFile", ppcglue_SFPPutFile},
     {"SFPutFile", ppcglue_SFPutFile},
+    {"SFindBigDevBase", ppcglue_SFindBigDevBase},
+    {"SFindDevBase", ppcglue_SFindDevBase},
+    {"SFindSInfoRecPtr", ppcglue_SFindSInfoRecPtr},
+    {"SFindSRsrcPtr", ppcglue_SFindSRsrcPtr},
+    {"SGetDriver", ppcglue_SGetDriver},
+    {"SGetSRsrcPtr", ppcglue_SGetSRsrcPtr},
+    {"SInitPRAMRecs", ppcglue_SInitPRAMRecs},
+    {"SInitSRsrcTable", ppcglue_SInitSRsrcTable},
+    {"SIntInstall", ppcglue_SIntInstall},
+    {"SIntRemove", ppcglue_SIntRemove},
+    {"SOffsetData", ppcglue_SOffsetData},
     {"SPBBytesToMilliseconds", ppcglue_SPBBytesToMilliseconds},
     {"SPBCloseDevice", ppcglue_SPBCloseDevice},
     {"SPBGetDeviceInfo", ppcglue_SPBGetDeviceInfo},
@@ -38649,6 +40307,15 @@ const ppc_export ppc_exports[] = {
     {"SPBSignOutDevice", ppcglue_SPBSignOutDevice},
     {"SPBStopRecording", ppcglue_SPBStopRecording},
     {"SPBVersion", ppcglue_SPBVersion},
+    {"SPrimaryInit", ppcglue_SPrimaryInit},
+    {"SPtrToSlot", ppcglue_SPtrToSlot},
+    {"SPutPRAMRec", ppcglue_SPutPRAMRec},
+    {"SReadFHeader", ppcglue_SReadFHeader},
+    {"SReadInfo", ppcglue_SReadInfo},
+    {"SReadPBSize", ppcglue_SReadPBSize},
+    {"SReadPRAMRec", ppcglue_SReadPRAMRec},
+    {"SSearchSRT", ppcglue_SSearchSRT},
+    {"SUpdateSRT", ppcglue_SUpdateSRT},
     {"SameProcess", ppcglue_SameProcess},
     {"SampleNumToMediaTime", ppctrap_SampleNumToMediaTime},
     {"SaveBack", ppcglue_SaveBack},
@@ -38729,6 +40396,7 @@ const ppc_export ppc_exports[] = {
     {"SetDateTime", ppctrap_SetDateTime},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},
+    {"SetDefaultStartup", ppcglue_SetDefaultStartup},
     {"SetDepth", ppcglue_SetDepth},
     {"SetDeskCPat", ppcglue_SetDeskCPat},
     {"SetDeviceAttribute", ppcglue_SetDeviceAttribute},
@@ -38757,6 +40425,8 @@ const ppc_export ppc_exports[] = {
     {"SetFLock", ppcglue_SetFLock},
     {"SetFSInfo", ppcglue_SetFSInfo},
     {"SetFScaleDisable", ppcglue_SetFScaleDisable},
+    {"SetFileViewAccess", ppcglue_SetFileViewAccess},
+    {"SetFileViewBackingBase", ppcglue_SetFileViewBackingBase},
     {"SetFontLock", ppcglue_SetFontLock},
     {"SetFractEnable", ppcglue_SetFractEnable},
     {"SetFrontProcess", ppcglue_SetFrontProcess},
@@ -38781,6 +40451,7 @@ const ppc_export ppc_exports[] = {
     {"SetKeyboardFocus", ppcglue_SetKeyboardFocus},
     {"SetMCEntries", ppcglue_SetMCEntries},
     {"SetMCInfo", ppcglue_SetMCInfo},
+    {"SetMappedFileSize", ppcglue_SetMappedFileSize},
     {"SetMediaDataHandler", ppctrap_SetMediaDataHandler},
     {"SetMediaDataRef", ppctrap_SetMediaDataRef},
     {"SetMediaDataRefAttributes", ppctrap_SetMediaDataRefAttributes},
@@ -38840,6 +40511,7 @@ const ppc_export ppc_exports[] = {
     {"SetMovieVideoOutput", ppctrap_SetMovieVideoOutput},
     {"SetMovieVolume", ppcglue_SetMovieVolume},
     {"SetMoviesErrorProc", ppctrap_SetMoviesErrorProc},
+    {"SetOSDefault", ppcglue_SetOSDefault},
     {"SetOSTrapAddress", ppcglue_SetOSTrapAddress},
     {"SetOrigin", ppcglue_SetOrigin},
     {"SetOutlinePreferred", ppcglue_SetOutlinePreferred},
@@ -38863,6 +40535,7 @@ const ppc_export ppc_exports[] = {
     {"SetResLoad", ppcglue_SetResLoad},
     {"SetResPurge", ppcglue_SetResPurge},
     {"SetResourceSize", ppcglue_SetResourceSize},
+    {"SetSRsrcState", ppcglue_SetSRsrcState},
     {"SetScanOverride", ppcglue_SetScanOverride},
     {"SetScriptManagerVariable", ppcglue_SetScriptManagerVariable},
     {"SetScriptVariable", ppcglue_SetScriptVariable},
@@ -38906,6 +40579,7 @@ const ppc_export ppc_exports[] = {
     {"SetTimeBaseTime", ppcglue_SetTimeBaseTime},
     {"SetTimeBaseValue", ppcglue_SetTimeBaseValue},
     {"SetTimeBaseZero", ppcglue_SetTimeBaseZero},
+    {"SetTimeout", ppcglue_SetTimeout},
     {"SetToolTrapAddress", ppcglue_SetToolTrapAddress},
     {"SetTrackAlternate", ppctrap_SetTrackAlternate},
     {"SetTrackClipRgn", ppctrap_SetTrackClipRgn},
@@ -38924,8 +40598,10 @@ const ppc_export ppc_exports[] = {
     {"SetTrapAddress", ppcglue_SetTrapAddress},
     {"SetUpControlBackground", ppcglue_SetUpControlBackground},
     {"SetUserDataItem", ppctrap_SetUserDataItem},
+    {"SetVideoDefault", ppcglue_SetVideoDefault},
     {"SetWRefCon", ppcglue_SetWRefCon},
     {"SetWTitle", ppcglue_SetWTitle},
+    {"SetWUTime", ppcglue_SetWUTime},
     {"SetWinColor", ppcglue_SetWinColor},
     {"SetWindowContentColor", ppcglue_SetWindowContentColor},
     {"SetWindowModified", ppcglue_SetWindowModified},
@@ -38998,6 +40674,7 @@ const ppc_export ppc_exports[] = {
     {"StandardGetFilePreview", ppcglue_StandardGetFilePreview},
     {"StandardPutFile", ppcglue_StandardPutFile},
     {"StartMovie", ppcglue_StartMovie},
+    {"StartSecureSession", ppcglue_StartSecureSession},
     {"StdArc", ppcglue_StdArc},
     {"StdBits", ppcglue_StdBits},
     {"StdComment", ppcglue_StdComment},
@@ -39131,6 +40808,7 @@ const ppc_export ppc_exports[] = {
     {"UnloadScrap", ppcglue_UnloadScrap},
     {"UnloadSeg", ppctrap_UnloadSeg},
     {"UnlockPixels", ppcglue_UnlockPixels},
+    {"UnmapFileView", ppcglue_UnmapFileView},
     {"UnpackBits", ppcglue_UnpackBits},
     {"UnregisterAppearanceClient", ppcglue_UnregisterAppearanceClient},
     {"UnregisterIconRef", ppcglue_UnregisterIconRef},
@@ -39176,5 +40854,8 @@ const ppc_export ppc_exports[] = {
     {"_AE_hdlr_install", ppcglue__AE_hdlr_install},
     {"_AE_hdlr_lookup", ppcglue__AE_hdlr_lookup},
     {"_AE_hdlr_table_alloc", ppcglue__AE_hdlr_table_alloc},
+    {"ataManager", ppcglue_ataManager},
+    {"dibadmount", ppcglue_dibadmount},
+    {"dizero", ppcglue_dizero},
 };
 const unsigned ppc_export_count = sizeof ppc_exports / sizeof ppc_exports[0];

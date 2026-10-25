@@ -1,0 +1,1951 @@
+# The old hardware and networking managers (Power.h, Start.h, SCSI.h,
+# Slots.h, DatabaseAccess.h, AppleTalk.h, ENET.h, PPCToolbox.h, Devices.h,
+# DiskInit.h, FileMapping.h ...): InterfaceLib's calls, and the 68k traps
+# and selectors Apple gave them.  Same schema as Defs/multiversal/defs.
+
+# ---- The Power Manager (power.c) ----
+
+# _PowerDispatch ($A09E): MOVEQ #selector,D0; the answer in D0.
+- dispatcher:
+    name: PowerDispatch
+    trap: 0xA09E
+    selector-location: D0W
+
+- function:
+    name: PMSelectorCount
+    return: INTEGER
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0000
+
+- function:
+    name: PMFeatures
+    return: uint32_t
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0001
+
+- function:
+    name: GetSleepTimeout
+    return: uint8_t
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0002
+
+- function:
+    name: BatteryCount
+    return: INTEGER
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x001A
+
+- function:
+    name: GetDimmingTimeout
+    return: uint8_t
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x001D
+
+# The PMgrOp family ($A085 and its flag variants) is a portable's; on the
+# desktop Blue Box presents these are InterfaceLib's alone.
+- function:
+    name: BatteryStatus
+    return: OSErr
+    args:
+      - name: status
+        type: Ptr
+      - name: power
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: ModemStatus
+    return: OSErr
+    args:
+      - name: status
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: GetWUTime
+    return: OSErr
+    args:
+      - name: wuTime
+        type: Ptr
+      - name: wuFlag
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SetWUTime
+    return: OSErr
+    args:
+      - name: wuTime
+        type: LONGINT
+    cfm: InterfaceLib
+
+- function:
+    name: DisableWUTime
+    return: OSErr
+    cfm: InterfaceLib
+
+- function:
+    name: AOn
+    cfm: InterfaceLib
+
+- function:
+    name: AOnIgnoreModem
+    cfm: InterfaceLib
+
+- function:
+    name: BOn
+    cfm: InterfaceLib
+
+- function:
+    name: AOff
+    cfm: InterfaceLib
+
+- function:
+    name: BOff
+    cfm: InterfaceLib
+
+- function:
+    name: GetCPUSpeed
+    return: LONGINT
+    cfm: InterfaceLib
+
+# ---- The Start Manager (power.c): A0 the record ----
+
+- function:
+    name: GetDefaultStartup
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA07D
+
+- function:
+    name: SetDefaultStartup
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA07E
+
+- function:
+    name: SetVideoDefault
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA081
+
+- function:
+    name: SetOSDefault
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA083
+
+- function:
+    name: GetOSDefault
+    args:
+      - name: paramBlock
+        type: Ptr
+        register: A0
+    trap: 0xA084
+
+- function:
+    name: GetTimeout
+    args:
+      - name: count
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SetTimeout
+    args:
+      - name: count
+        type: INTEGER
+    cfm: InterfaceLib
+
+# ---- The SCSI Manager (scsi.c) ----
+
+# _SCSIDispatch ($A815): Pascal arguments, then MOVE.W #selector,-(SP).
+- dispatcher:
+    name: SCSIDispatch
+    trap: 0xA815
+    selector-location: StackW
+
+- function:
+    name: SCSIReset
+    return: OSErr
+    dispatcher: SCSIDispatch
+    selector: 0x0000
+
+- function:
+    name: SCSIGet
+    return: OSErr
+    dispatcher: SCSIDispatch
+    selector: 0x0001
+
+- function:
+    name: SCSISelect
+    return: OSErr
+    args:
+      - name: targetID
+        type: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x0002
+
+- function:
+    name: SCSICmd
+    return: OSErr
+    args:
+      - name: buffer
+        type: Ptr
+      - name: count
+        type: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x0003
+
+- function:
+    name: SCSIComplete
+    return: OSErr
+    args:
+      - name: stat
+        type: Ptr
+      - name: message
+        type: Ptr
+      - name: wait
+        type: uint32_t
+    dispatcher: SCSIDispatch
+    selector: 0x0004
+
+- function:
+    name: SCSIRead
+    return: OSErr
+    args:
+      - name: tibPtr
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x0005
+
+- function:
+    name: SCSIWrite
+    return: OSErr
+    args:
+      - name: tibPtr
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x0006
+
+- function:
+    name: SCSIRBlind
+    return: OSErr
+    args:
+      - name: tibPtr
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x0008
+
+- function:
+    name: SCSIWBlind
+    return: OSErr
+    args:
+      - name: tibPtr
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x0009
+
+- function:
+    name: SCSIStat
+    return: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x000A
+
+- function:
+    name: SCSISelAtn
+    return: OSErr
+    args:
+      - name: targetID
+        type: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x000B
+
+- function:
+    name: SCSIMsgIn
+    return: OSErr
+    args:
+      - name: message
+        type: Ptr
+    dispatcher: SCSIDispatch
+    selector: 0x000C
+
+- function:
+    name: SCSIMsgOut
+    return: OSErr
+    args:
+      - name: message
+        type: INTEGER
+    dispatcher: SCSIDispatch
+    selector: 0x000D
+
+# SCSI Manager 4.3's _SCSIAtomic ($A089): MOVEQ #selector,D0, A0 the
+# parameter block, the result in D0.
+- dispatcher:
+    name: SCSIAtomic
+    trap: 0xA089
+    selector-location: D0W
+
+- function:
+    name: SCSIAction
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0001
+
+- function:
+    name: SCSIRegisterBus
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0002
+
+- function:
+    name: SCSIDeregisterBus
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0003
+
+- function:
+    name: SCSIReregisterBus
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0004
+
+- function:
+    name: SCSIKillXPT
+    return: OSErr
+    args:
+      - name: parameterBlock
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: SCSIAtomic
+    selector: 0x0005
+
+# The ATA Manager: a G3's, for PowerPC programs ($AAF1 stays the Quadra
+# 800's unimplemented trap).
+- function:
+    name: ataManager
+    return: INTEGER
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+# ---- The Slot Manager (slots.c): _SlotManager ($A06E) is a raw trap,
+# the selector in D0 and the SpBlock in A0; these are its InterfaceLib
+# calls, and the slot interrupt queue's traps. ----
+
+- function:
+    name: SIntInstall
+    return: OSErr
+    args:
+      - name: sIntQElemPtr
+        type: Ptr
+        register: A0
+      - name: theSlot
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA075
+
+- function:
+    name: SIntRemove
+    return: OSErr
+    args:
+      - name: sIntQElemPtr
+        type: Ptr
+        register: A0
+      - name: theSlot
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA076
+
+- function:
+    name: SReadInfo
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SReadPRAMRec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SPutPRAMRec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SReadFHeader
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SCkCardStat
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SFindDevBase
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SFindBigDevBase
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: InitSDeclMgr
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SPrimaryInit
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SCardChanged
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SExec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SOffsetData
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SInitPRAMRecs
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SReadPBSize
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SCalcStep
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SInitSRsrcTable
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SSearchSRT
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SUpdateSRT
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SCalcSPointer
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SGetDriver
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SPtrToSlot
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SFindSInfoRecPtr
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SFindSRsrcPtr
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SDeleteSRTRec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SetSRsrcState
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: InsertSRTRec
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: SGetSRsrcPtr
+    return: OSErr
+    args:
+      - name: spBlkPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: OpenSlot
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: OpenSlotSync
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: OpenSlotAsync
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+# ---- The Data Access Manager (dbaccess.c): _Pack13 ($A82F), Pascal
+# arguments, MOVE.W #selector,D0 (the arguments' size in words in its
+# high byte). ----
+- dispatcher:
+    name: Pack13
+    trap: 0xA82F
+    selector-location: D0W
+
+- function:
+    name: InitDBPack
+    return: OSErr
+    args:
+      - name: version
+        type: INTEGER
+    dispatcher: Pack13
+    selector: 0x0100
+
+- function:
+    name: DBInit
+    return: OSErr
+    args:
+      - name: sessID
+        type: Ptr
+      - name: ddevName
+        type: Ptr
+      - name: host
+        type: Ptr
+      - name: user
+        type: Ptr
+      - name: passwd
+        type: Ptr
+      - name: connStr
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0E02
+
+- function:
+    name: DBEnd
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0403
+
+- function:
+    name: DBGetConnInfo
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: sessNum
+        type: INTEGER
+      - name: returnedID
+        type: Ptr
+      - name: version
+        type: Ptr
+      - name: ddevName
+        type: Ptr
+      - name: host
+        type: Ptr
+      - name: user
+        type: Ptr
+      - name: network
+        type: Ptr
+      - name: connStr
+        type: Ptr
+      - name: start
+        type: Ptr
+      - name: state
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x1704
+
+- function:
+    name: DBGetSessionNum
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: sessNum
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0605
+
+- function:
+    name: DBSend
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: text
+        type: Ptr
+      - name: len
+        type: INTEGER
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0706
+
+- function:
+    name: DBSendItem
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: dataType
+        type: OSType
+      - name: len
+        type: INTEGER
+      - name: places
+        type: INTEGER
+      - name: flags
+        type: INTEGER
+      - name: buffer
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0B07
+
+- function:
+    name: DBExec
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0408
+
+- function:
+    name: DBState
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0409
+
+- function:
+    name: DBGetErr
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: err1
+        type: Ptr
+      - name: err2
+        type: Ptr
+      - name: item1
+        type: Ptr
+      - name: item2
+        type: Ptr
+      - name: errorMsg
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0E0A
+
+- function:
+    name: DBBreak
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: abort
+        type: Boolean
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x050B
+
+- function:
+    name: DBGetItem
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: timeout
+        type: LONGINT
+      - name: dataType
+        type: Ptr
+      - name: len
+        type: Ptr
+      - name: places
+        type: Ptr
+      - name: flags
+        type: Ptr
+      - name: buffer
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x100C
+
+- function:
+    name: DBUnGetItem
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x040D
+
+- function:
+    name: DBKill
+    return: OSErr
+    args:
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x020E
+
+- function:
+    name: DBGetNewQuery
+    return: OSErr
+    args:
+      - name: queryID
+        type: INTEGER
+      - name: query
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x030F
+
+- function:
+    name: DBDisposeQuery
+    return: OSErr
+    args:
+      - name: query
+        type: Handle
+    dispatcher: Pack13
+    selector: 0x0210
+
+- function:
+    name: DBStartQuery
+    return: OSErr
+    args:
+      - name: sessID
+        type: Ptr
+      - name: query
+        type: Handle
+      - name: statusProc
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0811
+
+- function:
+    name: DBGetQueryResults
+    return: OSErr
+    args:
+      - name: sessID
+        type: LONGINT
+      - name: results
+        type: Ptr
+      - name: timeout
+        type: LONGINT
+      - name: statusProc
+        type: Ptr
+      - name: asyncPB
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0A12
+
+- function:
+    name: DBResultsToText
+    return: OSErr
+    args:
+      - name: results
+        type: Ptr
+      - name: theText
+        type: Ptr
+    dispatcher: Pack13
+    selector: 0x0413
+
+- function:
+    name: DBInstallResultHandler
+    return: OSErr
+    args:
+      - name: dataType
+        type: OSType
+      - name: theHandler
+        type: Ptr
+      - name: isSysHandler
+        type: Boolean
+    dispatcher: Pack13
+    selector: 0x0514
+
+- function:
+    name: DBRemoveResultHandler
+    return: OSErr
+    args:
+      - name: dataType
+        type: OSType
+    dispatcher: Pack13
+    selector: 0x0215
+
+- function:
+    name: DBGetResultHandler
+    return: OSErr
+    args:
+      - name: dataType
+        type: OSType
+      - name: theHandler
+        type: Ptr
+      - name: getSysHandler
+        type: Boolean
+    dispatcher: Pack13
+    selector: 0x0516
+
+# ---- AppleTalk's and Ethernet's InterfaceLib glue (atlegacy.c): Control
+# calls on .XPP, .MPP, .ATP and .ENET ----
+
+- function:
+    name: ASPOpenSession
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPCloseSession
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPAbortOS
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPGetParms
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPCloseAll
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPUserWrite
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPUserCommand
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPGetStatus
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: AFPCommand
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: GetLocalZones
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: GetZoneList
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: PAttachPH
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: PDetachPH
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: PWriteLAP
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ATPKillAllGetReq
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EWrite
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EAttachPH
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EDetachPH
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ERead
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ERdCancel
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EGetInfo
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ESetGeneral
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EAddMulti
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EDelMulti
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: BuildLAPwds
+    args:
+      - name: wdsPtr
+        type: Ptr
+      - name: dataPtr
+        type: Ptr
+      - name: destHost
+        type: INTEGER
+      - name: prototype
+        type: INTEGER
+      - name: frameLen
+        type: INTEGER
+    cfm: InterfaceLib
+
+- function:
+    name: GetBridgeAddress
+    return: INTEGER
+    cfm: InterfaceLib
+
+- function:
+    name: ATPUnload
+    return: OSErr
+    cfm: InterfaceLib
+
+- function:
+    name: LAPAddATQ
+    return: OSErr
+    args:
+      - name: theATQEntry
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: LAPRmvATQ
+    return: OSErr
+    args:
+      - name: theATQEntry
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: ATEvent
+    args:
+      - name: event
+        type: LONGINT
+      - name: infoPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: ATPreFlightEvent
+    return: OSErr
+    args:
+      - name: event
+        type: LONGINT
+      - name: cancel
+        type: LONGINT
+      - name: infoPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+# ---- The PPC Toolbox (ppctoolbox.c): InterfaceLib's calls; 68k code
+# reaches them through _PPC ($A0DD, PPCDispatch in extras.yaml) ----
+
+- function:
+    name: PPCOpenSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCOpenAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCStartSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCStartAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCInformSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCInformAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCAcceptSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCAcceptAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCRejectSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCRejectAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCWriteSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCWriteAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCReadSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCReadAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCEndSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCEndAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCCloseSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PPCCloseAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: IPCListPortsSync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: IPCListPortsAsync
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: IPCKillListPorts
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: DeleteUserIdentity
+    return: OSErr
+    args:
+      - name: userRef
+        type: uint32_t
+    cfm: InterfaceLib
+
+- function:
+    name: StartSecureSession
+    return: OSErr
+    args:
+      - name: pb
+        type: Ptr
+      - name: userName
+        type: Ptr
+      - name: useDefault
+        type: Boolean
+      - name: allowGuest
+        type: Boolean
+      - name: guestSelected
+        type: Ptr
+      - name: prompt
+        type: Ptr
+    cfm: InterfaceLib
+
+# ---- The Device Manager's installation and immediate calls, the drive
+# queue, slot retraces, deferred functions (devices.c) ----
+
+- function:
+    name: DriverInstall
+    return: OSErr
+    args:
+      - name: drvrPtr
+        type: Ptr
+      - name: refNum
+        type: INTEGER
+    cfm: InterfaceLib
+
+- function:
+    name: DriverInstallReserveMem
+    return: OSErr
+    args:
+      - name: drvrPtr
+        type: Ptr
+      - name: refNum
+        type: INTEGER
+    cfm: InterfaceLib
+
+- function:
+    name: DrvrRemove
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA03E
+
+- function:
+    name: PBOpenImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBCloseImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBReadImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBWriteImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBStatusImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBKillIOImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: AddDrive
+    args:
+      - name: drvrRefNum
+        type: INTEGER
+      - name: drvNum
+        type: INTEGER
+      - name: qEl
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: DriveStatus
+    return: OSErr
+    args:
+      - name: drvNum
+        type: INTEGER
+      - name: status
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: AttachVBL
+    return: OSErr
+    args:
+      - name: theSlot
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA071
+
+- function:
+    name: DoVBLTask
+    return: OSErr
+    args:
+      - name: theSlot
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA072
+
+- function:
+    name: DeferUserFn
+    return: OSErr
+    args:
+      - name: userFunction
+        type: Ptr
+        register: A0
+      - name: argument
+        type: Ptr
+        register: D0
+    returnreg: D0
+    trap: 0xA08F
+
+# The Disk Initialization Package's extended calls: Pack2's selectors.
+- function:
+    name: DIXFormat
+    return: OSErr
+    args:
+      - name: drvNum
+        type: INTEGER
+      - name: fmtFlag
+        type: Boolean
+      - name: fmtArg
+        type: uint32_t
+      - name: actSize
+        type: Ptr
+    dispatcher: Pack2
+    selector: 0x000C
+
+- function:
+    name: DIXZero
+    return: OSErr
+    args:
+      - name: drvNum
+        type: INTEGER
+      - name: volName
+        type: Ptr
+      - name: fsid
+        type: INTEGER
+      - name: mediaStatus
+        type: INTEGER
+      - name: volTypeSelector
+        type: INTEGER
+      - name: volSize
+        type: uint32_t
+      - name: extendedInfoPtr
+        type: Ptr
+    dispatcher: Pack2
+    selector: 0x000E
+
+- function:
+    name: DIReformat
+    return: OSErr
+    args:
+      - name: drvNum
+        type: INTEGER
+      - name: fsid
+        type: INTEGER
+      - name: volName
+        type: Ptr
+      - name: msgText
+        type: Ptr
+    dispatcher: Pack2
+    selector: 0x0010
+
+- function:
+    name: dizero
+    return: OSErr
+    args:
+      - name: drvnum
+        type: INTEGER
+      - name: volName
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: dibadmount
+    return: OSErr
+    args:
+      - name: where
+        type: Ptr
+      - name: evtMessage
+        type: LONGINT
+    cfm: InterfaceLib
+
+# The Extensions Manager (Start.h): MOVEQ #selector,D0; _ExtensionsDispatch.
+- dispatcher:
+    name: ExtensionsDispatch
+    trap: 0xAA7D
+    selector-location: D0W
+
+- function:
+    name: InstallExtensionNotificationProc
+    return: OSErr
+    args:
+      - name: extNotificationProc
+        type: Ptr
+    dispatcher: ExtensionsDispatch
+    selector: 0x0000
+
+- function:
+    name: RemoveExtensionNotificationProc
+    return: OSErr
+    args:
+      - name: extNotificationProc
+        type: Ptr
+    dispatcher: ExtensionsDispatch
+    selector: 0x0001
+
+- function:
+    name: InstallExtensionTableHandlerProc
+    return: OSErr
+    args:
+      - name: extMgrProc
+        type: Ptr
+      - name: extTable
+        type: Ptr
+    dispatcher: ExtensionsDispatch
+    selector: 0x0002
+
+- function:
+    name: RemoveExtensionTableHandlerProc
+    return: OSErr
+    args:
+      - name: extMgrProc
+        type: Ptr
+    dispatcher: ExtensionsDispatch
+    selector: 0x0003
+
+# The File Transfer Manager's System 7.5 calls (InterfaceLib's only).
+- function:
+    name: FTSendAsync
+    return: INTEGER
+    args:
+      - name: hFT
+        type: Handle
+      - name: numFiles
+        type: INTEGER
+      - name: pFSSpec
+        type: Ptr
+      - name: notifyProc
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: FTReceiveAsync
+    return: INTEGER
+    args:
+      - name: hFT
+        type: Handle
+      - name: pFSSpec
+        type: Ptr
+      - name: notifyProc
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: FTCompletionAsync
+    return: INTEGER
+    args:
+      - name: hFT
+        type: Handle
+      - name: completionCall
+        type: uint16_t
+    cfm: InterfaceLib
+
+# ---- File mapping (fmap.c): _FileMappingDispatch ($AA81), MOVEQ
+# #selector,D0, Pascal arguments ----
+- dispatcher:
+    name: FileMappingDispatch
+    trap: 0xAA81
+    selector-location: D0W
+
+- function:
+    name: OpenMappedFile
+    return: OSErr
+    args:
+      - name: ref
+        type: Ptr
+      - name: forkNameLength
+        type: uint32_t
+      - name: forkName
+        type: Ptr
+      - name: privileges
+        type: uint32_t
+      - name: backingFile
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0000
+
+- function:
+    name: FSpOpenMappedFile
+    return: OSErr
+    args:
+      - name: spec
+        type: Ptr
+      - name: mapResFork
+        type: Boolean
+      - name: privileges
+        type: uint32_t
+      - name: backingFile
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0001
+
+- function:
+    name: OpenMappedScratchFile
+    return: OSErr
+    args:
+      - name: volume
+        type: INTEGER
+      - name: fileSize
+        type: uint32_t
+      - name: privileges
+        type: uint32_t
+      - name: backingFile
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0002
+
+- function:
+    name: CloseMappedFile
+    return: OSErr
+    args:
+      - name: backingFile
+        type: uint32_t
+    dispatcher: FileMappingDispatch
+    selector: 0x0003
+
+- function:
+    name: GetMappedFileInformation
+    return: OSErr
+    args:
+      - name: backingFile
+        type: uint32_t
+      - name: version
+        type: uint32_t
+      - name: info
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0004
+
+- function:
+    name: GetNextMappedFile
+    return: OSErr
+    args:
+      - name: backingFile
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0005
+
+- function:
+    name: SetMappedFileSize
+    return: OSErr
+    args:
+      - name: backingFile
+        type: uint32_t
+      - name: positionMode
+        type: uint16_t
+      - name: positionOffset
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0006
+
+- function:
+    name: GetFileViewAccessOptions
+    return: OSErr
+    args:
+      - name: access
+        type: Ptr
+      - name: options
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0007
+
+- function:
+    name: MapFileView
+    return: OSErr
+    args:
+      - name: backingFile
+        type: uint32_t
+      - name: backingBase
+        type: Ptr
+      - name: backingLength
+        type: uint32_t
+      - name: access
+        type: uint32_t
+      - name: guardLength
+        type: uint32_t
+      - name: options
+        type: uint32_t
+      - name: viewBase
+        type: Ptr
+      - name: viewLength
+        type: Ptr
+      - name: theView
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0008
+
+- function:
+    name: UnmapFileView
+    return: OSErr
+    args:
+      - name: theView
+        type: uint32_t
+    dispatcher: FileMappingDispatch
+    selector: 0x0009
+
+- function:
+    name: GetFileViewInformation
+    return: OSErr
+    args:
+      - name: theView
+        type: uint32_t
+      - name: version
+        type: uint32_t
+      - name: info
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x000A
+
+- function:
+    name: GetFileViewFromAddress
+    return: OSErr
+    args:
+      - name: address
+        type: Ptr
+      - name: theView
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x000B
+
+- function:
+    name: GetNextFileView
+    return: OSErr
+    args:
+      - name: theView
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x000C
+
+- function:
+    name: SetFileViewAccess
+    return: OSErr
+    args:
+      - name: theView
+        type: uint32_t
+      - name: access
+        type: uint32_t
+    dispatcher: FileMappingDispatch
+    selector: 0x000D
+
+- function:
+    name: SetFileViewBackingBase
+    return: OSErr
+    args:
+      - name: theView
+        type: uint32_t
+      - name: newBackingBase
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x000E

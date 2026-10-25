@@ -111,6 +111,8 @@ void gestalt_init(void)
     gestalt_set(fourcc("scr#"), 1);           /* one script system: Roman */
     gestalt_set(fourcc("te  "), 5);           /* TextEdit (gestaltTE5) */
     gestalt_set(fourcc("hdwr"), 0x009B);      /* VIA1, VIA2, ASC, SCC, SCSI */
+    gestalt_set(fourcc("scsi"), 0x3);         /* SCSI Manager 4.3, in ROM (scsi.c: no devices) */
+    gestalt_set(fourcc("ppc "), 0x1000);      /* the PPC Toolbox, real-time sessions on this machine (ppctoolbox.c) */
     gestalt_set(fourcc("edtn"), 0x1);         /* Edition Manager present */
     gestalt_set(fourcc("help"), 0x1);         /* Help Manager present */
     gestalt_set(fourcc("alis"), 0x1);         /* Alias Manager present */

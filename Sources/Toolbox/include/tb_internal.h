@@ -551,6 +551,9 @@ void at_remove_name(gaddr nte);
 bool at_name_taken(const uint8_t *packed, int len);
 void at_hold_selfsend(bool on);
 uint16_t at_network(void);
+/* The AppleTalk Transition Queue: entries added and removed, events sent. */
+int16_t at_transition_queue(gaddr entry, bool add);
+int32_t at_transition_event(int32_t event, gaddr info, bool preflight, int32_t cancel);
 /* ADSP's driver calls from C, on a parameter block in guest memory. */
 int16_t adsp_control(gaddr pb, bool async);
 typedef struct {

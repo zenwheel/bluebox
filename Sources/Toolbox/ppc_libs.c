@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "forks.h"
+#include "legacy.h"
 #include "machine.h"
 #include "ppc_bridge.h"
 #include "qd_internal.h"
@@ -834,11 +835,11 @@ static void g_GetDefaultUser(ppc_cpu *c)
     size_t n = utf8_to_macroman(name, mac, strlen(name));
     if (n > 31)
         n = 31;
-    if (R(3))
-        wr16(R(3), 0);
-    if (R(4)) {
-        wr8(R(4), (uint8_t)n);
-        gput(R(4) + 1, mac, (uint32_t)n);
+    if (R(0))
+        wr32(R(0), 1); /* the default user's identity (ppctoolbox.c) */
+    if (R(1)) {
+        wr8(R(1), (uint8_t)n);
+        gput(R(1) + 1, mac, (uint32_t)n);
     }
     RETURN(0);
 }
@@ -952,7 +953,7 @@ static void g_portNotCf(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
 static void g_GetVideoDefault(ppc_cpu *c)
 {
     if (R(0))
-        gmemset(R(0), 0, 4);
+        startmgr_get_video(R(0));
     c->pc = c->lr;
 }
 
@@ -1932,7 +1933,7 @@ const ppc_export lib_exports[] = {
     { "SerReset", g_SerReset }, { "SerHShake", g_SerHShake }, { "SerSetBuf", g_SerSetBuf }, { "SerSetBrk", g_SerSetBrk },
     { "SerClrBrk", g_SerClrBrk }, { "SerGetBuf", g_SerGetBuf }, { "SerStatus", g_SerStatus },
     /* AppleTalk and the PPC Toolbox's network side */
-    { "GetMyZone", g_noAppleTalk }, { "PPCBrowser", g_noAppleTalk }, { "IPCListPortsSync", g_noAppleTalk },
+    { "GetMyZone", g_noAppleTalk }, { "PPCBrowser", g_noAppleTalk },
     { "NBPSetNTE", g_NBPSetNTE }, { "NBPSetEntity", g_NBPSetEntity }, { "NBPExtract", g_NBPExtract },
     { "BuildDDPwds", g_BuildDDPwds }, { "BuildBDSBuffer", g_BuildBDSBuffer }, { "GetNodeAddress", g_GetNodeAddress },
     { "IsMPPOpen", g_IsMPPOpen }, { "IsATPOpen", g_IsMPPOpen }, { "MPPOpen", g_MPPOpen },

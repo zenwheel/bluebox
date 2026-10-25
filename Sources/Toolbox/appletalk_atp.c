@@ -1,6 +1,6 @@
 /*
  * ATP, the AppleTalk Transaction Protocol (the .ATP driver), and ZIP's
- * calls through .XPP, on appletalk.c's DDP.
+ * calls through .XPP (its ASP and AFP calls in xpp.c), on appletalk.c's DDP.
  *
  * A transaction is a request (DDP type 3, function TReq) and up to eight
  * numbered responses (TResp), the requester asking again for those still
@@ -15,6 +15,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "legacy.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -556,7 +557,7 @@ enum { X_SUBCODE = 28, X_BUFF = 34, X_NUMZONES = 38, X_LASTFLAG = 40 };
 static int16_t xpp_control(gaddr pb, bool async)
 {
     if ((int16_t)rd16(pb + CntrlParam_csCode_off) != xCall)
-        return -17; /* ASP and AFP: no servers here */
+        return xpp_asp_control(pb, async); /* ASP and AFP (xpp.c) */
     switch ((int16_t)rd16(pb + X_SUBCODE)) {
     case zipGetMyZone: {
         static const uint8_t star[2] = { 1, '*' };

@@ -319,15 +319,3 @@ int16_t tb_LaunchApplication(gaddr pb)
     return noErr;
 }
 
-/* The PPC Toolbox ($A0DD, selector in D0): it starts, but no port opens, as
- * on a Mac with nothing to talk to (Word 5.0 opens one at startup and goes
- * on without it).  The result is in D0 and the parameter block's ioResult. */
-enum { noPortErr = -903 };
-
-void tb_PPCDispatch(int32_t d0, int32_t a0)
-{
-    int16_t err = d0 == 0 /* PPCInit */ ? noErr : noPortErr;
-    if (d0 != 0 && a0)
-        wr16((gaddr)a0 + 16, (uint16_t)err);
-    g_cpu->d[0] = (uint32_t)(int32_t)err;
-}

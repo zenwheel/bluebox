@@ -9,6 +9,7 @@
 
 #include "forks.h"
 #include "hostgl.h"
+#include "legacy.h"
 #include "qd_internal.h"
 #include "qt_codec.h"
 #include "sysfonts.h"
@@ -379,6 +380,7 @@ bool machine_boot(bool census)
     carbon_reset();
     slots_reset();
     cursor_devices_reset();
+    legacy_reset();
     notify_reset();
     iconservices_reset();
     agl_reset(); /* OpenGL's contexts, on the host */
