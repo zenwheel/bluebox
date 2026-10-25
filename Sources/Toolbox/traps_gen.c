@@ -684,6 +684,7 @@ const char *const tb_trap_names[1024] = {
     [0x251] = "CopyDeepMask",
     [0x252] = "HighLevelFSDispatch",
     [0x253] = "DictionaryDispatch",
+    [0x254] = "TSMDispatch",
     [0x259] = "MixedModeDispatch",
     [0x25A] = "CodeFragmentDispatch",
     [0x260] = "DeleteMCEntries",
@@ -1573,6 +1574,16 @@ static void glue_ActivatePalette(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_ActivatePalette(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_ActivateTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ActivateTSMDocument(a_idocID);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2495,6 +2506,36 @@ static void glue_CloseRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CloseServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CloseServiceWindow(a_window);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseTSMAwareApplication(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_CloseTSMAwareApplication();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseTextService(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_aComponentInstance = (uint32_t)cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CloseTextService(a_idocID, a_aComponentInstance);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CloseWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3252,6 +3293,16 @@ static void glue_DeactivateControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DeactivateTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DeactivateTSMDocument(a_idocID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DebugStr(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3506,6 +3557,16 @@ static void glue_DeleteRecordFromDictionary(cpu68k *c, uint16_t trapword)
     gaddr a_key = (gaddr)cpu_pop32(c);
     int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
     int16_t r = tb_DeleteRecordFromDictionary(a_dictionaryReference, a_key);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DeleteTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DeleteTSMDocument(a_idocID);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -5258,6 +5319,17 @@ static void glue_FindScriptRun(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    uint32_t a_thePoint = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_FindServiceWindow(a_thePoint, a_theWindow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FindWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5406,6 +5478,16 @@ static void glue_FixRound(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t a_x = (int32_t)cpu_pop32(c);
     int16_t r = tb_FixRound(a_x);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FixTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FixTSMDocument(a_idocID);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -6814,6 +6896,17 @@ static void glue_GetDblTime(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDefaultInputMethod(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slRecordPtr = (gaddr)cpu_pop32(c);
+    gaddr a_ts = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDefaultInputMethod(a_ts, a_slRecordPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7116,6 +7209,16 @@ static void glue_GetFrontProcess(cpu68k *c, uint16_t trapword)
     int32_t a_dummy = (int32_t)cpu_pop32(c);
     gaddr a_serial_number = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetFrontProcess(a_serial_number, a_dummy);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFrontServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFrontServiceWindow(a_window);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -8406,6 +8509,19 @@ static void glue_GetScriptVariable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetServiceList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_seedValue = (gaddr)cpu_pop32(c);
+    gaddr a_serviceInfo = (gaddr)cpu_pop32(c);
+    gaddr a_supportedInterfaceTypes = (gaddr)cpu_pop32(c);
+    int16_t a_numOfInterface = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetServiceList(a_numOfInterface, a_supportedInterfaceTypes, a_serviceInfo, a_seedValue);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetSoundHeaderOffset(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8573,6 +8689,16 @@ static void glue_GetSysPPtr(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_GetSysPPtr();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTextServiceLanguage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slRecordPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetTextServiceLanguage(a_slRecordPtr);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -10145,6 +10271,15 @@ static void glue_InitResources(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_InitResources();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InitTSMAwareApplication(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_InitTSMAwareApplication();
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -11827,6 +11962,24 @@ static void glue_NewAliasMinimalFromFullPath(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewCServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    uint32_t a_ts = (uint32_t)cpu_pop32(c);
+    int8_t a_goAwayFlag = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int16_t a_theProc = (int16_t)cpu_pop16(c);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_wStorage = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewCServiceWindow(a_wStorage, a_boundsRect, a_title, a_visible, a_theProc, a_behind, a_goAwayFlag, a_ts, a_window);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewCWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12171,6 +12324,24 @@ static void glue_NewScreenBuffer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewServiceWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    uint32_t a_ts = (uint32_t)cpu_pop32(c);
+    int8_t a_goAwayFlag = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int16_t a_theProc = (int16_t)cpu_pop16(c);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_wStorage = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewServiceWindow(a_wStorage, a_boundsRect, a_title, a_visible, a_theProc, a_behind, a_goAwayFlag, a_ts, a_window);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewSpeechChannel(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12198,6 +12369,19 @@ static void glue_NewSubscriberDialog(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_reply = (gaddr)cpu_pop32(c);
     int16_t r = tb_NewSubscriberDialog(a_reply);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewTSMDocument(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refcon = (int32_t)cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    gaddr a_supportedInterfaceTypes = (gaddr)cpu_pop32(c);
+    int16_t a_numOfInterface = (int16_t)cpu_pop16(c);
+    int16_t r = tb_NewTSMDocument(a_numOfInterface, a_supportedInterfaceTypes, a_idocID, a_refcon);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -12470,6 +12654,18 @@ static void glue_OpenRgn(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_OpenRgn();
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenTextService(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_aComponentInstance = (gaddr)cpu_pop32(c);
+    uint32_t a_aComponent = (uint32_t)cpu_pop32(c);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OpenTextService(a_idocID, a_aComponent, a_aComponentInstance);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -15070,6 +15266,22 @@ static void glue_SelectWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SendAEFromTSMComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_filterProc = (gaddr)cpu_pop32(c);
+    gaddr a_idleProc = (gaddr)cpu_pop32(c);
+    int32_t a_timeOutInTicks = (int32_t)cpu_pop32(c);
+    int16_t a_sendPriority = (int16_t)cpu_pop16(c);
+    int32_t a_sendMode = (int32_t)cpu_pop32(c);
+    gaddr a_reply = (gaddr)cpu_pop32(c);
+    gaddr a_theAppleEvent = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SendAEFromTSMComponent(a_theAppleEvent, a_reply, a_sendMode, a_sendPriority, a_timeOutInTicks, a_idleProc, a_filterProc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SendBehind(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15542,6 +15754,17 @@ static void glue_SetDebuggerNotificationProcs(cpu68k *c, uint16_t trapword)
     gaddr a_notifyDisposeThread = (gaddr)cpu_pop32(c);
     gaddr a_notifyNewThread = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetDebuggerNotificationProcs(a_notifyNewThread, a_notifyDisposeThread, a_notifyThreadScheduler);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDefaultInputMethod(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slRecordPtr = (gaddr)cpu_pop32(c);
+    uint32_t a_ts = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_SetDefaultInputMethod(a_ts, a_slRecordPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -16669,6 +16892,16 @@ static void glue_SetSysDirection(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetTSMCursor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_mousePos = (uint32_t)cpu_pop32(c);
+    int8_t r = tb_SetTSMCursor(a_mousePos);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_SetTabEnabled(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16677,6 +16910,16 @@ static void glue_SetTabEnabled(cpu68k *c, uint16_t trapword)
     int16_t a_tab = (int16_t)cpu_pop16(c);
     gaddr a_tabs = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetTabEnabled(a_tabs, a_tab, a_enabled);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetTextServiceLanguage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_slRecordPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetTextServiceLanguage(a_slRecordPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -18461,6 +18704,26 @@ static void glue_TEUseStyleScrap(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TSMEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_event = (gaddr)cpu_pop32(c);
+    int8_t r = tb_TSMEvent(a_event);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_TSMMenuSelect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_menuResult = (int32_t)cpu_pop32(c);
+    int8_t r = tb_TSMMenuSelect(a_menuResult);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_TempDisposeHandle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19018,6 +19281,17 @@ static void glue_UseDictionary(cpu68k *c, uint16_t trapword)
     gaddr a_dictionary = (gaddr)cpu_pop32(c);
     gaddr a_chan = (gaddr)cpu_pop32(c);
     int16_t r = tb_UseDictionary(a_chan, a_dictionary);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UseInputWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_useWindow = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_idocID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UseInputWindow(a_idocID, a_useWindow);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -21965,6 +22239,30 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA83D, (int32_t)0xDu, "TENumStyles", CONV_STACK, 12, 4, glue_TENumStyles},
     {0xA83D, (int32_t)0xEu, "TEFeatureFlag", CONV_STACK, 8, 2, glue_TEFeatureFlag},
     {0xA83D, (int32_t)0xFu, "TEGetHiliteRgn", CONV_STACK, 8, 2, glue_TEGetHiliteRgn},
+    {0xAA54, (int32_t)0x0u, "NewTSMDocument", CONV_STACK, 14, 2, glue_NewTSMDocument},
+    {0xAA54, (int32_t)0x1u, "DeleteTSMDocument", CONV_STACK, 4, 2, glue_DeleteTSMDocument},
+    {0xAA54, (int32_t)0x2u, "ActivateTSMDocument", CONV_STACK, 4, 2, glue_ActivateTSMDocument},
+    {0xAA54, (int32_t)0x3u, "DeactivateTSMDocument", CONV_STACK, 4, 2, glue_DeactivateTSMDocument},
+    {0xAA54, (int32_t)0x4u, "TSMEvent", CONV_STACK, 4, 2, glue_TSMEvent},
+    {0xAA54, (int32_t)0x5u, "TSMMenuSelect", CONV_STACK, 4, 2, glue_TSMMenuSelect},
+    {0xAA54, (int32_t)0x6u, "SetTSMCursor", CONV_STACK, 4, 2, glue_SetTSMCursor},
+    {0xAA54, (int32_t)0x7u, "FixTSMDocument", CONV_STACK, 4, 2, glue_FixTSMDocument},
+    {0xAA54, (int32_t)0x8u, "GetServiceList", CONV_STACK, 14, 2, glue_GetServiceList},
+    {0xAA54, (int32_t)0x9u, "OpenTextService", CONV_STACK, 12, 2, glue_OpenTextService},
+    {0xAA54, (int32_t)0xAu, "CloseTextService", CONV_STACK, 8, 2, glue_CloseTextService},
+    {0xAA54, (int32_t)0xBu, "SendAEFromTSMComponent", CONV_STACK, 26, 2, glue_SendAEFromTSMComponent},
+    {0xAA54, (int32_t)0xCu, "SetDefaultInputMethod", CONV_STACK, 8, 2, glue_SetDefaultInputMethod},
+    {0xAA54, (int32_t)0xDu, "GetDefaultInputMethod", CONV_STACK, 8, 2, glue_GetDefaultInputMethod},
+    {0xAA54, (int32_t)0xEu, "SetTextServiceLanguage", CONV_STACK, 4, 2, glue_SetTextServiceLanguage},
+    {0xAA54, (int32_t)0xFu, "GetTextServiceLanguage", CONV_STACK, 4, 2, glue_GetTextServiceLanguage},
+    {0xAA54, (int32_t)0x10u, "UseInputWindow", CONV_STACK, 6, 2, glue_UseInputWindow},
+    {0xAA54, (int32_t)0x11u, "NewServiceWindow", CONV_STACK, 30, 2, glue_NewServiceWindow},
+    {0xAA54, (int32_t)0x12u, "CloseServiceWindow", CONV_STACK, 4, 2, glue_CloseServiceWindow},
+    {0xAA54, (int32_t)0x13u, "GetFrontServiceWindow", CONV_STACK, 4, 2, glue_GetFrontServiceWindow},
+    {0xAA54, (int32_t)0x14u, "InitTSMAwareApplication", CONV_STACK, 0, 2, glue_InitTSMAwareApplication},
+    {0xAA54, (int32_t)0x15u, "CloseTSMAwareApplication", CONV_STACK, 0, 2, glue_CloseTSMAwareApplication},
+    {0xAA54, (int32_t)0x17u, "FindServiceWindow", CONV_STACK, 8, 2, glue_FindServiceWindow},
+    {0xAA54, (int32_t)0x1Au, "NewCServiceWindow", CONV_STACK, 30, 2, glue_NewCServiceWindow},
     {0xABF2, (int32_t)0xBu, "ThreadBeginCritical", CONV_STACK, 0, 2, glue_ThreadBeginCritical},
     {0xABF2, (int32_t)0xCu, "ThreadEndCritical", CONV_STACK, 0, 2, glue_ThreadEndCritical},
     {0xABF2, (int32_t)0x205u, "YieldToThread", CONV_STACK, 4, 2, glue_YieldToThread},
@@ -22036,6 +22334,7 @@ const dispatcher_info dispatchers[] = {
     {0xA895, "ShutDown", "StackW"},
     {0xA800, "SoundDispatch", "D0<0xFFFFFF>"},
     {0xA83D, "TEDispatch", "StackW"},
+    {0xAA54, "TSMDispatch", "D0W"},
     {0xABF2, "ThreadDispatch", "D0W"},
 };
 const unsigned dispatcher_count = sizeof dispatchers / sizeof dispatchers[0];

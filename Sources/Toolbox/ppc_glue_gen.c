@@ -22907,6 +22907,207 @@ static void ppcglue_AVLGetRefcon(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NewTSMDocument(ppc_cpu *c)
+{
+    int16_t a_numOfInterface = (int16_t)c->gpr[3];
+    gaddr a_supportedInterfaceTypes = (gaddr)c->gpr[4];
+    gaddr a_idocID = (gaddr)c->gpr[5];
+    int32_t a_refcon = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewTSMDocument(a_numOfInterface, a_supportedInterfaceTypes, a_idocID, a_refcon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteTSMDocument(ppc_cpu *c)
+{
+    gaddr a_idocID = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteTSMDocument(a_idocID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ActivateTSMDocument(ppc_cpu *c)
+{
+    gaddr a_idocID = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ActivateTSMDocument(a_idocID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeactivateTSMDocument(ppc_cpu *c)
+{
+    gaddr a_idocID = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeactivateTSMDocument(a_idocID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TSMEvent(ppc_cpu *c)
+{
+    gaddr a_event = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_TSMEvent(a_event);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TSMMenuSelect(ppc_cpu *c)
+{
+    int32_t a_menuResult = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_TSMMenuSelect(a_menuResult);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTSMCursor(ppc_cpu *c)
+{
+    uint32_t a_mousePos = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SetTSMCursor(a_mousePos);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FixTSMDocument(ppc_cpu *c)
+{
+    gaddr a_idocID = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FixTSMDocument(a_idocID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetServiceList(ppc_cpu *c)
+{
+    int16_t a_numOfInterface = (int16_t)c->gpr[3];
+    gaddr a_supportedInterfaceTypes = (gaddr)c->gpr[4];
+    gaddr a_serviceInfo = (gaddr)c->gpr[5];
+    gaddr a_seedValue = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetServiceList(a_numOfInterface, a_supportedInterfaceTypes, a_serviceInfo, a_seedValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenTextService(ppc_cpu *c)
+{
+    gaddr a_idocID = (gaddr)c->gpr[3];
+    uint32_t a_aComponent = (uint32_t)c->gpr[4];
+    gaddr a_aComponentInstance = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenTextService(a_idocID, a_aComponent, a_aComponentInstance);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseTextService(ppc_cpu *c)
+{
+    gaddr a_idocID = (gaddr)c->gpr[3];
+    uint32_t a_aComponentInstance = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseTextService(a_idocID, a_aComponentInstance);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SendAEFromTSMComponent(ppc_cpu *c)
+{
+    gaddr a_theAppleEvent = (gaddr)c->gpr[3];
+    gaddr a_reply = (gaddr)c->gpr[4];
+    int32_t a_sendMode = (int32_t)c->gpr[5];
+    int16_t a_sendPriority = (int16_t)c->gpr[6];
+    int32_t a_timeOutInTicks = (int32_t)c->gpr[7];
+    gaddr a_idleProc = (gaddr)c->gpr[8];
+    gaddr a_filterProc = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SendAEFromTSMComponent(a_theAppleEvent, a_reply, a_sendMode, a_sendPriority, a_timeOutInTicks, a_idleProc, a_filterProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDefaultInputMethod(ppc_cpu *c)
+{
+    uint32_t a_ts = (uint32_t)c->gpr[3];
+    gaddr a_slRecordPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDefaultInputMethod(a_ts, a_slRecordPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDefaultInputMethod(ppc_cpu *c)
+{
+    gaddr a_ts = (gaddr)c->gpr[3];
+    gaddr a_slRecordPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDefaultInputMethod(a_ts, a_slRecordPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTextServiceLanguage(ppc_cpu *c)
+{
+    gaddr a_slRecordPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetTextServiceLanguage(a_slRecordPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTextServiceLanguage(ppc_cpu *c)
+{
+    gaddr a_slRecordPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTextServiceLanguage(a_slRecordPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UseInputWindow(ppc_cpu *c)
+{
+    gaddr a_idocID = (gaddr)c->gpr[3];
+    int8_t a_useWindow = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UseInputWindow(a_idocID, a_useWindow);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewServiceWindow(ppc_cpu *c)
+{
+    gaddr a_wStorage = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int8_t a_visible = (int8_t)c->gpr[6];
+    int16_t a_theProc = (int16_t)c->gpr[7];
+    gaddr a_behind = (gaddr)c->gpr[8];
+    int8_t a_goAwayFlag = (int8_t)c->gpr[9];
+    uint32_t a_ts = (uint32_t)c->gpr[10];
+    gaddr a_window = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewServiceWindow(a_wStorage, a_boundsRect, a_title, a_visible, a_theProc, a_behind, a_goAwayFlag, a_ts, a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseServiceWindow(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseServiceWindow(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFrontServiceWindow(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFrontServiceWindow(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitTSMAwareApplication(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitTSMAwareApplication();
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseTSMAwareApplication(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseTSMAwareApplication();
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindServiceWindow(ppc_cpu *c)
+{
+    uint32_t a_thePoint = (uint32_t)c->gpr[3];
+    gaddr a_theWindow = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FindServiceWindow(a_thePoint, a_theWindow);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewCServiceWindow(ppc_cpu *c)
+{
+    gaddr a_wStorage = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int8_t a_visible = (int8_t)c->gpr[6];
+    int16_t a_theProc = (int16_t)c->gpr[7];
+    gaddr a_behind = (gaddr)c->gpr[8];
+    int8_t a_goAwayFlag = (int8_t)c->gpr[9];
+    uint32_t a_ts = (uint32_t)c->gpr[10];
+    gaddr a_window = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewCServiceWindow(a_wStorage, a_boundsRect, a_title, a_visible, a_theProc, a_behind, a_goAwayFlag, a_ts, a_window);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -34876,6 +35077,7 @@ const ppc_export ppc_exports[] = {
     {"AcquireIconRef", ppcglue_AcquireIconRef},
     {"ActivateControl", ppcglue_ActivateControl},
     {"ActivatePalette", ppcglue_ActivatePalette},
+    {"ActivateTSMDocument", ppcglue_ActivateTSMDocument},
     {"AddCallBackToTimeBase", ppctrap_AddCallBackToTimeBase},
     {"AddClonedTrackToMovie", ppctrap_AddClonedTrackToMovie},
     {"AddCollectionItem", ppcglue_AddCollectionItem},
@@ -35009,6 +35211,9 @@ const ppc_export ppc_exports[] = {
     {"ClosePort", ppcglue_ClosePort},
     {"CloseResFile", ppcglue_CloseResFile},
     {"CloseRgn", ppcglue_CloseRgn},
+    {"CloseServiceWindow", ppcglue_CloseServiceWindow},
+    {"CloseTSMAwareApplication", ppcglue_CloseTSMAwareApplication},
+    {"CloseTextService", ppcglue_CloseTextService},
     {"CloseWindow", ppcglue_CloseWindow},
     {"CodecManagerVersion", ppcglue_CodecManagerVersion},
     {"CollapseAllWindows", ppcglue_CollapseAllWindows},
@@ -35111,6 +35316,7 @@ const ppc_export ppc_exports[] = {
     {"DTInstall", ppcglue_DTInstall},
     {"DateToSeconds", ppctrap_DateToSeconds},
     {"DeactivateControl", ppcglue_DeactivateControl},
+    {"DeactivateTSMDocument", ppcglue_DeactivateTSMDocument},
     {"DebugStr", ppcglue_DebugStr},
     {"Debugger", ppcglue_Debugger},
     {"DebuggerEnter", ppcglue_DebuggerEnter},
@@ -35137,6 +35343,7 @@ const ppc_export ppc_exports[] = {
     {"DeleteMovieSegment", ppcglue_DeleteMovieSegment},
     {"DeleteMovieStorage", ppctrap_DeleteMovieStorage},
     {"DeleteRecordFromDictionary", ppcglue_DeleteRecordFromDictionary},
+    {"DeleteTSMDocument", ppcglue_DeleteTSMDocument},
     {"DeleteTrackReference", ppctrap_DeleteTrackReference},
     {"DeleteTrackSegment", ppctrap_DeleteTrackSegment},
     {"DeltaPoint", ppcglue_DeltaPoint},
@@ -35324,6 +35531,7 @@ const ppc_export ppc_exports[] = {
     {"FindRecordByIndexInDictionary", ppcglue_FindRecordByIndexInDictionary},
     {"FindRecordInDictionary", ppcglue_FindRecordInDictionary},
     {"FindScriptRun", ppcglue_FindScriptRun},
+    {"FindServiceWindow", ppcglue_FindServiceWindow},
     {"FindSymbol", ppctrap_FindSymbol},
     {"FindWindow", ppcglue_FindWindow},
     {"FindWord", ppcglue_FindWord},
@@ -35339,6 +35547,7 @@ const ppc_export ppc_exports[] = {
     {"FixPow", ppcglue_FixPow},
     {"FixRatio", ppcglue_FixRatio},
     {"FixRound", ppcglue_FixRound},
+    {"FixTSMDocument", ppcglue_FixTSMDocument},
     {"FlashMenuBar", ppcglue_FlashMenuBar},
     {"FlattenCollection", ppctrap_FlattenCollection},
     {"FlattenCollectionToHdl", ppctrap_FlattenCollectionToHdl},
@@ -35589,6 +35798,7 @@ const ppc_export ppc_exports[] = {
     {"GetDataHandler", ppctrap_GetDataHandler},
     {"GetDateTime", ppcglue_GetDateTime},
     {"GetDblTime", ppcglue_GetDblTime},
+    {"GetDefaultInputMethod", ppcglue_GetDefaultInputMethod},
     {"GetDefaultOutputVolume", ppcglue_GetDefaultOutputVolume},
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
@@ -35621,6 +35831,7 @@ const ppc_export ppc_exports[] = {
     {"GetForeColor", ppcglue_GetForeColor},
     {"GetFreeThreadCount", ppcglue_GetFreeThreadCount},
     {"GetFrontProcess", ppcglue_GetFrontProcess},
+    {"GetFrontServiceWindow", ppcglue_GetFrontServiceWindow},
     {"GetGDevice", ppcglue_GetGDevice},
     {"GetGWorld", ppcglue_GetGWorld},
     {"GetGWorldDevice", ppcglue_GetGWorldDevice},
@@ -35821,6 +36032,7 @@ const ppc_export ppc_exports[] = {
     {"GetScrap", ppcglue_GetScrap},
     {"GetScriptManagerVariable", ppcglue_GetScriptManagerVariable},
     {"GetScriptVariable", ppcglue_GetScriptVariable},
+    {"GetServiceList", ppcglue_GetServiceList},
     {"GetSharedLibrary", ppctrap_GetSharedLibrary},
     {"GetSimilarity", ppctrap_GetSimilarity},
     {"GetSoundDescriptionExtension", ppctrap_GetSoundDescriptionExtension},
@@ -35845,6 +36057,7 @@ const ppc_export ppc_exports[] = {
     {"GetSysPPtr", ppcglue_GetSysPPtr},
     {"GetTaggedCollectionItem", ppctrap_GetTaggedCollectionItem},
     {"GetTaggedCollectionItemInfo", ppctrap_GetTaggedCollectionItemInfo},
+    {"GetTextServiceLanguage", ppcglue_GetTextServiceLanguage},
     {"GetThemeAccentColors", ppcglue_GetThemeAccentColors},
     {"GetThemeBrushAsColor", ppcglue_GetThemeBrushAsColor},
     {"GetThemeButtonBackgroundBounds", ppcglue_GetThemeButtonBackgroundBounds},
@@ -36068,6 +36281,7 @@ const ppc_export ppc_exports[] = {
     {"InitPort", ppcglue_InitPort},
     {"InitProcMenu", ppcglue_InitProcMenu},
     {"InitResources", ppcglue_InitResources},
+    {"InitTSMAwareApplication", ppcglue_InitTSMAwareApplication},
     {"InitUtil", ppcglue_InitUtil},
     {"InitWindows", ppcglue_InitWindows},
     {"InitializeDictionary", ppcglue_InitializeDictionary},
@@ -36748,6 +36962,7 @@ const ppc_export ppc_exports[] = {
     {"NewAlias", ppcglue_NewAlias},
     {"NewAliasMinimal", ppcglue_NewAliasMinimal},
     {"NewAliasMinimalFromFullPath", ppcglue_NewAliasMinimalFromFullPath},
+    {"NewCServiceWindow", ppcglue_NewCServiceWindow},
     {"NewCWindow", ppcglue_NewCWindow},
     {"NewCallBack", ppctrap_NewCallBack},
     {"NewCollection", ppcglue_NewCollection},
@@ -36797,12 +37012,14 @@ const ppc_export ppc_exports[] = {
     {"NewRoutineDescriptor", ppctrap_NewRoutineDescriptor},
     {"NewScreenBuffer", ppcglue_NewScreenBuffer},
     {"NewSection", ppctrap_NewSection},
+    {"NewServiceWindow", ppcglue_NewServiceWindow},
     {"NewSpeechChannel", ppcglue_NewSpeechChannel},
     {"NewSprite", ppctrap_NewSprite},
     {"NewSpriteWorld", ppctrap_NewSpriteWorld},
     {"NewString", ppcglue_NewString},
     {"NewSubscriberDialog", ppcglue_NewSubscriberDialog},
     {"NewSubscriberExpDialog", ppctrap_NewSubscriberExpDialog},
+    {"NewTSMDocument", ppcglue_NewTSMDocument},
     {"NewTempScreenBuffer", ppcglue_NewTempScreenBuffer},
     {"NewThread", ppcglue_NewThread},
     {"NewTimeBase", ppcglue_NewTimeBase},
@@ -36837,6 +37054,7 @@ const ppc_export ppc_exports[] = {
     {"OpenRFPerm", ppcglue_OpenRFPerm},
     {"OpenResFile", ppcglue_OpenResFile},
     {"OpenRgn", ppcglue_OpenRgn},
+    {"OpenTextService", ppcglue_OpenTextService},
     {"OutlineMetrics", ppcglue_OutlineMetrics},
     {"OverrideIconRef", ppcglue_OverrideIconRef},
     {"OverrideIconRefFromResource", ppcglue_OverrideIconRefFromResource},
@@ -37452,6 +37670,7 @@ const ppc_export ppc_exports[] = {
     {"SelectDialogItemText", ppcglue_SelectDialogItemText},
     {"SelectMovieAlternates", ppctrap_SelectMovieAlternates},
     {"SelectWindow", ppcglue_SelectWindow},
+    {"SendAEFromTSMComponent", ppcglue_SendAEFromTSMComponent},
     {"SendBehind", ppcglue_SendBehind},
     {"SendControlMessage", ppcglue_SendControlMessage},
     {"SetADBInfo", ppcglue_SetADBInfo},
@@ -37508,6 +37727,7 @@ const ppc_export ppc_exports[] = {
     {"SetDSequenceTransferMode", ppcglue_SetDSequenceTransferMode},
     {"SetDateTime", ppctrap_SetDateTime},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
+    {"SetDefaultInputMethod", ppcglue_SetDefaultInputMethod},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},
     {"SetDepth", ppcglue_SetDepth},
     {"SetDeskCPat", ppcglue_SetDeskCPat},
@@ -37662,7 +37882,9 @@ const ppc_export ppc_exports[] = {
     {"SetSuiteLabel", ppcglue_SetSuiteLabel},
     {"SetSysBeepVolume", ppcglue_SetSysBeepVolume},
     {"SetSysDirection", ppcglue_SetSysDirection},
+    {"SetTSMCursor", ppcglue_SetTSMCursor},
     {"SetTabEnabled", ppcglue_SetTabEnabled},
+    {"SetTextServiceLanguage", ppcglue_SetTextServiceLanguage},
     {"SetThemeBackground", ppcglue_SetThemeBackground},
     {"SetThemeCursor", ppcglue_SetThemeCursor},
     {"SetThemeDrawingState", ppcglue_SetThemeDrawingState},
@@ -37864,6 +38086,8 @@ const ppc_export ppc_exports[] = {
     {"TEToScrap", ppcglue_TEToScrap},
     {"TEUpdate", ppcglue_TEUpdate},
     {"TEUseStyleScrap", ppcglue_TEUseStyleScrap},
+    {"TSMEvent", ppcglue_TSMEvent},
+    {"TSMMenuSelect", ppcglue_TSMMenuSelect},
     {"TempDisposeHandle", ppcglue_TempDisposeHandle},
     {"TempFreeMem", ppcglue_TempFreeMem},
     {"TempHLock", ppcglue_TempHLock},
@@ -37927,6 +38151,7 @@ const ppc_export ppc_exports[] = {
     {"UpdateMovieResource", ppcglue_UpdateMovieResource},
     {"UpdateResFile", ppcglue_UpdateResFile},
     {"UseDictionary", ppcglue_UseDictionary},
+    {"UseInputWindow", ppcglue_UseInputWindow},
     {"UseMovieEditState", ppctrap_UseMovieEditState},
     {"UseResFile", ppcglue_UseResFile},
     {"UseThemeFont", ppcglue_UseThemeFont},

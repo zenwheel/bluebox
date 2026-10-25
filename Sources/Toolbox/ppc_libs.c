@@ -1878,13 +1878,6 @@ static void g_IUEqualPString(ppc_cpu *c) { g_IUEqualString(c); }
 static void g_IUCompPString(ppc_cpu *c) { g_IUCompString(c); }
 static void g_GetComponentVersion(ppc_cpu *c) { instance_call(c, -4, ""); }
 static void g_false(ppc_cpu *c) { RETURN(0); }
-/* NewTSMDocument(count, types, *docID, refcon): a document that does nothing. */
-static void g_NewTSMDocument(ppc_cpu *c)
-{
-    if (R(2))
-        wr32(R(2), 1);
-    RETURN(0);
-}
 /* The serial driver's calls, on a port that is always idle. */
 /* The Serial Manager: Control and Status calls on the driver, csParam
  * filled before and read after. */
@@ -2148,85 +2141,6 @@ static void g_GetFormatOrder(ppc_cpu *c)
     for (int i = 0; i < n; i++)
         wr16(order + 2 * (uint32_t)i, (uint16_t)idx[line_right ? n - 1 - i : i]);
     c->pc = c->lr;
-}
-
-/* Service windows: the Text Services Manager's floating windows for input
- * methods.  There are no input methods, but a program can make them; they
- * are windows in front of its others. */
-enum { MAX_SERVICE_WINDOWS = 16 };
-static gaddr service_windows[MAX_SERVICE_WINDOWS];
-
-static bool is_service_window(gaddr w)
-{
-    for (int i = 0; i < MAX_SERVICE_WINDOWS; i++)
-        if (w && service_windows[i] == w)
-            return true;
-    return false;
-}
-
-/* NewServiceWindow(wStorage, bounds, title, visible, theProc, behind,
- * goAwayFlag, ts, *window) */
-static void g_NewServiceWindow(ppc_cpu *c)
-{
-    gaddr out = arg_word(c, 8);
-    int slot = -1;
-    for (int i = 0; i < MAX_SERVICE_WINDOWS && slot < 0; i++)
-        if (!service_windows[i])
-            slot = i;
-    if (out)
-        wr32(out, 0);
-    if (slot < 0) {
-        RETURN((int32_t)memFullErr);
-        return;
-    }
-    gaddr w = tb_NewCWindow(R(0), R(1), R(2), (int8_t)R(3), (int16_t)R(4), (gaddr)-1, (int8_t)R(6), (int32_t)R(7));
-    if (!w) {
-        RETURN((int32_t)memFullErr);
-        return;
-    }
-    service_windows[slot] = w;
-    if (out)
-        wr32(out, w);
-    RETURN(0);
-}
-
-static void g_CloseServiceWindow(ppc_cpu *c)
-{
-    for (int i = 0; i < MAX_SERVICE_WINDOWS; i++)
-        if (R(0) && service_windows[i] == R(0)) {
-            service_windows[i] = 0;
-            tb_DisposeWindow(R(0));
-            RETURN(0);
-            return;
-        }
-    RETURN((int32_t)paramErr);
-}
-
-/* GetFrontServiceWindow(*window): the frontmost of them, or nil. */
-static void g_GetFrontServiceWindow(ppc_cpu *c)
-{
-    gaddr w = rd32(LM_WindowList);
-    while (w && !is_service_window(w))
-        w = WindowRecord_nextWindow(w);
-    if (R(0))
-        wr32(R(0), w);
-    RETURN(0);
-}
-
-/* FindServiceWindow(where, *window): the part of a service window there,
- * as FindWindow says it; inDesk when there is none. */
-static void g_FindServiceWindow(ppc_cpu *c)
-{
-    gaddr tmp = tb_NewPtr(4, false, true);
-    int16_t part = tmp ? tb_FindWindow(R(0), tmp) : 0;
-    gaddr w = tmp ? rd32(tmp) : 0;
-    if (tmp)
-        tb_DisposePtr(tmp);
-    if (!is_service_window(w))
-        part = 0, w = 0;
-    if (R(1))
-        wr32(R(1), w);
-    RETURN(part);
 }
 
 /* ValidDate(const LongDateRec *, flags, LongDateTime *newSecs): the first
@@ -2627,7 +2541,6 @@ static void s_assertprint(ppc_cpu *c)
 /* A new run: the guest blocks went with the old heap. */
 void ppc_libs_reset(void)
 {
-    memset(service_windows, 0, sizeof service_windows);
     memset(location, 0, sizeof location);
     memset(fds, 0, sizeof fds);
     errno_block = 0;
@@ -2658,8 +2571,7 @@ const ppc_export lib_exports[] = {
     { "CursorDeviceUnitsPerInch", g_CrsrDevUnitsPerInch }, { "CursorDeviceNextDevice", g_CrsrDevNextDevice },
     { "CursorDeviceNewDevice", g_CrsrDevNewDevice }, { "CursorDeviceDisposeDevice", g_CrsrDevDisposeDevice },
     /* Assorted InterfaceLib */
-    { "GetFormatOrder", g_GetFormatOrder }, { "NewServiceWindow", g_NewServiceWindow },
-    { "CloseServiceWindow", g_CloseServiceWindow }, { "GetFrontServiceWindow", g_GetFrontServiceWindow },
+    { "GetFormatOrder", g_GetFormatOrder },
     { "ValidDate", g_ValidDate }, { "IdleUpdate", g_IdleUpdate }, { "FollowFinderAlias", g_FollowFinderAlias },
     { "DrvrInstall", g_DrvrInstall }, { "BuildBDS", g_BuildBDS }, { "WriteLocation", g_WriteLocation },
     { "LwrText", g_LowerText }, { "IPCListPortsAsync", g_IPCListPortsAsync },
@@ -2723,11 +2635,6 @@ const ppc_export lib_exports[] = {
     { "GetComponentVersion", g_GetComponentVersion },
     { "HoldMemory", g_noErr }, { "UnholdMemory", g_noErr }, { "LockMemory", g_noErr }, { "UnlockMemory", g_noErr },
     { "LockMemoryContiguous", g_noErr },
-    /* The Text Services Manager, with no input methods */
-    { "InitTSMAwareApplication", g_noErr }, { "CloseTSMAwareApplication", g_noErr },
-    { "NewTSMDocument", g_NewTSMDocument }, { "DeleteTSMDocument", g_noErr }, { "ActivateTSMDocument", g_noErr },
-    { "DeactivateTSMDocument", g_noErr }, { "FixTSMDocument", g_noErr }, { "TSMEvent", g_false },
-    { "TSMMenuSelect", g_false }, { "SetTSMCursor", g_false }, { "UseInputWindow", g_noErr },
     /* Serial ports */
     { "SerReset", g_SerReset }, { "SerHShake", g_SerHShake }, { "SerSetBuf", g_SerSetBuf }, { "SerSetBrk", g_SerSetBrk },
     { "SerClrBrk", g_SerClrBrk }, { "SerGetBuf", g_SerGetBuf }, { "SerStatus", g_SerStatus },
@@ -2752,7 +2659,7 @@ const ppc_export lib_exports[] = {
     { "DMSetDisplayMode", dm_paramErr }, { "DMSetMainDisplay", dm_paramErr },
     /* Odds and ends */
     { "equalstring", g_equalstring }, { "relstring", g_relstring }, { "SVersion", g_SVersion },
-    { "MIDIVersion", g_MIDIVersion }, { "InstallExceptionHandler", g_noErr }, { "FindServiceWindow", g_FindServiceWindow },
+    { "MIDIVersion", g_MIDIVersion }, { "InstallExceptionHandler", g_noErr },
     { "GetVideoDefault", g_GetVideoDefault }, { "MPPOpen", g_portNotCf }, { "PPCInit", g_noErr },
     { "OpenXPP", g_portNotCf }, { "ATPLoad", g_portNotCf }, { "MPPClose", g_noErr },
     { "GetDefaultUser", g_GetDefaultUser }, { "TruncText", g_TruncText },

@@ -580,6 +580,90 @@ extension BlueBox {
     }
 }
 
+extension BlueBox {
+    /// The Text Services Manager on a Mac with no input methods.
+    @Suite struct TextServices {
+        init() { bootMachine() }
+
+        @Test func documentsAndServices() {
+            guestStack()
+            let types = tb_NewPtr(4, false, true), docVar = tb_NewPtr(4, false, true)
+            wr32(types, fourCC("tmTE"))
+            #expect(ilCall16("NewTSMDocument", [1, types, docVar, 42]) == 0)
+            let doc = rd32(docVar)
+            #expect(doc != 0 && rd32(doc + 4) == 42)
+            #expect(ilCall16("DeactivateTSMDocument", [doc]) == -2507) // not active
+            #expect(ilCall16("FixTSMDocument", [doc]) == -2507)
+            #expect(ilCall16("ActivateTSMDocument", [doc]) == 0)
+            #expect(ilCall16("FixTSMDocument", [doc]) == 0)
+            #expect(ilCall("TSMEvent", [tb_NewPtr(16, false, true)]) == 0)
+            #expect(ilCall("TSMMenuSelect", [0x0080_0001]) == 0)
+            #expect(ilCall16("UseInputWindow", [doc, 1]) == 0)
+
+            // No services offered, no default input method.
+            let list = tb_NewPtr(4, false, true), seed = tb_NewPtr(4, false, true)
+            #expect(ilCall16("GetServiceList", [1, types, list, seed]) == 0)
+            #expect(rd16(rd32(rd32(list))) == 0)
+            let sl = tb_NewPtr(4, false, true), comp = tb_NewPtr(4, false, true)
+            #expect(ilCall16("GetDefaultInputMethod", [comp, sl]) == -2517 && rd32(comp) == 0)
+            wr32(sl, 0x0000_000B) // Roman, langDutch
+            #expect(ilCall16("SetTextServiceLanguage", [sl]) == 0)
+            wr32(sl, 0)
+            #expect(ilCall16("GetTextServiceLanguage", [sl]) == 0 && rd32(sl) == 0x0000_000B)
+
+            // A component of the program's own can be opened as a service.
+            let entry = native_register(testComponent, "TestComponent", 0)
+            let cd = tb_NewPtr(20, false, true)
+            wr32(cd, fourCC("tsvc"))
+            let c = ilCall("RegisterComponent", [cd, entry, 0, 0, 0, 0])
+            let ciVar = tb_NewPtr(4, false, true)
+            #expect(ilCall16("OpenTextService", [doc, c, ciVar]) == 0 && rd32(ciVar) != 0)
+            let ci = rd32(ciVar)
+            #expect(ilCall("ActivateTextService", [ci]) == UInt32(bitPattern: -2009)) // the component's answer
+            #expect(ilCall("TextServiceEvent", [ci, 1, tb_NewPtr(16, false, true)]) == UInt32(bitPattern: -2009))
+            #expect(ilCall16("CloseTextService", [doc, ci]) == 0)
+            #expect(ilCall16("CloseTextService", [doc, ci]) == -2514)
+            #expect(ilCall16("OpenTextService", [doc, 0, ciVar]) == -2509)
+
+            #expect(ilCall16("DeactivateTSMDocument", [doc]) == 0)
+            #expect(ilCall16("DeleteTSMDocument", [doc]) == 0)
+            #expect(ilCall16("DeleteTSMDocument", [doc]) == -2505)
+
+            // Through the trap: TSMEvent answers false.
+            let reason = run68k([
+                0x4267,                                 // CLR.W -(SP)
+                0x2F3C, 0x0000, 0x0000,                 // MOVE.L #0,-(SP)
+                0x7004, 0xAA54,                         // MOVEQ #4,D0; _TSMDispatch
+                0x3E1F,                                 // MOVE.W (SP)+,D7
+                0x7014, 0xAA54,                         // InitTSMAwareApplication (D0 the result)
+                0x3C00,                                 // MOVE.W D0,D6
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell" && g_cpu!.pointee.d.7 & 0xFFFF == 0)
+        }
+
+        @Test func serviceWindowsFloatInFront() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            wr16(r, 50); wr16(r + 2, 50); wr16(r + 4, 150); wr16(r + 6, 200)
+            let other = tb_NewWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+            let wVar = tb_NewPtr(4, false, true)
+            wr16(r, 60); wr16(r + 2, 60); wr16(r + 4, 120); wr16(r + 6, 160)
+            #expect(tb_NewCServiceWindow(0, r, 0, 1, 0, 0, 0, 0x7356_6373, wVar) == 0)
+            let sw = rd32(wVar)
+            #expect(sw != 0 && sw != other)
+            let front = tb_NewPtr(4, false, true)
+            #expect(tb_GetFrontServiceWindow(front) == 0 && rd32(front) == sw)
+            #expect(tb_FindServiceWindow(0x0064_0064, front) != 0 && rd32(front) == sw) // (100, 100)
+            #expect(tb_FindServiceWindow(0x008C_00B4, front) == 0 && rd32(front) == 0)  // the other window's
+            #expect(tb_CloseServiceWindow(sw) == 0)
+            #expect(tb_CloseServiceWindow(sw) == -50)
+            #expect(tb_GetFrontServiceWindow(front) == 0 && rd32(front) == 0)
+        }
+    }
+}
+
 nonisolated(unsafe) var avlDisposed: [UInt32] = []
 nonisolated(unsafe) var avlWalked: [(key: UInt32, level: UInt32)] = []
 

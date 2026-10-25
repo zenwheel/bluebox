@@ -124,6 +124,19 @@ INSTANCE(CallComponentTarget, -6, "4")
 INSTANCE(CallComponentUnregister, -7, "")
 INSTANCE(CallComponentGetMPWorkFunction, -8, "44")
 INSTANCE(CallComponentGetPublicResource, -10, "424")
+/* Text services' calls (TextServices.h) */
+INSTANCE(GetScriptLanguageSupport, 1, "4")
+INSTANCE(InitiateTextService, 2, "")
+INSTANCE(TerminateTextService, 3, "")
+INSTANCE(ActivateTextService, 4, "")
+INSTANCE(DeactivateTextService, 5, "")
+INSTANCE(TextServiceEvent, 6, "24")
+INSTANCE(GetTextServiceMenu, 7, "4")
+INSTANCE(TextServiceMenuSelect, 8, "42")
+INSTANCE(FixTextService, 9, "")
+INSTANCE(SetTextServiceCursor, 10, "4")
+INSTANCE(HidePaletteWindows, 11, "")
+INSTANCE(UCTextServiceEvent, 14, "2444")
 #undef INSTANCE
 
 /* _ComponentDispatch with the selector in D0, Pascal arguments, an OSErr. */
@@ -201,6 +214,12 @@ static const ppc_export cc_exports[] = {
     { "GetComponentPublicResource", cc_GetComponentPublicResource },
     { "GetComponentPublicResourceList", cc_GetComponentPublicResourceList },
     { "GetComponentPublicIndString", cc_GetComponentPublicIndString },
+    { "GetScriptLanguageSupport", cc_GetScriptLanguageSupport }, { "InitiateTextService", cc_InitiateTextService },
+    { "TerminateTextService", cc_TerminateTextService }, { "ActivateTextService", cc_ActivateTextService },
+    { "DeactivateTextService", cc_DeactivateTextService }, { "TextServiceEvent", cc_TextServiceEvent },
+    { "GetTextServiceMenu", cc_GetTextServiceMenu }, { "TextServiceMenuSelect", cc_TextServiceMenuSelect },
+    { "FixTextService", cc_FixTextService }, { "SetTextServiceCursor", cc_SetTextServiceCursor },
+    { "HidePaletteWindows", cc_HidePaletteWindows }, { "UCTextServiceEvent", cc_UCTextServiceEvent },
     { "CallComponentFunction", cc_CallComponentFunction },
     { "CallComponentFunctionWithStorage", cc_CallComponentFunctionWithStorage },
     { "CallComponentFunctionWithStorageProcInfo", cc_CallComponentFunctionWithStorageProcInfo },
@@ -222,9 +241,14 @@ static const export_table tables[] = {
 };
 
 void dictionary_reset(void);
+void tsm_reset(void);
 
 /* A fresh machine. */
-void ilutil_reset(void) { dictionary_reset(); }
+void ilutil_reset(void)
+{
+    dictionary_reset();
+    tsm_reset();
+}
 
 void (*ilutil_export_fn(const char *name))(ppc_cpu *)
 {

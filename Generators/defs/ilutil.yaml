@@ -335,3 +335,290 @@
         type: void*
     dispatcher: AVLTreeDispatch
     selector: 0x0409
+
+# The Text Services Manager: _TSMDispatch ($AA54), the selector in D0
+# (MOVEQ #n,D0), Pascal arguments.
+- dispatcher:
+    name: TSMDispatch
+    trap: 0xAA54
+    selector-location: D0W
+
+- function:
+    name: NewTSMDocument
+    return: OSErr
+    args:
+      - name: numOfInterface
+        type: int16_t
+      - name: supportedInterfaceTypes
+        type: OSType*
+      - name: idocID
+        type: void*
+      - name: refcon
+        type: int32_t
+    dispatcher: TSMDispatch
+    selector: 0x0000
+
+- function:
+    name: DeleteTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x0001
+
+- function:
+    name: ActivateTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x0002
+
+- function:
+    name: DeactivateTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x0003
+
+- function:
+    name: TSMEvent
+    return: Boolean
+    args:
+      - name: event
+        type: EventRecord*
+    dispatcher: TSMDispatch
+    selector: 0x0004
+
+- function:
+    name: TSMMenuSelect
+    return: Boolean
+    args:
+      - name: menuResult
+        type: int32_t
+    dispatcher: TSMDispatch
+    selector: 0x0005
+
+- function:
+    name: SetTSMCursor
+    return: Boolean
+    args:
+      - name: mousePos
+        type: Point
+    dispatcher: TSMDispatch
+    selector: 0x0006
+
+- function:
+    name: FixTSMDocument
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x0007
+
+- function:
+    name: GetServiceList
+    return: OSErr
+    args:
+      - name: numOfInterface
+        type: int16_t
+      - name: supportedInterfaceTypes
+        type: OSType*
+      - name: serviceInfo
+        type: Handle*
+      - name: seedValue
+        type: int32_t*
+    dispatcher: TSMDispatch
+    selector: 0x0008
+
+- function:
+    name: OpenTextService
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+      - name: aComponent
+        type: uint32_t
+      - name: aComponentInstance
+        type: uint32_t*
+    dispatcher: TSMDispatch
+    selector: 0x0009
+
+- function:
+    name: CloseTextService
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+      - name: aComponentInstance
+        type: uint32_t
+    dispatcher: TSMDispatch
+    selector: 0x000A
+
+- function:
+    name: SendAEFromTSMComponent
+    return: OSErr
+    args:
+      - name: theAppleEvent
+        type: AEDesc*
+      - name: reply
+        type: AEDesc*
+      - name: sendMode
+        type: int32_t
+      - name: sendPriority
+        type: int16_t
+      - name: timeOutInTicks
+        type: int32_t
+      - name: idleProc
+        type: ProcPtr
+      - name: filterProc
+        type: ProcPtr
+    dispatcher: TSMDispatch
+    selector: 0x000B
+
+- function:
+    name: SetDefaultInputMethod
+    return: OSErr
+    args:
+      - name: ts
+        type: uint32_t
+      - name: slRecordPtr
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x000C
+
+- function:
+    name: GetDefaultInputMethod
+    return: OSErr
+    args:
+      - name: ts
+        type: uint32_t*
+      - name: slRecordPtr
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x000D
+
+- function:
+    name: SetTextServiceLanguage
+    return: OSErr
+    args:
+      - name: slRecordPtr
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x000E
+
+- function:
+    name: GetTextServiceLanguage
+    return: OSErr
+    args:
+      - name: slRecordPtr
+        type: void*
+    dispatcher: TSMDispatch
+    selector: 0x000F
+
+- function:
+    name: UseInputWindow
+    return: OSErr
+    args:
+      - name: idocID
+        type: void*
+      - name: useWindow
+        type: Boolean
+    dispatcher: TSMDispatch
+    selector: 0x0010
+
+- function:
+    name: NewServiceWindow
+    return: OSErr
+    args:
+      - name: wStorage
+        type: void*
+      - name: boundsRect
+        type: Rect*
+      - name: title
+        type: ConstStr255Param
+      - name: visible
+        type: Boolean
+      - name: theProc
+        type: int16_t
+      - name: behind
+        type: WindowPtr
+      - name: goAwayFlag
+        type: Boolean
+      - name: ts
+        type: uint32_t
+      - name: window
+        type: WindowPtr*
+    dispatcher: TSMDispatch
+    selector: 0x0011
+
+- function:
+    name: CloseServiceWindow
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr
+    dispatcher: TSMDispatch
+    selector: 0x0012
+
+- function:
+    name: GetFrontServiceWindow
+    return: OSErr
+    args:
+      - name: window
+        type: WindowPtr*
+    dispatcher: TSMDispatch
+    selector: 0x0013
+
+- function:
+    name: InitTSMAwareApplication
+    return: OSErr
+    dispatcher: TSMDispatch
+    selector: 0x0014
+
+- function:
+    name: CloseTSMAwareApplication
+    return: OSErr
+    dispatcher: TSMDispatch
+    selector: 0x0015
+
+- function:
+    name: FindServiceWindow
+    return: int16_t
+    args:
+      - name: thePoint
+        type: Point
+      - name: theWindow
+        type: WindowPtr*
+    dispatcher: TSMDispatch
+    selector: 0x0017
+
+- function:
+    name: NewCServiceWindow
+    return: OSErr
+    args:
+      - name: wStorage
+        type: void*
+      - name: boundsRect
+        type: Rect*
+      - name: title
+        type: ConstStr255Param
+      - name: visible
+        type: Boolean
+      - name: theProc
+        type: int16_t
+      - name: behind
+        type: WindowPtr
+      - name: goAwayFlag
+        type: Boolean
+      - name: ts
+        type: uint32_t
+      - name: window
+        type: WindowPtr*
+    dispatcher: TSMDispatch
+    selector: 0x001A
