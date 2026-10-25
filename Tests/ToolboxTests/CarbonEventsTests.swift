@@ -67,6 +67,12 @@ let ceCommandHandler: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = 
     ceReturn(c, 0)
 }
 
+/// A routine of one argument: gives it plus one.
+let cePlusOne: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+    guard let c else { return }
+    ceReturn(c, ceArg(c, 0) &+ 1)
+}
+
 /// A timer: counts its firings in ceResults[0]; at the third it quits the
 /// application's event loop.
 let ceTimer: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
@@ -344,6 +350,37 @@ extension BlueBox {
             #expect(rd32(UInt32(LM_WindowList)) == 0)
         }
 
+        /// CheckEventQueueForUserCancel finds Escape, taking the input
+        /// before it; the mouse and the modifiers as Carbon reads them.
+        @Test func userCancelAndTheMouse() {
+            #expect(tb_PostEvent(1, 0) == 0) // a click
+            #expect(tb_PostEvent(3, 0x0061) == 0) // 'a'
+            #expect(tb_PostEvent(3, 0x351B) == 0) // Escape
+            #expect(tb_PostEvent(3, 0x0062) == 0) // 'b'
+            #expect(call("CheckEventQueueForUserCancel") & 0xFF == 1)
+            let rec = tb_NewPtr(16, false, true)
+            #expect(tb_GetNextEvent(-1, rec) != 0 && rd16(rec) == 3 && rd32(rec + 2) & 0xFF == 0x62)
+            #expect(call("CheckEventQueueForUserCancel") & 0xFF == 0)
+            let pt = ptr([0])
+            call("GetGlobalMouse", [pt])
+            var v: Int32 = 0, h: Int32 = 0
+            var rel = false
+            _ = machine_mouse_state(&h, &v, &rel)
+            #expect(rd32(pt) == UInt32(UInt16(truncatingIfNeeded: v)) << 16 | UInt32(UInt16(truncatingIfNeeded: h)))
+            #expect(call("GetCurrentKeyModifiers") & 0x80 == 0x80) // the button up
+        }
+
+        /// The Thread Manager's and others' UPPs: descriptors, called through.
+        @Test func otherManagersUPPs() {
+            let fn = handler(cePlusOne, "cePlusOne")
+            let upp = call("NewThreadEntryUPP", [fn])
+            #expect(upp != 0 && rd16(upp) == 0xAAFE) // a routine descriptor
+            #expect(call("InvokeThreadEntryUPP", [41, upp]) == 42)
+            call("DisposeThreadEntryUPP", [upp])
+            let idle = call("NewAEIdleUPP", [fn])
+            #expect(call("InvokeAEIdleUPP", [0x1FF, 0, 0, idle]) == 0) // a Boolean: the low byte
+        }
+
         /// Default and cancel buttons are kept per window; a window must exist.
         @Test func defaultAndCancelButtons() {
             let w = window()
@@ -358,13 +395,16 @@ extension BlueBox {
             #expect(err("EndAppModalStateForWindow", [w]) == -5622)
         }
 
-        /// A program importing CarbonLib finds it, and Gestalt says which
-        /// CarbonLib it is.
+        /// A program importing CarbonLib finds it, under its other names
+        /// too, and Gestalt says which CarbonLib it is.
         @Test func carbonLibLoads() {
-            let name = tb_NewPtr(16, false, true), conn = ptr([0])
-            guestPString("CarbonLib", at: name)
-            #expect(err("GetSharedLibrary", [name, fourCC("pwpc"), 1, conn, 0, 0]) == 0)
-            #expect(rd32(conn) != 0)
+            let name = tb_NewPtr(32, false, true), conn = ptr([0])
+            for lib in ["CarbonLib", "Apple;Carbon;Multimedia", "Apple;Carbon;Networking"] {
+                guestPString(lib, at: name)
+                wr32(conn, 0)
+                #expect(err("GetSharedLibrary", [name, fourCC("pwpc"), 1, conn, 0, 0]) == 0)
+                #expect(rd32(conn) != 0)
+            }
             gestalt_powerpc()
             var v: UInt32 = 0
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("cbon")), &v) == 0 && v == 0x0110)

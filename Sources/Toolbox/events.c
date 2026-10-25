@@ -835,6 +835,39 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     return 0;
 }
 
+/* CheckEventQueueForUserCancel (carbon_events.c): whether a key-down of
+ * Escape or Command-period waits; if so it goes, with the mouse and
+ * keyboard events before it. */
+bool ev_take_user_cancel(void)
+{
+    pthread_mutex_lock(&lock);
+    int n = (qtail - qhead + QSIZE) % QSIZE, cancel = -1;
+    for (int k = 0; k < n && cancel < 0; k++) {
+        const event *e = &queue[(qhead + k) % QSIZE];
+        uint8_t ch = (uint8_t)e->message;
+        if (e->what == keyDown && (ch == 0x1B || ((e->modifiers & cmdKey) && ch == '.')))
+            cancel = k;
+    }
+    if (cancel >= 0) {
+        event keep[QSIZE];
+        int m = 0;
+        for (int k = 0; k < n; k++) {
+            const event *e = &queue[(qhead + k) % QSIZE];
+            bool input = e->what >= mouseDown && e->what <= autoKey;
+            if (k > cancel || !input)
+                keep[m++] = *e;
+        }
+        for (int k = 0; k < m; k++)
+            queue[(qhead + k) % QSIZE] = keep[k];
+        qtail = (qhead + m) % QSIZE;
+        qversion++;
+    }
+    pthread_mutex_unlock(&lock);
+    if (cancel >= 0)
+        mirror_queue();
+    return cancel >= 0;
+}
+
 bool tb_GetOSEvent(int16_t evmask, gaddr eventp) { return polled(next_event(evmask, eventp, true, true)); }
 bool tb_OSEventAvail(int16_t evmask, gaddr eventp) { return polled(next_event(evmask, eventp, false, true)); }
 

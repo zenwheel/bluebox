@@ -494,6 +494,7 @@ static const char *const native_libraries[] = {
     "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
     "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
     "TextCommon", "UnicodeConverter", "TextEncodingConverter", "CarbonLib",
+    "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
 };
 
 /* Apple libraries left unloaded even where an installer put them: the

@@ -30,6 +30,8 @@
 #include "tb_internal.h"
 
 uint16_t ev_modifiers(void); /* events.c */
+uint32_t ev_mouse_global(void);
+bool ev_take_user_cancel(void);
 
 #define R(n) (c->gpr[3 + (n)])
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; return; } while (0)
@@ -2640,6 +2642,79 @@ static void ce_InvokeEventComparatorUPP(ppc_cpu *c)
 }
 
 /* ---------------------------------------------------------------------- */
+/* Events.h's Carbon additions */
+
+static void ce_GetGlobalMouse(ppc_cpu *c)
+{
+    if (R(0))
+        wr32(R(0), ev_mouse_global());
+    c->pc = c->lr;
+}
+
+/* The modifiers as an EventRecord has them (with the button's state). */
+static void ce_GetCurrentKeyModifiers(ppc_cpu *c) { RETURN(ev_modifiers()); }
+
+/* A cancel (Escape, Command-period) waiting, in Blue Box's queue or the
+ * Carbon one; taken, with the input before it. */
+static void ce_CheckEventQueueForUserCancel(ppc_cpu *c)
+{
+    bool found = ev_take_user_cancel();
+    for (cevent *e = queue_head, *next; e && !found; e = next) {
+        next = e->qnext;
+        uint32_t mods = 0;
+        get32(e, kEventParamKeyModifiers, &mods);
+        param *p = find_param(e, kEventParamKeyMacCharCodes);
+        uint8_t ch = p && p->size ? p->data[0] : 0;
+        bool input = e->cls == kEventClassMouse || e->cls == kEventClassKeyboard;
+        found = e->cls == kEventClassKeyboard && e->kind == kEventRawKeyDown && (ch == 0x1B || ((mods & cmdKey) && ch == '.'));
+        if (input) {
+            if (found) {
+                for (cevent *d = queue_head, *dn; d && d != e; d = dn) {
+                    dn = d->qnext;
+                    if (d->cls == kEventClassMouse || d->cls == kEventClassKeyboard)
+                        remove_queued(d);
+                }
+                remove_queued(e);
+            }
+        }
+    }
+    RETURN(found);
+}
+
+/* Processes.h: the application's script and text encoding, the system's
+ * (Roman, Mac OS Roman, unless another script system leads). */
+static void ce_GetApplicationScript(ppc_cpu *c) { RETURN((uint16_t)tb_GetScriptManagerVariable(18)); /* smSysScript */ }
+static void ce_GetApplicationTextEncoding(ppc_cpu *c) { RETURN((uint16_t)tb_GetScriptManagerVariable(18)); }
+
+/* The UPPs of the Thread Manager, Time Manager, Notification Manager and
+ * Apple Event Manager that CarbonLib exports: routine descriptors, and
+ * the calls through them (the UPP after the arguments). */
+static void invoke_upp(ppc_cpu *c, uint32_t procinfo, int n)
+{
+    uint32_t args[4];
+    for (int i = 0; i < n; i++)
+        args[i] = R(i);
+    uint32_t r = aem_call_proc(R(n), procinfo, args, n);
+    RETURN((procinfo & 0x30) == 0x10 ? r & 0xFF : r); /* a Boolean result is a byte */
+}
+
+#define UPP_FAMILY(name, procinfo, nargs)                                         \
+    static void ce_New##name##UPP(ppc_cpu *c) { RETURN(new_upp(R(0), procinfo)); } \
+    static void ce_Invoke##name##UPP(ppc_cpu *c) { invoke_upp(c, procinfo, nargs); }
+
+UPP_FAMILY(ThreadEntry, 0xF0, 1)
+UPP_FAMILY(ThreadScheduler, 0xF0, 1)
+UPP_FAMILY(ThreadSwitch, 0x3C0, 2)
+UPP_FAMILY(ThreadTermination, 0x3C0, 2)
+UPP_FAMILY(DebuggerNewThread, 0xC0, 1)
+UPP_FAMILY(DebuggerDisposeThread, 0xC0, 1)
+UPP_FAMILY(DebuggerThreadScheduler, 0xF0, 1)
+UPP_FAMILY(Timer, 0xB802, 1)
+UPP_FAMILY(NM, 0xC0, 1)
+UPP_FAMILY(AEIdle, 0xFD0, 3)
+UPP_FAMILY(AEFilter, 0x3FD0, 4)
+
+/* ---------------------------------------------------------------------- */
 /* CarbonLib's own setting up */
 
 void carbonlib_init(void)
@@ -2707,28 +2782,44 @@ const ppc_export ce_exports[] = {
     { "AddEventTypesToHandler", ce_AddEventTypesToHandler },
     { "BeginAppModalStateForWindow", ce_BeginAppModalStateForWindow },
     { "CallNextEventHandler", ce_CallNextEventHandler },
+    { "CheckEventQueueForUserCancel", ce_CheckEventQueueForUserCancel },
     { "ConvertEventRefToEventRecord", ce_ConvertEventRefToEventRecord },
     { "CopyEvent", ce_CopyEvent },
     { "CreateEvent", ce_CreateEvent },
+    { "DisposeAEFilterUPP", dispose_upp },
+    { "DisposeAEIdleUPP", dispose_upp },
+    { "DisposeDebuggerDisposeThreadUPP", dispose_upp },
+    { "DisposeDebuggerNewThreadUPP", dispose_upp },
+    { "DisposeDebuggerThreadSchedulerUPP", dispose_upp },
     { "DisposeEventComparatorUPP", dispose_upp },
     { "DisposeEventHandlerUPP", dispose_upp },
     { "DisposeEventLoopTimerUPP", dispose_upp },
+    { "DisposeNMUPP", dispose_upp },
+    { "DisposeThreadEntryUPP", dispose_upp },
+    { "DisposeThreadSchedulerUPP", dispose_upp },
+    { "DisposeThreadSwitchUPP", dispose_upp },
+    { "DisposeThreadTerminationUPP", dispose_upp },
+    { "DisposeTimerUPP", dispose_upp },
     { "EndAppModalStateForWindow", ce_EndAppModalStateForWindow },
     { "FindSpecificEventInQueue", ce_FindSpecificEventInQueue },
     { "FlushEventQueue", ce_FlushEventQueue },
     { "FlushEventsMatchingListFromQueue", ce_FlushEventsMatchingListFromQueue },
     { "FlushSpecificEventsFromQueue", ce_FlushSpecificEventsFromQueue },
     { "GetApplicationEventTarget", ce_GetApplicationEventTarget },
+    { "GetApplicationScript", ce_GetApplicationScript },
+    { "GetApplicationTextEncoding", ce_GetApplicationTextEncoding },
     { "GetControlEventTarget", ce_GetControlEventTarget },
     { "GetCurrentEventLoop", ce_GetMainEventLoop },
     { "GetCurrentEventQueue", ce_GetMainEventQueue },
     { "GetCurrentEventTime", ce_GetCurrentEventTime },
+    { "GetCurrentKeyModifiers", ce_GetCurrentKeyModifiers },
     { "GetEventClass", ce_GetEventClass },
     { "GetEventDispatcherTarget", ce_GetEventDispatcherTarget },
     { "GetEventKind", ce_GetEventKind },
     { "GetEventParameter", ce_GetEventParameter },
     { "GetEventRetainCount", ce_GetEventRetainCount },
     { "GetEventTime", ce_GetEventTime },
+    { "GetGlobalMouse", ce_GetGlobalMouse },
     { "GetLastUserEventTime", ce_GetLastUserEventTime },
     { "GetMainEventLoop", ce_GetMainEventLoop },
     { "GetMainEventQueue", ce_GetMainEventQueue },
@@ -2742,16 +2833,38 @@ const ppc_export ce_exports[] = {
     { "InstallEventHandler", ce_InstallEventHandler },
     { "InstallEventLoopTimer", ce_InstallEventLoopTimer },
     { "InstallStandardEventHandler", ce_InstallStandardEventHandler },
+    { "InvokeAEFilterUPP", ce_InvokeAEFilterUPP },
+    { "InvokeAEIdleUPP", ce_InvokeAEIdleUPP },
+    { "InvokeDebuggerDisposeThreadUPP", ce_InvokeDebuggerDisposeThreadUPP },
+    { "InvokeDebuggerNewThreadUPP", ce_InvokeDebuggerNewThreadUPP },
+    { "InvokeDebuggerThreadSchedulerUPP", ce_InvokeDebuggerThreadSchedulerUPP },
     { "InvokeEventComparatorUPP", ce_InvokeEventComparatorUPP },
     { "InvokeEventHandlerUPP", ce_InvokeEventHandlerUPP },
     { "InvokeEventLoopTimerUPP", ce_InvokeEventLoopTimerUPP },
+    { "InvokeNMUPP", ce_InvokeNMUPP },
+    { "InvokeThreadEntryUPP", ce_InvokeThreadEntryUPP },
+    { "InvokeThreadSchedulerUPP", ce_InvokeThreadSchedulerUPP },
+    { "InvokeThreadSwitchUPP", ce_InvokeThreadSwitchUPP },
+    { "InvokeThreadTerminationUPP", ce_InvokeThreadTerminationUPP },
+    { "InvokeTimerUPP", ce_InvokeTimerUPP },
     { "IsEventInMask", ce_IsEventInMask },
     { "IsEventInQueue", ce_IsEventInQueue },
     { "IsUserCancelEventRef", ce_IsUserCancelEventRef },
     { "MacCreateEvent", ce_CreateEvent },
+    { "NewAEFilterUPP", ce_NewAEFilterUPP },
+    { "NewAEIdleUPP", ce_NewAEIdleUPP },
+    { "NewDebuggerDisposeThreadUPP", ce_NewDebuggerDisposeThreadUPP },
+    { "NewDebuggerNewThreadUPP", ce_NewDebuggerNewThreadUPP },
+    { "NewDebuggerThreadSchedulerUPP", ce_NewDebuggerThreadSchedulerUPP },
     { "NewEventComparatorUPP", ce_NewEventComparatorUPP },
     { "NewEventHandlerUPP", ce_NewEventHandlerUPP },
     { "NewEventLoopTimerUPP", ce_NewEventLoopTimerUPP },
+    { "NewNMUPP", ce_NewNMUPP },
+    { "NewThreadEntryUPP", ce_NewThreadEntryUPP },
+    { "NewThreadSchedulerUPP", ce_NewThreadSchedulerUPP },
+    { "NewThreadSwitchUPP", ce_NewThreadSwitchUPP },
+    { "NewThreadTerminationUPP", ce_NewThreadTerminationUPP },
+    { "NewTimerUPP", ce_NewTimerUPP },
     { "PostEventToQueue", ce_PostEventToQueue },
     { "ProcessHICommand", ce_ProcessHICommand },
     { "QuitAppModalLoopForWindow", ce_QuitAppModalLoopForWindow },
