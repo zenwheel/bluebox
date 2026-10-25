@@ -115,6 +115,29 @@ extension BlueBox {
             tb_DisposeWindow(w)
         }
 
+        /// agl_macro.h's way in (Cro-Mag Rally): gl through the context's
+        /// own table, the renderer word first, each entry a transition
+        /// vector; clear_color is the thirteenth, read_pixels's eighth
+        /// argument comes in r10.
+        @Test func macroDispatchThroughTheContext() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            let ctx = context()
+            let mem = tb_NewPtr(8 * 8 * 4, false, true)
+            #expect(gl("aglSetOffScreen", [ctx, 8, 8, 32, mem]) == 1)
+            let rend = rd32(ctx)
+            func entry(_ i: UInt32) -> UInt32 { rd32(ctx + 4 + 4 * i) }
+            #expect(entry(0) != 0 && entry(335) != 0 && rd32(entry(12) + 4) == 12)
+            for (i, f) in [0.0, 1.0, 0.0, 1.0].enumerated() { ppc_set_fpr(&g_ppc, Int32(1 + i), f) }
+            _ = ppc_call(entry(12), [rend], 1)                                   // glClearColor
+            _ = ppc_call(entry(10), [rend, Self.GL_COLOR_BUFFER_BIT], 2)         // glClear
+            let px = tb_NewPtr(4, false, true)
+            _ = ppc_call(entry(237), [rend, 0, 0, 1, 1, Self.GL_RGBA, Self.GL_UNSIGNED_BYTE, px], 8) // glReadPixels
+            #expect([rd8(px), rd8(px + 1), rd8(px + 2), rd8(px + 3)] == [0, 255, 0, 255])
+            #expect(ppc_call(entry(102), [rend], 1) == 0)                         // glGetError
+            #expect(gl("aglDestroyContext", [ctx]) == 1)
+        }
+
         /// Big-endian data both ways: a 16-bit texture (the host swapping
         /// its pixels, the ninth argument on the stack), a float vertex
         /// array, a matrix read back, and glReadPixels; drawn off screen.

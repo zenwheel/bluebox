@@ -45,6 +45,12 @@ extern const unsigned gl_export_count;
 extern const ppc_export agl_exports[];
 extern const unsigned agl_export_count;
 
+/* AGL's macro dispatch (agl_macro.c): a context's table of transition
+ * vectors, one per OpenGL 1.1 call, and the vectors themselves (8 bytes
+ * each) in guest memory. */
+enum { AGL_DISPATCH_COUNT = 336 };
+void agl_macro_fill(gaddr table, gaddr vectors);
+
 /* Guest memory gone (machine reset): the strings and names made in it. */
 void hostgl_reset(void);
 
