@@ -17,13 +17,11 @@
         type: int16_t
     trap: 0xABF8
 
-# HiliteWindowFrameForDrag (MacWindows.h): MOVEQ #$19,D0 then $A829, the
-# Mac OS 8.5 Window Manager's dispatch for it.
-- dispatcher:
-    name: WindowDragHiliteDispatch
-    trap: 0xA829
-    selector-location: D0W
-
+# HiliteWindowFrameForDrag (MacWindows.h): for 68k code, MOVEQ #$19,D0 then
+# $A829, Mac OS 8.5's Window Manager dispatch.  Not installed: the System
+# Blue Box reports (7.1, 8.1 for PowerPC) had no $A829, and programs that
+# find it implemented call it with Mac OS 8.5's other selectors (SpookHouse
+# and StarGuardian, HyperCard standalones; SoundEdit Pro; MoviePlay).
 - function:
     name: HiliteWindowFrameForDrag
     return: OSStatus
@@ -32,5 +30,4 @@
         type: WindowPtr
       - name: hilited
         type: Boolean
-    dispatcher: WindowDragHiliteDispatch
-    selector: 0x0019
+    cfm: CarbonLib

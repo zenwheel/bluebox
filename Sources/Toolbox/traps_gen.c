@@ -165,7 +165,6 @@ const char *const tb_trap_names[1024] = {
     [0x026] = "InsertMenuItem",
     [0x027] = "HideDialogItem",
     [0x028] = "ShowDialogItem",
-    [0x029] = "WindowDragHiliteDispatch",
     [0x02D] = "Pack11",
     [0x02E] = "Pack12",
     [0x02F] = "Pack13",
@@ -13544,17 +13543,6 @@ static void glue_HiliteWindow(cpu68k *c, uint16_t trapword)
     int8_t a_flag = (int8_t)(cpu_pop16(c) >> 8);
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_HiliteWindow(a_w, a_flag);
-    cpu_push32(c, ret);
-}
-
-static void glue_HiliteWindowFrameForDrag(cpu68k *c, uint16_t trapword)
-{
-    (void)trapword;
-    uint32_t ret = cpu_pop32(c);
-    int8_t a_hilited = (int8_t)(cpu_pop16(c) >> 8);
-    gaddr a_window = (gaddr)cpu_pop32(c);
-    int32_t r = tb_HiliteWindowFrameForDrag(a_window, a_hilited);
-    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -28083,7 +28071,6 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF2, (int32_t)0x615u, "GetSpecificFreeThreadCount", CONV_STACK, 12, 2, glue_GetSpecificFreeThreadCount},
     {0xABF2, (int32_t)0x70Au, "SetThreadSwitcher", CONV_STACK, 14, 2, glue_SetThreadSwitcher},
     {0xABF2, (int32_t)0xE03u, "NewThread", CONV_STACK, 28, 2, glue_NewThread},
-    {0xA829, (int32_t)0x19u, "HiliteWindowFrameForDrag", CONV_STACK, 6, 4, glue_HiliteWindowFrameForDrag},
 };
 const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[0];
 
@@ -28145,6 +28132,5 @@ const dispatcher_info dispatchers[] = {
     {0xA83D, "TEDispatch", "StackW"},
     {0xAA54, "TSMDispatch", "D0W"},
     {0xABF2, "ThreadDispatch", "D0W"},
-    {0xA829, "WindowDragHiliteDispatch", "D0W"},
 };
 const unsigned dispatcher_count = sizeof dispatchers / sizeof dispatchers[0];
