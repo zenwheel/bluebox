@@ -1675,6 +1675,66 @@ static void tec_TECSniffTextEncoding(ppc_cpu *c)
 
 /* ---------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------- */
+/* For Core Foundation's strings (carbon_cfstring.c) */
+
+bool tec_encoding_available(uint32_t e) { return supported(e); }
+
+int tec_decode(uint32_t e, const uint8_t *in, size_t n, size_t *used, uint16_t *out, size_t cap, size_t *produced)
+{
+    return decode(e, in, n, used, out, cap, produced);
+}
+
+int tec_encode(uint32_t e, const uint16_t *in, size_t n, size_t *used, uint8_t *out, size_t cap, size_t *produced)
+{
+    return encode(e, in, n, used, out, cap, produced);
+}
+
+/* An encoding's name as GetTextEncodingName gives it, or NULL. */
+const char *tec_encoding_name(uint32_t e)
+{
+    uint32_t base = is_unicode(e) ? 0x100 : te_base(e);
+    for (unsigned i = 0; i < NELEM(encoding_names); i++)
+        if (encoding_names[i].base == base)
+            return encoding_names[i].name;
+    return NULL;
+}
+
+/* The Internet's preferred name for an encoding, or NULL. */
+const char *tec_internet_name(uint32_t e)
+{
+    uint32_t key = is_unicode(e) ? (e & 0xFC000000u) | 0x100 : te_base(e);
+    for (unsigned i = 0; i < NELEM(internet_names); i++)
+        if (internet_names[i].encoding == key)
+            return internet_names[i].name;
+    return NULL;
+}
+
+/* An encoding from any of its Internet names, ignoring case. */
+bool tec_encoding_of_internet_name(const char *name, uint32_t *e)
+{
+    for (unsigned i = 0; i < NELEM(internet_names); i++) {
+        const char *a = internet_names[i].name, *b = name;
+        while (*a && *b && (*a | 0x20) == (*b | 0x20))
+            a++, b++;
+        if (!*a && !*b) {
+            *e = internet_names[i].encoding;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* The encodings there are (up to max of them); how many. */
+unsigned tec_available_encodings(uint32_t *out, unsigned max)
+{
+    unsigned k = 0;
+    for (unsigned i = 0; i < NELEM(candidates); i++)
+        if (supported(candidates[i]) && k < max)
+            out[k++] = candidates[i];
+    return k;
+}
+
 const ppc_export tec_exports[] = {
     /* TextCommon */
     { "CreateTextEncoding", tc_CreateTextEncoding },

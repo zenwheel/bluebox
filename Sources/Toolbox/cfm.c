@@ -163,6 +163,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     void (*svc)(ppc_cpu *) = carbonsvc_export_fn(name);
     if (svc)
         return svc;
+    void (*cf)(ppc_cpu *) = carbon_cf_export_fn(name);
+    if (cf)
+        return cf;
     for (unsigned i = 0; i < snd_export_count; i++)
         if (!strcmp(snd_exports[i].name, name))
             return snd_exports[i].fn;
@@ -1157,6 +1160,7 @@ void cfm_reset(void)
     missing_len = missing_count = 0;
     nfrags = ninit = init_next = ndata_blocks = 0;
     stdclib_reset(); /* the last program's library state went with it */
+    carbon_cf_reset();
     ppc_cpu_ready = false;
     code_check_reset(); /* the last program's code */
 }
