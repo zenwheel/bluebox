@@ -316,6 +316,7 @@ static const struct {
     const unsigned *count;
 } tables[] = {
     { carbon_scrap_exports, &carbon_scrap_export_count },
+    { carbon_nav_exports, &carbon_nav_export_count },
 };
 
 void (*carbonsvc_export_fn(const char *name))(ppc_cpu *)
@@ -333,5 +334,6 @@ void (*carbonsvc_export_fn(const char *name))(ppc_cpu *)
 void carbonsvc_reset(void)
 {
     nwrapped = 0;
+    carbon_nav_reset();
     carbon_scrap_reset();
 }

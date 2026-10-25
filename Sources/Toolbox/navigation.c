@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "carbon_svc.h"
 #include "forks.h"
 #include "machine.h"
 #include "tb_internal.h"
@@ -293,6 +294,10 @@ int16_t tb_NavDisposeReply(gaddr reply)
         return paramErr;
     tb_AEDisposeDesc(reply + NavReplyRecord_selection_off);
     wr8(reply + NavReplyRecord_validRecord_off, 0);
+    if (rd16(reply + NavReplyRecord_version_off) >= 1) { /* Carbon's: its saveFileName, a CFString */
+        svc_cfrelease(rd32(reply + 24));
+        wr32(reply + 24, 0);
+    }
     return noErr;
 }
 
