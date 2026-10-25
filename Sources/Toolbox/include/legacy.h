@@ -24,4 +24,8 @@ void scsi_reset(void);
 /* dbaccess.c */
 void dbaccess_reset(void);
 
+/* xpp.c: .XPP's ASP and AFP calls */
+void xpp_reset(void);
+int16_t xpp_asp_control(gaddr pb, bool async);
+
 #endif

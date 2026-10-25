@@ -18,6 +18,14 @@ typedef struct asp_session asp_session;
  * (status and *status_len optional, up to ASP_QUANTUM bytes), and open a
  * session. */
 asp_session *asp_open(const char *nbp_name, uint8_t *status, int *status_len, char *err, size_t errlen);
+/* The same at a server's address (its node and session listening socket),
+ * asking every interval_ms, tries times: NULL with the server's refusal or
+ * the transport's error in *err. */
+asp_session *asp_open_at(uint8_t node, uint8_t sls, int interval_ms, int tries, int16_t *err);
+/* A server's status, up to cap bytes. */
+int16_t asp_status_at(uint8_t node, uint8_t sls, uint8_t *status, int cap, int *status_len);
+/* The server's attentions, to fn (called while the stack runs). */
+void asp_set_attention(asp_session *s, void (*fn)(void *ctx, uint16_t code), void *ctx);
 /* A command: the AFP result from the reply's CmdResult (or a session
  * failure), and the reply data (up to cap bytes; *rlen its length). */
 int asp_command(asp_session *s, const uint8_t *cmd, int len, uint8_t *reply, int cap, int *rlen);

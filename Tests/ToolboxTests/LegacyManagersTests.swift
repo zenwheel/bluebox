@@ -352,4 +352,134 @@ extension BlueBox {
             #expect(ppcErr("DBRemoveResultHandler", [fourCC("blob")]) == -811)
         }
     }
+
+    /// AppleTalk's older InterfaceLib calls: .XPP's ASP and AFP calls with
+    /// a server (AFPTests' stub on the LToUDP loopback), LAP protocol
+    /// handlers, the transition queue, and Ethernet with no driver open.
+    @Suite struct AppleTalkLegacy {
+        func block(_ bytes: [UInt8]) -> UInt32 {
+            let p = tb_NewPtr(Int32(max(bytes.count, 1)), false, true)
+            for (i, b) in bytes.enumerated() { wr8(p + UInt32(i), b) }
+            return p
+        }
+        func pas(_ s: String) -> [UInt8] { [UInt8(s.utf8.count)] + Array(s.utf8) }
+
+        @Test func aspAndAfpWithAServer() {
+            #expect(machine_set_appletalk("local"))
+            _ = launchTestApp()
+            let afp = AFPStub()
+            let asp = ASPStub(afp)
+            defer { asp.thread.finish() }
+            // XPPPrmBlk: cmdResult 18, sessRefnum 28, cbSize 32, cbPtr 34,
+            // rbSize 38, rbPtr 40, wdSize 44, wdPtr 46; serverAddr 32.
+            let pb = tb_NewPtr(400, false, true), reply = tb_NewPtr(8000, false, true)
+            let server = UInt32(asp.node) << 8 | UInt32(asp.sls)
+            wr32(pb + 32, server); wr16(pb + 38, 100); wr32(pb + 40, reply)
+            #expect(ppcErr("ASPGetStatus", [pb, 0]) == 0)
+            #expect(String(decoding: (0..<UInt32(rd16(pb + 38))).map { rd8(reply + $0) }, as: UTF8.self) == "stub status")
+
+            // A login opens the session at afpAddrBlock (44).
+            let login = block([18] + pas("AFPVersion 2.1") + pas("No User Authent"))
+            gmemset(pb, 0, 400)
+            wr16(pb + 32, UInt16(1 + 15 + 16)); wr32(pb + 34, login); wr16(pb + 38, 0); wr32(pb + 40, reply)
+            wr32(pb + 44, server)
+            #expect(ppcErr("AFPCommand", [pb, 0]) == 0 && rd32(pb + 18) == 0)
+            let sess = rd16(pb + 28)
+            #expect(sess != 0)
+
+            // An ASP command: FPGetSrvrParms.
+            let cmd = block([16, 0])
+            wr16(pb + 32, 2); wr32(pb + 34, cmd); wr16(pb + 38, 100)
+            #expect(ppcErr("ASPUserCommand", [pb, 0]) == 0 && rd32(pb + 18) == 0 && rd16(pb + 38) == 14)
+            #expect(rd8(reply + 4) == 1 && rd8(reply + 6) == 7)
+
+            // The volume, a fork, and a read across two transactions.
+            let open = block([24, 0, 0, 0x20] + pas("StubVol"))
+            wr16(pb + 32, 12); wr32(pb + 34, open); wr16(pb + 38, 100)
+            #expect(ppcErr("AFPCommand", [pb, 0]) == 0 && rd32(pb + 18) == 0 && rd16(reply + 2) == 1)
+            let fork = block([26, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 2] + pas("ReadMe"))
+            wr16(pb + 32, 20); wr32(pb + 34, fork); wr16(pb + 38, 100)
+            #expect(ppcErr("AFPCommand", [pb, 0]) == 0 && rd32(pb + 18) == 0)
+            let ref = rd16(reply + 2)
+            let rw = block([27, 0] + be16(Int(ref)) + be32(0) + be32(6000) + [0, 0])
+            wr32(pb + 34, rw); wr16(pb + 38, 6000)
+            let reads = afp.reads
+            #expect(ppcErr("AFPCommand", [pb, 0]) == 0 && rd32(pb + 18) == 0 && rd16(pb + 38) == 6000)
+            #expect((0..<6000).map { rd8(reply + UInt32($0)) } == Array(AFPStub.readMe[0..<6000]))
+            #expect(afp.reads - reads == 2)
+            // A write of the program's data.
+            let data = block([UInt8](repeating: 0x5A, count: 100))
+            wr8(rw, 33); wr32(rw + 8, 100)
+            wr16(pb + 44, 100); wr32(pb + 46, data); wr16(pb + 38, 4)
+            #expect(ppcErr("AFPCommand", [pb, 0]) == 0 && rd32(pb + 18) == 0 && afp.writes == 1)
+
+            wr16(pb + 28, 0)
+            #expect(ppcErr("ASPGetParms", [pb, 0]) == 0 && rd16(pb + 28) == 578 && rd16(pb + 30) == 4624)
+            wr16(pb + 28, sess)
+            let logout = block([20, 0])
+            wr16(pb + 32, 2); wr32(pb + 34, logout); wr16(pb + 38, 0)
+            #expect(ppcErr("AFPCommand", [pb, 0]) == 0)
+            #expect(asp.closed)
+            #expect(ppcErr("ASPCloseSession", [pb, 0]) == -1070) // aspParamErr: closed with the logout
+            #expect(ppcErr("ASPAbortOS", [pb, 0]) == -1102)
+            // No server at another address.
+            wr32(pb + 32, 0x0000_7790); wr8(pb + 30, 1); wr8(pb + 31, 0) // one try, a second
+            #expect(ppcErr("ASPOpenSession", [pb, 0]) == -1069)
+            // ZIP: no router, so no zones.
+            #expect(ppcErr("GetZoneList", [pb, 0]) == -93 && ppcExport("GetBridgeAddress", []) == 0)
+        }
+
+        @Test func lapProtocolHandlersAndTheTransitionQueue() {
+            #expect(machine_set_appletalk("local"))
+            _ = launchTestApp()
+            #expect(ppcErr("MPPOpen", []) == 0)
+            let flag = tb_NewPtr(4, false, true)
+            // MOVE.W D1,flag; RTS: the bytes after the LAP header.
+            let handler = block([0x33, 0xC1] + be32(flag) + [0x4E, 0x75])
+            let pb = tb_NewPtr(64, false, true)
+            wr8(pb + 28, 0x50); wr32(pb + 30, handler)
+            #expect(ppcErr("PAttachPH", [pb, 0]) == 0)
+            #expect(ppcErr("PAttachPH", [pb, 0]) == -94) // lapProtErr: taken
+            let stub = ASPStub(AFPStub())
+            defer { stub.thread.finish() }
+            let me = tb_NewPtr(4, false, true)
+            #expect(ppcErr("GetNodeAddress", [me, me + 2]) == 0)
+            stub.sendRaw([UInt8(rd16(me)), stub.node, 0x50, 1, 2, 3])
+            for _ in 0..<200 where rd16(flag) == 0 { usleep(5000); appletalk_poll() }
+            #expect(rd16(flag) == 3)
+            // A frame of our own: BuildLAPwds, then PWriteLAP.
+            let wds = tb_NewPtr(16, false, true), frame = tb_NewPtr(16, false, true)
+            ppcExport("BuildLAPwds", [wds, frame, UInt32(stub.node), 0x50, 8])
+            #expect(rd8(frame) == stub.node && rd8(frame + 2) == 0x50 && rd16(wds) == 8 && rd32(wds + 2) == frame)
+            wr32(pb + 30, wds)
+            #expect(ppcErr("PWriteLAP", [pb, 0]) == 0)
+            #expect(ppcErr("PDetachPH", [pb, 0]) == 0 && ppcErr("PDetachPH", [pb, 0]) == -94)
+            wr8(pb + 28, 2)
+            #expect(ppcErr("PAttachPH", [pb, 0]) == -94) // DDP's own type
+
+            // Transition queue entries: each records the event; the second refuses.
+            let f1 = tb_NewPtr(4, false, true), f2 = tb_NewPtr(4, false, true)
+            func entry(_ f: UInt32, _ answer: UInt8) -> UInt32 {
+                let code = block([0x20, 0x2F, 0x00, 0x04, 0x23, 0xC0] + be32(f) + [0x70, answer, 0x4E, 0x75])
+                let q = tb_NewPtr(10, false, true)
+                wr32(q + 6, code)
+                return q
+            }
+            let e1 = entry(f1, 0), e2 = entry(f2, 7)
+            #expect(ppcErr("LAPAddATQ", [e1]) == 0 && ppcErr("LAPAddATQ", [e2]) == 0)
+            #expect(ppcErr("ATPreFlightEvent", [3, 4, 0]) == 7) // ClosePrep refused
+            #expect(rd32(f1) == 4 && rd32(f2) == 3)                 // the first told to cancel
+            ppcExport("ATEvent", [2, 0])
+            #expect(rd32(f1) == 2 && rd32(f2) == 2)
+            #expect(ppcErr("LAPRmvATQ", [e2]) == 0 && ppcErr("LAPRmvATQ", [e2]) == -1)
+            #expect(ppcErr("ATPUnload", []) == 0)
+
+            // Ethernet: .ENET isn't open.
+            let epb = tb_NewPtr(80, false, true)
+            for name in ["EAttachPH", "EWrite", "ERead", "EGetInfo", "EAddMulti", "EDelMulti", "ERdCancel",
+                         "ESetGeneral", "EDetachPH"] {
+                #expect(ppcErr(name, [epb, 0]) == -28)
+            }
+        }
+    }
 }

@@ -23397,6 +23397,252 @@ static void ppcglue_DBGetResultHandler(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ASPOpenSession(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPOpenSession(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPCloseSession(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPCloseSession(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPAbortOS(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPAbortOS(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPGetParms(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPGetParms(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPCloseAll(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPCloseAll(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPUserWrite(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPUserWrite(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPUserCommand(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPUserCommand(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ASPGetStatus(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ASPGetStatus(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AFPCommand(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AFPCommand(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetLocalZones(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetLocalZones(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetZoneList(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetZoneList(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PAttachPH(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PAttachPH(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PDetachPH(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PDetachPH(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PWriteLAP(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PWriteLAP(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ATPKillAllGetReq(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ATPKillAllGetReq(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EWrite(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EWrite(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EAttachPH(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EAttachPH(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EDetachPH(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EDetachPH(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ERead(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ERead(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ERdCancel(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ERdCancel(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EGetInfo(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EGetInfo(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ESetGeneral(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ESetGeneral(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EAddMulti(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EAddMulti(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EDelMulti(ppc_cpu *c)
+{
+    gaddr a_thePBptr = (gaddr)c->gpr[3];
+    int8_t a_async = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EDelMulti(a_thePBptr, a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_BuildLAPwds(ppc_cpu *c)
+{
+    gaddr a_wdsPtr = (gaddr)c->gpr[3];
+    gaddr a_dataPtr = (gaddr)c->gpr[4];
+    int16_t a_destHost = (int16_t)c->gpr[5];
+    int16_t a_prototype = (int16_t)c->gpr[6];
+    int16_t a_frameLen = (int16_t)c->gpr[7];
+    tb_BuildLAPwds(a_wdsPtr, a_dataPtr, a_destHost, a_prototype, a_frameLen);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetBridgeAddress(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBridgeAddress();
+    c->pc = c->lr;
+}
+
+static void ppcglue_ATPUnload(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ATPUnload();
+    c->pc = c->lr;
+}
+
+static void ppcglue_LAPAddATQ(ppc_cpu *c)
+{
+    gaddr a_theATQEntry = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LAPAddATQ(a_theATQEntry);
+    c->pc = c->lr;
+}
+
+static void ppcglue_LAPRmvATQ(ppc_cpu *c)
+{
+    gaddr a_theATQEntry = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LAPRmvATQ(a_theATQEntry);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ATEvent(ppc_cpu *c)
+{
+    int32_t a_event = (int32_t)c->gpr[3];
+    gaddr a_infoPtr = (gaddr)c->gpr[4];
+    tb_ATEvent(a_event, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ATPreFlightEvent(ppc_cpu *c)
+{
+    int32_t a_event = (int32_t)c->gpr[3];
+    int32_t a_cancel = (int32_t)c->gpr[4];
+    gaddr a_infoPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ATPreFlightEvent(a_event, a_cancel, a_infoPtr);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -35352,9 +35598,22 @@ const ppc_export ppc_exports[] = {
     {"AESizeOfNthItem", ppcglue_AESizeOfNthItem},
     {"AESizeOfParam", ppcglue_AESizeOfParam},
     {"AESuspendTheCurrentEvent", ppcglue_AESuspendTheCurrentEvent},
+    {"AFPCommand", ppcglue_AFPCommand},
     {"AOff", ppcglue_AOff},
     {"AOn", ppcglue_AOn},
     {"AOnIgnoreModem", ppcglue_AOnIgnoreModem},
+    {"ASPAbortOS", ppcglue_ASPAbortOS},
+    {"ASPCloseAll", ppcglue_ASPCloseAll},
+    {"ASPCloseSession", ppcglue_ASPCloseSession},
+    {"ASPGetParms", ppcglue_ASPGetParms},
+    {"ASPGetStatus", ppcglue_ASPGetStatus},
+    {"ASPOpenSession", ppcglue_ASPOpenSession},
+    {"ASPUserCommand", ppcglue_ASPUserCommand},
+    {"ASPUserWrite", ppcglue_ASPUserWrite},
+    {"ATEvent", ppcglue_ATEvent},
+    {"ATPKillAllGetReq", ppcglue_ATPKillAllGetReq},
+    {"ATPUnload", ppcglue_ATPUnload},
+    {"ATPreFlightEvent", ppcglue_ATPreFlightEvent},
     {"AbortPrePrerollMovie", ppctrap_AbortPrePrerollMovie},
     {"AcceptHighLevelEvent", ppcglue_AcceptHighLevelEvent},
     {"AcquireIconRef", ppcglue_AcquireIconRef},
@@ -35429,6 +35688,7 @@ const ppc_export ppc_exports[] = {
     {"BlockMove", ppcglue_BlockMove},
     {"BlockMoveData", ppcglue_BlockMoveData},
     {"BringToFront", ppcglue_BringToFront},
+    {"BuildLAPwds", ppcglue_BuildLAPwds},
     {"Button", ppcglue_Button},
     {"CDSequenceBusy", ppcglue_CDSequenceBusy},
     {"CDSequenceChangedSourceData", ppctrap_CDSequenceChangedSourceData},
@@ -35746,6 +36006,15 @@ const ppc_export ppc_exports[] = {
     {"DrawTrimmedPicture", ppctrap_DrawTrimmedPicture},
     {"DrawTrimmedPictureFile", ppctrap_DrawTrimmedPictureFile},
     {"DumpControlHierarchy", ppcglue_DumpControlHierarchy},
+    {"EAddMulti", ppcglue_EAddMulti},
+    {"EAttachPH", ppcglue_EAttachPH},
+    {"EDelMulti", ppcglue_EDelMulti},
+    {"EDetachPH", ppcglue_EDetachPH},
+    {"EGetInfo", ppcglue_EGetInfo},
+    {"ERdCancel", ppcglue_ERdCancel},
+    {"ERead", ppcglue_ERead},
+    {"ESetGeneral", ppcglue_ESetGeneral},
+    {"EWrite", ppcglue_EWrite},
     {"EditionHasFormat", ppctrap_EditionHasFormat},
     {"EmbedControl", ppcglue_EmbedControl},
     {"EmptyCollection", ppctrap_EmptyCollection},
@@ -36036,6 +36305,7 @@ const ppc_export ppc_exports[] = {
     {"GetBevelButtonContentInfo", ppcglue_GetBevelButtonContentInfo},
     {"GetBevelButtonMenuHandle", ppcglue_GetBevelButtonMenuHandle},
     {"GetBevelButtonMenuValue", ppcglue_GetBevelButtonMenuValue},
+    {"GetBridgeAddress", ppcglue_GetBridgeAddress},
     {"GetCCursor", ppcglue_GetCCursor},
     {"GetCIcon", ppcglue_GetCIcon},
     {"GetCPUSpeed", ppcglue_GetCPUSpeed},
@@ -36166,6 +36436,7 @@ const ppc_export ppc_exports[] = {
     {"GetKeys", ppcglue_GetKeys},
     {"GetLabel", ppcglue_GetLabel},
     {"GetLastEditionContainerUsed", ppcglue_GetLastEditionContainerUsed},
+    {"GetLocalZones", ppcglue_GetLocalZones},
     {"GetMCEntry", ppcglue_GetMCEntry},
     {"GetMCInfo", ppcglue_GetMCInfo},
     {"GetMainDevice", ppcglue_GetMainDevice},
@@ -36442,6 +36713,7 @@ const ppc_export ppc_exports[] = {
     {"GetWindowProxyIcon", ppcglue_GetWindowProxyIcon},
     {"GetWindowRegion", ppcglue_GetWindowRegion},
     {"GetZone", ppcglue_GetZone},
+    {"GetZoneList", ppcglue_GetZoneList},
     {"GlobalToLocal", ppcglue_GlobalToLocal},
     {"GoToBeginningOfMovie", ppcglue_GoToBeginningOfMovie},
     {"GoToEndOfMovie", ppctrap_GoToEndOfMovie},
@@ -36632,6 +36904,8 @@ const ppc_export ppc_exports[] = {
     {"KillControls", ppcglue_KillControls},
     {"KillPicture", ppcglue_KillPicture},
     {"KillPoly", ppcglue_KillPoly},
+    {"LAPAddATQ", ppcglue_LAPAddATQ},
+    {"LAPRmvATQ", ppcglue_LAPRmvATQ},
     {"LActivate", ppcglue_LActivate},
     {"LAddColumn", ppcglue_LAddColumn},
     {"LAddRow", ppcglue_LAddRow},
@@ -37346,6 +37620,7 @@ const ppc_export ppc_exports[] = {
     {"OutlineMetrics", ppcglue_OutlineMetrics},
     {"OverrideIconRef", ppcglue_OverrideIconRef},
     {"OverrideIconRefFromResource", ppcglue_OverrideIconRefFromResource},
+    {"PAttachPH", ppcglue_PAttachPH},
     {"PBAllocate", ppcglue_PBAllocate},
     {"PBAllocateAsync", ppcglue_PBAllocateAsync},
     {"PBAllocateSync", ppcglue_PBAllocateSync},
@@ -37590,11 +37865,13 @@ const ppc_export ppc_exports[] = {
     {"PBWrite", ppcglue_PBWrite},
     {"PBWriteAsync", ppcglue_PBWriteAsync},
     {"PBWriteSync", ppcglue_PBWriteSync},
+    {"PDetachPH", ppcglue_PDetachPH},
     {"PMFeatures", ppcglue_PMFeatures},
     {"PMSelectorCount", ppcglue_PMSelectorCount},
     {"PMgrVersion", ppcglue_PMgrVersion},
     {"PPCDispatch", ppcglue_PPCDispatch},
     {"PPostEvent", ppcglue_PPostEvent},
+    {"PWriteLAP", ppcglue_PWriteLAP},
     {"PackBits", ppcglue_PackBits},
     {"PaintArc", ppcglue_PaintArc},
     {"PaintBehind", ppcglue_PaintBehind},

@@ -39,12 +39,12 @@ enum { DDP_NBP = 2, NIS_SOCKET = 2, MAX_DATA = 586 };
 enum { NBP_BRRQ = 1, NBP_LKUP = 2, NBP_LKUP_REPLY = 3 };
 /* .MPP control codes */
 enum {
-    writeDDP = 246, closeSkt = 247, openSkt = 248, loadNBP = 249, confirmName = 250, lookupName = 251,
+    writeLAP = 243, detachPH = 244, attachPH = 245, writeDDP = 246, closeSkt = 247, openSkt = 248, loadNBP = 249, confirmName = 250, lookupName = 251,
     removeName = 252, registerName = 253, killNBP = 254, unloadNBP = 255, setSelfSend = 256,
     SetMyZone = 257, GetATalkInfo = 258, ATalkClosePrep = 259,
 };
 enum {
-    ddpSktErr = -91, ddpLenErr = -92, nbpBuffOvr = -1024, nbpNoConfirm = -1025, nbpConfDiff = -1026,
+    ddpSktErr = -91, ddpLenErr = -92, lapProtErr = -94, nbpBuffOvr = -1024, nbpNoConfirm = -1025, nbpConfDiff = -1026,
     nbpDuplicate = -1027, nbpNotFound = -1028, tooManyReqs = -1097, reqAborted = -1105, cbNotFound = -1102,
 };
 /* MPP parameter block, after csCode */
@@ -68,6 +68,7 @@ static uint8_t node;
 static bool opened, selfsend, booted;
 static int selfsend_holds; /* Open Transport's endpoints: always to ourselves too */
 static gaddr listeners[256];
+static gaddr lap_handlers[256]; /* LAP protocol handlers, by LLAP type */
 static bool sockets[256];
 static at_handler handlers[256]; /* sockets of ours (ATP's): datagrams go to C */
 static gaddr vars, readers;     /* RHA, and ReadPacket/ReadRest */
@@ -569,9 +570,41 @@ static void read_rest(cpu68k *c, uint16_t tw)
     set_z(c, true);
 }
 
+/* A frame of another LLAP type, to the protocol handler attached for it:
+ * called as a listener is, A3 just past the LAP header, D1 the rest. */
+static void deliver_lap(const uint8_t *f, int n)
+{
+    gaddr fn = lap_handlers[f[2]];
+    if (!fn || !g_cpu)
+        return;
+    cpu68k *c = g_cpu;
+    uint32_t d[8], a[8];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    uint16_t sr = c->sr;
+    gput(vars + TO_RHA, f, 3);
+    cur = f + 3;
+    cur_left = n - 3;
+    c->a[0] = c->a[1] = 0;
+    c->a[2] = vars;
+    c->a[3] = vars + TO_RHA + 3;
+    c->a[4] = readers;
+    c->d[1] = (uint32_t)(n - 3);
+    guest_call_regs(fn);
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    c->sr = sr;
+    cur = NULL;
+    cur_left = 0;
+}
+
 /* A DDP datagram for this node: frame is LLAP header and DDP header. */
 static void deliver(const uint8_t *f, int n)
 {
+    if (n >= 3 && f[2] != LLAP_DDP_SHORT && f[2] != LLAP_DDP_LONG && f[2] < 0x80) {
+        deliver_lap(f, n);
+        return;
+    }
     if (n < 3 + 5)
         return;
     int hl;
@@ -1013,9 +1046,51 @@ static int16_t write_ddp(gaddr pb)
     return noErr;
 }
 
+/* writeLAP: a frame of the program's own LLAP type, its header (the
+ * destination node and the type) in the write data structure's first
+ * entry, the data after. */
+static int16_t write_lap(gaddr pb)
+{
+    gaddr wds = rd32(pb + PB_WDS);
+    if (!wds || !rd32(wds + 2) || rd16(wds) < 3)
+        return paramErr;
+    gaddr hdr = rd32(wds + 2);
+    uint8_t f[3 + 600];
+    f[0] = rd8(hdr);
+    f[1] = node;
+    f[2] = rd8(hdr + 2);
+    if (f[2] == 0 || f[2] >= 0x80)
+        return lapProtErr;
+    int n = 0;
+    for (gaddr e = wds; rd16(e); e += 6) {
+        int skip = e == wds ? 3 : 0, l = rd16(e) - skip;
+        if (n + l > 600)
+            return ddpLenErr;
+        gget(f + 3 + n, rd32(e + 2) + (uint32_t)skip, (uint32_t)l);
+        n += l;
+    }
+    send_frame(f, 3 + n);
+    return noErr;
+}
+
 static int16_t mpp_control(gaddr pb, bool async)
 {
     switch ((int16_t)rd16(pb + CntrlParam_csCode_off)) {
+    case attachPH: { /* a handler for an LLAP type other than DDP's */
+        uint8_t t = rd8(pb + PB_SOCKET);
+        if (t == 0 || t == LLAP_DDP_SHORT || t == LLAP_DDP_LONG || t >= 0x80 || lap_handlers[t])
+            return lapProtErr;
+        lap_handlers[t] = rd32(pb + PB_LISTENER);
+        return noErr;
+    }
+    case detachPH: {
+        uint8_t t = rd8(pb + PB_SOCKET);
+        if (!lap_handlers[t])
+            return lapProtErr;
+        lap_handlers[t] = 0;
+        return noErr;
+    }
+    case writeLAP: return write_lap(pb);
     case openSkt: {
         int s = rd8(pb + PB_SOCKET);
         if (!s) {
@@ -1150,6 +1225,57 @@ static void lap_manager(cpu68k *c, uint16_t tw)
     c->d[0] = 0;
 }
 
+/* The transition queue for InterfaceLib's LAPAddATQ and LAPRmvATQ. */
+int16_t at_transition_queue(gaddr entry, bool add)
+{
+    cpu68k *c = g_cpu;
+    uint32_t d0 = c->d[0], a0 = c->a[0];
+    c->d[0] = add ? LAddAEQ : LRmvAEQ;
+    c->a[0] = entry;
+    int n = ntransition;
+    lap_manager(c, 0);
+    c->d[0] = d0;
+    c->a[0] = a0;
+    return add || ntransition < n ? noErr : -1; /* qErr: not in the queue */
+}
+
+/* An event to every entry's routine, C convention (event, entry, info),
+ * oldest first.  When a routine refuses (a nonzero answer) and cancel is
+ * an event, those already told are sent it and the refusal returned. */
+int32_t at_transition_event(int32_t event, gaddr info, bool preflight, int32_t cancel)
+{
+    cpu68k *c = g_cpu;
+    for (int i = 0; i < ntransition; i++) {
+        gaddr q = transition_queue[i], fn = rd32(q + 6);
+        if (!fn)
+            continue;
+        uint32_t sp = c->a[7];
+        cpu_push32(c, info);
+        cpu_push32(c, q);
+        cpu_push32(c, (uint32_t)event);
+        uint32_t d[8], a[8];
+        memcpy(d, c->d, sizeof d);
+        memcpy(a, c->a, sizeof a);
+        guest_call_regs(fn);
+        int32_t r = (int32_t)c->d[0];
+        memcpy(c->d, d, sizeof d);
+        memcpy(c->a, a, sizeof a);
+        c->a[7] = sp;
+        if (preflight && r) {
+            for (int k = 0; k < i; k++) {
+                gaddr p = transition_queue[k];
+                cpu_push32(c, info);
+                cpu_push32(c, p);
+                cpu_push32(c, (uint32_t)cancel);
+                guest_call(rd32(p + 6));
+                c->a[7] = sp;
+            }
+            return r;
+        }
+    }
+    return 0;
+}
+
 bool machine_set_appletalk(const char *how)
 {
     if (!strcmp(how, "off"))
@@ -1188,6 +1314,7 @@ void appletalk_reset(void)
     atp_reset();
     adsp_reset();
     memset(listeners, 0, sizeof listeners);
+    memset(lap_handlers, 0, sizeof lap_handlers);
     memset(ops, 0, sizeof ops);
     memset(&host_lookup, 0, sizeof host_lookup);
     memset(hops, 0, sizeof hops);

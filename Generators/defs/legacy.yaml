@@ -961,3 +961,308 @@
         type: Boolean
     dispatcher: Pack13
     selector: 0x0516
+
+# ---- AppleTalk's and Ethernet's InterfaceLib glue (atlegacy.c): Control
+# calls on .XPP, .MPP, .ATP and .ENET ----
+
+- function:
+    name: ASPOpenSession
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPCloseSession
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPAbortOS
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPGetParms
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPCloseAll
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPUserWrite
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPUserCommand
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ASPGetStatus
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: AFPCommand
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: GetLocalZones
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: GetZoneList
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: PAttachPH
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: PDetachPH
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: PWriteLAP
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ATPKillAllGetReq
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EWrite
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EAttachPH
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EDetachPH
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ERead
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ERdCancel
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EGetInfo
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: ESetGeneral
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EAddMulti
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: EDelMulti
+    return: OSErr
+    args:
+      - name: thePBptr
+        type: Ptr
+      - name: async
+        type: Boolean
+    cfm: InterfaceLib
+
+- function:
+    name: BuildLAPwds
+    args:
+      - name: wdsPtr
+        type: Ptr
+      - name: dataPtr
+        type: Ptr
+      - name: destHost
+        type: INTEGER
+      - name: prototype
+        type: INTEGER
+      - name: frameLen
+        type: INTEGER
+    cfm: InterfaceLib
+
+- function:
+    name: GetBridgeAddress
+    return: INTEGER
+    cfm: InterfaceLib
+
+- function:
+    name: ATPUnload
+    return: OSErr
+    cfm: InterfaceLib
+
+- function:
+    name: LAPAddATQ
+    return: OSErr
+    args:
+      - name: theATQEntry
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: LAPRmvATQ
+    return: OSErr
+    args:
+      - name: theATQEntry
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: ATEvent
+    args:
+      - name: event
+        type: LONGINT
+      - name: infoPtr
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: ATPreFlightEvent
+    return: OSErr
+    args:
+      - name: event
+        type: LONGINT
+      - name: cancel
+        type: LONGINT
+      - name: infoPtr
+        type: Ptr
+    cfm: InterfaceLib
