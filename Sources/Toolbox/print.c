@@ -65,7 +65,7 @@ static int res_of(gaddr p, int off)
 
 /* Fill a print record from a page setup (in points), at the record's
  * resolution. */
-static void put_setup(gaddr p, const machine_page_setup *ps, int vres, int hres)
+void print_put_setup(gaddr p, const machine_page_setup *ps, int vres, int hres)
 {
     double sv = vres / 72.0, sh = hres / 72.0;
     int w = (int)((ps->right - ps->left) * sh + 0.5), h = (int)((ps->bottom - ps->top) * sv + 0.5);
@@ -86,7 +86,7 @@ static void put_setup(gaddr p, const machine_page_setup *ps, int vres, int hres)
     gmemcpy(p + 32, p + 2, 14);        /* prInfoPT */
 }
 
-static void get_setup(gaddr p, machine_page_setup *ps)
+void print_get_setup(gaddr p, machine_page_setup *ps)
 {
     qrect page = qrect_get(p + 8), paper = qrect_get(p + 16);
     double sv = 72.0 / res_of(p, 4), sh = 72.0 / res_of(p, 6);
@@ -104,7 +104,7 @@ void tb_PrintDefault(gaddr h)
     gaddr p = rd32(h);
     gmemset(p, 0, TPrint_SIZE);
     wr16(p, 3);                        /* iPrVersion */
-    put_setup(p, &defaults, 72, 72);
+    print_put_setup(p, &defaults, 72, 72);
     wr16(p + 62, 1);                   /* iFstPage */
     wr16(p + 64, 9999);                /* iLstPage */
     wr16(p + 66, 1);                   /* iCopies */
@@ -125,7 +125,7 @@ int8_t tb_PrStlDialog(gaddr h)
 {
     tb_PrValidate(h);
     machine_page_setup ps;
-    get_setup(rd32(h), &ps);
+    print_get_setup(rd32(h), &ps);
     if (!page_setup_fn) {
         set_print_error(noErr);
         return 1; /* no host panel: keep the defaults */
@@ -134,7 +134,7 @@ int8_t tb_PrStlDialog(gaddr h)
         set_print_error(noErr);
         return 0;
     }
-    put_setup(rd32(h), &ps, res_of(rd32(h), 4), res_of(rd32(h), 6));
+    print_put_setup(rd32(h), &ps, res_of(rd32(h), 4), res_of(rd32(h), 6));
     return 1;
 }
 
@@ -236,7 +236,7 @@ static void job_item(cpu68k *c, uint16_t tw)
 static void describe_paper(gaddr d)
 {
     machine_page_setup ps;
-    get_setup(rd32(rd32(d + hPrintUsr_off)), &ps);
+    print_get_setup(rd32(rd32(d + hPrintUsr_off)), &ps);
     char text[96];
     snprintf(text, sizeof text, "Paper: %.4g x %.4g in, %s", ps.paper_width / 72, ps.paper_height / 72,
              ps.landscape ? "landscape" : "portrait");
@@ -264,9 +264,9 @@ static void style_item(cpu68k *c, uint16_t tw)
     } else if (item == 3 && page_setup_fn) {
         gaddr h = rd32(d + hPrintUsr_off);
         machine_page_setup ps;
-        get_setup(rd32(h), &ps);
+        print_get_setup(rd32(h), &ps);
         if (page_setup_fn(&ps, print_ctx)) {
-            put_setup(rd32(h), &ps, res_of(rd32(h), 4), res_of(rd32(h), 6));
+            print_put_setup(rd32(h), &ps, res_of(rd32(h), 4), res_of(rd32(h), 6));
             describe_paper(d);
         }
     }
@@ -384,8 +384,8 @@ void tb_PrGeneral(gaddr pData)
         }
         tb_PrValidate(h);
         machine_page_setup ps;
-        get_setup(rd32(h), &ps);
-        put_setup(rd32(h), &ps, y, x);
+        print_get_setup(rd32(h), &ps);
+        print_put_setup(rd32(h), &ps, y, x);
         break;
     }
     case draftBitsOp:
@@ -397,7 +397,7 @@ void tb_PrGeneral(gaddr pData)
         machine_page_setup ps = defaults;
         if (h && rd32(h)) {
             tb_PrValidate(h);
-            get_setup(rd32(h), &ps);
+            print_get_setup(rd32(h), &ps);
         }
         wr8(pData + 12, ps.landscape ? 0xFF : 0);
         wr8(pData + 13, 0);

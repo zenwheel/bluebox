@@ -221,6 +221,11 @@ void machine_tick_polled(void);
 gaddr wm_window_at(uint32_t p);
 void drag_reset(void); /* Drag Manager (drag.c): a fresh machine */
 void print_reset(void); /* Printing Manager (print.c) */
+/* A print record's page setup in points, and one put in at a resolution
+ * (the Carbon Printing Manager's page formats are print records too). */
+void print_get_setup(gaddr p, machine_page_setup *ps);
+void print_put_setup(gaddr p, const machine_page_setup *ps, int vres, int hres);
+void carbonsvc_reset(void); /* CarbonLib's services (carbon_svc.c) */
 void icm_reset(void); /* Image Compression Manager (qt_icm.c) */
 void gx_reset(void); /* QuickDraw GX (gx.c) */
 /* The mouse's own motion for ADB packets (events.c). */

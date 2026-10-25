@@ -54,6 +54,8 @@ extern const unsigned snd_export_count;
 /* CarbonLib's Core Foundation basics and accessors (carbon.c). */
 extern const ppc_export carbon_exports[];
 extern const unsigned carbon_export_count;
+/* CarbonLib's printing, Navigation, scrap, ATSUI and MLTE (carbon_svc.c). */
+void (*carbonsvc_export_fn(const char *name))(ppc_cpu *);
 /* DrawSprocket (drawsprocket.c). */
 extern const ppc_export dsp_exports[];
 extern const unsigned dsp_export_count;
