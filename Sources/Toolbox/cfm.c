@@ -699,7 +699,10 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
                     continue;
                 }
             } else if (li >= 0 || !weak_lib) {
-                void (*fn)(ppc_cpu *) = cls == kTVectorCFragSymbol || cls == kCodeCFragSymbol ? export_fn(sname) : NULL;
+                /* By name, as CFM binds: a routine imported as data
+                 * (Hardwood Solitaire II's GetCurrentProcess) is still its
+                 * transition vector, unless we have data of that name. */
+                void (*fn)(ppc_cpu *) = cls == kDataCFragSymbol && ppc_data_export(sname) ? NULL : export_fn(sname);
                 if (fn) {
                     imports[k] = native_tvector(fn, sname);
                     continue;

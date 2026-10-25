@@ -147,6 +147,10 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
     g_ppc.gpr[1] = sp;
     g_ppc.pc = rd32(tvector);
     g_ppc.gpr[2] = rd32(tvector + 4);
+    /* r12 holds the transition vector, as for a call through a pointer:
+     * Hardwood Solitaire II's trap patches are vectors built in the heap
+     * whose code reads the routine to go on to from the vector. */
+    g_ppc.gpr[12] = tvector;
     g_ppc.lr = return_code;
     g_ppc.halted = false;
     uint64_t cap = trap_instruction_limit();
