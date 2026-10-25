@@ -733,6 +733,21 @@ extension BlueBox {
             #expect(ilCall16("DMSetDisplayMode", [main, 0x80, depth, 0, 0]) == 0)
             #expect(ilCall16("DMSetDisplayMode", [main, 0x81, depth, 0, 0]) == -50)
 
+            // The display list: the one display; no AV components.
+            let count = tb_NewPtr(4, false, true), list = tb_NewPtr(4, false, true)
+            #expect(tb_DMNewDisplayList(0, 0, 0, count, list) == 0 && rd32(count) == 1)
+            #expect(tb_DMGetIndexedDisplayFromList(rd32(list), 1, 0, 0, 0) == -6229)
+            #expect(tb_DMDisposeList(rd32(list)) == 0)
+            #expect(tb_DMNewAVDeviceList(0, 0, 0, count, list) == 0 && rd32(count) == 0)
+            #expect(tb_DMGetIndexedComponentFromList(rd32(list), 0, 0, 0, 0) == -6229)
+            let name = tb_NewPtr(256, false, true)
+            #expect(tb_DMGetNameByAVID(1, 0, name) == 0 && pstring(at: name) == "Display")
+            #expect(tb_DMGetEnableByAVID(1, flag, flag + 1) == 0 && rd8(flag) == 1 && rd8(flag + 1) == 0)
+            #expect(tb_DMSetEnableByAVID(1, 0, 0) == -6231)
+            #expect(tb_DMGetGammaByAVID(1, 0, name) == -6228)
+            #expect(tb_DMDisplayGestalt(1, 0, name) == -5551)
+            #expect(tb_DMConfirmConfiguration(0, 0, 0, 0) == 0)
+
             // From 68k code: DMGetFirstScreenDevice and DMGetDeskRegion.
             let desk = tb_NewPtr(4, false, true)
             let reason = run68k([

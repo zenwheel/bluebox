@@ -1540,3 +1540,425 @@
         type: FSSpec*
     dispatcher: OSDispatch
     selector: 0x007B
+
+# The rest of _DisplayDispatch: display lists, AV devices, gamma, prefs.
+
+- function:
+    name: DMDisplayGestalt
+    return: OSErr
+    args:
+      - name: theDisplayID
+        type: uint32_t
+      - name: displayGestaltSelector
+        type: uint32_t
+      - name: displayGestaltResponse
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x06D3
+
+- function:
+    name: DMUseScreenPrefs
+    return: OSErr
+    args:
+      - name: usePrefs
+        type: Boolean
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x03EC
+
+- function:
+    name: DMSetGammaByAVID
+    return: OSErr
+    args:
+      - name: gammaAVID
+        type: uint32_t
+      - name: setGammaFlags
+        type: uint32_t
+      - name: theGamma
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x06D1
+
+- function:
+    name: DMGetGammaByAVID
+    return: OSErr
+    args:
+      - name: gammaAVID
+        type: uint32_t
+      - name: getGammaFlags
+        type: uint32_t
+      - name: theGamma
+        type: Handle*
+    dispatcher: DisplayDispatch
+    selector: 0x06D0
+
+- function:
+    name: DMGetMakeAndModelByAVID
+    return: OSErr
+    args:
+      - name: theAVID
+        type: uint32_t
+      - name: theMakeAndModel
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x04D7
+
+- function:
+    name: DMNewDisplayList
+    return: OSErr
+    args:
+      - name: displayListIncludeFlags
+        type: uint32_t
+      - name: reserved1
+        type: uint32_t
+      - name: reserved2
+        type: uint32_t
+      - name: theCount
+        type: uint32_t*
+      - name: theDisplayList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0AD6
+
+- function:
+    name: DMGetIndexedDisplayFromList
+    return: OSErr
+    args:
+      - name: theDisplayList
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: ProcPtr
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0AD5
+
+- function:
+    name: DMNewProfileListByAVID
+    return: OSErr
+    args:
+      - name: theAVID
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: profileCount
+        type: uint32_t*
+      - name: profileList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x08DC
+
+- function:
+    name: DMGetIndexedProfileFromList
+    return: OSErr
+    args:
+      - name: profileList
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: ProcPtr
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0ADB
+
+- function:
+    name: DMNewAVPanelList
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: panelType
+        type: uint32_t
+      - name: minimumFidelity
+        type: uint32_t
+      - name: panelListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: thePanelCount
+        type: uint32_t*
+      - name: thePanelList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0C27
+
+- function:
+    name: DMNewAVEngineList
+    return: OSErr
+    args:
+      - name: displayID
+        type: uint32_t
+      - name: engineType
+        type: uint32_t
+      - name: minimumFidelity
+        type: uint32_t
+      - name: engineListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: engineCount
+        type: uint32_t*
+      - name: engineList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0C28
+
+- function:
+    name: DMNewAVDeviceList
+    return: OSErr
+    args:
+      - name: deviceType
+        type: uint32_t
+      - name: deviceListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: deviceCount
+        type: uint32_t*
+      - name: deviceList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A29
+
+- function:
+    name: DMNewAVPortListByPortType
+    return: OSErr
+    args:
+      - name: subType
+        type: uint32_t
+      - name: portListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: devicePortCount
+        type: uint32_t*
+      - name: theDevicePortList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A2A
+
+- function:
+    name: DMGetIndexedComponentFromList
+    return: OSErr
+    args:
+      - name: panelList
+        type: void*
+      - name: itemIndex
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: listIterator
+        type: ProcPtr
+      - name: userData
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0A2B
+
+- function:
+    name: DMGetNameByAVID
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: nameFlags
+        type: uint32_t
+      - name: name
+        type: StringPtr
+    dispatcher: DisplayDispatch
+    selector: 0x062D
+
+- function:
+    name: DMNewAVIDByPortComponent
+    return: OSErr
+    args:
+      - name: thePortComponent
+        type: uint32_t
+      - name: portKind
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: newID
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x082E
+
+- function:
+    name: DMGetPortComponentByAVID
+    return: OSErr
+    args:
+      - name: thePortID
+        type: uint32_t
+      - name: thePortComponent
+        type: uint32_t*
+      - name: theDesciption
+        type: void*
+      - name: thePortKind
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x082F
+
+- function:
+    name: DMSaveScreenPrefs
+    return: OSErr
+    args:
+      - name: reserved1
+        type: uint32_t
+      - name: saveFlags
+        type: uint32_t
+      - name: reserved2
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0632
+
+- function:
+    name: DMNewAVIDByDeviceComponent
+    return: OSErr
+    args:
+      - name: theDeviceComponent
+        type: uint32_t
+      - name: portKind
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: newID
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x0833
+
+- function:
+    name: DMNewAVPortListByDeviceAVID
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: minimumFidelity
+        type: uint32_t
+      - name: portListFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: devicePortCount
+        type: uint32_t*
+      - name: theDevicePortList
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0C34
+
+- function:
+    name: DMGetDeviceComponentByAVID
+    return: OSErr
+    args:
+      - name: theDeviceID
+        type: uint32_t
+      - name: theDeviceComponent
+        type: uint32_t*
+      - name: theDesciption
+        type: void*
+      - name: theDeviceKind
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x0835
+
+- function:
+    name: DMGetGraphicInfoByAVID
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: theAVPcit
+        type: Handle*
+      - name: theAVIconSuite
+        type: Handle*
+      - name: theAVLocation
+        type: void*
+    dispatcher: DisplayDispatch
+    selector: 0x0838
+
+- function:
+    name: DMGetAVPowerState
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: getPowerState
+        type: void*
+      - name: reserved1
+        type: uint32_t
+    dispatcher: DisplayDispatch
+    selector: 0x0839
+
+- function:
+    name: DMSetAVPowerState
+    return: OSErr
+    args:
+      - name: theID
+        type: uint32_t
+      - name: setPowerState
+        type: void*
+      - name: powerFlags
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x083A
+
+- function:
+    name: DMGetDeviceAVIDByPortAVID
+    return: OSErr
+    args:
+      - name: portAVID
+        type: uint32_t
+      - name: deviceAVID
+        type: uint32_t*
+    dispatcher: DisplayDispatch
+    selector: 0x043B
+
+- function:
+    name: DMGetEnableByAVID
+    return: OSErr
+    args:
+      - name: theAVID
+        type: uint32_t
+      - name: isAVIDEnabledNow
+        type: Boolean*
+      - name: canChangeEnableNow
+        type: Boolean*
+    dispatcher: DisplayDispatch
+    selector: 0x063C
+
+- function:
+    name: DMSetEnableByAVID
+    return: OSErr
+    args:
+      - name: theAVID
+        type: uint32_t
+      - name: doEnable
+        type: Boolean
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x053D
+
+- function:
+    name: DMConfirmConfiguration
+    return: OSErr
+    args:
+      - name: filterProc
+        type: ProcPtr
+      - name: confirmFlags
+        type: uint32_t
+      - name: reserved
+        type: uint32_t
+      - name: displayState
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x083F

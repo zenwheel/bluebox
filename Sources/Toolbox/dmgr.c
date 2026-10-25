@@ -428,3 +428,185 @@ void dmgr_reset(void)
     display_component = 0;
     memset(notify, 0, sizeof notify);
 }
+
+/* ---- Display lists, AV components, gamma and preferences ----
+ * The display list holds the one display; there are no AV components
+ * (panels, engines, devices, ports, profiles), so their lists are empty
+ * and an AVID other than the display's names nothing.  The display's
+ * driver keeps no gamma the Display Manager can change. */
+
+enum { gestaltUndefSelectorErr = -5551 };
+
+static int16_t empty_list(gaddr count, gaddr list)
+{
+    gaddr l = tb_NewPtr(4, true, true);
+    if (!l)
+        return memFullErr;
+    if (count)
+        wr32(count, 0);
+    if (list)
+        wr32(list, l);
+    return noErr;
+}
+
+int16_t tb_DMDisplayGestalt(uint32_t theDisplayID, uint32_t displayGestaltSelector, gaddr displayGestaltResponse)
+{
+    return theDisplayID == MAIN_DISPLAY_ID ? gestaltUndefSelectorErr : kDMNotFoundErr;
+}
+
+int16_t tb_DMUseScreenPrefs(int8_t usePrefs, gaddr displayState) { return noErr; }
+int16_t tb_DMSaveScreenPrefs(uint32_t reserved1, uint32_t saveFlags, uint32_t reserved2) { return noErr; }
+
+int16_t tb_DMSetGammaByAVID(uint32_t gammaAVID, uint32_t setGammaFlags, gaddr theGamma)
+{
+    return gammaAVID == MAIN_DISPLAY_ID ? kDMDriverNotDisplayMgrAwareErr : kDMNotFoundErr;
+}
+
+int16_t tb_DMGetGammaByAVID(uint32_t gammaAVID, uint32_t getGammaFlags, gaddr theGamma)
+{
+    if (theGamma)
+        wr32(theGamma, 0);
+    return gammaAVID == MAIN_DISPLAY_ID ? kDMDriverNotDisplayMgrAwareErr : kDMNotFoundErr;
+}
+
+int16_t tb_DMGetMakeAndModelByAVID(uint32_t theAVID, gaddr theMakeAndModel) { return kDMNotFoundErr; }
+
+/* A display list: one entry, the main display. */
+int16_t tb_DMNewDisplayList(uint32_t displayListIncludeFlags, uint32_t reserved1, uint32_t reserved2, gaddr theCount,
+                            gaddr theDisplayList)
+{
+    gaddr l = tb_NewPtr(4, true, true);
+    if (!l)
+        return memFullErr;
+    wr32(l, 1);
+    if (theCount)
+        wr32(theCount, 1);
+    if (theDisplayList)
+        wr32(theDisplayList, l);
+    return noErr;
+}
+
+/* DMDisplayListEntryRec: the device, its display ID, the include flags,
+ * reserved, then the rest left zero. */
+int16_t tb_DMGetIndexedDisplayFromList(gaddr theDisplayList, uint32_t itemIndex, uint32_t reserved, gaddr listIterator,
+                                       gaddr userData)
+{
+    if (!theDisplayList || itemIndex >= rd32(theDisplayList))
+        return kDMNotFoundErr;
+    gaddr entry = tb_NewPtr(64, true, true);
+    if (!entry)
+        return memFullErr;
+    wr32(entry, rd32(LM_MainDevice));
+    wr32(entry + 4, MAIN_DISPLAY_ID);
+    uint32_t args[3] = { userData, itemIndex, entry };
+    if (listIterator)
+        mm_call(listIterator, 0x00000FC0, args, 3);
+    tb_DisposePtr(entry);
+    return noErr;
+}
+
+int16_t tb_DMNewProfileListByAVID(uint32_t theAVID, uint32_t reserved, gaddr profileCount, gaddr profileList)
+{
+    return empty_list(profileCount, profileList);
+}
+int16_t tb_DMGetIndexedProfileFromList(gaddr profileList, uint32_t itemIndex, uint32_t reserved, gaddr listIterator,
+                                       gaddr userData)
+{
+    return kDMNotFoundErr;
+}
+int16_t tb_DMNewAVPanelList(uint32_t displayID, uint32_t panelType, uint32_t minimumFidelity, uint32_t panelListFlags,
+                            uint32_t reserved, gaddr thePanelCount, gaddr thePanelList)
+{
+    return empty_list(thePanelCount, thePanelList);
+}
+int16_t tb_DMNewAVEngineList(uint32_t displayID, uint32_t engineType, uint32_t minimumFidelity, uint32_t engineListFlags,
+                             uint32_t reserved, gaddr engineCount, gaddr engineList)
+{
+    return empty_list(engineCount, engineList);
+}
+int16_t tb_DMNewAVDeviceList(uint32_t deviceType, uint32_t deviceListFlags, uint32_t reserved, gaddr deviceCount,
+                             gaddr deviceList)
+{
+    return empty_list(deviceCount, deviceList);
+}
+int16_t tb_DMNewAVPortListByPortType(uint32_t subType, uint32_t portListFlags, uint32_t reserved,
+                                     gaddr devicePortCount, gaddr theDevicePortList)
+{
+    return empty_list(devicePortCount, theDevicePortList);
+}
+int16_t tb_DMNewAVPortListByDeviceAVID(uint32_t theID, uint32_t minimumFidelity, uint32_t portListFlags,
+                                       uint32_t reserved, gaddr devicePortCount, gaddr theDevicePortList)
+{
+    return empty_list(devicePortCount, theDevicePortList);
+}
+int16_t tb_DMGetIndexedComponentFromList(gaddr panelList, uint32_t itemIndex, uint32_t reserved, gaddr listIterator,
+                                         gaddr userData)
+{
+    return kDMNotFoundErr;
+}
+
+/* The display's name. */
+int16_t tb_DMGetNameByAVID(uint32_t theID, uint32_t nameFlags, gaddr name)
+{
+    if (theID != MAIN_DISPLAY_ID)
+        return kDMNotFoundErr;
+    static const char display[] = "Display";
+    if (name) {
+        wr8(name, sizeof display - 1);
+        gput(name + 1, display, sizeof display - 1);
+    }
+    return noErr;
+}
+
+int16_t tb_DMNewAVIDByPortComponent(uint32_t thePortComponent, uint32_t portKind, uint32_t reserved, gaddr newID)
+{
+    return kDMNotFoundErr;
+}
+int16_t tb_DMNewAVIDByDeviceComponent(uint32_t theDeviceComponent, uint32_t portKind, uint32_t reserved, gaddr newID)
+{
+    return kDMNotFoundErr;
+}
+int16_t tb_DMGetPortComponentByAVID(uint32_t thePortID, gaddr thePortComponent, gaddr theDesciption, gaddr thePortKind)
+{
+    return kDMNotFoundErr;
+}
+int16_t tb_DMGetDeviceComponentByAVID(uint32_t theDeviceID, gaddr theDeviceComponent, gaddr theDesciption,
+                                      gaddr theDeviceKind)
+{
+    return kDMNotFoundErr;
+}
+int16_t tb_DMGetGraphicInfoByAVID(uint32_t theID, gaddr theAVPcit, gaddr theAVIconSuite, gaddr theAVLocation)
+{
+    return kDMNotFoundErr;
+}
+int16_t tb_DMGetAVPowerState(uint32_t theID, gaddr getPowerState, uint32_t reserved1) { return kDMNotFoundErr; }
+int16_t tb_DMSetAVPowerState(uint32_t theID, gaddr setPowerState, uint32_t powerFlags, gaddr displayState)
+{
+    return kDMNotFoundErr;
+}
+int16_t tb_DMGetDeviceAVIDByPortAVID(uint32_t portAVID, gaddr deviceAVID) { return kDMNotFoundErr; }
+
+/* The display is on, and stays so. */
+int16_t tb_DMGetEnableByAVID(uint32_t theAVID, gaddr isAVIDEnabledNow, gaddr canChangeEnableNow)
+{
+    if (theAVID != MAIN_DISPLAY_ID)
+        return kDMNotFoundErr;
+    if (isAVIDEnabledNow)
+        wr8(isAVIDEnabledNow, 1);
+    if (canChangeEnableNow)
+        wr8(canChangeEnableNow, 0);
+    return noErr;
+}
+
+int16_t tb_DMSetEnableByAVID(uint32_t theAVID, int8_t doEnable, gaddr displayState)
+{
+    if (theAVID != MAIN_DISPLAY_ID)
+        return kDMNotFoundErr;
+    return doEnable ? noErr : kDMMainDisplayCannotMoveErr;
+}
+
+/* Nothing changed, so nothing to confirm. */
+int16_t tb_DMConfirmConfiguration(gaddr filterProc, uint32_t confirmFlags, uint32_t reserved, gaddr displayState)
+{
+    return noErr;
+}

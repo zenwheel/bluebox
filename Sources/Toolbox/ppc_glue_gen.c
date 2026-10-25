@@ -25135,6 +25135,286 @@ static void ppcglue_LaunchControlPanel(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DMDisplayGestalt(ppc_cpu *c)
+{
+    uint32_t a_theDisplayID = (uint32_t)c->gpr[3];
+    uint32_t a_displayGestaltSelector = (uint32_t)c->gpr[4];
+    gaddr a_displayGestaltResponse = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMDisplayGestalt(a_theDisplayID, a_displayGestaltSelector, a_displayGestaltResponse);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMUseScreenPrefs(ppc_cpu *c)
+{
+    int8_t a_usePrefs = (int8_t)c->gpr[3];
+    gaddr a_displayState = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMUseScreenPrefs(a_usePrefs, a_displayState);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMSetGammaByAVID(ppc_cpu *c)
+{
+    uint32_t a_gammaAVID = (uint32_t)c->gpr[3];
+    uint32_t a_setGammaFlags = (uint32_t)c->gpr[4];
+    gaddr a_theGamma = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMSetGammaByAVID(a_gammaAVID, a_setGammaFlags, a_theGamma);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetGammaByAVID(ppc_cpu *c)
+{
+    uint32_t a_gammaAVID = (uint32_t)c->gpr[3];
+    uint32_t a_getGammaFlags = (uint32_t)c->gpr[4];
+    gaddr a_theGamma = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetGammaByAVID(a_gammaAVID, a_getGammaFlags, a_theGamma);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetMakeAndModelByAVID(ppc_cpu *c)
+{
+    uint32_t a_theAVID = (uint32_t)c->gpr[3];
+    gaddr a_theMakeAndModel = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetMakeAndModelByAVID(a_theAVID, a_theMakeAndModel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewDisplayList(ppc_cpu *c)
+{
+    uint32_t a_displayListIncludeFlags = (uint32_t)c->gpr[3];
+    uint32_t a_reserved1 = (uint32_t)c->gpr[4];
+    uint32_t a_reserved2 = (uint32_t)c->gpr[5];
+    gaddr a_theCount = (gaddr)c->gpr[6];
+    gaddr a_theDisplayList = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewDisplayList(a_displayListIncludeFlags, a_reserved1, a_reserved2, a_theCount, a_theDisplayList);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetIndexedDisplayFromList(ppc_cpu *c)
+{
+    gaddr a_theDisplayList = (gaddr)c->gpr[3];
+    uint32_t a_itemIndex = (uint32_t)c->gpr[4];
+    uint32_t a_reserved = (uint32_t)c->gpr[5];
+    gaddr a_listIterator = (gaddr)c->gpr[6];
+    gaddr a_userData = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetIndexedDisplayFromList(a_theDisplayList, a_itemIndex, a_reserved, a_listIterator, a_userData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewProfileListByAVID(ppc_cpu *c)
+{
+    uint32_t a_theAVID = (uint32_t)c->gpr[3];
+    uint32_t a_reserved = (uint32_t)c->gpr[4];
+    gaddr a_profileCount = (gaddr)c->gpr[5];
+    gaddr a_profileList = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewProfileListByAVID(a_theAVID, a_reserved, a_profileCount, a_profileList);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetIndexedProfileFromList(ppc_cpu *c)
+{
+    gaddr a_profileList = (gaddr)c->gpr[3];
+    uint32_t a_itemIndex = (uint32_t)c->gpr[4];
+    uint32_t a_reserved = (uint32_t)c->gpr[5];
+    gaddr a_listIterator = (gaddr)c->gpr[6];
+    gaddr a_userData = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetIndexedProfileFromList(a_profileList, a_itemIndex, a_reserved, a_listIterator, a_userData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewAVPanelList(ppc_cpu *c)
+{
+    uint32_t a_displayID = (uint32_t)c->gpr[3];
+    uint32_t a_panelType = (uint32_t)c->gpr[4];
+    uint32_t a_minimumFidelity = (uint32_t)c->gpr[5];
+    uint32_t a_panelListFlags = (uint32_t)c->gpr[6];
+    uint32_t a_reserved = (uint32_t)c->gpr[7];
+    gaddr a_thePanelCount = (gaddr)c->gpr[8];
+    gaddr a_thePanelList = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewAVPanelList(a_displayID, a_panelType, a_minimumFidelity, a_panelListFlags, a_reserved, a_thePanelCount, a_thePanelList);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewAVEngineList(ppc_cpu *c)
+{
+    uint32_t a_displayID = (uint32_t)c->gpr[3];
+    uint32_t a_engineType = (uint32_t)c->gpr[4];
+    uint32_t a_minimumFidelity = (uint32_t)c->gpr[5];
+    uint32_t a_engineListFlags = (uint32_t)c->gpr[6];
+    uint32_t a_reserved = (uint32_t)c->gpr[7];
+    gaddr a_engineCount = (gaddr)c->gpr[8];
+    gaddr a_engineList = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewAVEngineList(a_displayID, a_engineType, a_minimumFidelity, a_engineListFlags, a_reserved, a_engineCount, a_engineList);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewAVDeviceList(ppc_cpu *c)
+{
+    uint32_t a_deviceType = (uint32_t)c->gpr[3];
+    uint32_t a_deviceListFlags = (uint32_t)c->gpr[4];
+    uint32_t a_reserved = (uint32_t)c->gpr[5];
+    gaddr a_deviceCount = (gaddr)c->gpr[6];
+    gaddr a_deviceList = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewAVDeviceList(a_deviceType, a_deviceListFlags, a_reserved, a_deviceCount, a_deviceList);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewAVPortListByPortType(ppc_cpu *c)
+{
+    uint32_t a_subType = (uint32_t)c->gpr[3];
+    uint32_t a_portListFlags = (uint32_t)c->gpr[4];
+    uint32_t a_reserved = (uint32_t)c->gpr[5];
+    gaddr a_devicePortCount = (gaddr)c->gpr[6];
+    gaddr a_theDevicePortList = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewAVPortListByPortType(a_subType, a_portListFlags, a_reserved, a_devicePortCount, a_theDevicePortList);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetIndexedComponentFromList(ppc_cpu *c)
+{
+    gaddr a_panelList = (gaddr)c->gpr[3];
+    uint32_t a_itemIndex = (uint32_t)c->gpr[4];
+    uint32_t a_reserved = (uint32_t)c->gpr[5];
+    gaddr a_listIterator = (gaddr)c->gpr[6];
+    gaddr a_userData = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetIndexedComponentFromList(a_panelList, a_itemIndex, a_reserved, a_listIterator, a_userData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetNameByAVID(ppc_cpu *c)
+{
+    uint32_t a_theID = (uint32_t)c->gpr[3];
+    uint32_t a_nameFlags = (uint32_t)c->gpr[4];
+    gaddr a_name = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetNameByAVID(a_theID, a_nameFlags, a_name);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewAVIDByPortComponent(ppc_cpu *c)
+{
+    uint32_t a_thePortComponent = (uint32_t)c->gpr[3];
+    uint32_t a_portKind = (uint32_t)c->gpr[4];
+    uint32_t a_reserved = (uint32_t)c->gpr[5];
+    gaddr a_newID = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewAVIDByPortComponent(a_thePortComponent, a_portKind, a_reserved, a_newID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetPortComponentByAVID(ppc_cpu *c)
+{
+    uint32_t a_thePortID = (uint32_t)c->gpr[3];
+    gaddr a_thePortComponent = (gaddr)c->gpr[4];
+    gaddr a_theDesciption = (gaddr)c->gpr[5];
+    gaddr a_thePortKind = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetPortComponentByAVID(a_thePortID, a_thePortComponent, a_theDesciption, a_thePortKind);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMSaveScreenPrefs(ppc_cpu *c)
+{
+    uint32_t a_reserved1 = (uint32_t)c->gpr[3];
+    uint32_t a_saveFlags = (uint32_t)c->gpr[4];
+    uint32_t a_reserved2 = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMSaveScreenPrefs(a_reserved1, a_saveFlags, a_reserved2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewAVIDByDeviceComponent(ppc_cpu *c)
+{
+    uint32_t a_theDeviceComponent = (uint32_t)c->gpr[3];
+    uint32_t a_portKind = (uint32_t)c->gpr[4];
+    uint32_t a_reserved = (uint32_t)c->gpr[5];
+    gaddr a_newID = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewAVIDByDeviceComponent(a_theDeviceComponent, a_portKind, a_reserved, a_newID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMNewAVPortListByDeviceAVID(ppc_cpu *c)
+{
+    uint32_t a_theID = (uint32_t)c->gpr[3];
+    uint32_t a_minimumFidelity = (uint32_t)c->gpr[4];
+    uint32_t a_portListFlags = (uint32_t)c->gpr[5];
+    uint32_t a_reserved = (uint32_t)c->gpr[6];
+    gaddr a_devicePortCount = (gaddr)c->gpr[7];
+    gaddr a_theDevicePortList = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMNewAVPortListByDeviceAVID(a_theID, a_minimumFidelity, a_portListFlags, a_reserved, a_devicePortCount, a_theDevicePortList);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetDeviceComponentByAVID(ppc_cpu *c)
+{
+    uint32_t a_theDeviceID = (uint32_t)c->gpr[3];
+    gaddr a_theDeviceComponent = (gaddr)c->gpr[4];
+    gaddr a_theDesciption = (gaddr)c->gpr[5];
+    gaddr a_theDeviceKind = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetDeviceComponentByAVID(a_theDeviceID, a_theDeviceComponent, a_theDesciption, a_theDeviceKind);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetGraphicInfoByAVID(ppc_cpu *c)
+{
+    uint32_t a_theID = (uint32_t)c->gpr[3];
+    gaddr a_theAVPcit = (gaddr)c->gpr[4];
+    gaddr a_theAVIconSuite = (gaddr)c->gpr[5];
+    gaddr a_theAVLocation = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetGraphicInfoByAVID(a_theID, a_theAVPcit, a_theAVIconSuite, a_theAVLocation);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetAVPowerState(ppc_cpu *c)
+{
+    uint32_t a_theID = (uint32_t)c->gpr[3];
+    gaddr a_getPowerState = (gaddr)c->gpr[4];
+    uint32_t a_reserved1 = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetAVPowerState(a_theID, a_getPowerState, a_reserved1);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMSetAVPowerState(ppc_cpu *c)
+{
+    uint32_t a_theID = (uint32_t)c->gpr[3];
+    gaddr a_setPowerState = (gaddr)c->gpr[4];
+    uint32_t a_powerFlags = (uint32_t)c->gpr[5];
+    gaddr a_displayState = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMSetAVPowerState(a_theID, a_setPowerState, a_powerFlags, a_displayState);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetDeviceAVIDByPortAVID(ppc_cpu *c)
+{
+    uint32_t a_portAVID = (uint32_t)c->gpr[3];
+    gaddr a_deviceAVID = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetDeviceAVIDByPortAVID(a_portAVID, a_deviceAVID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetEnableByAVID(ppc_cpu *c)
+{
+    uint32_t a_theAVID = (uint32_t)c->gpr[3];
+    gaddr a_isAVIDEnabledNow = (gaddr)c->gpr[4];
+    gaddr a_canChangeEnableNow = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetEnableByAVID(a_theAVID, a_isAVIDEnabledNow, a_canChangeEnableNow);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMSetEnableByAVID(ppc_cpu *c)
+{
+    uint32_t a_theAVID = (uint32_t)c->gpr[3];
+    int8_t a_doEnable = (int8_t)c->gpr[4];
+    gaddr a_displayState = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMSetEnableByAVID(a_theAVID, a_doEnable, a_displayState);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMConfirmConfiguration(ppc_cpu *c)
+{
+    gaddr a_filterProc = (gaddr)c->gpr[3];
+    uint32_t a_confirmFlags = (uint32_t)c->gpr[4];
+    uint32_t a_reserved = (uint32_t)c->gpr[5];
+    gaddr a_displayState = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMConfirmConfiguration(a_filterProc, a_confirmFlags, a_reserved, a_displayState);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -37295,7 +37575,9 @@ const ppc_export ppc_exports[] = {
     {"DMBlockMirroring", ppcglue_DMBlockMirroring},
     {"DMCanMirrorNow", ppcglue_DMCanMirrorNow},
     {"DMCheckDisplayMode", ppcglue_DMCheckDisplayMode},
+    {"DMConfirmConfiguration", ppcglue_DMConfirmConfiguration},
     {"DMDisableDisplay", ppcglue_DMDisableDisplay},
+    {"DMDisplayGestalt", ppcglue_DMDisplayGestalt},
     {"DMDisposeAVComponent", ppcglue_DMDisposeAVComponent},
     {"DMDisposeDisplay", ppcglue_DMDisposeDisplay},
     {"DMDisposeList", ppcglue_DMDisposeList},
@@ -37303,21 +37585,42 @@ const ppc_export ppc_exports[] = {
     {"DMDrawDesktopRegion", ppcglue_DMDrawDesktopRegion},
     {"DMEnableDisplay", ppcglue_DMEnableDisplay},
     {"DMEndConfigureDisplays", ppcglue_DMEndConfigureDisplays},
+    {"DMGetAVPowerState", ppcglue_DMGetAVPowerState},
     {"DMGetDeskRegion", ppcglue_DMGetDeskRegion},
+    {"DMGetDeviceAVIDByPortAVID", ppcglue_DMGetDeviceAVIDByPortAVID},
+    {"DMGetDeviceComponentByAVID", ppcglue_DMGetDeviceComponentByAVID},
     {"DMGetDisplayComponent", ppcglue_DMGetDisplayComponent},
     {"DMGetDisplayIDByGDevice", ppcglue_DMGetDisplayIDByGDevice},
     {"DMGetDisplayMgrA5World", ppcglue_DMGetDisplayMgrA5World},
     {"DMGetDisplayMode", ppcglue_DMGetDisplayMode},
+    {"DMGetEnableByAVID", ppcglue_DMGetEnableByAVID},
     {"DMGetFirstScreenDevice", ppcglue_DMGetFirstScreenDevice},
     {"DMGetGDeviceByDisplayID", ppcglue_DMGetGDeviceByDisplayID},
+    {"DMGetGammaByAVID", ppcglue_DMGetGammaByAVID},
+    {"DMGetGraphicInfoByAVID", ppcglue_DMGetGraphicInfoByAVID},
+    {"DMGetIndexedComponentFromList", ppcglue_DMGetIndexedComponentFromList},
+    {"DMGetIndexedDisplayFromList", ppcglue_DMGetIndexedDisplayFromList},
     {"DMGetIndexedDisplayModeFromList", ppcglue_DMGetIndexedDisplayModeFromList},
+    {"DMGetIndexedProfileFromList", ppcglue_DMGetIndexedProfileFromList},
+    {"DMGetMakeAndModelByAVID", ppcglue_DMGetMakeAndModelByAVID},
+    {"DMGetNameByAVID", ppcglue_DMGetNameByAVID},
     {"DMGetNextMirroredDevice", ppcglue_DMGetNextMirroredDevice},
     {"DMGetNextScreenDevice", ppcglue_DMGetNextScreenDevice},
+    {"DMGetPortComponentByAVID", ppcglue_DMGetPortComponentByAVID},
     {"DMIsMirroringOn", ppcglue_DMIsMirroringOn},
     {"DMMirrorDevices", ppcglue_DMMirrorDevices},
     {"DMMoveDisplay", ppcglue_DMMoveDisplay},
+    {"DMNewAVDeviceList", ppcglue_DMNewAVDeviceList},
+    {"DMNewAVEngineList", ppcglue_DMNewAVEngineList},
+    {"DMNewAVIDByDeviceComponent", ppcglue_DMNewAVIDByDeviceComponent},
+    {"DMNewAVIDByPortComponent", ppcglue_DMNewAVIDByPortComponent},
+    {"DMNewAVPanelList", ppcglue_DMNewAVPanelList},
+    {"DMNewAVPortListByDeviceAVID", ppcglue_DMNewAVPortListByDeviceAVID},
+    {"DMNewAVPortListByPortType", ppcglue_DMNewAVPortListByPortType},
     {"DMNewDisplay", ppcglue_DMNewDisplay},
+    {"DMNewDisplayList", ppcglue_DMNewDisplayList},
     {"DMNewDisplayModeList", ppcglue_DMNewDisplayModeList},
+    {"DMNewProfileListByAVID", ppcglue_DMNewProfileListByAVID},
     {"DMQDIsMirroringCapable", ppcglue_DMQDIsMirroringCapable},
     {"DMRegisterExtendedNotifyProc", ppcglue_DMRegisterExtendedNotifyProc},
     {"DMRegisterNotifyProc", ppcglue_DMRegisterNotifyProc},
@@ -37326,13 +37629,18 @@ const ppc_export ppc_exports[] = {
     {"DMRemoveNotifyProc", ppcglue_DMRemoveNotifyProc},
     {"DMResolveDisplayComponents", ppcglue_DMResolveDisplayComponents},
     {"DMResumeConfigure", ppcglue_DMResumeConfigure},
+    {"DMSaveScreenPrefs", ppcglue_DMSaveScreenPrefs},
     {"DMSendDependentNotification", ppcglue_DMSendDependentNotification},
+    {"DMSetAVPowerState", ppcglue_DMSetAVPowerState},
     {"DMSetDisplayComponent", ppcglue_DMSetDisplayComponent},
     {"DMSetDisplayMode", ppcglue_DMSetDisplayMode},
+    {"DMSetEnableByAVID", ppcglue_DMSetEnableByAVID},
+    {"DMSetGammaByAVID", ppcglue_DMSetGammaByAVID},
     {"DMSetMainDisplay", ppcglue_DMSetMainDisplay},
     {"DMSuspendConfigure", ppcglue_DMSuspendConfigure},
     {"DMUnblockMirroring", ppcglue_DMUnblockMirroring},
     {"DMUnmirrorDevice", ppcglue_DMUnmirrorDevice},
+    {"DMUseScreenPrefs", ppcglue_DMUseScreenPrefs},
     {"DTInstall", ppcglue_DTInstall},
     {"DateToSeconds", ppctrap_DateToSeconds},
     {"DeactivateControl", ppcglue_DeactivateControl},
