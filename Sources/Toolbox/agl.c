@@ -838,7 +838,7 @@ static void agl_UseFont(ppc_cpu *c)
     int ascent = (int16_t)rd16(info), descent = (int16_t)rd16(info + 2);
     int left = size / 2; /* room for kerned and italic glyphs */
     gaddr pm = rd32(rd32(gw + CGrafPort_portPixMap_off));
-    gaddr bits = PixMap_baseAddr(pm);
+    gaddr bits = qd_pixmap_base(pm, true);
     uint32_t rb = (uint32_t)(PixMap_rowBytes(pm) & 0x3FFF);
     int gh = ascent + descent;
     if (gh > h)

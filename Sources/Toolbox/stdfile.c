@@ -115,7 +115,7 @@ static void draw_offscreen(gaddr d)
     gaddr pmh = tb_GetGWorldPixMap(gw);
     tb_LockPixels(pmh);
     gaddr pm = rd32(pmh);
-    gaddr base = rd32(pm + PixMap_baseAddr_off);
+    gaddr base = qd_pixmap_base(pm, true);
     uint32_t row = rd16(pm + PixMap_rowBytes_off) & 0x3FFF;
     /* The dialog's port draws into the GWorld's pixels for a moment. */
     uint8_t saved_bits[14];

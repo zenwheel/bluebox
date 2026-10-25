@@ -189,6 +189,8 @@ static void dsp_Reserve(ppc_cpu *c)
     wr16(r + 6, (uint16_t)w);
     gaddr ctab = want && depth <= 8 ? rd32(want + 24) : 0;
     int16_t err = tb_NewGWorld(gwp, (int16_t)depth, r, ctab, 0, 0);
+    if (!err) /* games take the back buffer's baseAddr as it is */
+        tb_LockPixels(tb_GetGWorldPixMap(rd32(gwp)));
     wr32(ctx + CTX_GWORLD, err ? 0 : rd32(gwp));
     tb_DisposePtr(r);
     tb_DisposePtr(gwp);
@@ -373,6 +375,8 @@ static void dsp_AltBufferNew(ppc_cpu *c)
         wr16(r + 4, (uint16_t)rd32(ctx + 8));
         wr16(r + 6, (uint16_t)rd32(ctx + 4));
         int16_t err = tb_NewGWorld(gwp, (int16_t)depth, r, ctab, 0, 0);
+        if (!err)
+            tb_LockPixels(tb_GetGWorldPixMap(rd32(gwp)));
         gaddr alt = err ? 0 : tb_NewPtr(ALT_SIZE, true, true);
         if (alt) {
             wr32(alt, ALT_MAGIC);
@@ -574,7 +578,7 @@ static bool buffer_pixels(gaddr port, gaddr *base, uint32_t *row_bytes, int *dep
     gaddr pm = h ? rd32(h) : 0;
     if (!pm)
         return false;
-    *base = PixMap_baseAddr(pm);
+    *base = qd_pixmap_base(pm, true);
     *row_bytes = (uint32_t)(PixMap_rowBytes(pm) & 0x3FFF);
     *depth = PixMap_pixelSize(pm);
     *bounds = qrect_get(pm + PixMap_bounds_off);

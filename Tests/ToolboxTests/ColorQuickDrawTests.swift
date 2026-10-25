@@ -141,11 +141,51 @@ extension BlueBox {
             #expect(tb_NewGWorld(gw, 8, rect(0, 0, 32, 32), 0, 0, 0) == 0)
             let pm = rd32(tb_GetGWorldPixMap(rd32(gw)))
             #expect(rd16(pm + 4) & 0x3FFF == 36)
-            #expect(tb_GetPtrSize(PixMap_baseAddr(pm)) >= 36 * 33)
+            #expect(tb_GetHandleSize(PixMap_baseAddr(pm)) >= 36 * 33)
             tb_DisposeGWorld(rd32(gw))
             #expect(tb_NewGWorld(gw, 32, rect(0, 0, 10, 10), 0, 0, 0) == 0)
             #expect(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + 4) & 0x3FFF == 40)
             tb_DisposeGWorld(rd32(gw))
+        }
+
+        /// A GWorld's pixels are a handle, held in baseAddr until LockPixels
+        /// puts their address there (pmVersion 2, then 1), as QuickDraw's
+        /// were.  HunterDeer moves its pixels into a handle of its own by it;
+        /// drawing then stays inside them.
+        @Test func gworldPixelsAreAHandleUntilLocked() {
+            launchTestApp()
+            _ = initToolbox()
+            let zone = rd32(UInt32(LM_ApplZone))
+            let screen = tb_NewPtr(4, false, true), dev = tb_NewPtr(4, false, true)
+            tb_GetGWorld(screen, dev)
+            let gw = tb_NewPtr(4, false, true)
+            let bounds = rect(0, 0, 40, 60)
+            #expect(tb_NewGWorld(gw, 8, bounds, 0, 0, 0) == 0)
+            let port = rd32(gw), pmh = tb_GetGWorldPixMap(port), pm = rd32(pmh)
+            let h = PixMap_baseAddr(pm)
+            #expect(rd16(pm + 14) == 2)
+            let size = tb_GetHandleSize(h)
+            #expect(size >= 40 * Int32(rd16(pm + 4) & 0x3FFF))
+            #expect(tb_GetPixBaseAddr(pmh) == rd32(h))
+            #expect(tb_LockPixels(pmh) != 0)
+            #expect(PixMap_baseAddr(pm) == rd32(h) && rd16(pm + 14) == 1)
+            #expect(tb_GetPixelsState(pmh) & 0x80 != 0)
+            tb_UnlockPixels(pmh)
+            #expect(PixMap_baseAddr(pm) == h && rd16(pm + 14) == 2)
+            #expect(tb_GetPixelsState(pmh) & 0x80 == 0)
+            // The pixels moved into a handle of the program's own.
+            tb_DisposeHandle(h)
+            let mine = tb_NewHandle(size, false, false)
+            wr32(pm, mine)
+            #expect(tb_LockPixels(pmh) != 0)
+            #expect(PixMap_baseAddr(pm) == rd32(mine))
+            tb_SetGWorld(port, 0)
+            tb_EraseRect(bounds)
+            #expect(rd8(rd32(mine)) == 0) // white, at 8 bits
+            #expect(mm_check_zone(zone))
+            tb_SetGWorld(rd32(screen), rd32(dev))
+            tb_DisposeGWorld(port)
+            #expect(mm_check_zone(zone))
         }
 
         /// A direct screen's device table has 256 entries all the same, for

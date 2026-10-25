@@ -76,13 +76,27 @@ void tb_InitGraf(gaddr gp)
 
 bool qd_port_is_color(gaddr port) { return port && (rd16(port + GrafPort_portBits_off + 4) & 0xC000) == 0xC000; }
 
+/* A PixMap's pixels.  A GWorld's whose pixels are unlocked (pmVersion 2)
+ * holds their handle in baseAddr, as QuickDraw's did (programs move the
+ * pixels by it: HunterDeer disposes of the handle and puts its own in);
+ * drawing locks it so the pixels stay put while they are drawn into. */
+gaddr qd_pixmap_base(gaddr pm, bool lock)
+{
+    gaddr base = PixMap_baseAddr(pm);
+    if (!(PixMap_rowBytes(pm) & 0x8000) || !(PixMap_pmVersion(pm) & 2) || !base)
+        return base;
+    if (lock && rd32(base))
+        tb_HLock(base);
+    return rd32(base);
+}
+
 pixdst qd_port_pixels(gaddr port)
 {
     pixdst d;
     d.ctab = 0;
     if (qd_port_is_color(port)) {
         gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
-        d.base = PixMap_baseAddr(pm);
+        d.base = qd_pixmap_base(pm, true);
         d.row_bytes = (uint16_t)PixMap_rowBytes(pm) & 0x3FFF;
         d.bounds = qrect_get(pm + PixMap_bounds_off);
         d.depth = PixMap_pixelSize(pm);

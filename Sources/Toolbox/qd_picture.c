@@ -1050,7 +1050,7 @@ bool machine_picture_rgba(const uint8_t *pict, size_t len, uint8_t **rgba, int *
         gput(rd32(pic), pict, (uint32_t)len);
         tb_DrawPicture(pic, bounds);
         gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
-        gaddr base = PixMap_baseAddr(pm);
+        gaddr base = qd_pixmap_base(pm, true);
         uint32_t row_bytes = (uint16_t)PixMap_rowBytes(pm) & 0x3FFF;
         *rgba = malloc((size_t)width * (size_t)height * 4);
         for (int y = 0; y < height; y++)
