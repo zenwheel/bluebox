@@ -237,6 +237,13 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
      * Space Pebbles steps its 32-pixel icon worlds by width + 4. */
     int slack = depth < 32 ? 32 / depth - 1 : 0;
     uint32_t rb = row_bytes_for(w + slack, depth);
+    /* System 7.5's QuickDraw and later give every depth a long to spare
+     * and round rows up to 16 bytes (for video digitizers): the Mac OS 8 of
+     * PowerPC programs.  Angel Egg reads its 384-pixel 8-bit backgrounds,
+     * saved 400 bytes a row, straight into its world when the file's rows
+     * are the world's. */
+    if (rd16(LM_SysVersion) >= 0x0750)
+        rb = ((uint32_t)((w * depth + 30) / 32 + 1) * 4 + 15) & ~15u;
     /* And a row to spare after the last: tile scrollers copy whole tiles
      * past the right edge, which on the last row runs off the end (Slippy
      * and STARFIGHT write 15 bytes over, scrolled 15 pixels across). */

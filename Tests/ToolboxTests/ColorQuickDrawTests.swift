@@ -148,6 +148,23 @@ extension BlueBox {
             tb_DisposeGWorld(rd32(gw))
         }
 
+        /// System 7.5's QuickDraw and later round rows up to 16 bytes: the
+        /// Mac OS 8 that PowerPC programs see (Angel Egg reads backgrounds
+        /// saved 400 bytes a row straight into a 384-pixel 8-bit world).
+        @Test func gworldRowsRoundTo16BytesFromSystem75() {
+            launchTestApp()
+            _ = initToolbox()
+            let saved = rd16(UInt32(LM_SysVersion))
+            wr16(UInt32(LM_SysVersion), 0x0810)
+            defer { wr16(UInt32(LM_SysVersion), saved) }
+            let gw = tb_NewPtr(4, false, true)
+            for (depth, rb) in [(8, 400), (16, 784), (32, 1552)] {
+                #expect(tb_NewGWorld(gw, Int16(depth), rect(0, 0, 582, 384), 0, 0, 0) == 0)
+                #expect(Int(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + 4) & 0x3FFF) == rb)
+                tb_DisposeGWorld(rd32(gw))
+            }
+        }
+
         /// A GWorld's pixels are a handle, held in baseAddr until LockPixels
         /// puts their address there (pmVersion 2, then 1), as QuickDraw's
         /// were.  HunterDeer moves its pixels into a handle of its own by it;
