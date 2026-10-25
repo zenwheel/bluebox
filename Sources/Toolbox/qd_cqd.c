@@ -686,17 +686,16 @@ void tb_DisposePixPat(gaddr pp)
         tb_DisposeHandle(pp);
 }
 
+/* The pattern itself goes in a colour port, as QuickDraw put it: programs
+ * read it back from the port and dispose of it before setting the next
+ * (Chromosomethingorother's DisposePixPat, then BackPixPat). */
 static void set_port_pixpat(uint32_t color_off, uint32_t old_off, gaddr pp)
 {
     gaddr port = qd_port();
     if (!pp || !rd32(pp))
         return;
     if (qd_port_is_color(port)) {
-        gaddr cur = rd32(port + color_off);
-        if (cur && rd32(cur) && cur != pp)
-            gmemcpy(rd32(cur), rd32(pp), PixPat_SIZEOF);
-        else if (!cur)
-            wr32(port + color_off, pp);
+        wr32(port + color_off, pp);
     } else {
         gmemcpy(port + old_off, rd32(pp) + PixPat_pat1Data_off, 8);
     }

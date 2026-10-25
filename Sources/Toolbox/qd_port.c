@@ -1,5 +1,6 @@
 /* QuickDraw globals, graphics ports, pen state, colours and the cursor. */
 #include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "qd_internal.h"
@@ -247,6 +248,44 @@ void tb_InitCPort(gaddr p)
     tb_InitPort(p);
 }
 
+/* A colour port's own pixel patterns, made by OpenCPort.  PenPixPat and
+ * BackPixPat put the program's pattern in the port in their place (the
+ * program keeps it and disposes it); PenPat, BackPat and PenNormal go back
+ * to the port's own, and CloseCPort disposes only these. */
+static const uint32_t own_offs[3] = { CGrafPort_pnPixPat_off, CGrafPort_bkPixPat_off, CGrafPort_fillPixPat_off };
+static struct port_pats {
+    gaddr port, pp[3];
+} *own_pats;
+static size_t nown_pats;
+
+void qd_port_pats_reset(void)
+{
+    free(own_pats);
+    own_pats = NULL;
+    nown_pats = 0;
+}
+
+static struct port_pats *port_pats_of(gaddr port)
+{
+    for (size_t i = 0; port && i < nown_pats; i++)
+        if (own_pats[i].port == port)
+            return &own_pats[i];
+    return NULL;
+}
+
+/* The port's own pattern handle for an offset: put back in the port when
+ * the program's is there; 0 for a port not opened by OpenCPort. */
+static gaddr own_pixpat(gaddr port, uint32_t off)
+{
+    struct port_pats *o = port_pats_of(port);
+    for (int i = 0; o && i < 3; i++)
+        if (own_offs[i] == off) {
+            wr32(port + off, o->pp[i]);
+            return o->pp[i];
+        }
+    return rd32(port + off);
+}
+
 void tb_OpenCPort(gaddr p)
 {
     port_list_add(p);
@@ -256,6 +295,19 @@ void tb_OpenCPort(gaddr p)
     wr32(p + CGrafPort_bkPixPat_off, qd_pixpat_for(qd_pat_white));
     wr32(p + CGrafPort_pnPixPat_off, qd_pixpat_for(qd_pat_black));
     wr32(p + CGrafPort_fillPixPat_off, qd_pixpat_for(qd_pat_black));
+    struct port_pats *o = port_pats_of(p);
+    if (!o) {
+        struct port_pats *n = realloc(own_pats, (nown_pats + 1) * sizeof *own_pats);
+        if (n) {
+            own_pats = n;
+            o = &own_pats[nown_pats++];
+        }
+    }
+    if (o) {
+        o->port = p;
+        for (int i = 0; i < 3; i++)
+            o->pp[i] = rd32(p + own_offs[i]);
+    }
     GrafPort_set_visRgn(p, tb_NewRgn());
     GrafPort_set_clipRgn(p, tb_NewRgn());
     tb_InitCPort(p);
@@ -266,9 +318,11 @@ void tb_CloseCPort(gaddr p)
     tb_ClosePort(p);
     tb_DisposeHandle(rd32(p + CGrafPort_portPixMap_off));
     tb_DisposeHandle(rd32(p + CGrafPort_grafVars_off));
-    tb_DisposeHandle(rd32(p + CGrafPort_bkPixPat_off));
-    tb_DisposeHandle(rd32(p + CGrafPort_pnPixPat_off));
-    tb_DisposeHandle(rd32(p + CGrafPort_fillPixPat_off));
+    struct port_pats *o = port_pats_of(p);
+    for (int i = 0; i < 3; i++)
+        tb_DisposeHandle(o ? o->pp[i] : rd32(p + own_offs[i]));
+    if (o)
+        *o = own_pats[--nown_pats];
 }
 
 void tb_SetPort(gaddr p)
@@ -347,7 +401,7 @@ void tb_BackPat(gaddr pp)
     uint8_t pat[8];
     gget(pat, pp, 8);
     if (qd_port_is_color(p))
-        set_old_pattern(rd32(p + CGrafPort_bkPixPat_off), pat);
+        set_old_pattern(own_pixpat(p, CGrafPort_bkPixPat_off), pat);
     else
         gmemcpy(p + GrafPort_bkPat_off, pp, 8);
 }
@@ -420,7 +474,7 @@ void tb_PenPat(gaddr pp)
     uint8_t pat[8];
     gget(pat, pp, 8);
     if (qd_port_is_color(p))
-        set_old_pattern(rd32(p + CGrafPort_pnPixPat_off), pat);
+        set_old_pattern(own_pixpat(p, CGrafPort_pnPixPat_off), pat);
     else
         gmemcpy(p + GrafPort_pnPat_off, pp, 8);
 }
@@ -431,7 +485,7 @@ void tb_PenNormal(void)
     wr32(p + GrafPort_pnSize_off, make_pt(1, 1));
     GrafPort_set_pnMode(p, patCopy);
     if (qd_port_is_color(p))
-        set_old_pattern(rd32(p + CGrafPort_pnPixPat_off), qd_pat_black);
+        set_old_pattern(own_pixpat(p, CGrafPort_pnPixPat_off), qd_pat_black);
     else
         gput(p + GrafPort_pnPat_off, qd_pat_black, 8);
 }

@@ -140,6 +140,7 @@ void qd_screen_init(int width, int height)
     qd_device_itable(gdh);
     nports = 0;
     qd_gworlds_reset();
+    qd_port_pats_reset();
     qd_palettes_reset();
 }
 

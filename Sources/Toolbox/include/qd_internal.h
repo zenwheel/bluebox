@@ -239,6 +239,7 @@ int qd_text_width(gaddr port, const uint8_t *text, int len);
 /* Screen. */
 void qd_screen_init(int width, int height);
 void qd_gworlds_reset(void);
+void qd_port_pats_reset(void);
 void qd_palettes_reset(void); /* windows' palettes and the default one, for a new launch */
 void qd_device_itable(gaddr gdh); /* an indexed device's inverse table, made again */
 /* The pixel value the current device's search procedures give a colour

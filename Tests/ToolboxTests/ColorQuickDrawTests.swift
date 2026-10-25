@@ -40,6 +40,46 @@ extension BlueBox {
             tb_DisposeGWorld(port)
         }
 
+        /// BackPixPat and PenPixPat put the program's own pattern in the port:
+        /// a program that reads it back and disposes of it before setting the
+        /// next (Chromosomethingorother) leaves the heap whole, BackPat goes
+        /// back to the port's own pattern, and CloseCPort disposes only that.
+        @Test func pixPatsGoInThePortAsTheyAre() {
+            launchTestApp()
+            _ = initToolbox()
+            let zone = rd32(UInt32(LM_ApplZone))
+            let saved = tb_NewPtr(4, false, true)
+            tb_GetPort(saved)
+            let port = tb_NewPtr(108, true, true)
+            tb_OpenCPort(port)
+            let bkOff: UInt32 = 32, pnOff: UInt32 = 58
+            let own = rd32(port + bkOff)
+            let first = tb_NewPixPat()
+            tb_BackPixPat(first)
+            #expect(rd32(port + bkOff) == first)
+            tb_DisposePixPat(rd32(port + bkOff))
+            let second = tb_NewPixPat()
+            tb_BackPixPat(second)
+            #expect(rd32(port + bkOff) == second)
+            #expect(mm_check_zone(zone))
+            let white = tb_NewPtr(8, true, true)
+            for i in 0..<8 { wr8(white + UInt32(i), 0) }
+            tb_BackPat(white)
+            #expect(rd32(port + bkOff) == own)
+            #expect(rd16(rd32(second)) == 1) // still the program's pixel pattern
+            let pen = tb_NewPixPat()
+            tb_PenPixPat(pen)
+            #expect(rd32(port + pnOff) == pen)
+            tb_PenNormal()
+            #expect(rd32(port + pnOff) != pen)
+            tb_SetPort(rd32(saved))
+            tb_CloseCPort(port)
+            #expect(rd32(second) != 0 && rd32(pen) != 0) // not the port's to dispose
+            tb_DisposePixPat(second)
+            tb_DisposePixPat(pen)
+            #expect(mm_check_zone(zone))
+        }
+
         /// At depth 0 the rectangle is global, only to choose the screen: the
         /// world starts at 0,0 (Squark draws at 0,0 into a world made from
         /// its window's global rectangle).  A given depth keeps the rectangle.
