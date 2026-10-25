@@ -8200,6 +8200,12 @@ static void ppcglue_StackSpace(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_TopMem(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_TopMem();
+    c->pc = c->lr;
+}
+
 static void ppcglue_TempFreeMem(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)tb_TempFreeMem();
@@ -9626,6 +9632,12 @@ static void ppcglue_SecondsToDate(ppc_cpu *c)
 static void ppcglue_InitUtil(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitUtil();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSysPPtr(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetSysPPtr();
     c->pc = c->lr;
 }
 
@@ -22672,6 +22684,65 @@ static void ppcglue_IsDataAvailableInIconRef(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DebuggerGetMax(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_DebuggerGetMax();
+    c->pc = c->lr;
+}
+
+static void ppcglue_DebuggerEnter(ppc_cpu *c)
+{
+    tb_DebuggerEnter();
+    c->pc = c->lr;
+}
+
+static void ppcglue_DebuggerExit(ppc_cpu *c)
+{
+    tb_DebuggerExit();
+    c->pc = c->lr;
+}
+
+static void ppcglue_DebuggerPoll(ppc_cpu *c)
+{
+    tb_DebuggerPoll();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetPageState(ppc_cpu *c)
+{
+    gaddr a_address = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetPageState(a_address);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PageFaultFatal(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_PageFaultFatal();
+    c->pc = c->lr;
+}
+
+static void ppcglue_DebuggerLockMemory(ppc_cpu *c)
+{
+    gaddr a_address = (gaddr)c->gpr[3];
+    uint32_t a_count = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DebuggerLockMemory(a_address, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DebuggerUnlockMemory(ppc_cpu *c)
+{
+    gaddr a_address = (gaddr)c->gpr[3];
+    uint32_t a_count = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DebuggerUnlockMemory(a_address, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EnterSupervisorMode(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EnterSupervisorMode();
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -34867,6 +34938,12 @@ const ppc_export ppc_exports[] = {
     {"DeactivateControl", ppcglue_DeactivateControl},
     {"DebugStr", ppcglue_DebugStr},
     {"Debugger", ppcglue_Debugger},
+    {"DebuggerEnter", ppcglue_DebuggerEnter},
+    {"DebuggerExit", ppcglue_DebuggerExit},
+    {"DebuggerGetMax", ppcglue_DebuggerGetMax},
+    {"DebuggerLockMemory", ppcglue_DebuggerLockMemory},
+    {"DebuggerPoll", ppcglue_DebuggerPoll},
+    {"DebuggerUnlockMemory", ppcglue_DebuggerUnlockMemory},
     {"DecompressImage", ppcglue_DecompressImage},
     {"DecompressSequenceBegin", ppcglue_DecompressSequenceBegin},
     {"DecompressSequenceBeginS", ppcglue_DecompressSequenceBeginS},
@@ -35007,6 +35084,7 @@ const ppc_export ppc_exports[] = {
     {"EndUpdate", ppcglue_EndUpdate},
     {"Enqueue", ppcglue_Enqueue},
     {"EnterMovies", ppcglue_EnterMovies},
+    {"EnterSupervisorMode", ppcglue_EnterSupervisorMode},
     {"Entry2Index", ppcglue_Entry2Index},
     {"EqualMatrix", ppcglue_EqualMatrix},
     {"EqualPt", ppcglue_EqualPt},
@@ -35531,6 +35609,7 @@ const ppc_export ppc_exports[] = {
     {"GetOSEvent", ppcglue_GetOSEvent},
     {"GetOSTrapAddress", ppcglue_GetOSTrapAddress},
     {"GetOutlinePreferred", ppcglue_GetOutlinePreferred},
+    {"GetPageState", ppcglue_GetPageState},
     {"GetPalette", ppcglue_GetPalette},
     {"GetPaletteUpdates", ppcglue_GetPaletteUpdates},
     {"GetPattern", ppcglue_GetPattern},
@@ -35584,6 +35663,7 @@ const ppc_export ppc_exports[] = {
     {"GetSwitchInfo", ppcglue_GetSwitchInfo},
     {"GetSysBeepVolume", ppcglue_GetSysBeepVolume},
     {"GetSysDirection", ppcglue_GetSysDirection},
+    {"GetSysPPtr", ppcglue_GetSysPPtr},
     {"GetTaggedCollectionItem", ppctrap_GetTaggedCollectionItem},
     {"GetTaggedCollectionItemInfo", ppctrap_GetTaggedCollectionItemInfo},
     {"GetThemeAccentColors", ppcglue_GetThemeAccentColors},
@@ -36826,6 +36906,7 @@ const ppc_export ppc_exports[] = {
     {"PPCDispatch", ppcglue_PPCDispatch},
     {"PPostEvent", ppcglue_PPostEvent},
     {"PackBits", ppcglue_PackBits},
+    {"PageFaultFatal", ppcglue_PageFaultFatal},
     {"PaintArc", ppcglue_PaintArc},
     {"PaintBehind", ppcglue_PaintBehind},
     {"PaintOne", ppcglue_PaintOne},
@@ -37622,6 +37703,7 @@ const ppc_export ppc_exports[] = {
     {"ThreadEndCritical", ppcglue_ThreadEndCritical},
     {"TickCount", ppcglue_TickCount},
     {"ToggleDate", ppctrap_ToggleDate},
+    {"TopMem", ppcglue_TopMem},
     {"TrackBox", ppcglue_TrackBox},
     {"TrackControl", ppcglue_TrackControl},
     {"TrackDrag", ppcglue_TrackDrag},

@@ -103,6 +103,7 @@ const char *const os_trap_names[256] = {
     [0x7A] = "SetADBInfo",
     [0x7B] = "ADBReInit",
     [0x82] = "DTInstall",
+    [0x8D] = "DebugUtil",
     [0x90] = "SysEnvirons",
     [0x98] = "HWPriv",
     [0xAD] = "GestaltDispatch",
@@ -3135,6 +3136,55 @@ static void glue_Debugger(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DebuggerEnter(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_DebuggerEnter();
+    cpu_push32(c, ret);
+}
+
+static void glue_DebuggerExit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_DebuggerExit();
+    cpu_push32(c, ret);
+}
+
+static void glue_DebuggerGetMax(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int32_t r = tb_DebuggerGetMax();
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_DebuggerLockMemory(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_address = (gaddr)c->a[0];
+    uint32_t a_count = (uint32_t)c->a[1];
+    int16_t r = tb_DebuggerLockMemory(a_address, a_count);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_DebuggerPoll(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_DebuggerPoll();
+    cpu_push32(c, ret);
+}
+
+static void glue_DebuggerUnlockMemory(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_address = (gaddr)c->a[0];
+    uint32_t a_count = (uint32_t)c->a[1];
+    int16_t r = tb_DebuggerUnlockMemory(a_address, a_count);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_DecompressImage(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -4395,6 +4445,13 @@ static void glue_EnterMovies(cpu68k *c, uint16_t trapword)
     int16_t r = tb_EnterMovies();
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_EnterSupervisorMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_EnterSupervisorMode();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_Entry2Index(cpu68k *c, uint16_t trapword)
@@ -7865,6 +7922,14 @@ static void glue_GetOutlinePreferred(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetPageState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_address = (gaddr)c->a[0];
+    int16_t r = tb_GetPageState(a_address);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_GetPalette(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8317,6 +8382,15 @@ static void glue_GetSysDirection(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_GetSysDirection();
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetSysPPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_GetSysPPtr();
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -12894,6 +12968,13 @@ static void glue_PackBits(cpu68k *c, uint16_t trapword)
     gaddr a_sp = (gaddr)cpu_pop32(c);
     tb_PackBits(a_sp, a_dp, a_len);
     cpu_push32(c, ret);
+}
+
+static void glue_PageFaultFatal(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_PageFaultFatal();
+    c->d[0] = (uint32_t)r;
 }
 
 static void glue_PaintArc(cpu68k *c, uint16_t trapword)
@@ -18363,6 +18444,15 @@ static void glue_TickCount(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TopMem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_TopMem();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_TrackBox(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19804,6 +19894,15 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA73, (int32_t)0x1Cu, "SetControlFontStyle", CONV_STACK, 8, 2, glue_SetControlFontStyle},
     {0xAA73, (int32_t)0x1Du, "SetUpControlBackground", CONV_STACK, 8, 2, glue_SetUpControlBackground},
     {0xAA73, (int32_t)0x1Eu, "SetControlVisibility", CONV_STACK, 8, 2, glue_SetControlVisibility},
+    {0xA08D, (int32_t)0x0u, "DebuggerGetMax", CONV_REG, 0, 0, glue_DebuggerGetMax},
+    {0xA08D, (int32_t)0x1u, "DebuggerEnter", CONV_STACK, 0, 0, glue_DebuggerEnter},
+    {0xA08D, (int32_t)0x2u, "DebuggerExit", CONV_STACK, 0, 0, glue_DebuggerExit},
+    {0xA08D, (int32_t)0x3u, "DebuggerPoll", CONV_STACK, 0, 0, glue_DebuggerPoll},
+    {0xA08D, (int32_t)0x4u, "GetPageState", CONV_REG, 0, 0, glue_GetPageState},
+    {0xA08D, (int32_t)0x5u, "PageFaultFatal", CONV_REG, 0, 0, glue_PageFaultFatal},
+    {0xA08D, (int32_t)0x6u, "DebuggerLockMemory", CONV_REG, 0, 0, glue_DebuggerLockMemory},
+    {0xA08D, (int32_t)0x7u, "DebuggerUnlockMemory", CONV_REG, 0, 0, glue_DebuggerUnlockMemory},
+    {0xA08D, (int32_t)0x8u, "EnterSupervisorMode", CONV_REG, 0, 0, glue_EnterSupervisorMode},
     {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
     {0xAA68, (int32_t)0x20Du, "AutoSizeDialog", CONV_STACK, 4, 2, glue_AutoSizeDialog},
     {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},
@@ -21659,6 +21758,7 @@ const dispatcher_info dispatchers[] = {
     {0xABF6, "CollectionDispatch", "D0W"},
     {0xAA72, "ContextualMenuDispatch", "D0W"},
     {0xAA73, "ControlDispatch", "D0W"},
+    {0xA08D, "DebugUtil", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
     {0xABEB, "DisplayDispatch", "D0W"},
     {0xABED, "DragDispatch", "D0W"},

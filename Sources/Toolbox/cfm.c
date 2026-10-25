@@ -175,6 +175,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ppc_glue_export_count; i++)
         if (!strcmp(ppc_glue_exports[i].name, name))
             return ppc_glue_exports[i].fn;
+    void (*util)(ppc_cpu *) = ilutil_export_fn(name);
+    if (util)
+        return util;
     if (name[0] == 'a' && name[1] == 'g' && name[2] == 'l')
         for (unsigned i = 0; i < agl_export_count; i++)
             if (!strcmp(agl_exports[i].name, name))

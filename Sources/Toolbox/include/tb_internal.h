@@ -266,6 +266,10 @@ void raw_SlotManager(cpu68k *c, uint16_t tw);
 int16_t slot_manager(uint16_t sel, gaddr spb);
 void slots_reset(void);
 void raw_MemoryDispatch(cpu68k *c, uint16_t tw);
+/* Virtual memory's calls by _MemoryDispatch selector (driverservices.c);
+ * *a0_out is A0 after. */
+int16_t memory_dispatch(uint16_t sel, uint32_t a0, uint32_t a1, uint32_t *a0_out);
+void raw_IdleUpdate(cpu68k *c, uint16_t tw);
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
 /* A MacRoman character's comparison key. */
 int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);

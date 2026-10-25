@@ -1,0 +1,85 @@
+# InterfaceLib's utility calls (M17) that multiversal lacks: the debugger
+# utility trap, the Dictionary Manager, AVL trees, the Text Services
+# Manager and the rest.  Same schema as Defs/multiversal/defs.  Written
+# from the published interfaces' trap words and selectors.
+
+# _DebugUtil ($A08D), selector in D0 (MOVEQ #n,D0), arguments in A0/A1.
+- dispatcher:
+    name: DebugUtil
+    trap: 0xA08D
+    selector-location: D0W
+
+- function:
+    name: DebuggerGetMax
+    return: int32_t
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0000
+
+- function:
+    name: DebuggerEnter
+    dispatcher: DebugUtil
+    selector: 0x0001
+
+- function:
+    name: DebuggerExit
+    dispatcher: DebugUtil
+    selector: 0x0002
+
+- function:
+    name: DebuggerPoll
+    dispatcher: DebugUtil
+    selector: 0x0003
+
+- function:
+    name: GetPageState
+    return: int16_t
+    args:
+      - name: address
+        type: void*
+        register: A0
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0004
+
+- function:
+    name: PageFaultFatal
+    return: Boolean
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0005
+
+- function:
+    name: DebuggerLockMemory
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0006
+
+- function:
+    name: DebuggerUnlockMemory
+    return: OSErr
+    args:
+      - name: address
+        type: void*
+        register: A0
+      - name: count
+        type: uint32_t
+        register: A1
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0007
+
+- function:
+    name: EnterSupervisorMode
+    return: int16_t
+    returnreg: D0
+    dispatcher: DebugUtil
+    selector: 0x0008
