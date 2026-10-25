@@ -242,7 +242,7 @@ extension BlueBox {
             #expect(Int32(bitPattern: call("open", [cstr("Missing"), 0])) == -1 && rd32(errno) == 2) // ENOENT
             // The console takes what's written and has nothing to read.
             #expect(call("write", [1, text, 5]) == 5 && call("read", [0, buf, 4]) == 0)
-            #expect(Int32(bitPattern: call("lseek", [1, 0, 0])) == -1 && rd32(errno) == 29) // ESPIPE
+            #expect(Int32(bitPattern: call("lseek", [1, 0, 0])) == -1 && rd32(errno) == 22) // EINVAL, as MPW's console
         }
 
         // MARK: Core Foundation

@@ -111,6 +111,7 @@ static void unimplemented_import(ppc_cpu *c) { (void)c; }
 
 static void ppc_ExitToShell(ppc_cpu *c)
 {
+    stdclib_terminate();
     rm_update_all();
     cpu_halt(g_cpu, "ExitToShell");
     ppc_halt(c, "ExitToShell");
@@ -163,6 +164,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ml_export_count; i++)
         if (!strcmp(ml_exports[i].name, name))
             return ml_exports[i].fn;
+    void (*stdc)(ppc_cpu *) = stdclib_export_fn(name);
+    if (stdc)
+        return stdc;
     for (unsigned i = 0; i < lib_export_count; i++)
         if (!strcmp(lib_exports[i].name, name))
             return lib_exports[i].fn;
@@ -1096,6 +1100,7 @@ static void run_next_init(ppc_cpu *c)
 /* main returned: the application is done. */
 static void main_returned(ppc_cpu *c)
 {
+    stdclib_terminate();
     rm_update_all();
     cpu_halt(g_cpu, "ExitToShell (main returned)");
     ppc_halt(c, "ExitToShell (main returned)");
@@ -1118,6 +1123,7 @@ void cfm_reset(void)
     glue_area = 0;
     missing_len = missing_count = 0;
     nfrags = ninit = init_next = ndata_blocks = 0;
+    stdclib_reset(); /* the last program's library state went with it */
     ppc_cpu_ready = false;
     code_check_reset(); /* the last program's code */
 }
