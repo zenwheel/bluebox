@@ -7,6 +7,7 @@
 #include <strings.h>
 #include <time.h>
 
+#include "carbon_events.h"
 #include "forks.h"
 #include "hostgl.h"
 #include "legacy.h"
@@ -378,6 +379,7 @@ bool machine_boot(bool census)
     ppc_libs_reset();
     sound_converters_reset();
     carbon_reset();
+    carbon_events_reset();
     ilutil_reset();
     slots_reset();
     cursor_devices_reset();

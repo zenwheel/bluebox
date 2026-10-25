@@ -11,6 +11,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "carbon_events.h"
 #include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
@@ -770,6 +771,7 @@ static bool wne_event(int16_t mask, gaddr evp, bool *idled)
 
 int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
 {
+    sleep = carbon_event_loop_turn(sleep); /* Carbon timers, posted events, MP tasks */
     machine_advance_ticks();
     sound_pump();
     speech_pump();

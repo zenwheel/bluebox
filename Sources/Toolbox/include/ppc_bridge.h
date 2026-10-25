@@ -54,6 +54,12 @@ extern const unsigned snd_export_count;
 /* CarbonLib's Core Foundation basics and accessors (carbon.c). */
 extern const ppc_export carbon_exports[];
 extern const unsigned carbon_export_count;
+/* The Carbon Event Manager (carbon_events.c) and Multiprocessing
+ * Services (multiprocessing.c). */
+extern const ppc_export ce_exports[];
+extern const unsigned ce_export_count;
+extern const ppc_export mp_exports[];
+extern const unsigned mp_export_count;
 /* DrawSprocket (drawsprocket.c). */
 extern const ppc_export dsp_exports[];
 extern const unsigned dsp_export_count;
