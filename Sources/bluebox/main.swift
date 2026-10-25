@@ -951,17 +951,20 @@ func resolveApplication(_ given: String, named: String?) -> String {
     }
     let apps = scan(entry).filter { $0.isApplication }
     var candidates = apps.filter { $0.hasCODE || $0.hasCfrg } /* 68k, PowerPC or both */
+    // Each one's path inside the archive: what the list below shows, and
+    // what --app takes to tell apart applications of the same name.
+    func inside(_ f: IngestedFile) -> String {
+        f.path.hasPrefix(entry + "/") ? String(f.path.dropFirst(entry.count + 1)) : (f.path as NSString).lastPathComponent
+    }
     if let named {
-        candidates = candidates.filter {
-            ($0.path as NSString).lastPathComponent.range(of: named, options: .caseInsensitive) != nil
-        }
+        candidates = matchApplications(candidates.map(inside), wanted: named).map { candidates[$0] }
     }
     if candidates.count == 1 { return candidates[0].path }
     if candidates.isEmpty {
         fail(named == nil ? "no application found in \(entry)" : "no application matching \"\(named!)\" in \(entry)")
     }
     eprint("several applications in \(entry); choose one with --app:\n")
-    for a in candidates { eprint("  \((a.path as NSString).lastPathComponent)\n") }
+    for a in candidates { eprint("  \(inside(a))\n") }
     exit(2)
 }
 

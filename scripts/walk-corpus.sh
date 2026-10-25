@@ -63,7 +63,8 @@ walk_one() {
 	else
 		end=$(grep -a -m 1 -E '^stopped:|^bluebox:|^instruction limit|^several applications' "$log" | sed -E 's/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//' | cut -c1-120)
 	fi
-	# An archive of several applications: each of them in turn.
+	# An archive of several applications: each of them in turn, by its
+	# path inside the archive (names alone can be the same).
 	if [ -z "$app" ] && grep -q '^several applications' "$log"; then
 		sed -n '/^several applications/,$ s/^  //p' "$log" | while IFS= read -r one; do
 			walk_one "$rel" "$one"
