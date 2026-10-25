@@ -13,6 +13,9 @@
 #   batch <work dir>/walk.tsv (the batch, then walk-corpus.sh's columns) and
 #   <work dir>/report.txt.  WALK_TIMEOUT and MAX pass through to
 #   walk-corpus.sh; HEAPCHECK defaults to 10 here (every 10th call).
+#   KEEP, a folder, keeps the expanded applications there as a census
+#   corpus (KEEP/corpus/<batch>/..., KEEP/census_list.txt) that
+#   walk-corpus.sh can walk again without importing anything.
 #   REMOUNT, a command, is run when the archive folder has gone (a network
 #   share unmounted) before the next batch, and the run stops if it stays
 #   gone.
@@ -63,7 +66,14 @@ cut -f1 "$work/batches.txt" | uniq | while IFS= read -r b; do
 	printf '%s: ' "$b"
 	t=$work/batch
 	rm -rf "$t"
-	mkdir -p "$t/in" "$t/census/corpus" "$t/h" "$work/results/$b"
+	mkdir -p "$t/in" "$t/census" "$t/h" "$work/results/$b"
+	if [ -n "${KEEP:-}" ]; then
+		rm -rf "${KEEP:?}/corpus/$b"
+		mkdir -p "$KEEP/corpus/$b"
+		ln -s "$KEEP/corpus/$b" "$t/census/corpus"
+	else
+		mkdir -p "$t/census/corpus"
+	fi
 	# Copy each archive in, import it, and drop the copy.
 	awk -F'\t' -v b="$b" '$1 == b { print $2 }' "$work/batches.txt" | while IFS= read -r f; do
 		c="$t/in/$(basename "$f")"
@@ -81,6 +91,9 @@ cut -f1 "$work/batches.txt" | uniq | while IFS= read -r b; do
 		cp "$t/out/walk.tsv" "$t/out/report.txt" "$work/results/$b/" 2>/dev/null || true
 		tar czf "$work/results/$b/logs.tgz" -C "$t/out" logs 2>/dev/null || true
 		awk -v b="$b" '{ print b "\t" $0 }' "$t/out/walk.tsv" >>"$work/walk.tsv" 2>/dev/null || true
+	fi
+	if [ -n "${KEEP:-}" ]; then
+		sed "s|^|$b/|" "$t/census/census_list.txt" >>"$KEEP/census_list.txt"
 	fi
 	printf '%s\n' "$b" >>"$work/done.txt"
 	rm -rf "$t"
