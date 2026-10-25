@@ -315,10 +315,9 @@ static const struct {
     const ppc_export *table;
     const unsigned *count;
 } tables[] = {
-    { carbon_scrap_exports, &carbon_scrap_export_count },
-    { carbon_nav_exports, &carbon_nav_export_count },
-    { carbon_print_exports, &carbon_print_export_count },
-    { carbon_atsui_exports, &carbon_atsui_export_count },
+    { carbon_print_exports, &carbon_print_export_count }, { carbon_nav_exports, &carbon_nav_export_count },
+    { carbon_scrap_exports, &carbon_scrap_export_count }, { carbon_atsui_exports, &carbon_atsui_export_count },
+    { carbon_mlte_exports, &carbon_mlte_export_count },
 };
 
 void (*carbonsvc_export_fn(const char *name))(ppc_cpu *)
@@ -340,4 +339,5 @@ void carbonsvc_reset(void)
     carbon_nav_reset();
     carbon_scrap_reset();
     carbon_atsui_reset();
+    carbon_mlte_reset();
 }
