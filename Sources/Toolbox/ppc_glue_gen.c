@@ -22743,6 +22743,170 @@ static void ppcglue_EnterSupervisorMode(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_InitializeDictionary(ppc_cpu *c)
+{
+    gaddr a_spec = (gaddr)c->gpr[3];
+    int16_t a_maximumKeyLength = (int16_t)c->gpr[4];
+    int8_t a_keyAttributes = (int8_t)c->gpr[5];
+    int16_t a_script = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitializeDictionary(a_spec, a_maximumKeyLength, a_keyAttributes, a_script);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenDictionary(ppc_cpu *c)
+{
+    gaddr a_spec = (gaddr)c->gpr[3];
+    int8_t a_accessPermission = (int8_t)c->gpr[4];
+    gaddr a_dictionaryReference = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenDictionary(a_spec, a_accessPermission, a_dictionaryReference);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseDictionary(ppc_cpu *c)
+{
+    int32_t a_dictionaryReference = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseDictionary(a_dictionaryReference);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertRecordToDictionary(ppc_cpu *c)
+{
+    int32_t a_dictionaryReference = (int32_t)c->gpr[3];
+    gaddr a_key = (gaddr)c->gpr[4];
+    gaddr a_recordDataHandle = (gaddr)c->gpr[5];
+    int16_t a_whichMode = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InsertRecordToDictionary(a_dictionaryReference, a_key, a_recordDataHandle, a_whichMode);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteRecordFromDictionary(ppc_cpu *c)
+{
+    int32_t a_dictionaryReference = (int32_t)c->gpr[3];
+    gaddr a_key = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteRecordFromDictionary(a_dictionaryReference, a_key);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindRecordInDictionary(ppc_cpu *c)
+{
+    int32_t a_dictionaryReference = (int32_t)c->gpr[3];
+    gaddr a_key = (gaddr)c->gpr[4];
+    gaddr a_requestedAttributeTablePointer = (gaddr)c->gpr[5];
+    gaddr a_recordDataHandle = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FindRecordInDictionary(a_dictionaryReference, a_key, a_requestedAttributeTablePointer, a_recordDataHandle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindRecordByIndexInDictionary(ppc_cpu *c)
+{
+    int32_t a_dictionaryReference = (int32_t)c->gpr[3];
+    int32_t a_recordIndex = (int32_t)c->gpr[4];
+    gaddr a_requestedAttributeTablePointer = (gaddr)c->gpr[5];
+    gaddr a_recordKey = (gaddr)c->gpr[6];
+    gaddr a_recordDataHandle = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FindRecordByIndexInDictionary(a_dictionaryReference, a_recordIndex, a_requestedAttributeTablePointer, a_recordKey, a_recordDataHandle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDictionaryInformation(ppc_cpu *c)
+{
+    int32_t a_dictionaryReference = (int32_t)c->gpr[3];
+    gaddr a_theDictionaryInformation = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDictionaryInformation(a_dictionaryReference, a_theDictionaryInformation);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompactDictionary(ppc_cpu *c)
+{
+    int32_t a_dictionaryReference = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CompactDictionary(a_dictionaryReference);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLInit(ppc_cpu *c)
+{
+    uint32_t a_flags = (uint32_t)c->gpr[3];
+    gaddr a_compareItemsProc = (gaddr)c->gpr[4];
+    gaddr a_sizeItemProc = (gaddr)c->gpr[5];
+    gaddr a_disposeItemProc = (gaddr)c->gpr[6];
+    gaddr a_refCon = (gaddr)c->gpr[7];
+    gaddr a_tree = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLInit(a_flags, a_compareItemsProc, a_sizeItemProc, a_disposeItemProc, a_refCon, a_tree);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLDispose(ppc_cpu *c)
+{
+    gaddr a_tree = (gaddr)c->gpr[3];
+    uint16_t a_order = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLDispose(a_tree, a_order);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLWalk(ppc_cpu *c)
+{
+    gaddr a_tree = (gaddr)c->gpr[3];
+    gaddr a_walkProc = (gaddr)c->gpr[4];
+    uint16_t a_order = (uint16_t)c->gpr[5];
+    gaddr a_walkRefCon = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLWalk(a_tree, a_walkProc, a_order, a_walkRefCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLCount(ppc_cpu *c)
+{
+    gaddr a_tree = (gaddr)c->gpr[3];
+    gaddr a_count = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLCount(a_tree, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLGetIndItem(ppc_cpu *c)
+{
+    gaddr a_tree = (gaddr)c->gpr[3];
+    uint32_t a_index = (uint32_t)c->gpr[4];
+    gaddr a_dataPtr = (gaddr)c->gpr[5];
+    gaddr a_itemSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLGetIndItem(a_tree, a_index, a_dataPtr, a_itemSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLInsert(ppc_cpu *c)
+{
+    gaddr a_tree = (gaddr)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLInsert(a_tree, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLRemove(ppc_cpu *c)
+{
+    gaddr a_tree = (gaddr)c->gpr[3];
+    gaddr a_key = (gaddr)c->gpr[4];
+    gaddr a_dataPtr = (gaddr)c->gpr[5];
+    gaddr a_itemSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLRemove(a_tree, a_key, a_dataPtr, a_itemSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLFind(ppc_cpu *c)
+{
+    gaddr a_tree = (gaddr)c->gpr[3];
+    gaddr a_key = (gaddr)c->gpr[4];
+    gaddr a_dataPtr = (gaddr)c->gpr[5];
+    gaddr a_itemSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLFind(a_tree, a_key, a_dataPtr, a_itemSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AVLGetRefcon(ppc_cpu *c)
+{
+    gaddr a_tree = (gaddr)c->gpr[3];
+    gaddr a_refCon = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AVLGetRefcon(a_tree, a_refCon);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -34698,6 +34862,15 @@ const ppc_export ppc_exports[] = {
     {"AESizeOfNthItem", ppcglue_AESizeOfNthItem},
     {"AESizeOfParam", ppcglue_AESizeOfParam},
     {"AESuspendTheCurrentEvent", ppcglue_AESuspendTheCurrentEvent},
+    {"AVLCount", ppcglue_AVLCount},
+    {"AVLDispose", ppcglue_AVLDispose},
+    {"AVLFind", ppcglue_AVLFind},
+    {"AVLGetIndItem", ppcglue_AVLGetIndItem},
+    {"AVLGetRefcon", ppcglue_AVLGetRefcon},
+    {"AVLInit", ppcglue_AVLInit},
+    {"AVLInsert", ppcglue_AVLInsert},
+    {"AVLRemove", ppcglue_AVLRemove},
+    {"AVLWalk", ppcglue_AVLWalk},
     {"AbortPrePrerollMovie", ppctrap_AbortPrePrerollMovie},
     {"AcceptHighLevelEvent", ppcglue_AcceptHighLevelEvent},
     {"AcquireIconRef", ppcglue_AcquireIconRef},
@@ -34827,6 +35000,7 @@ const ppc_export ppc_exports[] = {
     {"CloseConnection", ppctrap_CloseConnection},
     {"CloseDeskAcc", ppcglue_CloseDeskAcc},
     {"CloseDialog", ppcglue_CloseDialog},
+    {"CloseDictionary", ppcglue_CloseDictionary},
     {"CloseEdition", ppctrap_CloseEdition},
     {"CloseMovieFile", ppcglue_CloseMovieFile},
     {"CloseMovieStorage", ppctrap_CloseMovieStorage},
@@ -34855,6 +35029,7 @@ const ppc_export ppc_exports[] = {
     {"CompShift", ppcglue_CompShift},
     {"CompSquareRoot", ppcglue_CompSquareRoot},
     {"CompSub", ppcglue_CompSub},
+    {"CompactDictionary", ppcglue_CompactDictionary},
     {"CompactMem", ppcglue_CompactMem},
     {"CompactMemSys", ppcglue_CompactMemSys},
     {"CompositeIconRef", ppcglue_CompositeIconRef},
@@ -34961,6 +35136,7 @@ const ppc_export ppc_exports[] = {
     {"DeleteMovieFile", ppctrap_DeleteMovieFile},
     {"DeleteMovieSegment", ppcglue_DeleteMovieSegment},
     {"DeleteMovieStorage", ppctrap_DeleteMovieStorage},
+    {"DeleteRecordFromDictionary", ppcglue_DeleteRecordFromDictionary},
     {"DeleteTrackReference", ppctrap_DeleteTrackReference},
     {"DeleteTrackSegment", ppctrap_DeleteTrackSegment},
     {"DeltaPoint", ppcglue_DeltaPoint},
@@ -35145,6 +35321,8 @@ const ppc_export ppc_exports[] = {
     {"FindControlUnderMouse", ppcglue_FindControlUnderMouse},
     {"FindDialogItem", ppcglue_FindDialogItem},
     {"FindFolder", ppcglue_FindFolder},
+    {"FindRecordByIndexInDictionary", ppcglue_FindRecordByIndexInDictionary},
+    {"FindRecordInDictionary", ppcglue_FindRecordInDictionary},
     {"FindScriptRun", ppcglue_FindScriptRun},
     {"FindSymbol", ppctrap_FindSymbol},
     {"FindWindow", ppcglue_FindWindow},
@@ -35417,6 +35595,7 @@ const ppc_export ppc_exports[] = {
     {"GetDialogItem", ppcglue_GetDialogItem},
     {"GetDialogItemAsControl", ppcglue_GetDialogItemAsControl},
     {"GetDialogItemText", ppcglue_GetDialogItemText},
+    {"GetDictionaryInformation", ppcglue_GetDictionaryInformation},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
     {"GetDragAttributes", ppcglue_GetDragAttributes},
     {"GetDragHiliteColor", ppcglue_GetDragHiliteColor},
@@ -35891,6 +36070,7 @@ const ppc_export ppc_exports[] = {
     {"InitResources", ppcglue_InitResources},
     {"InitUtil", ppcglue_InitUtil},
     {"InitWindows", ppcglue_InitWindows},
+    {"InitializeDictionary", ppcglue_InitializeDictionary},
     {"InsTime", ppcglue_InsTime},
     {"InsXTime", ppcglue_InsXTime},
     {"InsertEmptyMovieSegment", ppcglue_InsertEmptyMovieSegment},
@@ -35899,6 +36079,7 @@ const ppc_export ppc_exports[] = {
     {"InsertMenu", ppcglue_InsertMenu},
     {"InsertMenuItem", ppcglue_InsertMenuItem},
     {"InsertMovieSegment", ppcglue_InsertMovieSegment},
+    {"InsertRecordToDictionary", ppcglue_InsertRecordToDictionary},
     {"InsertResMenu", ppcglue_InsertResMenu},
     {"InsertTrackSegment", ppctrap_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
@@ -36645,6 +36826,7 @@ const ppc_export ppc_exports[] = {
     {"OpenCPicture", ppcglue_OpenCPicture},
     {"OpenCPort", ppcglue_OpenCPort},
     {"OpenDeskAcc", ppcglue_OpenDeskAcc},
+    {"OpenDictionary", ppcglue_OpenDictionary},
     {"OpenEdition", ppctrap_OpenEdition},
     {"OpenMovieFile", ppcglue_OpenMovieFile},
     {"OpenMovieStorage", ppctrap_OpenMovieStorage},

@@ -434,3 +434,203 @@ let plainFunction: native_fn = { c, _ in
     wr32(c.pointee.a.7, a * 10 + b)
     cpu_push32(c, ret)
 }
+
+extension BlueBox {
+    /// The Dictionary Manager: keyed records in a file of ours.
+    @Suite struct DictionaryManager {
+        init() { bootMachine() }
+
+        func handle(_ bytes: [UInt8]) -> UInt32 {
+            let h = tb_NewHandle(Int32(bytes.count), false, false)
+            for (i, b) in bytes.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+            return h
+        }
+        func pstr(_ s: String) -> UInt32 {
+            let p = tb_NewPtr(256, false, true)
+            guestPString(s, at: p)
+            return p
+        }
+        func bytes(_ h: UInt32) -> [UInt8] { (0..<UInt32(tb_GetHandleSize(h))).map { rd8(rd32(h) + $0) } }
+
+        @Test func recordsKeptInAFile() {
+            let dir = launchTestApp()
+            let spec = tb_NewPtr(70, false, true)
+            fm_spec_for_path(dir.appendingPathComponent("Words").path, spec)
+            #expect(tb_InitializeDictionary(spec, 0, 0, 0) == -416)    // btKeyLenErr
+            #expect(tb_InitializeDictionary(spec, 32, 0x40, 0) == -417) // btKeyAttrErr
+            #expect(tb_InitializeDictionary(spec, 32, 0, 0) == 0)      // case and marks ignored
+            let ref = tb_NewPtr(4, false, true)
+            #expect(ilCall16("OpenDictionary", [spec, 3, ref]) == 0)
+            let d = Int32(bitPattern: rd32(ref))
+
+            #expect(tb_InsertRecordToDictionary(d, pstr("pear"), handle([1, 2, 3]), 0) == 0)
+            #expect(tb_InsertRecordToDictionary(d, pstr("Apple"), handle([4]), 0) == 0)
+            #expect(tb_InsertRecordToDictionary(d, pstr("APPLE"), handle([5]), 0) == -414) // btDupRecErr
+            #expect(tb_InsertRecordToDictionary(d, pstr("fig"), handle([6]), 1) == -415)   // kReplace: none
+            #expect(tb_InsertRecordToDictionary(d, pstr("apple"), handle([7, 7]), 2) == 0) // kInsertOrReplace
+            #expect(tb_InsertRecordToDictionary(d, pstr("x"), handle([]), 3) == -20000)
+            #expect(tb_InsertRecordToDictionary(d, pstr(String(repeating: "k", count: 33)), handle([]), 0) == -416)
+            #expect(tb_InsertRecordToDictionary(d, pstr("big"), handle([UInt8](repeating: 0, count: 1025)), 0) == -20001)
+            #expect(tb_InsertRecordToDictionary(d, pstr("fig"), handle([8]), 0) == 0)
+
+            let out = tb_NewHandle(0, false, false)
+            #expect(tb_FindRecordInDictionary(d, pstr("PEAR"), 0, out) == 0 && bytes(out) == [1, 2, 3])
+            #expect(tb_FindRecordInDictionary(d, pstr("plum"), 0, out) == -415)
+            // In key order, from 0.
+            let key = tb_NewPtr(256, false, true)
+            #expect(tb_FindRecordByIndexInDictionary(d, 0, 0, key, out) == 0 && pstring(at: key) == "Apple" && bytes(out) == [7, 7])
+            #expect(tb_FindRecordByIndexInDictionary(d, 2, 0, key, out) == 0 && pstring(at: key) == "pear")
+            #expect(tb_FindRecordByIndexInDictionary(d, 3, 0, key, out) == -415)
+
+            #expect(tb_DeleteRecordFromDictionary(d, pstr("FIG")) == 0)
+            #expect(tb_DeleteRecordFromDictionary(d, pstr("fig")) == -415)
+            let info = tb_NewPtr(84, false, true)
+            #expect(tb_GetDictionaryInformation(d, info) == 0)
+            #expect(rd32(info + 70) == 2 && rd16(info + 80) == 32 && rd8(info + 82) == 0)
+            #expect(rd32(info + 2) == rd32(spec + 2)) // the file's parent
+            #expect(tb_CompactDictionary(d) == 0)
+            #expect(ilCall16("CloseDictionary", [rd32(ref)]) == 0)
+            #expect(tb_CloseDictionary(d) == -50)
+
+            // Opened again, read only: the records came back from the file.
+            #expect(tb_OpenDictionary(spec, 1, ref) == 0)
+            let d2 = Int32(bitPattern: rd32(ref))
+            #expect(tb_FindRecordInDictionary(d2, pstr("apple"), 0, out) == 0 && bytes(out) == [7, 7])
+            #expect(tb_InsertRecordToDictionary(d2, pstr("kiwi"), handle([9]), 0) == -61) // wrPermErr
+            #expect(tb_CloseDictionary(d2) == 0)
+
+            // Not one of ours.
+            let other = tb_NewPtr(70, false, true)
+            let path = dir.appendingPathComponent("Other").path
+            try? Data([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]).write(to: URL(fileURLWithPath: path))
+            fm_spec_for_path(path, other)
+            #expect(tb_OpenDictionary(other, 1, ref) == -410) // notBTree
+        }
+    }
+
+    /// AVL trees, ordered by the program's compare procedure.
+    @Suite struct AVLTrees {
+        init() { bootMachine() }
+
+        @Test func insertFindRemoveWalk() {
+            guestStack()
+            avlDisposed = []
+            avlWalked = []
+            let compare = native_register(avlCompare, "AVLCompare", 0)
+            let size = native_register(avlSize, "AVLSize", 0)
+            let dispose = native_register(avlDispose, "AVLDispose", 0)
+            let walkProc = native_register(avlWalk, "AVLWalk", 0)
+            let treeVar = tb_NewPtr(4, false, true)
+            #expect(tb_AVLInit(0, compare, size, dispose, 0x1234, treeVar) == 0)
+            let tree = rd32(treeVar)
+            #expect(tree != 0)
+            let item = tb_NewPtr(8, false, true)
+            for k: UInt32 in [50, 20, 70, 10, 30, 60, 80, 40] {
+                wr32(item, k)
+                wr32(item + 4, k * 2)
+                #expect(tb_AVLInsert(tree, item) == 0)
+            }
+            wr32(item, 30)
+            #expect(tb_AVLInsert(tree, item) == -960) // errItemAlreadyInTree
+            let count = tb_NewPtr(4, false, true), out = tb_NewPtr(8, false, true), sz = tb_NewPtr(4, false, true)
+            #expect(tb_AVLCount(tree, count) == 0 && rd32(count) == 8)
+            // Found by key alone.
+            wr32(item, 60)
+            wr32(item + 4, 0)
+            #expect(tb_AVLFind(tree, item, out, sz) == 0 && rd32(out + 4) == 120 && rd32(sz) == 8)
+            wr32(item, 65)
+            #expect(tb_AVLFind(tree, item, out, sz) == -962)
+            #expect(tb_AVLGetIndItem(tree, 3, out, sz) == 0 && rd32(out) == 30)
+            #expect(tb_AVLGetIndItem(tree, 9, out, sz) == -962)
+            // Removing calls the dispose procedure.
+            wr32(item, 20)
+            #expect(tb_AVLRemove(tree, item, out, sz) == 0 && rd32(out + 4) == 40 && avlDisposed == [20])
+            #expect(tb_AVLCount(tree, count) == 0 && rd32(count) == 7)
+
+            // The walk: in order left to right, then right to left.
+            #expect(tb_AVLWalk(tree, walkProc, 0, 0) == 0)
+            #expect(avlWalked.map(\.key) == [10, 30, 40, 50, 60, 70, 80])
+            #expect(avlWalked.map(\.level).max()! <= 4 && avlWalked.map(\.level).min()! == 1)
+            avlWalked = []
+            #expect(tb_AVLWalk(tree, walkProc, 1, 0) == 0)
+            #expect(avlWalked.map(\.key) == [80, 70, 60, 50, 40, 30, 10])
+            // A walk stops at the first nonzero result.
+            avlWalked = []
+            #expect(tb_AVLWalk(tree, walkProc, 0, 3) == -1)
+            #expect(avlWalked.count == 3)
+
+            // Through the 68k trap: AVLGetRefcon, then AVLCount.
+            let refcon = tb_NewPtr(4, false, true)
+            let reason = run68k([
+                0x4267,                                   // CLR.W -(SP)
+                0x2F3C, hiWord(tree), loWord(tree),       // MOVE.L #tree,-(SP)
+                0x2F3C, hiWord(refcon), loWord(refcon),   // MOVE.L #refcon,-(SP)
+                0x303C, 0x0409, 0xAA80,                   // AVLGetRefcon
+                0x3E1F,                                   // MOVE.W (SP)+,D7
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell" && g_cpu!.pointee.d.7 & 0xFFFF == 0 && rd32(refcon) == 0x1234)
+            #expect(ilCall16("AVLCount", [tree, count]) == 0 && rd32(count) == 7)
+
+            avlDisposed = []
+            #expect(tb_AVLDispose(treeVar, 0) == 0 && rd32(treeVar) == 0)
+            #expect(avlDisposed.count == 7)
+            #expect(tb_AVLCount(tree, count) == -961) // errNotValidTree
+        }
+    }
+}
+
+nonisolated(unsafe) var avlDisposed: [UInt32] = []
+nonisolated(unsafe) var avlWalked: [(key: UInt32, level: UInt32)] = []
+
+/// pascal long (tree, i1, i2, nodeType): the items' keys compared.
+let avlCompare: native_fn = { c, _ in
+    guard let c else { return }
+    let ret = cpu_pop32(c)
+    _ = cpu_pop16(c)
+    let i2 = cpu_pop32(c), i1 = cpu_pop32(c)
+    _ = cpu_pop32(c)
+    let a = Int64(rd32(i1)), b = Int64(rd32(i2))
+    wr32(c.pointee.a.7, UInt32(bitPattern: Int32(a < b ? -1 : a > b ? 1 : 0)))
+    cpu_push32(c, ret)
+}
+
+/// pascal long (tree, item): 8.
+let avlSize: native_fn = { c, _ in
+    guard let c else { return }
+    let ret = cpu_pop32(c)
+    c.pointee.a.7 += 8
+    wr32(c.pointee.a.7, 8)
+    cpu_push32(c, ret)
+}
+
+/// pascal void (tree, item)
+let avlDispose: native_fn = { c, _ in
+    guard let c else { return }
+    let ret = cpu_pop32(c)
+    let item = cpu_pop32(c)
+    _ = cpu_pop32(c)
+    avlDisposed.append(rd32(item))
+    cpu_push32(c, ret)
+}
+
+/// pascal OSErr (tree, item, stage, node, level, balance, refCon): the
+/// in-order visits noted; stops (-1) after refCon of them when it is not 0.
+let avlWalk: native_fn = { c, _ in
+    guard let c else { return }
+    let ret = cpu_pop32(c)
+    let refCon = cpu_pop32(c)
+    _ = cpu_pop32(c)
+    let level = cpu_pop32(c)
+    _ = cpu_pop16(c)
+    let stage = cpu_pop16(c)
+    let item = cpu_pop32(c)
+    _ = cpu_pop32(c)
+    var r: Int16 = 0
+    if stage == 1 {
+        avlWalked.append((rd32(item), level))
+        if refCon != 0 && avlWalked.count == Int(refCon) { r = -1 }
+    }
+    wr16(c.pointee.a.7, UInt16(bitPattern: r))
+    cpu_push32(c, ret)
+}

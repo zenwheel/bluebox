@@ -83,3 +83,255 @@
     returnreg: D0
     dispatcher: DebugUtil
     selector: 0x0008
+
+# The Dictionary Manager: _DictionaryDispatch ($AA53), the selector in D0
+# (the parameters' size in words in its high byte), Pascal arguments.
+- dispatcher:
+    name: DictionaryDispatch
+    trap: 0xAA53
+    selector-location: D0W
+
+- function:
+    name: InitializeDictionary
+    return: OSErr
+    args:
+      - name: spec
+        type: FSSpec*
+      - name: maximumKeyLength
+        type: int16_t
+      - name: keyAttributes
+        type: int8_t
+      - name: script
+        type: int16_t
+    dispatcher: DictionaryDispatch
+    selector: 0x0500
+
+- function:
+    name: OpenDictionary
+    return: OSErr
+    args:
+      - name: spec
+        type: FSSpec*
+      - name: accessPermission
+        type: int8_t
+      - name: dictionaryReference
+        type: int32_t*
+    dispatcher: DictionaryDispatch
+    selector: 0x0501
+
+- function:
+    name: CloseDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+    dispatcher: DictionaryDispatch
+    selector: 0x0202
+
+- function:
+    name: InsertRecordToDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: key
+        type: ConstStr255Param
+      - name: recordDataHandle
+        type: Handle
+      - name: whichMode
+        type: int16_t
+    dispatcher: DictionaryDispatch
+    selector: 0x0703
+
+- function:
+    name: DeleteRecordFromDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: key
+        type: ConstStr255Param
+    dispatcher: DictionaryDispatch
+    selector: 0x0404
+
+- function:
+    name: FindRecordInDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: key
+        type: ConstStr255Param
+      - name: requestedAttributeTablePointer
+        type: void*
+      - name: recordDataHandle
+        type: Handle
+    dispatcher: DictionaryDispatch
+    selector: 0x0805
+
+- function:
+    name: FindRecordByIndexInDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: recordIndex
+        type: int32_t
+      - name: requestedAttributeTablePointer
+        type: void*
+      - name: recordKey
+        type: StringPtr
+      - name: recordDataHandle
+        type: Handle
+    dispatcher: DictionaryDispatch
+    selector: 0x0A06
+
+- function:
+    name: GetDictionaryInformation
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+      - name: theDictionaryInformation
+        type: void*
+    dispatcher: DictionaryDispatch
+    selector: 0x0407
+
+- function:
+    name: CompactDictionary
+    return: OSErr
+    args:
+      - name: dictionaryReference
+        type: int32_t
+    dispatcher: DictionaryDispatch
+    selector: 0x0208
+
+# AVL trees (AVLTree.h): _AVLTreeDispatch ($AA80), the selector in D0 as
+# the Dictionary Manager's, Pascal arguments.
+- dispatcher:
+    name: AVLTreeDispatch
+    trap: 0xAA80
+    selector-location: D0W
+
+- function:
+    name: AVLInit
+    return: OSErr
+    args:
+      - name: flags
+        type: uint32_t
+      - name: compareItemsProc
+        type: ProcPtr
+      - name: sizeItemProc
+        type: ProcPtr
+      - name: disposeItemProc
+        type: ProcPtr
+      - name: refCon
+        type: void*
+      - name: tree
+        type: void*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0C01
+
+- function:
+    name: AVLDispose
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: order
+        type: uint16_t
+    dispatcher: AVLTreeDispatch
+    selector: 0x0302
+
+- function:
+    name: AVLWalk
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: walkProc
+        type: ProcPtr
+      - name: order
+        type: uint16_t
+      - name: walkRefCon
+        type: void*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0703
+
+- function:
+    name: AVLCount
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: count
+        type: uint32_t*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0804
+
+- function:
+    name: AVLGetIndItem
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: index
+        type: uint32_t
+      - name: dataPtr
+        type: void*
+      - name: itemSize
+        type: uint32_t*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0805
+
+- function:
+    name: AVLInsert
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: data
+        type: void*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0406
+
+- function:
+    name: AVLRemove
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: key
+        type: void*
+      - name: dataPtr
+        type: void*
+      - name: itemSize
+        type: uint32_t*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0807
+
+- function:
+    name: AVLFind
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: key
+        type: void*
+      - name: dataPtr
+        type: void*
+      - name: itemSize
+        type: uint32_t*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0808
+
+- function:
+    name: AVLGetRefcon
+    return: OSErr
+    args:
+      - name: tree
+        type: void*
+      - name: refCon
+        type: void*
+    dispatcher: AVLTreeDispatch
+    selector: 0x0409

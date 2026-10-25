@@ -683,6 +683,7 @@ const char *const tb_trap_names[1024] = {
     [0x250] = "SeedCFill",
     [0x251] = "CopyDeepMask",
     [0x252] = "HighLevelFSDispatch",
+    [0x253] = "DictionaryDispatch",
     [0x259] = "MixedModeDispatch",
     [0x25A] = "CodeFragmentDispatch",
     [0x260] = "DeleteMCEntries",
@@ -696,6 +697,7 @@ const char *const tb_trap_names[1024] = {
     [0x272] = "ContextualMenuDispatch",
     [0x273] = "ControlDispatch",
     [0x274] = "AppearanceDispatch",
+    [0x280] = "AVLTreeDispatch",
     [0x290] = "InitPalettes",
     [0x291] = "NewPalette",
     [0x292] = "GetNewPalette",
@@ -1427,6 +1429,117 @@ static void glue_AESuspendTheCurrentEvent(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_evt = (gaddr)cpu_pop32(c);
     int16_t r = tb_AESuspendTheCurrentEvent(a_evt);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_count = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLCount(a_tree, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLDispose(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_order = (uint16_t)cpu_pop16(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLDispose(a_tree, a_order);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLFind(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLFind(a_tree, a_key, a_dataPtr, a_itemSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLGetIndItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    uint32_t a_index = (uint32_t)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLGetIndItem(a_tree, a_index, a_dataPtr, a_itemSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLGetRefcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLGetRefcon(a_tree, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLInit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_disposeItemProc = (gaddr)cpu_pop32(c);
+    gaddr a_sizeItemProc = (gaddr)cpu_pop32(c);
+    gaddr a_compareItemsProc = (gaddr)cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_AVLInit(a_flags, a_compareItemsProc, a_sizeItemProc, a_disposeItemProc, a_refCon, a_tree);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLInsert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLInsert(a_tree, a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemSize = (gaddr)cpu_pop32(c);
+    gaddr a_dataPtr = (gaddr)cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLRemove(a_tree, a_key, a_dataPtr, a_itemSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AVLWalk(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_walkRefCon = (gaddr)cpu_pop32(c);
+    uint16_t a_order = (uint16_t)cpu_pop16(c);
+    gaddr a_walkProc = (gaddr)cpu_pop32(c);
+    gaddr a_tree = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AVLWalk(a_tree, a_walkProc, a_order, a_walkRefCon);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -2319,6 +2432,16 @@ static void glue_CloseDialog(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CloseDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CloseDictionary(a_dictionaryReference);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CloseMovieFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2545,6 +2668,16 @@ static void glue_CompSub(cpu68k *c, uint16_t trapword)
     gaddr a_dst = (gaddr)cpu_pop32(c);
     gaddr a_src = (gaddr)cpu_pop32(c);
     tb_CompSub(a_src, a_dst);
+    cpu_push32(c, ret);
+}
+
+static void glue_CompactDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CompactDictionary(a_dictionaryReference);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -3362,6 +3495,17 @@ static void glue_DeleteMovieSegment(cpu68k *c, uint16_t trapword)
     int32_t a_startTime = (int32_t)cpu_pop32(c);
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int16_t r = tb_DeleteMovieSegment(a_theMovie, a_startTime, a_duration);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DeleteRecordFromDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DeleteRecordFromDictionary(a_dictionaryReference, a_key);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -5075,6 +5219,33 @@ static void glue_FindFolder(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindRecordByIndexInDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_recordDataHandle = (gaddr)cpu_pop32(c);
+    gaddr a_recordKey = (gaddr)cpu_pop32(c);
+    gaddr a_requestedAttributeTablePointer = (gaddr)cpu_pop32(c);
+    int32_t a_recordIndex = (int32_t)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FindRecordByIndexInDictionary(a_dictionaryReference, a_recordIndex, a_requestedAttributeTablePointer, a_recordKey, a_recordDataHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FindRecordInDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_recordDataHandle = (gaddr)cpu_pop32(c);
+    gaddr a_requestedAttributeTablePointer = (gaddr)cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FindRecordInDictionary(a_dictionaryReference, a_key, a_requestedAttributeTablePointer, a_recordDataHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FindScriptRun(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6705,6 +6876,17 @@ static void glue_GetDialogItemText(cpu68k *c, uint16_t trapword)
     gaddr a_text = (gaddr)cpu_pop32(c);
     gaddr a_item = (gaddr)cpu_pop32(c);
     tb_GetDialogItemText(a_item, a_text);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDictionaryInformation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theDictionaryInformation = (gaddr)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetDictionaryInformation(a_dictionaryReference, a_theDictionaryInformation);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9982,6 +10164,19 @@ static void glue_InitWindows(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InitializeDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    int8_t a_keyAttributes = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_maximumKeyLength = (int16_t)cpu_pop16(c);
+    gaddr a_spec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_InitializeDictionary(a_spec, a_maximumKeyLength, a_keyAttributes, a_script);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InsTime(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10039,6 +10234,19 @@ static void glue_InsertMovieSegment(cpu68k *c, uint16_t trapword)
     int32_t a_dstMovie = (int32_t)cpu_pop32(c);
     int32_t a_srcMovie = (int32_t)cpu_pop32(c);
     int16_t r = tb_InsertMovieSegment(a_srcMovie, a_dstMovie, a_srcIn, a_srcDuration, a_dstIn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InsertRecordToDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_whichMode = (int16_t)cpu_pop16(c);
+    gaddr a_recordDataHandle = (gaddr)cpu_pop32(c);
+    gaddr a_key = (gaddr)cpu_pop32(c);
+    int32_t a_dictionaryReference = (int32_t)cpu_pop32(c);
+    int16_t r = tb_InsertRecordToDictionary(a_dictionaryReference, a_key, a_recordDataHandle, a_whichMode);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -12179,6 +12387,18 @@ static void glue_OpenDeskAcc(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_acc = (gaddr)cpu_pop32(c);
     int16_t r = tb_OpenDeskAcc(a_acc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenDictionary(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dictionaryReference = (gaddr)cpu_pop32(c);
+    int8_t a_accessPermission = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_spec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OpenDictionary(a_spec, a_accessPermission, a_dictionaryReference);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -19763,6 +19983,15 @@ const trap_sig trap_sigs[] = {
 const unsigned trap_sig_count = sizeof trap_sigs / sizeof trap_sigs[0];
 
 const dispatch_sig dispatch_sigs[] = {
+    {0xAA80, (int32_t)0x302u, "AVLDispose", CONV_STACK, 6, 2, glue_AVLDispose},
+    {0xAA80, (int32_t)0x406u, "AVLInsert", CONV_STACK, 8, 2, glue_AVLInsert},
+    {0xAA80, (int32_t)0x409u, "AVLGetRefcon", CONV_STACK, 8, 2, glue_AVLGetRefcon},
+    {0xAA80, (int32_t)0x703u, "AVLWalk", CONV_STACK, 14, 2, glue_AVLWalk},
+    {0xAA80, (int32_t)0x804u, "AVLCount", CONV_STACK, 8, 2, glue_AVLCount},
+    {0xAA80, (int32_t)0x805u, "AVLGetIndItem", CONV_STACK, 16, 2, glue_AVLGetIndItem},
+    {0xAA80, (int32_t)0x807u, "AVLRemove", CONV_STACK, 16, 2, glue_AVLRemove},
+    {0xAA80, (int32_t)0x808u, "AVLFind", CONV_STACK, 16, 2, glue_AVLFind},
+    {0xAA80, (int32_t)0xC01u, "AVLInit", CONV_STACK, 24, 2, glue_AVLInit},
     {0xA823, (int32_t)0x0u, "FindFolder", CONV_STACK, 16, 2, glue_FindFolder},
     {0xA823, (int32_t)0x2u, "NewAlias", CONV_STACK, 12, 2, glue_NewAlias},
     {0xA823, (int32_t)0x3u, "ResolveAlias", CONV_STACK, 16, 2, glue_ResolveAlias},
@@ -19914,6 +20143,15 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA68, (int32_t)0x511u, "SizeDialogItem", CONV_STACK, 10, 2, glue_SizeDialogItem},
     {0xAA68, (int32_t)0x90Eu, "StandardAlert", CONV_STACK, 18, 2, glue_StandardAlert},
     {0xAA68, (int32_t)0x110Cu, "NewFeaturesDialog", CONV_STACK, 34, 4, glue_NewFeaturesDialog},
+    {0xAA53, (int32_t)0x202u, "CloseDictionary", CONV_STACK, 4, 2, glue_CloseDictionary},
+    {0xAA53, (int32_t)0x208u, "CompactDictionary", CONV_STACK, 4, 2, glue_CompactDictionary},
+    {0xAA53, (int32_t)0x404u, "DeleteRecordFromDictionary", CONV_STACK, 8, 2, glue_DeleteRecordFromDictionary},
+    {0xAA53, (int32_t)0x407u, "GetDictionaryInformation", CONV_STACK, 8, 2, glue_GetDictionaryInformation},
+    {0xAA53, (int32_t)0x500u, "InitializeDictionary", CONV_STACK, 10, 2, glue_InitializeDictionary},
+    {0xAA53, (int32_t)0x501u, "OpenDictionary", CONV_STACK, 10, 2, glue_OpenDictionary},
+    {0xAA53, (int32_t)0x703u, "InsertRecordToDictionary", CONV_STACK, 14, 2, glue_InsertRecordToDictionary},
+    {0xAA53, (int32_t)0x805u, "FindRecordInDictionary", CONV_STACK, 16, 2, glue_FindRecordInDictionary},
+    {0xAA53, (int32_t)0xA06u, "FindRecordByIndexInDictionary", CONV_STACK, 20, 2, glue_FindRecordByIndexInDictionary},
     {0xABEB, (int32_t)0x414u, "DMRegisterNotifyProc", CONV_STACK, 8, 2, 0},
     {0xABED, (int32_t)0x1u, "InstallTrackingHandler", CONV_STACK, 12, 2, glue_InstallTrackingHandler},
     {0xABED, (int32_t)0x2u, "InstallReceiveHandler", CONV_STACK, 12, 2, glue_InstallReceiveHandler},
@@ -21752,6 +21990,7 @@ const dispatch_sig dispatch_sigs[] = {
 const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[0];
 
 const dispatcher_info dispatchers[] = {
+    {0xAA80, "AVLTreeDispatch", "D0W"},
     {0xA823, "AliasDispatch", "D0W"},
     {0xAA74, "AppearanceDispatch", "D0W"},
     {0xAA5A, "CodeFragmentDispatch", "StackW"},
@@ -21760,6 +21999,7 @@ const dispatcher_info dispatchers[] = {
     {0xAA73, "ControlDispatch", "D0W"},
     {0xA08D, "DebugUtil", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
+    {0xAA53, "DictionaryDispatch", "D0W"},
     {0xABEB, "DisplayDispatch", "D0W"},
     {0xABED, "DragDispatch", "D0W"},
     {0xA060, "FSDispatch", "D0W"},

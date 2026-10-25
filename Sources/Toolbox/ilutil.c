@@ -221,6 +221,11 @@ static const export_table tables[] = {
     { cc_exports, &cc_export_count },
 };
 
+void dictionary_reset(void);
+
+/* A fresh machine. */
+void ilutil_reset(void) { dictionary_reset(); }
+
 void (*ilutil_export_fn(const char *name))(ppc_cpu *)
 {
     for (unsigned t = 0; t < sizeof tables / sizeof tables[0]; t++)

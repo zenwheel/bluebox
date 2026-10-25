@@ -622,6 +622,7 @@ void ppc_glue_reset(void); /* ppc_glue.c */
 void ppc_libs_reset(void); /* ppc_libs.c */
 void sound_converters_reset(void); /* sndconvert.c */
 void carbon_reset(void); /* carbon.c */
+void ilutil_reset(void); /* InterfaceLib's utilities (ilutil.c) */
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);
 bool rm_host_path(int16_t rn, char *out, size_t outsize);
