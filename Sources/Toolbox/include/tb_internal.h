@@ -436,6 +436,9 @@ void carbon_controls_reset(void);
 void carbon_cfstring_to_pstr(gaddr cf, uint8_t out[256]);
 gaddr carbon_cfstring_from_text(const uint8_t *text, size_t n);
 void carbon_cfrelease(gaddr cf);
+uint32_t carbon_call_export(const char *name, const uint32_t *args, int n);
+/* The Data Browser (carbon_databrowser.c) */
+void databrowser_reset(void);
 /* The Appearance CDEFs (cdefs_appearance.c): their entry, the standard
  * buttons drawn in Platinum (kind 0 push, 1 check box, 2 radio), tracking
  * of their own (false when the Control Manager's will do), and what

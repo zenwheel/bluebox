@@ -55,7 +55,7 @@ static int extra_index(gaddr d, bool create)
         return -1;
     for (int i = 0; i < MAX_EXTRAS; i++)
         if (!extras[i].dialog) {
-            extras[i] = (dialog_extra){ d, 0, false, 0, NULL, 0 };
+            extras[i] = (dialog_extra){ .dialog = d };
             return i;
         }
     return -1;

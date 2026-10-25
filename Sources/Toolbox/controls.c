@@ -1709,6 +1709,15 @@ static int16_t track(gaddr ch, uint32_t p, gaddr a)
         ap_after_track(ch, done);
         return done;
     }
+    /* Others that say they track themselves (CarbonLib's Data Browser). */
+    if ((features(ch) & kControlHandlesTracking) && new_messages(ch)) {
+        gaddr rec = tb_NewPtr(10, false, true); /* ControlTrackingRec: startPt, modifiers, action */
+        wr32(rec, p);
+        wr32(rec + 6, a);
+        int16_t r = (int16_t)call_cdef(ch, kControlMsgHandleTracking, (int32_t)rec);
+        tb_DisposePtr(rec);
+        return r;
+    }
     if (part == inThumb) {
         /* Drag the thumb; the value follows the mouse along the track. */
         qrect r = crect(ch);

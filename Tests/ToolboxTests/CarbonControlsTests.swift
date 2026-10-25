@@ -485,6 +485,182 @@ extension BlueBox {
         }
     }
 
+    /// The Data Browser: items, containers, selection, sorting through the
+    /// program's compare callback, notifications, columns, the column view.
+    @Suite(.serialized) struct CarbonDataBrowser {
+        let t = CarbonControls()
+
+        func ids(_ list: [UInt32]) -> UInt32 {
+            let p = t.ptr(max(list.count, 1) * 4)
+            for (i, v) in list.enumerated() { wr32(p + UInt32(i * 4), v) }
+            return p
+        }
+
+        func rows(_ b: UInt32) -> [UInt32] {
+            var out: [UInt32] = []
+            let item = t.ptr()
+            var row: UInt32 = 0
+            while tb_GetDataBrowserTableViewItemID(b, row, item) == 0 {
+                out.append(rd32(item))
+                row += 1
+            }
+            return out
+        }
+
+        /// A PowerPC routine: the code words, its transition vector.
+        func routine(_ words: [UInt32]) -> UInt32 {
+            let code = t.ptr(words.count * 4), tv = t.ptr(8)
+            for (i, w) in words.enumerated() { wr32(code + UInt32(i * 4), w) }
+            wr32(tv, code)
+            return tv
+        }
+
+        func browser(_ style: String = "lstv") -> UInt32 {
+            let w = t.setUp()
+            let out = t.ptr()
+            #expect(tb_CreateDataBrowserControl(w, t.rect(10, 10, 210, 310), Int32(bitPattern: fourCC(style)), out) == 0)
+            return rd32(out)
+        }
+
+        @Test func itemsSelectionAndContainers() {
+            let b = browser()
+            #expect(tb_IsValidControlHandle(b) != 0)
+            let style = t.ptr()
+            #expect(tb_GetDataBrowserViewStyle(b, style) == 0 && rd32(style) == fourCC("lstv"))
+            #expect(tb_AddDataBrowserItems(b, 0, 3, ids([10, 20, 30]), 0) == 0)
+            #expect(tb_AddDataBrowserItems(b, 0, 2, 0, 0) == 0) // IDs 1 and 2
+            let n = t.ptr()
+            #expect(tb_GetDataBrowserItemCount(b, 0, 0, 0xFFFF_FFFF, n) == 0 && rd32(n) == 5)
+            #expect(tb_AddDataBrowserItems(b, 99, 1, ids([5]), 0) == -4971) // no such container
+            // Selection: assign, add, toggle; the anchor is the first and last.
+            #expect(tb_SetDataBrowserSelectedItems(b, 1, ids([20]), 1) == 0)
+            #expect(tb_IsDataBrowserItemSelected(b, 20) != 0 && tb_IsDataBrowserItemSelected(b, 10) == 0)
+            #expect(tb_SetDataBrowserSelectedItems(b, 2, ids([10, 30]), 0) == 0)
+            #expect(tb_GetDataBrowserItemCount(b, 0, 0, 1, n) == 0 && rd32(n) == 3)
+            #expect(tb_SetDataBrowserSelectedItems(b, 1, ids([20]), 2) == 0)
+            let first = t.ptr(), last = t.ptr()
+            #expect(tb_GetDataBrowserSelectionAnchor(b, first, last) == 0 && rd32(first) == 10 && rd32(last) == 30)
+            let h = tb_NewHandle(0, false, true)
+            #expect(tb_GetDataBrowserItems(b, 0, 0, 1, h) == 0 && tb_GetHandleSize(h) == 8)
+            // Only one: selecting another deselects.
+            #expect(tb_SetDataBrowserSelectionFlags(b, 2) == 0)
+            #expect(tb_SetDataBrowserSelectedItems(b, 1, ids([1]), 0) == 0)
+            #expect(tb_GetDataBrowserItemCount(b, 0, 0, 1, n) == 0 && rd32(n) == 1)
+            // A container opened takes items; closed, they go.
+            #expect(tb_OpenDataBrowserContainer(b, 10) == 0)
+            #expect(tb_AddDataBrowserItems(b, 10, 2, ids([11, 12]), 0) == 0)
+            let state = t.ptr()
+            #expect(tb_GetDataBrowserItemState(b, 10, state) == 0 && rd32(state) & 2 == 2)
+            #expect(rows(b) == [10, 11, 12, 20, 30, 1, 2])
+            #expect(tb_GetDataBrowserItemCount(b, 0, 1, 0xFFFF_FFFF, n) == 0 && rd32(n) == 7)
+            #expect(tb_CloseDataBrowserContainer(b, 10) == 0)
+            #expect(rows(b) == [10, 20, 30, 1, 2])
+            #expect(tb_RemoveDataBrowserItems(b, 0, 1, ids([20]), 0) == 0)
+            #expect(tb_RemoveDataBrowserItems(b, 0, 0, 0, 0) == 0)
+            #expect(tb_GetDataBrowserItemCount(b, 0, 1, 0xFFFF_FFFF, n) == 0 && rd32(n) == 0)
+            tb_DisposeControl(b)
+            #expect(tb_GetDataBrowserViewStyle(b, style) == -30584)
+        }
+
+        @Test func sortingAndNotifications() {
+            let b = browser()
+            // DataBrowserItemCompareProcPtr(browser, a, b, property): a < b
+            let compare = t.call("NewDataBrowserItemCompareUPP", [routine([
+                0x7C04_2840, // cmplw r4, r5
+                0x3860_0000, // li r3, 0
+                0x4080_0008, // bge +8
+                0x3860_0001, // li r3, 1
+                0x4E80_0020, // blr
+            ])])
+            // DataBrowserItemNotificationProcPtr(browser, item, message): counted, the last kept
+            let slot = t.ptr(8)
+            let notify = t.call("NewDataBrowserItemNotificationUPP", [routine([
+                0x3D20_0000 | (slot >> 16), 0x6129_0000 | (slot & 0xFFFF), // r9 = slot
+                0x8149_0004, 0x394A_0001, 0x9149_0004, // count += 1
+                0x90A9_0000, // last = message
+                0x4E80_0020,
+            ])])
+            let cb = t.ptr(44)
+            #expect(tb_InitDataBrowserCallbacks(cb) == 0)
+            wr32(cb + 8, compare)
+            wr32(cb + 12, notify)
+            #expect(tb_SetDataBrowserCallbacks(b, cb) == 0)
+            let back = t.ptr(44)
+            #expect(tb_GetDataBrowserCallbacks(b, back) == 0 && rd32(back + 8) == compare)
+            // A sortable text column.
+            let desc = t.ptr(58)
+            wr32(desc, 1024)
+            wr32(desc + 4, fourCC("text"))
+            wr32(desc + 8, 1 << 18) // kDataBrowserListViewSortableColumn
+            wr32(desc + 22, t.cfString("Name"))
+            #expect(tb_AddDataBrowserListViewColumn(b, desc, 0xFFFF_FFFF) == 0)
+            let count = t.ptr()
+            #expect(tb_GetDataBrowserTableViewColumnCount(b, count) == 0 && rd32(count) == 1)
+            let prop = t.ptr()
+            #expect(tb_GetDataBrowserSortProperty(b, prop) == 0 && rd32(prop) == 1024)
+            #expect(tb_AddDataBrowserItems(b, 0, 3, ids([3, 1, 2]), 0) == 0)
+            #expect(rd32(slot + 4) >= 3) // three added, then sorting
+            #expect(rows(b) == [1, 2, 3])
+            #expect(tb_SetDataBrowserSortOrder(b, 2) == 0)
+            #expect(rows(b) == [3, 2, 1])
+            let row = t.ptr()
+            #expect(tb_GetDataBrowserTableViewItemRow(b, 1, row) == 0 && rd32(row) == 2)
+            #expect(tb_SetDataBrowserSelectedItems(b, 1, ids([2]), 1) == 0)
+            #expect(rd32(slot) == 14) // kDataBrowserSelectionSetChanged
+            #expect(tb_OpenDataBrowserContainer(b, 2) == 0 && [8, 12].contains(rd32(slot)))
+            // Column geometry.
+            #expect(tb_SetDataBrowserTableViewNamedColumnWidth(b, 1024, 120) == 0)
+            let w16 = t.ptr(2)
+            #expect(tb_GetDataBrowserTableViewNamedColumnWidth(b, 1024, w16) == 0 && rd16(w16) == 120)
+            let bounds = t.ptr(8)
+            #expect(tb_GetDataBrowserItemPartBounds(b, 3, 1024, 0, bounds) == 0)
+            #expect(t.rectOf(bounds) == [11 + 17, 11, 11 + 17 + 18, 11 + 120])
+            #expect(tb_RemoveDataBrowserTableViewColumn(b, 1024) == 0)
+            #expect(tb_RemoveDataBrowserTableViewColumn(b, 1024) == -4972)
+        }
+
+        @Test func itemDataRecord() {
+            _ = browser()
+            let d = t.ptr(68)
+            let v = t.ptr(8)
+            #expect(tb_SetDataBrowserItemDataValue(d, 42) == 0)
+            #expect(tb_GetDataBrowserItemDataValue(d, v) == 0 && rd32(v) == 42)
+            #expect(tb_SetDataBrowserItemDataBooleanValue(d, 1) == 0)
+            #expect(tb_GetDataBrowserItemDataBooleanValue(d, v) == 0 && rd8(v) == 1)
+            #expect(tb_SetDataBrowserItemDataButtonValue(d, 2) == 0)
+            #expect(tb_GetDataBrowserItemDataButtonValue(d, v) == 0 && rd16(v) == 2)
+            let text = t.cfString("cell")
+            #expect(tb_SetDataBrowserItemDataText(d, text) == 0)
+            #expect(tb_GetDataBrowserItemDataText(d, v) == 0 && t.text(rd32(v)) == "cell")
+            #expect(tb_SetDataBrowserItemDataDateTime(d, 1234) == 0)
+            #expect(tb_GetDataBrowserItemDataDateTime(d, v) == 0 && rd32(v) == 1234)
+            wr32(v, 0)
+            wr32(v + 4, 99)
+            #expect(tb_SetDataBrowserItemDataLongDateTime(d, v) == 0)
+            let l = t.ptr(8)
+            #expect(tb_GetDataBrowserItemDataLongDateTime(d, l) == 0 && rd32(l + 4) == 99)
+            #expect(tb_SetDataBrowserItemDataMinimum(d, -5) == 0 && tb_SetDataBrowserItemDataMaximum(d, 5) == 0)
+            #expect(tb_GetDataBrowserItemDataMinimum(d, v) == 0 && Int32(bitPattern: rd32(v)) == -5)
+            #expect(tb_InitDataBrowserCustomCallbacks(t.ptr(32)) == 0)
+            let bad = t.ptr(44)
+            wr32(bad, 7)
+            #expect(tb_InitDataBrowserCallbacks(bad) == -50)
+        }
+
+        @Test func columnView() {
+            let b = browser("clmv")
+            #expect(tb_AddDataBrowserItems(b, 0, 2, ids([1, 2]), 0) == 0)
+            #expect(tb_SetDataBrowserColumnViewPath(b, 1, ids([1])) == 0)
+            let n = t.ptr()
+            #expect(tb_GetDataBrowserColumnViewPathLength(b, n) == 0 && rd32(n) == 1)
+            let h = tb_NewHandle(0, false, true)
+            #expect(tb_GetDataBrowserColumnViewPath(b, h) == 0 && rd32(rd32(h)) == 1)
+            #expect(tb_GetDataBrowserTarget(b, n) == 0 && rd32(n) == 1)
+            #expect(tb_SetDataBrowserColumnViewDisplayType(b, Int32(bitPattern: fourCC("ticn"))) == 0)
+            #expect(tb_GetDataBrowserColumnViewDisplayType(b, n) == 0 && rd32(n) == fourCC("ticn"))
+        }
+    }
+
     /// CarbonLib's Dialog Manager calls: the accessors, items inserted and
     /// removed, ParamText read back, timeouts and the event mask.
     @Suite(.serialized) struct CarbonDialogs {

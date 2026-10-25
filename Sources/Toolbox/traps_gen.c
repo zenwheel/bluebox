@@ -1643,6 +1643,32 @@ static void glue_AddComp(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddDataBrowserItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_preSortProperty = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_numItems = (uint32_t)cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_AddDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AddDataBrowserListViewColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_position = (uint32_t)cpu_pop32(c);
+    gaddr a_columnDesc = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_AddDataBrowserListViewColumn(a_browser, a_columnDesc, a_position);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AddDragItemFlavor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1903,6 +1929,16 @@ static void glue_AutoEmbedControl(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_AutoEmbedControl(a_control, a_window);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AutoSizeDataBrowserListViewColumns(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_AutoSizeDataBrowserListViewColumns(a_browser);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2494,6 +2530,17 @@ static void glue_CloseCursorComponent(cpu68k *c, uint16_t trapword)
     uint32_t a_ci = (uint32_t)cpu_pop32(c);
     int16_t r = tb_CloseCursorComponent(a_ci);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseDataBrowserContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CloseDataBrowserContainer(a_browser, a_container);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -3280,6 +3327,19 @@ static void glue_CreateCustomControl(cpu68k *c, uint16_t trapword)
     gaddr a_contBounds = (gaddr)cpu_pop32(c);
     gaddr a_owningWindow = (gaddr)cpu_pop32(c);
     int32_t r = tb_CreateCustomControl(a_owningWindow, a_contBounds, a_def, a_initData, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateDataBrowserControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int32_t a_style = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateDataBrowserControl(a_window, a_boundsRect, a_style, a_outControl);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -6350,6 +6410,17 @@ static void glue_EmptyRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_EnableDataBrowserEditCommand(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_command = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int8_t r = tb_EnableDataBrowserEditCommand(a_browser, a_command);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_EnableItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6561,6 +6632,17 @@ static void glue_EventAvail(cpu68k *c, uint16_t trapword)
     int16_t a_em = (int16_t)cpu_pop16(c);
     int8_t r = tb_EventAvail(a_em, a_evt);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_ExecuteDataBrowserEditCommand(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_command = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_ExecuteDataBrowserEditCommand(a_browser, a_command);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8016,6 +8098,21 @@ static void glue_FontToScript(cpu68k *c, uint16_t trapword)
     int16_t a_fontnum = (int16_t)cpu_pop16(c);
     int16_t r = tb_FontToScript(a_fontnum);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ForEachDataBrowserItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_clientData = (gaddr)cpu_pop32(c);
+    gaddr a_callback = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    int8_t a_recurse = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_ForEachDataBrowserItem(a_browser, a_container, a_recurse, a_state, a_callback, a_clientData);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9531,6 +9628,601 @@ static void glue_GetDSequenceMatrix(cpu68k *c, uint16_t trapword)
     int32_t a_seqID = (int32_t)cpu_pop32(c);
     int16_t r = tb_GetDSequenceMatrix(a_seqID, a_matrix);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserActiveItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_active = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserActiveItems(a_browser, a_active);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserCallbacks(a_browser, a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserColumnViewDisplayType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyType = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserColumnViewDisplayType(a_browser, a_propertyType);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserColumnViewPath(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_path = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserColumnViewPath(a_browser, a_path);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserColumnViewPathLength(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pathLength = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserColumnViewPathLength(a_browser, a_pathLength);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserCustomCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserCustomCallbacks(a_browser, a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserEditItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserEditItem(a_browser, a_item, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserEditText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserEditText(a_browser, a_text);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserHasScrollBars(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_vert = (gaddr)cpu_pop32(c);
+    gaddr a_horiz = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserHasScrollBars(a_browser, a_horiz, a_vert);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numItems = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    int8_t a_recurse = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemCount(a_browser, a_container, a_recurse, a_state, a_numItems);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataBooleanValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataBooleanValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataButtonValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataButtonValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataDateTime(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataDrawState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataDrawState(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataIcon(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataIconTransform(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataIconTransform(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataItemID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataItemID(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataLongDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataLongDateTime(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataMaximum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataMaximum(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataMenuRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataMenuRef(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataMinimum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataMinimum(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataProperty(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataRGBColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataRGBColor(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataText(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemPartBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t a_part = (int32_t)cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemPartBounds(a_browser, a_item, a_property, a_part, a_bounds);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_state = (gaddr)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemState(a_browser, a_item, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    int8_t a_recurse = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItems(a_browser, a_container, a_recurse, a_state, a_items);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserListViewDisclosureColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_expandableRows = (gaddr)cpu_pop32(c);
+    gaddr a_column = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserListViewDisclosureColumn(a_browser, a_column, a_expandableRows);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserListViewHeaderBtnHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserListViewHeaderBtnHeight(a_browser, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserListViewUsePlainBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_usePlainBackground = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserListViewUsePlainBackground(a_browser, a_usePlainBackground);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserPropertyFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_flags = (gaddr)cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserPropertyFlags(a_browser, a_property, a_flags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserScrollBarInset(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_insetRect = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserScrollBarInset(a_browser, a_insetRect);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserScrollPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_left = (gaddr)cpu_pop32(c);
+    gaddr a_top = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserScrollPosition(a_browser, a_top, a_left);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserSelectionAnchor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_last = (gaddr)cpu_pop32(c);
+    gaddr a_first = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserSelectionAnchor(a_browser, a_first, a_last);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserSelectionFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_selectionFlags = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserSelectionFlags(a_browser, a_selectionFlags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserSortOrder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_order = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserSortOrder(a_browser, a_order);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserSortProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserSortProperty(a_browser, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewColumnCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numColumns = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewColumnCount(a_browser, a_numColumns);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewColumnPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_position = (gaddr)cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewColumnPosition(a_browser, a_column, a_position);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewColumnProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewColumnProperty(a_browser, a_column, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewColumnWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_width = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewColumnWidth(a_browser, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewGeometry(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_variableHeightRows = (gaddr)cpu_pop32(c);
+    gaddr a_variableWidthColumns = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewGeometry(a_browser, a_variableWidthColumns, a_variableHeightRows);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewHiliteStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_hiliteStyle = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewHiliteStyle(a_browser, a_hiliteStyle);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewItemID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    uint32_t a_row = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewItemID(a_browser, a_row, a_item);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewItemRow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_row = (gaddr)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewItemRow(a_browser, a_item, a_row);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewItemRowHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewItemRowHeight(a_browser, a_item, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewNamedColumnWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_width = (gaddr)cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewNamedColumnWidth(a_browser, a_column, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewRowHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewRowHeight(a_browser, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTarget(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTarget(a_browser, a_target);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserUserState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_stateInfo = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserUserState(a_browser, a_stateInfo);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserViewStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserViewStyle(a_browser, a_style);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -13164,6 +13856,26 @@ static void glue_InitDBPack(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InitDataBrowserCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    int32_t r = tb_InitDataBrowserCallbacks(a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InitDataBrowserCustomCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    int32_t r = tb_InitDataBrowserCustomCallbacks(a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InitDateCache(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13700,6 +14412,17 @@ static void glue_IsControlVisible(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_control = (gaddr)cpu_pop32(c);
     int8_t r = tb_IsControlVisible(a_control);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsDataBrowserItemSelected(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsDataBrowserItemSelected(a_browser, a_item);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -14977,6 +15700,18 @@ static void glue_MoveControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MoveDataBrowserSelectionAnchor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_extendSelection = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_direction = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_MoveDataBrowserSelectionAnchor(a_browser, a_direction, a_extendSelection);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MoveDialogItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15754,6 +16489,17 @@ static void glue_OpenCursorComponent(cpu68k *c, uint16_t trapword)
     uint32_t a_c = (uint32_t)cpu_pop32(c);
     int16_t r = tb_OpenCursorComponent(a_c, a_ci);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenDataBrowserContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_OpenDataBrowserContainer(a_browser, a_container);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18217,6 +18963,31 @@ static void glue_RemoveControlProperty(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RemoveDataBrowserItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_preSortProperty = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_numItems = (uint32_t)cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RemoveDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveDataBrowserTableViewColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RemoveDataBrowserTableViewColumn(a_browser, a_column);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RemoveDialogItems(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18471,6 +19242,19 @@ static void glue_RestoreFore(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_RestoreFore(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_RevealDataBrowserItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint8_t a_options = (uint8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_propertyID = (uint32_t)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RevealDataBrowserItem(a_browser, a_item, a_propertyID, a_options);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -19778,6 +20562,492 @@ static void glue_SetDSequenceTransferMode(cpu68k *c, uint16_t trapword)
     int32_t a_seqID = (int32_t)cpu_pop32(c);
     int16_t r = tb_SetDSequenceTransferMode(a_seqID, a_mode, a_opColor);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserActiveItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_active = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserActiveItems(a_browser, a_active);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserCallbacks(a_browser, a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserColumnViewDisplayType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_propertyType = (int32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserColumnViewDisplayType(a_browser, a_propertyType);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserColumnViewPath(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_path = (gaddr)cpu_pop32(c);
+    uint32_t a_length = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserColumnViewPath(a_browser, a_length, a_path);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserCustomCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserCustomCallbacks(a_browser, a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserEditItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserEditItem(a_browser, a_item, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserEditText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserEditText(a_browser, a_text);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserHasScrollBars(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_vert = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_horiz = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserHasScrollBars(a_browser, a_horiz, a_vert);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataBooleanValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_theData = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataBooleanValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataButtonValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_theData = (uint16_t)cpu_pop16(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataButtonValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theData = (int32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataDateTime(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataDrawState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theData = (uint32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataDrawState(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataIcon(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataIconTransform(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_theData = (int16_t)cpu_pop16(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataIconTransform(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataItemID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theData = (uint32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataItemID(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataLongDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataLongDateTime(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataMaximum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theData = (int32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataMaximum(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataMenuRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataMenuRef(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataMinimum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theData = (int32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataMinimum(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataRGBColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataRGBColor(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataText(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theData = (int32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserListViewDisclosureColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_expandableRows = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserListViewDisclosureColumn(a_browser, a_column, a_expandableRows);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserListViewHeaderBtnHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_height = (uint16_t)cpu_pop16(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserListViewHeaderBtnHeight(a_browser, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserListViewUsePlainBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_usePlainBackground = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserListViewUsePlainBackground(a_browser, a_usePlainBackground);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserPropertyFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserPropertyFlags(a_browser, a_property, a_flags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserScrollBarInset(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_insetRect = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserScrollBarInset(a_browser, a_insetRect);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserScrollPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_left = (uint32_t)cpu_pop32(c);
+    uint32_t a_top = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserScrollPosition(a_browser, a_top, a_left);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserSelectedItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_operation = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_numItems = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserSelectedItems(a_browser, a_numItems, a_items, a_operation);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserSelectionFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_selectionFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserSelectionFlags(a_browser, a_selectionFlags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserSortOrder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_order = (uint16_t)cpu_pop16(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserSortOrder(a_browser, a_order);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserSortProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserSortProperty(a_browser, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewColumnPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_position = (uint32_t)cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewColumnPosition(a_browser, a_column, a_position);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewColumnWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_width = (uint16_t)cpu_pop16(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewColumnWidth(a_browser, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewGeometry(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_variableHeightRows = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_variableWidthColumns = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewGeometry(a_browser, a_variableWidthColumns, a_variableHeightRows);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewHiliteStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_hiliteStyle = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewHiliteStyle(a_browser, a_hiliteStyle);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewItemRow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_row = (uint32_t)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewItemRow(a_browser, a_item, a_row);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewItemRowHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_height = (uint16_t)cpu_pop16(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewItemRowHeight(a_browser, a_item, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewNamedColumnWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_width = (uint16_t)cpu_pop16(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewNamedColumnWidth(a_browser, a_column, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewRowHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_height = (uint16_t)cpu_pop16(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewRowHeight(a_browser, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTarget(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_target = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTarget(a_browser, a_target);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserUserState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_stateInfo = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserUserState(a_browser, a_stateInfo);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserViewStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_style = (int32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserViewStyle(a_browser, a_style);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -21896,6 +23166,18 @@ static void glue_SndStopFilePlay(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SortDataBrowserContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_sortChildren = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SortDataBrowserContainer(a_browser, a_container, a_sortChildren);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SpaceExtra(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -23422,6 +24704,21 @@ static void glue_UpdateControls(cpu68k *c, uint16_t trapword)
     gaddr a_rh = (gaddr)cpu_pop32(c);
     gaddr a_wp = (gaddr)cpu_pop32(c);
     tb_UpdateControls(a_wp, a_rh);
+    cpu_push32(c, ret);
+}
+
+static void glue_UpdateDataBrowserItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_propertyID = (uint32_t)cpu_pop32(c);
+    uint32_t a_preSortProperty = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_numItems = (uint32_t)cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_UpdateDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty, a_propertyID);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 

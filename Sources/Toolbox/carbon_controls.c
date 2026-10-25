@@ -56,8 +56,9 @@ static gaddr cp(gaddr ch) { return rd32(ch); }
 /* ---------------------------------------------------------------------- */
 /* Core Foundation strings, through CarbonLib's own calls */
 
-/* Call one of our exports as PowerPC code would, from native code. */
-static uint32_t call_export(const char *name, const uint32_t *args, int n)
+/* Call one of our exports as PowerPC code would, from native code (0
+ * when there is none). */
+uint32_t carbon_call_export(const char *name, const uint32_t *args, int n)
 {
     void (*fn)(ppc_cpu *) = cfm_export_fn(name);
     if (!fn)
@@ -78,7 +79,7 @@ void carbon_cfstring_to_pstr(gaddr cf, uint8_t out[256])
     out[0] = 0;
     if (!cf)
         return;
-    uint32_t len = call_export("CFStringGetLength", (uint32_t[]){ cf }, 1);
+    uint32_t len = carbon_call_export("CFStringGetLength", (uint32_t[]){ cf }, 1);
     if (len > 1024)
         len = 1024;
     if (!len)
@@ -86,7 +87,7 @@ void carbon_cfstring_to_pstr(gaddr cf, uint8_t out[256])
     gaddr buf = tb_NewPtr((int32_t)(len * 2), false, false);
     if (!buf)
         return;
-    call_export("CFStringGetCharacters", (uint32_t[]){ cf, 0, len, buf }, 4);
+    carbon_call_export("CFStringGetCharacters", (uint32_t[]){ cf, 0, len, buf }, 4);
     char utf8[4 * 1024 + 1];
     size_t k = 0;
     for (uint32_t i = 0; i < len; i++) {
@@ -131,7 +132,7 @@ gaddr carbon_cfstring_from_text(const uint8_t *text, size_t n)
     if (!s)
         return 0;
     gput(s, text, (uint32_t)n);
-    gaddr cf = call_export("CFStringCreateWithCString", (uint32_t[]){ 0, s, 0 /* kCFStringEncodingMacRoman */ }, 3);
+    gaddr cf = carbon_call_export("CFStringCreateWithCString", (uint32_t[]){ 0, s, 0 /* kCFStringEncodingMacRoman */ }, 3);
     tb_DisposePtr(s);
     return cf;
 }
@@ -139,7 +140,7 @@ gaddr carbon_cfstring_from_text(const uint8_t *text, size_t n)
 void carbon_cfrelease(gaddr cf)
 {
     if (cf)
-        call_export("CFRelease", (uint32_t[]){ cf }, 1);
+        carbon_call_export("CFRelease", (uint32_t[]){ cf }, 1);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -212,6 +213,7 @@ static int nregistered;
 
 void carbon_controls_reset(void)
 {
+    databrowser_reset();
     memset(drag_windows, 0, sizeof drag_windows);
     memset(registered, 0, sizeof registered);
     nregistered = 0;
@@ -862,7 +864,7 @@ int32_t tb_CreateCustomControl(gaddr w, gaddr bounds, gaddr spec, gaddr coll, ga
     }
     gaddr t = tb_NewPtr(256, false, false);
     gput(t, title, (uint32_t)title[0] + 1);
-    gaddr ch = ctl_new(w, bounds, t, false, clamp16(value), clamp16(min), clamp16(max), var, 0, defh, refcon,
+    gaddr ch = ctl_new(w, bounds, t, false, clamp16(value), clamp16(min), clamp16(max), var, -1, defh, refcon,
                        (int32_t)coll);
     tb_DisposePtr(t);
     if (!ch)
