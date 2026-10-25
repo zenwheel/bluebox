@@ -25346,6 +25346,139 @@ static void ppcglue_FTCompletionAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_OpenMappedFile(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    uint32_t a_forkNameLength = (uint32_t)c->gpr[4];
+    gaddr a_forkName = (gaddr)c->gpr[5];
+    uint32_t a_privileges = (uint32_t)c->gpr[6];
+    gaddr a_backingFile = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenMappedFile(a_ref, a_forkNameLength, a_forkName, a_privileges, a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSpOpenMappedFile(ppc_cpu *c)
+{
+    gaddr a_spec = (gaddr)c->gpr[3];
+    int8_t a_mapResFork = (int8_t)c->gpr[4];
+    uint32_t a_privileges = (uint32_t)c->gpr[5];
+    gaddr a_backingFile = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSpOpenMappedFile(a_spec, a_mapResFork, a_privileges, a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenMappedScratchFile(ppc_cpu *c)
+{
+    int16_t a_volume = (int16_t)c->gpr[3];
+    uint32_t a_fileSize = (uint32_t)c->gpr[4];
+    uint32_t a_privileges = (uint32_t)c->gpr[5];
+    gaddr a_backingFile = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenMappedScratchFile(a_volume, a_fileSize, a_privileges, a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseMappedFile(ppc_cpu *c)
+{
+    uint32_t a_backingFile = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseMappedFile(a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMappedFileInformation(ppc_cpu *c)
+{
+    uint32_t a_backingFile = (uint32_t)c->gpr[3];
+    uint32_t a_version = (uint32_t)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMappedFileInformation(a_backingFile, a_version, a_info);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextMappedFile(ppc_cpu *c)
+{
+    gaddr a_backingFile = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetNextMappedFile(a_backingFile);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMappedFileSize(ppc_cpu *c)
+{
+    uint32_t a_backingFile = (uint32_t)c->gpr[3];
+    uint16_t a_positionMode = (uint16_t)c->gpr[4];
+    gaddr a_positionOffset = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMappedFileSize(a_backingFile, a_positionMode, a_positionOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFileViewAccessOptions(ppc_cpu *c)
+{
+    gaddr a_access = (gaddr)c->gpr[3];
+    gaddr a_options = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFileViewAccessOptions(a_access, a_options);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MapFileView(ppc_cpu *c)
+{
+    uint32_t a_backingFile = (uint32_t)c->gpr[3];
+    gaddr a_backingBase = (gaddr)c->gpr[4];
+    uint32_t a_backingLength = (uint32_t)c->gpr[5];
+    uint32_t a_access = (uint32_t)c->gpr[6];
+    uint32_t a_guardLength = (uint32_t)c->gpr[7];
+    uint32_t a_options = (uint32_t)c->gpr[8];
+    gaddr a_viewBase = (gaddr)c->gpr[9];
+    gaddr a_viewLength = (gaddr)c->gpr[10];
+    gaddr a_theView = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MapFileView(a_backingFile, a_backingBase, a_backingLength, a_access, a_guardLength, a_options, a_viewBase, a_viewLength, a_theView);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UnmapFileView(ppc_cpu *c)
+{
+    uint32_t a_theView = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UnmapFileView(a_theView);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFileViewInformation(ppc_cpu *c)
+{
+    uint32_t a_theView = (uint32_t)c->gpr[3];
+    uint32_t a_version = (uint32_t)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFileViewInformation(a_theView, a_version, a_info);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFileViewFromAddress(ppc_cpu *c)
+{
+    gaddr a_address = (gaddr)c->gpr[3];
+    gaddr a_theView = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFileViewFromAddress(a_address, a_theView);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextFileView(ppc_cpu *c)
+{
+    gaddr a_theView = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetNextFileView(a_theView);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetFileViewAccess(ppc_cpu *c)
+{
+    uint32_t a_theView = (uint32_t)c->gpr[3];
+    uint32_t a_access = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetFileViewAccess(a_theView, a_access);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetFileViewBackingBase(ppc_cpu *c)
+{
+    uint32_t a_theView = (uint32_t)c->gpr[3];
+    gaddr a_newBackingBase = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetFileViewBackingBase(a_theView, a_newBackingBase);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -37456,6 +37589,7 @@ const ppc_export ppc_exports[] = {
     {"CloseDeskAcc", ppcglue_CloseDeskAcc},
     {"CloseDialog", ppcglue_CloseDialog},
     {"CloseEdition", ppctrap_CloseEdition},
+    {"CloseMappedFile", ppcglue_CloseMappedFile},
     {"CloseMovieFile", ppcglue_CloseMovieFile},
     {"CloseMovieStorage", ppctrap_CloseMovieStorage},
     {"ClosePicture", ppcglue_ClosePicture},
@@ -37823,6 +37957,7 @@ const ppc_export ppc_exports[] = {
     {"FSpGetFInfo", ppcglue_FSpGetFInfo},
     {"FSpMakeFSRef", ppcglue_FSpMakeFSRef},
     {"FSpOpenDF", ppcglue_FSpOpenDF},
+    {"FSpOpenMappedFile", ppcglue_FSpOpenMappedFile},
     {"FSpOpenRF", ppcglue_FSpOpenRF},
     {"FSpOpenResFile", ppcglue_FSpOpenResFile},
     {"FSpRename", ppcglue_FSpRename},
@@ -38149,6 +38284,9 @@ const ppc_export ppc_exports[] = {
     {"GetEntryUsage", ppcglue_GetEntryUsage},
     {"GetFNum", ppcglue_GetFNum},
     {"GetFSInfo", ppcglue_GetFSInfo},
+    {"GetFileViewAccessOptions", ppcglue_GetFileViewAccessOptions},
+    {"GetFileViewFromAddress", ppcglue_GetFileViewFromAddress},
+    {"GetFileViewInformation", ppcglue_GetFileViewInformation},
     {"GetFirstCallBack", ppctrap_GetFirstCallBack},
     {"GetFlavorData", ppcglue_GetFlavorData},
     {"GetFlavorDataSize", ppcglue_GetFlavorDataSize},
@@ -38208,6 +38346,7 @@ const ppc_export ppc_exports[] = {
     {"GetMCEntry", ppcglue_GetMCEntry},
     {"GetMCInfo", ppcglue_GetMCInfo},
     {"GetMainDevice", ppcglue_GetMainDevice},
+    {"GetMappedFileInformation", ppcglue_GetMappedFileInformation},
     {"GetMaskTable", ppctrap_GetMaskTable},
     {"GetMatrixType", ppcglue_GetMatrixType},
     {"GetMaxCompressionSize", ppcglue_GetMaxCompressionSize},
@@ -38319,7 +38458,9 @@ const ppc_export ppc_exports[] = {
     {"GetNextDevice", ppcglue_GetNextDevice},
     {"GetNextEvent", ppcglue_GetNextEvent},
     {"GetNextFOND", ppctrap_GetNextFOND},
+    {"GetNextFileView", ppcglue_GetNextFileView},
     {"GetNextImageDescriptionExtensionType", ppctrap_GetNextImageDescriptionExtensionType},
+    {"GetNextMappedFile", ppcglue_GetNextMappedFile},
     {"GetNextProcess", ppcglue_GetNextProcess},
     {"GetNextTrackForCompositing", ppctrap_GetNextTrackForCompositing},
     {"GetNextTrackReferenceType", ppctrap_GetNextTrackReferenceType},
@@ -39243,6 +39384,7 @@ const ppc_export ppc_exports[] = {
     {"MakeThumbnailFromPixMap", ppctrap_MakeThumbnailFromPixMap},
     {"MakeTrackTimeTable", ppctrap_MakeTrackTimeTable},
     {"MakeVoiceSpec", ppcglue_MakeVoiceSpec},
+    {"MapFileView", ppcglue_MapFileView},
     {"MapMatrix", ppcglue_MapMatrix},
     {"MapPoly", ppcglue_MapPoly},
     {"MapPt", ppcglue_MapPt},
@@ -39382,6 +39524,8 @@ const ppc_export ppc_exports[] = {
     {"OpenCPort", ppcglue_OpenCPort},
     {"OpenDeskAcc", ppcglue_OpenDeskAcc},
     {"OpenEdition", ppctrap_OpenEdition},
+    {"OpenMappedFile", ppcglue_OpenMappedFile},
+    {"OpenMappedScratchFile", ppcglue_OpenMappedScratchFile},
     {"OpenMovieFile", ppcglue_OpenMovieFile},
     {"OpenMovieStorage", ppctrap_OpenMovieStorage},
     {"OpenNewEdition", ppctrap_OpenNewEdition},
@@ -40281,6 +40425,8 @@ const ppc_export ppc_exports[] = {
     {"SetFLock", ppcglue_SetFLock},
     {"SetFSInfo", ppcglue_SetFSInfo},
     {"SetFScaleDisable", ppcglue_SetFScaleDisable},
+    {"SetFileViewAccess", ppcglue_SetFileViewAccess},
+    {"SetFileViewBackingBase", ppcglue_SetFileViewBackingBase},
     {"SetFontLock", ppcglue_SetFontLock},
     {"SetFractEnable", ppcglue_SetFractEnable},
     {"SetFrontProcess", ppcglue_SetFrontProcess},
@@ -40305,6 +40451,7 @@ const ppc_export ppc_exports[] = {
     {"SetKeyboardFocus", ppcglue_SetKeyboardFocus},
     {"SetMCEntries", ppcglue_SetMCEntries},
     {"SetMCInfo", ppcglue_SetMCInfo},
+    {"SetMappedFileSize", ppcglue_SetMappedFileSize},
     {"SetMediaDataHandler", ppctrap_SetMediaDataHandler},
     {"SetMediaDataRef", ppctrap_SetMediaDataRef},
     {"SetMediaDataRefAttributes", ppctrap_SetMediaDataRefAttributes},
@@ -40661,6 +40808,7 @@ const ppc_export ppc_exports[] = {
     {"UnloadScrap", ppcglue_UnloadScrap},
     {"UnloadSeg", ppctrap_UnloadSeg},
     {"UnlockPixels", ppcglue_UnlockPixels},
+    {"UnmapFileView", ppcglue_UnmapFileView},
     {"UnpackBits", ppcglue_UnpackBits},
     {"UnregisterAppearanceClient", ppcglue_UnregisterAppearanceClient},
     {"UnregisterIconRef", ppcglue_UnregisterIconRef},

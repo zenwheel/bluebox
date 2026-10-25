@@ -8,8 +8,15 @@ import Toolbox
 /// Call a PowerPC export with its arguments in r3 on; r3 after.
 @discardableResult
 func ppcExport(_ name: String, _ args: [UInt32]) -> UInt32 {
+    // The first eight in r3-r10, the rest in the caller's parameter area at 24(r1) on.
+    var sp: UInt32 = 0
+    if args.count > 8 {
+        sp = tb_NewPtr(Int32(24 + 4 * args.count), false, true)
+        for (i, a) in args.enumerated() { wr32(sp + 24 + UInt32(4 * i), a) }
+    }
     withUnsafeMutableBytes(of: &g_ppc.gpr) { gpr in
-        for (i, a) in args.enumerated() { gpr.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+        for (i, a) in args.prefix(8).enumerated() { gpr.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+        if sp != 0 { gpr.storeBytes(of: sp, toByteOffset: 4, as: UInt32.self) }
     }
     guard let fn = cfm_export_fn(name) else {
         Issue.record("no export \(name)")
@@ -689,6 +696,63 @@ extension BlueBox {
             // ADBOp: Talk register 3 of the mouse (address 3): its address and handler.
             let buf = tb_NewPtr(9, false, true)
             #expect(ppcErr("ADBOp", [0, 0, buf, 0x3F]) == 0 && rd8(buf) == 2)
+        }
+    }
+
+    /// File mapping: views of a fork read into memory and written back.
+    @Suite struct FileMapping {
+        @Test func viewsOfAForkAndAScratchFile() {
+            _ = launchTestApp()
+            let spec = tb_NewPtr(70, false, true), name = tb_NewPtr(16, false, true)
+            guestPString("Mapped", at: name)
+            _ = tb_FSMakeFSSpec(0, 0, name, spec)
+            #expect(tb_FSpCreate(spec, Int32(bitPattern: fourCC("BBOX")), Int32(bitPattern: fourCC("TEXT")), 0) == 0)
+            let id = tb_NewPtr(4, false, true), base = tb_NewPtr(4, false, true), len = tb_NewPtr(4, false, true)
+            let view = tb_NewPtr(4, false, true), size = tb_NewPtr(8, false, true)
+            #expect(ppcErr("FSpOpenMappedFile", [spec, 0, 0]) == -641) // no read privilege
+            #expect(ppcErr("FSpOpenMappedFile", [spec, 0, 3, id]) == 0)
+            let file = rd32(id)
+            wr32(size + 4, 100)
+            #expect(ppcErr("SetMappedFileSize", [file, 1, size]) == 0)
+            #expect(ppcErr("MapFileView", [file, 0, 0xFFFF_FFFF, 3, 0, 0, base, len, view]) == 0)
+            #expect(rd32(len) == 100)
+            let v = rd32(view), mem = rd32(base)
+            for i in 0..<100 { wr8(mem + UInt32(i), UInt8(i)) }
+            let found = tb_NewPtr(4, false, true)
+            #expect(ppcErr("GetFileViewFromAddress", [mem + 50, found]) == 0 && rd32(found) == v)
+            #expect(ppcErr("GetFileViewFromAddress", [mem + 100, found]) == -647)
+            #expect(ppcErr("CloseMappedFile", [file]) == -642) // a view is still mapped
+            #expect(ppcErr("UnmapFileView", [v]) == 0 && ppcErr("UnmapFileView", [v]) == -644)
+            #expect(ppcErr("CloseMappedFile", [file]) == 0)
+
+            // Again, read only, by FSRef, from byte 40.
+            let ref = tb_NewPtr(80, false, true)
+            #expect(ppcErr("FSpMakeFSRef", [spec, ref]) == 0)
+            #expect(ppcErr("OpenMappedFile", [ref, 0, 0, 1, id]) == 0)
+            let from = tb_NewPtr(8, false, true)
+            wr32(from + 4, 40)
+            #expect(ppcErr("MapFileView", [rd32(id), from, 10, 3, 0, 0, base, len, view]) == -645) // not writable
+            #expect(ppcErr("MapFileView", [rd32(id), from, 10, 1, 0, 0, base, len, view]) == 0)
+            #expect((0..<10).map { rd8(rd32(base) + UInt32($0)) } == Array(40..<50))
+            let info = tb_NewPtr(40, false, true)
+            #expect(ppcErr("GetFileViewInformation", [rd32(view), 1, info]) == 0 && rd32(info + 24) == 40 && rd32(info + 12) == 10)
+            let next = tb_NewPtr(4, false, true)
+            #expect(ppcErr("GetNextFileView", [next]) == 0 && rd32(next) == rd32(view))
+            #expect(ppcErr("GetNextFileView", [next]) == -646)
+            wr32(from + 4, 90)
+            #expect(ppcErr("SetFileViewBackingBase", [rd32(view), from]) == 0)
+            #expect((0..<10).map { rd8(rd32(base) + UInt32($0)) } == Array(90..<100))
+            #expect(ppcErr("UnmapFileView", [rd32(view)]) == 0 && ppcErr("CloseMappedFile", [rd32(id)]) == 0)
+
+            // A scratch file, kept in memory.
+            #expect(ppcErr("OpenMappedScratchFile", [0, 64, 3, id]) == 0)
+            #expect(ppcErr("GetMappedFileInformation", [rd32(id), 1, info]) == 0)
+            #expect(rd32(info + 24) == 64 && rd32(info + 28) == 1)
+            #expect(ppcErr("MapFileView", [rd32(id), 0, 64, 3, 0, 0, base, len, view]) == 0 && rd8(rd32(base)) == 0)
+            let acc = tb_NewPtr(8, false, true)
+            #expect(ppcErr("GetFileViewAccessOptions", [acc, acc + 4]) == 0 && rd32(acc) == 7)
+            #expect(ppcErr("UnmapFileView", [rd32(view)]) == 0 && ppcErr("CloseMappedFile", [rd32(id)]) == 0)
+            #expect(ppcErr("CloseMappedFile", [rd32(id)]) == -640)
         }
     }
 }

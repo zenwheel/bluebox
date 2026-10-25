@@ -713,6 +713,7 @@ const char *const tb_trap_names[1024] = {
     [0x273] = "ControlDispatch",
     [0x274] = "AppearanceDispatch",
     [0x27D] = "ExtensionsDispatch",
+    [0x281] = "FileMappingDispatch",
     [0x290] = "InitPalettes",
     [0x291] = "NewPalette",
     [0x292] = "GetNewPalette",
@@ -2361,6 +2362,16 @@ static void glue_CloseDialog(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_dp = (gaddr)cpu_pop32(c);
     tb_CloseDialog(a_dp);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseMappedFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_backingFile = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_CloseMappedFile(a_backingFile);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5753,6 +5764,19 @@ static void glue_FSpOpenDF(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FSpOpenMappedFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_backingFile = (gaddr)cpu_pop32(c);
+    uint32_t a_privileges = (uint32_t)cpu_pop32(c);
+    int8_t a_mapResFork = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_spec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FSpOpenMappedFile(a_spec, a_mapResFork, a_privileges, a_backingFile);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FSpOpenRF(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7848,6 +7872,40 @@ static void glue_GetFNum(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetFileViewAccessOptions(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_options = (gaddr)cpu_pop32(c);
+    gaddr a_access = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFileViewAccessOptions(a_access, a_options);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFileViewFromAddress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theView = (gaddr)cpu_pop32(c);
+    gaddr a_address = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFileViewFromAddress(a_address, a_theView);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFileViewInformation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint32_t a_version = (uint32_t)cpu_pop32(c);
+    uint32_t a_theView = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_GetFileViewInformation(a_theView, a_version, a_info);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetFlavorData(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8283,6 +8341,18 @@ static void glue_GetMainDevice(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_GetMainDevice();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetMappedFileInformation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint32_t a_version = (uint32_t)cpu_pop32(c);
+    uint32_t a_backingFile = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_GetMappedFileInformation(a_backingFile, a_version, a_info);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8905,6 +8975,26 @@ static void glue_GetNextEvent(cpu68k *c, uint16_t trapword)
     int16_t a_em = (int16_t)cpu_pop16(c);
     int8_t r = tb_GetNextEvent(a_em, a_evt);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_GetNextFileView(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theView = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetNextFileView(a_theView);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetNextMappedFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_backingFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetNextMappedFile(a_backingFile);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -12325,6 +12415,24 @@ static void glue_MakeVoiceSpec(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MapFileView(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theView = (gaddr)cpu_pop32(c);
+    gaddr a_viewLength = (gaddr)cpu_pop32(c);
+    gaddr a_viewBase = (gaddr)cpu_pop32(c);
+    uint32_t a_options = (uint32_t)cpu_pop32(c);
+    uint32_t a_guardLength = (uint32_t)cpu_pop32(c);
+    uint32_t a_access = (uint32_t)cpu_pop32(c);
+    uint32_t a_backingLength = (uint32_t)cpu_pop32(c);
+    gaddr a_backingBase = (gaddr)cpu_pop32(c);
+    uint32_t a_backingFile = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_MapFileView(a_backingFile, a_backingBase, a_backingLength, a_access, a_guardLength, a_options, a_viewBase, a_viewLength, a_theView);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MapMatrix(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13241,6 +13349,33 @@ static void glue_OpenDeskAcc(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_acc = (gaddr)cpu_pop32(c);
     int16_t r = tb_OpenDeskAcc(a_acc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenMappedFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_backingFile = (gaddr)cpu_pop32(c);
+    uint32_t a_privileges = (uint32_t)cpu_pop32(c);
+    gaddr a_forkName = (gaddr)cpu_pop32(c);
+    uint32_t a_forkNameLength = (uint32_t)cpu_pop32(c);
+    gaddr a_ref = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OpenMappedFile(a_ref, a_forkNameLength, a_forkName, a_privileges, a_backingFile);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenMappedScratchFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_backingFile = (gaddr)cpu_pop32(c);
+    uint32_t a_privileges = (uint32_t)cpu_pop32(c);
+    uint32_t a_fileSize = (uint32_t)cpu_pop32(c);
+    int16_t a_volume = (int16_t)cpu_pop16(c);
+    int16_t r = tb_OpenMappedScratchFile(a_volume, a_fileSize, a_privileges, a_backingFile);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -17270,6 +17405,28 @@ static void glue_SetFScaleDisable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetFileViewAccess(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_access = (uint32_t)cpu_pop32(c);
+    uint32_t a_theView = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_SetFileViewAccess(a_theView, a_access);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetFileViewBackingBase(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newBackingBase = (gaddr)cpu_pop32(c);
+    uint32_t a_theView = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_SetFileViewBackingBase(a_theView, a_newBackingBase);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetFontLock(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17448,6 +17605,18 @@ static void glue_SetMCInfo(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_SetMCInfo(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetMappedFileSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_positionOffset = (gaddr)cpu_pop32(c);
+    uint16_t a_positionMode = (uint16_t)cpu_pop16(c);
+    uint32_t a_backingFile = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_SetMappedFileSize(a_backingFile, a_positionMode, a_positionOffset);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -20327,6 +20496,16 @@ static void glue_UnlockPixels(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UnmapFileView(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theView = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_UnmapFileView(a_theView);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UnpackBits(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -21720,6 +21899,21 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA0A8, (int32_t)0x52u, "PBWriteFork", CONV_REG, 0, 0, glue_PBWriteFork},
     {0xA0AC, (int32_t)0x0u, "InstallFS", CONV_REG, 0, 0, glue_InstallFS},
     {0xA0AC, (int32_t)0x1u, "RemoveFS", CONV_REG, 0, 0, glue_RemoveFS},
+    {0xAA81, (int32_t)0x0u, "OpenMappedFile", CONV_STACK, 20, 2, glue_OpenMappedFile},
+    {0xAA81, (int32_t)0x1u, "FSpOpenMappedFile", CONV_STACK, 14, 2, glue_FSpOpenMappedFile},
+    {0xAA81, (int32_t)0x2u, "OpenMappedScratchFile", CONV_STACK, 14, 2, glue_OpenMappedScratchFile},
+    {0xAA81, (int32_t)0x3u, "CloseMappedFile", CONV_STACK, 4, 2, glue_CloseMappedFile},
+    {0xAA81, (int32_t)0x4u, "GetMappedFileInformation", CONV_STACK, 12, 2, glue_GetMappedFileInformation},
+    {0xAA81, (int32_t)0x5u, "GetNextMappedFile", CONV_STACK, 4, 2, glue_GetNextMappedFile},
+    {0xAA81, (int32_t)0x6u, "SetMappedFileSize", CONV_STACK, 10, 2, glue_SetMappedFileSize},
+    {0xAA81, (int32_t)0x7u, "GetFileViewAccessOptions", CONV_STACK, 8, 2, glue_GetFileViewAccessOptions},
+    {0xAA81, (int32_t)0x8u, "MapFileView", CONV_STACK, 36, 2, glue_MapFileView},
+    {0xAA81, (int32_t)0x9u, "UnmapFileView", CONV_STACK, 4, 2, glue_UnmapFileView},
+    {0xAA81, (int32_t)0xAu, "GetFileViewInformation", CONV_STACK, 12, 2, glue_GetFileViewInformation},
+    {0xAA81, (int32_t)0xBu, "GetFileViewFromAddress", CONV_STACK, 8, 2, glue_GetFileViewFromAddress},
+    {0xAA81, (int32_t)0xCu, "GetNextFileView", CONV_STACK, 4, 2, glue_GetNextFileView},
+    {0xAA81, (int32_t)0xDu, "SetFileViewAccess", CONV_STACK, 8, 2, glue_SetFileViewAccess},
+    {0xAA81, (int32_t)0xEu, "SetFileViewBackingBase", CONV_STACK, 8, 2, glue_SetFileViewBackingBase},
     {0xA854, (int32_t)0x0u, "IsOutline", CONV_STACK, 8, 2, glue_IsOutline},
     {0xA854, (int32_t)0x1u, "SetOutlinePreferred", CONV_STACK, 2, 0, glue_SetOutlinePreferred},
     {0xA854, (int32_t)0x8u, "OutlineMetrics", CONV_STACK, 34, 2, glue_OutlineMetrics},
@@ -23572,6 +23766,7 @@ const dispatcher_info dispatchers[] = {
     {0xA060, "FSDispatch", "D0W"},
     {0xA0A8, "FSForkIODispatch", "D0W"},
     {0xA0AC, "FSMDispatch", "D0W"},
+    {0xAA81, "FileMappingDispatch", "D0W"},
     {0xA854, "FontDispatch", "D0<0xF>"},
     {0xA832, "GXGraphicsDispatch", "D0W"},
     {0xABFE, "GXPrintingDispatch", "D0L"},

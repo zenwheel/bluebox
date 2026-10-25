@@ -1751,3 +1751,201 @@
       - name: completionCall
         type: uint16_t
     cfm: InterfaceLib
+
+# ---- File mapping (fmap.c): _FileMappingDispatch ($AA81), MOVEQ
+# #selector,D0, Pascal arguments ----
+- dispatcher:
+    name: FileMappingDispatch
+    trap: 0xAA81
+    selector-location: D0W
+
+- function:
+    name: OpenMappedFile
+    return: OSErr
+    args:
+      - name: ref
+        type: Ptr
+      - name: forkNameLength
+        type: uint32_t
+      - name: forkName
+        type: Ptr
+      - name: privileges
+        type: uint32_t
+      - name: backingFile
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0000
+
+- function:
+    name: FSpOpenMappedFile
+    return: OSErr
+    args:
+      - name: spec
+        type: Ptr
+      - name: mapResFork
+        type: Boolean
+      - name: privileges
+        type: uint32_t
+      - name: backingFile
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0001
+
+- function:
+    name: OpenMappedScratchFile
+    return: OSErr
+    args:
+      - name: volume
+        type: INTEGER
+      - name: fileSize
+        type: uint32_t
+      - name: privileges
+        type: uint32_t
+      - name: backingFile
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0002
+
+- function:
+    name: CloseMappedFile
+    return: OSErr
+    args:
+      - name: backingFile
+        type: uint32_t
+    dispatcher: FileMappingDispatch
+    selector: 0x0003
+
+- function:
+    name: GetMappedFileInformation
+    return: OSErr
+    args:
+      - name: backingFile
+        type: uint32_t
+      - name: version
+        type: uint32_t
+      - name: info
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0004
+
+- function:
+    name: GetNextMappedFile
+    return: OSErr
+    args:
+      - name: backingFile
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0005
+
+- function:
+    name: SetMappedFileSize
+    return: OSErr
+    args:
+      - name: backingFile
+        type: uint32_t
+      - name: positionMode
+        type: uint16_t
+      - name: positionOffset
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0006
+
+- function:
+    name: GetFileViewAccessOptions
+    return: OSErr
+    args:
+      - name: access
+        type: Ptr
+      - name: options
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0007
+
+- function:
+    name: MapFileView
+    return: OSErr
+    args:
+      - name: backingFile
+        type: uint32_t
+      - name: backingBase
+        type: Ptr
+      - name: backingLength
+        type: uint32_t
+      - name: access
+        type: uint32_t
+      - name: guardLength
+        type: uint32_t
+      - name: options
+        type: uint32_t
+      - name: viewBase
+        type: Ptr
+      - name: viewLength
+        type: Ptr
+      - name: theView
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x0008
+
+- function:
+    name: UnmapFileView
+    return: OSErr
+    args:
+      - name: theView
+        type: uint32_t
+    dispatcher: FileMappingDispatch
+    selector: 0x0009
+
+- function:
+    name: GetFileViewInformation
+    return: OSErr
+    args:
+      - name: theView
+        type: uint32_t
+      - name: version
+        type: uint32_t
+      - name: info
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x000A
+
+- function:
+    name: GetFileViewFromAddress
+    return: OSErr
+    args:
+      - name: address
+        type: Ptr
+      - name: theView
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x000B
+
+- function:
+    name: GetNextFileView
+    return: OSErr
+    args:
+      - name: theView
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x000C
+
+- function:
+    name: SetFileViewAccess
+    return: OSErr
+    args:
+      - name: theView
+        type: uint32_t
+      - name: access
+        type: uint32_t
+    dispatcher: FileMappingDispatch
+    selector: 0x000D
+
+- function:
+    name: SetFileViewBackingBase
+    return: OSErr
+    args:
+      - name: theView
+        type: uint32_t
+      - name: newBackingBase
+        type: Ptr
+    dispatcher: FileMappingDispatch
+    selector: 0x000E

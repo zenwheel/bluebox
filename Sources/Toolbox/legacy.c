@@ -12,4 +12,5 @@ void legacy_reset(void)
     xpp_reset();
     ppc_toolbox_reset();
     devices_reset();
+    fmap_reset();
 }

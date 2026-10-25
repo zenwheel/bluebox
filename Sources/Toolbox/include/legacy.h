@@ -38,5 +38,7 @@ int16_t adb_op(gaddr buf, gaddr fn, gaddr data, uint8_t cmd);
 void time_vbl_task(void);
 /* devices.c */
 void devices_reset(void);
+/* fmap.c */
+void fmap_reset(void);
 
 #endif
