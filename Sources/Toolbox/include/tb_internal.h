@@ -394,6 +394,7 @@ typedef struct {
     uint8_t font[24];
     int32_t view_size; /* SetControlViewSize's */
     void *ap;
+    void *carbon; /* CarbonLib's: its ID, command, properties (carbon_controls.c) */
 } ctl_info;
 typedef struct {
     int16_t font, size, mode;
@@ -412,6 +413,32 @@ uint32_t ctl_local_mouse(gaddr ch);
 void ctl_call_action(gaddr action, gaddr ch, int16_t part);
 void controls_reset(void);
 void controls_forget_window(gaddr w);
+gaddr ctl_new(gaddr wst, gaddr r, gaddr title, bool vis, int16_t value, int16_t min, int16_t max, int16_t var,
+              int16_t cdef_id, gaddr defh, int32_t rc, int32_t init_param);
+/* Called with the part a click on a control ended in (TrackControl,
+ * HandleControlClick): for the Carbon Event Manager's kEventControlHit
+ * and the control's command (carbon_ctl_command).  NULL until set. */
+extern void (*ctl_hit_hook)(gaddr ch, int16_t part, uint16_t modifiers);
+/* CarbonLib's controls (carbon_controls.c): a control's Carbon state
+ * freed, its command ID and ControlID, the definition a program
+ * registered for a CDEF ID (the initCntl parameter, a Collection made for
+ * it, in *init; _done disposes of it), and the colour procedure a
+ * program set (true when it set the colours). */
+void carbon_ctl_free(ctl_info *c);
+uint32_t carbon_ctl_command(gaddr ch);
+bool carbon_ctl_id(gaddr ch, uint32_t *signature, int32_t *id);
+gaddr carbon_registered_cdef(int16_t id, gaddr w, gaddr r, gaddr title, bool vis, int16_t value, int16_t min,
+                             int16_t max, int16_t procid, int32_t rc, int32_t *init);
+void carbon_registered_cdef_done(int32_t init);
+bool carbon_ctl_color(gaddr ch, int16_t msg, int16_t depth, bool color);
+void carbon_controls_reset(void);
+/* CFStrings to and from MacRoman, through CarbonLib's own calls. */
+void carbon_cfstring_to_pstr(gaddr cf, uint8_t out[256]);
+gaddr carbon_cfstring_from_text(const uint8_t *text, size_t n);
+void carbon_cfrelease(gaddr cf);
+uint32_t carbon_call_export(const char *name, const uint32_t *args, int n);
+/* The Data Browser (carbon_databrowser.c) */
+void databrowser_reset(void);
 /* The Appearance CDEFs (cdefs_appearance.c): their entry, the standard
  * buttons drawn in Platinum (kind 0 push, 1 check box, 2 radio), tracking
  * of their own (false when the Control Manager's will do), and what
@@ -430,6 +457,15 @@ void ap_after_track(gaddr ch, int16_t part);
  * procedures when it has them (ap_item_click: -1 when it has none). */
 gaddr ap_item_control(gaddr dialog, int item, int kind);
 void ap_forget_dialog(gaddr dialog);
+void ap_items_shifted(gaddr dialog, int from, int delta);
+/* What CarbonLib's Create...Control calls set beyond NewControl's
+ * arguments: content (push buttons with icons), a slider's tick marks, a
+ * list box's list made to the arguments. */
+void ap_set_content(gaddr ch, gaddr info);
+void ap_set_ticks(gaddr ch, int n);
+enum { AP_AUTO_TOGGLE = 1, AP_DRAWS_TITLE = 2 }; /* check box group boxes, disclosure triangles */
+void ap_set_behavior(gaddr ch, int16_t bits);
+bool ap_list_setup(gaddr ch, int rows, int cols, int cell_h, int cell_w, bool hs, bool vs, bool grow, gaddr ldef_upp);
 bool ap_item_draw(gaddr dialog, int item);
 int16_t ap_item_click(gaddr dialog, int item, uint32_t pt, int16_t modifiers);
 void ap_cdefs_reset(void);

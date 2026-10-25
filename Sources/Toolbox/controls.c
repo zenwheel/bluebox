@@ -79,6 +79,7 @@ static ctl_info *ctl_add(gaddr ch)
     if (c) {
         free(c->ap);
         c->ap = NULL;
+        carbon_ctl_free(c);
     }
     for (int i = 0; i < nctls && !c; i++)
         if (!ctls[i].ch)
@@ -127,12 +128,15 @@ static int win_index(gaddr w, bool create)
 
 void controls_reset(void)
 {
-    for (int i = 0; i < nctls; i++)
+    for (int i = 0; i < nctls; i++) {
         free(ctls[i].ap);
+        carbon_ctl_free(&ctls[i]);
+    }
     free(ctls);
     ctls = NULL;
     nctls = cap_ctls = 0;
     memset(wins, 0, sizeof wins);
+    carbon_controls_reset();
 }
 
 /* A window goes away: forget what we kept for it and its controls (which
@@ -148,6 +152,7 @@ void controls_forget_window(gaddr w)
         if (c) {
             free(c->ap);
             c->ap = NULL;
+            carbon_ctl_free(c);
             c->ch = 0;
         }
     }
@@ -621,7 +626,10 @@ void cdef1_native(cpu68k *c, uint16_t tw) { cdef_entry(c, true); }
 enum { popupFixedWidth = 1, popupVariableWidth = 2, popupUseAddResMenu = 4 };
 enum { inPopUpMenu = 2 }; /* kControlMenuPart */
 enum { popupTitleLeftJust = 0, popupTitleCenterJust = 1, popupTitleRightJust = 0xFF };
-#define POPUP_DATA_SIZE 10 /* mHandle, mID, title style, title width */
+#define POPUP_DATA_SIZE 14 /* mHandle, mID, title style, title width; flags, extra height */
+enum { popupOwnsMenu = 1, popupNoCheck = 2 }; /* the flags: 'omrf', 'chck' */
+
+static uint16_t popup_flags(gaddr d) { return d ? rd16(d + 10) : 0; }
 
 static gaddr popup_data(gaddr ch)
 {
@@ -868,11 +876,12 @@ static void popup_track(gaddr ch)
     tb_LocalToGlobal(pt);
     uint32_t g = rd32(pt);
     tb_DisposePtr(pt);
-    /* The item marked is the current one. */
+    /* The item marked is the current one (unless 'chck' said not). */
     int16_t cur = cvalue(ch);
     int items = tb_CountMItems(mh);
-    for (int i = 1; i <= items; i++)
-        tb_SetItemMark(mh, (int16_t)i, i == cur ? 0x12 : 0);
+    if (!(popup_flags(popup_data(ch)) & popupNoCheck))
+        for (int i = 1; i <= items; i++)
+            tb_SetItemMark(mh, (int16_t)i, i == cur ? 0x12 : 0);
     tb_HiliteControl(ch, inPopUpMenu);
     int32_t r = tb_PopUpMenuSelect(mh, (int16_t)pt_v(g), (int16_t)pt_h(g), cur);
     tb_HiliteControl(ch, 0);
@@ -892,8 +901,29 @@ static int32_t popup_data_access(gaddr ch, gaddr rec, bool set)
     gaddr d = popup_data(ch);
     if (!d)
         return errDataNotSupported;
-    if (tag == fourcc("mhan") || tag == fourcc("mnid")) {
-        bool handle = tag == fourcc("mhan");
+    if (tag == fourcc("chck") || tag == fourcc("exht")) {
+        bool chck = tag == fourcc("chck");
+        int32_t want = chck ? 1 : 2;
+        if (!set) {
+            if (data && size >= want) {
+                if (chck)
+                    wr8(data, !(popup_flags(d) & popupNoCheck));
+                else
+                    wr16(data, rd16(d + 12));
+            }
+            wr32(rec + 8, (uint32_t)want);
+            return noErr;
+        }
+        if (size < want)
+            return -30591; /* errDataSizeMismatch */
+        if (chck)
+            wr16(d + 10, (uint16_t)(rd8(data) ? popup_flags(d) & ~popupNoCheck : popup_flags(d) | popupNoCheck));
+        else
+            wr16(d + 12, rd16(data));
+        return noErr;
+    }
+    if (tag == fourcc("mhan") || tag == fourcc("mnid") || tag == fourcc("omrf")) {
+        bool handle = tag != fourcc("mnid");
         int32_t want = handle ? 4 : 2;
         if (!set) {
             if (data && size >= want) {
@@ -914,8 +944,11 @@ static int32_t popup_data_access(gaddr ch, gaddr rec, bool set)
                 tb_InsertMenu(mh, -1);
         }
         d = popup_data(ch);
+        if ((popup_flags(d) & popupOwnsMenu) && rd32(d) && rd32(d) != mh)
+            tb_DisposeMenu(rd32(d));
         wr32(d, mh);
         wr16(d + 4, mh ? (uint16_t)MenuInfo_menuID(rd32(mh)) : 0);
+        wr16(d + 10, (uint16_t)(tag == fourcc("omrf") ? popup_flags(d) | popupOwnsMenu : popup_flags(d) & ~popupOwnsMenu));
         ControlRecord_set_contrlMax(cp(ch), (int16_t)(mh ? tb_CountMItems(mh) : 0));
         return noErr;
     }
@@ -944,6 +977,9 @@ void cdef63_native(cpu68k *c, uint16_t tw)
     case initCntl: popup_init(ch); break;
     case dispCntl: {
         gaddr dh = ControlRecord_contrlData(cp(ch));
+        gaddr d = popup_data(ch);
+        if (d && (popup_flags(d) & popupOwnsMenu) && rd32(d))
+            tb_DisposeMenu(rd32(d));
         if (dh)
             tb_DisposeHandle(dh);
         ControlRecord_set_contrlData(cp(ch), 0);
@@ -951,13 +987,16 @@ void cdef63_native(cpu68k *c, uint16_t tw)
     }
     case autoTrack: popup_track(ch); break;
     case kControlMsgTestNewMsgSupport: result = NEW_MSG_OK; break;
-    case kControlMsgGetFeatures: result = kControlWantsActivate | kControlSupportsDataAccess; break;
+    case kControlMsgGetFeatures:
+        result = kControlWantsActivate | kControlSupportsDataAccess | kControlSupportsCalcBestRect;
+        break;
     case kControlMsgSetData: result = popup_data_access(ch, (gaddr)param, true); break;
     case kControlMsgGetData: result = popup_data_access(ch, (gaddr)param, false); break;
     case kControlMsgCalcBestRect: {
         qrect title, box;
         popup_parts(ch, &title, &box);
-        wr16((gaddr)param, 20);
+        gaddr d = popup_data(ch);
+        wr16((gaddr)param, (uint16_t)(20 + (d ? (int16_t)rd16(d + 12) : 0))); /* 'exht' */
         wr16((gaddr)param + 2, (uint16_t)(box.right - title.left));
         wr16((gaddr)param + 4, 0);
         break;
@@ -1132,8 +1171,10 @@ int16_t tb_SetControlSupervisor(gaddr ch, gaddr boss)
 /* ---------------------------------------------------------------------- */
 /* Creating and disposing */
 
-gaddr tb_NewControl(gaddr wst, gaddr r, gaddr title, int8_t vis, int16_t value, int16_t min, int16_t max,
-                    int16_t procid, int32_t rc)
+/* A control with the given definition (a CDEF's handle, or one a
+ * CarbonLib program registered or made); initCntl gets init_param. */
+gaddr ctl_new(gaddr wst, gaddr r, gaddr title, bool vis, int16_t value, int16_t min, int16_t max, int16_t var,
+              int16_t cdef_id, gaddr defh, int32_t rc, int32_t init_param)
 {
     uint32_t tl = title ? (uint32_t)rd8(title) + 1 : 1;
     gaddr ch = tb_NewHandle((int32_t)(ControlRecord_contrlTitle_off + tl), false, true);
@@ -1147,25 +1188,38 @@ gaddr tb_NewControl(gaddr wst, gaddr r, gaddr title, int8_t vis, int16_t value, 
     ControlRecord_set_contrlValue(p, value);
     ControlRecord_set_contrlMin(p, min);
     ControlRecord_set_contrlMax(p, max);
-    gaddr cdef = tb_GetResource((int32_t)fourcc("CDEF"), (int16_t)(procid >> 4));
-    p = cp(ch);
-    ControlRecord_set_contrlDefProc(p, cdef);
+    ControlRecord_set_contrlDefProc(p, defh);
     ControlRecord_set_contrlRfCon(p, rc);
     if (title)
         gmemcpy(p + ControlRecord_contrlTitle_off, title, tl);
     ctl_info *c = ctl_add(ch);
-    c->var = (int16_t)(procid & 15);
-    c->cdef = (int16_t)(procid >> 4);
+    c->var = var;
+    c->cdef = cdef_id;
     /* Link at the head of the window's control list. */
     ControlRecord_set_nextControl(p, WindowRecord_controlList(wst));
     WindowRecord_set_controlList(wst, ch);
-    call_cdef(ch, initCntl, 0);
+    call_cdef(ch, initCntl, init_param);
     /* With a root control, the window's new controls go in it. */
     gaddr root = ctl_window_root(wst);
     if (root)
         tb_AutoEmbedControl(ch, wst);
     if (vis && ControlRecord_contrlVis(cp(ch)))
         tb_Draw1Control(ch);
+    return ch;
+}
+
+gaddr tb_NewControl(gaddr wst, gaddr r, gaddr title, int8_t vis, int16_t value, int16_t min, int16_t max,
+                    int16_t procid, int32_t rc)
+{
+    /* A definition registered under the CDEF's ID comes first (CarbonLib's RegisterControlDefinition). */
+    int32_t init = 0;
+    gaddr cdef = carbon_registered_cdef((int16_t)(procid >> 4), wst, r, title, vis != 0, value, min, max, procid, rc,
+                                        &init);
+    if (!cdef)
+        cdef = tb_GetResource((int32_t)fourcc("CDEF"), (int16_t)(procid >> 4));
+    gaddr ch = ctl_new(wst, r, title, vis != 0, value, min, max, (int16_t)(procid & 15), (int16_t)(procid >> 4), cdef, rc,
+                       init);
+    carbon_registered_cdef_done(init);
     return ch;
 }
 
@@ -1227,6 +1281,7 @@ void tb_DisposeControl(gaddr ch)
             ctl_call(c->parent, kControlMsgSubControlRemoved, (int32_t)ch);
         free(c->ap);
         c->ap = NULL;
+        carbon_ctl_free(c);
         c->ch = 0;
     }
     tb_DisposeHandle(ch);
@@ -1635,7 +1690,7 @@ static void call_action(gaddr action, gaddr ch, int16_t part)
 
 void ctl_call_action(gaddr action, gaddr ch, int16_t part) { call_action(action, ch, part); }
 
-int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a)
+static int16_t track(gaddr ch, uint32_t p, gaddr a)
 {
     int16_t part = tb_TestControl(ch, p);
     if (!part)
@@ -1656,6 +1711,15 @@ int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a)
     if (ap_ctl_track(ch, part, p, a, 0, &done)) {
         ap_after_track(ch, done);
         return done;
+    }
+    /* Others that say they track themselves (CarbonLib's Data Browser). */
+    if ((features(ch) & kControlHandlesTracking) && new_messages(ch)) {
+        gaddr rec = tb_NewPtr(10, false, true); /* ControlTrackingRec: startPt, modifiers, action */
+        wr32(rec, p);
+        wr32(rec + 6, a);
+        int16_t r = (int16_t)call_cdef(ch, kControlMsgHandleTracking, (int32_t)rec);
+        tb_DisposePtr(rec);
+        return r;
     }
     if (part == inThumb) {
         /* Drag the thumb; the value follows the mouse along the track. */
@@ -1703,6 +1767,19 @@ int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a)
     return inside ? part : 0;
 }
 
+/* What a click ended in goes to the Carbon Event Manager's hook too
+ * (kEventControlHit and the control's command). */
+void (*ctl_hit_hook)(gaddr ch, int16_t part, uint16_t modifiers);
+
+static int16_t hit(gaddr ch, int16_t part, int16_t modifiers)
+{
+    if (part && ctl_hit_hook && ctl_find(ch))
+        ctl_hit_hook(ch, part, (uint16_t)modifiers);
+    return part;
+}
+
+int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a) { return hit(ch, track(ch, p, a), 0); }
+
 void tb_DragControl(gaddr ch, uint32_t p, gaddr limit, gaddr slop, int16_t axis)
 {
     int32_t d = tb_DragGrayRgn(0, p, limit, slop, axis, 0);
@@ -1725,7 +1802,7 @@ int16_t tb_HandleControlClick(gaddr ch, uint32_t where, int16_t modifiers, gaddr
     int16_t done;
     if (ap_ctl_track(ch, part, where, action, modifiers, &done)) {
         ap_after_track(ch, done);
-        return done;
+        return hit(ch, done, modifiers);
     }
     if ((f & kControlHandlesTracking) && new_messages(ch)) {
         /* ControlTrackingRec: startPt, modifiers, action */
@@ -1735,9 +1812,9 @@ int16_t tb_HandleControlClick(gaddr ch, uint32_t where, int16_t modifiers, gaddr
         wr32(rec + 6, action);
         int16_t r = (int16_t)call_cdef(ch, kControlMsgHandleTracking, (int32_t)rec);
         tb_DisposePtr(rec);
-        return r;
+        return hit(ch, r, modifiers);
     }
-    return tb_TrackControl(ch, where, action);
+    return hit(ch, track(ch, where, action), modifiers);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2026,6 +2103,8 @@ int16_t tb_SetUpControlBackground(gaddr ch, int16_t depth, int8_t color)
     ctl_info *c = ctl_find(ch);
     if (!c)
         return errUnknownControl;
+    if (carbon_ctl_color(ch, kControlMsgSetUpBackground, depth, color)) /* SetControlColorProc's */
+        return noErr;
     for (ctl_info *a = ctl_find(c->parent); a; a = ctl_find(a->parent))
         if (features(a->ch) & kControlHasSpecialBackground) {
             tb_SetThemeBackground(25, depth, color); /* kThemeBrushStaticAreaFill */

@@ -1,0 +1,2199 @@
+# CarbonLib's Control Manager and Dialog Manager additions (Controls.h,
+# ControlDefinitions.h and Dialogs.h, Universal Interfaces 3.4): the
+# accessors, ControlIDs, properties, custom definitions, the Create...Control
+# calls and the Data Browser.  CarbonLib exports only: none of these had a
+# 68k trap.  Same schema as Defs/multiversal/defs.
+
+# Controls.h: accessors
+- function:
+    name: GetControlBounds
+    return: Rect*
+    args:
+      - name: control
+        type: ControlHandle
+      - name: bounds
+        type: Rect*
+
+- function:
+    name: SetControlBounds
+    args:
+      - name: control
+        type: ControlHandle
+      - name: bounds
+        type: const Rect*
+
+- function:
+    name: IsControlHilited
+    return: Boolean
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: GetControlHilite
+    return: UInt16
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: GetControlOwner
+    return: WindowPtr
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: GetControlDataHandle
+    return: Handle
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: SetControlDataHandle
+    args:
+      - name: control
+        type: ControlHandle
+      - name: dataHandle
+        type: Handle
+
+- function:
+    name: GetControlPopupMenuHandle
+    return: MenuHandle
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: GetControlPopupMenuID
+    return: SInt16
+    args:
+      - name: control
+        type: ControlHandle
+
+- function:
+    name: SetControlPopupMenuHandle
+    args:
+      - name: control
+        type: ControlHandle
+      - name: popupMenu
+        type: MenuHandle
+
+- function:
+    name: SetControlPopupMenuID
+    args:
+      - name: control
+        type: ControlHandle
+      - name: menuID
+        type: SInt16
+
+
+# Control IDs and command IDs
+- function:
+    name: SetControlID
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inID
+        type: const void*
+
+- function:
+    name: GetControlID
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: outID
+        type: void*
+
+- function:
+    name: GetControlByID
+    return: OSStatus
+    args:
+      - name: inWindow
+        type: WindowPtr
+      - name: inID
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: SetControlCommandID
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inCommandID
+        type: UInt32
+
+- function:
+    name: GetControlCommandID
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: outCommandID
+        type: UInt32*
+
+
+# Properties
+- function:
+    name: GetControlProperty
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: bufferSize
+        type: UInt32
+      - name: actualSize
+        type: UInt32*
+      - name: propertyBuffer
+        type: void*
+
+- function:
+    name: GetControlPropertySize
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: size
+        type: UInt32*
+
+- function:
+    name: SetControlProperty
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: propertySize
+        type: UInt32
+      - name: propertyData
+        type: void*
+
+- function:
+    name: RemoveControlProperty
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+
+- function:
+    name: GetControlPropertyAttributes
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: attributes
+        type: UInt32*
+
+- function:
+    name: ChangeControlPropertyAttributes
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: propertyCreator
+        type: OSType
+      - name: propertyTag
+        type: OSType
+      - name: attributesToSet
+        type: UInt32
+      - name: attributesToClear
+        type: UInt32
+
+
+# Regions, titles, colours
+- function:
+    name: CopyControlTitleAsCFString
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: outString
+        type: void*
+
+- function:
+    name: SetControlTitleWithCFString
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inString
+        type: void*
+
+- function:
+    name: SetUpControlTextColor
+    return: OSErr
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inDepth
+        type: SInt16
+      - name: inIsColorDevice
+        type: Boolean
+
+- function:
+    name: SetControlColorProc
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inProc
+        type: ProcPtr
+
+
+# Clicks, cursors, contextual menus, drag and drop
+- function:
+    name: GetControlClickActivation
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inWhere
+        type: Point
+      - name: inModifiers
+        type: UInt16
+      - name: outResult
+        type: UInt32*
+
+- function:
+    name: HandleControlContextualMenuClick
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inWhere
+        type: Point
+      - name: menuDisplayed
+        type: Boolean*
+
+- function:
+    name: HandleControlSetCursor
+    return: OSStatus
+    args:
+      - name: control
+        type: ControlHandle
+      - name: localPoint
+        type: Point
+      - name: modifiers
+        type: UInt16
+      - name: cursorWasSet
+        type: Boolean*
+
+- function:
+    name: HandleControlDragTracking
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inMessage
+        type: SInt16
+      - name: inDrag
+        type: void*
+      - name: outLikesDrag
+        type: Boolean*
+
+- function:
+    name: HandleControlDragReceive
+    return: OSStatus
+    args:
+      - name: inControl
+        type: ControlHandle
+      - name: inDrag
+        type: void*
+
+- function:
+    name: SetControlDragTrackingEnabled
+    return: OSStatus
+    args:
+      - name: theControl
+        type: ControlHandle
+      - name: tracks
+        type: Boolean
+
+- function:
+    name: IsControlDragTrackingEnabled
+    return: OSStatus
+    args:
+      - name: theControl
+        type: ControlHandle
+      - name: tracks
+        type: Boolean*
+
+- function:
+    name: SetAutomaticControlDragTrackingEnabledForWindow
+    return: OSStatus
+    args:
+      - name: theWindow
+        type: WindowPtr
+      - name: tracks
+        type: Boolean
+
+- function:
+    name: IsAutomaticControlDragTrackingEnabledForWindow
+    return: OSStatus
+    args:
+      - name: theWindow
+        type: WindowPtr
+      - name: tracks
+        type: Boolean*
+
+
+# Custom definitions
+- function:
+    name: CreateCustomControl
+    return: OSStatus
+    args:
+      - name: owningWindow
+        type: WindowPtr
+      - name: contBounds
+        type: const Rect*
+      - name: def
+        type: const void*
+      - name: initData
+        type: void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: RegisterControlDefinition
+    return: OSStatus
+    args:
+      - name: inCDEFResID
+        type: SInt16
+      - name: inControlDef
+        type: const void*
+      - name: inConversionProc
+        type: ProcPtr
+
+
+# Dialogs.h
+- function:
+    name: GetDialogWindow
+    return: WindowPtr
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogPort
+    return: GrafPtr
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogFromWindow
+    return: DialogPtr
+    args:
+      - name: window
+        type: WindowPtr
+
+- function:
+    name: GetDialogTextEditHandle
+    return: TEHandle
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogKeyboardFocusItem
+    return: SInt16
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogDefaultItem
+    return: SInt16
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogCancelItem
+    return: SInt16
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: SetPortDialogPort
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetParamText
+    args:
+      - name: param0
+        type: StringPtr
+      - name: param1
+        type: StringPtr
+      - name: param2
+        type: StringPtr
+      - name: param3
+        type: StringPtr
+
+- function:
+    name: InsertDialogItem
+    return: OSStatus
+    args:
+      - name: theDialog
+        type: DialogPtr
+      - name: afterItem
+        type: SInt16
+      - name: itemType
+        type: SInt16
+      - name: itemHandle
+        type: Handle
+      - name: box
+        type: const Rect*
+
+- function:
+    name: RemoveDialogItems
+    return: OSStatus
+    args:
+      - name: theDialog
+        type: DialogPtr
+      - name: itemNo
+        type: SInt16
+      - name: amountToRemove
+        type: SInt16
+      - name: disposeItemData
+        type: Boolean
+
+- function:
+    name: SetDialogTimeout
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogPtr
+      - name: inButtonToPress
+        type: SInt16
+      - name: inSecondsToWait
+        type: UInt32
+
+- function:
+    name: GetDialogTimeout
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogPtr
+      - name: outButtonToPress
+        type: SInt16*
+      - name: outSecondsToWait
+        type: UInt32*
+      - name: outSecondsRemaining
+        type: UInt32*
+
+- function:
+    name: SetModalDialogEventMask
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogPtr
+      - name: inMask
+        type: UInt16
+
+- function:
+    name: GetModalDialogEventMask
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogPtr
+      - name: outMask
+        type: UInt16*
+
+
+# ControlDefinitions.h: the Create...Control calls
+- function:
+    name: CreatePushButtonControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePushButtonWithIconControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: icon
+        type: void*
+      - name: iconAlignment
+        type: UInt16
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateCheckBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: initialValue
+        type: SInt32
+      - name: autoToggle
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateRadioButtonControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: initialValue
+        type: SInt32
+      - name: autoToggle
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateRadioGroupControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateBevelButtonControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: thickness
+        type: UInt16
+      - name: behavior
+        type: UInt16
+      - name: info
+        type: void*
+      - name: menuID
+        type: SInt16
+      - name: menuBehavior
+        type: UInt16
+      - name: menuPlacement
+        type: UInt16
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateScrollBarControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: value
+        type: SInt32
+      - name: minimum
+        type: SInt32
+      - name: maximum
+        type: SInt32
+      - name: viewSize
+        type: SInt32
+      - name: liveTracking
+        type: Boolean
+      - name: liveTrackingProc
+        type: ProcPtr
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateSliderControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: value
+        type: SInt32
+      - name: minimum
+        type: SInt32
+      - name: maximum
+        type: SInt32
+      - name: orientation
+        type: UInt16
+      - name: numTickMarks
+        type: UInt16
+      - name: liveTracking
+        type: Boolean
+      - name: liveTrackingProc
+        type: ProcPtr
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateProgressBarControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: value
+        type: SInt32
+      - name: minimum
+        type: SInt32
+      - name: maximum
+        type: SInt32
+      - name: indeterminate
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateLittleArrowsControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: value
+        type: SInt32
+      - name: minimum
+        type: SInt32
+      - name: maximum
+        type: SInt32
+      - name: increment
+        type: SInt32
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateChasingArrowsControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateDisclosureTriangleControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: orientation
+        type: UInt16
+      - name: title
+        type: void*
+      - name: initialValue
+        type: SInt32
+      - name: drawTitle
+        type: Boolean
+      - name: autoToggles
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateTabsControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: size
+        type: UInt16
+      - name: direction
+        type: UInt16
+      - name: numTabs
+        type: UInt16
+      - name: tabArray
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateSeparatorControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateGroupBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: primary
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateCheckGroupBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: initialValue
+        type: SInt32
+      - name: primary
+        type: Boolean
+      - name: autoToggle
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePopupGroupBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: primary
+        type: Boolean
+      - name: menuID
+        type: SInt16
+      - name: variableWidth
+        type: Boolean
+      - name: titleWidth
+        type: SInt16
+      - name: titleJustification
+        type: SInt16
+      - name: titleStyle
+        type: UInt8
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateImageWellControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: info
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePictureControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: content
+        type: const void*
+      - name: dontTrack
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateIconControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: icon
+        type: const void*
+      - name: dontTrack
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePopupArrowControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: orientation
+        type: UInt16
+      - name: size
+        type: UInt16
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePopupButtonControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: title
+        type: void*
+      - name: menuID
+        type: SInt16
+      - name: variableWidth
+        type: Boolean
+      - name: titleWidth
+        type: SInt16
+      - name: titleJustification
+        type: SInt16
+      - name: titleStyle
+        type: UInt8
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreatePlacardControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateClockControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: clockType
+        type: UInt16
+      - name: clockFlags
+        type: UInt32
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateUserPaneControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: features
+        type: UInt32
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateWindowHeaderControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: isListHeader
+        type: Boolean
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateEditTextControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: text
+        type: void*
+      - name: isPassword
+        type: Boolean
+      - name: useInlineInput
+        type: Boolean
+      - name: style
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateStaticTextControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: text
+        type: void*
+      - name: style
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateScrollingTextBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: contentResID
+        type: SInt16
+      - name: autoScroll
+        type: Boolean
+      - name: delayBeforeAutoScroll
+        type: UInt32
+      - name: delayBetweenAutoScroll
+        type: UInt32
+      - name: autoScrollAmount
+        type: UInt16
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: CreateListBoxControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: autoSize
+        type: Boolean
+      - name: numRows
+        type: SInt16
+      - name: numColumns
+        type: SInt16
+      - name: horizScroll
+        type: Boolean
+      - name: vertScroll
+        type: Boolean
+      - name: cellHeight
+        type: SInt16
+      - name: cellWidth
+        type: SInt16
+      - name: hasGrowSpace
+        type: Boolean
+      - name: listDef
+        type: const void*
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: GetTabContentRect
+    return: OSErr
+    args:
+      - name: inTabControl
+        type: ControlHandle
+      - name: outContentRect
+        type: Rect*
+
+- function:
+    name: GetImageWellContentInfo
+    return: OSErr
+    args:
+      - name: inButton
+        type: ControlHandle
+      - name: outContent
+        type: void*
+
+
+# The Data Browser (CarbonLib 1.1)
+- function:
+    name: CreateDataBrowserControl
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: boundsRect
+        type: const Rect*
+      - name: style
+        type: OSType
+      - name: outControl
+        type: ControlHandle*
+
+- function:
+    name: GetDataBrowserViewStyle
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: style
+        type: OSType*
+
+- function:
+    name: SetDataBrowserViewStyle
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: style
+        type: OSType
+
+- function:
+    name: AddDataBrowserItems
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+      - name: numItems
+        type: UInt32
+      - name: items
+        type: const UInt32*
+      - name: preSortProperty
+        type: UInt32
+
+- function:
+    name: RemoveDataBrowserItems
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+      - name: numItems
+        type: UInt32
+      - name: items
+        type: const UInt32*
+      - name: preSortProperty
+        type: UInt32
+
+- function:
+    name: UpdateDataBrowserItems
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+      - name: numItems
+        type: UInt32
+      - name: items
+        type: const UInt32*
+      - name: preSortProperty
+        type: UInt32
+      - name: propertyID
+        type: UInt32
+
+- function:
+    name: EnableDataBrowserEditCommand
+    return: Boolean
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: command
+        type: UInt32
+
+- function:
+    name: ExecuteDataBrowserEditCommand
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: command
+        type: UInt32
+
+- function:
+    name: GetDataBrowserSelectionAnchor
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: first
+        type: UInt32*
+      - name: last
+        type: UInt32*
+
+- function:
+    name: MoveDataBrowserSelectionAnchor
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: direction
+        type: UInt32
+      - name: extendSelection
+        type: Boolean
+
+- function:
+    name: OpenDataBrowserContainer
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+
+- function:
+    name: CloseDataBrowserContainer
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+
+- function:
+    name: SortDataBrowserContainer
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+      - name: sortChildren
+        type: Boolean
+
+- function:
+    name: GetDataBrowserItems
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+      - name: recurse
+        type: Boolean
+      - name: state
+        type: UInt32
+      - name: items
+        type: Handle
+
+- function:
+    name: GetDataBrowserItemCount
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+      - name: recurse
+        type: Boolean
+      - name: state
+        type: UInt32
+      - name: numItems
+        type: UInt32*
+
+- function:
+    name: ForEachDataBrowserItem
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: container
+        type: UInt32
+      - name: recurse
+        type: Boolean
+      - name: state
+        type: UInt32
+      - name: callback
+        type: ProcPtr
+      - name: clientData
+        type: void*
+
+- function:
+    name: IsDataBrowserItemSelected
+    return: Boolean
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+
+- function:
+    name: GetDataBrowserItemState
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+      - name: state
+        type: UInt32*
+
+- function:
+    name: RevealDataBrowserItem
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+      - name: propertyID
+        type: UInt32
+      - name: options
+        type: UInt8
+
+- function:
+    name: SetDataBrowserSelectedItems
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: numItems
+        type: UInt32
+      - name: items
+        type: const UInt32*
+      - name: operation
+        type: UInt32
+
+- function:
+    name: SetDataBrowserUserState
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: stateInfo
+        type: void*
+
+- function:
+    name: GetDataBrowserUserState
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: stateInfo
+        type: void*
+
+- function:
+    name: SetDataBrowserActiveItems
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: active
+        type: Boolean
+
+- function:
+    name: GetDataBrowserActiveItems
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: active
+        type: Boolean*
+
+- function:
+    name: SetDataBrowserScrollBarInset
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: insetRect
+        type: Rect*
+
+- function:
+    name: GetDataBrowserScrollBarInset
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: insetRect
+        type: Rect*
+
+- function:
+    name: SetDataBrowserTarget
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: target
+        type: UInt32
+
+- function:
+    name: GetDataBrowserTarget
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: target
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserSortOrder
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: order
+        type: UInt16
+
+- function:
+    name: GetDataBrowserSortOrder
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: order
+        type: UInt16*
+
+- function:
+    name: SetDataBrowserScrollPosition
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: top
+        type: UInt32
+      - name: left
+        type: UInt32
+
+- function:
+    name: GetDataBrowserScrollPosition
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: top
+        type: UInt32*
+      - name: left
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserHasScrollBars
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: horiz
+        type: Boolean
+      - name: vert
+        type: Boolean
+
+- function:
+    name: GetDataBrowserHasScrollBars
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: horiz
+        type: Boolean*
+      - name: vert
+        type: Boolean*
+
+- function:
+    name: SetDataBrowserSortProperty
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: property
+        type: UInt32
+
+- function:
+    name: GetDataBrowserSortProperty
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: property
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserSelectionFlags
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: selectionFlags
+        type: UInt32
+
+- function:
+    name: GetDataBrowserSelectionFlags
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: selectionFlags
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserPropertyFlags
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: property
+        type: UInt32
+      - name: flags
+        type: UInt32
+
+- function:
+    name: GetDataBrowserPropertyFlags
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: property
+        type: UInt32
+      - name: flags
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserEditText
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: text
+        type: void*
+
+- function:
+    name: GetDataBrowserEditText
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: text
+        type: void*
+
+- function:
+    name: SetDataBrowserEditItem
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+      - name: property
+        type: UInt32
+
+- function:
+    name: GetDataBrowserEditItem
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32*
+      - name: property
+        type: UInt32*
+
+- function:
+    name: GetDataBrowserItemPartBounds
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+      - name: property
+        type: UInt32
+      - name: part
+        type: OSType
+      - name: bounds
+        type: Rect*
+
+- function:
+    name: SetDataBrowserItemDataIcon
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: void*
+
+- function:
+    name: GetDataBrowserItemDataIcon
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: void*
+
+- function:
+    name: SetDataBrowserItemDataText
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: void*
+
+- function:
+    name: GetDataBrowserItemDataText
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: void*
+
+- function:
+    name: SetDataBrowserItemDataValue
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt32
+
+- function:
+    name: GetDataBrowserItemDataValue
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt32*
+
+- function:
+    name: SetDataBrowserItemDataMinimum
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt32
+
+- function:
+    name: GetDataBrowserItemDataMinimum
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt32*
+
+- function:
+    name: SetDataBrowserItemDataMaximum
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt32
+
+- function:
+    name: GetDataBrowserItemDataMaximum
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt32*
+
+- function:
+    name: SetDataBrowserItemDataBooleanValue
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: Boolean
+
+- function:
+    name: GetDataBrowserItemDataBooleanValue
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: Boolean*
+
+- function:
+    name: SetDataBrowserItemDataMenuRef
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: MenuHandle
+
+- function:
+    name: GetDataBrowserItemDataMenuRef
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: MenuHandle*
+
+- function:
+    name: SetDataBrowserItemDataRGBColor
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: const void*
+
+- function:
+    name: GetDataBrowserItemDataRGBColor
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: void*
+
+- function:
+    name: SetDataBrowserItemDataDrawState
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: UInt32
+
+- function:
+    name: GetDataBrowserItemDataDrawState
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserItemDataButtonValue
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: UInt16
+
+- function:
+    name: GetDataBrowserItemDataButtonValue
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: UInt16*
+
+- function:
+    name: SetDataBrowserItemDataIconTransform
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt16
+
+- function:
+    name: GetDataBrowserItemDataIconTransform
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt16*
+
+- function:
+    name: SetDataBrowserItemDataDateTime
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt32
+
+- function:
+    name: GetDataBrowserItemDataDateTime
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: SInt32*
+
+- function:
+    name: SetDataBrowserItemDataLongDateTime
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: const void*
+
+- function:
+    name: GetDataBrowserItemDataLongDateTime
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: void*
+
+- function:
+    name: SetDataBrowserItemDataItemID
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: UInt32
+
+- function:
+    name: GetDataBrowserItemDataItemID
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: UInt32*
+
+- function:
+    name: GetDataBrowserItemDataProperty
+    return: OSStatus
+    args:
+      - name: itemData
+        type: void*
+      - name: theData
+        type: UInt32*
+
+- function:
+    name: InitDataBrowserCallbacks
+    return: OSStatus
+    args:
+      - name: callbacks
+        type: void*
+
+- function:
+    name: GetDataBrowserCallbacks
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: callbacks
+        type: void*
+
+- function:
+    name: SetDataBrowserCallbacks
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: callbacks
+        type: const void*
+
+- function:
+    name: InitDataBrowserCustomCallbacks
+    return: OSStatus
+    args:
+      - name: callbacks
+        type: void*
+
+- function:
+    name: GetDataBrowserCustomCallbacks
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: callbacks
+        type: void*
+
+- function:
+    name: SetDataBrowserCustomCallbacks
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: callbacks
+        type: const void*
+
+- function:
+    name: RemoveDataBrowserTableViewColumn
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: column
+        type: UInt32
+
+- function:
+    name: GetDataBrowserTableViewColumnCount
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: numColumns
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserTableViewHiliteStyle
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: hiliteStyle
+        type: UInt32
+
+- function:
+    name: GetDataBrowserTableViewHiliteStyle
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: hiliteStyle
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserTableViewRowHeight
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: height
+        type: UInt16
+
+- function:
+    name: GetDataBrowserTableViewRowHeight
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: height
+        type: UInt16*
+
+- function:
+    name: SetDataBrowserTableViewColumnWidth
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: width
+        type: UInt16
+
+- function:
+    name: GetDataBrowserTableViewColumnWidth
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: width
+        type: UInt16*
+
+- function:
+    name: SetDataBrowserTableViewItemRowHeight
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+      - name: height
+        type: UInt16
+
+- function:
+    name: GetDataBrowserTableViewItemRowHeight
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+      - name: height
+        type: UInt16*
+
+- function:
+    name: SetDataBrowserTableViewNamedColumnWidth
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: column
+        type: UInt32
+      - name: width
+        type: UInt16
+
+- function:
+    name: GetDataBrowserTableViewNamedColumnWidth
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: column
+        type: UInt32
+      - name: width
+        type: UInt16*
+
+- function:
+    name: SetDataBrowserTableViewGeometry
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: variableWidthColumns
+        type: Boolean
+      - name: variableHeightRows
+        type: Boolean
+
+- function:
+    name: GetDataBrowserTableViewGeometry
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: variableWidthColumns
+        type: Boolean*
+      - name: variableHeightRows
+        type: Boolean*
+
+- function:
+    name: GetDataBrowserTableViewItemID
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: row
+        type: UInt32
+      - name: item
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserTableViewItemRow
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+      - name: row
+        type: UInt32
+
+- function:
+    name: GetDataBrowserTableViewItemRow
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: item
+        type: UInt32
+      - name: row
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserTableViewColumnPosition
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: column
+        type: UInt32
+      - name: position
+        type: UInt32
+
+- function:
+    name: GetDataBrowserTableViewColumnPosition
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: column
+        type: UInt32
+      - name: position
+        type: UInt32*
+
+- function:
+    name: GetDataBrowserTableViewColumnProperty
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: column
+        type: UInt32
+      - name: property
+        type: UInt32*
+
+- function:
+    name: AutoSizeDataBrowserListViewColumns
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+
+- function:
+    name: AddDataBrowserListViewColumn
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: columnDesc
+        type: void*
+      - name: position
+        type: UInt32
+
+- function:
+    name: SetDataBrowserListViewHeaderBtnHeight
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: height
+        type: UInt16
+
+- function:
+    name: GetDataBrowserListViewHeaderBtnHeight
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: height
+        type: UInt16*
+
+- function:
+    name: SetDataBrowserListViewUsePlainBackground
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: usePlainBackground
+        type: Boolean
+
+- function:
+    name: GetDataBrowserListViewUsePlainBackground
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: usePlainBackground
+        type: Boolean*
+
+- function:
+    name: SetDataBrowserListViewDisclosureColumn
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: column
+        type: UInt32
+      - name: expandableRows
+        type: Boolean
+
+- function:
+    name: GetDataBrowserListViewDisclosureColumn
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: column
+        type: UInt32*
+      - name: expandableRows
+        type: Boolean*
+
+- function:
+    name: GetDataBrowserColumnViewPath
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: path
+        type: Handle
+
+- function:
+    name: GetDataBrowserColumnViewPathLength
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: pathLength
+        type: UInt32*
+
+- function:
+    name: SetDataBrowserColumnViewPath
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: length
+        type: UInt32
+      - name: path
+        type: const UInt32*
+
+- function:
+    name: SetDataBrowserColumnViewDisplayType
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: propertyType
+        type: OSType
+
+- function:
+    name: GetDataBrowserColumnViewDisplayType
+    return: OSStatus
+    args:
+      - name: browser
+        type: ControlHandle
+      - name: propertyType
+        type: OSType*

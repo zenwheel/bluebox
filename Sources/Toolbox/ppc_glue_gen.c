@@ -20793,6 +20793,1787 @@ static void ppcglue_SetMenuExcludesMarkColumn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetControlBounds(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_bounds = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetControlBounds(a_control, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlBounds(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_bounds = (gaddr)c->gpr[4];
+    tb_SetControlBounds(a_control, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsControlHilited(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsControlHilited(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlHilite(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlHilite(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlOwner(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlOwner(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlDataHandle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlDataHandle(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlDataHandle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_dataHandle = (gaddr)c->gpr[4];
+    tb_SetControlDataHandle(a_control, a_dataHandle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlPopupMenuHandle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetControlPopupMenuHandle(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlPopupMenuID(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetControlPopupMenuID(a_control);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlPopupMenuHandle(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    gaddr a_popupMenu = (gaddr)c->gpr[4];
+    tb_SetControlPopupMenuHandle(a_control, a_popupMenu);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlPopupMenuID(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int16_t a_menuID = (int16_t)c->gpr[4];
+    tb_SetControlPopupMenuID(a_control, a_menuID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlID(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_inID = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlID(a_inControl, a_inID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlID(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_outID = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetControlID(a_inControl, a_outID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlByID(ppc_cpu *c)
+{
+    gaddr a_inWindow = (gaddr)c->gpr[3];
+    gaddr a_inID = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetControlByID(a_inWindow, a_inID, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlCommandID(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    uint32_t a_inCommandID = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlCommandID(a_inControl, a_inCommandID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlCommandID(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_outCommandID = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetControlCommandID(a_inControl, a_outCommandID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlProperty(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    uint32_t a_bufferSize = (uint32_t)c->gpr[6];
+    gaddr a_actualSize = (gaddr)c->gpr[7];
+    gaddr a_propertyBuffer = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_GetControlProperty(a_control, a_propertyCreator, a_propertyTag, a_bufferSize, a_actualSize, a_propertyBuffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlPropertySize(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    gaddr a_size = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetControlPropertySize(a_control, a_propertyCreator, a_propertyTag, a_size);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlProperty(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    uint32_t a_propertySize = (uint32_t)c->gpr[6];
+    gaddr a_propertyData = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_SetControlProperty(a_control, a_propertyCreator, a_propertyTag, a_propertySize, a_propertyData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveControlProperty(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_RemoveControlProperty(a_control, a_propertyCreator, a_propertyTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlPropertyAttributes(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    gaddr a_attributes = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetControlPropertyAttributes(a_control, a_propertyCreator, a_propertyTag, a_attributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ChangeControlPropertyAttributes(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    int32_t a_propertyCreator = (int32_t)c->gpr[4];
+    int32_t a_propertyTag = (int32_t)c->gpr[5];
+    uint32_t a_attributesToSet = (uint32_t)c->gpr[6];
+    uint32_t a_attributesToClear = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_ChangeControlPropertyAttributes(a_control, a_propertyCreator, a_propertyTag, a_attributesToSet, a_attributesToClear);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyControlTitleAsCFString(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_outString = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_CopyControlTitleAsCFString(a_inControl, a_outString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlTitleWithCFString(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_inString = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlTitleWithCFString(a_inControl, a_inString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetUpControlTextColor(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    int16_t a_inDepth = (int16_t)c->gpr[4];
+    int8_t a_inIsColorDevice = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetUpControlTextColor(a_inControl, a_inDepth, a_inIsColorDevice);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlColorProc(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_inProc = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlColorProc(a_inControl, a_inProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlClickActivation(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    uint32_t a_inWhere = (uint32_t)c->gpr[4];
+    uint16_t a_inModifiers = (uint16_t)c->gpr[5];
+    gaddr a_outResult = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetControlClickActivation(a_inControl, a_inWhere, a_inModifiers, a_outResult);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlContextualMenuClick(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    uint32_t a_inWhere = (uint32_t)c->gpr[4];
+    gaddr a_menuDisplayed = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_HandleControlContextualMenuClick(a_inControl, a_inWhere, a_menuDisplayed);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlSetCursor(ppc_cpu *c)
+{
+    gaddr a_control = (gaddr)c->gpr[3];
+    uint32_t a_localPoint = (uint32_t)c->gpr[4];
+    uint16_t a_modifiers = (uint16_t)c->gpr[5];
+    gaddr a_cursorWasSet = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_HandleControlSetCursor(a_control, a_localPoint, a_modifiers, a_cursorWasSet);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlDragTracking(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    int16_t a_inMessage = (int16_t)c->gpr[4];
+    gaddr a_inDrag = (gaddr)c->gpr[5];
+    gaddr a_outLikesDrag = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_HandleControlDragTracking(a_inControl, a_inMessage, a_inDrag, a_outLikesDrag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HandleControlDragReceive(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    gaddr a_inDrag = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_HandleControlDragReceive(a_inControl, a_inDrag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetControlDragTrackingEnabled(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    int8_t a_tracks = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetControlDragTrackingEnabled(a_theControl, a_tracks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsControlDragTrackingEnabled(ppc_cpu *c)
+{
+    gaddr a_theControl = (gaddr)c->gpr[3];
+    gaddr a_tracks = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_IsControlDragTrackingEnabled(a_theControl, a_tracks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetAutomaticControlDragTrackingEnabledForWindow(ppc_cpu *c)
+{
+    gaddr a_theWindow = (gaddr)c->gpr[3];
+    int8_t a_tracks = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetAutomaticControlDragTrackingEnabledForWindow(a_theWindow, a_tracks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsAutomaticControlDragTrackingEnabledForWindow(ppc_cpu *c)
+{
+    gaddr a_theWindow = (gaddr)c->gpr[3];
+    gaddr a_tracks = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_IsAutomaticControlDragTrackingEnabledForWindow(a_theWindow, a_tracks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateCustomControl(ppc_cpu *c)
+{
+    gaddr a_owningWindow = (gaddr)c->gpr[3];
+    gaddr a_contBounds = (gaddr)c->gpr[4];
+    gaddr a_def = (gaddr)c->gpr[5];
+    gaddr a_initData = (gaddr)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateCustomControl(a_owningWindow, a_contBounds, a_def, a_initData, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RegisterControlDefinition(ppc_cpu *c)
+{
+    int16_t a_inCDEFResID = (int16_t)c->gpr[3];
+    gaddr a_inControlDef = (gaddr)c->gpr[4];
+    gaddr a_inConversionProc = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_RegisterControlDefinition(a_inCDEFResID, a_inControlDef, a_inConversionProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogWindow(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetDialogWindow(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogPort(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetDialogPort(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogFromWindow(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetDialogFromWindow(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogTextEditHandle(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetDialogTextEditHandle(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogKeyboardFocusItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDialogKeyboardFocusItem(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogDefaultItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDialogDefaultItem(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogCancelItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDialogCancelItem(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetPortDialogPort(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    tb_SetPortDialogPort(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetParamText(ppc_cpu *c)
+{
+    gaddr a_param0 = (gaddr)c->gpr[3];
+    gaddr a_param1 = (gaddr)c->gpr[4];
+    gaddr a_param2 = (gaddr)c->gpr[5];
+    gaddr a_param3 = (gaddr)c->gpr[6];
+    tb_GetParamText(a_param0, a_param1, a_param2, a_param3);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertDialogItem(ppc_cpu *c)
+{
+    gaddr a_theDialog = (gaddr)c->gpr[3];
+    int16_t a_afterItem = (int16_t)c->gpr[4];
+    int16_t a_itemType = (int16_t)c->gpr[5];
+    gaddr a_itemHandle = (gaddr)c->gpr[6];
+    gaddr a_box = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_InsertDialogItem(a_theDialog, a_afterItem, a_itemType, a_itemHandle, a_box);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveDialogItems(ppc_cpu *c)
+{
+    gaddr a_theDialog = (gaddr)c->gpr[3];
+    int16_t a_itemNo = (int16_t)c->gpr[4];
+    int16_t a_amountToRemove = (int16_t)c->gpr[5];
+    int8_t a_disposeItemData = (int8_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_RemoveDialogItems(a_theDialog, a_itemNo, a_amountToRemove, a_disposeItemData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDialogTimeout(ppc_cpu *c)
+{
+    gaddr a_inDialog = (gaddr)c->gpr[3];
+    int16_t a_inButtonToPress = (int16_t)c->gpr[4];
+    uint32_t a_inSecondsToWait = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDialogTimeout(a_inDialog, a_inButtonToPress, a_inSecondsToWait);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogTimeout(ppc_cpu *c)
+{
+    gaddr a_inDialog = (gaddr)c->gpr[3];
+    gaddr a_outButtonToPress = (gaddr)c->gpr[4];
+    gaddr a_outSecondsToWait = (gaddr)c->gpr[5];
+    gaddr a_outSecondsRemaining = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetDialogTimeout(a_inDialog, a_outButtonToPress, a_outSecondsToWait, a_outSecondsRemaining);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetModalDialogEventMask(ppc_cpu *c)
+{
+    gaddr a_inDialog = (gaddr)c->gpr[3];
+    uint16_t a_inMask = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetModalDialogEventMask(a_inDialog, a_inMask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetModalDialogEventMask(ppc_cpu *c)
+{
+    gaddr a_inDialog = (gaddr)c->gpr[3];
+    gaddr a_outMask = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetModalDialogEventMask(a_inDialog, a_outMask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePushButtonControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreatePushButtonControl(a_window, a_boundsRect, a_title, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePushButtonWithIconControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    gaddr a_icon = (gaddr)c->gpr[6];
+    uint16_t a_iconAlignment = (uint16_t)c->gpr[7];
+    gaddr a_outControl = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_CreatePushButtonWithIconControl(a_window, a_boundsRect, a_title, a_icon, a_iconAlignment, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateCheckBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int32_t a_initialValue = (int32_t)c->gpr[6];
+    int8_t a_autoToggle = (int8_t)c->gpr[7];
+    gaddr a_outControl = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_CreateCheckBoxControl(a_window, a_boundsRect, a_title, a_initialValue, a_autoToggle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateRadioButtonControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int32_t a_initialValue = (int32_t)c->gpr[6];
+    int8_t a_autoToggle = (int8_t)c->gpr[7];
+    gaddr a_outControl = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_CreateRadioButtonControl(a_window, a_boundsRect, a_title, a_initialValue, a_autoToggle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateRadioGroupControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CreateRadioGroupControl(a_window, a_boundsRect, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateBevelButtonControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    uint16_t a_thickness = (uint16_t)c->gpr[6];
+    uint16_t a_behavior = (uint16_t)c->gpr[7];
+    gaddr a_info = (gaddr)c->gpr[8];
+    int16_t a_menuID = (int16_t)c->gpr[9];
+    uint16_t a_menuBehavior = (uint16_t)c->gpr[10];
+    uint16_t a_menuPlacement = (uint16_t)rd32(c->gpr[1] + 56);
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)tb_CreateBevelButtonControl(a_window, a_boundsRect, a_title, a_thickness, a_behavior, a_info, a_menuID, a_menuBehavior, a_menuPlacement, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateScrollBarControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_value = (int32_t)c->gpr[5];
+    int32_t a_minimum = (int32_t)c->gpr[6];
+    int32_t a_maximum = (int32_t)c->gpr[7];
+    int32_t a_viewSize = (int32_t)c->gpr[8];
+    int8_t a_liveTracking = (int8_t)c->gpr[9];
+    gaddr a_liveTrackingProc = (gaddr)c->gpr[10];
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)tb_CreateScrollBarControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_viewSize, a_liveTracking, a_liveTrackingProc, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateSliderControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_value = (int32_t)c->gpr[5];
+    int32_t a_minimum = (int32_t)c->gpr[6];
+    int32_t a_maximum = (int32_t)c->gpr[7];
+    uint16_t a_orientation = (uint16_t)c->gpr[8];
+    uint16_t a_numTickMarks = (uint16_t)c->gpr[9];
+    int8_t a_liveTracking = (int8_t)c->gpr[10];
+    gaddr a_liveTrackingProc = (gaddr)rd32(c->gpr[1] + 56);
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)tb_CreateSliderControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_orientation, a_numTickMarks, a_liveTracking, a_liveTrackingProc, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateProgressBarControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_value = (int32_t)c->gpr[5];
+    int32_t a_minimum = (int32_t)c->gpr[6];
+    int32_t a_maximum = (int32_t)c->gpr[7];
+    int8_t a_indeterminate = (int8_t)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateProgressBarControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_indeterminate, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateLittleArrowsControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_value = (int32_t)c->gpr[5];
+    int32_t a_minimum = (int32_t)c->gpr[6];
+    int32_t a_maximum = (int32_t)c->gpr[7];
+    int32_t a_increment = (int32_t)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateLittleArrowsControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_increment, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateChasingArrowsControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CreateChasingArrowsControl(a_window, a_boundsRect, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateDisclosureTriangleControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint16_t a_orientation = (uint16_t)c->gpr[5];
+    gaddr a_title = (gaddr)c->gpr[6];
+    int32_t a_initialValue = (int32_t)c->gpr[7];
+    int8_t a_drawTitle = (int8_t)c->gpr[8];
+    int8_t a_autoToggles = (int8_t)c->gpr[9];
+    gaddr a_outControl = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)tb_CreateDisclosureTriangleControl(a_window, a_boundsRect, a_orientation, a_title, a_initialValue, a_drawTitle, a_autoToggles, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateTabsControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint16_t a_size = (uint16_t)c->gpr[5];
+    uint16_t a_direction = (uint16_t)c->gpr[6];
+    uint16_t a_numTabs = (uint16_t)c->gpr[7];
+    gaddr a_tabArray = (gaddr)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateTabsControl(a_window, a_boundsRect, a_size, a_direction, a_numTabs, a_tabArray, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateSeparatorControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CreateSeparatorControl(a_window, a_boundsRect, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateGroupBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int8_t a_primary = (int8_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateGroupBoxControl(a_window, a_boundsRect, a_title, a_primary, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateCheckGroupBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int32_t a_initialValue = (int32_t)c->gpr[6];
+    int8_t a_primary = (int8_t)c->gpr[7];
+    int8_t a_autoToggle = (int8_t)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateCheckGroupBoxControl(a_window, a_boundsRect, a_title, a_initialValue, a_primary, a_autoToggle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePopupGroupBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int8_t a_primary = (int8_t)c->gpr[6];
+    int16_t a_menuID = (int16_t)c->gpr[7];
+    int8_t a_variableWidth = (int8_t)c->gpr[8];
+    int16_t a_titleWidth = (int16_t)c->gpr[9];
+    int16_t a_titleJustification = (int16_t)c->gpr[10];
+    uint8_t a_titleStyle = (uint8_t)rd32(c->gpr[1] + 56);
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)tb_CreatePopupGroupBoxControl(a_window, a_boundsRect, a_title, a_primary, a_menuID, a_variableWidth, a_titleWidth, a_titleJustification, a_titleStyle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateImageWellControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreateImageWellControl(a_window, a_boundsRect, a_info, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePictureControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_content = (gaddr)c->gpr[5];
+    int8_t a_dontTrack = (int8_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreatePictureControl(a_window, a_boundsRect, a_content, a_dontTrack, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateIconControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_icon = (gaddr)c->gpr[5];
+    int8_t a_dontTrack = (int8_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateIconControl(a_window, a_boundsRect, a_icon, a_dontTrack, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePopupArrowControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint16_t a_orientation = (uint16_t)c->gpr[5];
+    uint16_t a_size = (uint16_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreatePopupArrowControl(a_window, a_boundsRect, a_orientation, a_size, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePopupButtonControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_title = (gaddr)c->gpr[5];
+    int16_t a_menuID = (int16_t)c->gpr[6];
+    int8_t a_variableWidth = (int8_t)c->gpr[7];
+    int16_t a_titleWidth = (int16_t)c->gpr[8];
+    int16_t a_titleJustification = (int16_t)c->gpr[9];
+    uint8_t a_titleStyle = (uint8_t)c->gpr[10];
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)tb_CreatePopupButtonControl(a_window, a_boundsRect, a_title, a_menuID, a_variableWidth, a_titleWidth, a_titleJustification, a_titleStyle, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreatePlacardControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_outControl = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_CreatePlacardControl(a_window, a_boundsRect, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateClockControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint16_t a_clockType = (uint16_t)c->gpr[5];
+    uint32_t a_clockFlags = (uint32_t)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateClockControl(a_window, a_boundsRect, a_clockType, a_clockFlags, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateUserPaneControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    uint32_t a_features = (uint32_t)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreateUserPaneControl(a_window, a_boundsRect, a_features, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateWindowHeaderControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int8_t a_isListHeader = (int8_t)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreateWindowHeaderControl(a_window, a_boundsRect, a_isListHeader, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateEditTextControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_text = (gaddr)c->gpr[5];
+    int8_t a_isPassword = (int8_t)c->gpr[6];
+    int8_t a_useInlineInput = (int8_t)c->gpr[7];
+    gaddr a_style = (gaddr)c->gpr[8];
+    gaddr a_outControl = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_CreateEditTextControl(a_window, a_boundsRect, a_text, a_isPassword, a_useInlineInput, a_style, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateStaticTextControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    gaddr a_text = (gaddr)c->gpr[5];
+    gaddr a_style = (gaddr)c->gpr[6];
+    gaddr a_outControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_CreateStaticTextControl(a_window, a_boundsRect, a_text, a_style, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateScrollingTextBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int16_t a_contentResID = (int16_t)c->gpr[5];
+    int8_t a_autoScroll = (int8_t)c->gpr[6];
+    uint32_t a_delayBeforeAutoScroll = (uint32_t)c->gpr[7];
+    uint32_t a_delayBetweenAutoScroll = (uint32_t)c->gpr[8];
+    uint16_t a_autoScrollAmount = (uint16_t)c->gpr[9];
+    gaddr a_outControl = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)tb_CreateScrollingTextBoxControl(a_window, a_boundsRect, a_contentResID, a_autoScroll, a_delayBeforeAutoScroll, a_delayBetweenAutoScroll, a_autoScrollAmount, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateListBoxControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int8_t a_autoSize = (int8_t)c->gpr[5];
+    int16_t a_numRows = (int16_t)c->gpr[6];
+    int16_t a_numColumns = (int16_t)c->gpr[7];
+    int8_t a_horizScroll = (int8_t)c->gpr[8];
+    int8_t a_vertScroll = (int8_t)c->gpr[9];
+    int16_t a_cellHeight = (int16_t)c->gpr[10];
+    int16_t a_cellWidth = (int16_t)rd32(c->gpr[1] + 56);
+    int8_t a_hasGrowSpace = (int8_t)rd32(c->gpr[1] + 60);
+    gaddr a_listDef = (gaddr)rd32(c->gpr[1] + 64);
+    gaddr a_outControl = (gaddr)rd32(c->gpr[1] + 68);
+    c->gpr[3] = (uint32_t)tb_CreateListBoxControl(a_window, a_boundsRect, a_autoSize, a_numRows, a_numColumns, a_horizScroll, a_vertScroll, a_cellHeight, a_cellWidth, a_hasGrowSpace, a_listDef, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTabContentRect(ppc_cpu *c)
+{
+    gaddr a_inTabControl = (gaddr)c->gpr[3];
+    gaddr a_outContentRect = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTabContentRect(a_inTabControl, a_outContentRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetImageWellContentInfo(ppc_cpu *c)
+{
+    gaddr a_inButton = (gaddr)c->gpr[3];
+    gaddr a_outContent = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetImageWellContentInfo(a_inButton, a_outContent);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateDataBrowserControl(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    gaddr a_boundsRect = (gaddr)c->gpr[4];
+    int32_t a_style = (int32_t)c->gpr[5];
+    gaddr a_outControl = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_CreateDataBrowserControl(a_window, a_boundsRect, a_style, a_outControl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserViewStyle(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_style = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserViewStyle(a_browser, a_style);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserViewStyle(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    int32_t a_style = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserViewStyle(a_browser, a_style);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddDataBrowserItems(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    uint32_t a_numItems = (uint32_t)c->gpr[5];
+    gaddr a_items = (gaddr)c->gpr[6];
+    uint32_t a_preSortProperty = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_AddDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveDataBrowserItems(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    uint32_t a_numItems = (uint32_t)c->gpr[5];
+    gaddr a_items = (gaddr)c->gpr[6];
+    uint32_t a_preSortProperty = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_RemoveDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UpdateDataBrowserItems(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    uint32_t a_numItems = (uint32_t)c->gpr[5];
+    gaddr a_items = (gaddr)c->gpr[6];
+    uint32_t a_preSortProperty = (uint32_t)c->gpr[7];
+    uint32_t a_propertyID = (uint32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_UpdateDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty, a_propertyID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EnableDataBrowserEditCommand(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_command = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_EnableDataBrowserEditCommand(a_browser, a_command);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExecuteDataBrowserEditCommand(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_command = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_ExecuteDataBrowserEditCommand(a_browser, a_command);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserSelectionAnchor(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_first = (gaddr)c->gpr[4];
+    gaddr a_last = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserSelectionAnchor(a_browser, a_first, a_last);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MoveDataBrowserSelectionAnchor(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_direction = (uint32_t)c->gpr[4];
+    int8_t a_extendSelection = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_MoveDataBrowserSelectionAnchor(a_browser, a_direction, a_extendSelection);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenDataBrowserContainer(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_OpenDataBrowserContainer(a_browser, a_container);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseDataBrowserContainer(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_CloseDataBrowserContainer(a_browser, a_container);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SortDataBrowserContainer(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    int8_t a_sortChildren = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SortDataBrowserContainer(a_browser, a_container, a_sortChildren);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItems(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    int8_t a_recurse = (int8_t)c->gpr[5];
+    uint32_t a_state = (uint32_t)c->gpr[6];
+    gaddr a_items = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItems(a_browser, a_container, a_recurse, a_state, a_items);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemCount(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    int8_t a_recurse = (int8_t)c->gpr[5];
+    uint32_t a_state = (uint32_t)c->gpr[6];
+    gaddr a_numItems = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemCount(a_browser, a_container, a_recurse, a_state, a_numItems);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ForEachDataBrowserItem(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_container = (uint32_t)c->gpr[4];
+    int8_t a_recurse = (int8_t)c->gpr[5];
+    uint32_t a_state = (uint32_t)c->gpr[6];
+    gaddr a_callback = (gaddr)c->gpr[7];
+    gaddr a_clientData = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_ForEachDataBrowserItem(a_browser, a_container, a_recurse, a_state, a_callback, a_clientData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsDataBrowserItemSelected(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsDataBrowserItemSelected(a_browser, a_item);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemState(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    gaddr a_state = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemState(a_browser, a_item, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RevealDataBrowserItem(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    uint32_t a_propertyID = (uint32_t)c->gpr[5];
+    uint8_t a_options = (uint8_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_RevealDataBrowserItem(a_browser, a_item, a_propertyID, a_options);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserSelectedItems(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_numItems = (uint32_t)c->gpr[4];
+    gaddr a_items = (gaddr)c->gpr[5];
+    uint32_t a_operation = (uint32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserSelectedItems(a_browser, a_numItems, a_items, a_operation);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserUserState(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_stateInfo = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserUserState(a_browser, a_stateInfo);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserUserState(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_stateInfo = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserUserState(a_browser, a_stateInfo);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserActiveItems(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    int8_t a_active = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserActiveItems(a_browser, a_active);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserActiveItems(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_active = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserActiveItems(a_browser, a_active);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserScrollBarInset(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_insetRect = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserScrollBarInset(a_browser, a_insetRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserScrollBarInset(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_insetRect = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserScrollBarInset(a_browser, a_insetRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTarget(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_target = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTarget(a_browser, a_target);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTarget(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_target = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTarget(a_browser, a_target);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserSortOrder(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint16_t a_order = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserSortOrder(a_browser, a_order);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserSortOrder(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_order = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserSortOrder(a_browser, a_order);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserScrollPosition(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_top = (uint32_t)c->gpr[4];
+    uint32_t a_left = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserScrollPosition(a_browser, a_top, a_left);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserScrollPosition(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_top = (gaddr)c->gpr[4];
+    gaddr a_left = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserScrollPosition(a_browser, a_top, a_left);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserHasScrollBars(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    int8_t a_horiz = (int8_t)c->gpr[4];
+    int8_t a_vert = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserHasScrollBars(a_browser, a_horiz, a_vert);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserHasScrollBars(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_horiz = (gaddr)c->gpr[4];
+    gaddr a_vert = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserHasScrollBars(a_browser, a_horiz, a_vert);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserSortProperty(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_property = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserSortProperty(a_browser, a_property);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserSortProperty(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_property = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserSortProperty(a_browser, a_property);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserSelectionFlags(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_selectionFlags = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserSelectionFlags(a_browser, a_selectionFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserSelectionFlags(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_selectionFlags = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserSelectionFlags(a_browser, a_selectionFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserPropertyFlags(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_property = (uint32_t)c->gpr[4];
+    uint32_t a_flags = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserPropertyFlags(a_browser, a_property, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserPropertyFlags(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_property = (uint32_t)c->gpr[4];
+    gaddr a_flags = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserPropertyFlags(a_browser, a_property, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserEditText(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_text = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserEditText(a_browser, a_text);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserEditText(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_text = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserEditText(a_browser, a_text);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserEditItem(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    uint32_t a_property = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserEditItem(a_browser, a_item, a_property);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserEditItem(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_item = (gaddr)c->gpr[4];
+    gaddr a_property = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserEditItem(a_browser, a_item, a_property);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemPartBounds(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    uint32_t a_property = (uint32_t)c->gpr[5];
+    int32_t a_part = (int32_t)c->gpr[6];
+    gaddr a_bounds = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemPartBounds(a_browser, a_item, a_property, a_part, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataIcon(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataIcon(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataIcon(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataIcon(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataText(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataText(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataText(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataText(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataValue(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    int32_t a_theData = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataValue(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataValue(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataValue(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataMinimum(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    int32_t a_theData = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataMinimum(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataMinimum(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataMinimum(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataMaximum(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    int32_t a_theData = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataMaximum(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataMaximum(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataMaximum(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataBooleanValue(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    int8_t a_theData = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataBooleanValue(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataBooleanValue(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataBooleanValue(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataMenuRef(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataMenuRef(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataMenuRef(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataMenuRef(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataRGBColor(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataRGBColor(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataRGBColor(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataRGBColor(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataDrawState(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    uint32_t a_theData = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataDrawState(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataDrawState(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataDrawState(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataButtonValue(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    uint16_t a_theData = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataButtonValue(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataButtonValue(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataButtonValue(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataIconTransform(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    int16_t a_theData = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataIconTransform(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataIconTransform(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataIconTransform(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataDateTime(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    int32_t a_theData = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataDateTime(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataDateTime(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataDateTime(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataLongDateTime(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataLongDateTime(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataLongDateTime(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataLongDateTime(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserItemDataItemID(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    uint32_t a_theData = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserItemDataItemID(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataItemID(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataItemID(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserItemDataProperty(ppc_cpu *c)
+{
+    gaddr a_itemData = (gaddr)c->gpr[3];
+    gaddr a_theData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserItemDataProperty(a_itemData, a_theData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitDataBrowserCallbacks(ppc_cpu *c)
+{
+    gaddr a_callbacks = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_InitDataBrowserCallbacks(a_callbacks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserCallbacks(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_callbacks = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserCallbacks(a_browser, a_callbacks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserCallbacks(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_callbacks = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserCallbacks(a_browser, a_callbacks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InitDataBrowserCustomCallbacks(ppc_cpu *c)
+{
+    gaddr a_callbacks = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_InitDataBrowserCustomCallbacks(a_callbacks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserCustomCallbacks(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_callbacks = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserCustomCallbacks(a_browser, a_callbacks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserCustomCallbacks(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_callbacks = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserCustomCallbacks(a_browser, a_callbacks);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveDataBrowserTableViewColumn(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_column = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_RemoveDataBrowserTableViewColumn(a_browser, a_column);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewColumnCount(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_numColumns = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewColumnCount(a_browser, a_numColumns);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTableViewHiliteStyle(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_hiliteStyle = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTableViewHiliteStyle(a_browser, a_hiliteStyle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewHiliteStyle(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_hiliteStyle = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewHiliteStyle(a_browser, a_hiliteStyle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTableViewRowHeight(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint16_t a_height = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTableViewRowHeight(a_browser, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewRowHeight(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_height = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewRowHeight(a_browser, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTableViewColumnWidth(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint16_t a_width = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTableViewColumnWidth(a_browser, a_width);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewColumnWidth(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_width = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewColumnWidth(a_browser, a_width);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTableViewItemRowHeight(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    uint16_t a_height = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTableViewItemRowHeight(a_browser, a_item, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewItemRowHeight(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    gaddr a_height = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewItemRowHeight(a_browser, a_item, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTableViewNamedColumnWidth(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_column = (uint32_t)c->gpr[4];
+    uint16_t a_width = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTableViewNamedColumnWidth(a_browser, a_column, a_width);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewNamedColumnWidth(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_column = (uint32_t)c->gpr[4];
+    gaddr a_width = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewNamedColumnWidth(a_browser, a_column, a_width);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTableViewGeometry(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    int8_t a_variableWidthColumns = (int8_t)c->gpr[4];
+    int8_t a_variableHeightRows = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTableViewGeometry(a_browser, a_variableWidthColumns, a_variableHeightRows);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewGeometry(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_variableWidthColumns = (gaddr)c->gpr[4];
+    gaddr a_variableHeightRows = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewGeometry(a_browser, a_variableWidthColumns, a_variableHeightRows);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewItemID(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_row = (uint32_t)c->gpr[4];
+    gaddr a_item = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewItemID(a_browser, a_row, a_item);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTableViewItemRow(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    uint32_t a_row = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTableViewItemRow(a_browser, a_item, a_row);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewItemRow(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_item = (uint32_t)c->gpr[4];
+    gaddr a_row = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewItemRow(a_browser, a_item, a_row);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserTableViewColumnPosition(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_column = (uint32_t)c->gpr[4];
+    uint32_t a_position = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserTableViewColumnPosition(a_browser, a_column, a_position);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewColumnPosition(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_column = (uint32_t)c->gpr[4];
+    gaddr a_position = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewColumnPosition(a_browser, a_column, a_position);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserTableViewColumnProperty(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_column = (uint32_t)c->gpr[4];
+    gaddr a_property = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserTableViewColumnProperty(a_browser, a_column, a_property);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AutoSizeDataBrowserListViewColumns(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_AutoSizeDataBrowserListViewColumns(a_browser);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddDataBrowserListViewColumn(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_columnDesc = (gaddr)c->gpr[4];
+    uint32_t a_position = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_AddDataBrowserListViewColumn(a_browser, a_columnDesc, a_position);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserListViewHeaderBtnHeight(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint16_t a_height = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserListViewHeaderBtnHeight(a_browser, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserListViewHeaderBtnHeight(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_height = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserListViewHeaderBtnHeight(a_browser, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserListViewUsePlainBackground(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    int8_t a_usePlainBackground = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserListViewUsePlainBackground(a_browser, a_usePlainBackground);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserListViewUsePlainBackground(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_usePlainBackground = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserListViewUsePlainBackground(a_browser, a_usePlainBackground);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserListViewDisclosureColumn(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_column = (uint32_t)c->gpr[4];
+    int8_t a_expandableRows = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserListViewDisclosureColumn(a_browser, a_column, a_expandableRows);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserListViewDisclosureColumn(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_column = (gaddr)c->gpr[4];
+    gaddr a_expandableRows = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserListViewDisclosureColumn(a_browser, a_column, a_expandableRows);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserColumnViewPath(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_path = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserColumnViewPath(a_browser, a_path);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserColumnViewPathLength(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_pathLength = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserColumnViewPathLength(a_browser, a_pathLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserColumnViewPath(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    uint32_t a_length = (uint32_t)c->gpr[4];
+    gaddr a_path = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserColumnViewPath(a_browser, a_length, a_path);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDataBrowserColumnViewDisplayType(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    int32_t a_propertyType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetDataBrowserColumnViewDisplayType(a_browser, a_propertyType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataBrowserColumnViewDisplayType(ppc_cpu *c)
+{
+    gaddr a_browser = (gaddr)c->gpr[3];
+    gaddr a_propertyType = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetDataBrowserColumnViewDisplayType(a_browser, a_propertyType);
+    c->pc = c->lr;
+}
+
 static void ppcpatched_StdOpcode(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -38808,6 +40589,8 @@ const ppc_export ppc_exports[] = {
     {"AddCollectionItem", ppcglue_AddCollectionItem},
     {"AddCollectionItemHdl", ppctrap_AddCollectionItemHdl},
     {"AddComp", ppcglue_AddComp},
+    {"AddDataBrowserItems", ppcglue_AddDataBrowserItems},
+    {"AddDataBrowserListViewColumn", ppcglue_AddDataBrowserListViewColumn},
     {"AddDragItemFlavor", ppcglue_AddDragItemFlavor},
     {"AddDrive", ppcglue_AddDrive},
     {"AddEmptyTrackToMovie", ppctrap_AddEmptyTrackToMovie},
@@ -38850,6 +40633,7 @@ const ppc_export ppc_exports[] = {
     {"AssociateSection", ppctrap_AssociateSection},
     {"AttachVBL", ppcglue_AttachVBL},
     {"AutoEmbedControl", ppcglue_AutoEmbedControl},
+    {"AutoSizeDataBrowserListViewColumns", ppcglue_AutoSizeDataBrowserListViewColumns},
     {"AutoSizeDialog", ppcglue_AutoSizeDialog},
     {"BOff", ppcglue_BOff},
     {"BOn", ppcglue_BOn},
@@ -38908,6 +40692,7 @@ const ppc_export ppc_exports[] = {
     {"CancelCallBack", ppctrap_CancelCallBack},
     {"CancelSwitch", ppcglue_CancelSwitch},
     {"CautionAlert", ppcglue_CautionAlert},
+    {"ChangeControlPropertyAttributes", ppcglue_ChangeControlPropertyAttributes},
     {"ChangeDragBehaviors", ppcglue_ChangeDragBehaviors},
     {"ChangedResource", ppcglue_ChangedResource},
     {"Char2Pixel", ppcglue_Char2Pixel},
@@ -38934,6 +40719,7 @@ const ppc_export ppc_exports[] = {
     {"CloseCPort", ppcglue_CloseCPort},
     {"CloseConnection", ppctrap_CloseConnection},
     {"CloseCursorComponent", ppcglue_CloseCursorComponent},
+    {"CloseDataBrowserContainer", ppcglue_CloseDataBrowserContainer},
     {"CloseDeskAcc", ppcglue_CloseDeskAcc},
     {"CloseDialog", ppcglue_CloseDialog},
     {"CloseDictionary", ppcglue_CloseDictionary},
@@ -38988,6 +40774,7 @@ const ppc_export ppc_exports[] = {
     {"ConvertTimeScale", ppcglue_ConvertTimeScale},
     {"CopyBits", ppcglue_CopyBits},
     {"CopyCollection", ppctrap_CopyCollection},
+    {"CopyControlTitleAsCFString", ppcglue_CopyControlTitleAsCFString},
     {"CopyDeepMask", ppcglue_CopyDeepMask},
     {"CopyMask", ppcglue_CopyMask},
     {"CopyMatrix", ppcglue_CopyMatrix},
@@ -39022,8 +40809,22 @@ const ppc_export ppc_exports[] = {
     {"CountTypes", ppcglue_CountTypes},
     {"CountUserDataType", ppctrap_CountUserDataType},
     {"CountVoices", ppcglue_CountVoices},
+    {"CreateBevelButtonControl", ppcglue_CreateBevelButtonControl},
+    {"CreateChasingArrowsControl", ppcglue_CreateChasingArrowsControl},
+    {"CreateCheckBoxControl", ppcglue_CreateCheckBoxControl},
+    {"CreateCheckGroupBoxControl", ppcglue_CreateCheckGroupBoxControl},
+    {"CreateClockControl", ppcglue_CreateClockControl},
     {"CreateCompDescriptor", ppcglue_CreateCompDescriptor},
+    {"CreateCustomControl", ppcglue_CreateCustomControl},
+    {"CreateDataBrowserControl", ppcglue_CreateDataBrowserControl},
+    {"CreateDisclosureTriangleControl", ppcglue_CreateDisclosureTriangleControl},
+    {"CreateEditTextControl", ppcglue_CreateEditTextControl},
     {"CreateEditionContainerFile", ppctrap_CreateEditionContainerFile},
+    {"CreateGroupBoxControl", ppcglue_CreateGroupBoxControl},
+    {"CreateIconControl", ppcglue_CreateIconControl},
+    {"CreateImageWellControl", ppcglue_CreateImageWellControl},
+    {"CreateListBoxControl", ppcglue_CreateListBoxControl},
+    {"CreateLittleArrowsControl", ppcglue_CreateLittleArrowsControl},
     {"CreateLogicalDescriptor", ppcglue_CreateLogicalDescriptor},
     {"CreateMovieControl", ppctrap_CreateMovieControl},
     {"CreateMovieFile", ppctrap_CreateMovieFile},
@@ -39031,11 +40832,29 @@ const ppc_export ppc_exports[] = {
     {"CreateNewWindow", ppcglue_CreateNewWindow},
     {"CreateObjSpecifier", ppcglue_CreateObjSpecifier},
     {"CreateOffsetDescriptor", ppcglue_CreateOffsetDescriptor},
+    {"CreatePictureControl", ppcglue_CreatePictureControl},
+    {"CreatePlacardControl", ppcglue_CreatePlacardControl},
+    {"CreatePopupArrowControl", ppcglue_CreatePopupArrowControl},
+    {"CreatePopupButtonControl", ppcglue_CreatePopupButtonControl},
+    {"CreatePopupGroupBoxControl", ppcglue_CreatePopupGroupBoxControl},
+    {"CreateProgressBarControl", ppcglue_CreateProgressBarControl},
+    {"CreatePushButtonControl", ppcglue_CreatePushButtonControl},
+    {"CreatePushButtonWithIconControl", ppcglue_CreatePushButtonWithIconControl},
+    {"CreateRadioButtonControl", ppcglue_CreateRadioButtonControl},
+    {"CreateRadioGroupControl", ppcglue_CreateRadioGroupControl},
     {"CreateRangeDescriptor", ppcglue_CreateRangeDescriptor},
     {"CreateResFile", ppcglue_CreateResFile},
     {"CreateRootControl", ppcglue_CreateRootControl},
+    {"CreateScrollBarControl", ppcglue_CreateScrollBarControl},
+    {"CreateScrollingTextBoxControl", ppcglue_CreateScrollingTextBoxControl},
+    {"CreateSeparatorControl", ppcglue_CreateSeparatorControl},
     {"CreateShortcutMovieFile", ppctrap_CreateShortcutMovieFile},
+    {"CreateSliderControl", ppcglue_CreateSliderControl},
+    {"CreateStaticTextControl", ppcglue_CreateStaticTextControl},
+    {"CreateTabsControl", ppcglue_CreateTabsControl},
     {"CreateThreadPool", ppcglue_CreateThreadPool},
+    {"CreateUserPaneControl", ppcglue_CreateUserPaneControl},
+    {"CreateWindowHeaderControl", ppcglue_CreateWindowHeaderControl},
     {"CurResFile", ppcglue_CurResFile},
     {"CursorComponentChanged", ppcglue_CursorComponentChanged},
     {"CursorComponentSetData", ppcglue_CursorComponentSetData},
@@ -39306,6 +41125,7 @@ const ppc_export ppc_exports[] = {
     {"EmptyHandle", ppcglue_EmptyHandle},
     {"EmptyRect", ppcglue_EmptyRect},
     {"EmptyRgn", ppcglue_EmptyRgn},
+    {"EnableDataBrowserEditCommand", ppcglue_EnableDataBrowserEditCommand},
     {"EnableItem", ppcglue_EnableItem},
     {"EnableMenuItemIcon", ppcglue_EnableMenuItemIcon},
     {"EndFullScreen", ppcglue_EndFullScreen},
@@ -39330,6 +41150,7 @@ const ppc_export ppc_exports[] = {
     {"ErrorSound", ppcglue_ErrorSound},
     {"EventAvail", ppcglue_EventAvail},
     {"ExecuteCallBack", ppctrap_ExecuteCallBack},
+    {"ExecuteDataBrowserEditCommand", ppcglue_ExecuteDataBrowserEditCommand},
     {"ExitMovies", ppcglue_ExitMovies},
     {"ExitToShell", ppctrap_ExitToShell},
     {"Exp1to3", ppcglue_Exp1to3},
@@ -39463,6 +41284,7 @@ const ppc_export ppc_exports[] = {
     {"FontMetrics", ppcglue_FontMetrics},
     {"FontScript", ppcglue_FontScript},
     {"FontToScript", ppcglue_FontToScript},
+    {"ForEachDataBrowserItem", ppcglue_ForEachDataBrowserItem},
     {"ForEachIconDo", ppcglue_ForEachIconDo},
     {"ForeColor", ppcglue_ForeColor},
     {"FormatRecToString", ppcglue_FormatRecToString},
@@ -39681,11 +41503,24 @@ const ppc_export ppc_exports[] = {
     {"GetControl32BitMinimum", ppcglue_GetControl32BitMinimum},
     {"GetControl32BitValue", ppcglue_GetControl32BitValue},
     {"GetControlAction", ppcglue_GetControlAction},
+    {"GetControlBounds", ppcglue_GetControlBounds},
+    {"GetControlByID", ppcglue_GetControlByID},
+    {"GetControlClickActivation", ppcglue_GetControlClickActivation},
+    {"GetControlCommandID", ppcglue_GetControlCommandID},
     {"GetControlData", ppcglue_GetControlData},
+    {"GetControlDataHandle", ppcglue_GetControlDataHandle},
     {"GetControlDataSize", ppcglue_GetControlDataSize},
     {"GetControlFeatures", ppcglue_GetControlFeatures},
+    {"GetControlHilite", ppcglue_GetControlHilite},
+    {"GetControlID", ppcglue_GetControlID},
     {"GetControlMaximum", ppcglue_GetControlMaximum},
     {"GetControlMinimum", ppcglue_GetControlMinimum},
+    {"GetControlOwner", ppcglue_GetControlOwner},
+    {"GetControlPopupMenuHandle", ppcglue_GetControlPopupMenuHandle},
+    {"GetControlPopupMenuID", ppcglue_GetControlPopupMenuID},
+    {"GetControlProperty", ppcglue_GetControlProperty},
+    {"GetControlPropertyAttributes", ppcglue_GetControlPropertyAttributes},
+    {"GetControlPropertySize", ppcglue_GetControlPropertySize},
     {"GetControlReference", ppcglue_GetControlReference},
     {"GetControlRegion", ppcglue_GetControlRegion},
     {"GetControlTitle", ppcglue_GetControlTitle},
@@ -39699,6 +41534,58 @@ const ppc_export ppc_exports[] = {
     {"GetDSequenceImageBuffer", ppctrap_GetDSequenceImageBuffer},
     {"GetDSequenceMatrix", ppcglue_GetDSequenceMatrix},
     {"GetDSequenceScreenBuffer", ppctrap_GetDSequenceScreenBuffer},
+    {"GetDataBrowserActiveItems", ppcglue_GetDataBrowserActiveItems},
+    {"GetDataBrowserCallbacks", ppcglue_GetDataBrowserCallbacks},
+    {"GetDataBrowserColumnViewDisplayType", ppcglue_GetDataBrowserColumnViewDisplayType},
+    {"GetDataBrowserColumnViewPath", ppcglue_GetDataBrowserColumnViewPath},
+    {"GetDataBrowserColumnViewPathLength", ppcglue_GetDataBrowserColumnViewPathLength},
+    {"GetDataBrowserCustomCallbacks", ppcglue_GetDataBrowserCustomCallbacks},
+    {"GetDataBrowserEditItem", ppcglue_GetDataBrowserEditItem},
+    {"GetDataBrowserEditText", ppcglue_GetDataBrowserEditText},
+    {"GetDataBrowserHasScrollBars", ppcglue_GetDataBrowserHasScrollBars},
+    {"GetDataBrowserItemCount", ppcglue_GetDataBrowserItemCount},
+    {"GetDataBrowserItemDataBooleanValue", ppcglue_GetDataBrowserItemDataBooleanValue},
+    {"GetDataBrowserItemDataButtonValue", ppcglue_GetDataBrowserItemDataButtonValue},
+    {"GetDataBrowserItemDataDateTime", ppcglue_GetDataBrowserItemDataDateTime},
+    {"GetDataBrowserItemDataDrawState", ppcglue_GetDataBrowserItemDataDrawState},
+    {"GetDataBrowserItemDataIcon", ppcglue_GetDataBrowserItemDataIcon},
+    {"GetDataBrowserItemDataIconTransform", ppcglue_GetDataBrowserItemDataIconTransform},
+    {"GetDataBrowserItemDataItemID", ppcglue_GetDataBrowserItemDataItemID},
+    {"GetDataBrowserItemDataLongDateTime", ppcglue_GetDataBrowserItemDataLongDateTime},
+    {"GetDataBrowserItemDataMaximum", ppcglue_GetDataBrowserItemDataMaximum},
+    {"GetDataBrowserItemDataMenuRef", ppcglue_GetDataBrowserItemDataMenuRef},
+    {"GetDataBrowserItemDataMinimum", ppcglue_GetDataBrowserItemDataMinimum},
+    {"GetDataBrowserItemDataProperty", ppcglue_GetDataBrowserItemDataProperty},
+    {"GetDataBrowserItemDataRGBColor", ppcglue_GetDataBrowserItemDataRGBColor},
+    {"GetDataBrowserItemDataText", ppcglue_GetDataBrowserItemDataText},
+    {"GetDataBrowserItemDataValue", ppcglue_GetDataBrowserItemDataValue},
+    {"GetDataBrowserItemPartBounds", ppcglue_GetDataBrowserItemPartBounds},
+    {"GetDataBrowserItemState", ppcglue_GetDataBrowserItemState},
+    {"GetDataBrowserItems", ppcglue_GetDataBrowserItems},
+    {"GetDataBrowserListViewDisclosureColumn", ppcglue_GetDataBrowserListViewDisclosureColumn},
+    {"GetDataBrowserListViewHeaderBtnHeight", ppcglue_GetDataBrowserListViewHeaderBtnHeight},
+    {"GetDataBrowserListViewUsePlainBackground", ppcglue_GetDataBrowserListViewUsePlainBackground},
+    {"GetDataBrowserPropertyFlags", ppcglue_GetDataBrowserPropertyFlags},
+    {"GetDataBrowserScrollBarInset", ppcglue_GetDataBrowserScrollBarInset},
+    {"GetDataBrowserScrollPosition", ppcglue_GetDataBrowserScrollPosition},
+    {"GetDataBrowserSelectionAnchor", ppcglue_GetDataBrowserSelectionAnchor},
+    {"GetDataBrowserSelectionFlags", ppcglue_GetDataBrowserSelectionFlags},
+    {"GetDataBrowserSortOrder", ppcglue_GetDataBrowserSortOrder},
+    {"GetDataBrowserSortProperty", ppcglue_GetDataBrowserSortProperty},
+    {"GetDataBrowserTableViewColumnCount", ppcglue_GetDataBrowserTableViewColumnCount},
+    {"GetDataBrowserTableViewColumnPosition", ppcglue_GetDataBrowserTableViewColumnPosition},
+    {"GetDataBrowserTableViewColumnProperty", ppcglue_GetDataBrowserTableViewColumnProperty},
+    {"GetDataBrowserTableViewColumnWidth", ppcglue_GetDataBrowserTableViewColumnWidth},
+    {"GetDataBrowserTableViewGeometry", ppcglue_GetDataBrowserTableViewGeometry},
+    {"GetDataBrowserTableViewHiliteStyle", ppcglue_GetDataBrowserTableViewHiliteStyle},
+    {"GetDataBrowserTableViewItemID", ppcglue_GetDataBrowserTableViewItemID},
+    {"GetDataBrowserTableViewItemRow", ppcglue_GetDataBrowserTableViewItemRow},
+    {"GetDataBrowserTableViewItemRowHeight", ppcglue_GetDataBrowserTableViewItemRowHeight},
+    {"GetDataBrowserTableViewNamedColumnWidth", ppcglue_GetDataBrowserTableViewNamedColumnWidth},
+    {"GetDataBrowserTableViewRowHeight", ppcglue_GetDataBrowserTableViewRowHeight},
+    {"GetDataBrowserTarget", ppcglue_GetDataBrowserTarget},
+    {"GetDataBrowserUserState", ppcglue_GetDataBrowserUserState},
+    {"GetDataBrowserViewStyle", ppcglue_GetDataBrowserViewStyle},
     {"GetDataHandler", ppctrap_GetDataHandler},
     {"GetDateTime", ppcglue_GetDateTime},
     {"GetDblTime", ppcglue_GetDblTime},
@@ -39707,9 +41594,17 @@ const ppc_export ppc_exports[] = {
     {"GetDefaultStartup", ppcglue_GetDefaultStartup},
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
+    {"GetDialogCancelItem", ppcglue_GetDialogCancelItem},
+    {"GetDialogDefaultItem", ppcglue_GetDialogDefaultItem},
+    {"GetDialogFromWindow", ppcglue_GetDialogFromWindow},
     {"GetDialogItem", ppcglue_GetDialogItem},
     {"GetDialogItemAsControl", ppcglue_GetDialogItemAsControl},
     {"GetDialogItemText", ppcglue_GetDialogItemText},
+    {"GetDialogKeyboardFocusItem", ppcglue_GetDialogKeyboardFocusItem},
+    {"GetDialogPort", ppcglue_GetDialogPort},
+    {"GetDialogTextEditHandle", ppcglue_GetDialogTextEditHandle},
+    {"GetDialogTimeout", ppcglue_GetDialogTimeout},
+    {"GetDialogWindow", ppcglue_GetDialogWindow},
     {"GetDictionaryInformation", ppcglue_GetDictionaryInformation},
     {"GetDimmingTimeout", ppcglue_GetDimmingTimeout},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
@@ -39766,6 +41661,7 @@ const ppc_export ppc_exports[] = {
     {"GetIconSuite", ppcglue_GetIconSuite},
     {"GetImageDescriptionCTable", ppcglue_GetImageDescriptionCTable},
     {"GetImageDescriptionExtension", ppctrap_GetImageDescriptionExtension},
+    {"GetImageWellContentInfo", ppcglue_GetImageWellContentInfo},
     {"GetIndADB", ppcglue_GetIndADB},
     {"GetIndPattern", ppcglue_GetIndPattern},
     {"GetIndResource", ppcglue_GetIndResource},
@@ -39844,6 +41740,7 @@ const ppc_export ppc_exports[] = {
     {"GetMenuItemRefCon2", ppcglue_GetMenuItemRefCon2},
     {"GetMenuItemText", ppcglue_GetMenuItemText},
     {"GetMenuItemTextEncoding", ppcglue_GetMenuItemTextEncoding},
+    {"GetModalDialogEventMask", ppcglue_GetModalDialogEventMask},
     {"GetMouse", ppcglue_GetMouse},
     {"GetMovieActive", ppcglue_GetMovieActive},
     {"GetMovieActiveSegment", ppctrap_GetMovieActiveSegment},
@@ -39917,6 +41814,7 @@ const ppc_export ppc_exports[] = {
     {"GetPageState", ppcglue_GetPageState},
     {"GetPalette", ppcglue_GetPalette},
     {"GetPaletteUpdates", ppcglue_GetPaletteUpdates},
+    {"GetParamText", ppcglue_GetParamText},
     {"GetPattern", ppcglue_GetPattern},
     {"GetPen", ppcglue_GetPen},
     {"GetPenState", ppcglue_GetPenState},
@@ -39975,6 +41873,7 @@ const ppc_export ppc_exports[] = {
     {"GetSysBeepVolume", ppcglue_GetSysBeepVolume},
     {"GetSysDirection", ppcglue_GetSysDirection},
     {"GetSysPPtr", ppcglue_GetSysPPtr},
+    {"GetTabContentRect", ppcglue_GetTabContentRect},
     {"GetTaggedCollectionItem", ppctrap_GetTaggedCollectionItem},
     {"GetTaggedCollectionItemInfo", ppctrap_GetTaggedCollectionItemInfo},
     {"GetTextServiceLanguage", ppcglue_GetTextServiceLanguage},
@@ -40119,7 +42018,11 @@ const ppc_export ppc_exports[] = {
     {"HandAndHand", ppcglue_HandAndHand},
     {"HandToHand", ppctrap_HandToHand},
     {"HandleControlClick", ppcglue_HandleControlClick},
+    {"HandleControlContextualMenuClick", ppcglue_HandleControlContextualMenuClick},
+    {"HandleControlDragReceive", ppcglue_HandleControlDragReceive},
+    {"HandleControlDragTracking", ppcglue_HandleControlDragTracking},
     {"HandleControlKey", ppcglue_HandleControlKey},
+    {"HandleControlSetCursor", ppcglue_HandleControlSetCursor},
     {"HandleZone", ppcglue_HandleZone},
     {"HasDepth", ppcglue_HasDepth},
     {"HasMovieChanged", ppcglue_HasMovieChanged},
@@ -40198,6 +42101,8 @@ const ppc_export ppc_exports[] = {
     {"InitContextualMenus", ppcglue_InitContextualMenus},
     {"InitCursor", ppcglue_InitCursor},
     {"InitDBPack", ppcglue_InitDBPack},
+    {"InitDataBrowserCallbacks", ppcglue_InitDataBrowserCallbacks},
+    {"InitDataBrowserCustomCallbacks", ppcglue_InitDataBrowserCustomCallbacks},
     {"InitDateCache", ppcglue_InitDateCache},
     {"InitDialogs", ppcglue_InitDialogs},
     {"InitEditionPackVersion", ppcglue_InitEditionPackVersion},
@@ -40218,6 +42123,7 @@ const ppc_export ppc_exports[] = {
     {"InitializeDictionary", ppcglue_InitializeDictionary},
     {"InsTime", ppcglue_InsTime},
     {"InsXTime", ppcglue_InsXTime},
+    {"InsertDialogItem", ppcglue_InsertDialogItem},
     {"InsertEmptyMovieSegment", ppcglue_InsertEmptyMovieSegment},
     {"InsertEmptyTrackSegment", ppctrap_InsertEmptyTrackSegment},
     {"InsertFontResMenu", ppcglue_InsertFontResMenu},
@@ -40255,9 +42161,13 @@ const ppc_export ppc_exports[] = {
     {"InvertRoundRect", ppcglue_InvertRoundRect},
     {"IsAliasFile", ppcglue_IsAliasFile},
     {"IsAppearanceClient", ppcglue_IsAppearanceClient},
+    {"IsAutomaticControlDragTrackingEnabledForWindow", ppcglue_IsAutomaticControlDragTrackingEnabledForWindow},
     {"IsControlActive", ppcglue_IsControlActive},
+    {"IsControlDragTrackingEnabled", ppcglue_IsControlDragTrackingEnabled},
+    {"IsControlHilited", ppcglue_IsControlHilited},
     {"IsControlVisible", ppcglue_IsControlVisible},
     {"IsDataAvailableInIconRef", ppcglue_IsDataAvailableInIconRef},
+    {"IsDataBrowserItemSelected", ppcglue_IsDataBrowserItemSelected},
     {"IsDialogEvent", ppcglue_IsDialogEvent},
     {"IsIconRefComposite", ppcglue_IsIconRefComposite},
     {"IsIconRefMaskEmpty", ppcglue_IsIconRefMaskEmpty},
@@ -40871,6 +42781,7 @@ const ppc_export ppc_exports[] = {
     {"MoreMasters", ppcglue_MoreMasters},
     {"Move", ppcglue_Move},
     {"MoveControl", ppcglue_MoveControl},
+    {"MoveDataBrowserSelectionAnchor", ppcglue_MoveDataBrowserSelectionAnchor},
     {"MoveDialogItem", ppcglue_MoveDialogItem},
     {"MoveHHi", ppcglue_MoveHHi},
     {"MovePortTo", ppcglue_MovePortTo},
@@ -40990,6 +42901,7 @@ const ppc_export ppc_exports[] = {
     {"OpenCPicture", ppcglue_OpenCPicture},
     {"OpenCPort", ppcglue_OpenCPort},
     {"OpenCursorComponent", ppcglue_OpenCursorComponent},
+    {"OpenDataBrowserContainer", ppcglue_OpenDataBrowserContainer},
     {"OpenDeskAcc", ppcglue_OpenDeskAcc},
     {"OpenDictionary", ppcglue_OpenDictionary},
     {"OpenEdition", ppctrap_OpenEdition},
@@ -41674,6 +43586,7 @@ const ppc_export ppc_exports[] = {
     {"RectMatrix", ppcglue_RectMatrix},
     {"RectRgn", ppcglue_RectRgn},
     {"RegisterAppearanceClient", ppcglue_RegisterAppearanceClient},
+    {"RegisterControlDefinition", ppcglue_RegisterControlDefinition},
     {"RegisterIconRefFromIconFamily", ppcglue_RegisterIconRefFromIconFamily},
     {"RegisterIconRefFromIconFile", ppcglue_RegisterIconRefFromIconFile},
     {"RegisterIconRefFromResource", ppcglue_RegisterIconRefFromResource},
@@ -41683,6 +43596,10 @@ const ppc_export ppc_exports[] = {
     {"ReleaseResource", ppcglue_ReleaseResource},
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
+    {"RemoveControlProperty", ppcglue_RemoveControlProperty},
+    {"RemoveDataBrowserItems", ppcglue_RemoveDataBrowserItems},
+    {"RemoveDataBrowserTableViewColumn", ppcglue_RemoveDataBrowserTableViewColumn},
+    {"RemoveDialogItems", ppcglue_RemoveDialogItems},
     {"RemoveExtensionNotificationProc", ppcglue_RemoveExtensionNotificationProc},
     {"RemoveExtensionTableHandlerProc", ppcglue_RemoveExtensionTableHandlerProc},
     {"RemoveFS", ppcglue_RemoveFS},
@@ -41721,6 +43638,7 @@ const ppc_export ppc_exports[] = {
     {"RestoreFore", ppcglue_RestoreFore},
     {"RestoreMixedModeState", ppctrap_RestoreMixedModeState},
     {"RetrievePictInfo", ppctrap_RetrievePictInfo},
+    {"RevealDataBrowserItem", ppcglue_RevealDataBrowserItem},
     {"ReverseKeyboardFocus", ppcglue_ReverseKeyboardFocus},
     {"RmvTime", ppcglue_RmvTime},
     {"RotateMatrix", ppcglue_RotateMatrix},
@@ -41824,6 +43742,7 @@ const ppc_export ppc_exports[] = {
     {"SetApplBase", ppcglue_SetApplBase},
     {"SetApplLimit", ppcglue_SetApplLimit},
     {"SetAutoTrackAlternatesEnabled", ppctrap_SetAutoTrackAlternatesEnabled},
+    {"SetAutomaticControlDragTrackingEnabledForWindow", ppcglue_SetAutomaticControlDragTrackingEnabledForWindow},
     {"SetBevelButtonContentInfo", ppcglue_SetBevelButtonContentInfo},
     {"SetBevelButtonGraphicAlignment", ppcglue_SetBevelButtonGraphicAlignment},
     {"SetBevelButtonMenuValue", ppcglue_SetBevelButtonMenuValue},
@@ -41849,14 +43768,24 @@ const ppc_export ppc_exports[] = {
     {"SetControl32BitMinimum", ppcglue_SetControl32BitMinimum},
     {"SetControl32BitValue", ppcglue_SetControl32BitValue},
     {"SetControlAction", ppcglue_SetControlAction},
+    {"SetControlBounds", ppcglue_SetControlBounds},
     {"SetControlColor", ppcglue_SetControlColor},
+    {"SetControlColorProc", ppcglue_SetControlColorProc},
+    {"SetControlCommandID", ppcglue_SetControlCommandID},
     {"SetControlData", ppcglue_SetControlData},
+    {"SetControlDataHandle", ppcglue_SetControlDataHandle},
+    {"SetControlDragTrackingEnabled", ppcglue_SetControlDragTrackingEnabled},
     {"SetControlFontStyle", ppcglue_SetControlFontStyle},
+    {"SetControlID", ppcglue_SetControlID},
     {"SetControlMaximum", ppcglue_SetControlMaximum},
     {"SetControlMinimum", ppcglue_SetControlMinimum},
+    {"SetControlPopupMenuHandle", ppcglue_SetControlPopupMenuHandle},
+    {"SetControlPopupMenuID", ppcglue_SetControlPopupMenuID},
+    {"SetControlProperty", ppcglue_SetControlProperty},
     {"SetControlReference", ppcglue_SetControlReference},
     {"SetControlSupervisor", ppcglue_SetControlSupervisor},
     {"SetControlTitle", ppcglue_SetControlTitle},
+    {"SetControlTitleWithCFString", ppcglue_SetControlTitleWithCFString},
     {"SetControlValue", ppcglue_SetControlValue},
     {"SetControlViewSize", ppcglue_SetControlViewSize},
     {"SetControlVisibility", ppcglue_SetControlVisibility},
@@ -41872,6 +43801,49 @@ const ppc_export ppc_exports[] = {
     {"SetDSequenceSrcRect", ppcglue_SetDSequenceSrcRect},
     {"SetDSequenceTimeCode", ppctrap_SetDSequenceTimeCode},
     {"SetDSequenceTransferMode", ppcglue_SetDSequenceTransferMode},
+    {"SetDataBrowserActiveItems", ppcglue_SetDataBrowserActiveItems},
+    {"SetDataBrowserCallbacks", ppcglue_SetDataBrowserCallbacks},
+    {"SetDataBrowserColumnViewDisplayType", ppcglue_SetDataBrowserColumnViewDisplayType},
+    {"SetDataBrowserColumnViewPath", ppcglue_SetDataBrowserColumnViewPath},
+    {"SetDataBrowserCustomCallbacks", ppcglue_SetDataBrowserCustomCallbacks},
+    {"SetDataBrowserEditItem", ppcglue_SetDataBrowserEditItem},
+    {"SetDataBrowserEditText", ppcglue_SetDataBrowserEditText},
+    {"SetDataBrowserHasScrollBars", ppcglue_SetDataBrowserHasScrollBars},
+    {"SetDataBrowserItemDataBooleanValue", ppcglue_SetDataBrowserItemDataBooleanValue},
+    {"SetDataBrowserItemDataButtonValue", ppcglue_SetDataBrowserItemDataButtonValue},
+    {"SetDataBrowserItemDataDateTime", ppcglue_SetDataBrowserItemDataDateTime},
+    {"SetDataBrowserItemDataDrawState", ppcglue_SetDataBrowserItemDataDrawState},
+    {"SetDataBrowserItemDataIcon", ppcglue_SetDataBrowserItemDataIcon},
+    {"SetDataBrowserItemDataIconTransform", ppcglue_SetDataBrowserItemDataIconTransform},
+    {"SetDataBrowserItemDataItemID", ppcglue_SetDataBrowserItemDataItemID},
+    {"SetDataBrowserItemDataLongDateTime", ppcglue_SetDataBrowserItemDataLongDateTime},
+    {"SetDataBrowserItemDataMaximum", ppcglue_SetDataBrowserItemDataMaximum},
+    {"SetDataBrowserItemDataMenuRef", ppcglue_SetDataBrowserItemDataMenuRef},
+    {"SetDataBrowserItemDataMinimum", ppcglue_SetDataBrowserItemDataMinimum},
+    {"SetDataBrowserItemDataRGBColor", ppcglue_SetDataBrowserItemDataRGBColor},
+    {"SetDataBrowserItemDataText", ppcglue_SetDataBrowserItemDataText},
+    {"SetDataBrowserItemDataValue", ppcglue_SetDataBrowserItemDataValue},
+    {"SetDataBrowserListViewDisclosureColumn", ppcglue_SetDataBrowserListViewDisclosureColumn},
+    {"SetDataBrowserListViewHeaderBtnHeight", ppcglue_SetDataBrowserListViewHeaderBtnHeight},
+    {"SetDataBrowserListViewUsePlainBackground", ppcglue_SetDataBrowserListViewUsePlainBackground},
+    {"SetDataBrowserPropertyFlags", ppcglue_SetDataBrowserPropertyFlags},
+    {"SetDataBrowserScrollBarInset", ppcglue_SetDataBrowserScrollBarInset},
+    {"SetDataBrowserScrollPosition", ppcglue_SetDataBrowserScrollPosition},
+    {"SetDataBrowserSelectedItems", ppcglue_SetDataBrowserSelectedItems},
+    {"SetDataBrowserSelectionFlags", ppcglue_SetDataBrowserSelectionFlags},
+    {"SetDataBrowserSortOrder", ppcglue_SetDataBrowserSortOrder},
+    {"SetDataBrowserSortProperty", ppcglue_SetDataBrowserSortProperty},
+    {"SetDataBrowserTableViewColumnPosition", ppcglue_SetDataBrowserTableViewColumnPosition},
+    {"SetDataBrowserTableViewColumnWidth", ppcglue_SetDataBrowserTableViewColumnWidth},
+    {"SetDataBrowserTableViewGeometry", ppcglue_SetDataBrowserTableViewGeometry},
+    {"SetDataBrowserTableViewHiliteStyle", ppcglue_SetDataBrowserTableViewHiliteStyle},
+    {"SetDataBrowserTableViewItemRow", ppcglue_SetDataBrowserTableViewItemRow},
+    {"SetDataBrowserTableViewItemRowHeight", ppcglue_SetDataBrowserTableViewItemRowHeight},
+    {"SetDataBrowserTableViewNamedColumnWidth", ppcglue_SetDataBrowserTableViewNamedColumnWidth},
+    {"SetDataBrowserTableViewRowHeight", ppcglue_SetDataBrowserTableViewRowHeight},
+    {"SetDataBrowserTarget", ppcglue_SetDataBrowserTarget},
+    {"SetDataBrowserUserState", ppcglue_SetDataBrowserUserState},
+    {"SetDataBrowserViewStyle", ppcglue_SetDataBrowserViewStyle},
     {"SetDateTime", ppcglue_SetDateTime},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
     {"SetDefaultInputMethod", ppcglue_SetDefaultInputMethod},
@@ -41885,6 +43857,7 @@ const ppc_export ppc_exports[] = {
     {"SetDialogFont", ppcglue_SetDialogFont},
     {"SetDialogItem", ppcglue_SetDialogItem},
     {"SetDialogItemText", ppcglue_SetDialogItemText},
+    {"SetDialogTimeout", ppcglue_SetDialogTimeout},
     {"SetDialogTracksCursor", ppcglue_SetDialogTracksCursor},
     {"SetDisclosureTriangleLastValue", ppcglue_SetDisclosureTriangleLastValue},
     {"SetDragDrawingProc", ppcglue_SetDragDrawingProc},
@@ -41960,6 +43933,7 @@ const ppc_export ppc_exports[] = {
     {"SetMenuItemRefCon2", ppcglue_SetMenuItemRefCon2},
     {"SetMenuItemText", ppcglue_SetMenuItemText},
     {"SetMenuItemTextEncoding", ppcglue_SetMenuItemTextEncoding},
+    {"SetModalDialogEventMask", ppcglue_SetModalDialogEventMask},
     {"SetMovieActive", ppcglue_SetMovieActive},
     {"SetMovieActiveSegment", ppctrap_SetMovieActiveSegment},
     {"SetMovieAnchorDataRef", ppctrap_SetMovieAnchorDataRef},
@@ -42002,6 +43976,7 @@ const ppc_export ppc_exports[] = {
     {"SetPort", ppcglue_SetPort},
     {"SetPortBits", ppcglue_SetPortBits},
     {"SetPortCustomXFerProc", ppcglue_SetPortCustomXFerProc},
+    {"SetPortDialogPort", ppcglue_SetPortDialogPort},
     {"SetPortPix", ppcglue_SetPortPix},
     {"SetPosterBox", ppctrap_SetPosterBox},
     {"SetPreserveGlyph", ppcglue_SetPreserveGlyph},
@@ -42084,6 +44059,7 @@ const ppc_export ppc_exports[] = {
     {"SetTrackVolume", ppctrap_SetTrackVolume},
     {"SetTrapAddress", ppcglue_SetTrapAddress},
     {"SetUpControlBackground", ppcglue_SetUpControlBackground},
+    {"SetUpControlTextColor", ppcglue_SetUpControlTextColor},
     {"SetUserDataItem", ppctrap_SetUserDataItem},
     {"SetVideoDefault", ppcglue_SetVideoDefault},
     {"SetWRefCon", ppcglue_SetWRefCon},
@@ -42145,6 +44121,7 @@ const ppc_export ppc_exports[] = {
     {"SndSoundManagerVersion", ppcglue_SndSoundManagerVersion},
     {"SndStartFilePlay", ppcglue_SndStartFilePlay},
     {"SndStopFilePlay", ppcglue_SndStopFilePlay},
+    {"SortDataBrowserContainer", ppcglue_SortDataBrowserContainer},
     {"SpaceExtra", ppcglue_SpaceExtra},
     {"SpeakBuffer", ppcglue_SpeakBuffer},
     {"SpeakString", ppcglue_SpeakString},
@@ -42308,6 +44285,7 @@ const ppc_export ppc_exports[] = {
     {"UnsignedFixedMulDiv", ppctrap_UnsignedFixedMulDiv},
     {"UpdateAlias", ppcglue_UpdateAlias},
     {"UpdateControls", ppcglue_UpdateControls},
+    {"UpdateDataBrowserItems", ppcglue_UpdateDataBrowserItems},
     {"UpdateDialog", ppcglue_UpdateDialog},
     {"UpdateDragHilite", ppcglue_UpdateDragHilite},
     {"UpdateGWorld", ppcglue_UpdateGWorld},

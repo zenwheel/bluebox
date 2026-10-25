@@ -60,6 +60,9 @@ extern const ppc_export ce_exports[];
 extern const unsigned ce_export_count;
 extern const ppc_export mp_exports[];
 extern const unsigned mp_export_count;
+/* CarbonLib's controls and dialogs (carbon_controls.c). */
+extern const ppc_export carbon_ctl_exports[];
+extern const unsigned carbon_ctl_export_count;
 /* DrawSprocket (drawsprocket.c). */
 extern const ppc_export dsp_exports[];
 extern const unsigned dsp_export_count;

@@ -1645,6 +1645,32 @@ static void glue_AddComp(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddDataBrowserItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_preSortProperty = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_numItems = (uint32_t)cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_AddDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AddDataBrowserListViewColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_position = (uint32_t)cpu_pop32(c);
+    gaddr a_columnDesc = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_AddDataBrowserListViewColumn(a_browser, a_columnDesc, a_position);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AddDragItemFlavor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -1905,6 +1931,16 @@ static void glue_AutoEmbedControl(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_AutoEmbedControl(a_control, a_window);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AutoSizeDataBrowserListViewColumns(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_AutoSizeDataBrowserListViewColumns(a_browser);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2258,6 +2294,20 @@ static void glue_CautionAlert(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ChangeControlPropertyAttributes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_attributesToClear = (uint32_t)cpu_pop32(c);
+    uint32_t a_attributesToSet = (uint32_t)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_ChangeControlPropertyAttributes(a_control, a_propertyCreator, a_propertyTag, a_attributesToSet, a_attributesToClear);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ChangeDragBehaviors(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2482,6 +2532,17 @@ static void glue_CloseCursorComponent(cpu68k *c, uint16_t trapword)
     uint32_t a_ci = (uint32_t)cpu_pop32(c);
     int16_t r = tb_CloseCursorComponent(a_ci);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseDataBrowserContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CloseDataBrowserContainer(a_browser, a_container);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -2941,6 +3002,17 @@ static void glue_CopyBits(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CopyControlTitleAsCFString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outString = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CopyControlTitleAsCFString(a_inControl, a_outString);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CopyDeepMask(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3171,6 +3243,368 @@ static void glue_CountVoices(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CreateBevelButtonControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint16_t a_menuPlacement = (uint16_t)cpu_pop16(c);
+    uint16_t a_menuBehavior = (uint16_t)cpu_pop16(c);
+    int16_t a_menuID = (int16_t)cpu_pop16(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    uint16_t a_behavior = (uint16_t)cpu_pop16(c);
+    uint16_t a_thickness = (uint16_t)cpu_pop16(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateBevelButtonControl(a_window, a_boundsRect, a_title, a_thickness, a_behavior, a_info, a_menuID, a_menuBehavior, a_menuPlacement, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateChasingArrowsControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateChasingArrowsControl(a_window, a_boundsRect, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateCheckBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_autoToggle = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_initialValue = (int32_t)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateCheckBoxControl(a_window, a_boundsRect, a_title, a_initialValue, a_autoToggle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateCheckGroupBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_autoToggle = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_primary = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_initialValue = (int32_t)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateCheckGroupBoxControl(a_window, a_boundsRect, a_title, a_initialValue, a_primary, a_autoToggle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateClockControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint32_t a_clockFlags = (uint32_t)cpu_pop32(c);
+    uint16_t a_clockType = (uint16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateClockControl(a_window, a_boundsRect, a_clockType, a_clockFlags, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateCustomControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_initData = (gaddr)cpu_pop32(c);
+    gaddr a_def = (gaddr)cpu_pop32(c);
+    gaddr a_contBounds = (gaddr)cpu_pop32(c);
+    gaddr a_owningWindow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateCustomControl(a_owningWindow, a_contBounds, a_def, a_initData, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateDataBrowserControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int32_t a_style = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateDataBrowserControl(a_window, a_boundsRect, a_style, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateDisclosureTriangleControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_autoToggles = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_drawTitle = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_initialValue = (int32_t)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    uint16_t a_orientation = (uint16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateDisclosureTriangleControl(a_window, a_boundsRect, a_orientation, a_title, a_initialValue, a_drawTitle, a_autoToggles, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateEditTextControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    int8_t a_useInlineInput = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_isPassword = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateEditTextControl(a_window, a_boundsRect, a_text, a_isPassword, a_useInlineInput, a_style, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateGroupBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_primary = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateGroupBoxControl(a_window, a_boundsRect, a_title, a_primary, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateIconControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_dontTrack = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_icon = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateIconControl(a_window, a_boundsRect, a_icon, a_dontTrack, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateImageWellControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_info = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateImageWellControl(a_window, a_boundsRect, a_info, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateListBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_listDef = (gaddr)cpu_pop32(c);
+    int8_t a_hasGrowSpace = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_cellWidth = (int16_t)cpu_pop16(c);
+    int16_t a_cellHeight = (int16_t)cpu_pop16(c);
+    int8_t a_vertScroll = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_horizScroll = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_numColumns = (int16_t)cpu_pop16(c);
+    int16_t a_numRows = (int16_t)cpu_pop16(c);
+    int8_t a_autoSize = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateListBoxControl(a_window, a_boundsRect, a_autoSize, a_numRows, a_numColumns, a_horizScroll, a_vertScroll, a_cellHeight, a_cellWidth, a_hasGrowSpace, a_listDef, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateLittleArrowsControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int32_t a_increment = (int32_t)cpu_pop32(c);
+    int32_t a_maximum = (int32_t)cpu_pop32(c);
+    int32_t a_minimum = (int32_t)cpu_pop32(c);
+    int32_t a_value = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateLittleArrowsControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_increment, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePictureControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_dontTrack = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_content = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePictureControl(a_window, a_boundsRect, a_content, a_dontTrack, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePlacardControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePlacardControl(a_window, a_boundsRect, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePopupArrowControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint16_t a_size = (uint16_t)cpu_pop16(c);
+    uint16_t a_orientation = (uint16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePopupArrowControl(a_window, a_boundsRect, a_orientation, a_size, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePopupButtonControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint8_t a_titleStyle = (uint8_t)(cpu_pop16(c) >> 8);
+    int16_t a_titleJustification = (int16_t)cpu_pop16(c);
+    int16_t a_titleWidth = (int16_t)cpu_pop16(c);
+    int8_t a_variableWidth = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_menuID = (int16_t)cpu_pop16(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePopupButtonControl(a_window, a_boundsRect, a_title, a_menuID, a_variableWidth, a_titleWidth, a_titleJustification, a_titleStyle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePopupGroupBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint8_t a_titleStyle = (uint8_t)(cpu_pop16(c) >> 8);
+    int16_t a_titleJustification = (int16_t)cpu_pop16(c);
+    int16_t a_titleWidth = (int16_t)cpu_pop16(c);
+    int8_t a_variableWidth = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_menuID = (int16_t)cpu_pop16(c);
+    int8_t a_primary = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePopupGroupBoxControl(a_window, a_boundsRect, a_title, a_primary, a_menuID, a_variableWidth, a_titleWidth, a_titleJustification, a_titleStyle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateProgressBarControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_indeterminate = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_maximum = (int32_t)cpu_pop32(c);
+    int32_t a_minimum = (int32_t)cpu_pop32(c);
+    int32_t a_value = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateProgressBarControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_indeterminate, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePushButtonControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePushButtonControl(a_window, a_boundsRect, a_title, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreatePushButtonWithIconControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint16_t a_iconAlignment = (uint16_t)cpu_pop16(c);
+    gaddr a_icon = (gaddr)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreatePushButtonWithIconControl(a_window, a_boundsRect, a_title, a_icon, a_iconAlignment, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateRadioButtonControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_autoToggle = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_initialValue = (int32_t)cpu_pop32(c);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateRadioButtonControl(a_window, a_boundsRect, a_title, a_initialValue, a_autoToggle, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateRadioGroupControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateRadioGroupControl(a_window, a_boundsRect, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CreateResFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3191,6 +3625,102 @@ static void glue_CreateRootControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CreateScrollBarControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_liveTrackingProc = (gaddr)cpu_pop32(c);
+    int8_t a_liveTracking = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_viewSize = (int32_t)cpu_pop32(c);
+    int32_t a_maximum = (int32_t)cpu_pop32(c);
+    int32_t a_minimum = (int32_t)cpu_pop32(c);
+    int32_t a_value = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateScrollBarControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_viewSize, a_liveTracking, a_liveTrackingProc, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateScrollingTextBoxControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint16_t a_autoScrollAmount = (uint16_t)cpu_pop16(c);
+    uint32_t a_delayBetweenAutoScroll = (uint32_t)cpu_pop32(c);
+    uint32_t a_delayBeforeAutoScroll = (uint32_t)cpu_pop32(c);
+    int8_t a_autoScroll = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_contentResID = (int16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateScrollingTextBoxControl(a_window, a_boundsRect, a_contentResID, a_autoScroll, a_delayBeforeAutoScroll, a_delayBetweenAutoScroll, a_autoScrollAmount, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateSeparatorControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateSeparatorControl(a_window, a_boundsRect, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateSliderControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_liveTrackingProc = (gaddr)cpu_pop32(c);
+    int8_t a_liveTracking = (int8_t)(cpu_pop16(c) >> 8);
+    uint16_t a_numTickMarks = (uint16_t)cpu_pop16(c);
+    uint16_t a_orientation = (uint16_t)cpu_pop16(c);
+    int32_t a_maximum = (int32_t)cpu_pop32(c);
+    int32_t a_minimum = (int32_t)cpu_pop32(c);
+    int32_t a_value = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateSliderControl(a_window, a_boundsRect, a_value, a_minimum, a_maximum, a_orientation, a_numTickMarks, a_liveTracking, a_liveTrackingProc, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateStaticTextControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateStaticTextControl(a_window, a_boundsRect, a_text, a_style, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateTabsControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_tabArray = (gaddr)cpu_pop32(c);
+    uint16_t a_numTabs = (uint16_t)cpu_pop16(c);
+    uint16_t a_direction = (uint16_t)cpu_pop16(c);
+    uint16_t a_size = (uint16_t)cpu_pop16(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateTabsControl(a_window, a_boundsRect, a_size, a_direction, a_numTabs, a_tabArray, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CreateThreadPool(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3200,6 +3730,32 @@ static void glue_CreateThreadPool(cpu68k *c, uint16_t trapword)
     int32_t a_threadStyle = (int32_t)cpu_pop32(c);
     int16_t r = tb_CreateThreadPool(a_threadStyle, a_numToCreate, a_stackSize);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateUserPaneControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    uint32_t a_features = (uint32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateUserPaneControl(a_window, a_boundsRect, a_features, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateWindowHeaderControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    int8_t a_isListHeader = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CreateWindowHeaderControl(a_window, a_boundsRect, a_isListHeader, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -5856,6 +6412,17 @@ static void glue_EmptyRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_EnableDataBrowserEditCommand(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_command = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int8_t r = tb_EnableDataBrowserEditCommand(a_browser, a_command);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_EnableItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6067,6 +6634,17 @@ static void glue_EventAvail(cpu68k *c, uint16_t trapword)
     int16_t a_em = (int16_t)cpu_pop16(c);
     int8_t r = tb_EventAvail(a_em, a_evt);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_ExecuteDataBrowserEditCommand(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_command = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_ExecuteDataBrowserEditCommand(a_browser, a_command);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -7525,6 +8103,21 @@ static void glue_FontToScript(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ForEachDataBrowserItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_clientData = (gaddr)cpu_pop32(c);
+    gaddr a_callback = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    int8_t a_recurse = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_ForEachDataBrowserItem(a_browser, a_container, a_recurse, a_state, a_callback, a_clientData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ForEachIconDo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8739,6 +9332,53 @@ static void glue_GetControlAction(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetControlBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetControlBounds(a_control, a_bounds);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlByID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outControl = (gaddr)cpu_pop32(c);
+    gaddr a_inID = (gaddr)cpu_pop32(c);
+    gaddr a_inWindow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlByID(a_inWindow, a_inID, a_outControl);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlClickActivation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outResult = (gaddr)cpu_pop32(c);
+    uint16_t a_inModifiers = (uint16_t)cpu_pop16(c);
+    uint32_t a_inWhere = (uint32_t)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlClickActivation(a_inControl, a_inWhere, a_inModifiers, a_outResult);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlCommandID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outCommandID = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlCommandID(a_inControl, a_outCommandID);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetControlData(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8751,6 +9391,16 @@ static void glue_GetControlData(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetControlData(a_control, a_part, a_tag, a_bufferSize, a_buffer, a_actualSize);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlDataHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetControlDataHandle(a_control);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8778,6 +9428,27 @@ static void glue_GetControlFeatures(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetControlHilite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    uint16_t r = tb_GetControlHilite(a_control);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outID = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlID(a_inControl, a_outID);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetControlMaximum(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8795,6 +9466,77 @@ static void glue_GetControlMinimum(cpu68k *c, uint16_t trapword)
     gaddr a_c = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetControlMinimum(a_c);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlOwner(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetControlOwner(a_control);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlPopupMenuHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetControlPopupMenuHandle(a_control);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlPopupMenuID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetControlPopupMenuID(a_control);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyBuffer = (gaddr)cpu_pop32(c);
+    gaddr a_actualSize = (gaddr)cpu_pop32(c);
+    uint32_t a_bufferSize = (uint32_t)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlProperty(a_control, a_propertyCreator, a_propertyTag, a_bufferSize, a_actualSize, a_propertyBuffer);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlPropertyAttributes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_attributes = (gaddr)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlPropertyAttributes(a_control, a_propertyCreator, a_propertyTag, a_attributes);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetControlPropertySize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_size = (gaddr)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetControlPropertySize(a_control, a_propertyCreator, a_propertyTag, a_size);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -8879,6 +9621,601 @@ static void glue_GetDSequenceMatrix(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDataBrowserActiveItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_active = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserActiveItems(a_browser, a_active);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserCallbacks(a_browser, a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserColumnViewDisplayType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyType = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserColumnViewDisplayType(a_browser, a_propertyType);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserColumnViewPath(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_path = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserColumnViewPath(a_browser, a_path);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserColumnViewPathLength(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_pathLength = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserColumnViewPathLength(a_browser, a_pathLength);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserCustomCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserCustomCallbacks(a_browser, a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserEditItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserEditItem(a_browser, a_item, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserEditText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserEditText(a_browser, a_text);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserHasScrollBars(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_vert = (gaddr)cpu_pop32(c);
+    gaddr a_horiz = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserHasScrollBars(a_browser, a_horiz, a_vert);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numItems = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    int8_t a_recurse = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemCount(a_browser, a_container, a_recurse, a_state, a_numItems);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataBooleanValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataBooleanValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataButtonValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataButtonValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataDateTime(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataDrawState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataDrawState(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataIcon(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataIconTransform(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataIconTransform(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataItemID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataItemID(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataLongDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataLongDateTime(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataMaximum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataMaximum(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataMenuRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataMenuRef(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataMinimum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataMinimum(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataProperty(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataRGBColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataRGBColor(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataText(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemDataValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemDataValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemPartBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    int32_t a_part = (int32_t)cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemPartBounds(a_browser, a_item, a_property, a_part, a_bounds);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItemState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_state = (gaddr)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItemState(a_browser, a_item, a_state);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_state = (uint32_t)cpu_pop32(c);
+    int8_t a_recurse = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserItems(a_browser, a_container, a_recurse, a_state, a_items);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserListViewDisclosureColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_expandableRows = (gaddr)cpu_pop32(c);
+    gaddr a_column = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserListViewDisclosureColumn(a_browser, a_column, a_expandableRows);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserListViewHeaderBtnHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserListViewHeaderBtnHeight(a_browser, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserListViewUsePlainBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_usePlainBackground = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserListViewUsePlainBackground(a_browser, a_usePlainBackground);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserPropertyFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_flags = (gaddr)cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserPropertyFlags(a_browser, a_property, a_flags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserScrollBarInset(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_insetRect = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserScrollBarInset(a_browser, a_insetRect);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserScrollPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_left = (gaddr)cpu_pop32(c);
+    gaddr a_top = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserScrollPosition(a_browser, a_top, a_left);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserSelectionAnchor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_last = (gaddr)cpu_pop32(c);
+    gaddr a_first = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserSelectionAnchor(a_browser, a_first, a_last);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserSelectionFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_selectionFlags = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserSelectionFlags(a_browser, a_selectionFlags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserSortOrder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_order = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserSortOrder(a_browser, a_order);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserSortProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserSortProperty(a_browser, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewColumnCount(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numColumns = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewColumnCount(a_browser, a_numColumns);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewColumnPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_position = (gaddr)cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewColumnPosition(a_browser, a_column, a_position);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewColumnProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewColumnProperty(a_browser, a_column, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewColumnWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_width = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewColumnWidth(a_browser, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewGeometry(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_variableHeightRows = (gaddr)cpu_pop32(c);
+    gaddr a_variableWidthColumns = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewGeometry(a_browser, a_variableWidthColumns, a_variableHeightRows);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewHiliteStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_hiliteStyle = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewHiliteStyle(a_browser, a_hiliteStyle);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewItemID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    uint32_t a_row = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewItemID(a_browser, a_row, a_item);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewItemRow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_row = (gaddr)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewItemRow(a_browser, a_item, a_row);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewItemRowHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewItemRowHeight(a_browser, a_item, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewNamedColumnWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_width = (gaddr)cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewNamedColumnWidth(a_browser, a_column, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTableViewRowHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_height = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTableViewRowHeight(a_browser, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserTarget(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserTarget(a_browser, a_target);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserUserState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_stateInfo = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserUserState(a_browser, a_stateInfo);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDataBrowserViewStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_style = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDataBrowserViewStyle(a_browser, a_style);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDblTime(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8936,6 +10273,36 @@ static void glue_GetDeviceList(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDialogCancelItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDialogCancelItem(a_dialog);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogDefaultItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDialogDefaultItem(a_dialog);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogFromWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetDialogFromWindow(a_window);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDialogItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8968,6 +10335,59 @@ static void glue_GetDialogItemText(cpu68k *c, uint16_t trapword)
     gaddr a_text = (gaddr)cpu_pop32(c);
     gaddr a_item = (gaddr)cpu_pop32(c);
     tb_GetDialogItemText(a_item, a_text);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogKeyboardFocusItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDialogKeyboardFocusItem(a_dialog);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogPort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetDialogPort(a_dialog);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogTextEditHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetDialogTextEditHandle(a_dialog);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outSecondsRemaining = (gaddr)cpu_pop32(c);
+    gaddr a_outSecondsToWait = (gaddr)cpu_pop32(c);
+    gaddr a_outButtonToPress = (gaddr)cpu_pop32(c);
+    gaddr a_inDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDialogTimeout(a_inDialog, a_outButtonToPress, a_outSecondsToWait, a_outSecondsRemaining);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetDialogWindow(a_dialog);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -9363,6 +10783,17 @@ static void glue_GetImageDescriptionCTable(cpu68k *c, uint16_t trapword)
     gaddr a_ctable = (gaddr)cpu_pop32(c);
     int32_t a_desc = (int32_t)cpu_pop32(c);
     int16_t r = tb_GetImageDescriptionCTable(a_desc, a_ctable);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetImageWellContentInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outContent = (gaddr)cpu_pop32(c);
+    gaddr a_inButton = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetImageWellContentInfo(a_inButton, a_outContent);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -9835,6 +11266,17 @@ static void glue_GetMenuItemTextEncoding(cpu68k *c, uint16_t trapword)
     gaddr a_menu = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetMenuItemTextEncoding(a_menu, a_item, a_encoding);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetModalDialogEventMask(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outMask = (gaddr)cpu_pop32(c);
+    gaddr a_inDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetModalDialogEventMask(a_inDialog, a_outMask);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -10311,6 +11753,18 @@ static void glue_GetPaletteUpdates(cpu68k *c, uint16_t trapword)
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetPaletteUpdates(a_arg0);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetParamText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_param3 = (gaddr)cpu_pop32(c);
+    gaddr a_param2 = (gaddr)cpu_pop32(c);
+    gaddr a_param1 = (gaddr)cpu_pop32(c);
+    gaddr a_param0 = (gaddr)cpu_pop32(c);
+    tb_GetParamText(a_param0, a_param1, a_param2, a_param3);
     cpu_push32(c, ret);
 }
 
@@ -10823,6 +12277,17 @@ static void glue_GetSysPPtr(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_GetSysPPtr();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTabContentRect(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outContentRect = (gaddr)cpu_pop32(c);
+    gaddr a_inTabControl = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetTabContentRect(a_inTabControl, a_outContentRect);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -11874,6 +13339,42 @@ static void glue_HandleControlClick(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_HandleControlContextualMenuClick(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_menuDisplayed = (gaddr)cpu_pop32(c);
+    uint32_t a_inWhere = (uint32_t)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HandleControlContextualMenuClick(a_inControl, a_inWhere, a_menuDisplayed);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HandleControlDragReceive(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inDrag = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HandleControlDragReceive(a_inControl, a_inDrag);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HandleControlDragTracking(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outLikesDrag = (gaddr)cpu_pop32(c);
+    gaddr a_inDrag = (gaddr)cpu_pop32(c);
+    int16_t a_inMessage = (int16_t)cpu_pop16(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HandleControlDragTracking(a_inControl, a_inMessage, a_inDrag, a_outLikesDrag);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_HandleControlKey(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11884,6 +13385,19 @@ static void glue_HandleControlKey(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_HandleControlKey(a_control, a_keyCode, a_charCode, a_modifiers);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_HandleControlSetCursor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_cursorWasSet = (gaddr)cpu_pop32(c);
+    uint16_t a_modifiers = (uint16_t)cpu_pop16(c);
+    uint32_t a_localPoint = (uint32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HandleControlSetCursor(a_control, a_localPoint, a_modifiers, a_cursorWasSet);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -12343,6 +13857,26 @@ static void glue_InitDBPack(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InitDataBrowserCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    int32_t r = tb_InitDataBrowserCallbacks(a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InitDataBrowserCustomCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    int32_t r = tb_InitDataBrowserCustomCallbacks(a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InitDateCache(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12501,6 +14035,20 @@ static void glue_InsXTime(cpu68k *c, uint16_t trapword)
     (void)trapword;
     gaddr a_taskp = (gaddr)c->a[0];
     tb_InsXTime(a_taskp);
+}
+
+static void glue_InsertDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_box = (gaddr)cpu_pop32(c);
+    gaddr a_itemHandle = (gaddr)cpu_pop32(c);
+    int16_t a_itemType = (int16_t)cpu_pop16(c);
+    int16_t a_afterItem = (int16_t)cpu_pop16(c);
+    gaddr a_theDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_InsertDialogItem(a_theDialog, a_afterItem, a_itemType, a_itemHandle, a_box);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_InsertEmptyMovieSegment(cpu68k *c, uint16_t trapword)
@@ -12817,6 +14365,17 @@ static void glue_IsAppearanceClient(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsAutomaticControlDragTrackingEnabledForWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tracks = (gaddr)cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_IsAutomaticControlDragTrackingEnabledForWindow(a_theWindow, a_tracks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_IsControlActive(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12827,12 +14386,44 @@ static void glue_IsControlActive(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsControlDragTrackingEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tracks = (gaddr)cpu_pop32(c);
+    gaddr a_theControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_IsControlDragTrackingEnabled(a_theControl, a_tracks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IsControlHilited(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsControlHilited(a_control);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_IsControlVisible(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     gaddr a_control = (gaddr)cpu_pop32(c);
     int8_t r = tb_IsControlVisible(a_control);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsDataBrowserItemSelected(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsDataBrowserItemSelected(a_browser, a_item);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -14110,6 +15701,18 @@ static void glue_MoveControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MoveDataBrowserSelectionAnchor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_extendSelection = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_direction = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_MoveDataBrowserSelectionAnchor(a_browser, a_direction, a_extendSelection);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MoveDialogItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14887,6 +16490,17 @@ static void glue_OpenCursorComponent(cpu68k *c, uint16_t trapword)
     uint32_t a_c = (uint32_t)cpu_pop32(c);
     int16_t r = tb_OpenCursorComponent(a_c, a_ci);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenDataBrowserContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_OpenDataBrowserContainer(a_browser, a_container);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -17282,6 +18896,18 @@ static void glue_RegisterAppearanceClient(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RegisterControlDefinition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inConversionProc = (gaddr)cpu_pop32(c);
+    gaddr a_inControlDef = (gaddr)cpu_pop32(c);
+    int16_t a_inCDEFResID = (int16_t)cpu_pop16(c);
+    int32_t r = tb_RegisterControlDefinition(a_inCDEFResID, a_inControlDef, a_inConversionProc);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RegisterSection(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17323,6 +18949,56 @@ static void glue_RemoveCollectionItem(cpu68k *c, uint16_t trapword)
     gaddr a_c = (gaddr)cpu_pop32(c);
     int16_t r = tb_RemoveCollectionItem(a_c, a_tag, a_id);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveControlProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RemoveControlProperty(a_control, a_propertyCreator, a_propertyTag);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveDataBrowserItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_preSortProperty = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_numItems = (uint32_t)cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RemoveDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveDataBrowserTableViewColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RemoveDataBrowserTableViewColumn(a_browser, a_column);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveDialogItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_disposeItemData = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_amountToRemove = (int16_t)cpu_pop16(c);
+    int16_t a_itemNo = (int16_t)cpu_pop16(c);
+    gaddr a_theDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RemoveDialogItems(a_theDialog, a_itemNo, a_amountToRemove, a_disposeItemData);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -17567,6 +19243,19 @@ static void glue_RestoreFore(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_RestoreFore(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_RevealDataBrowserItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint8_t a_options = (uint8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_propertyID = (uint32_t)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RevealDataBrowserItem(a_browser, a_item, a_propertyID, a_options);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18341,6 +20030,17 @@ static void glue_SetApplLimit(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_SetAutomaticControlDragTrackingEnabledForWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_tracks = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetAutomaticControlDragTrackingEnabledForWindow(a_theWindow, a_tracks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetBevelButtonContentInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18538,6 +20238,16 @@ static void glue_SetControlAction(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetControlBounds(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_SetControlBounds(a_control, a_bounds);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetControlColor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18545,6 +20255,28 @@ static void glue_SetControlColor(cpu68k *c, uint16_t trapword)
     gaddr a_ctab = (gaddr)cpu_pop32(c);
     gaddr a_ctl = (gaddr)cpu_pop32(c);
     tb_SetControlColor(a_ctl, a_ctab);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlColorProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inProc = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlColorProc(a_inControl, a_inProc);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlCommandID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_inCommandID = (uint32_t)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlCommandID(a_inControl, a_inCommandID);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18562,6 +20294,27 @@ static void glue_SetControlData(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetControlDataHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dataHandle = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_SetControlDataHandle(a_control, a_dataHandle);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlDragTrackingEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_tracks = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_theControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlDragTrackingEnabled(a_theControl, a_tracks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetControlFontStyle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18570,6 +20323,17 @@ static void glue_SetControlFontStyle(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetControlFontStyle(a_control, a_style);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inID = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlID(a_inControl, a_inID);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18590,6 +20354,40 @@ static void glue_SetControlMinimum(cpu68k *c, uint16_t trapword)
     int16_t a_v = (int16_t)cpu_pop16(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     tb_SetControlMinimum(a_c, a_v);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlPopupMenuHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_popupMenu = (gaddr)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_SetControlPopupMenuHandle(a_control, a_popupMenu);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlPopupMenuID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_menuID = (int16_t)cpu_pop16(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    tb_SetControlPopupMenuID(a_control, a_menuID);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyData = (gaddr)cpu_pop32(c);
+    uint32_t a_propertySize = (uint32_t)cpu_pop32(c);
+    int32_t a_propertyTag = (int32_t)cpu_pop32(c);
+    int32_t a_propertyCreator = (int32_t)cpu_pop32(c);
+    gaddr a_control = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlProperty(a_control, a_propertyCreator, a_propertyTag, a_propertySize, a_propertyData);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18621,6 +20419,17 @@ static void glue_SetControlTitle(cpu68k *c, uint16_t trapword)
     gaddr a_t = (gaddr)cpu_pop32(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     tb_SetControlTitle(a_c, a_t);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetControlTitleWithCFString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_inString = (gaddr)cpu_pop32(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetControlTitleWithCFString(a_inControl, a_inString);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -18757,6 +20566,492 @@ static void glue_SetDSequenceTransferMode(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDataBrowserActiveItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_active = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserActiveItems(a_browser, a_active);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserCallbacks(a_browser, a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserColumnViewDisplayType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_propertyType = (int32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserColumnViewDisplayType(a_browser, a_propertyType);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserColumnViewPath(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_path = (gaddr)cpu_pop32(c);
+    uint32_t a_length = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserColumnViewPath(a_browser, a_length, a_path);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserCustomCallbacks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_callbacks = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserCustomCallbacks(a_browser, a_callbacks);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserEditItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserEditItem(a_browser, a_item, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserEditText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserEditText(a_browser, a_text);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserHasScrollBars(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_vert = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_horiz = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserHasScrollBars(a_browser, a_horiz, a_vert);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataBooleanValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_theData = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataBooleanValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataButtonValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_theData = (uint16_t)cpu_pop16(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataButtonValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theData = (int32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataDateTime(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataDrawState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theData = (uint32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataDrawState(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataIcon(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataIcon(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataIconTransform(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_theData = (int16_t)cpu_pop16(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataIconTransform(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataItemID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_theData = (uint32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataItemID(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataLongDateTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataLongDateTime(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataMaximum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theData = (int32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataMaximum(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataMenuRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataMenuRef(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataMinimum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theData = (int32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataMinimum(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataRGBColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataRGBColor(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theData = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataText(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserItemDataValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theData = (int32_t)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserItemDataValue(a_itemData, a_theData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserListViewDisclosureColumn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_expandableRows = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserListViewDisclosureColumn(a_browser, a_column, a_expandableRows);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserListViewHeaderBtnHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_height = (uint16_t)cpu_pop16(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserListViewHeaderBtnHeight(a_browser, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserListViewUsePlainBackground(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_usePlainBackground = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserListViewUsePlainBackground(a_browser, a_usePlainBackground);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserPropertyFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserPropertyFlags(a_browser, a_property, a_flags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserScrollBarInset(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_insetRect = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserScrollBarInset(a_browser, a_insetRect);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserScrollPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_left = (uint32_t)cpu_pop32(c);
+    uint32_t a_top = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserScrollPosition(a_browser, a_top, a_left);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserSelectedItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_operation = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_numItems = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserSelectedItems(a_browser, a_numItems, a_items, a_operation);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserSelectionFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_selectionFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserSelectionFlags(a_browser, a_selectionFlags);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserSortOrder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_order = (uint16_t)cpu_pop16(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserSortOrder(a_browser, a_order);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserSortProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_property = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserSortProperty(a_browser, a_property);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewColumnPosition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_position = (uint32_t)cpu_pop32(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewColumnPosition(a_browser, a_column, a_position);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewColumnWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_width = (uint16_t)cpu_pop16(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewColumnWidth(a_browser, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewGeometry(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_variableHeightRows = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_variableWidthColumns = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewGeometry(a_browser, a_variableWidthColumns, a_variableHeightRows);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewHiliteStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_hiliteStyle = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewHiliteStyle(a_browser, a_hiliteStyle);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewItemRow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_row = (uint32_t)cpu_pop32(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewItemRow(a_browser, a_item, a_row);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewItemRowHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_height = (uint16_t)cpu_pop16(c);
+    uint32_t a_item = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewItemRowHeight(a_browser, a_item, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewNamedColumnWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_width = (uint16_t)cpu_pop16(c);
+    uint32_t a_column = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewNamedColumnWidth(a_browser, a_column, a_width);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTableViewRowHeight(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_height = (uint16_t)cpu_pop16(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTableViewRowHeight(a_browser, a_height);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserTarget(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_target = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserTarget(a_browser, a_target);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserUserState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_stateInfo = (gaddr)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserUserState(a_browser, a_stateInfo);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDataBrowserViewStyle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_style = (int32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDataBrowserViewStyle(a_browser, a_style);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDateTime(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18889,6 +21184,18 @@ static void glue_SetDialogItemText(cpu68k *c, uint16_t trapword)
     gaddr a_text = (gaddr)cpu_pop32(c);
     gaddr a_item = (gaddr)cpu_pop32(c);
     tb_SetDialogItemText(a_item, a_text);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetDialogTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_inSecondsToWait = (uint32_t)cpu_pop32(c);
+    int16_t a_inButtonToPress = (int16_t)cpu_pop16(c);
+    gaddr a_inDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDialogTimeout(a_inDialog, a_inButtonToPress, a_inSecondsToWait);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -19461,6 +21768,17 @@ static void glue_SetMenuItemTextEncoding(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetModalDialogEventMask(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_inMask = (uint16_t)cpu_pop16(c);
+    gaddr a_inDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetModalDialogEventMask(a_inDialog, a_inMask);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetMovieActive(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19710,6 +22028,15 @@ static void glue_SetPortCustomXFerProc(cpu68k *c, uint16_t trapword)
     gaddr a_port = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetPortCustomXFerProc(a_port, a_proc, a_flags, a_refCon);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetPortDialogPort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    tb_SetPortDialogPort(a_dialog);
     cpu_push32(c, ret);
 }
 
@@ -20325,6 +22652,18 @@ static void glue_SetUpControlBackground(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetUpControlTextColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_inIsColorDevice = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_inDepth = (int16_t)cpu_pop16(c);
+    gaddr a_inControl = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetUpControlTextColor(a_inControl, a_inDepth, a_inIsColorDevice);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetVideoDefault(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20825,6 +23164,18 @@ static void glue_SndStopFilePlay(cpu68k *c, uint16_t trapword)
     gaddr a_chanp = (gaddr)cpu_pop32(c);
     int16_t r = tb_SndStopFilePlay(a_chanp, a_async);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SortDataBrowserContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_sortChildren = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SortDataBrowserContainer(a_browser, a_container, a_sortChildren);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -22366,6 +24717,21 @@ static void glue_UpdateControls(cpu68k *c, uint16_t trapword)
     gaddr a_rh = (gaddr)cpu_pop32(c);
     gaddr a_wp = (gaddr)cpu_pop32(c);
     tb_UpdateControls(a_wp, a_rh);
+    cpu_push32(c, ret);
+}
+
+static void glue_UpdateDataBrowserItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_propertyID = (uint32_t)cpu_pop32(c);
+    uint32_t a_preSortProperty = (uint32_t)cpu_pop32(c);
+    gaddr a_items = (gaddr)cpu_pop32(c);
+    uint32_t a_numItems = (uint32_t)cpu_pop32(c);
+    uint32_t a_container = (uint32_t)cpu_pop32(c);
+    gaddr a_browser = (gaddr)cpu_pop32(c);
+    int32_t r = tb_UpdateDataBrowserItems(a_browser, a_container, a_numItems, a_items, a_preSortProperty, a_propertyID);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 

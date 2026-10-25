@@ -157,6 +157,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     void (*carbonhi)(ppc_cpu *) = carbonhi_export_fn(name); /* CarbonLib's drawing, windows and menus */
     if (carbonhi)
         return carbonhi;
+    for (unsigned i = 0; i < carbon_ctl_export_count; i++)
+        if (!strcmp(carbon_ctl_exports[i].name, name))
+            return carbon_ctl_exports[i].fn;
     for (unsigned i = 0; i < snd_export_count; i++)
         if (!strcmp(snd_exports[i].name, name))
             return snd_exports[i].fn;

@@ -37,6 +37,12 @@ typedef struct {
     uint32_t flags;
     uint8_t (*fonts)[24]; /* ControlFontStyleRec by item, flags 0 for none */
     int nfonts;
+    /* SetDialogTimeout's button, seconds and start (ticks), and
+     * SetModalDialogEventMask's events. */
+    int16_t timeout_item;
+    uint32_t timeout_secs, timeout_start;
+    uint16_t event_mask;
+    bool has_mask;
 } dialog_extra;
 static dialog_extra extras[MAX_EXTRAS];
 
@@ -49,7 +55,7 @@ static int extra_index(gaddr d, bool create)
         return -1;
     for (int i = 0; i < MAX_EXTRAS; i++)
         if (!extras[i].dialog) {
-            extras[i] = (dialog_extra){ d, 0, false, 0, NULL, 0 };
+            extras[i] = (dialog_extra){ .dialog = d };
             return i;
         }
     return -1;
@@ -269,64 +275,77 @@ static void activate_edit(gaddr d, int n, int start, int end)
 
 /* Make the items from `from` on: controls, text handles, icons, pictures;
  * the first edit text item (if none is active yet) gets the TERec. */
+static gaddr make_item(gaddr d, int i)
+{
+    gaddr it = item_at(d, i);
+    int type = rd8(it + 12) & 0x7F, len = rd8(it + 13);
+    gaddr made = 0;
+    if (type & ctrlItem) {
+        int kind = type & 3;
+        gaddr r = tb_NewPtr(8, false, false);
+        gaddr title = tb_NewPtr(256, false, false);
+        it = item_at(d, i);
+        gmemcpy(r, it + 4, 8);
+        if (kind == resCtrl) {
+            made = tb_GetNewControl((int16_t)rd16(it + 14), d);
+            if (made) {
+                qrect q = qrect_get(r);
+                tb_MoveControl(made, q.left, q.top);
+                tb_SizeControl(made, (int16_t)(q.right - q.left), (int16_t)(q.bottom - q.top));
+            }
+        } else {
+            wr8(title, (uint8_t)len);
+            gmemcpy(title + 1, it + 14, (uint32_t)len);
+            made = tb_NewControl(d, r, title, 1, 0, 0, 1, (int16_t)kind, 0);
+        }
+        tb_DisposePtr(r);
+        tb_DisposePtr(title);
+    } else if (type == statText || type == editText) {
+        gaddr data = tb_NewPtr(len ? len : 1, false, false);
+        gmemcpy(data, item_at(d, i) + 14, (uint32_t)len);
+        made = text_handle_from(data, (uint32_t)len);
+        tb_DisposePtr(data);
+    } else if (type == iconItem) {
+        made = tb_GetResource((int32_t)fourcc("ICON"), (int16_t)rd16(item_at(d, i) + 14));
+    } else if (type == picItem) {
+        made = tb_GetPicture((int16_t)rd16(item_at(d, i) + 14));
+    }
+    return made;
+}
+
+/* The dialog's TERec, made for edit text item n when it has none yet. */
+static void make_edit(gaddr d, int n)
+{
+    if (rd32(d + DialogRecord_textH_off))
+        return;
+    gaddr r = tb_NewPtr(8, false, false);
+    qrect_put(r, item_rect(d, n));
+    gaddr saved = qd_port();
+    tb_SetPort(d);
+    gaddr te = tb_TENew(r, r);
+    tb_SetPort(saved);
+    tb_DisposePtr(r);
+    tb_DisposeHandle(TERec_hText(rd32(te)));
+    wr32(d + DialogRecord_textH_off, te);
+    activate_edit(d, n, 0, 32767);
+}
+
 static void make_items_from(gaddr d, int from)
 {
     int n = item_count(d);
     int first_edit = 0;
     for (int i = from; i <= n; i++) {
-        gaddr it = item_at(d, i);
-        int type = rd8(it + 12) & 0x7F, len = rd8(it + 13);
-        gaddr made = 0;
-        if (type & ctrlItem) {
-            int kind = type & 3;
-            gaddr r = tb_NewPtr(8, false, false);
-            gaddr title = tb_NewPtr(256, false, false);
-            it = item_at(d, i);
-            gmemcpy(r, it + 4, 8);
-            if (kind == resCtrl) {
-                made = tb_GetNewControl((int16_t)rd16(it + 14), d);
-                if (made) {
-                    qrect q = qrect_get(r);
-                    tb_MoveControl(made, q.left, q.top);
-                    tb_SizeControl(made, (int16_t)(q.right - q.left), (int16_t)(q.bottom - q.top));
-                }
-            } else {
-                wr8(title, (uint8_t)len);
-                gmemcpy(title + 1, it + 14, (uint32_t)len);
-                made = tb_NewControl(d, r, title, 1, 0, 0, 1, (int16_t)kind, 0);
-            }
-            tb_DisposePtr(r);
-            tb_DisposePtr(title);
-        } else if (type == statText || type == editText) {
-            gaddr data = tb_NewPtr(len ? len : 1, false, false);
-            gmemcpy(data, item_at(d, i) + 14, (uint32_t)len);
-            made = text_handle_from(data, (uint32_t)len);
-            tb_DisposePtr(data);
-            if (type == editText && !first_edit)
-                first_edit = i;
-        } else if (type == iconItem) {
-            made = tb_GetResource((int32_t)fourcc("ICON"), (int16_t)rd16(item_at(d, i) + 14));
-        } else if (type == picItem) {
-            made = tb_GetPicture((int16_t)rd16(item_at(d, i) + 14));
-        }
+        gaddr made = make_item(d, i);
+        if ((item_type(d, i) & 0x7F) == editText && !first_edit)
+            first_edit = i;
         wr32(item_at(d, i), made); /* user items keep their (nil) procedure */
     }
     if (from == 1) {
         wr16(d + DialogRecord_editField_off, (uint16_t)-1);
         wr32(d + DialogRecord_textH_off, 0);
     }
-    if (first_edit && !rd32(d + DialogRecord_textH_off)) {
-        gaddr r = tb_NewPtr(8, false, false);
-        qrect_put(r, item_rect(d, first_edit));
-        gaddr saved = qd_port();
-        tb_SetPort(d);
-        gaddr te = tb_TENew(r, r);
-        tb_SetPort(saved);
-        tb_DisposePtr(r);
-        tb_DisposeHandle(TERec_hText(rd32(te)));
-        wr32(d + DialogRecord_textH_off, te);
-        activate_edit(d, first_edit, 0, 32767);
-    }
+    if (first_edit)
+        make_edit(d, first_edit);
 }
 
 static void make_items(gaddr d) { make_items_from(d, 1); }
@@ -1380,9 +1399,23 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
     gaddr dp = tb_NewPtr(4, false, true);
     gaddr outer = in_modal;
     in_modal = d;
+    int x = extra_index(d, false);
     while (!g_cpu->halted) {
-        /* Every event but high-level ones, which wait for the application. */
-        bool got = tb_WaitNextEvent((int16_t)(0xFFFF & ~0x0400), evt, 6, 0) != 0;
+        /* Every event but high-level ones, which wait for the application,
+         * or those SetModalDialogEventMask asked for. */
+        uint16_t mask = x >= 0 && extras[x].has_mask ? extras[x].event_mask : (uint16_t)(0xFFFF & ~0x0400);
+        bool got = tb_WaitNextEvent((int16_t)mask, evt, 6, 0) != 0;
+        if (x >= 0 && extras[x].timeout_secs) {
+            int what = (int16_t)rd16(evt);
+            if (got && (what == mouseDown || what == keyDown || what == autoKey)) /* the user is there: start again */
+                extras[x].timeout_start = rd32(LM_Ticks);
+            else if (rd32(LM_Ticks) - extras[x].timeout_start >= extras[x].timeout_secs * 60) {
+                extras[x].timeout_secs = 0;
+                flash_button(d, extras[x].timeout_item);
+                wr16(itemp, (uint16_t)extras[x].timeout_item);
+                break;
+            }
+        }
         if (filter) {
             cpu68k *c = g_cpu;
             cpu_push16(c, 0);
@@ -1554,6 +1587,180 @@ int16_t tb_AppendDialogItemList(gaddr d, int16_t id, int16_t method)
     if (!ditl || !rd32(ditl))
         return resNotFound;
     tb_AppendDITL(d, ditl, method);
+    return noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* CarbonLib's: the accessors, items inserted and removed, timeouts and
+ * the events ModalDialog takes */
+
+enum { dialogNoTimeoutErr = -5640, errItemNotFound = -30597 };
+
+gaddr tb_GetDialogWindow(gaddr d) { return d; }
+gaddr tb_GetDialogPort(gaddr d) { return d; }
+gaddr tb_GetDialogFromWindow(gaddr w) { return w; }
+gaddr tb_GetDialogTextEditHandle(gaddr d) { return d ? edit_te(d) : 0; }
+int16_t tb_GetDialogKeyboardFocusItem(gaddr d) { return d ? (int16_t)edit_item(d) : 0; }
+int16_t tb_GetDialogDefaultItem(gaddr d) { return d ? (int16_t)rd16(d + DialogRecord_aDefItem_off) : 0; }
+
+int16_t tb_GetDialogCancelItem(gaddr d)
+{
+    int x = extra_index(d, false);
+    return x >= 0 ? extras[x].cancel : 0;
+}
+
+void tb_SetPortDialogPort(gaddr d) { tb_SetPort(d); }
+
+/* InsertDialogItem(dialog, afterItem, type, handle, box): a new item after
+ * afterItem (0 for the first), with the handle given, or what its kind
+ * makes (a control with no title, empty text). */
+int32_t tb_InsertDialogItem(gaddr d, int16_t after, int16_t type, gaddr h, gaddr box)
+{
+    if (!is_dialog(d) || !box)
+        return paramErr;
+    int n = item_count(d);
+    if (after < 0 || after > n)
+        after = (int16_t)n;
+    gaddr items = items_handle(d);
+    uint32_t have = (uint32_t)tb_GetHandleSize(items);
+    uint32_t at = after ? item_at(d, after) + ITEM_HEADER + ((rd8(item_at(d, after) + 13) + 1u) & ~1u) - rd32(items)
+                        : 2;
+    tb_SetHandleSize(items, (int32_t)(have + ITEM_HEADER));
+    if (rd16(LM_MemErr))
+        return memFullErr;
+    gaddr p = rd32(items);
+    gmemcpy(p + at + ITEM_HEADER, p + at, have - at);
+    wr32(p + at, h);
+    gmemcpy(p + at + 4, box, 8);
+    wr8(p + at + 12, (uint8_t)type);
+    wr8(p + at + 13, 0);
+    wr16(p, (uint16_t)n); /* count - 1 */
+    int item = after + 1;
+    int edit = edit_item(d);
+    if (edit >= item)
+        wr16(d + DialogRecord_editField_off, (uint16_t)edit); /* one further on */
+    ap_items_shifted(d, item, 1);
+    int kind = type & 0x7F;
+    if (!h && kind != userItem) {
+        gaddr made = make_item(d, item);
+        wr32(item_at(d, item), made);
+    }
+    if ((kind & ctrlItem) && h && ctl_window_root(d)) /* a control of the program's own goes in the root */
+        tb_AutoEmbedControl(h, d);
+    if (kind == editText)
+        make_edit(d, item);
+    if (WindowRecord_visible(d)) {
+        qrect r = qrect_get(box);
+        gaddr saved = qd_port();
+        tb_SetPort(d);
+        gaddr rr = tb_NewPtr(8, false, false);
+        qrect_put(rr, r);
+        tb_InvalRect(rr);
+        tb_DisposePtr(rr);
+        tb_SetPort(saved);
+    }
+    return noErr;
+}
+
+/* RemoveDialogItems(dialog, itemNo, amountToRemove, disposeItemData): the
+ * items go; their controls and text with them when disposeItemData says. */
+int32_t tb_RemoveDialogItems(gaddr d, int16_t first, int16_t count, int8_t dispose)
+{
+    int n = item_count(d);
+    if (!is_dialog(d) || first < 1 || first > n || count < 1)
+        return paramErr;
+    if (first + count - 1 > n)
+        count = (int16_t)(n - first + 1);
+    int last = first + count - 1;
+    int edit = edit_item(d);
+    gaddr saved = qd_port();
+    tb_SetPort(d);
+    for (int i = first; i <= last; i++) {
+        int type = item_type(d, i) & 0x7F;
+        gaddr h = item_handle(d, i);
+        gaddr rr = tb_NewPtr(8, false, false);
+        qrect_put(rr, item_rect(d, i));
+        tb_InvalRect(rr);
+        tb_DisposePtr(rr);
+        if (i == edit) { /* the TERec gives the item's text back */
+            gaddr te = edit_te(d);
+            if (te) {
+                TERec_set_hText(rd32(te), tb_NewHandle(0, false, false));
+                tb_TEDispose(te);
+                wr32(d + DialogRecord_textH_off, 0);
+            }
+            wr16(d + DialogRecord_editField_off, (uint16_t)-1);
+        }
+        if ((type & ctrlItem) && h) {
+            if (dispose)
+                tb_DisposeControl(h);
+            else
+                tb_HideControl(h);
+        } else if ((type == statText || type == editText) && h && dispose) {
+            tb_DisposeHandle(h);
+        }
+    }
+    tb_SetPort(saved);
+    gaddr items = items_handle(d);
+    gaddr from = item_at(d, first);
+    gaddr to = item_at(d, last) + ITEM_HEADER + ((rd8(item_at(d, last) + 13) + 1u) & ~1u);
+    uint32_t size = (uint32_t)tb_GetHandleSize(items), tail = rd32(items) + size - to;
+    gmemcpy(from, to, tail);
+    tb_SetHandleSize(items, (int32_t)(size - (to - from)));
+    wr16(rd32(items), (uint16_t)(n - count - 1));
+    if (edit > last)
+        wr16(d + DialogRecord_editField_off, (uint16_t)(edit - count - 1));
+    ap_items_shifted(d, last + 1, -count);
+    if (!edit_te(d)) /* the next edit text item takes the TERec */
+        for (int i = 1; i <= n - count; i++)
+            if ((item_type(d, i) & 0x7F) == editText) {
+                make_edit(d, i);
+                break;
+            }
+    return noErr;
+}
+
+int32_t tb_SetDialogTimeout(gaddr d, int16_t item, uint32_t seconds)
+{
+    int x = extra_index(d, true);
+    if (x < 0)
+        return memFullErr;
+    extras[x].timeout_item = item;
+    extras[x].timeout_secs = seconds;
+    extras[x].timeout_start = rd32(LM_Ticks);
+    return noErr;
+}
+
+int32_t tb_GetDialogTimeout(gaddr d, gaddr item, gaddr seconds, gaddr remaining)
+{
+    int x = extra_index(d, false);
+    if (x < 0 || !extras[x].timeout_secs)
+        return dialogNoTimeoutErr;
+    uint32_t elapsed = (rd32(LM_Ticks) - extras[x].timeout_start) / 60;
+    if (item)
+        wr16(item, (uint16_t)extras[x].timeout_item);
+    if (seconds)
+        wr32(seconds, extras[x].timeout_secs);
+    if (remaining)
+        wr32(remaining, elapsed < extras[x].timeout_secs ? extras[x].timeout_secs - elapsed : 0);
+    return noErr;
+}
+
+int32_t tb_SetModalDialogEventMask(gaddr d, uint16_t mask)
+{
+    int x = extra_index(d, true);
+    if (x < 0)
+        return memFullErr;
+    extras[x].event_mask = mask;
+    extras[x].has_mask = true;
+    return noErr;
+}
+
+int32_t tb_GetModalDialogEventMask(gaddr d, gaddr mask)
+{
+    int x = extra_index(d, false);
+    if (mask)
+        wr16(mask, x >= 0 && extras[x].has_mask ? extras[x].event_mask : (uint16_t)(0xFFFF & ~0x0400));
     return noErr;
 }
 

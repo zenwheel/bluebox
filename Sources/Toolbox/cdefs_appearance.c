@@ -96,6 +96,15 @@ typedef struct {
     gaddr dialog;                /* a dialog item's stand-in */
     int item;
     int16_t icon_id;             /* push buttons with icons */
+    /* CarbonLib's: a slider's tick marks, a menu the control disposes of,
+     * an image well taking drags, animation stopped (progress bars,
+     * chasing arrows, clocks), a clock's flags and the time it shows (0:
+     * now), an edit text's validation procedure, a scrolling text box. */
+    int16_t ticks;
+    bool owned_menu, drag_dest, still;
+    uint32_t clock_flags, clock_secs;
+    gaddr validation;
+    void *scroll_text;
 } ap_ctl;
 
 static gaddr cp(gaddr ch) { return rd32(ch); }
@@ -396,12 +405,14 @@ void ap_draw_standard(gaddr ch, int kind)
         ap_push_button(r, state, a && a->is_default);
         text_rgb(ch, state == 0 ? 13 : state == 2 ? 14 : 12, c);
         qrect tr = inset(r, 3);
-        if (a && a->icon_id) { /* a colour icon at the left (6) or right (7) */
-            gaddr icon = tb_GetCIcon(a->icon_id);
+        if (a && (a->icon_id || a->content)) { /* a colour icon at the left (6) or right (7) */
+            gaddr icon = a->content ? 0 : tb_GetCIcon(a->icon_id);
             int iy = r.top + (r.bottom - r.top - 16) / 2;
             bool right = (var_of(ch) & 7) == 7;
             qrect ir = right ? (qrect){ (int16_t)iy, (int16_t)(r.right - 22), (int16_t)(iy + 16), (int16_t)(r.right - 6) }
                              : (qrect){ (int16_t)iy, (int16_t)(r.left + 6), (int16_t)(iy + 16), (int16_t)(r.left + 22) };
+            if (a->content) /* CreatePushButtonWithIconControl's */
+                draw_content(a, ir, state == 0);
             if (icon) {
                 gaddr rp = tmp_rect(ir);
                 tb_PlotCIcon(rp, icon);
@@ -477,7 +488,9 @@ static void draw_track(gaddr ch, int kind)
     ap_track(info);
     if (kind == 2 && (var_of(ch) & 2) && !(var_of(ch) & 8)) { /* tick marks: one per value up to 20 */
         int range = cmax(ch) - cmin(ch);
-        tb_DrawThemeTrackTickMarks(info, (uint32_t)(range > 0 && range < 20 ? range + 1 : 11), 0, 0);
+        ap_ctl *a = ap_of(ch);
+        uint32_t n = a && a->ticks > 0 ? (uint32_t)a->ticks : (uint32_t)(range > 0 && range < 20 ? range + 1 : 11);
+        tb_DrawThemeTrackTickMarks(info, n, 0, 0);
     }
     tb_DisposePtr(info);
 }
@@ -701,8 +714,16 @@ static int32_t bevel_data(gaddr ch, ap_ctl *a, const access *x, bool set)
     case TAG('m', 'v', 'a', 'l'):
         if (set) { if (take16(x, &v16)) a->menu_value = v16; break; }
         return give16(x, a->menu_value);
-    case TAG('m', 'h', 'n', 'd'):
-        if (set) { if (take32(x, &v32)) a->menu = v32; break; }
+    case TAG('m', 'h', 'n', 'd'): case TAG('o', 'm', 'r', 'f'):
+        if (set) {
+            if (take32(x, &v32)) {
+                if (a->owned_menu && a->menu && a->menu != v32)
+                    tb_DisposeMenu(a->menu);
+                a->menu = v32;
+                a->owned_menu = x->tag == TAG('o', 'm', 'r', 'f');
+            }
+            break;
+        }
         return give32(x, a->menu);
     case TAG('p', 'g', 'l', 'c'):
         if (set) { if (take_bool(x, &b)) a->center_glyph = b; break; }
@@ -889,7 +910,10 @@ static int32_t tabs_data(gaddr ch, ap_ctl *a, const access *x, bool set)
         if (x->size < 5)
             return errDataSizeMismatch;
         a->tabs[i - 1].icon = (int16_t)rd16(x->data + 2);
-        gget(a->tabs[i - 1].name, x->data + 4, (uint32_t)rd8(x->data + 4) + 1);
+        if (rd16(x->data) == 1) /* ControlTabInfoRecV1: the name a CFString */
+            carbon_cfstring_to_pstr(rd32(x->data + 4), a->tabs[i - 1].name);
+        else
+            gget(a->tabs[i - 1].name, x->data + 4, (uint32_t)rd8(x->data + 4) + 1);
         break;
     }
     default:
@@ -910,15 +934,32 @@ static int group_title_height(void)
     return asc + desc;
 }
 
+/* A pop-up group box's title: its menu's current item. */
+static void group_title_text(gaddr ch, uint8_t *t, int *n)
+{
+    ap_ctl *a = ap_of(ch);
+    if ((var_of(ch) & 3) == 2 && a && a->menu) {
+        gaddr s = tb_NewPtr(256, false, true);
+        tb_GetMenuItemText(a->menu, cvalue(ch), s);
+        *n = rd8(s);
+        gget(t, s + 1, (uint32_t)*n);
+        tb_DisposePtr(s);
+        return;
+    }
+    title_of(ch, t, n);
+}
+
 static qrect group_title(gaddr ch)
 {
     qrect r = crect(ch);
     uint8_t t[256];
     int n;
-    title_of(ch, t, &n);
+    group_title_text(ch, t, &n);
     int w = n ? qd_text_width(qd_port(), t, n) + 4 : 0;
     if ((var_of(ch) & 3) == 1)
         w += 18;
+    else if ((var_of(ch) & 3) == 2)
+        w += 16; /* the pop-up's arrow */
     return (qrect){ r.top, (int16_t)(r.left + 8), (int16_t)(r.top + group_title_height()), (int16_t)(r.left + 8 + w) };
 }
 
@@ -931,7 +972,7 @@ static void group_draw(gaddr ch)
     qrect r = crect(ch);
     uint8_t t[256];
     int n;
-    title_of(ch, t, &n);
+    group_title_text(ch, t, &n);
     int th = n || (var_of(ch) & 3) ? group_title_height() : 0;
     uint32_t state = draw_state(ch, 0);
     qrect frame = { (int16_t)(r.top + th / 2), r.left, r.bottom, r.right };
@@ -945,6 +986,11 @@ static void group_draw(gaddr ch)
             qrect box = { (int16_t)(tr.top + (th - 12) / 2), (int16_t)(tr.left + 2), (int16_t)(tr.top + (th - 12) / 2 + 12), (int16_t)(tr.left + 14) };
             ap_check_box(box, false, cvalue(ch) ? 1 : 0, chilite(ch) == kControlCheckBoxPart ? 2 : state);
             tr.left = (int16_t)(box.right + 4);
+        } else if ((var_of(ch) & 3) == 2) { /* a pop-up: the arrow after the item */
+            ap_arrow((qrect){ (int16_t)(tr.top + (th - 9) / 2), (int16_t)(tr.right - 14), (int16_t)(tr.top + (th - 9) / 2 + 9),
+                              (int16_t)(tr.right - 5) }, 3, 9, c);
+            tr.left = (int16_t)(tr.left + 2);
+            tr.right = (int16_t)(tr.right - 14);
         } else {
             tr.left = (int16_t)(tr.left + 2);
         }
@@ -1142,6 +1188,8 @@ static int32_t edit_key(gaddr ch, ap_ctl *a, gaddr rec)
     }
     restore_bk(&bk);
     (void)mods;
+    if (a->validation) /* ControlEditTextValidationProcPtr(ControlHandle) */
+        mm_call(a->validation, 0x000000C0, (uint32_t[]){ ch }, 1);
     return kControlEditTextPart;
 }
 
@@ -1269,7 +1317,15 @@ static int32_t edit_data(gaddr ch, ap_ctl *a, const access *x, bool set)
             a->key_filter = v;
         return 0;
     }
-    case TAG('k', 's', 'c', 'r'): case TAG('v', 'a', 'l', 'i'): case TAG('p', 'r', 'u', 'p'): case TAG('p', 'o', 'u', 'p'):
+    case TAG('v', 'a', 'l', 'i'): {
+        uint32_t v;
+        if (!set)
+            return give32(x, a->validation);
+        if (take32(x, &v))
+            a->validation = v;
+        return 0;
+    }
+    case TAG('k', 's', 'c', 'r'): case TAG('p', 'r', 'u', 'p'): case TAG('p', 'o', 'u', 'p'):
         return set ? 0 : give32(x, 0);
     default:
         return errDataNotSupported;
@@ -1519,7 +1575,10 @@ static void clock_draw(gaddr ch, ap_ctl *a)
     ap_fill_grey(r, 0xFFFF);
     ap_well_frame(inset(r, -1), draw_state(ch, 0));
     gaddr now = tb_NewPtr(4, false, true), s = tb_NewPtr(256, false, true);
-    tb_GetDateTime(now);
+    if (a->clock_secs && !(a->clock_flags & 2))
+        wr32(now, a->clock_secs);
+    else
+        tb_GetDateTime(now);
     int v = var_of(ch);
     if (v == 2 || v == 3)
         tb_IUDateString((int32_t)rd32(now), 0, s);
@@ -1539,6 +1598,237 @@ static void clock_draw(gaddr ch, ap_ctl *a)
 }
 
 /* ---------------------------------------------------------------------- */
+/* CDEF 27: scrolling text boxes (Appearance 1.1).  The text is a 'TEXT'
+ * and 'styl' resource's in a styled TERec; the plain variant scrolls by
+ * a live scroll bar of its own at the right, the auto-scrolling one by
+ * itself at idle time, a few pixels after each delay, from the bottom
+ * again once its text has gone by. */
+
+typedef struct {
+    gaddr te, bar;
+    uint32_t delay_before, delay_between, start, last;
+    int16_t amount, offset, height;
+    bool still;
+} scroll_text;
+
+static scroll_text *st_of(ap_ctl *a) { return a ? (scroll_text *)a->scroll_text : NULL; }
+
+static qrect st_view(gaddr ch, scroll_text *t)
+{
+    qrect v = inset(crect(ch), 1);
+    if (t && t->bar)
+        v.right = (int16_t)(v.right - 15);
+    return v;
+}
+
+static int st_text_height(scroll_text *t)
+{
+    gaddr p = rd32(t->te);
+    return tb_TEGetHeight((int32_t)TERec_nLines(p), 1, t->te);
+}
+
+/* Scroll so that pixel `offset` of the text is at the view's top. */
+static void st_scroll_to(gaddr ch, scroll_text *t, int offset)
+{
+    if (!t->te || offset == t->offset)
+        return;
+    gaddr saved = qd_port();
+    tb_SetPort(cowner(ch));
+    bk_saved bk;
+    white_bk(&bk);
+    tb_TEScroll(0, (int16_t)(t->offset - offset), t->te);
+    restore_bk(&bk);
+    tb_SetPort(saved);
+    t->offset = (int16_t)offset;
+}
+
+/* The scroll bar's action procedure: ControlActionProcPtr(control, part). */
+static void st_bar_action(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int16_t part = (int16_t)cpu_pop16(c);
+    gaddr bar = cpu_pop32(c);
+    gaddr box = ctl_find(bar) ? (gaddr)tb_GetControlReference(bar) : 0; /* the text box, the bar's reference */
+    ap_ctl *a = ctl_find(box) ? ap_of(box) : NULL;
+    scroll_text *t = a && a->id == 27 ? st_of(a) : NULL;
+    if (t && t->te) {
+        int line = TERec_lineHeight(rd32(t->te));
+        qrect v = st_view(box, t);
+        int page = (v.bottom - v.top) - line;
+        int value = tb_GetControlValue(bar), max = tb_GetControlMaximum(bar);
+        switch (part) {
+        case kControlUpButtonPart: value -= line; break;
+        case kControlDownButtonPart: value += line; break;
+        case kControlPageUpPart: value -= page; break;
+        case kControlPageDownPart: value += page; break;
+        default: break; /* the thumb: the value is where it is */
+        }
+        if (value < 0)
+            value = 0;
+        if (value > max)
+            value = max;
+        if (part != kControlIndicatorPart)
+            tb_SetControlValue(bar, (int16_t)value);
+        st_scroll_to(box, t, value);
+    }
+    cpu_push32(c, ret);
+}
+
+static gaddr st_action_stub;
+
+static void st_load(gaddr ch, ap_ctl *a, int16_t id)
+{
+    scroll_text *t = st_of(a);
+    gaddr text = tb_GetResource((int32_t)fourcc("TEXT"), id);
+    if (!text || !rd32(text))
+        return;
+    gaddr styl = tb_GetResource((int32_t)fourcc("styl"), id);
+    gaddr saved = qd_port();
+    tb_SetPort(cowner(ch));
+    if (t->te)
+        tb_TEDispose(t->te);
+    qrect v = st_view(ch, t);
+    gaddr dst = tmp_rect((qrect){ v.top, (int16_t)(v.left + 2), v.bottom, (int16_t)(v.right - 2) });
+    gaddr view = tmp_rect(v);
+    t->te = tb_TEStyleNew(dst, view);
+    tb_DisposePtr(view);
+    tb_DisposePtr(dst);
+    tb_HLock(text);
+    tb_TEStyleInsert(rd32(text), tb_GetHandleSize(text), styl && rd32(styl) ? styl : 0, t->te);
+    tb_HUnlock(text);
+    tb_TESetSelect(0, 0, t->te);
+    tb_TEDeactivate(t->te);
+    t->offset = 0;
+    t->height = (int16_t)st_text_height(t);
+    if (!t->bar)
+        t->start = t->last = rd32(LM_Ticks);
+    tb_SetPort(saved);
+}
+
+static void st_init(gaddr ch, ap_ctl *a)
+{
+    scroll_text *t = calloc(1, sizeof *t);
+    a->scroll_text = t;
+    t->delay_before = (uint32_t)(uint16_t)cmin(ch);
+    t->delay_between = (uint32_t)(uint16_t)cmax(ch);
+    t->amount = 1;
+    int16_t id = cvalue(ch);
+    set_value_raw(ch, 0);
+    ControlRecord_set_contrlMin(cp(ch), 0);
+    ControlRecord_set_contrlMax(cp(ch), 0);
+    if (!(var_of(ch) & 1)) { /* the plain variant: a scroll bar inside, at the right */
+        if (!st_action_stub)
+            st_action_stub = native_register(st_bar_action, "scrolling text box", 0);
+        qrect r = crect(ch);
+        gaddr br = tmp_rect((qrect){ r.top, (int16_t)(r.right - 16), r.bottom, r.right });
+        t->bar = tb_NewControl(cowner(ch), br, 0, cvisible(ch), 0, 0, 0, 386, (int32_t)ch);
+        tb_DisposePtr(br);
+        if (t->bar)
+            tb_SetControlAction(t->bar, st_action_stub);
+    }
+    st_load(ch, a, id);
+    if (t->bar && t->te) {
+        qrect v = st_view(ch, t);
+        int over = t->height - (v.bottom - v.top);
+        tb_SetControlMaximum(t->bar, (int16_t)(over > 0 ? over : 0));
+    }
+}
+
+static void st_draw(gaddr ch, ap_ctl *a)
+{
+    scroll_text *t = st_of(a);
+    qrect r = crect(ch);
+    ap_well_frame(r, draw_state(ch, 0));
+    qrect v = st_view(ch, t);
+    ap_fill_grey(v, 0xFFFF);
+    if (t && t->te) {
+        bk_saved bk;
+        white_bk(&bk);
+        gaddr vr = tmp_rect(v);
+        tb_TEUpdate(vr, t->te);
+        tb_DisposePtr(vr);
+        restore_bk(&bk);
+    }
+}
+
+static void st_idle(gaddr ch, ap_ctl *a)
+{
+    scroll_text *t = st_of(a);
+    uint32_t now = rd32(LM_Ticks);
+    if (!t || t->bar || !t->te || t->still || now - t->start < t->delay_before || now - t->last < t->delay_between)
+        return;
+    t->last = now;
+    qrect v = st_view(ch, t);
+    int next = t->offset + t->amount;
+    if (next > t->height) /* gone by: in again from the bottom */
+        next = -(v.bottom - v.top);
+    if (cvisible(ch))
+        st_scroll_to(ch, t, next);
+    else
+        t->offset = (int16_t)next;
+}
+
+static int32_t st_data(gaddr ch, ap_ctl *a, const access *x, bool set)
+{
+    scroll_text *t = st_of(a);
+    if (!t)
+        return errDataNotSupported;
+    uint32_t v32;
+    int16_t v16;
+    bool b;
+    switch (x->tag) {
+    case TAG('s', 't', 'd', 'l'):
+        if (!set)
+            return give32(x, t->delay_before);
+        if (take32(x, &v32))
+            t->delay_before = v32;
+        return 0;
+    case TAG('s', 'c', 'd', 'l'):
+        if (!set)
+            return give32(x, t->delay_between);
+        if (take32(x, &v32))
+            t->delay_between = v32;
+        return 0;
+    case TAG('s', 'a', 'm', 't'):
+        if (!set)
+            return give16(x, t->amount);
+        if (take16(x, &v16))
+            t->amount = v16 > 0 ? v16 : 1;
+        return 0;
+    case TAG('t', 'r', 'e', 's'): /* write only */
+        if (!set)
+            return errDataNotSupported;
+        if (!take16(x, &v16))
+            return errDataSizeMismatch;
+        st_load(ch, a, v16);
+        if (cvisible(ch))
+            tb_Draw1Control(ch);
+        return 0;
+    case TAG('a', 'n', 'i', 'm'):
+        if (!set)
+            return give_bool(x, !t->still && !t->bar);
+        if (take_bool(x, &b))
+            t->still = !b;
+        return 0;
+    default:
+        return errDataNotSupported;
+    }
+}
+
+static void st_dispose(gaddr ch, ap_ctl *a)
+{
+    scroll_text *t = st_of(a);
+    if (!t)
+        return;
+    if (t->te)
+        tb_TEDispose(t->te);
+    if (t->bar && ctl_find(t->bar))
+        tb_DisposeControl(t->bar);
+    free(t);
+    a->scroll_text = NULL;
+}
+
+/* ---------------------------------------------------------------------- */
 /* The entry: FUNCTION (varCode, theControl, message, param) */
 
 static uint32_t kind_features(gaddr ch, ap_ctl *a)
@@ -1549,12 +1839,12 @@ static uint32_t kind_features(gaddr ch, ap_ctl *a)
     case 3: return act | kControlSupportsLiveFeedback;
     case 4: return act | data;
     case 5: return act | data | kControlWantsIdle;
-    case 7: return kControlWantsIdle;
+    case 7: return kControlWantsIdle | data;
     case 8: return act | data | embed | kControlHasSpecialBackground;
     case 10: return act | data | embed;
     case 11: return act | data;
     case 14: case 21: return act | embed | kControlHasSpecialBackground;
-    case 15: return act | data | kControlSupportsFocus | kControlGetsFocusOnClick;
+    case 15: return act | data | kControlSupportsFocus | kControlGetsFocusOnClick | (a->clock_flags & 2 ? kControlWantsIdle : 0);
     case 16: return pane_features(a);
     case 17:
         return act | data | kControlSupportsFocus | kControlWantsIdle | kControlHandlesTracking |
@@ -1564,6 +1854,7 @@ static uint32_t kind_features(gaddr ch, ap_ctl *a)
     case 22: return act | data | kControlSupportsFocus | kControlHandlesTracking | kControlGetsFocusOnClick;
     case 23: return act | data | kControlSupportsCalcBestRect;
     case 26: return act | embed;
+    case 27: return act | data | (var_of(ch) & 1 ? kControlWantsIdle : 0);
     default: return act;
     }
 }
@@ -1580,7 +1871,19 @@ static void draw(gaddr ch, ap_ctl *a, int part)
     case 3: draw_track(ch, 2); break;
     case 4:
         erase(r);
-        ap_disclosure(r, cvalue(ch) != 0, draw_state(ch, kControlTrianglePart), var_of(ch) & 1);
+        if (a->behavior & AP_DRAWS_TITLE) { /* the triangle, its title after it */
+            int top = r.top + (r.bottom - r.top - 12) / 2;
+            qrect tri = { (int16_t)top, r.left, (int16_t)(top + 12), (int16_t)(r.left + 12) };
+            ap_disclosure(tri, cvalue(ch) != 0, draw_state(ch, kControlTrianglePart), var_of(ch) & 1);
+            uint8_t t[256];
+            int n;
+            title_of(ch, t, &n);
+            uint16_t c[3];
+            text_rgb(ch, chilite(ch) == 255 ? 2 : 1, c);
+            ap_text_in((qrect){ r.top, (int16_t)(tri.right + 4), r.bottom, r.right }, t, n, false, c);
+        } else {
+            ap_disclosure(r, cvalue(ch) != 0, draw_state(ch, kControlTrianglePart), var_of(ch) & 1);
+        }
         break;
     case 5: draw_track(ch, a->indeterminate ? 4 : 3); break;
     case 6: {
@@ -1634,6 +1937,7 @@ static void draw(gaddr ch, ap_ctl *a, int part)
     }
     case 22: list_draw(ch, a); break;
     case 23: ap_draw_standard(ch, standard_kind(ch)); break;
+    case 27: st_draw(ch, a); break;
     case 26: { /* the radio buttons follow the group's value */
         gaddr subs[256];
         int n = ctl_subcontrols(ch, subs, 256);
@@ -1664,13 +1968,14 @@ static int32_t test(gaddr ch, ap_ctl *a, uint32_t pt)
         return pt_v(pt) < (r.top + r.bottom) / 2 ? kControlUpButtonPart : kControlDownButtonPart;
     case 8: return tabs_test(ch, a, pt);
     case 10: {
-        if ((var_of(ch) & 3) != 1)
+        int kind = var_of(ch) & 3;
+        if (kind != 1 && !(kind == 2 && a->menu))
             return 0;
         ctl_font_saved fs;
         ctl_font_begin(ch, &fs);
         bool hit = in_rect(group_title(ch), pt);
         ctl_font_end(&fs);
-        return hit ? kControlCheckBoxPart : 0;
+        return hit ? (kind == 1 ? kControlCheckBoxPart : kControlMenuPart) : 0;
     }
     case 11: return in_rect(r, pt) ? kControlImageWellPart : 0;
     case 15: return in_rect(r, pt) ? kControlClockPart : 0;
@@ -1725,6 +2030,16 @@ static int32_t data(gaddr ch, ap_ctl *a, gaddr rec, bool set)
             }
             return 0;
         }
+        /* fall through: 'anim' */
+    case 7:
+        if (x.tag == TAG('a', 'n', 'i', 'm')) { /* animating (the default) or still */
+            bool b;
+            if (!set)
+                return give_bool(&x, !a->still);
+            if (take_bool(&x, &b))
+                a->still = !b;
+            return 0;
+        }
         return errDataNotSupported;
     case 8: return tabs_data(ch, a, &x, set);
     case 10:
@@ -1737,8 +2052,22 @@ static int32_t data(gaddr ch, ap_ctl *a, gaddr rec, bool set)
                              (uint8_t)(t.bottom >> 8), (uint8_t)t.bottom, (uint8_t)(t.right >> 8), (uint8_t)t.right };
             return give(&x, b, 8);
         }
-        if (x.tag == TAG('m', 'h', 'a', 'n'))
-            return set ? 0 : give32(&x, a->menu);
+        if (x.tag == TAG('m', 'h', 'a', 'n') || x.tag == TAG('o', 'm', 'r', 'f')) {
+            uint32_t v;
+            if (!set)
+                return give32(&x, a->menu);
+            if (take32(&x, &v)) {
+                if (a->owned_menu && a->menu && a->menu != v)
+                    tb_DisposeMenu(a->menu);
+                a->menu = v;
+                a->owned_menu = x.tag == TAG('o', 'm', 'r', 'f');
+                ControlRecord_set_contrlMin(cp(ch), 1);
+                ControlRecord_set_contrlMax(cp(ch), (int16_t)(v ? tb_CountMItems(v) : 0));
+                if (cvisible(ch))
+                    tb_Draw1Control(ch);
+            }
+            return 0;
+        }
         return errDataNotSupported;
     case 11: case 19: case 20:
         if (x.tag == TAG('c', 'o', 'n', 't')) {
@@ -1762,6 +2091,22 @@ static int32_t data(gaddr ch, ap_ctl *a, gaddr rec, bool set)
                 return give16(&x, a->graphic_align);
             if (take16(&x, &v))
                 a->graphic_align = v;
+        } else if (x.tag == TAG('d', 'r', 'a', 'g') && a->id == 11) {
+            bool b;
+            if (!set)
+                return give_bool(&x, a->drag_dest);
+            if (take_bool(&x, &b))
+                a->drag_dest = b;
+            return 0;
+        } else if (x.tag == TAG('p', 'i', 'c', 'h') && a->id == 19) {
+            uint32_t v;
+            if (!set)
+                return give32(&x, a->content_type == kControlContentPictHandle || a->content_type == kControlContentPictRes
+                                      ? a->content : 0);
+            if (!take32(&x, &v))
+                return errDataSizeMismatch;
+            a->content_type = kControlContentPictHandle;
+            a->content = v; /* the program's (resource pictures are the Resource Manager's) */
         } else if (x.tag == TAG('i', 'r', 'e', 's') && a->id == 20) {
             int16_t v;
             if (!set)
@@ -1777,10 +2122,42 @@ static int32_t data(gaddr ch, ap_ctl *a, gaddr rec, bool set)
             tb_Draw1Control(ch);
         return 0;
     case 15:
-        if (x.tag == TAG('d', 'a', 't', 'e'))
-            return set ? 0 : give(&x, (uint8_t[28]){ 0 }, 28);
+        if (x.tag == TAG('d', 'a', 't', 'e')) { /* LongDateRec */
+            gaddr ld = tb_NewPtr(28, false, true), secs = tb_NewPtr(8, false, true);
+            int32_t err = 0;
+            if (!set) {
+                if (a->clock_secs)
+                    wr32(secs + 4, a->clock_secs);
+                else
+                    tb_GetDateTime(secs + 4);
+                tb_LongSecondsToDate(secs, ld);
+                uint8_t b[28];
+                gget(b, ld, 28);
+                give(&x, b, 28);
+            } else if (x.size < 28) {
+                err = errDataSizeMismatch;
+            } else {
+                gmemcpy(ld, x.data, 28);
+                tb_LongDateToSeconds(ld, secs);
+                a->clock_secs = rd32(secs + 4);
+                if (cvisible(ch))
+                    tb_Draw1Control(ch);
+            }
+            tb_DisposePtr(secs);
+            tb_DisposePtr(ld);
+            return err;
+        }
+        if (x.tag == TAG('a', 'n', 'i', 'm')) {
+            bool b;
+            if (!set)
+                return give_bool(&x, (a->clock_flags & 2) && !a->still);
+            if (take_bool(&x, &b))
+                a->still = !b;
+            return 0;
+        }
         return errDataNotSupported;
     case 16: return pane_data(ch, a, &x, set);
+    case 27: return st_data(ch, a, &x, set);
     case 17: return edit_data(ch, a, &x, set);
     case 18: return static_data(ch, a, &x, set);
     case 22:
@@ -1875,8 +2252,16 @@ static void idle(gaddr ch, ap_ctl *a)
 {
     uint32_t now = rd32(LM_Ticks);
     switch (a->id) {
+    case 27: st_idle(ch, a); break;
+    case 15: /* a live clock: each second */
+        if ((a->clock_flags & 2) && !a->still && now - a->last_tick >= 60) {
+            a->last_tick = now;
+            if (cvisible(ch))
+                draw(ch, a, 0);
+        }
+        break;
     case 5: case 7:
-        if ((a->id == 7 || a->indeterminate) && now - a->last_tick >= 4) {
+        if ((a->id == 7 || a->indeterminate) && !a->still && now - a->last_tick >= 4) {
             a->last_tick = now;
             a->phase++;
             if (cvisible(ch))
@@ -1915,10 +2300,15 @@ static void init(gaddr ch, ap_ctl *a)
         a->features = (uint32_t)(uint16_t)cvalue(ch);
         set_value_raw(ch, 0);
         break;
+    case 15: /* the clock's flags come as its value */
+        a->clock_flags = (uint32_t)(uint16_t)cvalue(ch);
+        set_value_raw(ch, 0);
+        break;
     case 17: edit_init(ch, a); break;
     case 19: picture_init(ch, a); break;
     case 20: icon_init(ch, a); break;
     case 22: list_init(ch, a); break;
+    case 27: st_init(ch, a); break;
     case 23:
         if ((var_of(ch) & 7) >= 6) { /* a push button with an icon: its cicn from the maximum */
             a->icon_id = cmax(ch);
@@ -1931,6 +2321,9 @@ static void init(gaddr ch, ap_ctl *a)
 
 static void dispose(gaddr ch, ap_ctl *a)
 {
+    st_dispose(ch, a);
+    if (a->owned_menu && a->menu)
+        tb_DisposeMenu(a->menu);
     if (a->id != 19)
         dispose_content(a);
     if (a->te && !a->dialog)
@@ -2104,6 +2497,31 @@ bool ap_ctl_track(gaddr ch, int16_t part, uint32_t pt, gaddr action, int16_t mod
     case 8:
         *result = tabs_track(ch, a, part);
         return true;
+    case 10: {
+        if (part != kControlMenuPart || !a->menu)
+            return false;
+        ctl_font_saved fs;
+        ctl_font_begin(ch, &fs);
+        qrect t = group_title(ch);
+        ctl_font_end(&fs);
+        gaddr gp = tb_NewPtr(4, false, true);
+        wr32(gp, make_pt(t.top, t.left));
+        tb_LocalToGlobal(gp);
+        uint32_t g = rd32(gp);
+        tb_DisposePtr(gp);
+        int items = tb_CountMItems(a->menu);
+        for (int i = 1; i <= items; i++)
+            tb_SetItemMark(a->menu, (int16_t)i, i == cvalue(ch) ? 0x12 : 0);
+        tb_HiliteControl(ch, kControlMenuPart);
+        int32_t r = tb_PopUpMenuSelect(a->menu, (int16_t)pt_v(g), (int16_t)pt_h(g), cvalue(ch));
+        tb_HiliteControl(ch, 0);
+        *result = 0;
+        if (r && (int16_t)(r & 0xFFFF) > 0) {
+            tb_SetControlValue(ch, (int16_t)(r & 0xFFFF));
+            *result = kControlMenuPart;
+        }
+        return true;
+    }
     case 16:
         if (!a->procs[UP_TRACK])
             return false;
@@ -2186,6 +2604,10 @@ void ap_after_track(gaddr ch, int16_t part)
         if (var_of(ch) & 2)
             tb_SetControlValue(ch, (int16_t)!cvalue(ch));
         break;
+    case 10: /* a check box group box made to toggle (CreateCheckGroupBoxControl) */
+        if (part == kControlCheckBoxPart && (a->behavior & AP_AUTO_TOGGLE))
+            tb_SetControlValue(ch, (int16_t)!cvalue(ch));
+        break;
     case 23:
         if ((var_of(ch) & 7) == 3)
             tb_SetControlValue(ch, (int16_t)(cvalue(ch) == 1 ? 0 : 1));
@@ -2266,6 +2688,31 @@ void ap_forget_dialog(gaddr d)
             if (ch && rd32(ch))
                 tb_DisposeControl(ch);
         }
+}
+
+/* Items from `from` on moved by delta (InsertDialogItem, RemoveDialogItems):
+ * their stand-ins follow, and those of items removed (from - delta up to
+ * from, for a negative delta) go. */
+void ap_items_shifted(gaddr d, int from, int delta)
+{
+    for (int i = 0; i < 256; i++) {
+        if (stand_ins[i].dialog != d || !stand_ins[i].ch || !rd32(stand_ins[i].ch))
+            continue;
+        int n = stand_ins[i].item;
+        if (delta < 0 && n >= from + delta && n < from) {
+            gaddr ch = stand_ins[i].ch;
+            stand_ins[i].dialog = 0;
+            stand_ins[i].ch = 0;
+            tb_DisposeControl(ch);
+            continue;
+        }
+        if (n >= from) {
+            stand_ins[i].item = n + delta;
+            ap_ctl *a = ap_of(stand_ins[i].ch);
+            if (a)
+                a->item = n + delta;
+        }
+    }
 }
 
 /* A user item's stand-in with a drawing procedure draws it. */
@@ -2378,3 +2825,71 @@ int16_t tb_SetTabEnabled(gaddr ch, int16_t tab, int8_t enabled)
 }
 
 int16_t tb_SetDisclosureTriangleLastValue(gaddr ch, int16_t v) { return set_data16(ch, 0, TAG('l', 'a', 's', 't'), v); }
+
+/* ---------------------------------------------------------------------- */
+/* CarbonLib's Create...Control (carbon_create.c): what its arguments set
+ * that NewControl's don't */
+
+void ap_set_content(gaddr ch, gaddr info)
+{
+    ap_ctl *a = ap_of(ch);
+    if (a && info)
+        set_content_info(a, info);
+}
+
+void ap_set_behavior(gaddr ch, int16_t bits)
+{
+    ap_ctl *a = ap_of(ch);
+    if (a)
+        a->behavior = (int16_t)(a->behavior | bits);
+}
+
+void ap_set_ticks(gaddr ch, int n)
+{
+    ap_ctl *a = ap_of(ch);
+    if (a)
+        a->ticks = (int16_t)n;
+}
+
+/* A list box's list made anew to the arguments given: its rows, columns
+ * and cell size, its scroll bars and grow box, and its definition (LDEF
+ * 0, or a program's own through its UPP). */
+bool ap_list_setup(gaddr ch, int rows, int cols, int cell_h, int cell_w, bool hs, bool vs, bool grow, gaddr ldef_upp)
+{
+    ap_ctl *a = ap_of(ch);
+    if (!a || a->id != 22)
+        return false;
+    if (a->list)
+        tb_LDispose(a->list);
+    qrect view = crect(ch);
+    if (vs)
+        view.right = (int16_t)(view.right - 15);
+    if (hs)
+        view.bottom = (int16_t)(view.bottom - 15);
+    gaddr saved = qd_port();
+    gaddr w = cowner(ch);
+    tb_SetPort(w);
+    gaddr rv = tmp_rect(view), db = tmp_rect((qrect){ 0, 0, (int16_t)rows, (int16_t)(cols > 0 ? cols : 1) });
+    a->list = tb_LNew(rv, db, make_pt((int16_t)cell_h, (int16_t)cell_w), 0, w, false, grow, hs, vs);
+    tb_DisposePtr(db);
+    tb_DisposePtr(rv);
+    if (a->list && ldef_upp) {
+        /* The program's definition: a handle whose code is its routine descriptor. */
+        uint32_t n = mm_is_descriptor(ldef_upp) ? 12 + 20 * ((uint32_t)rd16(ldef_upp + 10) + 1) : 0;
+        gaddr h = n ? tb_NewHandle((int32_t)n, true, false) : 0;
+        if (h) {
+            gmemcpy(rd32(h), ldef_upp, n);
+            tb_HLock(h);
+            gaddr old = ListRec_listDefProc(rd32(a->list));
+            ListRec_set_listDefProc(rd32(a->list), h);
+            (void)old; /* LDEF 0's, a resource */
+            /* lInitMsg to the new definition */
+            uint32_t args[7] = { 0, 0, 0, 0, 0, 0, a->list };
+            mm_call(rd32(h), 0x000EBD80, args, 7);
+        }
+    }
+    if (a->list)
+        tb_LSetDrawingMode(true, a->list);
+    tb_SetPort(saved);
+    return a->list != 0;
+}
