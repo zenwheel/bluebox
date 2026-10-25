@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "machine.h"
+#include "ppc.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
 
@@ -428,8 +429,43 @@ void display_note_screen_draw(qrect r)
         display_want_screen("it draws on the screen outside its windows");
 }
 
+/* BLUEBOX_WATCH=addr[,len]: the processors' stores into guest memory there
+ * logged with the instruction that made them, for finding what damages a
+ * heap between two Toolbox calls (the screen is not watched meanwhile). */
+static gaddr debug_watch_lo, debug_watch_len;
+
+static void debug_watch_written(gaddr a)
+{
+    static unsigned n;
+    if (n++ < 200)
+        log_printf("watch: store to %08X at 68k pc %08X, PowerPC pc %08X lr %08X\n", a, g_cpu ? g_cpu->op_pc : 0,
+                   g_ppc.pc, g_ppc.lr);
+}
+
+static bool debug_watch(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char *e = getenv("BLUEBOX_WATCH");
+        on = e && *e;
+        if (on) {
+            char *end;
+            debug_watch_lo = (gaddr)strtoul(e, &end, 16);
+            debug_watch_len = *end == ',' ? (gaddr)strtoul(end + 1, NULL, 0) : 4;
+        }
+    }
+    if (on) {
+        g_watch_fn = debug_watch_written;
+        g_watch_lo = debug_watch_lo;
+        g_watch_len = debug_watch_len;
+    }
+    return on;
+}
+
 static void check_screen_mode(void)
 {
+    if (debug_watch())
+        return;
     if (!screen_reason) {
         if ((int16_t)rd16(LM_MBarHeight) == 0)
             display_want_screen("it hides the menu bar");

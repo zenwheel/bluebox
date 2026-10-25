@@ -52,6 +52,21 @@ extension BlueBox {
             tb_DisposeHandle(h)
         }
 
+        /// With every call checked, damage done between two calls is found
+        /// on the way into the second, not laid on it.
+        @Test func heapCheckLooksBeforeACallToo() {
+            machine_set_heap_check(1)
+            defer { machine_set_heap_check(0) }
+            #expect(mm_debug_after_call("first"))
+            let h = tb_NewHandle(64, false, false)
+            let p = rd32(h)
+            wr32(h, p + 8) // the program's own store, between the calls
+            #expect(!mm_debug_before_call("second"))
+            wr32(h, p)
+            #expect(mm_debug_before_call("second"))
+            tb_DisposeHandle(h)
+        }
+
         @Test func clearedAllocationsAreZero() {
             let h = tb_NewHandle(64, false, true)
             #expect((0..<64).allSatisfy { rd8(rd32(h) + UInt32($0)) == 0 })

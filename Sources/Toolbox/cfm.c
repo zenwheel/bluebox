@@ -28,6 +28,7 @@
 #include "trap.h"
 
 ppc_cpu g_ppc;
+gaddr cfm_ppc_stack_lo;
 bool g_ppc_mode;
 
 /* ---------------------------------------------------------------------- */
@@ -1176,6 +1177,7 @@ void cfm_reset(void)
     stdclib_reset(); /* the last program's library state went with it */
     carbon_cf_reset();
     ppc_cpu_ready = false;
+    cfm_ppc_stack_lo = 0;
     code_check_reset(); /* the last program's code */
 }
 
@@ -1191,6 +1193,7 @@ bool cfm_ppc_cpu(void)
     gaddr stack = tb_NewPtr((int32_t)stack_size, false, true);
     if (!stack)
         return false;
+    cfm_ppc_stack_lo = stack;
     ppc_init(&g_ppc);
     g_ppc.native = dispatch_native;
     if (getenv("BLUEBOX_PPC_TRACE"))

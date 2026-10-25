@@ -19,6 +19,7 @@
 #include <stdio.h>
 
 #include "tb_internal.h"
+#include "ppc.h"
 
 enum { USE_FREE = 0, USE_NREL = 1, USE_REL = 2 };
 enum { ST_LOCK = 0x80, ST_PURGE = 0x40, ST_RSRC = 0x20 };
@@ -1085,13 +1086,16 @@ int16_t tb_HandAndHand(gaddr h1, gaddr h2)
 bool mm_check_zone(gaddr z)
 {
     gaddr lim = z_lim(z);
-    gaddr b = z_first(z);
+    gaddr b = z_first(z), prev = 0;
     while (b < lim) {
         uint32_t ps = b_psize(b);
         if (ps < HDR || b + ps > lim || (ps & 3)) {
-            log_printf("mm: zone %08X damaged at block %08X (size %u)\n", z, b, ps);
+            /* The block before says where this one starts: its size may be
+             * what was damaged. */
+            log_printf("mm: zone %08X damaged at block %08X (size %u; the block before is %08X)\n", z, b, ps, prev);
             return false;
         }
+        prev = b;
         if (b_use(b) == USE_REL) {
             gaddr mp = z + b_loc(b);
             /* The top byte may be the handle's flags, set as programs of
@@ -1138,12 +1142,28 @@ static int heap_check_every(void)
     return every;
 }
 
+/* Damage a stack did, run past its end by a recursion too deep (XContact's
+ * walk up its folders, Game Atlas's search asked to start again and again),
+ * is said so. */
+static void note_stack_overrun(void)
+{
+    gaddr r1 = g_ppc.gpr[1];
+    if (cfm_ppc_stack_lo && r1 && r1 < cfm_ppc_stack_lo && r1 > cfm_ppc_stack_lo - 0x100000)
+        log_printf("mm: the PowerPC stack has run %u bytes below its block at %08X (r1 %08X): a recursion too deep\n",
+                   cfm_ppc_stack_lo - r1, cfm_ppc_stack_lo, r1);
+    gaddr a7 = g_cpu ? g_cpu->a[7] : 0, limit = rd32(LM_ApplLimit);
+    if (a7 && limit && a7 < limit && a7 > rd32(LM_ApplZone))
+        log_printf("mm: the 68k stack has run below ApplLimit %08X (a7 %08X) into the heap\n", limit, a7);
+}
+
 static bool zones_intact(void)
 {
     gaddr zones[2] = { rd32(LM_SysZone), rd32(LM_ApplZone) };
     for (int i = 0; i < 2; i++)
-        if (zones[i] && !mm_check_zone(zones[i]))
+        if (zones[i] && !mm_check_zone(zones[i])) {
+            note_stack_overrun();
             return false;
+        }
     return true;
 }
 
