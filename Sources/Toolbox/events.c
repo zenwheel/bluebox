@@ -97,8 +97,8 @@ static void enqueue(int16_t what, uint32_t message)
     int next = (qtail + 1) % QSIZE;
     if (next == qhead) /* full: drop the oldest */
         qhead = (qhead + 1) % QSIZE;
-    queue[qtail] = (event){ what, message, rd32(LM_Ticks), make_pt(mouse_v, mouse_h),
-                            (uint16_t)(key_mods | (button_down ? 0 : btnState)) };
+    queue[qtail] = (event){ .what = what, .message = message, .when = rd32(LM_Ticks), .where = make_pt(mouse_v, mouse_h),
+                            .modifiers = (uint16_t)(key_mods | (button_down ? 0 : btnState)) };
     qtail = next;
     qversion++;
     pthread_cond_broadcast(&arrived);
@@ -583,8 +583,8 @@ static void write_event(gaddr evt, const event *e)
 
 static event null_event(void)
 {
-    event e = { nullEvent, 0, rd32(LM_Ticks), make_pt(mouse_v, mouse_h),
-                (uint16_t)(key_mods | (button_down ? 0 : btnState)) };
+    event e = { .what = nullEvent, .when = rd32(LM_Ticks), .where = make_pt(mouse_v, mouse_h),
+                .modifiers = (uint16_t)(key_mods | (button_down ? 0 : btnState)) };
     return e;
 }
 

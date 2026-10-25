@@ -309,7 +309,7 @@ void aem_queue_flat(const uint8_t *data, uint32_t len, machine_ae_reply_fn reply
         }
         off += 12 + ((elen + 1) & ~1u);
     }
-    pending_ae e = { cls, id, malloc(len), len, reply, ctx };
+    pending_ae e = { .cls = cls, .id = id, .flat = malloc(len), .flatlen = len, .reply = reply, .reply_ctx = ctx };
     memcpy(e.flat, data, len);
     enqueue(&e);
 }
