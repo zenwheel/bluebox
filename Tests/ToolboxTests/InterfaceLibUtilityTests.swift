@@ -790,6 +790,239 @@ extension BlueBox {
     }
 }
 
+extension BlueBox {
+    /// MPW's C forms of Toolbox calls: Points by address, C strings.
+    @Suite struct CForms {
+        init() { bootMachine() }
+
+        func cstr(_ s: String) -> UInt32 {
+            let p = tb_NewPtr(256, false, true)
+            for (i, b) in Array(s.utf8).enumerated() { wr8(p + UInt32(i), b) }
+            return p
+        }
+        func cstring(_ p: UInt32) -> String {
+            var b = [UInt8]()
+            var i: UInt32 = 0
+            while rd8(p + i) != 0 { b.append(rd8(p + i)); i += 1 }
+            return String(decoding: b, as: UTF8.self)
+        }
+
+        @Test func everyPascalFormIsThere() {
+            var buf = [CChar](repeating: 0, count: 1024)
+            let ok = cglue_check(&buf, 1024)
+            #expect(ok, "\(String(cString: buf))")
+        }
+
+        @Test func pointsAndStrings() {
+            launchTestApp()
+            _ = initToolbox()
+            let a = tb_NewPtr(4, false, true), b = tb_NewPtr(4, false, true)
+            wr32(a, 0x0001_0002); wr32(b, 0x0010_0020)
+            ilCall("addpt", [a, b])
+            #expect(rd32(b) == 0x0011_0022)
+            ilCall("subpt", [a, b])
+            #expect(rd32(b) == 0x0010_0020)
+            #expect(ilCall("equalpt", [b, b]) & 0xFF == 1 && ilCall("equalpt", [a, b]) & 0xFF == 0)
+            let r = tb_NewPtr(8, false, true)
+            ilCall("pt2rect", [a, b, r])
+            #expect(rd16(r) == 1 && rd16(r + 2) == 2 && rd16(r + 4) == 0x10 && rd16(r + 6) == 0x20)
+            wr32(a, 0x0005_0005)
+            #expect(ilCall("ptinrect", [a, r]) & 0xFF == 1)
+            // A C string to Pascal and back.
+            let h = ilCall("newstring", [cstr("hello")])
+            #expect(h != 0 && pstring(at: rd32(h)) == "hello")
+            ilCall("setstring", [h, cstr("bye")])
+            #expect(pstring(at: rd32(h)) == "bye")
+            #expect(Int16(truncatingIfNeeded: ilCall("iucompstring", [cstr("abc"), cstr("abd")])) == -1)
+            #expect(ilCall("iuequalstring", [cstr("abc"), cstr("abc")]) & 0xFFFF == 0)
+            let out = tb_NewPtr(256, false, true)
+            ilCall("iudatestring", [0, 0, out])
+            #expect(cstring(out) == "1/1/04")
+            let vol = tb_NewPtr(256, false, true), vref = tb_NewPtr(2, false, true)
+            #expect(ilCall16("getvol", [vol, vref]) == 0 && !cstring(vol).isEmpty)
+        }
+    }
+}
+
+extension BlueBox {
+    /// The Script Manager's tokenizer and its other remaining calls.
+    @Suite struct ScriptUtilities {
+        init() { bootMachine() }
+
+        func text(_ s: String) -> (UInt32, Int) {
+            let b = Array(s.utf8)
+            let p = tb_NewPtr(Int32(max(b.count, 1)), false, true)
+            for (i, x) in b.enumerated() { wr8(p + UInt32(i), x) }
+            return (p, b.count)
+        }
+
+        @Test func intlTokenize() {
+            let (src, n) = text("x1 := 3.25 + foo; \"hi\" (*note*)\r")
+            let tb = tb_NewPtr(100, false, true), tokens = tb_NewPtr(14 * 32, false, true)
+            let strings = tb_NewPtr(256, false, true)
+            wr32(tb, src); wr32(tb + 4, UInt32(n))
+            wr32(tb + 8, tokens); wr32(tb + 12, 32)
+            wr32(tb + 20, strings); wr32(tb + 24, 256)
+            wr8(tb + 32, 1)                  // doString
+            wr8(tb + 34, 1)                  // doAlphanumeric
+            wr16(tb + 36, 51); wr16(tb + 38, 0xFFFF) // "..." literals
+            wr16(tb + 40, 51); wr16(tb + 42, 0xFFFF)
+            wr16(tb + 44, 16); wr16(tb + 46, 26)    // (* ... *)
+            wr16(tb + 48, 0xFFFF); wr16(tb + 50, 0xFFFF)
+            wr16(tb + 52, 26); wr16(tb + 54, 17)
+            wr16(tb + 56, 0xFFFF); wr16(tb + 58, 0xFFFF)
+            wr16(tb + 62, 46)                // the decimal point
+            #expect(tb_IntlTokenize(tb) == 0)
+            let count = Int(rd32(tb + 16))
+            let kinds = (0..<count).map { Int16(bitPattern: rd16(tokens + UInt32($0 * 14))) }
+            // x1, white, :=, white, 3.25, white, +, white, foo, ;, white, "  hi  ", white, (* *), new line
+            #expect(kinds == [4, 1, 39, 1, 12, 1, 24, 1, 4, 53, 1, 2, 9, 3, 1, 7, 8, 6])
+            #expect(pstring(at: rd32(tokens + 10)) == "x1")
+            #expect(rd32(tokens + 4 * 14 + 6) == 4 && rd32(tokens + 4 * 14 + 2) == src + 6) // "3.25"
+            // Too few tokens allowed.
+            wr32(tb + 12, 3)
+            #expect(tb_IntlTokenize(tb) == 1 && rd32(tb + 16) == 3) // tokenOverflow
+        }
+
+        @Test func otherScriptCalls() {
+            launchTestApp()
+            _ = initToolbox()
+            // A format back to its text, with its parts.
+            let fmt = tb_NewPtr(256, false, true), parts = tb_NewPtr(256, false, true)
+            guestPString("#,##0.00;(#,##0.00);0", at: parts) // (used as the input string)
+            let canonical = tb_NewPtr(256, false, true)
+            #expect(tb_StringToFormatRec(parts, 0, canonical) == 0)
+            let positions = tb_NewPtr(12, false, true)
+            #expect(tb_FormatRecToString(canonical, 0, fmt, positions) == 0)
+            #expect(pstring(at: fmt) == "#,##0.00;(#,##0.00);0")
+            #expect(rd16(positions) == 1 && rd16(positions + 2) == 8 && rd16(positions + 4) == 10 && rd16(positions + 10) == 1)
+
+            #expect(tb_GetScriptUtilityAddress(10, 1, 0) == 0)
+            tb_SetScriptUtilityAddress(10, 1, 0x1234, 0)
+            #expect(tb_GetScriptUtilityAddress(10, 1, 0) == 0x1234 && tb_GetScriptUtilityAddress(10, 0, 0) == 0)
+            tb_SetScriptQDPatchAddress(Int16(bitPattern: 0xA884), 0, 1, 0x5678, 1)
+            #expect(tb_GetScriptQDPatchAddress(Int16(bitPattern: 0xA884), 0, 1, 1) == 0x5678)
+
+            #expect(Int16(truncatingIfNeeded: ilCall("ScriptOrder", [0, 1])) == -1)
+            let a = tb_NewPtr(16, false, true), b = tb_NewPtr(16, false, true)
+            guestPString("apple", at: a); guestPString("Apple", at: b)
+            #expect(Int16(truncatingIfNeeded: ilCall("IUStringOrder", [a, b, 0, 0, 0, 0])) == tb_IUMagString(a + 1, b + 1, 5, 5))
+            #expect(Int16(truncatingIfNeeded: ilCall("IUStringOrder", [a, b, 1, 0, 0, 0])) == 1)
+            #expect(Int16(truncatingIfNeeded: ilCall("IUStringOrder", [a, a, 0, 0, 3, 1])) == 1)
+
+            let (t, n) = text("one two")
+            let offsets = tb_NewPtr(12, false, true)
+            tb_NFindWord(t, Int16(n), 5, 1, 0, offsets)
+            #expect(rd16(offsets) == 4 && rd16(offsets + 2) == 7)
+            #expect(tb_PortionText(t, Int32(n)) > 0)
+
+            // Fonts: FetchFontInfo leaves the port's font alone.
+            let port = qd_port()
+            let info = tb_NewPtr(8, false, true), info2 = tb_NewPtr(8, false, true)
+            let before = rd16(port + UInt32(GrafPort_txSize_off))
+            #expect(tb_FetchFontInfo(0, 24, 0, info) == 0)
+            #expect(rd16(port + UInt32(GrafPort_txSize_off)) == before)
+            tb_TextSize(24)
+            tb_GetFontInfo(info2)
+            #expect(rd32(info) == rd32(info2) && rd32(info + 4) == rd32(info2 + 4))
+            let r = tb_NewPtr(8, false, true)
+            tb_QDTextBounds(Int16(n), t, r)
+            #expect(Int16(bitPattern: rd16(r)) == -Int16(bitPattern: rd16(info2)) && rd16(r + 6) == UInt16(tb_TextWidth(t, 0, Int16(n))))
+
+            // StripText and the rest.
+            let (u, un) = text("ete")
+            wr8(u, 0x8E); wr8(u + 2, 0x8E) // é t é in Mac Roman
+            ilCall("StripUpperText", [u, UInt32(un)])
+            #expect(rd8(u) == 0x45 && rd8(u + 1) == 0x54)
+            ilCall("TempInsertROMMap", [1])
+            #expect(rd16(0xB9E) == 0xFFFF)
+            #expect(ilCall("GetTrapVector", [0xA9A0]) == UInt32(TB_TRAP_TABLE) + 0x1A0 * 4)
+            #expect(ilCall("GetTrapVector", [0xA02E]) == UInt32(OS_TRAP_TABLE) + 0x2E * 4)
+        }
+
+        @Test func quickDrawMenusAndCursorComponents() {
+            launchTestApp()
+            _ = initToolbox()
+            let gd = rd32(UInt32(LM_MainDevice))
+            let pm = rd32(rd32(gd) + UInt32(GDevice_gdPMap_off))
+            #expect(ilCall("GetPixRowBytes", [pm]) == UInt32(rd16(rd32(pm) + 4) & 0x3FFF))
+            let port = qd_port(), out = tb_NewPtr(12, false, true)
+            wr32(out, 7)
+            #expect(ilCall16("GetPortCustomXFerProc", [port, out, out + 4, out + 8]) == 0 && rd32(out) == 0)
+            #expect(ilCall16("SetPortCustomXFerProc", [port, 0, 0, 0]) == 0)
+            #expect(ilCall16("SetPortCustomXFerProc", [port, 0x1000, 0, 0]) == -4)
+
+            let entry = native_register(testComponent, "TestComponent", 0)
+            let cd = tb_NewPtr(20, false, true)
+            wr32(cd, fourCC("curs"))
+            let comp = ilCall("RegisterComponent", [cd, entry, 0, 0, 0, 0])
+            #expect(ilCall16("OpenCursorComponent", [comp, out]) == 0 && rd32(out) != 0)
+            let ci = rd32(out)
+            #expect(ilCall16("SetCursorComponent", [0]) == 0)
+            #expect(ilCall16("SetCursorComponent", [ci]) == -4)
+            #expect(ilCall16("CursorComponentChanged", [ci]) == 0)
+            #expect(ilCall16("CursorComponentSetData", [ci, 5]) == 0)
+            #expect(ilCall16("CloseCursorComponent", [ci]) == 0)
+            #expect(ilCall16("OpenCursorComponent", [0, out]) == -3000)
+
+            // A font menu: the fonts there are, after item 0.
+            let menu = tb_NewPtr(256, false, true)
+            guestPString("Font", at: menu)
+            let mh = tb_NewMenu(300, menu)
+            ilCall("InsertFontResMenu", [mh, 0, 0xFFFF])
+            let fonts = tb_CountMItems(mh)
+            let mh2 = tb_NewMenu(301, menu)
+            tb_AppendResMenu(mh2, Int32(bitPattern: fourCC("FONT")))
+            #expect(fonts == tb_CountMItems(mh2))
+        }
+
+        @Test func startupParametersAndManagers() {
+            // GetOSDefault through its trap: Mac OS.
+            let rec = tb_NewPtr(4, false, true)
+            let reason = run68k([
+                0x207C, hiWord(rec), loWord(rec), // MOVEA.L #rec,A0
+                0xA084,                           // _GetOSDefault
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell" && rd8(rec + 1) == 1)
+            wr32(rec, 0x0102_0304)
+            tb_SetDefaultStartup(rec)
+            wr32(rec, 0)
+            tb_GetDefaultStartup(rec)
+            #expect(rd32(rec) == 0x0102_0304)
+            tb_SetTimeout(7)
+            tb_GetTimeout(rec)
+            #expect(rd16(rec) == 7)
+
+            // The Extension Manager after startup: an empty table.
+            let h = tb_NewPtr(4, false, true)
+            #expect(ilCall16("InstallExtensionTableHandlerProc", [0x4000, h]) == 0)
+            #expect(rd32(rd32(rd32(h))) == 20 && rd32(rd32(rd32(h)) + 4) == 0x100 && rd32(rd32(rd32(h)) + 16) == 0)
+            #expect(ilCall16("RemoveExtensionTableHandlerProc", [0x4000]) == 0)
+            #expect(ilCall16("InstallExtensionNotificationProc", [0x4004]) == 0)
+            #expect(ilCall16("RemoveExtensionNotificationProc", [0x4004]) == 0)
+            #expect(ilCall16("RemoveExtensionNotificationProc", [0x4004]) == -50)
+
+            #expect(ilCall16("PrLoadDriver", []) == 0)
+            ilCall("PrNoPurge", [])
+            ilCall("PrPurge", [])
+            #expect(ilCall16("LaunchControlPanel", [rec]) == -4)
+
+            // SetTime sets the clock, which then goes on from there.
+            let date = tb_NewPtr(14, false, true)
+            wr16(date, 2001); wr16(date + 2, 2); wr16(date + 4, 3)
+            wr16(date + 6, 4); wr16(date + 8, 5); wr16(date + 10, 6)
+            ilCall("SetTime", [date])
+            var secs: UInt32 = 0
+            tb_DateToSeconds(date, &secs)
+            #expect(rd32(UInt32(LM_Time)) == secs)
+            let now = tb_NewPtr(4, false, true)
+            tb_GetDateTime(now)
+            #expect(rd32(now) >= secs && rd32(now) < secs + 5)
+        }
+    }
+}
+
 nonisolated(unsafe) var avlDisposed: [UInt32] = []
 nonisolated(unsafe) var avlWalked: [(key: UInt32, level: UInt32)] = []
 

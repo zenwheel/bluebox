@@ -85,6 +85,68 @@ static void il_DMDisposePortComponent(ppc_cpu *c) { RETURN((int32_t)tb_DMDispose
 static void il_cantCreatePicker(ppc_cpu *c) { RETURN((int32_t)-4004); }
 static void il_noPicker(ppc_cpu *c) { RETURN((int32_t)paramErr); }
 
+/* ScriptOrder: Pack6's IUScriptOrder by its other name. */
+static void il_ScriptOrder(ppc_cpu *c) { RETURN((int32_t)tb_IUScriptOrder((int16_t)R(0), (int16_t)R(1))); }
+/* IUStringOrder(a, b, aScript, bScript, aLang, bLang) */
+int16_t il_string_order(gaddr a, gaddr b, int16_t aScript, int16_t bScript, int16_t aLang, int16_t bLang);
+static void il_IUStringOrder(ppc_cpu *c)
+{
+    RETURN((int32_t)il_string_order(R(0), R(1), (int16_t)R(2), (int16_t)R(3), (int16_t)R(4), (int16_t)R(5)));
+}
+/* StripText and StripUpperText (_LowerText's variants): marks taken
+ * off, and for the second the case made upper. */
+static void il_StripText(ppc_cpu *c)
+{
+    intl_convert_text(R(0), (int16_t)R(1), false, true);
+    c->pc = c->lr;
+}
+static void il_StripUpperText(ppc_cpu *c)
+{
+    intl_convert_text(R(0), (int16_t)R(1), true, true);
+    c->pc = c->lr;
+}
+/* TempInsertROMMap(tempResLoad): the glue's MOVE.W of $FF (RomMapInsert)
+ * and the flag (TmpResLoad) to $B9E. */
+static void il_TempInsertROMMap(ppc_cpu *c)
+{
+    wr16(0x0B9E, (R(0) & 0xFF) ? 0xFFFF : 0xFF00);
+    c->pc = c->lr;
+}
+/* GetTrapVector(trapNumber): the trap's entry in its table. */
+static void il_GetTrapVector(ppc_cpu *c)
+{
+    uint16_t t = (uint16_t)R(0);
+    RETURN(t & 0x0800 ? TB_TRAP_TABLE + (t & 0x3FFu) * 4 : OS_TRAP_TABLE + (t & 0xFFu) * 4);
+}
+/* StandardOpenDialog(reply): StandardGetFile for any file; noErr, or
+ * userCanceledErr. */
+static void il_StandardOpenDialog(ppc_cpu *c)
+{
+    gaddr reply = R(0);
+    void (*fn)(ppc_cpu *) = cfm_export_fn("StandardGetFile");
+    uint32_t lr = c->lr;
+    if (!fn || !reply)
+        RETURN((int32_t)paramErr);
+    c->gpr[3] = 0;
+    c->gpr[4] = (uint32_t)-1;
+    c->gpr[5] = 0;
+    c->gpr[6] = reply;
+    fn(c);
+    c->lr = lr;
+    RETURN(rd8(reply) ? noErr : -128);
+}
+/* FTSendAsync and FTReceiveAsync: FTSend and FTReceive, which return as
+ * soon as the transfer starts, FTExec moving it on. */
+static void forward(ppc_cpu *c, const char *name)
+{
+    void (*fn)(ppc_cpu *) = cfm_export_fn(name);
+    if (!fn)
+        RETURN((int32_t)paramErr);
+    fn(c);
+}
+static void il_FTSendAsync(ppc_cpu *c) { forward(c, "FTSend"); }
+static void il_FTReceiveAsync(ppc_cpu *c) { forward(c, "FTReceive"); }
+
 /* GetEventQueue: the Event Manager's queue header, in low memory. */
 static void il_GetEventQueue(ppc_cpu *c) { RETURN(LM_EventQueue); }
 
@@ -95,6 +157,10 @@ static const ppc_export lm_exports[] = {
     LM(StackLowPoint), LM(UnitTableEntryCount), LM(WordRedraw), LM(MouseTemp), LM(RawMouseLocation),
     LM(TheCursor),
     { "GetEventQueue", il_GetEventQueue }, { "DMDisposePortComponent", il_DMDisposePortComponent },
+    { "ScriptOrder", il_ScriptOrder }, { "IUStringOrder", il_IUStringOrder }, { "StripText", il_StripText },
+    { "StripUpperText", il_StripUpperText }, { "TempInsertROMMap", il_TempInsertROMMap },
+    { "GetTrapVector", il_GetTrapVector }, { "StandardOpenDialog", il_StandardOpenDialog },
+    { "FTSendAsync", il_FTSendAsync }, { "FTReceiveAsync", il_FTReceiveAsync },
     { "CreateColorDialog", il_cantCreatePicker }, { "CreatePickerDialog", il_cantCreatePicker },
     { "AddPickerToDialog", il_cantCreatePicker }, { "DisposeColorPicker", il_noPicker },
     { "DoPickerDraw", il_noPicker }, { "DoPickerEdit", il_noPicker }, { "DoPickerEvent", il_noPicker },
@@ -247,6 +313,8 @@ static const unsigned cc_export_count = sizeof cc_exports / sizeof cc_exports[0]
 
 extern const ppc_export dsl_exports[];
 extern const unsigned dsl_export_count;
+extern const ppc_export cglue_exports[];
+extern const unsigned cglue_export_count;
 
 typedef struct {
     const ppc_export *table;
@@ -257,11 +325,13 @@ static const export_table tables[] = {
     { dsl_exports, &dsl_export_count },
     { lm_exports, &lm_export_count },
     { cc_exports, &cc_export_count },
+    { cglue_exports, &cglue_export_count },
 };
 
 void dictionary_reset(void);
 void tsm_reset(void);
 void dmgr_reset(void);
+void ilmisc_reset(void);
 
 /* A fresh machine. */
 void ilutil_reset(void)
@@ -269,6 +339,7 @@ void ilutil_reset(void)
     dictionary_reset();
     tsm_reset();
     dmgr_reset();
+    ilmisc_reset();
 }
 
 void (*ilutil_export_fn(const char *name))(ppc_cpu *)

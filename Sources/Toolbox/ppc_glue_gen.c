@@ -4664,6 +4664,13 @@ static void ppcglue_DiskEject(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetTagBuffer(ppc_cpu *c)
+{
+    gaddr a_bp = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetTagBuffer(a_bp);
+    c->pc = c->lr;
+}
+
 static void ppcglue_DILoad(ppc_cpu *c)
 {
     tb_DILoad();
@@ -7593,6 +7600,22 @@ static void ppcglue_IUMagIDPString(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_IUScriptOrder(ppc_cpu *c)
+{
+    int16_t a_script1 = (int16_t)c->gpr[3];
+    int16_t a_script2 = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IUScriptOrder(a_script1, a_script2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IULangOrder(ppc_cpu *c)
+{
+    int16_t a_l1 = (int16_t)c->gpr[3];
+    int16_t a_l2 = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IULangOrder(a_l1, a_l2);
+    c->pc = c->lr;
+}
+
 static void ppcglue_IUTextOrder(ppc_cpu *c)
 {
     gaddr a_ptra = (gaddr)c->gpr[3];
@@ -9629,11 +9652,25 @@ static void ppcglue_ReadDateTime(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetDateTime(ppc_cpu *c)
+{
+    uint32_t a_mactime = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDateTime(a_mactime);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SecondsToDate(ppc_cpu *c)
 {
     uint32_t a_mactime = (uint32_t)c->gpr[3];
     gaddr a_d = (gaddr)c->gpr[4];
     tb_SecondsToDate(a_mactime, a_d);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTime(ppc_cpu *c)
+{
+    gaddr a_d = (gaddr)c->gpr[3];
+    tb_SetTime(a_d);
     c->pc = c->lr;
 }
 
@@ -16856,6 +16893,14 @@ static void ppcglue_TEDeactivate(ppc_cpu *c)
     }
     gaddr a_teh = (gaddr)c->gpr[3];
     tb_TEDeactivate(a_teh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TESetWordBreak(ppc_cpu *c)
+{
+    gaddr a_wb = (gaddr)c->gpr[3];
+    gaddr a_teh = (gaddr)c->gpr[4];
+    tb_TESetWordBreak(a_wb, a_teh);
     c->pc = c->lr;
 }
 
@@ -24800,6 +24845,296 @@ static void ppcglue_NPickColor(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_IntlTokenize(ppc_cpu *c)
+{
+    gaddr a_tokenParam = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IntlTokenize(a_tokenParam);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NFindWord(ppc_cpu *c)
+{
+    gaddr a_textPtr = (gaddr)c->gpr[3];
+    int16_t a_textLength = (int16_t)c->gpr[4];
+    int16_t a_offset = (int16_t)c->gpr[5];
+    int8_t a_leadingEdge = (int8_t)c->gpr[6];
+    gaddr a_nbreaks = (gaddr)c->gpr[7];
+    gaddr a_offsets = (gaddr)c->gpr[8];
+    tb_NFindWord(a_textPtr, a_textLength, a_offset, a_leadingEdge, a_nbreaks, a_offsets);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PortionText(ppc_cpu *c)
+{
+    gaddr a_textPtr = (gaddr)c->gpr[3];
+    int32_t a_textLength = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_PortionText(a_textPtr, a_textLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FormatRecToString(ppc_cpu *c)
+{
+    gaddr a_myCanonical = (gaddr)c->gpr[3];
+    gaddr a_partsTable = (gaddr)c->gpr[4];
+    gaddr a_outString = (gaddr)c->gpr[5];
+    gaddr a_positions = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FormatRecToString(a_myCanonical, a_partsTable, a_outString, a_positions);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetScriptUtilityAddress(ppc_cpu *c)
+{
+    int16_t a_selector = (int16_t)c->gpr[3];
+    int8_t a_before = (int8_t)c->gpr[4];
+    int16_t a_script = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetScriptUtilityAddress(a_selector, a_before, a_script);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetScriptUtilityAddress(ppc_cpu *c)
+{
+    int16_t a_selector = (int16_t)c->gpr[3];
+    int8_t a_before = (int8_t)c->gpr[4];
+    gaddr a_routineAddr = (gaddr)c->gpr[5];
+    int16_t a_script = (int16_t)c->gpr[6];
+    tb_SetScriptUtilityAddress(a_selector, a_before, a_routineAddr, a_script);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetScriptQDPatchAddress(ppc_cpu *c)
+{
+    int16_t a_trapNum = (int16_t)c->gpr[3];
+    int8_t a_before = (int8_t)c->gpr[4];
+    int8_t a_forPrinting = (int8_t)c->gpr[5];
+    int16_t a_script = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetScriptQDPatchAddress(a_trapNum, a_before, a_forPrinting, a_script);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetScriptQDPatchAddress(ppc_cpu *c)
+{
+    int16_t a_trapNum = (int16_t)c->gpr[3];
+    int8_t a_before = (int8_t)c->gpr[4];
+    int8_t a_forPrinting = (int8_t)c->gpr[5];
+    gaddr a_routineAddr = (gaddr)c->gpr[6];
+    int16_t a_script = (int16_t)c->gpr[7];
+    tb_SetScriptQDPatchAddress(a_trapNum, a_before, a_forPrinting, a_routineAddr, a_script);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QDTextBounds(ppc_cpu *c)
+{
+    int16_t a_byteCount = (int16_t)c->gpr[3];
+    gaddr a_textAddr = (gaddr)c->gpr[4];
+    gaddr a_bounds = (gaddr)c->gpr[5];
+    tb_QDTextBounds(a_byteCount, a_textAddr, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FetchFontInfo(ppc_cpu *c)
+{
+    int16_t a_fontID = (int16_t)c->gpr[3];
+    int16_t a_fontSize = (int16_t)c->gpr[4];
+    int16_t a_fontStyle = (int16_t)c->gpr[5];
+    gaddr a_info = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FetchFontInfo(a_fontID, a_fontSize, a_fontStyle, a_info);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertFontResMenu(ppc_cpu *c)
+{
+    gaddr a_theMenu = (gaddr)c->gpr[3];
+    int16_t a_afterItem = (int16_t)c->gpr[4];
+    int16_t a_scriptFilter = (int16_t)c->gpr[5];
+    tb_InsertFontResMenu(a_theMenu, a_afterItem, a_scriptFilter);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertIntlResMenu(ppc_cpu *c)
+{
+    gaddr a_theMenu = (gaddr)c->gpr[3];
+    uint32_t a_theType = (uint32_t)c->gpr[4];
+    int16_t a_afterItem = (int16_t)c->gpr[5];
+    int16_t a_scriptFilter = (int16_t)c->gpr[6];
+    tb_InsertIntlResMenu(a_theMenu, a_theType, a_afterItem, a_scriptFilter);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetPixRowBytes(ppc_cpu *c)
+{
+    gaddr a_pm = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetPixRowBytes(a_pm);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetPortCustomXFerProc(ppc_cpu *c)
+{
+    gaddr a_port = (gaddr)c->gpr[3];
+    gaddr a_proc = (gaddr)c->gpr[4];
+    gaddr a_flags = (gaddr)c->gpr[5];
+    gaddr a_refCon = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetPortCustomXFerProc(a_port, a_proc, a_flags, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetPortCustomXFerProc(ppc_cpu *c)
+{
+    gaddr a_port = (gaddr)c->gpr[3];
+    gaddr a_proc = (gaddr)c->gpr[4];
+    uint32_t a_flags = (uint32_t)c->gpr[5];
+    uint32_t a_refCon = (uint32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetPortCustomXFerProc(a_port, a_proc, a_flags, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenCursorComponent(ppc_cpu *c)
+{
+    uint32_t a_c = (uint32_t)c->gpr[3];
+    gaddr a_ci = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenCursorComponent(a_c, a_ci);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseCursorComponent(ppc_cpu *c)
+{
+    uint32_t a_ci = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseCursorComponent(a_ci);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetCursorComponent(ppc_cpu *c)
+{
+    uint32_t a_ci = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetCursorComponent(a_ci);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CursorComponentChanged(ppc_cpu *c)
+{
+    uint32_t a_ci = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CursorComponentChanged(a_ci);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CursorComponentSetData(ppc_cpu *c)
+{
+    uint32_t a_ci = (uint32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CursorComponentSetData(a_ci, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDefaultStartup(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_GetDefaultStartup(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDefaultStartup(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetDefaultStartup(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetVideoDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetVideoDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetOSDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_SetOSDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetOSDefault(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    tb_GetOSDefault(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTimeout(ppc_cpu *c)
+{
+    gaddr a_count = (gaddr)c->gpr[3];
+    tb_GetTimeout(a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTimeout(ppc_cpu *c)
+{
+    int16_t a_count = (int16_t)c->gpr[3];
+    tb_SetTimeout(a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallExtensionNotificationProc(ppc_cpu *c)
+{
+    gaddr a_extNotificationProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallExtensionNotificationProc(a_extNotificationProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveExtensionNotificationProc(ppc_cpu *c)
+{
+    gaddr a_extNotificationProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveExtensionNotificationProc(a_extNotificationProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallExtensionTableHandlerProc(ppc_cpu *c)
+{
+    gaddr a_extMgrProc = (gaddr)c->gpr[3];
+    gaddr a_extTable = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallExtensionTableHandlerProc(a_extMgrProc, a_extTable);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveExtensionTableHandlerProc(ppc_cpu *c)
+{
+    gaddr a_extMgrProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveExtensionTableHandlerProc(a_extMgrProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PrLoadDriver(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PrLoadDriver();
+    c->pc = c->lr;
+}
+
+static void ppcglue_PrNoPurge(ppc_cpu *c)
+{
+    tb_PrNoPurge();
+    c->pc = c->lr;
+}
+
+static void ppcglue_PrPurge(ppc_cpu *c)
+{
+    tb_PrPurge();
+    c->pc = c->lr;
+}
+
+static void ppcglue_LaunchDeskAccessory(ppc_cpu *c)
+{
+    gaddr a_pFileSpec = (gaddr)c->gpr[3];
+    gaddr a_pDAName = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LaunchDeskAccessory(a_pFileSpec, a_pDAName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_LaunchControlPanel(ppc_cpu *c)
+{
+    gaddr a_pFileSpec = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LaunchControlPanel(a_pFileSpec);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -27614,34 +27949,6 @@ static void ppctrap_IUMystery(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_IUScriptOrder(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, 0x1E);
-    ppc_trap((uint16_t)(0xA9ED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_IULangOrder(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, 0x20);
-    ppc_trap((uint16_t)(0xA9ED));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_MaxMem(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -27787,17 +28094,6 @@ static void ppctrap_PtrToHand(ppc_cpu *c)
     ppc_trap_set(0, c->gpr[5]);
     ppc_trap((uint16_t)(0xA9E3));
     if (o_h) wr32(o_h, ppc_trap_get(8));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDateTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA03A));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
     ppc_trap_end();
     c->gpr[3] = r;
@@ -36879,6 +37175,7 @@ const ppc_export ppc_exports[] = {
     {"CloneCollection", ppctrap_CloneCollection},
     {"CloseCPort", ppcglue_CloseCPort},
     {"CloseConnection", ppctrap_CloseConnection},
+    {"CloseCursorComponent", ppcglue_CloseCursorComponent},
     {"CloseDeskAcc", ppcglue_CloseDeskAcc},
     {"CloseDialog", ppcglue_CloseDialog},
     {"CloseDictionary", ppcglue_CloseDictionary},
@@ -36981,6 +37278,8 @@ const ppc_export ppc_exports[] = {
     {"CreateShortcutMovieFile", ppctrap_CreateShortcutMovieFile},
     {"CreateThreadPool", ppcglue_CreateThreadPool},
     {"CurResFile", ppcglue_CurResFile},
+    {"CursorComponentChanged", ppcglue_CursorComponentChanged},
+    {"CursorComponentSetData", ppcglue_CursorComponentSetData},
     {"CustomGetFile", ppcglue_CustomGetFile},
     {"CustomGetFilePreview", ppcglue_CustomGetFilePreview},
     {"CustomPutFile", ppcglue_CustomPutFile},
@@ -37272,6 +37571,7 @@ const ppc_export ppc_exports[] = {
     {"FSpRstFLock", ppctrap_FSpRstFLock},
     {"FSpSetFInfo", ppcglue_FSpSetFInfo},
     {"FSpSetFLock", ppctrap_FSpSetFLock},
+    {"FetchFontInfo", ppcglue_FetchFontInfo},
     {"FillArc", ppcglue_FillArc},
     {"FillCArc", ppcglue_FillCArc},
     {"FillCOval", ppcglue_FillCOval},
@@ -37333,6 +37633,7 @@ const ppc_export ppc_exports[] = {
     {"FontToScript", ppcglue_FontToScript},
     {"ForEachIconDo", ppcglue_ForEachIconDo},
     {"ForeColor", ppcglue_ForeColor},
+    {"FormatRecToString", ppcglue_FormatRecToString},
     {"Frac2Fix", ppcglue_Frac2Fix},
     {"FracCos", ppcglue_FracCos},
     {"FracDiv", ppcglue_FracDiv},
@@ -37568,6 +37869,7 @@ const ppc_export ppc_exports[] = {
     {"GetDblTime", ppcglue_GetDblTime},
     {"GetDefaultInputMethod", ppcglue_GetDefaultInputMethod},
     {"GetDefaultOutputVolume", ppcglue_GetDefaultOutputVolume},
+    {"GetDefaultStartup", ppcglue_GetDefaultStartup},
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
     {"GetDialogItem", ppcglue_GetDialogItem},
@@ -37765,6 +38067,7 @@ const ppc_export ppc_exports[] = {
     {"GetNextTrackForCompositing", ppctrap_GetNextTrackForCompositing},
     {"GetNextTrackReferenceType", ppctrap_GetNextTrackReferenceType},
     {"GetNextUserDataType", ppctrap_GetNextUserDataType},
+    {"GetOSDefault", ppcglue_GetOSDefault},
     {"GetOSEvent", ppcglue_GetOSEvent},
     {"GetOSTrapAddress", ppcglue_GetOSTrapAddress},
     {"GetOutlinePreferred", ppcglue_GetOutlinePreferred},
@@ -37780,9 +38083,11 @@ const ppc_export ppc_exports[] = {
     {"GetPixBaseAddr", ppcglue_GetPixBaseAddr},
     {"GetPixMapInfo", ppcglue_GetPixMapInfo},
     {"GetPixPat", ppcglue_GetPixPat},
+    {"GetPixRowBytes", ppcglue_GetPixRowBytes},
     {"GetPixel", ppcglue_GetPixel},
     {"GetPixelsState", ppcglue_GetPixelsState},
     {"GetPort", ppcglue_GetPort},
+    {"GetPortCustomXFerProc", ppcglue_GetPortCustomXFerProc},
     {"GetPortNameFromProcessSerialNumber", ppcglue_GetPortNameFromProcessSerialNumber},
     {"GetPosterBox", ppctrap_GetPosterBox},
     {"GetPreserveGlyph", ppcglue_GetPreserveGlyph},
@@ -37800,6 +38105,8 @@ const ppc_export ppc_exports[] = {
     {"GetScanOverride", ppcglue_GetScanOverride},
     {"GetScrap", ppcglue_GetScrap},
     {"GetScriptManagerVariable", ppcglue_GetScriptManagerVariable},
+    {"GetScriptQDPatchAddress", ppcglue_GetScriptQDPatchAddress},
+    {"GetScriptUtilityAddress", ppcglue_GetScriptUtilityAddress},
     {"GetScriptVariable", ppcglue_GetScriptVariable},
     {"GetServiceList", ppcglue_GetServiceList},
     {"GetSharedLibrary", ppctrap_GetSharedLibrary},
@@ -37867,6 +38174,7 @@ const ppc_export ppc_exports[] = {
     {"GetTimeBaseStatus", ppcglue_GetTimeBaseStatus},
     {"GetTimeBaseStopTime", ppcglue_GetTimeBaseStopTime},
     {"GetTimeBaseTime", ppcglue_GetTimeBaseTime},
+    {"GetTimeout", ppcglue_GetTimeout},
     {"GetToolTrapAddress", ppcglue_GetToolTrapAddress},
     {"GetTrackAlternate", ppctrap_GetTrackAlternate},
     {"GetTrackBoundsRgn", ppctrap_GetTrackBoundsRgn},
@@ -38005,13 +38313,13 @@ const ppc_export ppc_exports[] = {
     {"IUDateString", ppcglue_IUDateString},
     {"IULDateString", ppcglue_IULDateString},
     {"IULTimeString", ppcglue_IULTimeString},
-    {"IULangOrder", ppctrap_IULangOrder},
+    {"IULangOrder", ppcglue_IULangOrder},
     {"IUMagIDPString", ppcglue_IUMagIDPString},
     {"IUMagIDString", ppcglue_IUMagIDString},
     {"IUMagPString", ppcglue_IUMagPString},
     {"IUMagString", ppcglue_IUMagString},
     {"IUMystery", ppctrap_IUMystery},
-    {"IUScriptOrder", ppctrap_IUScriptOrder},
+    {"IUScriptOrder", ppcglue_IUScriptOrder},
     {"IUTextOrder", ppcglue_IUTextOrder},
     {"IUTimePString", ppcglue_IUTimePString},
     {"IUTimeString", ppcglue_IUTimeString},
@@ -38060,6 +38368,8 @@ const ppc_export ppc_exports[] = {
     {"InsXTime", ppcglue_InsXTime},
     {"InsertEmptyMovieSegment", ppcglue_InsertEmptyMovieSegment},
     {"InsertEmptyTrackSegment", ppctrap_InsertEmptyTrackSegment},
+    {"InsertFontResMenu", ppcglue_InsertFontResMenu},
+    {"InsertIntlResMenu", ppcglue_InsertIntlResMenu},
     {"InsertMediaIntoTrack", ppctrap_InsertMediaIntoTrack},
     {"InsertMenu", ppcglue_InsertMenu},
     {"InsertMenuItem", ppcglue_InsertMenuItem},
@@ -38069,10 +38379,13 @@ const ppc_export ppc_exports[] = {
     {"InsertTrackSegment", ppctrap_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
+    {"InstallExtensionNotificationProc", ppcglue_InstallExtensionNotificationProc},
+    {"InstallExtensionTableHandlerProc", ppcglue_InstallExtensionTableHandlerProc},
     {"InstallFS", ppcglue_InstallFS},
     {"InstallReceiveHandler", ppcglue_InstallReceiveHandler},
     {"InstallTrackingHandler", ppcglue_InstallTrackingHandler},
     {"IntlScript", ppcglue_IntlScript},
+    {"IntlTokenize", ppcglue_IntlTokenize},
     {"InvalMenuBar", ppcglue_InvalMenuBar},
     {"InvalRect", ppcglue_InvalRect},
     {"InvalRgn", ppcglue_InvalRgn},
@@ -38609,6 +38922,8 @@ const ppc_export ppc_exports[] = {
     {"LSize", ppcglue_LSize},
     {"LUpdate", ppcglue_LUpdate},
     {"LaunchApplication", ppcglue_LaunchApplication},
+    {"LaunchControlPanel", ppcglue_LaunchControlPanel},
+    {"LaunchDeskAccessory", ppcglue_LaunchDeskAccessory},
     {"Line", ppcglue_Line},
     {"LineTo", ppcglue_LineTo},
     {"LoWord", ppcglue_LoWord},
@@ -38708,6 +39023,7 @@ const ppc_export ppc_exports[] = {
     {"MovieSearchText", ppctrap_MovieSearchText},
     {"MoviesTask", ppcglue_MoviesTask},
     {"Munger", ppcglue_Munger},
+    {"NFindWord", ppcglue_NFindWord},
     {"NMInstall", ppcglue_NMInstall},
     {"NMRemove", ppcglue_NMRemove},
     {"NPickColor", ppcglue_NPickColor},
@@ -38816,6 +39132,7 @@ const ppc_export ppc_exports[] = {
     {"OpenADataHandler", ppctrap_OpenADataHandler},
     {"OpenCPicture", ppcglue_OpenCPicture},
     {"OpenCPort", ppcglue_OpenCPort},
+    {"OpenCursorComponent", ppcglue_OpenCursorComponent},
     {"OpenDeskAcc", ppcglue_OpenDeskAcc},
     {"OpenDictionary", ppcglue_OpenDictionary},
     {"OpenEdition", ppctrap_OpenEdition},
@@ -39233,6 +39550,7 @@ const ppc_export ppc_exports[] = {
     {"PortChanged", ppcglue_PortChanged},
     {"PortSize", ppcglue_PortSize},
     {"PortionLine", ppcglue_PortionLine},
+    {"PortionText", ppcglue_PortionText},
     {"PostEvent", ppcglue_PostEvent},
     {"PostHighLevelEvent", ppcglue_PostHighLevelEvent},
     {"PrClose", ppcglue_PrClose},
@@ -39249,10 +39567,13 @@ const ppc_export ppc_exports[] = {
     {"PrJobDialog", ppcglue_PrJobDialog},
     {"PrJobInit", ppcglue_PrJobInit},
     {"PrJobMerge", ppctrap_PrJobMerge},
+    {"PrLoadDriver", ppcglue_PrLoadDriver},
+    {"PrNoPurge", ppcglue_PrNoPurge},
     {"PrOpen", ppcglue_PrOpen},
     {"PrOpenDoc", ppcglue_PrOpenDoc},
     {"PrOpenPage", ppcglue_PrOpenPage},
     {"PrPicFile", ppcglue_PrPicFile},
+    {"PrPurge", ppcglue_PrPurge},
     {"PrSetError", ppcglue_PrSetError},
     {"PrStlDialog", ppcglue_PrStlDialog},
     {"PrStlInit", ppcglue_PrStlInit},
@@ -39295,6 +39616,7 @@ const ppc_export ppc_exports[] = {
     {"PutUserDataIntoHandle", ppctrap_PutUserDataIntoHandle},
     {"QDDone", ppcglue_QDDone},
     {"QDError", ppcglue_QDError},
+    {"QDTextBounds", ppcglue_QDTextBounds},
     {"QTAddMovieError", ppctrap_QTAddMovieError},
     {"QTBandwidthRelease", ppctrap_QTBandwidthRelease},
     {"QTBandwidthRequest", ppctrap_QTBandwidthRequest},
@@ -39470,6 +39792,8 @@ const ppc_export ppc_exports[] = {
     {"ReleaseResource", ppcglue_ReleaseResource},
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
+    {"RemoveExtensionNotificationProc", ppcglue_RemoveExtensionNotificationProc},
+    {"RemoveExtensionTableHandlerProc", ppcglue_RemoveExtensionTableHandlerProc},
     {"RemoveFS", ppcglue_RemoveFS},
     {"RemoveIconRefOverride", ppcglue_RemoveIconRefOverride},
     {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
@@ -39602,6 +39926,7 @@ const ppc_export ppc_exports[] = {
     {"SetControlViewSize", ppcglue_SetControlViewSize},
     {"SetControlVisibility", ppcglue_SetControlVisibility},
     {"SetCursor", ppcglue_SetCursor},
+    {"SetCursorComponent", ppcglue_SetCursorComponent},
     {"SetCustomIconsEnabled", ppcglue_SetCustomIconsEnabled},
     {"SetDSequenceAccuracy", ppcglue_SetDSequenceAccuracy},
     {"SetDSequenceDataProc", ppcglue_SetDSequenceDataProc},
@@ -39612,10 +39937,11 @@ const ppc_export ppc_exports[] = {
     {"SetDSequenceSrcRect", ppcglue_SetDSequenceSrcRect},
     {"SetDSequenceTimeCode", ppctrap_SetDSequenceTimeCode},
     {"SetDSequenceTransferMode", ppcglue_SetDSequenceTransferMode},
-    {"SetDateTime", ppctrap_SetDateTime},
+    {"SetDateTime", ppcglue_SetDateTime},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
     {"SetDefaultInputMethod", ppcglue_SetDefaultInputMethod},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},
+    {"SetDefaultStartup", ppcglue_SetDefaultStartup},
     {"SetDepth", ppcglue_SetDepth},
     {"SetDeskCPat", ppcglue_SetDeskCPat},
     {"SetDeviceAttribute", ppcglue_SetDeviceAttribute},
@@ -39727,6 +40053,7 @@ const ppc_export ppc_exports[] = {
     {"SetMovieVideoOutput", ppctrap_SetMovieVideoOutput},
     {"SetMovieVolume", ppcglue_SetMovieVolume},
     {"SetMoviesErrorProc", ppctrap_SetMoviesErrorProc},
+    {"SetOSDefault", ppcglue_SetOSDefault},
     {"SetOSTrapAddress", ppcglue_SetOSTrapAddress},
     {"SetOrigin", ppcglue_SetOrigin},
     {"SetOutlinePreferred", ppcglue_SetOutlinePreferred},
@@ -39736,6 +40063,7 @@ const ppc_export ppc_exports[] = {
     {"SetPixelsState", ppcglue_SetPixelsState},
     {"SetPort", ppcglue_SetPort},
     {"SetPortBits", ppcglue_SetPortBits},
+    {"SetPortCustomXFerProc", ppcglue_SetPortCustomXFerProc},
     {"SetPortPix", ppcglue_SetPortPix},
     {"SetPosterBox", ppctrap_SetPosterBox},
     {"SetPreserveGlyph", ppcglue_SetPreserveGlyph},
@@ -39752,6 +40080,8 @@ const ppc_export ppc_exports[] = {
     {"SetResourceSize", ppcglue_SetResourceSize},
     {"SetScanOverride", ppcglue_SetScanOverride},
     {"SetScriptManagerVariable", ppcglue_SetScriptManagerVariable},
+    {"SetScriptQDPatchAddress", ppcglue_SetScriptQDPatchAddress},
+    {"SetScriptUtilityAddress", ppcglue_SetScriptUtilityAddress},
     {"SetScriptVariable", ppcglue_SetScriptVariable},
     {"SetSequenceProgressProc", ppctrap_SetSequenceProgressProc},
     {"SetSoundOutputInfo", ppcglue_SetSoundOutputInfo},
@@ -39772,6 +40102,7 @@ const ppc_export ppc_exports[] = {
     {"SetSysDirection", ppcglue_SetSysDirection},
     {"SetTSMCursor", ppcglue_SetTSMCursor},
     {"SetTabEnabled", ppcglue_SetTabEnabled},
+    {"SetTagBuffer", ppcglue_SetTagBuffer},
     {"SetTextServiceLanguage", ppcglue_SetTextServiceLanguage},
     {"SetThemeBackground", ppcglue_SetThemeBackground},
     {"SetThemeCursor", ppcglue_SetThemeCursor},
@@ -39786,6 +40117,7 @@ const ppc_export ppc_exports[] = {
     {"SetThreadStateEndCritical", ppcglue_SetThreadStateEndCritical},
     {"SetThreadSwitcher", ppcglue_SetThreadSwitcher},
     {"SetThreadTerminator", ppcglue_SetThreadTerminator},
+    {"SetTime", ppcglue_SetTime},
     {"SetTimeBaseFlags", ppcglue_SetTimeBaseFlags},
     {"SetTimeBaseMasterClock", ppcglue_SetTimeBaseMasterClock},
     {"SetTimeBaseMasterTimeBase", ppcglue_SetTimeBaseMasterTimeBase},
@@ -39795,6 +40127,7 @@ const ppc_export ppc_exports[] = {
     {"SetTimeBaseTime", ppcglue_SetTimeBaseTime},
     {"SetTimeBaseValue", ppcglue_SetTimeBaseValue},
     {"SetTimeBaseZero", ppcglue_SetTimeBaseZero},
+    {"SetTimeout", ppcglue_SetTimeout},
     {"SetToolTrapAddress", ppcglue_SetToolTrapAddress},
     {"SetTrackAlternate", ppctrap_SetTrackAlternate},
     {"SetTrackClipRgn", ppctrap_SetTrackClipRgn},
@@ -39813,6 +40146,7 @@ const ppc_export ppc_exports[] = {
     {"SetTrapAddress", ppcglue_SetTrapAddress},
     {"SetUpControlBackground", ppcglue_SetUpControlBackground},
     {"SetUserDataItem", ppctrap_SetUserDataItem},
+    {"SetVideoDefault", ppcglue_SetVideoDefault},
     {"SetWRefCon", ppcglue_SetWRefCon},
     {"SetWTitle", ppcglue_SetWTitle},
     {"SetWinColor", ppcglue_SetWinColor},
@@ -39967,6 +40301,7 @@ const ppc_export ppc_exports[] = {
     {"TESetStyle", ppcglue_TESetStyle},
     {"TESetStyleHandle", ppcglue_TESetStyleHandle},
     {"TESetText", ppcglue_TESetText},
+    {"TESetWordBreak", ppcglue_TESetWordBreak},
     {"TEStyleInsert", ppcglue_TEStyleInsert},
     {"TEStyleNew", ppcglue_TEStyleNew},
     {"TEStylePaste", ppcglue_TEStylePaste},

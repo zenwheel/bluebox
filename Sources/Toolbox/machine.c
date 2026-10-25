@@ -725,6 +725,13 @@ void machine_advance_ticks(void)
         wr32(LM_Time, secs);
 }
 
+/* SetDateTime: Time from now on counts from secs. */
+void machine_set_time(uint32_t secs)
+{
+    boot_time = secs - (uint32_t)(machine_time_ns() / 1000000000u);
+    wr32(LM_Time, secs);
+}
+
 run_status machine_run(uint64_t max)
 {
     const uint64_t slice = 20000;

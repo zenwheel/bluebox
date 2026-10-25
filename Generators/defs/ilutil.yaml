@@ -1133,3 +1133,410 @@
         type: void*
     dispatcher: Pack12
     selector: 0x0227
+
+# The Script Manager's remaining ScriptUtil calls and Pack6's orders.
+
+- function:
+    name: IntlTokenize
+    return: int16_t
+    args:
+      - name: tokenParam
+        type: void*
+    dispatcher: ScriptUtil
+    selector: 0x8204FFFA
+
+- function:
+    name: NFindWord
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: textLength
+        type: int16_t
+      - name: offset
+        type: int16_t
+      - name: leadingEdge
+        type: Boolean
+      - name: nbreaks
+        type: void*
+      - name: offsets
+        type: void*
+    dispatcher: ScriptUtil
+    selector: 0x8012FFE2
+
+- function:
+    name: PortionText
+    return: int32_t
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: textLength
+        type: int32_t
+    dispatcher: ScriptUtil
+    selector: 0x84080024
+
+- function:
+    name: FormatRecToString
+    return: int16_t
+    args:
+      - name: myCanonical
+        type: void*
+      - name: partsTable
+        type: void*
+      - name: outString
+        type: StringPtr
+      - name: positions
+        type: void*
+    dispatcher: ScriptUtil
+    selector: 0x8210FFEA
+
+- function:
+    name: GetScriptUtilityAddress
+    return: ProcPtr
+    args:
+      - name: selector
+        type: int16_t
+      - name: before
+        type: Boolean
+      - name: script
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0xC4040038
+
+- function:
+    name: SetScriptUtilityAddress
+    args:
+      - name: selector
+        type: int16_t
+      - name: before
+        type: Boolean
+      - name: routineAddr
+        type: ProcPtr
+      - name: script
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0xC008003A
+
+- function:
+    name: GetScriptQDPatchAddress
+    return: ProcPtr
+    args:
+      - name: trapNum
+        type: int16_t
+      - name: before
+        type: Boolean
+      - name: forPrinting
+        type: Boolean
+      - name: script
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0xC406003C
+
+- function:
+    name: SetScriptQDPatchAddress
+    args:
+      - name: trapNum
+        type: int16_t
+      - name: before
+        type: Boolean
+      - name: forPrinting
+        type: Boolean
+      - name: routineAddr
+        type: ProcPtr
+      - name: script
+        type: int16_t
+    dispatcher: ScriptUtil
+    selector: 0xC00A003E
+
+# The Font Manager's FontDispatch ($A854, the selector in D0's low nibble).
+
+- function:
+    name: QDTextBounds
+    args:
+      - name: byteCount
+        type: int16_t
+      - name: textAddr
+        type: void*
+      - name: bounds
+        type: Rect*
+    dispatcher: FontDispatch
+    selector: 0x0013
+
+- function:
+    name: FetchFontInfo
+    return: OSErr
+    args:
+      - name: fontID
+        type: int16_t
+      - name: fontSize
+        type: int16_t
+      - name: fontStyle
+        type: int16_t
+      - name: info
+        type: void*
+    dispatcher: FontDispatch
+    selector: 0x0014
+
+# The Menu Manager's font and international resource menus.
+
+- function:
+    name: InsertFontResMenu
+    args:
+      - name: theMenu
+        type: MenuHandle
+      - name: afterItem
+        type: int16_t
+      - name: scriptFilter
+        type: int16_t
+    dispatcher: MenuDispatch
+    selector: 0x0400
+
+- function:
+    name: InsertIntlResMenu
+    args:
+      - name: theMenu
+        type: MenuHandle
+      - name: theType
+        type: uint32_t
+      - name: afterItem
+        type: int16_t
+      - name: scriptFilter
+        type: int16_t
+    dispatcher: MenuDispatch
+    selector: 0x0601
+
+# QuickDraw's extensions ($AB1D, the selector in D0).
+
+- function:
+    name: GetPixRowBytes
+    return: int32_t
+    args:
+      - name: pm
+        type: PixMapHandle
+    dispatcher: QDExtensions
+    selector: 0x00040018
+
+- function:
+    name: GetPortCustomXFerProc
+    return: OSErr
+    args:
+      - name: port
+        type: CGrafPtr
+      - name: proc
+        type: ProcPtr*
+      - name: flags
+        type: uint32_t*
+      - name: refCon
+        type: uint32_t*
+    dispatcher: QDExtensions
+    selector: 0x00100019
+
+- function:
+    name: SetPortCustomXFerProc
+    return: OSErr
+    args:
+      - name: port
+        type: CGrafPtr
+      - name: proc
+        type: ProcPtr
+      - name: flags
+        type: uint32_t
+      - name: refCon
+        type: uint32_t
+    dispatcher: QDExtensions
+    selector: 0x0010001A
+
+# Cursor components (Quickdraw.h): $ABE0, the selector in D0.
+- dispatcher:
+    name: CursorComponentDispatch
+    trap: 0xABE0
+    selector-location: D0L
+
+- function:
+    name: OpenCursorComponent
+    return: OSErr
+    args:
+      - name: c
+        type: uint32_t
+      - name: ci
+        type: uint32_t*
+    dispatcher: CursorComponentDispatch
+    selector: 0x0008000B
+
+- function:
+    name: CloseCursorComponent
+    return: OSErr
+    args:
+      - name: ci
+        type: uint32_t
+    dispatcher: CursorComponentDispatch
+    selector: 0x0004000C
+
+- function:
+    name: SetCursorComponent
+    return: OSErr
+    args:
+      - name: ci
+        type: uint32_t
+    dispatcher: CursorComponentDispatch
+    selector: 0x0004000D
+
+- function:
+    name: CursorComponentChanged
+    return: OSErr
+    args:
+      - name: ci
+        type: uint32_t
+    dispatcher: CursorComponentDispatch
+    selector: 0x0004000E
+
+- function:
+    name: CursorComponentSetData
+    return: OSErr
+    args:
+      - name: ci
+        type: uint32_t
+      - name: data
+        type: int32_t
+    dispatcher: CursorComponentDispatch
+    selector: 0x0008000F
+
+# Start.h: the startup device, the operating system and the SCSI timeout, in
+# parameter RAM.
+
+- function:
+    name: GetDefaultStartup
+    args:
+      - name: paramBlock
+        type: void*
+        register: A0
+    trap: 0xA07D
+
+- function:
+    name: SetDefaultStartup
+    args:
+      - name: paramBlock
+        type: void*
+        register: A0
+    trap: 0xA07E
+
+- function:
+    name: SetVideoDefault
+    args:
+      - name: paramBlock
+        type: void*
+        register: A0
+    trap: 0xA081
+
+- function:
+    name: SetOSDefault
+    args:
+      - name: paramBlock
+        type: void*
+        register: A0
+    trap: 0xA083
+
+- function:
+    name: GetOSDefault
+    args:
+      - name: paramBlock
+        type: void*
+        register: A0
+    trap: 0xA084
+
+- function:
+    name: GetTimeout
+    args:
+      - name: count
+        type: int16_t*
+    cfm: InterfaceLib
+
+- function:
+    name: SetTimeout
+    args:
+      - name: count
+        type: int16_t
+    cfm: InterfaceLib
+
+# The Extension Manager's calls ($AA7D, the selector in D0).
+- dispatcher:
+    name: ExtensionManagerDispatch
+    trap: 0xAA7D
+    selector-location: D0W
+
+- function:
+    name: InstallExtensionNotificationProc
+    return: OSErr
+    args:
+      - name: extNotificationProc
+        type: ProcPtr
+    dispatcher: ExtensionManagerDispatch
+    selector: 0x0000
+
+- function:
+    name: RemoveExtensionNotificationProc
+    return: OSErr
+    args:
+      - name: extNotificationProc
+        type: ProcPtr
+    dispatcher: ExtensionManagerDispatch
+    selector: 0x0001
+
+- function:
+    name: InstallExtensionTableHandlerProc
+    return: OSErr
+    args:
+      - name: extMgrProc
+        type: ProcPtr
+      - name: extTable
+        type: Handle*
+    dispatcher: ExtensionManagerDispatch
+    selector: 0x0002
+
+- function:
+    name: RemoveExtensionTableHandlerProc
+    return: OSErr
+    args:
+      - name: extMgrProc
+        type: ProcPtr
+    dispatcher: ExtensionManagerDispatch
+    selector: 0x0003
+
+# The Printing Manager's driver: loaded, and never purged.
+
+- function:
+    name: PrLoadDriver
+    return: int16_t
+    dispatcher: PrGlue
+    selector: 0xD8000000
+
+- function:
+    name: PrNoPurge
+    dispatcher: PrGlue
+    selector: 0xB0000000
+
+- function:
+    name: PrPurge
+    dispatcher: PrGlue
+    selector: 0xA8000000
+
+# The Process Manager's desk accessory and control panel launching
+# (_OSDispatch, $A88F).
+- function:
+    name: LaunchDeskAccessory
+    return: OSErr
+    args:
+      - name: pFileSpec
+        type: FSSpec*
+      - name: pDAName
+        type: ConstStr255Param
+    dispatcher: OSDispatch
+    selector: 0x0036
+
+- function:
+    name: LaunchControlPanel
+    return: OSErr
+    args:
+      - name: pFileSpec
+        type: FSSpec*
+    dispatcher: OSDispatch
+    selector: 0x007B

@@ -12,13 +12,33 @@
 /* Seconds between 1904-01-01 and 1970-01-01. */
 #define MAC_EPOCH_OFFSET 2082844800u
 
+static int64_t clock_set; /* SetDateTime's change to the host's clock */
+
 uint32_t mac_now(void)
 {
     time_t t = time(NULL);
     struct tm lt;
     localtime_r(&t, &lt);
     /* Mac time is local time. */
-    return (uint32_t)((int64_t)t + lt.tm_gmtoff + MAC_EPOCH_OFFSET);
+    return (uint32_t)((int64_t)t + lt.tm_gmtoff + MAC_EPOCH_OFFSET + clock_set);
+}
+
+/* SetDateTime: the clock set, for the session (the host's stays). */
+int16_t tb_SetDateTime(uint32_t secs)
+{
+    clock_set += (int64_t)secs - (int64_t)mac_now();
+    machine_set_time(secs);
+    return noErr;
+}
+
+/* SetTime: SetDateTime from a date. */
+void tb_SetTime(gaddr d)
+{
+    uint32_t secs = 0;
+    if (d) {
+        tb_DateToSeconds(d, &secs);
+        tb_SetDateTime(secs);
+    }
 }
 
 uint32_t tb_TickCount(void)
