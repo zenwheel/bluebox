@@ -715,6 +715,11 @@ int16_t machine_ae_send(int pid, uint32_t sig, const uint8_t *event, uint32_t le
                         uint8_t **reply, uint32_t *reply_len);
 void osl_reset(void);
 
+/* Carbon's small additions to older managers (carbon_gaps.c's exports). */
+int32_t tb_AEGetDescDataSize(gaddr desc);
+int16_t tb_AEGetDescData(gaddr desc, gaddr data, int32_t max_size);
+void tb_MoreMasterPointers(uint32_t count);
+
 /* Mixed Mode (mixedmode.c). */
 void mixedmode_init(void);
 bool mm_is_descriptor(gaddr p);

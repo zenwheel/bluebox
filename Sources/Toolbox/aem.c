@@ -970,6 +970,26 @@ int aem_launch_documents(gaddr params, char ***paths_out)
     return count;
 }
 
+/* AEGetDescData and AEGetDescDataSize (Carbon's accessors for what a
+ * descriptor holds: the data of any descriptor, list and record included,
+ * as its flattened bytes). */
+int32_t tb_AEGetDescDataSize(gaddr desc)
+{
+    gaddr h = desc_handle(desc);
+    return h ? tb_GetHandleSize(h) : 0;
+}
+
+int16_t tb_AEGetDescData(gaddr desc, gaddr data, int32_t max_size)
+{
+    gaddr h = desc_handle(desc);
+    int32_t n = h ? tb_GetHandleSize(h) : 0;
+    if (n > max_size)
+        n = max_size;
+    if (n > 0 && data)
+        gmemcpy(data, rd32(h), (uint32_t)n);
+    return noErr;
+}
+
 int16_t tb_AECoerceDesc(gaddr desc, int32_t result_type, gaddr desc_out)
 {
     return coerce_desc(desc, (uint32_t)result_type, desc_out);
