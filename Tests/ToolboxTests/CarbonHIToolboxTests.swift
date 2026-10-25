@@ -293,15 +293,9 @@ extension BlueBox {
             wr32(spec, 2); wr16(spec + 4, 2)
             #expect(ilCall("CreateCustomWindow", [spec, 6, 0, rect(50, 50, 100, 100), out]) == 0)
             #expect(tb_GetWVariant(rd32(out)) == 2)
-            // the drag highlight, through _A829 as 68k code calls it
+            // the drag highlight: PowerPC only ($A829 isn't installed for 68k code,
+            // as on the System Blue Box reports)
             tb_ShowWindow(w)
-            let reason = run68k([0x42A7,                                   // CLR.L -(SP)
-                                 0x2F3C, hiWord(w), loWord(w),             // MOVE.L #w,-(SP)
-                                 0x1F3C, 0x0001,                           // MOVE.B #1,-(SP)
-                                 0x7019, 0xA829,                           // MOVEQ #$19,D0; _A829
-                                 0x2E1F, 0xA9F4])                          // MOVE.L (SP)+,D7
-            #expect(reason.contains("ExitToShell"))
-            #expect(g_cpu!.pointee.d.7 == 0)
             #expect(ilCall("HiliteWindowFrameForDrag", [w, 0]) == 0)
         }
 
