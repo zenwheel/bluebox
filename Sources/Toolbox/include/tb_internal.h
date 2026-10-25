@@ -680,6 +680,8 @@ bool mm_is_descriptor(gaddr p);
 /* Call a universal procedure pointer (either ISA) with arguments as the
  * procInfo describes; returns the result. */
 uint32_t mm_call(gaddr upp, uint32_t procinfo, const uint32_t *args, int nargs);
+/* A new one-routine descriptor (CarbonLib's NewXxxUPP calls). */
+gaddr mm_new_descriptor(gaddr proc, uint32_t procinfo, int isa);
 /* InterfaceLib's CallComponentUPP variable (a descriptor in it). */
 gaddr mm_call_component_upp(void);
 /* Run the PowerPC routine of a transition vector with these arguments;

@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "carbon_hi.h"
 #include "m68k.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
@@ -440,8 +441,12 @@ gaddr tb_LNew(gaddr rview, gaddr bounds, uint32_t csize, int16_t proc, gaddr win
     wr16(l + ListRec_cellSize_off, (uint16_t)ch);
     wr16(l + ListRec_cellSize_off + 2, (uint16_t)cw);
 
-    /* The definition procedure: the LDEF resource, else the built-in one. */
-    gaddr defh = tb_GetResource((int32_t)fourcc("LDEF"), proc);
+    /* The definition procedure: CarbonLib's (CreateCustomList's or one
+     * RegisterListDefinition registered), the LDEF resource, else the
+     * built-in one. */
+    gaddr defh = carbonui_list_def(proc);
+    if (!defh)
+        defh = tb_GetResource((int32_t)fourcc("LDEF"), proc);
     if (!defh)
         defh = tb_GetResource((int32_t)fourcc("LDEF"), 0);
     wr32(lp(list) + ListRec_listDefProc_off, defh);

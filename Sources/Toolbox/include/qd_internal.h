@@ -249,6 +249,9 @@ extern int g_screen_width, g_screen_height;
 /* Standard patterns. */
 extern const uint8_t qd_pat_black[8], qd_pat_white[8], qd_pat_gray[8], qd_pat_ltgray[8], qd_pat_dkgray[8];
 
+/* QDErr, QDError's answer (a low-memory word lowmem_gen.h lacks). */
+#define LM_QDErr_ADDR 0x0D6Eu
+
 /* Screen depth changes (qd_screen.c). */
 void qd_screen_port_opened(gaddr port);
 void qd_screen_port_closed(gaddr port);

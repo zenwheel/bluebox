@@ -706,7 +706,8 @@ void qd_port_op_color(gaddr port, uint16_t out[3])
             out[i] = rd16(rd32(gv) + (uint32_t)i * 2);
 }
 void tb_HiliteColor(gaddr c) {}
-int16_t tb_QDError(void) { return 0; }
+/* QDErr: nothing here fails; what SetQDError (CarbonLib) left. */
+int16_t tb_QDError(void) { return (int16_t)rd16(LM_QDErr_ADDR); }
 
 /* A pixel pattern with its pixel map and (empty) data handles, which
  * applications fill in themselves. */

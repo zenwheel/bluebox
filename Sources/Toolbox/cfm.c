@@ -22,6 +22,7 @@
 #include "forks.h"
 #include "hostgl.h"
 #include "machine.h"
+#include "carbon_hi.h"
 #include "ppc_bridge.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -153,6 +154,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < mp_export_count; i++)
         if (!strcmp(mp_exports[i].name, name))
             return mp_exports[i].fn;
+    void (*carbonhi)(ppc_cpu *) = carbonhi_export_fn(name); /* CarbonLib's drawing, windows and menus */
+    if (carbonhi)
+        return carbonhi;
     for (unsigned i = 0; i < snd_export_count; i++)
         if (!strcmp(snd_exports[i].name, name))
             return snd_exports[i].fn;
@@ -1047,6 +1051,15 @@ static int library_named(const char *name, char *err, size_t errlen)
         return load_from_file(path, name, err, errlen);
     snprintf(err, errlen, "library %s not found", name);
     return -1;
+}
+
+/* Whether the program runs on CarbonLib (imports from it). */
+bool cfm_imports_carbonlib(void)
+{
+    for (int i = 0; i < nfrags; i++)
+        if (!strcmp(frags[i].name, "CarbonLib"))
+            return true;
+    return false;
 }
 
 /* ---------------------------------------------------------------------- */
