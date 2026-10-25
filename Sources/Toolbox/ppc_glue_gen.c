@@ -27182,6 +27182,15 @@ static void ppcglue_IsValidControlHandle(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetControlRegion(ppc_cpu *c)
+{
+    gaddr a_inControl = (gaddr)c->gpr[3];
+    int16_t a_inPart = (int16_t)c->gpr[4];
+    gaddr a_outRegion = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetControlRegion(a_inControl, a_inPart, a_outRegion);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMoviesError(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMoviesError();
@@ -39644,6 +39653,7 @@ const ppc_export ppc_exports[] = {
     {"GetControlMaximum", ppcglue_GetControlMaximum},
     {"GetControlMinimum", ppcglue_GetControlMinimum},
     {"GetControlReference", ppcglue_GetControlReference},
+    {"GetControlRegion", ppcglue_GetControlRegion},
     {"GetControlTitle", ppcglue_GetControlTitle},
     {"GetControlValue", ppcglue_GetControlValue},
     {"GetControlVariant", ppcglue_GetControlVariant},

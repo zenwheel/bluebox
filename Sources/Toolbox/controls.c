@@ -25,17 +25,20 @@ enum {
     kControlMsgCalcBestRect = 14, kControlMsgHandleTracking = 15, kControlMsgFocus = 16, kControlMsgKeyDown = 17,
     kControlMsgIdle = 18, kControlMsgGetFeatures = 19, kControlMsgSetData = 20, kControlMsgGetData = 21,
     kControlMsgActivate = 22, kControlMsgSetUpBackground = 23, kControlMsgTestNewMsgSupport = 27,
-    kControlMsgSubControlAdded = 28, kControlMsgSubControlRemoved = 29,
+    kControlMsgSubControlAdded = 28, kControlMsgSubControlRemoved = 29, kControlMsgGetRegion = 31,
 };
+enum { kControlStructureMetaPart = -1, kControlContentMetaPart = -2 };
 enum {
     kControlSupportsEmbedding = 1 << 1, kControlSupportsFocus = 1 << 2, kControlWantsIdle = 1 << 3,
     kControlWantsActivate = 1 << 4, kControlHandlesTracking = 1 << 5, kControlSupportsDataAccess = 1 << 6,
     kControlHasSpecialBackground = 1 << 7, kControlGetsFocusOnClick = 1 << 8, kControlSupportsCalcBestRect = 1 << 9,
+    kControlSupportsGetRegion = 1 << 17,
 };
 enum {
     errMessageNotSupported = -30580, errDataNotSupported = -30581, errControlDoesntSupportFocus = -30582,
     errUnknownControl = -30584, errCouldntSetFocus = -30585, errNoRootControl = -30586,
-    errRootAlreadyExists = -30587, errControlIsNotEmbedder = -30590, errCantEmbedIntoSelf = -30594,
+    errRootAlreadyExists = -30587, errInvalidPartCode = -30588, errControlIsNotEmbedder = -30590,
+    errCantEmbedIntoSelf = -30594,
     errCantEmbedRoot = -30595,
 };
 #define NEW_MSG_OK 0x206F6B20 /* ' ok ' */
@@ -1966,6 +1969,37 @@ int16_t tb_GetBestControlRect(gaddr ch, gaddr out, gaddr baseline)
         wr16(baseline, rd16(rec + 4));
     tb_DisposePtr(rec);
     return noErr;
+}
+
+/* Appearance 1.1: a CDEF that says it can answers kControlMsgGetRegion
+ * (a ControlGetRegionRec: the region, the part); for the others the
+ * structure, and the content of a control that embeds, is its rectangle
+ * (what calcCntlRgn gave), and the parts themselves aren't known. */
+int32_t tb_GetControlRegion(gaddr ch, int16_t part, gaddr rgn)
+{
+    if (!ctl_find(ch))
+        return errUnknownControl;
+    if (!rgn)
+        return paramErr;
+    uint32_t f = features(ch);
+    if (f & kControlSupportsGetRegion) {
+        gaddr rec = tb_NewPtr(6, false, true);
+        wr32(rec, rgn);
+        wr16(rec + 4, (uint16_t)part);
+        gaddr saved = qd_port();
+        tb_SetPort(cowner(ch));
+        int32_t r = call_cdef(ch, kControlMsgGetRegion, (int32_t)rec);
+        tb_SetPort(saved);
+        tb_DisposePtr(rec);
+        return r;
+    }
+    if (part == kControlStructureMetaPart || (part == kControlContentMetaPart && (f & kControlSupportsEmbedding))) {
+        gaddr r = tmp_rect(crect(ch));
+        tb_RectRgn(rgn, r);
+        tb_DisposePtr(r);
+        return noErr;
+    }
+    return errInvalidPartCode;
 }
 
 /* ControlFontStyleRec: flags, font, size, style, mode, just, fore, back. */
