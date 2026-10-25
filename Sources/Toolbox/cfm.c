@@ -160,6 +160,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbon_ctl_export_count; i++)
         if (!strcmp(carbon_ctl_exports[i].name, name))
             return carbon_ctl_exports[i].fn;
+    void (*svc)(ppc_cpu *) = carbonsvc_export_fn(name);
+    if (svc)
+        return svc;
     for (unsigned i = 0; i < snd_export_count; i++)
         if (!strcmp(snd_exports[i].name, name))
             return snd_exports[i].fn;

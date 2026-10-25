@@ -359,6 +359,7 @@ bool machine_boot(bool census)
     speech_reset();
     drag_reset();
     print_reset();
+    carbonsvc_reset();
     icm_reset();
     gx_reset();
     aem_reset();
