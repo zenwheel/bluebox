@@ -13,6 +13,9 @@
 #   batch <work dir>/walk.tsv (the batch, then walk-corpus.sh's columns) and
 #   <work dir>/report.txt.  WALK_TIMEOUT and MAX pass through to
 #   walk-corpus.sh; HEAPCHECK defaults to 10 here (every 10th call).
+#   REMOUNT, a command, is run when the archive folder has gone (a network
+#   share unmounted) before the next batch, and the run stops if it stays
+#   gone.
 set -eu
 LC_ALL=C
 export LC_ALL
@@ -33,6 +36,15 @@ mkdir -p "$work/results"
 work=$(cd "$work" && pwd)
 touch "$work/done.txt"
 
+# The archive folder there, remounting it if it has gone.
+have_source() {
+	[ -d "$src" ] && return 0
+	[ -n "${REMOUNT:-}" ] && sh -c "$REMOUNT" >/dev/null 2>&1
+	sleep 5
+	[ -d "$src" ]
+}
+have_source || { printf '%s: not there\n' "$src" >&2; exit 1; }
+
 # The archives and disk images, each with its batch: "batch<TAB>path".
 if [ ! -f "$work/batches.txt" ]; then
 	find "$src" -type f ! -name '._*' ! -name '.DS_Store' \( -iname '*.zip' -o -iname '*.sit' \
@@ -47,6 +59,7 @@ fi
 
 cut -f1 "$work/batches.txt" | uniq | while IFS= read -r b; do
 	if grep -qx "$b" "$work/done.txt"; then continue; fi
+	have_source || { printf '%s: gone, stopping\n' "$src" >&2; exit 1; }
 	printf '%s: ' "$b"
 	t=$work/batch
 	rm -rf "$t"
