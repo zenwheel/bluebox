@@ -61,6 +61,7 @@ const char *const os_trap_names[256] = {
     [0x39] = "ReadDateTime",
     [0x3A] = "SetDateTime",
     [0x3B] = "Delay",
+    [0x3E] = "DrvrRemove",
     [0x3F] = "InitUtil",
     [0x40] = "ReserveMem",
     [0x41] = "PBSetFLock",
@@ -97,6 +98,8 @@ const char *const os_trap_names[256] = {
     [0x6A] = "HSetState",
     [0x6F] = "SlotVInstall",
     [0x70] = "SlotVRemove",
+    [0x71] = "AttachVBL",
+    [0x72] = "DoVBLTask",
     [0x75] = "SIntInstall",
     [0x76] = "SIntRemove",
     [0x77] = "CountADBs",
@@ -111,6 +114,7 @@ const char *const os_trap_names[256] = {
     [0x83] = "SetOSDefault",
     [0x84] = "GetOSDefault",
     [0x89] = "SCSIAtomic",
+    [0x8F] = "DeferUserFn",
     [0x90] = "SysEnvirons",
     [0x98] = "HWPriv",
     [0x9E] = "PowerDispatch",
@@ -706,6 +710,7 @@ const char *const tb_trap_names[1024] = {
     [0x272] = "ContextualMenuDispatch",
     [0x273] = "ControlDispatch",
     [0x274] = "AppearanceDispatch",
+    [0x27D] = "ExtensionsDispatch",
     [0x290] = "InitPalettes",
     [0x291] = "NewPalette",
     [0x292] = "GetNewPalette",
@@ -739,6 +744,19 @@ const char *const tb_trap_names[1024] = {
     [0x3FE] = "GXPrintingDispatch",
     [0x3FF] = "DebugStr",
 };
+
+static void glue_ADBOp(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_command = (int16_t)cpu_pop16(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    gaddr a_procp = (gaddr)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ADBOp(a_data, a_procp, a_buffer, a_command);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
 
 static void glue_ADBReInit(cpu68k *c, uint16_t trapword)
 {
@@ -1738,6 +1756,14 @@ static void glue_ApplyThemeBackground(cpu68k *c, uint16_t trapword)
     int32_t r = tb_ApplyThemeBackground(a_kind, a_bounds, a_state, a_depth, a_isColorDevice);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_AttachVBL(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_theSlot = (int16_t)c->d[0];
+    int16_t r = tb_AttachVBL(a_theSlot);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_AutoEmbedControl(cpu68k *c, uint16_t trapword)
@@ -3350,6 +3376,19 @@ static void glue_DILoad(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DIReformat(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_msgText = (gaddr)cpu_pop32(c);
+    gaddr a_volName = (gaddr)cpu_pop32(c);
+    int16_t a_fsid = (int16_t)cpu_pop16(c);
+    int16_t a_drvNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_DIReformat(a_drvNum, a_fsid, a_volName, a_msgText);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DIUnload(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3364,6 +3403,35 @@ static void glue_DIVerify(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int16_t a_dn = (int16_t)cpu_pop16(c);
     int16_t r = tb_DIVerify(a_dn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DIXFormat(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_actSize = (gaddr)cpu_pop32(c);
+    uint32_t a_fmtArg = (uint32_t)cpu_pop32(c);
+    int8_t a_fmtFlag = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_drvNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_DIXFormat(a_drvNum, a_fmtFlag, a_fmtArg, a_actSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DIXZero(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_extendedInfoPtr = (gaddr)cpu_pop32(c);
+    uint32_t a_volSize = (uint32_t)cpu_pop32(c);
+    int16_t a_volTypeSelector = (int16_t)cpu_pop16(c);
+    int16_t a_mediaStatus = (int16_t)cpu_pop16(c);
+    int16_t a_fsid = (int16_t)cpu_pop16(c);
+    gaddr a_volName = (gaddr)cpu_pop32(c);
+    int16_t a_drvNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_DIXZero(a_drvNum, a_volName, a_fsid, a_mediaStatus, a_volTypeSelector, a_volSize, a_extendedInfoPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -3524,6 +3592,15 @@ static void glue_DecompressSequenceFrameWhen(cpu68k *c, uint16_t trapword)
     int16_t r = tb_DecompressSequenceFrameWhen(a_seqID, a_data, a_dataSize, a_inFlags, a_outFlags, a_asyncCompletionProc, a_frameTime);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_DeferUserFn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_userFunction = (gaddr)c->a[0];
+    gaddr a_argument = (gaddr)c->d[0];
+    int16_t r = tb_DeferUserFn(a_userFunction, a_argument);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_DelComp(cpu68k *c, uint16_t trapword)
@@ -3968,6 +4045,14 @@ static void glue_DisposeWindow(cpu68k *c, uint16_t trapword)
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_DisposeWindow(a_w);
     cpu_push32(c, ret);
+}
+
+static void glue_DoVBLTask(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_theSlot = (int16_t)c->d[0];
+    int16_t r = tb_DoVBLTask(a_theSlot);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_DragAlignedWindow(cpu68k *c, uint16_t trapword)
@@ -4558,6 +4643,14 @@ static void glue_DrawThemeWindowListViewHeader(cpu68k *c, uint16_t trapword)
     int32_t r = tb_DrawThemeWindowListViewHeader(a_r, a_state);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_DrvrRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_refNum = (int16_t)c->d[0];
+    int16_t r = tb_DrvrRemove(a_refNum);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_DumpControlHierarchy(cpu68k *c, uint16_t trapword)
@@ -10328,6 +10421,27 @@ static void glue_InsetRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InstallExtensionNotificationProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_extNotificationProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_InstallExtensionNotificationProc(a_extNotificationProc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InstallExtensionTableHandlerProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_extTable = (gaddr)cpu_pop32(c);
+    gaddr a_extMgrProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_InstallExtensionTableHandlerProc(a_extMgrProc, a_extTable);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InstallReceiveHandler(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14408,6 +14522,26 @@ static void glue_RemoveCollectionItem(cpu68k *c, uint16_t trapword)
     int32_t a_tag = (int32_t)cpu_pop32(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     int16_t r = tb_RemoveCollectionItem(a_c, a_tag, a_id);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveExtensionNotificationProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_extNotificationProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RemoveExtensionNotificationProc(a_extNotificationProc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveExtensionTableHandlerProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_extMgrProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RemoveExtensionTableHandlerProc(a_extMgrProc);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -19580,6 +19714,7 @@ const trap_sig trap_sigs[] = {
     {0xA039, -1, "ReadDateTime", CONV_REG, 0, 0, glue_ReadDateTime},
     {0xA03A, -1, "SetDateTime", CONV_REG, 0, 0, 0},
     {0xA03B, -1, "Delay", CONV_REG, 0, 0, glue_Delay},
+    {0xA03E, -1, "DrvrRemove", CONV_REG, 0, 0, glue_DrvrRemove},
     {0xA03F, -1, "InitUtil", CONV_REG, 0, 0, glue_InitUtil},
     {0xA040, -1, "ReserveMem", CONV_REG, 0, 0, glue_ReserveMem},
     {0xA041, -1, "PBSetFLock", CONV_REG, 0, 0, glue_PBSetFLock},
@@ -19612,6 +19747,8 @@ const trap_sig trap_sigs[] = {
     {0xA06A, -1, "HSetState", CONV_REG, 0, 0, glue_HSetState},
     {0xA06F, -1, "SlotVInstall", CONV_REG, 0, 0, glue_SlotVInstall},
     {0xA070, -1, "SlotVRemove", CONV_REG, 0, 0, glue_SlotVRemove},
+    {0xA071, -1, "AttachVBL", CONV_REG, 0, 0, glue_AttachVBL},
+    {0xA072, -1, "DoVBLTask", CONV_REG, 0, 0, glue_DoVBLTask},
     {0xA075, -1, "SIntInstall", CONV_REG, 0, 0, glue_SIntInstall},
     {0xA076, -1, "SIntRemove", CONV_REG, 0, 0, glue_SIntRemove},
     {0xA077, -1, "CountADBs", CONV_REG, 0, 0, glue_CountADBs},
@@ -19625,6 +19762,7 @@ const trap_sig trap_sigs[] = {
     {0xA082, -1, "DTInstall", CONV_REG, 0, 0, glue_DTInstall},
     {0xA083, -1, "SetOSDefault", CONV_REG, 0, 0, glue_SetOSDefault},
     {0xA084, -1, "GetOSDefault", CONV_REG, 0, 0, glue_GetOSDefault},
+    {0xA08F, -1, "DeferUserFn", CONV_REG, 0, 0, glue_DeferUserFn},
     {0xA090, -1, "SysEnvirons", CONV_REG, 0, 0, glue_SysEnvirons},
     {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, 0},
     {0xA0DD, -1, "PPCDispatch", CONV_REG, 0, 0, glue_PPCDispatch},
@@ -20411,6 +20549,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABED, (int32_t)0x26u, "GetDragHiliteColor", CONV_STACK, 8, 2, glue_GetDragHiliteColor},
     {0xABED, (int32_t)0x27u, "SetDragImage", CONV_STACK, 20, 2, glue_SetDragImage},
     {0xABED, (int32_t)0x28u, "ChangeDragBehaviors", CONV_STACK, 12, 2, glue_ChangeDragBehaviors},
+    {0xAA7D, (int32_t)0x0u, "InstallExtensionNotificationProc", CONV_STACK, 4, 2, glue_InstallExtensionNotificationProc},
+    {0xAA7D, (int32_t)0x1u, "RemoveExtensionNotificationProc", CONV_STACK, 4, 2, glue_RemoveExtensionNotificationProc},
+    {0xAA7D, (int32_t)0x2u, "InstallExtensionTableHandlerProc", CONV_STACK, 8, 2, glue_InstallExtensionTableHandlerProc},
+    {0xAA7D, (int32_t)0x3u, "RemoveExtensionTableHandlerProc", CONV_STACK, 4, 2, glue_RemoveExtensionTableHandlerProc},
     {0xA060, (int32_t)0x1u, "PBOpenWD", CONV_REG, 0, 0, glue_PBOpenWD},
     {0xA060, (int32_t)0x2u, "PBCloseWD", CONV_REG, 0, 0, glue_PBCloseWD},
     {0xA060, (int32_t)0x5u, "PBCatMove", CONV_REG, 0, 0, glue_PBCatMove},
@@ -21385,6 +21527,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9E9, (int32_t)0x6u, "DIFormat", CONV_STACK, 2, 2, glue_DIFormat},
     {0xA9E9, (int32_t)0x8u, "DIVerify", CONV_STACK, 2, 2, glue_DIVerify},
     {0xA9E9, (int32_t)0xAu, "DIZero", CONV_STACK, 6, 2, glue_DIZero},
+    {0xA9E9, (int32_t)0xCu, "DIXFormat", CONV_STACK, 12, 2, glue_DIXFormat},
+    {0xA9E9, (int32_t)0xEu, "DIXZero", CONV_STACK, 20, 2, glue_DIXZero},
+    {0xA9E9, (int32_t)0x10u, "DIReformat", CONV_STACK, 12, 2, glue_DIReformat},
     {0xA9EA, (int32_t)0x1u, "SFPutFile", CONV_STACK, 20, 0, glue_SFPutFile},
     {0xA9EA, (int32_t)0x2u, "SFGetFile", CONV_STACK, 26, 0, glue_SFGetFile},
     {0xA9EA, (int32_t)0x3u, "SFPPutFile", CONV_STACK, 26, 0, glue_SFPPutFile},
@@ -22263,6 +22408,7 @@ const dispatcher_info dispatchers[] = {
     {0xAA68, "DialogDispatch", "D0W"},
     {0xABEB, "DisplayDispatch", "D0W"},
     {0xABED, "DragDispatch", "D0W"},
+    {0xAA7D, "ExtensionsDispatch", "D0W"},
     {0xA060, "FSDispatch", "D0W"},
     {0xA854, "FontDispatch", "D0<0xF>"},
     {0xA832, "GXGraphicsDispatch", "D0W"},

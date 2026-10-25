@@ -13,6 +13,16 @@ static void ppcglue_ADBReInit(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ADBOp(ppc_cpu *c)
+{
+    gaddr a_data = (gaddr)c->gpr[3];
+    gaddr a_procp = (gaddr)c->gpr[4];
+    gaddr a_buffer = (gaddr)c->gpr[5];
+    int16_t a_command = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ADBOp(a_data, a_procp, a_buffer, a_command);
+    c->pc = c->lr;
+}
+
 static void ppcglue_CountADBs(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountADBs();
@@ -23809,6 +23819,223 @@ static void ppcglue_StartSecureSession(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DriverInstall(ppc_cpu *c)
+{
+    gaddr a_drvrPtr = (gaddr)c->gpr[3];
+    int16_t a_refNum = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DriverInstall(a_drvrPtr, a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DriverInstallReserveMem(ppc_cpu *c)
+{
+    gaddr a_drvrPtr = (gaddr)c->gpr[3];
+    int16_t a_refNum = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DriverInstallReserveMem(a_drvrPtr, a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrvrRemove(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DrvrRemove(a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBOpenImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBOpenImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCloseImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBCloseImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBReadImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBReadImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBWriteImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBWriteImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBStatusImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBStatusImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBKillIOImmed(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBKillIOImmed(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBWaitIOComplete(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    int32_t a_timeout = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBWaitIOComplete(a_paramBlock, a_timeout);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddDrive(ppc_cpu *c)
+{
+    int16_t a_drvrRefNum = (int16_t)c->gpr[3];
+    int16_t a_drvNum = (int16_t)c->gpr[4];
+    gaddr a_qEl = (gaddr)c->gpr[5];
+    tb_AddDrive(a_drvrRefNum, a_drvNum, a_qEl);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DriveStatus(ppc_cpu *c)
+{
+    int16_t a_drvNum = (int16_t)c->gpr[3];
+    gaddr a_status = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DriveStatus(a_drvNum, a_status);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AttachVBL(ppc_cpu *c)
+{
+    int16_t a_theSlot = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AttachVBL(a_theSlot);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DoVBLTask(ppc_cpu *c)
+{
+    int16_t a_theSlot = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DoVBLTask(a_theSlot);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeferUserFn(ppc_cpu *c)
+{
+    gaddr a_userFunction = (gaddr)c->gpr[3];
+    gaddr a_argument = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeferUserFn(a_userFunction, a_argument);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DIXFormat(ppc_cpu *c)
+{
+    int16_t a_drvNum = (int16_t)c->gpr[3];
+    int8_t a_fmtFlag = (int8_t)c->gpr[4];
+    uint32_t a_fmtArg = (uint32_t)c->gpr[5];
+    gaddr a_actSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DIXFormat(a_drvNum, a_fmtFlag, a_fmtArg, a_actSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DIXZero(ppc_cpu *c)
+{
+    int16_t a_drvNum = (int16_t)c->gpr[3];
+    gaddr a_volName = (gaddr)c->gpr[4];
+    int16_t a_fsid = (int16_t)c->gpr[5];
+    int16_t a_mediaStatus = (int16_t)c->gpr[6];
+    int16_t a_volTypeSelector = (int16_t)c->gpr[7];
+    uint32_t a_volSize = (uint32_t)c->gpr[8];
+    gaddr a_extendedInfoPtr = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DIXZero(a_drvNum, a_volName, a_fsid, a_mediaStatus, a_volTypeSelector, a_volSize, a_extendedInfoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DIReformat(ppc_cpu *c)
+{
+    int16_t a_drvNum = (int16_t)c->gpr[3];
+    int16_t a_fsid = (int16_t)c->gpr[4];
+    gaddr a_volName = (gaddr)c->gpr[5];
+    gaddr a_msgText = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DIReformat(a_drvNum, a_fsid, a_volName, a_msgText);
+    c->pc = c->lr;
+}
+
+static void ppcglue_dizero(ppc_cpu *c)
+{
+    int16_t a_drvnum = (int16_t)c->gpr[3];
+    gaddr a_volName = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_dizero(a_drvnum, a_volName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_dibadmount(ppc_cpu *c)
+{
+    gaddr a_where = (gaddr)c->gpr[3];
+    int32_t a_evtMessage = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_dibadmount(a_where, a_evtMessage);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallExtensionNotificationProc(ppc_cpu *c)
+{
+    gaddr a_extNotificationProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallExtensionNotificationProc(a_extNotificationProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveExtensionNotificationProc(ppc_cpu *c)
+{
+    gaddr a_extNotificationProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveExtensionNotificationProc(a_extNotificationProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallExtensionTableHandlerProc(ppc_cpu *c)
+{
+    gaddr a_extMgrProc = (gaddr)c->gpr[3];
+    gaddr a_extTable = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallExtensionTableHandlerProc(a_extMgrProc, a_extTable);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveExtensionTableHandlerProc(ppc_cpu *c)
+{
+    gaddr a_extMgrProc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveExtensionTableHandlerProc(a_extMgrProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FTSendAsync(ppc_cpu *c)
+{
+    gaddr a_hFT = (gaddr)c->gpr[3];
+    int16_t a_numFiles = (int16_t)c->gpr[4];
+    gaddr a_pFSSpec = (gaddr)c->gpr[5];
+    gaddr a_notifyProc = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FTSendAsync(a_hFT, a_numFiles, a_pFSSpec, a_notifyProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FTReceiveAsync(ppc_cpu *c)
+{
+    gaddr a_hFT = (gaddr)c->gpr[3];
+    gaddr a_pFSSpec = (gaddr)c->gpr[4];
+    gaddr a_notifyProc = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FTReceiveAsync(a_hFT, a_pFSSpec, a_notifyProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FTCompletionAsync(ppc_cpu *c)
+{
+    gaddr a_hFT = (gaddr)c->gpr[3];
+    uint16_t a_completionCall = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FTCompletionAsync(a_hFT, a_completionCall);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -35708,6 +35935,7 @@ static void ppclm_set_AuxWinHead(ppc_cpu *c) { wr32(0xCD0, (uint32_t)c->gpr[3]);
 static void ppclm_get_DeskCPat(ppc_cpu *c) { c->gpr[3] = rd32(0xCD8); c->pc = c->lr; }
 static void ppclm_set_DeskCPat(ppc_cpu *c) { wr32(0xCD8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 const ppc_export ppc_exports[] = {
+    {"ADBOp", ppcglue_ADBOp},
     {"ADBReInit", ppcglue_ADBReInit},
     {"AECallObjectAccessor", ppcglue_AECallObjectAccessor},
     {"AECoerceDesc", ppcglue_AECoerceDesc},
@@ -35791,6 +36019,7 @@ const ppc_export ppc_exports[] = {
     {"AddCollectionItemHdl", ppctrap_AddCollectionItemHdl},
     {"AddComp", ppcglue_AddComp},
     {"AddDragItemFlavor", ppcglue_AddDragItemFlavor},
+    {"AddDrive", ppcglue_AddDrive},
     {"AddEmptyTrackToMovie", ppctrap_AddEmptyTrackToMovie},
     {"AddFilePreview", ppcglue_AddFilePreview},
     {"AddIconToSuite", ppcglue_AddIconToSuite},
@@ -35828,6 +36057,7 @@ const ppc_export ppc_exports[] = {
     {"ApplyThemeBackground", ppcglue_ApplyThemeBackground},
     {"AreFloatingWindowsVisible", ppcglue_AreFloatingWindowsVisible},
     {"AssociateSection", ppctrap_AssociateSection},
+    {"AttachVBL", ppcglue_AttachVBL},
     {"AutoEmbedControl", ppcglue_AutoEmbedControl},
     {"AutoSizeDialog", ppcglue_AutoSizeDialog},
     {"BOff", ppcglue_BOff},
@@ -36037,8 +36267,11 @@ const ppc_export ppc_exports[] = {
     {"DIBadMount", ppcglue_DIBadMount},
     {"DIFormat", ppcglue_DIFormat},
     {"DILoad", ppcglue_DILoad},
+    {"DIReformat", ppcglue_DIReformat},
     {"DIUnload", ppcglue_DIUnload},
     {"DIVerify", ppcglue_DIVerify},
+    {"DIXFormat", ppcglue_DIXFormat},
+    {"DIXZero", ppcglue_DIXZero},
     {"DIZero", ppcglue_DIZero},
     {"DMRegisterNotifyProc", ppctrap_DMRegisterNotifyProc},
     {"DTInstall", ppcglue_DTInstall},
@@ -36052,6 +36285,7 @@ const ppc_export ppc_exports[] = {
     {"DecompressSequenceFrame", ppcglue_DecompressSequenceFrame},
     {"DecompressSequenceFrameS", ppcglue_DecompressSequenceFrameS},
     {"DecompressSequenceFrameWhen", ppcglue_DecompressSequenceFrameWhen},
+    {"DeferUserFn", ppcglue_DeferUserFn},
     {"DelComp", ppcglue_DelComp},
     {"DelSearch", ppcglue_DelSearch},
     {"Delay", ppctrap_Delay},
@@ -36117,6 +36351,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeTrackMedia", ppctrap_DisposeTrackMedia},
     {"DisposeUserData", ppctrap_DisposeUserData},
     {"DisposeWindow", ppcglue_DisposeWindow},
+    {"DoVBLTask", ppcglue_DoVBLTask},
     {"DragAlignedGrayRgn", ppctrap_DragAlignedGrayRgn},
     {"DragAlignedWindow", ppcglue_DragAlignedWindow},
     {"DragControl", ppcglue_DragControl},
@@ -36172,6 +36407,10 @@ const ppc_export ppc_exports[] = {
     {"DrawThemeWindowListViewHeader", ppcglue_DrawThemeWindowListViewHeader},
     {"DrawTrimmedPicture", ppctrap_DrawTrimmedPicture},
     {"DrawTrimmedPictureFile", ppctrap_DrawTrimmedPictureFile},
+    {"DriveStatus", ppcglue_DriveStatus},
+    {"DriverInstall", ppcglue_DriverInstall},
+    {"DriverInstallReserveMem", ppcglue_DriverInstallReserveMem},
+    {"DrvrRemove", ppcglue_DrvrRemove},
     {"DumpControlHierarchy", ppcglue_DumpControlHierarchy},
     {"EAddMulti", ppcglue_EAddMulti},
     {"EAttachPH", ppcglue_EAttachPH},
@@ -36237,6 +36476,9 @@ const ppc_export ppc_exports[] = {
     {"FSpRstFLock", ppctrap_FSpRstFLock},
     {"FSpSetFInfo", ppcglue_FSpSetFInfo},
     {"FSpSetFLock", ppctrap_FSpSetFLock},
+    {"FTCompletionAsync", ppcglue_FTCompletionAsync},
+    {"FTReceiveAsync", ppcglue_FTReceiveAsync},
+    {"FTSendAsync", ppcglue_FTSendAsync},
     {"FillArc", ppcglue_FillArc},
     {"FillCArc", ppcglue_FillCArc},
     {"FillCOval", ppcglue_FillCOval},
@@ -37029,6 +37271,8 @@ const ppc_export ppc_exports[] = {
     {"InsertTrackSegment", ppctrap_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
+    {"InstallExtensionNotificationProc", ppcglue_InstallExtensionNotificationProc},
+    {"InstallExtensionTableHandlerProc", ppcglue_InstallExtensionTableHandlerProc},
     {"InstallReceiveHandler", ppcglue_InstallReceiveHandler},
     {"InstallTrackingHandler", ppcglue_InstallTrackingHandler},
     {"IntlScript", ppcglue_IntlScript},
@@ -37802,6 +38046,7 @@ const ppc_export ppc_exports[] = {
     {"PBCatSearchSync", ppcglue_PBCatSearchSync},
     {"PBClose", ppcglue_PBClose},
     {"PBCloseAsync", ppcglue_PBCloseAsync},
+    {"PBCloseImmed", ppcglue_PBCloseImmed},
     {"PBCloseSync", ppcglue_PBCloseSync},
     {"PBCloseWD", ppcglue_PBCloseWD},
     {"PBCloseWDAsync", ppcglue_PBCloseWDAsync},
@@ -37971,6 +38216,7 @@ const ppc_export ppc_exports[] = {
     {"PBHSetVolSync", ppcglue_PBHSetVolSync},
     {"PBKillIO", ppcglue_PBKillIO},
     {"PBKillIOAsync", ppcglue_PBKillIOAsync},
+    {"PBKillIOImmed", ppcglue_PBKillIOImmed},
     {"PBKillIOSync", ppcglue_PBKillIOSync},
     {"PBLockRange", ppctrap_PBLockRange},
     {"PBLockRangeAsync", ppctrap_PBLockRangeAsync},
@@ -37982,6 +38228,7 @@ const ppc_export ppc_exports[] = {
     {"PBOpenDF", ppcglue_PBOpenDF},
     {"PBOpenDFAsync", ppcglue_PBOpenDFAsync},
     {"PBOpenDFSync", ppcglue_PBOpenDFSync},
+    {"PBOpenImmed", ppcglue_PBOpenImmed},
     {"PBOpenRF", ppcglue_PBOpenRF},
     {"PBOpenRFAsync", ppcglue_PBOpenRFAsync},
     {"PBOpenRFSync", ppcglue_PBOpenRFSync},
@@ -37991,6 +38238,7 @@ const ppc_export ppc_exports[] = {
     {"PBOpenWDSync", ppcglue_PBOpenWDSync},
     {"PBRead", ppcglue_PBRead},
     {"PBReadAsync", ppcglue_PBReadAsync},
+    {"PBReadImmed", ppcglue_PBReadImmed},
     {"PBReadSync", ppcglue_PBReadSync},
     {"PBRename", ppcglue_PBRename},
     {"PBRenameAsync", ppcglue_PBRenameAsync},
@@ -38027,13 +38275,16 @@ const ppc_export ppc_exports[] = {
     {"PBSetVolSync", ppcglue_PBSetVolSync},
     {"PBStatus", ppcglue_PBStatus},
     {"PBStatusAsync", ppcglue_PBStatusAsync},
+    {"PBStatusImmed", ppcglue_PBStatusImmed},
     {"PBStatusSync", ppcglue_PBStatusSync},
     {"PBUnlockRange", ppctrap_PBUnlockRange},
     {"PBUnlockRangeAsync", ppctrap_PBUnlockRangeAsync},
     {"PBUnlockRangeSync", ppctrap_PBUnlockRangeSync},
     {"PBUnmountVol", ppcglue_PBUnmountVol},
+    {"PBWaitIOComplete", ppcglue_PBWaitIOComplete},
     {"PBWrite", ppcglue_PBWrite},
     {"PBWriteAsync", ppcglue_PBWriteAsync},
+    {"PBWriteImmed", ppcglue_PBWriteImmed},
     {"PBWriteSync", ppcglue_PBWriteSync},
     {"PDetachPH", ppcglue_PDetachPH},
     {"PMFeatures", ppcglue_PMFeatures},
@@ -38340,6 +38591,8 @@ const ppc_export ppc_exports[] = {
     {"ReleaseResource", ppcglue_ReleaseResource},
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
+    {"RemoveExtensionNotificationProc", ppcglue_RemoveExtensionNotificationProc},
+    {"RemoveExtensionTableHandlerProc", ppcglue_RemoveExtensionTableHandlerProc},
     {"RemoveIconRefOverride", ppcglue_RemoveIconRefOverride},
     {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
     {"RemoveIndexedCollectionItem", ppctrap_RemoveIndexedCollectionItem},
@@ -38979,5 +39232,7 @@ const ppc_export ppc_exports[] = {
     {"_AE_hdlr_lookup", ppcglue__AE_hdlr_lookup},
     {"_AE_hdlr_table_alloc", ppcglue__AE_hdlr_table_alloc},
     {"ataManager", ppcglue_ataManager},
+    {"dibadmount", ppcglue_dibadmount},
+    {"dizero", ppcglue_dizero},
 };
 const unsigned ppc_export_count = sizeof ppc_exports / sizeof ppc_exports[0];

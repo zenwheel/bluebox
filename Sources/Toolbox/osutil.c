@@ -632,18 +632,26 @@ static void adb_call(gaddr fn, gaddr buf, gaddr data, uint8_t cmd)
 
 /* _ADBOp: A0 = ADBOpBlock (dataBuffPtr, opServiceRtPtr, opDataAreaPtr),
  * D0.B = command (address << 4, then Talk 3 / Listen 2 / Flush, register). */
+/* A command: Talk answered with the device's register into buffer, then
+ * the completion routine called. */
+int16_t adb_op(gaddr buf, gaddr fn, gaddr data, uint8_t cmd)
+{
+    int k = adb_index(cmd >> 4), kind = (cmd >> 2) & 3, reg = cmd & 3;
+    if (k >= 0 && kind == 3)
+        adb_talk(k, reg, buf);
+    if (fn)
+        adb_call(fn, buf, data, cmd);
+    return noErr;
+}
+
 static void adbop_native(cpu68k *c, uint16_t tw)
 {
     (void)tw;
     gaddr pb = c->a[0];
     uint8_t cmd = (uint8_t)c->d[0];
-    int k = adb_index(cmd >> 4), kind = (cmd >> 2) & 3, reg = cmd & 3;
     gaddr buf = pb ? rd32(pb) : 0, fn = pb ? rd32(pb + 4) : 0, data = pb ? rd32(pb + 8) : 0;
-    if (k >= 0 && kind == 3)
-        adb_talk(k, reg, buf);
     c->d[0] = noErr;
-    if (fn)
-        adb_call(fn, buf, data, cmd);
+    adb_op(buf, fn, data, cmd);
 }
 
 static void adb_own_native(cpu68k *c, uint16_t tw) { (void)c; (void)tw; }

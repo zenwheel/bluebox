@@ -32,4 +32,11 @@ int16_t xpp_asp_control(gaddr pb, bool async);
 void ppc_toolbox_reset(void);
 void ppc_toolbox_poll(void);
 
+/* osutil.c: an ADB command, as _ADBOp does it */
+int16_t adb_op(gaddr buf, gaddr fn, gaddr data, uint8_t cmd);
+/* timemgr.c: the VBL tasks of a retrace, for DoVBLTask */
+void time_vbl_task(void);
+/* devices.c */
+void devices_reset(void);
+
 #endif

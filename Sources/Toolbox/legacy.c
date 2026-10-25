@@ -11,4 +11,5 @@ void legacy_reset(void)
     dbaccess_reset();
     xpp_reset();
     ppc_toolbox_reset();
+    devices_reset();
 }

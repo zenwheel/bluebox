@@ -291,6 +291,22 @@ static void run_completions(void)
     }
 }
 
+/* One tick's VBL tasks: each count down, those reaching zero run. */
+static void vbl_tick(void)
+{
+    for (int i = 0; i < MAX_TASKS; i++) {
+        gaddr v = vbls[i];
+        if (!v)
+            continue;
+        int16_t count = (int16_t)rd16(v + VBLTask_vblCount_off);
+        if (count <= 0)
+            continue;
+        wr16(v + VBLTask_vblCount_off, (uint16_t)(count - 1));
+        if (count == 1)
+            interrupt_call(rd32(v + VBLTask_vblAddr_off), v, 0);
+    }
+}
+
 /* Whether a Time Manager or VBL task is waiting to run. */
 bool time_busy(void)
 {
@@ -337,19 +353,19 @@ void time_pump(void)
     if (n > 4)
         n = 4;
     vbl_ticks = ticks;
-    while (n--) {
-        for (int i = 0; i < MAX_TASKS; i++) {
-            gaddr v = vbls[i];
-            if (!v)
-                continue;
-            int16_t count = (int16_t)rd16(v + VBLTask_vblCount_off);
-            if (count <= 0)
-                continue;
-            wr16(v + VBLTask_vblCount_off, (uint16_t)(count - 1));
-            if (count == 1)
-                interrupt_call(rd32(v + VBLTask_vblAddr_off), v, 0);
-        }
-    }
+    while (n--)
+        vbl_tick();
+    in_interrupt = false;
+}
+
+/* DoVBLTask: a slot's retrace, its tasks run as on a tick (all are the
+ * built-in video's: SlotVInstall is VInstall's). */
+void time_vbl_task(void)
+{
+    if (in_interrupt)
+        return;
+    in_interrupt = true;
+    vbl_tick();
     in_interrupt = false;
 }
 

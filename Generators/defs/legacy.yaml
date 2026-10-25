@@ -1463,3 +1463,301 @@
       - name: prompt
         type: Ptr
     cfm: InterfaceLib
+
+# ---- The Device Manager's installation and immediate calls, the drive
+# queue, slot retraces, deferred functions (devices.c) ----
+
+- function:
+    name: DriverInstall
+    return: OSErr
+    args:
+      - name: drvrPtr
+        type: Ptr
+      - name: refNum
+        type: INTEGER
+    cfm: InterfaceLib
+
+- function:
+    name: DriverInstallReserveMem
+    return: OSErr
+    args:
+      - name: drvrPtr
+        type: Ptr
+      - name: refNum
+        type: INTEGER
+    cfm: InterfaceLib
+
+- function:
+    name: DrvrRemove
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA03E
+
+- function:
+    name: PBOpenImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBCloseImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBReadImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBWriteImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBStatusImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBKillIOImmed
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: PBWaitIOComplete
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+      - name: timeout
+        type: LONGINT
+    cfm: InterfaceLib
+
+- function:
+    name: AddDrive
+    args:
+      - name: drvrRefNum
+        type: INTEGER
+      - name: drvNum
+        type: INTEGER
+      - name: qEl
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: DriveStatus
+    return: OSErr
+    args:
+      - name: drvNum
+        type: INTEGER
+      - name: status
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: AttachVBL
+    return: OSErr
+    args:
+      - name: theSlot
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA071
+
+- function:
+    name: DoVBLTask
+    return: OSErr
+    args:
+      - name: theSlot
+        type: INTEGER
+        register: D0
+    returnreg: D0
+    trap: 0xA072
+
+- function:
+    name: DeferUserFn
+    return: OSErr
+    args:
+      - name: userFunction
+        type: Ptr
+        register: A0
+      - name: argument
+        type: Ptr
+        register: D0
+    returnreg: D0
+    trap: 0xA08F
+
+# The Disk Initialization Package's extended calls: Pack2's selectors.
+- function:
+    name: DIXFormat
+    return: OSErr
+    args:
+      - name: drvNum
+        type: INTEGER
+      - name: fmtFlag
+        type: Boolean
+      - name: fmtArg
+        type: uint32_t
+      - name: actSize
+        type: Ptr
+    dispatcher: Pack2
+    selector: 0x000C
+
+- function:
+    name: DIXZero
+    return: OSErr
+    args:
+      - name: drvNum
+        type: INTEGER
+      - name: volName
+        type: Ptr
+      - name: fsid
+        type: INTEGER
+      - name: mediaStatus
+        type: INTEGER
+      - name: volTypeSelector
+        type: INTEGER
+      - name: volSize
+        type: uint32_t
+      - name: extendedInfoPtr
+        type: Ptr
+    dispatcher: Pack2
+    selector: 0x000E
+
+- function:
+    name: DIReformat
+    return: OSErr
+    args:
+      - name: drvNum
+        type: INTEGER
+      - name: fsid
+        type: INTEGER
+      - name: volName
+        type: Ptr
+      - name: msgText
+        type: Ptr
+    dispatcher: Pack2
+    selector: 0x0010
+
+- function:
+    name: dizero
+    return: OSErr
+    args:
+      - name: drvnum
+        type: INTEGER
+      - name: volName
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: dibadmount
+    return: OSErr
+    args:
+      - name: where
+        type: Ptr
+      - name: evtMessage
+        type: LONGINT
+    cfm: InterfaceLib
+
+# The Extensions Manager (Start.h): MOVEQ #selector,D0; _ExtensionsDispatch.
+- dispatcher:
+    name: ExtensionsDispatch
+    trap: 0xAA7D
+    selector-location: D0W
+
+- function:
+    name: InstallExtensionNotificationProc
+    return: OSErr
+    args:
+      - name: extNotificationProc
+        type: Ptr
+    dispatcher: ExtensionsDispatch
+    selector: 0x0000
+
+- function:
+    name: RemoveExtensionNotificationProc
+    return: OSErr
+    args:
+      - name: extNotificationProc
+        type: Ptr
+    dispatcher: ExtensionsDispatch
+    selector: 0x0001
+
+- function:
+    name: InstallExtensionTableHandlerProc
+    return: OSErr
+    args:
+      - name: extMgrProc
+        type: Ptr
+      - name: extTable
+        type: Ptr
+    dispatcher: ExtensionsDispatch
+    selector: 0x0002
+
+- function:
+    name: RemoveExtensionTableHandlerProc
+    return: OSErr
+    args:
+      - name: extMgrProc
+        type: Ptr
+    dispatcher: ExtensionsDispatch
+    selector: 0x0003
+
+# The File Transfer Manager's System 7.5 calls (InterfaceLib's only).
+- function:
+    name: FTSendAsync
+    return: INTEGER
+    args:
+      - name: hFT
+        type: Handle
+      - name: numFiles
+        type: INTEGER
+      - name: pFSSpec
+        type: Ptr
+      - name: notifyProc
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: FTReceiveAsync
+    return: INTEGER
+    args:
+      - name: hFT
+        type: Handle
+      - name: pFSSpec
+        type: Ptr
+      - name: notifyProc
+        type: Ptr
+    cfm: InterfaceLib
+
+- function:
+    name: FTCompletionAsync
+    return: INTEGER
+    args:
+      - name: hFT
+        type: Handle
+      - name: completionCall
+        type: uint16_t
+    cfm: InterfaceLib

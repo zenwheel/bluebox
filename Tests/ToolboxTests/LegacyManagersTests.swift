@@ -612,4 +612,83 @@ extension BlueBox {
             #expect(Int16(bitPattern: rd16(inform + 16)) == -916)
         }
     }
+
+    /// The Device Manager's installation and immediate calls, the drive
+    /// queue, slot retraces, deferred functions, the Disk Initialization
+    /// Package's extended calls and the Extensions Manager.
+    @Suite struct DevicesAndDrives {
+        init() { bootMachine() }
+
+        @Test func driversInstalledAndRemoved() {
+            let drvr = tb_NewPtr(32, false, true)
+            #expect(ppcErr("DriverInstall", [drvr, UInt32(bitPattern: -60)]) == 0)
+            let h = rd32(rd32(UInt32(LM_UTableBase)) + 4 * 59)
+            #expect(h != 0 && rd32(rd32(h)) == drvr)
+            // _DrvrRemove: gone, then not there to remove.
+            #expect(run68k([0x303C, 0xFFC4, 0xA03E, 0x3E00, 0x303C, 0xFFC4, 0xA03E, 0x3C00, 0xA9F4]) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0 && Int16(bitPattern: UInt16(g_cpu!.pointee.d.6 & 0xFFFF)) == -1)
+            #expect(rd32(rd32(UInt32(LM_UTableBase)) + 4 * 59) == 0)
+            #expect(ppcErr("DriverInstallReserveMem", [drvr, 5]) == -21) // badUnitErr
+            #expect(ppcErr("DrvrRemove", [UInt32(bitPattern: -1000)]) == -21)
+        }
+
+        @Test func drivesQueuedAndAsked() {
+            let el = tb_NewPtr(16, false, true)
+            ppcExport("AddDrive", [UInt32(bitPattern: -5), 9, el])
+            #expect(rd16(el + 6) == 9 && Int16(bitPattern: rd16(el + 8)) == -5)
+            var found = false
+            var e = rd32(UInt32(LM_DrvQHdr) + 2)
+            while e != 0 { if e == el { found = true }; e = rd32(e) }
+            #expect(found)
+            let st = tb_NewPtr(22, false, true)
+            #expect(ppcErr("DriveStatus", [9, st]) != 0)    // its driver (-5) has no status call
+            #expect(ppcErr("DriveStatus", [77, st]) == -56) // nsDrvErr
+            #expect(ppcErr("DIXFormat", [77, 0, 0, st]) == -64)
+            #expect(ppcErr("DIXFormat", [9, 0, 0, st]) != 0)
+            let name = tb_NewPtr(8, false, true)
+            wr8(name, 0x41)
+            #expect(ppcErr("dizero", [77, name]) == -64)
+        }
+
+        @Test func waitsRetracesAndDeferredFunctions() {
+            // An I/O already done; one that never ends times out.
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(pb + UInt32(IOParam_ioResult_off), UInt16(bitPattern: -43))
+            #expect(ppcErr("PBWaitIOComplete", [pb, 10]) == -43)
+            wr16(pb + UInt32(IOParam_ioResult_off), 1)
+            #expect(ppcErr("PBWaitIOComplete", [pb, 5]) == -29296)
+            #expect(ppcErr("AttachVBL", [0]) == 0 && ppcErr("AttachVBL", [9]) == -360)
+            // A VBL task with a count of one runs on DoVBLTask.
+            let flag = tb_NewPtr(4, false, true)
+            let code = tb_NewPtr(8, false, false)
+            for (i, w) in [0x52B9, Int(hiWord(flag)), Int(loWord(flag)), 0x4E75].enumerated() { wr16(code + UInt32(i * 2), UInt16(w)) }
+            let task = tb_NewPtr(Int32(VBLTask_SIZEOF), false, true)
+            wr16(task + 4, 1); wr32(task + UInt32(VBLTask_vblAddr_off), code); wr16(task + UInt32(VBLTask_vblCount_off), 1)
+            #expect(tb_VInstall(task) == 0)
+            #expect(run68k([0x7000, 0xA072, 0x3E00, 0xA9F4]) == "ExitToShell" && g_cpu!.pointee.d.7 & 0xFFFF == 0)
+            #expect(rd32(flag) == 1)
+            // DeferUserFn: the function at once, A0 its argument.
+            let arg = tb_NewPtr(4, false, true), stack = tb_NewPtr(4096, false, true)
+            g_cpu!.pointee.a.7 = stack + 4096 - 16
+            g_cpu!.pointee.halted = false // run68k's ExitToShell
+            let fn = tb_NewPtr(8, false, false)
+            for (i, w) in [0x5290, 0x4E75].enumerated() { wr16(fn + UInt32(i * 2), UInt16(w)) } // ADDQ.L #1,(A0)
+            #expect(ppcErr("DeferUserFn", [fn, arg]) == 0 && rd32(arg) == 1)
+        }
+
+        @Test func noExtensionsLoad() {
+            let proc = tb_NewPtr(2, false, true), table = tb_NewPtr(4, false, true)
+            #expect(ppcErr("InstallExtensionNotificationProc", [proc]) == 0)
+            #expect(ppcErr("RemoveExtensionNotificationProc", [proc]) == 0)
+            #expect(ppcErr("RemoveExtensionNotificationProc", [proc]) == -50)
+            #expect(ppcErr("InstallExtensionTableHandlerProc", [proc, table]) == 0)
+            let t = rd32(rd32(table))
+            #expect(rd32(t) == 20 && rd32(t + 4) == 0x100 && rd32(t + 12) == 94 && rd32(t + 16) == 0)
+            #expect(ppcErr("RemoveExtensionTableHandlerProc", [proc]) == 0)
+            #expect(ppcErr("FTSendAsync", [0, 1, 0, 0]) == 2) // ftFailed: no transfer record
+            // ADBOp: Talk register 3 of the mouse (address 3): its address and handler.
+            let buf = tb_NewPtr(9, false, true)
+            #expect(ppcErr("ADBOp", [0, 0, buf, 0x3F]) == 0 && rd8(buf) == 2)
+        }
+    }
 }
