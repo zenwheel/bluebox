@@ -775,8 +775,15 @@ static int standard_kind(const machine_cursor *c)
     return MACHINE_CURSOR_CUSTOM;
 }
 
+/* TheCrsr ($844): the current cursor's record, kept as QuickDraw kept it
+ * (LMGetTheCursor reads it). */
+#define LM_TheCrsr 0x0844u
+
 static void set_image(gaddr data, gaddr mask, gaddr hot)
 {
+    gmemcpy(LM_TheCrsr, data, 32);
+    gmemcpy(LM_TheCrsr + 32, mask, 32);
+    gmemcpy(LM_TheCrsr + 64, hot, 4);
     pthread_mutex_lock(&cursor_lock);
     gget(cursor.data, data, 32);
     gget(cursor.mask, mask, 32);
@@ -867,6 +874,11 @@ static bool color_image(gaddr c, uint32_t size, uint8_t rgba[16 * 16 * 4])
 
 void tb_InitCursor(void)
 {
+    for (int i = 0; i < 16; i++) {
+        wr16(LM_TheCrsr + (uint32_t)i * 2, arrow_data[i]);
+        wr16(LM_TheCrsr + 32 + (uint32_t)i * 2, arrow_mask[i]);
+    }
+    wr32(LM_TheCrsr + 64, 0x00010001);
     pthread_mutex_lock(&cursor_lock);
     cursor.arrow = true;
     cursor.kind = MACHINE_CURSOR_ARROW;

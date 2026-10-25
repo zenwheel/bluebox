@@ -250,4 +250,56 @@ extension BlueBox {
             #expect(g_cpu!.pointee.d.6 == rd32(UInt32(LM_Ticks)))
         }
     }
+
+    /// LowMem.h's accessors for the globals that had none: on the globals.
+    @Suite struct LowMemoryAccessors {
+        init() { bootMachine() }
+
+        @Test func scalarsRoundTrip() {
+            let longs: [(String, UInt32)] = [("ABusGlobals", 0x2D8), ("ATalkHk2", 0xB18),
+                                              ("DiskFormatingHFSDefaults", 0x39E), ("HighHeapMark", 0xBAE),
+                                              ("KeyTime", 0x186), ("MBTicks", 0x16E), ("ROMMapHandle", 0xB06),
+                                              ("StackLowPoint", 0x110)]
+            for (name, addr) in longs {
+                ilCall("LMSet\(name)", [0x1234_5678])
+                #expect(rd32(addr) == 0x1234_5678, "\(name)")
+                wr32(addr, 0x0BAD_F00D)
+                #expect(ilCall("LMGet\(name)", []) == 0x0BAD_F00D, "\(name)")
+            }
+            let bytes: [(String, UInt32)] = [("CursorNew", 0x8CE), ("MouseButtonState", 0x172), ("PortAInfo", 0x290),
+                                              ("ROMMapInsert", 0xB9E), ("WordRedraw", 0xBA5)]
+            for (name, addr) in bytes {
+                let next = rd8(addr + 1)
+                ilCall("LMSet\(name)", [0x1FF])
+                #expect(rd8(addr) == 0xFF && rd8(addr + 1) == next, "\(name)")
+                wr8(addr, 0x42)
+                #expect(ilCall("LMGet\(name)", []) == 0x42, "\(name)")
+            }
+            ilCall("LMSetUnitTableEntryCount", [UInt32(bitPattern: -2)])
+            #expect(rd16(0x1D2) == 0xFFFE)
+            #expect(Int32(bitPattern: ilCall("LMGetUnitTableEntryCount", [])) == -2)
+        }
+
+        @Test func pointsAndTheCursor() {
+            ilCall("LMSetMouseTemp", [0x0010_0020])
+            #expect(rd32(0x828) == 0x0010_0020)
+            wr32(0x82C, 0x0030_0040)
+            #expect(ilCall("LMGetRawMouseLocation", [0]) == 0x0030_0040)
+
+            // SetCursor keeps TheCrsr, which LMGetTheCursor copies out.
+            let cursor = tb_NewPtr(68, false, true)
+            for i in 0..<16 { wr16(cursor + UInt32(i * 2), UInt16(0x0101 * i)) }
+            wr32(cursor + 64, 0x0003_0004)
+            tb_SetCursor(cursor)
+            let out = tb_NewPtr(68, false, true)
+            ilCall("LMGetTheCursor", [out])
+            #expect((0..<68).allSatisfy { rd8(out + UInt32($0)) == rd8(cursor + UInt32($0)) })
+            tb_InitCursor()
+            ilCall("LMGetTheCursor", [out])
+            #expect(rd16(out + 2) == 0x4000 && rd32(out + 64) == 0x0001_0001) // the arrow
+            ilCall("LMSetTheCursor", [cursor])
+            #expect(rd32(0x844 + 64) == 0x0003_0004)
+            #expect(ilCall("GetEventQueue", []) == UInt32(LM_EventQueue))
+        }
+    }
 }
