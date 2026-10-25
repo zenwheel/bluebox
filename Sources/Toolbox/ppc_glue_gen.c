@@ -21120,6 +21120,128 @@ static void ppcglue_RegisterControlDefinition(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetDialogWindow(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetDialogWindow(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogPort(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetDialogPort(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogFromWindow(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetDialogFromWindow(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogTextEditHandle(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetDialogTextEditHandle(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogKeyboardFocusItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDialogKeyboardFocusItem(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogDefaultItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDialogDefaultItem(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogCancelItem(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDialogCancelItem(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetPortDialogPort(ppc_cpu *c)
+{
+    gaddr a_dialog = (gaddr)c->gpr[3];
+    tb_SetPortDialogPort(a_dialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetParamText(ppc_cpu *c)
+{
+    gaddr a_param0 = (gaddr)c->gpr[3];
+    gaddr a_param1 = (gaddr)c->gpr[4];
+    gaddr a_param2 = (gaddr)c->gpr[5];
+    gaddr a_param3 = (gaddr)c->gpr[6];
+    tb_GetParamText(a_param0, a_param1, a_param2, a_param3);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertDialogItem(ppc_cpu *c)
+{
+    gaddr a_theDialog = (gaddr)c->gpr[3];
+    int16_t a_afterItem = (int16_t)c->gpr[4];
+    int16_t a_itemType = (int16_t)c->gpr[5];
+    gaddr a_itemHandle = (gaddr)c->gpr[6];
+    gaddr a_box = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_InsertDialogItem(a_theDialog, a_afterItem, a_itemType, a_itemHandle, a_box);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveDialogItems(ppc_cpu *c)
+{
+    gaddr a_theDialog = (gaddr)c->gpr[3];
+    int16_t a_itemNo = (int16_t)c->gpr[4];
+    int16_t a_amountToRemove = (int16_t)c->gpr[5];
+    int8_t a_disposeItemData = (int8_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_RemoveDialogItems(a_theDialog, a_itemNo, a_amountToRemove, a_disposeItemData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDialogTimeout(ppc_cpu *c)
+{
+    gaddr a_inDialog = (gaddr)c->gpr[3];
+    int16_t a_inButtonToPress = (int16_t)c->gpr[4];
+    uint32_t a_inSecondsToWait = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDialogTimeout(a_inDialog, a_inButtonToPress, a_inSecondsToWait);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDialogTimeout(ppc_cpu *c)
+{
+    gaddr a_inDialog = (gaddr)c->gpr[3];
+    gaddr a_outButtonToPress = (gaddr)c->gpr[4];
+    gaddr a_outSecondsToWait = (gaddr)c->gpr[5];
+    gaddr a_outSecondsRemaining = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_GetDialogTimeout(a_inDialog, a_outButtonToPress, a_outSecondsToWait, a_outSecondsRemaining);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetModalDialogEventMask(ppc_cpu *c)
+{
+    gaddr a_inDialog = (gaddr)c->gpr[3];
+    uint16_t a_inMask = (uint16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_SetModalDialogEventMask(a_inDialog, a_inMask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetModalDialogEventMask(ppc_cpu *c)
+{
+    gaddr a_inDialog = (gaddr)c->gpr[3];
+    gaddr a_outMask = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetModalDialogEventMask(a_inDialog, a_outMask);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -40007,9 +40129,17 @@ const ppc_export ppc_exports[] = {
     {"GetDefaultStartup", ppcglue_GetDefaultStartup},
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
+    {"GetDialogCancelItem", ppcglue_GetDialogCancelItem},
+    {"GetDialogDefaultItem", ppcglue_GetDialogDefaultItem},
+    {"GetDialogFromWindow", ppcglue_GetDialogFromWindow},
     {"GetDialogItem", ppcglue_GetDialogItem},
     {"GetDialogItemAsControl", ppcglue_GetDialogItemAsControl},
     {"GetDialogItemText", ppcglue_GetDialogItemText},
+    {"GetDialogKeyboardFocusItem", ppcglue_GetDialogKeyboardFocusItem},
+    {"GetDialogPort", ppcglue_GetDialogPort},
+    {"GetDialogTextEditHandle", ppcglue_GetDialogTextEditHandle},
+    {"GetDialogTimeout", ppcglue_GetDialogTimeout},
+    {"GetDialogWindow", ppcglue_GetDialogWindow},
     {"GetDictionaryInformation", ppcglue_GetDictionaryInformation},
     {"GetDimmingTimeout", ppcglue_GetDimmingTimeout},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
@@ -40144,6 +40274,7 @@ const ppc_export ppc_exports[] = {
     {"GetMenuItemRefCon2", ppcglue_GetMenuItemRefCon2},
     {"GetMenuItemText", ppcglue_GetMenuItemText},
     {"GetMenuItemTextEncoding", ppcglue_GetMenuItemTextEncoding},
+    {"GetModalDialogEventMask", ppcglue_GetModalDialogEventMask},
     {"GetMouse", ppcglue_GetMouse},
     {"GetMovieActive", ppcglue_GetMovieActive},
     {"GetMovieActiveSegment", ppctrap_GetMovieActiveSegment},
@@ -40217,6 +40348,7 @@ const ppc_export ppc_exports[] = {
     {"GetPageState", ppcglue_GetPageState},
     {"GetPalette", ppcglue_GetPalette},
     {"GetPaletteUpdates", ppcglue_GetPaletteUpdates},
+    {"GetParamText", ppcglue_GetParamText},
     {"GetPattern", ppcglue_GetPattern},
     {"GetPen", ppcglue_GetPen},
     {"GetPenState", ppcglue_GetPenState},
@@ -40521,6 +40653,7 @@ const ppc_export ppc_exports[] = {
     {"InitializeDictionary", ppcglue_InitializeDictionary},
     {"InsTime", ppcglue_InsTime},
     {"InsXTime", ppcglue_InsXTime},
+    {"InsertDialogItem", ppcglue_InsertDialogItem},
     {"InsertEmptyMovieSegment", ppcglue_InsertEmptyMovieSegment},
     {"InsertEmptyTrackSegment", ppctrap_InsertEmptyTrackSegment},
     {"InsertFontResMenu", ppcglue_InsertFontResMenu},
@@ -41991,6 +42124,7 @@ const ppc_export ppc_exports[] = {
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
     {"RemoveControlProperty", ppcglue_RemoveControlProperty},
+    {"RemoveDialogItems", ppcglue_RemoveDialogItems},
     {"RemoveExtensionNotificationProc", ppcglue_RemoveExtensionNotificationProc},
     {"RemoveExtensionTableHandlerProc", ppcglue_RemoveExtensionTableHandlerProc},
     {"RemoveFS", ppcglue_RemoveFS},
@@ -42204,6 +42338,7 @@ const ppc_export ppc_exports[] = {
     {"SetDialogFont", ppcglue_SetDialogFont},
     {"SetDialogItem", ppcglue_SetDialogItem},
     {"SetDialogItemText", ppcglue_SetDialogItemText},
+    {"SetDialogTimeout", ppcglue_SetDialogTimeout},
     {"SetDialogTracksCursor", ppcglue_SetDialogTracksCursor},
     {"SetDisclosureTriangleLastValue", ppcglue_SetDisclosureTriangleLastValue},
     {"SetDragDrawingProc", ppcglue_SetDragDrawingProc},
@@ -42279,6 +42414,7 @@ const ppc_export ppc_exports[] = {
     {"SetMenuItemRefCon2", ppcglue_SetMenuItemRefCon2},
     {"SetMenuItemText", ppcglue_SetMenuItemText},
     {"SetMenuItemTextEncoding", ppcglue_SetMenuItemTextEncoding},
+    {"SetModalDialogEventMask", ppcglue_SetModalDialogEventMask},
     {"SetMovieActive", ppcglue_SetMovieActive},
     {"SetMovieActiveSegment", ppctrap_SetMovieActiveSegment},
     {"SetMovieAnchorDataRef", ppctrap_SetMovieAnchorDataRef},
@@ -42321,6 +42457,7 @@ const ppc_export ppc_exports[] = {
     {"SetPort", ppcglue_SetPort},
     {"SetPortBits", ppcglue_SetPortBits},
     {"SetPortCustomXFerProc", ppcglue_SetPortCustomXFerProc},
+    {"SetPortDialogPort", ppcglue_SetPortDialogPort},
     {"SetPortPix", ppcglue_SetPortPix},
     {"SetPosterBox", ppctrap_SetPosterBox},
     {"SetPreserveGlyph", ppcglue_SetPreserveGlyph},

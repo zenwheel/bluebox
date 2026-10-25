@@ -454,6 +454,7 @@ void ap_after_track(gaddr ch, int16_t part);
  * procedures when it has them (ap_item_click: -1 when it has none). */
 gaddr ap_item_control(gaddr dialog, int item, int kind);
 void ap_forget_dialog(gaddr dialog);
+void ap_items_shifted(gaddr dialog, int from, int delta);
 bool ap_item_draw(gaddr dialog, int item);
 int16_t ap_item_click(gaddr dialog, int item, uint32_t pt, int16_t modifiers);
 void ap_cdefs_reset(void);

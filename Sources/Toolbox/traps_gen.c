@@ -9134,6 +9134,36 @@ static void glue_GetDeviceList(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDialogCancelItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDialogCancelItem(a_dialog);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogDefaultItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDialogDefaultItem(a_dialog);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogFromWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetDialogFromWindow(a_window);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDialogItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9166,6 +9196,59 @@ static void glue_GetDialogItemText(cpu68k *c, uint16_t trapword)
     gaddr a_text = (gaddr)cpu_pop32(c);
     gaddr a_item = (gaddr)cpu_pop32(c);
     tb_GetDialogItemText(a_item, a_text);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogKeyboardFocusItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDialogKeyboardFocusItem(a_dialog);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogPort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetDialogPort(a_dialog);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogTextEditHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetDialogTextEditHandle(a_dialog);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outSecondsRemaining = (gaddr)cpu_pop32(c);
+    gaddr a_outSecondsToWait = (gaddr)cpu_pop32(c);
+    gaddr a_outButtonToPress = (gaddr)cpu_pop32(c);
+    gaddr a_inDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetDialogTimeout(a_inDialog, a_outButtonToPress, a_outSecondsToWait, a_outSecondsRemaining);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDialogWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetDialogWindow(a_dialog);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -10036,6 +10119,17 @@ static void glue_GetMenuItemTextEncoding(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetModalDialogEventMask(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outMask = (gaddr)cpu_pop32(c);
+    gaddr a_inDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_GetModalDialogEventMask(a_inDialog, a_outMask);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetMouse(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10509,6 +10603,18 @@ static void glue_GetPaletteUpdates(cpu68k *c, uint16_t trapword)
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetPaletteUpdates(a_arg0);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetParamText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_param3 = (gaddr)cpu_pop32(c);
+    gaddr a_param2 = (gaddr)cpu_pop32(c);
+    gaddr a_param1 = (gaddr)cpu_pop32(c);
+    gaddr a_param0 = (gaddr)cpu_pop32(c);
+    tb_GetParamText(a_param0, a_param1, a_param2, a_param3);
     cpu_push32(c, ret);
 }
 
@@ -12737,6 +12843,20 @@ static void glue_InsXTime(cpu68k *c, uint16_t trapword)
     (void)trapword;
     gaddr a_taskp = (gaddr)c->a[0];
     tb_InsXTime(a_taskp);
+}
+
+static void glue_InsertDialogItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_box = (gaddr)cpu_pop32(c);
+    gaddr a_itemHandle = (gaddr)cpu_pop32(c);
+    int16_t a_itemType = (int16_t)cpu_pop16(c);
+    int16_t a_afterItem = (int16_t)cpu_pop16(c);
+    gaddr a_theDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_InsertDialogItem(a_theDialog, a_afterItem, a_itemType, a_itemHandle, a_box);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_InsertEmptyMovieSegment(cpu68k *c, uint16_t trapword)
@@ -17618,6 +17738,19 @@ static void glue_RemoveControlProperty(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RemoveDialogItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_disposeItemData = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_amountToRemove = (int16_t)cpu_pop16(c);
+    int16_t a_itemNo = (int16_t)cpu_pop16(c);
+    gaddr a_theDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_RemoveDialogItems(a_theDialog, a_itemNo, a_amountToRemove, a_disposeItemData);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RemoveExtensionNotificationProc(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19304,6 +19437,18 @@ static void glue_SetDialogItemText(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDialogTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_inSecondsToWait = (uint32_t)cpu_pop32(c);
+    int16_t a_inButtonToPress = (int16_t)cpu_pop16(c);
+    gaddr a_inDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetDialogTimeout(a_inDialog, a_inButtonToPress, a_inSecondsToWait);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDialogTracksCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19873,6 +20018,17 @@ static void glue_SetMenuItemTextEncoding(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetModalDialogEventMask(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_inMask = (uint16_t)cpu_pop16(c);
+    gaddr a_inDialog = (gaddr)cpu_pop32(c);
+    int32_t r = tb_SetModalDialogEventMask(a_inDialog, a_inMask);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetMovieActive(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20122,6 +20278,15 @@ static void glue_SetPortCustomXFerProc(cpu68k *c, uint16_t trapword)
     gaddr a_port = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetPortCustomXFerProc(a_port, a_proc, a_flags, a_refCon);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetPortDialogPort(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dialog = (gaddr)cpu_pop32(c);
+    tb_SetPortDialogPort(a_dialog);
     cpu_push32(c, ret);
 }
 

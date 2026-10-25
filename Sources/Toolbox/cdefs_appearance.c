@@ -2268,6 +2268,31 @@ void ap_forget_dialog(gaddr d)
         }
 }
 
+/* Items from `from` on moved by delta (InsertDialogItem, RemoveDialogItems):
+ * their stand-ins follow, and those of items removed (from - delta up to
+ * from, for a negative delta) go. */
+void ap_items_shifted(gaddr d, int from, int delta)
+{
+    for (int i = 0; i < 256; i++) {
+        if (stand_ins[i].dialog != d || !stand_ins[i].ch || !rd32(stand_ins[i].ch))
+            continue;
+        int n = stand_ins[i].item;
+        if (delta < 0 && n >= from + delta && n < from) {
+            gaddr ch = stand_ins[i].ch;
+            stand_ins[i].dialog = 0;
+            stand_ins[i].ch = 0;
+            tb_DisposeControl(ch);
+            continue;
+        }
+        if (n >= from) {
+            stand_ins[i].item = n + delta;
+            ap_ctl *a = ap_of(stand_ins[i].ch);
+            if (a)
+                a->item = n + delta;
+        }
+    }
+}
+
 /* A user item's stand-in with a drawing procedure draws it. */
 bool ap_item_draw(gaddr d, int item)
 {

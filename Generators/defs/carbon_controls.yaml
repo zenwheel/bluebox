@@ -398,3 +398,142 @@
         type: const void*
       - name: inConversionProc
         type: ProcPtr
+
+
+# Dialogs.h
+- function:
+    name: GetDialogWindow
+    return: WindowPtr
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogPort
+    return: GrafPtr
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogFromWindow
+    return: DialogPtr
+    args:
+      - name: window
+        type: WindowPtr
+
+- function:
+    name: GetDialogTextEditHandle
+    return: TEHandle
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogKeyboardFocusItem
+    return: SInt16
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogDefaultItem
+    return: SInt16
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetDialogCancelItem
+    return: SInt16
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: SetPortDialogPort
+    args:
+      - name: dialog
+        type: DialogPtr
+
+- function:
+    name: GetParamText
+    args:
+      - name: param0
+        type: StringPtr
+      - name: param1
+        type: StringPtr
+      - name: param2
+        type: StringPtr
+      - name: param3
+        type: StringPtr
+
+- function:
+    name: InsertDialogItem
+    return: OSStatus
+    args:
+      - name: theDialog
+        type: DialogPtr
+      - name: afterItem
+        type: SInt16
+      - name: itemType
+        type: SInt16
+      - name: itemHandle
+        type: Handle
+      - name: box
+        type: const Rect*
+
+- function:
+    name: RemoveDialogItems
+    return: OSStatus
+    args:
+      - name: theDialog
+        type: DialogPtr
+      - name: itemNo
+        type: SInt16
+      - name: amountToRemove
+        type: SInt16
+      - name: disposeItemData
+        type: Boolean
+
+- function:
+    name: SetDialogTimeout
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogPtr
+      - name: inButtonToPress
+        type: SInt16
+      - name: inSecondsToWait
+        type: UInt32
+
+- function:
+    name: GetDialogTimeout
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogPtr
+      - name: outButtonToPress
+        type: SInt16*
+      - name: outSecondsToWait
+        type: UInt32*
+      - name: outSecondsRemaining
+        type: UInt32*
+
+- function:
+    name: SetModalDialogEventMask
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogPtr
+      - name: inMask
+        type: UInt16
+
+- function:
+    name: GetModalDialogEventMask
+    return: OSStatus
+    args:
+      - name: inDialog
+        type: DialogPtr
+      - name: outMask
+        type: UInt16*

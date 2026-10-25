@@ -255,4 +255,105 @@ extension BlueBox {
             #expect(tb_HandleControlDragReceive(ch, 0) == -30580) // errMessageNotSupported
         }
     }
+
+    /// CarbonLib's Dialog Manager calls: the accessors, items inserted and
+    /// removed, ParamText read back, timeouts and the event mask.
+    @Suite(.serialized) struct CarbonDialogs {
+        static func text(_ s: String) -> [UInt8] { Array(s.utf8) }
+        static let items = ditl([
+            ditlItem(4, (160, 220, 180, 290), text("OK")),       // 1 button
+            ditlItem(8, (20, 20, 36, 200), text("Hello")),      // 2 static text
+            ditlItem(16, (50, 20, 66, 200), text("abc")),       // 3 edit text
+            ditlItem(4, (160, 120, 180, 190), text("Cancel")),  // 4 button
+        ])
+
+        func open() -> UInt32 {
+            launchTestApp([TestResource(type: "DLOG", id: 210, data: dlog(items: 210)),
+                           TestResource(type: "DITL", id: 210, data: Self.items)])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(210, 0, 0xFFFF_FFFF)
+            #expect(d != 0)
+            return d
+        }
+
+        func item(_ d: UInt32, _ n: Int16) -> (type: Int16, handle: UInt32, rect: [Int16]) {
+            let t = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true)
+            tb_GetDialogItem(d, n, t, h, r)
+            return (Int16(bitPattern: rd16(t)), rd32(h), (0..<4).map { Int16(bitPattern: rd16(r + UInt32($0 * 2))) })
+        }
+
+        func itemText(_ h: UInt32) -> String {
+            let s = tb_NewPtr(256, false, true)
+            tb_GetDialogItemText(h, s)
+            return pstring(at: s)
+        }
+
+        @Test func accessors() {
+            let d = open()
+            #expect(tb_GetDialogWindow(d) == d && tb_GetDialogPort(d) == d && tb_GetDialogFromWindow(d) == d)
+            #expect(tb_GetDialogTextEditHandle(d) == rd32(d + UInt32(DialogRecord_textH_off)))
+            #expect(tb_GetDialogKeyboardFocusItem(d) == 3)
+            _ = tb_SetDialogDefaultItem(d, 1)
+            _ = tb_SetDialogCancelItem(d, 4)
+            #expect(tb_GetDialogDefaultItem(d) == 1 && tb_GetDialogCancelItem(d) == 4)
+            tb_SetPort(0)
+            tb_SetPortDialogPort(d)
+            let port = tb_NewPtr(4, false, true)
+            tb_GetPort(port)
+            #expect(rd32(port) == d)
+        }
+
+        @Test func paramTextReadBack() {
+            _ = open()
+            let a = tb_NewPtr(256, false, true), b = tb_NewPtr(256, false, true)
+            guestPString("first", at: a)
+            guestPString("second", at: b)
+            tb_ParamText(a, b, 0, 0)
+            let o0 = tb_NewPtr(256, false, true), o1 = tb_NewPtr(256, false, true)
+            tb_GetParamText(o0, o1, 0, 0)
+            #expect(pstring(at: o0) == "first" && pstring(at: o1) == "second")
+        }
+
+        @Test func insertAndRemoveItems() {
+            let d = open()
+            let box = tb_NewPtr(8, false, true)
+            for (i, v) in [90, 20, 106, 200].enumerated() { wr16(box + UInt32(i * 2), UInt16(v)) }
+            // An edit text item after the static text: the active one moves to 4.
+            #expect(tb_InsertDialogItem(d, 2, 16, 0, box) == 0)
+            #expect(tb_CountDITL(d) == 5)
+            #expect(item(d, 3).type == 16 && item(d, 3).rect == [90, 20, 106, 200] && item(d, 3).handle != 0)
+            #expect(itemText(item(d, 4).handle) == "abc")
+            #expect(tb_GetDialogKeyboardFocusItem(d) == 4)
+            #expect(item(d, 5).type == 4) // Cancel
+            // A button: a control with no title.
+            #expect(tb_InsertDialogItem(d, 0, 4, 0, box) == 0)
+            #expect(item(d, 1).type == 4 && tb_IsValidControlHandle(item(d, 1).handle) != 0)
+            #expect(tb_CountDITL(d) == 6)
+            // Remove the first two (the new button and OK), disposing them.
+            let ok = item(d, 2).handle
+            #expect(tb_RemoveDialogItems(d, 1, 2, 1) == 0)
+            #expect(tb_CountDITL(d) == 4 && tb_IsValidControlHandle(ok) == 0)
+            #expect(itemText(item(d, 1).handle) == "Hello")
+            #expect(tb_GetDialogKeyboardFocusItem(d) == 3)
+            #expect(tb_RemoveDialogItems(d, 9, 1, 1) == -50)
+        }
+
+        @Test func timeoutAndEventMask() {
+            let d = open()
+            let item = tb_NewPtr(2, false, true), secs = tb_NewPtr(4, false, true), left = tb_NewPtr(4, false, true)
+            #expect(tb_GetDialogTimeout(d, item, secs, left) == -5640) // dialogNoTimeoutErr
+            #expect(tb_SetDialogTimeout(d, 1, 5) == 0)
+            #expect(tb_GetDialogTimeout(d, item, secs, left) == 0)
+            #expect(rd16(item) == 1 && rd32(secs) == 5 && rd32(left) == 5)
+            let mask = tb_NewPtr(2, false, true)
+            #expect(tb_GetModalDialogEventMask(d, mask) == 0 && rd16(mask) == 0xFBFF)
+            #expect(tb_SetModalDialogEventMask(d, 0x002A) == 0)
+            #expect(tb_GetModalDialogEventMask(d, mask) == 0 && rd16(mask) == 0x002A)
+            // ModalDialog presses the button when the time is up.
+            #expect(tb_SetDialogTimeout(d, 4, 1) == 0)
+            g_cpu!.pointee.halted = false
+            tb_ModalDialog(0, item)
+            #expect(rd16(item) == 4)
+        }
+    }
 }

@@ -146,6 +146,21 @@ void tb_ParamText(gaddr p0, gaddr p1, gaddr p2, gaddr p3)
     }
 }
 
+/* GetParamText: the ParamText strings, into those of the four not NIL. */
+void tb_GetParamText(gaddr p0, gaddr p1, gaddr p2, gaddr p3)
+{
+    gaddr out[4] = { p0, p1, p2, p3 };
+    for (int i = 0; i < 4; i++) {
+        if (!out[i])
+            continue;
+        gaddr h = rd32(LM_DAStrings + (uint32_t)i * 4);
+        if (h && rd32(h))
+            gmemcpy(out[i], rd32(h), (uint32_t)rd8(rd32(h)) + 1);
+        else
+            wr8(out[i], 0);
+    }
+}
+
 /* Append MacRoman text, replacing ^0..^3 with the ParamText strings. */
 size_t append_text(char *out, size_t n, size_t cap, const uint8_t *s, size_t len)
 {
