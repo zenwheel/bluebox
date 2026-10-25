@@ -174,6 +174,10 @@ void gestalt_powerpc(void)
     gestalt_set(fourcc("cput"), 0x0108); /* gestaltCPU750 */
     gestalt_set(fourcc("cfrg"), 0x1);    /* gestaltCFMPresent */
     gestalt_set(fourcc("mixd"), 0x1);    /* gestaltPowerPCAware */
+    /* CarbonLib 1.1 (gestaltCarbonVersion): the Carbon Event Manager, the
+     * version's mark, is there (carbon_events.c), with what CarbonLib
+     * shares with InterfaceLib and its own additions as far as they go. */
+    gestalt_set(fourcc("cbon"), 0x0110);
     gestalt_set(fourcc("fpu "), 0);
     for (unsigned i = 0; i < noverrides; i++)
         gestalt_override(overrides[i].selector, overrides[i].value);

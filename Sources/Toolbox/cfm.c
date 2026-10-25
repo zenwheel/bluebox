@@ -18,6 +18,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "carbon_events.h"
 #include "forks.h"
 #include "hostgl.h"
 #include "machine.h"
@@ -492,7 +493,7 @@ static const char *const native_libraries[] = {
     "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
     "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
     "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
-    "TextCommon", "UnicodeConverter", "TextEncodingConverter",
+    "TextCommon", "UnicodeConverter", "TextEncodingConverter", "CarbonLib",
 };
 
 /* Apple libraries left unloaded even where an installer put them: the
@@ -1199,6 +1200,10 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
         snprintf(err, errlen, "no memory for the PowerPC stack");
         return false;
     }
+    /* CarbonLib set up the Toolbox for its programs as it loaded. */
+    for (int i = 0; i < nfrags; i++)
+        if (frags[i].native && !strcmp(frags[i].name, "CarbonLib"))
+            carbonlib_init();
     done_code = rd32(native_tvector(main_returned, "main returned"));
     chain_code = rd32(native_tvector(run_next_init, "next init"));
     run_next_init(&g_ppc);

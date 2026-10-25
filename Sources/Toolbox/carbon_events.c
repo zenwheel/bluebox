@@ -2639,6 +2639,22 @@ static void ce_InvokeEventComparatorUPP(ppc_cpu *c)
     RETURN(aem_call_proc(R(2), 0x3D0, args, 2) & 0xFF);
 }
 
+/* ---------------------------------------------------------------------- */
+/* CarbonLib's own setting up */
+
+void carbonlib_init(void)
+{
+    gaddr qd = tb_NewPtr(QDGlobals_SIZEOF, false, true);
+    if (qd)
+        tb_InitGraf(qd + QDGlobals_thePort_off);
+    tb_InitFonts();
+    tb_InitWindows();
+    tb_InitMenus();
+    tb_TEInit();
+    tb_InitDialogs(0);
+    tb_InitCursor();
+}
+
 void carbon_events_reset(void)
 {
     while (queue_head) {

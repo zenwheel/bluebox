@@ -357,5 +357,17 @@ extension BlueBox {
             #expect(err("EndAppModalStateForWindow", [w]) == 0)
             #expect(err("EndAppModalStateForWindow", [w]) == -5622)
         }
+
+        /// A program importing CarbonLib finds it, and Gestalt says which
+        /// CarbonLib it is.
+        @Test func carbonLibLoads() {
+            let name = tb_NewPtr(16, false, true), conn = ptr([0])
+            guestPString("CarbonLib", at: name)
+            #expect(err("GetSharedLibrary", [name, fourCC("pwpc"), 1, conn, 0, 0]) == 0)
+            #expect(rd32(conn) != 0)
+            gestalt_powerpc()
+            var v: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("cbon")), &v) == 0 && v == 0x0110)
+        }
     }
 }

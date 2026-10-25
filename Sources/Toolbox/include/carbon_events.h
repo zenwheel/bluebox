@@ -82,6 +82,10 @@ void carbon_menu_disposed(gaddr menu);
  * (ticks) cut short to the next timer. */
 int32_t carbon_event_loop_turn(int32_t sleep);
 void carbon_events_reset(void);
+/* A program importing CarbonLib: the Toolbox set up as CarbonLib did on
+ * loading (InitGraf and the other managers' Init calls, which Carbon
+ * programs don't make). */
+void carbonlib_init(void);
 
 /* ---- Multiprocessing Services ---- */
 
