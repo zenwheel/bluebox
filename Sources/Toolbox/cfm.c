@@ -136,6 +136,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < sizeof manual_exports / sizeof manual_exports[0]; i++)
         if (!strcmp(manual_exports[i].name, name))
             return manual_exports[i].fn;
+    for (unsigned i = 0; i < hfs_export_count; i++)
+        if (!strcmp(hfs_exports[i].name, name))
+            return hfs_exports[i].fn;
     for (unsigned i = 0; i < isp_export_count; i++)
         if (!strcmp(isp_exports[i].name, name))
             return isp_exports[i].fn;
@@ -160,6 +163,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ctb_export_count; i++)
         if (!strcmp(ctb_exports[i].name, name))
             return ctb_exports[i].fn;
+    for (unsigned i = 0; i < ml_export_count; i++)
+        if (!strcmp(ml_exports[i].name, name))
+            return ml_exports[i].fn;
     for (unsigned i = 0; i < lib_export_count; i++)
         if (!strcmp(lib_exports[i].name, name))
             return lib_exports[i].fn;

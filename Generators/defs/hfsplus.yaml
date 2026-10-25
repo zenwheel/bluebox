@@ -1,0 +1,1887 @@
+# Mac OS 9's File Manager additions (Files.h, Universal Interfaces 3.4):
+# the HFS Plus calls on FSRefs, forks, iterators and Unicode names, and
+# the Alias, Folder and Resource Manager calls on FSRefs.  Same schema as
+# Defs/multiversal/defs.
+#
+# The parameter block calls reach 68k code through _HFSDispatch ($A260,
+# the selector in D0), the fork reads and writes through $A2A8; the
+# high-level calls through _HighLevelFSDispatch ($AA52), whose D0 holds
+# the parameter size in words in its high byte and the selector in its
+# low one.  A 64-bit value parameter of those is passed by address, as
+# Pascal passes any value larger than four bytes; PowerPC passes it in
+# two registers, so their PowerPC exports are written by hand (hfsplus.c).
+
+- dispatcher:
+    name: HighLevelFSDispatch
+    trap: 0xAA52
+    selector-location: D0<0xFF>
+
+- dispatcher:
+    name: ResourceDispatch
+    trap: 0xA822
+    selector-location: D0<0xFF>
+
+# Unnamed in Traps.h: the fork reads and writes of Mac OS 9.
+- dispatcher:
+    name: FSForkIODispatch
+    trap: 0xA0A8
+    selector-location: D0W
+
+# ---- Structures
+
+- struct:
+    name: FSRef
+    members:
+      - name: hidden
+        type: uint8_t[80]
+
+- struct:
+    name: HFSUniStr255
+    members:
+      - name: length
+        type: uint16_t
+      - name: unicode
+        type: uint16_t[255]
+
+- struct:
+    name: UTCDateTime
+    members:
+      - name: highSeconds
+        type: uint16_t
+      - name: lowSeconds
+        type: uint32_t
+      - name: fraction
+        type: uint16_t
+
+- struct:
+    name: FSCatalogInfo
+    members:
+      - name: nodeFlags
+        type: uint16_t
+      - name: volume
+        type: int16_t
+      - name: parentDirID
+        type: uint32_t
+      - name: nodeID
+        type: uint32_t
+      - name: sharingFlags
+        type: uint8_t
+      - name: userPrivileges
+        type: uint8_t
+      - name: reserved1
+        type: uint8_t
+      - name: reserved2
+        type: uint8_t
+      - name: createDate
+        type: UTCDateTime
+      - name: contentModDate
+        type: UTCDateTime
+      - name: attributeModDate
+        type: UTCDateTime
+      - name: accessDate
+        type: UTCDateTime
+      - name: backupDate
+        type: UTCDateTime
+      - name: permissions
+        type: uint32_t[4]
+      - name: finderInfo
+        type: uint8_t[16]
+      - name: extFinderInfo
+        type: uint8_t[16]
+      - name: dataLogicalSize
+        type: uint64_t
+      - name: dataPhysicalSize
+        type: uint64_t
+      - name: rsrcLogicalSize
+        type: uint64_t
+      - name: rsrcPhysicalSize
+        type: uint64_t
+      - name: valence
+        type: uint32_t
+      - name: textEncodingHint
+        type: uint32_t
+
+- struct:
+    name: FSRefParam
+    members:
+      - name: qLink
+        type: void*
+      - name: qType
+        type: int16_t
+      - name: ioTrap
+        type: int16_t
+      - name: ioCmdAddr
+        type: void*
+      - name: ioCompletion
+        type: void*
+      - name: ioResult
+        type: int16_t
+      - name: ioNamePtr
+        type: void*
+      - name: ioVRefNum
+        type: int16_t
+      - name: reserved1
+        type: int16_t
+      - name: reserved2
+        type: uint8_t
+      - name: reserved3
+        type: uint8_t
+      - name: ref
+        type: void*
+      - name: whichInfo
+        type: uint32_t
+      - name: catInfo
+        type: void*
+      - name: nameLength
+        type: uint32_t
+      - name: name
+        type: void*
+      - name: ioDirID
+        type: int32_t
+      - name: spec
+        type: void*
+      - name: parentRef
+        type: void*
+      - name: newRef
+        type: void*
+      - name: textEncodingHint
+        type: uint32_t
+      - name: outName
+        type: void*
+
+- struct:
+    name: FSSearchParams
+    members:
+      - name: searchTime
+        type: int32_t
+      - name: searchBits
+        type: uint32_t
+      - name: searchNameLength
+        type: uint32_t
+      - name: searchName
+        type: void*
+      - name: searchInfo1
+        type: void*
+      - name: searchInfo2
+        type: void*
+
+- struct:
+    name: FSCatalogBulkParam
+    members:
+      - name: qLink
+        type: void*
+      - name: qType
+        type: int16_t
+      - name: ioTrap
+        type: int16_t
+      - name: ioCmdAddr
+        type: void*
+      - name: ioCompletion
+        type: void*
+      - name: ioResult
+        type: int16_t
+      - name: containerChanged
+        type: uint8_t
+      - name: reserved
+        type: uint8_t
+      - name: iteratorFlags
+        type: uint32_t
+      - name: iterator
+        type: uint32_t
+      - name: container
+        type: void*
+      - name: maximumItems
+        type: uint32_t
+      - name: actualItems
+        type: uint32_t
+      - name: whichInfo
+        type: uint32_t
+      - name: catalogInfo
+        type: void*
+      - name: refs
+        type: void*
+      - name: specs
+        type: void*
+      - name: names
+        type: void*
+      - name: searchParams
+        type: void*
+
+- struct:
+    name: FSForkIOParam
+    members:
+      - name: qLink
+        type: void*
+      - name: qType
+        type: int16_t
+      - name: ioTrap
+        type: int16_t
+      - name: ioCmdAddr
+        type: void*
+      - name: ioCompletion
+        type: void*
+      - name: ioResult
+        type: int16_t
+      - name: reserved1
+        type: void*
+      - name: reserved2
+        type: int16_t
+      - name: forkRefNum
+        type: int16_t
+      - name: reserved3
+        type: uint8_t
+      - name: permissions
+        type: int8_t
+      - name: ref
+        type: void*
+      - name: buffer
+        type: void*
+      - name: requestCount
+        type: uint32_t
+      - name: actualCount
+        type: uint32_t
+      - name: positionMode
+        type: uint16_t
+      - name: positionOffset
+        type: int64_t
+      - name: allocationFlags
+        type: uint16_t
+      - name: allocationAmount
+        type: uint64_t
+      - name: forkNameLength
+        type: uint32_t
+      - name: forkName
+        type: void*
+      - name: forkIterator
+        type: uint8_t[16]
+      - name: outForkName
+        type: void*
+
+- struct:
+    name: FSForkInfo
+    members:
+      - name: flags
+        type: int8_t
+      - name: permissions
+        type: int8_t
+      - name: volume
+        type: int16_t
+      - name: reserved2
+        type: uint32_t
+      - name: nodeID
+        type: uint32_t
+      - name: forkID
+        type: uint32_t
+      - name: currentPosition
+        type: uint64_t
+      - name: logicalEOF
+        type: uint64_t
+      - name: physicalEOF
+        type: uint64_t
+      - name: process
+        type: uint64_t
+
+- struct:
+    name: FSForkCBInfoParam
+    members:
+      - name: qLink
+        type: void*
+      - name: qType
+        type: int16_t
+      - name: ioTrap
+        type: int16_t
+      - name: ioCmdAddr
+        type: void*
+      - name: ioCompletion
+        type: void*
+      - name: ioResult
+        type: int16_t
+      - name: desiredRefNum
+        type: int16_t
+      - name: volumeRefNum
+        type: int16_t
+      - name: iterator
+        type: int16_t
+      - name: actualRefNum
+        type: int16_t
+      - name: ref
+        type: void*
+      - name: forkInfo
+        type: void*
+      - name: forkName
+        type: void*
+
+- struct:
+    name: FSVolumeInfo
+    members:
+      - name: createDate
+        type: UTCDateTime
+      - name: modifyDate
+        type: UTCDateTime
+      - name: backupDate
+        type: UTCDateTime
+      - name: checkedDate
+        type: UTCDateTime
+      - name: fileCount
+        type: uint32_t
+      - name: folderCount
+        type: uint32_t
+      - name: totalBytes
+        type: uint64_t
+      - name: freeBytes
+        type: uint64_t
+      - name: blockSize
+        type: uint32_t
+      - name: totalBlocks
+        type: uint32_t
+      - name: freeBlocks
+        type: uint32_t
+      - name: nextAllocation
+        type: uint32_t
+      - name: rsrcClumpSize
+        type: uint32_t
+      - name: dataClumpSize
+        type: uint32_t
+      - name: nextCatalogID
+        type: uint32_t
+      - name: finderInfo
+        type: uint8_t[32]
+      - name: flags
+        type: uint16_t
+      - name: filesystemID
+        type: uint16_t
+      - name: signature
+        type: uint16_t
+      - name: driveNumber
+        type: uint16_t
+      - name: driverRefNum
+        type: int16_t
+
+- struct:
+    name: FSVolumeInfoParam
+    members:
+      - name: qLink
+        type: void*
+      - name: qType
+        type: int16_t
+      - name: ioTrap
+        type: int16_t
+      - name: ioCmdAddr
+        type: void*
+      - name: ioCompletion
+        type: void*
+      - name: ioResult
+        type: int16_t
+      - name: ioNamePtr
+        type: void*
+      - name: ioVRefNum
+        type: int16_t
+      - name: volumeIndex
+        type: uint32_t
+      - name: whichInfo
+        type: uint32_t
+      - name: volumeInfo
+        type: void*
+      - name: volumeName
+        type: void*
+      - name: ref
+        type: void*
+
+# XVolumeParam: HVolumeParam with its filler2 as ioXVersion, and the
+# volume's size in bytes after it.
+- struct:
+    name: XVolumeParam
+    members:
+      - name: hvp
+        type: HVolumeParam
+      - name: ioVTotalBytes
+        type: uint64_t
+      - name: ioVFreeBytes
+        type: uint64_t
+
+# ---- _HFSDispatch ($A260) parameter block calls
+
+- function:
+    name: PBXGetVolInfo
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0012
+    returnreg: D0
+
+- function:
+    name: PBMakeFSSpec
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x001B
+    returnreg: D0
+
+- function:
+    name: PBGetVolumeInfo
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x001D
+    returnreg: D0
+
+- function:
+    name: PBSetVolumeInfo
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x001E
+    returnreg: D0
+
+- function:
+    name: PBGetXCatInfo
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x003A
+    returnreg: D0
+
+- function:
+    name: PBGetForkPosition
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0053
+    returnreg: D0
+
+- function:
+    name: PBSetForkPosition
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0054
+    returnreg: D0
+
+- function:
+    name: PBGetForkSize
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0055
+    returnreg: D0
+
+- function:
+    name: PBSetForkSize
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0056
+    returnreg: D0
+
+- function:
+    name: PBAllocateFork
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0057
+    returnreg: D0
+
+- function:
+    name: PBFlushFork
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0058
+    returnreg: D0
+
+- function:
+    name: PBCloseFork
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0059
+    returnreg: D0
+
+- function:
+    name: PBGetForkCBInfo
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x005A
+    returnreg: D0
+
+- function:
+    name: PBCloseIterator
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x005B
+    returnreg: D0
+
+- function:
+    name: PBGetCatalogInfoBulk
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x005C
+    returnreg: D0
+
+- function:
+    name: PBCatalogSearch
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x005D
+    returnreg: D0
+
+- function:
+    name: PBMakeFSRef
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x006E
+    returnreg: D0
+
+- function:
+    name: PBCreateFileUnicode
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0070
+    returnreg: D0
+
+- function:
+    name: PBCreateDirectoryUnicode
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0071
+    returnreg: D0
+
+- function:
+    name: PBDeleteObject
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0072
+    returnreg: D0
+
+- function:
+    name: PBMoveObject
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0073
+    returnreg: D0
+
+- function:
+    name: PBRenameUnicode
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0074
+    returnreg: D0
+
+- function:
+    name: PBExchangeObjects
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0075
+    returnreg: D0
+
+- function:
+    name: PBGetCatalogInfo
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0076
+    returnreg: D0
+
+- function:
+    name: PBSetCatalogInfo
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0077
+    returnreg: D0
+
+- function:
+    name: PBOpenIterator
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0078
+    returnreg: D0
+
+- function:
+    name: PBOpenFork
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x0079
+    returnreg: D0
+
+- function:
+    name: PBMakeFSRefUnicode
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x007A
+    returnreg: D0
+
+- function:
+    name: PBCompareFSRefs
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x007C
+    returnreg: D0
+
+- function:
+    name: PBCreateFork
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x007D
+    returnreg: D0
+
+- function:
+    name: PBDeleteFork
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x007E
+    returnreg: D0
+
+- function:
+    name: PBIterateForks
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA260
+    dispatcher: FSDispatch
+    selector: 0x007F
+    returnreg: D0
+
+- function:
+    name: PBReadFork
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA2A8
+    dispatcher: FSForkIODispatch
+    selector: 0x0051
+    returnreg: D0
+
+- function:
+    name: PBWriteFork
+    return: OSErr
+    args:
+      - name: pb
+        type: void*
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA2A8
+    dispatcher: FSForkIODispatch
+    selector: 0x0052
+    returnreg: D0
+
+# ---- Variants of older traps
+
+# _AllocContig is _Allocate with the HFS bit; _HTrashVolumeCaches is
+# _FlushVol's.
+- function:
+    name: PBAllocContig
+    return: OSErr
+    args:
+      - name: pb
+        type: ParmBlkPtr
+        register: A0
+      - name: async
+        type: Boolean
+        register: TrapBit<0x400>
+    trap: 0xA210
+    returnreg: D0
+
+- function:
+    name: PBHTrashVolumeCaches
+    return: OSErr
+    args:
+      - name: pb
+        type: ParmBlkPtr
+        register: A0
+    trap: 0xA213
+    returnreg: D0
+    variants:
+      - PBHTrashVolumeCachesSync
+
+- function:
+    name: AllocContig
+    return: OSErr
+    args:
+      - name: refNum
+        type: int16_t
+      - name: count
+        type: int32_t*
+    cfm: InterfaceLib
+
+- function:
+    name: PBWaitIOComplete
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: ParmBlkPtr
+      - name: timeout
+        type: int32_t
+    cfm: InterfaceLib
+
+# ---- The File System Manager ($A0AC): no foreign file systems but the
+# ones a program installs.
+
+- dispatcher:
+    name: FSMDispatch
+    trap: 0xA0AC
+    selector-location: D0W
+
+- function:
+    name: InstallFS
+    return: OSErr
+    args:
+      - name: fsdPtr
+        type: void*
+        register: A0
+    dispatcher: FSMDispatch
+    selector: 0x0000
+    returnreg: D0
+
+- function:
+    name: RemoveFS
+    return: OSErr
+    args:
+      - name: fsid
+        type: int16_t
+        register: A0
+    dispatcher: FSMDispatch
+    selector: 0x0001
+    returnreg: D0
+
+- function:
+    name: GetFSInfo
+    return: OSErr
+    args:
+      - name: selector
+        type: int16_t
+      - name: key
+        type: int16_t
+      - name: bufSize
+        type: int16_t*
+      - name: fsdPtr
+        type: void*
+    cfm: InterfaceLib
+
+- function:
+    name: SetFSInfo
+    return: OSErr
+    args:
+      - name: fsid
+        type: int16_t
+      - name: bufSize
+        type: int16_t
+      - name: fsdPtr
+        type: void*
+    cfm: InterfaceLib
+
+- function:
+    name: InformFSM
+    return: OSErr
+    args:
+      - name: theMessage
+        type: int16_t
+      - name: paramBlock
+        type: void*
+    cfm: InterfaceLib
+
+- function:
+    name: InformFFS
+    return: OSErr
+    args:
+      - name: fsid
+        type: int16_t
+      - name: paramBlock
+        type: void*
+    cfm: InterfaceLib
+
+# ---- _HighLevelFSDispatch ($AA52)
+
+- function:
+    name: FSpMakeFSRef
+    return: OSErr
+    args:
+      - name: source
+        type: FSSpec*
+      - name: newRef
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x041A
+
+- function:
+    name: FSMakeFSRefUnicode
+    return: OSErr
+    args:
+      - name: parentRef
+        type: FSRef*
+      - name: nameLength
+        type: uint32_t
+      - name: name
+        type: uint16_t*
+      - name: textEncodingHint
+        type: uint32_t
+      - name: newRef
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0A1B
+
+- function:
+    name: FSCreateFileUnicode
+    return: OSErr
+    args:
+      - name: parentRef
+        type: FSRef*
+      - name: nameLength
+        type: uint32_t
+      - name: name
+        type: uint16_t*
+      - name: whichInfo
+        type: uint32_t
+      - name: catalogInfo
+        type: FSCatalogInfo*
+      - name: newRef
+        type: FSRef*
+      - name: newSpec
+        type: FSSpec*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0E1C
+
+- function:
+    name: FSCreateDirectoryUnicode
+    return: OSErr
+    args:
+      - name: parentRef
+        type: FSRef*
+      - name: nameLength
+        type: uint32_t
+      - name: name
+        type: uint16_t*
+      - name: whichInfo
+        type: uint32_t
+      - name: catalogInfo
+        type: FSCatalogInfo*
+      - name: newRef
+        type: FSRef*
+      - name: newSpec
+        type: FSSpec*
+      - name: newDirID
+        type: uint32_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x101D
+
+- function:
+    name: FSDeleteObject
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x021E
+
+- function:
+    name: FSMoveObject
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: destDirectory
+        type: FSRef*
+      - name: newRef
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x061F
+
+- function:
+    name: FSRenameUnicode
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: nameLength
+        type: uint32_t
+      - name: name
+        type: uint16_t*
+      - name: textEncodingHint
+        type: uint32_t
+      - name: newRef
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0A20
+
+- function:
+    name: FSExchangeObjects
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: destRef
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0421
+
+- function:
+    name: FSGetCatalogInfo
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: whichInfo
+        type: uint32_t
+      - name: catalogInfo
+        type: FSCatalogInfo*
+      - name: outName
+        type: HFSUniStr255*
+      - name: fsSpec
+        type: FSSpec*
+      - name: parentRef
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0C22
+
+- function:
+    name: FSSetCatalogInfo
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: whichInfo
+        type: uint32_t
+      - name: catalogInfo
+        type: FSCatalogInfo*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0623
+
+- function:
+    name: FSOpenIterator
+    return: OSErr
+    args:
+      - name: container
+        type: FSRef*
+      - name: iteratorFlags
+        type: uint32_t
+      - name: iterator
+        type: uint32_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0624
+
+- function:
+    name: FSCloseIterator
+    return: OSErr
+    args:
+      - name: iterator
+        type: uint32_t
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0225
+
+- function:
+    name: FSGetCatalogInfoBulk
+    return: OSErr
+    args:
+      - name: iterator
+        type: uint32_t
+      - name: maximumObjects
+        type: uint32_t
+      - name: actualObjects
+        type: uint32_t*
+      - name: containerChanged
+        type: Boolean*
+      - name: whichInfo
+        type: uint32_t
+      - name: catalogInfos
+        type: FSCatalogInfo*
+      - name: refs
+        type: FSRef*
+      - name: specs
+        type: FSSpec*
+      - name: names
+        type: HFSUniStr255*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x1226
+
+- function:
+    name: FSCatalogSearch
+    return: OSErr
+    args:
+      - name: iterator
+        type: uint32_t
+      - name: searchCriteria
+        type: FSSearchParams*
+      - name: maximumObjects
+        type: uint32_t
+      - name: actualObjects
+        type: uint32_t*
+      - name: containerChanged
+        type: Boolean*
+      - name: whichInfo
+        type: uint32_t
+      - name: catalogInfos
+        type: FSCatalogInfo*
+      - name: refs
+        type: FSRef*
+      - name: specs
+        type: FSSpec*
+      - name: names
+        type: HFSUniStr255*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x1427
+
+- function:
+    name: FSCreateFork
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: forkNameLength
+        type: uint32_t
+      - name: forkName
+        type: uint16_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0636
+
+- function:
+    name: FSDeleteFork
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: forkNameLength
+        type: uint32_t
+      - name: forkName
+        type: uint16_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0637
+
+- function:
+    name: FSIterateForks
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: forkIterator
+        type: void*
+      - name: forkName
+        type: HFSUniStr255*
+      - name: forkSize
+        type: int64_t*
+      - name: forkPhysicalSize
+        type: uint64_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0A38
+
+- function:
+    name: FSOpenFork
+    return: OSErr
+    args:
+      - name: ref
+        type: FSRef*
+      - name: forkNameLength
+        type: uint32_t
+      - name: forkName
+        type: uint16_t*
+      - name: permissions
+        type: int8_t
+      - name: forkRefNum
+        type: int16_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0928
+
+# The 64-bit position comes by address on 68k (see the top).
+- function:
+    name: FSReadFork
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+      - name: positionMode
+        type: uint16_t
+      - name: positionOffset
+        type: int64_t*
+      - name: requestCount
+        type: uint32_t
+      - name: buffer
+        type: void*
+      - name: actualCount
+        type: uint32_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0A29
+    ppc: false
+
+- function:
+    name: FSWriteFork
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+      - name: positionMode
+        type: uint16_t
+      - name: positionOffset
+        type: int64_t*
+      - name: requestCount
+        type: uint32_t
+      - name: buffer
+        type: void*
+      - name: actualCount
+        type: uint32_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0A2A
+    ppc: false
+
+- function:
+    name: FSGetForkPosition
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+      - name: position
+        type: int64_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x032B
+
+- function:
+    name: FSSetForkPosition
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+      - name: positionMode
+        type: uint16_t
+      - name: positionOffset
+        type: int64_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x042C
+    ppc: false
+
+- function:
+    name: FSGetForkSize
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+      - name: forkSize
+        type: int64_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x032D
+
+- function:
+    name: FSSetForkSize
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+      - name: positionMode
+        type: uint16_t
+      - name: positionOffset
+        type: int64_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x042E
+    ppc: false
+
+- function:
+    name: FSAllocateFork
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+      - name: flags
+        type: uint16_t
+      - name: positionMode
+        type: uint16_t
+      - name: positionOffset
+        type: int64_t*
+      - name: requestCount
+        type: uint64_t*
+      - name: actualCount
+        type: uint64_t*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x092F
+    ppc: false
+
+- function:
+    name: FSFlushFork
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0130
+
+- function:
+    name: FSCloseFork
+    return: OSErr
+    args:
+      - name: forkRefNum
+        type: int16_t
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0131
+
+- function:
+    name: FSGetForkCBInfo
+    return: OSErr
+    args:
+      - name: desiredRefNum
+        type: int16_t
+      - name: volume
+        type: int16_t
+      - name: iterator
+        type: int16_t*
+      - name: actualRefNum
+        type: int16_t*
+      - name: forkInfo
+        type: FSForkInfo*
+      - name: ref
+        type: FSRef*
+      - name: outForkName
+        type: HFSUniStr255*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0C32
+
+- function:
+    name: FSGetVolumeInfo
+    return: OSErr
+    args:
+      - name: volume
+        type: int16_t
+      - name: volumeIndex
+        type: uint32_t
+      - name: actualVolume
+        type: int16_t*
+      - name: whichInfo
+        type: uint32_t
+      - name: info
+        type: FSVolumeInfo*
+      - name: volumeName
+        type: HFSUniStr255*
+      - name: rootDirectory
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0D33
+
+- function:
+    name: FSSetVolumeInfo
+    return: OSErr
+    args:
+      - name: volume
+        type: int16_t
+      - name: whichInfo
+        type: uint32_t
+      - name: info
+        type: FSVolumeInfo*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0534
+
+- function:
+    name: FSGetDataForkName
+    return: OSErr
+    args:
+      - name: dataForkName
+        type: HFSUniStr255*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0218
+
+- function:
+    name: FSGetResourceForkName
+    return: OSErr
+    args:
+      - name: resourceForkName
+        type: HFSUniStr255*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0219
+
+- function:
+    name: FSCompareFSRefs
+    return: OSErr
+    args:
+      - name: ref1
+        type: FSRef*
+      - name: ref2
+        type: FSRef*
+    dispatcher: HighLevelFSDispatch
+    selector: 0x0435
+
+# ---- The Resource Manager on FSRefs (_ResourceDispatch, $A822)
+
+- function:
+    name: FSpResourceFileAlreadyOpen
+    return: Boolean
+    args:
+      - name: resourceFile
+        type: FSSpec*
+      - name: inChain
+        type: Boolean*
+      - name: refNum
+        type: int16_t*
+    dispatcher: ResourceDispatch
+    selector: 0x0010
+
+- function:
+    name: FSOpenResFile
+    return: int16_t
+    args:
+      - name: ref
+        type: FSRef*
+      - name: permission
+        type: int8_t
+    dispatcher: ResourceDispatch
+    selector: 0x0013
+
+- function:
+    name: FSCreateResFile
+    args:
+      - name: parentRef
+        type: FSRef*
+      - name: nameLength
+        type: uint32_t
+      - name: name
+        type: uint16_t*
+      - name: whichInfo
+        type: uint32_t
+      - name: catalogInfo
+        type: FSCatalogInfo*
+      - name: newRef
+        type: FSRef*
+      - name: newSpec
+        type: FSSpec*
+    dispatcher: ResourceDispatch
+    selector: 0x0014
+
+- function:
+    name: FSResourceFileAlreadyOpen
+    return: Boolean
+    args:
+      - name: resourceFileRef
+        type: FSRef*
+      - name: inChain
+        type: Boolean*
+      - name: refNum
+        type: int16_t*
+    dispatcher: ResourceDispatch
+    selector: 0x0015
+
+# ---- The Alias Manager on FSRefs, and its later FSSpec calls
+# (_AliasDispatch, $A823)
+
+- function:
+    name: ResolveAliasFileWithMountFlags
+    return: OSErr
+    args:
+      - name: theSpec
+        type: FSSpec*
+      - name: resolveAliasChains
+        type: Boolean
+      - name: targetIsFolder
+        type: Boolean*
+      - name: wasAliased
+        type: Boolean*
+      - name: mountFlags
+        type: uint32_t
+    dispatcher: AliasDispatch
+    selector: 0x0029
+
+- function:
+    name: IsAliasFile
+    return: OSErr
+    args:
+      - name: fileFSSpec
+        type: FSSpec*
+      - name: aliasFileFlag
+        type: Boolean*
+      - name: folderFlag
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x002A
+
+- function:
+    name: ResolveAliasWithMountFlags
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSSpec*
+      - name: alias
+        type: AliasHandle
+      - name: target
+        type: FSSpec*
+      - name: wasChanged
+        type: Boolean*
+      - name: mountFlags
+        type: uint32_t
+    dispatcher: AliasDispatch
+    selector: 0x002B
+
+- function:
+    name: FSNewAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSRef*
+      - name: target
+        type: FSRef*
+      - name: inAlias
+        type: AliasHandle*
+    dispatcher: AliasDispatch
+    selector: 0x0036
+
+- function:
+    name: FSNewAliasMinimal
+    return: OSErr
+    args:
+      - name: target
+        type: FSRef*
+      - name: inAlias
+        type: AliasHandle*
+    dispatcher: AliasDispatch
+    selector: 0x0037
+
+- function:
+    name: FSIsAliasFile
+    return: OSErr
+    args:
+      - name: fileRef
+        type: FSRef*
+      - name: aliasFileFlag
+        type: Boolean*
+      - name: folderFlag
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x0038
+
+- function:
+    name: FSResolveAliasWithMountFlags
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSRef*
+      - name: inAlias
+        type: AliasHandle
+      - name: target
+        type: FSRef*
+      - name: wasChanged
+        type: Boolean*
+      - name: mountFlags
+        type: uint32_t
+    dispatcher: AliasDispatch
+    selector: 0x0039
+
+- function:
+    name: FSResolveAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSRef*
+      - name: alias
+        type: AliasHandle
+      - name: target
+        type: FSRef*
+      - name: wasChanged
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x003A
+
+- function:
+    name: FSResolveAliasFileWithMountFlags
+    return: OSErr
+    args:
+      - name: theRef
+        type: FSRef*
+      - name: resolveAliasChains
+        type: Boolean
+      - name: targetIsFolder
+        type: Boolean*
+      - name: wasAliased
+        type: Boolean*
+      - name: mountFlags
+        type: uint32_t
+    dispatcher: AliasDispatch
+    selector: 0x003B
+
+- function:
+    name: FSResolveAliasFile
+    return: OSErr
+    args:
+      - name: theRef
+        type: FSRef*
+      - name: resolveAliasChains
+        type: Boolean
+      - name: targetIsFolder
+        type: Boolean*
+      - name: wasAliased
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x003C
+
+- function:
+    name: FSFollowFinderAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSRef*
+      - name: alias
+        type: AliasHandle
+      - name: logon
+        type: Boolean
+      - name: target
+        type: FSRef*
+      - name: wasChanged
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x003D
+
+- function:
+    name: FSUpdateAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSRef*
+      - name: target
+        type: FSRef*
+      - name: alias
+        type: AliasHandle
+      - name: wasChanged
+        type: Boolean*
+    dispatcher: AliasDispatch
+    selector: 0x003E
+
+# ---- The Folder Manager (_AliasDispatch too)
+
+- function:
+    name: ReleaseFolder
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: folderType
+        type: uint32_t
+    dispatcher: AliasDispatch
+    selector: 0x000B
+
+- function:
+    name: FindFolderExtended
+    return: OSErr
+    args:
+      - name: vol
+        type: int16_t
+      - name: foldType
+        type: uint32_t
+      - name: createFolder
+        type: Boolean
+      - name: flags
+        type: uint32_t
+      - name: data
+        type: void*
+      - name: vRefNum
+        type: int16_t*
+      - name: dirID
+        type: int32_t*
+    dispatcher: AliasDispatch
+    selector: 0x0B2C
+
+- function:
+    name: FSFindFolder
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: folderType
+        type: uint32_t
+      - name: createFolder
+        type: Boolean
+      - name: foundRef
+        type: FSRef*
+    dispatcher: AliasDispatch
+    selector: 0x0034
+
+- function:
+    name: FSFindFolderExtended
+    return: OSErr
+    args:
+      - name: vol
+        type: int16_t
+      - name: foldType
+        type: uint32_t
+      - name: createFolder
+        type: Boolean
+      - name: flags
+        type: uint32_t
+      - name: data
+        type: void*
+      - name: foundRef
+        type: FSRef*
+    dispatcher: AliasDispatch
+    selector: 0x0035
+
+- function:
+    name: FolderManagerRegisterNotificationProc
+    return: OSErr
+    args:
+      - name: notificationProc
+        type: void*
+      - name: refCon
+        type: void*
+      - name: options
+        type: uint32_t
+    dispatcher: AliasDispatch
+    selector: 0x062F
+
+- function:
+    name: FolderManagerUnregisterNotificationProc
+    return: OSErr
+    args:
+      - name: notificationProc
+        type: void*
+      - name: refCon
+        type: void*
+    dispatcher: AliasDispatch
+    selector: 0x0430
+
+- function:
+    name: FolderManagerRegisterCallNotificationProcs
+    return: int32_t
+    args:
+      - name: message
+        type: uint32_t
+      - name: arg
+        type: void*
+      - name: options
+        type: uint32_t
+    dispatcher: AliasDispatch
+    selector: 0x0631

@@ -389,11 +389,11 @@ int16_t pb_call_done(gaddr pb, int16_t err, bool async)
 void key_trans_native(cpu68k *c, uint16_t tw);
 
 /* The File and Device Manager traps, whose argument is a parameter block
- * (InitQueue, $A016, has none). */
+ * (InitQueue, $A016, has none); $A8 is Mac OS 9's fork reads and writes. */
 static bool param_block_trap(uint16_t op)
 {
     unsigned t = op & 0xFF;
-    return (t <= 0x18 && t != 0x16) || (t >= 0x41 && t <= 0x45) || t == 0x60;
+    return (t <= 0x18 && t != 0x16) || (t >= 0x41 && t <= 0x45) || t == 0x60 || t == 0xA8;
 }
 
 /* Calls from native code into the guest under way, and the one returned. */

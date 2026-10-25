@@ -149,7 +149,6 @@ static void m_remquo(ppc_cpu *c)
 static void m_rinttol(ppc_cpu *c) { RETURN((int32_t)lrint(F(0))); }
 static void m_roundtol(ppc_cpu *c) { RETURN((int32_t)lround(F(0))); }
 static void m_inf(ppc_cpu *c) { RETURN_F(INFINITY); }
-static void m_nan(ppc_cpu *c) { RETURN_F(NAN); }
 static void m_isnand(ppc_cpu *c) { RETURN(isnan(F(0)) ? 1 : 0); }
 static void m_isfinited(ppc_cpu *c) { RETURN(isfinite(F(0)) ? 1 : 0); }
 static void m_isnormald(ppc_cpu *c) { RETURN(isnormal(F(0)) ? 1 : 0); }
@@ -170,8 +169,6 @@ static void m_randomx(ppc_cpu *c)
     wr_double(R(0), x);
     RETURN_F(x);
 }
-/* The floating-point environment: round to nearest, no exceptions kept. */
-static void m_zero(ppc_cpu *c) { RETURN(0); }
 static void m_x80tod(ppc_cpu *c) { RETURN_F(sane_ext_get(R(0))); }
 static void m_dtox80(ppc_cpu *c)
 {
@@ -2598,13 +2595,11 @@ const ppc_export lib_exports[] = {
     { "cbrt", m_cbrt }, { "ceil", m_ceil }, { "compound", m_compound }, { "copysign", m_copysign },
     { "cos", m_cos }, { "cosh", m_cosh }, { "dec2num", m_dec2num }, { "dec2str", m_dec2str },
     { "dtox80", m_dtox80 }, { "erf", m_erf }, { "erfc", m_erfc }, { "exp", m_exp }, { "exp2", m_exp2 },
-    { "expm1", m_expm1 }, { "fabs", m_fabs }, { "fdim", m_fdim }, { "feclearexcept", m_zero },
-    { "fegetenv", m_zero }, { "fegetround", m_zero }, { "feholdexcept", m_zero }, { "feraiseexcept", m_zero },
-    { "fesetenv", m_zero }, { "fesetround", m_zero }, { "fetestexcept", m_zero }, { "feupdateenv", m_zero },
+    { "expm1", m_expm1 }, { "fabs", m_fabs }, { "fdim", m_fdim },
     { "floor", m_floor }, { "fmax", m_fmax }, { "fmin", m_fmin }, { "fmod", m_fmod }, { "frexp", m_frexp },
     { "gamma", m_gamma }, { "hypot", m_hypot }, { "ldexp", m_ldexp }, { "ldtox80", m_ldtox80 },
     { "lgamma", m_lgamma }, { "log", m_log }, { "log10", m_log10 }, { "log1p", m_log1p },
-    { "log2", m_log2 }, { "logb", m_logb }, { "modf", m_modf }, { "nan", m_nan },
+    { "log2", m_log2 }, { "logb", m_logb }, { "modf", m_modf },
     { "nearbyint", m_nearbyint }, { "nextafterd", m_nextafterd }, { "num2dec", m_num2dec }, { "pow", m_pow },
     { "randomx", m_randomx }, { "remainder", m_remainder }, { "remquo", m_remquo }, { "rint", m_rint },
     { "rinttol", m_rinttol }, { "round", m_round }, { "roundtol", m_roundtol }, { "scalb", m_scalb },
@@ -2699,6 +2694,8 @@ static gaddr ctype_table(void)
 /* The data exports ppc_data_export makes, by name only. */
 bool ppc_data_export_known(const char *name)
 {
+    if (ml_data_export_known(name))
+        return true;
     static const char *const names[] = { "__p_CType", "CallComponentUPP", "_DBL_EPSILON", "_DBL_MIN", "_DBL_MAX",
                                          "pi", "errno", "_IntEnv", "_exit_status", "__target_for_exit", "__NubAt3",
                                          "__C_phase", "_iob", "StandAlone", "__huge_val" };
@@ -2710,6 +2707,8 @@ bool ppc_data_export_known(const char *name)
 
 gaddr ppc_data_export(const char *name)
 {
+    if (ml_data_export_known(name))
+        return ml_data_export(name);
     if (!strcmp(name, "__p_CType")) {
         gaddr p = tb_NewPtr(4, true, true);
         wr32(p, ctype_table());
