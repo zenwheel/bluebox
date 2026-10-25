@@ -22341,6 +22341,1324 @@ static void ppcglue_GetIndexedCollectionItemInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PBXGetVolInfo(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBXGetVolInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBXGetVolInfoSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBXGetVolInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBXGetVolInfoAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBXGetVolInfo(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSSpec(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSSpec(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSSpecSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSSpec(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSSpecAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSSpec(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetVolumeInfo(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVolumeInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetVolumeInfoSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVolumeInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetVolumeInfoAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetVolumeInfo(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetVolumeInfo(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVolumeInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetVolumeInfoSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVolumeInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetVolumeInfoAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetVolumeInfo(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetXCatInfo(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetXCatInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetXCatInfoSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetXCatInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetXCatInfoAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetXCatInfo(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkPosition(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkPosition(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkPositionSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkPosition(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkPositionAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkPosition(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetForkPosition(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetForkPosition(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetForkPositionSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetForkPosition(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetForkPositionAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetForkPosition(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkSize(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkSize(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkSizeSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkSize(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkSizeAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkSize(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetForkSize(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetForkSize(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetForkSizeSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetForkSize(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetForkSizeAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetForkSize(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBAllocateFork(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocateFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBAllocateForkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocateFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBAllocateForkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocateFork(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBFlushFork(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBFlushForkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBFlushForkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBFlushFork(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCloseFork(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCloseForkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCloseForkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseFork(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkCBInfo(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkCBInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkCBInfoSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkCBInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetForkCBInfoAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetForkCBInfo(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCloseIterator(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseIterator(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCloseIteratorSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseIterator(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCloseIteratorAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCloseIterator(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetCatalogInfoBulk(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatalogInfoBulk(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetCatalogInfoBulkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatalogInfoBulk(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetCatalogInfoBulkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatalogInfoBulk(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCatalogSearch(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatalogSearch(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCatalogSearchSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatalogSearch(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCatalogSearchAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCatalogSearch(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSRef(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSRef(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSRefSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSRef(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSRefAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSRef(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateFileUnicode(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFileUnicode(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateFileUnicodeSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFileUnicode(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateFileUnicodeAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFileUnicode(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateDirectoryUnicode(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateDirectoryUnicode(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateDirectoryUnicodeSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateDirectoryUnicode(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateDirectoryUnicodeAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateDirectoryUnicode(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBDeleteObject(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteObject(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBDeleteObjectSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteObject(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBDeleteObjectAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteObject(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMoveObject(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMoveObject(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMoveObjectSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMoveObject(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMoveObjectAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMoveObject(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBRenameUnicode(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRenameUnicode(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBRenameUnicodeSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRenameUnicode(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBRenameUnicodeAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBRenameUnicode(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBExchangeObjects(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeObjects(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBExchangeObjectsSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeObjects(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBExchangeObjectsAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeObjects(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetCatalogInfo(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatalogInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetCatalogInfoSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatalogInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBGetCatalogInfoAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBGetCatalogInfo(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetCatalogInfo(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetCatalogInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetCatalogInfoSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetCatalogInfo(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBSetCatalogInfoAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBSetCatalogInfo(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBOpenIterator(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenIterator(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBOpenIteratorSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenIterator(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBOpenIteratorAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenIterator(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBOpenFork(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBOpenForkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBOpenForkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBOpenFork(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSRefUnicode(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSRefUnicode(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSRefUnicodeSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSRefUnicode(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBMakeFSRefUnicodeAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBMakeFSRefUnicode(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCompareFSRefs(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCompareFSRefs(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCompareFSRefsSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCompareFSRefs(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCompareFSRefsAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCompareFSRefs(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateFork(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateForkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBCreateForkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBCreateFork(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBDeleteFork(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBDeleteForkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBDeleteForkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBDeleteFork(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBIterateForks(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBIterateForks(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBIterateForksSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBIterateForks(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBIterateForksAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBIterateForks(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBReadFork(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBReadFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBReadForkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBReadFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBReadForkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBReadFork(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBWriteFork(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBWriteFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBWriteForkSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBWriteFork(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBWriteForkAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBWriteFork(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBAllocContig(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocContig(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBAllocContigSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocContig(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBAllocContigAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBAllocContig(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHTrashVolumeCaches(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHTrashVolumeCaches(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHTrashVolumeCachesSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBHTrashVolumeCaches(a_pb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AllocContig(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    gaddr a_count = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AllocContig(a_refNum, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBWaitIOComplete(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    int32_t a_timeout = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PBWaitIOComplete(a_paramBlock, a_timeout);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallFS(ppc_cpu *c)
+{
+    gaddr a_fsdPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallFS(a_fsdPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveFS(ppc_cpu *c)
+{
+    int16_t a_fsid = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveFS(a_fsid);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFSInfo(ppc_cpu *c)
+{
+    int16_t a_selector = (int16_t)c->gpr[3];
+    int16_t a_key = (int16_t)c->gpr[4];
+    gaddr a_bufSize = (gaddr)c->gpr[5];
+    gaddr a_fsdPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFSInfo(a_selector, a_key, a_bufSize, a_fsdPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetFSInfo(ppc_cpu *c)
+{
+    int16_t a_fsid = (int16_t)c->gpr[3];
+    int16_t a_bufSize = (int16_t)c->gpr[4];
+    gaddr a_fsdPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetFSInfo(a_fsid, a_bufSize, a_fsdPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InformFSM(ppc_cpu *c)
+{
+    int16_t a_theMessage = (int16_t)c->gpr[3];
+    gaddr a_paramBlock = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InformFSM(a_theMessage, a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InformFFS(ppc_cpu *c)
+{
+    int16_t a_fsid = (int16_t)c->gpr[3];
+    gaddr a_paramBlock = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InformFFS(a_fsid, a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSpMakeFSRef(ppc_cpu *c)
+{
+    gaddr a_source = (gaddr)c->gpr[3];
+    gaddr a_newRef = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSpMakeFSRef(a_source, a_newRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSMakeFSRefUnicode(ppc_cpu *c)
+{
+    gaddr a_parentRef = (gaddr)c->gpr[3];
+    uint32_t a_nameLength = (uint32_t)c->gpr[4];
+    gaddr a_name = (gaddr)c->gpr[5];
+    uint32_t a_textEncodingHint = (uint32_t)c->gpr[6];
+    gaddr a_newRef = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSMakeFSRefUnicode(a_parentRef, a_nameLength, a_name, a_textEncodingHint, a_newRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSCreateFileUnicode(ppc_cpu *c)
+{
+    gaddr a_parentRef = (gaddr)c->gpr[3];
+    uint32_t a_nameLength = (uint32_t)c->gpr[4];
+    gaddr a_name = (gaddr)c->gpr[5];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[6];
+    gaddr a_catalogInfo = (gaddr)c->gpr[7];
+    gaddr a_newRef = (gaddr)c->gpr[8];
+    gaddr a_newSpec = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSCreateFileUnicode(a_parentRef, a_nameLength, a_name, a_whichInfo, a_catalogInfo, a_newRef, a_newSpec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSCreateDirectoryUnicode(ppc_cpu *c)
+{
+    gaddr a_parentRef = (gaddr)c->gpr[3];
+    uint32_t a_nameLength = (uint32_t)c->gpr[4];
+    gaddr a_name = (gaddr)c->gpr[5];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[6];
+    gaddr a_catalogInfo = (gaddr)c->gpr[7];
+    gaddr a_newRef = (gaddr)c->gpr[8];
+    gaddr a_newSpec = (gaddr)c->gpr[9];
+    gaddr a_newDirID = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSCreateDirectoryUnicode(a_parentRef, a_nameLength, a_name, a_whichInfo, a_catalogInfo, a_newRef, a_newSpec, a_newDirID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSDeleteObject(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSDeleteObject(a_ref);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSMoveObject(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    gaddr a_destDirectory = (gaddr)c->gpr[4];
+    gaddr a_newRef = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSMoveObject(a_ref, a_destDirectory, a_newRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSRenameUnicode(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    uint32_t a_nameLength = (uint32_t)c->gpr[4];
+    gaddr a_name = (gaddr)c->gpr[5];
+    uint32_t a_textEncodingHint = (uint32_t)c->gpr[6];
+    gaddr a_newRef = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSRenameUnicode(a_ref, a_nameLength, a_name, a_textEncodingHint, a_newRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSExchangeObjects(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    gaddr a_destRef = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSExchangeObjects(a_ref, a_destRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSGetCatalogInfo(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[4];
+    gaddr a_catalogInfo = (gaddr)c->gpr[5];
+    gaddr a_outName = (gaddr)c->gpr[6];
+    gaddr a_fsSpec = (gaddr)c->gpr[7];
+    gaddr a_parentRef = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSGetCatalogInfo(a_ref, a_whichInfo, a_catalogInfo, a_outName, a_fsSpec, a_parentRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSSetCatalogInfo(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[4];
+    gaddr a_catalogInfo = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSSetCatalogInfo(a_ref, a_whichInfo, a_catalogInfo);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSOpenIterator(ppc_cpu *c)
+{
+    gaddr a_container = (gaddr)c->gpr[3];
+    uint32_t a_iteratorFlags = (uint32_t)c->gpr[4];
+    gaddr a_iterator = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSOpenIterator(a_container, a_iteratorFlags, a_iterator);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSCloseIterator(ppc_cpu *c)
+{
+    uint32_t a_iterator = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSCloseIterator(a_iterator);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSGetCatalogInfoBulk(ppc_cpu *c)
+{
+    uint32_t a_iterator = (uint32_t)c->gpr[3];
+    uint32_t a_maximumObjects = (uint32_t)c->gpr[4];
+    gaddr a_actualObjects = (gaddr)c->gpr[5];
+    gaddr a_containerChanged = (gaddr)c->gpr[6];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[7];
+    gaddr a_catalogInfos = (gaddr)c->gpr[8];
+    gaddr a_refs = (gaddr)c->gpr[9];
+    gaddr a_specs = (gaddr)c->gpr[10];
+    gaddr a_names = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSGetCatalogInfoBulk(a_iterator, a_maximumObjects, a_actualObjects, a_containerChanged, a_whichInfo, a_catalogInfos, a_refs, a_specs, a_names);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSCatalogSearch(ppc_cpu *c)
+{
+    uint32_t a_iterator = (uint32_t)c->gpr[3];
+    gaddr a_searchCriteria = (gaddr)c->gpr[4];
+    uint32_t a_maximumObjects = (uint32_t)c->gpr[5];
+    gaddr a_actualObjects = (gaddr)c->gpr[6];
+    gaddr a_containerChanged = (gaddr)c->gpr[7];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[8];
+    gaddr a_catalogInfos = (gaddr)c->gpr[9];
+    gaddr a_refs = (gaddr)c->gpr[10];
+    gaddr a_specs = (gaddr)rd32(c->gpr[1] + 56);
+    gaddr a_names = (gaddr)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSCatalogSearch(a_iterator, a_searchCriteria, a_maximumObjects, a_actualObjects, a_containerChanged, a_whichInfo, a_catalogInfos, a_refs, a_specs, a_names);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSCreateFork(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    uint32_t a_forkNameLength = (uint32_t)c->gpr[4];
+    gaddr a_forkName = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSCreateFork(a_ref, a_forkNameLength, a_forkName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSDeleteFork(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    uint32_t a_forkNameLength = (uint32_t)c->gpr[4];
+    gaddr a_forkName = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSDeleteFork(a_ref, a_forkNameLength, a_forkName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSIterateForks(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    gaddr a_forkIterator = (gaddr)c->gpr[4];
+    gaddr a_forkName = (gaddr)c->gpr[5];
+    gaddr a_forkSize = (gaddr)c->gpr[6];
+    gaddr a_forkPhysicalSize = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSIterateForks(a_ref, a_forkIterator, a_forkName, a_forkSize, a_forkPhysicalSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSOpenFork(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    uint32_t a_forkNameLength = (uint32_t)c->gpr[4];
+    gaddr a_forkName = (gaddr)c->gpr[5];
+    int8_t a_permissions = (int8_t)c->gpr[6];
+    gaddr a_forkRefNum = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSOpenFork(a_ref, a_forkNameLength, a_forkName, a_permissions, a_forkRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSGetForkPosition(ppc_cpu *c)
+{
+    int16_t a_forkRefNum = (int16_t)c->gpr[3];
+    gaddr a_position = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSGetForkPosition(a_forkRefNum, a_position);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSGetForkSize(ppc_cpu *c)
+{
+    int16_t a_forkRefNum = (int16_t)c->gpr[3];
+    gaddr a_forkSize = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSGetForkSize(a_forkRefNum, a_forkSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSFlushFork(ppc_cpu *c)
+{
+    int16_t a_forkRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSFlushFork(a_forkRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSCloseFork(ppc_cpu *c)
+{
+    int16_t a_forkRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSCloseFork(a_forkRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSGetForkCBInfo(ppc_cpu *c)
+{
+    int16_t a_desiredRefNum = (int16_t)c->gpr[3];
+    int16_t a_volume = (int16_t)c->gpr[4];
+    gaddr a_iterator = (gaddr)c->gpr[5];
+    gaddr a_actualRefNum = (gaddr)c->gpr[6];
+    gaddr a_forkInfo = (gaddr)c->gpr[7];
+    gaddr a_ref = (gaddr)c->gpr[8];
+    gaddr a_outForkName = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSGetForkCBInfo(a_desiredRefNum, a_volume, a_iterator, a_actualRefNum, a_forkInfo, a_ref, a_outForkName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSGetVolumeInfo(ppc_cpu *c)
+{
+    int16_t a_volume = (int16_t)c->gpr[3];
+    uint32_t a_volumeIndex = (uint32_t)c->gpr[4];
+    gaddr a_actualVolume = (gaddr)c->gpr[5];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[6];
+    gaddr a_info = (gaddr)c->gpr[7];
+    gaddr a_volumeName = (gaddr)c->gpr[8];
+    gaddr a_rootDirectory = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSGetVolumeInfo(a_volume, a_volumeIndex, a_actualVolume, a_whichInfo, a_info, a_volumeName, a_rootDirectory);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSSetVolumeInfo(ppc_cpu *c)
+{
+    int16_t a_volume = (int16_t)c->gpr[3];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[4];
+    gaddr a_info = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSSetVolumeInfo(a_volume, a_whichInfo, a_info);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSGetDataForkName(ppc_cpu *c)
+{
+    gaddr a_dataForkName = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSGetDataForkName(a_dataForkName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSGetResourceForkName(ppc_cpu *c)
+{
+    gaddr a_resourceForkName = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSGetResourceForkName(a_resourceForkName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSCompareFSRefs(ppc_cpu *c)
+{
+    gaddr a_ref1 = (gaddr)c->gpr[3];
+    gaddr a_ref2 = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSCompareFSRefs(a_ref1, a_ref2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSpResourceFileAlreadyOpen(ppc_cpu *c)
+{
+    gaddr a_resourceFile = (gaddr)c->gpr[3];
+    gaddr a_inChain = (gaddr)c->gpr[4];
+    gaddr a_refNum = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_FSpResourceFileAlreadyOpen(a_resourceFile, a_inChain, a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSOpenResFile(ppc_cpu *c)
+{
+    gaddr a_ref = (gaddr)c->gpr[3];
+    int8_t a_permission = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSOpenResFile(a_ref, a_permission);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSCreateResFile(ppc_cpu *c)
+{
+    gaddr a_parentRef = (gaddr)c->gpr[3];
+    uint32_t a_nameLength = (uint32_t)c->gpr[4];
+    gaddr a_name = (gaddr)c->gpr[5];
+    uint32_t a_whichInfo = (uint32_t)c->gpr[6];
+    gaddr a_catalogInfo = (gaddr)c->gpr[7];
+    gaddr a_newRef = (gaddr)c->gpr[8];
+    gaddr a_newSpec = (gaddr)c->gpr[9];
+    tb_FSCreateResFile(a_parentRef, a_nameLength, a_name, a_whichInfo, a_catalogInfo, a_newRef, a_newSpec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSResourceFileAlreadyOpen(ppc_cpu *c)
+{
+    gaddr a_resourceFileRef = (gaddr)c->gpr[3];
+    gaddr a_inChain = (gaddr)c->gpr[4];
+    gaddr a_refNum = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_FSResourceFileAlreadyOpen(a_resourceFileRef, a_inChain, a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ResolveAliasFileWithMountFlags(ppc_cpu *c)
+{
+    gaddr a_theSpec = (gaddr)c->gpr[3];
+    int8_t a_resolveAliasChains = (int8_t)c->gpr[4];
+    gaddr a_targetIsFolder = (gaddr)c->gpr[5];
+    gaddr a_wasAliased = (gaddr)c->gpr[6];
+    uint32_t a_mountFlags = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ResolveAliasFileWithMountFlags(a_theSpec, a_resolveAliasChains, a_targetIsFolder, a_wasAliased, a_mountFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsAliasFile(ppc_cpu *c)
+{
+    gaddr a_fileFSSpec = (gaddr)c->gpr[3];
+    gaddr a_aliasFileFlag = (gaddr)c->gpr[4];
+    gaddr a_folderFlag = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IsAliasFile(a_fileFSSpec, a_aliasFileFlag, a_folderFlag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ResolveAliasWithMountFlags(ppc_cpu *c)
+{
+    gaddr a_fromFile = (gaddr)c->gpr[3];
+    gaddr a_alias = (gaddr)c->gpr[4];
+    gaddr a_target = (gaddr)c->gpr[5];
+    gaddr a_wasChanged = (gaddr)c->gpr[6];
+    uint32_t a_mountFlags = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ResolveAliasWithMountFlags(a_fromFile, a_alias, a_target, a_wasChanged, a_mountFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSNewAlias(ppc_cpu *c)
+{
+    gaddr a_fromFile = (gaddr)c->gpr[3];
+    gaddr a_target = (gaddr)c->gpr[4];
+    gaddr a_inAlias = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSNewAlias(a_fromFile, a_target, a_inAlias);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSNewAliasMinimal(ppc_cpu *c)
+{
+    gaddr a_target = (gaddr)c->gpr[3];
+    gaddr a_inAlias = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSNewAliasMinimal(a_target, a_inAlias);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSIsAliasFile(ppc_cpu *c)
+{
+    gaddr a_fileRef = (gaddr)c->gpr[3];
+    gaddr a_aliasFileFlag = (gaddr)c->gpr[4];
+    gaddr a_folderFlag = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSIsAliasFile(a_fileRef, a_aliasFileFlag, a_folderFlag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSResolveAliasWithMountFlags(ppc_cpu *c)
+{
+    gaddr a_fromFile = (gaddr)c->gpr[3];
+    gaddr a_inAlias = (gaddr)c->gpr[4];
+    gaddr a_target = (gaddr)c->gpr[5];
+    gaddr a_wasChanged = (gaddr)c->gpr[6];
+    uint32_t a_mountFlags = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSResolveAliasWithMountFlags(a_fromFile, a_inAlias, a_target, a_wasChanged, a_mountFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSResolveAlias(ppc_cpu *c)
+{
+    gaddr a_fromFile = (gaddr)c->gpr[3];
+    gaddr a_alias = (gaddr)c->gpr[4];
+    gaddr a_target = (gaddr)c->gpr[5];
+    gaddr a_wasChanged = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSResolveAlias(a_fromFile, a_alias, a_target, a_wasChanged);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSResolveAliasFileWithMountFlags(ppc_cpu *c)
+{
+    gaddr a_theRef = (gaddr)c->gpr[3];
+    int8_t a_resolveAliasChains = (int8_t)c->gpr[4];
+    gaddr a_targetIsFolder = (gaddr)c->gpr[5];
+    gaddr a_wasAliased = (gaddr)c->gpr[6];
+    uint32_t a_mountFlags = (uint32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSResolveAliasFileWithMountFlags(a_theRef, a_resolveAliasChains, a_targetIsFolder, a_wasAliased, a_mountFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSResolveAliasFile(ppc_cpu *c)
+{
+    gaddr a_theRef = (gaddr)c->gpr[3];
+    int8_t a_resolveAliasChains = (int8_t)c->gpr[4];
+    gaddr a_targetIsFolder = (gaddr)c->gpr[5];
+    gaddr a_wasAliased = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSResolveAliasFile(a_theRef, a_resolveAliasChains, a_targetIsFolder, a_wasAliased);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSFollowFinderAlias(ppc_cpu *c)
+{
+    gaddr a_fromFile = (gaddr)c->gpr[3];
+    gaddr a_alias = (gaddr)c->gpr[4];
+    int8_t a_logon = (int8_t)c->gpr[5];
+    gaddr a_target = (gaddr)c->gpr[6];
+    gaddr a_wasChanged = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSFollowFinderAlias(a_fromFile, a_alias, a_logon, a_target, a_wasChanged);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSUpdateAlias(ppc_cpu *c)
+{
+    gaddr a_fromFile = (gaddr)c->gpr[3];
+    gaddr a_target = (gaddr)c->gpr[4];
+    gaddr a_alias = (gaddr)c->gpr[5];
+    gaddr a_wasChanged = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSUpdateAlias(a_fromFile, a_target, a_alias, a_wasChanged);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ReleaseFolder(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    uint32_t a_folderType = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ReleaseFolder(a_vRefNum, a_folderType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindFolderExtended(ppc_cpu *c)
+{
+    int16_t a_vol = (int16_t)c->gpr[3];
+    uint32_t a_foldType = (uint32_t)c->gpr[4];
+    int8_t a_createFolder = (int8_t)c->gpr[5];
+    uint32_t a_flags = (uint32_t)c->gpr[6];
+    gaddr a_data = (gaddr)c->gpr[7];
+    gaddr a_vRefNum = (gaddr)c->gpr[8];
+    gaddr a_dirID = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FindFolderExtended(a_vol, a_foldType, a_createFolder, a_flags, a_data, a_vRefNum, a_dirID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSFindFolder(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    uint32_t a_folderType = (uint32_t)c->gpr[4];
+    int8_t a_createFolder = (int8_t)c->gpr[5];
+    gaddr a_foundRef = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSFindFolder(a_vRefNum, a_folderType, a_createFolder, a_foundRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FSFindFolderExtended(ppc_cpu *c)
+{
+    int16_t a_vol = (int16_t)c->gpr[3];
+    uint32_t a_foldType = (uint32_t)c->gpr[4];
+    int8_t a_createFolder = (int8_t)c->gpr[5];
+    uint32_t a_flags = (uint32_t)c->gpr[6];
+    gaddr a_data = (gaddr)c->gpr[7];
+    gaddr a_foundRef = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FSFindFolderExtended(a_vol, a_foldType, a_createFolder, a_flags, a_data, a_foundRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FolderManagerRegisterNotificationProc(ppc_cpu *c)
+{
+    gaddr a_notificationProc = (gaddr)c->gpr[3];
+    gaddr a_refCon = (gaddr)c->gpr[4];
+    uint32_t a_options = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FolderManagerRegisterNotificationProc(a_notificationProc, a_refCon, a_options);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FolderManagerUnregisterNotificationProc(ppc_cpu *c)
+{
+    gaddr a_notificationProc = (gaddr)c->gpr[3];
+    gaddr a_refCon = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FolderManagerUnregisterNotificationProc(a_notificationProc, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FolderManagerRegisterCallNotificationProcs(ppc_cpu *c)
+{
+    uint32_t a_message = (uint32_t)c->gpr[3];
+    gaddr a_arg = (gaddr)c->gpr[4];
+    uint32_t a_options = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_FolderManagerRegisterCallNotificationProcs(a_message, a_arg, a_options);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetIconRef(ppc_cpu *c)
 {
     int16_t a_vRefNum = (int16_t)c->gpr[3];
@@ -34663,6 +35981,7 @@ const ppc_export ppc_exports[] = {
     {"Alert", ppcglue_Alert},
     {"AlignScreenRect", ppcglue_AlignScreenRect},
     {"AlignWindow", ppcglue_AlignWindow},
+    {"AllocContig", ppcglue_AllocContig},
     {"AllocCursor", ppcglue_AllocCursor},
     {"AllowPurgePixels", ppcglue_AllowPurgePixels},
     {"AngleFromSlope", ppcglue_AngleFromSlope},
@@ -35032,7 +36351,48 @@ const ppc_export ppc_exports[] = {
     {"FDecompressImage", ppcglue_FDecompressImage},
     {"FInitQueue", ppctrap_FInitQueue},
     {"FMSwapFont", ppcglue_FMSwapFont},
+    {"FSCatalogSearch", ppcglue_FSCatalogSearch},
+    {"FSCloseFork", ppcglue_FSCloseFork},
+    {"FSCloseIterator", ppcglue_FSCloseIterator},
+    {"FSCompareFSRefs", ppcglue_FSCompareFSRefs},
+    {"FSCreateDirectoryUnicode", ppcglue_FSCreateDirectoryUnicode},
+    {"FSCreateFileUnicode", ppcglue_FSCreateFileUnicode},
+    {"FSCreateFork", ppcglue_FSCreateFork},
+    {"FSCreateResFile", ppcglue_FSCreateResFile},
+    {"FSDeleteFork", ppcglue_FSDeleteFork},
+    {"FSDeleteObject", ppcglue_FSDeleteObject},
+    {"FSExchangeObjects", ppcglue_FSExchangeObjects},
+    {"FSFindFolder", ppcglue_FSFindFolder},
+    {"FSFindFolderExtended", ppcglue_FSFindFolderExtended},
+    {"FSFlushFork", ppcglue_FSFlushFork},
+    {"FSFollowFinderAlias", ppcglue_FSFollowFinderAlias},
+    {"FSGetCatalogInfo", ppcglue_FSGetCatalogInfo},
+    {"FSGetCatalogInfoBulk", ppcglue_FSGetCatalogInfoBulk},
+    {"FSGetDataForkName", ppcglue_FSGetDataForkName},
+    {"FSGetForkCBInfo", ppcglue_FSGetForkCBInfo},
+    {"FSGetForkPosition", ppcglue_FSGetForkPosition},
+    {"FSGetForkSize", ppcglue_FSGetForkSize},
+    {"FSGetResourceForkName", ppcglue_FSGetResourceForkName},
+    {"FSGetVolumeInfo", ppcglue_FSGetVolumeInfo},
+    {"FSIsAliasFile", ppcglue_FSIsAliasFile},
+    {"FSIterateForks", ppcglue_FSIterateForks},
+    {"FSMakeFSRefUnicode", ppcglue_FSMakeFSRefUnicode},
     {"FSMakeFSSpec", ppcglue_FSMakeFSSpec},
+    {"FSMoveObject", ppcglue_FSMoveObject},
+    {"FSNewAlias", ppcglue_FSNewAlias},
+    {"FSNewAliasMinimal", ppcglue_FSNewAliasMinimal},
+    {"FSOpenFork", ppcglue_FSOpenFork},
+    {"FSOpenIterator", ppcglue_FSOpenIterator},
+    {"FSOpenResFile", ppcglue_FSOpenResFile},
+    {"FSRenameUnicode", ppcglue_FSRenameUnicode},
+    {"FSResolveAlias", ppcglue_FSResolveAlias},
+    {"FSResolveAliasFile", ppcglue_FSResolveAliasFile},
+    {"FSResolveAliasFileWithMountFlags", ppcglue_FSResolveAliasFileWithMountFlags},
+    {"FSResolveAliasWithMountFlags", ppcglue_FSResolveAliasWithMountFlags},
+    {"FSResourceFileAlreadyOpen", ppcglue_FSResourceFileAlreadyOpen},
+    {"FSSetCatalogInfo", ppcglue_FSSetCatalogInfo},
+    {"FSSetVolumeInfo", ppcglue_FSSetVolumeInfo},
+    {"FSUpdateAlias", ppcglue_FSUpdateAlias},
     {"FSpCatMove", ppcglue_FSpCatMove},
     {"FSpCreate", ppcglue_FSpCreate},
     {"FSpCreateResFile", ppcglue_FSpCreateResFile},
@@ -35040,10 +36400,12 @@ const ppc_export ppc_exports[] = {
     {"FSpDirCreate", ppcglue_FSpDirCreate},
     {"FSpExchangeFiles", ppcglue_FSpExchangeFiles},
     {"FSpGetFInfo", ppcglue_FSpGetFInfo},
+    {"FSpMakeFSRef", ppcglue_FSpMakeFSRef},
     {"FSpOpenDF", ppcglue_FSpOpenDF},
     {"FSpOpenRF", ppcglue_FSpOpenRF},
     {"FSpOpenResFile", ppcglue_FSpOpenResFile},
     {"FSpRename", ppcglue_FSpRename},
+    {"FSpResourceFileAlreadyOpen", ppcglue_FSpResourceFileAlreadyOpen},
     {"FSpRstFLock", ppctrap_FSpRstFLock},
     {"FSpSetFInfo", ppcglue_FSpSetFInfo},
     {"FSpSetFLock", ppctrap_FSpSetFLock},
@@ -35067,6 +36429,7 @@ const ppc_export ppc_exports[] = {
     {"FindControlUnderMouse", ppcglue_FindControlUnderMouse},
     {"FindDialogItem", ppcglue_FindDialogItem},
     {"FindFolder", ppcglue_FindFolder},
+    {"FindFolderExtended", ppcglue_FindFolderExtended},
     {"FindScriptRun", ppcglue_FindScriptRun},
     {"FindSymbol", ppctrap_FindSymbol},
     {"FindWindow", ppcglue_FindWindow},
@@ -35095,6 +36458,9 @@ const ppc_export ppc_exports[] = {
     {"FlushFonts", ppcglue_FlushFonts},
     {"FlushIconRefs", ppcglue_FlushIconRefs},
     {"FlushIconRefsByVolume", ppcglue_FlushIconRefsByVolume},
+    {"FolderManagerRegisterCallNotificationProcs", ppcglue_FolderManagerRegisterCallNotificationProcs},
+    {"FolderManagerRegisterNotificationProc", ppcglue_FolderManagerRegisterNotificationProc},
+    {"FolderManagerUnregisterNotificationProc", ppcglue_FolderManagerUnregisterNotificationProc},
     {"FontMetrics", ppcglue_FontMetrics},
     {"FontScript", ppcglue_FontScript},
     {"FontToScript", ppcglue_FontToScript},
@@ -35354,6 +36720,7 @@ const ppc_export ppc_exports[] = {
     {"GetEntryColor", ppcglue_GetEntryColor},
     {"GetEntryUsage", ppcglue_GetEntryUsage},
     {"GetFNum", ppcglue_GetFNum},
+    {"GetFSInfo", ppcglue_GetFSInfo},
     {"GetFirstCallBack", ppctrap_GetFirstCallBack},
     {"GetFlavorData", ppcglue_GetFlavorData},
     {"GetFlavorDataSize", ppcglue_GetFlavorDataSize},
@@ -35791,6 +37158,8 @@ const ppc_export ppc_exports[] = {
     {"ImageTranscodeSequenceEnd", ppctrap_ImageTranscodeSequenceEnd},
     {"Index2Color", ppcglue_Index2Color},
     {"InfoScrap", ppcglue_InfoScrap},
+    {"InformFFS", ppcglue_InformFFS},
+    {"InformFSM", ppcglue_InformFSM},
     {"InitAllPacks", ppcglue_InitAllPacks},
     {"InitApplZone", ppctrap_InitApplZone},
     {"InitCPort", ppcglue_InitCPort},
@@ -35823,6 +37192,7 @@ const ppc_export ppc_exports[] = {
     {"InsertTrackSegment", ppctrap_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
+    {"InstallFS", ppcglue_InstallFS},
     {"InstallReceiveHandler", ppcglue_InstallReceiveHandler},
     {"InstallTrackingHandler", ppcglue_InstallTrackingHandler},
     {"IntlScript", ppcglue_IntlScript},
@@ -35840,6 +37210,7 @@ const ppc_export ppc_exports[] = {
     {"InvertRect", ppcglue_InvertRect},
     {"InvertRgn", ppcglue_InvertRgn},
     {"InvertRoundRect", ppcglue_InvertRoundRect},
+    {"IsAliasFile", ppcglue_IsAliasFile},
     {"IsAppearanceClient", ppcglue_IsAppearanceClient},
     {"IsControlActive", ppcglue_IsControlActive},
     {"IsControlVisible", ppcglue_IsControlVisible},
@@ -36578,8 +37949,14 @@ const ppc_export ppc_exports[] = {
     {"OutlineMetrics", ppcglue_OutlineMetrics},
     {"OverrideIconRef", ppcglue_OverrideIconRef},
     {"OverrideIconRefFromResource", ppcglue_OverrideIconRefFromResource},
+    {"PBAllocContig", ppcglue_PBAllocContig},
+    {"PBAllocContigAsync", ppcglue_PBAllocContigAsync},
+    {"PBAllocContigSync", ppcglue_PBAllocContigSync},
     {"PBAllocate", ppcglue_PBAllocate},
     {"PBAllocateAsync", ppcglue_PBAllocateAsync},
+    {"PBAllocateFork", ppcglue_PBAllocateFork},
+    {"PBAllocateForkAsync", ppcglue_PBAllocateForkAsync},
+    {"PBAllocateForkSync", ppcglue_PBAllocateForkSync},
     {"PBAllocateSync", ppcglue_PBAllocateSync},
     {"PBCatMove", ppcglue_PBCatMove},
     {"PBCatMoveAsync", ppcglue_PBCatMoveAsync},
@@ -36587,20 +37964,41 @@ const ppc_export ppc_exports[] = {
     {"PBCatSearch", ppcglue_PBCatSearch},
     {"PBCatSearchAsync", ppcglue_PBCatSearchAsync},
     {"PBCatSearchSync", ppcglue_PBCatSearchSync},
+    {"PBCatalogSearch", ppcglue_PBCatalogSearch},
+    {"PBCatalogSearchAsync", ppcglue_PBCatalogSearchAsync},
+    {"PBCatalogSearchSync", ppcglue_PBCatalogSearchSync},
     {"PBClose", ppcglue_PBClose},
     {"PBCloseAsync", ppcglue_PBCloseAsync},
+    {"PBCloseFork", ppcglue_PBCloseFork},
+    {"PBCloseForkAsync", ppcglue_PBCloseForkAsync},
+    {"PBCloseForkSync", ppcglue_PBCloseForkSync},
+    {"PBCloseIterator", ppcglue_PBCloseIterator},
+    {"PBCloseIteratorAsync", ppcglue_PBCloseIteratorAsync},
+    {"PBCloseIteratorSync", ppcglue_PBCloseIteratorSync},
     {"PBCloseSync", ppcglue_PBCloseSync},
     {"PBCloseWD", ppcglue_PBCloseWD},
     {"PBCloseWDAsync", ppcglue_PBCloseWDAsync},
     {"PBCloseWDSync", ppcglue_PBCloseWDSync},
+    {"PBCompareFSRefs", ppcglue_PBCompareFSRefs},
+    {"PBCompareFSRefsAsync", ppcglue_PBCompareFSRefsAsync},
+    {"PBCompareFSRefsSync", ppcglue_PBCompareFSRefsSync},
     {"PBControl", ppcglue_PBControl},
     {"PBControlAsync", ppcglue_PBControlAsync},
     {"PBControlSync", ppcglue_PBControlSync},
     {"PBCreate", ppcglue_PBCreate},
     {"PBCreateAsync", ppcglue_PBCreateAsync},
+    {"PBCreateDirectoryUnicode", ppcglue_PBCreateDirectoryUnicode},
+    {"PBCreateDirectoryUnicodeAsync", ppcglue_PBCreateDirectoryUnicodeAsync},
+    {"PBCreateDirectoryUnicodeSync", ppcglue_PBCreateDirectoryUnicodeSync},
     {"PBCreateFileIDRef", ppcglue_PBCreateFileIDRef},
     {"PBCreateFileIDRefAsync", ppcglue_PBCreateFileIDRefAsync},
     {"PBCreateFileIDRefSync", ppcglue_PBCreateFileIDRefSync},
+    {"PBCreateFileUnicode", ppcglue_PBCreateFileUnicode},
+    {"PBCreateFileUnicodeAsync", ppcglue_PBCreateFileUnicodeAsync},
+    {"PBCreateFileUnicodeSync", ppcglue_PBCreateFileUnicodeSync},
+    {"PBCreateFork", ppcglue_PBCreateFork},
+    {"PBCreateForkAsync", ppcglue_PBCreateForkAsync},
+    {"PBCreateForkSync", ppcglue_PBCreateForkSync},
     {"PBCreateSync", ppcglue_PBCreateSync},
     {"PBDTAddAPPL", ppcglue_PBDTAddAPPL},
     {"PBDTAddAPPLAsync", ppcglue_PBDTAddAPPLAsync},
@@ -36649,6 +38047,12 @@ const ppc_export ppc_exports[] = {
     {"PBDeleteFileIDRef", ppcglue_PBDeleteFileIDRef},
     {"PBDeleteFileIDRefAsync", ppcglue_PBDeleteFileIDRefAsync},
     {"PBDeleteFileIDRefSync", ppcglue_PBDeleteFileIDRefSync},
+    {"PBDeleteFork", ppcglue_PBDeleteFork},
+    {"PBDeleteForkAsync", ppcglue_PBDeleteForkAsync},
+    {"PBDeleteForkSync", ppcglue_PBDeleteForkSync},
+    {"PBDeleteObject", ppcglue_PBDeleteObject},
+    {"PBDeleteObjectAsync", ppcglue_PBDeleteObjectAsync},
+    {"PBDeleteObjectSync", ppcglue_PBDeleteObjectSync},
     {"PBDeleteSync", ppcglue_PBDeleteSync},
     {"PBDirCreate", ppcglue_PBDirCreate},
     {"PBDirCreateAsync", ppcglue_PBDirCreateAsync},
@@ -36657,15 +38061,27 @@ const ppc_export ppc_exports[] = {
     {"PBExchangeFiles", ppctrap_PBExchangeFiles},
     {"PBExchangeFilesAsync", ppctrap_PBExchangeFilesAsync},
     {"PBExchangeFilesSync", ppctrap_PBExchangeFilesSync},
+    {"PBExchangeObjects", ppcglue_PBExchangeObjects},
+    {"PBExchangeObjectsAsync", ppcglue_PBExchangeObjectsAsync},
+    {"PBExchangeObjectsSync", ppcglue_PBExchangeObjectsSync},
     {"PBFlushFile", ppcglue_PBFlushFile},
     {"PBFlushFileAsync", ppcglue_PBFlushFileAsync},
     {"PBFlushFileSync", ppcglue_PBFlushFileSync},
+    {"PBFlushFork", ppcglue_PBFlushFork},
+    {"PBFlushForkAsync", ppcglue_PBFlushForkAsync},
+    {"PBFlushForkSync", ppcglue_PBFlushForkSync},
     {"PBFlushVol", ppcglue_PBFlushVol},
     {"PBFlushVolAsync", ppcglue_PBFlushVolAsync},
     {"PBFlushVolSync", ppcglue_PBFlushVolSync},
     {"PBGetCatInfo", ppcglue_PBGetCatInfo},
     {"PBGetCatInfoAsync", ppcglue_PBGetCatInfoAsync},
     {"PBGetCatInfoSync", ppcglue_PBGetCatInfoSync},
+    {"PBGetCatalogInfo", ppcglue_PBGetCatalogInfo},
+    {"PBGetCatalogInfoAsync", ppcglue_PBGetCatalogInfoAsync},
+    {"PBGetCatalogInfoBulk", ppcglue_PBGetCatalogInfoBulk},
+    {"PBGetCatalogInfoBulkAsync", ppcglue_PBGetCatalogInfoBulkAsync},
+    {"PBGetCatalogInfoBulkSync", ppcglue_PBGetCatalogInfoBulkSync},
+    {"PBGetCatalogInfoSync", ppcglue_PBGetCatalogInfoSync},
     {"PBGetEOF", ppcglue_PBGetEOF},
     {"PBGetEOFAsync", ppcglue_PBGetEOFAsync},
     {"PBGetEOFSync", ppcglue_PBGetEOFSync},
@@ -36678,15 +38094,30 @@ const ppc_export ppc_exports[] = {
     {"PBGetFPos", ppcglue_PBGetFPos},
     {"PBGetFPosAsync", ppcglue_PBGetFPosAsync},
     {"PBGetFPosSync", ppcglue_PBGetFPosSync},
+    {"PBGetForkCBInfo", ppcglue_PBGetForkCBInfo},
+    {"PBGetForkCBInfoAsync", ppcglue_PBGetForkCBInfoAsync},
+    {"PBGetForkCBInfoSync", ppcglue_PBGetForkCBInfoSync},
+    {"PBGetForkPosition", ppcglue_PBGetForkPosition},
+    {"PBGetForkPositionAsync", ppcglue_PBGetForkPositionAsync},
+    {"PBGetForkPositionSync", ppcglue_PBGetForkPositionSync},
+    {"PBGetForkSize", ppcglue_PBGetForkSize},
+    {"PBGetForkSizeAsync", ppcglue_PBGetForkSizeAsync},
+    {"PBGetForkSizeSync", ppcglue_PBGetForkSizeSync},
     {"PBGetVInfo", ppcglue_PBGetVInfo},
     {"PBGetVInfoAsync", ppcglue_PBGetVInfoAsync},
     {"PBGetVInfoSync", ppcglue_PBGetVInfoSync},
     {"PBGetVol", ppcglue_PBGetVol},
     {"PBGetVolAsync", ppcglue_PBGetVolAsync},
     {"PBGetVolSync", ppcglue_PBGetVolSync},
+    {"PBGetVolumeInfo", ppcglue_PBGetVolumeInfo},
+    {"PBGetVolumeInfoAsync", ppcglue_PBGetVolumeInfoAsync},
+    {"PBGetVolumeInfoSync", ppcglue_PBGetVolumeInfoSync},
     {"PBGetWDInfo", ppcglue_PBGetWDInfo},
     {"PBGetWDInfoAsync", ppcglue_PBGetWDInfoAsync},
     {"PBGetWDInfoSync", ppcglue_PBGetWDInfoSync},
+    {"PBGetXCatInfo", ppcglue_PBGetXCatInfo},
+    {"PBGetXCatInfoAsync", ppcglue_PBGetXCatInfoAsync},
+    {"PBGetXCatInfoSync", ppcglue_PBGetXCatInfoSync},
     {"PBHCopyFile", ppctrap_PBHCopyFile},
     {"PBHCopyFileAsync", ppctrap_PBHCopyFileAsync},
     {"PBHCopyFileSync", ppctrap_PBHCopyFileSync},
@@ -36756,19 +38187,42 @@ const ppc_export ppc_exports[] = {
     {"PBHSetVol", ppcglue_PBHSetVol},
     {"PBHSetVolAsync", ppcglue_PBHSetVolAsync},
     {"PBHSetVolSync", ppcglue_PBHSetVolSync},
+    {"PBHTrashVolumeCaches", ppcglue_PBHTrashVolumeCaches},
+    {"PBHTrashVolumeCachesSync", ppcglue_PBHTrashVolumeCachesSync},
+    {"PBIterateForks", ppcglue_PBIterateForks},
+    {"PBIterateForksAsync", ppcglue_PBIterateForksAsync},
+    {"PBIterateForksSync", ppcglue_PBIterateForksSync},
     {"PBKillIO", ppcglue_PBKillIO},
     {"PBKillIOAsync", ppcglue_PBKillIOAsync},
     {"PBKillIOSync", ppcglue_PBKillIOSync},
     {"PBLockRange", ppctrap_PBLockRange},
     {"PBLockRangeAsync", ppctrap_PBLockRangeAsync},
     {"PBLockRangeSync", ppctrap_PBLockRangeSync},
+    {"PBMakeFSRef", ppcglue_PBMakeFSRef},
+    {"PBMakeFSRefAsync", ppcglue_PBMakeFSRefAsync},
+    {"PBMakeFSRefSync", ppcglue_PBMakeFSRefSync},
+    {"PBMakeFSRefUnicode", ppcglue_PBMakeFSRefUnicode},
+    {"PBMakeFSRefUnicodeAsync", ppcglue_PBMakeFSRefUnicodeAsync},
+    {"PBMakeFSRefUnicodeSync", ppcglue_PBMakeFSRefUnicodeSync},
+    {"PBMakeFSSpec", ppcglue_PBMakeFSSpec},
+    {"PBMakeFSSpecAsync", ppcglue_PBMakeFSSpecAsync},
+    {"PBMakeFSSpecSync", ppcglue_PBMakeFSSpecSync},
     {"PBMountVol", ppcglue_PBMountVol},
+    {"PBMoveObject", ppcglue_PBMoveObject},
+    {"PBMoveObjectAsync", ppcglue_PBMoveObjectAsync},
+    {"PBMoveObjectSync", ppcglue_PBMoveObjectSync},
     {"PBOffLine", ppcglue_PBOffLine},
     {"PBOpen", ppcglue_PBOpen},
     {"PBOpenAsync", ppcglue_PBOpenAsync},
     {"PBOpenDF", ppcglue_PBOpenDF},
     {"PBOpenDFAsync", ppcglue_PBOpenDFAsync},
     {"PBOpenDFSync", ppcglue_PBOpenDFSync},
+    {"PBOpenFork", ppcglue_PBOpenFork},
+    {"PBOpenForkAsync", ppcglue_PBOpenForkAsync},
+    {"PBOpenForkSync", ppcglue_PBOpenForkSync},
+    {"PBOpenIterator", ppcglue_PBOpenIterator},
+    {"PBOpenIteratorAsync", ppcglue_PBOpenIteratorAsync},
+    {"PBOpenIteratorSync", ppcglue_PBOpenIteratorSync},
     {"PBOpenRF", ppcglue_PBOpenRF},
     {"PBOpenRFAsync", ppcglue_PBOpenRFAsync},
     {"PBOpenRFSync", ppcglue_PBOpenRFSync},
@@ -36778,10 +38232,16 @@ const ppc_export ppc_exports[] = {
     {"PBOpenWDSync", ppcglue_PBOpenWDSync},
     {"PBRead", ppcglue_PBRead},
     {"PBReadAsync", ppcglue_PBReadAsync},
+    {"PBReadFork", ppcglue_PBReadFork},
+    {"PBReadForkAsync", ppcglue_PBReadForkAsync},
+    {"PBReadForkSync", ppcglue_PBReadForkSync},
     {"PBReadSync", ppcglue_PBReadSync},
     {"PBRename", ppcglue_PBRename},
     {"PBRenameAsync", ppcglue_PBRenameAsync},
     {"PBRenameSync", ppcglue_PBRenameSync},
+    {"PBRenameUnicode", ppcglue_PBRenameUnicode},
+    {"PBRenameUnicodeAsync", ppcglue_PBRenameUnicodeAsync},
+    {"PBRenameUnicodeSync", ppcglue_PBRenameUnicodeSync},
     {"PBResolveFileIDRef", ppcglue_PBResolveFileIDRef},
     {"PBResolveFileIDRefAsync", ppcglue_PBResolveFileIDRefAsync},
     {"PBResolveFileIDRefSync", ppcglue_PBResolveFileIDRefSync},
@@ -36791,6 +38251,9 @@ const ppc_export ppc_exports[] = {
     {"PBSetCatInfo", ppcglue_PBSetCatInfo},
     {"PBSetCatInfoAsync", ppcglue_PBSetCatInfoAsync},
     {"PBSetCatInfoSync", ppcglue_PBSetCatInfoSync},
+    {"PBSetCatalogInfo", ppcglue_PBSetCatalogInfo},
+    {"PBSetCatalogInfoAsync", ppcglue_PBSetCatalogInfoAsync},
+    {"PBSetCatalogInfoSync", ppcglue_PBSetCatalogInfoSync},
     {"PBSetEOF", ppcglue_PBSetEOF},
     {"PBSetEOFAsync", ppcglue_PBSetEOFAsync},
     {"PBSetEOFSync", ppcglue_PBSetEOFSync},
@@ -36806,12 +38269,21 @@ const ppc_export ppc_exports[] = {
     {"PBSetFVers", ppctrap_PBSetFVers},
     {"PBSetFVersAsync", ppctrap_PBSetFVersAsync},
     {"PBSetFVersSync", ppctrap_PBSetFVersSync},
+    {"PBSetForkPosition", ppcglue_PBSetForkPosition},
+    {"PBSetForkPositionAsync", ppcglue_PBSetForkPositionAsync},
+    {"PBSetForkPositionSync", ppcglue_PBSetForkPositionSync},
+    {"PBSetForkSize", ppcglue_PBSetForkSize},
+    {"PBSetForkSizeAsync", ppcglue_PBSetForkSizeAsync},
+    {"PBSetForkSizeSync", ppcglue_PBSetForkSizeSync},
     {"PBSetVInfo", ppcglue_PBSetVInfo},
     {"PBSetVInfoAsync", ppcglue_PBSetVInfoAsync},
     {"PBSetVInfoSync", ppcglue_PBSetVInfoSync},
     {"PBSetVol", ppcglue_PBSetVol},
     {"PBSetVolAsync", ppcglue_PBSetVolAsync},
     {"PBSetVolSync", ppcglue_PBSetVolSync},
+    {"PBSetVolumeInfo", ppcglue_PBSetVolumeInfo},
+    {"PBSetVolumeInfoAsync", ppcglue_PBSetVolumeInfoAsync},
+    {"PBSetVolumeInfoSync", ppcglue_PBSetVolumeInfoSync},
     {"PBStatus", ppcglue_PBStatus},
     {"PBStatusAsync", ppcglue_PBStatusAsync},
     {"PBStatusSync", ppcglue_PBStatusSync},
@@ -36819,9 +38291,16 @@ const ppc_export ppc_exports[] = {
     {"PBUnlockRangeAsync", ppctrap_PBUnlockRangeAsync},
     {"PBUnlockRangeSync", ppctrap_PBUnlockRangeSync},
     {"PBUnmountVol", ppcglue_PBUnmountVol},
+    {"PBWaitIOComplete", ppcglue_PBWaitIOComplete},
     {"PBWrite", ppcglue_PBWrite},
     {"PBWriteAsync", ppcglue_PBWriteAsync},
+    {"PBWriteFork", ppcglue_PBWriteFork},
+    {"PBWriteForkAsync", ppcglue_PBWriteForkAsync},
+    {"PBWriteForkSync", ppcglue_PBWriteForkSync},
     {"PBWriteSync", ppcglue_PBWriteSync},
+    {"PBXGetVolInfo", ppcglue_PBXGetVolInfo},
+    {"PBXGetVolInfoAsync", ppcglue_PBXGetVolInfoAsync},
+    {"PBXGetVolInfoSync", ppcglue_PBXGetVolInfoSync},
     {"PMgrVersion", ppcglue_PMgrVersion},
     {"PPCDispatch", ppcglue_PPCDispatch},
     {"PPostEvent", ppcglue_PPostEvent},
@@ -37101,10 +38580,12 @@ const ppc_export ppc_exports[] = {
     {"RegisterIconRefFromIconFile", ppcglue_RegisterIconRefFromIconFile},
     {"RegisterIconRefFromResource", ppcglue_RegisterIconRefFromResource},
     {"RegisterSection", ppcglue_RegisterSection},
+    {"ReleaseFolder", ppcglue_ReleaseFolder},
     {"ReleaseIconRef", ppcglue_ReleaseIconRef},
     {"ReleaseResource", ppcglue_ReleaseResource},
     {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
+    {"RemoveFS", ppcglue_RemoveFS},
     {"RemoveIconRefOverride", ppcglue_RemoveIconRefOverride},
     {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
     {"RemoveIndexedCollectionItem", ppctrap_RemoveIndexedCollectionItem},
@@ -37132,6 +38613,8 @@ const ppc_export ppc_exports[] = {
     {"ResizePalette", ppcglue_ResizePalette},
     {"ResolveAlias", ppcglue_ResolveAlias},
     {"ResolveAliasFile", ppcglue_ResolveAliasFile},
+    {"ResolveAliasFileWithMountFlags", ppcglue_ResolveAliasFileWithMountFlags},
+    {"ResolveAliasWithMountFlags", ppcglue_ResolveAliasWithMountFlags},
     {"RestoreBack", ppcglue_RestoreBack},
     {"RestoreDeviceClut", ppcglue_RestoreDeviceClut},
     {"RestoreEntries", ppcglue_RestoreEntries},
@@ -37272,6 +38755,7 @@ const ppc_export ppc_exports[] = {
     {"SetEntryUsage", ppcglue_SetEntryUsage},
     {"SetEventMask", ppcglue_SetEventMask},
     {"SetFLock", ppcglue_SetFLock},
+    {"SetFSInfo", ppcglue_SetFSInfo},
     {"SetFScaleDisable", ppcglue_SetFScaleDisable},
     {"SetFontLock", ppcglue_SetFontLock},
     {"SetFractEnable", ppcglue_SetFractEnable},

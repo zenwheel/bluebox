@@ -19,6 +19,9 @@
  */
 #include <dirent.h>
 #include <errno.h>
+#ifdef __APPLE__
+#include <sys/attr.h>
+#endif
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +30,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "filemgr_internal.h"
 #include "forks.h"
 #include "tb_internal.h"
 
@@ -41,7 +45,7 @@ enum { fsCurPerm = 0, fsRdPerm, fsWrPerm, fsRdWrPerm, fsRdWrShPerm };
 
 #define VREF -1
 #define ROOT_ID 2
-#define MAX_DIRS 4096
+#define MAX_DIRS 0xFFFF /* files have entries too, numbered from 0x10000 */
 #define MAX_WDS 64
 #define FCB_FIRST 32 /* refnum slots below this belong to the Resource Manager */
 #define MAX_FCBS 300
@@ -175,9 +179,13 @@ static struct {
 } grants[MAX_GRANTS];
 static int ngrants;
 
-/* Directory IDs: index i holds the host path of directory ID i (relative). */
-static char *dirs[MAX_DIRS];
-static int ndirs;
+/* Directory IDs: index i holds the host path of directory ID i (relative);
+ * a file's number is its index and 0x10000.  A hash of the paths finds an
+ * index (whole volumes are walked, by catalog searches and iterators). */
+static char **dirs;
+static int ndirs, dirs_cap;
+static int32_t *dir_hash; /* indices; 0 is an empty slot */
+static uint32_t dir_hash_size;
 
 static struct {
     bool used;
@@ -291,6 +299,29 @@ static int host_to_mac(const char *name, uint8_t *out)
 }
 
 static const char *entry_name(const char *dir, const char *n);
+
+/* An existing entry's name as the host spells it: a host that ignores
+ * case and how accents are composed (macOS) finds it by others, and one
+ * object should have one path (and so one directory ID or file number). */
+static void disk_name(const char *full, char *name, size_t namesize)
+{
+#ifdef __APPLE__
+    struct attrlist al = { .bitmapcount = ATTR_BIT_MAP_COUNT, .commonattr = ATTR_CMN_NAME };
+    struct {
+        uint32_t len;
+        attrreference_t ref;
+        char buf[NAME_MAX * 3 + 1];
+    } __attribute__((packed)) out;
+    if (getattrlist(full, &al, &out, sizeof out, FSOPT_NOFOLLOW) == 0) {
+        const char *n = (const char *)&out.ref + out.ref.attr_dataoffset;
+        if (out.ref.attr_length > 1 && (size_t)out.ref.attr_length <= namesize)
+            snprintf(name, namesize, "%.*s", (int)out.ref.attr_length - 1, n);
+    }
+#else
+    (void)full, (void)name, (void)namesize;
+#endif
+}
+
 static int mac_char_cmp(const uint8_t *a, const uint8_t *b, int n)
 {
     for (int i = 0; i < n; i++)
@@ -309,6 +340,10 @@ static void host_component(const char *dir, const uint8_t *mac, int n, char *out
     char full[PATH_MAX];
     struct stat st;
     snprintf(full, sizeof full, "%s/%s", dir, out);
+    if (lstat(full, &st) == 0) {
+        disk_name(full, out, outsize);
+        return;
+    }
     if (stat(full, &st) == 0)
         return;
     char *side = appledouble_sidecar_path(full);
@@ -334,15 +369,59 @@ static void host_component(const char *dir, const uint8_t *mac, int n, char *out
     closedir(d);
 }
 
+static uint32_t path_hash(const char *s)
+{
+    uint32_t h = 2166136261u; /* FNV-1a */
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++)
+        h = (h ^ *p) * 16777619u;
+    return h;
+}
+
+static void hash_insert(int32_t i)
+{
+    uint32_t h = path_hash(dirs[i]) & (dir_hash_size - 1);
+    while (dir_hash[h])
+        h = (h + 1) & (dir_hash_size - 1);
+    dir_hash[h] = i;
+}
+
+static void hash_rebuild(void)
+{
+    uint32_t size = 1024;
+    while (size < (uint32_t)dirs_cap * 2)
+        size *= 2;
+    free(dir_hash);
+    dir_hash = calloc(size, sizeof *dir_hash);
+    dir_hash_size = size;
+    for (int i = ROOT_ID; i < ndirs; i++)
+        if (dirs[i])
+            hash_insert(i);
+}
+
 static int32_t dir_id_for(const char *rel)
 {
-    for (int i = ROOT_ID; i < ndirs; i++)
-        if (dirs[i] && !strcmp(dirs[i], rel))
-            return i;
+    if (dir_hash)
+        for (uint32_t h = path_hash(rel) & (dir_hash_size - 1); dir_hash[h]; h = (h + 1) & (dir_hash_size - 1))
+            if (dirs[dir_hash[h]] && !strcmp(dirs[dir_hash[h]], rel))
+                return dir_hash[h];
     if (ndirs >= MAX_DIRS)
         return 0;
+    if (ndirs >= dirs_cap) {
+        int cap = dirs_cap ? dirs_cap * 2 : 1024;
+        char **nd = realloc(dirs, (size_t)cap * sizeof *nd);
+        if (!nd)
+            return 0;
+        memset(nd + dirs_cap, 0, (size_t)(cap - dirs_cap) * sizeof *nd);
+        dirs = nd;
+        dirs_cap = cap;
+    }
     dirs[ndirs] = strdup(rel);
-    return ndirs++;
+    ndirs++;
+    if (!dir_hash || (uint32_t)ndirs * 2 > dir_hash_size)
+        hash_rebuild();
+    else
+        hash_insert(ndirs - 1);
+    return ndirs - 1;
 }
 
 /* Directories are recorded relative to the volume's folder ("" for its
@@ -880,8 +959,10 @@ void fm_init(const char *app_dir)
         free(dirs[i]);
         dirs[i] = NULL;
     }
-    dirs[ROOT_ID] = strdup("");
-    ndirs = ROOT_ID + 1;
+    ndirs = ROOT_ID;
+    free(dir_hash);
+    dir_hash = NULL;
+    dir_id_for(""); /* the root, 2 */
     memset(wds, 0, sizeof wds);
     for (int i = 0; i < MAX_FCBS; i++)
         free(fcbs[i].buf);
@@ -910,6 +991,7 @@ void fm_init(const char *app_dir)
         nmounts++;
     }
     npending = 0; /* for this launch */
+    hfsplus_reset();
     default_dir = dir_id_for(rel_of(app));
     mount *am = mount_of_path(app);
     default_vref = am ? am->vref : VREF;
@@ -1180,6 +1262,49 @@ bool fm_last_data_fork(char *out, size_t outsize)
     return true;
 }
 
+/* Open a file's fork: its refnum, or one already open for writing with
+ * opWrErr. */
+static int16_t open_path(const char *path, bool rsrc, uint8_t perm, int16_t *rn)
+{
+    if (!exists(path) || is_dir(path))
+        return fnfErrF;
+    bool write = perm != fsRdPerm;
+    if (write && !writable(path)) {
+        if (perm == fsWrPerm)
+            return permErr;
+        write = false; /* read-write (or current) permission: read-only here */
+    }
+    for (int i = 0; i < MAX_FCBS; i++) {
+        if (fcbs[i].used && fcbs[i].rsrc == rsrc && fcbs[i].write && write && !strcmp(fcbs[i].path, path)) {
+            *rn = fcb_refnum(i);
+            return opWrErr;
+        }
+    }
+    for (int i = 0; i < MAX_FCBS; i++) {
+        if (fcbs[i].used)
+            continue;
+        fcb *f = &fcbs[i];
+        memset(f, 0, sizeof *f);
+        f->used = true;
+        f->rsrc = rsrc;
+        f->write = write;
+        snprintf(f->path, sizeof f->path, "%s", path);
+        int16_t err = load_fork(f);
+        if (err) {
+            f->used = false;
+            return err;
+        }
+        f->parid = parent_id_of(path);
+        host_pname(f->name, path);
+        *rn = fcb_refnum(i);
+        fm_fcb_record(fcb_refnum(i), path, rsrc, write, f->len, 0);
+        if (!rsrc)
+            snprintf(last_data_open, sizeof last_data_open, "%s", path);
+        return noErr;
+    }
+    return tmfoErr;
+}
+
 static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
 {
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
@@ -1196,44 +1321,11 @@ static int16_t open_fork(gaddr pb, bool rsrc, bool hfs)
          err ? "?" : path, err);
     if (err)
         return err;
-    if (!exists(path) || is_dir(path))
-        return fnfErrF;
-    uint8_t perm = rd8(pb + IOParam_ioPermssn_off);
-    bool write = perm != fsRdPerm;
-    if (write && !writable(path)) {
-        if (perm == fsWrPerm)
-            return permErr;
-        write = false; /* read-write (or current) permission: read-only here */
-    }
-    /* Already open for writing?  Return that refnum with opWrErr. */
-    for (int i = 0; i < MAX_FCBS; i++) {
-        if (fcbs[i].used && fcbs[i].rsrc == rsrc && fcbs[i].write && write && !strcmp(fcbs[i].path, path)) {
-            wr16(pb + IOParam_ioRefNum_off, (uint16_t)fcb_refnum(i));
-            return opWrErr;
-        }
-    }
-    for (int i = 0; i < MAX_FCBS; i++) {
-        if (fcbs[i].used)
-            continue;
-        fcb *f = &fcbs[i];
-        memset(f, 0, sizeof *f);
-        f->used = true;
-        f->rsrc = rsrc;
-        f->write = write;
-        snprintf(f->path, sizeof f->path, "%s", path);
-        if ((err = load_fork(f))) {
-            f->used = false;
-            return err;
-        }
-        f->parid = parent_id_of(path);
-        host_pname(f->name, path);
-        wr16(pb + IOParam_ioRefNum_off, (uint16_t)fcb_refnum(i));
-        fm_fcb_record(fcb_refnum(i), path, rsrc, write, f->len, 0);
-        if (!rsrc)
-            snprintf(last_data_open, sizeof last_data_open, "%s", path);
-        return noErr;
-    }
-    return tmfoErr;
+    int16_t rn = 0;
+    err = open_path(path, rsrc, rd8(pb + IOParam_ioPermssn_off), &rn);
+    if (rn)
+        wr16(pb + IOParam_ioRefNum_off, (uint16_t)rn);
+    return err;
 }
 
 int16_t tb_PBOpen(gaddr pb, bool async) { return open_fork(pb, false, hfs_call()); }
@@ -1246,13 +1338,18 @@ int16_t tb_PBClose(gaddr pb, bool async)
 {
     if (driver_refnum((int16_t)rd16(pb + IOParam_ioRefNum_off)))
         return driver_call(pb, async, DRIVER_CLOSE);
-    fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    return fm_close_fork((int16_t)rd16(pb + IOParam_ioRefNum_off));
+}
+
+int16_t fm_close_fork(int16_t rn)
+{
+    fcb *f = fcb_for(rn);
     if (!f)
         return rfNumErr;
     int16_t err = save_fork(f);
     free(f->buf);
     memset(f, 0, sizeof *f);
-    fm_fcb_forget((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    fm_fcb_forget(rn);
     return err;
 }
 
@@ -1426,6 +1523,60 @@ int16_t tb_PBFlushVol(gaddr pb, bool async)
 /* ---------------------------------------------------------------------- */
 /* Creating, deleting, renaming */
 
+static bool rel_under(const char *rel, const char *top, size_t n)
+{
+    return !strncmp(rel, top, n) && (rel[n] == 0 || rel[n] == '/');
+}
+
+/* Drop the node numbers of a path and what was inside it. */
+static void forget_nodes(const char *path)
+{
+    char r[PATH_MAX + 2];
+    snprintf(r, sizeof r, "%s", rel_of(path));
+    size_t n = strlen(r);
+    if (!n)
+        return; /* the root stays */
+    for (int i = ROOT_ID + 1; i < ndirs; i++)
+        if (dirs[i] && rel_under(dirs[i], r, n)) {
+            free(dirs[i]);
+            dirs[i] = NULL;
+        }
+    hash_rebuild();
+}
+
+/* A renamed or moved object keeps its directory ID or file number, as
+ * does everything inside it, and its open forks follow it, as on HFS. */
+static void retarget(const char *from, const char *to)
+{
+    if (!strcmp(from, to))
+        return;
+    forget_nodes(to); /* an earlier object's, gone */
+    char f[PATH_MAX + 2], t[PATH_MAX + 2];
+    snprintf(f, sizeof f, "%s", rel_of(from));
+    snprintf(t, sizeof t, "%s", rel_of(to));
+    size_t fl = strlen(f);
+    if (!fl)
+        return;
+    for (int i = ROOT_ID + 1; i < ndirs; i++) {
+        if (!dirs[i] || !rel_under(dirs[i], f, fl))
+            continue;
+        char nr[PATH_MAX + 2];
+        snprintf(nr, sizeof nr, "%s%s", t, dirs[i] + fl);
+        free(dirs[i]);
+        dirs[i] = strdup(nr);
+    }
+    hash_rebuild();
+    size_t pl = strlen(from);
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && under(fcbs[i].path, from)) {
+            char np[PATH_MAX];
+            snprintf(np, sizeof np, "%s%s", to, fcbs[i].path + pl);
+            snprintf(fcbs[i].path, sizeof fcbs[i].path, "%s", np);
+            fcbs[i].parid = parent_id_of(np);
+            host_pname(fcbs[i].name, np);
+        }
+}
+
 static int16_t create_file(const char *path)
 {
     if (exists(path))
@@ -1489,14 +1640,16 @@ static int16_t delete_path(const char *path)
         if (rmdir(path) != 0)
             return fBsyErr;
         as_deleted(path);
+        forget_nodes(path);
         return noErr;
     }
     char *side = appledouble_sidecar_path(path);
     unlink(side);
     free(side);
-    if (unlink(path) != 0)
+    if (unlink(path) != 0 && errno != ENOENT) /* ENOENT: only its sidecar was there */
         return ioErrF;
     as_deleted(path);
+    forget_nodes(path);
     return noErr;
 }
 
@@ -1514,10 +1667,33 @@ int16_t tb_PBHDelete(gaddr pb, bool async)
     return err ? err : delete_path(path);
 }
 
-static int16_t rename_path(const char *from, gaddr newname)
+/* Rename or move a host object, its sidecar with it. */
+static int16_t rename_host(const char *from, const char *to)
 {
     if (!exists(from))
         return fnfErrF;
+    /* A change of case alone renames the object to itself (on a host
+     * that ignores case, as HFS does). */
+    struct stat sf, st;
+    bool there = lstat(from, &sf) == 0;
+    bool same = there && lstat(to, &st) == 0 && sf.st_dev == st.st_dev && sf.st_ino == st.st_ino;
+    if (exists(to) && !same)
+        return dupFNErr;
+    if (!writable(from) || !writable(to) || !strcmp(from, "/"))
+        return wPrErr;
+    if (there && rename(from, to) != 0) /* not there: only its sidecar is */
+        return ioErrF;
+    char *s1 = appledouble_sidecar_path(from), *s2 = appledouble_sidecar_path(to);
+    rename(s1, s2);
+    free(s1);
+    free(s2);
+    as_moved(from, to);
+    retarget(from, to);
+    return noErr;
+}
+
+static int16_t rename_path(const char *from, gaddr newname)
+{
     char to[PATH_MAX], comp[256];
     uint8_t nm[256];
     int n = rd8(newname);
@@ -1526,18 +1702,7 @@ static int16_t rename_path(const char *from, gaddr newname)
     snprintf(to, sizeof to, "%s", from);
     char *slash = strrchr(to, '/');
     snprintf(slash + 1, sizeof to - (size_t)(slash + 1 - to), "%s", comp);
-    if (exists(to))
-        return dupFNErr;
-    if (!writable(from) || !writable(to) || !strcmp(from, "/"))
-        return wPrErr;
-    if (rename(from, to) != 0)
-        return ioErrF;
-    char *s1 = appledouble_sidecar_path(from), *s2 = appledouble_sidecar_path(to);
-    rename(s1, s2);
-    free(s1);
-    free(s2);
-    as_moved(from, to);
-    return noErr;
+    return rename_host(from, to);
 }
 
 int16_t tb_PBRename(gaddr pb, bool async)
@@ -1586,32 +1751,64 @@ int16_t tb_RstFLock(gaddr filen, int16_t vrn) { return lock_by_name(filen, vrn);
 /* ---------------------------------------------------------------------- */
 /* File information */
 
-static void fill_file_info(gaddr pb, const char *path, bool cat)
+/* A file's or folder's catalog information, from the host. */
+bool fm_info_of(const char *path, fm_info *o)
 {
+    memset(o, 0, sizeof *o);
+    if (!exists(path))
+        return false;
+    host_times(path, &o->created, &o->modified);
+    if (is_dir(path)) {
+        o->dir = true;
+        o->valence = (uint32_t)count_entries(path);
+        return true;
+    }
     mac_file mf;
     char err[256];
-    bool ok = appledouble_read(path, &mf, err, sizeof err);
-    uint8_t attrib = is_open(path) ? 0x80 : 0;
-    wr8(pb + FileParam_ioFlAttrib_off, attrib);
-    gmemset(pb + FileParam_ioFlFndrInfo_off, 0, 16);
-    uint32_t dl = ok ? (uint32_t)mf.data_len : 0, rl = ok ? (uint32_t)mf.rsrc_len : 0;
-    if (ok) {
+    if (appledouble_read(path, &mf, err, sizeof err)) {
+        o->data_len = (uint32_t)mf.data_len;
+        o->rsrc_len = (uint32_t)mf.rsrc_len;
         uint8_t finfo[16] = { 0 };
         bool host_text = host_file_type(path, finfo);
         if (host_text || finfo[0]) {
             /* Plain host file: type from the extension; text length as seen inside. */
-            gput(pb + FileParam_ioFlFndrInfo_off, finfo, 16);
+            memcpy(o->finder_info, finfo, 16);
             if (host_text) {
                 size_t n;
                 free(text_in(mf.data, mf.data_len, &n));
-                dl = (uint32_t)n;
+                o->data_len = (uint32_t)n;
             }
         } else {
-            gput(pb + FileParam_ioFlFndrInfo_off, mf.finder_info, 16);
+            memcpy(o->finder_info, mf.finder_info, 16);
         }
-        if (cat)
-            gput(pb + HFileInfo_ioFlXFndrInfo_off, mf.finder_info + 16, 16);
+        memcpy(o->finder_info + 16, mf.finder_info + 16, 16);
+        if (mf.create_date)
+            o->created = mf.create_date;
+        if (mf.modify_date)
+            o->modified = mf.modify_date;
+        mac_file_free(&mf);
     }
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && !strcmp(fcbs[i].path, path)) {
+            if (fcbs[i].rsrc)
+                o->rsrc_open = true;
+            else
+                o->data_open = true;
+        }
+    if (rm_path_open(path, NULL, NULL))
+        o->rsrc_open = true;
+    return true;
+}
+
+static void fill_file_info(gaddr pb, const char *path, bool cat)
+{
+    fm_info in;
+    fm_info_of(path, &in);
+    wr8(pb + FileParam_ioFlAttrib_off, is_open(path) ? 0x80 : 0);
+    gput(pb + FileParam_ioFlFndrInfo_off, in.finder_info, 16);
+    if (cat)
+        gput(pb + HFileInfo_ioFlXFndrInfo_off, in.finder_info + 16, 16);
+    uint32_t dl = in.data_len, rl = in.rsrc_len;
     wr32(pb + FileParam_ioFlNum_off, (uint32_t)dir_id_for(rel_of(path)) + 0x10000); /* file IDs */
     wr16(pb + FileParam_ioFlStBlk_off, 0);
     wr32(pb + FileParam_ioFlLgLen_off, dl);
@@ -1619,18 +1816,13 @@ static void fill_file_info(gaddr pb, const char *path, bool cat)
     wr16(pb + FileParam_ioFlRStBlk_off, 0);
     wr32(pb + FileParam_ioFlRLgLen_off, rl);
     wr32(pb + FileParam_ioFlRPyLen_off, (rl + 511) & ~511u);
-    uint32_t hc, hm;
-    host_times(path, &hc, &hm);
-    uint32_t c = ok && mf.create_date ? mf.create_date : hc, m = ok && mf.modify_date ? mf.modify_date : hm;
-    wr32(pb + FileParam_ioFlCrDat_off, c);
-    wr32(pb + FileParam_ioFlMdDat_off, m);
+    wr32(pb + FileParam_ioFlCrDat_off, in.created);
+    wr32(pb + FileParam_ioFlMdDat_off, in.modified);
     if (cat) {
         wr32(pb + HFileInfo_ioFlBkDat_off, 0);
         wr32(pb + HFileInfo_ioFlParID_off, (uint32_t)out_id(parent_id_of(path)));
         wr32(pb + HFileInfo_ioFlClpSiz_off, 0);
     }
-    if (ok)
-        mac_file_free(&mf);
 }
 
 static int16_t get_finfo(gaddr pb, bool hfs)
@@ -1661,12 +1853,11 @@ static int16_t get_finfo(gaddr pb, bool hfs)
 int16_t tb_PBGetFInfo(gaddr pb, bool async) { return get_finfo(pb, hfs_call()); }
 int16_t tb_PBHGetFInfo(gaddr pb, bool async) { return get_finfo(pb, true); }
 
-static int16_t set_finfo(gaddr pb, bool hfs, bool cat)
+/* Change a file's Finder information (either half may be NULL) and dates
+ * (NULL: left alone); a folder keeps none. */
+static int16_t set_file_info(const char *path, const uint8_t *finfo, const uint8_t *fxinfo, const uint32_t *created,
+                             const uint32_t *modified)
 {
-    char path[PATH_MAX];
-    int16_t err = pb_path(pb, hfs, path, sizeof path);
-    if (err)
-        return err;
     if (!exists(path))
         return fnfErrF;
     if (is_dir(path))
@@ -1677,12 +1868,23 @@ static int16_t set_finfo(gaddr pb, bool hfs, bool cat)
     char e[256];
     if (!appledouble_read(path, &mf, e, sizeof e))
         return ioErrF;
-    gget(mf.finder_info, pb + FileParam_ioFlFndrInfo_off, 16);
-    if (cat)
-        gget(mf.finder_info + 16, pb + HFileInfo_ioFlXFndrInfo_off, 16);
-    mf.has_finder_info = true;
-    mf.create_date = rd32(pb + FileParam_ioFlCrDat_off);
-    mf.modify_date = rd32(pb + FileParam_ioFlMdDat_off);
+    if (finfo || fxinfo) {
+        if (!mf.has_finder_info) {
+            /* A plain host file's type comes from its extension. */
+            uint8_t implied[16] = { 0 };
+            if (host_file_type(path, implied) || implied[0])
+                memcpy(mf.finder_info, implied, 16);
+        }
+        if (finfo)
+            memcpy(mf.finder_info, finfo, 16);
+        if (fxinfo)
+            memcpy(mf.finder_info + 16, fxinfo, 16);
+        mf.has_finder_info = true;
+    }
+    if (created)
+        mf.create_date = *created;
+    if (modified)
+        mf.modify_date = *modified;
     if (sidecar_redundant(path, &mf)) {
         /* Plain host text: the extension says it all; drop any sidecar. */
         mac_file_free(&mf);
@@ -1697,6 +1899,20 @@ static int16_t set_finfo(gaddr pb, bool hfs, bool cat)
     if (ok)
         as_file_changed(path);
     return ok ? noErr : ioErrF;
+}
+
+static int16_t set_finfo(gaddr pb, bool hfs, bool cat)
+{
+    char path[PATH_MAX];
+    int16_t err = pb_path(pb, hfs, path, sizeof path);
+    if (err)
+        return err;
+    uint8_t fi[16], fx[16];
+    gget(fi, pb + FileParam_ioFlFndrInfo_off, 16);
+    if (cat)
+        gget(fx, pb + HFileInfo_ioFlXFndrInfo_off, 16);
+    uint32_t cr = rd32(pb + FileParam_ioFlCrDat_off), md = rd32(pb + FileParam_ioFlMdDat_off);
+    return set_file_info(path, fi, cat ? fx : NULL, &cr, &md);
 }
 
 int16_t tb_PBSetFInfo(gaddr pb, bool async) { return set_finfo(pb, hfs_call(), false); }
@@ -2017,6 +2233,18 @@ int16_t tb_PBDirCreate(gaddr pb, bool async)
     return noErr;
 }
 
+/* Move an object into a folder (dest: where it went); not into itself. */
+static int16_t move_host(const char *from, const char *dir, char *dest, size_t destsize)
+{
+    if (!is_dir(dir) || under(dir, from))
+        return badMovErr;
+    const char *base = strrchr(from, '/');
+    snprintf(dest, destsize, "%s%s", strcmp(dir, "/") ? dir : "", base);
+    if (!strcmp(from, "/"))
+        return wPrErr;
+    return rename_host(from, dest);
+}
+
 int16_t tb_PBCatMove(gaddr pb, bool async)
 {
     char from[PATH_MAX], to[PATH_MAX];
@@ -2028,21 +2256,8 @@ int16_t tb_PBCatMove(gaddr pb, bool async)
                   rd32(pb + 28) /* ioNewName */, true, to, sizeof to);
     if (err)
         return err;
-    if (!is_dir(to))
-        return badMovErr;
-    const char *base = strrchr(from, '/');
     char dest[PATH_MAX];
-    snprintf(dest, sizeof dest, "%s%s", strcmp(to, "/") ? to : "", base);
-    if (!writable(from) || !writable(dest) || !strcmp(from, "/"))
-        return wPrErr;
-    if (rename(from, dest) != 0)
-        return ioErrF;
-    char *s1 = appledouble_sidecar_path(from), *s2 = appledouble_sidecar_path(dest);
-    rename(s1, s2);
-    free(s1);
-    free(s2);
-    as_moved(from, dest);
-    return noErr;
+    return move_host(from, to, dest, sizeof dest);
 }
 
 /* Move a file or folder into the folder the destination FSSpec names. */
@@ -2123,26 +2338,25 @@ int16_t tb_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id, gaddr file_name, gaddr 
     int16_t err = resolve(vRefNum, dir_id, file_name, true, path, sizeof path);
     if (err)
         return err;
-    char parent[PATH_MAX];
-    snprintf(parent, sizeof parent, "%s", path);
-    char *slash = strrchr(parent, '/');
-    bool at_root = !strcmp(path, "/");
-    if (slash && !at_root)
-        *slash = 0;
+    fm_spec_of_path(path, spec);
+    return exists(path) ? noErr : fnfErrF;
+}
+
+/* The FSSpec of a host path: a volume's root is its name in the root's
+ * parent (1); the Host folder is in the root. */
+void fm_spec_of_path(const char *path, gaddr spec)
+{
     mount *pm = mount_of_path(path);
-    if (pm && !strcmp(pm->root, path)) { /* a mounted volume's root */
-        wr16(spec + FSSpec_vRefNum_off, (uint16_t)pm->vref);
+    if (!strcmp(path, root_path) || (pm && !strcmp(pm->root, path))) {
+        wr16(spec + FSSpec_vRefNum_off, (uint16_t)(pm ? pm->vref : VREF));
         wr32(spec + FSSpec_parID_off, 1);
-        gput(spec + FSSpec_name_off, pm->name, (uint32_t)pm->name[0] + 1);
-        return noErr;
+        const char *n = pm ? pm->name : vol_name;
+        gput(spec + FSSpec_name_off, n, (uint32_t)(uint8_t)n[0] + 1);
+        return;
     }
     wr16(spec + FSSpec_vRefNum_off, (uint16_t)vref_of_path(path));
-    wr32(spec + FSSpec_parID_off, at_root ? 1 : (uint32_t)out_id(dir_id_for(rel_of(parent))));
-    if (at_root)
-        gput(spec + FSSpec_name_off, vol_name, (uint32_t)vol_name[0] + 1);
-    else
-        put_name(spec + FSSpec_name_off, path);
-    return exists(path) ? noErr : fnfErrF;
+    wr32(spec + FSSpec_parID_off, (uint32_t)out_id(parent_id_of(path)));
+    put_name(spec + FSSpec_name_off, path);
 }
 
 /* A parameter block for an FSSpec (in the system heap scratch area). */
@@ -2233,6 +2447,15 @@ int16_t tb_FSpExchangeFiles(gaddr src, gaddr dst)
         err = pb_path(spec_pb(dst), true, b, sizeof b);
     if (err)
         return err;
+    return fm_exchange(a, b);
+}
+
+int16_t fm_exchange(const char *a, const char *b)
+{
+    if (is_dir(a) || is_dir(b))
+        return -1302; /* notAFileErr */
+    if (!writable(a) || !writable(b))
+        return wPrErr;
     mac_file fa, fb;
     char msg[256];
     if (!appledouble_read(a, &fa, msg, sizeof msg))
@@ -2494,19 +2717,20 @@ static const struct {
     { "\xC4" "scr", "Scripts" }, /* 'ƒscr' */
 };
 
-int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, gaddr foundVRefNum,
-                      gaddr foundDirID)
+/* A folder type's host folder; the standard folders always exist, as on
+ * a working System, so they are made when missing. */
+int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
 {
     char path[PATH_MAX];
     bool found = false;
-    if ((uint32_t)folderType == 0x6465736B /* 'desk' */) {
+    if (type == 0x6465736B /* 'desk' */) {
         snprintf(path, sizeof path, "%s/Desktop Folder", disk_path());
         found = true;
     }
     for (size_t i = 0; i < sizeof folders / sizeof folders[0] && !found; i++) {
         const uint8_t *t = (const uint8_t *)folders[i].type;
         uint32_t code = (uint32_t)t[0] << 24 | (uint32_t)t[1] << 16 | (uint32_t)t[2] << 8 | t[3];
-        if (code != (uint32_t)folderType)
+        if (code != type)
             continue;
         if (folders[i].name)
             snprintf(path, sizeof path, "%s/%s", system_folder_path(), folders[i].name);
@@ -2516,12 +2740,18 @@ int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, 
     }
     if (!found)
         return fnfErrF;
-    /* The standard folders always exist, as on a working System. */
     if (!is_dir(path) && !make_dirs(path))
         return fnfErrF;
+    return realpath(path, out) && strlen(out) < outsize ? noErr : fnfErrF;
+}
+
+int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, gaddr foundVRefNum,
+                      gaddr foundDirID)
+{
     char full[PATH_MAX];
-    if (!realpath(path, full))
-        return fnfErrF;
+    int16_t err = fm_find_folder((uint32_t)folderType, createFolder, full, sizeof full);
+    if (err)
+        return err;
     if (foundVRefNum)
         wr16(foundVRefNum, (uint16_t)VREF);
     if (foundDirID)
@@ -3475,3 +3705,281 @@ bool fm_open_apple_menu_item(const uint8_t *name, int n)
 /* The host folder of the System Folder (for the Code Fragment Manager's
  * search of its Extensions). */
 const char *fm_system_folder_host(void) { return system_folder_path(); }
+
+/* ---------------------------------------------------------------------- */
+/* The host side of the HFS Plus calls (hfsplus.c) */
+
+int32_t fm_node_of_path(const char *host) { return dir_id_for(rel_of(host)); }
+bool fm_path_of_node(int32_t node, char *out, size_t outsize) { return host_of_dir(node, out, outsize); }
+int16_t fm_vref_of_path(const char *host) { return vref_of_path(host); }
+bool fm_is_dir(const char *host) { return is_dir(host); }
+bool fm_visible(const char *host) { return visible(host); }
+bool fm_writable(const char *host) { return writable(host); }
+
+bool fm_is_volume_root(const char *host)
+{
+    mount *m = mount_of_path(host);
+    return !strcmp(host, root_path) || (m && !strcmp(m->root, host));
+}
+
+uint32_t fm_cat_id(const char *host)
+{
+    int32_t node = dir_id_for(rel_of(host));
+    return is_dir(host) ? (uint32_t)out_id(node) : (uint32_t)node + 0x10000;
+}
+
+uint32_t fm_parent_cat_id(const char *host)
+{
+    return fm_is_volume_root(host) ? 1 : (uint32_t)out_id(parent_id_of(host));
+}
+
+int16_t fm_resolve(int16_t vref, int32_t dirid, gaddr name, char *out, size_t outsize)
+{
+    return resolve(vref, dirid, name, true, out, outsize);
+}
+
+void fm_display_name(const char *host, char *out, size_t outsize)
+{
+    mount *m = mount_of_path(host);
+    if (!strcmp(host, root_path) || (m && !strcmp(m->root, host))) {
+        const char *n = m ? m->name : vol_name;
+        macroman_to_utf8((const uint8_t *)n + 1, (uint8_t)n[0], out, outsize);
+    } else if (!strcmp(host, "/")) {
+        snprintf(out, outsize, "%s", host_folder);
+    } else {
+        const char *base = strrchr(host, '/');
+        snprintf(out, outsize, "%s", base ? base + 1 : host);
+    }
+}
+
+int fm_list_dir(const char *dir, char ***paths)
+{
+    char **names;
+    int count = list_entries(dir, false, &names);
+    bool root = !strcmp(dir, root_path);
+    for (int i = 0; i < count; i++) {
+        char full[PATH_MAX];
+        if (root && !strcmp(names[i], host_folder) && ngrants)
+            snprintf(full, sizeof full, "/");
+        else
+            snprintf(full, sizeof full, "%s/%s", strcmp(dir, "/") ? dir : "", names[i]);
+        free(names[i]);
+        names[i] = strdup(full);
+    }
+    *paths = names;
+    return count;
+}
+
+void fm_child_path(const char *dir, const char *name, char *out, size_t outsize)
+{
+    if (!strcmp(dir, root_path) && ngrants && !strcasecmp(name, host_folder)) {
+        snprintf(out, outsize, "/");
+        return;
+    }
+    /* The entry's own spelling, so that one object has one node. */
+    snprintf(out, outsize, "%s/%s", strcmp(dir, "/") ? dir : "", name);
+    as_ensure_dir(dir);
+    struct stat st;
+    if (lstat(out, &st) == 0) {
+        char n[NAME_MAX * 3 + 1];
+        snprintf(n, sizeof n, "%s", name);
+        disk_name(out, n, sizeof n);
+        snprintf(out, outsize, "%s/%s", strcmp(dir, "/") ? dir : "", n);
+        return;
+    }
+    if (exists(out))
+        return; /* only a sidecar */
+    DIR *d = opendir(dir);
+    struct dirent *e;
+    while (d && (e = readdir(d))) {
+        const char *n = entry_name(dir, e->d_name);
+        if (n && !strcasecmp(n, name)) {
+            snprintf(out, outsize, "%s/%s", strcmp(dir, "/") ? dir : "", n);
+            break;
+        }
+    }
+    if (d)
+        closedir(d);
+}
+
+int16_t fm_create_file(const char *host) { return create_file(host); }
+
+int16_t fm_create_dir(const char *host)
+{
+    if (exists(host))
+        return dupFNErr;
+    if (!writable(host))
+        return wPrErr;
+    if (mkdir(host, 0755) != 0)
+        return ioErrF;
+    as_dir_created(host);
+    return noErr;
+}
+
+int16_t fm_delete(const char *host) { return delete_path(host); }
+int16_t fm_rename(const char *from, const char *to) { return rename_host(from, to); }
+int16_t fm_move(const char *from, const char *dir, char *dest, size_t destsize)
+{
+    return move_host(from, dir, dest, destsize);
+}
+
+int16_t fm_set_info(const char *host, const uint8_t *finfo, const uint8_t *fxinfo, uint32_t created,
+                    uint32_t modified)
+{
+    return set_file_info(host, finfo, fxinfo, created ? &created : NULL, modified ? &modified : NULL);
+}
+
+int16_t fm_open_fork(const char *host, bool rsrc, uint8_t perm, int16_t *refnum)
+{
+    return open_path(host, rsrc, perm, refnum);
+}
+
+int16_t fm_flush_fork(int16_t refnum)
+{
+    fcb *f = fcb_for(refnum);
+    if (f)
+        return save_fork(f);
+    const uint8_t *data;
+    uint32_t len;
+    return rm_fork_of(refnum, &data, &len) ? noErr : rfNumErr;
+}
+
+bool fm_fork_state(int16_t refnum, char *path, size_t pathsize, bool *rsrc, bool *write, uint32_t *pos,
+                   uint32_t *len)
+{
+    fcb *f = fcb_readable(refnum);
+    if (!f)
+        return false;
+    if (path && f->path[0])
+        snprintf(path, pathsize, "%s", f->path);
+    else if (path && !rm_host_path(refnum, path, pathsize))
+        path[0] = 0;
+    *rsrc = f->rsrc;
+    *write = f->write;
+    *pos = f->pos;
+    *len = f->len;
+    return true;
+}
+
+/* A position from a mode and offset, or -1 if before the start. */
+static int64_t fork_position(const fcb *f, uint16_t mode, int64_t off)
+{
+    int64_t base = (mode & 3) == fsFromStart ? 0 : (mode & 3) == fsFromLEOF ? (int64_t)f->len : (int64_t)f->pos;
+    int64_t pos = base + off;
+    return pos < 0 ? -1 : pos;
+}
+
+int16_t fm_fork_io(int16_t refnum, bool write, uint16_t mode, int64_t off, uint32_t count, gaddr buf,
+                   uint32_t *actual)
+{
+    *actual = 0;
+    fcb *f = write ? fcb_for(refnum) : fcb_readable(refnum);
+    if (!f)
+        return rfNumErr;
+    if (write && !f->write)
+        return wrPermErr;
+    int64_t pos = fork_position(f, mode, (mode & 3) == fsAtMark ? 0 : off);
+    if (pos < 0)
+        return posErr;
+    if (!write) {
+        if (pos > f->len) {
+            f->pos = f->len;
+            fcb_sync(refnum);
+            return eofErr;
+        }
+        uint32_t n = f->len - (uint32_t)pos < count ? f->len - (uint32_t)pos : count;
+        gput(buf, f->buf + pos, n);
+        f->pos = (uint32_t)pos + n;
+        *actual = n;
+        fcb_sync(refnum);
+        return n < count ? eofErr : noErr;
+    }
+    /* Writing past the end extends the fork, the gap zeros. */
+    if (pos + count > 0xFFFFFFF0u || !reserve(f, (uint32_t)pos + count))
+        return dskFulErr;
+    if (pos > f->len)
+        memset(f->buf + f->len, 0, (size_t)(pos - f->len));
+    gget(f->buf + pos, buf, count);
+    f->pos = (uint32_t)pos + count;
+    if (f->pos > f->len)
+        f->len = f->pos;
+    f->dirty = any_dirty = true;
+    *actual = count;
+    fcb_sync(refnum);
+    return noErr;
+}
+
+int16_t fm_fork_seek(int16_t refnum, uint16_t mode, int64_t off)
+{
+    fcb *f = fcb_readable(refnum);
+    if (!f)
+        return rfNumErr;
+    int64_t pos = fork_position(f, mode, off);
+    if (pos < 0)
+        return posErr;
+    int16_t err = noErr;
+    if (pos > f->len) {
+        pos = f->len;
+        err = eofErr;
+    }
+    f->pos = (uint32_t)pos;
+    fcb_sync(refnum);
+    return err;
+}
+
+int16_t fm_fork_set_eof(int16_t refnum, uint16_t mode, int64_t off)
+{
+    fcb *f = fcb_for(refnum);
+    if (!f)
+        return fcb_readable(refnum) ? wrPermErr : rfNumErr;
+    if (!f->write)
+        return wrPermErr;
+    int64_t n = fork_position(f, mode, off);
+    if (n < 0)
+        return posErr;
+    if (n > 0xFFFFFFF0u || !reserve(f, (uint32_t)n))
+        return dskFulErr;
+    if (n > f->len)
+        memset(f->buf + f->len, 0, (size_t)(n - f->len));
+    f->len = (uint32_t)n;
+    if (f->pos > f->len)
+        f->pos = f->len;
+    f->dirty = any_dirty = true;
+    fcb_sync(refnum);
+    return noErr;
+}
+
+int16_t fm_next_fork(int16_t after)
+{
+    int start = after >= 2 ? (after - 2) / FCB_LEN + 1 : 0;
+    for (int i = start; i < FCB_SLOTS; i++) {
+        int16_t rn = (int16_t)(2 + i * FCB_LEN);
+        const uint8_t *data;
+        uint32_t len;
+        if (fcb_for(rn) || rm_fork_of(rn, &data, &len))
+            return rn;
+    }
+    return 0;
+}
+
+bool fm_volume(uint32_t index, int16_t vref, int16_t *vref_out, char *root, size_t rootsize, uint8_t name[32],
+               int16_t *drive, int16_t *driver)
+{
+    mount *m;
+    if (index > 0x7FFF || !vinfo_volume((int16_t)index, vref, 0, &m))
+        return false;
+    *vref_out = m ? m->vref : VREF;
+    snprintf(root, rootsize, "%s", m ? m->root : root_path);
+    const char *n = m ? m->name : vol_name;
+    memcpy(name, n, (size_t)(uint8_t)n[0] + 1);
+    *drive = (int16_t)(m ? 2 + (m - mounts) : 1);
+    *driver = (int16_t)(m ? -1 - CD_UNIT : -5);
+    return true;
+}
+
+void fm_flush_volume(void)
+{
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used)
+            save_fork(&fcbs[i]);
+}

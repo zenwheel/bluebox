@@ -65,6 +65,10 @@ extern const unsigned ctb_export_count;
  * TextEncodingConverter (tec.c). */
 extern const ppc_export tec_exports[];
 extern const unsigned tec_export_count;
+
+/* The HFS Plus calls' hand-written exports (hfsplus.c). */
+extern const ppc_export hfs_exports[];
+extern const unsigned hfs_export_count;
 /* Mixed Mode (mixedmode.c). */
 extern const ppc_export mm_exports[];
 extern const unsigned mm_export_count;

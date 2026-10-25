@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "filemgr_internal.h"
 #include "forks.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -1538,3 +1539,29 @@ void tb_FSpCreateResFile(gaddr spec, int32_t creator, int32_t file_type, int16_t
 static bool scan_override;
 void tb_SetScanOverride(int8_t scan) { scan_override = scan != 0; }
 int8_t tb_GetScanOverride(void) { return scan_override; }
+
+/* ---------------------------------------------------------------------- */
+/* By host path, for the FSRef calls (hfsplus.c) */
+
+int16_t rm_open_path(const char *path, int8_t perm) { return open_path_perm(path, perm); }
+
+void rm_create_path(const char *path, uint32_t type, uint32_t creator) { create_res_file(path, type, creator, true); }
+
+/* Whether a host file's resource fork is open, its refnum, and whether its
+ * map is in the resource chain (from TopMapHndl). */
+bool rm_path_open(const char *path, bool *in_chain, int16_t *refnum)
+{
+    for (int i = 0; i < MAX_RESFILES; i++) {
+        if (!files[i].used || !files[i].path || strcmp(files[i].path, path))
+            continue;
+        if (refnum)
+            *refnum = files[i].refnum;
+        if (in_chain) {
+            *in_chain = false;
+            for (gaddr h = rd32(LM_TopMapHndl); h && !*in_chain; h = map_next(h))
+                *in_chain = h == files[i].maph;
+        }
+        return true;
+    }
+    return false;
+}
