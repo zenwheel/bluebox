@@ -26,6 +26,21 @@ func ilCall16(_ name: String, _ args: [UInt32]) -> Int16 { Int16(truncatingIfNee
 func rd64(_ p: UInt32) -> UInt64 { UInt64(rd32(p)) << 32 | UInt64(rd32(p + 4)) }
 
 extension BlueBox {
+    /// BitShift as QuickDraw's: a negative count shifts right by its
+    /// magnitude (Extension Overload takes a name's length with -24), and
+    /// LSL/LSR's count modulo 64 shifts 32 to 63 bits out altogether.
+    @Suite struct BitShiftCalls {
+        @Test func negativeCountsShiftRight() {
+            #expect(tb_BitShift(0x0644_1100, -24) == 0x06)
+            #expect(tb_BitShift(0x0644_1100, 8) == 0x4411_0000)
+            #expect(tb_BitShift(Int32(bitPattern: 0x8000_0000), -31) == 1) // logical
+            #expect(tb_BitShift(0x1234, 32) == 0)
+            #expect(tb_BitShift(0x1234, -40) == 0)
+            #expect(tb_BitShift(0x1234, 64) == 0x1234)
+            #expect(tb_BitShift(0x1234, 0) == 0x1234)
+        }
+    }
+
     /// Driver Services' time base, atomic operations and memory calls, and
     /// the debugger utility trap, as InterfaceLib exports them.
     @Suite struct DriverServicesCalls {

@@ -16,11 +16,17 @@ int32_t tb_BitOr(int32_t a, int32_t b) { return a | b; }
 int32_t tb_BitXor(int32_t a, int32_t b) { return a ^ b; }
 int32_t tb_BitNot(int32_t a) { return ~a; }
 
+/* As QuickDraw's: a positive count shifts left, a negative one right
+ * (logically) by its magnitude, with the 68k's LSL and LSR, which take the
+ * count modulo 64.  Extension Overload shifts a resource's name length
+ * down by -24 to copy it; taken as 8 to the left, the length ran to a
+ * gigabyte. */
 int32_t tb_BitShift(int32_t a, int16_t n)
 {
-    n &= 31; /* only the count modulo 32 matters; positive shifts left */
-    int16_t s = (int16_t)(n >= 16 ? n - 32 : n);
-    return s >= 0 ? (int32_t)((uint32_t)a << s) : (int32_t)((uint32_t)a >> -s);
+    uint32_t c = (uint32_t)(uint16_t)(n < 0 ? -n : n) & 63;
+    if (c >= 32)
+        return 0;
+    return n < 0 ? (int32_t)((uint32_t)a >> c) : (int32_t)((uint32_t)a << c);
 }
 
 int16_t tb_HiWord(int32_t a) { return (int16_t)((uint32_t)a >> 16); }
