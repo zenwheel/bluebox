@@ -850,7 +850,8 @@ void fm_fcb_eof(int16_t rn, uint32_t eof)
     }
 }
 
-void fm_reset(void) { fcb_table = the_vcb = 0; }
+static gaddr spec_pb_block;
+void fm_reset(void) { fcb_table = the_vcb = spec_pb_block = 0; }
 
 static void fcb_sync(int16_t rn)
 {
@@ -2148,9 +2149,9 @@ int16_t tb_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id, gaddr file_name, gaddr 
 /* A parameter block for an FSSpec (in the system heap scratch area). */
 static gaddr spec_pb(gaddr spec)
 {
-    static gaddr pb;
+    gaddr pb = spec_pb_block;
     if (!pb)
-        pb = tb_NewPtr(HFileInfo_SIZEOF, true, true);
+        pb = spec_pb_block = tb_NewPtr(HFileInfo_SIZEOF, true, true);
     gmemset(pb, 0, HFileInfo_SIZEOF);
     wr32(pb + IOParam_ioNamePtr_off, spec + FSSpec_name_off);
     wr16(pb + IOParam_ioVRefNum_off, rd16(spec + FSSpec_vRefNum_off));
