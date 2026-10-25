@@ -753,6 +753,43 @@ extension BlueBox {
     }
 }
 
+extension BlueBox {
+    /// The Color Picker: PickColor through the host's colour panel.
+    @Suite struct ColorPickerCalls {
+        init() { bootMachine() }
+
+        @Test func pickColor() {
+            let info = tb_NewPtr(312, false, true)
+            wr16(info + 4, 0x1111); wr16(info + 6, 0x2222); wr16(info + 8, 0x3333)
+            guestPString("Pick one", at: info + 42)
+            machine_set_color_picker({ prompt, inRGB, out, _ in
+                guard let prompt, let inRGB, let out else { return false }
+                if String(cString: prompt) != "Pick one" || inRGB[0] != 0x1111 { return false }
+                out[0] = 0xFFFF; out[1] = 0x8000; out[2] = 0
+                return true
+            }, nil)
+            #expect(ilCall16("PickColor", [info]) == 0)
+            #expect(rd16(info + 4) == 0xFFFF && rd16(info + 6) == 0x8000 && rd16(info + 8) == 0 && rd8(info + 310) == 1)
+            // Cancelled: the colour stays, none chosen, no error.
+            machine_set_color_picker({ _, _, _, _ in false }, nil)
+            #expect(ilCall16("NPickColor", [info]) == 0)
+            #expect(rd16(info + 4) == 0xFFFF && rd8(info + 310) == 0)
+            machine_set_color_picker(nil, nil)
+            // 68k: Pack12 selector $0213.
+            let reason = run68k([
+                0x4267,                                // CLR.W -(SP)
+                0x2F3C, hiWord(info), loWord(info),    // MOVE.L #info,-(SP)
+                0x3F3C, 0x0213, 0xA82E,                // _Pack12 PickColor
+                0x3E1F, 0xA9F4,                        // MOVE.W (SP)+,D7
+            ])
+            #expect(reason == "ExitToShell" && g_cpu!.pointee.d.7 & 0xFFFF == 0 && rd8(info + 310) == 0)
+            let p = tb_NewPtr(4, false, true)
+            #expect(ilCall16("CreateColorDialog", [info, p]) == -4004)
+            #expect(ilCall16("GetPickerColor", [0, 0, p]) == -50)
+        }
+    }
+}
+
 nonisolated(unsafe) var avlDisposed: [UInt32] = []
 nonisolated(unsafe) var avlWalked: [(key: UInt32, level: UInt32)] = []
 

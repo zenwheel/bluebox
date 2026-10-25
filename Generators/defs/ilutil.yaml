@@ -1114,3 +1114,22 @@
         type: uint32_t
     dispatcher: DisplayDispatch
     selector: 0x04E8
+
+# Color Picker 2.0's PickColor and 2.1's NPickColor (Pack12).
+- function:
+    name: PickColor
+    return: OSErr
+    args:
+      - name: theColorInfo
+        type: void*
+    dispatcher: Pack12
+    selector: 0x0213
+
+- function:
+    name: NPickColor
+    return: OSErr
+    args:
+      - name: theColorInfo
+        type: void*
+    dispatcher: Pack12
+    selector: 0x0227

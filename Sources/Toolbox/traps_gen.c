@@ -13097,6 +13097,16 @@ static void glue_NMRemove(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_NPickColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theColorInfo = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NPickColor(a_theColorInfo);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NSetPalette(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15083,6 +15093,16 @@ static void glue_PicComment(cpu68k *c, uint16_t trapword)
     int16_t a_size = (int16_t)cpu_pop16(c);
     int16_t a_kind = (int16_t)cpu_pop16(c);
     tb_PicComment(a_kind, a_size, a_hand);
+    cpu_push32(c, ret);
+}
+
+static void glue_PickColor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theColorInfo = (gaddr)cpu_pop32(c);
+    int16_t r = tb_PickColor(a_theColorInfo);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -23069,6 +23089,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA82E, (int32_t)0x7u, "HSV2RGB", CONV_STACK, 8, 0, glue_HSV2RGB},
     {0xA82E, (int32_t)0x8u, "RGB2HSV", CONV_STACK, 8, 0, glue_RGB2HSV},
     {0xA82E, (int32_t)0x9u, "GetColor", CONV_STACK, 16, 2, glue_GetColor},
+    {0xA82E, (int32_t)0x213u, "PickColor", CONV_STACK, 4, 2, glue_PickColor},
+    {0xA82E, (int32_t)0x227u, "NPickColor", CONV_STACK, 4, 2, glue_NPickColor},
     {0xA830, (int32_t)0x2u, "HMRemoveBalloon", CONV_STACK, 0, 2, glue_HMRemoveBalloon},
     {0xA830, (int32_t)0x3u, "HMGetBalloons", CONV_STACK, 0, 2, glue_HMGetBalloons},
     {0xA830, (int32_t)0x7u, "HMIsBalloon", CONV_STACK, 0, 2, glue_HMIsBalloon},

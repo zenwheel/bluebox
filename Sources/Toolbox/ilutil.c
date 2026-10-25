@@ -77,6 +77,14 @@ static void lm_set_TheCursor(ppc_cpu *c)
 /* DMDisposePortComponent: DMDisposeAVComponent's first name. */
 static void il_DMDisposePortComponent(ppc_cpu *c) { RETURN((int32_t)tb_DMDisposeAVComponent(R(0))); }
 
+/* Color Picker 2.0's pickers in dialogs of their own or the program's
+ * (CreateColorDialog ... DoPickerEvent): their records are not in the
+ * published interfaces we follow, so no picker is made
+ * (cantCreatePickerWindow), and calls on one find none (paramErr).
+ * PickColor, the whole dialog in one call, works (picker.c). */
+static void il_cantCreatePicker(ppc_cpu *c) { RETURN((int32_t)-4004); }
+static void il_noPicker(ppc_cpu *c) { RETURN((int32_t)paramErr); }
+
 /* GetEventQueue: the Event Manager's queue header, in low memory. */
 static void il_GetEventQueue(ppc_cpu *c) { RETURN(LM_EventQueue); }
 
@@ -87,6 +95,14 @@ static const ppc_export lm_exports[] = {
     LM(StackLowPoint), LM(UnitTableEntryCount), LM(WordRedraw), LM(MouseTemp), LM(RawMouseLocation),
     LM(TheCursor),
     { "GetEventQueue", il_GetEventQueue }, { "DMDisposePortComponent", il_DMDisposePortComponent },
+    { "CreateColorDialog", il_cantCreatePicker }, { "CreatePickerDialog", il_cantCreatePicker },
+    { "AddPickerToDialog", il_cantCreatePicker }, { "DisposeColorPicker", il_noPicker },
+    { "DoPickerDraw", il_noPicker }, { "DoPickerEdit", il_noPicker }, { "DoPickerEvent", il_noPicker },
+    { "ExtractPickerHelpItem", il_noPicker }, { "GetPickerColor", il_noPicker },
+    { "GetPickerEditMenuState", il_noPicker }, { "GetPickerOrigin", il_noPicker },
+    { "GetPickerProfile", il_noPicker }, { "GetPickerVisibility", il_noPicker }, { "SetPickerColor", il_noPicker },
+    { "SetPickerOrigin", il_noPicker }, { "SetPickerProfile", il_noPicker }, { "SetPickerPrompt", il_noPicker },
+    { "SetPickerVisibility", il_noPicker },
 };
 #undef LM
 static const unsigned lm_export_count = sizeof lm_exports / sizeof lm_exports[0];

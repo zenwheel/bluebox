@@ -24786,6 +24786,20 @@ static void ppcglue_DMResumeConfigure(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PickColor(ppc_cpu *c)
+{
+    gaddr a_theColorInfo = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PickColor(a_theColorInfo);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NPickColor(ppc_cpu *c)
+{
+    gaddr a_theColorInfo = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NPickColor(a_theColorInfo);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -38696,6 +38710,7 @@ const ppc_export ppc_exports[] = {
     {"Munger", ppcglue_Munger},
     {"NMInstall", ppcglue_NMInstall},
     {"NMRemove", ppcglue_NMRemove},
+    {"NPickColor", ppcglue_NPickColor},
     {"NSetPalette", ppcglue_NSetPalette},
     {"NavAskDiscardChanges", ppcglue_NavAskDiscardChanges},
     {"NavAskSaveChanges", ppcglue_NavAskSaveChanges},
@@ -39194,6 +39209,7 @@ const ppc_export ppc_exports[] = {
     {"PenPixPat", ppcglue_PenPixPat},
     {"PenSize", ppcglue_PenSize},
     {"PicComment", ppcglue_PicComment},
+    {"PickColor", ppcglue_PickColor},
     {"PinRect", ppcglue_PinRect},
     {"PixMap32Bit", ppcglue_PixMap32Bit},
     {"PixPatChanged", ppcglue_PixPatChanged},
