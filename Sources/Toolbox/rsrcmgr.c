@@ -21,6 +21,8 @@
 
 #define MAX_RESFILES 64
 
+enum { rfNumErr = -51, wrPermErr = -61, dskFulErr = -34 };
+
 typedef struct {
     bool used;
     int16_t refnum;
@@ -29,6 +31,7 @@ typedef struct {
     uint32_t len;
     gaddr maph;       /* guest handle to the map */
     bool read_only;
+    bool rd_perm;     /* opened with fsRdPerm: its fork isn't written through the File Manager */
 } resfile;
 
 /* A compressed resource whose decompressor is not built in: run the
@@ -841,6 +844,7 @@ static int16_t open_fork(const char *path, const uint8_t *fork, uint32_t len, bo
     f->len = len;
     f->maph = maph;
     f->read_only = read_only;
+    f->rd_perm = false;
     wr16(m + 20, (uint16_t)f->refnum);
     if (path)
         fm_fcb_record(f->refnum, path, true, !read_only, len, 0);
@@ -957,6 +961,8 @@ static int16_t open_path_perm(const char *path, int perm)
     }
     int16_t rn = rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, false);
     mac_file_free(&mf);
+    if (rn >= 0)
+        file_for(rn)->rd_perm = perm == 1;
     if (rn < 0 && !rd16(LM_ResErr))
         set_res_err(-39); /* eofErr: no resource fork */
     return rn;
@@ -1233,6 +1239,54 @@ static bool write_host_fork(const char *path, const uint8_t *fork, uint32_t len)
     if (ok)
         as_file_changed(path); /* to the server, on an AppleShare volume */
     return ok;
+}
+
+/* A program copying a resource fork with FSRead and FSWrite through the
+ * reference numbers OpenResFile gave (Starry Night Backyard's preferences
+ * from its "Factory Defaults"), as a Mac's File Manager let it: the bytes
+ * go to the fork and the disk; the map in memory stays as it was, as on a
+ * Mac, and is written over them only if a resource is then changed. */
+static int16_t replace_fork(resfile *f, uint32_t len, uint32_t pos, const uint8_t *src, uint32_t n)
+{
+    uint8_t *fork = malloc(len ? len : 1);
+    if (!fork)
+        return memFullErr;
+    uint32_t keep = f->len < len ? f->len : len;
+    memcpy(fork, f->fork, keep);
+    memset(fork + keep, 0, len - keep);
+    if (n)
+        memcpy(fork + pos, src, n);
+    free(f->fork);
+    f->fork = fork;
+    f->len = len;
+    fm_fcb_eof(f->refnum, len);
+    return f->path && !write_host_fork(f->path, fork, len) ? ioErr : noErr;
+}
+
+static resfile *writable_fork(int16_t rn, int16_t *err)
+{
+    resfile *f = file_for(rn);
+    *err = !f || !f->fork ? rfNumErr : f->read_only || f->rd_perm ? wrPermErr : noErr;
+    return *err ? NULL : f;
+}
+
+int16_t rm_fork_write(int16_t rn, uint32_t pos, const uint8_t *src, uint32_t n)
+{
+    int16_t err;
+    resfile *f = writable_fork(rn, &err);
+    if (!f)
+        return err;
+    if (pos > 0xFFFFFFF0u - n)
+        return dskFulErr;
+    uint32_t end = pos + n;
+    return replace_fork(f, end > f->len ? end : f->len, pos, src, n);
+}
+
+int16_t rm_fork_set_eof(int16_t rn, uint32_t len)
+{
+    int16_t err;
+    resfile *f = writable_fork(rn, &err);
+    return f ? replace_fork(f, len, 0, NULL, 0) : err;
 }
 
 static int16_t update_file(resfile *f)

@@ -633,6 +633,10 @@ bool cglue_check(char *missing, size_t size);
 /* An open resource file's fork, by its reference number (rsrcmgr.c). */
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len);
 bool rm_host_path(int16_t rn, char *out, size_t outsize);
+/* The File Manager writing a resource file's fork by its reference number:
+ * the bytes from pos (zeros up to it past the end), or a new length. */
+int16_t rm_fork_write(int16_t rn, uint32_t pos, const uint8_t *src, uint32_t n);
+int16_t rm_fork_set_eof(int16_t rn, uint32_t len);
 bool gestalt_exists(uint32_t selector);
 void gestalt_delete(uint32_t selector);
 void wm_hide_menu_bar(bool hide);

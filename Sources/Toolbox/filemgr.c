@@ -259,6 +259,35 @@ static fcb *fcb_readable(int16_t rn)
     return f;
 }
 
+/* Writing through such a number (a fork copied in by FSWrite): the
+ * Resource Manager's fork takes the bytes, unless it was opened read-only,
+ * and the view follows it, its mark after them. */
+static int16_t rsrc_view_write(int16_t rn, fcb *f, uint32_t pos, gaddr buf, uint32_t n, bool eof)
+{
+    int16_t err;
+    if (eof) {
+        err = rm_fork_set_eof(rn, pos);
+    } else {
+        uint8_t *tmp = malloc(n ? n : 1);
+        if (!tmp)
+            return memFullErr;
+        gget(tmp, buf, n);
+        err = rm_fork_write(rn, pos, tmp, n);
+        free(tmp);
+    }
+    const uint8_t *data;
+    uint32_t len;
+    if (err || !rm_fork_of(rn, &data, &len))
+        return err;
+    for (int i = 0; i < 8; i++)
+        if (rsrc_views[i].rn == rn)
+            rsrc_views[i].data = data;
+    f->buf = (uint8_t *)data;
+    f->len = f->cap = len;
+    f->pos = eof ? (f->pos > len ? len : f->pos) : pos + n;
+    return noErr;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Names and paths */
 
@@ -1422,17 +1451,26 @@ static bool reserve(fcb *f, uint32_t need)
 
 static int16_t pb_write(gaddr pb, bool async)
 {
-    fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    int16_t rn = (int16_t)rd16(pb + IOParam_ioRefNum_off);
+    fcb *f = fcb_for(rn);
+    bool view = !f && (f = fcb_readable(rn)) != NULL;
     wr32(pb + IOParam_ioActCount_off, 0);
     if (!f)
         return rfNumErr;
-    if (!f->write)
+    if (!f->write && !view)
         return wrPermErr;
     uint16_t mode = rd16(pb + IOParam_ioPosMode_off);
     int16_t err = set_mark(f, mode, (int32_t)rd32(pb + IOParam_ioPosOffset_off));
     if (err && err != eofErr)
         return err;
     uint32_t n = rd32(pb + IOParam_ioReqCount_off);
+    if (view) {
+        if ((err = rsrc_view_write(rn, f, f->pos, rd32(pb + IOParam_ioBuffer_off), n, false)))
+            return err;
+        wr32(pb + IOParam_ioActCount_off, n);
+        wr32(pb + IOParam_ioPosOffset_off, f->pos);
+        return noErr;
+    }
     if (!reserve(f, f->pos + n))
         return dskFulErr;
     gget(f->buf + f->pos, rd32(pb + IOParam_ioBuffer_off), n);
@@ -1456,12 +1494,15 @@ int16_t tb_PBGetEOF(gaddr pb, bool async)
 
 static int16_t pb_set_eof(gaddr pb, bool async)
 {
-    fcb *f = fcb_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    int16_t rn = (int16_t)rd16(pb + IOParam_ioRefNum_off);
+    fcb *f = fcb_for(rn);
+    uint32_t n = rd32(pb + IOParam_ioMisc_off);
+    if (!f && (f = fcb_readable(rn)) != NULL)
+        return rsrc_view_write(rn, f, n, 0, 0, true);
     if (!f)
         return rfNumErr;
     if (!f->write)
         return wrPermErr;
-    uint32_t n = rd32(pb + IOParam_ioMisc_off);
     if (!reserve(f, n))
         return dskFulErr;
     if (n > f->len)
@@ -3874,14 +3915,21 @@ int16_t fm_fork_io(int16_t refnum, bool write, uint16_t mode, int64_t off, uint3
                    uint32_t *actual)
 {
     *actual = 0;
-    fcb *f = write ? fcb_for(refnum) : fcb_readable(refnum);
+    fcb *f = fcb_for(refnum);
+    bool view = !f && (f = fcb_readable(refnum)) != NULL;
     if (!f)
         return rfNumErr;
-    if (write && !f->write)
+    if (write && !f->write && !view)
         return wrPermErr;
     int64_t pos = fork_position(f, mode, (mode & 3) == fsAtMark ? 0 : off);
     if (pos < 0)
         return posErr;
+    if (write && view) {
+        int16_t err = pos > 0xFFFFFFF0u ? dskFulErr : rsrc_view_write(refnum, f, (uint32_t)pos, buf, count, false);
+        if (!err)
+            *actual = count;
+        return err;
+    }
     if (!write) {
         if (pos > f->len) {
             f->pos = f->len;
@@ -3931,8 +3979,12 @@ int16_t fm_fork_seek(int16_t refnum, uint16_t mode, int64_t off)
 int16_t fm_fork_set_eof(int16_t refnum, uint16_t mode, int64_t off)
 {
     fcb *f = fcb_for(refnum);
+    if (!f && (f = fcb_readable(refnum)) != NULL) {
+        int64_t n = fork_position(f, mode, off);
+        return n < 0 ? posErr : n > 0xFFFFFFF0u ? dskFulErr : rsrc_view_write(refnum, f, (uint32_t)n, 0, 0, true);
+    }
     if (!f)
-        return fcb_readable(refnum) ? wrPermErr : rfNumErr;
+        return rfNumErr;
     if (!f->write)
         return wrPermErr;
     int64_t n = fork_position(f, mode, off);
