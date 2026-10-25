@@ -21,6 +21,7 @@
 #include "forks.h"
 #include "hostgl.h"
 #include "machine.h"
+#include "carbon_hi.h"
 #include "ppc_bridge.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -146,6 +147,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbon_export_count; i++)
         if (!strcmp(carbon_exports[i].name, name))
             return carbon_exports[i].fn;
+    void (*carbonhi)(ppc_cpu *) = carbonhi_export_fn(name); /* CarbonLib's drawing, windows and menus */
+    if (carbonhi)
+        return carbonhi;
     for (unsigned i = 0; i < snd_export_count; i++)
         if (!strcmp(snd_exports[i].name, name))
             return snd_exports[i].fn;

@@ -105,6 +105,15 @@ static void set_record(gaddr rd, int i, gaddr proc, uint32_t procinfo, int isa)
     wr32(rr + RR_PROC, proc);
 }
 
+/* A one-routine descriptor (CarbonLib's NewXxxUPP calls make these). */
+gaddr mm_new_descriptor(gaddr proc, uint32_t procinfo, int isa)
+{
+    gaddr rd = proc ? new_descriptor(1) : 0;
+    if (rd)
+        set_record(rd, 0, proc, procinfo, isa);
+    return rd;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Running PowerPC code from native code */
 

@@ -20793,6 +20793,40 @@ static void ppcglue_SetMenuExcludesMarkColumn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcpatched_StdOpcode(ppc_cpu *c)
+{
+    ppc_trap_begin();
+    ppc_trap_push(4, c->gpr[3]);
+    ppc_trap_push(4, c->gpr[4]);
+    ppc_trap_push(2, c->gpr[5]);
+    ppc_trap_push(2, c->gpr[6]);
+    ppc_trap((uint16_t)(0xABF8));
+    ppc_trap_end();
+    c->pc = c->lr;
+}
+
+static void ppcglue_StdOpcode(ppc_cpu *c)
+{
+    if (ppc_trap_patched(0xABF8)) {
+        ppcpatched_StdOpcode(c);
+        return;
+    }
+    gaddr a_fromRect = (gaddr)c->gpr[3];
+    gaddr a_toRect = (gaddr)c->gpr[4];
+    uint16_t a_opcode = (uint16_t)c->gpr[5];
+    int16_t a_version = (int16_t)c->gpr[6];
+    tb_StdOpcode(a_fromRect, a_toRect, a_opcode, a_version);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HiliteWindowFrameForDrag(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    int8_t a_hilited = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_HiliteWindowFrameForDrag(a_window, a_hilited);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -40092,6 +40126,7 @@ const ppc_export ppc_exports[] = {
     {"HiliteMenu", ppcglue_HiliteMenu},
     {"HiliteText", ppcglue_HiliteText},
     {"HiliteWindow", ppcglue_HiliteWindow},
+    {"HiliteWindowFrameForDrag", ppcglue_HiliteWindowFrameForDrag},
     {"HitTestDSequenceData", ppctrap_HitTestDSequenceData},
     {"HitTestThemeScrollBarArrows", ppcglue_HitTestThemeScrollBarArrows},
     {"HitTestThemeTrack", ppcglue_HitTestThemeTrack},
@@ -42122,6 +42157,7 @@ const ppc_export ppc_exports[] = {
     {"StdComment", ppcglue_StdComment},
     {"StdGetPic", ppcglue_StdGetPic},
     {"StdLine", ppcglue_StdLine},
+    {"StdOpcode", ppcglue_StdOpcode},
     {"StdOval", ppcglue_StdOval},
     {"StdPix", ppctrap_StdPix},
     {"StdPoly", ppcglue_StdPoly},

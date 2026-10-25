@@ -1106,6 +1106,7 @@ void tb_HiliteControl(gaddr c, int16_t state);
 void tb_HiliteMenu(int16_t mid);
 void tb_HiliteText(gaddr textbufp, int16_t firstoffset, int16_t secondoffset, gaddr offsets);
 void tb_HiliteWindow(gaddr w, int8_t flag);
+int32_t tb_HiliteWindowFrameForDrag(gaddr window, int8_t hilited);
 int8_t tb_HitTestThemeScrollBarArrows(gaddr bounds, uint8_t enableState, uint8_t pressState, int8_t horizontal, uint32_t pt, gaddr trackBounds, gaddr part);
 int8_t tb_HitTestThemeTrack(gaddr info, uint32_t pt, gaddr part);
 int16_t tb_HomeResFile(gaddr res);
@@ -2093,6 +2094,7 @@ void tb_StdBits(gaddr srcbmp, gaddr srcrp, gaddr dstrp, int16_t mode, gaddr mask
 void tb_StdComment(int16_t kind, int16_t size, gaddr hand);
 void tb_StdGetPic(gaddr dp, int16_t bc);
 void tb_StdLine(uint32_t p);
+void tb_StdOpcode(gaddr fromRect, gaddr toRect, uint16_t opcode, int16_t version);
 void tb_StdOval(int8_t v, gaddr rp);
 void tb_StdPoly(int8_t verb, gaddr ph);
 void tb_StdPutPic(gaddr sp, int16_t bc);

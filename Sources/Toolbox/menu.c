@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "carbon_hi.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
 
@@ -43,6 +44,7 @@ typedef struct {
     int16_t hier_id, font, glyph;
     uint8_t modifiers, icon_type;
     bool icon_disabled;
+    hi_item hi; /* CarbonLib's (carbon_menu.c) */
 } item_extra;
 
 typedef struct {
@@ -52,6 +54,7 @@ typedef struct {
     int16_t font;
     uint16_t size;
     bool exclude_mark;
+    hi_menu hi; /* CarbonLib's (carbon_menu.c) */
 } menu_extra;
 
 #define MAX_MENU_EXTRAS 128
@@ -105,6 +108,7 @@ static void extras_deleted(gaddr mh, int index)
     menu_extra *m = menu_extras(mh, false);
     if (!m || index > m->n)
         return;
+    hi_item_free(&m->items[index - 1].hi);
     memmove(m->items + index - 1, m->items + index, (size_t)(m->n - index) * sizeof *m->items);
     m->n--;
 }
@@ -113,6 +117,9 @@ static void extras_forget(gaddr mh)
 {
     menu_extra *m = menu_extras(mh, false);
     if (m) {
+        for (int i = 0; i < m->n; i++)
+            hi_item_free(&m->items[i].hi);
+        hi_menu_free(&m->hi);
         free(m->items);
         memset(m, 0, sizeof *m);
     }
@@ -120,10 +127,30 @@ static void extras_forget(gaddr mh)
 
 void menu_reset(void)
 {
-    for (int i = 0; i < MAX_MENU_EXTRAS; i++)
+    for (int i = 0; i < MAX_MENU_EXTRAS; i++) {
+        for (int k = 0; k < mextras[i].n; k++)
+            hi_item_free(&mextras[i].items[k].hi);
+        hi_menu_free(&mextras[i].hi);
         free(mextras[i].items);
+    }
     memset(mextras, 0, sizeof mextras);
     nhier = 0;
+}
+
+/* CarbonLib's fields of a menu and of an item (NULL when there's no
+ * such menu or item, or none yet and create is false). */
+hi_menu *menu_hi_menu(gaddr mh, bool create)
+{
+    menu_extra *m = mh && rd32(mh) ? menu_extras(mh, create) : NULL;
+    return m ? &m->hi : NULL;
+}
+
+hi_item *menu_hi_item(gaddr mh, int item, bool create)
+{
+    if (!mh || !rd32(mh) || item < 1 || item > tb_CountMItems(mh))
+        return NULL;
+    item_extra *e = item_extras(mh, item, create);
+    return e ? &e->hi : NULL;
 }
 
 /* An item's Mac OS 8 modifiers (kMenuShiftModifier ...), for the host's menus. */
@@ -257,7 +284,10 @@ gaddr tb_GetMenu(int16_t rid)
     gaddr p = rd32(h);
     /* The resource holds the MDEF's ID where the handle will go. */
     int16_t mdef = (int16_t)(MenuInfo_menuProc(p) & 0xFFFF);
-    gaddr mh = tb_GetResource((int32_t)fourcc("MDEF"), mdef);
+    /* (a definition CarbonLib's RegisterMenuDefinition registered first) */
+    gaddr mh = carbonmenu_registered_def(mdef);
+    if (!mh)
+        mh = tb_GetResource((int32_t)fourcc("MDEF"), mdef);
     if (!mh)
         mh = tb_GetResource((int32_t)fourcc("MDEF"), 0);
     MenuInfo_set_menuProc(rd32(h), mh);
@@ -1435,7 +1465,7 @@ int8_t tb_ProcessIsContextualMenuClient(gaddr inPSN) { return cm_client; }
 
 /* Mac OS 8: command IDs, modifiers, glyphs, icons and fonts of items */
 
-enum { menuItemNotFoundErr = -5622, menuNotFoundErr = -5623 };
+enum { menuItemNotFoundErr = -5622, menuNotFoundErr = -5620 };
 enum { kMenuShiftModifier = 1, kMenuOptionModifier = 2, kMenuControlModifier = 4, kMenuNoCommandModifier = 8 };
 
 static bool item_ok(gaddr mh, int16_t item) { return mh && rd32(mh) && item >= 1 && item <= tb_CountMItems(mh); }
@@ -1824,5 +1854,21 @@ bool menu_bar_item(int i, int n, char *text, size_t size, bool *enabled, bool *s
     text[k] = 0;
     *submenu = rd8(it + 1 + (gaddr)len + 1) == 0x1B;
     *enabled = item_enabled(mh, n) && !(len && rd8(it + 1) == '-');
+    return true;
+}
+
+/* A menu's title replaced (CarbonLib's SetMenuTitle). */
+bool menu_set_title(gaddr mh, gaddr title)
+{
+    if (!mh || !rd32(mh) || !title)
+        return false;
+    uint8_t buf[256];
+    uint32_t n = rd8(title) + 1u;
+    gget(buf, title, n);
+    uint32_t old = rd8(title_of(mh)) + 1u;
+    if (!menu_insert_bytes(mh, MenuInfo_menuData_off, buf, n))
+        return false;
+    menu_delete_bytes(mh, MenuInfo_menuData_off + n, old);
+    display_menus_changed();
     return true;
 }

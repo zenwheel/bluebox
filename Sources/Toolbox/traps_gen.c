@@ -165,6 +165,7 @@ const char *const tb_trap_names[1024] = {
     [0x026] = "InsertMenuItem",
     [0x027] = "HideDialogItem",
     [0x028] = "ShowDialogItem",
+    [0x029] = "WindowDragHiliteDispatch",
     [0x02D] = "Pack11",
     [0x02E] = "Pack12",
     [0x02F] = "Pack13",
@@ -749,6 +750,7 @@ const char *const tb_trap_names[1024] = {
     [0x3F1] = "GestaltValueDispatch",
     [0x3F2] = "ThreadDispatch",
     [0x3F6] = "CollectionDispatch",
+    [0x3F8] = "StdOpcode",
     [0x3FE] = "GXPrintingDispatch",
     [0x3FF] = "DebugStr",
 };
@@ -12031,6 +12033,17 @@ static void glue_HiliteWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_HiliteWindowFrameForDrag(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_hilited = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int32_t r = tb_HiliteWindowFrameForDrag(a_window, a_hilited);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_HitTestThemeScrollBarArrows(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -21006,6 +21019,18 @@ static void glue_StdLine(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_StdOpcode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_version = (int16_t)cpu_pop16(c);
+    uint16_t a_opcode = (uint16_t)cpu_pop16(c);
+    gaddr a_toRect = (gaddr)cpu_pop32(c);
+    gaddr a_fromRect = (gaddr)cpu_pop32(c);
+    tb_StdOpcode(a_fromRect, a_toRect, a_opcode, a_version);
+    cpu_push32(c, ret);
+}
+
 static void glue_StdOval(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -23403,6 +23428,7 @@ const trap_sig trap_sigs[] = {
     {0xAAA0, -1, "Palette2CTab", CONV_STACK, 8, 0, glue_Palette2CTab},
     {0xAAA1, -1, "CopyPalette", CONV_STACK, 14, 0, glue_CopyPalette},
     {0xABCA, -1, "DeviceLoop", CONV_STACK, 16, 0, glue_DeviceLoop},
+    {0xABF8, -1, "StdOpcode", CONV_STACK, 12, 0, glue_StdOpcode},
     {0xABFF, -1, "DebugStr", CONV_STACK, 4, 0, glue_DebugStr},
 };
 const unsigned trap_sig_count = sizeof trap_sigs / sizeof trap_sigs[0];
@@ -25691,6 +25717,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF2, (int32_t)0x615u, "GetSpecificFreeThreadCount", CONV_STACK, 12, 2, glue_GetSpecificFreeThreadCount},
     {0xABF2, (int32_t)0x70Au, "SetThreadSwitcher", CONV_STACK, 14, 2, glue_SetThreadSwitcher},
     {0xABF2, (int32_t)0xE03u, "NewThread", CONV_STACK, 28, 2, glue_NewThread},
+    {0xA829, (int32_t)0x19u, "HiliteWindowFrameForDrag", CONV_STACK, 6, 4, glue_HiliteWindowFrameForDrag},
 };
 const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[0];
 
@@ -25752,5 +25779,6 @@ const dispatcher_info dispatchers[] = {
     {0xA83D, "TEDispatch", "StackW"},
     {0xAA54, "TSMDispatch", "D0W"},
     {0xABF2, "ThreadDispatch", "D0W"},
+    {0xA829, "WindowDragHiliteDispatch", "D0W"},
 };
 const unsigned dispatcher_count = sizeof dispatchers / sizeof dispatchers[0];

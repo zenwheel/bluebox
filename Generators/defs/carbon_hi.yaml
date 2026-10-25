@@ -1,0 +1,36 @@
+# CarbonLib's drawing, windows and menus (carbon_qd.c, carbon_wm.c,
+# carbon_menu.c, carbon_ui.c; the rest of their exports are written by
+# hand there).  These are the ones that have a 68k trap too.
+
+# StdOpcode (Quickdraw.h): the bottleneck for picture opcodes QuickDraw
+# doesn't know, _StdOpcodeProc.
+- function:
+    name: StdOpcode
+    args:
+      - name: fromRect
+        type: Rect*
+      - name: toRect
+        type: Rect*
+      - name: opcode
+        type: uint16_t
+      - name: version
+        type: int16_t
+    trap: 0xABF8
+
+# HiliteWindowFrameForDrag (MacWindows.h): MOVEQ #$19,D0 then $A829, the
+# Mac OS 8.5 Window Manager's dispatch for it.
+- dispatcher:
+    name: WindowDragHiliteDispatch
+    trap: 0xA829
+    selector-location: D0W
+
+- function:
+    name: HiliteWindowFrameForDrag
+    return: OSStatus
+    args:
+      - name: window
+        type: WindowPtr
+      - name: hilited
+        type: Boolean
+    dispatcher: WindowDragHiliteDispatch
+    selector: 0x0019

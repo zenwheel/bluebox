@@ -13,6 +13,7 @@
 #include "qd_internal.h"
 #include "qt_codec.h"
 #include "sysfonts.h"
+#include "carbon_hi.h"
 #include "tb_internal.h"
 #include "sysres_gen.h"
 #include "machine.h"
@@ -378,6 +379,7 @@ bool machine_boot(bool census)
     ppc_libs_reset();
     sound_converters_reset();
     carbon_reset();
+    carbonhi_reset();
     ilutil_reset();
     slots_reset();
     cursor_devices_reset();

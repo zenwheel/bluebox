@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "qd_internal.h"
+#include "carbon_hi.h"
 #include "machine.h"
 #include "tb_internal.h"
 
@@ -56,6 +57,7 @@ static void forget_varcode(gaddr w)
 {
     set_collapsed(w, false);
     forget_properties(w);
+    carbonwm_forget(w);
     for (int i = 0; i < 256; i++)
         if (varcodes[i].w == w)
             varcodes[i].w = 0;
@@ -968,7 +970,8 @@ static void repaint(const hrgn *clobbered)
                 rgn_write(WindowRecord_updateRgn(w), &upd);
                 hrgn_free(&upd);
             }
-            if (!hrgn_empty(&cont) && rd16(LM_PaintWhite)) {
+            /* (or the program paints it: CarbonLib's InstallWindowContentPaintProc) */
+            if (!hrgn_empty(&cont) && rd16(LM_PaintWhite) && !carbonwm_paint_content(w, &cont)) {
                 gaddr saved = qd_port();
                 tb_SetPort(w);
                 int dh, dv;
@@ -1204,7 +1207,10 @@ static gaddr new_window(gaddr storage, qrect bounds, gaddr title, bool vis, int1
     WindowRecord_set_strucRgn(w, tb_NewRgn());
     WindowRecord_set_contRgn(w, tb_NewRgn());
     WindowRecord_set_updateRgn(w, tb_NewRgn());
-    gaddr wdef = tb_GetResource((int32_t)fourcc("WDEF"), (int16_t)(procid >> 4));
+    /* (a definition CarbonLib's RegisterWindowDefinition registered first) */
+    gaddr wdef = carbonwm_registered_def((int16_t)(procid >> 4));
+    if (!wdef)
+        wdef = tb_GetResource((int32_t)fourcc("WDEF"), (int16_t)(procid >> 4));
     if (!wdef)
         wdef = tb_GetResource((int32_t)fourcc("WDEF"), 0);
     WindowRecord_set_windowDefProc(w, wdef);
@@ -2317,7 +2323,8 @@ int16_t tb_GetWVariant(gaddr w) { return w ? varcode(w) : 0; }
 
 enum {
     kAlertWindowClass = 1, kMovableAlertWindowClass, kModalWindowClass, kMovableModalWindowClass,
-    kFloatingWindowClass, kDocumentWindowClass, kPlainWindowClass = 13,
+    kFloatingWindowClass, kDocumentWindowClass, kUtilityWindowClass = 8, kHelpWindowClass = 10, kSheetWindowClass,
+    kToolbarWindowClass, kPlainWindowClass, kSheetAlertWindowClass = 15, kAltPlainWindowClass,
 };
 enum {
     kWindowCloseBoxAttribute = 1 << 0, kWindowHorizontalZoomAttribute = 1 << 1, kWindowVerticalZoomAttribute = 1 << 2,
@@ -2354,7 +2361,13 @@ int16_t tb_GetWindowClass(gaddr w, gaddr outClass)
     if (!is_window(w))
         return errInvalidWindowPtr;
     int var = varcode(w), def = our_wdef(w);
-    uint32_t cls = kDocumentWindowClass;
+    uint32_t cls = carbonwm_class(w);
+    if (cls) {
+        if (outClass)
+            wr32(outClass, cls);
+        return noErr;
+    }
+    cls = kDocumentWindowClass;
     if (def == 124)
         cls = kFloatingWindowClass;
     else if (def == 0 && (var == 1 || var == 3))
@@ -2395,7 +2408,7 @@ int16_t tb_GetWindowAttributes(gaddr w, gaddr outAttributes)
     if (!is_window(w))
         return errInvalidWindowPtr;
     if (outAttributes)
-        wr32(outAttributes, attributes_of(w));
+        wr32(outAttributes, attributes_of(w) | carbonwm_attributes(w));
     return noErr;
 }
 
@@ -2522,33 +2535,51 @@ int16_t tb_CollapseAllWindows(int8_t collapse)
     return noErr;
 }
 
+/* The procID a class and attributes call for, or -1. */
+int16_t wm_class_proc(uint32_t windowClass, uint32_t attributes)
+{
+    bool zoom = attributes & (kWindowHorizontalZoomAttribute | kWindowVerticalZoomAttribute);
+    bool grow = attributes & kWindowResizableAttribute;
+    switch (windowClass) {
+    case kDocumentWindowClass: return (int16_t)(zoom ? (grow ? 8 : 12) : (grow ? 0 : 4));
+    /* (CarbonLib's utility windows float) */
+    case kFloatingWindowClass:
+    case kUtilityWindowClass:
+        return (int16_t)(124 * 16 + (grow ? 2 : 0) + (zoom ? 4 : 0) + (attributes & kWindowSideTitlebarAttribute ? 8 : 0));
+    /* (sheets, which CarbonLib shows app-modal, are modal dialog boxes) */
+    case kAlertWindowClass:
+    case kModalWindowClass:
+    case kSheetWindowClass:
+    case kSheetAlertWindowClass: return 1;
+    case kMovableAlertWindowClass:
+    case kMovableModalWindowClass: return 5;
+    /* (help tags, toolbars and the other plain windows: plain boxes) */
+    case kPlainWindowClass:
+    case kHelpWindowClass:
+    case kToolbarWindowClass:
+    case kAltPlainWindowClass: return 2;
+    default: return -1;
+    }
+}
+
 /* CreateNewWindow(class, attributes, contentBounds, &window): a colour
  * window of the definition the class and attributes call for, hidden. */
 int16_t tb_CreateNewWindow(uint32_t windowClass, uint32_t attributes, gaddr bounds, gaddr outWindow)
 {
     if (!bounds || !outWindow)
         return paramErr;
-    bool zoom = attributes & (kWindowHorizontalZoomAttribute | kWindowVerticalZoomAttribute);
-    bool grow = attributes & kWindowResizableAttribute;
-    int16_t proc;
-    switch (windowClass) {
-    case kDocumentWindowClass: proc = (int16_t)(zoom ? (grow ? 8 : 12) : (grow ? 0 : 4)); break;
-    case kFloatingWindowClass:
-        proc = (int16_t)(124 * 16 + (grow ? 2 : 0) + (zoom ? 4 : 0) + (attributes & kWindowSideTitlebarAttribute ? 8 : 0));
-        break;
-    case kAlertWindowClass:
-    case kModalWindowClass: proc = 1; break;
-    case kMovableAlertWindowClass:
-    case kMovableModalWindowClass: proc = 5; break;
-    case kPlainWindowClass: proc = 2; break;
-    default: return errUnrecognizedWindowClass;
-    }
+    int16_t proc = wm_class_proc(windowClass, attributes);
+    if (proc < 0)
+        return errUnrecognizedWindowClass;
     gaddr title = tb_NewPtr(2, true, true);
     gaddr w = new_window(0, qrect_get(bounds), title, false, proc, IN_FRONT, (attributes & kWindowCloseBoxAttribute) != 0,
                          0, true);
     tb_DisposePtr(title);
-    if (w && windowClass != kDocumentWindowClass && windowClass != kFloatingWindowClass)
+    if (w && windowClass != kDocumentWindowClass && windowClass != kFloatingWindowClass &&
+        windowClass != kUtilityWindowClass)
         WindowRecord_set_windowKind(w, dialogKind);
+    if (w)
+        carbonwm_set_class(w, windowClass, attributes);
     wr32(outWindow, w);
     return w ? noErr : memFullErr;
 }
@@ -2774,4 +2805,71 @@ int8_t tb_IsWindowModified(gaddr w)
         if (w && modified[i] == w)
             return 1;
     return 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* For CarbonLib's Window Manager calls (carbon_wm.c) */
+
+bool wm_is_window(gaddr w) { return w && is_window(w); }
+
+/* The FindWindow part code a global point has in a window (inDesk when
+ * the window's definition says it's not in it). */
+int16_t wm_hit_part(gaddr w, uint32_t p)
+{
+    if (!wvisible(w))
+        return inDesk;
+    hrgn s;
+    hrgn_init(&s);
+    rgn_read(WindowRecord_strucRgn(w), &s);
+    bool in = hrgn_contains(&s, pt_h(p), pt_v(p));
+    hrgn_free(&s);
+    int32_t hit = in ? call_wdef(w, wHit, (int32_t)p) : wNoHit;
+    switch (hit) {
+    case wNoHit: return inDesk;
+    case wInContent: return inContent;
+    case wInDrag: return inDrag;
+    case wInGrow: return inGrow;
+    case wInGoAway: return inGoAway;
+    case wInZoomIn: return inZoomIn;
+    case wInZoomOut: return inZoomOut;
+    case wInCollapseBox: return 11; /* inCollapseBox */
+    default: return inDrag;
+    }
+}
+
+/* A window's zoom states (its WStateData handle), or 0; the standard
+ * state a window zooms to. */
+gaddr wm_zoom_state(gaddr w) { return zoom_state(w); }
+qrect wm_std_state(void) { return std_state(); }
+
+/* A window given another definition (when defproc isn't 0, the old one
+ * told it's disposed of and the new one that it's new) or variation (when
+ * var isn't -1): its regions worked out again and the screen redrawn. */
+void wm_redefine(gaddr w, gaddr defproc, int16_t var)
+{
+    hrgn old;
+    hrgn_init(&old);
+    rgn_read(WindowRecord_strucRgn(w), &old);
+    gaddr saved = qd_port();
+    if (defproc) {
+        call_wdef(w, wDispose, 0);
+        WindowRecord_set_windowDefProc(w, defproc);
+    }
+    if (var >= 0)
+        set_varcode(w, var);
+    if (defproc)
+        call_wdef(w, wNew, 0);
+    call_wdef(w, wCalcRgns, 0);
+    tb_SetPort(saved);
+    if (wvisible(w)) {
+        hrgn now;
+        hrgn_init(&now);
+        rgn_read(WindowRecord_strucRgn(w), &now);
+        hrgn_op(&old, &old, &now, RGN_UNION);
+        repaint(&old);
+        hrgn_free(&now);
+    } else {
+        calc_all_vis();
+    }
+    hrgn_free(&old);
 }
