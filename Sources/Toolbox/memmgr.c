@@ -831,13 +831,19 @@ void tb_HSetState(gaddr h, int8_t flags)
     set_mem_err(noErr);
 }
 
+/* MoreMasterPointers(count): a block of count master pointers at once. */
+void tb_MoreMasterPointers(uint32_t count)
+{
+    gaddr z = cur_zone();
+    gaddr p = count ? mm_new_ptr_in(z, count * 4, true) : 0;
+    if (p)
+        link_masters(z, p, count);
+}
+
 void tb_MoreMasters(void)
 {
     gaddr z = cur_zone();
-    unsigned n = Zone_moreMast(z) ? Zone_moreMast(z) : 32;
-    gaddr p = mm_new_ptr_in(z, n * 4, true);
-    if (p)
-        link_masters(z, p, n);
+    tb_MoreMasterPointers(Zone_moreMast(z) ? Zone_moreMast(z) : 32);
 }
 
 /* ---------------------------------------------------------------------- */
