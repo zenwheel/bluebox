@@ -42,6 +42,8 @@ struct ppc_cpu {
     void (*syscall)(ppc_cpu *c);
     /* Called before every instruction when non-NULL (tracing). */
     void (*trace)(ppc_cpu *c);
+    /* Called after an illegal instruction halted the run, to say more. */
+    void (*illegal)(ppc_cpu *c);
     void *user;
 };
 

@@ -345,6 +345,7 @@ typedef struct {
     const section *sections;
     int nsections;
     const gaddr *imports;
+    const char *const *absent; /* each missing weak import's "symbol from library" */
     uint32_t nimports;
     gaddr target_base, reloc, sect_c, sect_d;
     uint32_t import_index;
@@ -353,7 +354,67 @@ typedef struct {
     int depth;
 } reloc_state;
 
-static gaddr import_at(reloc_state *s, uint32_t index) { return index < s->nimports ? s->imports[index] : 0; }
+/* Where the missing weak imports went: a call through one of them (an
+ * illegal instruction at 0) is then named. */
+typedef struct {
+    gaddr slot;
+    char *name;
+} absent_slot;
+static absent_slot *absent_slots;
+static size_t absent_count, absent_cap;
+
+static void note_absent_slot(gaddr slot, const char *name)
+{
+    if (absent_count == absent_cap) {
+        size_t cap = absent_cap ? absent_cap * 2 : 64;
+        absent_slot *grown = realloc(absent_slots, cap * sizeof *grown);
+        if (!grown)
+            return;
+        absent_slots = grown;
+        absent_cap = cap;
+    }
+    absent_slots[absent_count++] = (absent_slot){ slot, strdup(name) };
+}
+
+static void free_absent(char **absent, uint32_t n)
+{
+    for (uint32_t i = 0; absent && i < n; i++)
+        free(absent[i]);
+    free(absent);
+}
+
+/* The missing weak import a call to 0 came through: the cross-TOC glue
+ * (lwz r12,d(r2); stw r2,20(r1); lwz r0,0(r12); ...; bctr) saved the
+ * caller's TOC at 20(r1), and its first instruction gives the slot. */
+static void name_nil_call(ppc_cpu *c)
+{
+    if (c->op_pc != 0 || !absent_count)
+        return;
+    gaddr toc = rd32(c->gpr[1] + 20);
+    for (int back = 1; back <= 8; back++) {
+        uint32_t op = rd32(c->prev_pc - 4u * back);
+        if ((op & 0xFFFF0000u) != 0x81820000u) /* lwz r12,d(r2) */
+            continue;
+        gaddr slot = toc + (uint32_t)(int16_t)(op & 0xFFFF);
+        for (size_t i = absent_count; i-- > 0;)
+            if (absent_slots[i].slot == slot) {
+                size_t n = strlen(c->halt_reason);
+                snprintf(c->halt_reason + n, sizeof c->halt_reason - n, ": weak %s, not there",
+                         absent_slots[i].name);
+                return;
+            }
+        return;
+    }
+}
+
+static gaddr import_at(reloc_state *s, uint32_t index)
+{
+    if (index >= s->nimports)
+        return 0;
+    if (!s->imports[index] && s->absent && s->absent[index])
+        note_absent_slot(s->reloc, s->absent[index]);
+    return s->imports[index];
+}
 /* What a relocation by a section adds: its address less its default one. */
 static gaddr section_base(reloc_state *s, uint32_t index)
 {
@@ -688,6 +749,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
     /* Imports: an address each (a transition vector or data), or 0 for
      * missing weak ones. */
     gaddr *imports = calloc(nsyms ? nsyms : 1, sizeof *imports);
+    char **absent = calloc(nsyms ? nsyms : 1, sizeof *absent);
     const uint8_t *libs = loader + 56, *syms = libs + nlibs * 24;
     for (uint32_t l = 0; l < nlibs; l++) {
         const uint8_t *lib = libs + l * 24;
@@ -739,6 +801,11 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
             if ((weak || weak_lib) && (li < 0 || !core_library(lname))) {
                 imports[k] = 0;
                 LOGF(LOG_SEG, "cfm: weak %s from %s: not there\n", sname, lname);
+                if (absent) {
+                    char both[256];
+                    snprintf(both, sizeof both, "%s from %s", sname, lname);
+                    absent[k] = strdup(both);
+                }
             } else if (cls == kDataCFragSymbol) {
                 imports[k] = data_import(sname);
                 LOGF(LOG_UNIMPL, "cfm: data %s from %s not provided\n", sname, lname);
@@ -763,6 +830,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
             .sections = sections,
             .nsections = ninst,
             .imports = imports,
+            .absent = (const char *const *)absent,
             .nimports = nsyms,
             .target_base = sections[target].base,
             .reloc = sections[target].base,
@@ -773,6 +841,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
         };
         if (!reloc_run(&st, 0, count)) {
             free(imports);
+            free_absent(absent, nsyms);
             free(sections);
             return false;
         }
@@ -805,6 +874,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
     f->init_tv = init_sect >= 0 && init_sect < ninst ? sections[init_sect].base + init_off : 0;
     f->term_tv = term_sect >= 0 && term_sect < ninst ? sections[term_sect].base + term_off : 0;
     free(imports);
+    free_absent(absent, nsyms);
     free(sections);
     return true;
 }
@@ -1202,6 +1272,7 @@ bool cfm_ppc_cpu(void)
     cfm_ppc_stack_lo = stack;
     ppc_init(&g_ppc);
     g_ppc.native = dispatch_native;
+    g_ppc.illegal = name_nil_call;
     if (getenv("BLUEBOX_PPC_TRACE"))
         g_ppc.trace = trace_instruction;
     g_ppc.gpr[1] = (stack + stack_size - 64) & ~15u;

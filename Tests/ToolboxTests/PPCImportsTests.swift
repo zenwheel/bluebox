@@ -68,16 +68,16 @@ extension BlueBox {
         /// A PEF container in guest memory: one 8-byte data section whose
         /// first word is relocated by one import (of class cls) from
         /// InterfaceLib, and main at the data section's start.
-        func importContainer(_ symbol: String, cls: UInt8) -> UInt32 {
+        func importContainer(_ symbol: String, cls: UInt8, library: String = "InterfaceLib", weak: Bool = false) -> UInt32 {
             func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
             func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
-            let strings = Array("InterfaceLib".utf8) + [0] + Array(symbol.utf8) + [0]
+            let strings = Array(library.utf8) + [0] + Array(symbol.utf8) + [0]
             var loader = be32(0) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
             let stringsOff = UInt32(56 + 24 + 4 + 12 + 4)
             let hashOff = (stringsOff + UInt32(strings.count) + 3) & ~3
             loader += be32(1) + be32(1) + be32(1) + be32(56 + 24 + 4 + 12) + be32(stringsOff) + be32(hashOff) + be32(0) + be32(0)
-            loader += be32(0) + be32(0) + be32(0) + be32(1) + be32(0) + [0, 0] + be16(0)    // the library
-            loader += be32(UInt32(cls) << 24 | 13)                                         // the symbol
+            loader += be32(0) + be32(0) + be32(0) + be32(1) + be32(0) + [weak ? 0x40 : 0, 0] + be16(0) // the library
+            loader += be32(UInt32(cls) << 24 | UInt32(library.utf8.count + 1))             // the symbol
             loader += be16(0) + be16(0) + be32(1) + be32(0)                                 // relocations for section 0
             loader += be16(0x6000) + be16(0)                                                // RelocSmByImport 0
             loader += strings
@@ -102,6 +102,29 @@ extension BlueBox {
             let tv = rd32(main)
             #expect(tv != 0 && rd32(tv) != 0)
             #expect(tv == rd32(cfm_prepare_container(importContainer("GetCurrentProcess", cls: 2))))
+        }
+
+        /// A call through a missing weak import (a transition vector of 0)
+        /// stops naming the import, found from the cross-TOC glue's slot.
+        @Test func nilCallNamesTheWeakImport() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            let toc = cfm_prepare_container(importContainer("Q3IsInitialized", cls: 2, library: "NoSuchLib", weak: true))
+            #expect(toc != 0 && rd32(toc) == 0)
+            // lwz r12,0(r2); stw r2,20(r1); lwz r0,0(r12); lwz r2,4(r12); mtctr r0; bctr
+            let words: [UInt32] = [0x8182_0000, 0x9041_0014, 0x800C_0000, 0x804C_0004, 0x7C09_03A6, 0x4E80_0420]
+            let glue = bytes(words.flatMap { [UInt8($0 >> 24), UInt8(($0 >> 16) & 0xFF), UInt8(($0 >> 8) & 0xFF), UInt8($0 & 0xFF)] })
+            let stack = tb_NewPtr(4096, false, true)
+            withUnsafeMutableBytes(of: &g_ppc.gpr) { gpr in
+                gpr.storeBytes(of: stack + 2048, toByteOffset: 4, as: UInt32.self)
+                gpr.storeBytes(of: toc, toByteOffset: 8, as: UInt32.self)
+            }
+            g_ppc.pc = glue
+            g_ppc.halted = false
+            _ = ppc_run(&g_ppc, 20)
+            let reason = withUnsafeBytes(of: g_ppc.halt_reason) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+            #expect(reason.hasPrefix("illegal PowerPC instruction 00000000 at 00000000"))
+            #expect(reason.hasSuffix(": weak Q3IsInitialized from NoSuchLib, not there"))
         }
 
         /// Mixed Mode calls a PowerPC routine with r12 at its transition

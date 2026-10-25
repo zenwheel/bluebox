@@ -58,6 +58,8 @@ static void illegal(ppc_cpu *c)
                  c->prev_pc, c->lr);
     else
         ppc_halt(c, "illegal PowerPC instruction %08X at %08X", c->op, c->op_pc);
+    if (c->illegal)
+        c->illegal(c);
 }
 
 /* ---------------------------------------------------------------------- */
