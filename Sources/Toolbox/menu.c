@@ -29,6 +29,7 @@ void display_menus_changed(void);
 int32_t display_take_menu_choice(void);
 
 static gaddr mlist(void) { return rd32(LM_MenuList); }
+gaddr hm_help_menu(void); /* help.c */
 static int mbar_height(void) { return (int16_t)rd16(LM_MBarHeight); }
 
 #define MAX_HIER 64
@@ -737,6 +738,10 @@ gaddr tb_GetMenuHandle(int16_t mid)
     for (int i = 0; i < nhier; i++)
         if (rd32(hier[i]) && MenuInfo_menuID(menu_ptr(hier[i])) == mid)
             return hier[i];
+    /* The Help menu is in every program's menu bar on System 7, so its
+     * ID finds it (Creative Minesweeper keeps an object for it). */
+    if (mid == -16490) /* kHMHelpMenuID */
+        return hm_help_menu();
     return 0;
 }
 
