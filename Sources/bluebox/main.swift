@@ -1024,6 +1024,11 @@ func appsCommand(_ args: [String]) {
         for a in scan(root).filter({ $0.isApplication }) {
             let rel = String(a.path.dropFirst(root.count + 1))
             if rel.hasPrefix("System Folder/") { continue }
+            // A self-extracting archive that import expanded beside itself:
+            // what it held is listed from there.
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: a.path + " ƒ", isDirectory: &isDir), isDir.boolValue,
+               classify(a.path) == .archive { continue }
             print("\(a.architecture.padding(8)) \(fourCCString(a.creator))  \(label)\(rel)")
             any = true
         }

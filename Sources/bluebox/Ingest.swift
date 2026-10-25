@@ -5,6 +5,7 @@
 // `unar`, which writes resource forks as AppleDouble "._" sidecars, the format
 // the library uses.  Archives nested inside archives are extracted too.
 
+import BlueBoxHost
 import CCore
 import Foundation
 import ForkStore
@@ -113,10 +114,6 @@ private func readPrefix(_ path: String, _ n: Int = 2048) -> [UInt8] {
     return Array((try? h.read(upToCount: n)) ?? Data())
 }
 
-private let stuffItSignatures: Set<String> = ["SIT!", "ST46", "ST50", "ST60", "ST65", "STin", "STi2", "STi3", "STi4"]
-private let archiveTypes: Set<String> = ["SIT!", "SITD", "SIT5", "SITX", "PACT", "BnHq"]
-private let archiveCreators: Set<String> = ["SIT!", "SITx", "CPCT", "aust", "BnHq", "ArcF"]
-private let archiveExtensions: Set<String> = ["sit", "sea", "cpt", "hqx", "zip"]
 private let diskTypes: Set<String> = ["dImg", "rohd", "dCpy", "ddsk", "hdsk"]
 private let diskExtensions: Set<String> = ["img", "image", "dsk", "dc42", "iso", "toast", "hfs", "cdr", "disk"]
 
@@ -126,28 +123,6 @@ private func looksLikeDiskData(_ b: [UInt8]) -> Bool {
     if b.count >= 1026 && b[0] == 0x45 && b[1] == 0x52 && b[512] == 0x50 && b[513] == 0x4D { return true }
     return b.count >= 84 + 1026 && b[0] <= 63 && b[82] == 0x01 && b[83] == 0x00 &&
         b[84 + 1024] == 0x42 && b[84 + 1025] == 0x44
-}
-
-/// Archive formats recognisable from the data fork alone.
-private func looksLikeArchiveData(_ b: [UInt8]) -> Bool {
-    if b.count >= 14 {
-        let sig = String(decoding: b[0..<4], as: UTF8.self)
-        if stuffItSignatures.contains(sig) && String(decoding: b[10..<14], as: UTF8.self) == "rLau" { return true }
-    }
-    if b.starts(with: Array("StuffIt (c)1997".utf8)) { return true }
-    if b.starts(with: [0x50, 0x4B, 0x03, 0x04]) { return true } // zip
-    let text = String(decoding: b, as: UTF8.self)
-    return text.contains("(This file must be converted with BinHex")
-}
-
-private func isArchive(type: UInt32, creator: UInt32, name: String, data: [UInt8]) -> Bool {
-    let t = fourCCString(type), c = fourCCString(creator)
-    if looksLikeArchiveData(data) { return true }
-    // Types alone are not enough: Word settings files, for one, are 'SITD'.
-    if archiveTypes.contains(t) && archiveCreators.contains(c) { return true }
-    if t == "APPL" && (c == "aust" || c == "EXTR") { return true } // self-extracting archives
-    let ext = (name as NSString).pathExtension.lowercased()
-    return archiveExtensions.contains(ext) || looksLikeArchiveData(data)
 }
 
 func fourCCString(_ code: UInt32) -> String {
@@ -182,7 +157,7 @@ func classify(_ path: String) -> InputKind {
             let name = (path as NSString).lastPathComponent
             let t = fourCCString(mac_file_type(&f)), c = fourCCString(mac_file_creator(&f))
             if diskTypes.contains(t) || diskTypes.contains(c) || looksLikeDiskData(prefix) { return .diskImage }
-            if isArchive(type: mac_file_type(&f), creator: mac_file_creator(&f), name: name, data: prefix) {
+            if isMacArchive(type: mac_file_type(&f), creator: mac_file_creator(&f), name: name, data: prefix) {
                 return .archive
             }
         }
@@ -316,7 +291,7 @@ private func decodeMacBinary(_ path: String, into dir: String, depth: Int, notes
     var name = withUnsafeBytes(of: &f.name) { raw in String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self) }
     if name.isEmpty { name = ((path as NSString).lastPathComponent as NSString).deletingPathExtension }
     let dataPrefix = Array(UnsafeBufferPointer(start: f.data, count: min(f.data_len, 1024)))
-    if depth < 4 && isArchive(type: mac_file_type(&f), creator: mac_file_creator(&f), name: name, data: dataPrefix) {
+    if depth < 4 && isMacArchive(type: mac_file_type(&f), creator: mac_file_creator(&f), name: name, data: dataPrefix) {
         // unar understands MacBinary-wrapped archives directly.
         let sub = dir + "/" + hostName(name) + " ƒ"
         try FileManager.default.createDirectory(atPath: sub, withIntermediateDirectories: true)
