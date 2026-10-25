@@ -63,6 +63,79 @@ extension BlueBox {
             #expect(rd16(flag + 2) == 1) // a synchronous call has no completion
         }
 
+        // MARK: Code Fragment Manager and Mixed Mode
+
+        /// A PEF container in guest memory: one 8-byte data section whose
+        /// first word is relocated by one import (of class cls) from
+        /// InterfaceLib, and main at the data section's start.
+        func importContainer(_ symbol: String, cls: UInt8) -> UInt32 {
+            func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
+            func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
+            let strings = Array("InterfaceLib".utf8) + [0] + Array(symbol.utf8) + [0]
+            var loader = be32(0) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+            let stringsOff = UInt32(56 + 24 + 4 + 12 + 4)
+            let hashOff = (stringsOff + UInt32(strings.count) + 3) & ~3
+            loader += be32(1) + be32(1) + be32(1) + be32(56 + 24 + 4 + 12) + be32(stringsOff) + be32(hashOff) + be32(0) + be32(0)
+            loader += be32(0) + be32(0) + be32(0) + be32(1) + be32(0) + [0, 0] + be16(0)    // the library
+            loader += be32(UInt32(cls) << 24 | 13)                                         // the symbol
+            loader += be16(0) + be16(0) + be32(1) + be32(0)                                 // relocations for section 0
+            loader += be16(0x6000) + be16(0)                                                // RelocSmByImport 0
+            loader += strings
+            while loader.count < Int(hashOff) { loader.append(0) }
+            loader += be32(0)                                                               // one empty hash slot
+            let dataOff = UInt32(40 + 2 * 28), loaderOff = dataOff + 8
+            var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(2) + be16(1) + be32(0)
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(dataOff) + [1, 1, 0, 0]
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count)) + be32(loaderOff) + [4, 1, 0, 0]
+            pef += [UInt8](repeating: 0, count: 8) + loader
+            return bytes(pef)
+        }
+
+        /// CFM binds an import by its name: a routine a program imports as
+        /// data (Hardwood Solitaire II's GetCurrentProcess) is still the
+        /// routine's transition vector, not a block of zeros to call.
+        @Test func routineImportedAsDataIsItsTransitionVector() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            let main = cfm_prepare_container(importContainer("GetCurrentProcess", cls: 1))
+            #expect(main != 0)
+            let tv = rd32(main)
+            #expect(tv != 0 && rd32(tv) != 0)
+            #expect(tv == rd32(cfm_prepare_container(importContainer("GetCurrentProcess", cls: 2))))
+        }
+
+        /// Mixed Mode calls a PowerPC routine with r12 at its transition
+        /// vector, as a call through a pointer has it: Hardwood Solitaire
+        /// II's trap patches read where to go on from their vectors.
+        @Test func mixedModeCallsWithTheVectorInR12() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            // or r3,r12,r12; blr
+            let code = bytes([0x7D, 0x83, 0x63, 0x78, 0x4E, 0x80, 0x00, 0x20])
+            let tv = bytes([0, 0, 0, 0, 0, 0, 0, 0])
+            wr32(tv, code)
+            #expect(ppc_call(tv, nil, 0) == tv)
+        }
+
+        /// CallUniversalProc to a PowerPC routine moves every argument down
+        /// two registers, however many the procInfo counts: Amadeus II
+        /// passes its plug-ins a sixth (where to keep their data) under a
+        /// procInfo for five, as the Mixed Mode it was written on allowed.
+        @Test func callUniversalProcPassesEveryArgument() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            let tv = bytes([0, 0, 0, 0, 0, 0, 0, 0])
+            wr32(tv, bytes([0x4E, 0x80, 0x00, 0x20])) // blr
+            // A descriptor of one PowerPC routine taking six longs (Pascal).
+            let rd = bytes([0xAA, 0xFE, 7, 0] + [UInt8](repeating: 0, count: 8 + 20))
+            wr32(rd + 12, 0x3FFC0)
+            wr8(rd + 17, 1) // kPowerPCISA
+            wr32(rd + 20, tv)
+            call("CallUniversalProc", [rd, 0xFFC0, 1, 2, 3, 4, 5, 6])
+            #expect(g_ppc.pc == rd32(tv) && g_ppc.gpr.12 == tv)
+            #expect([g_ppc.gpr.3, g_ppc.gpr.4, g_ppc.gpr.5, g_ppc.gpr.6, g_ppc.gpr.7, g_ppc.gpr.8] == [1, 2, 3, 4, 5, 6])
+        }
+
         // MARK: Slot Manager
 
         /// SpBlock: spResult 0, spsPointer 4, spParamData 24, spRefNum 38,

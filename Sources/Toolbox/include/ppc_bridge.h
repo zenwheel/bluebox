@@ -67,6 +67,9 @@ extern const ppc_export carbonupps_exports[];
 extern const unsigned carbonupps_export_count;
 extern const ppc_export carbongaps_exports[];
 extern const unsigned carbongaps_export_count;
+/* CarbonLib's user and machine names (carbon_user.c). */
+extern const ppc_export carbonuser_exports[];
+extern const unsigned carbonuser_export_count;
 /* CarbonLib's printing, Navigation, scrap, ATSUI and MLTE (carbon_svc.c). */
 void (*carbonsvc_export_fn(const char *name))(ppc_cpu *);
 /* Its Core Foundation and Math64 (carbon_cf*.c): routines, data, and the

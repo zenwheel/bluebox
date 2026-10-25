@@ -125,9 +125,29 @@ static apix *pix_of(gaddr g)
     int i = object_index(g, TAG_PIX);
     return i >= 0 && pixs[i] && pixs[i]->guest == g ? pixs[i] : NULL;
 }
+/* A context's block: the tag (the renderer word agl_macro.h passes on),
+ * the macro dispatch table, the index, and the table's vectors. */
+#define CTX_INDEX (4 + 4 * AGL_DISPATCH_COUNT)
+#define CTX_VECTORS (CTX_INDEX + 4)
+static gaddr new_context_object(int i)
+{
+    gaddr g = tb_NewPtr(CTX_VECTORS + 8 * AGL_DISPATCH_COUNT, true, true);
+    if (g) {
+        wr32(g, TAG_CTX);
+        wr32(g + CTX_INDEX, (uint32_t)i);
+        agl_macro_fill(g + 4, g + CTX_VECTORS);
+    }
+    return g;
+}
+static int context_index(gaddr g)
+{
+    if (!g || rd32(g) != TAG_CTX || rd32(g + CTX_INDEX) >= MAX_OBJECTS)
+        return -1;
+    return (int)rd32(g + CTX_INDEX);
+}
 static actx *ctx_of(gaddr g)
 {
-    int i = object_index(g, TAG_CTX);
+    int i = context_index(g);
     return i >= 0 && ctxs[i] && ctxs[i]->guest == g ? ctxs[i] : NULL;
 }
 
@@ -372,7 +392,7 @@ static void agl_CreateContext(ppc_cpu *c)
         if (!ctxs[i])
             slot = i;
     hostgl_ctx *h = slot >= 0 ? hostgl_create(share ? share->h : NULL, f->depth, f->stencil) : NULL;
-    gaddr g = h ? new_object(TAG_CTX, slot) : 0;
+    gaddr g = h ? new_context_object(slot) : 0;
     gaddr s = g ? tb_NewPtr(64, true, true) : 0;
     if (!s) {
         if (g)
@@ -399,7 +419,7 @@ static void destroy(actx *a)
         current = NULL;
         hostgl_set_current(NULL);
     }
-    ctxs[object_index(a->guest, TAG_CTX)] = NULL;
+    ctxs[context_index(a->guest)] = NULL;
     close_fullscreen(a);
     hostgl_destroy(a->h);
     free_frame(a);

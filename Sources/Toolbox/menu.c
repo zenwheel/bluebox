@@ -29,6 +29,7 @@ void display_menus_changed(void);
 int32_t display_take_menu_choice(void);
 
 static gaddr mlist(void) { return rd32(LM_MenuList); }
+gaddr hm_help_menu(void); /* help.c */
 static int mbar_height(void) { return (int16_t)rd16(LM_MBarHeight); }
 
 #define MAX_HIER 64
@@ -519,6 +520,20 @@ static int nmenus(void)
 
 static gaddr menu_at(int i) { return rd32(rd32(mlist()) + 6 + (uint32_t)i * 6); }
 
+/* The list, made if the program never called InitMenus (Test Drive II,
+ * PICTshow): the empty list each application had at launch, where these
+ * used to write through a nil handle into low memory and the host. */
+static gaddr mlist_made(void)
+{
+    gaddr l = mlist();
+    if (!l) {
+        l = tb_NewHandle(6 + 6, true, true);
+        if (l)
+            wr32(LM_MenuList, l);
+    }
+    return l;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Menu colour table (MenuCInfo): kept for applications to read and write;
  * the native menus draw in the host's colours.  Entries are 30 bytes and
@@ -646,16 +661,9 @@ void tb_InsertMenu(gaddr mh, int16_t before)
     if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
         return;
     display_menus_changed();
-    gaddr l = mlist();
-    if (!l) {
-        /* A program that never called InitMenus (Test Drive II): the empty
-         * list each application had at launch, which this used to write
-         * through a nil handle into low memory and the program's code. */
-        l = tb_NewHandle(6 + 6, true, true);
-        if (!l)
-            return;
-        wr32(LM_MenuList, l);
-    }
+    gaddr l = mlist_made();
+    if (!l)
+        return;
     int n = nmenus();
     int16_t id = MenuInfo_menuID(menu_ptr(mh));
     for (int i = 0; i < n; i++)
@@ -714,7 +722,9 @@ void tb_ClearMenuBar(void)
 {
     display_menus_changed();
     nhier = 0;
-    gaddr l = mlist();
+    gaddr l = mlist_made();
+    if (!l)
+        return;
     tb_SetHandleSize(l, 12);
     gmemset(rd32(l), 0, 12);
 }
@@ -728,14 +738,22 @@ gaddr tb_GetMenuHandle(int16_t mid)
     for (int i = 0; i < nhier; i++)
         if (rd32(hier[i]) && MenuInfo_menuID(menu_ptr(hier[i])) == mid)
             return hier[i];
+    /* The Help menu is in every program's menu bar on System 7, so its
+     * ID finds it (Creative Minesweeper keeps an object for it). */
+    if (mid == -16490) /* kHMHelpMenuID */
+        return hm_help_menu();
     return 0;
 }
 
 gaddr tb_GetMenuBar(void)
 {
-    gaddr l = mlist();
+    gaddr l = mlist_made();
+    if (!l)
+        return 0;
     int32_t size = tb_GetHandleSize(l);
     gaddr h = tb_NewHandle(size, false, false);
+    if (!h)
+        return 0;
     gmemcpy(rd32(h), rd32(l), (uint32_t)size);
     return h;
 }
@@ -743,7 +761,9 @@ gaddr tb_GetMenuBar(void)
 void tb_SetMenuBar(gaddr ml)
 {
     display_menus_changed();
-    gaddr l = mlist();
+    gaddr l = mlist_made();
+    if (!l || !ml || !rd32(ml))
+        return;
     int32_t size = tb_GetHandleSize(ml);
     tb_SetHandleSize(l, size);
     gmemcpy(rd32(l), rd32(ml), (uint32_t)size);

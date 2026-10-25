@@ -439,6 +439,26 @@ extension BlueBox {
             let box = rd32(rgn) + 2
             #expect(rd16(box) == 1 && rd16(box + 2) == 4 && rd16(box + 4) == 3 && rd16(box + 6) == 8)
         }
+
+        /// A copy of a 1-bit GWorld's portBits (its PixMap handle and the
+        /// 0xC000 portVersion) stands for the PixMap, as with CopyBits:
+        /// Bubblomania makes its bubbles' regions so.
+        @Test func bitMapToRegionFromColourPortBits() {
+            launchTestApp()
+            _ = initToolbox()
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 1, rect(0, 0, 4, 16), 0, 0, 0) == 0)
+            let port = rd32(gw)
+            let pm = rd32(rd32(port + 2))
+            let base = rd32(pm), rb = UInt32(rd16(pm + 4) & 0x3FFF)
+            wr8(base + rb, 0x0F); wr8(base + 2 * rb, 0x0F)
+            let bm = tb_NewPtr(14, false, true)
+            for i in 0..<14 { wr8(bm + UInt32(i), rd8(port + 2 + UInt32(i))) }
+            let rgn = tb_NewRgn()
+            #expect(tb_BitMapToRegion(rgn, bm) == 0)
+            let box = rd32(rgn) + 2
+            #expect(rd16(box) == 1 && rd16(box + 2) == 4 && rd16(box + 4) == 3 && rd16(box + 6) == 8)
+        }
     }
 
     @Suite struct International {

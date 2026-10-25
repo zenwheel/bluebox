@@ -487,6 +487,18 @@ static void dsp_GetMouse(ppc_cpu *c)
     }
     RETURN(0);
 }
+/* DSpFindContextFromPoint(globalPoint, *context): ours for a point on the
+ * screen, the one display (µWar finds the context the mouse is over). */
+static void dsp_FindContextFromPoint(ppc_cpu *c)
+{
+    int v = (int16_t)(R(0) >> 16), h = (int16_t)R(0);
+    bool on = v >= 0 && h >= 0 && v < g_screen_height && h < g_screen_width;
+    if (on)
+        context_make();
+    if (R(1))
+        wr32(R(1), on ? ctx : 0);
+    RETURN(on ? 0 : kDSpContextNotFoundErr);
+}
 /* DSpProcessEvent(event, *processed): nothing of ours in events. */
 static void dsp_ProcessEvent(ppc_cpu *c)
 {
@@ -702,6 +714,7 @@ const ppc_export dsp_exports[] = {
     { "DSpContext_SwapBuffers", dsp_SwapBuffers },
     { "DSpFindBestContext", dsp_FindBestContext },
     { "DSpFindBestContextOnDisplayID", dsp_FindBestContextOnDisplayID },
+    { "DSpFindContextFromPoint", dsp_FindContextFromPoint },
     { "DSpGetFirstContext", dsp_GetFirstContext },
     { "DSpGetMouse", dsp_GetMouse },
     { "DSpGetNextContext", dsp_GetNextContext },

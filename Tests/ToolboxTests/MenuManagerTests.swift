@@ -63,6 +63,33 @@ extension BlueBox {
             #expect(rd32(0x10) == low)
         }
 
+        /// GetNewMBar before any InitMenus (PICTshow) saves, clears and
+        /// restores a list made empty, not one read through nil.
+        @Test func getNewMBarWithoutInitMenus() {
+            launchTestApp()
+            _ = initToolbox()
+            wr32(UInt32(LM_MenuList), 0)
+            #expect(tb_GetMenuBar() != 0)
+            wr32(UInt32(LM_MenuList), 0)
+            tb_ClearMenuBar()
+            #expect(rd32(UInt32(LM_MenuList)) != 0 && tb_GetHandleSize(rd32(UInt32(LM_MenuList))) == 12)
+            wr32(UInt32(LM_MenuList), 0)
+            let saved = tb_NewHandle(12, false, true)
+            tb_SetMenuBar(saved)
+            #expect(rd32(UInt32(LM_MenuList)) != 0 && tb_GetHandleSize(rd32(UInt32(LM_MenuList))) == 12)
+        }
+
+        /// GetMenuHandle(kHMHelpMenuID) finds the Help menu that is in every
+        /// System 7 menu bar, as HMGetHelpMenuHandle does (Creative
+        /// Minesweeper makes an object for it and uses it unchecked).
+        @Test func getMenuHandleFindsTheHelpMenu() {
+            launchTestApp()
+            _ = initToolbox()
+            let out = tb_NewPtr(4, false, true)
+            #expect(tb_HMGetHelpMenuHandle(out) == 0)
+            #expect(rd32(out) != 0 && tb_GetMenuHandle(-16490) == rd32(out))
+        }
+
         /// CopyRgn from a disposed region (a dead port's clipRgn) gives an
         /// empty region instead of copying an error as a length.
         @Test func copyRgnFromDisposedRegion() {

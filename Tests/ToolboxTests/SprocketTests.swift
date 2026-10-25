@@ -198,6 +198,26 @@ extension BlueBox {
             #expect(rd32(out) != 0 && rd32(out) == rd32(best))
         }
 
+        /// DSpFindContextFromPoint: the context for a point on the screen
+        /// (µWar asks for the one under the mouse), none off it.
+        @Test func findContextFromPoint() {
+            bootMachine()
+            let out: UInt32 = 0x6000_0100, best: UInt32 = 0x6000_0104
+            func call(_ name: String, _ args: [UInt32]) -> UInt32 {
+                for (i, a) in args.enumerated() {
+                    withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+                }
+                cfm_export_fn(name)!(&g_ppc)
+                return g_ppc.gpr.3
+            }
+            #expect(call("DSpStartup", []) == 0)
+            #expect(call("DSpGetFirstContext", [0, best]) == 0)
+            #expect(call("DSpFindContextFromPoint", [(100 << 16) | 200, out]) == 0)
+            #expect(rd32(out) != 0 && rd32(out) == rd32(best))
+            #expect(Int32(bitPattern: call("DSpFindContextFromPoint", [0xFFF0_FFF0, out])) == -30446)
+            #expect(rd32(out) == 0)
+        }
+
         /// Alternate buffers are GWorlds of the context's depth; a blit
         /// between them with a source key leaves the keyed pixels alone.
         @Test func altBuffersAndKeyedBlits() {

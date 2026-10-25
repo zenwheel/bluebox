@@ -727,7 +727,14 @@ static void add_run_band(hrgn *acc, const int *runs, int n, int top, int bottom)
 
 int16_t tb_BitMapToRegion(gaddr rgn, gaddr bm)
 {
-    /* A PixMap must be one bit deep. */
+    /* A colour port's portBits (rowBytes' top two bits set) stands for its
+     * PixMap, as for CopyBits: Bubblomania passes a copy of a 1-bit
+     * GWorld's.  A PixMap must be one bit deep. */
+    if ((rd16(bm + 4) & 0xC000) == 0xC000) {
+        if (!rd32(bm) || !rd32(rd32(bm)))
+            return paramErr;
+        bm = rd32(rd32(bm));
+    }
     uint16_t rb = rd16(bm + 4);
     if ((rb & 0x8000) && rd16(bm + PixMap_pixelSize_off) != 1)
         return -148; /* pixmapTooDeepErr */

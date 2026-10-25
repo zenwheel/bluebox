@@ -95,6 +95,21 @@ extension BlueBox {
         /// applier(value, context): *context += value
         var sumInto: UInt32 { routine([0x80A4_0000, 0x7CA5_1A14, 0x90A4_0000, 0x4E80_0020]) }
 
+        // MARK: User and machine names
+
+        /// CSCopyUserName and CSCopyMachineName (CarbonLib 1.3): the host
+        /// account's short or full name and the host's name, as strings the
+        /// caller owns (Asshole II names its player so).
+        @Test func userAndMachineNames() {
+            _ = start()
+            let short = text(call("CSCopyUserName", [1]))
+            #expect(short == NSUserName())
+            let full = text(call("CSCopyUserName", [0]))
+            #expect(full != nil && !full!.isEmpty)
+            let machine = text(call("CSCopyMachineName"))
+            #expect(machine != nil && !machine!.isEmpty && !machine!.contains("."))
+        }
+
         // MARK: Objects and allocators
 
         @Test func objectsCountReferencesAndCompare() {

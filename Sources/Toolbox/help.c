@@ -26,7 +26,7 @@ static gaddr help_menu;
 
 void help_reset(void) { help_menu = 0; }
 
-int16_t tb_HMGetHelpMenuHandle(gaddr mhp)
+gaddr hm_help_menu(void)
 {
     if (!help_menu) {
         gaddr saved = tb_GetZone();
@@ -43,7 +43,12 @@ int16_t tb_HMGetHelpMenuHandle(gaddr mhp)
         tb_DisposePtr(s);
         tb_SetZone(saved);
     }
-    wr32(mhp, help_menu);
+    return help_menu;
+}
+
+int16_t tb_HMGetHelpMenuHandle(gaddr mhp)
+{
+    wr32(mhp, hm_help_menu());
     return help_menu ? noErr : memFullErr;
 }
 int16_t tb_HMGetFont(gaddr fontp)
