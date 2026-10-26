@@ -126,8 +126,11 @@ static void extras_forget(gaddr mh)
     }
 }
 
+static void mbdf_reset(void);
+
 void menu_reset(void)
 {
+    mbdf_reset();
     for (int i = 0; i < MAX_MENU_EXTRAS; i++) {
         for (int k = 0; k < mextras[i].n; k++)
             hi_item_free(&mextras[i].items[k].hi);
@@ -865,11 +868,20 @@ static void dim_rect(qrect r)
     hrgn_free(&g);
 }
 
+/* MenusLib's SetMenuBarSkipDrawCount: that many DrawMenuBars passed over
+ * (a program about to change its menus several times). */
+static int skip_draws;
+void menu_skip_draws(int n) { skip_draws = n > 0 ? n : 0; }
+
 void tb_DrawMenuBar(void)
 {
     display_menus_changed();
     if (!rd32(LM_WMgrPort) || !mlist())
         return;
+    if (skip_draws) {
+        skip_draws--;
+        return;
+    }
     gaddr saved;
     with_wmgr_port(&saved);
     layout_titles();
@@ -894,6 +906,7 @@ void tb_DrawMenuBar(void)
         if (!(MenuInfo_enableFlags(menu_ptr(mh)) & 1))
             dim_rect(r);
     }
+    os9tbx_draw_clock();
     int16_t hil = (int16_t)rd16(LM_TheMenu);
     if (hil) {
         for (int i = 0; i < n; i++)
@@ -1015,6 +1028,13 @@ void mdef0_native(cpu68k *c, uint16_t tw)
     gaddr rect = cpu_pop32(c);
     gaddr mh = cpu_pop32(c);
     int16_t msg = (int16_t)cpu_pop16(c);
+    menu_standard_mdef(msg, mh, rect, hit, which);
+    cpu_push32(c, ret);
+}
+
+/* The standard MDEF's body (MenusLib exports it as StandardMDEF). */
+void menu_standard_mdef(int16_t msg, gaddr mh, gaddr rect, uint32_t hit, gaddr which)
+{
     qrect r = qrect_get(rect);
     switch (msg) {
     case mDrawMsg:
@@ -1042,7 +1062,6 @@ void mdef0_native(cpu68k *c, uint16_t tw)
     default:
         break;
     }
-    cpu_push32(c, ret);
 }
 
 static void call_mdef(gaddr mh, int16_t msg, qrect r, uint32_t hit, gaddr which)
@@ -1062,6 +1081,163 @@ static void call_mdef(gaddr mh, int16_t msg, qrect r, uint32_t hit, gaddr which)
     guest_call_defproc(rd32(proc));
     tb_HUnlock(proc);
     tb_DisposePtr(rect);
+}
+
+/* An item's rectangle in its menu (AppearanceLib's GetMenuItemBounds),
+ * the menu's top left at 0,0, as the standard MDEF lays it out. */
+bool menu_item_bounds(gaddr mh, int item, qrect *out)
+{
+    if (!mh || !rd32(mh) || item < 1 || item > tb_CountMItems(mh))
+        return false;
+    int top = (item - 1) * ITEM_HEIGHT;
+    *out = (qrect){ (int16_t)top, 0, (int16_t)(top + ITEM_HEIGHT), MenuInfo_menuWidth(menu_ptr(mh)) };
+    return true;
+}
+
+/* The menu bar's right end, where a clock goes. */
+int menu_bar_titles_end(void)
+{
+    if (!mlist())
+        return 0;
+    layout_titles();
+    return (int16_t)rd16(rd32(mlist()) + 2);
+}
+
+/* MenusLib's CallMenuDef(menu, message, &menuRect, hitPt, &whichItem):
+ * the menu's definition, whichever it is. */
+void menu_call_def(gaddr mh, int16_t msg, gaddr rect, uint32_t hit, gaddr which)
+{
+    gaddr proc = MenuInfo_menuProc(menu_ptr(mh));
+    if (!proc || !rd32(proc))
+        return;
+    cpu68k *c = g_cpu;
+    cpu_push16(c, (uint16_t)msg);
+    cpu_push32(c, mh);
+    cpu_push32(c, rect);
+    cpu_push32(c, hit);
+    cpu_push32(c, which);
+    tb_HLock(proc);
+    guest_call_defproc(rd32(proc));
+    tb_HUnlock(proc);
+}
+
+/* ---------------------------------------------------------------------- */
+/* The menu bar's definition: the standard MBDF's messages (MenusLib's
+ * StandardMBDF and CallMenuBar), on the bar drawn here.  A menu is named
+ * by its offset in the menu list, 6 bytes to an entry after the header. */
+
+enum { kMenuBarDraw, kMenuBarHit, kMenuBarCalc, kMenuBarInit, kMenuBarDispose, kMenuBarHilite, kMenuBarHeight,
+       kMenuBarSave, kMenuBarRestore, kMenuBarRect, kMenuBarSaveAlt, kMenuBarResetAlt, kMenuBarMenuRgn };
+
+static struct {
+    int16_t offset;
+    qrect r;
+    uint32_t *bits;
+} mbdf_saved[8];
+static int nmbdf_saved;
+static gaddr mbdf_rect;
+
+static uint32_t *save_bits(qrect r);
+static void restore_bits(qrect r, uint32_t *buf);
+
+static void mbdf_reset(void)
+{
+    for (int i = 0; i < nmbdf_saved; i++)
+        free(mbdf_saved[i].bits);
+    nmbdf_saved = 0;
+    mbdf_rect = 0;
+    skip_draws = 0;
+}
+
+static int menu_of_offset(int offset)
+{
+    int i = (offset - 6) / 6;
+    return offset >= 6 && (offset - 6) % 6 == 0 && i < nmenus() ? i : -1;
+}
+
+int32_t menu_standard_mbdf(int16_t msg, int16_t param1, int32_t param2)
+{
+    if (!mlist())
+        return 0;
+    switch (msg) {
+    case kMenuBarDraw:
+        tb_DrawMenuBar();
+        return 0;
+    case kMenuBarHit: {
+        int16_t h = pt_h((uint32_t)param2), v = pt_v((uint32_t)param2);
+        if (v < 0 || v >= mbar_height() || h < 0 || h >= g_screen_width)
+            return -1;
+        layout_titles();
+        for (int i = 0; i < nmenus(); i++) {
+            qrect t = title_rect(i);
+            if (h >= t.left && h < t.right)
+                return 6 + i * 6;
+        }
+        return 0;
+    }
+    case kMenuBarCalc:
+        layout_titles();
+        return 0;
+    case kMenuBarHilite: {
+        int i = menu_of_offset((int16_t)(param2 & 0xFFFF));
+        if (i < 0)
+            tb_HiliteMenu(0);
+        else
+            tb_HiliteMenu(param2 >> 16 ? MenuInfo_menuID(menu_ptr(menu_at(i))) : 0);
+        return 0;
+    }
+    case kMenuBarHeight:
+        return mbar_height();
+    case kMenuBarSave: {
+        /* The screen under a menu about to be drawn in param2's rectangle,
+         * its shadow and frame. */
+        if (nmbdf_saved == 8 || !param2)
+            return 0;
+        qrect r = qrect_get((gaddr)param2);
+        r = (qrect){ (int16_t)(r.top - 1), (int16_t)(r.left - 1), (int16_t)(r.bottom + 2), (int16_t)(r.right + 2) };
+        if (qrect_empty(r))
+            return 0;
+        mbdf_saved[nmbdf_saved].offset = param1;
+        mbdf_saved[nmbdf_saved].r = r;
+        mbdf_saved[nmbdf_saved++].bits = save_bits(r);
+        return 0;
+    }
+    case kMenuBarRestore:
+        /* The last saved, put back. */
+        if (nmbdf_saved) {
+            nmbdf_saved--;
+            restore_bits(mbdf_saved[nmbdf_saved].r, mbdf_saved[nmbdf_saved].bits);
+        }
+        return 0;
+    case kMenuBarRect: {
+        /* The rectangle a menu (param2's offset, or param1's) is drawn in,
+         * below its title. */
+        int i = menu_of_offset(param1 ? param1 : (int16_t)param2);
+        if (i < 0)
+            return 0;
+        if (!mbdf_rect)
+            mbdf_rect = tb_NewPtr(8, true, true);
+        layout_titles();
+        gaddr mp = menu_ptr(menu_at(i));
+        qrect t = title_rect(i);
+        qrect_put(mbdf_rect, (qrect){ (int16_t)mbar_height(), t.left, (int16_t)(mbar_height() + MenuInfo_menuHeight(mp)),
+                                      (int16_t)(t.left + MenuInfo_menuWidth(mp)) });
+        return (int32_t)mbdf_rect;
+    }
+    case kMenuBarMenuRgn: {
+        /* The bar's region, in param2's region. */
+        if (!param2)
+            return 0;
+        hrgn g;
+        hrgn_init(&g);
+        hrgn_rect(&g, (qrect){ 0, 0, (int16_t)mbar_height(), (int16_t)g_screen_width });
+        rgn_write((gaddr)param2, &g);
+        hrgn_free(&g);
+        return param2;
+    }
+    default:
+        return 0;
+    }
 }
 
 /* ---------------------------------------------------------------------- */

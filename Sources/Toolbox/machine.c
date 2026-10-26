@@ -15,6 +15,7 @@
 #include "qt_codec.h"
 #include "sysfonts.h"
 #include "carbon_hi.h"
+#include "os9_toolbox.h"
 #include "tb_internal.h"
 #include "sysres_gen.h"
 #include "machine.h"
@@ -383,6 +384,7 @@ bool machine_boot(bool census)
     time_reset();
     vam_reset();
     priv_os9_reset();
+    os9tbx_reset();
     threads_reset();
     help_reset();
     dialog_reset();

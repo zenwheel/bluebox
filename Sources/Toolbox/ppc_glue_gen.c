@@ -28999,6 +28999,51 @@ static void ppcglue_GetControlRegion(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetMenuItemBounds(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_bounds = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemBounds(a_menu, a_item, a_bounds);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMenuItemPencilGlyph(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    int8_t a_showGlyph = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMenuItemPencilGlyph(a_menu, a_item, a_showGlyph);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMenuItemPencilGlyph(ppc_cpu *c)
+{
+    gaddr a_menu = (gaddr)c->gpr[3];
+    int16_t a_item = (int16_t)c->gpr[4];
+    gaddr a_showGlyph = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMenuItemPencilGlyph(a_menu, a_item, a_showGlyph);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlManagerDragTrackingHandler(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetControlManagerDragTrackingHandler();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetControlManagerDragReceiveHandler(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetControlManagerDragReceiveHandler();
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallControlManagerDragHandlers(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InstallControlManagerDragHandlers();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMoviesError(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMoviesError();
@@ -41631,6 +41676,8 @@ const ppc_export ppc_exports[] = {
     {"GetControlFeatures", ppcglue_GetControlFeatures},
     {"GetControlHilite", ppcglue_GetControlHilite},
     {"GetControlID", ppcglue_GetControlID},
+    {"GetControlManagerDragReceiveHandler", ppcglue_GetControlManagerDragReceiveHandler},
+    {"GetControlManagerDragTrackingHandler", ppcglue_GetControlManagerDragTrackingHandler},
     {"GetControlMaximum", ppcglue_GetControlMaximum},
     {"GetControlMinimum", ppcglue_GetControlMinimum},
     {"GetControlOwner", ppcglue_GetControlOwner},
@@ -41849,12 +41896,14 @@ const ppc_export ppc_exports[] = {
     {"GetMenuExcludesMarkColumn", ppcglue_GetMenuExcludesMarkColumn},
     {"GetMenuFont", ppcglue_GetMenuFont},
     {"GetMenuHandle", ppcglue_GetMenuHandle},
+    {"GetMenuItemBounds", ppcglue_GetMenuItemBounds},
     {"GetMenuItemCommandID", ppcglue_GetMenuItemCommandID},
     {"GetMenuItemFontID", ppcglue_GetMenuItemFontID},
     {"GetMenuItemHierarchicalID", ppcglue_GetMenuItemHierarchicalID},
     {"GetMenuItemIconHandle", ppcglue_GetMenuItemIconHandle},
     {"GetMenuItemKeyGlyph", ppcglue_GetMenuItemKeyGlyph},
     {"GetMenuItemModifiers", ppcglue_GetMenuItemModifiers},
+    {"GetMenuItemPencilGlyph", ppcglue_GetMenuItemPencilGlyph},
     {"GetMenuItemRefCon", ppcglue_GetMenuItemRefCon},
     {"GetMenuItemRefCon2", ppcglue_GetMenuItemRefCon2},
     {"GetMenuItemText", ppcglue_GetMenuItemText},
@@ -42259,6 +42308,7 @@ const ppc_export ppc_exports[] = {
     {"InsertTrackSegment", ppctrap_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
+    {"InstallControlManagerDragHandlers", ppcglue_InstallControlManagerDragHandlers},
     {"InstallExtensionNotificationProc", ppcglue_InstallExtensionNotificationProc},
     {"InstallExtensionTableHandlerProc", ppcglue_InstallExtensionTableHandlerProc},
     {"InstallFS", ppcglue_InstallFS},
@@ -44062,6 +44112,7 @@ const ppc_export ppc_exports[] = {
     {"SetMenuItemIconHandle", ppcglue_SetMenuItemIconHandle},
     {"SetMenuItemKeyGlyph", ppcglue_SetMenuItemKeyGlyph},
     {"SetMenuItemModifiers", ppcglue_SetMenuItemModifiers},
+    {"SetMenuItemPencilGlyph", ppcglue_SetMenuItemPencilGlyph},
     {"SetMenuItemRefCon", ppcglue_SetMenuItemRefCon},
     {"SetMenuItemRefCon2", ppcglue_SetMenuItemRefCon2},
     {"SetMenuItemText", ppcglue_SetMenuItemText},

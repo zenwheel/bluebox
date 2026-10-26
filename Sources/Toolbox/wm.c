@@ -119,6 +119,11 @@ static bool is_floating(gaddr w) { return our_wdef(w) == 124; }
  * highlighted, and the front document window the active one. */
 static bool float_layer;
 
+/* Floating windows deactivated (WindowsLib's DeactivateFloatingWindows,
+ * as the System did when the program went to the back): unhighlighted
+ * until activated again. */
+static bool floats_inactive;
+
 static void port_offset(gaddr w, int *dh, int *dv)
 {
     pixdst d = qd_port_pixels(w);
@@ -841,9 +846,10 @@ static void set_desk(int mbar)
 
 /* The menu bar hidden, as a full-screen game has it (MBarHeight 0, the
  * desk the whole screen), and shown again at the height it had. */
+static int16_t saved_height;
+
 void wm_hide_menu_bar(bool hide)
 {
-    static int16_t saved_height;
     if (hide) {
         if (!rd16(LM_MBarHeight))
             return;
@@ -858,6 +864,26 @@ void wm_hide_menu_bar(bool hide)
         tb_DrawMenuBar();
     }
 }
+
+/* MenusLib's SetMenuBarHeight: the bar this high (the height it will
+ * have when shown again, while it is hidden) and the desk below it. */
+void wm_set_menu_bar_height(int16_t h)
+{
+    if (h < 0)
+        return;
+    if (!rd16(LM_MBarHeight) && saved_height) {
+        saved_height = h;
+        return;
+    }
+    wr16(LM_MBarHeight, (uint16_t)h);
+    set_desk(h);
+    if (h)
+        tb_DrawMenuBar();
+}
+
+/* WindowsLib's RebuildDesktopRegion: the gray region made again from the
+ * screen and the menu bar. */
+void wm_rebuild_desk(void) { set_desk((int16_t)rd16(LM_MBarHeight)); }
 
 void display_windows_changed(void);
 
@@ -1112,7 +1138,7 @@ static void update_active(void)
     gaddr front = front_active();
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
         if (float_layer && is_floating(w)) {
-            set_hilite(w, wvisible(w) != 0);
+            set_hilite(w, wvisible(w) != 0 && !floats_inactive);
             continue;
         }
         if (w != front && WindowRecord_hilited(w)) {
@@ -1549,6 +1575,8 @@ bool wm_set_collapsed(gaddr w, bool on)
     return true;
 }
 
+static void system_features(gaddr w, uint32_t *f);
+
 /* GetWindowFeatures' bits: kWindowCanGrow 1, CanZoom 2, CanCollapse 4,
  * IsModal 8, CanGetWindowRegion 16, HasTitleBar 64. */
 uint32_t wm_window_features(gaddr w)
@@ -1569,6 +1597,7 @@ uint32_t wm_window_features(gaddr w)
     } else if (def == 124) {
         f |= 4 | 64;
     }
+    system_features(w, &f); /* what the System set for it */
     return f;
 }
 
@@ -2277,6 +2306,7 @@ void tb_InitWindows(void)
     old_window = 0;
     floats_hidden = false;
     float_layer = false;
+    floats_inactive = false;
     nhidden_floats = 0;
     ndisposed = 0;
     wr32(LM_CurActivate, 0);
@@ -2440,6 +2470,7 @@ int16_t tb_GetWindowFeatures(gaddr w, gaddr outFeatures)
         if (def == 0 && (var == 1 || var == 5))
             f |= kWindowIsModal;
     }
+    system_features(w, &f); /* what the System set for it */
     if (outFeatures)
         wr32(outFeatures, f);
     return noErr;
@@ -2613,6 +2644,13 @@ int16_t tb_InitFloatingWindows(void)
 }
 int8_t tb_AreFloatingWindowsVisible(void) { return !floats_hidden; }
 
+void wm_set_floats_active(bool on)
+{
+    floats_inactive = !on;
+    update_active();
+}
+bool wm_floats_active(void) { return !floats_inactive; }
+
 static int16_t show_floats(bool show)
 {
     if (floats_hidden == !show)
@@ -2695,6 +2733,15 @@ static window_property *find_property(gaddr w, uint32_t creator, uint32_t tag)
         if (props[i].w == w && props[i].creator == creator && props[i].tag == tag)
             return &props[i];
     return NULL;
+}
+
+/* The features WindowsLib's SetWindowFeatures gave a window: a property
+ * of the System's ('macs' 'feat'). */
+static void system_features(gaddr w, uint32_t *f)
+{
+    window_property *p = find_property(w, 0x6D616373, 0x66656174);
+    if (p && p->size == 4)
+        *f = (uint32_t)p->data[0] << 24 | (uint32_t)p->data[1] << 16 | (uint32_t)p->data[2] << 8 | p->data[3];
 }
 
 int16_t tb_SetWindowProperty(gaddr w, uint32_t creator, uint32_t tag, uint32_t size, gaddr buffer)

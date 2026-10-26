@@ -1,0 +1,66 @@
+# Mac OS 8.5 to 9's private Appearance Manager calls that AppearanceLib
+# reaches through the Menu and Control Managers' traps (_MenuDispatch
+# $A825, _ControlDispatch $AA73), so 68k code has them by the same
+# selectors.  The rest of the four libraries' private calls are PowerPC
+# only (os9_toolbox.c).
+
+# GetMenuItemBounds(menu, item, &rect): the item's rectangle in its menu.
+- function:
+    name: GetMenuItemBounds
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: bounds
+        type: Rect*
+    dispatcher: MenuDispatch
+    selector: 0x0515
+
+# Whether an item shows the glyph marking it editable.
+- function:
+    name: SetMenuItemPencilGlyph
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: showGlyph
+        type: Boolean
+    dispatcher: MenuDispatch
+    selector: 0x0416
+
+- function:
+    name: GetMenuItemPencilGlyph
+    return: OSErr
+    args:
+      - name: menu
+        type: MenuHandle
+      - name: item
+        type: SInt16
+      - name: showGlyph
+        type: Boolean*
+    dispatcher: MenuDispatch
+    selector: 0x0517
+
+# The Control Manager's Drag Manager handlers, and them installed for
+# every window.
+- function:
+    name: GetControlManagerDragTrackingHandler
+    return: Ptr
+    dispatcher: ControlDispatch
+    selector: 0x001F
+
+- function:
+    name: GetControlManagerDragReceiveHandler
+    return: Ptr
+    dispatcher: ControlDispatch
+    selector: 0x0020
+
+- function:
+    name: InstallControlManagerDragHandlers
+    return: OSErr
+    dispatcher: ControlDispatch
+    selector: 0x0021

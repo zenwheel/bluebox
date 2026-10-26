@@ -24,6 +24,7 @@
 #include "hostgl.h"
 #include "machine.h"
 #include "carbon_hi.h"
+#include "os9_toolbox.h"
 #include "ppc_bridge.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -247,6 +248,8 @@ static void (*export_fn(const char *name))(ppc_cpu *)
         for (unsigned i = 0; i < gl_export_count; i++)
             if (!strcmp(gl_exports[i].name, name))
                 return gl_exports[i].fn;
+    if (os9tbx_export_fn(name)) /* WindowsLib, ControlsLib, MenusLib and AppearanceLib's own */
+        return os9tbx_export_fn(name);
     unsigned lo = 0, hi = ppc_export_count;
     while (lo < hi) {
         unsigned mid = (lo + hi) / 2;

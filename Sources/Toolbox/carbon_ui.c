@@ -15,6 +15,7 @@
 #define CARBON_HI_EXPORTS
 #include "carbon_hi.h"
 #include "forks.h"
+#include "os9_toolbox.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
 
@@ -1099,13 +1100,14 @@ static void ap_GetTheme(ppc_cpu *c)
     tb_AddCollectionItem(coll, (int32_t)kThemeVariantNameTag, 0, rd8(buf) + 1, buf);
     gmemcpy(buf, LM_HiliteRGB, 6);
     tb_AddCollectionItem(coll, (int32_t)kThemeHighlightColorTag, 0, 6, buf);
-    wr16(buf, 0); /* kThemeScrollBarArrowsSingle */
+    const appearance_settings *set = ap_settings();
+    wr16(buf, set->arrow_style);
     tb_AddCollectionItem(coll, (int32_t)kThemeScrollBarArrowStyleTag, 0, 2, buf);
-    wr16(buf, 1); /* kThemeScrollBarThumbProportional */
+    wr16(buf, set->thumb_style);
     tb_AddCollectionItem(coll, (int32_t)kThemeScrollBarThumbStyleTag, 0, 2, buf);
-    wr8(buf, 0);
+    wr8(buf, set->sounds);
     tb_AddCollectionItem(coll, (int32_t)kThemeSoundsEnabledTag, 0, 1, buf);
-    wr8(buf, 1);
+    wr8(buf, set->dbl_click == 1);
     tb_AddCollectionItem(coll, (int32_t)kThemeDblClickCollapseTag, 0, 1, buf);
     static const struct {
         uint32_t tag;
@@ -1124,8 +1126,8 @@ static void ap_GetTheme(ppc_cpu *c)
     RETURN(noErr);
 }
 
-/* SetTheme: the highlight colour taken; the rest is the one theme there
- * is. */
+/* SetTheme: the highlight colour taken, and the control panel's settings
+ * (fonts, scroll bars, sounds); the appearance is the one there is. */
 static void ap_SetTheme(ppc_cpu *c)
 {
     gaddr coll = R(0);
@@ -1141,7 +1143,7 @@ static void ap_SetTheme(ppc_cpu *c)
     }
     tb_DisposePtr(size);
     tb_DisposePtr(rgb);
-    RETURN(noErr);
+    RETURN(ap_apply_theme(coll));
 }
 
 /* IterateThemes(proc, userData): the theme files of the Appearance

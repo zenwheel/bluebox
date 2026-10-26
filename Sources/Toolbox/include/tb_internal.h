@@ -714,6 +714,25 @@ void wm_hide_menu_bar(bool hide);
 bool wm_is_collapsed(gaddr w);
 bool wm_set_collapsed(gaddr w, bool on); /* false when the window can't collapse */
 uint32_t wm_window_features(gaddr w);
+/* For WindowsLib (os9_toolbox.c): floating windows highlighted or not,
+ * the menu bar's height, and the desk's region made again. */
+void wm_set_floats_active(bool on);
+bool wm_floats_active(void);
+void wm_set_menu_bar_height(int16_t h);
+void wm_rebuild_desk(void);
+/* For MenusLib: the standard menu definition and the menu bar's, and a
+ * menu's own definition called. */
+void menu_standard_mdef(int16_t msg, gaddr mh, gaddr rect, uint32_t hit, gaddr which);
+int32_t menu_standard_mbdf(int16_t msg, int16_t param1, int32_t param2);
+void menu_call_def(gaddr mh, int16_t msg, gaddr rect, uint32_t hit, gaddr which);
+void menu_skip_draws(int n);
+bool menu_item_bounds(gaddr mh, int item, qrect *out);
+int menu_bar_titles_end(void);
+/* The menu bar clock (MenusLib's), drawn with the bar when it's on. */
+void os9tbx_draw_clock(void);
+/* The Control Manager's Drag Manager handlers (carbon_controls.c). */
+gaddr ctl_drag_tracking_handler(void);
+gaddr ctl_drag_receive_handler(void);
 bool cfm_launch(const char *app_path, char *err, size_t errlen);
 bool cfm_app_fragment_loadable(const char *path);
 /* Load a PEF container in memory (an accelerated code resource's) once;
