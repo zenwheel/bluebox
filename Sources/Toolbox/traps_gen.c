@@ -7887,6 +7887,21 @@ static void glue_FindWord(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindWordBreaks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    gaddr a_offsets = (gaddr)cpu_pop32(c);
+    gaddr a_breaks = (gaddr)cpu_pop32(c);
+    int8_t a_leadingEdge = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_offset = (int16_t)cpu_pop16(c);
+    int16_t a_textLength = (int16_t)cpu_pop16(c);
+    gaddr a_textPtr = (gaddr)cpu_pop32(c);
+    tb_FindWordBreaks(a_textPtr, a_textLength, a_offset, a_leadingEdge, a_breaks, a_offsets, a_script);
+    cpu_push32(c, ret);
+}
+
 static void glue_Fix2Frac(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -24659,6 +24674,19 @@ static void glue_TruncString(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TruncText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_truncWhere = (int16_t)cpu_pop16(c);
+    gaddr a_length = (gaddr)cpu_pop32(c);
+    gaddr a_textPtr = (gaddr)cpu_pop32(c);
+    int16_t a_width = (int16_t)cpu_pop16(c);
+    int16_t r = tb_TruncText(a_width, a_textPtr, a_length, a_truncWhere);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UnRegisterSection(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -27958,6 +27986,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x820C0016u, "Char2Pixel", CONV_STACK, 12, 2, glue_Char2Pixel},
     {0xA8B5, (int32_t)0x820C0026u, "FindScriptRun", CONV_STACK, 12, 2, glue_FindScriptRun},
     {0xA8B5, (int32_t)0x820CFFDCu, "ReplaceText", CONV_STACK, 12, 2, glue_ReplaceText},
+    {0xA8B5, (int32_t)0x820CFFDEu, "TruncText", CONV_STACK, 12, 2, glue_TruncText},
     {0xA8B5, (int32_t)0x820CFFECu, "StringToFormatRec", CONV_STACK, 12, 2, glue_StringToFormatRec},
     {0xA8B5, (int32_t)0x820E0014u, "Pixel2Char", CONV_STACK, 14, 2, glue_Pixel2Char},
     {0xA8B5, (int32_t)0x820E0018u, "Transliterate", CONV_STACK, 14, 2, glue_Transliterate},
@@ -27977,6 +28006,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x84120036u, "PortionLine", CONV_STACK, 18, 4, glue_PortionLine},
     {0xA8B5, (int32_t)0xC008003Au, "SetScriptUtilityAddress", CONV_STACK, 10, 0, glue_SetScriptUtilityAddress},
     {0xA8B5, (int32_t)0xC00A003Eu, "SetScriptQDPatchAddress", CONV_STACK, 12, 0, glue_SetScriptQDPatchAddress},
+    {0xA8B5, (int32_t)0xC012001Au, "FindWordBreaks", CONV_STACK, 20, 0, glue_FindWordBreaks},
     {0xA8B5, (int32_t)0xC2040022u, "FillParseTable", CONV_STACK, 6, 2, glue_FillParseTable},
     {0xA8B5, (int32_t)0xC2060010u, "CharacterByteType", CONV_STACK, 8, 2, glue_CharacterByteType},
     {0xA8B5, (int32_t)0xC2060012u, "CharacterType", CONV_STACK, 8, 2, glue_CharacterType},

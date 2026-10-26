@@ -136,3 +136,41 @@
     name: QDExtensions
     trap: 0xAB1D
     selector-location: D0<0xFFFF>
+
+# The Script Manager's TruncText and FindWordBreaks for 68k programs
+# (Pentominoes, OpenMe First, YellowEdit Documentation); PowerPC ones had
+# them already.
+- function:
+    name: TruncText
+    return: INTEGER
+    args:
+      - name: width
+        type: INTEGER
+      - name: textPtr
+        type: Ptr
+      - name: length
+        type: INTEGER*
+      - name: truncWhere
+        type: INTEGER
+    dispatcher: ScriptUtil
+    selector: 0x820CFFDE
+
+- function:
+    name: FindWordBreaks
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: textLength
+        type: INTEGER
+      - name: offset
+        type: INTEGER
+      - name: leadingEdge
+        type: Boolean
+      - name: breaks
+        type: Ptr
+      - name: offsets
+        type: Ptr
+      - name: script
+        type: INTEGER
+    dispatcher: ScriptUtil
+    selector: 0xC012001A

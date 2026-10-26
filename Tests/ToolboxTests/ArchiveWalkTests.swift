@@ -151,6 +151,28 @@ extension BlueBox {
             }
         }
 
+        /// TruncText, now a 68k call too (Pentominoes): the text cut to the
+        /// width with an ellipsis, its length updated; FindWordBreaks finds
+        /// a word's bounds (OpenMe First).
+        @Test func scriptManagerTextCalls() {
+            bootMachine()
+            let text = Array("Pentominoes and more".utf8)
+            let p = tb_NewPtr(64, false, true), len = tb_NewPtr(2, false, true)
+            for (i, b) in text.enumerated() { wr8(p + UInt32(i), b) }
+            wr16(len, UInt16(text.count))
+            wr32(UInt32(LM_CurrentA5), tb_NewPtr(64, false, true) + 32) // an A5 world for QuickDraw's globals
+            _ = initToolbox()
+            tb_TextFont(4) // Monaco
+            tb_TextSize(9)
+            #expect(tb_TruncText(1000, p, len, 0) == 0 && rd16(len) == UInt16(text.count))
+            let cut = tb_TruncText(40, p, len, 0)
+            #expect(cut == 1 && rd16(len) < UInt16(text.count), "\(cut) \(rd16(len))")
+            let offsets = tb_NewPtr(12, false, true)
+            for (i, b) in text.enumerated() { wr8(p + UInt32(i), b) }
+            tb_FindWordBreaks(p, Int16(text.count), 2, 1, 0, offsets, 0)
+            #expect(rd16(offsets) == 0 && rd16(offsets + 2) == 11)
+        }
+
         /// OTCompareAndSwap8 and 16, and Carbon's CompareString and
         /// TimeString (Turtle Turmoil, The Cow Catching Game, Amorphium).
         @Test func smallCalls() {

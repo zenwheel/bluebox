@@ -801,28 +801,7 @@ static void g_SetEnvirons(ppc_cpu *c)
 
 static void g_TruncText(ppc_cpu *c)
 {
-    gaddr text = R(1), lenp = R(2);
-    int16_t len = lenp ? (int16_t)rd16(lenp) : 0;
-    if (len <= 0 || !text) {
-        RETURN(0);
-        return;
-    }
-    if (len > 255)
-        len = 255;
-    gaddr tmp = tb_NewPtr(256, false, false);
-    if (!tmp) {
-        RETURN((uint32_t)-1);
-        return;
-    }
-    wr8(tmp, (uint8_t)len);
-    gmemcpy(tmp + 1, text, (uint32_t)len);
-    int16_t r = tb_TruncString((int16_t)R(0), tmp, (int16_t)R(3));
-    if (r > 0) {
-        gmemcpy(text, tmp + 1, rd8(tmp));
-        wr16(lenp, rd8(tmp));
-    }
-    tb_DisposePtr(tmp);
-    RETURN((uint32_t)(int32_t)r);
+    RETURN((uint32_t)(int32_t)tb_TruncText((int16_t)R(0), R(1), R(2), (int16_t)R(3)));
 }
 
 /* GetDefaultUser(&userRef, name): Sharing Setup's owner, the host

@@ -615,6 +615,40 @@ static void ic_GetComponentInstance(ppc_cpu *c)
     RETURN(ci ? noErr : -2000 /* invalidComponentID */);
 }
 
+/* ---------------------------------------------------------------------- */
+/* The Script Manager. */
+
+/* TruncText(width, textPtr, short *length, truncWhere): the text cut to
+ * fit width with an ellipsis, as TruncString cuts a Pascal string. */
+int16_t tb_TruncText(int16_t width, gaddr text, gaddr lenp, int16_t where)
+{
+    int16_t len = lenp ? (int16_t)rd16(lenp) : 0;
+    if (len <= 0 || !text)
+        return 0;
+    if (len > 255)
+        len = 255;
+    gaddr tmp = tb_NewPtr(256, false, false);
+    if (!tmp)
+        return -1;
+    wr8(tmp, (uint8_t)len);
+    gmemcpy(tmp + 1, text, (uint32_t)len);
+    int16_t r = tb_TruncString(width, tmp, where);
+    if (r > 0) {
+        gmemcpy(text, tmp + 1, rd8(tmp));
+        wr16(lenp, rd8(tmp));
+    }
+    tb_DisposePtr(tmp);
+    return r;
+}
+
+/* FindWordBreaks: FindWord, for the system script's word breaks. */
+void tb_FindWordBreaks(gaddr text, int16_t len, int16_t offset, int8_t leading, gaddr breaks, gaddr offsets,
+                       int16_t script)
+{
+    (void)script;
+    tb_FindWord(text, len, offset, leading, breaks, offsets);
+}
+
 const ppc_export vam_exports[] = {
     { "OTCreateTimerTask", ot_CreateTimerTask }, { "OTCreateTimerTaskInContext", ot_CreateTimerTask },
     { "OTScheduleTimerTask", ot_ScheduleTimerTask }, { "OTCancelTimerTask", ot_CancelTimerTask },

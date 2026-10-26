@@ -30372,6 +30372,29 @@ static void ppcglue_IsLayer(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_TruncText(ppc_cpu *c)
+{
+    int16_t a_width = (int16_t)c->gpr[3];
+    gaddr a_textPtr = (gaddr)c->gpr[4];
+    gaddr a_length = (gaddr)c->gpr[5];
+    int16_t a_truncWhere = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TruncText(a_width, a_textPtr, a_length, a_truncWhere);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindWordBreaks(ppc_cpu *c)
+{
+    gaddr a_textPtr = (gaddr)c->gpr[3];
+    int16_t a_textLength = (int16_t)c->gpr[4];
+    int16_t a_offset = (int16_t)c->gpr[5];
+    int8_t a_leadingEdge = (int8_t)c->gpr[6];
+    gaddr a_breaks = (gaddr)c->gpr[7];
+    gaddr a_offsets = (gaddr)c->gpr[8];
+    int16_t a_script = (int16_t)c->gpr[9];
+    tb_FindWordBreaks(a_textPtr, a_textLength, a_offset, a_leadingEdge, a_breaks, a_offsets, a_script);
+    c->pc = c->lr;
+}
+
 static void ppctrap_StringToNum(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -41336,6 +41359,7 @@ const ppc_export ppc_exports[] = {
     {"FindSymbol", ppctrap_FindSymbol},
     {"FindWindow", ppcglue_FindWindow},
     {"FindWord", ppcglue_FindWord},
+    {"FindWordBreaks", ppcglue_FindWordBreaks},
     {"Fix2Frac", ppcglue_Fix2Frac},
     {"Fix2Long", ppcglue_Fix2Long},
     {"Fix2SmallFract", ppcglue_Fix2SmallFract},
@@ -44361,6 +44385,7 @@ const ppc_export ppc_exports[] = {
     {"TransliterateText", ppcglue_TransliterateText},
     {"TrimImage", ppctrap_TrimImage},
     {"TruncString", ppcglue_TruncString},
+    {"TruncText", ppcglue_TruncText},
     {"UnRegisterSection", ppcglue_UnRegisterSection},
     {"UnflattenCollection", ppctrap_UnflattenCollection},
     {"UnflattenCollectionFromHdl", ppctrap_UnflattenCollectionFromHdl},
