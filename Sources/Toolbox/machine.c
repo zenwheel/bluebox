@@ -335,6 +335,7 @@ void machine_dump_68k_trace(void)
         if (hist[k].pc)
             log_printf("68k %08X %04X  a7 %08X d0 %08X\n", hist[k].pc, hist[k].op, hist[k].a7, hist[k].d0);
     }
+    memset(hist, 0, hist_len * sizeof *hist); /* printed once */
 }
 
 bool machine_boot(bool census)

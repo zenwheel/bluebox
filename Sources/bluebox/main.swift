@@ -773,6 +773,7 @@ func runCommand(_ args: [String]) {
     let count = machine_instruction_count()
     relaunchAtWantedDepth()
     if status == RUN_HALTED {
+        machine_dump_68k_trace() // a stop the CPU made itself, with no exception handler
         print("stopped: \(String(cString: machine_halt_reason())) after \(count) instructions")
     } else {
         let waiting = machine_waiting_for_input() ? " waiting for input" : ""
