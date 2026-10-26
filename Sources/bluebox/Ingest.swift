@@ -187,7 +187,11 @@ private func findUnar() -> String? {
 }
 
 /// Extract an archive into dest with resource forks as AppleDouble sidecars.
-private func unar(_ archive: String, into dest: String) throws {
+/// Some files failing while others came out (an InstallerMaker archive's
+/// control entries named as its folders are, a damaged or encrypted file)
+/// keeps what came out: returned is what failed, to note.
+@discardableResult
+private func unar(_ archive: String, into dest: String) throws -> String? {
     guard let tool = findUnar() else { throw IngestError.unarMissing }
     let p = Process()
     p.executableURL = URL(fileURLWithPath: tool)
@@ -204,8 +208,15 @@ private func unar(_ archive: String, into dest: String) throws {
     p.waitUntilExit()
     let msg = String(decoding: errPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     if p.terminationStatus != 0 {
+        let failed = msg.split(separator: "\n").filter { $0.contains("Failed!") }
+        let out = (try? FileManager.default.contentsOfDirectory(atPath: dest)) ?? []
+        if !failed.isEmpty && out.contains(where: { !$0.hasPrefix(".") }) {
+            let first = failed[0].trimmingCharacters(in: .whitespaces)
+            return failed.count == 1 ? first : "\(first), and \(failed.count - 1) more"
+        }
         throw IngestError.unarFailed(archive, msg.trimmingCharacters(in: .whitespacesAndNewlines))
     }
+    return nil
 }
 
 /// Mac names may contain '/', host names may not; Mac names cannot contain ':'.
@@ -268,7 +279,9 @@ private func normalise(_ dir: String, depth: Int, notes: inout [String]) throws 
             if !fm.fileExists(atPath: sub) {
                 try fm.createDirectory(atPath: sub, withIntermediateDirectories: true)
                 do {
-                    try unar(path, into: sub)
+                    if let failed = try unar(path, into: sub) {
+                        notes.append("\(name): partly extracted (\(failed))")
+                    }
                     try normalise(sub, depth: depth + 1, notes: &notes)
                 } catch {
                     try? fm.removeItem(atPath: sub)
@@ -295,7 +308,9 @@ private func decodeMacBinary(_ path: String, into dir: String, depth: Int, notes
         // unar understands MacBinary-wrapped archives directly.
         let sub = dir + "/" + hostName(name) + " ƒ"
         try FileManager.default.createDirectory(atPath: sub, withIntermediateDirectories: true)
-        try unar(path, into: sub)
+        if let failed = try unar(path, into: sub) {
+            notes.append("\(name): partly extracted (\(failed))")
+        }
         try normalise(sub, depth: depth + 1, notes: &notes)
         return
     }
@@ -347,7 +362,9 @@ func ingest(_ source: String, library: String, force: Bool = false) throws -> (e
         case .macBinary:
             try decodeMacBinary(source, into: entry, depth: 0, notes: &notes)
         case .archive:
-            try unar(source, into: entry)
+            if let failed = try unar(source, into: entry) {
+                notes.append("partly extracted (\(failed))")
+            }
             try normalise(entry, depth: 1, notes: &notes)
         case .appleDouble, .diskImage:
             let name = (source as NSString).lastPathComponent
