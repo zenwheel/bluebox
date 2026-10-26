@@ -277,5 +277,30 @@ extension BlueBox {
             #expect(rd32(UInt32(LM_SoundGlue)) == 0xFFFF_FFFF)
             #expect(pstring(at: UInt32(LM_SysResName)) == "System")
         }
+
+        /// Every dialog has a TERec, with no edit text item too (OfficePool
+        /// locks its about box's); an edit text item, appended later, takes
+        /// it over with its own text.
+        @Test func dialogsAlwaysHaveATERec() {
+            let plain = ditl([ditlItem(4, (160, 220, 180, 290), Array("OK".utf8)),
+                              ditlItem(8, (50, 20, 66, 280), Array("Hello".utf8))])
+            let more = ditl([ditlItem(16, (80, 20, 96, 200), Array("abc".utf8))])
+            launchTestApp([TestResource(type: "DLOG", id: 200, data: dlog(items: 200)),
+                           TestResource(type: "DITL", id: 200, data: plain),
+                           TestResource(type: "DITL", id: 201, data: more)])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+            let te = rd32(d + 0xA0) // textH
+            #expect(te != 0 && Int16(bitPattern: rd16(d + 0xA4)) == -1) // editField
+            tb_HLock(te)
+            #expect(memErr() == 0)
+            tb_HUnlock(te)
+            tb_AppendDITL(d, tb_GetResource(Int32(bitPattern: fourCC("DITL")), 201), 0)
+            #expect(rd32(d + 0xA0) == te && rd16(d + 0xA4) == 2)
+            let t = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true)
+            tb_GetDialogItem(d, 3, t, h, r)
+            #expect(rd32(rd32(te) + 0x3E) == rd32(h)) // hText: the item's text
+            tb_DisposeDialog(d)
+        }
     }
 }

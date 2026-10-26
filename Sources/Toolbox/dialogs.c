@@ -232,6 +232,10 @@ static void activate_edit(gaddr d, int n, int start, int end)
     gaddr te = edit_te(d);
     if (!te)
         return;
+    if (edit_item(d) <= 0 && TERec_hText(rd32(te))) { /* its own text, until now */
+        tb_DisposeHandle(TERec_hText(rd32(te)));
+        TERec_set_hText(rd32(te), 0);
+    }
     gaddr saved = qd_port();
     tb_SetPort(d);
     edit_bk bk;
@@ -313,21 +317,42 @@ static gaddr make_item(gaddr d, int i)
     return made;
 }
 
-/* The dialog's TERec, made for edit text item n when it has none yet. */
-static void make_edit(gaddr d, int n)
+/* The dialog's TERec.  Every dialog has one, as the Dialog Manager made
+ * it, with or without edit text items: programs set its font for their
+ * static text or lock it (OfficePool stops with a trap when textH is
+ * nil).  Without an edit text item it keeps a text of its own. */
+static gaddr new_dialog_te(gaddr d, qrect rect)
 {
-    if (rd32(d + DialogRecord_textH_off))
-        return;
     gaddr r = tb_NewPtr(8, false, false);
-    qrect_put(r, item_rect(d, n));
+    qrect_put(r, rect);
     gaddr saved = qd_port();
     tb_SetPort(d);
     gaddr te = tb_TENew(r, r);
     tb_SetPort(saved);
     tb_DisposePtr(r);
-    tb_DisposeHandle(TERec_hText(rd32(te)));
-    wr32(d + DialogRecord_textH_off, te);
-    activate_edit(d, n, 0, 32767);
+    return te;
+}
+
+/* Edit text item n becomes the active one, unless one already is. */
+static void make_edit(gaddr d, int n)
+{
+    gaddr te = rd32(d + DialogRecord_textH_off);
+    if (te && edit_item(d) > 0)
+        return;
+    if (!te) {
+        te = new_dialog_te(d, item_rect(d, n));
+        wr32(d + DialogRecord_textH_off, te);
+    }
+    activate_edit(d, n, 0, 32767); /* the item's text in place of the TERec's own */
+}
+
+/* The TERec without an edit text item: its own empty text again. */
+static void idle_edit(gaddr d)
+{
+    gaddr te = rd32(d + DialogRecord_textH_off);
+    if (te && rd32(te))
+        TERec_set_hText(rd32(te), tb_NewHandle(0, false, false)); /* the item owns its text */
+    wr16(d + DialogRecord_editField_off, (uint16_t)-1);
 }
 
 static void make_items_from(gaddr d, int from)
@@ -346,6 +371,8 @@ static void make_items_from(gaddr d, int from)
     }
     if (first_edit)
         make_edit(d, first_edit);
+    else if (!rd32(d + DialogRecord_textH_off))
+        wr32(d + DialogRecord_textH_off, new_dialog_te(d, (qrect){ 0, 0, 0, 0 }));
 }
 
 static void make_items(gaddr d) { make_items_from(d, 1); }
@@ -659,7 +686,8 @@ void tb_CloseDialog(gaddr d)
     ap_forget_dialog(d);
     gaddr te = edit_te(d);
     if (te) {
-        TERec_set_hText(rd32(te), tb_NewHandle(0, false, false)); /* the item owns its text */
+        if (edit_item(d) > 0)
+            TERec_set_hText(rd32(te), tb_NewHandle(0, false, false)); /* the item owns its text */
         tb_TEDispose(te);
         wr32(d + DialogRecord_textH_off, 0);
     }
@@ -1064,7 +1092,7 @@ int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
     gaddr saved = qd_port();
     tb_SetPort(d);
     int8_t result = 0;
-    gaddr te = edit_te(d);
+    gaddr te = edit_item(d) > 0 ? edit_te(d) : 0; /* the TERec, while an edit text item has it */
     switch (what) {
     case updateEvt:
         tb_BeginUpdate(d);
@@ -1682,15 +1710,8 @@ int32_t tb_RemoveDialogItems(gaddr d, int16_t first, int16_t count, int8_t dispo
         qrect_put(rr, item_rect(d, i));
         tb_InvalRect(rr);
         tb_DisposePtr(rr);
-        if (i == edit) { /* the TERec gives the item's text back */
-            gaddr te = edit_te(d);
-            if (te) {
-                TERec_set_hText(rd32(te), tb_NewHandle(0, false, false));
-                tb_TEDispose(te);
-                wr32(d + DialogRecord_textH_off, 0);
-            }
-            wr16(d + DialogRecord_editField_off, (uint16_t)-1);
-        }
+        if (i == edit) /* the TERec gives the item's text back */
+            idle_edit(d);
         if ((type & ctrlItem) && h) {
             if (dispose)
                 tb_DisposeControl(h);
@@ -1711,7 +1732,7 @@ int32_t tb_RemoveDialogItems(gaddr d, int16_t first, int16_t count, int8_t dispo
     if (edit > last)
         wr16(d + DialogRecord_editField_off, (uint16_t)(edit - count - 1));
     ap_items_shifted(d, last + 1, -count);
-    if (!edit_te(d)) /* the next edit text item takes the TERec */
+    if (edit_item(d) <= 0) /* the next edit text item takes the TERec */
         for (int i = 1; i <= n - count; i++)
             if ((item_type(d, i) & 0x7F) == editText) {
                 make_edit(d, i);
