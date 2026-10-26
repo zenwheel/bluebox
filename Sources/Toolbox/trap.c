@@ -380,6 +380,14 @@ static void package_native(cpu68k *c, uint16_t tw)
         cpu_halt(c, "package %d (trap %04X) not found", n, tw);
         return;
     }
+    /* The System's PACK is a stub that jumps through the trap table: back
+     * here, for a package with no code of ours, round and round. */
+    gaddr p = rd32(h);
+    if (rd16(p) == 0x2F38 && rd16(p + 2) == (uint16_t)(TB_TRAP_TABLE + (tw & 0x3FFu) * 4) && rd16(p + 4) == 0x4E75) {
+        current_trap = tw;
+        unimplemented_native(c, tw);
+        return;
+    }
     tb_HNoPurge(h);
     tb_HLock(h);
     cpu_push32(c, rd32(h)); /* the dispatcher's return goes there */

@@ -161,5 +161,14 @@ extension BlueBox {
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("pop!")), &v) == 0 && v & 1 == 1)
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("nmgr")), &v) == 0 && v & 1 == 1)
         }
+
+        /// A package with no code of ours stops as an unimplemented trap:
+        /// the System's PACK stub jumps through the trap table, which led
+        /// back to the package loader for ever.
+        @Test func packageWithoutCodeIsUnimplemented() {
+            bootMachine()
+            let reason = run68k([0x303C, 0x0001, 0xA82C, 0xA9F4]) // MOVE.W #1,D0; _Pack10; _ExitToShell
+            #expect(reason.contains("unimplemented trap"))
+        }
     }
 }
