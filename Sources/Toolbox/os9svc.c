@@ -16,6 +16,7 @@ typedef struct {
 
 static const os9_library libraries[] = {
     { os9_font_exports, &os9_font_export_count, os9_font_aliases, &os9_font_alias_count },
+    { os9_sound_exports, &os9_sound_export_count, os9_sound_aliases, &os9_sound_alias_count },
 };
 
 void (*cfm_export_fn(const char *name))(ppc_cpu *);

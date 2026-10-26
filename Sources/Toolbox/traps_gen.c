@@ -2598,6 +2598,16 @@ static void glue_CloseMappedFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CloseMixerSoundComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_ci = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CloseMixerSoundComponent(a_ci);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CloseMovieFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9377,6 +9387,17 @@ static void glue_GetCompressedImageSize(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetCompressionName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_compressionName = (gaddr)cpu_pop32(c);
+    int32_t a_compressionType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCompressionName(a_compressionType, a_compressionName);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetCompressionTime(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10334,6 +10355,16 @@ static void glue_GetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_levelp = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetDefaultOutputVolume(a_levelp);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDefaultSoundOutput(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_sc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDefaultSoundOutput(a_sc);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -16908,6 +16939,18 @@ static void glue_OpenMappedScratchFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_OpenMixerSoundComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_mixerComponent = (gaddr)cpu_pop32(c);
+    int32_t a_outputFlags = (int32_t)cpu_pop32(c);
+    gaddr a_outputDescription = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OpenMixerSoundComponent(a_outputDescription, a_outputFlags, a_mixerComponent);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_OpenMovieFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18187,6 +18230,19 @@ static void glue_ParamText(cpu68k *c, uint16_t trapword)
     gaddr a_p1 = (gaddr)cpu_pop32(c);
     gaddr a_p0 = (gaddr)cpu_pop32(c);
     tb_ParamText(a_p0, a_p1, a_p2, a_p3);
+    cpu_push32(c, ret);
+}
+
+static void glue_ParseAIFFHeader(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dataOffset = (gaddr)cpu_pop32(c);
+    gaddr a_numFrames = (gaddr)cpu_pop32(c);
+    gaddr a_sndInfo = (gaddr)cpu_pop32(c);
+    int16_t a_fRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_ParseAIFFHeader(a_fRefNum, a_sndInfo, a_numFrames, a_dataOffset);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -21648,6 +21704,16 @@ static void glue_SetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDefaultSoundOutput(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_sc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDefaultSoundOutput(a_sc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDefaultStartup(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -23743,6 +23809,30 @@ static void glue_SortDataBrowserContainer(cpu68k *c, uint16_t trapword)
     gaddr a_browser = (gaddr)cpu_pop32(c);
     int32_t r = tb_SortDataBrowserContainer(a_browser, a_container, a_sortChildren);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SoundConverterGetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int32_t a_sc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundConverterGetInfo(a_sc, a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SoundConverterSetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int32_t a_sc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundConverterSetInfo(a_sc, a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -28636,9 +28726,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, glue_SndSetSysBeepState},
     {0xA800, (int32_t)0x2040008u, "SndPauseFilePlay", CONV_STACK, 4, 2, glue_SndPauseFilePlay},
     {0xA800, (int32_t)0x2180008u, "SndGetSysBeepState", CONV_STACK, 4, 0, glue_SndGetSysBeepState},
+    {0xA800, (int32_t)0x2180018u, "CloseMixerSoundComponent", CONV_STACK, 4, 2, glue_CloseMixerSoundComponent},
     {0xA800, (int32_t)0x21C000Cu, "DisposeSpeechChannel", CONV_STACK, 4, 2, glue_DisposeSpeechChannel},
     {0xA800, (int32_t)0x21C0014u, "SPBCloseDevice", CONV_STACK, 4, 2, glue_SPBCloseDevice},
+    {0xA800, (int32_t)0x21C0018u, "GetDefaultSoundOutput", CONV_STACK, 4, 2, glue_GetDefaultSoundOutput},
     {0xA800, (int32_t)0x220000Cu, "SpeakString", CONV_STACK, 4, 2, glue_SpeakString},
+    {0xA800, (int32_t)0x2200018u, "SetDefaultSoundOutput", CONV_STACK, 4, 2, glue_SetDefaultSoundOutput},
     {0xA800, (int32_t)0x2240018u, "GetSysBeepVolume", CONV_STACK, 4, 2, glue_GetSysBeepVolume},
     {0xA800, (int32_t)0x2280014u, "SPBPauseRecording", CONV_STACK, 4, 2, glue_SPBPauseRecording},
     {0xA800, (int32_t)0x2280018u, "SetSysBeepVolume", CONV_STACK, 4, 2, glue_SetSysBeepVolume},
@@ -28664,6 +28757,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x4440014u, "SPBBytesToMilliseconds", CONV_STACK, 8, 2, glue_SPBBytesToMilliseconds},
     {0xA800, (int32_t)0x448000Cu, "GetSpeechRate", CONV_STACK, 8, 2, glue_GetSpeechRate},
     {0xA800, (int32_t)0x44C000Cu, "SetSpeechPitch", CONV_STACK, 8, 2, glue_SetSpeechPitch},
+    {0xA800, (int32_t)0x44C0018u, "GetCompressionName", CONV_STACK, 8, 2, glue_GetCompressionName},
     {0xA800, (int32_t)0x450000Cu, "GetSpeechPitch", CONV_STACK, 8, 2, glue_GetSpeechPitch},
     {0xA800, (int32_t)0x460000Cu, "UseDictionary", CONV_STACK, 8, 2, glue_UseDictionary},
     {0xA800, (int32_t)0x5100008u, "SndChannelStatus", CONV_STACK, 10, 2, glue_SndChannelStatus},
@@ -28673,6 +28767,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x60C0018u, "UnsignedFixedMulDiv", CONV_STACK, 12, 4, 0},
     {0xA800, (int32_t)0x610000Cu, "GetVoiceDescription", CONV_STACK, 12, 2, glue_GetVoiceDescription},
     {0xA800, (int32_t)0x614000Cu, "GetVoiceInfo", CONV_STACK, 12, 2, glue_GetVoiceInfo},
+    {0xA800, (int32_t)0x6140018u, "OpenMixerSoundComponent", CONV_STACK, 12, 2, glue_OpenMixerSoundComponent},
     {0xA800, (int32_t)0x624000Cu, "SpeakText", CONV_STACK, 12, 2, glue_SpeakText},
     {0xA800, (int32_t)0x6340018u, "SetSoundPreference", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x6380014u, "SPBGetDeviceInfo", CONV_STACK, 12, 2, glue_SPBGetDeviceInfo},
@@ -28684,8 +28779,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x6480018u, "SetSoundOutputInfo", CONV_STACK, 12, 2, glue_SetSoundOutputInfo},
     {0xA800, (int32_t)0x654000Cu, "SetSpeechInfo", CONV_STACK, 12, 2, glue_SetSpeechInfo},
     {0xA800, (int32_t)0x658000Cu, "GetSpeechInfo", CONV_STACK, 12, 2, glue_GetSpeechInfo},
+    {0xA800, (int32_t)0x6680018u, "SoundConverterGetInfo", CONV_STACK, 12, 2, glue_SoundConverterGetInfo},
+    {0xA800, (int32_t)0x66C0018u, "SoundConverterSetInfo", CONV_STACK, 12, 2, glue_SoundConverterSetInfo},
     {0xA800, (int32_t)0x7080014u, "SndRecordToFile", CONV_STACK, 14, 2, glue_SndRecordToFile},
     {0xA800, (int32_t)0x7100018u, "GetCompressionInfo", CONV_STACK, 14, 2, 0},
+    {0xA800, (int32_t)0x7580014u, "ParseAIFFHeader", CONV_STACK, 14, 2, glue_ParseAIFFHeader},
     {0xA800, (int32_t)0x8040014u, "SndRecord", CONV_STACK, 16, 2, glue_SndRecord},
     {0xA800, (int32_t)0x828000Cu, "SpeakBuffer", CONV_STACK, 16, 2, glue_SpeakBuffer},
     {0xA800, (int32_t)0xA5C000Cu, "TextToPhonemes", CONV_STACK, 20, 2, glue_TextToPhonemes},

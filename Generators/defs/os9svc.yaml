@@ -1,0 +1,100 @@
+# Mac OS 9's service libraries (SoundLib and others): routines with a
+# dispatch selector that the Toolbox's other tables lack.
+
+# Sound Manager 3.0 and later, SoundDispatch tool $14 (the Sound Input
+# Manager's): an AIFF file's sound as a SoundComponentData.
+- function:
+    name: ParseAIFFHeader
+    return: OSErr
+    args:
+      - name: fRefNum
+        type: INTEGER
+      - name: sndInfo
+        type: Ptr
+      - name: numFrames
+        type: Ptr
+      - name: dataOffset
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x07580014
+
+# Sound Manager 3.2: the name of a compression type.
+- function:
+    name: GetCompressionName
+    return: OSErr
+    args:
+      - name: compressionType
+        type: OSType
+      - name: compressionName
+        type: StringPtr
+    dispatcher: SoundDispatch
+    selector: 0x044C0018
+
+# Sound Manager 3.3: a Sound Converter's settings.
+- function:
+    name: SoundConverterGetInfo
+    return: OSErr
+    args:
+      - name: sc
+        type: LONGINT
+      - name: selector
+        type: OSType
+      - name: infoPtr
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x06680018
+
+- function:
+    name: SoundConverterSetInfo
+    return: OSErr
+    args:
+      - name: sc
+        type: LONGINT
+      - name: selector
+        type: OSType
+      - name: infoPtr
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x066C0018
+
+# Sound Manager 3.0: the mixer component.
+- function:
+    name: OpenMixerSoundComponent
+    return: OSErr
+    args:
+      - name: outputDescription
+        type: Ptr
+      - name: outputFlags
+        type: LONGINT
+      - name: mixerComponent
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x06140018
+
+- function:
+    name: CloseMixerSoundComponent
+    return: OSErr
+    args:
+      - name: ci
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x02180018
+
+# The default sound output device component.
+- function:
+    name: GetDefaultSoundOutput
+    return: OSErr
+    args:
+      - name: sc
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x021C0018
+
+- function:
+    name: SetDefaultSoundOutput
+    return: OSErr
+    args:
+      - name: sc
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x02200018

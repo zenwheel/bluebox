@@ -22,4 +22,10 @@ extern const unsigned os9_font_export_count;
 extern const os9_alias os9_font_aliases[];
 extern const unsigned os9_font_alias_count;
 
+extern const ppc_export os9_sound_exports[];
+extern const unsigned os9_sound_export_count;
+extern const os9_alias os9_sound_aliases[];
+extern const unsigned os9_sound_alias_count;
+void os9svc_sound_reset(void);
+
 #endif

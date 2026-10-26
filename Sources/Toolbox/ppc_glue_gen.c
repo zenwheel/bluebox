@@ -28999,6 +28999,72 @@ static void ppcglue_GetControlRegion(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ParseAIFFHeader(ppc_cpu *c)
+{
+    int16_t a_fRefNum = (int16_t)c->gpr[3];
+    gaddr a_sndInfo = (gaddr)c->gpr[4];
+    gaddr a_numFrames = (gaddr)c->gpr[5];
+    gaddr a_dataOffset = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ParseAIFFHeader(a_fRefNum, a_sndInfo, a_numFrames, a_dataOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCompressionName(ppc_cpu *c)
+{
+    int32_t a_compressionType = (int32_t)c->gpr[3];
+    gaddr a_compressionName = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetCompressionName(a_compressionType, a_compressionName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SoundConverterGetInfo(ppc_cpu *c)
+{
+    int32_t a_sc = (int32_t)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_infoPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SoundConverterGetInfo(a_sc, a_selector, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SoundConverterSetInfo(ppc_cpu *c)
+{
+    int32_t a_sc = (int32_t)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_infoPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SoundConverterSetInfo(a_sc, a_selector, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenMixerSoundComponent(ppc_cpu *c)
+{
+    gaddr a_outputDescription = (gaddr)c->gpr[3];
+    int32_t a_outputFlags = (int32_t)c->gpr[4];
+    gaddr a_mixerComponent = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenMixerSoundComponent(a_outputDescription, a_outputFlags, a_mixerComponent);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseMixerSoundComponent(ppc_cpu *c)
+{
+    int32_t a_ci = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseMixerSoundComponent(a_ci);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDefaultSoundOutput(ppc_cpu *c)
+{
+    gaddr a_sc = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDefaultSoundOutput(a_sc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDefaultSoundOutput(ppc_cpu *c)
+{
+    int32_t a_sc = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDefaultSoundOutput(a_sc);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMoviesError(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMoviesError();
@@ -40842,6 +40908,7 @@ const ppc_export ppc_exports[] = {
     {"CloseDictionary", ppcglue_CloseDictionary},
     {"CloseEdition", ppctrap_CloseEdition},
     {"CloseMappedFile", ppcglue_CloseMappedFile},
+    {"CloseMixerSoundComponent", ppcglue_CloseMixerSoundComponent},
     {"CloseMovieFile", ppcglue_CloseMovieFile},
     {"CloseMovieStorage", ppctrap_CloseMovieStorage},
     {"ClosePicture", ppcglue_ClosePicture},
@@ -41616,6 +41683,7 @@ const ppc_export ppc_exports[] = {
     {"GetCompressedImageSize", ppcglue_GetCompressedImageSize},
     {"GetCompressedPixMapInfo", ppctrap_GetCompressedPixMapInfo},
     {"GetCompressionInfo", ppctrap_GetCompressionInfo},
+    {"GetCompressionName", ppcglue_GetCompressionName},
     {"GetCompressionTime", ppcglue_GetCompressionTime},
     {"GetControl32BitMaximum", ppcglue_GetControl32BitMaximum},
     {"GetControl32BitMinimum", ppcglue_GetControl32BitMinimum},
@@ -41710,6 +41778,7 @@ const ppc_export ppc_exports[] = {
     {"GetDblTime", ppcglue_GetDblTime},
     {"GetDefaultInputMethod", ppcglue_GetDefaultInputMethod},
     {"GetDefaultOutputVolume", ppcglue_GetDefaultOutputVolume},
+    {"GetDefaultSoundOutput", ppcglue_GetDefaultSoundOutput},
     {"GetDefaultStartup", ppcglue_GetDefaultStartup},
     {"GetDefaultThreadStackSize", ppcglue_GetDefaultThreadStackSize},
     {"GetDeviceList", ppcglue_GetDeviceList},
@@ -43035,6 +43104,7 @@ const ppc_export ppc_exports[] = {
     {"OpenEdition", ppctrap_OpenEdition},
     {"OpenMappedFile", ppcglue_OpenMappedFile},
     {"OpenMappedScratchFile", ppcglue_OpenMappedScratchFile},
+    {"OpenMixerSoundComponent", ppcglue_OpenMixerSoundComponent},
     {"OpenMovieFile", ppcglue_OpenMovieFile},
     {"OpenMovieStorage", ppctrap_OpenMovieStorage},
     {"OpenNewEdition", ppctrap_OpenNewEdition},
@@ -43448,6 +43518,7 @@ const ppc_export ppc_exports[] = {
     {"PaintRoundRect", ppcglue_PaintRoundRect},
     {"Palette2CTab", ppcglue_Palette2CTab},
     {"ParamText", ppcglue_ParamText},
+    {"ParseAIFFHeader", ppcglue_ParseAIFFHeader},
     {"ParseTable", ppcglue_ParseTable},
     {"PasteHandleIntoMovie", ppctrap_PasteHandleIntoMovie},
     {"PasteMovieSelection", ppcglue_PasteMovieSelection},
@@ -43981,6 +44052,7 @@ const ppc_export ppc_exports[] = {
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
     {"SetDefaultInputMethod", ppcglue_SetDefaultInputMethod},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},
+    {"SetDefaultSoundOutput", ppcglue_SetDefaultSoundOutput},
     {"SetDefaultStartup", ppcglue_SetDefaultStartup},
     {"SetDepth", ppcglue_SetDepth},
     {"SetDeskCPat", ppcglue_SetDeskCPat},
@@ -44256,6 +44328,8 @@ const ppc_export ppc_exports[] = {
     {"SndStartFilePlay", ppcglue_SndStartFilePlay},
     {"SndStopFilePlay", ppcglue_SndStopFilePlay},
     {"SortDataBrowserContainer", ppcglue_SortDataBrowserContainer},
+    {"SoundConverterGetInfo", ppcglue_SoundConverterGetInfo},
+    {"SoundConverterSetInfo", ppcglue_SoundConverterSetInfo},
     {"SpaceExtra", ppcglue_SpaceExtra},
     {"SpeakBuffer", ppcglue_SpeakBuffer},
     {"SpeakString", ppcglue_SpeakString},
