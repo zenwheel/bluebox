@@ -333,5 +333,26 @@ extension BlueBox {
             #expect(tb_GetHandleSize(rd32(pm)) > 32 * 32) // the pixels, a handle
             tb_DisposeGWorld(rd32(gw))
         }
+
+        /// HSetFInfo sets a file's Finder information in the folder named:
+        /// the GetFInfo before it leaves the file's number where the folder
+        /// was (Dr. Max's new preferences file was "not found").
+        @Test func hSetFInfoFindsTheFile() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            let vref = tb_NewPtr(2, false, true), dir = tb_NewPtr(4, false, true)
+            #expect(tb_FindFolder(-1, Int32(bitPattern: fourCC("pref")), 1, vref, dir) == 0)
+            let v = UInt32(rd16(vref)) | (rd16(vref) & 0x8000 != 0 ? 0xFFFF_0000 : 0), d = rd32(dir)
+            let name = pstr("Max Prefs")
+            tb_HCreateResFile(Int16(bitPattern: rd16(vref)), Int32(bitPattern: d), name)
+            #expect(tb_ResError() == 0)
+            let info = tb_NewPtr(16, false, true)
+            #expect(ppcErr("HGetFInfo", [v, d, name, info]) == 0)
+            wr32(info, fourCC("pref"))
+            wr32(info + 4, fourCC("DrMx"))
+            #expect(ppcErr("HSetFInfo", [v, d, name, info]) == 0)
+            wr32(info, 0)
+            #expect(ppcErr("HGetFInfo", [v, d, name, info]) == 0 && rd32(info) == fourCC("pref"))
+        }
     }
 }
