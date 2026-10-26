@@ -1024,6 +1024,9 @@ func appsCommand(_ args: [String]) {
         for a in scan(root).filter({ $0.isApplication }) {
             let rel = String(a.path.dropFirst(root.count + 1))
             if rel.hasPrefix("System Folder/") { continue }
+            // Typed APPL but with no code to run: a custom icon's carrier
+            // (Ben's Zip Icons), a file of CDEFs, a dummy target for events.
+            if !a.hasCODE && !a.hasCfrg { continue }
             // A self-extracting archive that import expanded beside itself:
             // what it held is listed from there.
             var isDir: ObjCBool = false
