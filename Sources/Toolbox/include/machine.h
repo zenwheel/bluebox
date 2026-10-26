@@ -41,6 +41,8 @@ bool machine_volume_info(int i, char *name, size_t namesize, char *root, size_t 
 /* Run up to max_instructions. */
 run_status machine_run(uint64_t max_instructions);
 const char *machine_halt_reason(void);
+/* BLUEBOX_68K_TRACE=n: print the last n 68k instructions run (a fault does). */
+void machine_dump_68k_trace(void);
 uint64_t machine_instruction_count(void);
 uint32_t machine_pc(void);
 

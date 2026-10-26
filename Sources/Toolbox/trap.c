@@ -309,6 +309,7 @@ static void exception_native(cpu68k *c, uint16_t tw)
     };
     unsigned v = (fv & 0xFFF) / 4;
     const char *n = v < sizeof names / sizeof names[0] && names[v] ? names[v] : "exception";
+    machine_dump_68k_trace();
     cpu_halt(c, "%s (vector %u) at %08X, sr %04X, op %04X", n, v, pc, sr, rd16(pc));
 }
 
