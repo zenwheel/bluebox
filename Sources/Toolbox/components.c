@@ -622,7 +622,7 @@ enum {
     kICCDeletePref = 12, kICCGetPerm = 13, kICCFindUserConfigFile = 14, kICCGetPrefHandle = 26,
     kICCFindPrefHandle = 36, kICCLaunchURL = 17,
     kICCSetPrefHandle = 27,
-    icTruncatedErr = -664, icPrefNotFoundErr = -666,
+    icTruncatedErr = -670, icPrefNotFoundErr = -666,
 };
 
 #define IC_MAX_PREFS 96
@@ -878,6 +878,51 @@ static void ic_component(cpu68k *c, uint16_t tw)
     case kICCDeletePref: /* (key) */
         r = ic_delete_pref(last);
         break;
+    /* The mappings database, URLs and the configuration (vam.c): */
+    case 0x0F: /* ICEditPreferences(key) */
+        r = ic_edit_preferences();
+        break;
+    case 0x10: /* ICParseURL(hint, data, len, &selStart, &selEnd, url) */
+        r = ic_parse_url(rd32(params + 24), rd32(params + 20), (int32_t)rd32(params + 16), rd32(params + 12),
+                         rd32(params + 8), last);
+        break;
+    case 0x12: /* ICCountMapEntries(entries, &count) */
+        r = ic_map_count(rd32(params + 8), last);
+        break;
+    case 0x13: /* ICGetIndMapEntry(entries, index, &pos, entry) */
+        r = ic_map_get_ind(rd32(params + 16), (int32_t)rd32(params + 12), rd32(params + 8), last);
+        break;
+    case 0x14: /* ICGetMapEntry(entries, pos, entry) */
+        r = ic_map_get(rd32(params + 12), (int32_t)rd32(params + 8), last);
+        break;
+    case 0x15: /* ICSetMapEntry(entries, pos, entry) */
+        r = ic_map_set(rd32(params + 12), (int32_t)rd32(params + 8), last);
+        break;
+    case 0x16: /* ICDeleteMapEntry(entries, pos) */
+        r = ic_map_delete(rd32(params + 8), (int32_t)last);
+        break;
+    case 0x17: /* ICAddMapEntry(entries, entry) */
+        r = ic_map_add(rd32(params + 8), last);
+        break;
+    case 0x18: /* ICMapFilename(filename, entry) */
+        r = ic_map_filename(rd32(params + 8), last);
+        break;
+    case 0x19: /* ICMapTypeCreator(type, creator, filename, entry) */
+        r = ic_map_type_creator(rd32(params + 16), rd32(params + 12), rd32(params + 8), last);
+        break;
+    case 0x1C: /* ICMapEntriesFilename(entries, filename, entry) */
+        r = ic_map_entries_filename(rd32(params + 12), rd32(params + 8), last);
+        break;
+    case 0x1D: /* ICMapEntriesTypeCreator(entries, type, creator, filename, entry) */
+        r = ic_map_entries_type_creator(rd32(params + 20), rd32(params + 16), rd32(params + 12), rd32(params + 8),
+                                        last);
+        break;
+    case 0x1F: /* ICGetConfigReference(ref) */
+        r = ic_get_config_ref(last);
+        break;
+    case 0x20: /* ICSetConfigReference(ref, flags) */
+        r = ic_set_config_ref(rd32(params + 8));
+        break;
     case kICCLaunchURL: { /* (hint, data, len, &selStart, &selEnd), last first */
         gaddr ps = rd32(params + 8);
         int32_t len = (int32_t)rd32(params + 12);
@@ -889,6 +934,17 @@ static void ic_component(cpu68k *c, uint16_t tw)
     }
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
+}
+
+/* OpenDefaultComponent for native callers: an instance of the first
+ * component of the type (and subtype, if not 0), or 0. */
+gaddr components_open_default(uint32_t type, uint32_t subtype)
+{
+    int16_t err;
+    for (unsigned i = 0; i < MAX_COMPONENTS; i++)
+        if (comps[i].used && !comps[i].captured_by && comps[i].type == type && (!subtype || comps[i].subtype == subtype))
+            return open_component(COMPONENT_TAG | i, &err);
+    return 0;
 }
 
 /* Forget everything registered: a new run. */

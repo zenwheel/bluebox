@@ -118,6 +118,23 @@ bool process_open_url(const char *url);
 int16_t ic_launch_url(gaddr data, int32_t len, int32_t a, int32_t b);
 /* Internet Config's preferences (components.c), for both CPUs. */
 void ic_make_file(void); /* ICFindConfigFile: the Internet Preferences file, made when missing */
+/* Internet Config's mappings, URLs and configuration (vam.c), for both its
+ * PowerPC calls and its component's selectors. */
+int16_t ic_map_count(gaddr entries, gaddr count);
+int16_t ic_map_get_ind(gaddr entries, int32_t index, gaddr pos, gaddr entry);
+int16_t ic_map_get(gaddr entries, int32_t pos, gaddr entry);
+int16_t ic_map_set(gaddr entries, int32_t pos, gaddr entry);
+int16_t ic_map_delete(gaddr entries, int32_t pos);
+int16_t ic_map_add(gaddr entries, gaddr entry);
+int16_t ic_map_entries_filename(gaddr entries, gaddr name, gaddr entry);
+int16_t ic_map_entries_type_creator(gaddr entries, uint32_t type, uint32_t creator, gaddr name, gaddr entry);
+int16_t ic_map_filename(gaddr name, gaddr entry);
+int16_t ic_map_type_creator(uint32_t type, uint32_t creator, gaddr name, gaddr entry);
+int16_t ic_parse_url(gaddr hint, gaddr data, int32_t len, gaddr sel_start, gaddr sel_end, gaddr url);
+int16_t ic_get_config_ref(gaddr ref);
+int16_t ic_set_config_ref(gaddr ref);
+int16_t ic_edit_preferences(void);
+gaddr components_open_default(uint32_t type, uint32_t subtype);
 int16_t ic_get_pref(gaddr key, gaddr attr, gaddr buf, gaddr size);
 int16_t ic_get_pref_handle(gaddr key, gaddr attr, gaddr out, gaddr h);
 int16_t ic_set_pref(gaddr key, gaddr buf, int32_t len);

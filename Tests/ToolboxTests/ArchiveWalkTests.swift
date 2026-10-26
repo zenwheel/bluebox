@@ -83,6 +83,63 @@ extension BlueBox {
             #expect(call("OTDestroyDeferredTask", [deferred]) == 0)
         }
 
+        /// An ICMapEntry (unpacked: Str255s) for the mappings database.
+        func mapEntry(_ ext: String, _ type: String, _ creator: String, _ name: String, flags: UInt32 = 0) -> UInt32 {
+            let e = tb_NewPtr(22 + 5 * 256, false, true)
+            wr32(e + 6, fourCC(type))
+            wr32(e + 10, fourCC(creator))
+            wr32(e + 18, flags)
+            guestPString(ext, at: e + 22)
+            guestPString(name, at: e + 22 + 4 * 256)
+            return e
+        }
+
+        /// Internet Config's mappings database calls over a handle (Audion,
+        /// BBEdit 6), and ICParseURL.
+        @Test func internetConfigMappings() {
+            bootMachine()
+            let h = tb_NewHandle(0, false, false)
+            #expect(call("ICAddMapEntry", [1, h, mapEntry(".txt", "TEXT", "ttxt", "Text")]) == 0)
+            #expect(call("ICAddMapEntry", [1, h, mapEntry(".gif", "GIFf", "ogle", "GIF")]) == 0)
+            #expect(call("ICAddMapEntry", [1, h, mapEntry(".html", "TEXT", "MOSS", "HTML")]) == 0)
+            let n = tb_NewPtr(4, false, true)
+            #expect(call("ICCountMapEntries", [1, h, n]) == 0 && rd32(n) == 3)
+            let out = tb_NewPtr(22 + 5 * 256, false, true), pos = tb_NewPtr(4, false, true)
+            #expect(call("ICGetIndMapEntry", [1, h, 2, pos, out]) == 0 && rd32(out + 6) == fourCC("GIFf"))
+            #expect(rd16(out + 2) == 22 && rd8(out + 22) == 4 && rd8(out + 22 + 4 * 256) == 3)
+            #expect(Int16(truncatingIfNeeded: call("ICGetIndMapEntry", [1, h, 4, pos, out])) == -666)
+            // The name's extension, longest first; type and creator, then type alone.
+            #expect(call("ICMapEntriesFilename", [1, h, pstr("index.HTML"), out]) == 0 && rd32(out + 10) == fourCC("MOSS"))
+            #expect(call("ICMapEntriesTypeCreator", [1, h, fourCC("TEXT"), fourCC("MOSS"), pstr(""), out]) == 0)
+            #expect(rd32(out + 10) == fourCC("MOSS"))
+            #expect(call("ICMapEntriesTypeCreator", [1, h, fourCC("TEXT"), fourCC("R*ch"), pstr("a.txt"), out]) == 0)
+            #expect(rd32(out + 10) == fourCC("ttxt"))
+            #expect(Int16(truncatingIfNeeded: call("ICMapEntriesFilename", [1, h, pstr("a.zip"), out])) == -666)
+            // Replace the second, delete the first.
+            call("ICGetIndMapEntry", [1, h, 2, pos, out])
+            #expect(call("ICSetMapEntry", [1, h, rd32(pos), mapEntry(".jpeg", "JPEG", "ogle", "JPEG")]) == 0)
+            #expect(call("ICGetMapEntry", [1, h, rd32(pos), out]) == 0 && rd32(out + 6) == fourCC("JPEG"))
+            #expect(call("ICDeleteMapEntry", [1, h, 0]) == 0)
+            #expect(call("ICCountMapEntries", [1, h, n]) == 0 && rd32(n) == 2)
+            #expect(call("ICGetIndMapEntry", [1, h, 1, pos, out]) == 0 && rd32(out + 6) == fourCC("JPEG"))
+
+            let text = Array("see <URL:http://example.com/x> or me@example.org".utf8)
+            let data = tb_NewPtr(Int32(text.count), false, true)
+            for (i, b) in text.enumerated() { wr8(data + UInt32(i), b) }
+            let a = tb_NewPtr(4, false, true), b = tb_NewPtr(4, false, true), url = tb_NewHandle(0, false, false)
+            wr32(a, 12)
+            wr32(b, 12)
+            #expect(call("ICParseURL", [1, pstr("mailto"), data, UInt32(text.count), a, b, url]) == 0)
+            #expect(read(rd32(url), Int(tb_GetHandleSize(url))) == Array("http://example.com/x".utf8))
+            wr32(a, UInt32(text.count))
+            wr32(b, UInt32(text.count))
+            #expect(call("ICParseURL", [1, pstr("mailto"), data, UInt32(text.count), a, b, url]) == 0)
+            #expect(read(rd32(url), Int(tb_GetHandleSize(url))) == Array("mailto:me@example.org".utf8))
+            #expect(Int16(truncatingIfNeeded: call("ICParseURL", [1, pstr(""), data, UInt32(text.count), a, b, url])) == -673)
+        }
+
+        func read(_ p: UInt32, _ n: Int) -> [UInt8] { (0..<n).map { rd8(p + UInt32($0)) } }
+
         /// OTCompareAndSwap8 and 16, and Carbon's CompareString and
         /// TimeString (Turtle Turmoil, The Cow Catching Game, Amorphium).
         @Test func smallCalls() {
