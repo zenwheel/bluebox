@@ -204,9 +204,12 @@ private func unar(_ archive: String, into dest: String) throws -> String? {
     let errPipe = Pipe()
     p.standardError = errPipe
     p.standardOutput = FileHandle.nullDevice
+    p.standardInput = FileHandle.nullDevice
     try p.run()
-    p.waitUntilExit()
+    // Read before waiting: an archive that fails file after file fills the
+    // pipe, and unar would wait on it forever.
     let msg = String(decoding: errPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    p.waitUntilExit()
     if p.terminationStatus != 0 {
         let failed = msg.split(separator: "\n").filter { $0.contains("Failed!") }
         let out = (try? FileManager.default.contentsOfDirectory(atPath: dest)) ?? []
