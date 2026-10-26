@@ -525,6 +525,8 @@ struct ppc_cpu;
 extern struct ppc_cpu g_ppc;
 /* The bottom of the PowerPC stack's block (0 before PowerPC code runs). */
 extern gaddr cfm_ppc_stack_lo;
+/* The running thread's free stack (StackSpace, ThreadCurrentStackSpace). */
+uint32_t thread_stack_space(void);
 extern bool g_ppc_mode;
 bool cfm_has_ppc(void);
 void cfm_reset(void);   /* a launch: no fragments, no PowerPC processor yet */

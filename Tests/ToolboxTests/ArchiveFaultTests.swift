@@ -255,5 +255,19 @@ extension BlueBox {
                 tb_DisposeWindow(w)
             }
         }
+
+        /// A PowerPC program's free stack is r1's room above the bottom of
+        /// its stack, not the 68k stack's: Chris' Puzzle fills it, from the
+        /// bottom up.
+        @Test func powerPCStackSpaceIsR1s() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            g_ppc_mode = true
+            defer { g_ppc_mode = false }
+            withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: cfm_ppc_stack_lo + 0x1230, toByteOffset: 4, as: UInt32.self) }
+            #expect(tb_StackSpace() == 0x1230)
+            let free = tb_NewPtr(4, false, true)
+            #expect(tb_ThreadCurrentStackSpace(1, free) == 0 && rd32(free) == 0x1230) // kCurrentThreadID
+        }
     }
 }
