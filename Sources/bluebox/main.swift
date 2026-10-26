@@ -177,7 +177,8 @@ func usage() -> Never {
           that is (1x or better plays at full frame rate).
       bluebox exports <PowerPC library>... [--missing]
           Read a PowerPC library's exports (a stub library from Universal
-          Interfaces, or the library itself) and say which Blue Box provides;
+          Interfaces, the library itself, or CFMDump's CFM Symbols.txt for
+          every library a running Mac had) and say which Blue Box provides;
           --missing lists every one it lacks.
       bluebox inspect <file> [--export dir] [--type T] [--id N]
           List a file's resources (AppleDouble or MacBinary, or an application
@@ -1120,16 +1121,44 @@ func exportsCommand(_ args: [String]) {
     guard !files.isEmpty else { usage() }
     for file in files {
         guard let data = FileManager.default.contents(atPath: file) else { fail("can't read \(file)") }
-        let exports = pefExports([UInt8](data))
-        var missing: [String] = []
-        for (name, isData) in exports where !machine_provides_export(name, isData) {
-            missing.append(isData ? "\(name) (data)" : name)
+        let bytes = [UInt8](data)
+        // A PEF library, or CFMDump's "CFM Symbols.txt" (library, index,
+        // class, address, name: every library a running Mac had), by library.
+        let sets: [(String, [(String, Bool)])]
+        if bytes.starts(with: Array("Joy!peff".utf8)) || !file.hasSuffix(".txt") {
+            sets = [((file as NSString).lastPathComponent, pefExports(bytes))]
+        } else {
+            sets = cfmDumpExports(String(decoding: bytes, as: UTF8.self))
         }
-        print("\((file as NSString).lastPathComponent): \(exports.count) exports, \(exports.count - missing.count) provided, \(missing.count) missing")
-        if missingOnly || exports.count < 2000 {
-            for m in missing { print("  \(m)") }
+        for (library, exports) in sets {
+            var missing: [String] = []
+            for (name, isData) in exports where !machine_provides_export(name, isData) {
+                missing.append(isData ? "\(name) (data)" : name)
+            }
+            print("\(library): \(exports.count) exports, \(exports.count - missing.count) provided, \(missing.count) missing")
+            if missingOnly || (sets.count == 1 && exports.count < 2000) {
+                for m in missing { print("  \(m)") }
+            }
         }
     }
+}
+
+/// CFMDump's symbol list by library, in the order the libraries come, each
+/// name once with whether it is data (classes data and TOC).
+func cfmDumpExports(_ text: String) -> [(String, [(String, Bool)])] {
+    var order: [String] = []
+    var byLibrary: [String: [String: Bool]] = [:]
+    for line in text.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+        let f = line.split(separator: "\t", omittingEmptySubsequences: false)
+        guard f.count >= 5 else { continue }
+        let library = String(f[0]), cls = String(f[2]), name = String(f[4])
+        if byLibrary[library] == nil {
+            byLibrary[library] = [:]
+            order.append(library)
+        }
+        byLibrary[library]![name] = cls == "data" || cls == "toc"
+    }
+    return order.map { lib in (lib, byLibrary[lib]!.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }) }
 }
 
 /// The exported names of every PEF container in d, sorted, with whether
