@@ -303,6 +303,16 @@ extension BlueBox {
             components_close(ci)
         }
 
+        /// SVersion is the Slot Manager's: noErr and its version in
+        /// spResult (Peng! takes anything else for a missing Display
+        /// Manager and says it needs 16-bit colour).
+        @Test func slotManagerVersion() {
+            bootMachine()
+            let spb = tb_NewPtr(64, false, true)
+            wr32(spb, 0xDEAD_BEEF)
+            #expect(call("SVersion", [spb]) == 0 && rd32(spb) == 1)
+        }
+
         /// OTCompareAndSwap8 and 16, and Carbon's CompareString and
         /// TimeString (Turtle Turmoil, The Cow Catching Game, Amorphium).
         @Test func smallCalls() {
