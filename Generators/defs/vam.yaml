@@ -174,3 +174,31 @@
         type: INTEGER
     dispatcher: ScriptUtil
     selector: 0xC012001A
+
+# The Control Strip (_ControlStripDispatch, ControlStripLib): its state
+# (Kinga and Tracktor Beam hide it while they run).  The selector is D0's
+# low byte, the high byte the arguments' size in words.
+- dispatcher:
+    name: ControlStripDispatch
+    trap: 0xAAF2
+    selector-location: D0<0xFF>
+
+- function:
+    name: SBIsControlStripVisible
+    return: Boolean
+    dispatcher: ControlStripDispatch
+    selector: 0x0000
+
+- function:
+    name: SBShowHideControlStrip
+    args:
+      - name: showIt
+        type: Boolean
+    dispatcher: ControlStripDispatch
+    selector: 0x0101
+
+- function:
+    name: SBSafeToAccessStartupDisk
+    return: Boolean
+    dispatcher: ControlStripDispatch
+    selector: 0x0002

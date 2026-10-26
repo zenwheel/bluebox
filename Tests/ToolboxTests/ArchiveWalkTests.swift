@@ -1,4 +1,5 @@
 import CCore
+import CPU68K
 import CPUPPC
 import Testing
 import Toolbox
@@ -171,6 +172,45 @@ extension BlueBox {
             for (i, b) in text.enumerated() { wr8(p + UInt32(i), b) }
             tb_FindWordBreaks(p, Int16(text.count), 2, 1, 0, offsets, 0)
             #expect(rd16(offsets) == 0 && rd16(offsets + 2) == 11)
+        }
+
+        /// Run 68k code with a fresh stack until it halts (it ends in _ExitToShell).
+        func run68k(_ words: [UInt16]) -> String {
+            let cpu = g_cpu!
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let stack = tb_NewPtr(65536, false, true)
+            cpu.pointee.a.7 = stack + 65536 - 16
+            cpu.pointee.pc = code
+            cpu.pointee.halted = false
+            _ = cpu_run(cpu, 100_000)
+            return String(cString: machine_halt_reason())
+        }
+
+        /// The 68k forms the walk's programs used: _LayerDispatch's
+        /// GetCurLayer (Virtual), the Control Strip (Kinga), QDExtensions
+        /// with only the selector in D0 (Drol), SndDispVersion with a word
+        /// (Anthem) and _IconServicesDispatch (X-Launch).
+        @Test func dispatchersFor68kPrograms() {
+            bootMachine()
+            let vars = tb_NewPtr(16, false, true)
+            let hi = UInt16(vars >> 16), lo = UInt16(vars & 0xFFFF)
+            #expect(run68k([
+                0x598F, 0x7003, 0xA829, 0x2E1F,         // SUBQ.L #4,SP; MOVEQ #3,D0; _LayerDispatch; MOVE.L (SP)+,D7
+                0x1F3C, 0x0001, 0x303C, 0x0101, 0xAAF2, // MOVE.B #1,-(SP); MOVE.W #$0101,D0; SBShowHideControlStrip
+                0x554F, 0x7000, 0xAAF2, 0x1C1F,         // SUBQ #2,SP; MOVEQ #0,D0; SBIsControlStripVisible; MOVE.B (SP)+,D6
+                0x4879, hi, lo, 0x4879, hi, lo + 4,      // PEA vars; PEA vars+4
+                0x7005, 0xAB1D,                         // MOVEQ #5,D0; _QDExtensions (GetGWorld)
+                0x598F, 0x3F3C, 0x0004, 0x7000, 0xA800, 0x2A1F, // SndDispVersion(4) into D5
+                0x554F, 0x3F3C, 0xFFFF, 0x1F3C, 0x0001, 0x701F, 0xAA75, 0x381F, // SetCustomIconsEnabled(-1, true) into D4
+                0xA9F4,
+            ]) == "ExitToShell")
+            let cpu = g_cpu!
+            #expect(cpu.pointee.d.7 == tb_GetCurLayer() && cpu.pointee.d.7 != 0)
+            #expect(cpu.pointee.d.6 & 0xFF == 1)
+            #expect(rd32(vars + 4) == rd32(UInt32(LM_MainDevice)))  // the device GetGWorld gave
+            #expect(cpu.pointee.d.5 == UInt32(bitPattern: tb_DirectorUnknown3()))
+            #expect(cpu.pointee.d.4 & 0xFFFF == 0)
         }
 
         /// OTCompareAndSwap8 and 16, and Carbon's CompareString and

@@ -616,6 +616,16 @@ static void ic_GetComponentInstance(ppc_cpu *c)
 }
 
 /* ---------------------------------------------------------------------- */
+/* The Control Strip: nothing of it is drawn here, but it keeps whether a
+ * program has it shown or hidden, starting hidden. */
+
+static bool strip_visible;
+
+int8_t tb_SBIsControlStripVisible(void) { return strip_visible; }
+void tb_SBShowHideControlStrip(int8_t showIt) { strip_visible = showIt != 0; }
+int8_t tb_SBSafeToAccessStartupDisk(void) { return 1; }
+
+/* ---------------------------------------------------------------------- */
 /* The Script Manager. */
 
 /* TruncText(width, textPtr, short *length, truncWhere): the text cut to
@@ -677,5 +687,6 @@ void vam_reset(void)
 {
     nlayers = 0;
     cur_layer = 0;
+    strip_visible = false;
     memset(ot_tasks, 0, sizeof ot_tasks);
 }

@@ -1,6 +1,12 @@
 # Icon Services (Mac OS 8.5's Icons.h): IconRefs and 'icns' icon families,
-# in IconServicesLib.  Mac OS 8.5 runs only on PowerPC, and so does Icon
-# Services: there is no 68k form.
+# in IconServicesLib, and for 68k programs running on Mac OS 8.5 through
+# _IconServicesDispatch (the selector in D0: X-Launch and BatchTyper call
+# SetCustomIconsEnabled and GetIconRefFromFile so).
+
+- dispatcher:
+    name: IconServicesDispatch
+    trap: 0xAA75
+    selector-location: D0W
 
 - typedef:
     name: IconRef
@@ -26,7 +32,8 @@
         type: OSType
       - name: theIconRef
         type: Ptr*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0021
 
 - function:
     name: GetIconRefFromFile
@@ -38,7 +45,8 @@
         type: Ptr*
       - name: theLabel
         type: int16_t*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0002
 
 - function:
     name: GetIconRefFromFolder
@@ -56,7 +64,8 @@
         type: SInt8
       - name: theIconRef
         type: Ptr*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0022
 
 - function:
     name: RegisterIconRefFromIconFamily
@@ -70,7 +79,8 @@
         type: IconFamilyHandle
       - name: theIconRef
         type: Ptr*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x001C
 
 - function:
     name: RegisterIconRefFromResource
@@ -86,7 +96,8 @@
         type: int16_t
       - name: theIconRef
         type: Ptr*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0023
 
 - function:
     name: RegisterIconRefFromIconFile
@@ -100,7 +111,8 @@
         type: const FSSpec*
       - name: theIconRef
         type: Ptr*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0035
 
 - function:
     name: ReadIconFile
@@ -110,7 +122,8 @@
         type: const FSSpec*
       - name: iconFamily
         type: Handle*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0036
 
 - function:
     name: WriteIconFile
@@ -120,7 +133,8 @@
         type: IconFamilyHandle
       - name: iconFile
         type: const FSSpec*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0037
 
 - function:
     name: UnregisterIconRef
@@ -130,7 +144,8 @@
         type: OSType
       - name: iconType
         type: OSType
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0008
 
 - function:
     name: UpdateIconRef
@@ -138,7 +153,8 @@
     args:
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0009
 
 - function:
     name: OverrideIconRefFromResource
@@ -150,7 +166,8 @@
         type: const FSSpec*
       - name: resourceID
         type: int16_t
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x002A
 
 - function:
     name: OverrideIconRef
@@ -160,7 +177,8 @@
         type: IconRef
       - name: newIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x002B
 
 - function:
     name: RemoveIconRefOverride
@@ -168,7 +186,8 @@
     args:
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x001E
 
 - function:
     name: CompositeIconRef
@@ -180,7 +199,8 @@
         type: IconRef
       - name: compositeIconRef
         type: Ptr*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0014
 
 - function:
     name: IsIconRefComposite
@@ -192,7 +212,8 @@
         type: Ptr*
       - name: foregroundIconRef
         type: Ptr*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x001A
 
 - function:
     name: IsValidIconRef
@@ -200,7 +221,8 @@
     args:
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0032
 
 - function:
     name: AcquireIconRef
@@ -208,7 +230,8 @@
     args:
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0027
 
 - function:
     name: ReleaseIconRef
@@ -216,7 +239,8 @@
     args:
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0028
 
 - function:
     name: GetIconRefOwners
@@ -226,7 +250,8 @@
         type: IconRef
       - name: owners
         type: uint16_t*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x000B
 
 - function:
     name: PlotIconRef
@@ -242,7 +267,8 @@
         type: IconServicesUsageFlags
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x000E
 
 - function:
     name: PlotIconRefInContext
@@ -278,7 +304,8 @@
         type: IconServicesUsageFlags
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x000F
 
 - function:
     name: RectInIconRef
@@ -294,7 +321,8 @@
         type: IconServicesUsageFlags
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0010
 
 - function:
     name: IconRefToRgn
@@ -310,7 +338,8 @@
         type: IconServicesUsageFlags
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0011
 
 - function:
     name: GetIconSizesFromIconRef
@@ -324,7 +353,8 @@
         type: IconServicesUsageFlags
       - name: theIconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0012
 
 - function:
     name: IsIconRefMaskEmpty
@@ -332,7 +362,8 @@
     args:
       - name: iconRef
         type: IconRef
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0033
 
 - function:
     name: GetIconRefVariant
@@ -344,7 +375,8 @@
         type: OSType
       - name: outTransform
         type: int16_t*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0034
 
 - function:
     name: IconRefToIconFamily
@@ -356,7 +388,8 @@
         type: IconSelectorValue
       - name: iconFamily
         type: Handle*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0024
 
 - function:
     name: IconFamilyToIconSuite
@@ -368,7 +401,8 @@
         type: IconSelectorValue
       - name: iconSuite
         type: Handle*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0025
 
 - function:
     name: IconSuiteToIconFamily
@@ -380,7 +414,8 @@
         type: IconSelectorValue
       - name: iconFamily
         type: Handle*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0026
 
 - function:
     name: SetIconFamilyData
@@ -392,7 +427,8 @@
         type: OSType
       - name: h
         type: Handle
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0030
 
 - function:
     name: GetIconFamilyData
@@ -404,7 +440,8 @@
         type: OSType
       - name: h
         type: Handle
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0031
 
 - function:
     name: FlushIconRefs
@@ -414,7 +451,8 @@
         type: OSType
       - name: iconType
         type: OSType
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0029
 
 - function:
     name: FlushIconRefsByVolume
@@ -422,7 +460,8 @@
     args:
       - name: vRefNum
         type: SInt16
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0018
 
 - function:
     name: SetCustomIconsEnabled
@@ -432,7 +471,8 @@
         type: SInt16
       - name: enableCustomIcons
         type: Boolean
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x001F
 
 - function:
     name: GetCustomIconsEnabled
@@ -442,7 +482,8 @@
         type: SInt16
       - name: customIconsEnabled
         type: Boolean*
-    cfm: IconServicesLib
+    dispatcher: IconServicesDispatch
+    selector: 0x0020
 
 - function:
     name: IsDataAvailableInIconRef

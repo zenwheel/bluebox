@@ -30395,6 +30395,25 @@ static void ppcglue_FindWordBreaks(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SBIsControlStripVisible(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SBIsControlStripVisible();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBShowHideControlStrip(ppc_cpu *c)
+{
+    int8_t a_showIt = (int8_t)c->gpr[3];
+    tb_SBShowHideControlStrip(a_showIt);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSafeToAccessStartupDisk(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SBSafeToAccessStartupDisk();
+    c->pc = c->lr;
+}
+
 static void ppctrap_StringToNum(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -43760,6 +43779,9 @@ const ppc_export ppc_exports[] = {
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"RstFLock", ppcglue_RstFLock},
+    {"SBIsControlStripVisible", ppcglue_SBIsControlStripVisible},
+    {"SBSafeToAccessStartupDisk", ppcglue_SBSafeToAccessStartupDisk},
+    {"SBShowHideControlStrip", ppcglue_SBShowHideControlStrip},
     {"SCSIAction", ppcglue_SCSIAction},
     {"SCSICmd", ppcglue_SCSICmd},
     {"SCSIComplete", ppcglue_SCSIComplete},
