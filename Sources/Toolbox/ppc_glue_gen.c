@@ -636,13 +636,6 @@ static void ppcglue_AEInteractWithUser(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppcglue_AEManagerInfo(ppc_cpu *c)
-{
-    gaddr a_resultp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AEManagerInfo(a_resultp);
-    c->pc = c->lr;
-}
-
 static void ppcglue_AEDisposeToken(ppc_cpu *c)
 {
     gaddr a_theToken = (gaddr)c->gpr[3];
@@ -30280,6 +30273,27 @@ static void ppcglue_MakeImageDescriptionForPixMap(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_AEManagerInfo(ppc_cpu *c)
+{
+    int32_t a_keyWord = (int32_t)c->gpr[3];
+    gaddr a_result = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AEManagerInfo(a_keyWord, a_result);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PPCBrowser(ppc_cpu *c)
+{
+    gaddr a_prompt = (gaddr)c->gpr[3];
+    gaddr a_applListLabel = (gaddr)c->gpr[4];
+    int8_t a_defaultSpecified = (int8_t)c->gpr[5];
+    gaddr a_theLocation = (gaddr)c->gpr[6];
+    gaddr a_thePortInfo = (gaddr)c->gpr[7];
+    gaddr a_portFilter = (gaddr)c->gpr[8];
+    gaddr a_theLocNBPType = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCBrowser(a_prompt, a_applListLabel, a_defaultSpecified, a_theLocation, a_thePortInfo, a_portFilter, a_theLocNBPType);
+    c->pc = c->lr;
+}
+
 static void ppctrap_StringToNum(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -40495,6 +40509,8 @@ static void ppclm_get_AuxWinHead(ppc_cpu *c) { c->gpr[3] = rd32(0xCD0); c->pc = 
 static void ppclm_set_AuxWinHead(ppc_cpu *c) { wr32(0xCD0, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_DeskCPat(ppc_cpu *c) { c->gpr[3] = rd32(0xCD8); c->pc = c->lr; }
 static void ppclm_set_DeskCPat(ppc_cpu *c) { wr32(0xCD8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
+static void ppclm_get_SoundGlue(ppc_cpu *c) { c->gpr[3] = rd32(0xAE8); c->pc = c->lr; }
+static void ppclm_set_SoundGlue(ppc_cpu *c) { wr32(0xAE8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 const ppc_export ppc_exports[] = {
     {"ADBOp", ppcglue_ADBOp},
     {"ADBReInit", ppcglue_ADBReInit},
@@ -42401,6 +42417,7 @@ const ppc_export ppc_exports[] = {
     {"LMGetSdVolume", ppclm_get_SdVolume},
     {"LMGetSoundActive", ppclm_get_SoundActive},
     {"LMGetSoundBase", ppclm_get_SoundBase},
+    {"LMGetSoundGlue", ppclm_get_SoundGlue},
     {"LMGetSoundLevel", ppclm_get_SoundLevel},
     {"LMGetSoundPtr", ppclm_get_SoundPtr},
     {"LMGetSynListHandle", ppclm_get_SynListHandle},
@@ -42634,6 +42651,7 @@ const ppc_export ppc_exports[] = {
     {"LMSetSdVolume", ppclm_set_SdVolume},
     {"LMSetSoundActive", ppclm_set_SoundActive},
     {"LMSetSoundBase", ppclm_set_SoundBase},
+    {"LMSetSoundGlue", ppclm_set_SoundGlue},
     {"LMSetSoundLevel", ppclm_set_SoundLevel},
     {"LMSetSoundPtr", ppclm_set_SoundPtr},
     {"LMSetSynListHandle", ppclm_set_SynListHandle},
@@ -43288,6 +43306,7 @@ const ppc_export ppc_exports[] = {
     {"PMgrVersion", ppcglue_PMgrVersion},
     {"PPCAcceptAsync", ppcglue_PPCAcceptAsync},
     {"PPCAcceptSync", ppcglue_PPCAcceptSync},
+    {"PPCBrowser", ppcglue_PPCBrowser},
     {"PPCCloseAsync", ppcglue_PPCCloseAsync},
     {"PPCCloseSync", ppcglue_PPCCloseSync},
     {"PPCDispatch", ppcglue_PPCDispatch},

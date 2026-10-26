@@ -264,7 +264,7 @@ static void call_ldef(gaddr list, int16_t msg, bool sel, qrect r, uint32_t cell,
     cpu_push16(c, (uint16_t)off);
     cpu_push16(c, (uint16_t)len);
     cpu_push32(c, list);
-    guest_call(rd32(defh));
+    guest_call_defproc(rd32(defh));
     tb_HUnlock(list);
     tb_HSetState(defh, state);
     tb_DisposePtr(rect);

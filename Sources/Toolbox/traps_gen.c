@@ -165,6 +165,7 @@ const char *const tb_trap_names[1024] = {
     [0x026] = "InsertMenuItem",
     [0x027] = "HideDialogItem",
     [0x028] = "ShowDialogItem",
+    [0x02B] = "Pack9",
     [0x02D] = "Pack11",
     [0x02E] = "Pack12",
     [0x02F] = "Pack13",
@@ -1172,8 +1173,9 @@ static void glue_AEManagerInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
-    gaddr a_resultp = (gaddr)cpu_pop32(c);
-    int16_t r = tb_AEManagerInfo(a_resultp);
+    gaddr a_result = (gaddr)cpu_pop32(c);
+    int32_t a_keyWord = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AEManagerInfo(a_keyWord, a_result);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -17646,6 +17648,22 @@ static void glue_PMgrVersion(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PPCBrowser(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theLocNBPType = (gaddr)cpu_pop32(c);
+    gaddr a_portFilter = (gaddr)cpu_pop32(c);
+    gaddr a_thePortInfo = (gaddr)cpu_pop32(c);
+    gaddr a_theLocation = (gaddr)cpu_pop32(c);
+    int8_t a_defaultSpecified = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_applListLabel = (gaddr)cpu_pop32(c);
+    gaddr a_prompt = (gaddr)cpu_pop32(c);
+    int16_t r = tb_PPCBrowser(a_prompt, a_applListLabel, a_defaultSpecified, a_theLocation, a_thePortInfo, a_portFilter, a_theLocNBPType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_PPCDispatch(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -27254,7 +27272,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA816, (int32_t)0x407u, "AECountItems", CONV_STACK, 8, 2, glue_AECountItems},
     {0xA816, (int32_t)0x40Eu, "AEDeleteItem", CONV_STACK, 8, 2, glue_AEDeleteItem},
     {0xA816, (int32_t)0x413u, "AEDeleteParam", CONV_STACK, 8, 2, glue_AEDeleteParam},
-    {0xA816, (int32_t)0x441u, "AEManagerInfo", CONV_STACK, 4, 2, glue_AEManagerInfo},
+    {0xA816, (int32_t)0x441u, "AEManagerInfo", CONV_STACK, 8, 2, glue_AEManagerInfo},
     {0xA816, (int32_t)0x500u, "AEInstallSpecialHandler", CONV_STACK, 10, 2, glue_AEInstallSpecialHandler},
     {0xA816, (int32_t)0x501u, "AERemoveSpecialHandler", CONV_STACK, 10, 2, glue_AERemoveSpecialHandler},
     {0xA816, (int32_t)0x52Du, "AEGetSpecialHandler", CONV_STACK, 10, 2, glue_AEGetSpecialHandler},
@@ -27300,6 +27318,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA816, (int32_t)0xE15u, "AEGetAttributePtr", CONV_STACK, 28, 2, glue_AEGetAttributePtr},
     {0xA816, (int32_t)0xE35u, "AESetObjectCallbacks", CONV_STACK, 28, 2, glue_AESetObjectCallbacks},
     {0xA816, (int32_t)0x100Au, "AEGetNthPtr", CONV_STACK, 32, 2, glue_AEGetNthPtr},
+    {0xA82B, (int32_t)0xD00u, "PPCBrowser", CONV_STACK, 26, 2, glue_PPCBrowser},
     {0xAAA2, (int32_t)0x0u, "Entry2Index", CONV_STACK, 2, 4, glue_Entry2Index},
     {0xAAA2, (int32_t)0x2u, "RestoreDeviceClut", CONV_STACK, 4, 0, glue_RestoreDeviceClut},
     {0xAAA2, (int32_t)0x3u, "ResizePalette", CONV_STACK, 6, 0, glue_ResizePalette},
@@ -28118,6 +28137,7 @@ const dispatcher_info dispatchers[] = {
     {0xA9ED, "Pack6", "StackW"},
     {0xA9EE, "Pack7", "StackW"},
     {0xA816, "Pack8", "D0W"},
+    {0xA82B, "Pack9", "D0W"},
     {0xAAA2, "PaletteDispatch", "D0<0xFF>"},
     {0xA09E, "PowerDispatch", "D0W"},
     {0xA8FD, "PrGlue", "StackL"},

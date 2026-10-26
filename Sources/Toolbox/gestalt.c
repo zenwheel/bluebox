@@ -133,6 +133,11 @@ void gestalt_init(void)
     gestalt_set(fourcc("teat"), 0x1);           /* gestaltTEAttr: TEGetHiliteRgn */
     gestalt_set(fourcc("drag"), 0x1);           /* gestaltDragMgrAttr: the Drag Manager */
     gestalt_set(fourcc("cmnu"), 0x2);           /* gestaltContextualMenuTrapAvailable */
+    /* gestaltPopupPresent (the pop-up menu CDEF, 63) and
+     * gestaltNotificationPresent, which System 7 has: AgendaMaker stops
+     * with an error at launch without them. */
+    gestalt_set(fourcc("pop!"), 0x1);
+    gestalt_set(fourcc("nmgr"), 0x1);
     gestalt_set(fourcc("ttsc"), 0x1);           /* gestaltSpeechAttr: the Speech Manager */
     gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
     /* The Appearance Manager for 68k programs too (as if the Appearance

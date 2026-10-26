@@ -225,7 +225,7 @@ static int32_t call_cdef(gaddr ch, int16_t msg, int32_t param)
     cpu_push32(c, (uint32_t)param);
     tb_HLock(h);
     tb_HLock(ch);
-    guest_call(rd32(h));
+    guest_call_defproc(rd32(h));
     tb_HUnlock(ch);
     tb_HUnlock(h);
     return (int32_t)cpu_pop32(c);

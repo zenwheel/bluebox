@@ -462,6 +462,7 @@ static void g_HSetFInfo(ppc_cpu *c)
     int16_t e = tb_PBHGetFInfo(pb, false);
     if (!e && R(3)) {
         gmemcpy(pb + FileParam_ioFlFndrInfo_off, R(3), 16);
+        wr32(pb + HFileParam_ioDirID_off, R(1)); /* GetFInfo left the file's number there */
         e = tb_PBHSetFInfo(pb, false);
     }
     RET(e);

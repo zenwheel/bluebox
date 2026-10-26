@@ -211,6 +211,7 @@ const lowmem_info lowmem_table[] = {
     {"TEScrpHandle", 0x0AB4u, 4u},
     {"AppPacks", 0x0AB8u, 32u},
     {"SysResName", 0x0AD8u, 20u},
+    {"SoundGlue", 0x0AE8u, 4u},
     {"AppParmHandle", 0x0AECu, 4u},
     {"DSErrCode", 0x0AF0u, 2u},
     {"ResErrProc", 0x0AF2u, 4u},

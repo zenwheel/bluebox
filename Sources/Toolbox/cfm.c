@@ -1671,17 +1671,19 @@ static void ppc_CountSymbols(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-/* GetIndSymbol(connID, symIndex (1-based), symName, *symAddr, *symClass) */
+/* GetIndSymbol(connID, symIndex, symName, *symAddr, *symClass): the index
+ * counts from 0 to CountSymbols - 1 (mTropolis asks each plug-in for its
+ * symbol 0). */
 static void ppc_GetIndSymbol(ppc_cpu *c)
 {
     fragment *f = connection(c->gpr[3]);
     uint32_t i = c->gpr[4];
-    if (!f || i < 1 || i > f->nexports) {
+    if (!f || i >= f->nexports) {
         c->gpr[3] = (uint32_t)(int32_t)(f ? cfragNoSymbolErr : cfragConnectionIDErr);
         c->pc = c->lr;
         return;
     }
-    const frag_export *x = &f->exports[i - 1];
+    const frag_export *x = &f->exports[i];
     if (c->gpr[5]) {
         size_t n = strlen(x->name) > 255 ? 255 : strlen(x->name);
         wr8(c->gpr[5], (uint8_t)n);

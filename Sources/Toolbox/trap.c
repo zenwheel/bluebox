@@ -176,6 +176,21 @@ static bool answers_zero(const char *dispatcher)
            !strncmp(dispatcher, "GX", 2) || !strcmp(dispatcher, "CollectionDispatch");
 }
 
+/* Dispatchers with no selector implemented, installed only for a census
+ * run: GetTrapAddress still finds Unimplemented there, as it would in an
+ * ordinary run, so a program testing for the trap (Tubular Worlds, for
+ * the Code Fragment Manager) takes the same path. */
+static uint32_t census_only[64];
+static unsigned ncensus_only;
+
+gaddr trap_visible_address(gaddr a)
+{
+    for (unsigned i = 0; i < ncensus_only; i++)
+        if (census_only[i] == a)
+            return unimpl_stub;
+    return a;
+}
+
 static void dispatch_native(cpu68k *c, uint16_t tw)
 {
     const disp_entry *d = find_disp(tw);
@@ -309,6 +324,7 @@ static void exception_native(cpu68k *c, uint16_t tw)
     };
     unsigned v = (fv & 0xFFF) / 4;
     const char *n = v < sizeof names / sizeof names[0] && names[v] ? names[v] : "exception";
+    machine_dump_68k_trace();
     cpu_halt(c, "%s (vector %u) at %08X, sr %04X, op %04X", n, v, pc, sr, rd16(pc));
 }
 
@@ -362,6 +378,14 @@ static void package_native(cpu68k *c, uint16_t tw)
     gaddr h = tb_GetResource((int32_t)fourcc("PACK"), (int16_t)n);
     if (!h || !rd32(h)) {
         cpu_halt(c, "package %d (trap %04X) not found", n, tw);
+        return;
+    }
+    /* The System's PACK is a stub that jumps through the trap table: back
+     * here, for a package with no code of ours, round and round. */
+    gaddr p = rd32(h);
+    if (rd16(p) == 0x2F38 && rd16(p + 2) == (uint16_t)(TB_TRAP_TABLE + (tw & 0x3FFu) * 4) && rd16(p + 4) == 0x4E75) {
+        current_trap = tw;
+        unimplemented_native(c, tw);
         return;
     }
     tb_HNoPurge(h);
@@ -653,6 +677,48 @@ void guest_call(gaddr fn)
     c->sr = sr;
 }
 
+/* NewHandle (clear) through the trap table when a program has patched it,
+ * as the Toolbox's own allocations went: the RampChamp demo, Kenzo and
+ * MACBOY Organiser patch NewHandle around each NewGWorld to place its
+ * pixels, and their patch takes itself out when it is called. */
+static gaddr new_handle_stub; /* made when first needed, after each boot */
+
+gaddr trap_new_handle_clear(int32_t size)
+{
+    cpu68k *c = g_cpu;
+    if (!c || native_index_for(rd32(OS_TRAP_TABLE + 0x22u * 4)) >= 0)
+        return tb_NewHandle(size, false, true);
+    gaddr stub = new_handle_stub;
+    if (!stub) {
+        stub = mm_new_ptr_in(rd32(LM_SysZone), 4, false);
+        if (!stub)
+            return tb_NewHandle(size, false, true);
+        wr16(stub, 0xA322); /* _NewHandle,CLEAR */
+        wr16(stub + 2, 0x4E75); /* RTS */
+        new_handle_stub = stub;
+    }
+    uint32_t d[8], a[8];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    uint16_t sr = c->sr;
+    c->d[0] = (uint32_t)size;
+    guest_call_regs(stub);
+    gaddr h = (int16_t)c->d[0] == noErr ? c->a[0] : 0;
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    c->sr = sr;
+    return h;
+}
+
+void guest_call_defproc(gaddr fn)
+{
+    cpu68k *c = g_cpu;
+    uint32_t a0 = c->a[0];
+    c->a[0] = fn;
+    guest_call(fn);
+    c->a[0] = a0;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Setup */
 
@@ -682,6 +748,8 @@ void trap_init(void)
     current_trap = 0;
 
     unimpl_stub = native_register(unimplemented_native, "Unimplemented", 0xA89F);
+    ncensus_only = 0;
+    new_handle_stub = 0;
     guest_return_stub = native_register(guest_return_native, "GuestReturn", 0);
     call_depth = returned_depth = 0;
     os_epilogue_stub = native_register(os_epilogue_native, "OSTrapEpilogue", 0);
@@ -809,6 +877,8 @@ void trap_init(void)
         if (raw)
             continue;
         uint32_t stub = native_register(dispatch_native, di->name, di->trap);
+        if (!any && !answers_zero(di->name) && ncensus_only < sizeof census_only / sizeof census_only[0])
+            census_only[ncensus_only++] = stub;
         if (di->trap & 0x0800)
             wr32(TB_TRAP_TABLE + (di->trap & 0x3FFu) * 4, stub);
         else
@@ -884,4 +954,13 @@ void trap_autovectors(void)
     wr32(stub + 2, EXCEPTION_JMP);
     for (unsigned v = 25; v < 32; v++)
         wr32(v * 4, stub);
+    /* TRAP #0-#15 (32..47) return at once: Mac OS used none of them, and
+     * Apple HD SC Setup makes A/UX's getuid call (TRAP #0) whether or not
+     * A/UX is running, then ignores the answer when it isn't. */
+    gaddr rte = mm_new_ptr_in(rd32(LM_SysZone), 2, false);
+    if (!rte)
+        return;
+    wr16(rte, 0x4E73); /* RTE */
+    for (unsigned v = 32; v < 48; v++)
+        wr32(v * 4, rte);
 }

@@ -1,0 +1,51 @@
+# Corrections found by the Vintage Apple Macintosh archive walk.  Same
+# schema as Defs/multiversal/defs; these replace multiversal's entries.
+
+# AEManagerInfo takes a keyword before the result pointer (its selector
+# says four words of arguments): ChordBook Lite returned to the long left
+# on the stack.
+- function:
+    name: AEManagerInfo
+    return: OSErr
+    args:
+      - name: keyWord
+        type: AEKeyword
+      - name: result
+        type: LONGINT*
+    dispatcher: Pack8
+    selector: 0x0441
+
+# PPCBrowser, the PPC Toolbox's port chooser (PACK 9, AgendaMaker's Send
+# Message...).
+- dispatcher:
+    name: Pack9
+    trap: 0xA82B
+    selector-location: D0W
+
+- function:
+    name: PPCBrowser
+    return: OSErr
+    args:
+      - name: prompt
+        type: ConstStringPtr
+      - name: applListLabel
+        type: ConstStringPtr
+      - name: defaultSpecified
+        type: Boolean
+      - name: theLocation
+        type: Ptr
+      - name: thePortInfo
+        type: Ptr
+      - name: portFilter
+        type: ProcPtr
+      - name: theLocNBPType
+        type: ConstStringPtr
+    dispatcher: Pack9
+    selector: 0x0D00
+
+# SoundGlue, the old Sound Driver glue's handle (Classic Daleks), in the
+# last four bytes multiversal gives SysResName (a Str15 in fact).
+- lowmem:
+    name: SoundGlue
+    type: Handle
+    address: 0xAE8

@@ -381,15 +381,36 @@ int16_t tb_GetDefaultThreadStackSize(int32_t style, gaddr sizep)
     return noErr;
 }
 
+/* A thread's free stack: down to the bottom of its stack block, or of the
+ * application's stack for the main thread.  A PowerPC program's stack is
+ * r1's, below the 68k one in a thread's block (Chris' Puzzle fills what
+ * is free with a pattern, from the bottom up: given the 68k stack's room,
+ * it wrote over its own code). */
+static uint32_t stack_space(int i)
+{
+    bool cur = i == current;
+    if (g_ppc_mode) {
+        uint32_t sp = cur ? g_ppc.gpr[1] : threads[i].ctx ? threads[i].ctx->ppc.gpr[1] : 0;
+        gaddr base = threads[i].stack ? threads[i].stack : cfm_ppc_stack_lo;
+        return sp > base ? sp - base : 0;
+    }
+    uint32_t sp = cur ? g_cpu->a[7] : threads[i].ctx ? threads[i].ctx->cpu.a[7] : 0;
+    if (!threads[i].stack) {
+        gaddr limit = rd32(LM_ApplLimit);
+        return sp > limit ? sp - limit : 0;
+    }
+    return sp > threads[i].stack ? sp - threads[i].stack : 0;
+}
+
+uint32_t thread_stack_space(void) { return stack_space(current); }
+
 int16_t tb_ThreadCurrentStackSpace(int32_t id, gaddr freep)
 {
     int i = find(id);
     if (i < 0)
         return threadNotFoundErr;
-    uint32_t sp = i == current ? g_cpu->a[7] : threads[i].ctx ? threads[i].ctx->cpu.a[7] : 0;
-    uint32_t space = threads[i].stack ? sp - threads[i].stack : (uint32_t)tb_StackSpace();
     if (freep)
-        wr32(freep, space);
+        wr32(freep, stack_space(i));
     return noErr;
 }
 

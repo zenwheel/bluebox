@@ -822,6 +822,17 @@ void tb_PPCDispatch(int32_t d0, int32_t a0)
     g_cpu->d[0] = (uint32_t)(int32_t)ppctb_call((int)(d0 & 0xFF), (gaddr)a0, async);
 }
 
+/* PPCBrowser (PACK 9): there is no browser dialog to choose another
+ * program's port with, so the user is taken to have cancelled it, which
+ * programs handle (AgendaMaker's Send Message sends nothing). */
+int16_t tb_PPCBrowser(gaddr prompt, gaddr appl_label, int8_t default_specified, gaddr location, gaddr port_info,
+                      gaddr filter, gaddr nbp_type)
+{
+    (void)prompt, (void)appl_label, (void)default_specified, (void)location, (void)port_info, (void)filter,
+        (void)nbp_type;
+    return -128; /* userCanceledErr */
+}
+
 int16_t tb_PPCOpenSync(gaddr pb) { return ppctb_call(1, pb, false); }
 int16_t tb_PPCOpenAsync(gaddr pb) { return ppctb_call(1, pb, true); }
 int16_t tb_PPCStartSync(gaddr pb) { return ppctb_call(2, pb, false); }

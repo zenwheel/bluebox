@@ -979,9 +979,8 @@ void tb_ReserveMem(int32_t needed, bool sys_p)
 
 int32_t tb_StackSpace(void)
 {
-    gaddr limit = rd32(LM_ApplLimit);
     set_mem_err(noErr);
-    return g_cpu && g_cpu->a[7] > limit ? (int32_t)(g_cpu->a[7] - limit) : 0;
+    return g_cpu ? (int32_t)thread_stack_space() : 0; /* the running thread's, PowerPC or 68k */
 }
 
 void tb_SetApplLimit(gaddr newlimit)

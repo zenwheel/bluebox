@@ -66,6 +66,15 @@ int native_index_for(uint32_t addr);
  * result space and arguments the caller has already pushed.  Registers other
  * than A7 are preserved. */
 void guest_call(gaddr fn);
+/* A trap table entry as GetTrapAddress reports it (Unimplemented's for a
+ * dispatcher that is there only for the census). */
+gaddr trap_visible_address(gaddr a);
+/* The same for a definition procedure (WDEF, CDEF, MDEF, LDEF) at fn: the
+ * managers jumped to it through A0, and a patched definition's stub finds
+ * the procedure it replaced from A0. */
+void guest_call_defproc(gaddr fn);
+/* NewHandle with the clear bit, through a program's patch of it if any. */
+gaddr trap_new_handle_clear(int32_t size);
 /* The same, leaving the registers as the routine left them. */
 void guest_call_regs(gaddr fn);
 /* Call a low-memory hook with D0 and A0 set; all registers (A7 = sp) are

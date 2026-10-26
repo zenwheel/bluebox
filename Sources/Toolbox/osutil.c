@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "m68k.h"
+#include "machine.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -123,12 +124,17 @@ void tb_HWPriv(int32_t d0, int32_t a0)
     g_cpu->d[0] = 0;
 }
 
-void tb_Debugger(void) { cpu_halt(g_cpu, "Debugger() called"); }
+void tb_Debugger(void)
+{
+    machine_dump_68k_trace();
+    cpu_halt(g_cpu, "Debugger() called");
+}
 
 void tb_DebugStr(gaddr p)
 {
     char s[256];
     pstr_to_c(p, s, sizeof s);
+    machine_dump_68k_trace();
     cpu_halt(g_cpu, "DebugStr: %s", s);
 }
 
@@ -147,7 +153,7 @@ static uint32_t table_slot(uint16_t n, bool newTraps, bool tool)
 
 gaddr tb_GetTrapAddress(uint16_t n, bool newTraps, bool tool)
 {
-    gaddr a = rd32(table_slot(n, newTraps, tool));
+    gaddr a = trap_visible_address(rd32(table_slot(n, newTraps, tool)));
     LOGF(LOG_TRAPS, "GetTrapAddress(%04X%s) = %08X\n", n, newTraps ? (tool ? ", tool" : ", OS") : "", a);
     return a;
 }

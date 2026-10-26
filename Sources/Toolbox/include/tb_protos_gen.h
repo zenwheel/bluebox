@@ -38,7 +38,7 @@ int16_t tb_AEInstallEventHandler(int32_t event_class, int32_t event_id, gaddr hd
 int16_t tb_AEInstallObjectAccessor(int32_t desiredClass, int32_t containerType, gaddr theAccessor, int32_t refcon, int8_t isSysHandler);
 int16_t tb_AEInstallSpecialHandler(int32_t function_class, gaddr hdlr, int8_t system_handler_p);
 int16_t tb_AEInteractWithUser(int32_t timeout, gaddr nm_req, gaddr idle_proc);
-int16_t tb_AEManagerInfo(gaddr resultp);
+int16_t tb_AEManagerInfo(int32_t keyWord, gaddr result);
 int16_t tb_AEObjectInit(void);
 int16_t tb_AEProcessAppleEvent(gaddr evt);
 int16_t tb_AEPutArray(gaddr list, uint8_t type, gaddr array_data, int32_t item_type, int32_t item_size, int32_t item_count);
@@ -1688,6 +1688,7 @@ int16_t tb_PMSelectorCount(void);
 int16_t tb_PMgrVersion(void);
 int16_t tb_PPCAcceptAsync(gaddr pb);
 int16_t tb_PPCAcceptSync(gaddr pb);
+int16_t tb_PPCBrowser(gaddr prompt, gaddr applListLabel, int8_t defaultSpecified, gaddr theLocation, gaddr thePortInfo, gaddr portFilter, gaddr theLocNBPType);
 int16_t tb_PPCCloseAsync(gaddr pb);
 int16_t tb_PPCCloseSync(gaddr pb);
 void tb_PPCDispatch(int32_t d0, int32_t a0);

@@ -122,6 +122,10 @@ static void init_lowmem(void)
     wr32(LM_MinStack, 0x400);
     wr32(LM_DefltStack, 0x2000);
     gput(LM_SysResName, (const uint8_t *)"\006System", 7);
+    /* The Sound Driver glue (StartSound in the programs' libraries) makes
+     * its handle when SoundGlue is negative, and uses what is there when
+     * it isn't: zero sent Classic Daleks's first sound from address 0. */
+    wr32(LM_SoundGlue, 0xFFFFFFFFu);
     wr16(LM_PaintWhite, 0xFFFF);      /* erase what is exposed */
     wr16(LM_SaveUpdate, 0xFFFF);      /* and queue its update */
     wr8(LM_QDExist, 0xFF);            /* QuickDraw not initialised */
@@ -308,6 +312,32 @@ static void hardware_globals(void)
     wr32(LM_ScrapName, name);
 }
 
+/* BLUEBOX_68K_TRACE=n: the last n 68k instructions, printed when an
+ * exception stops the run (for finding how a program got into data). */
+static struct { uint32_t pc, a7, d0; uint16_t op; } *hist;
+static unsigned hist_len, hist_pos;
+
+static void trace_68k(cpu68k *c)
+{
+    hist[hist_pos].pc = c->pc;
+    hist[hist_pos].a7 = c->a[7];
+    hist[hist_pos].d0 = c->d[0];
+    hist[hist_pos].op = rd16(c->pc);
+    hist_pos = (hist_pos + 1) % hist_len;
+}
+
+void machine_dump_68k_trace(void)
+{
+    if (!hist)
+        return;
+    for (unsigned i = 0; i < hist_len; i++) {
+        unsigned k = (hist_pos + i) % hist_len;
+        if (hist[k].pc)
+            log_printf("68k %08X %04X  a7 %08X d0 %08X\n", hist[k].pc, hist[k].op, hist[k].a7, hist[k].d0);
+    }
+    memset(hist, 0, hist_len * sizeof *hist); /* printed once */
+}
+
 bool machine_boot(bool census)
 {
     if (!mem_init())
@@ -319,6 +349,14 @@ bool machine_boot(bool census)
     cpu.aline = trap_aline;
     cpu.native = trap_native;
     cpu.sr = 0x2000; /* supervisor, interrupts enabled */
+    const char *tr = getenv("BLUEBOX_68K_TRACE");
+    if (tr && atoi(tr) > 0) {
+        hist_len = (unsigned)atoi(tr);
+        free(hist);
+        hist = calloc(hist_len, sizeof *hist);
+        hist_pos = 0;
+        cpu.trace = trace_68k;
+    }
 
     g_trap_census = census;
     init_lowmem();
@@ -798,7 +836,7 @@ static void trace_cpu(cpu68k *c)
 void machine_set_log(unsigned mask)
 {
     g_log_mask = mask;
-    cpu.trace = (mask & LOG_CPU) ? trace_cpu : NULL;
+    cpu.trace = (mask & LOG_CPU) ? trace_cpu : hist ? trace_68k : NULL;
 }
 
 unsigned machine_census(census_row *rows, unsigned max)
