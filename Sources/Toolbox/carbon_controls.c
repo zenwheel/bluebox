@@ -720,14 +720,31 @@ static void window_receive(cpu68k *c, uint16_t tw)
 
 static gaddr tracking_stub, receive_stub;
 
-int32_t tb_SetAutomaticControlDragTrackingEnabledForWindow(gaddr w, int8_t tracks)
+static void make_drag_stubs(void)
 {
-    if (!w)
-        return paramErr;
     if (!tracking_stub) {
         tracking_stub = native_register(window_tracking, "control drag tracking", 0);
         receive_stub = native_register(window_receive, "control drag receive", 0);
     }
+}
+
+/* The handlers, for AppearanceLib's GetControlManagerDrag...Handler. */
+gaddr ctl_drag_tracking_handler(void)
+{
+    make_drag_stubs();
+    return tracking_stub;
+}
+gaddr ctl_drag_receive_handler(void)
+{
+    make_drag_stubs();
+    return receive_stub;
+}
+
+int32_t tb_SetAutomaticControlDragTrackingEnabledForWindow(gaddr w, int8_t tracks)
+{
+    if (!w)
+        return paramErr;
+    make_drag_stubs();
     int i = drag_window(w);
     if (tracks && i < 0) {
         i = drag_window(0);

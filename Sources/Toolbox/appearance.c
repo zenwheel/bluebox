@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "os9_toolbox.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
 
@@ -2174,30 +2175,34 @@ int32_t tb_GetThemeMetric(uint32_t metric, gaddr out)
     return noErr;
 }
 
+/* The control panel's settings (proportional thumbs, single arrows and
+ * check marks unless changed). */
 int32_t tb_GetThemeScrollBarThumbStyle(gaddr out)
 {
-    wr16(out, 1); /* proportional */
+    wr16(out, ap_settings()->thumb_style);
     return noErr;
 }
 
 int32_t tb_GetThemeScrollBarArrowStyle(gaddr out)
 {
-    wr16(out, 0); /* single arrows */
+    wr16(out, ap_settings()->arrow_style);
     return noErr;
 }
 
 int32_t tb_GetThemeCheckBoxStyle(gaddr out)
 {
-    wr16(out, 1); /* check marks */
+    wr16(out, ap_settings()->check_style);
     return noErr;
 }
 
 /* The theme's fonts: Charcoal 12 for the system font, Geneva 10 (bold
- * for the emphasized one) for the small ones and views. */
+ * for the emphasized one) for the small ones and views, unless the
+ * control panel chose others. */
 static void theme_font(int id, const char **name, int *size, int *style)
 {
-    *name = id == 0 ? "Charcoal" : "Geneva";
-    *size = id == 0 ? 12 : 10;
+    const appearance_settings *a = ap_settings();
+    *name = a->font[id == 0 ? kThemeFontSystem : id == 3 ? kThemeFontViews : kThemeFontSmallSystem];
+    *size = id == 0 ? 12 : id == 3 ? a->views_size : 10;
     *style = id == 2 ? 1 : 0;
 }
 
