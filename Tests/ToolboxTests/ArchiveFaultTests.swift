@@ -154,5 +154,12 @@ extension BlueBox {
         }
 
         /// System 7's pop-up menu CDEF and Notification Manager are in
+        /// Gestalt: AgendaMaker stops at launch when either is missing.
+        @Test func gestaltHasPopupAndNotification() {
+            bootMachine()
+            var v: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("pop!")), &v) == 0 && v & 1 == 1)
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("nmgr")), &v) == 0 && v & 1 == 1)
+        }
     }
 }
