@@ -382,6 +382,7 @@ bool machine_boot(bool census)
     sane_reset();
     time_reset();
     vam_reset();
+    priv_os9_reset();
     threads_reset();
     help_reset();
     dialog_reset();

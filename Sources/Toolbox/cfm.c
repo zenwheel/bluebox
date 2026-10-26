@@ -185,6 +185,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < vam_export_count; i++) /* found missing by the archive walk */
         if (!strcmp(vam_exports[i].name, name))
             return vam_exports[i].fn;
+    for (unsigned i = 0; i < priv_os9_export_count; i++) /* Mac OS 9's private names */
+        if (!strcmp(priv_os9_exports[i].name, name))
+            return priv_os9_exports[i].fn;
     for (unsigned i = 0; i < carbonuser_export_count; i++) /* CarbonLib's user and machine names */
         if (!strcmp(carbonuser_exports[i].name, name))
             return carbonuser_exports[i].fn;

@@ -73,6 +73,10 @@ extern const unsigned carbongaps_export_count;
 /* Routines the archive walk found missing (vam.c). */
 extern const ppc_export vam_exports[];
 extern const unsigned vam_export_count;
+/* Mac OS 9's private names Blue Box can back (private_os9.c). */
+extern const ppc_export priv_os9_exports[];
+extern const unsigned priv_os9_export_count;
+void priv_os9_reset(void);
 /* QuickTime's graphics importers (qt_gimport.c). */
 extern const ppc_export gimport_exports[];
 extern const unsigned gimport_export_count;
