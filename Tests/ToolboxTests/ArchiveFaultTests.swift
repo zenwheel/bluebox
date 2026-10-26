@@ -152,5 +152,7 @@ extension BlueBox {
             #expect(pstring(at: sym) == "beta" && rd32(addr) == alpha + 4)
             #expect(ppcErr("GetIndSymbol", [rd32(conn), 2, sym, addr, cls]) == -2802) // cfragNoSymbolErr
         }
+
+        /// System 7's pop-up menu CDEF and Notification Manager are in
     }
 }
