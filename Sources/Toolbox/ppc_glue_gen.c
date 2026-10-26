@@ -30281,6 +30281,19 @@ static void ppcglue_AEManagerInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PPCBrowser(ppc_cpu *c)
+{
+    gaddr a_prompt = (gaddr)c->gpr[3];
+    gaddr a_applListLabel = (gaddr)c->gpr[4];
+    int8_t a_defaultSpecified = (int8_t)c->gpr[5];
+    gaddr a_theLocation = (gaddr)c->gpr[6];
+    gaddr a_thePortInfo = (gaddr)c->gpr[7];
+    gaddr a_portFilter = (gaddr)c->gpr[8];
+    gaddr a_theLocNBPType = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PPCBrowser(a_prompt, a_applListLabel, a_defaultSpecified, a_theLocation, a_thePortInfo, a_portFilter, a_theLocNBPType);
+    c->pc = c->lr;
+}
+
 static void ppctrap_StringToNum(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -43289,6 +43302,7 @@ const ppc_export ppc_exports[] = {
     {"PMgrVersion", ppcglue_PMgrVersion},
     {"PPCAcceptAsync", ppcglue_PPCAcceptAsync},
     {"PPCAcceptSync", ppcglue_PPCAcceptSync},
+    {"PPCBrowser", ppcglue_PPCBrowser},
     {"PPCCloseAsync", ppcglue_PPCCloseAsync},
     {"PPCCloseSync", ppcglue_PPCCloseSync},
     {"PPCDispatch", ppcglue_PPCDispatch},

@@ -170,5 +170,25 @@ extension BlueBox {
             let reason = run68k([0x303C, 0x0001, 0xA82C, 0xA9F4]) // MOVE.W #1,D0; _Pack10; _ExitToShell
             #expect(reason.contains("unimplemented trap"))
         }
+
+        /// PPCBrowser (PACK 9) has no dialog to choose a port with: it
+        /// answers userCanceledErr and takes its 26 bytes of arguments.
+        @Test func ppcBrowserIsCancelled() {
+            bootMachine()
+            let reason = run68k([
+                0x2A0F,                         // MOVE.L SP,D5
+                0x4267,                         // CLR.W -(SP)
+                0x42A7, 0x42A7, 0x4267,         // prompt, applListLabel, defaultSpecified
+                0x42A7, 0x42A7, 0x42A7, 0x42A7, // theLocation, thePortInfo, portFilter, theLocNBPType
+                0x303C, 0x0D00,                 // MOVE.W #$0D00,D0
+                0xA82B,                         // _Pack9
+                0x3E1F,                         // MOVE.W (SP)+,D7
+                0x2C0F,                         // MOVE.L SP,D6
+                0xA9F4,                         // _ExitToShell
+            ])
+            #expect(reason == "ExitToShell")
+            let cpu = g_cpu!.pointee
+            #expect(cpu.d.5 == cpu.d.6 && Int16(truncatingIfNeeded: cpu.d.7) == -128)
+        }
     }
 }

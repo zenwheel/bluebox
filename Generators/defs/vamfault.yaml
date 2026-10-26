@@ -14,3 +14,31 @@
         type: LONGINT*
     dispatcher: Pack8
     selector: 0x0441
+
+# PPCBrowser, the PPC Toolbox's port chooser (PACK 9, AgendaMaker's Send
+# Message...).
+- dispatcher:
+    name: Pack9
+    trap: 0xA82B
+    selector-location: D0W
+
+- function:
+    name: PPCBrowser
+    return: OSErr
+    args:
+      - name: prompt
+        type: ConstStringPtr
+      - name: applListLabel
+        type: ConstStringPtr
+      - name: defaultSpecified
+        type: Boolean
+      - name: theLocation
+        type: Ptr
+      - name: thePortInfo
+        type: Ptr
+      - name: portFilter
+        type: ProcPtr
+      - name: theLocNBPType
+        type: ConstStringPtr
+    dispatcher: Pack9
+    selector: 0x0D00

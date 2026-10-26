@@ -1688,6 +1688,7 @@ int16_t tb_PMSelectorCount(void);
 int16_t tb_PMgrVersion(void);
 int16_t tb_PPCAcceptAsync(gaddr pb);
 int16_t tb_PPCAcceptSync(gaddr pb);
+int16_t tb_PPCBrowser(gaddr prompt, gaddr applListLabel, int8_t defaultSpecified, gaddr theLocation, gaddr thePortInfo, gaddr portFilter, gaddr theLocNBPType);
 int16_t tb_PPCCloseAsync(gaddr pb);
 int16_t tb_PPCCloseSync(gaddr pb);
 void tb_PPCDispatch(int32_t d0, int32_t a0);
