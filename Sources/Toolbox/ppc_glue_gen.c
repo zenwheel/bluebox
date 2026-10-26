@@ -40509,6 +40509,8 @@ static void ppclm_get_AuxWinHead(ppc_cpu *c) { c->gpr[3] = rd32(0xCD0); c->pc = 
 static void ppclm_set_AuxWinHead(ppc_cpu *c) { wr32(0xCD0, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_DeskCPat(ppc_cpu *c) { c->gpr[3] = rd32(0xCD8); c->pc = c->lr; }
 static void ppclm_set_DeskCPat(ppc_cpu *c) { wr32(0xCD8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
+static void ppclm_get_SoundGlue(ppc_cpu *c) { c->gpr[3] = rd32(0xAE8); c->pc = c->lr; }
+static void ppclm_set_SoundGlue(ppc_cpu *c) { wr32(0xAE8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 const ppc_export ppc_exports[] = {
     {"ADBOp", ppcglue_ADBOp},
     {"ADBReInit", ppcglue_ADBReInit},
@@ -42415,6 +42417,7 @@ const ppc_export ppc_exports[] = {
     {"LMGetSdVolume", ppclm_get_SdVolume},
     {"LMGetSoundActive", ppclm_get_SoundActive},
     {"LMGetSoundBase", ppclm_get_SoundBase},
+    {"LMGetSoundGlue", ppclm_get_SoundGlue},
     {"LMGetSoundLevel", ppclm_get_SoundLevel},
     {"LMGetSoundPtr", ppclm_get_SoundPtr},
     {"LMGetSynListHandle", ppclm_get_SynListHandle},
@@ -42648,6 +42651,7 @@ const ppc_export ppc_exports[] = {
     {"LMSetSdVolume", ppclm_set_SdVolume},
     {"LMSetSoundActive", ppclm_set_SoundActive},
     {"LMSetSoundBase", ppclm_set_SoundBase},
+    {"LMSetSoundGlue", ppclm_set_SoundGlue},
     {"LMSetSoundLevel", ppclm_set_SoundLevel},
     {"LMSetSoundPtr", ppclm_set_SoundPtr},
     {"LMSetSynListHandle", ppclm_set_SynListHandle},

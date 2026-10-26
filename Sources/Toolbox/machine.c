@@ -122,6 +122,10 @@ static void init_lowmem(void)
     wr32(LM_MinStack, 0x400);
     wr32(LM_DefltStack, 0x2000);
     gput(LM_SysResName, (const uint8_t *)"\006System", 7);
+    /* The Sound Driver glue (StartSound in the programs' libraries) makes
+     * its handle when SoundGlue is negative, and uses what is there when
+     * it isn't: zero sent Classic Daleks's first sound from address 0. */
+    wr32(LM_SoundGlue, 0xFFFFFFFFu);
     wr16(LM_PaintWhite, 0xFFFF);      /* erase what is exposed */
     wr16(LM_SaveUpdate, 0xFFFF);      /* and queue its update */
     wr8(LM_QDExist, 0xFF);            /* QuickDraw not initialised */

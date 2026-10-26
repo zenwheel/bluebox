@@ -269,5 +269,13 @@ extension BlueBox {
             let free = tb_NewPtr(4, false, true)
             #expect(tb_ThreadCurrentStackSpace(1, free) == 0 && rd32(free) == 0x1230) // kCurrentThreadID
         }
+
+        /// SoundGlue starts negative: the Sound Driver glue makes its handle
+        /// then, and uses one that is there otherwise (Classic Daleks).
+        @Test func soundGlueStartsWithNoHandle() {
+            launchTestApp()
+            #expect(rd32(UInt32(LM_SoundGlue)) == 0xFFFF_FFFF)
+            #expect(pstring(at: UInt32(LM_SysResName)) == "System")
+        }
     }
 }

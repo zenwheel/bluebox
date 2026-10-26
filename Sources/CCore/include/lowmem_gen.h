@@ -211,6 +211,7 @@
 #define LM_TEScrpHandle 0x0AB4u /* Handle, 4 bytes */
 #define LM_AppPacks 0x0AB8u /* Handle[8], 32 bytes */
 #define LM_SysResName 0x0AD8u /* Byte[20], 20 bytes */
+#define LM_SoundGlue 0x0AE8u /* Handle, 4 bytes */
 #define LM_AppParmHandle 0x0AECu /* Handle, 4 bytes */
 #define LM_DSErrCode 0x0AF0u /* INTEGER, 2 bytes */
 #define LM_ResErrProc 0x0AF2u /* ProcPtr, 4 bytes */
