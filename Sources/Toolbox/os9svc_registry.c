@@ -222,6 +222,22 @@ static void get_cstr(gaddr p, char *out, size_t max)
     out[n] = 0;
 }
 
+/* A property of the entry an ID names: its bytes (valid until the registry
+ * changes) and size; for the Driver Loader. */
+int os9_registry_property(gaddr id, const char *name, const uint8_t **data, uint32_t *size)
+{
+    entry *e;
+    int err = id_entry(id, &e);
+    if (err)
+        return err;
+    prop *p = prop_find(e, name);
+    if (!p)
+        return nrNotFoundErr;
+    *data = p->value;
+    *size = p->size;
+    return noErr;
+}
+
 static void ds_IDInit(ppc_cpu *c)
 {
     if (!R(0))

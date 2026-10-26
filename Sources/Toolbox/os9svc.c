@@ -20,6 +20,7 @@ static const os9_library libraries[] = {
     { os9_driver_exports, &os9_driver_export_count, os9_driver_aliases, &os9_driver_alias_count },
     { os9_url_exports, &os9_url_export_count, os9_url_aliases, &os9_url_alias_count },
     { os9_registry_exports, &os9_registry_export_count, os9_registry_aliases, &os9_registry_alias_count },
+    { os9_loader_exports, &os9_loader_export_count, os9_loader_aliases, &os9_loader_alias_count },
 };
 
 void (*cfm_export_fn(const char *name))(ppc_cpu *);
