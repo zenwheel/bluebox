@@ -920,4 +920,13 @@ void trap_autovectors(void)
     wr32(stub + 2, EXCEPTION_JMP);
     for (unsigned v = 25; v < 32; v++)
         wr32(v * 4, stub);
+    /* TRAP #0-#15 (32..47) return at once: Mac OS used none of them, and
+     * Apple HD SC Setup makes A/UX's getuid call (TRAP #0) whether or not
+     * A/UX is running, then ignores the answer when it isn't. */
+    gaddr rte = mm_new_ptr_in(rd32(LM_SysZone), 2, false);
+    if (!rte)
+        return;
+    wr16(rte, 0x4E73); /* RTE */
+    for (unsigned v = 32; v < 48; v++)
+        wr32(v * 4, rte);
 }

@@ -302,5 +302,14 @@ extension BlueBox {
             #expect(rd32(rd32(te) + 0x3E) == rd32(h)) // hText: the item's text
             tb_DisposeDialog(d)
         }
+
+        /// TRAP #0-#15 return to the next instruction: Apple HD SC Setup
+        /// makes A/UX's getuid call (TRAP #0) under Mac OS too.
+        @Test func trapInstructionsReturn() {
+            launchTestApp()
+            let reason = run68k([0x7018, 0x4E40, 0x4E4F, 0x7E01, 0xA9F4]) // MOVEQ #24,D0; TRAP #0; TRAP #15; MOVEQ #1,D7
+            #expect(reason == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 == 1 && g_cpu!.pointee.d.0 & 0xFFFF == 0x18)
+        }
     }
 }
