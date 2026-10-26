@@ -255,6 +255,9 @@ bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
 void time_reset(void);
+/* Layers and Open Transport's tasks (vam.c): a new run; the tasks due. */
+void vam_reset(void);
+void ot_tasks_pump(void);
 /* The MIDI Manager (midi.c): packets and time base ports, run from time_pump. */
 void midi_pump(void);
 void midi_reset(void);

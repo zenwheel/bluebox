@@ -67,6 +67,9 @@ extern const ppc_export carbonupps_exports[];
 extern const unsigned carbonupps_export_count;
 extern const ppc_export carbongaps_exports[];
 extern const unsigned carbongaps_export_count;
+/* Routines the archive walk found missing (vam.c). */
+extern const ppc_export vam_exports[];
+extern const unsigned vam_export_count;
 /* CarbonLib's user and machine names (carbon_user.c). */
 extern const ppc_export carbonuser_exports[];
 extern const unsigned carbonuser_export_count;

@@ -50,3 +50,80 @@
         type: Ptr
     dispatcher: SoundDispatch
     selector: 0x00B00004
+
+# Window Manager layers (System 7's, for the Process Manager): private,
+# PrivateInterfaceLib's to PowerPC programs and _LayerDispatch's to 68k
+# ones.  Only the selectors programs were seen to use are given here:
+# NewLayer is 1 (RegEdit's arguments), GetCurLayer 3 (Virtual's),
+# SwapCurLayer 5 (RegEdit's, with the layer NewLayer made) and SetCurLayer
+# 4 (RegEdit's, putting the old layer back after making its window in the
+# new one; it leaves room for a word's result).
+- dispatcher:
+    name: LayerDispatch
+    trap: 0xA829
+    selector-location: D0W
+
+- function:
+    name: NewLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+      - name: visible
+        type: Boolean
+      - name: neverActive
+        type: Boolean
+      - name: behind
+        type: WindowPtr
+      - name: refCon
+        type: LONGINT
+    dispatcher: LayerDispatch
+    selector: 0x0001
+
+- function:
+    name: GetCurLayer
+    return: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0003
+
+- function:
+    name: SetCurLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0004
+
+- function:
+    name: SwapCurLayer
+    return: WindowPtr
+    args:
+      - name: layer
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0005
+
+- function:
+    name: GetSubWindows
+    return: WindowPtr
+    args:
+      - name: layer
+        type: WindowPtr
+    cfm: PrivateInterfaceLib
+
+- function:
+    name: GetParent
+    return: WindowPtr
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: PrivateInterfaceLib
+
+- function:
+    name: IsLayer
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: PrivateInterfaceLib

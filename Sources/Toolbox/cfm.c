@@ -175,6 +175,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbongaps_export_count; i++) /* CarbonLib's small additions */
         if (!strcmp(carbongaps_exports[i].name, name))
             return carbongaps_exports[i].fn;
+    for (unsigned i = 0; i < vam_export_count; i++) /* found missing by the archive walk */
+        if (!strcmp(vam_exports[i].name, name))
+            return vam_exports[i].fn;
     for (unsigned i = 0; i < carbonuser_export_count; i++) /* CarbonLib's user and machine names */
         if (!strcmp(carbonuser_exports[i].name, name))
             return carbonuser_exports[i].fn;
@@ -584,7 +587,7 @@ static const char *const native_libraries[] = {
     "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib", "InputSprocketLib",
     "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
     "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
-    "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
+    "OpenTptAppleTalkLib", "OTNtvUtilLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
     "TextCommon", "UnicodeConverter", "TextEncodingConverter", "CarbonLib",
     "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
 };

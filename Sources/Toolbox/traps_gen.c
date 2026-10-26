@@ -165,6 +165,7 @@ const char *const tb_trap_names[1024] = {
     [0x026] = "InsertMenuItem",
     [0x027] = "HideDialogItem",
     [0x028] = "ShowDialogItem",
+    [0x029] = "LayerDispatch",
     [0x02D] = "Pack11",
     [0x02E] = "Pack12",
     [0x02F] = "Pack13",
@@ -9589,6 +9590,15 @@ static void glue_GetControlVariant(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetCurLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_GetCurLayer();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetCurrentProcess(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16112,6 +16122,20 @@ static void glue_NewIconSuite(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int8_t a_neverActive = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_layer = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewLayer(a_layer, a_visible, a_neverActive, a_behind, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20485,6 +20509,16 @@ static void glue_SetControlVisibility(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetCurLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_layer = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetCurLayer(a_layer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -23656,6 +23690,16 @@ static void glue_SubtractTime(cpu68k *c, uint16_t trapword)
     gaddr a_src = (gaddr)cpu_pop32(c);
     gaddr a_dst = (gaddr)cpu_pop32(c);
     tb_SubtractTime(a_dst, a_src);
+    cpu_push32(c, ret);
+}
+
+static void glue_SwapCurLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_layer = (gaddr)cpu_pop32(c);
+    gaddr r = tb_SwapCurLayer(a_layer);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -26992,6 +27036,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x9Fu, "CDSequenceEquivalentImageDescriptionS", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0xA0u, "ReplaceDSequenceImageDescription", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0xA3u, "QTGetPixelFormatDepthForImageDescription", CONV_STACK, 4, 2, 0},
+    {0xA829, (int32_t)0x1u, "NewLayer", CONV_STACK, 16, 2, glue_NewLayer},
+    {0xA829, (int32_t)0x3u, "GetCurLayer", CONV_STACK, 0, 4, glue_GetCurLayer},
+    {0xA829, (int32_t)0x4u, "SetCurLayer", CONV_STACK, 4, 2, glue_SetCurLayer},
+    {0xA829, (int32_t)0x5u, "SwapCurLayer", CONV_STACK, 4, 4, glue_SwapCurLayer},
     {0xABC2, (int32_t)0x1u, "CompAdd", CONV_STACK, 8, 0, glue_CompAdd},
     {0xABC2, (int32_t)0x2u, "CompSub", CONV_STACK, 8, 0, glue_CompSub},
     {0xABC2, (int32_t)0x3u, "CompNeg", CONV_STACK, 4, 0, glue_CompNeg},
@@ -28146,6 +28194,7 @@ const dispatcher_info dispatchers[] = {
     {0xAA52, "HighLevelFSDispatch", "D0<0xFF>"},
     {0xABC9, "IconDispatch", "D0W"},
     {0xAAA3, "ImageCompressionDispatch", "D0W"},
+    {0xA829, "LayerDispatch", "D0W"},
     {0xABC2, "MatrixDispatch", "D0W"},
     {0xA825, "MenuDispatch", "D0W"},
     {0xAA59, "MixedModeDispatch", "D0W"},

@@ -30320,6 +30320,58 @@ static void ppcglue_MIDIDiscardPacket(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NewLayer(ppc_cpu *c)
+{
+    gaddr a_layer = (gaddr)c->gpr[3];
+    int8_t a_visible = (int8_t)c->gpr[4];
+    int8_t a_neverActive = (int8_t)c->gpr[5];
+    gaddr a_behind = (gaddr)c->gpr[6];
+    int32_t a_refCon = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewLayer(a_layer, a_visible, a_neverActive, a_behind, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCurLayer(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetCurLayer();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetCurLayer(ppc_cpu *c)
+{
+    gaddr a_layer = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetCurLayer(a_layer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SwapCurLayer(ppc_cpu *c)
+{
+    gaddr a_layer = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_SwapCurLayer(a_layer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSubWindows(ppc_cpu *c)
+{
+    gaddr a_layer = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetSubWindows(a_layer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetParent(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetParent(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsLayer(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsLayer(a_window);
+    c->pc = c->lr;
+}
+
 static void ppctrap_StringToNum(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -41558,6 +41610,7 @@ const ppc_export ppc_exports[] = {
     {"GetControlValue", ppcglue_GetControlValue},
     {"GetControlVariant", ppcglue_GetControlVariant},
     {"GetControlViewSize", ppcglue_GetControlViewSize},
+    {"GetCurLayer", ppcglue_GetCurLayer},
     {"GetCurrentProcess", ppcglue_GetCurrentProcess},
     {"GetCurrentThread", ppcglue_GetCurrentThread},
     {"GetCursor", ppcglue_GetCursor},
@@ -41846,6 +41899,7 @@ const ppc_export ppc_exports[] = {
     {"GetPalette", ppcglue_GetPalette},
     {"GetPaletteUpdates", ppcglue_GetPaletteUpdates},
     {"GetParamText", ppcglue_GetParamText},
+    {"GetParent", ppcglue_GetParent},
     {"GetPattern", ppcglue_GetPattern},
     {"GetPen", ppcglue_GetPen},
     {"GetPenState", ppcglue_GetPenState},
@@ -41898,6 +41952,7 @@ const ppc_export ppc_exports[] = {
     {"GetStdFilterProc", ppcglue_GetStdFilterProc},
     {"GetString", ppcglue_GetString},
     {"GetSubTable", ppcglue_GetSubTable},
+    {"GetSubWindows", ppcglue_GetSubWindows},
     {"GetSuiteLabel", ppcglue_GetSuiteLabel},
     {"GetSuperControl", ppcglue_GetSuperControl},
     {"GetSwitchInfo", ppcglue_GetSwitchInfo},
@@ -42202,6 +42257,7 @@ const ppc_export ppc_exports[] = {
     {"IsDialogEvent", ppcglue_IsDialogEvent},
     {"IsIconRefComposite", ppcglue_IsIconRefComposite},
     {"IsIconRefMaskEmpty", ppcglue_IsIconRefMaskEmpty},
+    {"IsLayer", ppcglue_IsLayer},
     {"IsMenuItemEnabled", ppcglue_IsMenuItemEnabled},
     {"IsMenuItemIconEnabled", ppcglue_IsMenuItemIconEnabled},
     {"IsMetric", ppcglue_IsMetric},
@@ -42876,6 +42932,7 @@ const ppc_export ppc_exports[] = {
     {"NewHandleSysClear", ppcglue_NewHandleSysClear},
     {"NewIconSuite", ppcglue_NewIconSuite},
     {"NewImageGWorld", ppctrap_NewImageGWorld},
+    {"NewLayer", ppcglue_NewLayer},
     {"NewMenu", ppcglue_NewMenu},
     {"NewMovie", ppcglue_NewMovie},
     {"NewMovieController", ppcglue_NewMovieController},
@@ -43823,6 +43880,7 @@ const ppc_export ppc_exports[] = {
     {"SetControlValue", ppcglue_SetControlValue},
     {"SetControlViewSize", ppcglue_SetControlViewSize},
     {"SetControlVisibility", ppcglue_SetControlVisibility},
+    {"SetCurLayer", ppcglue_SetCurLayer},
     {"SetCursor", ppcglue_SetCursor},
     {"SetCursorComponent", ppcglue_SetCursorComponent},
     {"SetCustomIconsEnabled", ppcglue_SetCustomIconsEnabled},
@@ -44206,6 +44264,7 @@ const ppc_export ppc_exports[] = {
     {"StyledLineBreak", ppcglue_StyledLineBreak},
     {"SubPt", ppcglue_SubPt},
     {"SubtractTime", ppcglue_SubtractTime},
+    {"SwapCurLayer", ppcglue_SwapCurLayer},
     {"SwapMMUMode", ppctrap_SwapMMUMode},
     {"SysBeep", ppcglue_SysBeep},
     {"SysEnvirons", ppcglue_SysEnvirons},
