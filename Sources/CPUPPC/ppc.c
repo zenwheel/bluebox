@@ -490,6 +490,51 @@ static bool arith31(ppc_cpu *c, uint32_t op)
             r = a / b;
         }
         break;
+    /* The POWER instructions the 601 kept, which Mac OS ran on later
+     * processors too: FutureBASIC^3 compiles division to divs. */
+    case 360: /* abs */
+        r = (int32_t)a < 0 ? 0 - a : a;
+        ov = a == 0x80000000u;
+        break;
+    case 488: /* nabs */
+        r = (int32_t)a > 0 ? 0 - a : a;
+        break;
+    case 264: /* doz: b - a, or 0 if a > b */
+        r = (int32_t)a > (int32_t)b ? 0 : b - a;
+        ov = (int32_t)a <= (int32_t)b && (int64_t)(int32_t)b - (int32_t)a != (int32_t)r;
+        break;
+    case 107: { /* mul: the high word, the low one to MQ (and CR0 by it) */
+        int64_t p = (int64_t)(int32_t)a * (int32_t)b;
+        r = (uint32_t)((uint64_t)p >> 32);
+        c->mq = (uint32_t)p;
+        ov = p != (int32_t)p;
+        c->gpr[RD(op)] = r;
+        if (OEBIT(op))
+            set_ov(c, ov);
+        if (RCBIT(op))
+            set_cr0(c, c->mq);
+        return true;
+    }
+    case 331:   /* div: (rA || MQ) / rB */
+    case 363: { /* divs: rA / rB; the remainder to MQ (and CR0 by it) */
+        int64_t n = XO9(op) == 331 ? (int64_t)((uint64_t)a << 32 | c->mq) : (int32_t)a;
+        int64_t q = 0, m = 0;
+        if (b == 0 || (n == INT64_MIN && b == 0xFFFFFFFFu)) {
+            ov = true;
+        } else {
+            q = n / (int32_t)b;
+            m = n % (int32_t)b;
+            ov = q != (int32_t)q;
+        }
+        r = ov ? 0x80000000u : (uint32_t)q;
+        c->mq = ov ? 0 : (uint32_t)m;
+        c->gpr[RD(op)] = r;
+        if (OEBIT(op))
+            set_ov(c, ov);
+        if (RCBIT(op))
+            set_cr0(c, c->mq);
+        return true;
+    }
     default:
         return false;
     }
@@ -586,6 +631,7 @@ static void op31(ppc_cpu *c, uint32_t op)
         case 9: c->gpr[d] = c->ctr; break;
         case 268: c->gpr[d] = (uint32_t)c->tb; break;
         case 269: c->gpr[d] = (uint32_t)(c->tb >> 32); break;
+        case 0: c->gpr[d] = c->mq; break;
         case 287: c->gpr[d] = 0x00080200u; break; /* PVR: a 750 (G3) */
         default: c->gpr[d] = 0; break;
         }
@@ -596,6 +642,7 @@ static void op31(ppc_cpu *c, uint32_t op)
         return;
     case 467: /* mtspr */
         switch (spr_num(op)) {
+        case 0: c->mq = rs; break;
         case 1: c->xer = rs; break;
         case 8: c->lr = rs; break;
         case 9: c->ctr = rs; break;
@@ -740,6 +787,11 @@ void ppc_execute(ppc_cpu *c, uint32_t op)
     case 7: /* mulli */
         c->gpr[d] = (uint32_t)((int32_t)c->gpr[a] * SIMM(op));
         return;
+    case 9: { /* dozi (POWER, as the 601 has it): SIMM - rA, or 0 */
+        int32_t x = (int32_t)c->gpr[a], imm = SIMM(op);
+        c->gpr[d] = x > imm ? 0 : (uint32_t)imm - (uint32_t)x;
+        return;
+    }
     case 8: { /* subfic */
         uint32_t x = c->gpr[a], imm = (uint32_t)SIMM(op);
         c->gpr[d] = imm - x;
