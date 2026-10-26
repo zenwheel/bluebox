@@ -28215,7 +28215,7 @@ const dispatcher_info dispatchers[] = {
     {0xAAA2, "PaletteDispatch", "D0<0xFF>"},
     {0xA09E, "PowerDispatch", "D0W"},
     {0xA8FD, "PrGlue", "StackL"},
-    {0xAB1D, "QDExtensions", "D0L"},
+    {0xAB1D, "QDExtensions", "D0<0xFFFF>"},
     {0xAAAA, "QuickTime", "D0W"},
     {0xA822, "ResourceDispatch", "D0<0xFF>"},
     {0xA089, "SCSIAtomic", "D0W"},

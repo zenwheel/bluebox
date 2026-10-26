@@ -140,6 +140,17 @@ extension BlueBox {
 
         func read(_ p: UInt32, _ n: Int) -> [UInt8] { (0..<n).map { rd8(p + UInt32($0)) } }
 
+        /// The main device's mode follows its depth, numbered as Apple's
+        /// video drivers did (Bubblomania 1.0 wants 8 bits: mode 131).
+        @Test func screenModeFollowsDepth() {
+            bootMachine()
+            let gd = rd32(rd32(UInt32(LM_MainDevice)))
+            for (depth, mode) in [(8, 0x83), (1, 0x80), (32, 0x85), (16, 0x84)] {
+                #expect(qd_screen_set_depth(Int32(depth)))
+                #expect(rd32(gd + UInt32(GDevice_gdMode_off)) == UInt32(mode))
+            }
+        }
+
         /// OTCompareAndSwap8 and 16, and Carbon's CompareString and
         /// TimeString (Turtle Turmoil, The Cow Catching Game, Amorphium).
         @Test func smallCalls() {

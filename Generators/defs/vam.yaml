@@ -127,3 +127,12 @@
       - name: window
         type: WindowPtr
     cfm: PrivateInterfaceLib
+
+# QDExtensions with older interfaces' selectors: 32-Bit QuickDraw's first
+# headers loaded only the selector, MOVEQ #5,D0 for GetGWorld, without the
+# parameter size in the high word (Drol, Bubblomania 1.0 to 1.2, Chips &
+# DIPS).
+- dispatcher:
+    name: QDExtensions
+    trap: 0xAB1D
+    selector-location: D0<0xFFFF>
