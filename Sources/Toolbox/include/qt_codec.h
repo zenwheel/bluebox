@@ -82,6 +82,10 @@ bool icm_csequence_exists(int32_t seqID);
 /* The Standard Image Compression dialog component ('scdi', qt_scdi.c),
  * registered again after the Component Manager is reset. */
 void icm_components_reset(void);
+/* A still image through the host's decoder (qt_codec.c): RGBA, malloc'd. */
+bool qt_decode_image(const uint8_t *data, size_t len, uint8_t **rgba, int *w, int *h);
+/* The graphics importer component (qt_gimport.c): a new run. */
+void qt_gimport_register(void);
 
 /* ---- Sound ----
  *

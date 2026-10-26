@@ -175,6 +175,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbongaps_export_count; i++) /* CarbonLib's small additions */
         if (!strcmp(carbongaps_exports[i].name, name))
             return carbongaps_exports[i].fn;
+    for (unsigned i = 0; i < gimport_export_count; i++) /* QuickTime's graphics importers */
+        if (!strcmp(gimport_exports[i].name, name))
+            return gimport_exports[i].fn;
     for (unsigned i = 0; i < vam_export_count; i++) /* found missing by the archive walk */
         if (!strcmp(vam_exports[i].name, name))
             return vam_exports[i].fn;

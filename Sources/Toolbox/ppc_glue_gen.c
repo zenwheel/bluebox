@@ -30272,6 +30272,42 @@ static void ppcglue_GetCSequenceFrameNumber(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetGraphicsImporterForFile(ppc_cpu *c)
+{
+    gaddr a_theFile = (gaddr)c->gpr[3];
+    gaddr a_gi = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForFile(a_theFile, a_gi);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetGraphicsImporterForDataRef(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    gaddr a_gi = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForDataRef(a_dataRef, a_dataRefType, a_gi);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetGraphicsImporterForFileWithFlags(ppc_cpu *c)
+{
+    gaddr a_theFile = (gaddr)c->gpr[3];
+    gaddr a_gi = (gaddr)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForFileWithFlags(a_theFile, a_gi, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetGraphicsImporterForDataRefWithFlags(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    gaddr a_gi = (gaddr)c->gpr[5];
+    int32_t a_flags = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForDataRefWithFlags(a_dataRef, a_dataRefType, a_gi, a_flags);
+    c->pc = c->lr;
+}
+
 static void ppcglue_MakeImageDescriptionForPixMap(ppc_cpu *c)
 {
     int32_t a_pixmap = (int32_t)c->gpr[3];
@@ -39667,66 +39703,6 @@ static void ppctrap_HitTestDSequenceData(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_GetGraphicsImporterForFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetGraphicsImporterForDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x77u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetGraphicsImporterForFileWithFlags(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x84u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetGraphicsImporterForDataRefWithFlags(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x85u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_QTGetFileNameExtension(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -41768,10 +41744,10 @@ const ppc_export ppc_exports[] = {
     {"GetGWorld", ppcglue_GetGWorld},
     {"GetGWorldDevice", ppcglue_GetGWorldDevice},
     {"GetGWorldPixMap", ppcglue_GetGWorldPixMap},
-    {"GetGraphicsImporterForDataRef", ppctrap_GetGraphicsImporterForDataRef},
-    {"GetGraphicsImporterForDataRefWithFlags", ppctrap_GetGraphicsImporterForDataRefWithFlags},
-    {"GetGraphicsImporterForFile", ppctrap_GetGraphicsImporterForFile},
-    {"GetGraphicsImporterForFileWithFlags", ppctrap_GetGraphicsImporterForFileWithFlags},
+    {"GetGraphicsImporterForDataRef", ppcglue_GetGraphicsImporterForDataRef},
+    {"GetGraphicsImporterForDataRefWithFlags", ppcglue_GetGraphicsImporterForDataRefWithFlags},
+    {"GetGraphicsImporterForFile", ppcglue_GetGraphicsImporterForFile},
+    {"GetGraphicsImporterForFileWithFlags", ppcglue_GetGraphicsImporterForFileWithFlags},
     {"GetGray", ppcglue_GetGray},
     {"GetHandleSize", ppcglue_GetHandleSize},
     {"GetIcon", ppcglue_GetIcon},

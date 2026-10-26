@@ -10812,6 +10812,54 @@ static void glue_GetGWorldPixMap(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetGraphicsImporterForDataRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_gi = (gaddr)cpu_pop32(c);
+    int32_t a_dataRefType = (int32_t)cpu_pop32(c);
+    int32_t a_dataRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetGraphicsImporterForDataRef(a_dataRef, a_dataRefType, a_gi);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetGraphicsImporterForDataRefWithFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    gaddr a_gi = (gaddr)cpu_pop32(c);
+    int32_t a_dataRefType = (int32_t)cpu_pop32(c);
+    int32_t a_dataRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetGraphicsImporterForDataRefWithFlags(a_dataRef, a_dataRefType, a_gi, a_flags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetGraphicsImporterForFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_gi = (gaddr)cpu_pop32(c);
+    gaddr a_theFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetGraphicsImporterForFile(a_theFile, a_gi);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetGraphicsImporterForFileWithFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    gaddr a_gi = (gaddr)cpu_pop32(c);
+    gaddr a_theFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetGraphicsImporterForFileWithFlags(a_theFile, a_gi, a_flags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetGray(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -27498,7 +27546,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x6Bu, "CDSequenceChangedSourceData", CONV_STACK, 4, 2, 0},
     {0xAAA3, (int32_t)0x6Cu, "PtInDSequenceData", CONV_STACK, 20, 2, 0},
     {0xAAA3, (int32_t)0x6Du, "ImageFieldSequenceBegin", CONV_STACK, 16, 2, 0},
-    {0xAAA3, (int32_t)0x6Eu, "GetGraphicsImporterForFile", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x6Eu, "GetGraphicsImporterForFile", CONV_STACK, 8, 2, glue_GetGraphicsImporterForFile},
     {0xAAA3, (int32_t)0x6Fu, "ImageTranscodeSequenceBegin", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x70u, "ImageTranscodeSequenceEnd", CONV_STACK, 4, 2, 0},
     {0xAAA3, (int32_t)0x71u, "ImageTranscodeFrame", CONV_STACK, 20, 2, 0},
@@ -27507,7 +27555,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x74u, "GetCSequenceMaxCompressionSize", CONV_STACK, 12, 2, glue_GetCSequenceMaxCompressionSize},
     {0xAAA3, (int32_t)0x75u, "ImageFieldSequenceExtractCombine", CONV_STACK, 32, 2, 0},
     {0xAAA3, (int32_t)0x76u, "ImageFieldSequenceEnd", CONV_STACK, 4, 2, 0},
-    {0xAAA3, (int32_t)0x77u, "GetGraphicsImporterForDataRef", CONV_STACK, 12, 2, 0},
+    {0xAAA3, (int32_t)0x77u, "GetGraphicsImporterForDataRef", CONV_STACK, 12, 2, glue_GetGraphicsImporterForDataRef},
     {0xAAA3, (int32_t)0x78u, "SetCSequencePreferredPacketSize", CONV_STACK, 8, 2, glue_SetCSequencePreferredPacketSize},
     {0xAAA3, (int32_t)0x79u, "CDSequenceSetTimeBase", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x7Au, "MakeImageDescriptionForPixMap", CONV_STACK, 8, 2, glue_MakeImageDescriptionForPixMap},
@@ -27520,8 +27568,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x81u, "QTUpdateGWorld", CONV_STACK, 24, 4, 0},
     {0xAAA3, (int32_t)0x82u, "ICMDecompressCompleteS", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x83u, "ICMGetPixelFormatInfo", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x84u, "GetGraphicsImporterForFileWithFlags", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x85u, "GetGraphicsImporterForDataRefWithFlags", CONV_STACK, 16, 2, 0},
+    {0xAAA3, (int32_t)0x84u, "GetGraphicsImporterForFileWithFlags", CONV_STACK, 12, 2, glue_GetGraphicsImporterForFileWithFlags},
+    {0xAAA3, (int32_t)0x85u, "GetGraphicsImporterForDataRefWithFlags", CONV_STACK, 16, 2, glue_GetGraphicsImporterForDataRefWithFlags},
     {0xAAA3, (int32_t)0x86u, "QTGetPixelSize", CONV_STACK, 4, 2, 0},
     {0xAAA3, (int32_t)0x87u, "HitTestDSequenceData", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x89u, "ICMSequenceGetInfo", CONV_STACK, 12, 2, 0},

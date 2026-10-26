@@ -29,6 +29,13 @@ void machine_set_image_decoder(machine_image_fn fn, void *ctx)
     image_ctx = ctx;
 }
 
+/* A still image through the host's decoder: RGBA (malloc'd) and its size. */
+bool qt_decode_image(const uint8_t *data, size_t len, uint8_t **rgba, int *w, int *h)
+{
+    *rgba = NULL;
+    return image_fn && image_fn(data, len, rgba, w, h, image_ctx) && *rgba;
+}
+
 static bool jpeg_supports(int depth) { return image_fn && (depth == 24 || depth == 32 || depth == 40); }
 static void *jpeg_open(const qt_video_format *f) { return (void *)1; }
 static void jpeg_close(void *s) {}
