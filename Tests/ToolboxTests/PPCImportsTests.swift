@@ -104,10 +104,40 @@ extension BlueBox {
             #expect(tv == rd32(cfm_prepare_container(importContainer("GetCurrentProcess", cls: 2))))
         }
 
+        /// A fragment in memory (a code resource) has its code and data
+        /// where they are in (a copy of) the container, the bytes between
+        /// them in reach: FutureBASIC^3's runtime keeps its glue and
+        /// variables there.
+        @Test func memoryFragmentKeepsItsLayout() {
+            bootMachine()
+            cfm_reset() // no fragments left from another test at the same address
+            _ = cfm_ppc_cpu()
+            func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
+            func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
+            func section(_ size: UInt32, _ off: UInt32, _ kind: UInt8) -> [UInt8] {
+                be32(UInt32(bitPattern: -1)) + be32(0) + be32(size) + be32(size) + be32(size) + be32(off) + [kind, 1, 0, 0]
+            }
+            // The data section's first word: the code section's address (RelocBySectC).
+            var loader = be32(1) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+            loader += be32(0) + be32(0) + be32(1) + be32(68) + be32(72) + be32(72) + be32(0) + be32(0)
+            loader += be16(1) + be16(0) + be32(1) + be32(0) + be16(0x4000) + be16(0) + be32(0)
+            var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(3) + be16(2) + be32(0)
+            pef += section(8, 124, 0) + section(8, 140, 1) + section(UInt32(loader.count), 148, 4)
+            pef += be32(0x6000_0000) + be32(0x6000_0000) + be32(0xCAFE_BABE) + be32(0x1234_5678) + be32(0) + be32(0) + loader
+            let container = bytes(pef)
+            let main = cfm_prepare_container(container)
+            #expect(main != 0)
+            let code = rd32(main)
+            #expect(code != 0 && rd32(code) == 0x6000_0000 && rd32(code + 8) == 0xCAFE_BABE)
+            #expect(main == code + 16) // the data section where the container has it
+            #expect(rd32(container + 140) == 0)  // the code resource itself unchanged
+        }
+
         /// A call through a missing weak import (a transition vector of 0)
         /// stops naming the import, found from the cross-TOC glue's slot.
         @Test func nilCallNamesTheWeakImport() {
             bootMachine()
+            cfm_reset() // no fragments left from another test at the same address
             _ = cfm_ppc_cpu()
             let toc = cfm_prepare_container(importContainer("Q3IsInitialized", cls: 2, library: "NoSuchLib", weak: true))
             #expect(toc != 0 && rd32(toc) == 0)
@@ -119,6 +149,8 @@ extension BlueBox {
                 gpr.storeBytes(of: stack + 2048, toByteOffset: 4, as: UInt32.self)
                 gpr.storeBytes(of: toc, toByteOffset: 8, as: UInt32.self)
             }
+            wr32(0, 0) // low memory, as a program finds it
+            wr32(4, 0)
             g_ppc.pc = glue
             g_ppc.halted = false
             _ = ppc_run(&g_ppc, 20)

@@ -665,8 +665,12 @@ static void add_export(fragment *f, const uint8_t *loader, uint32_t strings, con
 static int library_named(const char *name, char *err, size_t errlen);
 
 /* Load a PEF container into fragment f: sections, imports (loading the
- * libraries it needs), relocations, exports. */
-static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, size_t errlen)
+ * libraries it needs), relocations, exports.  With an image of the
+ * container in guest memory (at, else 0), its code and unpacked data are
+ * used where they are in it, as CFM uses a container in memory:
+ * FutureBASIC^3's runtime keeps glue and variables between its code and
+ * data sections and reaches them from both. */
+static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char *err, size_t errlen)
 {
     if (len < 40 || memcmp(pef, "Joy!peff", 8)) {
         snprintf(err, errlen, "not a PEF container");
@@ -700,6 +704,11 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
         }
         if (s >= ninst)
             continue;
+        if (at && (kind == kCode || kind == kUnpackedData) && packed == total) {
+            sections[s] = (section){ at + off, total, kind, at + off - be32(h + 4) };
+            LOGF(LOG_SEG, "cfm: section %d (kind %d) in place at %08X, %u bytes\n", s, kind, at + off, total);
+            continue;
+        }
         gaddr base = tb_NewPtr((int32_t)(total + 16), false, true);
         if (!base) {
             snprintf(err, errlen, "no memory for section %d (%u bytes)", s, total);
@@ -1050,7 +1059,7 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
     f->offset = s.found.where == kDataForkCFragLocator ? s.found.offset : 0;
     f->length = (uint32_t)len;
     f->loading = true;
-    bool ok = pef_load(pef, len, f, err, errlen);
+    bool ok = pef_load(pef, len, 0, f, err, errlen);
     free(pef);
     f->loading = false;
     if (!ok) {
@@ -1250,6 +1259,9 @@ void cfm_reset(void)
     glue_area = 0;
     missing_len = missing_count = 0;
     nfrags = ninit = init_next = ndata_blocks = 0;
+    for (size_t i = 0; i < absent_count; i++)
+        free(absent_slots[i].name);
+    absent_count = 0;
     stdclib_reset(); /* the last program's library state went with it */
     carbon_cf_reset();
     ppc_cpu_ready = false;
@@ -1403,7 +1415,7 @@ static void ppc_GetDiskFragment(ppc_cpu *c)
                 f->offset = off;
                 f->length = (uint32_t)take;
                 int before = ninit, idx = nfrags++;
-                if (pef_load(mf.data + off, take, f, err, sizeof err)) {
+                if (pef_load(mf.data + off, take, 0, f, err, sizeof err)) {
                     if (f->init_tv && ninit < MAX_FRAGMENTS)
                         init_queue[ninit++] = idx;
                     i = idx;
@@ -1423,6 +1435,17 @@ static void ppc_GetDiskFragment(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* A container from memory, copied whole into memory of its own: the
+ * fragment's code and data are used there (pef_load), and the original
+ * (a code resource, which may move) is left as it was. */
+static gaddr memory_image(const uint8_t *bytes, uint32_t len)
+{
+    gaddr p = tb_NewPtr((int32_t)len, false, false);
+    if (p)
+        gput(p, bytes, len);
+    return p;
+}
+
 /* GetMemFragment(memAddr, length, fragName, loadFlags, *connID, *mainAddr, errMessage) */
 static void ppc_GetMemFragment(ppc_cpu *c)
 {
@@ -1437,12 +1460,15 @@ static void ppc_GetMemFragment(ppc_cpu *c)
         if (c->gpr[5])
             pname_to_c(gptr(c->gpr[5]), f->name, sizeof f->name);
         int before = ninit, idx = nfrags++;
-        if (pef_load(bytes, len, f, err, sizeof err)) {
+        gaddr image = memory_image(bytes, len);
+        if (pef_load(bytes, len, image, f, err, sizeof err)) {
             if (f->init_tv && ninit < MAX_FRAGMENTS)
                 init_queue[ninit++] = idx;
             i = idx;
         } else {
             nfrags--;
+            if (image)
+                tb_DisposePtr(image);
         }
         free(bytes);
         run_new_inits(before);
@@ -1484,8 +1510,11 @@ gaddr cfm_prepare_container(gaddr pef)
     f->memory = pef;
     char err[256];
     int before = ninit, idx = nfrags++;
-    bool ok = pef_load(bytes, len, f, err, sizeof err);
+    gaddr image = memory_image(bytes, len);
+    bool ok = pef_load(bytes, len, image, f, err, sizeof err);
     free(bytes);
+    if (!ok && image)
+        tb_DisposePtr(image);
     if (!ok) {
         LOGF(LOG_UNIMPL, "cfm: code resource at %08X: %s\n", pef, err);
         nfrags--;
