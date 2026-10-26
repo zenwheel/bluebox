@@ -62,5 +62,36 @@ extension BlueBox {
             tb_DrawGrowIcon(w)
             #expect(rd32(out) == rd32(def))
         }
+
+        /// AEManagerInfo(keyWord, &result) takes four words of arguments,
+        /// as its selector says: ChordBook Lite returned to the keyword
+        /// left on the stack.
+        @Test func aeManagerInfoTakesAKeyword() {
+            bootMachine()
+            let out = tb_NewPtr(8, false, true)
+            let vers = fourCC("vers"), recr = fourCC("recr")
+            let reason = run68k([
+                0x2A0F,                                   // MOVE.L SP,D5
+                0x4267,                                   // CLR.W -(SP)
+                0x2F3C, hiWord(vers), loWord(vers),       // MOVE.L #'vers',-(SP)
+                0x4879, hiWord(out), loWord(out),         // PEA out
+                0x303C, 0x0441,                           // MOVE.W #$0441,D0
+                0xA816,                                   // _Pack8
+                0x3E1F,                                   // MOVE.W (SP)+,D7
+                0x4267,                                   // CLR.W -(SP)
+                0x2F3C, hiWord(recr), loWord(recr),       // MOVE.L #'recr',-(SP)
+                0x4879, hiWord(out + 4), loWord(out + 4), // PEA out+4
+                0x303C, 0x0441,                           // MOVE.W #$0441,D0
+                0xA816,                                   // _Pack8
+                0x3C1F,                                   // MOVE.W (SP)+,D6
+                0x280F,                                   // MOVE.L SP,D4
+                0xA9F4,                                   // _ExitToShell
+            ])
+            #expect(reason == "ExitToShell")
+            let cpu = g_cpu!.pointee
+            #expect(cpu.d.4 == cpu.d.5)
+            #expect(cpu.d.7 & 0xFFFF == 0 && cpu.d.6 & 0xFFFF == 0)
+            #expect(rd32(out) == 0x0103_8000 && rd32(out + 4) == 0)
+        }
     }
 }

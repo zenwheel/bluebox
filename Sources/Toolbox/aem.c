@@ -1287,11 +1287,20 @@ gaddr aem_special_handler(uint32_t key)
     return 0;
 }
 
-/* AEManagerInfo: the number of Apple Events processed and the like. */
-int16_t tb_AEManagerInfo(gaddr result)
+/* AEManagerInfo(keyWord, &result): the Apple Event Manager's version
+ * ('vers', a NumVersion: 1.0.3, as in Mac OS 8) or the number of
+ * recording processes ('recr': none). */
+int16_t tb_AEManagerInfo(int32_t key, gaddr result)
 {
+    uint32_t v;
+    if ((uint32_t)key == fourcc("vers"))
+        v = 0x01038000u;
+    else if ((uint32_t)key == fourcc("recr"))
+        v = 0;
+    else
+        return errAEDescNotFound;
     if (result)
-        wr32(result, 0);
+        wr32(result, v);
     return noErr;
 }
 

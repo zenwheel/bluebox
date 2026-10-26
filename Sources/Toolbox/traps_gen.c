@@ -1172,8 +1172,9 @@ static void glue_AEManagerInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
-    gaddr a_resultp = (gaddr)cpu_pop32(c);
-    int16_t r = tb_AEManagerInfo(a_resultp);
+    gaddr a_result = (gaddr)cpu_pop32(c);
+    int32_t a_keyWord = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AEManagerInfo(a_keyWord, a_result);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -27254,7 +27255,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA816, (int32_t)0x407u, "AECountItems", CONV_STACK, 8, 2, glue_AECountItems},
     {0xA816, (int32_t)0x40Eu, "AEDeleteItem", CONV_STACK, 8, 2, glue_AEDeleteItem},
     {0xA816, (int32_t)0x413u, "AEDeleteParam", CONV_STACK, 8, 2, glue_AEDeleteParam},
-    {0xA816, (int32_t)0x441u, "AEManagerInfo", CONV_STACK, 4, 2, glue_AEManagerInfo},
+    {0xA816, (int32_t)0x441u, "AEManagerInfo", CONV_STACK, 8, 2, glue_AEManagerInfo},
     {0xA816, (int32_t)0x500u, "AEInstallSpecialHandler", CONV_STACK, 10, 2, glue_AEInstallSpecialHandler},
     {0xA816, (int32_t)0x501u, "AERemoveSpecialHandler", CONV_STACK, 10, 2, glue_AERemoveSpecialHandler},
     {0xA816, (int32_t)0x52Du, "AEGetSpecialHandler", CONV_STACK, 10, 2, glue_AEGetSpecialHandler},

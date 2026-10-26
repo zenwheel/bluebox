@@ -636,13 +636,6 @@ static void ppcglue_AEInteractWithUser(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppcglue_AEManagerInfo(ppc_cpu *c)
-{
-    gaddr a_resultp = (gaddr)c->gpr[3];
-    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AEManagerInfo(a_resultp);
-    c->pc = c->lr;
-}
-
 static void ppcglue_AEDisposeToken(ppc_cpu *c)
 {
     gaddr a_theToken = (gaddr)c->gpr[3];
@@ -30277,6 +30270,14 @@ static void ppcglue_MakeImageDescriptionForPixMap(ppc_cpu *c)
     int32_t a_pixmap = (int32_t)c->gpr[3];
     gaddr a_idh = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeImageDescriptionForPixMap(a_pixmap, a_idh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AEManagerInfo(ppc_cpu *c)
+{
+    int32_t a_keyWord = (int32_t)c->gpr[3];
+    gaddr a_result = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AEManagerInfo(a_keyWord, a_result);
     c->pc = c->lr;
 }
 

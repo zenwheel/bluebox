@@ -1,0 +1,16 @@
+# Corrections found by the Vintage Apple Macintosh archive walk.  Same
+# schema as Defs/multiversal/defs; these replace multiversal's entries.
+
+# AEManagerInfo takes a keyword before the result pointer (its selector
+# says four words of arguments): ChordBook Lite returned to the long left
+# on the stack.
+- function:
+    name: AEManagerInfo
+    return: OSErr
+    args:
+      - name: keyWord
+        type: AEKeyword
+      - name: result
+        type: LONGINT*
+    dispatcher: Pack8
+    selector: 0x0441
