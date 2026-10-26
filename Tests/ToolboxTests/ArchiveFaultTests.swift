@@ -106,5 +106,51 @@ extension BlueBox {
             #expect(tb_GetTrapAddress(0xA9A0, false, false) != unimplemented) // GetResource
             bootMachine()
         }
+
+        /// A PEF container with a data section and two exports, alpha and
+        /// beta, at its offsets 0 and 4.
+        func exportContainer() -> (UInt32, UInt32) {
+            let strings = Array("alphabeta".utf8)
+            var loader = be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+            loader += be32(UInt32(bitPattern: -1)) + be32(0)
+            let stringsOff: UInt32 = 56, hashOff: UInt32 = 68
+            loader += be32(0) + be32(0) + be32(0) + be32(56) + be32(stringsOff) + be32(hashOff) + be32(0) + be32(2)
+            loader += strings
+            while loader.count < Int(hashOff) { loader.append(0) }
+            loader += be32(2 << 18 | 0)                         // one hash slot: both exports
+            loader += be32(5 << 16) + be32(4 << 16)             // the keys: name lengths
+            loader += be32(1 << 24 | 0) + be32(0) + be16(0)     // alpha: data at 0 in section 0
+            loader += be32(1 << 24 | 5) + be32(4) + be16(0)     // beta: data at 4
+            let dataOff = UInt32(40 + 2 * 28), loaderOff = dataOff + 8
+            var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0)
+            pef += be16(2) + be16(1) + be32(0)
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(dataOff) + [1, 1, 0, 0]
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count))
+            pef += be32(loaderOff) + [4, 1, 0, 0]
+            pef += [UInt8](repeating: 0, count: 8) + loader
+            let p = tb_NewPtr(Int32(pef.count), false, true)
+            for (i, b) in pef.enumerated() { wr8(p + UInt32(i), b) }
+            return (p, UInt32(pef.count))
+        }
+
+        /// GetIndSymbol's index counts from 0 to CountSymbols - 1: the
+        /// mTropolis Player asks each plug-in for its symbol 0.
+        @Test func getIndSymbolCountsFromZero() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            let (pef, len) = exportContainer()
+            let conn = tb_NewPtr(4, false, true), main = tb_NewPtr(4, false, true)
+            let name = pstr("frag"), err = tb_NewPtr(256, false, true)
+            #expect(ppcErr("GetMemFragment", [pef, len, name, 1, conn, main, err]) == 0)
+            let count = tb_NewPtr(4, false, true)
+            #expect(ppcErr("CountSymbols", [rd32(conn), count]) == 0 && rd32(count) == 2)
+            let sym = tb_NewPtr(256, false, true), addr = tb_NewPtr(4, false, true), cls = tb_NewPtr(2, false, true)
+            #expect(ppcErr("GetIndSymbol", [rd32(conn), 0, sym, addr, cls]) == 0)
+            #expect(pstring(at: sym) == "alpha" && rd8(cls) == 1)
+            let alpha = rd32(addr)
+            #expect(ppcErr("GetIndSymbol", [rd32(conn), 1, sym, addr, cls]) == 0)
+            #expect(pstring(at: sym) == "beta" && rd32(addr) == alpha + 4)
+            #expect(ppcErr("GetIndSymbol", [rd32(conn), 2, sym, addr, cls]) == -2802) // cfragNoSymbolErr
+        }
     }
 }
