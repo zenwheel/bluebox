@@ -33,6 +33,11 @@ extern const os9_alias os9_driver_aliases[];
 extern const unsigned os9_driver_alias_count;
 void os9svc_driver_reset(void);
 
+extern const ppc_export os9_url_exports[];
+extern const unsigned os9_url_export_count;
+extern const os9_alias os9_url_aliases[];
+extern const unsigned os9_url_alias_count;
+void os9svc_url_reset(void);
 void os9svc_power_reset(void);
 uint8_t os9svc_sleep_timeout(void);
 uint8_t os9svc_dimming_timeout(void);
