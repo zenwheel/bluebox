@@ -1172,6 +1172,31 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
     return i;
 }
 
+/* Whether an application's PowerPC fragment is a container we can load
+ * (PEF or XCOFF), as far as its first bytes tell.  One in a resource is
+ * taken on trust: the application may decompress it itself. */
+bool cfm_app_fragment_loadable(const char *path)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return false;
+    size_t clen, len = 0;
+    uint8_t *cfrg = file_cfrg(&mf, &clen);
+    member_search s = { .want = NULL };
+    if (cfrg)
+        cfrg_each(cfrg, clen, match_member, &s);
+    free(cfrg);
+    bool ok = s.ok;
+    if (ok && s.found.where == kDataForkCFragLocator) {
+        uint8_t *bytes = member_bytes(&mf, &s.found, &len);
+        ok = bytes && ((len >= 40 && !memcmp(bytes, "Joy!peff", 8)) || (len >= 20 && be16(bytes) == kXCOFFMagic));
+        free(bytes);
+    }
+    mac_file_free(&mf);
+    return ok;
+}
+
 /* Does this file hold an import library of this name? */
 static bool file_has_library(const char *path, const char *name)
 {

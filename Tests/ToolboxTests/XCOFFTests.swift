@@ -1,5 +1,6 @@
 import CCore
 import CPUPPC
+import ForkStore
 import Foundation
 import Testing
 import Toolbox
@@ -98,6 +99,37 @@ extension BlueBox {
             #expect(rd32(addr) == toc + 12)
             let bss = rd32(toc + 12)
             #expect(bss != 0x3000 && bss != 0 && rd32(bss) == 0)
+        }
+        /// A fat application's PowerPC fragment must be a container (PEF or
+        /// XCOFF) for it to run as PowerPC; RoboWar 4.1.2's data fork is
+        /// BinHex text, and it runs its 68k code instead.
+        @Test func fragmentLoadableOnlyWhenAContainer() {
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            // cfrg 0: one application member, the whole data fork.
+            var member = Array("pwpc".utf8) + [UInt8](repeating: 0, count: 18) + [1, 1] + be32(0) + be32(0)
+            member += [UInt8](repeating: 0, count: 8)
+            member += be16(UInt16(member.count + 2 + 4)) + [3] + Array("App".utf8)
+            let cfrg = be32(0) + be32(0) + be32(1) + [UInt8](repeating: 0, count: 16) + be32(1) + member
+            func app(_ name: String, data: [UInt8]) -> String {
+                let path = dir.appendingPathComponent(name).path
+                var data = data
+                var rsrc = buildFork([TestResource(type: "cfrg", id: 0, data: cfrg),
+                                      TestResource(type: "CODE", id: 0, data: [UInt8](repeating: 0, count: 24))])
+                var f = mac_file()
+                data.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = $0.count }
+                rsrc.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+                withUnsafeMutableBytes(of: &f.finder_info) { fi in
+                    for (i, b) in Array("APPL????".utf8).enumerated() { fi[i] = b }
+                }
+                var err = [CChar](repeating: 0, count: 256)
+                #expect(appledouble_write(path, &f, &err, err.count))
+                return path
+            }
+            let pef = Array("Joy!peffpwpc".utf8) + [UInt8](repeating: 0, count: 40)
+            #expect(cfm_app_fragment_loadable(app("PEF", data: pef)))
+            #expect(cfm_app_fragment_loadable(app("XCOFF", data: container())))
+            #expect(!cfm_app_fragment_loadable(app("BinHex", data: Array("+8SCFAR9$ljNmQIV*T0dkID6E9lCb$\n08-e@cDl5SjPP0mYZ".utf8))))
         }
     }
 }
