@@ -35,6 +35,11 @@ walk_one() {
 	rel=$1
 	app=${2:-}
 	name=$(printf '%s%s' "$rel" "${app:+ $app}" | tr '/ ' '__')
+	# A file name has at most 255 bytes: a long one shortened, kept apart
+	# from others by its checksum.
+	if [ "$(printf '%s' "$name" | wc -c)" -gt 200 ]; then
+		name=$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-160)_$(printf '%s' "$name" | cksum | cut -d ' ' -f 1)
+	fi
 	home="$work/homes/$name"
 	log="$work/logs/$name.txt"
 	rm -rf "$home"
@@ -63,7 +68,8 @@ walk_one() {
 	else
 		end=$(grep -a -m 1 -E '^stopped:|^bluebox:|^instruction limit|^several applications' "$log" | sed -E 's/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//' | cut -c1-120)
 	fi
-	# An archive of several applications: each of them in turn.
+	# An archive of several applications: each of them in turn, by its
+	# path inside the archive (names alone can be the same).
 	if [ -z "$app" ] && grep -q '^several applications' "$log"; then
 		sed -n '/^several applications/,$ s/^  //p' "$log" | while IFS= read -r one; do
 			walk_one "$rel" "$one"
@@ -75,14 +81,17 @@ walk_one() {
 	printf '%s\t%s\t%s\t%s\n' "$rel${app:+ [$app]}" "${end:-none}" "${step:-}" "$items"
 }
 
-if [ "${WALK_ONE:-}" ]; then
-	walk_one "$WALK_ONE"
+# One program, the fifth argument: what each of the parallel runs below does.
+if [ $# -ge 5 ]; then
+	walk_one "$5"
 	exit 0
 fi
 
+# Each path as an argument of its own (xargs -I would stop at the first
+# path over 255 bytes, leaving the rest unwalked).
 grep -v '^$' "$dir/census_list.txt" | while IFS= read -r rel; do
 	printf '%s\0' "$rel"
-done | xargs -0 -P "$jobs" -I {} env WALK_ONE={} sh "$0" "$dir" "$work" "$bin" "$jobs" >"$work/walk.tsv" || true
+done | xargs -0 -n 1 -P "$jobs" sh "$0" "$dir" "$work" "$bin" "$jobs" >"$work/walk.tsv" || true
 
 # The failures by kind: host errors, damaged heaps or code, missing routines,
 # CPU faults, then the rest; walks that finished or reached the limit

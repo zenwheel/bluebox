@@ -1,5 +1,6 @@
 /*
- * Code Fragment Manager: PowerPC applications (PEF containers).
+ * Code Fragment Manager: PowerPC applications (PEF containers, and the
+ * first tools' XCOFF).
  *
  * An application's 'cfrg' 0 names its PowerPC fragment (usually the whole
  * data fork).  Its sections are instantiated in the application heap
@@ -603,10 +604,233 @@ static void add_export(fragment *f, const uint8_t *loader, uint32_t strings, con
 
 static int library_named(const char *name, char *err, size_t errlen);
 
+/* What an import of sname (class cls) from library lname binds to: an
+ * address (a transition vector or data), or 0 for a missing weak one.
+ * li is the library's fragment, or -1 where it wasn't found. */
+static gaddr bind_import(const char *lname, int li, const char *sname, int cls, bool weak, bool weak_lib)
+{
+    const fragment *from = li >= 0 && !frags[li].native ? &frags[li] : NULL;
+    gaddr addr = 0;
+    if (from) {
+        if (frag_find_export(from, sname, &addr, NULL))
+            return addr;
+    } else if (li >= 0 || !weak_lib) {
+        /* By name, as CFM binds: a routine imported as data
+         * (Hardwood Solitaire II's GetCurrentProcess) is still its
+         * transition vector, unless we have data of that name. */
+        void (*fn)(ppc_cpu *) = cls == kDataCFragSymbol && ppc_data_export(sname) ? NULL : export_fn(sname);
+        if (fn)
+            return native_tvector(fn, sname);
+        /* Our data exports, whatever class the importer gave them
+         * (CallComponentUPP comes as a transition vector in some). */
+        if (li >= 0 && ppc_data_export(sname) != 0)
+            return data_import(sname);
+    }
+    /* A weak symbol, or one from a weakly linked library that isn't
+     * there, is 0.  But InterfaceLib, MathLib and StdCLib are always
+     * there with everything Mac OS 9 had in them, so what they lack
+     * here is ours to add: a stub that says so. */
+    if (li >= 0 && !strncmp(lname, "OT", 2)) {
+        /* Open Transport's other calls say they're not supported. */
+        LOGF(LOG_UNIMPL, "cfm: %s from %s: not supported\n", sname, lname);
+        return native_tvector(ot_unsupported, sname);
+    }
+    if ((weak || weak_lib) && (li < 0 || !core_library(lname))) {
+        LOGF(LOG_SEG, "cfm: weak %s from %s: not there\n", sname, lname);
+        return 0;
+    }
+    if (cls == kDataCFragSymbol) {
+        LOGF(LOG_UNIMPL, "cfm: data %s from %s not provided\n", sname, lname);
+        note_missing(lname, sname, true);
+        return data_import(sname);
+    }
+    LOGF(LOG_UNIMPL, "cfm: %s from %s not provided\n", sname, lname);
+    note_missing(lname, sname, false);
+    return native_tvector(unimplemented_import, sname);
+}
+
+/* An XCOFF container, as the first PowerPC tools wrote them (Anvil's,
+ * IBM's) and the Code Fragment Manager loaded too: Boingo Electro and
+ * Bumbler Bee-Luxe have one in the data fork.  Its sections (.text,
+ * .data, .bss) go where PEF's would; the .loader section names the
+ * imports by library, relocates the words that hold addresses and lists
+ * the exports, and the auxiliary header gives main's descriptor. */
+enum { kXCOFFMagic = 0x01DF, kSTYP_TEXT = 0x20, kSTYP_DATA = 0x40, kSTYP_BSS = 0x80, kSTYP_LOADER = 0x1000 };
+enum { kXMC_PR = 0, kXMC_DS = 10, kL_IMPORT = 0x40, kL_EXPORT = 0x10 };
+
+static bool xcoff_load(const uint8_t *x, size_t len, fragment *f, char *err, size_t errlen)
+{
+    uint16_t nscns = be16(x + 2), opthdr = be16(x + 16);
+    if (20 + (size_t)opthdr + nscns * 40u > len || nscns > 32) {
+        snprintf(err, errlen, "truncated XCOFF");
+        return false;
+    }
+    /* Section i (1-based, as the loader counts them): where it went, and
+     * the address the linker gave it. */
+    gaddr base[33] = { 0 };
+    uint32_t vaddr[33] = { 0 }, flags[33] = { 0 };
+    const uint8_t *loader = NULL;
+    uint32_t loader_len = 0;
+    int text = 0, data = 0, bss = 0;
+    for (int i = 1; i <= nscns; i++) {
+        const uint8_t *h = x + 20 + opthdr + (i - 1) * 40;
+        uint32_t size = be32(h + 16), ptr = be32(h + 20);
+        vaddr[i] = be32(h + 12);
+        flags[i] = be32(h + 36) & 0xFFFF;
+        if (flags[i] != kSTYP_BSS && (size_t)ptr + size > len) {
+            snprintf(err, errlen, "XCOFF section %d beyond the container", i);
+            return false;
+        }
+        if (flags[i] == kSTYP_LOADER) {
+            loader = x + ptr;
+            loader_len = size;
+            continue;
+        }
+        if (flags[i] != kSTYP_TEXT && flags[i] != kSTYP_DATA && flags[i] != kSTYP_BSS)
+            continue;
+        gaddr b = tb_NewPtr((int32_t)(size + 16), false, true);
+        if (!b) {
+            snprintf(err, errlen, "no memory for XCOFF section %d (%u bytes)", i, size);
+            return false;
+        }
+        base[i] = (b + 15) & ~15u;
+        gmemset(base[i], 0, size);
+        if (flags[i] != kSTYP_BSS)
+            gput(base[i], x + ptr, size);
+        if (flags[i] == kSTYP_TEXT && !text) {
+            text = i;
+            f->code = base[i], f->code_size = size;
+            code_check_add(base[i], size, f->name[0] ? f->name : "the application's code");
+        } else if (flags[i] == kSTYP_DATA && !data) {
+            data = i;
+            f->data = base[i], f->data_size = size;
+        } else if (flags[i] == kSTYP_BSS && !bss) {
+            bss = i;
+        }
+        LOGF(LOG_SEG, "cfm: XCOFF section %d (%04X) at %08X, %u bytes\n", i, flags[i], base[i], size);
+    }
+    if (!loader || loader_len < 32) {
+        snprintf(err, errlen, "no loader section");
+        return false;
+    }
+    uint32_t nsyms = be32(loader + 4), nreloc = be32(loader + 8), nimpid = be32(loader + 16);
+    uint32_t impoff = be32(loader + 20), stoff = be32(loader + 28);
+    if (32 + (size_t)nsyms * 24 + (size_t)nreloc * 12 > loader_len || impoff > loader_len || stoff > loader_len) {
+        snprintf(err, errlen, "truncated XCOFF loader section");
+        return false;
+    }
+    /* The libraries: each import file ID is a path, a base name and an
+     * archive member, NUL-ended; the first is the default search path. */
+    const char *libname[64] = { 0 };
+    const char *p = (const char *)loader + impoff, *end = (const char *)loader + loader_len;
+    for (uint32_t i = 0; i < nimpid && i < 64; i++) {
+        const char *path = p, *basename;
+        p += strnlen(p, (size_t)(end - p)) + 1;
+        basename = p < end ? p : "";
+        p += strnlen(p, (size_t)(end - p)) + 1;
+        p += strnlen(p, (size_t)(end - p)) + 1;
+        if (p > end)
+            break;
+        libname[i] = basename[0] ? basename : path;
+    }
+    int libfrag[64];
+    for (int i = 0; i < 64; i++)
+        libfrag[i] = -2; /* not looked up yet */
+
+    /* Symbols: imports bound, defined ones at their sections' places. */
+    gaddr *sym = calloc(nsyms ? nsyms : 1, sizeof *sym);
+    char **names = calloc(nsyms ? nsyms : 1, sizeof *names);
+    f->exports = calloc(nsyms ? nsyms : 1, sizeof *f->exports);
+    f->nexports = 0;
+    for (uint32_t i = 0; i < nsyms; i++) {
+        const uint8_t *e = loader + 32 + i * 24;
+        if (be32(e) == 0) {
+            uint32_t o = stoff + be32(e + 4);
+            names[i] = o < loader_len ? strndup((const char *)loader + o, loader_len - o) : strdup("");
+        } else {
+            names[i] = strndup((const char *)e, 8);
+        }
+        uint32_t value = be32(e + 8);
+        int16_t scn = (int16_t)be16(e + 12);
+        uint8_t type = e[14], smclas = e[15];
+        uint32_t ifile = be32(e + 16);
+        int cls = smclas == kXMC_DS ? kTVectorCFragSymbol : smclas == kXMC_PR ? kCodeCFragSymbol : kDataCFragSymbol;
+        if (type & kL_IMPORT) {
+            const char *lname = ifile < 64 && libname[ifile] ? libname[ifile] : "InterfaceLib";
+            if (ifile < 64 && libfrag[ifile] == -2) {
+                char lerr[256];
+                libfrag[ifile] = library_named(lname, lerr, sizeof lerr);
+                if (libfrag[ifile] < 0)
+                    LOGF(LOG_UNIMPL, "cfm: library %s: %s\n", lname, lerr);
+            }
+            sym[i] = bind_import(lname, ifile < 64 ? libfrag[ifile] : -1, names[i], cls, false, false);
+        } else if (scn >= 1 && scn <= nscns && base[scn]) {
+            sym[i] = base[scn] + (value - vaddr[scn]);
+            if (type & kL_EXPORT) {
+                frag_export *xp = &f->exports[f->nexports++];
+                xp->name = strdup(names[i]);
+                xp->addr = sym[i];
+                xp->cls = (uint8_t)cls;
+            }
+        }
+    }
+    /* Relocations: each adds to a word what its symbol moved by (a
+     * section's own symbols 0-2, or a defined symbol), or an import's
+     * address.  Only whole words (R_POS and its load forms) are left for
+     * a loader to do. */
+    bool ok = true;
+    const uint8_t *rel = loader + 32 + nsyms * 24;
+    for (uint32_t r = 0; r < nreloc && ok; r++) {
+        const uint8_t *e = rel + r * 12;
+        uint32_t at = be32(e), ndx = be32(e + 4);
+        uint8_t rsize = e[8], rtype = e[9];
+        int16_t secnm = (int16_t)be16(e + 10);
+        if (secnm < 1 || secnm > nscns || !base[secnm] || (rsize & 0x3F) != 31 ||
+            (rtype != 0x00 && rtype != 0x0C && rtype != 0x0D)) {
+            snprintf(err, errlen, "XCOFF relocation %u: type %02X size %u in section %d", r, rtype, rsize, secnm);
+            ok = false;
+            break;
+        }
+        uint32_t add;
+        int implicit = ndx == 0 ? text : ndx == 1 ? data : ndx == 2 ? bss : 0;
+        if (ndx < 3) {
+            add = implicit ? base[implicit] - vaddr[implicit] : 0;
+        } else if (ndx - 3 < nsyms) {
+            const uint8_t *s = loader + 32 + (ndx - 3) * 24;
+            int16_t scn = (int16_t)be16(s + 12);
+            if (s[14] & kL_IMPORT)
+                add = sym[ndx - 3];
+            else
+                add = scn >= 1 && scn <= nscns && base[scn] ? base[scn] - vaddr[scn] : 0;
+        } else {
+            snprintf(err, errlen, "XCOFF relocation %u: symbol %u of %u", r, ndx, nsyms);
+            ok = false;
+            break;
+        }
+        gaddr where = base[secnm] + (at - vaddr[secnm]);
+        wr32(where, rd32(where) + add);
+    }
+    /* main: the descriptor the auxiliary header names. */
+    if (ok && opthdr >= 72) {
+        const uint8_t *a = x + 20;
+        uint32_t entry = be32(a + 16);
+        uint16_t snentry = be16(a + 32);
+        if (snentry >= 1 && snentry <= nscns && base[snentry])
+            f->main_tv = base[snentry] + (entry - vaddr[snentry]);
+    }
+    for (uint32_t i = 0; i < nsyms; i++)
+        free(names[i]);
+    free(names);
+    free(sym);
+    return ok;
+}
+
 /* Load a PEF container into fragment f: sections, imports (loading the
  * libraries it needs), relocations, exports. */
 static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, size_t errlen)
 {
+    if (len >= 20 && be16(pef) == kXCOFFMagic)
+        return xcoff_load(pef, len, f, err, errlen);
     if (len < 40 || memcmp(pef, "Joy!peff", 8)) {
         snprintf(err, errlen, "not a PEF container");
         return false;
@@ -696,58 +920,12 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
         bool weak_lib = (lib[20] & 0x40) != 0;
         char lerr[256];
         int li = library_named(lname, lerr, sizeof lerr);
-        const fragment *from = li >= 0 && !frags[li].native ? &frags[li] : NULL;
         if (li < 0)
             LOGF(weak_lib ? LOG_SEG : LOG_UNIMPL, "cfm: library %s: %s\n", lname, lerr);
         for (uint32_t k = first; k < first + count && k < nsyms; k++) {
             uint32_t w = be32(syms + k * 4);
             const char *sname = (const char *)loader + strings + (w & 0xFFFFFF);
-            bool weak = (w >> 24) & 0x80;
-            int cls = (w >> 24) & 0x0F;
-            gaddr addr = 0;
-            if (from) {
-                if (frag_find_export(from, sname, &addr, NULL)) {
-                    imports[k] = addr;
-                    continue;
-                }
-            } else if (li >= 0 || !weak_lib) {
-                /* By name, as CFM binds: a routine imported as data
-                 * (Hardwood Solitaire II's GetCurrentProcess) is still its
-                 * transition vector, unless we have data of that name. */
-                void (*fn)(ppc_cpu *) = cls == kDataCFragSymbol && ppc_data_export(sname) ? NULL : export_fn(sname);
-                if (fn) {
-                    imports[k] = native_tvector(fn, sname);
-                    continue;
-                }
-                /* Our data exports, whatever class the importer gave them
-                 * (CallComponentUPP comes as a transition vector in some). */
-                if (!fn && li >= 0 && (addr = ppc_data_export(sname)) != 0) {
-                    imports[k] = data_import(sname);
-                    continue;
-                }
-            }
-            /* A weak symbol, or one from a weakly linked library that isn't
-             * there, is 0.  But InterfaceLib, MathLib and StdCLib are always
-             * there with everything Mac OS 9 had in them, so what they lack
-             * here is ours to add: a stub that says so. */
-            if (li >= 0 && !strncmp(lname, "OT", 2)) {
-                /* Open Transport's other calls say they're not supported. */
-                imports[k] = native_tvector(ot_unsupported, sname);
-                LOGF(LOG_UNIMPL, "cfm: %s from %s: not supported\n", sname, lname);
-                continue;
-            }
-            if ((weak || weak_lib) && (li < 0 || !core_library(lname))) {
-                imports[k] = 0;
-                LOGF(LOG_SEG, "cfm: weak %s from %s: not there\n", sname, lname);
-            } else if (cls == kDataCFragSymbol) {
-                imports[k] = data_import(sname);
-                LOGF(LOG_UNIMPL, "cfm: data %s from %s not provided\n", sname, lname);
-                note_missing(lname, sname, true);
-            } else {
-                imports[k] = native_tvector(unimplemented_import, sname);
-                LOGF(LOG_UNIMPL, "cfm: %s from %s not provided\n", sname, lname);
-                note_missing(lname, sname, false);
-            }
+            imports[k] = bind_import(lname, li, sname, (w >> 24) & 0x0F, (w >> 24) & 0x80, weak_lib);
         }
     }
     /* Relocations, section by section. */
@@ -992,6 +1170,31 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
     LOGF(LOG_SEG, "cfm: loaded %s from %s (main %08X, init %08X)\n", f->name[0] ? f->name : "application", path,
          f->main_tv, f->init_tv);
     return i;
+}
+
+/* Whether an application's PowerPC fragment is a container we can load
+ * (PEF or XCOFF), as far as its first bytes tell.  One in a resource is
+ * taken on trust: the application may decompress it itself. */
+bool cfm_app_fragment_loadable(const char *path)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return false;
+    size_t clen, len = 0;
+    uint8_t *cfrg = file_cfrg(&mf, &clen);
+    member_search s = { .want = NULL };
+    if (cfrg)
+        cfrg_each(cfrg, clen, match_member, &s);
+    free(cfrg);
+    bool ok = s.ok;
+    if (ok && s.found.where == kDataForkCFragLocator) {
+        uint8_t *bytes = member_bytes(&mf, &s.found, &len);
+        ok = bytes && ((len >= 40 && !memcmp(bytes, "Joy!peff", 8)) || (len >= 20 && be16(bytes) == kXCOFFMagic));
+        free(bytes);
+    }
+    mac_file_free(&mf);
+    return ok;
 }
 
 /* Does this file hold an import library of this name? */

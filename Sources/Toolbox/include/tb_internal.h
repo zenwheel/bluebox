@@ -691,6 +691,7 @@ bool wm_is_collapsed(gaddr w);
 bool wm_set_collapsed(gaddr w, bool on); /* false when the window can't collapse */
 uint32_t wm_window_features(gaddr w);
 bool cfm_launch(const char *app_path, char *err, size_t errlen);
+bool cfm_app_fragment_loadable(const char *path);
 /* Load a PEF container in memory (an accelerated code resource's) once;
  * returns its main transition vector, or 0. */
 gaddr cfm_prepare_container(gaddr pef);

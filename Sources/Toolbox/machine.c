@@ -643,8 +643,16 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     /* PowerPC: an application with no 68k code, or any with a PowerPC
      * fragment when PowerPC is preferred. */
     g_ppc_mode = false;
+    bool prefer_ppc_now = prefer_ppc;
     bool has_68k = tb_Get1Resource((int32_t)fourcc("CODE"), 0) != 0;
-    if (cfm_has_ppc() && (!has_68k || prefer_ppc)) {
+    /* A fat application whose PowerPC fragment isn't there to load
+     * (RoboWar 4.1.2's data fork is BinHex text, not PEF) runs its 68k
+     * code, as on a 68k Mac. */
+    if (has_68k && prefer_ppc && cfm_has_ppc() && !cfm_app_fragment_loadable(app_path)) {
+        LOGF(LOG_SEG, "launch: the PowerPC fragment is not a container; running the 68k code\n");
+        prefer_ppc_now = false;
+    }
+    if (cfm_has_ppc() && (!has_68k || prefer_ppc_now)) {
         start_jit(app_path);
         return cfm_launch(app_path, err, errlen);
     }
