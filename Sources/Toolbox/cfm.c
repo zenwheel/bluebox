@@ -179,6 +179,12 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbongaps_export_count; i++) /* CarbonLib's small additions */
         if (!strcmp(carbongaps_exports[i].name, name))
             return carbongaps_exports[i].fn;
+    for (unsigned i = 0; i < gimport_export_count; i++) /* QuickTime's graphics importers */
+        if (!strcmp(gimport_exports[i].name, name))
+            return gimport_exports[i].fn;
+    for (unsigned i = 0; i < vam_export_count; i++) /* found missing by the archive walk */
+        if (!strcmp(vam_exports[i].name, name))
+            return vam_exports[i].fn;
     for (unsigned i = 0; i < carbonuser_export_count; i++) /* CarbonLib's user and machine names */
         if (!strcmp(carbonuser_exports[i].name, name))
             return carbonuser_exports[i].fn;
@@ -349,6 +355,7 @@ typedef struct {
     const section *sections;
     int nsections;
     const gaddr *imports;
+    const char *const *absent; /* each missing weak import's "symbol from library" */
     uint32_t nimports;
     gaddr target_base, reloc, sect_c, sect_d;
     uint32_t import_index;
@@ -357,7 +364,67 @@ typedef struct {
     int depth;
 } reloc_state;
 
-static gaddr import_at(reloc_state *s, uint32_t index) { return index < s->nimports ? s->imports[index] : 0; }
+/* Where the missing weak imports went: a call through one of them (an
+ * illegal instruction at 0) is then named. */
+typedef struct {
+    gaddr slot;
+    char *name;
+} absent_slot;
+static absent_slot *absent_slots;
+static size_t absent_count, absent_cap;
+
+static void note_absent_slot(gaddr slot, const char *name)
+{
+    if (absent_count == absent_cap) {
+        size_t cap = absent_cap ? absent_cap * 2 : 64;
+        absent_slot *grown = realloc(absent_slots, cap * sizeof *grown);
+        if (!grown)
+            return;
+        absent_slots = grown;
+        absent_cap = cap;
+    }
+    absent_slots[absent_count++] = (absent_slot){ slot, strdup(name) };
+}
+
+static void free_absent(char **absent, uint32_t n)
+{
+    for (uint32_t i = 0; absent && i < n; i++)
+        free(absent[i]);
+    free(absent);
+}
+
+/* The missing weak import a call to 0 came through: the cross-TOC glue
+ * (lwz r12,d(r2); stw r2,20(r1); lwz r0,0(r12); ...; bctr) saved the
+ * caller's TOC at 20(r1), and its first instruction gives the slot. */
+static void name_nil_call(ppc_cpu *c)
+{
+    if (c->op_pc != 0 || !absent_count)
+        return;
+    gaddr toc = rd32(c->gpr[1] + 20);
+    for (int back = 1; back <= 8; back++) {
+        uint32_t op = rd32(c->prev_pc - 4u * back);
+        if ((op & 0xFFFF0000u) != 0x81820000u) /* lwz r12,d(r2) */
+            continue;
+        gaddr slot = toc + (uint32_t)(int16_t)(op & 0xFFFF);
+        for (size_t i = absent_count; i-- > 0;)
+            if (absent_slots[i].slot == slot) {
+                size_t n = strlen(c->halt_reason);
+                snprintf(c->halt_reason + n, sizeof c->halt_reason - n, ": weak %s, not there",
+                         absent_slots[i].name);
+                return;
+            }
+        return;
+    }
+}
+
+static gaddr import_at(reloc_state *s, uint32_t index)
+{
+    if (index >= s->nimports)
+        return 0;
+    if (!s->imports[index] && s->absent && s->absent[index])
+        note_absent_slot(s->reloc, s->absent[index]);
+    return s->imports[index];
+}
 /* What a relocation by a section adds: its address less its default one. */
 static gaddr section_base(reloc_state *s, uint32_t index)
 {
@@ -527,7 +594,7 @@ static const char *const native_libraries[] = {
     "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib", "InputSprocketLib",
     "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
     "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
-    "OpenTptAppleTalkLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
+    "OpenTptAppleTalkLib", "OTNtvUtilLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
     "TextCommon", "UnicodeConverter", "TextEncodingConverter", "CarbonLib",
     "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
 };
@@ -829,8 +896,12 @@ static bool xcoff_load(const uint8_t *x, size_t len, fragment *f, char *err, siz
 }
 
 /* Load a PEF container into fragment f: sections, imports (loading the
- * libraries it needs), relocations, exports. */
-static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, size_t errlen)
+ * libraries it needs), relocations, exports.  With an image of the
+ * container in guest memory (at, else 0), its code and unpacked data are
+ * used where they are in it, as CFM uses a container in memory:
+ * FutureBASIC^3's runtime keeps glue and variables between its code and
+ * data sections and reaches them from both. */
+static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char *err, size_t errlen)
 {
     if (len >= 20 && be16(pef) == kXCOFFMagic)
         return xcoff_load(pef, len, f, err, errlen);
@@ -866,6 +937,11 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
         }
         if (s >= ninst)
             continue;
+        if (at && (kind == kCode || kind == kUnpackedData) && packed == total) {
+            sections[s] = (section){ at + off, total, kind, at + off - be32(h + 4) };
+            LOGF(LOG_SEG, "cfm: section %d (kind %d) in place at %08X, %u bytes\n", s, kind, at + off, total);
+            continue;
+        }
         gaddr base = tb_NewPtr((int32_t)(total + 16), false, true);
         if (!base) {
             snprintf(err, errlen, "no memory for section %d (%u bytes)", s, total);
@@ -915,6 +991,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
     /* Imports: an address each (a transition vector or data), or 0 for
      * missing weak ones. */
     gaddr *imports = calloc(nsyms ? nsyms : 1, sizeof *imports);
+    char **absent = calloc(nsyms ? nsyms : 1, sizeof *absent);
     const uint8_t *libs = loader + 56, *syms = libs + nlibs * 24;
     for (uint32_t l = 0; l < nlibs; l++) {
         const uint8_t *lib = libs + l * 24;
@@ -929,6 +1006,11 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
             uint32_t w = be32(syms + k * 4);
             const char *sname = (const char *)loader + strings + (w & 0xFFFFFF);
             imports[k] = bind_import(lname, li, sname, (w >> 24) & 0x0F, (w >> 24) & 0x80, weak_lib);
+            if (!imports[k] && absent) { /* a weak import not there: named if it's called */
+                char both[256];
+                snprintf(both, sizeof both, "%s from %s", sname, lname);
+                absent[k] = strdup(both);
+            }
         }
     }
     /* Relocations, section by section. */
@@ -944,6 +1026,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
             .sections = sections,
             .nsections = ninst,
             .imports = imports,
+            .absent = (const char *const *)absent,
             .nimports = nsyms,
             .target_base = sections[target].base,
             .reloc = sections[target].base,
@@ -954,6 +1037,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
         };
         if (!reloc_run(&st, 0, count)) {
             free(imports);
+            free_absent(absent, nsyms);
             free(sections);
             return false;
         }
@@ -986,6 +1070,7 @@ static bool pef_load(const uint8_t *pef, size_t len, fragment *f, char *err, siz
     f->init_tv = init_sect >= 0 && init_sect < ninst ? sections[init_sect].base + init_off : 0;
     f->term_tv = term_sect >= 0 && term_sect < ninst ? sections[term_sect].base + term_off : 0;
     free(imports);
+    free_absent(absent, nsyms);
     free(sections);
     return true;
 }
@@ -1161,7 +1246,7 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
     f->offset = s.found.where == kDataForkCFragLocator ? s.found.offset : 0;
     f->length = (uint32_t)len;
     f->loading = true;
-    bool ok = pef_load(pef, len, f, err, errlen);
+    bool ok = pef_load(pef, len, 0, f, err, errlen);
     free(pef);
     f->loading = false;
     if (!ok) {
@@ -1386,6 +1471,9 @@ void cfm_reset(void)
     glue_area = 0;
     missing_len = missing_count = 0;
     nfrags = ninit = init_next = ndata_blocks = 0;
+    for (size_t i = 0; i < absent_count; i++)
+        free(absent_slots[i].name);
+    absent_count = 0;
     stdclib_reset(); /* the last program's library state went with it */
     carbon_cf_reset();
     ppc_cpu_ready = false;
@@ -1408,6 +1496,7 @@ bool cfm_ppc_cpu(void)
     cfm_ppc_stack_lo = stack;
     ppc_init(&g_ppc);
     g_ppc.native = dispatch_native;
+    g_ppc.illegal = name_nil_call;
     if (getenv("BLUEBOX_PPC_TRACE"))
         g_ppc.trace = trace_instruction;
     g_ppc.gpr[1] = (stack + stack_size - 64) & ~15u;
@@ -1538,7 +1627,7 @@ static void ppc_GetDiskFragment(ppc_cpu *c)
                 f->offset = off;
                 f->length = (uint32_t)take;
                 int before = ninit, idx = nfrags++;
-                if (pef_load(mf.data + off, take, f, err, sizeof err)) {
+                if (pef_load(mf.data + off, take, 0, f, err, sizeof err)) {
                     if (f->init_tv && ninit < MAX_FRAGMENTS)
                         init_queue[ninit++] = idx;
                     i = idx;
@@ -1558,6 +1647,17 @@ static void ppc_GetDiskFragment(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* A container from memory, copied whole into memory of its own: the
+ * fragment's code and data are used there (pef_load), and the original
+ * (a code resource, which may move) is left as it was. */
+static gaddr memory_image(const uint8_t *bytes, uint32_t len)
+{
+    gaddr p = tb_NewPtr((int32_t)len, false, false);
+    if (p)
+        gput(p, bytes, len);
+    return p;
+}
+
 /* GetMemFragment(memAddr, length, fragName, loadFlags, *connID, *mainAddr, errMessage) */
 static void ppc_GetMemFragment(ppc_cpu *c)
 {
@@ -1572,12 +1672,15 @@ static void ppc_GetMemFragment(ppc_cpu *c)
         if (c->gpr[5])
             pname_to_c(gptr(c->gpr[5]), f->name, sizeof f->name);
         int before = ninit, idx = nfrags++;
-        if (pef_load(bytes, len, f, err, sizeof err)) {
+        gaddr image = memory_image(bytes, len);
+        if (pef_load(bytes, len, image, f, err, sizeof err)) {
             if (f->init_tv && ninit < MAX_FRAGMENTS)
                 init_queue[ninit++] = idx;
             i = idx;
         } else {
             nfrags--;
+            if (image)
+                tb_DisposePtr(image);
         }
         free(bytes);
         run_new_inits(before);
@@ -1619,8 +1722,11 @@ gaddr cfm_prepare_container(gaddr pef)
     f->memory = pef;
     char err[256];
     int before = ninit, idx = nfrags++;
-    bool ok = pef_load(bytes, len, f, err, sizeof err);
+    gaddr image = memory_image(bytes, len);
+    bool ok = pef_load(bytes, len, image, f, err, sizeof err);
     free(bytes);
+    if (!ok && image)
+        tb_DisposePtr(image);
     if (!ok) {
         LOGF(LOG_UNIMPL, "cfm: code resource at %08X: %s\n", pef, err);
         nfrags--;

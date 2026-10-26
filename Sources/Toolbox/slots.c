@@ -407,6 +407,10 @@ int16_t slot_manager(uint16_t sel, gaddr spb)
     int16_t err;
     srsrc *s;
     switch (sel) {
+    case 0x08: /* SVersion: the Slot Manager's version in spResult (1, System 7's) */
+        wr32(spb + sp_result, 1);
+        wr32(spb + sp_sPointer, 0);
+        return noErr;
     case 0x00: /* SReadByte */
     case 0x01: /* SReadWord */
         if ((err = named_entry(spb, &e)) == noErr)

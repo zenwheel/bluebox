@@ -99,6 +99,13 @@ static void describe_screen(gaddr gd, gaddr pm)
     PixMap_set_pmTable(pm, screen_ctab);
     qd_screen_load_clut(screen_ctab);
     GDevice_set_gdType(gd, screen_depth >= 16 ? 2 : 0); /* direct or CLUT device */
+    /* The video driver's mode for the depth, as Apple's drivers numbered
+     * them (128 for 1 bit up to 133 for 32): Bubblomania 1.0 wants 131,
+     * 8 bits, or more. */
+    int mode = 0x80;
+    for (int d = screen_depth; d > 1; d >>= 1)
+        mode++;
+    GDevice_set_gdMode(gd, mode);
     wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
 }
 
@@ -131,7 +138,6 @@ void qd_screen_init(int width, int height)
     GDevice_set_gdPMap(gd, pmh);
     qrect_put(gd + GDevice_gdRect_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
     GDevice_set_gdResPref(gd, 3);
-    GDevice_set_gdMode(gd, 0x80);
     describe_screen(gd, pm);
 
     wr32(LM_MainDevice, gdh);

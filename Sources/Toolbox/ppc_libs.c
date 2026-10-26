@@ -801,28 +801,7 @@ static void g_SetEnvirons(ppc_cpu *c)
 
 static void g_TruncText(ppc_cpu *c)
 {
-    gaddr text = R(1), lenp = R(2);
-    int16_t len = lenp ? (int16_t)rd16(lenp) : 0;
-    if (len <= 0 || !text) {
-        RETURN(0);
-        return;
-    }
-    if (len > 255)
-        len = 255;
-    gaddr tmp = tb_NewPtr(256, false, false);
-    if (!tmp) {
-        RETURN((uint32_t)-1);
-        return;
-    }
-    wr8(tmp, (uint8_t)len);
-    gmemcpy(tmp + 1, text, (uint32_t)len);
-    int16_t r = tb_TruncString((int16_t)R(0), tmp, (int16_t)R(3));
-    if (r > 0) {
-        gmemcpy(text, tmp + 1, rd8(tmp));
-        wr16(lenp, rd8(tmp));
-    }
-    tb_DisposePtr(tmp);
-    RETURN((uint32_t)(int32_t)r);
+    RETURN((uint32_t)(int32_t)tb_TruncText((int16_t)R(0), R(1), R(2), (int16_t)R(3)));
 }
 
 /* GetDefaultUser(&userRef, name): Sharing Setup's owner, the host
@@ -910,14 +889,6 @@ static void c_compare(ppc_cpu *c, uint16_t trap, bool equal)
 static void g_equalstring(ppc_cpu *c) { c_compare(c, 0xA03C, true); }
 static void g_relstring(ppc_cpu *c) { c_compare(c, 0xA050, false); }
 
-/* The Sound Manager's version: 3.2.1. */
-static void g_SVersion(ppc_cpu *c)
-{
-    /* NumVersion results come back through the pointer in r3. */
-    if (R(0))
-        wr32(R(0), 0x03218000);
-    c->pc = c->lr;
-}
 /* The MIDI Manager's version, the same way. */
 static void g_MIDIVersion(ppc_cpu *c)
 {
@@ -1379,7 +1350,7 @@ static void g_MPPOpen(ppc_cpu *c) { RETURN((int32_t)at_open()); }
 SLOT_CALL(SReadByte, 0x00) SLOT_CALL(SReadWord, 0x01) SLOT_CALL(SReadLong, 0x02) SLOT_CALL(SGetCString, 0x03)
 SLOT_CALL(SGetBlock, 0x05) SLOT_CALL(SFindStruct, 0x06) SLOT_CALL(SReadStruct, 0x07) SLOT_CALL(SGetSRsrc, 0x0B)
 SLOT_CALL(SGetTypeSRsrc, 0x0C) SLOT_CALL(SNextSRsrc, 0x14) SLOT_CALL(SNextTypeSRsrc, 0x15) SLOT_CALL(SRsrcInfo, 0x16)
-SLOT_CALL(SDisposePtr, 0x17) SLOT_CALL(SReadDrvrName, 0x19)
+SLOT_CALL(SDisposePtr, 0x17) SLOT_CALL(SReadDrvrName, 0x19) SLOT_CALL(SVersion, 0x08)
 #undef SLOT_CALL
 
 /* The Cursor Device Manager (osutil.c): the arguments as words, a word

@@ -327,6 +327,7 @@ void time_pump(void)
     sound_pump(); /* sound completion ran at interrupt time too */
     midi_pump();
     opentransport_poll(); /* Open Transport's notifiers, at deferred task time */
+    ot_tasks_pump();      /* and its timer, deferred and system tasks */
     mactcp_poll();        /* MacTCP's calls in progress and its notification routines */
     serial_poll();        /* serial reads waiting for their bytes */
     ctb_poll();           /* Communications Toolbox connections and their completion routines */

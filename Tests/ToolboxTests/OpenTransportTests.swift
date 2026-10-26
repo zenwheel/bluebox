@@ -170,7 +170,7 @@ extension BlueBox {
             #expect(ot("ICGetPref", 0, pstr("httpproxyhost"), attr, buf, size) == 0)
             #expect(rd32(size) == 15 && rd8(buf) == 14 && rd8(buf + 1) == UInt8(ascii: "p"))
             wr32(size, 4) // too little room: what fits, and the length
-            #expect(Int32(bitPattern: ot("ICGetPref", 0, pstr("HTTPProxyHost"), attr, buf, size)) == -664)
+            #expect(Int32(bitPattern: ot("ICGetPref", 0, pstr("HTTPProxyHost"), attr, buf, size)) == -670) // icTruncatedErr
             #expect(rd32(size) == 15)
             wr32(size, 1)
             #expect(ot("ICGetPref", 0, pstr("UseHTTPProxy"), attr, buf, size) == 0 && rd8(buf) == 1)

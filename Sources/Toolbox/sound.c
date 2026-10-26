@@ -27,6 +27,7 @@
 
 #include "machine.h"
 #include "mace_decoder.h"
+#include "qt_codec.h"
 #include "qt_tune.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -40,6 +41,7 @@ enum {
     getVolumeCmd = 47, waveTableCmd = 60, soundCmd = 80, bufferCmd = 81, rateCmd = 82, continueCmd = 83,
     doubleBufferCmd = 84, getRateCmd = 85, rateMultiplierCmd = 86, getRateMultiplierCmd = 87, sizeCmd = 90,
     convertCmd = 91,
+    getClockComponentCmd = 51,
     filePlayDoneCmd = 0x7FF0, /* ours: SndStartFilePlay's sound has finished */
 };
 enum { dataPointerFlag = 0x8000 };
@@ -481,6 +483,7 @@ static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
         break;
     case getRateMultiplierCmd: if (cmd.p2) wr32((gaddr)cmd.p2, c->rate_mult); break;
     case filePlayDoneCmd: file_play_done(c, true); break;
+    case getClockComponentCmd: if (cmd.p2) wr32((gaddr)cmd.p2, qt_clock_open()); break;
     default: break;
     }
 }
@@ -1070,6 +1073,20 @@ int16_t tb_SndSetInfo(gaddr chan, int32_t selector, gaddr infoPtr)
 }
 int32_t tb_MACEVersion(void) { return 0x03218000; }
 int32_t tb_SPBVersion(void) { return 0x03218000; }
+
+/* SndDispVersion(dSelector): the version of the tool SoundDispatch reaches
+ * by the selector's low word, 0 for one that isn't there. */
+int32_t tb_FinaleUnknown1(int16_t dSelector)
+{
+    switch ((uint16_t)dSelector) {
+    case 0x0004: return tb_DirectorUnknown3(); /* the MIDI Manager */
+    case 0x0008: return tb_SndSoundManagerVersion();
+    case 0x000C: return tb_SpeechManagerVersion();
+    case 0x0010: return tb_MACEVersion();
+    case 0x0014: return tb_SPBVersion();
+    default: return 0;
+    }
+}
 
 void tb_SndGetSysBeepState(gaddr statep) { wr16(statep, beep_state); }
 int16_t tb_SndSetSysBeepState(int16_t state) { beep_state = (uint16_t)state; return noErr; }

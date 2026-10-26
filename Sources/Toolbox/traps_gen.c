@@ -165,6 +165,7 @@ const char *const tb_trap_names[1024] = {
     [0x026] = "InsertMenuItem",
     [0x027] = "HideDialogItem",
     [0x028] = "ShowDialogItem",
+    [0x029] = "LayerDispatch",
     [0x02B] = "Pack9",
     [0x02D] = "Pack11",
     [0x02E] = "Pack12",
@@ -716,6 +717,7 @@ const char *const tb_trap_names[1024] = {
     [0x272] = "ContextualMenuDispatch",
     [0x273] = "ControlDispatch",
     [0x274] = "AppearanceDispatch",
+    [0x275] = "IconServicesDispatch",
     [0x27D] = "ExtensionsDispatch",
     [0x280] = "AVLTreeDispatch",
     [0x281] = "FileMappingDispatch",
@@ -740,6 +742,7 @@ const char *const tb_trap_names[1024] = {
     [0x2A2] = "PaletteDispatch",
     [0x2A3] = "ImageCompressionDispatch",
     [0x2AA] = "QuickTime",
+    [0x2F2] = "ControlStripDispatch",
     [0x31D] = "QDExtensions",
     [0x3C2] = "MatrixDispatch",
     [0x3C9] = "IconDispatch",
@@ -1590,6 +1593,16 @@ static void glue_AcceptHighLevelEvent(cpu68k *c, uint16_t trapword)
     gaddr a_refcon_return = (gaddr)cpu_pop32(c);
     gaddr a_sender_id_return = (gaddr)cpu_pop32(c);
     int16_t r = tb_AcceptHighLevelEvent(a_sender_id_return, a_refcon_return, a_msg_buf, a_msg_length_return);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AcquireIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AcquireIconRef(a_theIconRef);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -2861,6 +2874,18 @@ static void glue_CompactMem(cpu68k *c, uint16_t trapword)
     bool a_sys_p = (trapword & 0x400) != 0;
     int32_t r = tb_CompactMem(a_sizeneeded, a_sys_p);
     c->d[0] = (uint32_t)r;
+}
+
+static void glue_CompositeIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_compositeIconRef = (gaddr)cpu_pop32(c);
+    gaddr a_foregroundIconRef = (gaddr)cpu_pop32(c);
+    gaddr a_backgroundIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CompositeIconRef(a_backgroundIconRef, a_foregroundIconRef, a_compositeIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_CompressImage(cpu68k *c, uint16_t trapword)
@@ -7712,6 +7737,16 @@ static void glue_FillRoundRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FinaleUnknown1(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_dSelector = (int16_t)cpu_pop16(c);
+    int32_t r = tb_FinaleUnknown1(a_dSelector);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FinaleUnknown2(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7878,6 +7913,21 @@ static void glue_FindWord(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindWordBreaks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    gaddr a_offsets = (gaddr)cpu_pop32(c);
+    gaddr a_breaks = (gaddr)cpu_pop32(c);
+    int8_t a_leadingEdge = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_offset = (int16_t)cpu_pop16(c);
+    int16_t a_textLength = (int16_t)cpu_pop16(c);
+    gaddr a_textPtr = (gaddr)cpu_pop32(c);
+    tb_FindWordBreaks(a_textPtr, a_textLength, a_offset, a_leadingEdge, a_breaks, a_offsets, a_script);
+    cpu_push32(c, ret);
+}
+
 static void glue_Fix2Frac(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -8037,6 +8087,27 @@ static void glue_FlushFonts(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_FlushFonts();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FlushIconRefs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_iconType = (int32_t)cpu_pop32(c);
+    int32_t a_creator = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FlushIconRefs(a_creator, a_iconType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FlushIconRefsByVolume(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FlushIconRefsByVolume(a_vRefNum);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -9581,6 +9652,15 @@ static void glue_GetControlVariant(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetCurLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_GetCurLayer();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetCurrentProcess(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9608,6 +9688,17 @@ static void glue_GetCursor(cpu68k *c, uint16_t trapword)
     int16_t a_id = (int16_t)cpu_pop16(c);
     gaddr r = tb_GetCursor(a_id);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCustomIconsEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_customIconsEnabled = (gaddr)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetCustomIconsEnabled(a_vRefNum, a_customIconsEnabled);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -10723,6 +10814,54 @@ static void glue_GetGWorldPixMap(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetGraphicsImporterForDataRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_gi = (gaddr)cpu_pop32(c);
+    int32_t a_dataRefType = (int32_t)cpu_pop32(c);
+    int32_t a_dataRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetGraphicsImporterForDataRef(a_dataRef, a_dataRefType, a_gi);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetGraphicsImporterForDataRefWithFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    gaddr a_gi = (gaddr)cpu_pop32(c);
+    int32_t a_dataRefType = (int32_t)cpu_pop32(c);
+    int32_t a_dataRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetGraphicsImporterForDataRefWithFlags(a_dataRef, a_dataRefType, a_gi, a_flags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetGraphicsImporterForFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_gi = (gaddr)cpu_pop32(c);
+    gaddr a_theFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetGraphicsImporterForFile(a_theFile, a_gi);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetGraphicsImporterForFileWithFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    gaddr a_gi = (gaddr)cpu_pop32(c);
+    gaddr a_theFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetGraphicsImporterForFileWithFlags(a_theFile, a_gi, a_flags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetGray(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10753,6 +10892,18 @@ static void glue_GetIcon(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetIconFamilyData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_h = (gaddr)cpu_pop32(c);
+    int32_t a_iconType = (int32_t)cpu_pop32(c);
+    gaddr a_iconFamily = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetIconFamilyData(a_iconFamily, a_iconType, a_h);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetIconFromSuite(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10761,6 +10912,82 @@ static void glue_GetIconFromSuite(cpu68k *c, uint16_t trapword)
     gaddr a_suite = (gaddr)cpu_pop32(c);
     gaddr a_icon_data = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetIconFromSuite(a_icon_data, a_suite, a_type);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int32_t a_iconType = (int32_t)cpu_pop32(c);
+    int32_t a_creator = (int32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetIconRef(a_vRefNum, a_creator, a_iconType, a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetIconRefFromFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theLabel = (gaddr)cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    gaddr a_theFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetIconRefFromFile(a_theFile, a_theIconRef, a_theLabel);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetIconRefFromFolder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int8_t a_accessPrivileges = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_attributes = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_folderID = (int32_t)cpu_pop32(c);
+    int32_t a_parentFolderID = (int32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetIconRefFromFolder(a_vRefNum, a_parentFolderID, a_folderID, a_attributes, a_accessPrivileges, a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetIconRefOwners(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_owners = (gaddr)cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetIconRefOwners(a_theIconRef, a_owners);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetIconRefVariant(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outTransform = (gaddr)cpu_pop32(c);
+    int32_t a_inVariant = (int32_t)cpu_pop32(c);
+    gaddr a_inIconRef = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetIconRefVariant(a_inIconRef, a_inVariant, a_outTransform);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetIconSizesFromIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    uint32_t a_iconServicesUsageFlags = (uint32_t)cpu_pop32(c);
+    gaddr a_iconSelectorOutputPtr = (gaddr)cpu_pop32(c);
+    uint32_t a_iconSelectorInput = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_GetIconSizesFromIconRef(a_iconSelectorInput, a_iconSelectorOutputPtr, a_iconServicesUsageFlags, a_theIconRef);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -12220,6 +12447,16 @@ static void glue_GetSubTable(cpu68k *c, uint16_t trapword)
     int16_t a_arg1 = (int16_t)cpu_pop16(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_GetSubTable(a_arg0, a_arg1, a_arg2);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetSubWindows(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_layer = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetSubWindows(a_layer);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -13749,6 +13986,18 @@ static void glue_IUTimeString(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IconFamilyToIconSuite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_iconSuite = (gaddr)cpu_pop32(c);
+    uint32_t a_whichIcons = (uint32_t)cpu_pop32(c);
+    gaddr a_iconFamily = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IconFamilyToIconSuite(a_iconFamily, a_whichIcons, a_iconSuite);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_IconIDToRgn(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13758,6 +14007,44 @@ static void glue_IconIDToRgn(cpu68k *c, uint16_t trapword)
     gaddr a_rect = (gaddr)cpu_pop32(c);
     gaddr a_rgn = (gaddr)cpu_pop32(c);
     int16_t r = tb_IconIDToRgn(a_rgn, a_rect, a_align, a_icon_id);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IconRefToIconFamily(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_iconFamily = (gaddr)cpu_pop32(c);
+    uint32_t a_whichIcons = (uint32_t)cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IconRefToIconFamily(a_theIconRef, a_whichIcons, a_iconFamily);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IconRefToRgn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    uint32_t a_iconServicesUsageFlags = (uint32_t)cpu_pop32(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_iconRect = (gaddr)cpu_pop32(c);
+    gaddr a_theRgn = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IconRefToRgn(a_theRgn, a_iconRect, a_align, a_iconServicesUsageFlags, a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IconSuiteToIconFamily(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_iconFamily = (gaddr)cpu_pop32(c);
+    uint32_t a_whichIcons = (uint32_t)cpu_pop32(c);
+    gaddr a_iconSuite = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IconSuiteToIconFamily(a_iconSuite, a_whichIcons, a_iconFamily);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -14428,6 +14715,28 @@ static void glue_IsDialogEvent(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsIconRefComposite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_foregroundIconRef = (gaddr)cpu_pop32(c);
+    gaddr a_backgroundIconRef = (gaddr)cpu_pop32(c);
+    gaddr a_compositeIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IsIconRefComposite(a_compositeIconRef, a_backgroundIconRef, a_foregroundIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IsIconRefMaskEmpty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_iconRef = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsIconRefMaskEmpty(a_iconRef);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_IsMenuItemIconEnabled(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14506,6 +14815,16 @@ static void glue_IsValidAppearanceFileType(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t a_fileType = (int32_t)cpu_pop32(c);
     int8_t r = tb_IsValidAppearanceFileType(a_fileType);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsValidIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsValidIconRef(a_theIconRef);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -15057,6 +15376,16 @@ static void glue_MIDIConvertTime(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MIDIDiscardPacket(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_packet = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIDiscardPacket(a_refnum, a_packet);
+    cpu_push32(c, ret);
+}
+
 static void glue_MIDIFlush(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15102,6 +15431,17 @@ static void glue_MIDIGetClients(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_MIDIGetClients();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetConnectionProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_connectionProc = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIGetConnectionProc(a_refnum, a_connectionProc, a_refCon);
     cpu_push32(c, ret);
 }
 
@@ -15233,6 +15573,17 @@ static void glue_MIDISetClientName(cpu68k *c, uint16_t trapword)
     gaddr a_name = (gaddr)cpu_pop32(c);
     int32_t a_clientID = (int32_t)cpu_pop32(c);
     tb_MIDISetClientName(a_clientID, a_name);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetConnectionProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    gaddr a_connectionProc = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetConnectionProc(a_refnum, a_connectionProc, a_refCon);
     cpu_push32(c, ret);
 }
 
@@ -16072,6 +16423,20 @@ static void glue_NewIconSuite(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int8_t a_neverActive = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_layer = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewLayer(a_layer, a_visible, a_neverActive, a_behind, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16639,6 +17004,29 @@ static void glue_OutlineMetrics(cpu68k *c, uint16_t trapword)
     gaddr a_text = (gaddr)cpu_pop32(c);
     int16_t a_byte_count = (int16_t)cpu_pop16(c);
     int16_t r = tb_OutlineMetrics(a_byte_count, a_text, a_numer, a_denom, a_y_max, a_y_min, a_aw_array, a_lsb_array, a_bounds_array);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OverrideIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newIconRef = (gaddr)cpu_pop32(c);
+    gaddr a_oldIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OverrideIconRef(a_oldIconRef, a_newIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OverrideIconRefFromResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_resourceID = (int16_t)cpu_pop16(c);
+    gaddr a_resourceFile = (gaddr)cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OverrideIconRefFromResource(a_theIconRef, a_resourceFile, a_resourceID);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -18044,6 +18432,20 @@ static void glue_PlotIconMethod(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PlotIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    uint32_t a_theIconServicesUsageFlags = (uint32_t)cpu_pop32(c);
+    int16_t a_transform = (int16_t)cpu_pop16(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_theRect = (gaddr)cpu_pop32(c);
+    int16_t r = tb_PlotIconRef(a_theRect, a_align, a_transform, a_theIconServicesUsageFlags, a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_PlotIconSuite(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18472,6 +18874,20 @@ static void glue_PtInIconID(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PtInIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    uint32_t a_theIconServicesUsageFlags = (uint32_t)cpu_pop32(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_iconRect = (gaddr)cpu_pop32(c);
+    gaddr a_testPt = (gaddr)cpu_pop32(c);
+    int8_t r = tb_PtInIconRef(a_testPt, a_iconRect, a_align, a_theIconServicesUsageFlags, a_theIconRef);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_PtInIconSuite(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18783,6 +19199,17 @@ static void glue_ReadDateTime(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_ReadIconFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_iconFamily = (gaddr)cpu_pop32(c);
+    gaddr a_iconFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ReadIconFile(a_iconFile, a_iconFamily);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ReadPartialResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18844,6 +19271,20 @@ static void glue_RectInIconID(cpu68k *c, uint16_t trapword)
     gaddr a_rect = (gaddr)cpu_pop32(c);
     gaddr a_test_rect = (gaddr)cpu_pop32(c);
     int8_t r = tb_RectInIconID(a_test_rect, a_rect, a_align, a_icon_id);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_RectInIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    uint32_t a_iconServicesUsageFlags = (uint32_t)cpu_pop32(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_iconRect = (gaddr)cpu_pop32(c);
+    gaddr a_testRect = (gaddr)cpu_pop32(c);
+    int8_t r = tb_RectInIconRef(a_testRect, a_iconRect, a_align, a_iconServicesUsageFlags, a_theIconRef);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -18914,6 +19355,46 @@ static void glue_RegisterControlDefinition(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RegisterIconRefFromIconFamily(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    gaddr a_iconFamily = (gaddr)cpu_pop32(c);
+    int32_t a_iconType = (int32_t)cpu_pop32(c);
+    int32_t a_creator = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RegisterIconRefFromIconFamily(a_creator, a_iconType, a_iconFamily, a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RegisterIconRefFromIconFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    gaddr a_iconFile = (gaddr)cpu_pop32(c);
+    int32_t a_iconType = (int32_t)cpu_pop32(c);
+    int32_t a_creator = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RegisterIconRefFromIconFile(a_creator, a_iconType, a_iconFile, a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RegisterIconRefFromResource(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int16_t a_resourceID = (int16_t)cpu_pop16(c);
+    gaddr a_resourceFile = (gaddr)cpu_pop32(c);
+    int32_t a_iconType = (int32_t)cpu_pop32(c);
+    int32_t a_creator = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RegisterIconRefFromResource(a_creator, a_iconType, a_resourceFile, a_resourceID, a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RegisterSection(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18933,6 +19414,16 @@ static void glue_ReleaseFolder(cpu68k *c, uint16_t trapword)
     uint32_t a_folderType = (uint32_t)cpu_pop32(c);
     int16_t a_vRefNum = (int16_t)cpu_pop16(c);
     int16_t r = tb_ReleaseFolder(a_vRefNum, a_folderType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ReleaseIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ReleaseIconRef(a_theIconRef);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -19034,6 +19525,16 @@ static void glue_RemoveFS(cpu68k *c, uint16_t trapword)
     int16_t a_fsid = (int16_t)c->a[0];
     int16_t r = tb_RemoveFS(a_fsid);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_RemoveIconRefOverride(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RemoveIconRefOverride(a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_RemoveReceiveHandler(cpu68k *c, uint16_t trapword)
@@ -19310,6 +19811,33 @@ static void glue_RstFLock(cpu68k *c, uint16_t trapword)
     gaddr a_filen = (gaddr)cpu_pop32(c);
     int16_t r = tb_RstFLock(a_filen, a_vrn);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBIsControlStripVisible(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t r = tb_SBIsControlStripVisible();
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_SBSafeToAccessStartupDisk(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t r = tb_SBSafeToAccessStartupDisk();
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_SBShowHideControlStrip(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_showIt = (int8_t)(cpu_pop16(c) >> 8);
+    tb_SBShowHideControlStrip(a_showIt);
     cpu_push32(c, ret);
 }
 
@@ -20461,6 +20989,16 @@ static void glue_SetControlVisibility(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetCurLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_layer = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetCurLayer(a_layer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20476,6 +21014,17 @@ static void glue_SetCursorComponent(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     uint32_t a_ci = (uint32_t)cpu_pop32(c);
     int16_t r = tb_SetCursorComponent(a_ci);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetCustomIconsEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_enableCustomIcons = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SetCustomIconsEnabled(a_vRefNum, a_enableCustomIcons);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -21493,6 +22042,18 @@ static void glue_SetHandleSize(cpu68k *c, uint16_t trapword)
     int32_t a_newsize = (int32_t)c->d[0];
     tb_SetHandleSize(a_h, a_newsize);
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
+}
+
+static void glue_SetIconFamilyData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_h = (gaddr)cpu_pop32(c);
+    int32_t a_iconType = (int32_t)cpu_pop32(c);
+    gaddr a_iconFamily = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetIconFamilyData(a_iconFamily, a_iconType, a_h);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_SetIdentityMatrix(cpu68k *c, uint16_t trapword)
@@ -23635,6 +24196,16 @@ static void glue_SubtractTime(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SwapCurLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_layer = (gaddr)cpu_pop32(c);
+    gaddr r = tb_SwapCurLayer(a_layer);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SwapMMUMode(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -24591,6 +25162,19 @@ static void glue_TruncString(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TruncText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_truncWhere = (int16_t)cpu_pop16(c);
+    gaddr a_length = (gaddr)cpu_pop32(c);
+    gaddr a_textPtr = (gaddr)cpu_pop32(c);
+    int16_t a_width = (int16_t)cpu_pop16(c);
+    int16_t r = tb_TruncText(a_width, a_textPtr, a_length, a_truncWhere);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UnRegisterSection(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -24691,6 +25275,17 @@ static void glue_UnregisterAppearanceClient(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UnregisterIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_iconType = (int32_t)cpu_pop32(c);
+    int32_t a_creator = (int32_t)cpu_pop32(c);
+    int16_t r = tb_UnregisterIconRef(a_creator, a_iconType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UnsignedFixMulDiv(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -24774,6 +25369,16 @@ static void glue_UpdateGWorld(cpu68k *c, uint16_t trapword)
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     int32_t r = tb_UpdateGWorld(a_arg0, a_arg1, a_arg2, a_arg3, a_arg4, a_arg5);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UpdateIconRef(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theIconRef = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UpdateIconRef(a_theIconRef);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -24934,6 +25539,17 @@ static void glue_WakeUpProcess(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_serial_number = (gaddr)cpu_pop32(c);
     int16_t r = tb_WakeUpProcess(a_serial_number);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_WriteIconFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_iconFile = (gaddr)cpu_pop32(c);
+    gaddr a_iconFamily = (gaddr)cpu_pop32(c);
+    int16_t r = tb_WriteIconFile(a_iconFamily, a_iconFile);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -25965,6 +26581,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA73, (int32_t)0x1Cu, "SetControlFontStyle", CONV_STACK, 8, 2, glue_SetControlFontStyle},
     {0xAA73, (int32_t)0x1Du, "SetUpControlBackground", CONV_STACK, 8, 2, glue_SetUpControlBackground},
     {0xAA73, (int32_t)0x1Eu, "SetControlVisibility", CONV_STACK, 8, 2, glue_SetControlVisibility},
+    {0xAAF2, (int32_t)0x0u, "SBIsControlStripVisible", CONV_STACK, 0, 2, glue_SBIsControlStripVisible},
+    {0xAAF2, (int32_t)0x2u, "SBSafeToAccessStartupDisk", CONV_STACK, 0, 2, glue_SBSafeToAccessStartupDisk},
+    {0xAAF2, (int32_t)0x101u, "SBShowHideControlStrip", CONV_STACK, 2, 0, glue_SBShowHideControlStrip},
     {0xABE0, (int32_t)0x4000Cu, "CloseCursorComponent", CONV_STACK, 4, 2, glue_CloseCursorComponent},
     {0xABE0, (int32_t)0x4000Du, "SetCursorComponent", CONV_STACK, 4, 2, glue_SetCursorComponent},
     {0xABE0, (int32_t)0x4000Eu, "CursorComponentChanged", CONV_STACK, 4, 2, glue_CursorComponentChanged},
@@ -26824,6 +27443,41 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABC9, (int32_t)0x90Fu, "PtInIconMethod", CONV_STACK, 18, 2, 0},
     {0xABC9, (int32_t)0x912u, "RectInIconMethod", CONV_STACK, 18, 2, 0},
     {0xABC9, (int32_t)0x915u, "IconMethodToRgn", CONV_STACK, 18, 2, 0},
+    {0xAA75, (int32_t)0x2u, "GetIconRefFromFile", CONV_STACK, 12, 2, glue_GetIconRefFromFile},
+    {0xAA75, (int32_t)0x8u, "UnregisterIconRef", CONV_STACK, 8, 2, glue_UnregisterIconRef},
+    {0xAA75, (int32_t)0x9u, "UpdateIconRef", CONV_STACK, 4, 2, glue_UpdateIconRef},
+    {0xAA75, (int32_t)0xBu, "GetIconRefOwners", CONV_STACK, 8, 2, glue_GetIconRefOwners},
+    {0xAA75, (int32_t)0xEu, "PlotIconRef", CONV_STACK, 16, 2, glue_PlotIconRef},
+    {0xAA75, (int32_t)0xFu, "PtInIconRef", CONV_STACK, 18, 2, glue_PtInIconRef},
+    {0xAA75, (int32_t)0x10u, "RectInIconRef", CONV_STACK, 18, 2, glue_RectInIconRef},
+    {0xAA75, (int32_t)0x11u, "IconRefToRgn", CONV_STACK, 18, 2, glue_IconRefToRgn},
+    {0xAA75, (int32_t)0x12u, "GetIconSizesFromIconRef", CONV_STACK, 16, 2, glue_GetIconSizesFromIconRef},
+    {0xAA75, (int32_t)0x14u, "CompositeIconRef", CONV_STACK, 12, 2, glue_CompositeIconRef},
+    {0xAA75, (int32_t)0x18u, "FlushIconRefsByVolume", CONV_STACK, 2, 2, glue_FlushIconRefsByVolume},
+    {0xAA75, (int32_t)0x1Au, "IsIconRefComposite", CONV_STACK, 12, 2, glue_IsIconRefComposite},
+    {0xAA75, (int32_t)0x1Cu, "RegisterIconRefFromIconFamily", CONV_STACK, 16, 2, glue_RegisterIconRefFromIconFamily},
+    {0xAA75, (int32_t)0x1Eu, "RemoveIconRefOverride", CONV_STACK, 4, 2, glue_RemoveIconRefOverride},
+    {0xAA75, (int32_t)0x1Fu, "SetCustomIconsEnabled", CONV_STACK, 4, 2, glue_SetCustomIconsEnabled},
+    {0xAA75, (int32_t)0x20u, "GetCustomIconsEnabled", CONV_STACK, 6, 2, glue_GetCustomIconsEnabled},
+    {0xAA75, (int32_t)0x21u, "GetIconRef", CONV_STACK, 14, 2, glue_GetIconRef},
+    {0xAA75, (int32_t)0x22u, "GetIconRefFromFolder", CONV_STACK, 18, 2, glue_GetIconRefFromFolder},
+    {0xAA75, (int32_t)0x23u, "RegisterIconRefFromResource", CONV_STACK, 18, 2, glue_RegisterIconRefFromResource},
+    {0xAA75, (int32_t)0x24u, "IconRefToIconFamily", CONV_STACK, 12, 2, glue_IconRefToIconFamily},
+    {0xAA75, (int32_t)0x25u, "IconFamilyToIconSuite", CONV_STACK, 12, 2, glue_IconFamilyToIconSuite},
+    {0xAA75, (int32_t)0x26u, "IconSuiteToIconFamily", CONV_STACK, 12, 2, glue_IconSuiteToIconFamily},
+    {0xAA75, (int32_t)0x27u, "AcquireIconRef", CONV_STACK, 4, 2, glue_AcquireIconRef},
+    {0xAA75, (int32_t)0x28u, "ReleaseIconRef", CONV_STACK, 4, 2, glue_ReleaseIconRef},
+    {0xAA75, (int32_t)0x29u, "FlushIconRefs", CONV_STACK, 8, 2, glue_FlushIconRefs},
+    {0xAA75, (int32_t)0x2Au, "OverrideIconRefFromResource", CONV_STACK, 10, 2, glue_OverrideIconRefFromResource},
+    {0xAA75, (int32_t)0x2Bu, "OverrideIconRef", CONV_STACK, 8, 2, glue_OverrideIconRef},
+    {0xAA75, (int32_t)0x30u, "SetIconFamilyData", CONV_STACK, 12, 2, glue_SetIconFamilyData},
+    {0xAA75, (int32_t)0x31u, "GetIconFamilyData", CONV_STACK, 12, 2, glue_GetIconFamilyData},
+    {0xAA75, (int32_t)0x32u, "IsValidIconRef", CONV_STACK, 4, 2, glue_IsValidIconRef},
+    {0xAA75, (int32_t)0x33u, "IsIconRefMaskEmpty", CONV_STACK, 4, 2, glue_IsIconRefMaskEmpty},
+    {0xAA75, (int32_t)0x34u, "GetIconRefVariant", CONV_STACK, 12, 4, glue_GetIconRefVariant},
+    {0xAA75, (int32_t)0x35u, "RegisterIconRefFromIconFile", CONV_STACK, 16, 2, glue_RegisterIconRefFromIconFile},
+    {0xAA75, (int32_t)0x36u, "ReadIconFile", CONV_STACK, 8, 2, glue_ReadIconFile},
+    {0xAA75, (int32_t)0x37u, "WriteIconFile", CONV_STACK, 8, 2, glue_WriteIconFile},
     {0xAAA3, (int32_t)0x0u, "CodecManagerVersion", CONV_STACK, 4, 2, glue_CodecManagerVersion},
     {0xAAA3, (int32_t)0x1u, "GetCodecNameList", CONV_STACK, 6, 2, glue_GetCodecNameList},
     {0xAAA3, (int32_t)0x3u, "GetCodecInfo", CONV_STACK, 12, 2, glue_GetCodecInfo},
@@ -26920,7 +27574,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x6Bu, "CDSequenceChangedSourceData", CONV_STACK, 4, 2, 0},
     {0xAAA3, (int32_t)0x6Cu, "PtInDSequenceData", CONV_STACK, 20, 2, 0},
     {0xAAA3, (int32_t)0x6Du, "ImageFieldSequenceBegin", CONV_STACK, 16, 2, 0},
-    {0xAAA3, (int32_t)0x6Eu, "GetGraphicsImporterForFile", CONV_STACK, 8, 2, 0},
+    {0xAAA3, (int32_t)0x6Eu, "GetGraphicsImporterForFile", CONV_STACK, 8, 2, glue_GetGraphicsImporterForFile},
     {0xAAA3, (int32_t)0x6Fu, "ImageTranscodeSequenceBegin", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x70u, "ImageTranscodeSequenceEnd", CONV_STACK, 4, 2, 0},
     {0xAAA3, (int32_t)0x71u, "ImageTranscodeFrame", CONV_STACK, 20, 2, 0},
@@ -26929,7 +27583,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x74u, "GetCSequenceMaxCompressionSize", CONV_STACK, 12, 2, glue_GetCSequenceMaxCompressionSize},
     {0xAAA3, (int32_t)0x75u, "ImageFieldSequenceExtractCombine", CONV_STACK, 32, 2, 0},
     {0xAAA3, (int32_t)0x76u, "ImageFieldSequenceEnd", CONV_STACK, 4, 2, 0},
-    {0xAAA3, (int32_t)0x77u, "GetGraphicsImporterForDataRef", CONV_STACK, 12, 2, 0},
+    {0xAAA3, (int32_t)0x77u, "GetGraphicsImporterForDataRef", CONV_STACK, 12, 2, glue_GetGraphicsImporterForDataRef},
     {0xAAA3, (int32_t)0x78u, "SetCSequencePreferredPacketSize", CONV_STACK, 8, 2, glue_SetCSequencePreferredPacketSize},
     {0xAAA3, (int32_t)0x79u, "CDSequenceSetTimeBase", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0x7Au, "MakeImageDescriptionForPixMap", CONV_STACK, 8, 2, glue_MakeImageDescriptionForPixMap},
@@ -26942,8 +27596,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x81u, "QTUpdateGWorld", CONV_STACK, 24, 4, 0},
     {0xAAA3, (int32_t)0x82u, "ICMDecompressCompleteS", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x83u, "ICMGetPixelFormatInfo", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x84u, "GetGraphicsImporterForFileWithFlags", CONV_STACK, 12, 2, 0},
-    {0xAAA3, (int32_t)0x85u, "GetGraphicsImporterForDataRefWithFlags", CONV_STACK, 16, 2, 0},
+    {0xAAA3, (int32_t)0x84u, "GetGraphicsImporterForFileWithFlags", CONV_STACK, 12, 2, glue_GetGraphicsImporterForFileWithFlags},
+    {0xAAA3, (int32_t)0x85u, "GetGraphicsImporterForDataRefWithFlags", CONV_STACK, 16, 2, glue_GetGraphicsImporterForDataRefWithFlags},
     {0xAAA3, (int32_t)0x86u, "QTGetPixelSize", CONV_STACK, 4, 2, 0},
     {0xAAA3, (int32_t)0x87u, "HitTestDSequenceData", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x89u, "ICMSequenceGetInfo", CONV_STACK, 12, 2, 0},
@@ -26968,6 +27622,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x9Fu, "CDSequenceEquivalentImageDescriptionS", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0xA0u, "ReplaceDSequenceImageDescription", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0xA3u, "QTGetPixelFormatDepthForImageDescription", CONV_STACK, 4, 2, 0},
+    {0xA829, (int32_t)0x1u, "NewLayer", CONV_STACK, 16, 2, glue_NewLayer},
+    {0xA829, (int32_t)0x3u, "GetCurLayer", CONV_STACK, 0, 4, glue_GetCurLayer},
+    {0xA829, (int32_t)0x4u, "SetCurLayer", CONV_STACK, 4, 2, glue_SetCurLayer},
+    {0xA829, (int32_t)0x5u, "SwapCurLayer", CONV_STACK, 4, 4, glue_SwapCurLayer},
+    {0xA829, (int32_t)0x6u, "GetSubWindows", CONV_STACK, 4, 4, glue_GetSubWindows},
     {0xABC2, (int32_t)0x1u, "CompAdd", CONV_STACK, 8, 0, glue_CompAdd},
     {0xABC2, (int32_t)0x2u, "CompSub", CONV_STACK, 8, 0, glue_CompSub},
     {0xABC2, (int32_t)0x3u, "CompNeg", CONV_STACK, 4, 0, glue_CompNeg},
@@ -27887,6 +28546,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x820C0016u, "Char2Pixel", CONV_STACK, 12, 2, glue_Char2Pixel},
     {0xA8B5, (int32_t)0x820C0026u, "FindScriptRun", CONV_STACK, 12, 2, glue_FindScriptRun},
     {0xA8B5, (int32_t)0x820CFFDCu, "ReplaceText", CONV_STACK, 12, 2, glue_ReplaceText},
+    {0xA8B5, (int32_t)0x820CFFDEu, "TruncText", CONV_STACK, 12, 2, glue_TruncText},
     {0xA8B5, (int32_t)0x820CFFECu, "StringToFormatRec", CONV_STACK, 12, 2, glue_StringToFormatRec},
     {0xA8B5, (int32_t)0x820E0014u, "Pixel2Char", CONV_STACK, 14, 2, glue_Pixel2Char},
     {0xA8B5, (int32_t)0x820E0018u, "Transliterate", CONV_STACK, 14, 2, glue_Transliterate},
@@ -27906,6 +28566,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x84120036u, "PortionLine", CONV_STACK, 18, 4, glue_PortionLine},
     {0xA8B5, (int32_t)0xC008003Au, "SetScriptUtilityAddress", CONV_STACK, 10, 0, glue_SetScriptUtilityAddress},
     {0xA8B5, (int32_t)0xC00A003Eu, "SetScriptQDPatchAddress", CONV_STACK, 12, 0, glue_SetScriptQDPatchAddress},
+    {0xA8B5, (int32_t)0xC012001Au, "FindWordBreaks", CONV_STACK, 20, 0, glue_FindWordBreaks},
     {0xA8B5, (int32_t)0xC2040022u, "FillParseTable", CONV_STACK, 6, 2, glue_FillParseTable},
     {0xA8B5, (int32_t)0xC2060010u, "CharacterByteType", CONV_STACK, 8, 2, glue_CharacterByteType},
     {0xA8B5, (int32_t)0xC2060012u, "CharacterType", CONV_STACK, 8, 2, glue_CharacterType},
@@ -27916,7 +28577,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA895, (int32_t)0x2u, "ShutDwnStart", CONV_STACK, 0, 0, 0},
     {0xA895, (int32_t)0x3u, "ShutDwnInstall", CONV_STACK, 6, 0, 0},
     {0xA895, (int32_t)0x4u, "ShutDwnRemove", CONV_STACK, 4, 0, 0},
-    {0xA800, (int32_t)0x0u, "FinaleUnknown1", CONV_STACK, 0, 0, 0},
+    {0xA800, (int32_t)0x0u, "FinaleUnknown1", CONV_STACK, 2, 4, glue_FinaleUnknown1},
     {0xA800, (int32_t)0x4u, "DirectorUnknown3", CONV_STACK, 0, 4, glue_DirectorUnknown3},
     {0xA800, (int32_t)0xCu, "SpeechManagerVersion", CONV_STACK, 0, 4, glue_SpeechManagerVersion},
     {0xA800, (int32_t)0x10u, "MACEVersion", CONV_STACK, 0, 4, glue_MACEVersion},
@@ -27967,6 +28628,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x940004u, "MIDISetTCFormat", CONV_STACK, 4, 0, glue_MIDISetTCFormat},
     {0xA800, (int32_t)0x980004u, "MIDISetRunRate", CONV_STACK, 8, 0, glue_MIDISetRunRate},
     {0xA800, (int32_t)0x9C0004u, "MIDIGetClientIcon", CONV_STACK, 4, 4, glue_MIDIGetClientIcon},
+    {0xA800, (int32_t)0xA80004u, "MIDISetConnectionProc", CONV_STACK, 10, 0, glue_MIDISetConnectionProc},
+    {0xA800, (int32_t)0xAC0004u, "MIDIGetConnectionProc", CONV_STACK, 10, 0, glue_MIDIGetConnectionProc},
+    {0xA800, (int32_t)0xB00004u, "MIDIDiscardPacket", CONV_STACK, 6, 0, glue_MIDIDiscardPacket},
     {0xA800, (int32_t)0x108000Cu, "CountVoices", CONV_STACK, 4, 2, glue_CountVoices},
     {0xA800, (int32_t)0x1100014u, "SPBSignOutDevice", CONV_STACK, 2, 2, glue_SPBSignOutDevice},
     {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, glue_SndSetSysBeepState},
@@ -28101,6 +28765,7 @@ const dispatcher_info dispatchers[] = {
     {0xABF6, "CollectionDispatch", "D0W"},
     {0xAA72, "ContextualMenuDispatch", "D0W"},
     {0xAA73, "ControlDispatch", "D0W"},
+    {0xAAF2, "ControlStripDispatch", "D0<0xFF>"},
     {0xABE0, "CursorComponentDispatch", "D0L"},
     {0xA08D, "DebugUtil", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
@@ -28119,7 +28784,9 @@ const dispatcher_info dispatchers[] = {
     {0xABF1, "GestaltValueDispatch", "D0W"},
     {0xAA52, "HighLevelFSDispatch", "D0<0xFF>"},
     {0xABC9, "IconDispatch", "D0W"},
+    {0xAA75, "IconServicesDispatch", "D0W"},
     {0xAAA3, "ImageCompressionDispatch", "D0W"},
+    {0xA829, "LayerDispatch", "D0W"},
     {0xABC2, "MatrixDispatch", "D0W"},
     {0xA825, "MenuDispatch", "D0W"},
     {0xAA59, "MixedModeDispatch", "D0W"},
@@ -28141,7 +28808,7 @@ const dispatcher_info dispatchers[] = {
     {0xAAA2, "PaletteDispatch", "D0<0xFF>"},
     {0xA09E, "PowerDispatch", "D0W"},
     {0xA8FD, "PrGlue", "StackL"},
-    {0xAB1D, "QDExtensions", "D0L"},
+    {0xAB1D, "QDExtensions", "D0<0xFFFF>"},
     {0xAAAA, "QuickTime", "D0W"},
     {0xA822, "ResourceDispatch", "D0<0xFF>"},
     {0xA089, "SCSIAtomic", "D0W"},

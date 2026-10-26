@@ -2677,6 +2677,18 @@ gaddr ap_item_control(gaddr d, int item, int kind)
     return ch;
 }
 
+/* The dialog and item a stand-in control is for, if ch is one. */
+bool ap_stand_in_item(gaddr ch, gaddr *dialog, int *item)
+{
+    for (int i = 0; ch && i < 256; i++)
+        if (stand_ins[i].ch == ch && stand_ins[i].dialog) {
+            *dialog = stand_ins[i].dialog;
+            *item = stand_ins[i].item;
+            return true;
+        }
+    return false;
+}
+
 /* The dialog goes: its stand-ins with it. */
 void ap_forget_dialog(gaddr d)
 {

@@ -82,6 +82,19 @@ bool icm_csequence_exists(int32_t seqID);
 /* The Standard Image Compression dialog component ('scdi', qt_scdi.c),
  * registered again after the Component Manager is reset. */
 void icm_components_reset(void);
+/* A still image through the host's decoder (qt_codec.c): RGBA, malloc'd. */
+bool qt_decode_image(const uint8_t *data, size_t len, uint8_t **rgba, int *w, int *h);
+/* The graphics importer component (qt_gimport.c): a new run. */
+void qt_gimport_register(void);
+/* A PowerPC program's component call through ComponentDispatch: the
+ * instance in r3, then arguments of the sizes given, "4" a long and "2" a
+ * word (qt_gimport.c). */
+struct ppc_cpu;
+void qt_component_call_ppc(struct ppc_cpu *c, int16_t what, const char *sizes);
+/* QuickTime's clock component (vam.c): a new run; an instance for a sound
+ * channel's getClockComponentCmd. */
+void qt_clock_register(void);
+uint32_t qt_clock_open(void); /* a ComponentInstance */
 
 /* ---- Sound ----
  *

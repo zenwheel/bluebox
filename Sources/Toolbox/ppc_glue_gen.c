@@ -30265,11 +30265,181 @@ static void ppcglue_GetCSequenceFrameNumber(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetGraphicsImporterForFile(ppc_cpu *c)
+{
+    gaddr a_theFile = (gaddr)c->gpr[3];
+    gaddr a_gi = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForFile(a_theFile, a_gi);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetGraphicsImporterForDataRef(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    gaddr a_gi = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForDataRef(a_dataRef, a_dataRefType, a_gi);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetGraphicsImporterForFileWithFlags(ppc_cpu *c)
+{
+    gaddr a_theFile = (gaddr)c->gpr[3];
+    gaddr a_gi = (gaddr)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForFileWithFlags(a_theFile, a_gi, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetGraphicsImporterForDataRefWithFlags(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    gaddr a_gi = (gaddr)c->gpr[5];
+    int32_t a_flags = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForDataRefWithFlags(a_dataRef, a_dataRefType, a_gi, a_flags);
+    c->pc = c->lr;
+}
+
 static void ppcglue_MakeImageDescriptionForPixMap(ppc_cpu *c)
 {
     int32_t a_pixmap = (int32_t)c->gpr[3];
     gaddr a_idh = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeImageDescriptionForPixMap(a_pixmap, a_idh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FinaleUnknown1(ppc_cpu *c)
+{
+    int16_t a_dSelector = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_FinaleUnknown1(a_dSelector);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SndDispVersion(ppc_cpu *c)
+{
+    int16_t a_dSelector = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_FinaleUnknown1(a_dSelector);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MIDISetConnectionProc(ppc_cpu *c)
+{
+    int16_t a_refnum = (int16_t)c->gpr[3];
+    gaddr a_connectionProc = (gaddr)c->gpr[4];
+    int32_t a_refCon = (int32_t)c->gpr[5];
+    tb_MIDISetConnectionProc(a_refnum, a_connectionProc, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MIDIGetConnectionProc(ppc_cpu *c)
+{
+    int16_t a_refnum = (int16_t)c->gpr[3];
+    gaddr a_connectionProc = (gaddr)c->gpr[4];
+    gaddr a_refCon = (gaddr)c->gpr[5];
+    tb_MIDIGetConnectionProc(a_refnum, a_connectionProc, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MIDIDiscardPacket(ppc_cpu *c)
+{
+    int16_t a_refnum = (int16_t)c->gpr[3];
+    gaddr a_packet = (gaddr)c->gpr[4];
+    tb_MIDIDiscardPacket(a_refnum, a_packet);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewLayer(ppc_cpu *c)
+{
+    gaddr a_layer = (gaddr)c->gpr[3];
+    int8_t a_visible = (int8_t)c->gpr[4];
+    int8_t a_neverActive = (int8_t)c->gpr[5];
+    gaddr a_behind = (gaddr)c->gpr[6];
+    int32_t a_refCon = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewLayer(a_layer, a_visible, a_neverActive, a_behind, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCurLayer(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetCurLayer();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetCurLayer(ppc_cpu *c)
+{
+    gaddr a_layer = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetCurLayer(a_layer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SwapCurLayer(ppc_cpu *c)
+{
+    gaddr a_layer = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_SwapCurLayer(a_layer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSubWindows(ppc_cpu *c)
+{
+    gaddr a_layer = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetSubWindows(a_layer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetParent(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetParent(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsLayer(ppc_cpu *c)
+{
+    gaddr a_window = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_IsLayer(a_window);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TruncText(ppc_cpu *c)
+{
+    int16_t a_width = (int16_t)c->gpr[3];
+    gaddr a_textPtr = (gaddr)c->gpr[4];
+    gaddr a_length = (gaddr)c->gpr[5];
+    int16_t a_truncWhere = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TruncText(a_width, a_textPtr, a_length, a_truncWhere);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindWordBreaks(ppc_cpu *c)
+{
+    gaddr a_textPtr = (gaddr)c->gpr[3];
+    int16_t a_textLength = (int16_t)c->gpr[4];
+    int16_t a_offset = (int16_t)c->gpr[5];
+    int8_t a_leadingEdge = (int8_t)c->gpr[6];
+    gaddr a_breaks = (gaddr)c->gpr[7];
+    gaddr a_offsets = (gaddr)c->gpr[8];
+    int16_t a_script = (int16_t)c->gpr[9];
+    tb_FindWordBreaks(a_textPtr, a_textLength, a_offset, a_leadingEdge, a_breaks, a_offsets, a_script);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBIsControlStripVisible(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SBIsControlStripVisible();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBShowHideControlStrip(ppc_cpu *c)
+{
+    int8_t a_showIt = (int8_t)c->gpr[3];
+    tb_SBShowHideControlStrip(a_showIt);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSafeToAccessStartupDisk(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SBSafeToAccessStartupDisk();
     c->pc = c->lr;
 }
 
@@ -32415,15 +32585,6 @@ static void ppctrap_GetSoundPreference(ppc_cpu *c)
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FinaleUnknown1(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x0u);
-    ppc_trap((uint16_t)(0xA800));
-    ppc_trap_end();
     c->pc = c->lr;
 }
 
@@ -39556,66 +39717,6 @@ static void ppctrap_HitTestDSequenceData(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_GetGraphicsImporterForFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetGraphicsImporterForDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x77u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetGraphicsImporterForFileWithFlags(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x84u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetGraphicsImporterForDataRefWithFlags(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x85u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_QTGetFileNameExtension(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -41254,7 +41355,7 @@ const ppc_export ppc_exports[] = {
     {"FillRect", ppcglue_FillRect},
     {"FillRgn", ppcglue_FillRgn},
     {"FillRoundRect", ppcglue_FillRoundRect},
-    {"FinaleUnknown1", ppctrap_FinaleUnknown1},
+    {"FinaleUnknown1", ppcglue_FinaleUnknown1},
     {"FinaleUnknown2", ppcglue_FinaleUnknown2},
     {"FindCodec", ppcglue_FindCodec},
     {"FindControl", ppcglue_FindControl},
@@ -41269,6 +41370,7 @@ const ppc_export ppc_exports[] = {
     {"FindSymbol", ppctrap_FindSymbol},
     {"FindWindow", ppcglue_FindWindow},
     {"FindWord", ppcglue_FindWord},
+    {"FindWordBreaks", ppcglue_FindWordBreaks},
     {"Fix2Frac", ppcglue_Fix2Frac},
     {"Fix2Long", ppcglue_Fix2Long},
     {"Fix2SmallFract", ppcglue_Fix2SmallFract},
@@ -41543,6 +41645,7 @@ const ppc_export ppc_exports[] = {
     {"GetControlValue", ppcglue_GetControlValue},
     {"GetControlVariant", ppcglue_GetControlVariant},
     {"GetControlViewSize", ppcglue_GetControlViewSize},
+    {"GetCurLayer", ppcglue_GetCurLayer},
     {"GetCurrentProcess", ppcglue_GetCurrentProcess},
     {"GetCurrentThread", ppcglue_GetCurrentThread},
     {"GetCursor", ppcglue_GetCursor},
@@ -41657,10 +41760,10 @@ const ppc_export ppc_exports[] = {
     {"GetGWorld", ppcglue_GetGWorld},
     {"GetGWorldDevice", ppcglue_GetGWorldDevice},
     {"GetGWorldPixMap", ppcglue_GetGWorldPixMap},
-    {"GetGraphicsImporterForDataRef", ppctrap_GetGraphicsImporterForDataRef},
-    {"GetGraphicsImporterForDataRefWithFlags", ppctrap_GetGraphicsImporterForDataRefWithFlags},
-    {"GetGraphicsImporterForFile", ppctrap_GetGraphicsImporterForFile},
-    {"GetGraphicsImporterForFileWithFlags", ppctrap_GetGraphicsImporterForFileWithFlags},
+    {"GetGraphicsImporterForDataRef", ppcglue_GetGraphicsImporterForDataRef},
+    {"GetGraphicsImporterForDataRefWithFlags", ppcglue_GetGraphicsImporterForDataRefWithFlags},
+    {"GetGraphicsImporterForFile", ppcglue_GetGraphicsImporterForFile},
+    {"GetGraphicsImporterForFileWithFlags", ppcglue_GetGraphicsImporterForFileWithFlags},
     {"GetGray", ppcglue_GetGray},
     {"GetHandleSize", ppcglue_GetHandleSize},
     {"GetIcon", ppcglue_GetIcon},
@@ -41831,6 +41934,7 @@ const ppc_export ppc_exports[] = {
     {"GetPalette", ppcglue_GetPalette},
     {"GetPaletteUpdates", ppcglue_GetPaletteUpdates},
     {"GetParamText", ppcglue_GetParamText},
+    {"GetParent", ppcglue_GetParent},
     {"GetPattern", ppcglue_GetPattern},
     {"GetPen", ppcglue_GetPen},
     {"GetPenState", ppcglue_GetPenState},
@@ -41883,6 +41987,7 @@ const ppc_export ppc_exports[] = {
     {"GetStdFilterProc", ppcglue_GetStdFilterProc},
     {"GetString", ppcglue_GetString},
     {"GetSubTable", ppcglue_GetSubTable},
+    {"GetSubWindows", ppcglue_GetSubWindows},
     {"GetSuiteLabel", ppcglue_GetSuiteLabel},
     {"GetSuperControl", ppcglue_GetSuperControl},
     {"GetSwitchInfo", ppcglue_GetSwitchInfo},
@@ -42187,6 +42292,7 @@ const ppc_export ppc_exports[] = {
     {"IsDialogEvent", ppcglue_IsDialogEvent},
     {"IsIconRefComposite", ppcglue_IsIconRefComposite},
     {"IsIconRefMaskEmpty", ppcglue_IsIconRefMaskEmpty},
+    {"IsLayer", ppcglue_IsLayer},
     {"IsMenuItemEnabled", ppcglue_IsMenuItemEnabled},
     {"IsMenuItemIconEnabled", ppcglue_IsMenuItemIconEnabled},
     {"IsMetric", ppcglue_IsMetric},
@@ -42727,11 +42833,13 @@ const ppc_export ppc_exports[] = {
     {"MIDIConnectData", ppcglue_MIDIConnectData},
     {"MIDIConnectTime", ppcglue_MIDIConnectTime},
     {"MIDIConvertTime", ppcglue_MIDIConvertTime},
+    {"MIDIDiscardPacket", ppcglue_MIDIDiscardPacket},
     {"MIDIFlush", ppcglue_MIDIFlush},
     {"MIDIGetClRefCon", ppcglue_MIDIGetClRefCon},
     {"MIDIGetClientIcon", ppcglue_MIDIGetClientIcon},
     {"MIDIGetClientName", ppcglue_MIDIGetClientName},
     {"MIDIGetClients", ppcglue_MIDIGetClients},
+    {"MIDIGetConnectionProc", ppcglue_MIDIGetConnectionProc},
     {"MIDIGetCurTime", ppcglue_MIDIGetCurTime},
     {"MIDIGetOffsetTime", ppcglue_MIDIGetOffsetTime},
     {"MIDIGetPortInfo", ppcglue_MIDIGetPortInfo},
@@ -42745,6 +42853,7 @@ const ppc_export ppc_exports[] = {
     {"MIDIRemovePort", ppcglue_MIDIRemovePort},
     {"MIDISetClRefCon", ppcglue_MIDISetClRefCon},
     {"MIDISetClientName", ppcglue_MIDISetClientName},
+    {"MIDISetConnectionProc", ppcglue_MIDISetConnectionProc},
     {"MIDISetCurTime", ppcglue_MIDISetCurTime},
     {"MIDISetOffsetTime", ppcglue_MIDISetOffsetTime},
     {"MIDISetPortName", ppcglue_MIDISetPortName},
@@ -42860,6 +42969,7 @@ const ppc_export ppc_exports[] = {
     {"NewHandleSysClear", ppcglue_NewHandleSysClear},
     {"NewIconSuite", ppcglue_NewIconSuite},
     {"NewImageGWorld", ppctrap_NewImageGWorld},
+    {"NewLayer", ppcglue_NewLayer},
     {"NewMenu", ppcglue_NewMenu},
     {"NewMovie", ppcglue_NewMovie},
     {"NewMovieController", ppcglue_NewMovieController},
@@ -43664,6 +43774,9 @@ const ppc_export ppc_exports[] = {
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"RstFLock", ppcglue_RstFLock},
+    {"SBIsControlStripVisible", ppcglue_SBIsControlStripVisible},
+    {"SBSafeToAccessStartupDisk", ppcglue_SBSafeToAccessStartupDisk},
+    {"SBShowHideControlStrip", ppcglue_SBShowHideControlStrip},
     {"SCSIAction", ppcglue_SCSIAction},
     {"SCSICmd", ppcglue_SCSICmd},
     {"SCSIComplete", ppcglue_SCSIComplete},
@@ -43808,6 +43921,7 @@ const ppc_export ppc_exports[] = {
     {"SetControlValue", ppcglue_SetControlValue},
     {"SetControlViewSize", ppcglue_SetControlViewSize},
     {"SetControlVisibility", ppcglue_SetControlVisibility},
+    {"SetCurLayer", ppcglue_SetCurLayer},
     {"SetCursor", ppcglue_SetCursor},
     {"SetCursorComponent", ppcglue_SetCursorComponent},
     {"SetCustomIconsEnabled", ppcglue_SetCustomIconsEnabled},
@@ -44123,6 +44237,7 @@ const ppc_export ppc_exports[] = {
     {"SndAddModifier", ppcglue_SndAddModifier},
     {"SndChannelStatus", ppcglue_SndChannelStatus},
     {"SndControl", ppcglue_SndControl},
+    {"SndDispVersion", ppcglue_SndDispVersion},
     {"SndDisposeChannel", ppcglue_SndDisposeChannel},
     {"SndDoCommand", ppcglue_SndDoCommand},
     {"SndDoImmediate", ppcglue_SndDoImmediate},
@@ -44190,6 +44305,7 @@ const ppc_export ppc_exports[] = {
     {"StyledLineBreak", ppcglue_StyledLineBreak},
     {"SubPt", ppcglue_SubPt},
     {"SubtractTime", ppcglue_SubtractTime},
+    {"SwapCurLayer", ppcglue_SwapCurLayer},
     {"SwapMMUMode", ppctrap_SwapMMUMode},
     {"SysBeep", ppcglue_SysBeep},
     {"SysEnvirons", ppcglue_SysEnvirons},
@@ -44286,6 +44402,7 @@ const ppc_export ppc_exports[] = {
     {"TransliterateText", ppcglue_TransliterateText},
     {"TrimImage", ppctrap_TrimImage},
     {"TruncString", ppcglue_TruncString},
+    {"TruncText", ppcglue_TruncText},
     {"UnRegisterSection", ppcglue_UnRegisterSection},
     {"UnflattenCollection", ppctrap_UnflattenCollection},
     {"UnflattenCollectionFromHdl", ppctrap_UnflattenCollectionFromHdl},

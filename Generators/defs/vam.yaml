@@ -1,0 +1,206 @@
+# Routines the walk of the Vintage Apple Macintosh archive found missing.
+
+# SndDispVersion(dSelector): the version of the tool SoundDispatch reaches
+# with that selector in D0's low word (4 the MIDI Manager, 8 the Sound
+# Manager, 12 the Speech Manager, 16 MACE, 20 the Sound Input Manager), 0
+# for one that isn't there.  JUNO Librarian and Anthem ask it whether the
+# MIDI Manager is installed (Anthem passes a word).
+- function:
+    name: FinaleUnknown1
+    return: LONGINT
+    args:
+      - name: dSelector
+        type: INTEGER
+    dispatcher: SoundDispatch
+    selector: 0x00000000
+    variants: [SndDispVersion]
+
+# The MIDI Manager's connection procedures: a port's, called as its
+# connections change (Anthem sets one for each of its ports).
+- function:
+    name: MIDISetConnectionProc
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: connectionProc
+        type: Ptr
+      - name: refCon
+        type: LONGINT
+    dispatcher: SoundDispatch
+    selector: 0x00A80004
+
+- function:
+    name: MIDIGetConnectionProc
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: connectionProc
+        type: Ptr
+      - name: refCon
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x00AC0004
+
+- function:
+    name: MIDIDiscardPacket
+    args:
+      - name: refnum
+        type: INTEGER
+      - name: packet
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x00B00004
+
+# Window Manager layers (System 7's, for the Process Manager): private,
+# PrivateInterfaceLib's to PowerPC programs and _LayerDispatch's to 68k
+# ones.  Only the selectors programs were seen to use are given here:
+# NewLayer is 1 (RegEdit's arguments), GetCurLayer 3 (Virtual's),
+# SwapCurLayer 5 (RegEdit's, with the layer NewLayer made) and SetCurLayer
+# 4 (RegEdit's, putting the old layer back after making its window in the
+# new one; it leaves room for a word's result) and GetSubWindows 6
+# (TarotWorks', with the layer GetCurLayer gave).
+- dispatcher:
+    name: LayerDispatch
+    trap: 0xA829
+    selector-location: D0W
+
+- function:
+    name: NewLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr*
+      - name: visible
+        type: Boolean
+      - name: neverActive
+        type: Boolean
+      - name: behind
+        type: WindowPtr
+      - name: refCon
+        type: LONGINT
+    dispatcher: LayerDispatch
+    selector: 0x0001
+
+- function:
+    name: GetCurLayer
+    return: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0003
+
+- function:
+    name: SetCurLayer
+    return: OSErr
+    args:
+      - name: layer
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0004
+
+- function:
+    name: SwapCurLayer
+    return: WindowPtr
+    args:
+      - name: layer
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0005
+
+- function:
+    name: GetSubWindows
+    return: WindowPtr
+    args:
+      - name: layer
+        type: WindowPtr
+    dispatcher: LayerDispatch
+    selector: 0x0006
+
+- function:
+    name: GetParent
+    return: WindowPtr
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: PrivateInterfaceLib
+
+- function:
+    name: IsLayer
+    return: Boolean
+    args:
+      - name: window
+        type: WindowPtr
+    cfm: PrivateInterfaceLib
+
+# QDExtensions with older interfaces' selectors: 32-Bit QuickDraw's first
+# headers loaded only the selector, MOVEQ #5,D0 for GetGWorld, without the
+# parameter size in the high word (Drol, Bubblomania 1.0 to 1.2, Chips &
+# DIPS).
+- dispatcher:
+    name: QDExtensions
+    trap: 0xAB1D
+    selector-location: D0<0xFFFF>
+
+# The Script Manager's TruncText and FindWordBreaks for 68k programs
+# (Pentominoes, OpenMe First, YellowEdit Documentation); PowerPC ones had
+# them already.
+- function:
+    name: TruncText
+    return: INTEGER
+    args:
+      - name: width
+        type: INTEGER
+      - name: textPtr
+        type: Ptr
+      - name: length
+        type: INTEGER*
+      - name: truncWhere
+        type: INTEGER
+    dispatcher: ScriptUtil
+    selector: 0x820CFFDE
+
+- function:
+    name: FindWordBreaks
+    args:
+      - name: textPtr
+        type: Ptr
+      - name: textLength
+        type: INTEGER
+      - name: offset
+        type: INTEGER
+      - name: leadingEdge
+        type: Boolean
+      - name: breaks
+        type: Ptr
+      - name: offsets
+        type: Ptr
+      - name: script
+        type: INTEGER
+    dispatcher: ScriptUtil
+    selector: 0xC012001A
+
+# The Control Strip (_ControlStripDispatch, ControlStripLib): its state
+# (Kinga and Tracktor Beam hide it while they run).  The selector is D0's
+# low byte, the high byte the arguments' size in words.
+- dispatcher:
+    name: ControlStripDispatch
+    trap: 0xAAF2
+    selector-location: D0<0xFF>
+
+- function:
+    name: SBIsControlStripVisible
+    return: Boolean
+    dispatcher: ControlStripDispatch
+    selector: 0x0000
+
+- function:
+    name: SBShowHideControlStrip
+    args:
+      - name: showIt
+        type: Boolean
+    dispatcher: ControlStripDispatch
+    selector: 0x0101
+
+- function:
+    name: SBSafeToAccessStartupDisk
+    return: Boolean
+    dispatcher: ControlStripDispatch
+    selector: 0x0002

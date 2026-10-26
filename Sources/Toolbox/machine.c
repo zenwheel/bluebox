@@ -381,6 +381,7 @@ bool machine_boot(bool census)
     fm_reset();
     sane_reset();
     time_reset();
+    vam_reset();
     threads_reset();
     help_reset();
     dialog_reset();

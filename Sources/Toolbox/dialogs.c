@@ -740,8 +740,21 @@ void tb_SetDialogItem(gaddr d, int16_t n, int16_t itype, gaddr item, gaddr r)
     wr8(it + 12, (uint8_t)itype);
 }
 
+/* A text item's handle, given it or (with the Appearance Manager) the
+ * control GetDialogItemAsControl gave for the item: MacMAME sets its
+ * static text through the control, whose record was resized to the text. */
+static gaddr text_handle(gaddr h)
+{
+    gaddr d;
+    int n;
+    if (ap_stand_in_item(h, &d, &n) && is_dialog(d) && n >= 1 && n <= item_count(d))
+        return item_handle(d, n);
+    return h;
+}
+
 void tb_GetDialogItemText(gaddr item, gaddr text)
 {
+    item = text_handle(item);
     uint32_t n = item && rd32(item) ? (uint32_t)tb_GetHandleSize(item) : 0;
     if (n > 255)
         n = 255;
@@ -754,6 +767,7 @@ static void draw_item(gaddr d, int n);
 
 void tb_SetDialogItemText(gaddr item, gaddr text)
 {
+    item = text_handle(item);
     if (!item)
         return;
     uint32_t n = rd8(text);

@@ -20,6 +20,12 @@ CASES = [
     ("mul", "mullw r5,r3,r4\n mulhw r6,r3,r4\n mulhwu r7,r3,r4\n mulli r8,r3,-3", {"r3": 0xFFFFFFFE, "r4": 3},
      {"r5": M - 5, "r6": M, "r7": 2, "r8": 6}),
     ("div", "divw r5,r3,r4\n divwu r6,r3,r4", {"r3": 0xFFFFFFF9, "r4": 2}, {"r5": M - 2, "r6": 0x7FFFFFFC}),
+    # The 601's POWER instructions (FutureBASIC^3 divides with divs).
+    ("power_601", "divs r5,r3,r4\n mfspr r6,0\n mul r7,r3,r4\n mfspr r8,0\n abs r9,r3\n nabs r11,r4\n doz r12,r3,r4\n dozi r13,r4,5\n"
+     " li r17,4\n li r16,7\n mtspr 0,r16\n li r14,1\n div r15,r14,r17\n mfspr r16,0",
+     {"r3": 0xFFFFFFF9, "r4": 2},
+     {"r5": M - 2, "r6": M, "r7": M, "r8": 0xFFFFFFF2, "r9": 7, "r11": 0xFFFFFFFE, "r12": 9, "r13": 3,
+      "r15": 0x40000001, "r16": 3}),
     ("logic", "and r5,r3,r4\n or r6,r3,r4\n xor r7,r3,r4\n nand r8,r3,r4\n nor r9,r3,r4\n andc r10,r3,r4\n eqv r11,r3,r4\n orc r12,r3,r4",
      {"r3": 0xF0F0F0F0, "r4": 0xFF00FF00},
      {"r5": 0xF000F000, "r6": 0xFFF0FFF0, "r7": 0x0FF00FF0, "r8": 0x0FFF0FFF, "r9": 0x000F000F, "r10": 0x00F000F0,

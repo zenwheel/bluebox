@@ -243,6 +243,7 @@ const raw_trap raw_traps[] = {
     { 0xA02F, "PostEvent", raw_PostEvent },
     { 0xA03C, "CmpString", raw_CmpString },
     { 0xA03D, "DrvrInstall", raw_DrvrInstall },
+    { 0xA04E, "AddDrive", raw_AddDrive },
     { 0xA051, "ReadXPRam", raw_ReadXPRam },
     { 0xA052, "WriteXPRam", raw_WriteXPRam },
     { 0xA056, "LowerText", raw_LowerText },
