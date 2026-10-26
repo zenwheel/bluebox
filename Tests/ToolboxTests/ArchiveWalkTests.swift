@@ -213,6 +213,25 @@ extension BlueBox {
             #expect(cpu.pointee.d.4 & 0xFFFF == 0)
         }
 
+        /// AddDrive from 68k code: drive number in D0's high word, driver
+        /// in its low word, the element in A0 (AppDisk's RAM disk).
+        @Test func addDriveFrom68k() {
+            bootMachine()
+            let q = tb_NewPtr(32, false, true)
+            #expect(run68k([
+                0x203C, 0x0009, 0xFFD0,                 // MOVE.L #$0009FFD0,D0: drive 9, driver -48
+                0x207C, UInt16(q >> 16), UInt16(q & 0xFFFF), // MOVEA.L #q,A0
+                0xA04E, 0x2E00,                         // _AddDrive; MOVE.L D0,D7
+                0xA9F4,
+            ]) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 == 0)
+            #expect(rd16(q + UInt32(DrvQEl_dQDrive_off)) == 9 && Int16(bitPattern: rd16(q + UInt32(DrvQEl_dQRefNum_off))) == -48)
+            var found = false
+            var e = rd32(UInt32(LM_DrvQHdr) + 2)
+            while e != 0 { if e == q { found = true }; e = rd32(e) }
+            #expect(found)
+        }
+
         /// OTCompareAndSwap8 and 16, and Carbon's CompareString and
         /// TimeString (Turtle Turmoil, The Cow Catching Game, Amorphium).
         @Test func smallCalls() {

@@ -616,6 +616,17 @@ static void ic_GetComponentInstance(ppc_cpu *c)
 }
 
 /* ---------------------------------------------------------------------- */
+/* AddDrive for 68k callers: the drive number in D0's high word, the
+ * driver's reference number in its low word, the queue element in A0
+ * (AppDisk, a RAM disk, adds its drive so). */
+void raw_AddDrive(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    tb_AddDrive((int16_t)(c->d[0] & 0xFFFF), (int16_t)(c->d[0] >> 16), c->a[0]);
+    c->d[0] = noErr;
+}
+
+/* ---------------------------------------------------------------------- */
 /* The Control Strip: nothing of it is drawn here, but it keeps whether a
  * program has it shown or hidden, starting hidden. */
 

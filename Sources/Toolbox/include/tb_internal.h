@@ -279,6 +279,7 @@ void ot_tasks_pump(void);
 void midi_pump(void);
 void midi_reset(void);
 void raw_RelString(cpu68k *c, uint16_t tw);
+void raw_AddDrive(cpu68k *c, uint16_t tw); /* vam.c */
 void raw_UprString(cpu68k *c, uint16_t tw);
 void raw_LowerText(cpu68k *c, uint16_t tw);
 void raw_DrvrInstall(cpu68k *c, uint16_t tw);
