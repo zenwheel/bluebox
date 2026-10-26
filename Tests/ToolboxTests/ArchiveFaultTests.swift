@@ -93,5 +93,18 @@ extension BlueBox {
             #expect(cpu.d.7 & 0xFFFF == 0 && cpu.d.6 & 0xFFFF == 0)
             #expect(rd32(out) == 0x0103_8000 && rd32(out + 4) == 0)
         }
+
+        /// A census run installs dispatchers with nothing behind them, to
+        /// see their calls, but GetTrapAddress finds Unimplemented there as
+        /// an ordinary run does: Tubular Worlds tests _CodeFragmentDispatch
+        /// to decide whether to load its PowerPC code.
+        @Test func censusOnlyDispatchersLookUnimplemented() {
+            #expect(machine_boot(true))
+            let unimplemented = tb_GetTrapAddress(0xA89F, true, true)
+            #expect(tb_GetTrapAddress(0xAA5A, false, false) == unimplemented) // CodeFragmentDispatch
+            #expect(tb_GetTrapAddress(0xAA59, false, false) == unimplemented) // MixedModeDispatch
+            #expect(tb_GetTrapAddress(0xA9A0, false, false) != unimplemented) // GetResource
+            bootMachine()
+        }
     }
 }

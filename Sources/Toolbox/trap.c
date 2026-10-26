@@ -176,6 +176,21 @@ static bool answers_zero(const char *dispatcher)
            !strncmp(dispatcher, "GX", 2) || !strcmp(dispatcher, "CollectionDispatch");
 }
 
+/* Dispatchers with no selector implemented, installed only for a census
+ * run: GetTrapAddress still finds Unimplemented there, as it would in an
+ * ordinary run, so a program testing for the trap (Tubular Worlds, for
+ * the Code Fragment Manager) takes the same path. */
+static uint32_t census_only[64];
+static unsigned ncensus_only;
+
+gaddr trap_visible_address(gaddr a)
+{
+    for (unsigned i = 0; i < ncensus_only; i++)
+        if (census_only[i] == a)
+            return unimpl_stub;
+    return a;
+}
+
 static void dispatch_native(cpu68k *c, uint16_t tw)
 {
     const disp_entry *d = find_disp(tw);
@@ -692,6 +707,7 @@ void trap_init(void)
     current_trap = 0;
 
     unimpl_stub = native_register(unimplemented_native, "Unimplemented", 0xA89F);
+    ncensus_only = 0;
     guest_return_stub = native_register(guest_return_native, "GuestReturn", 0);
     call_depth = returned_depth = 0;
     os_epilogue_stub = native_register(os_epilogue_native, "OSTrapEpilogue", 0);
@@ -819,6 +835,8 @@ void trap_init(void)
         if (raw)
             continue;
         uint32_t stub = native_register(dispatch_native, di->name, di->trap);
+        if (!any && !answers_zero(di->name) && ncensus_only < sizeof census_only / sizeof census_only[0])
+            census_only[ncensus_only++] = stub;
         if (di->trap & 0x0800)
             wr32(TB_TRAP_TABLE + (di->trap & 0x3FFu) * 4, stub);
         else

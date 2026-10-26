@@ -66,6 +66,9 @@ int native_index_for(uint32_t addr);
  * result space and arguments the caller has already pushed.  Registers other
  * than A7 are preserved. */
 void guest_call(gaddr fn);
+/* A trap table entry as GetTrapAddress reports it (Unimplemented's for a
+ * dispatcher that is there only for the census). */
+gaddr trap_visible_address(gaddr a);
 /* The same for a definition procedure (WDEF, CDEF, MDEF, LDEF) at fn: the
  * managers jumped to it through A0, and a patched definition's stub finds
  * the procedure it replaced from A0. */

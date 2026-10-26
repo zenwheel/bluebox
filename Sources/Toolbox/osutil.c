@@ -153,7 +153,7 @@ static uint32_t table_slot(uint16_t n, bool newTraps, bool tool)
 
 gaddr tb_GetTrapAddress(uint16_t n, bool newTraps, bool tool)
 {
-    gaddr a = rd32(table_slot(n, newTraps, tool));
+    gaddr a = trap_visible_address(rd32(table_slot(n, newTraps, tool)));
     LOGF(LOG_TRAPS, "GetTrapAddress(%04X%s) = %08X\n", n, newTraps ? (tool ? ", tool" : ", OS") : "", a);
     return a;
 }
