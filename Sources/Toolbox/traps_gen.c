@@ -12448,6 +12448,16 @@ static void glue_GetSubTable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetSubWindows(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_layer = (gaddr)cpu_pop32(c);
+    gaddr r = tb_GetSubWindows(a_layer);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetSuiteLabel(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -27598,6 +27608,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA829, (int32_t)0x3u, "GetCurLayer", CONV_STACK, 0, 4, glue_GetCurLayer},
     {0xA829, (int32_t)0x4u, "SetCurLayer", CONV_STACK, 4, 2, glue_SetCurLayer},
     {0xA829, (int32_t)0x5u, "SwapCurLayer", CONV_STACK, 4, 4, glue_SwapCurLayer},
+    {0xA829, (int32_t)0x6u, "GetSubWindows", CONV_STACK, 4, 4, glue_GetSubWindows},
     {0xABC2, (int32_t)0x1u, "CompAdd", CONV_STACK, 8, 0, glue_CompAdd},
     {0xABC2, (int32_t)0x2u, "CompSub", CONV_STACK, 8, 0, glue_CompSub},
     {0xABC2, (int32_t)0x3u, "CompNeg", CONV_STACK, 4, 0, glue_CompNeg},

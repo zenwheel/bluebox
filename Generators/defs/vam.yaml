@@ -57,7 +57,8 @@
 # NewLayer is 1 (RegEdit's arguments), GetCurLayer 3 (Virtual's),
 # SwapCurLayer 5 (RegEdit's, with the layer NewLayer made) and SetCurLayer
 # 4 (RegEdit's, putting the old layer back after making its window in the
-# new one; it leaves room for a word's result).
+# new one; it leaves room for a word's result) and GetSubWindows 6
+# (TarotWorks', with the layer GetCurLayer gave).
 - dispatcher:
     name: LayerDispatch
     trap: 0xA829
@@ -110,7 +111,8 @@
     args:
       - name: layer
         type: WindowPtr
-    cfm: PrivateInterfaceLib
+    dispatcher: LayerDispatch
+    selector: 0x0006
 
 - function:
     name: GetParent

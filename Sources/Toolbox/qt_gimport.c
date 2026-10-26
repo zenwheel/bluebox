@@ -494,15 +494,20 @@ int16_t tb_GetGraphicsImporterForDataRefWithFlags(int32_t dataRef, int32_t dataR
 }
 
 /* A PowerPC program's component call: through ComponentDispatch as the
- * 68k glue makes it (the instance in r3, then nargs long arguments). */
-void qt_component_call_ppc(ppc_cpu *c, int16_t what, int nargs)
+ * 68k glue makes it, the instance in r3, then the arguments of the sizes
+ * given ("4" a long, "2" a word: a short or a Boolean). */
+void qt_component_call_ppc(ppc_cpu *c, int16_t what, const char *sizes)
 {
     ppc_trap_begin();
     ppc_trap_push(4, 0);
     ppc_trap_push(4, c->gpr[3]);
-    for (int i = 0; i < nargs; i++)
-        ppc_trap_push(4, c->gpr[4 + i]);
-    ppc_trap_push(4, (uint32_t)(4 * nargs) << 16 | (uint16_t)what);
+    uint32_t size = 0;
+    for (int i = 0; sizes[i]; i++) {
+        int n = sizes[i] - '0';
+        ppc_trap_push(n, c->gpr[4 + i]);
+        size += (uint32_t)n;
+    }
+    ppc_trap_push(4, size << 16 | (uint16_t)what);
     ppc_trap_set(0, 0);
     ppc_trap(0xA82A);
     uint32_t r = ppc_trap_result(4);
@@ -511,34 +516,34 @@ void qt_component_call_ppc(ppc_cpu *c, int16_t what, int nargs)
     c->pc = c->lr;
 }
 
-#define GI(name, what, nargs) static void gi_##name(ppc_cpu *c) { qt_component_call_ppc(c, what, nargs); }
-GI(SetDataFile, 0x03, 1)
-GI(GetDataFile, 0x04, 1)
-GI(SetDataHandle, 0x05, 1)
-GI(GetDataHandle, 0x06, 1)
-GI(GetImageDescription, 0x07, 1)
-GI(SetClip, 0x0A, 1)
-GI(GetClip, 0x0B, 1)
-GI(SetSourceRect, 0x0C, 1)
-GI(GetSourceRect, 0x0D, 1)
-GI(GetNaturalBounds, 0x0E, 1)
-GI(Draw, 0x0F, 0)
-GI(SetGWorld, 0x10, 2)
-GI(GetGWorld, 0x11, 2)
-GI(SetBoundsRect, 0x14, 1)
-GI(GetBoundsRect, 0x15, 1)
-GI(SetGraphicsMode, 0x17, 2)
-GI(GetGraphicsMode, 0x18, 2)
-GI(SetQuality, 0x19, 1)
-GI(GetQuality, 0x1A, 1)
-GI(Validate, 0x1F, 1)
-GI(DoesDrawAllPixels, 0x22, 1)
-GI(GetAsPicture, 0x23, 1)
-GI(ExportImageFile, 0x24, 5)
-GI(DoExportImageFileDialog, 0x26, 6)
-GI(GetImageCount, 0x2B, 1)
-GI(SetImageIndex, 0x2C, 1)
-GI(GetImageIndex, 0x2D, 1)
+#define GI(name, what, sizes) static void gi_##name(ppc_cpu *c) { qt_component_call_ppc(c, what, sizes); }
+GI(SetDataFile, 0x03, "4")
+GI(GetDataFile, 0x04, "4")
+GI(SetDataHandle, 0x05, "4")
+GI(GetDataHandle, 0x06, "4")
+GI(GetImageDescription, 0x07, "4")
+GI(SetClip, 0x0A, "4")
+GI(GetClip, 0x0B, "4")
+GI(SetSourceRect, 0x0C, "4")
+GI(GetSourceRect, 0x0D, "4")
+GI(GetNaturalBounds, 0x0E, "4")
+GI(Draw, 0x0F, "")
+GI(SetGWorld, 0x10, "44")
+GI(GetGWorld, 0x11, "44")
+GI(SetBoundsRect, 0x14, "4")
+GI(GetBoundsRect, 0x15, "4")
+GI(SetGraphicsMode, 0x17, "44")
+GI(GetGraphicsMode, 0x18, "44")
+GI(SetQuality, 0x19, "4")
+GI(GetQuality, 0x1A, "4")
+GI(Validate, 0x1F, "4")
+GI(DoesDrawAllPixels, 0x22, "4")
+GI(GetAsPicture, 0x23, "4")
+GI(ExportImageFile, 0x24, "44444")
+GI(DoExportImageFileDialog, 0x26, "444444")
+GI(GetImageCount, 0x2B, "4")
+GI(SetImageIndex, 0x2C, "4")
+GI(GetImageIndex, 0x2D, "4")
 #undef GI
 
 const ppc_export gimport_exports[] = {

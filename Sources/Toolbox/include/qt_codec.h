@@ -87,9 +87,10 @@ bool qt_decode_image(const uint8_t *data, size_t len, uint8_t **rgba, int *w, in
 /* The graphics importer component (qt_gimport.c): a new run. */
 void qt_gimport_register(void);
 /* A PowerPC program's component call through ComponentDispatch: the
- * instance in r3, then nargs long arguments (qt_gimport.c). */
+ * instance in r3, then arguments of the sizes given, "4" a long and "2" a
+ * word (qt_gimport.c). */
 struct ppc_cpu;
-void qt_component_call_ppc(struct ppc_cpu *c, int16_t what, int nargs);
+void qt_component_call_ppc(struct ppc_cpu *c, int16_t what, const char *sizes);
 /* QuickTime's clock component (vam.c): a new run; an instance for a sound
  * channel's getClockComponentCmd. */
 void qt_clock_register(void);

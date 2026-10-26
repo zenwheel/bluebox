@@ -197,6 +197,7 @@ extension BlueBox {
             let hi = UInt16(vars >> 16), lo = UInt16(vars & 0xFFFF)
             #expect(run68k([
                 0x598F, 0x7003, 0xA829, 0x2E1F,         // SUBQ.L #4,SP; MOVEQ #3,D0; _LayerDispatch; MOVE.L (SP)+,D7
+                0x598F, 0x2F07, 0x7006, 0xA829, 0x261F, // GetSubWindows(D7) into D3
                 0x1F3C, 0x0001, 0x303C, 0x0101, 0xAAF2, // MOVE.B #1,-(SP); MOVE.W #$0101,D0; SBShowHideControlStrip
                 0x554F, 0x7000, 0xAAF2, 0x1C1F,         // SUBQ #2,SP; MOVEQ #0,D0; SBIsControlStripVisible; MOVE.B (SP)+,D6
                 0x4879, hi, lo, 0x4879, hi, lo + 4,      // PEA vars; PEA vars+4
@@ -207,6 +208,7 @@ extension BlueBox {
             ]) == "ExitToShell")
             let cpu = g_cpu!
             #expect(cpu.pointee.d.7 == tb_GetCurLayer() && cpu.pointee.d.7 != 0)
+            #expect(cpu.pointee.d.3 == rd32(UInt32(LM_WindowList)))
             #expect(cpu.pointee.d.6 & 0xFF == 1)
             #expect(rd32(vars + 4) == rd32(UInt32(LM_MainDevice)))  // the device GetGWorld gave
             #expect(cpu.pointee.d.5 == UInt32(bitPattern: tb_DirectorUnknown3()))
@@ -277,6 +279,28 @@ extension BlueBox {
             #expect(pstring(at: got) == "Goodbye, world")
             tb_GetDialogItemText(ch, got)
             #expect(pstring(at: got) == "Goodbye, world")
+        }
+
+        /// The Standard Image Compression component's calls from PowerPC
+        /// programs (Play it Cool's SCGetInfo): settings set and read back.
+        @Test func standardCompressionFromPowerPC() {
+            launchTestApp()
+            _ = initToolbox()
+            _ = cfm_ppc_cpu()
+            let ci = components_open_default(fourCC("scdi"), fourCC("imag"))
+            #expect(ci != 0)
+            let sp = tb_NewPtr(12, false, true)
+            wr32(sp, fourCC("rle "))
+            wr16(sp + 8, 16)
+            wr32(sp + 10, 0x300) // spatialQuality, unaligned as SCSpatialSettings has it
+            #expect(call("SCSetInfo", [ci, fourCC("sptl"), sp]) == 0)
+            let back = tb_NewPtr(12, false, true)
+            #expect(call("SCGetInfo", [ci, fourCC("sptl"), back]) == 0)
+            #expect(rd32(back) == fourCC("rle ") && rd16(back + 8) == 16)
+            let flags = tb_NewPtr(4, false, true)
+            #expect(call("SCSetCompressFlags", [ci, 4]) == 0)
+            #expect(call("SCGetCompressFlags", [ci, flags]) == 0 && rd32(flags) == 4)
+            components_close(ci)
         }
 
         /// OTCompareAndSwap8 and 16, and Carbon's CompareString and

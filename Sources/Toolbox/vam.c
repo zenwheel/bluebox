@@ -691,8 +691,40 @@ void qt_clock_register(void)
 
 uint32_t qt_clock_open(void) { return clock_component ? components_open(clock_component) : 0; }
 
-static void ClockGetTime(ppc_cpu *c) { qt_component_call_ppc(c, 0x01, 1); }
-static void ClockGetRate(ppc_cpu *c) { qt_component_call_ppc(c, 0x0A, 1); }
+static void ClockGetTime(ppc_cpu *c) { qt_component_call_ppc(c, 0x01, "4"); }
+static void ClockGetRate(ppc_cpu *c) { qt_component_call_ppc(c, 0x0A, "4"); }
+
+/* The Standard Image Compression dialog component's calls (qt_scdi.c)
+ * for PowerPC programs (Play it Cool, the Xclaim Video Player). */
+#define SC(name, what, sizes) static void name(ppc_cpu *c) { qt_component_call_ppc(c, what, sizes); }
+SC(SCGetCompressionExtended, 0x01, "444444")
+SC(SCPositionRect, 0x02, "44")
+SC(SCPositionDialog, 0x03, "24")
+SC(SCSetTestImagePictHandle, 0x04, "442")
+SC(SCSetTestImagePictFile, 0x05, "242")
+SC(SCSetTestImagePixMap, 0x06, "442")
+SC(SCGetBestDeviceRect, 0x07, "4")
+SC(SCRequestImageSettings, 0x0A, "")
+SC(SCCompressImage, 0x0B, "4444")
+SC(SCCompressPicture, 0x0C, "44")
+SC(SCCompressPictureFile, 0x0D, "22")
+SC(SCRequestSequenceSettings, 0x0E, "")
+SC(SCCompressSequenceBegin, 0x0F, "444")
+SC(SCCompressSequenceFrame, 0x10, "44444")
+SC(SCCompressSequenceEnd, 0x11, "")
+SC(SCDefaultPictHandleSettings, 0x12, "42")
+SC(SCDefaultPictFileSettings, 0x13, "22")
+SC(SCDefaultPixMapSettings, 0x14, "42")
+SC(SCGetInfo, 0x15, "44")
+SC(SCSetInfo, 0x16, "44")
+SC(SCNewGWorld, 0x17, "444")
+SC(SCSetCompressFlags, 0x18, "4")
+SC(SCGetCompressFlags, 0x19, "4")
+SC(SCGetSettingsAsText, 0x1A, "4")
+SC(SCGetSettingsAsAtomContainer, 0x1B, "4")
+SC(SCSetSettingsFromAtomContainer, 0x1C, "4")
+SC(SCAsyncIdle, 0x1E, "")
+#undef SC
 
 /* ---------------------------------------------------------------------- */
 /* The Script Manager. */
@@ -749,6 +781,15 @@ const ppc_export vam_exports[] = {
     { "ICSetConfigReference", ic_SetConfigReference }, { "ICEditPreferences", ic_EditPreferences },
     { "ICGetComponentInstance", ic_GetComponentInstance },
     { "ClockGetTime", ClockGetTime }, { "ClockGetRate", ClockGetRate },
+#define E(name) { #name, name }
+    E(SCGetCompressionExtended), E(SCPositionRect), E(SCPositionDialog), E(SCSetTestImagePictHandle),
+    E(SCSetTestImagePictFile), E(SCSetTestImagePixMap), E(SCGetBestDeviceRect), E(SCRequestImageSettings),
+    E(SCCompressImage), E(SCCompressPicture), E(SCCompressPictureFile), E(SCRequestSequenceSettings),
+    E(SCCompressSequenceBegin), E(SCCompressSequenceFrame), E(SCCompressSequenceEnd),
+    E(SCDefaultPictHandleSettings), E(SCDefaultPictFileSettings), E(SCDefaultPixMapSettings), E(SCGetInfo),
+    E(SCSetInfo), E(SCNewGWorld), E(SCSetCompressFlags), E(SCGetCompressFlags), E(SCGetSettingsAsText),
+    E(SCGetSettingsAsAtomContainer), E(SCSetSettingsFromAtomContainer), E(SCAsyncIdle),
+#undef E
 };
 const unsigned vam_export_count = sizeof vam_exports / sizeof vam_exports[0];
 
