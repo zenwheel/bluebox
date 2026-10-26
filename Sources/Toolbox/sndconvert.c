@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "os9svc.h"
 #include "ppc_bridge.h"
 #include "qt_codec.h"
 #include "tb_internal.h"
@@ -29,12 +30,17 @@ typedef struct {
     double pos;       /* the next output frame's place, in input frames after `last` */
     int16_t last[2];  /* the last input frame converted, at the output's channels */
     bool have_last;
+    int32_t roll_off;  /* the rate converter's filter slope, dB (siRateConverterRollOffSlope) */
 } converter;
 
 enum { MAX_CONVERTERS = 16, CONVERTER_TAG = 0x53430000 };
 static converter converters[MAX_CONVERTERS];
 
-void sound_converters_reset(void) { memset(converters, 0, sizeof converters); }
+void sound_converters_reset(void)
+{
+    memset(converters, 0, sizeof converters);
+    os9svc_reset();
+}
 
 static bool is(uint32_t f, const char *s) { return f == fourcc(s); }
 
@@ -99,6 +105,7 @@ static int16_t sc_open(gaddr in, gaddr out, gaddr scp)
             c->out_channels = och;
             c->out_bits = out_bits;
             c->out_rate = orate >= 1000 ? orate : f.rate;
+            c->roll_off = 60;
             c->resample = !(rd32(out) & kNoSampleRateConversion) && fabs(c->out_rate - f.rate) > 0.5;
             wr32(scp, CONVERTER_TAG + (uint32_t)i);
             return noErr;
@@ -174,6 +181,50 @@ static uint32_t convert(converter *c, const uint8_t *data, size_t len, uint8_t *
     c->have_last = true;
     free(src);
     return done;
+}
+
+/* ---- Converter settings ---- */
+
+enum { siUnknownInfoType = -231 };
+
+/* SoundConverterGetInfo(sc, selector, infoPtr): the converter's output
+ * format (rate as an UnsignedFixed, size and channels as shorts, the format
+ * as an OSType) and its rate converter's roll-off. */
+int16_t tb_SoundConverterGetInfo(int32_t sc, int32_t selector, gaddr infoPtr)
+{
+    converter *k = conv_of((uint32_t)sc);
+    if (!k || !infoPtr)
+        return paramErr;
+    uint32_t sel = (uint32_t)selector;
+    if (sel == fourcc("srat"))
+        wr32(infoPtr, (uint32_t)(k->out_rate * 65536.0));
+    else if (sel == fourcc("ssiz"))
+        wr16(infoPtr, (uint16_t)k->out_bits);
+    else if (sel == fourcc("chan"))
+        wr16(infoPtr, (uint16_t)k->out_channels);
+    else if (sel == fourcc("comp"))
+        wr32(infoPtr, k->out_format);
+    else if (sel == fourcc("rcdb"))
+        wr32(infoPtr, (uint32_t)k->roll_off);
+    else
+        return siUnknownInfoType;
+    return noErr;
+}
+
+/* SoundConverterSetInfo(sc, selector, infoPtr): the rate converter's
+ * roll-off, a long passed as the pointer, 20 (fast) to 90 (best); the
+ * output format is fixed when the converter opens. */
+int16_t tb_SoundConverterSetInfo(int32_t sc, int32_t selector, gaddr infoPtr)
+{
+    converter *k = conv_of((uint32_t)sc);
+    if (!k)
+        return paramErr;
+    if ((uint32_t)selector != fourcc("rcdb"))
+        return siUnknownInfoType;
+    if ((int32_t)infoPtr < 20 || (int32_t)infoPtr > 90)
+        return paramErr;
+    k->roll_off = (int32_t)infoPtr;
+    return noErr;
 }
 
 /* ---- PowerPC exports ---- */

@@ -17,14 +17,15 @@
 #include <string.h>
 
 #include "legacy.h"
+#include "os9svc.h"
 #include "tb_internal.h"
 
 enum { unimpErr = -4 };
 
 int16_t tb_PMSelectorCount(void) { return 0; }
 uint32_t tb_PMFeatures(void) { return 0; }
-uint8_t tb_GetSleepTimeout(void) { return 0; }
-uint8_t tb_GetDimmingTimeout(void) { return 0; }
+uint8_t tb_GetSleepTimeout(void) { return os9svc_sleep_timeout(); }
+uint8_t tb_GetDimmingTimeout(void) { return os9svc_dimming_timeout(); }
 int16_t tb_BatteryCount(void) { return 0; }
 
 int16_t tb_BatteryStatus(gaddr status, gaddr power) { return unimpErr; }

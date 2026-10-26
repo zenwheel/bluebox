@@ -32,6 +32,7 @@ enum {
 gaddr ref_new(int kind, void *obj);
 void *ref_get(gaddr ref, int kind);
 int ref_kind(gaddr ref);
+gaddr ref_next(int kind, gaddr after);
 void ref_free(gaddr ref);
 
 /* ---- Carbon events, for the other managers ---- */

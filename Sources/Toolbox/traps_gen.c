@@ -1968,6 +1968,13 @@ static void glue_AutoSizeDialog(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AutoSleepControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t a_enableSleep = (int8_t)(c->d[0] >> 16);
+    tb_AutoSleepControl(a_enableSleep);
+}
+
 static void glue_BackColor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2594,6 +2601,16 @@ static void glue_CloseMappedFile(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     uint32_t a_backingFile = (uint32_t)cpu_pop32(c);
     int16_t r = tb_CloseMappedFile(a_backingFile);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloseMixerSoundComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_ci = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CloseMixerSoundComponent(a_ci);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -3792,6 +3809,13 @@ static void glue_CurResFile(cpu68k *c, uint16_t trapword)
     int16_t r = tb_CurResFile();
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_CurrentProcessorSpeed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_CurrentProcessorSpeed();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_CursorComponentChanged(cpu68k *c, uint16_t trapword)
@@ -5344,6 +5368,13 @@ static void glue_Delay(cpu68k *c, uint16_t trapword)
     c->d[0] = a_ftp;
 }
 
+static void glue_DelaySystemIdle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_DelaySystemIdle();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_DeleteGestaltValue(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5478,6 +5509,13 @@ static void glue_DiffRgn(cpu68k *c, uint16_t trapword)
     gaddr a_s1 = (gaddr)cpu_pop32(c);
     tb_DiffRgn(a_s1, a_s2, a_dest);
     cpu_push32(c, ret);
+}
+
+static void glue_DimmingControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t a_enableSleep = (int8_t)(c->d[0] >> 16);
+    tb_DimmingControl(a_enableSleep);
 }
 
 static void glue_DirectorUnknown3(cpu68k *c, uint16_t trapword)
@@ -6467,6 +6505,13 @@ static void glue_EnableMenuItemIcon(cpu68k *c, uint16_t trapword)
     gaddr a_menu = (gaddr)cpu_pop32(c);
     tb_EnableMenuItemIcon(a_menu, a_item);
     cpu_push32(c, ret);
+}
+
+static void glue_EnableProcessorCycling(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t a_enable = (int8_t)(c->d[0] >> 16);
+    tb_EnableProcessorCycling(a_enable);
 }
 
 static void glue_EndFullScreen(cpu68k *c, uint16_t trapword)
@@ -8391,6 +8436,13 @@ static void glue_FrontWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FullProcessorSpeed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_FullProcessorSpeed();
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_GDeviceChanged(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9120,6 +9172,22 @@ static void glue_GetBackColor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetBatteryTimes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_whichBattery = (int16_t)(c->d[0] >> 16);
+    gaddr a_theTimes = (gaddr)c->a[0];
+    tb_GetBatteryTimes(a_whichBattery, a_theTimes);
+}
+
+static void glue_GetBatteryVoltage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_whichBattery = (int16_t)(c->d[0] >> 16);
+    int32_t r = tb_GetBatteryVoltage(a_whichBattery);
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_GetBestControlRect(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9373,6 +9441,17 @@ static void glue_GetCompressedImageSize(cpu68k *c, uint16_t trapword)
     int32_t a_data = (int32_t)cpu_pop32(c);
     int32_t a_desc = (int32_t)cpu_pop32(c);
     int16_t r = tb_GetCompressedImageSize(a_desc, a_data, a_bufferSize, a_dataProc, a_dataSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetCompressionName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_compressionName = (gaddr)cpu_pop32(c);
+    int32_t a_compressionType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetCompressionName(a_compressionType, a_compressionName);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -10356,6 +10435,16 @@ static void glue_GetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDefaultSoundOutput(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_sc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDefaultSoundOutput(a_sc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDefaultStartup(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10510,6 +10599,13 @@ static void glue_GetDictionaryInformation(cpu68k *c, uint16_t trapword)
     int16_t r = tb_GetDictionaryInformation(a_dictionaryReference, a_theDictionaryInformation);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_GetDimSuspendState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_GetDimSuspendState();
+    c->d[0] = (uint32_t)r;
 }
 
 static void glue_GetDimmingTimeout(cpu68k *c, uint16_t trapword)
@@ -10900,6 +10996,13 @@ static void glue_GetHandleSize(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)r;
 }
 
+static void glue_GetHardDiskTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint8_t r = tb_GetHardDiskTimeout();
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_GetIcon(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11136,6 +11239,13 @@ static void glue_GetIndexedSubControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetIntModemInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t r = tb_GetIntModemInfo();
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_GetIntlResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11233,6 +11343,14 @@ static void glue_GetLabel(cpu68k *c, uint16_t trapword)
     int16_t r = tb_GetLabel(a_label, a_label_color, a_label_string);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_GetLastActivity(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theActivity = (gaddr)c->a[0];
+    int16_t r = tb_GetLastActivity(a_theActivity);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_GetLastEditionContainerUsed(cpu68k *c, uint16_t trapword)
@@ -12293,6 +12411,22 @@ static void glue_GetRootControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetSCSIDiskModeAddress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_GetSCSIDiskModeAddress();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_GetScaledBatteryInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_whichBattery = (int16_t)(c->d[0] >> 16);
+    uint32_t a_theInfo = 0;
+    tb_GetScaledBatteryInfo(a_whichBattery, &a_theInfo);
+    c->d[0] = a_theInfo;
+}
+
 static void glue_GetScanOverride(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12391,6 +12525,14 @@ static void glue_GetSoundHeaderOffset(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetSoundMixerState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theSoundMixerByte = (gaddr)c->a[0];
+    int16_t r = tb_GetSoundMixerState(a_theSoundMixerByte);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_GetSoundOutputInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -12459,6 +12601,14 @@ static void glue_GetSpeechRate(cpu68k *c, uint16_t trapword)
     int16_t r = tb_GetSpeechRate(a_chan, a_rate);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_GetStartupTimer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theTime = (gaddr)c->a[0];
+    int16_t r = tb_GetStartupTimer(a_theTime);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_GetStdFilterProc(cpu68k *c, uint16_t trapword)
@@ -13150,6 +13300,13 @@ static void glue_GetWVariant(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetWakeupTimer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theTime = (gaddr)c->a[0];
+    tb_GetWakeupTimer(a_theTime);
+}
+
 static void glue_GetWindowFeatures(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13688,6 +13845,29 @@ static void glue_HandleZone(cpu68k *c, uint16_t trapword)
     gaddr r = tb_HandleZone(a_h);
     c->a[0] = (uint32_t)r;
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
+}
+
+static void glue_HardDiskPowered(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_HardDiskPowered();
+    c->d[0] = (uint32_t)r;
+}
+
+static void glue_HardDiskQInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theElement = (gaddr)c->a[0];
+    int16_t r = tb_HardDiskQInstall(a_theElement);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_HardDiskQRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theElement = (gaddr)c->a[0];
+    int16_t r = tb_HardDiskQRemove(a_theElement);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_HasDepth(cpu68k *c, uint16_t trapword)
@@ -14693,6 +14873,13 @@ static void glue_IsAppearanceClient(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsAutoSlpControlDisabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_IsAutoSlpControlDisabled();
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_IsAutomaticControlDragTrackingEnabledForWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14766,6 +14953,13 @@ static void glue_IsDialogEvent(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsDimmingControlDisabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_IsDimmingControlDisabled();
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_IsIconRefComposite(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14829,6 +15023,13 @@ static void glue_IsOutline(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsProcessorCyclingEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_IsProcessorCyclingEnabled();
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_IsRegisteredSection(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14847,6 +15048,13 @@ static void glue_IsShowContextualMenuClick(cpu68k *c, uint16_t trapword)
     int8_t r = tb_IsShowContextualMenuClick(a_inEvent);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
+}
+
+static void glue_IsSpindownDisabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t r = tb_IsSpindownDisabled();
+    c->d[0] = (uint32_t)r;
 }
 
 static void glue_IsThemeInColor(cpu68k *c, uint16_t trapword)
@@ -15977,6 +16185,13 @@ static void glue_MaxMem(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)r;
 }
 
+static void glue_MaximumProcessorSpeed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_MaximumProcessorSpeed();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_MeasureJust(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16955,6 +17170,18 @@ static void glue_OpenMappedScratchFile(cpu68k *c, uint16_t trapword)
     uint32_t a_fileSize = (uint32_t)cpu_pop32(c);
     int16_t a_volume = (int16_t)cpu_pop16(c);
     int16_t r = tb_OpenMappedScratchFile(a_volume, a_fileSize, a_privileges, a_backingFile);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OpenMixerSoundComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_mixerComponent = (gaddr)cpu_pop32(c);
+    int32_t a_outputFlags = (int32_t)cpu_pop32(c);
+    gaddr a_outputDescription = (gaddr)cpu_pop32(c);
+    int16_t r = tb_OpenMixerSoundComponent(a_outputDescription, a_outputFlags, a_mixerComponent);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -18078,6 +18305,22 @@ static void glue_PMSelectorCount(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PMgrStateQInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theElement = (gaddr)c->a[0];
+    int16_t r = tb_PMgrStateQInstall(a_theElement);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PMgrStateQRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theElement = (gaddr)c->a[0];
+    int16_t r = tb_PMgrStateQRemove(a_theElement);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PMgrVersion(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18238,6 +18481,19 @@ static void glue_ParamText(cpu68k *c, uint16_t trapword)
     gaddr a_p1 = (gaddr)cpu_pop32(c);
     gaddr a_p0 = (gaddr)cpu_pop32(c);
     tb_ParamText(a_p0, a_p1, a_p2, a_p3);
+    cpu_push32(c, ret);
+}
+
+static void glue_ParseAIFFHeader(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dataOffset = (gaddr)cpu_pop32(c);
+    gaddr a_numFrames = (gaddr)cpu_pop32(c);
+    gaddr a_sndInfo = (gaddr)cpu_pop32(c);
+    int16_t a_fRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_ParseAIFFHeader(a_fRefNum, a_sndInfo, a_numFrames, a_dataOffset);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -21699,6 +21955,16 @@ static void glue_SetDefaultOutputVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDefaultSoundOutput(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_sc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetDefaultSoundOutput(a_sc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDefaultStartup(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -21814,6 +22080,20 @@ static void glue_SetDialogTracksCursor(cpu68k *c, uint16_t trapword)
     int16_t r = tb_SetDialogTracksCursor(a_dialog, a_tracks);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_SetDimSuspendState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t a_dimSuspendState = (int8_t)(c->d[0] >> 16);
+    tb_SetDimSuspendState(a_dimSuspendState);
+}
+
+static void glue_SetDimmingTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint8_t a_timeout = (uint8_t)(c->d[0] >> 16);
+    tb_SetDimmingTimeout(a_timeout);
 }
 
 static void glue_SetDisclosureTriangleLastValue(cpu68k *c, uint16_t trapword)
@@ -22095,6 +22375,13 @@ static void glue_SetHandleSize(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_SetHardDiskTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint8_t a_timeout = (uint8_t)(c->d[0] >> 16);
+    tb_SetHardDiskTimeout(a_timeout);
+}
+
 static void glue_SetIconFamilyData(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -22136,6 +22423,13 @@ static void glue_SetImageWellTransform(cpu68k *c, uint16_t trapword)
     int16_t r = tb_SetImageWellTransform(a_well, a_transform);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_SetIntModemState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_theState = (int16_t)(c->d[0] >> 16);
+    tb_SetIntModemState(a_theState);
 }
 
 static void glue_SetItemCmd(cpu68k *c, uint16_t trapword)
@@ -22688,6 +22982,14 @@ static void glue_SetPreserveGlyph(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetProcessorSpeed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t a_fullSpeed = (int8_t)(c->d[0] >> 16);
+    int8_t r = tb_SetProcessorSpeed(a_fullSpeed);
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_SetPt(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -22793,6 +23095,13 @@ static void glue_SetResourceSize(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetSCSIDiskModeAddress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t a_scsiAddress = (int16_t)(c->d[0] >> 16);
+    tb_SetSCSIDiskModeAddress(a_scsiAddress);
+}
+
 static void glue_SetScanOverride(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -22850,6 +23159,21 @@ static void glue_SetScriptVariable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetSleepTimeout(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint8_t a_timeout = (uint8_t)(c->d[0] >> 16);
+    tb_SetSleepTimeout(a_timeout);
+}
+
+static void glue_SetSoundMixerState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theSoundMixerByte = (gaddr)c->a[0];
+    int16_t r = tb_SetSoundMixerState(a_theSoundMixerByte);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_SetSoundOutputInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -22894,6 +23218,21 @@ static void glue_SetSpeechRate(cpu68k *c, uint16_t trapword)
     int16_t r = tb_SetSpeechRate(a_chan, a_rate);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_SetSpindownDisable(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int8_t a_setDisable = (int8_t)(c->d[0] >> 16);
+    tb_SetSpindownDisable(a_setDisable);
+}
+
+static void glue_SetStartupTimer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theTime = (gaddr)c->a[0];
+    int16_t r = tb_SetStartupTimer(a_theTime);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_SetStdCProcs(cpu68k *c, uint16_t trapword)
@@ -23319,6 +23658,13 @@ static void glue_SetWTitle(cpu68k *c, uint16_t trapword)
     gaddr a_w = (gaddr)cpu_pop32(c);
     tb_SetWTitle(a_w, a_t);
     cpu_push32(c, ret);
+}
+
+static void glue_SetWakeupTimer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_theTime = (gaddr)c->a[0];
+    tb_SetWakeupTimer(a_theTime);
 }
 
 static void glue_SetWinColor(cpu68k *c, uint16_t trapword)
@@ -23809,6 +24155,30 @@ static void glue_SortDataBrowserContainer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SoundConverterGetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int32_t a_sc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundConverterGetInfo(a_sc, a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SoundConverterSetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int32_t a_sc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundConverterSetInfo(a_sc, a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SpaceExtra(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -23877,6 +24247,14 @@ static void glue_SpeechManagerVersion(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t r = tb_SpeechManagerVersion();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SpinDownHardDisk(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_SpinDownHardDisk();
     cpu_push32(c, ret);
 }
 
@@ -25475,6 +25853,14 @@ static void glue_UpdateResFile(cpu68k *c, uint16_t trapword)
     int16_t a_rn = (int16_t)cpu_pop16(c);
     tb_UpdateResFile(a_rn);
     cpu_push32(c, ret);
+}
+
+static void glue_UpdateSystemActivity(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint8_t a_activity = (uint8_t)(c->d[0] >> 16);
+    int16_t r = tb_UpdateSystemActivity(a_activity);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_UseDictionary(cpu68k *c, uint16_t trapword)
@@ -28063,8 +28449,48 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA09E, (int32_t)0x0u, "PMSelectorCount", CONV_REG, 0, 0, glue_PMSelectorCount},
     {0xA09E, (int32_t)0x1u, "PMFeatures", CONV_REG, 0, 0, glue_PMFeatures},
     {0xA09E, (int32_t)0x2u, "GetSleepTimeout", CONV_REG, 0, 0, glue_GetSleepTimeout},
+    {0xA09E, (int32_t)0x3u, "SetSleepTimeout", CONV_REG, 0, 0, glue_SetSleepTimeout},
+    {0xA09E, (int32_t)0x4u, "GetHardDiskTimeout", CONV_REG, 0, 0, glue_GetHardDiskTimeout},
+    {0xA09E, (int32_t)0x5u, "SetHardDiskTimeout", CONV_REG, 0, 0, glue_SetHardDiskTimeout},
+    {0xA09E, (int32_t)0x6u, "HardDiskPowered", CONV_REG, 0, 0, glue_HardDiskPowered},
+    {0xA09E, (int32_t)0x7u, "SpinDownHardDisk", CONV_STACK, 0, 0, glue_SpinDownHardDisk},
+    {0xA09E, (int32_t)0x8u, "IsSpindownDisabled", CONV_REG, 0, 0, glue_IsSpindownDisabled},
+    {0xA09E, (int32_t)0x9u, "SetSpindownDisable", CONV_REG, 0, 0, glue_SetSpindownDisable},
+    {0xA09E, (int32_t)0xAu, "HardDiskQInstall", CONV_REG, 0, 0, glue_HardDiskQInstall},
+    {0xA09E, (int32_t)0xBu, "HardDiskQRemove", CONV_REG, 0, 0, glue_HardDiskQRemove},
+    {0xA09E, (int32_t)0xCu, "GetScaledBatteryInfo", CONV_REG, 0, 0, glue_GetScaledBatteryInfo},
+    {0xA09E, (int32_t)0xDu, "AutoSleepControl", CONV_REG, 0, 0, glue_AutoSleepControl},
+    {0xA09E, (int32_t)0xEu, "GetIntModemInfo", CONV_REG, 0, 0, glue_GetIntModemInfo},
+    {0xA09E, (int32_t)0xFu, "SetIntModemState", CONV_REG, 0, 0, glue_SetIntModemState},
+    {0xA09E, (int32_t)0x10u, "MaximumProcessorSpeed", CONV_REG, 0, 0, glue_MaximumProcessorSpeed},
+    {0xA09E, (int32_t)0x11u, "CurrentProcessorSpeed", CONV_REG, 0, 0, glue_CurrentProcessorSpeed},
+    {0xA09E, (int32_t)0x12u, "FullProcessorSpeed", CONV_REG, 0, 0, glue_FullProcessorSpeed},
+    {0xA09E, (int32_t)0x13u, "SetProcessorSpeed", CONV_REG, 0, 0, glue_SetProcessorSpeed},
+    {0xA09E, (int32_t)0x14u, "GetSCSIDiskModeAddress", CONV_REG, 0, 0, glue_GetSCSIDiskModeAddress},
+    {0xA09E, (int32_t)0x15u, "SetSCSIDiskModeAddress", CONV_REG, 0, 0, glue_SetSCSIDiskModeAddress},
+    {0xA09E, (int32_t)0x16u, "GetWakeupTimer", CONV_REG, 0, 0, glue_GetWakeupTimer},
+    {0xA09E, (int32_t)0x17u, "SetWakeupTimer", CONV_REG, 0, 0, glue_SetWakeupTimer},
+    {0xA09E, (int32_t)0x18u, "IsProcessorCyclingEnabled", CONV_REG, 0, 0, glue_IsProcessorCyclingEnabled},
+    {0xA09E, (int32_t)0x19u, "EnableProcessorCycling", CONV_REG, 0, 0, glue_EnableProcessorCycling},
     {0xA09E, (int32_t)0x1Au, "BatteryCount", CONV_REG, 0, 0, glue_BatteryCount},
+    {0xA09E, (int32_t)0x1Bu, "GetBatteryVoltage", CONV_REG, 0, 0, glue_GetBatteryVoltage},
+    {0xA09E, (int32_t)0x1Cu, "GetBatteryTimes", CONV_REG, 0, 0, glue_GetBatteryTimes},
     {0xA09E, (int32_t)0x1Du, "GetDimmingTimeout", CONV_REG, 0, 0, glue_GetDimmingTimeout},
+    {0xA09E, (int32_t)0x1Eu, "SetDimmingTimeout", CONV_REG, 0, 0, glue_SetDimmingTimeout},
+    {0xA09E, (int32_t)0x1Fu, "DimmingControl", CONV_REG, 0, 0, glue_DimmingControl},
+    {0xA09E, (int32_t)0x20u, "IsDimmingControlDisabled", CONV_REG, 0, 0, glue_IsDimmingControlDisabled},
+    {0xA09E, (int32_t)0x21u, "IsAutoSlpControlDisabled", CONV_REG, 0, 0, glue_IsAutoSlpControlDisabled},
+    {0xA09E, (int32_t)0x22u, "PMgrStateQInstall", CONV_REG, 0, 0, glue_PMgrStateQInstall},
+    {0xA09E, (int32_t)0x23u, "PMgrStateQRemove", CONV_REG, 0, 0, glue_PMgrStateQRemove},
+    {0xA09E, (int32_t)0x24u, "UpdateSystemActivity", CONV_REG, 0, 0, glue_UpdateSystemActivity},
+    {0xA09E, (int32_t)0x25u, "DelaySystemIdle", CONV_REG, 0, 0, glue_DelaySystemIdle},
+    {0xA09E, (int32_t)0x26u, "GetStartupTimer", CONV_REG, 0, 0, glue_GetStartupTimer},
+    {0xA09E, (int32_t)0x27u, "SetStartupTimer", CONV_REG, 0, 0, glue_SetStartupTimer},
+    {0xA09E, (int32_t)0x28u, "GetLastActivity", CONV_REG, 0, 0, glue_GetLastActivity},
+    {0xA09E, (int32_t)0x29u, "GetSoundMixerState", CONV_REG, 0, 0, glue_GetSoundMixerState},
+    {0xA09E, (int32_t)0x2Au, "SetSoundMixerState", CONV_REG, 0, 0, glue_SetSoundMixerState},
+    {0xA09E, (int32_t)0x2Bu, "GetDimSuspendState", CONV_REG, 0, 0, glue_GetDimSuspendState},
+    {0xA09E, (int32_t)0x2Cu, "SetDimSuspendState", CONV_REG, 0, 0, glue_SetDimSuspendState},
     {0xA8FD, (int32_t)0x4000C00u, "PrOpenDoc", CONV_STACK, 12, 4, glue_PrOpenDoc},
     {0xA8FD, (int32_t)0x8000484u, "PrCloseDoc", CONV_STACK, 4, 0, glue_PrCloseDoc},
     {0xA8FD, (int32_t)0x10000808u, "PrOpenPage", CONV_STACK, 8, 0, glue_PrOpenPage},
@@ -28705,9 +29131,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, glue_SndSetSysBeepState},
     {0xA800, (int32_t)0x2040008u, "SndPauseFilePlay", CONV_STACK, 4, 2, glue_SndPauseFilePlay},
     {0xA800, (int32_t)0x2180008u, "SndGetSysBeepState", CONV_STACK, 4, 0, glue_SndGetSysBeepState},
+    {0xA800, (int32_t)0x2180018u, "CloseMixerSoundComponent", CONV_STACK, 4, 2, glue_CloseMixerSoundComponent},
     {0xA800, (int32_t)0x21C000Cu, "DisposeSpeechChannel", CONV_STACK, 4, 2, glue_DisposeSpeechChannel},
     {0xA800, (int32_t)0x21C0014u, "SPBCloseDevice", CONV_STACK, 4, 2, glue_SPBCloseDevice},
+    {0xA800, (int32_t)0x21C0018u, "GetDefaultSoundOutput", CONV_STACK, 4, 2, glue_GetDefaultSoundOutput},
     {0xA800, (int32_t)0x220000Cu, "SpeakString", CONV_STACK, 4, 2, glue_SpeakString},
+    {0xA800, (int32_t)0x2200018u, "SetDefaultSoundOutput", CONV_STACK, 4, 2, glue_SetDefaultSoundOutput},
     {0xA800, (int32_t)0x2240018u, "GetSysBeepVolume", CONV_STACK, 4, 2, glue_GetSysBeepVolume},
     {0xA800, (int32_t)0x2280014u, "SPBPauseRecording", CONV_STACK, 4, 2, glue_SPBPauseRecording},
     {0xA800, (int32_t)0x2280018u, "SetSysBeepVolume", CONV_STACK, 4, 2, glue_SetSysBeepVolume},
@@ -28733,6 +29162,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x4440014u, "SPBBytesToMilliseconds", CONV_STACK, 8, 2, glue_SPBBytesToMilliseconds},
     {0xA800, (int32_t)0x448000Cu, "GetSpeechRate", CONV_STACK, 8, 2, glue_GetSpeechRate},
     {0xA800, (int32_t)0x44C000Cu, "SetSpeechPitch", CONV_STACK, 8, 2, glue_SetSpeechPitch},
+    {0xA800, (int32_t)0x44C0018u, "GetCompressionName", CONV_STACK, 8, 2, glue_GetCompressionName},
     {0xA800, (int32_t)0x450000Cu, "GetSpeechPitch", CONV_STACK, 8, 2, glue_GetSpeechPitch},
     {0xA800, (int32_t)0x460000Cu, "UseDictionary", CONV_STACK, 8, 2, glue_UseDictionary},
     {0xA800, (int32_t)0x5100008u, "SndChannelStatus", CONV_STACK, 10, 2, glue_SndChannelStatus},
@@ -28742,6 +29172,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x60C0018u, "UnsignedFixedMulDiv", CONV_STACK, 12, 4, 0},
     {0xA800, (int32_t)0x610000Cu, "GetVoiceDescription", CONV_STACK, 12, 2, glue_GetVoiceDescription},
     {0xA800, (int32_t)0x614000Cu, "GetVoiceInfo", CONV_STACK, 12, 2, glue_GetVoiceInfo},
+    {0xA800, (int32_t)0x6140018u, "OpenMixerSoundComponent", CONV_STACK, 12, 2, glue_OpenMixerSoundComponent},
     {0xA800, (int32_t)0x624000Cu, "SpeakText", CONV_STACK, 12, 2, glue_SpeakText},
     {0xA800, (int32_t)0x6340018u, "SetSoundPreference", CONV_STACK, 12, 2, 0},
     {0xA800, (int32_t)0x6380014u, "SPBGetDeviceInfo", CONV_STACK, 12, 2, glue_SPBGetDeviceInfo},
@@ -28753,8 +29184,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x6480018u, "SetSoundOutputInfo", CONV_STACK, 12, 2, glue_SetSoundOutputInfo},
     {0xA800, (int32_t)0x654000Cu, "SetSpeechInfo", CONV_STACK, 12, 2, glue_SetSpeechInfo},
     {0xA800, (int32_t)0x658000Cu, "GetSpeechInfo", CONV_STACK, 12, 2, glue_GetSpeechInfo},
+    {0xA800, (int32_t)0x6680018u, "SoundConverterGetInfo", CONV_STACK, 12, 2, glue_SoundConverterGetInfo},
+    {0xA800, (int32_t)0x66C0018u, "SoundConverterSetInfo", CONV_STACK, 12, 2, glue_SoundConverterSetInfo},
     {0xA800, (int32_t)0x7080014u, "SndRecordToFile", CONV_STACK, 14, 2, glue_SndRecordToFile},
     {0xA800, (int32_t)0x7100018u, "GetCompressionInfo", CONV_STACK, 14, 2, 0},
+    {0xA800, (int32_t)0x7580014u, "ParseAIFFHeader", CONV_STACK, 14, 2, glue_ParseAIFFHeader},
     {0xA800, (int32_t)0x8040014u, "SndRecord", CONV_STACK, 16, 2, glue_SndRecord},
     {0xA800, (int32_t)0x828000Cu, "SpeakBuffer", CONV_STACK, 16, 2, glue_SpeakBuffer},
     {0xA800, (int32_t)0xA5C000Cu, "TextToPhonemes", CONV_STACK, 20, 2, glue_TextToPhonemes},

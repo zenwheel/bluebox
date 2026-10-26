@@ -1564,26 +1564,32 @@ static uint32_t rate_fixed(const uint8_t *x)
     return r >= 65536.0 ? 0xFFFFFFFFu : (uint32_t)(r * 65536.0);
 }
 
-/* An AIFF or AIFF-C file as a sound header followed by its samples, in one
- * guest block. */
-static gaddr read_aiff(int16_t refnum, int16_t *errp)
+/* What an AIFF or AIFF-C file says of its sound: the COMM chunk's fields
+ * and where the SSND chunk's samples are. */
+typedef struct {
+    uint8_t comm[26];
+    bool aifc;
+    uint32_t ssnd_at, ssnd_len, frames;
+    uint16_t nch, bits;
+    uint32_t format;
+} aiff_info;
+
+static int16_t aiff_scan(int16_t refnum, aiff_info *a)
 {
     uint8_t form[12];
     gaddr tmp = tb_NewPtr(64, false, true);
-    *errp = badFormat;
     if (!tmp)
-        return 0;
+        return memFullErr;
     uint32_t eof = file_eof(refnum);
     bool ok = eof >= 12 && !file_read(refnum, 0, tmp, 12);
     gget(form, tmp, 12);
     if (!ok || memcmp(form, "FORM", 4) || (memcmp(form + 8, "AIFF", 4) && memcmp(form + 8, "AIFC", 4))) {
         tb_DisposePtr(tmp);
-        return 0;
+        return badFormat;
     }
-    bool aifc = !memcmp(form + 8, "AIFC", 4);
-    uint8_t comm[26] = { 0 };
+    memset(a, 0, sizeof *a);
+    a->aifc = !memcmp(form + 8, "AIFC", 4);
     bool have_comm = false;
-    uint32_t ssnd_at = 0, ssnd_len = 0;
     for (uint32_t at = 12; at + 8 <= eof;) {
         uint8_t ck[8];
         if (file_read(refnum, at, tmp, 8))
@@ -1591,10 +1597,10 @@ static gaddr read_aiff(int16_t refnum, int16_t *errp)
         gget(ck, tmp, 8);
         uint32_t len = (uint32_t)ck[4] << 24 | (uint32_t)ck[5] << 16 | (uint32_t)ck[6] << 8 | ck[7];
         if (!memcmp(ck, "COMM", 4)) {
-            uint32_t n = len < sizeof comm ? len : sizeof comm;
+            uint32_t n = len < sizeof a->comm ? len : sizeof a->comm;
             if (file_read(refnum, at + 8, tmp, n))
                 break;
-            gget(comm, tmp, n);
+            gget(a->comm, tmp, n);
             have_comm = true;
         } else if (!memcmp(ck, "SSND", 4) && len >= 8) {
             uint8_t off[4];
@@ -1602,19 +1608,62 @@ static gaddr read_aiff(int16_t refnum, int16_t *errp)
                 break;
             gget(off, tmp, 4);
             uint32_t skip = (uint32_t)off[0] << 24 | (uint32_t)off[1] << 16 | (uint32_t)off[2] << 8 | off[3];
-            ssnd_at = at + 16 + skip;
-            ssnd_len = len - 8 - skip;
+            a->ssnd_at = at + 16 + skip;
+            a->ssnd_len = len - 8 - skip;
         }
         at += 8 + len + (len & 1);
     }
     tb_DisposePtr(tmp);
-    if (!have_comm || !ssnd_at || ssnd_len > eof)
+    if (!have_comm || !a->ssnd_at || a->ssnd_len > eof)
+        return badFormat;
+    const uint8_t *comm = a->comm;
+    a->nch = (uint16_t)(comm[0] << 8 | comm[1]);
+    a->frames = (uint32_t)comm[2] << 24 | (uint32_t)comm[3] << 16 | (uint32_t)comm[4] << 8 | comm[5];
+    a->bits = (uint16_t)(comm[6] << 8 | comm[7]);
+    a->format = a->aifc ? (uint32_t)comm[18] << 24 | (uint32_t)comm[19] << 16 | (uint32_t)comm[20] << 8 | comm[21]
+                        : fourcc("twos");
+    if (a->format == fourcc("ima4"))
+        a->frames = a->ssnd_len / (34u * (a->nch ? a->nch : 1));
+    return noErr;
+}
+
+/* ParseAIFFHeader(fRefNum, *sndInfo, *numFrames, *dataOffset): the file's
+ * sound as a SoundComponentData (no buffer), its frames (packets when
+ * compressed) and where the samples start in the file. */
+int16_t tb_ParseAIFFHeader(int16_t fRefNum, gaddr sndInfo, gaddr numFrames, gaddr dataOffset)
+{
+    aiff_info a;
+    int16_t err = aiff_scan(fRefNum, &a);
+    if (err)
+        return err;
+    if (sndInfo) {
+        wr32(sndInfo, 0);
+        wr32(sndInfo + 4, a.format);
+        wr16(sndInfo + 8, a.nch);
+        wr16(sndInfo + 10, a.bits);
+        wr32(sndInfo + 12, rate_fixed(a.comm + 8));
+        wr32(sndInfo + 16, a.frames);
+        wr32(sndInfo + 20, 0);
+        wr32(sndInfo + 24, 0);
+    }
+    if (numFrames)
+        wr32(numFrames, a.frames);
+    if (dataOffset)
+        wr32(dataOffset, a.ssnd_at);
+    return noErr;
+}
+
+/* An AIFF or AIFF-C file as a sound header followed by its samples, in one
+ * guest block. */
+static gaddr read_aiff(int16_t refnum, int16_t *errp)
+{
+    aiff_info a;
+    *errp = aiff_scan(refnum, &a);
+    if (*errp)
         return 0;
-    uint16_t nch = (uint16_t)(comm[0] << 8 | comm[1]);
-    uint32_t frames = (uint32_t)comm[2] << 24 | (uint32_t)comm[3] << 16 | (uint32_t)comm[4] << 8 | comm[5];
-    uint16_t bits = (uint16_t)(comm[6] << 8 | comm[7]);
-    uint32_t format = aifc ? (uint32_t)comm[18] << 24 | (uint32_t)comm[19] << 16 | (uint32_t)comm[20] << 8 | comm[21]
-                           : fourcc("twos");
+    const uint8_t *comm = a.comm;
+    uint32_t ssnd_at = a.ssnd_at, ssnd_len = a.ssnd_len, frames = a.frames, format = a.format;
+    uint16_t nch = a.nch, bits = a.bits;
     gaddr h = tb_NewPtr((int32_t)(64 + ssnd_len), false, true);
     if (!h) {
         *errp = memFullErr;
@@ -1631,7 +1680,7 @@ static gaddr read_aiff(int16_t refnum, int16_t *errp)
     wr32(h + 8, rate_fixed(comm + 8));    /* sampleRate */
     wr8(h + 20, 0xFE);                    /* encode: cmpSH */
     wr8(h + 21, 60);                      /* baseFrequency */
-    wr32(h + 22, format == fourcc("ima4") ? ssnd_len / (34u * (nch ? nch : 1)) : frames);
+    wr32(h + 22, frames);
     gput(h + 26, comm + 8, 10);           /* AIFFSampleRate */
     wr32(h + 40, format);                 /* format */
     wr16(h + 62, bits);                   /* sampleSize */

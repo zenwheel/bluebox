@@ -42,7 +42,8 @@ enum { kCurrentThreadID = 1, kApplicationThreadID = 2 };
 enum { NS_PER_ABS = 40 }; /* UpTime's unit, as driverservices.c has it */
 
 /* Reference kinds (carbon_events.c has its own, below 100). */
-enum { REF_TASK = 101, REF_QUEUE, REF_SEMAPHORE, REF_REGION, REF_EVENT, REF_NOTIFICATION, REF_TIMER };
+enum { REF_TASK = 101, REF_QUEUE, REF_SEMAPHORE, REF_REGION, REF_EVENT, REF_NOTIFICATION, REF_TIMER,
+       REF_PROCESS, REF_CPU, REF_COHERENCE, REF_SPACE };
 
 #define MAX_STORAGE 64
 #define TASK_STACK 0x10000u
@@ -988,6 +989,105 @@ static void mp_MPRemoteCall(ppc_cpu *c)
     RETURN(proc ? ppc_call(proc, &arg, 1) : 0);
 }
 
+/* ---- Iterating the IDs (MPDiagnostics' MPGetNext...ID) ---- */
+
+enum { kOpaqueAnyID, kOpaqueProcessID, kOpaqueTaskID, kOpaqueTimerID, kOpaqueQueueID, kOpaqueSemaphoreID,
+       kOpaqueCriticalRegionID, kOpaqueCpuID, kOpaqueAddressSpaceID, kOpaqueEventID, kOpaqueCoherenceID,
+       kOpaqueAreaID, kOpaqueNotificationID, kOpaqueConsoleID };
+
+/* The one process, address space, coherence group and processor there are:
+ * a reference each, made when first asked for. */
+static struct { int kind; gaddr id; } fixed_refs[4];
+
+static gaddr fixed_ref(int kind)
+{
+    for (int i = 0; i < 4; i++) {
+        if (fixed_refs[i].kind == kind)
+            return fixed_refs[i].id;
+        if (!fixed_refs[i].kind) {
+            fixed_refs[i].kind = kind;
+            fixed_refs[i].id = ref_new(kind, &fixed_refs[i]);
+            return fixed_refs[i].id;
+        }
+    }
+    return 0;
+}
+
+/* The next ID of a class after *id (0 for the first): kMPIterationEndErr
+ * at the end, kMPInvalidIDErr where *id isn't one. */
+static int32_t next_id(uint32_t cls, gaddr idp)
+{
+    gaddr after = rd32(idp), next = 0;
+    int kind = 0;
+    switch (cls) {
+    case kOpaqueProcessID: kind = REF_PROCESS; break;
+    case kOpaqueCpuID: kind = REF_CPU; break;
+    case kOpaqueCoherenceID: kind = REF_COHERENCE; break;
+    case kOpaqueAddressSpaceID: kind = REF_SPACE; break;
+    case kOpaqueTimerID: kind = REF_TIMER; break;
+    case kOpaqueQueueID: kind = REF_QUEUE; break;
+    case kOpaqueSemaphoreID: kind = REF_SEMAPHORE; break;
+    case kOpaqueCriticalRegionID: kind = REF_REGION; break;
+    case kOpaqueEventID: kind = REF_EVENT; break;
+    case kOpaqueNotificationID: kind = REF_NOTIFICATION; break;
+    case kOpaqueTaskID: {
+        /* The main task, then the others as they were made. */
+        gaddr ids[65];
+        int n = 0, at = -1;
+        current_task(); /* makes the main task's ID */
+        ids[n++] = main_task.id;
+        task *list[64];
+        int m = 0;
+        for (task *t = tasks; t && m < 64; t = t->next)
+            list[m++] = t;
+        while (m)
+            ids[n++] = list[--m]->id;
+        if (after) {
+            at = -2;
+            for (int i = 0; i < n; i++)
+                if (ids[i] == after)
+                    at = i;
+            if (at == -2)
+                return kMPInvalidIDErr;
+        }
+        if (at + 1 >= n)
+            return kMPIterationEndErr;
+        wr32(idp, ids[at + 1]);
+        return noErr;
+    }
+    default: return cls == kOpaqueAreaID || cls == kOpaqueConsoleID ? kMPIterationEndErr : paramErr;
+    }
+    if (kind == REF_PROCESS || kind == REF_CPU || kind == REF_COHERENCE || kind == REF_SPACE) {
+        gaddr one = fixed_ref(kind);
+        if (!after) {
+            wr32(idp, one);
+            return noErr;
+        }
+        return after == one ? kMPIterationEndErr : kMPInvalidIDErr;
+    }
+    if (after && ref_kind(after) != kind)
+        return kMPInvalidIDErr;
+    next = ref_next(kind, after);
+    if (!next)
+        return kMPIterationEndErr;
+    wr32(idp, next);
+    return noErr;
+}
+
+/* MPGetNextID(class, &id) and the per-class ones. */
+static void mp_MPGetNextID(ppc_cpu *c) { RETURN(R(1) ? next_id(R(0), R(1)) : paramErr); }
+static void mp_MPGetNextTaskID(ppc_cpu *c) { RETURN(R(1) ? next_id(kOpaqueTaskID, R(1)) : paramErr); }
+static void mp_MPGetNextCpuID(ppc_cpu *c) { RETURN(R(1) ? next_id(kOpaqueCpuID, R(1)) : paramErr); }
+static void mp_MPGetNextAreaID(ppc_cpu *c) { RETURN(R(1) ? next_id(kOpaqueAreaID, R(1)) : paramErr); }
+
+/* The page size: one class, 4 KB pages. */
+static void mp_MPGetPageSizeClasses(ppc_cpu *c) { RETURN(1); }
+static void mp_MPGetPageSize(ppc_cpu *c) { RETURN(R(0) == 1 ? 4096 : 0); }
+
+/* _MPTaskIsToolboxSafe(): tasks run on the application's thread of
+ * control here, so they can make Toolbox calls. */
+static void mp_TaskIsToolboxSafe(ppc_cpu *c) { RETURN(1); }
+
 /* ---- The library ---- */
 
 static void mp_IsFullyInitialized(ppc_cpu *c) { RETURN(1); }
@@ -1029,6 +1129,7 @@ void mp_reset(void)
     }
     memset(&main_task, 0, sizeof main_task);
     memset(storage_used, 0, sizeof storage_used);
+    memset(fixed_refs, 0, sizeof fixed_refs);
     version_string = 0;
     progress = 0;
 }
@@ -1036,6 +1137,7 @@ void mp_reset(void)
 const ppc_export mp_exports[] = {
     { "MPAllocate", mp_MPAllocate },
     { "MPAllocateAligned", mp_MPAllocateAligned },
+    { "MPAllocateGlobalTaskStorageIndex", mp_MPAllocateTaskStorageIndex },
     { "MPAllocateTaskStorageIndex", mp_MPAllocateTaskStorageIndex },
     { "MPArmTimer", mp_MPArmTimer },
     { "MPBlockClear", mp_MPBlockClear },
@@ -1053,6 +1155,7 @@ const ppc_export mp_exports[] = {
     { "MPDataToCode", mp_nothing },
     { "MPDeallocateTaskStorageIndex", mp_MPDeallocateTaskStorageIndex },
     { "MPDelayUntil", mp_MPDelayUntil },
+    { "MPDelayUntilSys", mp_MPDelayUntil },
     { "MPDeleteCriticalRegion", mp_MPDeleteCriticalRegion },
     { "MPDeleteEvent", mp_MPDeleteEvent },
     { "MPDeleteNotification", mp_MPDeleteNotification },
@@ -1066,6 +1169,12 @@ const ppc_export mp_exports[] = {
     { "MPExtractTaskState", mp_MPExtractTaskState },
     { "MPFree", mp_MPFree },
     { "MPGetAllocatedBlockSize", mp_MPGetAllocatedBlockSize },
+    { "MPGetNextAreaID", mp_MPGetNextAreaID },
+    { "MPGetNextCpuID", mp_MPGetNextCpuID },
+    { "MPGetNextID", mp_MPGetNextID },
+    { "MPGetNextTaskID", mp_MPGetNextTaskID },
+    { "MPGetPageSize", mp_MPGetPageSize },
+    { "MPGetPageSizeClasses", mp_MPGetPageSizeClasses },
     { "MPGetTaskStorageValue", mp_MPGetTaskStorageValue },
     { "MPModifyNotification", mp_MPModifyNotification },
     { "MPModifyNotificationParameters", mp_MPModifyNotificationParameters },
@@ -1091,8 +1200,12 @@ const ppc_export mp_exports[] = {
     { "MPWaitOnQueue", mp_MPWaitOnQueue },
     { "MPWaitOnSemaphore", mp_MPWaitOnSemaphore },
     { "MPYield", mp_MPYield },
+    { "MPYieldWithHint", mp_MPYield },
+    { "_MPAllocateSys", mp_MPAllocate },
     { "_MPIsFullyInitialized", mp_IsFullyInitialized },
     { "_MPLibraryIsCompatible", mp_MPLibraryIsCompatible },
     { "_MPLibraryVersion", mp_MPLibraryVersion },
+    { "_MPRPC", mp_MPRemoteCall },
+    { "_MPTaskIsToolboxSafe", mp_TaskIsToolboxSafe },
 };
 const unsigned mp_export_count = sizeof mp_exports / sizeof mp_exports[0];

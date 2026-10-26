@@ -18,6 +18,7 @@
 
 #include "m68k.h"
 #include "legacy.h"
+#include "os9svc.h"
 #include "tb_internal.h"
 
 #define MAX_TASKS 64
@@ -328,6 +329,7 @@ void time_pump(void)
     midi_pump();
     opentransport_poll(); /* Open Transport's notifiers, at deferred task time */
     ot_tasks_pump();      /* and its timer, deferred and system tasks */
+    os9svc_pump();        /* Driver Services' timers and queued secondary handlers */
     mactcp_poll();        /* MacTCP's calls in progress and its notification routines */
     serial_poll();        /* serial reads waiting for their bytes */
     ctb_poll();           /* Communications Toolbox connections and their completion routines */

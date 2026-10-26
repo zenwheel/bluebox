@@ -183,6 +183,28 @@ void *ref_get(gaddr ref, int kind)
     return s && s->kind == kind ? s->obj : NULL;
 }
 
+/* The next live reference of kind after `after` (0 for the first), in the
+ * order they were made; 0 at the end. */
+gaddr ref_next(int kind, gaddr after)
+{
+    int b = 0, i = 0;
+    if (after) {
+        ref_slot *s = slot_of(after);
+        if (!s)
+            return 0;
+        for (b = 0; b < ref_blocks; b++)
+            if (s >= ref_tab[b] && s < ref_tab[b] + REFS_PER_BLOCK) {
+                i = (int)(s - ref_tab[b]) + 1;
+                break;
+            }
+    }
+    for (; b < ref_blocks; b++, i = 0)
+        for (; i < REFS_PER_BLOCK; i++)
+            if (ref_tab[b][i].kind == kind)
+                return ref_base[b] + 4u * (uint32_t)i;
+    return 0;
+}
+
 int ref_kind(gaddr ref)
 {
     ref_slot *s = ref ? slot_of(ref) : NULL;
