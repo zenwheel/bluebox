@@ -16,6 +16,7 @@
 #   KEEP, a folder, keeps the expanded applications there as a census
 #   corpus (KEEP/corpus/<batch>/..., KEEP/census_list.txt) that
 #   walk-corpus.sh can walk again without importing anything.
+#   BLUEBOX names the binary to run (default: the release build).
 #   REMOUNT, a command, is run when the archive folder has gone (a network
 #   share unmounted) before the next batch, and the run stops if it stays
 #   gone.
@@ -32,7 +33,8 @@ work=${2:?"$usage"}
 jobs=${3:-$(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 8)}
 size=${4:-200}
 root=$(cd "$(dirname "$0")/.." && pwd)
-bin="$(cd "$root" && swift build -c release --show-bin-path)/bluebox"
+# BLUEBOX, the binary to run; otherwise the release build SwiftPM made.
+bin=${BLUEBOX:-"$(cd "$root" && swift build -c release --show-bin-path)/bluebox"}
 HEAPCHECK=${HEAPCHECK-10}
 export HEAPCHECK
 mkdir -p "$work/results"

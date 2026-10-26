@@ -25,7 +25,7 @@ work=${2:?usage: walk-corpus.sh <census dir> <work dir> [bluebox binary] [jobs]}
 root=$(cd "$(dirname "$0")/.." && pwd)
 # The release binary where SwiftPM puts it (.build/release is a link that
 # a full build may leave out).
-bin=${3:-"$(cd "$root" && swift build -c release --show-bin-path)/bluebox"}
+bin=${3:-${BLUEBOX:-"$(cd "$root" && swift build -c release --show-bin-path)/bluebox"}}
 jobs=${4:-8}
 mkdir -p "$work/logs" "$work/homes"
 
