@@ -65,6 +65,9 @@ extern const ppc_export carbon_ctl_exports[];
 extern const unsigned carbon_ctl_export_count;
 extern const ppc_export carbonupps_exports[];
 extern const unsigned carbonupps_export_count;
+/* The low-memory accessors beyond gen.py's (lowmem_acc_data.c). */
+extern const ppc_export lmacc_exports[];
+extern const unsigned lmacc_export_count;
 extern const ppc_export carbongaps_exports[];
 extern const unsigned carbongaps_export_count;
 /* CarbonLib's user and machine names (carbon_user.c). */

@@ -173,6 +173,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbonupps_export_count; i++) /* CarbonLib's remaining UPPs */
         if (!strcmp(carbonupps_exports[i].name, name))
             return carbonupps_exports[i].fn;
+    for (unsigned i = 0; i < lmacc_export_count; i++) /* the rest of LowMem.h's accessors */
+        if (!strcmp(lmacc_exports[i].name, name))
+            return lmacc_exports[i].fn;
     for (unsigned i = 0; i < carbongaps_export_count; i++) /* CarbonLib's small additions */
         if (!strcmp(carbongaps_exports[i].name, name))
             return carbongaps_exports[i].fn;
