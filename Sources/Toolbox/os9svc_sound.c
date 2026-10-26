@@ -86,7 +86,7 @@ int16_t tb_GetCompressionName(int32_t type, gaddr name)
         if ((uint32_t)type == fourcc(names[i].type)) {
             size_t n = strlen(names[i].name);
             wr8(name, (uint8_t)n);
-            for (size_t k = 0; k < n; k++)
+            for (uint32_t k = 0; k < n; k++)
                 wr8(name + 1 + k, (uint8_t)names[i].name[k]);
             return noErr;
         }
