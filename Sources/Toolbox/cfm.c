@@ -23,6 +23,7 @@
 #include "forks.h"
 #include "hostgl.h"
 #include "machine.h"
+#include "os9svc.h"
 #include "carbon_hi.h"
 #include "ppc_bridge.h"
 #include "tb_internal.h"
@@ -191,6 +192,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     void (*svc)(ppc_cpu *) = carbonsvc_export_fn(name);
     if (svc)
         return svc;
+    void (*os9)(ppc_cpu *) = os9svc_export_fn(name); /* Mac OS 9's service libraries */
+    if (os9)
+        return os9;
     void (*cf)(ppc_cpu *) = carbon_cf_export_fn(name);
     if (cf)
         return cf;
@@ -596,6 +600,8 @@ static const char *const native_libraries[] = {
     "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
     "OpenTptAppleTalkLib", "OTNtvUtilLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
     "TextCommon", "UnicodeConverter", "TextEncodingConverter", "CarbonLib",
+    "FontManager", "MPLibrary", "DriverServicesLib", "PowerMgrLib", "URLAccessLib", "NameRegistryLib",
+    "DriverLoaderLib", "KeychainLib",
     "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
 };
 
