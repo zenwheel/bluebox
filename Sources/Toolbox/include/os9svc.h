@@ -33,6 +33,10 @@ extern const os9_alias os9_driver_aliases[];
 extern const unsigned os9_driver_alias_count;
 void os9svc_driver_reset(void);
 
+void os9svc_power_reset(void);
+uint8_t os9svc_sleep_timeout(void);
+uint8_t os9svc_dimming_timeout(void);
+
 /* A new run, and the Time Manager's pump (timers and queued handlers). */
 void os9svc_reset(void);
 void os9svc_pump(void);

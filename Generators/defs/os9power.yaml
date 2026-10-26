@@ -1,0 +1,363 @@
+# The Power Manager's remaining _PowerDispatch selectors (Power.h), for
+# PowerMgrLib and 68k programs: power.c's desktop with nothing to power
+# manage, and os9svc_power.c's settings and activity times.
+
+- function:
+    name: SetSleepTimeout
+    args:
+      - name: timeout
+        type: uint8_t
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x0003
+
+- function:
+    name: GetHardDiskTimeout
+    return: uint8_t
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0004
+
+- function:
+    name: SetHardDiskTimeout
+    args:
+      - name: timeout
+        type: uint8_t
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x0005
+
+- function:
+    name: HardDiskPowered
+    return: Boolean
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0006
+
+- function:
+    name: SpinDownHardDisk
+    dispatcher: PowerDispatch
+    selector: 0x0007
+
+- function:
+    name: IsSpindownDisabled
+    return: Boolean
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0008
+
+- function:
+    name: SetSpindownDisable
+    args:
+      - name: setDisable
+        type: Boolean
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x0009
+
+- function:
+    name: HardDiskQInstall
+    return: OSErr
+    args:
+      - name: theElement
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x000A
+
+- function:
+    name: HardDiskQRemove
+    return: OSErr
+    args:
+      - name: theElement
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x000B
+
+- function:
+    name: GetScaledBatteryInfo
+    args:
+      - name: whichBattery
+        type: INTEGER
+        register: D0HighWord
+      - name: theInfo
+        type: Ptr
+        register: Out<D0>
+    dispatcher: PowerDispatch
+    selector: 0x000C
+
+- function:
+    name: AutoSleepControl
+    args:
+      - name: enableSleep
+        type: Boolean
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x000D
+
+- function:
+    name: GetIntModemInfo
+    return: uint32_t
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x000E
+
+- function:
+    name: SetIntModemState
+    args:
+      - name: theState
+        type: INTEGER
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x000F
+
+- function:
+    name: MaximumProcessorSpeed
+    return: INTEGER
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0010
+
+- function:
+    name: CurrentProcessorSpeed
+    return: INTEGER
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0011
+
+- function:
+    name: FullProcessorSpeed
+    return: Boolean
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0012
+
+- function:
+    name: SetProcessorSpeed
+    return: Boolean
+    args:
+      - name: fullSpeed
+        type: Boolean
+        register: D0HighWord
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0013
+
+- function:
+    name: GetSCSIDiskModeAddress
+    return: INTEGER
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0014
+
+- function:
+    name: SetSCSIDiskModeAddress
+    args:
+      - name: scsiAddress
+        type: INTEGER
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x0015
+
+- function:
+    name: GetWakeupTimer
+    args:
+      - name: theTime
+        type: Ptr
+        register: A0
+    dispatcher: PowerDispatch
+    selector: 0x0016
+
+- function:
+    name: SetWakeupTimer
+    args:
+      - name: theTime
+        type: Ptr
+        register: A0
+    dispatcher: PowerDispatch
+    selector: 0x0017
+
+- function:
+    name: IsProcessorCyclingEnabled
+    return: Boolean
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0018
+
+- function:
+    name: EnableProcessorCycling
+    args:
+      - name: enable
+        type: Boolean
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x0019
+
+- function:
+    name: GetBatteryVoltage
+    return: LONGINT
+    args:
+      - name: whichBattery
+        type: INTEGER
+        register: D0HighWord
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x001B
+
+- function:
+    name: GetBatteryTimes
+    args:
+      - name: whichBattery
+        type: INTEGER
+        register: D0HighWord
+      - name: theTimes
+        type: Ptr
+        register: A0
+    dispatcher: PowerDispatch
+    selector: 0x001C
+
+- function:
+    name: SetDimmingTimeout
+    args:
+      - name: timeout
+        type: uint8_t
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x001E
+
+- function:
+    name: DimmingControl
+    args:
+      - name: enableSleep
+        type: Boolean
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x001F
+
+- function:
+    name: IsDimmingControlDisabled
+    return: Boolean
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0020
+
+- function:
+    name: IsAutoSlpControlDisabled
+    return: Boolean
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0021
+
+- function:
+    name: PMgrStateQInstall
+    return: OSErr
+    args:
+      - name: theElement
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0022
+
+- function:
+    name: PMgrStateQRemove
+    return: OSErr
+    args:
+      - name: theElement
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0023
+
+- function:
+    name: UpdateSystemActivity
+    return: OSErr
+    args:
+      - name: activity
+        type: uint8_t
+        register: D0HighWord
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0024
+
+- function:
+    name: DelaySystemIdle
+    return: OSErr
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0025
+
+- function:
+    name: GetStartupTimer
+    return: OSErr
+    args:
+      - name: theTime
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0026
+
+- function:
+    name: SetStartupTimer
+    return: OSErr
+    args:
+      - name: theTime
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0027
+
+- function:
+    name: GetLastActivity
+    return: OSErr
+    args:
+      - name: theActivity
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0028
+
+- function:
+    name: GetSoundMixerState
+    return: OSErr
+    args:
+      - name: theSoundMixerByte
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0029
+
+- function:
+    name: SetSoundMixerState
+    return: OSErr
+    args:
+      - name: theSoundMixerByte
+        type: Ptr
+        register: A0
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x002A
+
+- function:
+    name: GetDimSuspendState
+    return: Boolean
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x002B
+
+- function:
+    name: SetDimSuspendState
+    args:
+      - name: dimSuspendState
+        type: Boolean
+        register: D0HighWord
+    dispatcher: PowerDispatch
+    selector: 0x002C

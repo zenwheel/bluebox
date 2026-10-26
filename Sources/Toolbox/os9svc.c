@@ -40,4 +40,5 @@ void os9svc_reset(void)
 {
     os9svc_sound_reset();
     os9svc_driver_reset();
+    os9svc_power_reset();
 }
