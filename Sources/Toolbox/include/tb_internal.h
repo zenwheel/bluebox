@@ -486,6 +486,7 @@ void ap_after_track(gaddr ch, int16_t part);
  * window's control list; a user item's draws and takes clicks through its
  * procedures when it has them (ap_item_click: -1 when it has none). */
 gaddr ap_item_control(gaddr dialog, int item, int kind);
+bool ap_stand_in_item(gaddr ch, gaddr *dialog, int *item); /* the item a stand-in is for */
 void ap_forget_dialog(gaddr dialog);
 void ap_items_shifted(gaddr dialog, int from, int delta);
 /* What CarbonLib's Create...Control calls set beyond NewControl's

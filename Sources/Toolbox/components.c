@@ -957,4 +957,5 @@ void components_reset(void)
                        native_register(ic_component, "InternetConfig", 0), 0, 0, 0, -1);
     qt_tune_register(); /* QuickTime's tune player and note allocator */
     qt_gimport_register(); /* and its graphics importer */
+    qt_clock_register();   /* and microsecond clock */
 }

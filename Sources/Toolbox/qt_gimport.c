@@ -493,10 +493,9 @@ int16_t tb_GetGraphicsImporterForDataRefWithFlags(int32_t dataRef, int32_t dataR
     return tb_GetGraphicsImporterForDataRef(dataRef, dataRefType, gi);
 }
 
-/* QuickTimeLib's GraphicsImport calls: the component call, through
- * ComponentDispatch as the 68k glue makes it (instance, then the
- * arguments, all longs here). */
-static void gi_ppc(ppc_cpu *c, int16_t what, int nargs)
+/* A PowerPC program's component call: through ComponentDispatch as the
+ * 68k glue makes it (the instance in r3, then nargs long arguments). */
+void qt_component_call_ppc(ppc_cpu *c, int16_t what, int nargs)
 {
     ppc_trap_begin();
     ppc_trap_push(4, 0);
@@ -512,7 +511,7 @@ static void gi_ppc(ppc_cpu *c, int16_t what, int nargs)
     c->pc = c->lr;
 }
 
-#define GI(name, what, nargs) static void gi_##name(ppc_cpu *c) { gi_ppc(c, what, nargs); }
+#define GI(name, what, nargs) static void gi_##name(ppc_cpu *c) { qt_component_call_ppc(c, what, nargs); }
 GI(SetDataFile, 0x03, 1)
 GI(GetDataFile, 0x04, 1)
 GI(SetDataHandle, 0x05, 1)

@@ -7,10 +7,13 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "m68k.h"
 #include "machine.h"
 #include "ppc.h"
 #include "ppc_bridge.h"
+#include "qt_codec.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 #define R(n) (c->gpr[3 + (n)])
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; } while (0)
@@ -637,6 +640,61 @@ void tb_SBShowHideControlStrip(int8_t showIt) { strip_visible = showIt != 0; }
 int8_t tb_SBSafeToAccessStartupDisk(void) { return 1; }
 
 /* ---------------------------------------------------------------------- */
+/* QuickTime's microsecond clock ('clok' 'micr'): its time is the
+ * machine's, in microseconds, at a rate of 1.  A sound channel gives one
+ * for getClockComponentCmd (MacMAME times its frames by it). */
+
+static uint32_t clock_component;
+
+static void clock_entry(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    uint32_t ret = cpu_pop32(c);
+    cpu_pop32(c); /* storage */
+    gaddr params = cpu_pop32(c);
+    int16_t what = (int16_t)rd16(params + 2);
+    uint32_t size = rd8(params + 1);
+    gaddr last = size >= 4 ? rd32(params + 4) : 0;
+    int32_t r = noErr;
+    switch (what) {
+    case -1: case -2: break; /* open, close */
+    case -3: { /* can do */
+        int16_t s = (int16_t)rd16(params + 4);
+        r = (s >= -4 && s <= -1) || s == 1 || s == 0x0A;
+        break;
+    }
+    case -4: r = 0x00010000; break; /* version */
+    case 0x01: /* ClockGetTime(&time): the value (wide), scale, base */
+        if (last) {
+            uint64_t us = machine_time_ns() / 1000u;
+            wr32(last, (uint32_t)(us >> 32));
+            wr32(last + 4, (uint32_t)us);
+            wr32(last + 8, 1000000);
+            wr32(last + 12, 0);
+        }
+        break;
+    case 0x0A: /* ClockGetRate(&rate) */
+        if (last)
+            wr32(last, 0x00010000);
+        break;
+    default: r = (int32_t)0x80008002; break; /* badComponentSelector: no callbacks */
+    }
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+void qt_clock_register(void)
+{
+    clock_component = components_register_native(fourcc("clok"), fourcc("micr"), fourcc("appl"),
+                                                 native_register(clock_entry, "Clock", 0));
+}
+
+uint32_t qt_clock_open(void) { return clock_component ? components_open(clock_component) : 0; }
+
+static void ClockGetTime(ppc_cpu *c) { qt_component_call_ppc(c, 0x01, 1); }
+static void ClockGetRate(ppc_cpu *c) { qt_component_call_ppc(c, 0x0A, 1); }
+
+/* ---------------------------------------------------------------------- */
 /* The Script Manager. */
 
 /* TruncText(width, textPtr, short *length, truncWhere): the text cut to
@@ -690,6 +748,7 @@ const ppc_export vam_exports[] = {
     { "ICParseURL", ic_ParseURL }, { "ICGetConfigReference", ic_GetConfigReference },
     { "ICSetConfigReference", ic_SetConfigReference }, { "ICEditPreferences", ic_EditPreferences },
     { "ICGetComponentInstance", ic_GetComponentInstance },
+    { "ClockGetTime", ClockGetTime }, { "ClockGetRate", ClockGetRate },
 };
 const unsigned vam_export_count = sizeof vam_exports / sizeof vam_exports[0];
 

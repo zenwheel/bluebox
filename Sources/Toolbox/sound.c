@@ -27,6 +27,7 @@
 
 #include "machine.h"
 #include "mace_decoder.h"
+#include "qt_codec.h"
 #include "qt_tune.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -40,6 +41,7 @@ enum {
     getVolumeCmd = 47, waveTableCmd = 60, soundCmd = 80, bufferCmd = 81, rateCmd = 82, continueCmd = 83,
     doubleBufferCmd = 84, getRateCmd = 85, rateMultiplierCmd = 86, getRateMultiplierCmd = 87, sizeCmd = 90,
     convertCmd = 91,
+    getClockComponentCmd = 51,
     filePlayDoneCmd = 0x7FF0, /* ours: SndStartFilePlay's sound has finished */
 };
 enum { dataPointerFlag = 0x8000 };
@@ -481,6 +483,7 @@ static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
         break;
     case getRateMultiplierCmd: if (cmd.p2) wr32((gaddr)cmd.p2, c->rate_mult); break;
     case filePlayDoneCmd: file_play_done(c, true); break;
+    case getClockComponentCmd: if (cmd.p2) wr32((gaddr)cmd.p2, qt_clock_open()); break;
     default: break;
     }
 }

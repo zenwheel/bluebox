@@ -232,6 +232,53 @@ extension BlueBox {
             #expect(found)
         }
 
+        /// QuickTime's microsecond clock, as a sound channel gives it for
+        /// getClockComponentCmd (MacMAME): its time and rate.
+        @Test func microsecondClock() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            let clock = qt_clock_open()
+            #expect(clock != 0)
+            let t = tb_NewPtr(16, false, true), rate = tb_NewPtr(4, false, true)
+            #expect(call("ClockGetTime", [clock, t]) == 0)
+            #expect(rd32(t + 8) == 1_000_000 && rd32(t + 12) == 0)
+            let first = UInt64(rd32(t)) << 32 | UInt64(rd32(t + 4))
+            machine_skip_time(5_000_000) // 5 ms
+            call("ClockGetTime", [clock, t])
+            let second = UInt64(rd32(t)) << 32 | UInt64(rd32(t + 4))
+            #expect(second >= first + 5000)
+            #expect(call("ClockGetRate", [clock, rate]) == 0 && rd32(rate) == 0x0001_0000)
+        }
+
+        /// SetDialogItemText given the control GetDialogItemAsControl made
+        /// for a static text item sets the item's text and leaves the
+        /// control alone (MacMAME; the control's record was resized to the
+        /// text, and the heap broke when it was moved).
+        @Test func dialogTextThroughItsControl() {
+            func text(_ s: String) -> [UInt8] { Array(s.utf8) }
+            launchTestApp([TestResource(type: "DLOG", id: 230, data: dlog(items: 230)),
+                           TestResource(type: "DITL", id: 230, data: ditl([
+                               ditlItem(4, (160, 220, 180, 290), text("OK")),
+                               ditlItem(8, (50, 20, 66, 280), text("Hello")),
+                           ])),
+                           TestResource(type: "dlgx", id: 230, data: cat(be16(0), be32(0x0F)))])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(230, 0, 0xFFFF_FFFF)
+            let out = tb_NewPtr(4, false, true)
+            #expect(tb_GetDialogItemAsControl(d, 2, out) == 0)
+            let ch = rd32(out)
+            let size = tb_GetHandleSize(ch)
+            tb_SetDialogItemText(ch, pstr("Goodbye, world"))
+            #expect(tb_GetHandleSize(ch) == size)
+            let t = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true)
+            tb_GetDialogItem(d, 2, t, h, r)
+            let got = tb_NewPtr(256, false, true)
+            tb_GetDialogItemText(rd32(h), got)
+            #expect(pstring(at: got) == "Goodbye, world")
+            tb_GetDialogItemText(ch, got)
+            #expect(pstring(at: got) == "Goodbye, world")
+        }
+
         /// OTCompareAndSwap8 and 16, and Carbon's CompareString and
         /// TimeString (Turtle Turmoil, The Cow Catching Game, Amorphium).
         @Test func smallCalls() {
