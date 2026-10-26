@@ -1059,7 +1059,7 @@ static void call_mdef(gaddr mh, int16_t msg, qrect r, uint32_t hit, gaddr which)
     cpu_push32(c, hit);
     cpu_push32(c, which);
     tb_HLock(proc);
-    guest_call(rd32(proc));
+    guest_call_defproc(rd32(proc));
     tb_HUnlock(proc);
     tb_DisposePtr(rect);
 }

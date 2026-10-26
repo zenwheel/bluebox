@@ -162,7 +162,7 @@ static int32_t call_wdef(gaddr w, int16_t msg, int32_t param)
     bool stand_in = msg == wCalcRgns && qd_port_is_color(w) && pmh && rd32(pmh);
     if (stand_in)
         wr32(gv_at, rd32(rd32(pmh) + PixMap_bounds_off));
-    guest_call(rd32(h));
+    guest_call_defproc(rd32(h));
     if (stand_in)
         wr32(gv_at, grafvars);
     tb_HUnlock(h);

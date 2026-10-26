@@ -654,6 +654,15 @@ void guest_call(gaddr fn)
     c->sr = sr;
 }
 
+void guest_call_defproc(gaddr fn)
+{
+    cpu68k *c = g_cpu;
+    uint32_t a0 = c->a[0];
+    c->a[0] = fn;
+    guest_call(fn);
+    c->a[0] = a0;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Setup */
 

@@ -66,6 +66,10 @@ int native_index_for(uint32_t addr);
  * result space and arguments the caller has already pushed.  Registers other
  * than A7 are preserved. */
 void guest_call(gaddr fn);
+/* The same for a definition procedure (WDEF, CDEF, MDEF, LDEF) at fn: the
+ * managers jumped to it through A0, and a patched definition's stub finds
+ * the procedure it replaced from A0. */
+void guest_call_defproc(gaddr fn);
 /* The same, leaving the registers as the routine left them. */
 void guest_call_regs(gaddr fn);
 /* Call a low-memory hook with D0 and A0 set; all registers (A7 = sp) are
