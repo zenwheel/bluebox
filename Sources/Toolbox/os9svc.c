@@ -17,6 +17,7 @@ typedef struct {
 static const os9_library libraries[] = {
     { os9_font_exports, &os9_font_export_count, os9_font_aliases, &os9_font_alias_count },
     { os9_sound_exports, &os9_sound_export_count, os9_sound_aliases, &os9_sound_alias_count },
+    { os9_driver_exports, &os9_driver_export_count, os9_driver_aliases, &os9_driver_alias_count },
 };
 
 void (*cfm_export_fn(const char *name))(ppc_cpu *);
@@ -33,4 +34,10 @@ void (*os9svc_export_fn(const char *name))(ppc_cpu *)
                 return cfm_export_fn(lib->aliases[i].target);
     }
     return NULL;
+}
+
+void os9svc_reset(void)
+{
+    os9svc_sound_reset();
+    os9svc_driver_reset();
 }

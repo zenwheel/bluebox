@@ -39,7 +39,7 @@ static converter converters[MAX_CONVERTERS];
 void sound_converters_reset(void)
 {
     memset(converters, 0, sizeof converters);
-    os9svc_sound_reset();
+    os9svc_reset();
 }
 
 static bool is(uint32_t f, const char *s) { return f == fourcc(s); }

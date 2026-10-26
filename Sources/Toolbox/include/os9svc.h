@@ -27,5 +27,14 @@ extern const unsigned os9_sound_export_count;
 extern const os9_alias os9_sound_aliases[];
 extern const unsigned os9_sound_alias_count;
 void os9svc_sound_reset(void);
+extern const ppc_export os9_driver_exports[];
+extern const unsigned os9_driver_export_count;
+extern const os9_alias os9_driver_aliases[];
+extern const unsigned os9_driver_alias_count;
+void os9svc_driver_reset(void);
+
+/* A new run, and the Time Manager's pump (timers and queued handlers). */
+void os9svc_reset(void);
+void os9svc_pump(void);
 
 #endif
