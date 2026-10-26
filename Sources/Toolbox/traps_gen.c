@@ -7710,6 +7710,16 @@ static void glue_FillRoundRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FinaleUnknown1(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_dSelector = (int16_t)cpu_pop16(c);
+    int32_t r = tb_FinaleUnknown1(a_dSelector);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FinaleUnknown2(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15055,6 +15065,16 @@ static void glue_MIDIConvertTime(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MIDIDiscardPacket(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_packet = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIDiscardPacket(a_refnum, a_packet);
+    cpu_push32(c, ret);
+}
+
 static void glue_MIDIFlush(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15100,6 +15120,17 @@ static void glue_MIDIGetClients(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_MIDIGetClients();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDIGetConnectionProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_refCon = (gaddr)cpu_pop32(c);
+    gaddr a_connectionProc = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDIGetConnectionProc(a_refnum, a_connectionProc, a_refCon);
     cpu_push32(c, ret);
 }
 
@@ -15231,6 +15262,17 @@ static void glue_MIDISetClientName(cpu68k *c, uint16_t trapword)
     gaddr a_name = (gaddr)cpu_pop32(c);
     int32_t a_clientID = (int32_t)cpu_pop32(c);
     tb_MIDISetClientName(a_clientID, a_name);
+    cpu_push32(c, ret);
+}
+
+static void glue_MIDISetConnectionProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    gaddr a_connectionProc = (gaddr)cpu_pop32(c);
+    int16_t a_refnum = (int16_t)cpu_pop16(c);
+    tb_MIDISetConnectionProc(a_refnum, a_connectionProc, a_refCon);
     cpu_push32(c, ret);
 }
 
@@ -27897,7 +27939,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA895, (int32_t)0x2u, "ShutDwnStart", CONV_STACK, 0, 0, 0},
     {0xA895, (int32_t)0x3u, "ShutDwnInstall", CONV_STACK, 6, 0, 0},
     {0xA895, (int32_t)0x4u, "ShutDwnRemove", CONV_STACK, 4, 0, 0},
-    {0xA800, (int32_t)0x0u, "FinaleUnknown1", CONV_STACK, 0, 0, 0},
+    {0xA800, (int32_t)0x0u, "FinaleUnknown1", CONV_STACK, 2, 4, glue_FinaleUnknown1},
     {0xA800, (int32_t)0x4u, "DirectorUnknown3", CONV_STACK, 0, 4, glue_DirectorUnknown3},
     {0xA800, (int32_t)0xCu, "SpeechManagerVersion", CONV_STACK, 0, 4, glue_SpeechManagerVersion},
     {0xA800, (int32_t)0x10u, "MACEVersion", CONV_STACK, 0, 4, glue_MACEVersion},
@@ -27948,6 +27990,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x940004u, "MIDISetTCFormat", CONV_STACK, 4, 0, glue_MIDISetTCFormat},
     {0xA800, (int32_t)0x980004u, "MIDISetRunRate", CONV_STACK, 8, 0, glue_MIDISetRunRate},
     {0xA800, (int32_t)0x9C0004u, "MIDIGetClientIcon", CONV_STACK, 4, 4, glue_MIDIGetClientIcon},
+    {0xA800, (int32_t)0xA80004u, "MIDISetConnectionProc", CONV_STACK, 10, 0, glue_MIDISetConnectionProc},
+    {0xA800, (int32_t)0xAC0004u, "MIDIGetConnectionProc", CONV_STACK, 10, 0, glue_MIDIGetConnectionProc},
+    {0xA800, (int32_t)0xB00004u, "MIDIDiscardPacket", CONV_STACK, 6, 0, glue_MIDIDiscardPacket},
     {0xA800, (int32_t)0x108000Cu, "CountVoices", CONV_STACK, 4, 2, glue_CountVoices},
     {0xA800, (int32_t)0x1100014u, "SPBSignOutDevice", CONV_STACK, 2, 2, glue_SPBSignOutDevice},
     {0xA800, (int32_t)0x11C0008u, "SndSetSysBeepState", CONV_STACK, 2, 2, glue_SndSetSysBeepState},

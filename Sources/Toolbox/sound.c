@@ -1071,6 +1071,20 @@ int16_t tb_SndSetInfo(gaddr chan, int32_t selector, gaddr infoPtr)
 int32_t tb_MACEVersion(void) { return 0x03218000; }
 int32_t tb_SPBVersion(void) { return 0x03218000; }
 
+/* SndDispVersion(dSelector): the version of the tool SoundDispatch reaches
+ * by the selector's low word, 0 for one that isn't there. */
+int32_t tb_FinaleUnknown1(int16_t dSelector)
+{
+    switch ((uint16_t)dSelector) {
+    case 0x0004: return tb_DirectorUnknown3(); /* the MIDI Manager */
+    case 0x0008: return tb_SndSoundManagerVersion();
+    case 0x000C: return tb_SpeechManagerVersion();
+    case 0x0010: return tb_MACEVersion();
+    case 0x0014: return tb_SPBVersion();
+    default: return 0;
+    }
+}
+
 void tb_SndGetSysBeepState(gaddr statep) { wr16(statep, beep_state); }
 int16_t tb_SndSetSysBeepState(int16_t state) { beep_state = (uint16_t)state; return noErr; }
 int16_t tb_GetSysBeepVolume(gaddr levelp) { wr32(levelp, beep_volume); return noErr; }

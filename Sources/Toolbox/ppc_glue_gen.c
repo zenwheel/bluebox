@@ -30280,6 +30280,46 @@ static void ppcglue_MakeImageDescriptionForPixMap(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_FinaleUnknown1(ppc_cpu *c)
+{
+    int16_t a_dSelector = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_FinaleUnknown1(a_dSelector);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SndDispVersion(ppc_cpu *c)
+{
+    int16_t a_dSelector = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_FinaleUnknown1(a_dSelector);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MIDISetConnectionProc(ppc_cpu *c)
+{
+    int16_t a_refnum = (int16_t)c->gpr[3];
+    gaddr a_connectionProc = (gaddr)c->gpr[4];
+    int32_t a_refCon = (int32_t)c->gpr[5];
+    tb_MIDISetConnectionProc(a_refnum, a_connectionProc, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MIDIGetConnectionProc(ppc_cpu *c)
+{
+    int16_t a_refnum = (int16_t)c->gpr[3];
+    gaddr a_connectionProc = (gaddr)c->gpr[4];
+    gaddr a_refCon = (gaddr)c->gpr[5];
+    tb_MIDIGetConnectionProc(a_refnum, a_connectionProc, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MIDIDiscardPacket(ppc_cpu *c)
+{
+    int16_t a_refnum = (int16_t)c->gpr[3];
+    gaddr a_packet = (gaddr)c->gpr[4];
+    tb_MIDIDiscardPacket(a_refnum, a_packet);
+    c->pc = c->lr;
+}
+
 static void ppctrap_StringToNum(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -32401,15 +32441,6 @@ static void ppctrap_GetSoundPreference(ppc_cpu *c)
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FinaleUnknown1(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x0u);
-    ppc_trap((uint16_t)(0xA800));
-    ppc_trap_end();
     c->pc = c->lr;
 }
 
@@ -41238,7 +41269,7 @@ const ppc_export ppc_exports[] = {
     {"FillRect", ppcglue_FillRect},
     {"FillRgn", ppcglue_FillRgn},
     {"FillRoundRect", ppcglue_FillRoundRect},
-    {"FinaleUnknown1", ppctrap_FinaleUnknown1},
+    {"FinaleUnknown1", ppcglue_FinaleUnknown1},
     {"FinaleUnknown2", ppcglue_FinaleUnknown2},
     {"FindCodec", ppcglue_FindCodec},
     {"FindControl", ppcglue_FindControl},
@@ -42709,11 +42740,13 @@ const ppc_export ppc_exports[] = {
     {"MIDIConnectData", ppcglue_MIDIConnectData},
     {"MIDIConnectTime", ppcglue_MIDIConnectTime},
     {"MIDIConvertTime", ppcglue_MIDIConvertTime},
+    {"MIDIDiscardPacket", ppcglue_MIDIDiscardPacket},
     {"MIDIFlush", ppcglue_MIDIFlush},
     {"MIDIGetClRefCon", ppcglue_MIDIGetClRefCon},
     {"MIDIGetClientIcon", ppcglue_MIDIGetClientIcon},
     {"MIDIGetClientName", ppcglue_MIDIGetClientName},
     {"MIDIGetClients", ppcglue_MIDIGetClients},
+    {"MIDIGetConnectionProc", ppcglue_MIDIGetConnectionProc},
     {"MIDIGetCurTime", ppcglue_MIDIGetCurTime},
     {"MIDIGetOffsetTime", ppcglue_MIDIGetOffsetTime},
     {"MIDIGetPortInfo", ppcglue_MIDIGetPortInfo},
@@ -42727,6 +42760,7 @@ const ppc_export ppc_exports[] = {
     {"MIDIRemovePort", ppcglue_MIDIRemovePort},
     {"MIDISetClRefCon", ppcglue_MIDISetClRefCon},
     {"MIDISetClientName", ppcglue_MIDISetClientName},
+    {"MIDISetConnectionProc", ppcglue_MIDISetConnectionProc},
     {"MIDISetCurTime", ppcglue_MIDISetCurTime},
     {"MIDISetOffsetTime", ppcglue_MIDISetOffsetTime},
     {"MIDISetPortName", ppcglue_MIDISetPortName},
@@ -44104,6 +44138,7 @@ const ppc_export ppc_exports[] = {
     {"SndAddModifier", ppcglue_SndAddModifier},
     {"SndChannelStatus", ppcglue_SndChannelStatus},
     {"SndControl", ppcglue_SndControl},
+    {"SndDispVersion", ppcglue_SndDispVersion},
     {"SndDisposeChannel", ppcglue_SndDisposeChannel},
     {"SndDoCommand", ppcglue_SndDoCommand},
     {"SndDoImmediate", ppcglue_SndDoImmediate},

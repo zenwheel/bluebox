@@ -81,6 +81,8 @@ typedef struct {
     int16_t timebase;    /* refnum of the time port it keeps time by, or 0 */
     uint32_t refcon;
     gaddr read_hook;
+    gaddr conn_proc;     /* MIDISetConnectionProc's, and its refCon */
+    uint32_t conn_refcon;
     int16_t sync, format;
     int32_t offset;
     uint8_t name[256];
@@ -702,6 +704,35 @@ static int16_t connect(int32_t src_client, int32_t src_port, int32_t dst_client,
             return noErr;
         }
     return midiNoConErr;
+}
+
+/* A port's connection procedure: kept for MIDIGetConnectionProc.  Only
+ * other clients' patching (PatchBay's) calls one, and nothing here
+ * patches the program's ports but the program. */
+void tb_MIDISetConnectionProc(int16_t refnum, gaddr proc, int32_t refcon)
+{
+    port *p = port_of(refnum);
+    if (p) {
+        p->conn_proc = proc;
+        p->conn_refcon = (uint32_t)refcon;
+    }
+}
+
+void tb_MIDIGetConnectionProc(int16_t refnum, gaddr proc, gaddr refcon)
+{
+    port *p = port_of(refnum);
+    if (proc)
+        wr32(proc, p ? p->conn_proc : 0);
+    if (refcon)
+        wr32(refcon, p ? p->conn_refcon : 0);
+}
+
+/* MIDIDiscardPacket: the read hook's packet is done with; ours are
+ * the port's own buffer, used again for the next. */
+void tb_MIDIDiscardPacket(int16_t refnum, gaddr packet)
+{
+    (void)refnum;
+    (void)packet;
 }
 
 int16_t tb_MIDIConnectData(int32_t a, int32_t b, int32_t c, int32_t d) { return connect(a, b, c, d, false, true); }

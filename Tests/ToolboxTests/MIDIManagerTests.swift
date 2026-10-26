@@ -80,6 +80,26 @@ extension BlueBox {
             return (0..<UInt32(rd16(p + 10))).map { (rd32(p + 12 + 8 * $0), rd32(p + 16 + 8 * $0)) }
         }
 
+        /// SndDispVersion answers each SoundDispatch tool's version, 0 for
+        /// one that isn't there (JUNO Librarian looks for the MIDI Manager
+        /// so); a port keeps its connection procedure (Anthem's).
+        @Test func dispatchVersionsAndConnectionProcs() {
+            bootMachine()
+            install()
+            defer { machine_set_midi_handler(nil, nil) }
+            #expect(tb_FinaleUnknown1(4) == tb_DirectorUnknown3())
+            #expect(tb_FinaleUnknown1(8) == tb_SndSoundManagerVersion())
+            #expect(tb_FinaleUnknown1(0x14) == tb_SPBVersion() && tb_FinaleUnknown1(0x18) == 0)
+            signIn("anth", "Anthem")
+            let port = addPort("anth", "in  ", type: 1)
+            tb_MIDISetConnectionProc(port, 0x0012_3456, 77)
+            let out = tb_NewPtr(8, false, true)
+            tb_MIDIGetConnectionProc(port, out, out + 4)
+            #expect(rd32(out) == 0x0012_3456 && rd32(out + 4) == 77)
+            tb_MIDIGetConnectionProc(999, out, out + 4)
+            #expect(rd32(out) == 0 && rd32(out + 4) == 0)
+        }
+
         @Test func clientsSignInAndAddPorts() {
             bootMachine()
             install()
