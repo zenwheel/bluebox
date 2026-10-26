@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "filemgr_internal.h"
 #include "m68k.h"
 #include "qt_tune.h"
 #include "tb_internal.h"
@@ -38,6 +39,8 @@ typedef struct {
     gaddr name, info, icon;
     uint32_t refcon;
     int16_t resfile;  /* the resource file it came from, or -1 */
+    char path[1024];  /* and that file, to open again once its registrant closed it */
+    int16_t opened;   /* the refnum we opened it as, until CloseComponentResFile */
     unsigned instances;
     uint32_t captured_by; /* component ID, when captured */
 } component;
@@ -91,7 +94,9 @@ static uint32_t register_component(uint32_t type, uint32_t subtype, uint32_t man
 {
     for (unsigned i = 0; i < MAX_COMPONENTS; i++) {
         if (!comps[i].used) {
-            comps[i] = (component){ true, type, subtype, manu, flags, entry, name, info, icon, 0, resfile, 0, 0 };
+            comps[i] = (component){ true, type, subtype, manu, flags, entry, name, info, icon, 0, resfile, "", 0, 0, 0 };
+            if (resfile < 0 || !rm_host_path(resfile, comps[i].path, sizeof comps[i].path))
+                comps[i].path[0] = 0;
             mod_seed++;
             return COMPONENT_TAG | i;
         }
@@ -193,6 +198,10 @@ static uint32_t register_thng(gaddr h, int16_t resfile)
     gaddr code = tb_GetResource((int32_t)code_type, code_id);
     if (!code || !rd32(code))
         return 0;
+    /* The component outlives its file: a program registering the
+     * components of a file it found (Internet Config, its extension)
+     * closes the file again, which would take the code with it. */
+    tb_DetachResource(code);
     tb_HNoPurge(code);
     tb_HLock(code);
     gaddr name = 0, info = 0, icon = 0;
@@ -205,6 +214,10 @@ static uint32_t register_thng(gaddr h, int16_t resfile)
     p = rd32(h);
     if (rd32(p + 38))
         icon = tb_GetResource((int32_t)rd32(p + 38), (int16_t)rd16(p + 42));
+    gaddr strs[] = { name, info, icon };
+    for (int i = 0; i < 3; i++)
+        if (strs[i])
+            tb_DetachResource(strs[i]);
     p = rd32(h);
     return register_component(rd32(p), rd32(p + 4), rd32(p + 8), rd32(p + 12), rd32(code),
                               name, info, icon, resfile);
@@ -260,6 +273,27 @@ static void copy_handle(gaddr from, gaddr to)
         gmemcpy(rd32(to), rd32(from), (uint32_t)n);
 }
 
+/* Is refnum rn open on the component's file? */
+static bool is_comp_file(const component *k, int16_t rn)
+{
+    char now[1024];
+    return rn > 0 && rm_host_path(rn, now, sizeof now) && !strcmp(now, k->path);
+}
+
+/* OpenComponentResFile: the refnum the component came from while that is
+ * still its file, else the file opened again (and current, as opening
+ * makes it), until CloseComponentResFile closes it. */
+static int16_t comp_resfile(component *k)
+{
+    if (!k || k->resfile < 0)
+        return -1;
+    if (!k->path[0] || is_comp_file(k, k->resfile))
+        return k->resfile;
+    if (!is_comp_file(k, k->opened))
+        k->opened = rm_open_path(k->path, 1 /* fsRdPerm */);
+    return k->opened > 0 ? k->opened : -1;
+}
+
 /* Argument k bytes above the stack pointer (the last argument is at 0). */
 #define ARG32(off) rd32(c->a[7] + (off))
 #define ARG16(off) rd16(c->a[7] + (off))
@@ -295,18 +329,19 @@ static void component_call(cpu68k *c, uint32_t ret)
 
 /* CallComponentFunction(params, func) and
  * CallComponentFunctionWithStorage(storage, params, func) share a selector;
- * the function is called with the storage, then the caller's arguments. */
+ * the function is called with the caller's arguments, after the storage
+ * for the second. */
 static void call_function(cpu68k *c, uint32_t ret)
 {
     gaddr func = ARG32(0), params = ARG32(4);
     uint32_t size = rd8(params + 1);
     instance *in = inst_of(rd32(params + 4 + size));
-    gaddr storage = in ? in->storage : 0;
     uint32_t n = 8;
     if (in && in->storage && ARG32(8) == in->storage)
         n = 12; /* the WithStorage form passed it */
     cpu_push32(c, 0);
-    cpu_push32(c, storage);
+    if (n == 12)
+        cpu_push32(c, in->storage);
     c->a[7] -= size;
     gmemcpy(c->a[7], params + 4, size);
     guest_call(func);
@@ -439,12 +474,20 @@ void raw_ComponentDispatch(cpu68k *c, uint16_t tw)
         return;
     }
     case 0x15: /* OpenComponentResFile(c): short */
-        k = comp_of(ARG32(0));
-        finish(c, ret, 4, 2, (uint16_t)(k && k->resfile >= 0 ? k->resfile : -1));
+        finish(c, ret, 4, 2, (uint16_t)comp_resfile(comp_of(ARG32(0))));
         return;
-    case 0x18: /* CloseComponentResFile(refnum): OSErr -- the file stays open */
+    case 0x18: { /* CloseComponentResFile(refnum): OSErr -- a registrant's file stays open */
+        int16_t rn = (int16_t)ARG16(0);
+        for (unsigned i = 0; i < MAX_COMPONENTS; i++) {
+            if (comps[i].used && comps[i].opened == rn && rn > 0) {
+                tb_CloseResFile(rn);
+                comps[i].opened = 0;
+                break;
+            }
+        }
         finish(c, ret, 2, 2, noErr);
         return;
+    }
     case 0x1C: { /* CaptureComponent(captured, capturing): Component */
         k = comp_of(ARG32(4));
         uint32_t r = 0;
@@ -510,17 +553,18 @@ void raw_ComponentDispatch(cpu68k *c, uint16_t tw)
         finish(c, ret, 12, 2, (uint16_t)err);
         return;
     }
-    case 0x2F: /* OpenAComponentResFile(c, *refnum): OSErr */
-        k = comp_of(ARG32(4));
-        wr16(ARG32(0), (uint16_t)(k && k->resfile >= 0 ? k->resfile : -1));
-        finish(c, ret, 8, 2, k && k->resfile >= 0 ? noErr : (uint16_t)resFNotFound);
+    case 0x2F: { /* OpenAComponentResFile(c, *refnum): OSErr */
+        int16_t rn = comp_resfile(comp_of(ARG32(4)));
+        wr16(ARG32(0), (uint16_t)rn);
+        finish(c, ret, 8, 2, rn >= 0 ? noErr : (uint16_t)resFNotFound);
         return;
+    }
     case 0x35: { /* GetComponentResource(c, type, id, *h): OSErr */
-        k = comp_of(ARG32(10));
+        int16_t rn = comp_resfile(comp_of(ARG32(10)));
         gaddr h = 0;
-        if (k && k->resfile >= 0) {
+        if (rn >= 0) {
             int16_t saved = tb_CurResFile();
-            tb_UseResFile(k->resfile);
+            tb_UseResFile(rn);
             h = tb_GetResource((int32_t)ARG32(6), (int16_t)ARG16(4));
             if (h)
                 tb_DetachResource(h);

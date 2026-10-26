@@ -1,6 +1,7 @@
 import CCore
 import CPU68K
 import CPUPPC
+import ForkStore
 import Foundation
 import Testing
 import Toolbox
@@ -189,6 +190,56 @@ extension BlueBox {
             #expect(reason == "ExitToShell")
             let cpu = g_cpu!.pointee
             #expect(cpu.d.5 == cpu.d.6 && Int16(truncatingIfNeeded: cpu.d.7) == -128)
+        }
+
+        /// A component registered from a resource file keeps its code when
+        /// the program closes the file (Internet Config registers its
+        /// extension's and closes it), OpenComponentResFile opens the file
+        /// again and CloseComponentResFile closes that, and
+        /// CallComponentFunction passes no storage (Account Buddy's image
+        /// returned into its own parameters).
+        @Test func componentOutlivesItsFile() throws {
+            launchTestApp()
+            let q = QTTune()
+            q.install()
+            // The component: what 1 calls CallComponentFunction(params, f),
+            // f(x) = x + 1; everything else answers 0.
+            let code: [UInt16] = [0x206F, 0x0008, 0x3028, 0x0002, 0x0C40, 0x0001, 0x6708, // what = 1?
+                                  0x205F, 0x508F, 0x4297, 0x4ED0,                         // else 0
+                                  0x42A7, 0x2F08, 0x487A, 0x0010, 0x70FF, 0xA82A,         // CallComponentFunction
+                                  0x201F, 0x205F, 0x508F, 0x2E80, 0x4ED0,
+                                  0x205F, 0x201F, 0x5280, 0x2E80, 0x4ED0]                 // f
+            let thng = cat(Array("testcasebbox".utf8), be32(0), be32(0), Array("PROC".utf8), be16(128),
+                           Array("STR ".utf8), be16(128), be32(0), be16(0), be32(0), be16(0))
+            var fork = buildFork([
+                TestResource(type: "thng", id: 128, data: thng),
+                TestResource(type: "PROC", id: 128, data: code.flatMap { be16(Int($0)) }),
+                TestResource(type: "STR ", id: 128, data: [6] + Array("Tester".utf8)),
+                TestResource(type: "TEST", id: 1, data: [1, 2, 3]),
+            ])
+            let path = tempDir().appendingPathComponent("Tester").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            var err = [CChar](repeating: 0, count: 256)
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            #expect(appledouble_write(path, &f, &err, err.count))
+            let rn = rm_open_host_file(path, &fork, UInt32(fork.count), true)
+            #expect(rn > 0)
+            #expect(q.call([0x7014, 0xA82A], [UInt32(rn)]) == 1) // RegisterComponentResourceFile
+            tb_CloseResFile(rn)
+            for _ in 0..<8 { // reuse what the file's resources held
+                let p = tb_NewPtr(64, false, false)
+                for i in 0..<16 { wr32(p + UInt32(i * 4), 0x4943_4943) }
+            }
+            let ci = q.call([0x7021, 0xA82A], [fourCC("test"), fourCC("case")]) // OpenDefaultComponent
+            #expect(ci != 0)
+            #expect(q.component(ci, 1, [41]) == 42)
+            let file = Int16(truncatingIfNeeded: q.call([0x7015, 0xA82A], [ci]) >> 16) // OpenComponentResFile
+            #expect(file > 0 && tb_CurResFile() == file)
+            #expect(tb_Get1Resource(Int32(bitPattern: fourCC("TEST")), 1) != 0)
+            let closed = q.call([0x3F3C, UInt16(bitPattern: file), 0x7018, 0xA82A], []) >> 16 // CloseComponentResFile
+            #expect(closed == 0 && tb_CurResFile() != file)
         }
     }
 }
