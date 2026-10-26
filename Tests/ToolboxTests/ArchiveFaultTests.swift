@@ -311,5 +311,27 @@ extension BlueBox {
             #expect(reason == "ExitToShell")
             #expect(g_cpu!.pointee.d.7 == 1 && g_cpu!.pointee.d.0 & 0xFFFF == 0x18)
         }
+
+        /// NewGWorld takes its pixels through a program's NewHandle patch:
+        /// the RampChamp demo's patch takes itself out when called, and
+        /// was put in twice, round and round, when it never was.
+        @Test func newGWorldCallsAPatchedNewHandle() {
+            launchTestApp()
+            _ = initToolbox()
+            let count = tb_NewPtr(4, false, true)
+            let old = tb_GetTrapAddress(0xA122, true, false)
+            let words: [UInt16] = [0x52B9, hiWord(count), loWord(count), // ADDQ.L #1,count
+                                   0x4EF9, hiWord(old), loWord(old)]    // JMP old
+            let patch = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(patch + UInt32(i * 2), w) }
+            tb_SetTrapAddress(patch, 0xA122, true, false)
+            defer { tb_SetTrapAddress(old, 0xA122, true, false) }
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 8, rect(0, 0, 32, 32), 0, 0, 0) == 0)
+            #expect(rd32(count) >= 1)
+            let pm = rd32(rd32(rd32(gw) + 2)) // portPixMap
+            #expect(tb_GetHandleSize(rd32(pm)) > 32 * 32) // the pixels, a handle
+            tb_DisposeGWorld(rd32(gw))
+        }
     }
 }

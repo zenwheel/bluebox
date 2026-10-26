@@ -73,6 +73,8 @@ gaddr trap_visible_address(gaddr a);
  * managers jumped to it through A0, and a patched definition's stub finds
  * the procedure it replaced from A0. */
 void guest_call_defproc(gaddr fn);
+/* NewHandle with the clear bit, through a program's patch of it if any. */
+gaddr trap_new_handle_clear(int32_t size);
 /* The same, leaving the registers as the routine left them. */
 void guest_call_regs(gaddr fn);
 /* Call a low-memory hook with D0 and A0 set; all registers (A7 = sp) are

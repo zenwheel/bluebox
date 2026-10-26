@@ -248,7 +248,7 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
      * past the right edge, which on the last row runs off the end (Slippy
      * and STARFIGHT write 15 bytes over, scrolled 15 pixels across). */
     /* The pixels are a handle, unlocked (pmVersion 2) until LockPixels. */
-    gaddr bits = tb_NewHandle((int32_t)(rb * (uint32_t)(h + 1)), false, true);
+    gaddr bits = trap_new_handle_clear((int32_t)(rb * (uint32_t)(h + 1)));
     if (!bits || !rd32(bits))
         return false;
     if (depth == 32)

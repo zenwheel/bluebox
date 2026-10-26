@@ -677,6 +677,39 @@ void guest_call(gaddr fn)
     c->sr = sr;
 }
 
+/* NewHandle (clear) through the trap table when a program has patched it,
+ * as the Toolbox's own allocations went: the RampChamp demo, Kenzo and
+ * MACBOY Organiser patch NewHandle around each NewGWorld to place its
+ * pixels, and their patch takes itself out when it is called. */
+static gaddr new_handle_stub; /* made when first needed, after each boot */
+
+gaddr trap_new_handle_clear(int32_t size)
+{
+    cpu68k *c = g_cpu;
+    if (!c || native_index_for(rd32(OS_TRAP_TABLE + 0x22u * 4)) >= 0)
+        return tb_NewHandle(size, false, true);
+    gaddr stub = new_handle_stub;
+    if (!stub) {
+        stub = mm_new_ptr_in(rd32(LM_SysZone), 4, false);
+        if (!stub)
+            return tb_NewHandle(size, false, true);
+        wr16(stub, 0xA322); /* _NewHandle,CLEAR */
+        wr16(stub + 2, 0x4E75); /* RTS */
+        new_handle_stub = stub;
+    }
+    uint32_t d[8], a[8];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    uint16_t sr = c->sr;
+    c->d[0] = (uint32_t)size;
+    guest_call_regs(stub);
+    gaddr h = (int16_t)c->d[0] == noErr ? c->a[0] : 0;
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    c->sr = sr;
+    return h;
+}
+
 void guest_call_defproc(gaddr fn)
 {
     cpu68k *c = g_cpu;
@@ -716,6 +749,7 @@ void trap_init(void)
 
     unimpl_stub = native_register(unimplemented_native, "Unimplemented", 0xA89F);
     ncensus_only = 0;
+    new_handle_stub = 0;
     guest_return_stub = native_register(guest_return_native, "GuestReturn", 0);
     call_depth = returned_depth = 0;
     os_epilogue_stub = native_register(os_epilogue_native, "OSTrapEpilogue", 0);
