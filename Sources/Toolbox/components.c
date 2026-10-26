@@ -120,18 +120,21 @@ static int32_t call_entry(instance *in, gaddr params)
     return (int32_t)cpu_pop32(c);
 }
 
-/* Send one of the standard requests whose single argument is a long. */
+/* Send one of the standard requests whose single argument is a long.  The
+ * instance follows the parameters, as it does on the stack of a call
+ * through the glue: CallComponentFunction finds the instance there (and
+ * so its storage), Internet Config's open function among others. */
 static int32_t send_request(instance *in, uint32_t ci, int16_t what, int has_arg, uint32_t arg)
 {
-    gaddr p = tb_NewPtr(8, false, true);
+    gaddr p = tb_NewPtr(12, false, true);
     if (!p)
         return memFullErr;
     wr8(p + 1, has_arg ? 4 : 0);
     wr16(p + 2, (uint16_t)what);
     wr32(p + 4, arg);
+    wr32(p + (has_arg ? 8 : 4), ci);
     int32_t r = call_entry(in, p);
     tb_DisposePtr(p);
-    (void)ci;
     return r;
 }
 

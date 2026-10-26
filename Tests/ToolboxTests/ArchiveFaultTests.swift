@@ -354,5 +354,29 @@ extension BlueBox {
             wr32(info, 0)
             #expect(ppcErr("HGetFInfo", [v, d, name, info]) == 0 && rd32(info) == fourCC("pref"))
         }
+
+        /// The Component Manager's own requests (open, close) have the
+        /// instance after their parameters, as a call through the glue
+        /// has: CallComponentFunctionWithStorage finds the instance there
+        /// (Internet Config's open function in Eudora).
+        @Test func openRequestHasTheInstanceAfterItsParameters() {
+            launchTestApp()
+            let q = QTTune()
+            q.install()
+            let out = tb_NewPtr(8, false, true)
+            let code: [UInt16] = [0x206F, 0x0008,                     // MOVEA.L 8(SP),A0: the parameters
+                                  0x0C68, 0xFFFF, 0x0002, 0x6608,     // CMPI.W #-1,2(A0); BNE.S done
+                                  0x23E8, 0x0008, hiWord(out), loWord(out), // MOVE.L 8(A0),out
+                                  0x205F, 0x508F, 0x4297, 0x4ED0]     // done: return 0
+            let entry = tb_NewPtr(Int32(code.count * 2), false, false)
+            for (i, w) in code.enumerated() { wr16(entry + UInt32(i * 2), w) }
+            let cd = tb_NewPtr(20, false, true)
+            wr32(cd, fourCC("test")); wr32(cd + 4, fourCC("open"))
+            // RegisterComponent(cd, entry, global, name, info, icon): global 0, no name, info or icon
+            let comp = q.call([0x3F3C, 0, 0x42A7, 0x42A7, 0x42A7, 0x7001, 0xA82A], [cd, entry])
+            #expect(comp != 0)
+            let ci = q.call([0x7021, 0xA82A], [fourCC("test"), fourCC("open")]) // OpenDefaultComponent
+            #expect(ci != 0 && rd32(out) == ci)
+        }
     }
 }
