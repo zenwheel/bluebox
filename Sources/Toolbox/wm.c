@@ -181,10 +181,13 @@ static bool is_dialog_variant(int var) { return var == 1 || var == 2 || var == 3
 static bool has_zoom(int var) { return var == 8 || var == 12; }
 static bool has_grow(int var) { return var == 0 || var == 8; }
 
-/* Zoom states: as the standard WDEF did, a zoomable window's dataHandle
+/* Zoom states: as the standard WDEF did, a document window's dataHandle
  * holds a WStateData, userState then stdState (global content
  * rectangles), made at wNew; programs read and set them (Shards opens its
- * puzzle window at another window's userState). */
+ * puzzle window at another window's userState), for a window without a
+ * zoom box too (iPoker sets its no-grow game window's, through a pointer
+ * it checks with a trap). */
+static bool has_state(int var) { return (var & 3) == 0; }
 static gaddr zoom_state(gaddr w)
 {
     gaddr h = WindowRecord_dataHandle(w);
@@ -201,7 +204,7 @@ static qrect std_state(void)
 
 static void wdef_new(gaddr w, int var)
 {
-    if (!has_zoom(var) || WindowRecord_dataHandle(w))
+    if (!has_state(var) || WindowRecord_dataHandle(w))
         return;
     gaddr h = tb_NewHandle(16, false, true);
     if (!h)
@@ -213,7 +216,7 @@ static void wdef_new(gaddr w, int var)
 
 static void wdef_dispose(gaddr w, int var)
 {
-    if (has_zoom(var) && WindowRecord_dataHandle(w)) {
+    if (has_state(var) && WindowRecord_dataHandle(w)) {
         tb_DisposeHandle(WindowRecord_dataHandle(w));
         WindowRecord_set_dataHandle(w, 0);
     }

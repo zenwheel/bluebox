@@ -241,5 +241,19 @@ extension BlueBox {
             let closed = q.call([0x3F3C, UInt16(bitPattern: file), 0x7018, 0xA82A], []) >> 16 // CloseComponentResFile
             #expect(closed == 0 && tb_CurResFile() != file)
         }
+
+        /// Every document window has zoom states in its dataHandle, a
+        /// no-grow one without a zoom box too (iPoker sets them for its game
+        /// window); a dialog's window has none.
+        @Test func documentWindowsHaveZoomStates() {
+            launchTestApp()
+            _ = initToolbox()
+            for (proc, states) in [(Int16(0), true), (4, true), (8, true), (12, true), (1, false), (2, false)] {
+                let w = tb_NewWindow(0, rect(60, 40, 260, 340), pstr("W"), 1, proc, 0xFFFF_FFFF, 0, 0)
+                let h = rd32(w + 0x82) // dataHandle
+                #expect((h != 0 && tb_GetHandleSize(h) == 16) == states)
+                tb_DisposeWindow(w)
+            }
+        }
     }
 }
