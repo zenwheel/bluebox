@@ -21,6 +21,7 @@ static const os9_library libraries[] = {
     { os9_url_exports, &os9_url_export_count, os9_url_aliases, &os9_url_alias_count },
     { os9_registry_exports, &os9_registry_export_count, os9_registry_aliases, &os9_registry_alias_count },
     { os9_loader_exports, &os9_loader_export_count, os9_loader_aliases, &os9_loader_alias_count },
+    { os9_keychain_exports, &os9_keychain_export_count, os9_keychain_aliases, &os9_keychain_alias_count },
 };
 
 void (*cfm_export_fn(const char *name))(ppc_cpu *);
@@ -46,4 +47,5 @@ void os9svc_reset(void)
     os9svc_power_reset();
     os9svc_url_reset();
     os9svc_registry_reset();
+    os9svc_keychain_reset();
 }
