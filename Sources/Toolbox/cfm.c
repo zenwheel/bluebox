@@ -187,6 +187,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < walk_export_count; i++) /* weak imports the archive walk's programs called */
         if (!strcmp(walk_exports[i].name, name))
             return walk_exports[i].fn;
+    for (unsigned i = 0; i < qtcapture_export_count; i++) /* QuickTime's capture and import calls */
+        if (!strcmp(qtcapture_exports[i].name, name))
+            return qtcapture_exports[i].fn;
     for (unsigned i = 0; i < vam_export_count; i++) /* found missing by the archive walk */
         if (!strcmp(vam_exports[i].name, name))
             return vam_exports[i].fn;

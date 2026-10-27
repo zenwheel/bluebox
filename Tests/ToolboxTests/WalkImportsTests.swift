@@ -64,3 +64,41 @@ extension BlueBox {
         }
     }
 }
+
+/// What the test sequence grabber was called with: the selector, the
+/// parameter size and the parameters' first word.
+nonisolated(unsafe) var sgCalls: [(what: Int16, size: UInt8, first: UInt16)] = []
+
+extension BlueBox {
+    /// QuickTimeLib's sequence grabber and video digitizer calls go to the
+    /// instance through the Component Manager with their selectors.
+    @Suite(.serialized) struct QuickTimeCapture {
+        @Test func callsReachTheInstance() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            #expect(ilCall("SGInitialize", [0]) == 0x8000_8001) // badComponentInstance
+            let entry = native_register({ c, _ in
+                guard let c else { return }
+                let ret = cpu_pop32(c)
+                _ = cpu_pop32(c) // storage
+                let params = cpu_pop32(c)
+                sgCalls.append((Int16(bitPattern: rd16(params + 2)), rd8(params + 1), rd16(params + 4)))
+                wr32(c.pointee.a.7, 0)
+                cpu_push32(c, ret)
+            }, "TestSequenceGrabber", 0)
+            let comp = components_register_native(fourCC("barg"), 0, fourCC("test"), entry)
+            #expect(comp != 0)
+            let sg = components_open(comp)
+            #expect(sg != 0)
+            sgCalls = []
+            #expect(ilCall("SGInitialize", [sg]) == 0)
+            #expect(ilCall("SGPause", [sg, 1]) == 0)
+            #expect(ilCall("VDSetPlayThruOnOff", [sg, 3]) == 0)
+            let calls = sgCalls
+            #expect(calls.map(\.what) == [0x1, 0x14, 0x2E])
+            #expect(calls.map(\.size) == [0, 2, 2])
+            #expect(calls.count == 3 && calls[1].first == 0x0100 && calls[2].first == 3) // a byte goes high in its word
+        }
+    }
+}

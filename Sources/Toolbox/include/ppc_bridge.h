@@ -76,6 +76,10 @@ extern const unsigned vam_export_count;
 /* Weak imports the archive walk's PowerPC programs called unchecked (ppc_walk.c). */
 extern const ppc_export walk_exports[];
 extern const unsigned walk_export_count;
+/* QuickTimeLib's sequence grabber, video digitizer and movie import and
+ * export component calls (qt_capture.c). */
+extern const ppc_export qtcapture_exports[];
+extern const unsigned qtcapture_export_count;
 /* Mac OS 9's private names Blue Box can back (private_os9.c). */
 extern const ppc_export priv_os9_exports[];
 extern const unsigned priv_os9_export_count;
