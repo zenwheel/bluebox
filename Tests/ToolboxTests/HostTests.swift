@@ -184,6 +184,21 @@ extension BlueBox {
             #expect(doc.page(at: 0)?.string?.contains("Hello, printer") == true) // real text, not pixels
         }
 
+        /// DrawText with a negative count draws nothing, on the page too
+        /// (SIOW programs' Print did so, and the recording copied -127 bytes).
+        @Test func negativeTextCountDrawsNothing() throws {
+            launchTestApp()
+            _ = initToolbox()
+            let s = guestString("abc")
+            printPage {
+                tb_MoveTo(72, 100)
+                tb_DrawText(s + 1, 0, -127)
+                tb_DrawString(s)
+            }
+            #expect(!Self.ops.contains { $0.kind == Int32(MACHINE_PRINT_TEXT) && $0.text.isEmpty == false && $0.text != "abc" })
+            #expect(Self.ops.contains { $0.text == "abc" })
+        }
+
         /// Text between TextBegin and TextEnd comments is turned about the
         /// centre TextCenter gives, also from a picture drawn on the page;
         /// text that is PostScript is left out.

@@ -319,6 +319,9 @@ static void paint_cell(const strike *s, int x, int w, int base, const pixdst *d,
 
 void qd_draw_text(gaddr port, const uint8_t *text, int len)
 {
+    /* A negative count (DrawText's is a signed integer) draws nothing. */
+    if (len < 0)
+        len = 0;
     strike s;
     bool have = load_strike(port, &s);
     if (have)
