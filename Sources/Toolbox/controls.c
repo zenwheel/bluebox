@@ -2144,6 +2144,19 @@ int32_t tb_GetControlViewSize(gaddr c)
 
 int8_t tb_IsValidControlHandle(gaddr c) { return ctl_find(c) != NULL; }
 
+/* Whether a control is a push button, for the menu walker: the System's
+ * or the Appearance Manager's, or (custom too) one of the program's own
+ * CDEFs with a title (FileT&C's "3D Buttons"). */
+bool ctl_push_button(gaddr ch, bool custom)
+{
+    ctl_info *c = ctl_find(ch);
+    if (!c)
+        return false;
+    if (custom && c->cdef >= 128)
+        return rd8(cp(ch) + ControlRecord_contrlTitle_off) != 0;
+    return (c->cdef == 0 && (c->var & 3) == 0) || (c->cdef == 23 && c->var == 0);
+}
+
 /* For the menu walker, as dialog_button: control n (1-based, in the
  * window's control list) of a window that is no dialog, when it is a push
  * button (2: shown and active, 1: dimmed, 0: some other control; -1 past
@@ -2155,10 +2168,8 @@ int window_button(gaddr w, int n, char *title, size_t size, int *x, int *y)
         ch = ControlRecord_nextControl(cp(ch));
     if (!ch || !rd32(ch))
         return -1;
-    ctl_info *c = ctl_find(ch);
-    bool push = c && ((c->cdef == 0 && (c->var & 3) == 0) || (c->cdef == 23 && c->var == 0));
     qrect r = crect(ch);
-    if (!push || !ControlRecord_contrlVis(cp(ch)) || r.left >= 8192)
+    if (!ctl_push_button(ch, false) || !ControlRecord_contrlVis(cp(ch)) || r.left >= 8192)
         return 0;
     gaddr t = cp(ch) + ControlRecord_contrlTitle_off;
     size_t len = rd8(t);

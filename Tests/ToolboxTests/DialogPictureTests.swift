@@ -140,6 +140,27 @@ extension BlueBox {
             tb_DisposeDialog(d)
         }
 
+        /// A control item from a 'CNTL' that is a push button is a button
+        /// for the menu walk to press, as a button item is (FileT&C's About
+        /// box has only such buttons).
+        @Test func controlItemPushButtonsAreButtonsForTheWalk() {
+            let cntl = cat(be16(0), be16(0), be16(20), be16(60), be16(0), be16(0x0100), be16(1), be16(0),
+                           be16(0), be32(0), [2], pstr("Go"))
+            let items = ditl([ditlItem(4 | 3, (10, 10, 30, 70), be16(300)),           // 1 control item
+                              ditlItem(8, (40, 10, 56, 200), pstr("text"))])           // 2 static text
+            launchTestApp([TestResource(type: "DLOG", id: 200, data: dlog(items: 201)),
+                           TestResource(type: "DITL", id: 201, data: items),
+                           TestResource(type: "CNTL", id: 300, data: cntl)])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+            var title = [CChar](repeating: 0, count: 64)
+            var x: Int32 = 0, y: Int32 = 0
+            #expect(dialog_button(d, 1, &title, title.count, &x, &y) == 2)
+            #expect(String(cString: title) == "Go")
+            #expect(dialog_button(d, 2, &title, title.count, &x, &y) == 0)
+            tb_DisposeDialog(d)
+        }
+
         /// InterfaceLib's StdFilterProc presses the default button on Return
         /// for a program running a dialog in its own event loop (Conflict
         /// Catcher's demonstration notice), and leaves other keys alone.

@@ -1836,7 +1836,11 @@ int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y)
     int type = item_type(d, n);
     gaddr h = item_handle(d, n);
     qrect r = item_rect(d, n);
-    if ((type & 0x7F) != (ctrlItem | btnCtrl) || !h || !rd32(h) || r.left >= 8192 || !ControlRecord_contrlVis(rd32(h)))
+    /* A button item, or a control item ('CNTL') that is a push button,
+     * the program's own CDEF's too: FileT&C's About box. */
+    bool button = (type & 0x7F) == (ctrlItem | btnCtrl) ||
+                  ((type & 0x7F) == (ctrlItem | resCtrl) && h && rd32(h) && ctl_push_button(h, true));
+    if (!button || !h || !rd32(h) || r.left >= 8192 || !ControlRecord_contrlVis(rd32(h)))
         return 0;
     gaddr t = tb_NewPtr(256, false, true);
     tb_GetControlTitle(h, t);

@@ -95,6 +95,7 @@ int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y);
  * Escape and Command-period the cancel button (dialogs.c). */
 bool dialog_std_filter(gaddr d, gaddr evt, gaddr itemp);
 int window_button(gaddr w, int n, char *title, size_t size, int *x, int *y); /* controls.c */
+bool ctl_push_button(gaddr ch, bool custom);
 void walker_idle(uint64_t now);
 
 /* ---- Resource Manager internals ---- */
