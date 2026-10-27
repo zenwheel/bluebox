@@ -17049,6 +17049,56 @@ static void glue_NumToString(cpu68k *c, uint16_t trapword)
     tb_NumToString(a_l, a_s);
 }
 
+static void glue_OSDispatch28(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_c = (int16_t)cpu_pop16(c);
+    int32_t a_b = (int32_t)cpu_pop32(c);
+    int32_t a_a = (int32_t)cpu_pop32(c);
+    tb_OSDispatch28(a_a, a_b, a_c);
+    cpu_push32(c, ret);
+}
+
+static void glue_OSDispatch2B(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_b = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_a = (int32_t)cpu_pop32(c);
+    int32_t r = tb_OSDispatch2B(a_a, a_b);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OSDispatch55(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_a = (int32_t)cpu_pop32(c);
+    int8_t r = tb_OSDispatch55(a_a);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_OSDispatch5A(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_i = (int32_t)cpu_pop32(c);
+    int32_t a_h = (int32_t)cpu_pop32(c);
+    int32_t a_g = (int32_t)cpu_pop32(c);
+    int8_t a_f = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_e = (int32_t)cpu_pop32(c);
+    int16_t a_d = (int16_t)cpu_pop16(c);
+    int8_t a_c = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_b = (int32_t)cpu_pop32(c);
+    int32_t a_a = (int32_t)cpu_pop32(c);
+    int32_t r = tb_OSDispatch5A(a_a, a_b, a_c, a_d, a_e, a_f, a_g, a_h, a_i);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_OSEventAvail(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28236,6 +28286,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x1Eu, "TempHLock", CONV_STACK, 8, 0, glue_TempHLock},
     {0xA88F, (int32_t)0x1Fu, "TempHUnlock", CONV_STACK, 8, 0, glue_TempHUnlock},
     {0xA88F, (int32_t)0x20u, "TempDisposeHandle", CONV_STACK, 8, 0, glue_TempDisposeHandle},
+    {0xA88F, (int32_t)0x28u, "OSDispatch28", CONV_STACK, 10, 0, glue_OSDispatch28},
+    {0xA88F, (int32_t)0x2Bu, "OSDispatch2B", CONV_STACK, 6, 4, glue_OSDispatch2B},
     {0xA88F, (int32_t)0x33u, "AcceptHighLevelEvent", CONV_STACK, 16, 2, glue_AcceptHighLevelEvent},
     {0xA88F, (int32_t)0x34u, "PostHighLevelEvent", CONV_STACK, 24, 2, glue_PostHighLevelEvent},
     {0xA88F, (int32_t)0x35u, "GetProcessSerialNumberFromPortName", CONV_STACK, 8, 2, glue_GetProcessSerialNumberFromPortName},
@@ -28251,6 +28303,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x41u, "EndSystemMode", CONV_STACK, 0, 2, glue_EndSystemMode},
     {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, glue_GetPortNameFromProcessSerialNumber},
+    {0xA88F, (int32_t)0x55u, "OSDispatch55", CONV_STACK, 4, 2, glue_OSDispatch55},
+    {0xA88F, (int32_t)0x5Au, "OSDispatch5A", CONV_STACK, 30, 4, glue_OSDispatch5A},
     {0xA88F, (int32_t)0x7Bu, "LaunchControlPanel", CONV_STACK, 4, 2, glue_LaunchControlPanel},
     {0xA9E7, (int32_t)0x0u, "LActivate", CONV_STACK, 6, 0, glue_LActivate},
     {0xA9E7, (int32_t)0x4u, "LAddColumn", CONV_STACK, 8, 2, glue_LAddColumn},

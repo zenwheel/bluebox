@@ -1,0 +1,74 @@
+# OSDispatch selectors that programs in the archive walk call and no
+# header, tech note or other program in the archive names: PrintMonitor
+# (every version, System 5 to 7.1: $28, once at start up), Virtual and
+# DragStrip ($2B), NotePad Deluxe ($55, after it sets up its drag handlers)
+# and MACAST and MacAMP ($5A).  The argument lists are what their call
+# sites push, and none uses a result but the last two; what the Process
+# Manager does for them is not known, so each answers as a call that finds
+# nothing to do: no error, nil, false.  See vamosdispatch.c.  PowerPC
+# programs reach them through their own 68k glue, so there are no
+# PowerPC exports.
+
+- function:
+    name: OSDispatch28
+    args:
+      - name: a
+        type: LONGINT
+      - name: b
+        type: LONGINT
+      - name: c
+        type: INTEGER
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0028
+
+# $2B is better known: Virtual's loop over its windows (GetWRefCon, then
+# GetProcessInformation on what the refCon points to) takes the next from
+# it, starting from nil, so it is the next window of the program.
+- function:
+    name: OSDispatch2B
+    return: LONGINT
+    args:
+      - name: a
+        type: LONGINT
+      - name: b
+        type: Boolean
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x002B
+
+- function:
+    name: OSDispatch55
+    return: Boolean
+    args:
+      - name: a
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0055
+
+- function:
+    name: OSDispatch5A
+    return: LONGINT
+    args:
+      - name: a
+        type: LONGINT
+      - name: b
+        type: LONGINT
+      - name: c
+        type: Boolean
+      - name: d
+        type: INTEGER
+      - name: e
+        type: LONGINT
+      - name: f
+        type: Boolean
+      - name: g
+        type: LONGINT
+      - name: h
+        type: LONGINT
+      - name: i
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x005A

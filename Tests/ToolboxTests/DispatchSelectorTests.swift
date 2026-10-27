@@ -139,5 +139,43 @@ extension BlueBox {
                 0xA9F4,
             ]) == "ExitToShell")
         }
+
+        /// OSDispatch selectors no header names (PrintMonitor $28, Virtual
+        /// and DragStrip $2B, NotePad Deluxe $55, MACAST and MacAMP $5A):
+        /// each takes the arguments its callers push and leaves the stack as
+        /// it found it, a result aside.
+        @Test func unnamedOSDispatchSelectors() {
+            func push(_ v: UInt32) -> [UInt16] { [0x2F3C, hiWord(v), loWord(v)] }
+            let marks: [UInt16] = [0x2C0F]                  // MOVE.L A7,D6
+            let check: [UInt16] = [0x2A0F, 0xA9F4]          // MOVE.L A7,D5; _ExitToShell
+            func run(_ body: [UInt16]) {
+                #expect(run68k(marks + body + check) == "ExitToShell")
+                #expect(g_cpu!.pointee.d.5 == g_cpu!.pointee.d.6)
+            }
+            // $28: three arguments, no result (PrintMonitor)
+            run(push(0) + push(0) + push(0x0028_0000) + [0xA88F]) // the word argument, then the selector
+            // $55: Boolean (long), false for nil (NotePad Deluxe)
+            run([0x554F] + push(0) + [0x3F3C, 0x0055, 0xA88F, 0x3E1F])
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0)
+            // $5A: long result, nine arguments of 30 bytes
+            run([0x598F] + push(0) + push(0) + [0x1F3C, 0, 0x3F3C, 0] + push(0) + [0x1F3C, 0] + push(0) + push(0) + push(0)
+                + [0x3F3C, 0x005A, 0xA88F, 0x2E1F])
+            #expect(g_cpu!.pointee.d.7 == 0)
+            // $2B: the program's windows one after another from nil (Virtual)
+            let r = tb_NewPtr(8, false, true)
+            wr16(r + 4, 100)
+            wr16(r + 6, 100)
+            let name = tb_NewPtr(4, false, true)
+            wr8(name, 1)
+            wr8(name + 1, 0x57)
+            let first = tb_NewWindow(0, r, name, 1, 0, 0xFFFF_FFFF, 0, 0)
+            let second = tb_NewWindow(0, r, name, 1, 0, 0xFFFF_FFFF, 0, 0)
+            run([0x598F] + push(0) + [0x1F3C, 0, 0x3F3C, 0x002B, 0xA88F, 0x2E1F]) // from nil
+            #expect(g_cpu!.pointee.d.7 == second) // the front window: the second one made
+            run([0x598F] + push(second) + [0x1F3C, 0, 0x3F3C, 0x002B, 0xA88F, 0x2E1F])
+            #expect(g_cpu!.pointee.d.7 == first)
+            run([0x598F] + push(first) + [0x1F3C, 0, 0x3F3C, 0x002B, 0xA88F, 0x2E1F])
+            #expect(g_cpu!.pointee.d.7 == 0)
+        }
     }
 }
