@@ -1212,6 +1212,55 @@ static void ot_StrLength(ppc_cpu *c)
     RETURN(n);
 }
 
+/* OTStrCopy(dest, src), OTStrCat(dest, src): C strings. */
+static void ot_StrCopy(ppc_cpu *c)
+{
+    gaddr d = R(0), s = R(1);
+    uint32_t i = 0;
+    if (d && s)
+        do
+            wr8(d + i, rd8(s + i));
+        while (rd8(s + i++));
+    RETURN(0);
+}
+
+static void ot_StrCat(ppc_cpu *c)
+{
+    gaddr d = R(0), s = R(1);
+    uint32_t n = 0, i = 0;
+    if (d && s) {
+        while (rd8(d + n))
+            n++;
+        do
+            wr8(d + n + i, rd8(s + i));
+        while (rd8(s + i++));
+    }
+    RETURN(0);
+}
+
+/* OTStrEqual(a, b) and OTMemcmp(a, b, n): true when they are the same. */
+static void ot_StrEqual(ppc_cpu *c)
+{
+    gaddr a = R(0), b = R(1);
+    uint32_t i = 0;
+    if (!a || !b)
+        RETURN(a == b);
+    else {
+        while (rd8(a + i) == rd8(b + i) && rd8(a + i))
+            i++;
+        RETURN(rd8(a + i) == rd8(b + i));
+    }
+}
+
+static void ot_Memcmp(ppc_cpu *c)
+{
+    gaddr a = R(0), b = R(1);
+    uint32_t n = R(2), i = 0;
+    while (i < n && rd8(a + i) == rd8(b + i))
+        i++;
+    RETURN(i == n);
+}
+
 static uint64_t micros(void)
 {
     struct timeval tv;
@@ -1549,7 +1598,8 @@ const ppc_export ot_exports[] = {
     /* OTUtilityLib */
     { "OTAllocMem", ot_AllocMem }, { "OTFreeMem", ot_FreeMem }, { "OTMemcpy", ot_MemcpyOrMove },
     { "OTMemmove", ot_MemcpyOrMove }, { "OTMemzero", ot_Memzero }, { "OTMemset", ot_Memset },
-    { "OTStrLength", ot_StrLength }, { "OTGetTimeStamp", ot_GetTimeStamp },
+    { "OTStrLength", ot_StrLength }, { "OTStrCopy", ot_StrCopy }, { "OTStrCat", ot_StrCat },
+    { "OTStrEqual", ot_StrEqual }, { "OTMemcmp", ot_Memcmp }, { "OTGetTimeStamp", ot_GetTimeStamp },
     { "OTElapsedMilliseconds", ot_ElapsedMilliseconds }, { "OTElapsedMicroseconds", ot_ElapsedMicroseconds },
     { "OTEnterNotifier", ot_EnterNotifier }, { "OTLeaveNotifier", ot_void }, { "OTIdle", ot_Idle },
     { "OTAllocMemPriv", ot_AllocMem }, { "OTFreeMemPriv", ot_FreeMem }, { "OTAllocMemInContext", ot_AllocMem },
@@ -1567,5 +1617,8 @@ const ppc_export ot_exports[] = {
     { "OTReleaseBuffer", ot_void }, { "OTAlloc", ot_Alloc }, { "OTAllocPriv", ot_Alloc },
     { "OTAllocInContext", ot_Alloc }, { "OTFree", ot_Free },
     { "OTFindPortByRef", ot_false }, { "OTIoctl", ot_unsupported },
+    /* No ports to list (not kOTNotSupportedErr, which a caller takes as
+     * true: IPNetMonitor lists ports until OTGetIndexedPort says no more). */
+    { "OTGetIndexedPort", ot_false }, { "OTFindPort", ot_false },
 };
 const unsigned ot_export_count = sizeof ot_exports / sizeof ot_exports[0];
