@@ -269,6 +269,23 @@ extension BlueBox {
             #expect(calls == ["pre"])
         }
 
+        /// An event sent with kAEDontExecute is for recording only: its
+        /// handler is not called (PowerPlant sends Close so, then closes).
+        @Test func dontExecute() {
+            launchTestApp()
+            guestStack()
+            var calls = 0
+            let handler = pascalProc([4, 4, 4]) { _ in calls += 1; return 0 }
+            _ = tb_AEInstallEventHandler(code("core"), code("clos"), handler, 0, 0)
+            let evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateAppleEvent(code("core"), code("clos"), 0, -1, 0, evt)
+            #expect(tb_AESend(evt, reply, 0x2001, 0, -1, 0, 0) == 0) // kAEDontExecute + kAENoReply
+            #expect(calls == 0)
+            #expect(descType(reply) == fourCC("null"))
+            #expect(tb_AESend(evt, reply, 1, 0, -1, 0, 0) == 0)
+            #expect(calls == 1)
+        }
+
         /// A handler's error goes into the reply as keyErrorNumber; a queued
         /// reply arrives later as an Answer event.
         @Test func replies() {

@@ -35,6 +35,7 @@ enum {
 };
 
 enum { kAENoReply = 1, kAEQueueReply = 2, kAEWaitReply = 3 };
+enum { kAEDontExecute = 0x2000 };
 enum { kAENeverInteract = 0x10, kAECanInteract = 0x20, kAEAlwaysInteract = 0x30 };
 enum { kAEDirectCall = 1, kAESameProcess = 2, kAELocalProcess = 3, kAERemoteProcess = 4 };
 enum { kAEInteractWithSelf = 0, kAEInteractWithLocal = 1, kAEInteractWithAll = 2 };
@@ -1913,6 +1914,11 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
         set_desc(reply, T("null"), 0);
     if (desc_type(evt) != T("aevt") || shape(desc_handle(evt)) != RECORD)
         return errAENotAEDesc;
+    /* Sent for a recording process only: nothing records here, and it is
+     * never executed.  PowerPlant's windows send Close this way and then
+     * delete themselves; executing it deleted them twice. */
+    if (send_mode & kAEDontExecute)
+        return noErr;
     if (to_finder(evt))
         return finder_event(evt);
     if (to_self(evt))
