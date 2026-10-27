@@ -619,6 +619,37 @@ gaddr tb_PtrZone(gaddr p)
     return b_loc(b);
 }
 
+/* CarbonLib's checks: a pointer is the start of a nonrelocatable block of
+ * a zone, a handle a master pointer whose block points back to it (or an
+ * empty one in a zone), and the heaps are intact. */
+bool mm_pointer_valid(gaddr p)
+{
+    if (!p || p < HDR)
+        return false;
+    gaddr b = p - HDR, z = zone_of(b);
+    return z && b_use(b) == USE_NREL && b_loc(b) == z && b_psize(b) >= HDR;
+}
+
+bool mm_handle_valid(gaddr h)
+{
+    gaddr z = h ? zone_of(h) : 0;
+    if (!z)
+        return false;
+    gaddr p = rd32(h);
+    if (!p)
+        return true; /* empty or purged */
+    if (p < HDR)
+        return false;
+    gaddr b = p - HDR, bz = zone_of(b);
+    return bz && b_use(b) == USE_REL && bz + b_loc(b) == h;
+}
+
+bool mm_heap_valid(void)
+{
+    gaddr cur = cur_zone(), sys = sys_zone();
+    return (!cur || mm_check_zone(cur)) && (!sys || sys == cur || mm_check_zone(sys));
+}
+
 /* ---------------------------------------------------------------------- */
 /* Handles */
 

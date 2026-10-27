@@ -184,6 +184,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < gimport_export_count; i++) /* QuickTime's graphics importers */
         if (!strcmp(gimport_exports[i].name, name))
             return gimport_exports[i].fn;
+    for (unsigned i = 0; i < walk_export_count; i++) /* weak imports the archive walk's programs called */
+        if (!strcmp(walk_exports[i].name, name))
+            return walk_exports[i].fn;
     for (unsigned i = 0; i < vam_export_count; i++) /* found missing by the archive walk */
         if (!strcmp(vam_exports[i].name, name))
             return vam_exports[i].fn;
@@ -608,7 +611,7 @@ static const char *const native_libraries[] = {
     "OpenTptAppleTalkLib", "OTNtvUtilLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
     "TextCommon", "UnicodeConverter", "TextEncodingConverter", "CarbonLib",
     "FontManager", "MPLibrary", "DriverServicesLib", "PowerMgrLib", "URLAccessLib", "NameRegistryLib",
-    "DriverLoaderLib", "KeychainLib", "FoldersLib", "FileSigningLib",
+    "DriverLoaderLib", "KeychainLib", "FoldersLib", "FileSigningLib", "UTCUtils",
     "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
 };
 

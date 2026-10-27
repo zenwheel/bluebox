@@ -363,6 +363,10 @@ static void g_Microseconds(ppc_cpu *c)
 /* ReadLocation(MachineLocation *): WriteLocation's, or Greenwich with no
  * daylight saving. */
 static uint8_t location[12];
+int32_t machine_gmt_delta(void)
+{
+    return (int32_t)((uint32_t)location[8] << 24 | (uint32_t)location[9] << 16 | (uint32_t)location[10] << 8 | location[11]);
+}
 static void g_ReadLocation(ppc_cpu *c)
 {
     if (R(0))

@@ -781,6 +781,12 @@ bool mm_is_native(gaddr p);
  * the calls that install handlers): 68k code, though PowerPC code runs. */
 void mm_note_proc(gaddr p);
 bool mm_is_68k_proc(gaddr p);
+/* CarbonLib's IsPointerValid, IsHandleValid and IsHeapValid (memmgr.c). */
+bool mm_pointer_valid(gaddr p);
+bool mm_handle_valid(gaddr h);
+bool mm_heap_valid(void);
+/* The machine location's gmtDelta field, flags byte included (ppc_libs.c). */
+int32_t machine_gmt_delta(void);
 /* Call a universal procedure pointer (either ISA) with arguments as the
  * procInfo describes; returns the result. */
 uint32_t mm_call(gaddr upp, uint32_t procinfo, const uint32_t *args, int nargs);
