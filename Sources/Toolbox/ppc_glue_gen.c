@@ -23629,6 +23629,111 @@ static void ppcglue_FixPow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_AddFolderDescriptor(ppc_cpu *c)
+{
+    int32_t a_foldType = (int32_t)c->gpr[3];
+    uint32_t a_flags = (uint32_t)c->gpr[4];
+    int32_t a_foldClass = (int32_t)c->gpr[5];
+    int32_t a_foldLocation = (int32_t)c->gpr[6];
+    int32_t a_badgeSignature = (int32_t)c->gpr[7];
+    int32_t a_badgeType = (int32_t)c->gpr[8];
+    gaddr a_name = (gaddr)c->gpr[9];
+    int8_t a_replaceFlag = (int8_t)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddFolderDescriptor(a_foldType, a_flags, a_foldClass, a_foldLocation, a_badgeSignature, a_badgeType, a_name, a_replaceFlag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveFolderDescriptor(ppc_cpu *c)
+{
+    int32_t a_foldType = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveFolderDescriptor(a_foldType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFolderDescriptor(ppc_cpu *c)
+{
+    int32_t a_foldType = (int32_t)c->gpr[3];
+    int32_t a_descSize = (int32_t)c->gpr[4];
+    gaddr a_foldDesc = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFolderDescriptor(a_foldType, a_descSize, a_foldDesc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFolderTypes(ppc_cpu *c)
+{
+    uint32_t a_requestedTypeCount = (uint32_t)c->gpr[3];
+    gaddr a_totalTypeCount = (gaddr)c->gpr[4];
+    gaddr a_theTypes = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFolderTypes(a_requestedTypeCount, a_totalTypeCount, a_theTypes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFolderName(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    int32_t a_foldType = (int32_t)c->gpr[4];
+    gaddr a_foundVRefNum = (gaddr)c->gpr[5];
+    gaddr a_name = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFolderName(a_vRefNum, a_foldType, a_foundVRefNum, a_name);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddFolderRouting(ppc_cpu *c)
+{
+    int32_t a_fileType = (int32_t)c->gpr[3];
+    int32_t a_routeFromFolder = (int32_t)c->gpr[4];
+    int32_t a_routeToFolder = (int32_t)c->gpr[5];
+    uint32_t a_flags = (uint32_t)c->gpr[6];
+    int8_t a_replaceFlag = (int8_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddFolderRouting(a_fileType, a_routeFromFolder, a_routeToFolder, a_flags, a_replaceFlag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveFolderRouting(ppc_cpu *c)
+{
+    int32_t a_fileType = (int32_t)c->gpr[3];
+    int32_t a_routeFromFolder = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveFolderRouting(a_fileType, a_routeFromFolder);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FindFolderRouting(ppc_cpu *c)
+{
+    int32_t a_fileType = (int32_t)c->gpr[3];
+    int32_t a_routeFromFolder = (int32_t)c->gpr[4];
+    gaddr a_routeToFolder = (gaddr)c->gpr[5];
+    gaddr a_flags = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FindFolderRouting(a_fileType, a_routeFromFolder, a_routeToFolder, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFolderRoutings(ppc_cpu *c)
+{
+    uint32_t a_requestedRoutingCount = (uint32_t)c->gpr[3];
+    gaddr a_totalRoutingCount = (gaddr)c->gpr[4];
+    int32_t a_routingSize = (int32_t)c->gpr[5];
+    gaddr a_theRoutings = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFolderRoutings(a_requestedRoutingCount, a_totalRoutingCount, a_routingSize, a_theRoutings);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InvalidateFolderDescriptorCache(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    int32_t a_dirID = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InvalidateFolderDescriptorCache(a_vRefNum, a_dirID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IdentifyFolder(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    int32_t a_dirID = (int32_t)c->gpr[4];
+    gaddr a_foldType = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IdentifyFolder(a_vRefNum, a_dirID, a_foldType);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GXNewGraphicsClient(ppc_cpu *c)
 {
     gaddr a_memoryStart = (gaddr)c->gpr[3];
@@ -30669,6 +30774,20 @@ static void ppcglue_GetGraphicsImporterForDataRefWithFlags(ppc_cpu *c)
     gaddr a_gi = (gaddr)c->gpr[5];
     int32_t a_flags = (int32_t)c->gpr[6];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetGraphicsImporterForDataRefWithFlags(a_dataRef, a_dataRefType, a_gi, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTNewGWorldFromPtr(ppc_cpu *c)
+{
+    gaddr a_gw = (gaddr)c->gpr[3];
+    int32_t a_pixelFormat = (int32_t)c->gpr[4];
+    gaddr a_boundsRect = (gaddr)c->gpr[5];
+    int32_t a_cTable = (int32_t)c->gpr[6];
+    int32_t a_aGDevice = (int32_t)c->gpr[7];
+    int32_t a_flags = (int32_t)c->gpr[8];
+    gaddr a_baseAddr = (gaddr)c->gpr[9];
+    int32_t a_rowBytes = (int32_t)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNewGWorldFromPtr(a_gw, a_pixelFormat, a_boundsRect, a_cTable, a_aGDevice, a_flags, a_baseAddr, a_rowBytes);
     c->pc = c->lr;
 }
 
@@ -40322,26 +40441,6 @@ static void ppctrap_QTNewGWorld(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTNewGWorldFromPtr(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_QTUpdateGWorld(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -41145,6 +41244,8 @@ const ppc_export ppc_exports[] = {
     {"AddDrive", ppcglue_AddDrive},
     {"AddEmptyTrackToMovie", ppctrap_AddEmptyTrackToMovie},
     {"AddFilePreview", ppcglue_AddFilePreview},
+    {"AddFolderDescriptor", ppcglue_AddFolderDescriptor},
+    {"AddFolderRouting", ppcglue_AddFolderRouting},
     {"AddIconToSuite", ppcglue_AddIconToSuite},
     {"AddImageDescriptionExtension", ppctrap_AddImageDescriptionExtension},
     {"AddMediaDataRef", ppctrap_AddMediaDataRef},
@@ -41802,6 +41903,7 @@ const ppc_export ppc_exports[] = {
     {"FindDialogItem", ppcglue_FindDialogItem},
     {"FindFolder", ppcglue_FindFolder},
     {"FindFolderExtended", ppcglue_FindFolderExtended},
+    {"FindFolderRouting", ppcglue_FindFolderRouting},
     {"FindRecordByIndexInDictionary", ppcglue_FindRecordByIndexInDictionary},
     {"FindRecordInDictionary", ppcglue_FindRecordInDictionary},
     {"FindScriptRun", ppcglue_FindScriptRun},
@@ -42198,6 +42300,10 @@ const ppc_export ppc_exports[] = {
     {"GetFlavorDataSize", ppcglue_GetFlavorDataSize},
     {"GetFlavorFlags", ppcglue_GetFlavorFlags},
     {"GetFlavorType", ppcglue_GetFlavorType},
+    {"GetFolderDescriptor", ppcglue_GetFolderDescriptor},
+    {"GetFolderName", ppcglue_GetFolderName},
+    {"GetFolderRoutings", ppcglue_GetFolderRoutings},
+    {"GetFolderTypes", ppcglue_GetFolderTypes},
     {"GetFontInfo", ppcglue_GetFontInfo},
     {"GetFontName", ppcglue_GetFontName},
     {"GetForeColor", ppcglue_GetForeColor},
@@ -42666,6 +42772,7 @@ const ppc_export ppc_exports[] = {
     {"IconRefToRgn", ppcglue_IconRefToRgn},
     {"IconSuiteToIconFamily", ppcglue_IconSuiteToIconFamily},
     {"IconSuiteToRgn", ppcglue_IconSuiteToRgn},
+    {"IdentifyFolder", ppcglue_IdentifyFolder},
     {"IdleControls", ppcglue_IdleControls},
     {"ImageFieldSequenceBegin", ppctrap_ImageFieldSequenceBegin},
     {"ImageFieldSequenceEnd", ppctrap_ImageFieldSequenceEnd},
@@ -42732,6 +42839,7 @@ const ppc_export ppc_exports[] = {
     {"InvalMenuBar", ppcglue_InvalMenuBar},
     {"InvalRect", ppcglue_InvalRect},
     {"InvalRgn", ppcglue_InvalRgn},
+    {"InvalidateFolderDescriptorCache", ppcglue_InvalidateFolderDescriptorCache},
     {"InvalidateMovieRegion", ppctrap_InvalidateMovieRegion},
     {"InvalidateSprite", ppctrap_InvalidateSprite},
     {"InvalidateSpriteWorld", ppctrap_InvalidateSpriteWorld},
@@ -44080,7 +44188,7 @@ const ppc_export ppc_exports[] = {
     {"QTNewAlias", ppctrap_QTNewAlias},
     {"QTNewAtomContainer", ppctrap_QTNewAtomContainer},
     {"QTNewGWorld", ppctrap_QTNewGWorld},
-    {"QTNewGWorldFromPtr", ppctrap_QTNewGWorldFromPtr},
+    {"QTNewGWorldFromPtr", ppcglue_QTNewGWorldFromPtr},
     {"QTNewTween", ppctrap_QTNewTween},
     {"QTNextChildAnyType", ppctrap_QTNextChildAnyType},
     {"QTParseTextHREF", ppctrap_QTParseTextHREF},
@@ -44204,6 +44312,8 @@ const ppc_export ppc_exports[] = {
     {"RemoveExtensionNotificationProc", ppcglue_RemoveExtensionNotificationProc},
     {"RemoveExtensionTableHandlerProc", ppcglue_RemoveExtensionTableHandlerProc},
     {"RemoveFS", ppcglue_RemoveFS},
+    {"RemoveFolderDescriptor", ppcglue_RemoveFolderDescriptor},
+    {"RemoveFolderRouting", ppcglue_RemoveFolderRouting},
     {"RemoveIconRefOverride", ppcglue_RemoveIconRefOverride},
     {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
     {"RemoveIndexedCollectionItem", ppctrap_RemoveIndexedCollectionItem},

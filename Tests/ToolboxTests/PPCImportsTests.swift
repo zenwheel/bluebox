@@ -35,32 +35,42 @@ extension BlueBox {
 
         func read(_ p: UInt32, _ n: Int) -> [UInt8] { (0..<n).map { rd8(p + UInt32($0)) } }
 
-        /// A PowerPC program's asynchronous PB call sets ioResult and runs
-        /// its completion routine later, at interrupt time, as a 68k one's
-        /// does (Star Wars DroidWorks waits in YieldToAnyThread for it).
+        /// A PowerPC program's asynchronous PB call that finishes at once
+        /// runs its completion routine before it returns, as a Mac's File
+        /// Manager did when the disk needed no waiting (MacGLQuake's GUSI
+        /// doesn't wait otherwise). A call the completion routine makes
+        /// waits for the interrupt pump, its ioResult in progress till then.
         @Test func asyncCallsRunTheirCompletion() {
             bootMachine()
             let stack = tb_NewPtr(65536, false, true)
             g_cpu!.pointee.a.7 = stack + 65536 - 16
             let flag = tb_NewPtr(4, false, true)
-            // MOVE.W D0,flag; ADDQ.W #1,flag+2; RTS
-            let words: [UInt16] = [0x33C0, UInt16(flag >> 16), UInt16(flag & 0xFFFF),
-                                   0x5279, UInt16((flag + 2) >> 16), UInt16((flag + 2) & 0xFFFF), 0x4E75]
-            let code = bytes(words.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xFF)] })
-            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
-            wr32(pb + UInt32(IOParam_ioCompletion_off), code)
-            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -1000)) // no such file
-            wr16(pb + UInt32(IOParam_ioResult_off), 1)
+            func code(_ words: [UInt16]) -> UInt32 { bytes(words.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xFF)] }) }
+            func newPB(_ completion: UInt32) -> UInt32 {
+                let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+                wr32(pb + UInt32(IOParam_ioCompletion_off), completion)
+                wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -1000)) // no such file
+                wr16(pb + UInt32(IOParam_ioResult_off), 1)
+                return pb
+            }
+            // ADDQ.W #1,flag+2; RTS
+            let pb2 = newPB(code([0x5279, UInt16((flag + 2) >> 16), UInt16((flag + 2) & 0xFFFF), 0x4E75]))
+            // MOVE.W D0,flag; ADDQ.W #1,flag+2; MOVEA.L #pb2,A0; _Read,ASYNC; RTS
+            let pb = newPB(code([0x33C0, UInt16(flag >> 16), UInt16(flag & 0xFFFF),
+                                 0x5279, UInt16((flag + 2) >> 16), UInt16((flag + 2) & 0xFFFF),
+                                 0x207C, UInt16(pb2 >> 16), UInt16(pb2 & 0xFFFF), 0xA402, 0x4E75]))
             #expect(result16("PBReadAsync", [pb]) == -51) // rfNumErr
-            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -51)
-            #expect(rd16(flag + 2) == 0) // not from inside the call
-            time_pump()
             #expect(rd16(flag + 2) == 1 && Int16(bitPattern: rd16(flag)) == -51)
+            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -51)
+            #expect(rd16(pb2 + UInt32(IOParam_ioResult_off)) == 1) // the completion's own call goes on
+            time_pump()
+            #expect(rd16(flag + 2) == 2)
+            #expect(Int16(bitPattern: rd16(pb2 + UInt32(IOParam_ioResult_off))) == -51)
             wr16(pb + UInt32(IOParam_ioResult_off), 1)
             #expect(result16("PBReadSync", [pb]) == -51)
             #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -51)
             time_pump()
-            #expect(rd16(flag + 2) == 1) // a synchronous call has no completion
+            #expect(rd16(flag + 2) == 2) // a synchronous call has no completion
         }
 
         // MARK: Code Fragment Manager and Mixed Mode
@@ -102,6 +112,38 @@ extension BlueBox {
             let tv = rd32(main)
             #expect(tv != 0 && rd32(tv) != 0)
             #expect(tv == rd32(cfm_prepare_container(importContainer("GetCurrentProcess", cls: 2))))
+        }
+
+        /// A library's symbols follow the library's before it even when its
+        /// header says they start at 0, as SmalltalkAgents' linker wrote
+        /// them (Pictodexer: STRuntime's 130 after InterfaceLib's one).
+        @Test func overlappingLibrarySymbolsFollowOn() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
+            func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
+            let strings = Array("InterfaceLib".utf8) + [0] + Array("GetCurrentProcess".utf8) + [0] + Array("TickCount".utf8) + [0]
+            let stringsOff: UInt32 = 128, hashOff = (stringsOff + UInt32(strings.count) + 3) & ~3
+            var loader = be32(0) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+            loader += be32(2) + be32(2) + be32(1) + be32(124) + be32(stringsOff) + be32(hashOff) + be32(0) + be32(0)
+            loader += be32(0) + be32(0) + be32(0) + be32(1) + be32(0) + [0, 0] + be16(0) // InterfaceLib: symbol 0
+            loader += be32(0) + be32(0) + be32(0) + be32(1) + be32(0) + [0, 0] + be16(0) // again, "from 0": symbol 1
+            loader += be32(2 << 24 | 13) + be32(2 << 24 | 31)
+            loader += be16(0) + be16(0) + be32(2) + be32(0)                                 // relocations for section 0
+            loader += be16(0x6000) + be16(0x6001)                                           // by import 0, by import 1
+            loader += strings
+            while loader.count < Int(hashOff) { loader.append(0) }
+            loader += be32(0)
+            let dataOff = UInt32(40 + 2 * 28), loaderOff = dataOff + 8
+            var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(2) + be16(1) + be32(0)
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(dataOff) + [1, 1, 0, 0]
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count)) + be32(loaderOff) + [4, 1, 0, 0]
+            pef += [UInt8](repeating: 0, count: 8) + loader
+            let data = cfm_prepare_container(bytes(pef))
+            #expect(data != 0)
+            #expect(rd32(data) != 0 && rd32(data + 4) != 0)
+            #expect(rd32(data) != rd32(data + 4))
         }
 
         /// A fragment in memory (a code resource) has its code and data
@@ -189,6 +231,26 @@ extension BlueBox {
             call("CallUniversalProc", [rd, 0xFFC0, 1, 2, 3, 4, 5, 6])
             #expect(g_ppc.pc == rd32(tv) && g_ppc.gpr.12 == tv)
             #expect([g_ppc.gpr.3, g_ppc.gpr.4, g_ppc.gpr.5, g_ppc.gpr.6, g_ppc.gpr.7, g_ppc.gpr.8] == [1, 2, 3, 4, 5, 6])
+        }
+
+        /// A descriptor whose PowerPC routine is itself a descriptor (List
+        /// Files wraps its user item's UPP again) calls that one's routine.
+        @Test func descriptorOfADescriptorCallsTheInnerRoutine() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            let tv = bytes([0, 0, 0, 0, 0, 0, 0, 0])
+            wr32(tv, bytes([0x4E, 0x80, 0x00, 0x20])) // blr
+            func descriptor(_ proc: UInt32) -> UInt32 {
+                let rd = bytes([0xAA, 0xFE, 7, 0] + [UInt8](repeating: 0, count: 8 + 20))
+                wr32(rd + 12, 0x2C0)
+                wr8(rd + 17, 1) // kPowerPCISA
+                wr32(rd + 20, proc)
+                return rd
+            }
+            let outer = descriptor(descriptor(tv))
+            call("CallUniversalProc", [outer, 0x2C0, 7, 8])
+            #expect(g_ppc.pc == rd32(tv) && g_ppc.gpr.12 == tv)
+            #expect(g_ppc.gpr.3 == 7 && g_ppc.gpr.4 == 8)
         }
 
         // MARK: Slot Manager

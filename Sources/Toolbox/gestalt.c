@@ -140,7 +140,11 @@ void gestalt_init(void)
     gestalt_set(fourcc("pop!"), 0x1);
     gestalt_set(fourcc("nmgr"), 0x1);
     gestalt_set(fourcc("ttsc"), 0x1);           /* gestaltSpeechAttr: the Speech Manager */
-    gestalt_set(fourcc("font"), 0);           /* bitmap fonts only */
+    /* gestaltOutlineFonts: the Font Manager has the outline font calls
+     * (FontDispatch), as every System 7 has; the text itself is drawn
+     * from bitmap strikes. MacPerl's runtime takes it to mean System 7
+     * and won't run without it. */
+    gestalt_set(fourcc("font"), 0x1);
     /* The Appearance Manager for 68k programs too (as if the Appearance
      * extension were installed): programs ask before using its calls, and
      * draw their lists and controls in Platinum when it is there.  Version

@@ -32,19 +32,19 @@ enum {
     badComponentSelector = (int32_t)0x80008002,
 };
 
-/* The OSA's selectors. */
+/* The OSA's selectors (OSA.h's, as the 68k glue's inline code has them). */
 enum {
     kOSASelectLoad = 0x0001, kOSASelectStore = 0x0002, kOSASelectExecute = 0x0003, kOSASelectDisplay = 0x0004,
     kOSASelectScriptError = 0x0005, kOSASelectDispose = 0x0006, kOSASelectSetScriptInfo = 0x0007,
     kOSASelectGetScriptInfo = 0x0008, kOSASelectSetActiveProc = 0x0009, kOSASelectGetActiveProc = 0x000A,
-    kOSASelectScriptingComponentName = 0x0102, kOSASelectGetSource = 0x0201, kOSASelectCompile = 0x0203,
-    kOSASelectCopyID = 0x0204, kOSASelectCoerceFromDesc = 0x0301, kOSASelectCoerceToDesc = 0x0302,
-    kOSASelectSetSendProc = 0x0305, kOSASelectGetSendProc = 0x0306, kOSASelectSetCreateProc = 0x0307,
-    kOSASelectGetCreateProc = 0x0308, kOSASelectSetDefaultTarget = 0x0309, kOSASelectStartRecording = 0x0401,
-    kOSASelectStopRecording = 0x0402, kOSASelectLoadExecute = 0x0501, kOSASelectCompileExecute = 0x0502,
-    kOSASelectDoScript = 0x0503, kOSASelectSetResumeDispatchProc = 0x0507,
-    kOSASelectGetResumeDispatchProc = 0x0508, kOSASelectExecuteEvent = 0x0509, kOSASelectDoEvent = 0x050A,
-    kOSASelectMakeContext = 0x050B,
+    kOSASelectScriptingComponentName = 0x0102, kOSASelectCompile = 0x0103, kOSASelectCopyID = 0x0104,
+    kOSASelectGetSource = 0x0201, kOSASelectCoerceFromDesc = 0x0301, kOSASelectCoerceToDesc = 0x0302,
+    kOSASelectSetSendProc = 0x0401, kOSASelectGetSendProc = 0x0402, kOSASelectSetCreateProc = 0x0403,
+    kOSASelectGetCreateProc = 0x0404, kOSASelectSetDefaultTarget = 0x0405, kOSASelectStartRecording = 0x0501,
+    kOSASelectStopRecording = 0x0502, kOSASelectLoadExecute = 0x0601, kOSASelectCompileExecute = 0x0602,
+    kOSASelectDoScript = 0x0603, kOSASelectSetResumeDispatchProc = 0x0801,
+    kOSASelectGetResumeDispatchProc = 0x0802, kOSASelectExecuteEvent = 0x0803, kOSASelectDoEvent = 0x0804,
+    kOSASelectMakeContext = 0x0805,
 };
 
 /* The procedures a client set (kept and given back; our runtime sends its
@@ -156,9 +156,16 @@ static int32_t osa_call(int16_t what, gaddr params)
     case 0xFFFE: /* close */
         return noErr;
     case 0xFFFD: { /* can do */
-        static const uint16_t sels[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0x0102, 0x0201, 0x0203, 0x0204, 0x0301,
-                                         0x0302, 0x0305, 0x0306, 0x0307, 0x0308, 0x0309, 0x0501, 0x0502, 0x0503,
-                                         0x0507, 0x0508, 0x0509, 0x050A, 0x050B };
+        static const uint16_t sels[] = {
+            kOSASelectLoad, kOSASelectStore, kOSASelectExecute, kOSASelectDisplay, kOSASelectScriptError,
+            kOSASelectDispose, kOSASelectSetScriptInfo, kOSASelectGetScriptInfo, kOSASelectSetActiveProc,
+            kOSASelectGetActiveProc, kOSASelectScriptingComponentName, kOSASelectCompile, kOSASelectCopyID,
+            kOSASelectGetSource, kOSASelectCoerceFromDesc, kOSASelectCoerceToDesc, kOSASelectSetSendProc,
+            kOSASelectGetSendProc, kOSASelectSetCreateProc, kOSASelectGetCreateProc, kOSASelectSetDefaultTarget,
+            kOSASelectStartRecording, kOSASelectStopRecording, kOSASelectLoadExecute, kOSASelectCompileExecute,
+            kOSASelectDoScript, kOSASelectSetResumeDispatchProc, kOSASelectGetResumeDispatchProc,
+            kOSASelectExecuteEvent, kOSASelectDoEvent, kOSASelectMakeContext,
+        };
         uint16_t s = rd16(params + 4);
         for (size_t i = 0; i < sizeof sels / sizeof sels[0]; i++)
             if (sels[i] == s)

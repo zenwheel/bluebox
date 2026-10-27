@@ -421,7 +421,9 @@ extension BlueBox {
             let shown = (0..<n).map { rd8(rd32(h) + UInt32($0)) }
             #expect(String(decoding: shown, as: UTF8.self) == "\"Blue Box\"")
             // Compiling is not there yet: a script error saying so.
-            #expect(q.component(ci, 0x0203, [desc, 0, idp]) == -1753)
+            #expect(q.component(ci, 0x0103, [desc, 0, idp]) == -1753) // OSACompile, OSA.h's selector
+            #expect(q.component(ci, 0x0501, [idp]) == 0)                 // OSAStartRecording
+            #expect(q.component(ci, 0x0502, [rd32(idp)]) == 0)           // OSAStopRecording
             #expect(q.component(ci, 5, [fourCC("errn"), fourCC("long"), text]) == 0)  // OSAScriptError
             #expect(Int32(bitPattern: rd32(rd32(rd32(text + 4)))) == -2741)
         }

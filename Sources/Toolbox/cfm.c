@@ -184,6 +184,12 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < gimport_export_count; i++) /* QuickTime's graphics importers */
         if (!strcmp(gimport_exports[i].name, name))
             return gimport_exports[i].fn;
+    for (unsigned i = 0; i < walk_export_count; i++) /* weak imports the archive walk's programs called */
+        if (!strcmp(walk_exports[i].name, name))
+            return walk_exports[i].fn;
+    for (unsigned i = 0; i < qtcapture_export_count; i++) /* QuickTime's capture and import calls */
+        if (!strcmp(qtcapture_exports[i].name, name))
+            return qtcapture_exports[i].fn;
     for (unsigned i = 0; i < vam_export_count; i++) /* found missing by the archive walk */
         if (!strcmp(vam_exports[i].name, name))
             return vam_exports[i].fn;
@@ -575,6 +581,7 @@ typedef struct {
 
 typedef struct {
     char name[64];       /* the fragment's name (MacRoman), "" for the application */
+    char app_name[64];   /* the application's name in its 'cfrg', which libraries may import from */
     char path[1024];     /* the file it came from */
     uint32_t offset, length;
     gaddr main_tv, init_tv, term_tv;
@@ -607,7 +614,7 @@ static const char *const native_libraries[] = {
     "OpenTptAppleTalkLib", "OTNtvUtilLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
     "TextCommon", "UnicodeConverter", "TextEncodingConverter", "CarbonLib",
     "FontManager", "MPLibrary", "DriverServicesLib", "PowerMgrLib", "URLAccessLib", "NameRegistryLib",
-    "DriverLoaderLib", "KeychainLib",
+    "DriverLoaderLib", "KeychainLib", "FoldersLib", "FileSigningLib", "UTCUtils",
     "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
 };
 
@@ -1005,10 +1012,19 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
     gaddr *imports = calloc(nsyms ? nsyms : 1, sizeof *imports);
     char **absent = calloc(nsyms ? nsyms : 1, sizeof *absent);
     const uint8_t *libs = loader + 56, *syms = libs + nlibs * 24;
+    uint32_t next = 0; /* where the libraries so far end */
     for (uint32_t l = 0; l < nlibs; l++) {
         const uint8_t *lib = libs + l * 24;
         const char *lname = (const char *)loader + strings + be32(lib);
         uint32_t count = be32(lib + 12), first = be32(lib + 16);
+        /* Each library's symbols follow the one before's: SmalltalkAgents'
+         * linker gave its runtime library first 0 after InterfaceLib's one
+         * symbol, so its last (RuntimeInit) was never bound.  Libraries
+         * whose symbols are merely in another order keep theirs. */
+        if (first < next && next + count <= nsyms)
+            first = next;
+        if (first + count > next)
+            next = first + count;
         bool weak_lib = (lib[20] & 0x40) != 0;
         char lerr[256];
         int li = library_named(lname, lerr, sizeof lerr);
@@ -1254,6 +1270,7 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
     fragment *f = &frags[i];
     memset(f, 0, sizeof *f);
     snprintf(f->name, sizeof f->name, "%s", want ? s.found.name : "");
+    snprintf(f->app_name, sizeof f->app_name, "%s", want ? "" : s.found.name);
     snprintf(f->path, sizeof f->path, "%s", path);
     f->offset = s.found.where == kDataForkCFragLocator ? s.found.offset : 0;
     f->length = (uint32_t)len;
@@ -1357,6 +1374,11 @@ static int library_named(const char *name, char *err, size_t errlen)
 {
     for (int i = 0; i < nfrags; i++)
         if (!strcmp(frags[i].name, name))
+            return i;
+    /* The application by its fragment's name: MacPerl's is "Perl", whose
+     * routines its extensions (shared libraries it loads) import. */
+    for (int i = 0; i < nfrags; i++)
+        if (frags[i].app_name[0] && !strcmp(frags[i].app_name, name))
             return i;
     if (is_native_library(name)) {
         if (nfrags >= MAX_FRAGMENTS)
@@ -1529,7 +1551,8 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
     else
         app_dir[0] = 0;
     gestalt_powerpc();
-    /* The application is fragment 0 (named "", so no import finds it). */
+    /* The application is fragment 0 (named "": imports find it only by
+     * its name in the 'cfrg', as MacPerl's extensions do). */
     frags[0].path[0] = 0;
     int a = load_from_file(app_path, NULL, err, errlen);
     if (a < 0)
@@ -1610,6 +1633,8 @@ static void ppc_GetSharedLibrary(ppc_cpu *c)
     pname_to_c(gptr(c->gpr[3]), name, sizeof name);
     int before = ninit;
     int i = library_named(name, err, sizeof err);
+    if (i < 0)
+        LOGF(LOG_SEG, "cfm: GetSharedLibrary %s: %s\n", name, err);
     run_new_inits(before);
     connect_result(c, i, c->gpr[6], c->gpr[7], c->gpr[8], err);
     c->pc = c->lr;

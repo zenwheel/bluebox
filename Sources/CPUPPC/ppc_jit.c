@@ -1214,6 +1214,7 @@ uint64_t ppc_jit_run(ppc_cpu *c, uint64_t max)
         if (done >= max)
             break;
         uint64_t left = max - done;
+        c->pc &= ~3u; /* the word a branch's low bits are in, as ppc_step */
         jit_block *b = jit_lookup(&E, c->pc);
         if (!b)
             b = translate(c->pc);
@@ -1234,6 +1235,7 @@ uint64_t ppc_jit_run(ppc_cpu *c, uint64_t max)
         /* Chain the exit just taken to its successor. */
         if (E.ctx.last_stub) {
             uint64_t gen = E.generation;
+            c->pc &= ~3u;
             jit_block *n = jit_lookup(&E, c->pc);
             if (!n)
                 n = translate(c->pc);

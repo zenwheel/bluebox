@@ -204,6 +204,7 @@ void sane_reset(void);
 void time_pump(void);
 /* An asynchronous call's completion routine, at the next interrupt pump. */
 void io_complete_later(gaddr pb, int16_t result);
+void io_complete_soon(gaddr pb, int16_t result); /* before the call returns, unless in a completion */
 bool time_busy(void);  /* a Time Manager or VBL task waiting */
 bool sound_busy(void); /* a sound channel open */
 void adb_install(void); /* the ADB Manager's ADBOp, at boot */
@@ -780,6 +781,19 @@ void tb_MoreMasterPointers(uint32_t count);
 /* Mixed Mode (mixedmode.c). */
 void mixedmode_init(void);
 bool mm_is_descriptor(gaddr p);
+/* A routine of Blue Box's own: 68k code in the ROM's native stubs, never a
+ * transition vector, whichever ISA asks for it. */
+bool mm_is_native(gaddr p);
+/* A procedure pointer that 68k code run from PowerPC installed (noted by
+ * the calls that install handlers): 68k code, though PowerPC code runs. */
+void mm_note_proc(gaddr p);
+bool mm_is_68k_proc(gaddr p);
+/* CarbonLib's IsPointerValid, IsHandleValid and IsHeapValid (memmgr.c). */
+bool mm_pointer_valid(gaddr p);
+bool mm_handle_valid(gaddr h);
+bool mm_heap_valid(void);
+/* The machine location's gmtDelta field, flags byte included (ppc_libs.c). */
+int32_t machine_gmt_delta(void);
 /* Call a universal procedure pointer (either ISA) with arguments as the
  * procInfo describes; returns the result. */
 uint32_t mm_call(gaddr upp, uint32_t procinfo, const uint32_t *args, int nargs);

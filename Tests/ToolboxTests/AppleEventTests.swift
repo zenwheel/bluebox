@@ -286,6 +286,48 @@ extension BlueBox {
             #expect(calls == 1)
         }
 
+        /// 68k code a PowerPC program runs through Mixed Mode installs 68k
+        /// handlers (gist's): they are called as 68k code, though PowerPC
+        /// code sends the event.
+        @Test func handlersInstalledBy68kCodeFromPowerPC() {
+            launchTestApp()
+            guestStack()
+            let flag = tb_NewPtr(4, false, true)
+            // MOVEA.L (SP)+,A0; LEA 12(SP),SP; CLR.W (SP); ADDQ.W #1,flag; JMP (A0)
+            let words: [UInt16] = [0x205F, 0x4FEF, 0x000C, 0x4257, 0x5279, UInt16(flag >> 16), UInt16(flag & 0xFFFF), 0x4ED0]
+            let handler = tb_NewPtr(Int32(words.count * 2 + 2), false, true) + 2 // 68k code needn't be 4-aligned
+            for (i, w) in words.enumerated() { wr16(handler + UInt32(i * 2), w) }
+            let installer = pascalProc([]) { _ in
+                tb_AEInstallEventHandler(Int32(bitPattern: fourCC("test")), Int32(bitPattern: fourCC("68k ")), handler, 0, 0)
+            }
+            let was = g_ppc_mode
+            g_ppc_mode = true
+            defer { g_ppc_mode = was }
+            #expect(mm_call(installer, 0, nil, 0) == 0)
+            let evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateAppleEvent(code("test"), code("68k "), 0, -1, 0, evt)
+            #expect(tb_AESend(evt, reply, 1, 0, -1, 0, 0) == 0)
+            #expect(rd16(flag) == 1)
+        }
+
+        /// A handler in the ROM's native stubs (the applet shell installs
+        /// its own) is 68k code even while PowerPC code sends the event, as
+        /// a Carbon applet's launcher does; it isn't taken for a vector.
+        @Test func nativeHandlersFromPowerPC() {
+            launchTestApp()
+            guestStack()
+            var calls: [UInt32] = []
+            let handler = pascalProc([4, 4, 4]) { a in calls.append(a[2]); return 0 }
+            _ = tb_AEInstallEventHandler(code("aevt"), code("oapp"), handler, 7, 0)
+            let evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateAppleEvent(code("aevt"), code("oapp"), 0, -1, 0, evt)
+            let was = g_ppc_mode
+            g_ppc_mode = true
+            defer { g_ppc_mode = was }
+            #expect(tb_AESend(evt, reply, 1, 0, -1, 0, 0) == 0)
+            #expect(calls == [7])
+        }
+
         /// A handler's error goes into the reply as keyErrorNumber; a queued
         /// reply arrives later as an Answer event.
         @Test func replies() {

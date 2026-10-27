@@ -1058,6 +1058,19 @@ static void set_active(ppc_cpu *c, bool on)
     RETURN(0);
 }
 static void isp_DevicesActivate(ppc_cpu *c) { set_active(c, true); }
+
+/* ISpDevice_IsActive(device, *isActive) */
+static void isp_DeviceIsActive(ppc_cpu *c)
+{
+    int d = device_of(R(0));
+    if (d < 0) {
+        RETURN(-50);
+        return;
+    }
+    if (R(1))
+        wr8(R(1), !devices[d].inactive);
+    RETURN(0);
+}
 static void isp_DevicesDeactivate(ppc_cpu *c) { set_active(c, false); }
 
 /* ISpDevices_ActivateClass(class) and DeactivateClass */
@@ -1500,6 +1513,7 @@ const ppc_export isp_exports[] = {
     { "ISpConfigure", isp_Configure },
     { "ISpDevice_GetDefinition", isp_DeviceGetDefinition },
     { "ISpDevice_GetElementList", isp_DeviceGetElementList },
+    { "ISpDevice_IsActive", isp_DeviceIsActive },
     { "ISpDevices_Activate", isp_DevicesActivate },
     { "ISpDevices_ActivateClass", isp_DevicesActivateClass },
     { "ISpDevices_Deactivate", isp_DevicesDeactivate },

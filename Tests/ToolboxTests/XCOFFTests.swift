@@ -131,5 +131,51 @@ extension BlueBox {
             #expect(cfm_app_fragment_loadable(app("XCOFF", data: container())))
             #expect(!cfm_app_fragment_loadable(app("BinHex", data: Array("+8SCFAR9$ljNmQIV*T0dkID6E9lCb$\n08-e@cDl5SjPP0mYZ".utf8))))
         }
+
+        /// A library can import from the application by the name its
+        /// 'cfrg' gives it: MacPerl's extensions import Perl's routines
+        /// from "Perl", the application itself.
+        @Test func applicationFoundByItsFragmentName() {
+            bootMachine()
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            var member = Array("pwpc".utf8) + [UInt8](repeating: 0, count: 18) + [1, 1] + be32(0) + be32(0)
+            member += [UInt8](repeating: 0, count: 8)
+            member += be16(UInt16(member.count + 2 + 5)) + [4] + Array("Perl".utf8)
+            let cfrg = be32(0) + be32(0) + be32(1) + [UInt8](repeating: 0, count: 16) + be32(1) + member
+            // PEF: an 8-byte data section, main at its start, no imports.
+            var loader = be32(0) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+            loader += be32(0) + be32(0) + be32(0) + be32(56) + be32(56) + be32(56) + be32(0) + be32(0) + be32(0)
+            let dataOff = UInt32(40 + 2 * 28), loaderOff = dataOff + 8
+            var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(2) + be16(1) + be32(0)
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(dataOff) + [1, 1, 0, 0]
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count)) + be32(loaderOff) + [4, 1, 0, 0]
+            pef += [UInt8](repeating: 0, count: 8) + loader
+            let path = dir.appendingPathComponent("MacPerl").path
+            var rsrc = buildFork([TestResource(type: "cfrg", id: 0, data: cfrg)])
+            var f = mac_file()
+            pef.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = $0.count }
+            rsrc.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            withUnsafeMutableBytes(of: &f.finder_info) { fi in
+                for (i, b) in Array("APPL????".utf8).enumerated() { fi[i] = b }
+            }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+            #expect(cfm_launch(path, &err, err.count))
+            guard let fn = cfm_export_fn("GetSharedLibrary") else {
+                Issue.record("GetSharedLibrary is not exported")
+                return
+            }
+            let name = bytes([4] + Array("Perl".utf8)), conn = bytes(be32(0)), main = bytes(be32(0))
+            withUnsafeMutableBytes(of: &g_ppc.gpr) { gpr in
+                for (i, a) in [name, fourCC("pwpc"), 1, conn, main, 0].enumerated() {
+                    gpr.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self)
+                }
+            }
+            fn(&g_ppc)
+            #expect(g_ppc.gpr.3 == 0)
+            #expect(rd32(conn) == 1) // the application, fragment 0
+            #expect(rd32(main) != 0)
+        }
     }
 }

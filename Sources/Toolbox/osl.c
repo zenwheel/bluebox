@@ -66,6 +66,7 @@ static int naccessors[2];
 
 int16_t tb_AEInstallObjectAccessor(int32_t desired, int32_t container, gaddr accessor, int32_t refcon, int8_t sys)
 {
+    mm_note_proc(accessor);
     int s = sys != 0;
     for (int i = 0; i < naccessors[s]; i++)
         if (accessors[s][i].desired == (uint32_t)desired && accessors[s][i].container == (uint32_t)container) {
@@ -136,6 +137,8 @@ int16_t tb_AESetObjectCallbacks(gaddr compare, gaddr count, gaddr dispose, gaddr
                                 gaddr errdesc)
 {
     const gaddr procs[7] = { compare, count, dispose, getmark, mark, adjust, errdesc };
+    for (int i = 0; i < 7; i++)
+        mm_note_proc(procs[i]);
     static const char keys[7][5] = { "cmpr", "cont", "xtok", "mkid", "mark", "adjm", "indc" };
     for (int i = 0; i < 7; i++)
         if (procs[i])
