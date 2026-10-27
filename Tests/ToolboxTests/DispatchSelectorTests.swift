@@ -106,5 +106,38 @@ extension BlueBox {
             ]) == "ExitToShell")
             #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0 && rd32(count) > 0 && rd32(list) != 0)
         }
+
+        /// GetFormatOrder from 68k code (Eudora; ScriptUtil selector
+        /// $8012FFFC): a run the direction procedure says goes right to
+        /// left is reversed within its stretch on a left-to-right line.
+        @Test func getFormatOrderFrom68k() {
+            // pascal Boolean proc(short run, void *param): true for runs 2 and 3
+            let words: [UInt16] = [0x205F, 0x588F, 0x301F, 0x5540, 0x0C40, 0x0002, 0x55C0, 0x1E80, 0x4ED0]
+            let proc = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(proc + UInt32(i * 2), w) }
+            let order = tb_NewPtr(16, false, true)
+            func push(_ v: UInt32) -> [UInt16] { [0x2F3C, hiWord(v), loWord(v)] }
+            #expect(run68k(push(order) + [0x3F3C, 1, 0x3F3C, 4, 0x1F3C, 0] + push(proc) + push(0) + [
+                0x2F3C, 0x8012, 0xFFFC, 0xA8B5,
+                0xA9F4,
+            ]) == "ExitToShell")
+            #expect((0..<4).map { rd16(order + UInt32(2 * $0)) } == [1, 3, 2, 4])
+        }
+
+        /// The CallComponent routine 68k code calls through (Eudora) is a
+        /// component call whatever its caller left in D0 (Eudora's mask,
+        /// $FFFFFFEF): it reaches the Component Manager as one, and an
+        /// instance that isn't one is an error, not a halt.
+        @Test func callComponentIgnoresD0() {
+            let params = tb_NewPtr(8, false, true) // flags, size 0, what 1, no parameters, instance 0
+            wr16(params + 2, 1)
+            let upp = mm_call_component_upp()
+            #expect(upp != 0)
+            #expect(run68k([
+                0x70EF, 0x598F, 0x4879, hiWord(params), loWord(params), // MOVEQ #-17,D0; SUBQ.L #4,SP; PEA params
+                0x2079, hiWord(upp), loWord(upp), 0x4E90, 0x2E1F,        // MOVEA.L upp,A0; JSR (A0); MOVE.L (SP)+,D7
+                0xA9F4,
+            ]) == "ExitToShell")
+        }
     }
 }

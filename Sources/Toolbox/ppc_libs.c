@@ -1380,43 +1380,8 @@ static uint32_t call_upp(gaddr upp, uint32_t procinfo, const uint32_t *args, int
     return mm_is_descriptor(upp) ? mm_call(upp, procinfo, args, n) : ppc_call(upp, args, n);
 }
 
-/* GetFormatOrder(ordering, firstFormat, lastFormat, lineRight, rlDirProc,
- * dirParam): the style runs in display order.  rlDirProc (pascal Boolean
- * (short run, void *dirParam)) says which runs go right to left; a line
- * running left to right reverses each stretch of those, a right-to-left
- * line reverses each stretch of the others and then the whole. */
-static void g_GetFormatOrder(ppc_cpu *c)
-{
-    gaddr order = R(0);
-    int first = (int16_t)R(1), last = (int16_t)R(2), n = last - first + 1;
-    bool line_right = (R(3) & 0xFF) != 0;
-    if (n <= 0 || n > 1024 || !order) {
-        c->pc = c->lr;
-        return;
-    }
-    int idx[1024];
-    bool rtl[1024];
-    for (int i = 0; i < n; i++) {
-        uint32_t args[2] = { (uint32_t)(first + i), R(5) };
-        idx[i] = first + i;
-        rtl[i] = R(4) ? (call_upp(R(4), 0x390, args, 2) & 0xFF) != 0 : false;
-    }
-    for (int i = 0; i < n;) {
-        int j = i;
-        while (j < n && rtl[j] == rtl[i])
-            j++;
-        if (rtl[i] != line_right)
-            for (int a = i, b = j - 1; a < b; a++, b--) {
-                int t = idx[a];
-                idx[a] = idx[b];
-                idx[b] = t;
-            }
-        i = j;
-    }
-    for (int i = 0; i < n; i++)
-        wr16(order + 2 * (uint32_t)i, (uint16_t)idx[line_right ? n - 1 - i : i]);
-    c->pc = c->lr;
-}
+/* GetFormatOrder: see formatorder.c. */
+void ppc_GetFormatOrder(ppc_cpu *c);
 
 /* ValidDate(const LongDateRec *, flags, LongDateTime *newSecs): the first
  * field (of those flags names, by mask bit) out of range, or -1
@@ -1597,7 +1562,7 @@ const ppc_export lib_exports[] = {
     { "CursorDeviceUnitsPerInch", g_CrsrDevUnitsPerInch }, { "CursorDeviceNextDevice", g_CrsrDevNextDevice },
     { "CursorDeviceNewDevice", g_CrsrDevNewDevice }, { "CursorDeviceDisposeDevice", g_CrsrDevDisposeDevice },
     /* Assorted InterfaceLib */
-    { "GetFormatOrder", g_GetFormatOrder },
+    { "GetFormatOrder", ppc_GetFormatOrder },
     { "ValidDate", g_ValidDate }, { "IdleUpdate", g_IdleUpdate }, { "FollowFinderAlias", g_FollowFinderAlias },
     { "DrvrInstall", g_DrvrInstall }, { "BuildBDS", g_BuildBDS }, { "WriteLocation", g_WriteLocation },
     { "LwrText", g_LowerText }, { "IPCListPortsAsync", g_IPCListPortsAsync },

@@ -958,6 +958,7 @@ int16_t tb_GetFlavorType(gaddr theDrag, uint32_t theItemRef, uint16_t index, gad
 void tb_GetFontInfo(gaddr ip);
 void tb_GetFontName(int16_t fnum, gaddr fnam);
 void tb_GetForeColor(gaddr arg0);
+void tb_GetFormatOrder(gaddr ordering, int16_t firstFormat, int16_t lastFormat, int8_t lineRight, gaddr rlDirProc, gaddr dirParam);
 int16_t tb_GetFreeThreadCount(int32_t threadStyle, gaddr freeCount);
 int16_t tb_GetFrontProcess(gaddr serial_number, int32_t dummy);
 int16_t tb_GetFrontServiceWindow(gaddr window);

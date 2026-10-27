@@ -30801,6 +30801,18 @@ static void ppcglue_FindWordBreaks(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetFormatOrder(ppc_cpu *c)
+{
+    gaddr a_ordering = (gaddr)c->gpr[3];
+    int16_t a_firstFormat = (int16_t)c->gpr[4];
+    int16_t a_lastFormat = (int16_t)c->gpr[5];
+    int8_t a_lineRight = (int8_t)c->gpr[6];
+    gaddr a_rlDirProc = (gaddr)c->gpr[7];
+    gaddr a_dirParam = (gaddr)c->gpr[8];
+    tb_GetFormatOrder(a_ordering, a_firstFormat, a_lastFormat, a_lineRight, a_rlDirProc, a_dirParam);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SBIsControlStripVisible(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SBIsControlStripVisible();
@@ -42189,6 +42201,7 @@ const ppc_export ppc_exports[] = {
     {"GetFontInfo", ppcglue_GetFontInfo},
     {"GetFontName", ppcglue_GetFontName},
     {"GetForeColor", ppcglue_GetForeColor},
+    {"GetFormatOrder", ppcglue_GetFormatOrder},
     {"GetFreeThreadCount", ppcglue_GetFreeThreadCount},
     {"GetFrontProcess", ppcglue_GetFrontProcess},
     {"GetFrontServiceWindow", ppcglue_GetFrontServiceWindow},

@@ -196,6 +196,28 @@
     dispatcher: ScriptUtil
     selector: 0xC012001A
 
+# GetFormatOrder for 68k programs (Eudora's text drawing); PowerPC ones had
+# it already.  The argument list is the Script Manager's: the order's
+# array, the first and last style runs, whether the line runs right, and
+# the procedure that says which runs are right to left, with its argument.
+- function:
+    name: GetFormatOrder
+    args:
+      - name: ordering
+        type: Ptr
+      - name: firstFormat
+        type: INTEGER
+      - name: lastFormat
+        type: INTEGER
+      - name: lineRight
+        type: Boolean
+      - name: rlDirProc
+        type: ProcPtr
+      - name: dirParam
+        type: Ptr
+    dispatcher: ScriptUtil
+    selector: 0x8012FFFC
+
 # The Control Strip (_ControlStripDispatch, ControlStripLib): its state
 # (Kinga and Tracktor Beam hide it while they run).  The selector is D0's
 # low byte, the high byte the arguments' size in words.

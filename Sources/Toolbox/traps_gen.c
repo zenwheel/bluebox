@@ -10866,6 +10866,20 @@ static void glue_GetForeColor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetFormatOrder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_dirParam = (gaddr)cpu_pop32(c);
+    gaddr a_rlDirProc = (gaddr)cpu_pop32(c);
+    int8_t a_lineRight = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t a_lastFormat = (int16_t)cpu_pop16(c);
+    int16_t a_firstFormat = (int16_t)cpu_pop16(c);
+    gaddr a_ordering = (gaddr)cpu_pop32(c);
+    tb_GetFormatOrder(a_ordering, a_firstFormat, a_lastFormat, a_lineRight, a_rlDirProc, a_dirParam);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetFreeThreadCount(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -29093,6 +29107,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x800E001Cu, "HiliteText", CONV_STACK, 12, 0, glue_HiliteText},
     {0xA8B5, (int32_t)0x8012001Au, "FindWord", CONV_STACK, 18, 0, glue_FindWord},
     {0xA8B5, (int32_t)0x8012FFE2u, "NFindWord", CONV_STACK, 18, 0, glue_NFindWord},
+    {0xA8B5, (int32_t)0x8012FFFCu, "GetFormatOrder", CONV_STACK, 18, 0, glue_GetFormatOrder},
     {0xA8B5, (int32_t)0x80160032u, "DrawJustified", CONV_STACK, 22, 0, glue_DrawJustified},
     {0xA8B5, (int32_t)0x801A0034u, "MeasureJustified", CONV_STACK, 26, 0, glue_MeasureJustified},
     {0xA8B5, (int32_t)0x82000000u, "FontScript", CONV_STACK, 0, 2, glue_FontScript},
