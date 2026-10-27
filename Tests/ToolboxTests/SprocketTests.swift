@@ -167,10 +167,12 @@ extension BlueBox {
             #expect(isp("ISpElementList_GetNextEvent", [global, 20, Self.buf, Self.buf + 32]) == 0 && rd8(Self.buf + 32) == 1)
             #expect(rd32(Self.buf + 8) == a && rd32(Self.buf + 16) == 1)
 
-            // Deactivated, it is idle.
+            // Deactivated, it is idle, and says so (Brutal Impact asks).
+            #expect(isp("ISpDevice_IsActive", [pad, Self.out]) == 0 && rd8(Self.out) == 1)
             wr32(Self.buf, pad)
             isp("ISpDevices_Deactivate", [1, Self.buf])
             #expect(state(a) == 0)
+            #expect(isp("ISpDevice_IsActive", [pad, Self.out]) == 0 && rd8(Self.out) == 0)
         }
     }
 }
