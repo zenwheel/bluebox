@@ -108,6 +108,16 @@ static bool mm_routine(gaddr rd, int want, uint32_t *procinfo, int *isa, gaddr *
         }
         *proc = tv;
     }
+    /* A routine that is itself a routine descriptor (List Files makes a
+     * descriptor of its user item's UPP): Mixed Mode goes on to that
+     * one's routine, as the descriptor's _MixedModeMagic would. */
+    static int depth;
+    if (*proc && mm_is_descriptor(*proc) && *proc != rd && depth < 4) {
+        depth++;
+        bool ok = mm_routine(*proc, want, procinfo, isa, proc);
+        depth--;
+        return ok;
+    }
     return *proc != 0;
 }
 

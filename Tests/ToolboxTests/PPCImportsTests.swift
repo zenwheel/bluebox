@@ -233,6 +233,26 @@ extension BlueBox {
             #expect([g_ppc.gpr.3, g_ppc.gpr.4, g_ppc.gpr.5, g_ppc.gpr.6, g_ppc.gpr.7, g_ppc.gpr.8] == [1, 2, 3, 4, 5, 6])
         }
 
+        /// A descriptor whose PowerPC routine is itself a descriptor (List
+        /// Files wraps its user item's UPP again) calls that one's routine.
+        @Test func descriptorOfADescriptorCallsTheInnerRoutine() {
+            bootMachine()
+            _ = cfm_ppc_cpu()
+            let tv = bytes([0, 0, 0, 0, 0, 0, 0, 0])
+            wr32(tv, bytes([0x4E, 0x80, 0x00, 0x20])) // blr
+            func descriptor(_ proc: UInt32) -> UInt32 {
+                let rd = bytes([0xAA, 0xFE, 7, 0] + [UInt8](repeating: 0, count: 8 + 20))
+                wr32(rd + 12, 0x2C0)
+                wr8(rd + 17, 1) // kPowerPCISA
+                wr32(rd + 20, proc)
+                return rd
+            }
+            let outer = descriptor(descriptor(tv))
+            call("CallUniversalProc", [outer, 0x2C0, 7, 8])
+            #expect(g_ppc.pc == rd32(tv) && g_ppc.gpr.12 == tv)
+            #expect(g_ppc.gpr.3 == 7 && g_ppc.gpr.4 == 8)
+        }
+
         // MARK: Slot Manager
 
         /// SpBlock: spResult 0, spsPointer 4, spParamData 24, spRefNum 38,
