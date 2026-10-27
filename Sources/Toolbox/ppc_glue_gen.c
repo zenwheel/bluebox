@@ -30820,6 +30820,38 @@ static void ppcglue_SBSafeToAccessStartupDisk(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SBOpenModuleResourceFile(ppc_cpu *c)
+{
+    int32_t a_fileCreator = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBOpenModuleResourceFile(a_fileCreator);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBLoadPreferences(ppc_cpu *c)
+{
+    gaddr a_prefsResourceName = (gaddr)c->gpr[3];
+    gaddr a_preferences = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBLoadPreferences(a_prefsResourceName, a_preferences);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSavePreferences(ppc_cpu *c)
+{
+    gaddr a_prefsResourceName = (gaddr)c->gpr[3];
+    gaddr a_preferences = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBSavePreferences(a_prefsResourceName, a_preferences);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetDetachedIndString(ppc_cpu *c)
+{
+    gaddr a_theString = (gaddr)c->gpr[3];
+    gaddr a_stringList = (gaddr)c->gpr[4];
+    int16_t a_whichString = (int16_t)c->gpr[5];
+    tb_SBGetDetachedIndString(a_theString, a_stringList, a_whichString);
+    c->pc = c->lr;
+}
+
 static void ppcglue_AEManagerInfo(ppc_cpu *c)
 {
     int32_t a_keyWord = (int32_t)c->gpr[3];
@@ -44201,8 +44233,12 @@ const ppc_export ppc_exports[] = {
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"RstFLock", ppcglue_RstFLock},
+    {"SBGetDetachedIndString", ppcglue_SBGetDetachedIndString},
     {"SBIsControlStripVisible", ppcglue_SBIsControlStripVisible},
+    {"SBLoadPreferences", ppcglue_SBLoadPreferences},
+    {"SBOpenModuleResourceFile", ppcglue_SBOpenModuleResourceFile},
     {"SBSafeToAccessStartupDisk", ppcglue_SBSafeToAccessStartupDisk},
+    {"SBSavePreferences", ppcglue_SBSavePreferences},
     {"SBShowHideControlStrip", ppcglue_SBShowHideControlStrip},
     {"SCSIAction", ppcglue_SCSIAction},
     {"SCSICmd", ppcglue_SCSICmd},

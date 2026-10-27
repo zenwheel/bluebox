@@ -215,3 +215,49 @@
     return: Boolean
     dispatcher: ControlStripDispatch
     selector: 0x0002
+
+# A module's resource file, preferences and detached strings (the
+# registration programs of CalcStrip, G3Strip and G3Throttle, and OT:PPP's
+# CSM helper, load their preferences at start); see controlstrip.c.
+- function:
+    name: SBOpenModuleResourceFile
+    return: INTEGER
+    args:
+      - name: fileCreator
+        type: OSType
+    dispatcher: ControlStripDispatch
+    selector: 0x0203
+
+- function:
+    name: SBLoadPreferences
+    return: OSErr
+    args:
+      - name: prefsResourceName
+        type: ConstStr255Param
+      - name: preferences
+        type: Handle*
+    dispatcher: ControlStripDispatch
+    selector: 0x0404
+
+- function:
+    name: SBSavePreferences
+    return: OSErr
+    args:
+      - name: prefsResourceName
+        type: ConstStr255Param
+      - name: preferences
+        type: Handle
+    dispatcher: ControlStripDispatch
+    selector: 0x0405
+
+- function:
+    name: SBGetDetachedIndString
+    args:
+      - name: theString
+        type: StringPtr
+      - name: stringList
+        type: Handle
+      - name: whichString
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x0506

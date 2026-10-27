@@ -20140,6 +20140,17 @@ static void glue_RstFLock(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SBGetDetachedIndString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_whichString = (int16_t)cpu_pop16(c);
+    gaddr a_stringList = (gaddr)cpu_pop32(c);
+    gaddr a_theString = (gaddr)cpu_pop32(c);
+    tb_SBGetDetachedIndString(a_theString, a_stringList, a_whichString);
+    cpu_push32(c, ret);
+}
+
 static void glue_SBIsControlStripVisible(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20149,12 +20160,44 @@ static void glue_SBIsControlStripVisible(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SBLoadPreferences(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_preferences = (gaddr)cpu_pop32(c);
+    gaddr a_prefsResourceName = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBLoadPreferences(a_prefsResourceName, a_preferences);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBOpenModuleResourceFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_fileCreator = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SBOpenModuleResourceFile(a_fileCreator);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SBSafeToAccessStartupDisk(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int8_t r = tb_SBSafeToAccessStartupDisk();
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_SBSavePreferences(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_preferences = (gaddr)cpu_pop32(c);
+    gaddr a_prefsResourceName = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBSavePreferences(a_prefsResourceName, a_preferences);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -27055,6 +27098,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAF2, (int32_t)0x0u, "SBIsControlStripVisible", CONV_STACK, 0, 2, glue_SBIsControlStripVisible},
     {0xAAF2, (int32_t)0x2u, "SBSafeToAccessStartupDisk", CONV_STACK, 0, 2, glue_SBSafeToAccessStartupDisk},
     {0xAAF2, (int32_t)0x101u, "SBShowHideControlStrip", CONV_STACK, 2, 0, glue_SBShowHideControlStrip},
+    {0xAAF2, (int32_t)0x203u, "SBOpenModuleResourceFile", CONV_STACK, 4, 2, glue_SBOpenModuleResourceFile},
+    {0xAAF2, (int32_t)0x404u, "SBLoadPreferences", CONV_STACK, 8, 2, glue_SBLoadPreferences},
+    {0xAAF2, (int32_t)0x405u, "SBSavePreferences", CONV_STACK, 8, 2, glue_SBSavePreferences},
+    {0xAAF2, (int32_t)0x506u, "SBGetDetachedIndString", CONV_STACK, 10, 0, glue_SBGetDetachedIndString},
     {0xABE0, (int32_t)0x4000Cu, "CloseCursorComponent", CONV_STACK, 4, 2, glue_CloseCursorComponent},
     {0xABE0, (int32_t)0x4000Du, "SetCursorComponent", CONV_STACK, 4, 2, glue_SetCursorComponent},
     {0xABE0, (int32_t)0x4000Eu, "CursorComponentChanged", CONV_STACK, 4, 2, glue_CursorComponentChanged},
