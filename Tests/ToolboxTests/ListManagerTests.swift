@@ -92,6 +92,28 @@ extension BlueBox {
             tb_LDispose(list)
         }
 
+        /// TimeSlice counts the selected cells with LGetSelect from each
+        /// LNextCell: the cell moves past the end, where LGetSelect finds
+        /// no more, and past a row's end LGetSelect goes on from the next.
+        @Test func countingSelectedCellsEnds() {
+            let (_, list) = makeList()
+            _ = tb_LAddRow(3, 0, list)
+            tb_LSetSelect(1, pt(0, 0), list)
+            tb_LSetSelect(1, pt(2, 0), list)
+            let c = tb_NewPtr(4, false, true)
+            wr32(c, pt(0, 0))
+            var count = 0
+            while tb_LGetSelect(1, c, list) != 0 && count < 10 {
+                count += 1
+                _ = tb_LNextCell(0, 1, c, list)
+            }
+            #expect(count == 2)
+            #expect(rd32(c) == pt(3, 0))
+            wr32(c, pt(0, 1))               // past row 0's only column
+            #expect(tb_LGetSelect(1, c, list) != 0 && rd32(c) == pt(2, 0))
+            tb_LDispose(list)
+        }
+
         /// An inactive list shows no selection, as System 7.1 draws it:
         /// LActivate draws the selected cells plain or highlighted, cells
         /// selected meanwhile aren't drawn, and drawing an inactive list
