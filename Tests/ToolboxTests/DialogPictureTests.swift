@@ -646,6 +646,27 @@ extension BlueBox {
             #expect(rgba(150, 150) == [0, 0, 0])
         }
 
+        /// A window with a picture (SetWindowPic) is drawn by the Window
+        /// Manager, with no update event: ACE! waits for its splash's
+        /// updates to end.
+        @Test func windowPicturesDrawWithoutUpdateEvents() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [60, 60, 260, 360].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let w = tb_NewWindow(0, r, 0, 0, 2, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            let pic = tb_OpenPicture(w + UInt32(GrafPort_portRect_off))
+            tb_PaintRect(w + UInt32(GrafPort_portRect_off))
+            tb_ClosePicture()
+            tb_SetWindowPic(w, pic)
+            tb_ShowWindow(w)
+            let ev = tb_NewPtr(16, false, true)
+            #expect(tb_CheckUpdate(ev) == 0)
+            #expect(tb_EmptyRgn(WindowRecord_updateRgn(w)) != 0)
+            #expect(rgba(150, 150) == [0, 0, 0])
+        }
+
         @Test func blackAndWhiteStaysOneBit() {
             launchTestApp()
             #expect(PixMap_pixelSize(rd32(GDevice_gdPMap(rd32(tb_GetMainDevice())))) == 1)

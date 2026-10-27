@@ -1762,11 +1762,23 @@ int8_t tb_CheckUpdate(gaddr ev)
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
         if (!wvisible(w))
             continue;
-        if (!tb_EmptyRgn(WindowRecord_updateRgn(w))) {
-            wr16(ev, 6); /* updateEvt */
-            wr32(ev + 2, w);
-            return 1;
+        if (tb_EmptyRgn(WindowRecord_updateRgn(w)))
+            continue;
+        /* A window with a picture is the Window Manager's to draw, with no
+         * update event (ACE!'s splash, waiting for its updates to end). */
+        gaddr pic = WindowRecord_windowPic(w);
+        if (pic) {
+            gaddr saved = qd_port();
+            tb_SetPort(w);
+            tb_BeginUpdate(w);
+            tb_DrawPicture(pic, w + GrafPort_portRect_off);
+            tb_EndUpdate(w);
+            tb_SetPort(saved);
+            continue;
         }
+        wr16(ev, 6); /* updateEvt */
+        wr32(ev + 2, w);
+        return 1;
     }
     return 0;
 }
