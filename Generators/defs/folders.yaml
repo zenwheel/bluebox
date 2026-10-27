@@ -1,0 +1,157 @@
+# The Folder Manager's descriptors and routings (FoldersLib, Mac OS 8.6
+# and later; CarbonLib has them too), _AliasDispatch ($A823) selectors.
+
+- function:
+    name: AddFolderDescriptor
+    return: OSErr
+    args:
+      - name: foldType
+        type: OSType
+      - name: flags
+        type: uint32_t
+      - name: foldClass
+        type: OSType
+      - name: foldLocation
+        type: OSType
+      - name: badgeSignature
+        type: OSType
+      - name: badgeType
+        type: OSType
+      - name: name
+        type: StringPtr
+      - name: replaceFlag
+        type: Boolean
+    dispatcher: AliasDispatch
+    selector: 0x0020
+
+- function:
+    name: RemoveFolderDescriptor
+    return: OSErr
+    args:
+      - name: foldType
+        type: OSType
+    dispatcher: AliasDispatch
+    selector: 0x0021
+
+- function:
+    name: GetFolderDescriptor
+    return: OSErr
+    args:
+      - name: foldType
+        type: OSType
+      - name: descSize
+        type: int32_t
+      - name: foldDesc
+        type: void*
+    dispatcher: AliasDispatch
+    selector: 0x0023
+
+- function:
+    name: GetFolderTypes
+    return: OSErr
+    args:
+      - name: requestedTypeCount
+        type: uint32_t
+      - name: totalTypeCount
+        type: uint32_t*
+      - name: theTypes
+        type: void*
+    dispatcher: AliasDispatch
+    selector: 0x0024
+
+- function:
+    name: GetFolderName
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: foldType
+        type: OSType
+      - name: foundVRefNum
+        type: int16_t*
+      - name: name
+        type: StringPtr
+    dispatcher: AliasDispatch
+    selector: 0x000E
+
+- function:
+    name: AddFolderRouting
+    return: OSErr
+    args:
+      - name: fileType
+        type: OSType
+      - name: routeFromFolder
+        type: OSType
+      - name: routeToFolder
+        type: OSType
+      - name: flags
+        type: uint32_t
+      - name: replaceFlag
+        type: Boolean
+    dispatcher: AliasDispatch
+    selector: 0x0926
+
+- function:
+    name: RemoveFolderRouting
+    return: OSErr
+    args:
+      - name: fileType
+        type: OSType
+      - name: routeFromFolder
+        type: OSType
+    dispatcher: AliasDispatch
+    selector: 0x0427
+
+- function:
+    name: FindFolderRouting
+    return: OSErr
+    args:
+      - name: fileType
+        type: OSType
+      - name: routeFromFolder
+        type: OSType
+      - name: routeToFolder
+        type: uint32_t*
+      - name: flags
+        type: uint32_t*
+    dispatcher: AliasDispatch
+    selector: 0x0822
+
+- function:
+    name: GetFolderRoutings
+    return: OSErr
+    args:
+      - name: requestedRoutingCount
+        type: uint32_t
+      - name: totalRoutingCount
+        type: uint32_t*
+      - name: routingSize
+        type: int32_t
+      - name: theRoutings
+        type: void*
+    dispatcher: AliasDispatch
+    selector: 0x081E
+
+- function:
+    name: InvalidateFolderDescriptorCache
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: dirID
+        type: int32_t
+    dispatcher: AliasDispatch
+    selector: 0x0325
+
+- function:
+    name: IdentifyFolder
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: int16_t
+      - name: dirID
+        type: int32_t
+      - name: foldType
+        type: uint32_t*
+    dispatcher: AliasDispatch
+    selector: 0x051F

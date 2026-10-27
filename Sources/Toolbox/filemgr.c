@@ -1022,6 +1022,7 @@ void fm_init(const char *app_dir)
     }
     npending = 0; /* for this launch */
     hfsplus_reset();
+    folders_reset();
     default_dir = dir_id_for(rel_of(app));
     mount *am = mount_of_path(app);
     default_vref = am ? am->vref : VREF;
@@ -2766,8 +2767,26 @@ static const struct {
     { "\xC4" "scr", "Scripts" }, /* 'ƒscr' */
 };
 
+/* The standard folders, by index: the Desktop Folder (name NULL) and
+ * the System Folder's ('macs', name NULL) and those in it. */
+bool fm_standard_folder(int i, uint32_t *type, const char **name)
+{
+    if (i == 0) {
+        *type = 0x6465736B; /* 'desk' */
+        *name = NULL;
+        return true;
+    }
+    if (i - 1 >= (int)(sizeof folders / sizeof folders[0]))
+        return false;
+    const uint8_t *t = (const uint8_t *)folders[i - 1].type;
+    *type = (uint32_t)t[0] << 24 | (uint32_t)t[1] << 16 | (uint32_t)t[2] << 8 | t[3];
+    *name = folders[i - 1].name;
+    return true;
+}
+
 /* A folder type's host folder; the standard folders always exist, as on
- * a working System, so they are made when missing. */
+ * a working System, so they are made when missing.  Others are those a
+ * program described (folders.c). */
 int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
 {
     char path[PATH_MAX];
@@ -2788,7 +2807,7 @@ int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
         found = true;
     }
     if (!found)
-        return fnfErrF;
+        return folders_find_added(type, create, out, outsize);
     if (!is_dir(path) && !make_dirs(path))
         return fnfErrF;
     return realpath(path, out) && strlen(out) < outsize ? noErr : fnfErrF;

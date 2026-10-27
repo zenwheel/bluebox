@@ -1712,6 +1712,37 @@ static void glue_AddFilePreview(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddFolderDescriptor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_replaceFlag = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int32_t a_badgeType = (int32_t)cpu_pop32(c);
+    int32_t a_badgeSignature = (int32_t)cpu_pop32(c);
+    int32_t a_foldLocation = (int32_t)cpu_pop32(c);
+    int32_t a_foldClass = (int32_t)cpu_pop32(c);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    int32_t a_foldType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AddFolderDescriptor(a_foldType, a_flags, a_foldClass, a_foldLocation, a_badgeSignature, a_badgeType, a_name, a_replaceFlag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AddFolderRouting(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_replaceFlag = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_flags = (uint32_t)cpu_pop32(c);
+    int32_t a_routeToFolder = (int32_t)cpu_pop32(c);
+    int32_t a_routeFromFolder = (int32_t)cpu_pop32(c);
+    int32_t a_fileType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AddFolderRouting(a_fileType, a_routeFromFolder, a_routeToFolder, a_flags, a_replaceFlag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AddIconToSuite(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -7883,6 +7914,19 @@ static void glue_FindFolderExtended(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindFolderRouting(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_flags = (gaddr)cpu_pop32(c);
+    gaddr a_routeToFolder = (gaddr)cpu_pop32(c);
+    int32_t a_routeFromFolder = (int32_t)cpu_pop32(c);
+    int32_t a_fileType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_FindFolderRouting(a_fileType, a_routeFromFolder, a_routeToFolder, a_flags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FindRecordByIndexInDictionary(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10825,6 +10869,56 @@ static void glue_GetFlavorType(cpu68k *c, uint16_t trapword)
     uint32_t a_theItemRef = (uint32_t)cpu_pop32(c);
     gaddr a_theDrag = (gaddr)cpu_pop32(c);
     int16_t r = tb_GetFlavorType(a_theDrag, a_theItemRef, a_index, a_theType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFolderDescriptor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_foldDesc = (gaddr)cpu_pop32(c);
+    int32_t a_descSize = (int32_t)cpu_pop32(c);
+    int32_t a_foldType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetFolderDescriptor(a_foldType, a_descSize, a_foldDesc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFolderName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    gaddr a_foundVRefNum = (gaddr)cpu_pop32(c);
+    int32_t a_foldType = (int32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetFolderName(a_vRefNum, a_foldType, a_foundVRefNum, a_name);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFolderRoutings(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theRoutings = (gaddr)cpu_pop32(c);
+    int32_t a_routingSize = (int32_t)cpu_pop32(c);
+    gaddr a_totalRoutingCount = (gaddr)cpu_pop32(c);
+    uint32_t a_requestedRoutingCount = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_GetFolderRoutings(a_requestedRoutingCount, a_totalRoutingCount, a_routingSize, a_theRoutings);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFolderTypes(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theTypes = (gaddr)cpu_pop32(c);
+    gaddr a_totalTypeCount = (gaddr)cpu_pop32(c);
+    uint32_t a_requestedTypeCount = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_GetFolderTypes(a_requestedTypeCount, a_totalTypeCount, a_theTypes);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -14284,6 +14378,18 @@ static void glue_IconSuiteToRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IdentifyFolder(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_foldType = (gaddr)cpu_pop32(c);
+    int32_t a_dirID = (int32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_IdentifyFolder(a_vRefNum, a_dirID, a_foldType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_IdleControls(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14770,6 +14876,17 @@ static void glue_InvalRgn(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_r = (gaddr)cpu_pop32(c);
     tb_InvalRgn(a_r);
+    cpu_push32(c, ret);
+}
+
+static void glue_InvalidateFolderDescriptorCache(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dirID = (int32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_InvalidateFolderDescriptorCache(a_vRefNum, a_dirID);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -19832,6 +19949,27 @@ static void glue_RemoveFS(cpu68k *c, uint16_t trapword)
     int16_t a_fsid = (int16_t)c->a[0];
     int16_t r = tb_RemoveFS(a_fsid);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_RemoveFolderDescriptor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_foldType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RemoveFolderDescriptor(a_foldType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveFolderRouting(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_routeFromFolder = (int32_t)cpu_pop32(c);
+    int32_t a_fileType = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RemoveFolderRouting(a_fileType, a_routeFromFolder);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_RemoveIconRefOverride(cpu68k *c, uint16_t trapword)
@@ -26890,6 +27028,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA823, (int32_t)0x9u, "NewAliasMinimalFromFullPath", CONV_STACK, 18, 2, glue_NewAliasMinimalFromFullPath},
     {0xA823, (int32_t)0xBu, "ReleaseFolder", CONV_STACK, 6, 2, glue_ReleaseFolder},
     {0xA823, (int32_t)0xCu, "ResolveAliasFile", CONV_STACK, 14, 2, glue_ResolveAliasFile},
+    {0xA823, (int32_t)0xEu, "GetFolderName", CONV_STACK, 14, 2, glue_GetFolderName},
+    {0xA823, (int32_t)0x20u, "AddFolderDescriptor", CONV_STACK, 30, 2, glue_AddFolderDescriptor},
+    {0xA823, (int32_t)0x21u, "RemoveFolderDescriptor", CONV_STACK, 4, 2, glue_RemoveFolderDescriptor},
+    {0xA823, (int32_t)0x23u, "GetFolderDescriptor", CONV_STACK, 12, 2, glue_GetFolderDescriptor},
+    {0xA823, (int32_t)0x24u, "GetFolderTypes", CONV_STACK, 12, 2, glue_GetFolderTypes},
     {0xA823, (int32_t)0x29u, "ResolveAliasFileWithMountFlags", CONV_STACK, 18, 2, glue_ResolveAliasFileWithMountFlags},
     {0xA823, (int32_t)0x2Au, "IsAliasFile", CONV_STACK, 12, 2, glue_IsAliasFile},
     {0xA823, (int32_t)0x2Bu, "ResolveAliasWithMountFlags", CONV_STACK, 20, 2, glue_ResolveAliasWithMountFlags},
@@ -26904,9 +27047,15 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA823, (int32_t)0x3Cu, "FSResolveAliasFile", CONV_STACK, 14, 2, glue_FSResolveAliasFile},
     {0xA823, (int32_t)0x3Du, "FSFollowFinderAlias", CONV_STACK, 18, 2, glue_FSFollowFinderAlias},
     {0xA823, (int32_t)0x3Eu, "FSUpdateAlias", CONV_STACK, 16, 2, glue_FSUpdateAlias},
+    {0xA823, (int32_t)0x325u, "InvalidateFolderDescriptorCache", CONV_STACK, 6, 2, glue_InvalidateFolderDescriptorCache},
+    {0xA823, (int32_t)0x427u, "RemoveFolderRouting", CONV_STACK, 8, 2, glue_RemoveFolderRouting},
     {0xA823, (int32_t)0x430u, "FolderManagerUnregisterNotificationProc", CONV_STACK, 8, 2, glue_FolderManagerUnregisterNotificationProc},
+    {0xA823, (int32_t)0x51Fu, "IdentifyFolder", CONV_STACK, 10, 2, glue_IdentifyFolder},
     {0xA823, (int32_t)0x62Fu, "FolderManagerRegisterNotificationProc", CONV_STACK, 12, 2, glue_FolderManagerRegisterNotificationProc},
     {0xA823, (int32_t)0x631u, "FolderManagerRegisterCallNotificationProcs", CONV_STACK, 12, 4, glue_FolderManagerRegisterCallNotificationProcs},
+    {0xA823, (int32_t)0x81Eu, "GetFolderRoutings", CONV_STACK, 16, 2, glue_GetFolderRoutings},
+    {0xA823, (int32_t)0x822u, "FindFolderRouting", CONV_STACK, 16, 2, glue_FindFolderRouting},
+    {0xA823, (int32_t)0x926u, "AddFolderRouting", CONV_STACK, 18, 2, glue_AddFolderRouting},
     {0xA823, (int32_t)0xB2Cu, "FindFolderExtended", CONV_STACK, 24, 2, glue_FindFolderExtended},
     {0xAA74, (int32_t)0xFFFFFFFFu, "IsAppearanceClient", CONV_STACK, 4, 2, glue_IsAppearanceClient},
     {0xAA74, (int32_t)0x1u, "SetThemePen", CONV_STACK, 6, 4, glue_SetThemePen},
