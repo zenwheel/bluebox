@@ -104,6 +104,38 @@ extension BlueBox {
             #expect(tv == rd32(cfm_prepare_container(importContainer("GetCurrentProcess", cls: 2))))
         }
 
+        /// A library's symbols follow the library's before it even when its
+        /// header says they start at 0, as SmalltalkAgents' linker wrote
+        /// them (Pictodexer: STRuntime's 130 after InterfaceLib's one).
+        @Test func overlappingLibrarySymbolsFollowOn() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
+            func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
+            let strings = Array("InterfaceLib".utf8) + [0] + Array("GetCurrentProcess".utf8) + [0] + Array("TickCount".utf8) + [0]
+            let stringsOff: UInt32 = 128, hashOff = (stringsOff + UInt32(strings.count) + 3) & ~3
+            var loader = be32(0) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+            loader += be32(2) + be32(2) + be32(1) + be32(124) + be32(stringsOff) + be32(hashOff) + be32(0) + be32(0)
+            loader += be32(0) + be32(0) + be32(0) + be32(1) + be32(0) + [0, 0] + be16(0) // InterfaceLib: symbol 0
+            loader += be32(0) + be32(0) + be32(0) + be32(1) + be32(0) + [0, 0] + be16(0) // again, "from 0": symbol 1
+            loader += be32(2 << 24 | 13) + be32(2 << 24 | 31)
+            loader += be16(0) + be16(0) + be32(2) + be32(0)                                 // relocations for section 0
+            loader += be16(0x6000) + be16(0x6001)                                           // by import 0, by import 1
+            loader += strings
+            while loader.count < Int(hashOff) { loader.append(0) }
+            loader += be32(0)
+            let dataOff = UInt32(40 + 2 * 28), loaderOff = dataOff + 8
+            var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(2) + be16(1) + be32(0)
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(dataOff) + [1, 1, 0, 0]
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count)) + be32(loaderOff) + [4, 1, 0, 0]
+            pef += [UInt8](repeating: 0, count: 8) + loader
+            let data = cfm_prepare_container(bytes(pef))
+            #expect(data != 0)
+            #expect(rd32(data) != 0 && rd32(data + 4) != 0)
+            #expect(rd32(data) != rd32(data + 4))
+        }
+
         /// A fragment in memory (a code resource) has its code and data
         /// where they are in (a copy of) the container, the bytes between
         /// them in reach: FutureBASIC^3's runtime keeps its glue and

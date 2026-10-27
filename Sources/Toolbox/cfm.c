@@ -1005,10 +1005,19 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
     gaddr *imports = calloc(nsyms ? nsyms : 1, sizeof *imports);
     char **absent = calloc(nsyms ? nsyms : 1, sizeof *absent);
     const uint8_t *libs = loader + 56, *syms = libs + nlibs * 24;
+    uint32_t next = 0; /* where the libraries so far end */
     for (uint32_t l = 0; l < nlibs; l++) {
         const uint8_t *lib = libs + l * 24;
         const char *lname = (const char *)loader + strings + be32(lib);
         uint32_t count = be32(lib + 12), first = be32(lib + 16);
+        /* Each library's symbols follow the one before's: SmalltalkAgents'
+         * linker gave its runtime library first 0 after InterfaceLib's one
+         * symbol, so its last (RuntimeInit) was never bound.  Libraries
+         * whose symbols are merely in another order keep theirs. */
+        if (first < next && next + count <= nsyms)
+            first = next;
+        if (first + count > next)
+            next = first + count;
         bool weak_lib = (lib[20] & 0x40) != 0;
         char lerr[256];
         int li = library_named(lname, lerr, sizeof lerr);
