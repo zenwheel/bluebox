@@ -35,32 +35,42 @@ extension BlueBox {
 
         func read(_ p: UInt32, _ n: Int) -> [UInt8] { (0..<n).map { rd8(p + UInt32($0)) } }
 
-        /// A PowerPC program's asynchronous PB call sets ioResult and runs
-        /// its completion routine later, at interrupt time, as a 68k one's
-        /// does (Star Wars DroidWorks waits in YieldToAnyThread for it).
+        /// A PowerPC program's asynchronous PB call that finishes at once
+        /// runs its completion routine before it returns, as a Mac's File
+        /// Manager did when the disk needed no waiting (MacGLQuake's GUSI
+        /// doesn't wait otherwise). A call the completion routine makes
+        /// waits for the interrupt pump, its ioResult in progress till then.
         @Test func asyncCallsRunTheirCompletion() {
             bootMachine()
             let stack = tb_NewPtr(65536, false, true)
             g_cpu!.pointee.a.7 = stack + 65536 - 16
             let flag = tb_NewPtr(4, false, true)
-            // MOVE.W D0,flag; ADDQ.W #1,flag+2; RTS
-            let words: [UInt16] = [0x33C0, UInt16(flag >> 16), UInt16(flag & 0xFFFF),
-                                   0x5279, UInt16((flag + 2) >> 16), UInt16((flag + 2) & 0xFFFF), 0x4E75]
-            let code = bytes(words.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xFF)] })
-            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
-            wr32(pb + UInt32(IOParam_ioCompletion_off), code)
-            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -1000)) // no such file
-            wr16(pb + UInt32(IOParam_ioResult_off), 1)
+            func code(_ words: [UInt16]) -> UInt32 { bytes(words.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xFF)] }) }
+            func newPB(_ completion: UInt32) -> UInt32 {
+                let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+                wr32(pb + UInt32(IOParam_ioCompletion_off), completion)
+                wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -1000)) // no such file
+                wr16(pb + UInt32(IOParam_ioResult_off), 1)
+                return pb
+            }
+            // ADDQ.W #1,flag+2; RTS
+            let pb2 = newPB(code([0x5279, UInt16((flag + 2) >> 16), UInt16((flag + 2) & 0xFFFF), 0x4E75]))
+            // MOVE.W D0,flag; ADDQ.W #1,flag+2; MOVEA.L #pb2,A0; _Read,ASYNC; RTS
+            let pb = newPB(code([0x33C0, UInt16(flag >> 16), UInt16(flag & 0xFFFF),
+                                 0x5279, UInt16((flag + 2) >> 16), UInt16((flag + 2) & 0xFFFF),
+                                 0x207C, UInt16(pb2 >> 16), UInt16(pb2 & 0xFFFF), 0xA402, 0x4E75]))
             #expect(result16("PBReadAsync", [pb]) == -51) // rfNumErr
-            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -51)
-            #expect(rd16(flag + 2) == 0) // not from inside the call
-            time_pump()
             #expect(rd16(flag + 2) == 1 && Int16(bitPattern: rd16(flag)) == -51)
+            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -51)
+            #expect(rd16(pb2 + UInt32(IOParam_ioResult_off)) == 1) // the completion's own call goes on
+            time_pump()
+            #expect(rd16(flag + 2) == 2)
+            #expect(Int16(bitPattern: rd16(pb2 + UInt32(IOParam_ioResult_off))) == -51)
             wr16(pb + UInt32(IOParam_ioResult_off), 1)
             #expect(result16("PBReadSync", [pb]) == -51)
             #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -51)
             time_pump()
-            #expect(rd16(flag + 2) == 1) // a synchronous call has no completion
+            #expect(rd16(flag + 2) == 2) // a synchronous call has no completion
         }
 
         // MARK: Code Fragment Manager and Mixed Mode

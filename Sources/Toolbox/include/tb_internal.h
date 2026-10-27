@@ -199,6 +199,7 @@ void sane_reset(void);
 void time_pump(void);
 /* An asynchronous call's completion routine, at the next interrupt pump. */
 void io_complete_later(gaddr pb, int16_t result);
+void io_complete_soon(gaddr pb, int16_t result); /* before the call returns, unless in a completion */
 bool time_busy(void);  /* a Time Manager or VBL task waiting */
 bool sound_busy(void); /* a sound channel open */
 void adb_install(void); /* the ADB Manager's ADBOp, at boot */

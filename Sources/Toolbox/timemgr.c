@@ -205,8 +205,41 @@ static int ncompletions;
 
 void io_complete_later(gaddr pb, int16_t result)
 {
-    if (ncompletions < MAX_COMPLETIONS)
+    if (ncompletions < MAX_COMPLETIONS) {
         completions[ncompletions++] = (completion){ pb, result };
+        /* Until its completion runs the call is still going on, as the
+         * I/O was: a program that waits for ioResult and then forgets the
+         * block (MacGLQuake's, on the stack) must not get the completion
+         * after the block has gone. */
+        if (rd32(pb + 12))
+            wr16(pb + 16, (uint16_t)ioInProgress);
+    }
+}
+
+/* A queued call finishes: its result in ioResult, then its completion. */
+static int completing; /* inside a completion routine */
+static void complete(gaddr pb, int16_t result)
+{
+    wr16(pb + 16, (uint16_t)result); /* ioResult */
+    gaddr fn = rd32(pb + 12);        /* ioCompletion */
+    if (fn) {
+        completing++;
+        interrupt_call_d0(fn, pb, 0, (uint32_t)(int32_t)result);
+        completing--;
+    }
+}
+
+/* A File or Device Manager call that finished at once: as on a Mac whose
+ * disk needed no waiting, its completion runs before the call returns
+ * (MacGLQuake's GUSI then never waits for one, a wait it isn't set up
+ * for).  One a completion routine makes waits for the pump instead, so a
+ * completion that issues the next read doesn't recurse. */
+void io_complete_soon(gaddr pb, int16_t result)
+{
+    if (completing)
+        io_complete_later(pb, result);
+    else
+        complete(pb, result);
 }
 
 /* Deferred tasks (DTInstall): run once at the next interrupt pump. */
@@ -250,9 +283,7 @@ void io_complete_now_for(int16_t refnum)
         if ((int16_t)rd16(pb + 24) == refnum) { /* ioRefNum */
             int16_t r = completions[i].result;
             memmove(completions + i, completions + i + 1, sizeof completions[0] * (size_t)(--ncompletions - i));
-            gaddr fn = rd32(pb + 12);
-            if (fn)
-                interrupt_call_d0(fn, pb, 0, (uint32_t)(int32_t)r);
+            complete(pb, r);
             i = 0; /* a completion may have queued more */
         } else {
             i++;
@@ -266,9 +297,7 @@ void io_complete_now(gaddr pb, int16_t result)
         if (completions[i].pb == pb) {
             int16_t r = completions[i].result;
             memmove(completions + i, completions + i + 1, sizeof completions[0] * (size_t)(--ncompletions - i));
-            gaddr fn = rd32(pb + 12);
-            if (fn)
-                interrupt_call_d0(fn, pb, 0, (uint32_t)(int32_t)r);
+            complete(pb, r);
         } else {
             i++;
         }
@@ -285,11 +314,8 @@ static void run_completions(void)
     completion due[MAX_COMPLETIONS];
     memcpy(due, completions, sizeof due[0] * (size_t)n);
     ncompletions = 0;
-    for (int i = 0; i < n; i++) {
-        gaddr fn = rd32(due[i].pb + 12); /* ioCompletion */
-        if (fn)
-            interrupt_call_d0(fn, due[i].pb, 0, (uint32_t)(int32_t)due[i].result);
-    }
+    for (int i = 0; i < n; i++)
+        complete(due[i].pb, due[i].result);
 }
 
 /* One tick's VBL tasks: each count down, those reaching zero run. */

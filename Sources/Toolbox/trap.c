@@ -406,7 +406,7 @@ int16_t pb_call_done(gaddr pb, int16_t err, bool async)
     /* async, with an ioCompletion; a driver call still in progress is
      * completed by the driver */
     if (async && rd32(pb + 12) && err != ioInProgress)
-        io_complete_later(pb, err);
+        io_complete_soon(pb, err);
     /* Queued: the call itself succeeds; ioResult says it runs on. */
     return async && err == ioInProgress ? noErr : err;
 }
