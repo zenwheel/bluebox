@@ -708,12 +708,13 @@ static const coercion_entry *find_coercion(uint32_t from, uint32_t to)
 /* A universal procedure pointer: a routine descriptor, 68k code, or (from
  * PowerPC code that skipped NewRoutineDescriptor) a transition vector.
  * Blue Box's own handlers (the applet shell's, installed while a Carbon
- * applet's PowerPC code runs) are 68k stubs in the ROM. */
+ * applet's PowerPC code runs) are 68k stubs in the ROM, and those 68k
+ * code installed (gist's, run through CallUniversalProc) 68k code too. */
 uint32_t aem_call_proc(gaddr upp, uint32_t procinfo, const uint32_t *args, int n)
 {
     if (!upp)
         return 0;
-    if (!mm_is_descriptor(upp) && !mm_is_native(upp) && g_ppc_mode)
+    if (!mm_is_descriptor(upp) && !mm_is_native(upp) && !mm_is_68k_proc(upp) && g_ppc_mode)
         return ppc_call(upp, args, n);
     return mm_call(upp, procinfo, args, n);
 }
@@ -1132,6 +1133,7 @@ static gaddr current_event_desc;
 
 int16_t tb_AEInstallEventHandler(int32_t event_class, int32_t event_id, gaddr hdlr, int32_t refcon, int8_t system_handler_p)
 {
+    mm_note_proc(hdlr);
     int s = system_handler_p != 0;
     for (int i = 0; i < nhandlers[s]; i++)
         if (handlers[s][i].cls == (uint32_t)event_class && handlers[s][i].id == (uint32_t)event_id) {
@@ -1193,6 +1195,7 @@ static bool app_has_handlers(void) { return nhandlers[0] > 0 || nhandlers[1] > 0
 
 int16_t tb_AEInstallCoercionHandler(int32_t from, int32_t to, gaddr hdlr, int32_t refcon, int8_t from_desc, int8_t sys)
 {
+    mm_note_proc(hdlr);
     int s = sys != 0;
     coercion_entry e = { (uint32_t)from, (uint32_t)to, hdlr, refcon, from_desc != 0 };
     for (int i = 0; i < ncoercions[s]; i++)
@@ -1244,6 +1247,7 @@ static int nspecials[2];
 
 int16_t tb_AEInstallSpecialHandler(int32_t cls, gaddr hdlr, int8_t sys)
 {
+    mm_note_proc(hdlr);
     int s = sys != 0;
     for (int i = 0; i < nspecials[s]; i++)
         if (specials[s][i].cls == (uint32_t)cls) {

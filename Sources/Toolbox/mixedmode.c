@@ -53,6 +53,31 @@ enum { RD_SIZE = 12, RR_SIZE = 20 };
 bool mm_is_descriptor(gaddr p) { return p && rd16(p) == 0xAAFE; }
 bool mm_is_native(gaddr p) { return p >= GA_ROM && p - GA_ROM < GA_ROM_SIZE; }
 
+/* 68k code a PowerPC program runs through Mixed Mode (CallUniversalProc)
+ * can install handlers of its own, plain 68k procedure pointers: the
+ * handler calls note them, so the handlers aren't taken for transition
+ * vectors when they are called while PowerPC code runs. */
+static int running_68k; /* depth of 68k code called from PowerPC */
+enum { MAX_68K_PROCS = 128 };
+static gaddr procs_68k[MAX_68K_PROCS];
+static int nprocs_68k;
+
+void mm_note_proc(gaddr p)
+{
+    if (!p || !g_ppc_mode || !running_68k || mm_is_descriptor(p) || mm_is_68k_proc(p))
+        return;
+    if (nprocs_68k < MAX_68K_PROCS)
+        procs_68k[nprocs_68k++] = p;
+}
+
+bool mm_is_68k_proc(gaddr p)
+{
+    for (int i = 0; i < nprocs_68k; i++)
+        if (procs_68k[i] == p)
+            return true;
+    return false;
+}
+
 /* The routine of a descriptor for the ISA wanted (else its first). */
 static bool mm_routine(gaddr rd, int want, uint32_t *procinfo, int *isa, gaddr *proc)
 {
@@ -154,6 +179,8 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
     g_ppc.gpr[12] = tvector;
     g_ppc.lr = return_code;
     g_ppc.halted = false;
+    int was_68k = running_68k;
+    running_68k = 0;
     uint64_t cap = trap_instruction_limit();
     while (!g_ppc.halted && !g_cpu->halted) {
         g_cpu->icount += ppc_run(&g_ppc, 20000);
@@ -170,6 +197,7 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
                 ppc_halt(&g_ppc, "instruction limit reached in a call from the Toolbox (pc %08X)", g_ppc.pc);
         }
     }
+    running_68k = was_68k;
     uint32_t result = g_ppc.gpr[3];
     bool returned = ppc_returned;
     ppc_returned = false;
@@ -328,6 +356,7 @@ static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int narg
          native_name_at(native_index_for(code)) ? native_name_at(native_index_for(code)) : "guest code", pi, nargs,
          nargs > 0 ? args[0] : 0, nargs > 1 ? args[1] : 0);
     ppc_trap_begin();
+    running_68k++;
     if (dispatched(conv) && nargs >= 1) {
         /* The selector in D0 or D1 or pushed last; Pascal or C parameters. */
         int scode = (int)((pi >> 6) & 3);
@@ -381,6 +410,7 @@ static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int narg
     } else {
         ppc_halt(&g_ppc, "Mixed Mode: calling convention %d (procInfo %08X) to 68k code", conv, pi);
     }
+    running_68k--;
     ppc_trap_end();
     if (g_cpu->halted && !g_ppc.halted)
         ppc_halt(&g_ppc, "%s", g_cpu->halt_reason);
@@ -561,5 +591,6 @@ gaddr mm_call_component_upp(void)
 
 void mixedmode_init(void)
 {
+    nprocs_68k = running_68k = 0;
     wr32(TB_TRAP_TABLE + 0x2FEu * 4, native_register(mixed_mode_native, "MixedModeMagic", 0xAAFE));
 }
