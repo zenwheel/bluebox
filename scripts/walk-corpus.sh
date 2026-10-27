@@ -9,8 +9,12 @@
 # usage: sh scripts/walk-corpus.sh <census dir> <work dir> [bluebox binary] [jobs]
 #   The census dir holds corpus/ and census_list.txt (paths under corpus/,
 #   one a line).  Writes <work dir>/walk.tsv (program, how it ended, the
-#   last step, items chosen) and <work dir>/report.txt (the failures by
-#   kind, most first); each run's output is kept in <work dir>/logs/.
+#   last step: a menu item or, with no menu bar, a button; items chosen)
+#   and <work dir>/report.txt (the failures by kind, most first; a program
+#   with no menu bar that was walked as a window of buttons or as a game
+#   drawing on ends "menu walk finished" too, one with nothing on the
+#   screen "menu walk found no menu bar or window"); each run's output is
+#   kept in <work dir>/logs/.
 #   HEAPCHECK=n checks the heaps every nth call (default 1; 0 for none),
 #   CODECHECK=n checks a PowerPC program's code for changes every nth
 #   call (default 0, none),
@@ -76,7 +80,7 @@ walk_one() {
 		done
 		return
 	fi
-	step=$(grep -a '^walk: menu' "$log" | tail -n 1 | sed 's/^walk: //')
+	step=$(grep -a -E '^walk: (menu|button)' "$log" | tail -n 1 | sed 's/^walk: //')
 	items=$(grep -a -c '^walk: menu' "$log" || true)
 	printf '%s\t%s\t%s\t%s\n' "$rel${app:+ [$app]}" "${end:-none}" "${step:-}" "$items"
 }
