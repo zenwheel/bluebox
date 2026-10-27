@@ -131,6 +131,30 @@ extension BlueBox {
             wr32(0x10, vector)
         }
 
+        /// An alert asking for another depth ends the run to start it again
+        /// at that depth; what the program added to its resource files is
+        /// written first, as when it quits (ChordLab's preferences).
+        @Test func depthRelaunchWritesResourceFiles() {
+            let dir = launchTestApp()
+            let spec = tb_NewPtr(70, false, true)
+            _ = tb_FSMakeFSSpec(0, 0, pname("Prefs"), spec)
+            tb_FSpCreateResFile(spec, Int32(bitPattern: fourCC("CRea")), Int32(bitPattern: fourCC("pref")), 0)
+            let rn = tb_FSpOpenResFile(spec, 3)
+            let h = tb_NewHandle(16, false, true)
+            tb_AddResource(h, Int32(bitPattern: fourCC("StuP")), 0, pname(""))
+            #expect(tb_ResError() == 0)
+            machine_set_depth_alerts(true)
+            defer { machine_set_depth_alerts(false) }
+            #expect(depth_alert("This application needs 256 colors to work properly."))
+            g_cpu!.pointee.halted = false
+            var f = mac_file()
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_read(dir.appendingPathComponent("Prefs").path, &f, &err, err.count))
+            #expect(f.rsrc_len > 286)                            // the map and the new resource
+            mac_file_free(&f)
+            tb_CloseResFile(rn)
+        }
+
         /// OTUtilityLib's string and memory helpers do what they say
         /// (IPNetRouter compares names with OTStrEqual and OTMemcmp, which
         /// said "not supported", taken as true).
