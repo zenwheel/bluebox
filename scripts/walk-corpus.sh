@@ -23,6 +23,9 @@
 set -eu
 LC_ALL=C
 export LC_ALL
+# timeout (coreutils), where Homebrew puts it.
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+export PATH
 
 dir=${1:?usage: walk-corpus.sh <census dir> <work dir> [bluebox binary] [jobs]}
 work=${2:?usage: walk-corpus.sh <census dir> <work dir> [bluebox binary] [jobs]}
