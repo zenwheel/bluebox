@@ -625,5 +625,28 @@ extension BlueBox {
             _ = tb_PBKillIO(kill, false)
             #expect(rd16(flag) == 1)                     // ran inside KillIO
         }
+
+        /// A synchronous write's ioCompletion is not called: the Reversi
+        /// games' parameter block is on the stack with garbage there.
+        @Test func synchronousWritesRunNoCompletion() {
+            launchTestApp()
+            let flag = tb_NewPtr(2, false, true)
+            let words: [UInt16] = [0x33FC, 0x0001, UInt16(flag >> 16), UInt16(flag & 0xFFFF), 0x4E75] // MOVE.W #1,flag; RTS
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let rec = tb_NewPtr(6 + 64, false, true)
+            wr32(rec + 2, 0x0001_0000)
+            for i in 0..<64 { wr8(rec + 6 + UInt32(i), 128) }
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
+            wr32(pb + 12, code)                          // left over in ioCompletion
+            wr32(pb + UInt32(IOParam_ioBuffer_off), rec)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), 70)
+            #expect(tb_PBWrite(pb, false) == 0)
+            machine_skip_time(1_000_000_000)
+            sound_pump()
+            time_pump()
+            #expect(rd16(flag) == 0)
+        }
     }
 }
