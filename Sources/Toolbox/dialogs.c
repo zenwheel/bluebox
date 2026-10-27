@@ -210,6 +210,15 @@ static int item_for_handle(gaddr d, gaddr h)
     return 0;
 }
 
+/* A text item's length: none when its handle is nil, empty, or not a
+ * handle at all (LetterRip Pro's installer keeps a drawing procedure in
+ * a static text item it draws itself). */
+static uint32_t text_size(gaddr h)
+{
+    int32_t n = h && rd32(h) ? tb_GetHandleSize(h) : 0;
+    return n > 0 ? (uint32_t)n : 0;
+}
+
 static gaddr text_handle_from(gaddr data, uint32_t len)
 {
     gaddr h = tb_NewHandle((int32_t)len, false, false);
@@ -755,7 +764,7 @@ static gaddr text_handle(gaddr h)
 void tb_GetDialogItemText(gaddr item, gaddr text)
 {
     item = text_handle(item);
-    uint32_t n = item && rd32(item) ? (uint32_t)tb_GetHandleSize(item) : 0;
+    uint32_t n = text_size(item);
     if (n > 255)
         n = 255;
     wr8(text, (uint8_t)n);
@@ -848,7 +857,7 @@ int16_t tb_FindDialogItem(gaddr d, uint32_t pt)
 /* Static text with ^0..^3 replaced by the ParamText strings. */
 static void draw_text_item(gaddr h, qrect r, bool substitute)
 {
-    uint32_t n = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
+    uint32_t n = text_size(h);
     uint8_t *src = malloc(n ? n : 1), *out = malloc(n + 4 * 256 + 1);
     gget(src, rd32(h), n);
     uint32_t k = 0;
@@ -1573,7 +1582,7 @@ int16_t tb_AutoSizeDialog(gaddr d)
         if (r.left > 8192)
             continue;
         gaddr h = item_handle(d, i);
-        uint32_t len = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
+        uint32_t len = text_size(h);
         if (!len)
             continue;
         uint8_t *text = malloc(len);
