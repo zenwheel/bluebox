@@ -151,7 +151,17 @@ static resfile *file_for_map(gaddr maph)
 /* Map access (offsets, because the map handle can move) */
 
 static inline gaddr mp_of(gaddr maph) { return rd32(maph); }
-static inline gaddr map_next(gaddr maph) { return rd32(mp_of(maph) + 16); }
+/* The next map in the chain; none after a handle that holds no map (a
+ * TopMapHndl a program wrote over: its "next" in low memory led round
+ * and round, and the search never ended). */
+static inline gaddr map_next(gaddr maph)
+{
+    gaddr m = mp_of(maph);
+    if (!m)
+        return 0;
+    gaddr next = rd32(m + 16);
+    return next != maph ? next : 0;
+}
 static inline int16_t map_refnum(gaddr maph) { return (int16_t)rd16(mp_of(maph) + 20); }
 
 static unsigned map_ntypes(gaddr maph)

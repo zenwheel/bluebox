@@ -116,6 +116,21 @@ extension BlueBox {
             #expect(tb_VRemove(v) == 0)
         }
 
+        /// A resource search ends at a TopMapHndl that holds no map: one a
+        /// program wrote over led the chain round through low memory.
+        @Test func resourceSearchEndsAtABrokenChain() {
+            launchTestApp()
+            let top = rd32(UInt32(LM_TopMapHndl))
+            let empty = tb_NewHandle(0, false, true)
+            tb_EmptyHandle(empty)                                // master pointer nil
+            let vector = rd32(0x10)
+            wr32(0x10, empty)                                    // its "next", read from low memory: itself
+            wr32(UInt32(LM_TopMapHndl), empty)
+            #expect(tb_GetResource(Int32(bitPattern: fourCC("STR#")), 129) == 0)
+            wr32(UInt32(LM_TopMapHndl), top)
+            wr32(0x10, vector)
+        }
+
         /// OTUtilityLib's string and memory helpers do what they say
         /// (IPNetRouter compares names with OTStrEqual and OTMemcmp, which
         /// said "not supported", taken as true).
