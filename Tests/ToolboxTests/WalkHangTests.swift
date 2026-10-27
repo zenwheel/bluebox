@@ -155,6 +155,30 @@ extension BlueBox {
             tb_CloseResFile(rn)
         }
 
+        /// A fork longer than HFS allows is a full disk: ResKnife writes
+        /// its preferences with a count of $F0800000, and SetEOF and
+        /// FSWrite past 2 GB went round for ever making room.
+        @Test func forksPastTwoGigabytesAreAFullDisk() {
+            launchTestApp()
+            let spec = tb_NewPtr(70, false, true)
+            _ = tb_FSMakeFSSpec(0, 0, pname("Big"), spec)
+            #expect(tb_FSpCreate(spec, Int32(bitPattern: fourCC("CRea")), Int32(bitPattern: fourCC("TEXT")), 0) == 0)
+            let ref = tb_NewPtr(2, false, true)
+            #expect(tb_FSpOpenDF(spec, 3, ref) == 0)
+            let pb = tb_NewPtr(80, false, true)
+            wr16(pb + 24, rd16(ref))                             // ioRefNum
+            wr32(pb + 28, 0xFFFF_FFF0)                           // ioMisc: the new length
+            #expect(tb_PBSetEOF(pb, false) == -34)               // dskFulErr
+            let buf = tb_NewPtr(16, false, true)
+            wr32(pb + 32, buf)                                   // ioBuffer
+            wr32(pb + 36, 0x9000_0000)                           // ioReqCount
+            wr16(pb + 44, 1)                                     // ioPosMode: fsFromStart
+            wr32(pb + 46, 0)                                     // ioPosOffset
+            #expect(tb_PBWrite(pb, false) == -34)
+            wr32(pb + 28, 100)
+            #expect(tb_PBSetEOF(pb, false) == 0)
+        }
+
         /// OTUtilityLib's string and memory helpers do what they say
         /// (IPNetRouter compares names with OTStrEqual and OTMemcmp, which
         /// said "not supported", taken as true).

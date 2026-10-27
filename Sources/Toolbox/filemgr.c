@@ -1434,10 +1434,16 @@ static int16_t pb_read(gaddr pb, bool async)
     return n < want ? eofErr : noErr;
 }
 
-static bool reserve(fcb *f, uint32_t need)
+/* Room for need bytes: no more than an HFS fork holds (2 GB), so a
+ * length past it is a full disk, not a doubling that wraps to 0 and goes
+ * round for ever (ResKnife writes its preferences with a count of
+ * $F0800000). */
+static bool reserve(fcb *f, uint64_t need)
 {
     if (need <= f->cap)
         return true;
+    if (need > 0x7FFFFFFFu)
+        return false;
     uint32_t cap = f->cap ? f->cap : 1024;
     while (cap < need)
         cap *= 2;
@@ -1471,7 +1477,7 @@ static int16_t pb_write(gaddr pb, bool async)
         wr32(pb + IOParam_ioPosOffset_off, f->pos);
         return noErr;
     }
-    if (!reserve(f, f->pos + n))
+    if (!reserve(f, (uint64_t)f->pos + n))
         return dskFulErr;
     gget(f->buf + f->pos, rd32(pb + IOParam_ioBuffer_off), n);
     f->pos += n;
