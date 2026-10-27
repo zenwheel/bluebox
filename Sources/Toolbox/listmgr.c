@@ -661,12 +661,17 @@ int8_t tb_LGetSelect(int8_t next, gaddr cellp, gaddr list)
     if (!next)
         return i >= 0 && is_selected(list, i);
     if (i < 0) {
-        /* From the start when the cell is before the data. */
+        /* From the start when the cell is before the data, from the next
+         * row when it is past a row's end (where LNextCell leaves it). */
         qrect b = bounds_of(list);
         uint32_t c = rd32(cellp);
-        if (pt_v(c) >= b.bottom || n == 0)
+        int v = pt_v(c), h = pt_h(c);
+        if (v >= b.bottom || n == 0)
             return 0;
-        i = 0;
+        if (v < b.top)
+            i = 0;
+        else
+            i = (v - b.top) * ncols(list) + (h < b.left ? 0 : h - b.left > ncols(list) ? ncols(list) : h - b.left);
     }
     for (; i < n; i++)
         if (is_selected(list, i)) {
@@ -700,10 +705,11 @@ int8_t tb_LNextCell(int8_t hnext, int8_t vnext, gaddr cellp, gaddr list)
     } else {
         return 0;
     }
-    if (v < b.top || v >= b.bottom || h < b.left || h >= b.right)
-        return 0;
+    /* The cell moves on past the end too: TimeSlice counts the selected
+     * cells with LGetSelect from each LNextCell, and stops only when the
+     * cell has gone past the last. */
     wr32(cellp, make_pt((int16_t)v, (int16_t)h));
-    return 1;
+    return v >= b.top && v < b.bottom && h >= b.left && h < b.right;
 }
 
 int32_t tb_LLastClick(gaddr list) { return (int32_t)rd32(lp(list) + ListRec_lastClick_off); }

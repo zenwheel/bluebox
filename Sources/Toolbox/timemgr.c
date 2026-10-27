@@ -170,7 +170,13 @@ int16_t tb_VRemove(gaddr vtaskp)
 int16_t tb_SlotVInstall(gaddr vtaskp, int16_t slot) { return tb_VInstall(vtaskp); }
 int16_t tb_SlotVRemove(gaddr vtaskp, int16_t slot) { return tb_VRemove(vtaskp); }
 
-/* Run guest code as an interrupt handler would: everything preserved. */
+/* Run guest code as an interrupt handler would: everything preserved.
+ * The stack holds what the interrupt left there: the exception frame (the
+ * interrupted SR and PC, a level 1 autovector's format word) under the
+ * registers the handler saved (D0-D3/A0-A3).  A task may change the PC
+ * there to send the interrupted code elsewhere when the interrupt
+ * returns: MPW Shell's waits for the next tick in BRA.S *, and its VBL
+ * task finds that PC on the stack and steps it past the loop. */
 static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0)
 {
     cpu68k *c = g_cpu;
@@ -178,14 +184,26 @@ static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0)
     memcpy(d, c->d, sizeof d);
     memcpy(a, c->a, sizeof a);
     uint16_t sr = c->sr;
+    uint32_t pc = c->pc;
+    cpu_push16(c, 0x0064); /* format 0, vector 25 */
+    cpu_push32(c, pc);
+    cpu_push16(c, sr);
+    gaddr frame = c->a[7];
+    for (int i = 3; i >= 0; i--)
+        cpu_push32(c, a[i]);
+    for (int i = 3; i >= 0; i--)
+        cpu_push32(c, d[i]);
     c->d[0] = d0;
     c->a[0] = a0;
     c->a[1] = a1;
     c->sr = (uint16_t)((c->sr & ~0x0700) | 0x0100); /* level 1, as the VIA interrupt */
     guest_call(fn);
+    uint32_t back = rd32((frame + 2) & c->addr_mask);
     memcpy(c->d, d, sizeof d);
     memcpy(c->a, a, sizeof a);
     c->sr = sr;
+    if (back != pc && !g_ppc_mode && !c->halted)
+        c->pc = back;
 }
 
 static void interrupt_call(gaddr fn, gaddr a0, gaddr a1) { interrupt_call_d0(fn, a0, a1, 0); }

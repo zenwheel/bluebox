@@ -311,6 +311,58 @@ extension BlueBox {
             tb_DisposeDialog(d)
         }
 
+        /// ShortenDITL taking the active edit text item gives the TERec its
+        /// own text first: appending the items again had the TERec dispose
+        /// of the old item's text, a handle by then reused (Numerator's
+        /// preferences pane switching drew a stale text handle and crashed).
+        @Test func shortenDITLLetsGoOfTheEditText() {
+            let plain = ditl([ditlItem(4, (160, 220, 180, 290), Array("OK".utf8))])
+            let more = ditl([ditlItem(16, (80, 20, 96, 200), Array("abc".utf8)),
+                             ditlItem(8, (50, 20, 66, 280), Array("Hello".utf8))])
+            launchTestApp([TestResource(type: "DLOG", id: 200, data: dlog(items: 200)),
+                           TestResource(type: "DITL", id: 200, data: plain),
+                           TestResource(type: "DITL", id: 201, data: more)])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+            let te = rd32(d + 0xA0)
+            tb_AppendDITL(d, tb_GetResource(Int32(bitPattern: fourCC("DITL")), 201), 0)
+            #expect(rd16(d + 0xA4) == 1)
+            tb_ShortenDITL(d, 2)
+            #expect(Int16(bitPattern: rd16(d + 0xA4)) == -1)
+            let own = rd32(rd32(te) + 0x3E)
+            #expect(own != 0 && tb_GetHandleSize(own) == 0 && memErr() == 0) // a live handle of its own
+            tb_AppendDITL(d, tb_GetResource(Int32(bitPattern: fourCC("DITL")), 201), 0)
+            let t = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true)
+            tb_GetDialogItem(d, 3, t, h, r)
+            #expect(tb_GetHandleSize(rd32(h)) == 5 && memErr() == 0)   // the static text's own, still there
+            tb_GetDialogItem(d, 2, t, h, r)
+            #expect(rd32(rd32(te) + 0x3E) == rd32(h))
+            tb_DrawDialog(d)
+            tb_DisposeDialog(d)
+        }
+
+        /// A static text item whose "handle" is no handle (LetterRip Pro's
+        /// installer keeps a jump table entry there and draws the item
+        /// itself) has no text to draw or give.
+        @Test func staticTextWithoutAHandleIsEmpty() {
+            let plain = ditl([ditlItem(4, (160, 220, 180, 290), Array("OK".utf8)),
+                              ditlItem(8 | 0x80, (50, 20, 66, 280), Array("Hello".utf8))])
+            launchTestApp([TestResource(type: "DLOG", id: 200, data: dlog(items: 200)),
+                           TestResource(type: "DITL", id: 200, data: plain)])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+            let t = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true)
+            tb_GetDialogItem(d, 2, t, h, r)
+            let entry = tb_NewPtr(8, false, true)
+            wr32(entry, 0x4EF9_0042) // JMP $00420000...: not a master pointer
+            tb_SetDialogItem(d, 2, Int16(rd16(t)), entry, r)
+            tb_DrawDialog(d)
+            let s = tb_NewPtr(256, false, true)
+            tb_GetDialogItemText(entry, s)
+            #expect(rd8(s) == 0)
+            tb_DisposeDialog(d)
+        }
+
         /// TRAP #0-#15 return to the next instruction: Apple HD SC Setup
         /// makes A/UX's getuid call (TRAP #0) under Mac OS too.
         @Test func trapInstructionsReturn() {

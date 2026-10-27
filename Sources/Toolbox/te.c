@@ -41,7 +41,23 @@ static gaddr te(gaddr teh) { return rd32(teh); }
 static bool te_ok(gaddr teh) { return teh && rd32(teh); }
 static int16_t te16(gaddr teh, uint32_t off) { return (int16_t)rd16(te(teh) + off); }
 static void set16(gaddr teh, uint32_t off, int16_t v) { wr16(te(teh) + off, (uint16_t)v); }
-static int text_len(gaddr teh) { return te16(teh, TERec_teLength_off); }
+/* A negative teLength (a record the program filled itself) is no text. */
+static int text_len(gaddr teh)
+{
+    int n = te16(teh, TERec_teLength_off);
+    return n > 0 ? n : 0;
+}
+/* The selection, within the text and in order, whatever the record says
+ * (FCReader copies from a record of its own with selEnd -32768). */
+static void selection(gaddr teh, int *a, int *b)
+{
+    int len = text_len(teh);
+    int s = te16(teh, TERec_selStart_off), e = te16(teh, TERec_selEnd_off);
+    s = s < 0 ? 0 : s > len ? len : s;
+    e = e < 0 ? 0 : e > len ? len : e;
+    *a = s < e ? s : e;
+    *b = s < e ? e : s;
+}
 static gaddr text_ptr(gaddr teh) { return rd32(TERec_hText(te(teh))); }
 static int nlines(gaddr teh) { return te16(teh, TERec_nLines_off); }
 static int line_start(gaddr teh, int i) { return te16(teh, TERec_lineStarts_off + (uint32_t)i * 2); }
@@ -297,9 +313,11 @@ void tb_TECalText(gaddr teh)
 {
     if (!te_ok(teh))
         return;
-    /* Apps may replace the text by resizing hText; its size is the length. */
+    /* Apps may replace the text by resizing hText; its size is the length.
+     * An hText that is no handle (Net Manager's messages window makes its
+     * TERec with NewHandle) is no text. */
     int32_t hsize = tb_GetHandleSize(TERec_hText(te(teh)));
-    set16(teh, TERec_teLength_off, (int16_t)(hsize > 32767 ? 32767 : hsize));
+    set16(teh, TERec_teLength_off, (int16_t)(hsize > 32767 ? 32767 : hsize < 0 ? 0 : hsize));
     fix_runs_end(teh);
     port_state s = enter(teh);
     int len = text_len(teh);
@@ -546,7 +564,8 @@ static void draw_caret(gaddr teh)
 /* Show or hide the selection/caret (it is drawn by inversion). */
 static void toggle_hilite(gaddr teh)
 {
-    int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+    int a, b;
+    selection(teh, &a, &b);
     if (a == b)
         draw_caret(teh);
     else
@@ -955,8 +974,14 @@ void tb_TESetText(gaddr p, int32_t ln, gaddr teh)
 {
     if (!te_ok(teh))
         return;
+    if (ln < 0) /* no text (RMaker's About box asks TextBox for -112 bytes) */
+        ln = 0;
+    if (ln > 32767)
+        ln = 32767;
     gaddr h = TERec_hText(te(teh));
     tb_SetHandleSize(h, ln);
+    if (rd16(LM_MemErr))
+        return;
     gmemcpy(rd32(h), p, (uint32_t)ln);
     set16(teh, TERec_teLength_off, (int16_t)ln);
     set16(teh, TERec_selStart_off, (int16_t)ln);
@@ -1048,7 +1073,8 @@ void tb_TEDeactivate(gaddr teh)
  * one typing gets. */
 static void replace_styled(gaddr teh, const uint8_t *bytes, int n, const tstyle *with)
 {
-    int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+    int a, b;
+    selection(teh, &a, &b);
     int len = text_len(teh);
     gaddr h = TERec_hText(te(teh));
     if (!h || !rd32(h))
@@ -1112,7 +1138,8 @@ void tb_TEKey(int16_t thec, gaddr teh)
     if (!te_ok(teh))
         return;
     uint8_t c = (uint8_t)thec;
-    int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+    int a, b;
+    selection(teh, &a, &b);
     int len = text_len(teh);
     switch (c) {
     case 8: /* backspace */
@@ -1155,7 +1182,8 @@ void tb_TEInsert(gaddr p, int32_t ln, gaddr teh)
         return;
     uint8_t *buf = malloc(ln > 0 ? (size_t)ln : 1);
     gget(buf, p, (uint32_t)(ln > 0 ? ln : 0));
-    int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+    int a, b;
+    selection(teh, &a, &b);
     set16(teh, TERec_selEnd_off, (int16_t)a); /* insert before the selection */
     edit(teh, buf, ln > 0 ? ln : 0);
     set16(teh, TERec_selStart_off, (int16_t)(b + ln));
@@ -1186,7 +1214,8 @@ static gaddr scrap_handle(void)
  * TextEdit's did, for TEStylePaste and other programs. */
 static void copy_styles_to_desk(gaddr teh)
 {
-    int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+    int a, b;
+    selection(teh, &a, &b);
     gaddr st = tb_TEGetStyleScrapHandle(teh);
     tb_ZeroScrap();
     tb_HLock(TERec_hText(te(teh)));
@@ -1203,7 +1232,8 @@ void tb_TECopy(gaddr teh)
 {
     if (!te_ok(teh))
         return;
-    int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+    int a, b;
+    selection(teh, &a, &b);
     gaddr h = scrap_handle();
     tb_SetHandleSize(h, b - a);
     gmemcpy(rd32(h), text_ptr(teh) + (uint32_t)a, (uint32_t)(b - a));
@@ -1514,7 +1544,8 @@ static void apply_style(gaddr teh, int mode, gaddr ns, bool draw, gaddr match)
         set16(teh, TERec_txSize_off, st.size);
         set_font_metrics(teh);
     } else {
-        int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+        int a, b;
+        selection(teh, &a, &b);
         if (a == b) { /* nothing selected: the style typing will have */
             tstyle st;
             style_for_insert(teh, a, &st);
@@ -1571,7 +1602,8 @@ int8_t tb_TEContinuousStyle(gaddr modep, gaddr thestyle, gaddr teh)
 {
     if (!te_ok(teh))
         return 0;
-    int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+    int a, b;
+    selection(teh, &a, &b);
     int mode = modep ? (int16_t)rd16(modep) : 0;
     tstyle first;
     if (a == b || !styled(teh)) {
@@ -1651,7 +1683,8 @@ gaddr tb_TEGetStyleScrapHandle(gaddr teh)
 {
     if (!te_ok(teh))
         return 0;
-    int a = te16(teh, TERec_selStart_off), b = te16(teh, TERec_selEnd_off);
+    int a, b;
+    selection(teh, &a, &b);
     int first = run_of(teh, a), last = b > a ? run_of(teh, b - 1) : first;
     int n = last - first + 1;
     gaddr h = tb_NewHandle(2 + n * SC_LEN, false, true);

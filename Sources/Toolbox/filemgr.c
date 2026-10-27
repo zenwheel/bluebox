@@ -1435,10 +1435,16 @@ static int16_t pb_read(gaddr pb, bool async)
     return n < want ? eofErr : noErr;
 }
 
-static bool reserve(fcb *f, uint32_t need)
+/* Room for need bytes: no more than an HFS fork holds (2 GB), so a
+ * length past it is a full disk, not a doubling that wraps to 0 and goes
+ * round for ever (ResKnife writes its preferences with a count of
+ * $F0800000). */
+static bool reserve(fcb *f, uint64_t need)
 {
     if (need <= f->cap)
         return true;
+    if (need > 0x7FFFFFFFu)
+        return false;
     uint32_t cap = f->cap ? f->cap : 1024;
     while (cap < need)
         cap *= 2;
@@ -1472,7 +1478,7 @@ static int16_t pb_write(gaddr pb, bool async)
         wr32(pb + IOParam_ioPosOffset_off, f->pos);
         return noErr;
     }
-    if (!reserve(f, f->pos + n))
+    if (!reserve(f, (uint64_t)f->pos + n))
         return dskFulErr;
     gget(f->buf + f->pos, rd32(pb + IOParam_ioBuffer_off), n);
     f->pos += n;
@@ -3281,10 +3287,15 @@ int16_t tb_PBCatSearch(gaddr pb, bool async)
     wr32(pb + CS_ActCount, 0);
     if (!matches || !i1 || !i2 || !want)
         return paramErr;
+    /* The volume ioVRefNum names: none is nsvErr (VISE installers search
+     * vRefNum -1, -2 ... until one isn't there). */
+    mount *m;
+    if (!vinfo_volume(0, (int16_t)rd16(pb + IOParam_ioVRefNum_off), 0, &m))
+        return nsvErr;
     cat_search cs = { .pb = pb, .rec = tb_NewPtr(108, false, true), .i1 = i1, .i2 = i2, .matches = matches,
                       .name = tb_NewPtr(256, false, true), .bits = rd32(pb + CS_Bits), .want = want,
                       .skip = rd32(pb + CS_Position) };
-    bool done = search_dir(&cs, root_path, 0);
+    bool done = search_dir(&cs, m ? m->root : root_path, 0);
     tb_DisposePtr(cs.rec);
     tb_DisposePtr(cs.name);
     wr32(pb + CS_ActCount, cs.found);

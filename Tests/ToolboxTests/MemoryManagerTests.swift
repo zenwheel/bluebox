@@ -67,6 +67,21 @@ extension BlueBox {
             tb_DisposeHandle(h)
         }
 
+        /// A master pointer with flags in its top byte, as a program of the
+        /// 24-bit days locks with BSET #7, still names its block (RMaker
+        /// asks GetHandleSize for its About box's string so).
+        @Test func flagsInTheMasterPointerAreLeftOut() {
+            let h = tb_NewHandle(126, false, false)
+            let p = rd32(h)
+            #expect(p < 0x0100_0000)
+            wr32(h, p | 0x8000_0000)
+            #expect(tb_GetHandleSize(h) == 126 && memErr() == 0)
+            wr32(h, p)
+            wr32(h, 0x4EF9_0042)  // not a master pointer at all
+            #expect(tb_GetHandleSize(h) < 0)
+            wr32(h, p)
+        }
+
         @Test func clearedAllocationsAreZero() {
             let h = tb_NewHandle(64, false, true)
             #expect((0..<64).allSatisfy { rd8(rd32(h) + UInt32($0)) == 0 })

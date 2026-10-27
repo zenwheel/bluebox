@@ -210,6 +210,15 @@ static int item_for_handle(gaddr d, gaddr h)
     return 0;
 }
 
+/* A text item's length: none when its handle is nil, empty, or not a
+ * handle at all (LetterRip Pro's installer keeps a drawing procedure in
+ * a static text item it draws itself). */
+static uint32_t text_size(gaddr h)
+{
+    int32_t n = h && rd32(h) ? tb_GetHandleSize(h) : 0;
+    return n > 0 ? (uint32_t)n : 0;
+}
+
 static gaddr text_handle_from(gaddr data, uint32_t len)
 {
     gaddr h = tb_NewHandle((int32_t)len, false, false);
@@ -445,13 +454,13 @@ void tb_ShortenDITL(gaddr d, int16_t count)
     for (int i = keep + 1; i <= n; i++) {
         int type = item_type(d, i) & 0x7F;
         gaddr h = item_handle(d, i);
+        /* The TERec gets its own text again before the item's goes. */
+        if (edit_item(d) == i)
+            idle_edit(d);
         if ((type & ctrlItem) && h)
             tb_DisposeControl(h);
         else if ((type == statText || type == editText) && h)
             tb_DisposeHandle(h);
-        if (edit_item(d) == i) {
-            wr16(d + DialogRecord_editField_off, (uint16_t)-1);
-        }
     }
     gaddr items = items_handle(d);
     gaddr end = keep ? item_at(d, keep) + ITEM_HEADER + ((rd8(item_at(d, keep) + 13) + 1u) & ~1u) : rd32(items) + 2;
@@ -755,7 +764,7 @@ static gaddr text_handle(gaddr h)
 void tb_GetDialogItemText(gaddr item, gaddr text)
 {
     item = text_handle(item);
-    uint32_t n = item && rd32(item) ? (uint32_t)tb_GetHandleSize(item) : 0;
+    uint32_t n = text_size(item);
     if (n > 255)
         n = 255;
     wr8(text, (uint8_t)n);
@@ -848,9 +857,7 @@ int16_t tb_FindDialogItem(gaddr d, uint32_t pt)
 /* Static text with ^0..^3 replaced by the ParamText strings. */
 static void draw_text_item(gaddr h, qrect r, bool substitute)
 {
-    /* A handle that isn't one (GetHandleSize's error) has no text. */
-    int32_t size = h && rd32(h) ? tb_GetHandleSize(h) : 0;
-    uint32_t n = size > 0 ? (uint32_t)size : 0;
+    uint32_t n = text_size(h);
     uint8_t *src = malloc(n ? n : 1), *out = malloc(n + 4 * 256 + 1);
     gget(src, rd32(h), n);
     uint32_t k = 0;
@@ -1575,7 +1582,7 @@ int16_t tb_AutoSizeDialog(gaddr d)
         if (r.left > 8192)
             continue;
         gaddr h = item_handle(d, i);
-        uint32_t len = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
+        uint32_t len = text_size(h);
         if (!len)
             continue;
         uint8_t *text = malloc(len);
@@ -1801,11 +1808,14 @@ int32_t tb_GetModalDialogEventMask(gaddr d, gaddr mask)
     return noErr;
 }
 
-/* The front window if it is a dialog (the menu walker dismisses it), or 0. */
+/* The front window if it is a dialog (the menu walker dismisses it), or 0.
+ * By windowKind, as IsDialogEvent goes: Tex-Edit Plus keeps a handle where
+ * a dialog's item list would be in its document windows, and the walker
+ * typed keys into the text for ever. */
 gaddr dialog_in_front(void)
 {
     gaddr w = tb_FrontWindow();
-    return is_dialog(w) ? w : 0;
+    return kind_dialog(w) ? w : 0;
 }
 
 /* What tells the walker one dialog from another: its size and its items'

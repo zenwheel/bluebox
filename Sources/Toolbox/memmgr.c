@@ -183,6 +183,11 @@ static gaddr handle_block(gaddr h, int16_t *err)
         return 0;
     }
     gaddr b = p - HDR;
+    /* The top byte may be the handle's flags, as programs of the 24-bit
+     * days set them (RMaker locks its strings with BSET #7 and then asks
+     * GetHandleSize), for a block below 16 MB. */
+    if (b_use(b) != USE_REL && (p >> 24) && (p & 0x00FFFFFFu) >= HDR)
+        b = (p & 0x00FFFFFFu) - HDR;
     if (b_use(b) != USE_REL) {
         *err = memWZErr;
         return 0;

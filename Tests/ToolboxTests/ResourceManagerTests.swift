@@ -365,6 +365,24 @@ extension BlueBox {
             tb_CloseResFile(rn)
         }
 
+        /// Opening a resource file that is already open (for writing)
+        /// gives its refnum and makes its map the current one (Technote
+        /// 1120): ChordLab opens its preferences again and reads them with
+        /// Get1Resource, which found nothing in the application's map.
+        @Test func reopeningAResourceFileMakesItCurrent() {
+            launchTestApp()
+            let app = tb_CurResFile()
+            let spec = tb_NewPtr(70, false, true)
+            _ = tb_FSMakeFSSpec(0, 0, pname("Prefs"), spec)
+            tb_FSpCreateResFile(spec, Int32(bitPattern: fourCC("CRea")), Int32(bitPattern: fourCC("pref")), 0)
+            let rn = tb_FSpOpenResFile(spec, 3)                  // fsRdWrPerm
+            #expect(rn > 0 && tb_CurResFile() == rn)
+            tb_UseResFile(app)
+            #expect(tb_FSpOpenResFile(spec, 3) == rn && tb_ResError() == 0)
+            #expect(tb_CurResFile() == rn)
+            tb_CloseResFile(rn)
+        }
+
         /// A file kept as its AppleDouble sidecar alone (an empty data fork,
         /// as archives give "Icon\r") resolves as an alias file to itself:
         /// ShatterBat walks its folder that way and stopped at its icon file.

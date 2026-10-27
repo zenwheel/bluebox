@@ -88,6 +88,11 @@ bool depth_alert(const char *message)
     }
     wanted_depth = pick;
     LOGF(LOG_UNIMPL, "alert asks for depth %d: %s\n", pick, message);
+    /* The run ends here, to start again at that depth: the resource files
+     * the program changed are written, as when it quits.  (ChordLab makes
+     * its preferences file and adds the settings before the alert; left
+     * empty, the second run read its settings through a nil handle.) */
+    rm_update_all();
     cpu_halt(g_cpu, "asks for depth %d", pick);
     return true;
 }
