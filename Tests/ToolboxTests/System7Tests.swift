@@ -154,6 +154,42 @@ extension BlueBox {
             #expect(rd16(rd32(te) + UInt32(TERec_teLength_off)) == 5)
         }
 
+        /// A TERec whose hText is no handle (Net Manager makes its record
+        /// with NewHandle, nil hText and all) has no text, and lays out.
+        @Test func calTextWithNoTextHandleHasNoText() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 0, 100, 200].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let te = tb_TENew(r, r)
+            wr32(rd32(te) + 62, 0)
+            wr16(rd32(te) + UInt32(TERec_teLength_off), 0xFF81)
+            tb_TECalText(te)
+            #expect(rd16(rd32(te) + UInt32(TERec_teLength_off)) == 0)
+            tb_TEUpdate(r, te)
+        }
+
+        /// A selection past the text (FCReader's record says selEnd
+        /// -32768) copies what is inside it, and TextBox with a negative
+        /// length shows no text.
+        @Test func selectionsAndLengthsOutsideTheTextAreNone() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 0, 100, 200].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let te = tb_TENew(r, r)
+            let s = tb_NewPtr(8, false, true)
+            for (i, b) in Array("Hello".utf8).enumerated() { wr8(s + UInt32(i), b) }
+            tb_TESetText(s, 5, te)
+            wr16(rd32(te) + UInt32(TERec_selStart_off), 2)
+            wr16(rd32(te) + UInt32(TERec_selEnd_off), 0x8000)
+            tb_TECopy(te)
+            #expect(rd16(UInt32(LM_TEScrpLength)) == 2)               // "He": from 0 to 2
+            tb_TESetText(s, -112, te)
+            #expect(rd16(rd32(te) + UInt32(TERec_teLength_off)) == 0)
+            tb_TETextBox(s, -112, r, 0)
+        }
+
         /// caretTime is when the caret next blinks: apps sleep until then.
         @Test func caretTimeIsTheNextBlink() {
             launchTestApp()
