@@ -140,6 +140,8 @@ void ppc_trap_push(int size, uint32_t value);
 void ppc_trap(uint16_t trapword);
 uint32_t ppc_trap_result(int size);
 void ppc_trap_end(void);
+/* Whether the trap word at pc is one this glue runs for PowerPC code. */
+bool ppc_trap_word_at(gaddr pc);
 /* Whether the program has patched a Toolbox trap: its glue then runs the
  * trap through the table instead of calling our function. */
 bool ppc_trap_patched(uint16_t trapword);

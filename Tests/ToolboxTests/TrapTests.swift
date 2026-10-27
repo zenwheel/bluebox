@@ -56,6 +56,24 @@ extension BlueBox {
             #expect(reason.hasPrefix("restart"))
         }
 
+        /// In a PowerPC program, 68k code asking Gestalt for Open Transport
+        /// is told it is missing (its client glue needs the Shared Library
+        /// Manager); the PowerPC side and native callers still see it.
+        @Test func openTransportHiddenFrom68kCode() {
+            gestalt_powerpc()
+            let otan = fourCC("otan")
+            let reason = run([
+                0x203C, hi(otan), lo(otan),     // MOVE.L #'otan',D0
+                0xA1AD,                         // _Gestalt
+                0x2E00,                         // MOVE.L D0,D7
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(Int16(truncatingIfNeeded: cpu.pointee.d.7) != 0)
+            var answer: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: otan), &answer) == 0 && answer & 1 != 0)
+        }
+
         @Test func osTrapPreservesRegistersAndReturnsInA0() {
             let reason = run([
                 0x227C, 0x1234, 0x5678,         // MOVEA.L #$12345678,A1
