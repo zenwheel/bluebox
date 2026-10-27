@@ -2,10 +2,10 @@
 # header, tech note or other program in the archive names: PrintMonitor
 # (every version, System 5 to 7.1: $28, once at start up), Virtual and
 # DragStrip ($2B), NotePad Deluxe ($55, after it sets up its drag handlers)
-# and MACAST and MacAMP ($5A).  The argument lists are what their call
-# sites push, and none uses a result but the last two; what the Process
-# Manager does for them is not known, so each answers as a call that finds
-# nothing to do: no error, nil, false.  See vamosdispatch.c.  PowerPC
+# and MACAST and MacAMP ($5A, and $64 after it).  The argument lists are what their call
+# sites push.  What the Process Manager does for them is not known, so
+# $28 and $55 answer as a call that finds nothing to do (nil, false);
+# $2B and $5A are worked out from their callers.  See vamosdispatch.c.  PowerPC
 # programs reach them through their own 68k glue, so there are no
 # PowerPC exports.
 
@@ -47,28 +47,45 @@
     ppc: false
     selector: 0x0055
 
+# $5A makes a window: NotePad Deluxe stops with "the memory is out" when it
+# answers nil.  The arguments are NewWindow's without the storage, and then
+# a routine descriptor and a long.
 - function:
     name: OSDispatch5A
-    return: LONGINT
+    return: WindowPtr
     args:
-      - name: a
-        type: LONGINT
-      - name: b
-        type: LONGINT
-      - name: c
+      - name: bounds
+        type: Rect*
+      - name: title
+        type: StringPtr
+      - name: visible
         type: Boolean
-      - name: d
+      - name: procID
         type: INTEGER
-      - name: e
-        type: LONGINT
-      - name: f
+      - name: behind
+        type: WindowPtr
+      - name: goAway
         type: Boolean
-      - name: g
+      - name: refCon
         type: LONGINT
-      - name: h
-        type: LONGINT
-      - name: i
+      - name: proc
+        type: ProcPtr
+      - name: flags
         type: LONGINT
     dispatcher: OSDispatch
     ppc: false
     selector: 0x005A
+
+# $64 is FindWindow's arguments and result (MACAST and MacAMP call it with
+# the point to look at and the place for the window), taken as FindWindow.
+- function:
+    name: OSDispatch64
+    return: INTEGER
+    args:
+      - name: thePoint
+        type: Point
+      - name: theWindow
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0064

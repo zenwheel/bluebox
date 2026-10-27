@@ -145,6 +145,8 @@ extension BlueBox {
         /// each takes the arguments its callers push and leaves the stack as
         /// it found it, a result aside.
         @Test func unnamedOSDispatchSelectors() {
+            launchTestApp()
+            _ = initToolbox()
             func push(_ v: UInt32) -> [UInt16] { [0x2F3C, hiWord(v), loWord(v)] }
             let marks: [UInt16] = [0x2C0F]                  // MOVE.L A7,D6
             let check: [UInt16] = [0x2A0F, 0xA9F4]          // MOVE.L A7,D5; _ExitToShell
@@ -157,10 +159,20 @@ extension BlueBox {
             // $55: Boolean (long), false for nil (NotePad Deluxe)
             run([0x554F] + push(0) + [0x3F3C, 0x0055, 0xA88F, 0x3E1F])
             #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0)
-            // $5A: long result, nine arguments of 30 bytes
-            run([0x598F] + push(0) + push(0) + [0x1F3C, 0, 0x3F3C, 0] + push(0) + [0x1F3C, 0] + push(0) + push(0) + push(0)
-                + [0x3F3C, 0x005A, 0xA88F, 0x2E1F])
-            #expect(g_cpu!.pointee.d.7 == 0)
+            // $5A: NewWindow without the storage (NotePad Deluxe, MACAST, MacAMP);
+            // $64: FindWindow
+            let bounds = tb_NewPtr(8, false, true)
+            wr16(bounds, 40); wr16(bounds + 2, 30); wr16(bounds + 4, 140); wr16(bounds + 6, 230)
+            let title = tb_NewPtr(8, false, true)
+            wr8(title, 1); wr8(title + 1, 0x4E)
+            run([0x598F] + push(bounds) + push(title) + [0x1F3C, 0x0001, 0x3F3C, 0] + push(0xFFFF_FFFF) + [0x1F3C, 0x0001]
+                + push(0) + push(0) + push(0) + [0x3F3C, 0x005A, 0xA88F, 0x2E1F])
+            let made = g_cpu!.pointee.d.7
+            #expect(made != 0 && rd32(UInt32(LM_WindowList)) == made && rd8(made + UInt32(WindowRecord_visible_off)) != 0)
+            let out = tb_NewPtr(4, false, true)
+            let inside: UInt32 = 90 << 16 | 100 // v 90, h 100: inside the content
+            run([0x554F] + push(inside) + push(out) + [0x3F3C, 0x0064, 0xA88F, 0x3E1F])
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 3 && rd32(out) == made) // inContent
             // $2B: the program's windows one after another from nil (Virtual)
             let r = tb_NewPtr(8, false, true)
             wr16(r + 4, 100)
@@ -175,7 +187,7 @@ extension BlueBox {
             run([0x598F] + push(second) + [0x1F3C, 0, 0x3F3C, 0x002B, 0xA88F, 0x2E1F])
             #expect(g_cpu!.pointee.d.7 == first)
             run([0x598F] + push(first) + [0x1F3C, 0, 0x3F3C, 0x002B, 0xA88F, 0x2E1F])
-            #expect(g_cpu!.pointee.d.7 == 0)
+            #expect(g_cpu!.pointee.d.7 == made) // the one made before, and then the list ends
         }
     }
 }

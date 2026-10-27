@@ -17085,17 +17085,28 @@ static void glue_OSDispatch5A(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
-    int32_t a_i = (int32_t)cpu_pop32(c);
-    int32_t a_h = (int32_t)cpu_pop32(c);
-    int32_t a_g = (int32_t)cpu_pop32(c);
-    int8_t a_f = (int8_t)(cpu_pop16(c) >> 8);
-    int32_t a_e = (int32_t)cpu_pop32(c);
-    int16_t a_d = (int16_t)cpu_pop16(c);
-    int8_t a_c = (int8_t)(cpu_pop16(c) >> 8);
-    int32_t a_b = (int32_t)cpu_pop32(c);
-    int32_t a_a = (int32_t)cpu_pop32(c);
-    int32_t r = tb_OSDispatch5A(a_a, a_b, a_c, a_d, a_e, a_f, a_g, a_h, a_i);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    int8_t a_goAway = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_behind = (gaddr)cpu_pop32(c);
+    int16_t a_procID = (int16_t)cpu_pop16(c);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_title = (gaddr)cpu_pop32(c);
+    gaddr a_bounds = (gaddr)cpu_pop32(c);
+    gaddr r = tb_OSDispatch5A(a_bounds, a_title, a_visible, a_procID, a_behind, a_goAway, a_refCon, a_proc, a_flags);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_OSDispatch64(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theWindow = (gaddr)cpu_pop32(c);
+    uint32_t a_thePoint = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_OSDispatch64(a_thePoint, a_theWindow);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -28305,6 +28316,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, glue_GetPortNameFromProcessSerialNumber},
     {0xA88F, (int32_t)0x55u, "OSDispatch55", CONV_STACK, 4, 2, glue_OSDispatch55},
     {0xA88F, (int32_t)0x5Au, "OSDispatch5A", CONV_STACK, 30, 4, glue_OSDispatch5A},
+    {0xA88F, (int32_t)0x64u, "OSDispatch64", CONV_STACK, 8, 2, glue_OSDispatch64},
     {0xA88F, (int32_t)0x7Bu, "LaunchControlPanel", CONV_STACK, 4, 2, glue_LaunchControlPanel},
     {0xA9E7, (int32_t)0x0u, "LActivate", CONV_STACK, 6, 0, glue_LActivate},
     {0xA9E7, (int32_t)0x4u, "LAddColumn", CONV_STACK, 8, 2, glue_LAddColumn},
