@@ -445,13 +445,13 @@ void tb_ShortenDITL(gaddr d, int16_t count)
     for (int i = keep + 1; i <= n; i++) {
         int type = item_type(d, i) & 0x7F;
         gaddr h = item_handle(d, i);
+        /* The TERec gets its own text again before the item's goes. */
+        if (edit_item(d) == i)
+            idle_edit(d);
         if ((type & ctrlItem) && h)
             tb_DisposeControl(h);
         else if ((type == statText || type == editText) && h)
             tb_DisposeHandle(h);
-        if (edit_item(d) == i) {
-            wr16(d + DialogRecord_editField_off, (uint16_t)-1);
-        }
     }
     gaddr items = items_handle(d);
     gaddr end = keep ? item_at(d, keep) + ITEM_HEADER + ((rd8(item_at(d, keep) + 13) + 1u) & ~1u) : rd32(items) + 2;
