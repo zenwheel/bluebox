@@ -150,6 +150,14 @@
     trap: 0xAB1D
     selector-location: D0<0xFFFF>
 
+# The Display Manager's selectors, too, come with only the routine's number
+# in D0 from some programs (King of Parking, Bugs Bannis, Rain'Net:
+# MOVEQ #$36,D0 for DMNewDisplayModeList), without the parameter size byte.
+- dispatcher:
+    name: DisplayDispatch
+    trap: 0xABEB
+    selector-location: D0<0xFF>
+
 # The Script Manager's TruncText and FindWordBreaks for 68k programs
 # (Pentominoes, OpenMe First, YellowEdit Documentation); PowerPC ones had
 # them already.

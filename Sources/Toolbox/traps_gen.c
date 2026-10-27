@@ -29341,7 +29341,7 @@ const dispatcher_info dispatchers[] = {
     {0xA08D, "DebugUtil", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
     {0xAA53, "DictionaryDispatch", "D0W"},
-    {0xABEB, "DisplayDispatch", "D0W"},
+    {0xABEB, "DisplayDispatch", "D0<0xFF>"},
     {0xABED, "DragDispatch", "D0W"},
     {0xAA7D, "ExtensionsDispatch", "D0W"},
     {0xA060, "FSDispatch", "D0W"},

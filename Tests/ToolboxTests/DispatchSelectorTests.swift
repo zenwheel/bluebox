@@ -93,5 +93,18 @@ extension BlueBox {
             tb_SBGetDetachedIndString(out, list, 3)
             #expect(rd8(out) == 0)
         }
+
+        /// Programs that load D0 with only the Display Manager's routine
+        /// number (King of Parking, Bugs Bannis, Rain'Net: MOVEQ #$36,D0)
+        /// get DMNewDisplayModeList.
+        @Test func displayManagerSelectorWithoutSize() {
+            let count = tb_NewPtr(4, false, true), list = tb_NewPtr(4, false, true)
+            func push(_ v: UInt32) -> [UInt16] { [0x2F3C, hiWord(v), loWord(v)] }
+            #expect(run68k([0x554F] + push(1) + push(0) + push(0) + push(count) + push(list) + [
+                0x7036, 0xABEB, 0x3E1F,         // MOVEQ #$36,D0; _DisplayDispatch; MOVE.W (SP)+,D7
+                0xA9F4,
+            ]) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0 && rd32(count) > 0 && rd32(list) != 0)
+        }
     }
 }
