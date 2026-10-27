@@ -163,6 +163,14 @@ extension BlueBox {
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("nmgr")), &v) == 0 && v & 1 == 1)
         }
 
+        /// The Font Manager has the outline font calls, as System 7's has:
+        /// MacPerl's runtime says it needs System 7 without the bit.
+        @Test func gestaltHasOutlineFonts() {
+            bootMachine()
+            var v: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("font")), &v) == 0 && v & 1 == 1) // gestaltOutlineFonts
+        }
+
         /// A package with no code of ours stops as an unimplemented trap:
         /// the System's PACK stub jumps through the trap table, which led
         /// back to the package loader for ever.
