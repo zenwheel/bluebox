@@ -65,6 +65,11 @@ static gaddr load_segment(int16_t seg)
         return 0;
     tb_HLock(h);
     gaddr code = rd32(h);
+    /* A program in a 24-bit partition may have set the master pointer's
+     * flags in its high byte itself (Dungeon of Doom locks the segment so
+     * in its own LoadSeg patch); a 24-bit Mac ignored that byte. */
+    if (rd32(LM_CurrentA5) < GA_A5WORLD_TOP_24)
+        code &= 0x00FFFFFFu;
     uint16_t first = rd16(code);
     uint16_t count = rd16(code + 2);
     if (first == 0xA89F) /* still compressed: should have been expanded on load */
@@ -131,6 +136,8 @@ static void raw_UnloadSeg(cpu68k *c, uint16_t tw)
         if (!h || !rd32(h))
             continue;
         gaddr start = rd32(h);
+        if (rd32(LM_CurrentA5) < GA_A5WORLD_TOP_24)
+            start &= 0x00FFFFFFu; /* as in load_segment */
         int32_t size = tb_GetHandleSize(h);
         if (addr >= start && addr < start + (uint32_t)size) {
             seg = s;
