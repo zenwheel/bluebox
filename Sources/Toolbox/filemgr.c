@@ -2018,6 +2018,48 @@ static bool vinfo_volume(int16_t idx, int16_t vref, gaddr namep, mount **m)
     return false;
 }
 
+/* The files and folders on a volume (the root and the Host folder not
+ * counted), as its catalog kept them: programs show a search's progress
+ * as a share of their sum (CatFinder divided by it).  Counted up to a
+ * limit, and kept for a few seconds for programs that ask often. */
+static void count_tree(const char *dir, bool root, uint32_t *files, uint32_t *dirs, uint32_t *budget)
+{
+    char **names;
+    int n = list_entries(dir, false, &names);
+    for (int i = 0; i < n; i++) {
+        if (*budget && !(root && !strcmp(names[i], host_folder))) {
+            char full[PATH_MAX];
+            snprintf(full, sizeof full, "%s/%s", dir, names[i]);
+            (*budget)--;
+            if (is_dir(full)) {
+                (*dirs)++;
+                count_tree(full, false, files, dirs, budget);
+            } else {
+                (*files)++;
+            }
+        }
+        free(names[i]);
+    }
+    free(names);
+}
+
+static void volume_counts(const char *root, uint32_t *files, uint32_t *dirs)
+{
+    static char last[PATH_MAX];
+    static uint32_t last_files, last_dirs;
+    static time_t when;
+    time_t now = time(NULL);
+    if (strcmp(last, root) || now - when > 5) {
+        uint32_t budget = 20000;
+        last_files = last_dirs = 0;
+        count_tree(root, !strcmp(root, root_path), &last_files, &last_dirs, &budget);
+        snprintf(last, sizeof last, "%s", root);
+        when = now;
+    }
+    *files = last_files;
+    *dirs = last_dirs;
+}
+
 static int16_t get_vinfo(gaddr pb, bool hfs)
 {
     int16_t idx = (int16_t)rd16(pb + VolumeParam_ioVolIndex_off);
@@ -2054,8 +2096,10 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
         wr32(pb + HVolumeParam_ioVBkUp_off, 0);
         wr16(pb + HVolumeParam_ioVSeqNum_off, 0);
         wr32(pb + HVolumeParam_ioVWrCnt_off, 0);
-        wr32(pb + HVolumeParam_ioVFilCnt_off, 0);
-        wr32(pb + HVolumeParam_ioVDirCnt_off, 0);
+        uint32_t files, dirs;
+        volume_counts(root, &files, &dirs);
+        wr32(pb + HVolumeParam_ioVFilCnt_off, files);
+        wr32(pb + HVolumeParam_ioVDirCnt_off, dirs);
         gmemset(pb + HVolumeParam_ioVFndrInfo_off, 0, 32);
     }
     return noErr;

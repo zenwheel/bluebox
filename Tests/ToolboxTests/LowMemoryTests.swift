@@ -308,6 +308,25 @@ extension BlueBox {
             #expect(tb_FSMakeFSSpec(-2, 65546, name, spec) == 0)
         }
 
+        /// The volume counts its files and folders, as programs that show a
+        /// search's progress against them divide by their sum (CatFinder).
+        @Test func theVolumeCountsItsFilesAndFolders() {
+            let dir = tempDir()
+            let sub = dir.appendingPathComponent("Folder")
+            try? FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+            for url in [dir.appendingPathComponent("One"), sub.appendingPathComponent("Two"), sub.appendingPathComponent("Three")] {
+                FileManager.default.createFile(atPath: url.path, contents: Data("x".utf8))
+            }
+            machine_mount_folder(dir.path, "Counted")
+            launchTestApp()
+            _ = initToolbox()
+            let pb = tb_NewPtr(Int32(HVolumeParam_SIZEOF), false, true)
+            wr16(pb + UInt32(VolumeParam_ioVolIndex_off), 2)
+            #expect(tb_PBHGetVInfo(pb, false) == 0)
+            #expect(rd32(pb + UInt32(HVolumeParam_ioVFilCnt_off)) == 3)
+            #expect(rd32(pb + UInt32(HVolumeParam_ioVDirCnt_off)) == 1)
+        }
+
         /// The mounted volume's drive is in the drive queue, on the CD-ROM
         /// driver (Prince of Persia 2 looks for it there and checks the
         /// driver's name), and the driver reports the drive's status.
