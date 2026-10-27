@@ -389,6 +389,29 @@ int16_t tb_NewGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect
     return noErr;
 }
 
+/* QTNewGWorldFromPtr (CarbonLib's NewGWorldFromPtr): a world drawing into
+ * the caller's pixels, of a depth (1 to 32) as the pixel format.  The
+ * world is a GWorld's but for its pixels, which stay the caller's. */
+int16_t tb_QTNewGWorldFromPtr(gaddr gw, int32_t pixelFormat, gaddr boundsRect, int32_t cTable, int32_t aGDevice,
+                              int32_t flags, gaddr baseAddr, int32_t rowBytes)
+{
+    int depth = pixelFormat;
+    if (!gw || !baseAddr || rowBytes <= 0 || rowBytes > 0x3FFF ||
+        (depth != 1 && depth != 2 && depth != 4 && depth != 8 && depth != 16 && depth != 32))
+        return paramErr;
+    int16_t err = tb_NewGWorld(gw, (int16_t)depth, boundsRect, (gaddr)cTable, (gaddr)aGDevice, flags);
+    if (err)
+        return err;
+    gaddr pm = rd32(rd32(rd32(gw) + CGrafPort_portPixMap_off));
+    gaddr own = pixels_handle(pm);
+    PixMap_set_baseAddr(pm, baseAddr);
+    PixMap_set_pmVersion(pm, 0);
+    PixMap_set_rowBytes(pm, (int16_t)(rowBytes | 0x8000));
+    if (own)
+        tb_DisposeHandle(own);
+    return noErr;
+}
+
 int32_t tb_UpdateGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect, gaddr cTable, gaddr aGDevice,
                         int32_t flags)
 {

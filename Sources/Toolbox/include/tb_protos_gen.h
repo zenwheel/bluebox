@@ -1862,6 +1862,7 @@ int32_t tb_PutScrap(int32_t len, int32_t rest, gaddr p);
 int8_t tb_QDDone(gaddr arg0);
 int16_t tb_QDError(void);
 void tb_QDTextBounds(int16_t byteCount, gaddr textAddr, gaddr bounds);
+int16_t tb_QTNewGWorldFromPtr(gaddr gw, int32_t pixelFormat, gaddr boundsRect, int32_t cTable, int32_t aGDevice, int32_t flags, gaddr baseAddr, int32_t rowBytes);
 int16_t tb_QTPrivateCall273(gaddr data);
 int16_t tb_QTPrivateCall274(int32_t container, int8_t flag);
 void tb_RGB2CMY(gaddr arg0, gaddr arg1);

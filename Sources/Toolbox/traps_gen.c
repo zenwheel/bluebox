@@ -19471,6 +19471,23 @@ static void glue_QDTextBounds(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_QTNewGWorldFromPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_rowBytes = (int32_t)cpu_pop32(c);
+    gaddr a_baseAddr = (gaddr)cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    int32_t a_aGDevice = (int32_t)cpu_pop32(c);
+    int32_t a_cTable = (int32_t)cpu_pop32(c);
+    gaddr a_boundsRect = (gaddr)cpu_pop32(c);
+    int32_t a_pixelFormat = (int32_t)cpu_pop32(c);
+    gaddr a_gw = (gaddr)cpu_pop32(c);
+    int16_t r = tb_QTNewGWorldFromPtr(a_gw, a_pixelFormat, a_boundsRect, a_cTable, a_aGDevice, a_flags, a_baseAddr, a_rowBytes);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_QTPrivateCall273(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28203,7 +28220,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x87u, "HitTestDSequenceData", CONV_STACK, 24, 2, 0},
     {0xAAA3, (int32_t)0x89u, "ICMSequenceGetInfo", CONV_STACK, 12, 2, 0},
     {0xAAA3, (int32_t)0x8Au, "ICMSetPixelFormatInfo", CONV_STACK, 8, 2, 0},
-    {0xAAA3, (int32_t)0x8Bu, "QTNewGWorldFromPtr", CONV_STACK, 32, 2, 0},
+    {0xAAA3, (int32_t)0x8Bu, "QTNewGWorldFromPtr", CONV_STACK, 32, 2, glue_QTNewGWorldFromPtr},
     {0xAAA3, (int32_t)0x8Du, "QTGetPixMapPtrRowBytes", CONV_STACK, 4, 4, 0},
     {0xAAA3, (int32_t)0x8Eu, "QTGetPixMapHandleRowBytes", CONV_STACK, 4, 4, 0},
     {0xAAA3, (int32_t)0x8Fu, "QTSetPixMapHandleRowBytes", CONV_STACK, 8, 2, 0},

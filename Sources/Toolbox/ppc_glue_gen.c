@@ -30777,6 +30777,20 @@ static void ppcglue_GetGraphicsImporterForDataRefWithFlags(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_QTNewGWorldFromPtr(ppc_cpu *c)
+{
+    gaddr a_gw = (gaddr)c->gpr[3];
+    int32_t a_pixelFormat = (int32_t)c->gpr[4];
+    gaddr a_boundsRect = (gaddr)c->gpr[5];
+    int32_t a_cTable = (int32_t)c->gpr[6];
+    int32_t a_aGDevice = (int32_t)c->gpr[7];
+    int32_t a_flags = (int32_t)c->gpr[8];
+    gaddr a_baseAddr = (gaddr)c->gpr[9];
+    int32_t a_rowBytes = (int32_t)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNewGWorldFromPtr(a_gw, a_pixelFormat, a_boundsRect, a_cTable, a_aGDevice, a_flags, a_baseAddr, a_rowBytes);
+    c->pc = c->lr;
+}
+
 static void ppcglue_MakeImageDescriptionForPixMap(ppc_cpu *c)
 {
     int32_t a_pixmap = (int32_t)c->gpr[3];
@@ -40377,26 +40391,6 @@ static void ppctrap_QTNewGWorld(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTNewGWorldFromPtr(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_QTUpdateGWorld(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -44142,7 +44136,7 @@ const ppc_export ppc_exports[] = {
     {"QTNewAlias", ppctrap_QTNewAlias},
     {"QTNewAtomContainer", ppctrap_QTNewAtomContainer},
     {"QTNewGWorld", ppctrap_QTNewGWorld},
-    {"QTNewGWorldFromPtr", ppctrap_QTNewGWorldFromPtr},
+    {"QTNewGWorldFromPtr", ppcglue_QTNewGWorldFromPtr},
     {"QTNewTween", ppctrap_QTNewTween},
     {"QTNextChildAnyType", ppctrap_QTNextChildAnyType},
     {"QTParseTextHREF", ppctrap_QTParseTextHREF},

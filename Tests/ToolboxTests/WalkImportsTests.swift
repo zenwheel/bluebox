@@ -54,6 +54,32 @@ extension BlueBox {
             #expect(ilCall("ConvertLocalToUTCDateTime", [back, utc]) == 0 && rd32(utc + 2) == 2_000_000)
         }
 
+        /// The Unicode Converter's mappings, all or those to one encoding (Eudora counts them).
+        @Test func unicodeMappings() {
+            let count = tb_NewPtr(4, false, true), find = tb_NewPtr(12, false, true), out = tb_NewPtr(12 * 200, false, true)
+            #expect(ilCall("CountUnicodeMappings", [0, 0, count]) == 0)
+            let all = rd32(count)
+            #expect(all > 1)
+            wr32(find, 0x0100)
+            wr32(find + 4, 0) // MacRoman
+            #expect(ilCall("CountUnicodeMappings", [1 << 3, find, count]) == 0 && rd32(count) == 1) // other base
+            #expect(ilCall("QueryUnicodeMappings", [1 << 3, find, 200, count, out]) == 0 && rd32(count) == 1)
+            #expect(rd32(out) == 0x0100 && rd32(out + 4) == 0 && rd32(out + 8) == 0xFFFF_FFFF)
+            #expect(ilCall("QueryUnicodeMappings", [0, 0, 2, count, out]) == 0 && rd32(count) == 2)
+        }
+
+        @Test func moreFirstNames() {
+            #expect(ilCall("OTUseSyncIdleEvents", [0x1234, 1]) == 0)
+            #expect(ilCall("TXNTSMCheck", [0x1234, 0]) & 0xFF == 0)
+            let gw = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true), buf = tb_NewPtr(16 * 16 * 4, false, true)
+            wr16(r + 4, 16)
+            wr16(r + 6, 16)
+            #expect(ilCall("NewGWorldFromPtr", [gw, 32, r, 0, 0, 0, buf, 64]) == 0 && rd32(gw) != 0)
+            let pm = rd32(rd32(rd32(gw) + UInt32(CGrafPort_portPixMap_off)))
+            #expect(rd32(pm) == buf && rd16(pm + 4) & 0x3FFF == 64) // the caller's pixels
+            #expect(ilCall("NewGWorldFromPtr", [gw, 3, r, 0, 0, 0, buf, 64]) == UInt32(bitPattern: -50))
+        }
+
         @Test func dataBrowserFirstNames() {
             let upp = ilCall("NewDataBrowserGetSetItemDataUPP", [0x0040_1000])
             #expect(upp != 0 && rd16(upp) == 0xAAFE)

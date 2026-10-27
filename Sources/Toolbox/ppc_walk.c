@@ -2,8 +2,10 @@
  * Routines the archive walk's PowerPC programs imported weakly from
  * libraries Blue Box has, and called without checking: CarbonLib's
  * memory checks (IsPointerValid, IsHandleValid, IsHeapValid), UTCUtils
- * (the clock in UTC, and conversions between UTC and local time), and the
- * names CarbonLib 1.0 gave two of the Data Browser's callbacks.
+ * (the clock in UTC, and conversions between UTC and local time), the
+ * names CarbonLib 1.0 gave two of the Data Browser's callbacks,
+ * CarbonLib's name for QTNewGWorldFromPtr, Open Transport's
+ * OTUseSyncIdleEvents, and the classic Text Engine's TXNTSMCheck.
  */
 #include <string.h>
 
@@ -151,6 +153,18 @@ static void NewDataBrowserCompareUPP(ppc_cpu *c) { forward(c, "NewDataBrowserIte
 static void DisposeDataBrowserCompareUPP(ppc_cpu *c) { forward(c, "DisposeDataBrowserItemCompareUPP"); }
 static void InvokeDataBrowserCompareUPP(ppc_cpu *c) { forward(c, "InvokeDataBrowserItemCompareUPP"); }
 
+/* CarbonLib's NewGWorldFromPtr is QuickTime's QTNewGWorldFromPtr. */
+static void NewGWorldFromPtr(ppc_cpu *c) { forward(c, "QTNewGWorldFromPtr"); }
+
+/* OTUseSyncIdleEvents(ref, useEvents): synchronous calls here never wait,
+ * so they never send a provider kOTSyncIdleEvent. */
+static void OTUseSyncIdleEvents(ppc_cpu *c) { RETURN(noErr); }
+
+/* TXNTSMCheck(object, event): whether an input method took the event.
+ * Mac OS 9's Text Engine (Textension) has it, though CarbonLib doesn't;
+ * TCP Console asks CarbonLib first thing.  There are no input methods. */
+static void TXNTSMCheck(ppc_cpu *c) { RETURN(0); }
+
 const ppc_export walk_exports[] = {
     { "IsPointerValid", IsPointerValid },
     { "IsHandleValid", IsHandleValid },
@@ -169,5 +183,8 @@ const ppc_export walk_exports[] = {
     { "NewDataBrowserCompareUPP", NewDataBrowserCompareUPP },
     { "DisposeDataBrowserCompareUPP", DisposeDataBrowserCompareUPP },
     { "InvokeDataBrowserCompareUPP", InvokeDataBrowserCompareUPP },
+    { "NewGWorldFromPtr", NewGWorldFromPtr },
+    { "OTUseSyncIdleEvents", OTUseSyncIdleEvents },
+    { "TXNTSMCheck", TXNTSMCheck },
 };
 const unsigned walk_export_count = sizeof walk_exports / sizeof walk_exports[0];

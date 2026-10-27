@@ -85,6 +85,7 @@ enum { kUnicodeUseFallbacksMask = 1 << 0, kUnicodeKeepSameEncodingMask = 1 << 8,
 
 static uint32_t te_base(uint32_t e) { return e & 0xFFFF; }
 static uint32_t te_format(uint32_t e) { return e >> 26 & 0x3F; }
+static uint32_t te_variant(uint32_t e) { return e >> 16 & 0x3FF; }
 static uint32_t te_make(uint32_t base, uint32_t variant, uint32_t format)
 {
     return (base & 0xFFFF) | (variant & 0x3FF) << 16 | (format & 0x3F) << 26;
@@ -1272,6 +1273,62 @@ static void tec_TECCountWebTextEncodings(ppc_cpu *c) { list_supported(c, web_enc
 static void tec_TECGetWebTextEncodings(ppc_cpu *c) { list_supported(c, web_encodings, NELEM(web_encodings), R(1), R(2), R(3)); }
 static void tec_TECCountMailTextEncodings(ppc_cpu *c) { list_supported(c, mail_encodings, NELEM(mail_encodings), 0, 0, R(1)); }
 static void tec_TECGetMailTextEncodings(ppc_cpu *c) { list_supported(c, mail_encodings, NELEM(mail_encodings), R(1), R(2), R(3)); }
+/* The Unicode Converter's mappings: Unicode to each encoding there is
+ * (but Unicode's own forms), at the latest mapping version, those whose
+ * parts the filter names matching the one sought (iFilter's bits: Unicode
+ * base, variant and format, then the other encoding's). */
+static bool mapping_matches(uint32_t filter, gaddr find, uint32_t other)
+{
+    if (!find)
+        return true;
+    uint32_t want[2] = { rd32(find), rd32(find + 4) }, have[2] = { kTextEncodingUnicodeDefault, other };
+    for (int i = 0; i < 2; i++) {
+        if ((filter >> (3 * i)) & 1 && te_base(want[i]) != te_base(have[i]))
+            return false;
+        if ((filter >> (3 * i + 1)) & 1 && te_variant(want[i]) != te_variant(have[i]))
+            return false;
+        if ((filter >> (3 * i + 2)) & 1 && te_format(want[i]) != te_format(have[i]))
+            return false;
+    }
+    return true;
+}
+
+static uint32_t list_mappings(uint32_t filter, gaddr find, gaddr out, uint32_t max)
+{
+    uint32_t n = 0;
+    for (unsigned i = 0; i < NELEM(candidates); i++) {
+        uint32_t e = candidates[i];
+        if (is_unicode(e) || !supported(e) || !mapping_matches(filter, find, e))
+            continue;
+        if (out && n < max) {
+            gaddr m = out + 12 * n;
+            wr32(m, kTextEncodingUnicodeDefault);
+            wr32(m + 4, e);
+            wr32(m + 8, 0xFFFFFFFFu); /* kUnicodeUseLatestMapping */
+        }
+        n++;
+    }
+    return n;
+}
+
+/* CountUnicodeMappings(iFilter, iFindMapping, *oActualCount) */
+static void tec_CountUnicodeMappings(ppc_cpu *c)
+{
+    uint32_t n = list_mappings(R(0), R(1), 0, 0);
+    if (R(2))
+        wr32(R(2), n);
+    RETURN(noErr);
+}
+
+/* QueryUnicodeMappings(iFilter, iFindMapping, iMaxCount, *oActualCount, oReturnedMappings[]) */
+static void tec_QueryUnicodeMappings(ppc_cpu *c)
+{
+    uint32_t n = list_mappings(R(0), R(1), R(4), R(2));
+    if (R(3))
+        wr32(R(3), n < R(2) ? n : R(2));
+    RETURN(noErr);
+}
+
 static void tec_TECCountAvailableSniffers(ppc_cpu *c) { list_supported(c, candidates, NELEM(candidates), 0, 0, R(0)); }
 static void tec_TECGetAvailableSniffers(ppc_cpu *c) { list_supported(c, candidates, NELEM(candidates), R(0), R(1), R(2)); }
 
@@ -1782,6 +1839,8 @@ const ppc_export tec_exports[] = {
     { "TECConvertTextToMultipleEncodings", tec_TECConvertTextToMultipleEncodings },
     { "TECCountAvailableSniffers", tec_TECCountAvailableSniffers },
     { "TECCountAvailableTextEncodings", tec_TECCountAvailableTextEncodings },
+    { "CountUnicodeMappings", tec_CountUnicodeMappings },
+    { "QueryUnicodeMappings", tec_QueryUnicodeMappings },
     { "TECCountDestinationTextEncodings", tec_TECCountDestinationTextEncodings },
     { "TECCountDirectTextEncodingConversions", tec_TECCountDirectTextEncodingConversions },
     { "TECCountMailTextEncodings", tec_TECCountMailTextEncodings },
