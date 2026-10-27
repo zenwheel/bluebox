@@ -558,8 +558,14 @@ void machine_idle(void)
         return;
     last_idle = c->icount;
     c->icount += 1000;
+    uint32_t presses = ev_press_count();
     walker_idle(c->icount);
     if (c->halted)
+        return;
+    /* A click the walk just gave is the program's to see: the clock moving
+     * on to its scripted release would let go of the button before a
+     * program polling Button (a title waiting for a click) looked. */
+    if (ev_press_count() != presses)
         return;
     /* Waiting: scripted input comes now, or the clock moves on to it. */
     uint64_t next = events_script_next_at();

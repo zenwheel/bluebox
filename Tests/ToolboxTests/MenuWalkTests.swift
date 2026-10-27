@@ -1,0 +1,89 @@
+import CCore
+import CPU68K
+import Foundation
+import ForkStore
+import Testing
+import Toolbox
+
+extension BlueBox {
+    /// The menu walker (--walk-menus) with synthesized programs that have
+    /// no menu bar of their own.
+    @Suite(.serialized) struct MenuWalk {
+        /// A one-segment application of the given code, launched.
+        func launch(_ code: [UInt8]) throws -> URL {
+            bootMachine()
+            let jt = cat(be16(0), be16(0x3F3C), be16(1), be16(0xA9F0)) // entry 0: seg 1, offset 0
+            let code0 = cat(be32(40), be32(256), be32(8), be32(32), jt)
+            var fork = buildFork([
+                TestResource(type: "CODE", id: 0, data: code0),
+                TestResource(type: "CODE", id: 1, data: cat(be16(0), be16(1), code)),
+            ])
+            let dir = tempDir()
+            let path = dir.appendingPathComponent("NoMenus").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+            #expect(machine_launch(path, &err, err.count))
+            return dir
+        }
+
+        /// A title that waits for a click by polling Button (ANSI Vision's)
+        /// sees the walk's click and goes on.
+        @Test func aTitlePollingButtonSeesTheClick() throws {
+            let dir = try launch(cat(
+                be16(0x554F),                 // loop: SUBQ #2,SP
+                be16(0xA974),                 // _Button
+                be16(0x4A1F),                 // TST.B (SP)+
+                be16(0x67FA),                 // BEQ loop
+                be16(0xA9F4)))                // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
+
+        /// A program that is one window of buttons, with no menu bar
+        /// (Disinfectant 1.6): the walk presses its button, which here
+        /// ends the program.
+        @Test func aWindowOfButtonsHasThemPressed() throws {
+            let dir = try launch(cat(
+                be16(0x4267),                 // loop: CLR.W -(SP)
+                be16(0x3F3C), be16(2),        // MOVE.W #mDownMask,-(SP)
+                be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+                be16(0xA970),                 // _GetNextEvent
+                be16(0x4A1F),                 // TST.B (SP)+
+                be16(0x67F0),                 // BEQ loop
+                be16(0x486D), be16(0xFFEA),   // PEA event.where(A5)
+                be16(0xA871),                 // _GlobalToLocal
+                be16(0x554F),                 // SUBQ #2,SP
+                be16(0x2F2D), be16(0xFFEA),   // MOVE.L event.where(A5),-(SP)
+                be16(0x2F2D), be16(0xFFF8),   // MOVE.L window(A5),-(SP)
+                be16(0x486D), be16(0xFFFC),   // PEA control(A5)
+                be16(0xA96C),                 // _FindControl
+                be16(0x301F),                 // MOVE.W (SP)+,D0
+                be16(0x67D6),                 // BEQ loop: a click beside the button
+                be16(0xA9F4)))                // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            func rect(_ v: [Int]) -> UInt32 {
+                let r = tb_NewPtr(8, false, true)
+                for (i, x) in v.enumerated() { wr16(r + UInt32(i * 2), UInt16(x)) }
+                return r
+            }
+            let title = tb_NewPtr(8, false, true)
+            for (i, b) in [3, 0x47, 0x6F, 0x21].enumerated() { wr8(title + UInt32(i), UInt8(b)) } // "Go!"
+            let w = tb_NewWindow(0, rect([50, 50, 150, 250]), title, 1, 1, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            _ = tb_NewControl(w, rect([10, 10, 30, 80]), title, 1, 0, 0, 1, 0, 0)
+            wr32(rd32(UInt32(LM_CurrentA5)) - 8, w)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
+    }
+}

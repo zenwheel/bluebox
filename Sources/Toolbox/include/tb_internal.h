@@ -91,6 +91,11 @@ gaddr dialog_in_front(void);
 uint32_t dialog_signature(gaddr d);
 bool dialog_modal(gaddr d);
 int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y);
+/* The standard dialog filter: Return and Enter press the default button,
+ * Escape and Command-period the cancel button (dialogs.c). */
+bool dialog_std_filter(gaddr d, gaddr evt, gaddr itemp);
+int window_button(gaddr w, int n, char *title, size_t size, int *x, int *y); /* controls.c */
+bool ctl_push_button(gaddr ch, bool custom);
 void walker_idle(uint64_t now);
 
 /* ---- Resource Manager internals ---- */
@@ -233,6 +238,8 @@ void fm_flush_dirty(void); /* open forks written out (filemgr.c) */
 /* The mouse and modifiers now (events.c); the window under a global point (wm.c). */
 bool ev_still_down(void);
 uint32_t ev_mouse_global(void);
+/* Mouse presses since boot, counted so a quick click is never missed (events.c). */
+uint32_t ev_press_count(void);
 uint16_t ev_modifiers(void);
 void ev_wait_tick(void);
 /* Headless, n pixels' worth of QuickDraw time passes (machine.c). */

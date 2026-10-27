@@ -1224,7 +1224,7 @@ static void flash_button(gaddr d, int n)
 
 /* The standard filter: Return and Enter press the default button; Escape
  * and Command-period the cancel button (when one is set). */
-static bool std_filter(gaddr d, gaddr evt, gaddr itemp)
+bool dialog_std_filter(gaddr d, gaddr evt, gaddr itemp)
 {
     int what = (int16_t)rd16(evt);
     if (what != keyDown && what != autoKey)
@@ -1249,7 +1249,7 @@ static void std_filter_native(cpu68k *c, uint16_t tw)
 {
     uint32_t ret = cpu_pop32(c);
     gaddr itemp = cpu_pop32(c), evt = cpu_pop32(c), d = cpu_pop32(c);
-    bool r = std_filter(d, evt, itemp);
+    bool r = dialog_std_filter(d, evt, itemp);
     wr16(c->a[7], r ? 0x0100 : 0);
     cpu_push32(c, ret);
 }
@@ -1467,7 +1467,7 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
             guest_call(filter);
             if (cpu_pop16(c) & 0xFF00)
                 break;
-        } else if (std_filter(d, evt, itemp)) {
+        } else if (dialog_std_filter(d, evt, itemp)) {
             break;
         }
         if (got && (int16_t)rd16(evt) == updateEvt && !is_dialog(rd32(evt + EventRecord_message_off))) {
@@ -1836,7 +1836,11 @@ int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y)
     int type = item_type(d, n);
     gaddr h = item_handle(d, n);
     qrect r = item_rect(d, n);
-    if ((type & 0x7F) != (ctrlItem | btnCtrl) || !h || !rd32(h) || r.left >= 8192 || !ControlRecord_contrlVis(rd32(h)))
+    /* A button item, or a control item ('CNTL') that is a push button,
+     * the program's own CDEF's too: FileT&C's About box. */
+    bool button = (type & 0x7F) == (ctrlItem | btnCtrl) ||
+                  ((type & 0x7F) == (ctrlItem | resCtrl) && h && rd32(h) && ctl_push_button(h, true));
+    if (!button || !h || !rd32(h) || r.left >= 8192 || !ControlRecord_contrlVis(rd32(h)))
         return 0;
     gaddr t = tb_NewPtr(256, false, true);
     tb_GetControlTitle(h, t);

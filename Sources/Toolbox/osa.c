@@ -413,6 +413,63 @@ static bool startup_screen(void)
     return as_ask(&d) != 1;
 }
 
+/* A Pascal string in a new guest block. */
+static gaddr new_pstring(const uint8_t *text, size_t n)
+{
+    if (n > 255)
+        n = 255;
+    gaddr p = tb_NewPtr((int32_t)n + 1, false, false);
+    wr8(p, (uint8_t)n);
+    gput(p + 1, text, (uint32_t)n);
+    return p;
+}
+
+static gaddr new_menu(int16_t id, const char *title, const char *items)
+{
+    gaddr t = new_pstring((const uint8_t *)title, strlen(title));
+    gaddr m = tb_NewMenu(id, t);
+    tb_DisposePtr(t);
+    if (*items) {
+        gaddr i = new_pstring((const uint8_t *)items, strlen(items));
+        tb_AppendMenu(m, i);
+        tb_DisposePtr(i);
+    }
+    tb_InsertMenu(m, 0);
+    return m;
+}
+
+enum { APPLE_MENU = 128, FILE_MENU = 129, EDIT_MENU = 130 };
+
+/* The applet shell's menu bar: the Apple menu with About, File with
+ * Quit, and Edit for the script's dialogs, its items dimmed. */
+static void applet_menus(void)
+{
+    gaddr apple = new_menu(APPLE_MENU, "\x14", "About");
+    uint8_t about[64] = "About ";
+    size_t n = 6, len = rd8(LM_CurApName);
+    if (len > 31)
+        len = 31;
+    gget(about + n, LM_CurApName + 1, (uint32_t)len);
+    n += len;
+    about[n++] = 0xC9; /* ... */
+    gaddr t = new_pstring(about, n);
+    tb_SetMenuItemText(apple, 1, t);
+    tb_DisposePtr(t);
+    new_menu(FILE_MENU, "File", "Quit/Q");
+    gaddr edit = new_menu(EDIT_MENU, "Edit", "Undo/Z;(-;Cut/X;Copy/C;Paste/V;Clear");
+    for (int16_t i = 1; i <= 6; i++)
+        tb_DisableItem(edit, i);
+    tb_DrawMenuBar();
+}
+
+/* A choice from the applet's menus: Quit quits; the rest does nothing. */
+static void applet_choice(int32_t choice)
+{
+    if ((int16_t)(choice >> 16) == FILE_MENU && (int16_t)choice == 1)
+        applet.quit = true;
+    tb_HiliteMenu(0);
+}
+
 static int32_t applet_main(void)
 {
     gaddr h = tb_Get1Resource((int32_t)T("scpt"), 128);
@@ -445,7 +502,8 @@ static int32_t applet_main(void)
     tb_AEInstallEventHandler((int32_t)T("aevt"), (int32_t)T("odoc"), handler, (int32_t)T("odoc"), 0);
     tb_AEInstallEventHandler((int32_t)T("aevt"), (int32_t)T("quit"), handler, (int32_t)T("quit"), 0);
 
-    gaddr evt = tb_NewPtr(EventRecord_SIZEOF, false, true);
+    applet_menus();
+    gaddr evt = tb_NewPtr(EventRecord_SIZEOF, false, true), wp = tb_NewPtr(4, false, true);
     uint32_t next_idle = 0;
     int waited = 0;
     as_quit_requested = false;
@@ -454,8 +512,10 @@ static int32_t applet_main(void)
         int16_t what = got ? (int16_t)rd16(evt) : 0;
         if (what == 23) /* kHighLevelEvent */
             tb_AEProcessAppleEvent(evt);
-        else if (what == 3 && (rd16(evt + 14) & 0x0100) && (rd32(evt + 2) & 0xFF) == 'q')
-            applet.quit = true; /* Command-Q */
+        else if (what == 3 && (rd16(evt + 14) & 0x0100))
+            applet_choice(tb_MenuKey((int16_t)(rd32(evt + 2) & 0xFF))); /* Command-Q */
+        else if (what == 1 && tb_FindWindow(rd32(evt + 10), wp) == 1) /* inMenuBar */
+            applet_choice(tb_MenuSelect(rd32(evt + 10)));
         if (!applet.ran && ++waited > 120) {
             /* No Open Application came (a launch without one): run anyway. */
             uint32_t r = 0;
@@ -484,6 +544,8 @@ static int32_t applet_main(void)
         }
     }
     tb_DisposePtr(evt);
+    tb_DisposePtr(wp);
+    tb_ClearMenuBar();
     tb_AERemoveEventHandler((int32_t)T("aevt"), (int32_t)T("oapp"), handler, 0);
     tb_AERemoveEventHandler((int32_t)T("aevt"), (int32_t)T("odoc"), handler, 0);
     tb_AERemoveEventHandler((int32_t)T("aevt"), (int32_t)T("quit"), handler, 0);

@@ -140,6 +140,42 @@ extension BlueBox {
             tb_DisposeDialog(d)
         }
 
+        /// A control item from a 'CNTL' that is a push button is a button
+        /// for the menu walk to press, as a button item is (FileT&C's About
+        /// box has only such buttons).
+        @Test func controlItemPushButtonsAreButtonsForTheWalk() {
+            let cntl = cat(be16(0), be16(0), be16(20), be16(60), be16(0), be16(0x0100), be16(1), be16(0),
+                           be16(0), be32(0), [2], pstr("Go"))
+            let items = ditl([ditlItem(4 | 3, (10, 10, 30, 70), be16(300)),           // 1 control item
+                              ditlItem(8, (40, 10, 56, 200), pstr("text"))])           // 2 static text
+            launchTestApp([TestResource(type: "DLOG", id: 200, data: dlog(items: 201)),
+                           TestResource(type: "DITL", id: 201, data: items),
+                           TestResource(type: "CNTL", id: 300, data: cntl)])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+            var title = [CChar](repeating: 0, count: 64)
+            var x: Int32 = 0, y: Int32 = 0
+            #expect(dialog_button(d, 1, &title, title.count, &x, &y) == 2)
+            #expect(String(cString: title) == "Go")
+            #expect(dialog_button(d, 2, &title, title.count, &x, &y) == 0)
+            tb_DisposeDialog(d)
+        }
+
+        /// InterfaceLib's StdFilterProc presses the default button on Return
+        /// for a program running a dialog in its own event loop (Conflict
+        /// Catcher's demonstration notice), and leaves other keys alone.
+        @Test func powerPCStandardFilterPressesTheDefaultButton() {
+            let d = open()
+            let evt = tb_NewPtr(16, false, true), hit = tb_NewPtr(2, false, true)
+            wr16(evt, 3) // keyDown
+            wr32(evt + 2, 0x0000_2461) // 'a'
+            #expect(ilCall("StdFilterProc", [d, evt, hit]) & 0xFF == 0)
+            wr32(evt + 2, 0x0000_240D) // Return
+            #expect(ilCall("StdFilterProc", [d, evt, hit]) & 0xFF != 0)
+            #expect(rd16(hit) == 1)
+            tb_DisposeDialog(d)
+        }
+
         /// Snood 2.1's alert filter "presses" its Cancel item on Command-period
         /// with HiliteControl, which in its one-button alert is the static
         /// text: the text's handle is no control record, nothing to change
@@ -628,6 +664,27 @@ extension BlueBox {
             let hidden = tb_NewWindow(0, r, 0, 0, 2, 0xFFFF_FFFF, 0, 0)
             tb_SizeWindow(hidden, 400, 300, 1)
             tb_SendBehind(hidden, 0)
+            #expect(rgba(150, 150) == [0, 0, 0])
+        }
+
+        /// A window with a picture (SetWindowPic) is drawn by the Window
+        /// Manager, with no update event: ACE! waits for its splash's
+        /// updates to end.
+        @Test func windowPicturesDrawWithoutUpdateEvents() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [60, 60, 260, 360].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let w = tb_NewWindow(0, r, 0, 0, 2, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            let pic = tb_OpenPicture(w + UInt32(GrafPort_portRect_off))
+            tb_PaintRect(w + UInt32(GrafPort_portRect_off))
+            tb_ClosePicture()
+            tb_SetWindowPic(w, pic)
+            tb_ShowWindow(w)
+            let ev = tb_NewPtr(16, false, true)
+            #expect(tb_CheckUpdate(ev) == 0)
+            #expect(tb_EmptyRgn(WindowRecord_updateRgn(w)) != 0)
             #expect(rgba(150, 150) == [0, 0, 0])
         }
 

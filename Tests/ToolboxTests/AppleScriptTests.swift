@@ -377,6 +377,29 @@ extension BlueBox {
 
         /// The AppleScript component, as a 68k program uses it: OSALoad,
         /// OSAExecute, OSADisplay through _ComponentDispatch.
+        /// A stay-open applet has the applet shell's menu bar while it
+        /// runs: its File menu's Quit ends it (a CGI applet otherwise waits
+        /// for Apple events with nothing to choose).
+        @Test func stayOpenAppletQuitsFromItsFileMenu() {
+            let a = Asm()
+            a.op(Self.pushLit | 0, Self.ret)
+            let data = Self.script([(Self.run, Self.handler(Self.run, locals: [], literals: [.text("hi")],
+                                                            code: a.done()))])
+            launchTestApp([TestResource(type: "scpt", id: 128, data: data),
+                           TestResource(type: "pref", id: 128, data: be16(1))]) // stay open
+            machine_set_script_dialog_handler(nil, nil)
+            let q = QTTune()
+            q.install()
+            let ci = q.call([0x7021, 0xA82A], [fourCC("aplt"), fourCC("scpt")])   // OpenDefaultComponent
+            #expect(ci != 0)
+            machine_choose_menu(129, 1)                                              // File: Quit
+            machine_set_instruction_limit(machine_instruction_count() + 50_000_000)
+            defer { machine_set_instruction_limit(0) }
+            #expect(q.component(ci, 1, []) == 0)                                     // run the applet
+            #expect(!g_cpu!.pointee.halted)                                           // it quit, not the limit
+            #expect(menu_bar_count() == 0)                                            // its menus gone
+        }
+
         @Test func osaComponentLoadsExecutesAndDisplays() {
             prepare()
             let q = QTTune()
