@@ -32,6 +32,26 @@ extension BlueBox {
             #expect(call("OTFindPort", [record, name]) & 0xFF == 0)
         }
 
+        /// The walker dismisses dialogs by windowKind: a document window
+        /// with a handle where a dialog's item list would be (Tex-Edit
+        /// Plus's) is not one, and keys typed into it went on for ever.
+        @Test func walkerTakesOnlyDialogsForDialogs() {
+            let items = ditl([ditlItem(4, (160, 220, 180, 290), Array("OK".utf8))])
+            launchTestApp([TestResource(type: "DLOG", id: 200, data: dlog(items: 200)),
+                           TestResource(type: "DITL", id: 200, data: items)])
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [40, 10, 300, 500].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let storage = tb_NewPtr(400, false, true)
+            let title = tb_NewPtr(8, false, true)
+            let w = tb_NewWindow(storage, r, title, 1, 0, 0xFFFF_FFFF, 1, 0)
+            wr32(w + UInt32(DialogRecord_items_off), tb_NewHandle(64, false, true)) // the program's own data
+            #expect(tb_FrontWindow() == w && dialog_in_front() == 0)
+            let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+            #expect(tb_FrontWindow() == d && dialog_in_front() == d)
+            tb_DisposeDialog(d)
+        }
+
         /// OTUtilityLib's string and memory helpers do what they say
         /// (IPNetRouter compares names with OTStrEqual and OTMemcmp, which
         /// said "not supported", taken as true).

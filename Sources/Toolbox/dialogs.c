@@ -1808,11 +1808,14 @@ int32_t tb_GetModalDialogEventMask(gaddr d, gaddr mask)
     return noErr;
 }
 
-/* The front window if it is a dialog (the menu walker dismisses it), or 0. */
+/* The front window if it is a dialog (the menu walker dismisses it), or 0.
+ * By windowKind, as IsDialogEvent goes: Tex-Edit Plus keeps a handle where
+ * a dialog's item list would be in its document windows, and the walker
+ * typed keys into the text for ever. */
 gaddr dialog_in_front(void)
 {
     gaddr w = tb_FrontWindow();
-    return is_dialog(w) ? w : 0;
+    return kind_dialog(w) ? w : 0;
 }
 
 /* What tells the walker one dialog from another: its size and its items'
