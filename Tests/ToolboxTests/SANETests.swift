@@ -134,6 +134,31 @@ extension BlueBox {
             #expect(abs(Double(bitPattern: bits) - 2.0 / 7.0) < 1e-12)
         }
 
+        /// Packed decimal: stored with a k-factor in a register or the
+        /// instruction (LoanCalc formats numbers so), and read back.
+        @Test func packedDecimal() {
+            let p = tb_NewPtr(12, false, true), q = tb_NewPtr(12, false, true)
+            let code: [UInt16] = [
+                0x207C, UInt16(p >> 16), UInt16(p & 0xFFFF),   // MOVEA.L #p,A0
+                0x227C, UInt16(q >> 16), UInt16(q & 0xFFFF),   // MOVEA.L #q,A1
+                0xF23C, 0x4000, 0x0000, 0x3039,   // FMOVE.L #12345,FP0
+                0xF23C, 0x4020, 0x0000, 0x0064,   // FDIV.L #100,FP0 → 123.45
+                0x7405,                           // MOVEQ #5,D2
+                0xF210, 0x7C20,                   // FMOVE.P FP0,(A0){D2}
+                0xF23C, 0x4080, 0xFFFF, 0xFFFB,   // FMOVE.L #-5,FP1
+                0xF23C, 0x40A0, 0x0000, 0x0080,   // FDIV.L #128,FP1 → -0.0390625
+                0xF211, 0x6C83,                   // FMOVE.P FP1,(A1){#3}
+                0xF210, 0x4D00,                   // FMOVE.P (A0),FP2
+                0xF23C, 0x4123, 0x0000, 0x0064,   // FMUL.L #100,FP2
+                0xF203, 0x6100,                   // FMOVE.L FP2,D3
+                0xA9F4,
+            ]
+            #expect(run(code) == "ExitToShell")
+            #expect(rd32(p) == 0x0002_0001 && rd32(p + 4) == 0x2345_0000 && rd32(p + 8) == 0) // +1.2345E+2
+            #expect(rd32(q) == 0xC002_0003 && rd32(q + 4) == 0x9100_0000)                      // -3.91E-2
+            #expect(cpu.pointee.d.3 == 12345)
+        }
+
         /// FSAVE pushes the 68040's 4-byte idle frame and FRESTORE takes back
         /// as much: an interrupt routine that saves the FPU around its work
         /// (Safari's sound callback, with FMOVEM of all eight registers)
