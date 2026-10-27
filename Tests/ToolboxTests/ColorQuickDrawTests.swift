@@ -242,6 +242,20 @@ extension BlueBox {
             tb_DisposeGWorld(port)
         }
 
+        /// Direct devices have an inverse table handle too, unbuilt: Color
+        /// It! stores the colour seed in a 32-bit GWorld's.
+        @Test func directDevicesHaveAnInverseTableHandle() {
+            launchTestApp()
+            _ = initToolbox()
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 32, rect(0, 0, 10, 10), 0, 0, 0) == 0)
+            for gdh in [tb_GetGWorldDevice(rd32(gw)), rd32(UInt32(LM_MainDevice)), tb_NewGDevice(0, 0)] {
+                let itab = rd32(rd32(gdh) + UInt32(GDevice_gdITable_off))
+                #expect(itab != 0 && rd32(itab) != 0 && tb_GetHandleSize(itab) >= 6)
+            }
+            tb_DisposeGWorld(rd32(gw))
+        }
+
         @Test func colorTablesAndIndices() {
             launchTestApp()
             _ = initToolbox()
