@@ -349,6 +349,15 @@ static void os_epilogue_native(cpu68k *c, uint16_t tw)
  * returning straight away is correct (the stub's RTS returns). */
 static void noop_native(cpu68k *c, uint16_t tw) {}
 
+/* ROMBase+$0A, the ROM's start: programs from before the Shutdown
+ * Manager restart the Mac by jumping there (World Builder's games, the
+ * Macintosh Basics tour, after ejecting their disks when no Finder is to
+ * be found).  Here the run ends. */
+static void restart_native(cpu68k *c, uint16_t tw)
+{
+    cpu_halt(c, "restart (jumped to the ROM's start)");
+}
+
 static void aline_vector_native(cpu68k *c, uint16_t tw)
 {
     /* Only reached if something jumps to the A-line vector itself. */
@@ -925,6 +934,9 @@ void trap_init(void)
         wr32(LM_JDTInstall, dt);
     wr32(LM_JCrsrTask, noop);
     wr32(LM_JADBProc, noop);
+
+    wr16(GA_ROM + 0x0A, 0x4EF9); /* JMP */
+    wr32(GA_ROM + 0x0C, native_register(restart_native, "Restart", 0));
 
     /* Exception vectors 2..63 (A-line gets its own marker stub). */
     uint32_t exc = native_register(exception_native, "Exception", 0);

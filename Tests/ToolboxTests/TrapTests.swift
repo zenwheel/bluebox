@@ -45,6 +45,17 @@ extension BlueBox {
             #expect(tb_GetHandleSize(h) == 3)
         }
 
+        /// Jumping to ROMBase+$0A restarted a Mac before the Shutdown
+        /// Manager (World Builder's games): the run ends there.
+        @Test func jumpToTheROMsStartRestarts() {
+            let reason = run([
+                0x2078, 0x02AE,                 // MOVEA.L ROMBase,A0
+                0xD0FC, 0x000A,                 // ADDA.W #$A,A0
+                0x4ED0,                         // JMP (A0)
+            ])
+            #expect(reason.hasPrefix("restart"))
+        }
+
         @Test func osTrapPreservesRegistersAndReturnsInA0() {
             let reason = run([
                 0x227C, 0x1234, 0x5678,         // MOVEA.L #$12345678,A1
