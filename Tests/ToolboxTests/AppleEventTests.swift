@@ -785,6 +785,24 @@ extension BlueBox {
             return e
         }
 
+        /// Every process listed has a partition: memory monitors divide
+        /// its free memory by its size (Monitor).
+        @Test func processesHavePartitions() {
+            launchTestApp()
+            let psn = tb_NewPtr(8, false, true), info = tb_NewPtr(Int32(ProcessInfoRec_SIZEOF), false, true)
+            var count = 0
+            while tb_GetNextProcess(psn) == 0 {
+                wr32(info + UInt32(ProcessInfoRec_processInfoLength_off), UInt32(ProcessInfoRec_SIZEOF))
+                wr32(info + UInt32(ProcessInfoRec_processName_off), 0)
+                wr32(info + UInt32(ProcessInfoRec_processAppSpec_off), 0)
+                #expect(tb_GetProcessInformation(psn, info) == 0)
+                let size = rd32(info + UInt32(ProcessInfoRec_processSize_off))
+                #expect(size > 0 && rd32(info + UInt32(ProcessInfoRec_processFreeMem_off)) <= size)
+                count += 1
+            }
+            #expect(count >= 2) // us and the Finder
+        }
+
         func ourSignature() -> UInt32 {
             let psn = tb_NewPtr(8, false, true), port = tb_NewPtr(Int32(PPCPortRec_SIZEOF), false, true)
             _ = tb_GetCurrentProcess(psn)

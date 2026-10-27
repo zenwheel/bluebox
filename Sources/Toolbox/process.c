@@ -86,6 +86,10 @@ uint16_t g_app_size_flags;
 extern char g_app_path[];
 extern uint32_t g_app_creator;
 
+/* The partition reported for the Finder and other runs, whose memory is
+ * not ours to see: about a System 7.5 Finder's. */
+#define OTHER_PARTITION 0x100000u
+
 int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
 {
     machine_ae_process other;
@@ -99,8 +103,10 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
         ProcessInfoRec_set_processSignature(info, (int32_t)other.signature);
         ProcessInfoRec_set_processMode(info, 0x0040); /* takes high-level events */
         ProcessInfoRec_set_processLocation(info, 0);
-        ProcessInfoRec_set_processSize(info, 0);
-        ProcessInfoRec_set_processFreeMem(info, 0);
+        /* A partition of its own, as a Finder's or an application's:
+         * memory monitors divide by it (Monitor showed each one's use). */
+        ProcessInfoRec_set_processSize(info, OTHER_PARTITION);
+        ProcessInfoRec_set_processFreeMem(info, OTHER_PARTITION / 4);
         wr32(info + ProcessInfoRec_processLauncher_off, 0);
         wr32(info + ProcessInfoRec_processLauncher_off + 4, 0);
         ProcessInfoRec_set_processLaunchDate(info, 0);
@@ -119,8 +125,8 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
         ProcessInfoRec_set_processSignature(info, fourcc("MACS"));
         ProcessInfoRec_set_processMode(info, 0x0040); /* takes high-level events */
         ProcessInfoRec_set_processLocation(info, 0);
-        ProcessInfoRec_set_processSize(info, 0);
-        ProcessInfoRec_set_processFreeMem(info, 0);
+        ProcessInfoRec_set_processSize(info, OTHER_PARTITION);
+        ProcessInfoRec_set_processFreeMem(info, OTHER_PARTITION / 4);
         wr32(info + ProcessInfoRec_processLauncher_off, 0);
         wr32(info + ProcessInfoRec_processLauncher_off + 4, 0);
         ProcessInfoRec_set_processLaunchDate(info, 0);
