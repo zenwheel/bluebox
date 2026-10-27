@@ -56,6 +56,28 @@ extension BlueBox {
             #expect(reason.hasPrefix("restart"))
         }
 
+        /// A program's own A-line handler that passes traps on to the vector
+        /// it found there (Lunar Commando's) has them dispatched.
+        @Test func aLineHandlerPassesTrapsOn() {
+            let reason = run([
+                0x7A00,                         // MOVEQ #0,D5
+                0x2C38, 0x0028,                 // MOVE.L $28.W,D6     the system's vector
+                0x41FA, 0x0012,                 // LEA handler(PC),A0
+                0x21C8, 0x0028,                 // MOVE.L A0,$28.W
+                0x7064,                         // MOVEQ #100,D0
+                0xA11E,                         // _NewPtr
+                0x2E08,                         // MOVE.L A0,D7
+                0x21C6, 0x0028,                 // MOVE.L D6,$28.W
+                0xA9F4,                         // _ExitToShell
+                0x5285,                         // handler: ADDQ.L #1,D5
+                0x2F06,                         // MOVE.L D6,-(SP)
+                0x4E75,                         // RTS: on to the system's
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(cpu.pointee.d.5 == 1)
+            #expect(cpu.pointee.d.7 != 0 && tb_GetPtrSize(cpu.pointee.d.7) == 100)
+        }
+
         /// In a PowerPC program, 68k code asking Gestalt for Open Transport
         /// is told it is missing (its client glue needs the Shared Library
         /// Manager); the PowerPC side and native callers still see it.
