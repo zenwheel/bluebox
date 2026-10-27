@@ -792,6 +792,7 @@ int16_t tb_GetADBInfo(gaddr adbp, int16_t address);
 int16_t tb_GetActiveTaskInfo(gaddr taskInfo, int16_t numSlots);
 int16_t tb_GetAlertStage(void);
 int16_t tb_GetAliasInfo(gaddr alias, int16_t index, gaddr theString);
+gaddr tb_GetAppLayer(void);
 void tb_GetAppParms(gaddr namep, gaddr rnp, gaddr aphandp);
 int8_t tb_GetAuxWin(gaddr arg0, gaddr arg1);
 int8_t tb_GetAuxiliaryControlRecord(gaddr c, gaddr acHndl);

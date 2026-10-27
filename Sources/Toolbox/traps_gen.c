@@ -9130,6 +9130,15 @@ static void glue_GetAliasInfo(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetAppLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr r = tb_GetAppLayer();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetAppParms(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14978,6 +14987,16 @@ static void glue_IsIconRefMaskEmpty(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_iconRef = (gaddr)cpu_pop32(c);
     int8_t r = tb_IsIconRefMaskEmpty(a_iconRef);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_IsLayer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_window = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsLayer(a_window);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -28074,7 +28093,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAA3, (int32_t)0x9Fu, "CDSequenceEquivalentImageDescriptionS", CONV_STACK, 16, 2, 0},
     {0xAAA3, (int32_t)0xA0u, "ReplaceDSequenceImageDescription", CONV_STACK, 8, 2, 0},
     {0xAAA3, (int32_t)0xA3u, "QTGetPixelFormatDepthForImageDescription", CONV_STACK, 4, 2, 0},
+    {0xA829, (int32_t)0xFFFFFFFFu, "GetAppLayer", CONV_STACK, 0, 4, glue_GetAppLayer},
     {0xA829, (int32_t)0x1u, "NewLayer", CONV_STACK, 16, 2, glue_NewLayer},
+    {0xA829, (int32_t)0x2u, "IsLayer", CONV_STACK, 4, 2, glue_IsLayer},
     {0xA829, (int32_t)0x3u, "GetCurLayer", CONV_STACK, 0, 4, glue_GetCurLayer},
     {0xA829, (int32_t)0x4u, "SetCurLayer", CONV_STACK, 4, 2, glue_SetCurLayer},
     {0xA829, (int32_t)0x5u, "SwapCurLayer", CONV_STACK, 4, 4, glue_SwapCurLayer},

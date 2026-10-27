@@ -30731,6 +30731,12 @@ static void ppcglue_NewLayer(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetAppLayer(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetAppLayer();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCurLayer(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)tb_GetCurLayer();
@@ -41969,6 +41975,7 @@ const ppc_export ppc_exports[] = {
     {"GetActiveTaskInfo", ppcglue_GetActiveTaskInfo},
     {"GetAlertStage", ppcglue_GetAlertStage},
     {"GetAliasInfo", ppcglue_GetAliasInfo},
+    {"GetAppLayer", ppcglue_GetAppLayer},
     {"GetAppParms", ppcglue_GetAppParms},
     {"GetAuxWin", ppcglue_GetAuxWin},
     {"GetAuxiliaryControlRecord", ppcglue_GetAuxiliaryControlRecord},
