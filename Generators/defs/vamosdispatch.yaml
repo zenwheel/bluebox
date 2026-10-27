@@ -1,0 +1,91 @@
+# OSDispatch selectors that programs in the archive walk call and no
+# header, tech note or other program in the archive names: PrintMonitor
+# (every version, System 5 to 7.1: $28, once at start up), Virtual and
+# DragStrip ($2B), NotePad Deluxe ($55, after it sets up its drag handlers)
+# and MACAST and MacAMP ($5A, and $64 after it).  The argument lists are what their call
+# sites push.  What the Process Manager does for them is not known, so
+# $28 and $55 answer as a call that finds nothing to do (nil, false);
+# $2B and $5A are worked out from their callers.  See vamosdispatch.c.  PowerPC
+# programs reach them through their own 68k glue, so there are no
+# PowerPC exports.
+
+- function:
+    name: OSDispatch28
+    args:
+      - name: a
+        type: LONGINT
+      - name: b
+        type: LONGINT
+      - name: c
+        type: INTEGER
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0028
+
+# $2B is better known: Virtual's loop over its windows (GetWRefCon, then
+# GetProcessInformation on what the refCon points to) takes the next from
+# it, starting from nil, so it is the next window of the program.
+- function:
+    name: OSDispatch2B
+    return: LONGINT
+    args:
+      - name: a
+        type: LONGINT
+      - name: b
+        type: Boolean
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x002B
+
+- function:
+    name: OSDispatch55
+    return: Boolean
+    args:
+      - name: a
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0055
+
+# $5A makes a window: NotePad Deluxe stops with "the memory is out" when it
+# answers nil.  The arguments are NewWindow's without the storage, and then
+# a routine descriptor and a long.
+- function:
+    name: OSDispatch5A
+    return: WindowPtr
+    args:
+      - name: bounds
+        type: Rect*
+      - name: title
+        type: StringPtr
+      - name: visible
+        type: Boolean
+      - name: procID
+        type: INTEGER
+      - name: behind
+        type: WindowPtr
+      - name: goAway
+        type: Boolean
+      - name: refCon
+        type: LONGINT
+      - name: proc
+        type: ProcPtr
+      - name: flags
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x005A
+
+# $64 is FindWindow's arguments and result (MACAST and MacAMP call it with
+# the point to look at and the place for the window), taken as FindWindow.
+- function:
+    name: OSDispatch64
+    return: INTEGER
+    args:
+      - name: thePoint
+        type: Point
+      - name: theWindow
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0064

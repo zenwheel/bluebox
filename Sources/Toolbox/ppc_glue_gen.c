@@ -30731,6 +30731,12 @@ static void ppcglue_NewLayer(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetAppLayer(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_GetAppLayer();
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCurLayer(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)tb_GetCurLayer();
@@ -30795,6 +30801,18 @@ static void ppcglue_FindWordBreaks(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetFormatOrder(ppc_cpu *c)
+{
+    gaddr a_ordering = (gaddr)c->gpr[3];
+    int16_t a_firstFormat = (int16_t)c->gpr[4];
+    int16_t a_lastFormat = (int16_t)c->gpr[5];
+    int8_t a_lineRight = (int8_t)c->gpr[6];
+    gaddr a_rlDirProc = (gaddr)c->gpr[7];
+    gaddr a_dirParam = (gaddr)c->gpr[8];
+    tb_GetFormatOrder(a_ordering, a_firstFormat, a_lastFormat, a_lineRight, a_rlDirProc, a_dirParam);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SBIsControlStripVisible(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SBIsControlStripVisible();
@@ -30811,6 +30829,38 @@ static void ppcglue_SBShowHideControlStrip(ppc_cpu *c)
 static void ppcglue_SBSafeToAccessStartupDisk(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SBSafeToAccessStartupDisk();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBOpenModuleResourceFile(ppc_cpu *c)
+{
+    int32_t a_fileCreator = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBOpenModuleResourceFile(a_fileCreator);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBLoadPreferences(ppc_cpu *c)
+{
+    gaddr a_prefsResourceName = (gaddr)c->gpr[3];
+    gaddr a_preferences = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBLoadPreferences(a_prefsResourceName, a_preferences);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSavePreferences(ppc_cpu *c)
+{
+    gaddr a_prefsResourceName = (gaddr)c->gpr[3];
+    gaddr a_preferences = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBSavePreferences(a_prefsResourceName, a_preferences);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetDetachedIndString(ppc_cpu *c)
+{
+    gaddr a_theString = (gaddr)c->gpr[3];
+    gaddr a_stringList = (gaddr)c->gpr[4];
+    int16_t a_whichString = (int16_t)c->gpr[5];
+    tb_SBGetDetachedIndString(a_theString, a_stringList, a_whichString);
     c->pc = c->lr;
 }
 
@@ -41969,6 +42019,7 @@ const ppc_export ppc_exports[] = {
     {"GetActiveTaskInfo", ppcglue_GetActiveTaskInfo},
     {"GetAlertStage", ppcglue_GetAlertStage},
     {"GetAliasInfo", ppcglue_GetAliasInfo},
+    {"GetAppLayer", ppcglue_GetAppLayer},
     {"GetAppParms", ppcglue_GetAppParms},
     {"GetAuxWin", ppcglue_GetAuxWin},
     {"GetAuxiliaryControlRecord", ppcglue_GetAuxiliaryControlRecord},
@@ -42150,6 +42201,7 @@ const ppc_export ppc_exports[] = {
     {"GetFontInfo", ppcglue_GetFontInfo},
     {"GetFontName", ppcglue_GetFontName},
     {"GetForeColor", ppcglue_GetForeColor},
+    {"GetFormatOrder", ppcglue_GetFormatOrder},
     {"GetFreeThreadCount", ppcglue_GetFreeThreadCount},
     {"GetFrontProcess", ppcglue_GetFrontProcess},
     {"GetFrontServiceWindow", ppcglue_GetFrontServiceWindow},
@@ -44194,8 +44246,12 @@ const ppc_export ppc_exports[] = {
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"RstFLock", ppcglue_RstFLock},
+    {"SBGetDetachedIndString", ppcglue_SBGetDetachedIndString},
     {"SBIsControlStripVisible", ppcglue_SBIsControlStripVisible},
+    {"SBLoadPreferences", ppcglue_SBLoadPreferences},
+    {"SBOpenModuleResourceFile", ppcglue_SBOpenModuleResourceFile},
     {"SBSafeToAccessStartupDisk", ppcglue_SBSafeToAccessStartupDisk},
+    {"SBSavePreferences", ppcglue_SBSavePreferences},
     {"SBShowHideControlStrip", ppcglue_SBShowHideControlStrip},
     {"SCSIAction", ppcglue_SCSIAction},
     {"SCSICmd", ppcglue_SCSICmd},

@@ -74,6 +74,13 @@ int16_t tb_NewLayer(gaddr layer, int8_t visible, int8_t neverActive, gaddr behin
     return l ? noErr : memFullErr;
 }
 
+/* The program's own layer, whatever layer is current. */
+gaddr tb_GetAppLayer(void)
+{
+    layers_init();
+    return layers[1];
+}
+
 gaddr tb_GetCurLayer(void)
 {
     layers_init();

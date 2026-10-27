@@ -540,6 +540,7 @@ static void call_component_68k(cpu68k *c, uint16_t tw)
     c->a[7] -= n;
     gmemcpy(c->a[7], params, n);
     ppc_trap_begin();
+    ppc_trap_set(0, 0); /* a component call's selector; the caller's D0 is anything (Eudora's mask) */
     ppc_trap(0xA82A);
     ppc_trap_end();
     c->a[7] = result_at;

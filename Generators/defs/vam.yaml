@@ -58,7 +58,8 @@
 # SwapCurLayer 5 (RegEdit's, with the layer NewLayer made) and SetCurLayer
 # 4 (RegEdit's, putting the old layer back after making its window in the
 # new one; it leaves room for a word's result) and GetSubWindows 6
-# (TarotWorks', with the layer GetCurLayer gave).
+# (TarotWorks', with the layer GetCurLayer gave) and IsLayer 2 (HyperCard's
+# window walk, in every program standalone from it).
 - dispatcher:
     name: LayerDispatch
     trap: 0xA829
@@ -80,6 +81,14 @@
         type: LONGINT
     dispatcher: LayerDispatch
     selector: 0x0001
+
+# Selector -1 is MoviePlay's, before it swaps in the layer it gave: with no
+# arguments and a long result, taken as the program's own layer.
+- function:
+    name: GetAppLayer
+    return: WindowPtr
+    dispatcher: LayerDispatch
+    selector: -1
 
 - function:
     name: GetCurLayer
@@ -129,6 +138,8 @@
       - name: window
         type: WindowPtr
     cfm: PrivateInterfaceLib
+    dispatcher: LayerDispatch
+    selector: 0x0002
 
 # QDExtensions with older interfaces' selectors: 32-Bit QuickDraw's first
 # headers loaded only the selector, MOVEQ #5,D0 for GetGWorld, without the
@@ -138,6 +149,14 @@
     name: QDExtensions
     trap: 0xAB1D
     selector-location: D0<0xFFFF>
+
+# The Display Manager's selectors, too, come with only the routine's number
+# in D0 from some programs (King of Parking, Bugs Bannis, Rain'Net:
+# MOVEQ #$36,D0 for DMNewDisplayModeList), without the parameter size byte.
+- dispatcher:
+    name: DisplayDispatch
+    trap: 0xABEB
+    selector-location: D0<0xFF>
 
 # The Script Manager's TruncText and FindWordBreaks for 68k programs
 # (Pentominoes, OpenMe First, YellowEdit Documentation); PowerPC ones had
@@ -177,6 +196,28 @@
     dispatcher: ScriptUtil
     selector: 0xC012001A
 
+# GetFormatOrder for 68k programs (Eudora's text drawing); PowerPC ones had
+# it already.  The argument list is the Script Manager's: the order's
+# array, the first and last style runs, whether the line runs right, and
+# the procedure that says which runs are right to left, with its argument.
+- function:
+    name: GetFormatOrder
+    args:
+      - name: ordering
+        type: Ptr
+      - name: firstFormat
+        type: INTEGER
+      - name: lastFormat
+        type: INTEGER
+      - name: lineRight
+        type: Boolean
+      - name: rlDirProc
+        type: ProcPtr
+      - name: dirParam
+        type: Ptr
+    dispatcher: ScriptUtil
+    selector: 0x8012FFFC
+
 # The Control Strip (_ControlStripDispatch, ControlStripLib): its state
 # (Kinga and Tracktor Beam hide it while they run).  The selector is D0's
 # low byte, the high byte the arguments' size in words.
@@ -204,3 +245,49 @@
     return: Boolean
     dispatcher: ControlStripDispatch
     selector: 0x0002
+
+# A module's resource file, preferences and detached strings (the
+# registration programs of CalcStrip, G3Strip and G3Throttle, and OT:PPP's
+# CSM helper, load their preferences at start); see controlstrip.c.
+- function:
+    name: SBOpenModuleResourceFile
+    return: INTEGER
+    args:
+      - name: fileCreator
+        type: OSType
+    dispatcher: ControlStripDispatch
+    selector: 0x0203
+
+- function:
+    name: SBLoadPreferences
+    return: OSErr
+    args:
+      - name: prefsResourceName
+        type: ConstStr255Param
+      - name: preferences
+        type: Handle*
+    dispatcher: ControlStripDispatch
+    selector: 0x0404
+
+- function:
+    name: SBSavePreferences
+    return: OSErr
+    args:
+      - name: prefsResourceName
+        type: ConstStr255Param
+      - name: preferences
+        type: Handle
+    dispatcher: ControlStripDispatch
+    selector: 0x0405
+
+- function:
+    name: SBGetDetachedIndString
+    args:
+      - name: theString
+        type: StringPtr
+      - name: stringList
+        type: Handle
+      - name: whichString
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x0506
