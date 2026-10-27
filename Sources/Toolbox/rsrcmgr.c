@@ -951,13 +951,16 @@ void tb_CloseResFile(int16_t rn)
 
 
 /* Open a file's resource fork.  Already open: the Resource Manager returns
- * the existing refnum, except for a read-only open (fsRdPerm), which gets
+ * the existing refnum and makes that map the current one (Technote 1120's
+ * "partial success"; ChordLab opens its preferences again and reads them
+ * with Get1Resource), except for a read-only open (fsRdPerm), which gets
  * an access path and map of its own (Squark opens itself read-only and
  * closes that again: the application's own map must stay). */
 static int16_t open_path_perm(const char *path, int perm)
 {
     for (int i = 0; i < MAX_RESFILES && perm != 1; i++)
         if (files[i].used && files[i].path && !strcmp(files[i].path, path)) {
+            wr16(LM_CurMap, (uint16_t)files[i].refnum);
             set_res_err(noErr);
             return files[i].refnum;
         }
