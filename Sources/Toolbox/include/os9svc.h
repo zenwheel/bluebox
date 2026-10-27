@@ -1,7 +1,7 @@
 /*
  * Mac OS 9's service libraries that programs import directly (FontManager,
  * SoundLib, MPLibrary, DriverServicesLib, PowerMgrLib, URLAccessLib,
- * NameRegistryLib, DriverLoaderLib, KeychainLib): the names beyond what the
+ * NameRegistryLib, DriverLoaderLib, KeychainLib, FileSigningLib): the names beyond what the
  * Toolbox's other tables give, found by os9svc_export_fn (os9svc.c).
  */
 #ifndef OS9SVC_H
@@ -48,6 +48,11 @@ extern const unsigned os9_keychain_export_count;
 extern const os9_alias os9_keychain_aliases[];
 extern const unsigned os9_keychain_alias_count;
 void os9svc_keychain_reset(void);
+extern const ppc_export os9_filesign_exports[];
+extern const unsigned os9_filesign_export_count;
+extern const os9_alias os9_filesign_aliases[];
+extern const unsigned os9_filesign_alias_count;
+void os9svc_filesign_reset(void);
 int os9_registry_property(gaddr id, const char *name, const uint8_t **data, uint32_t *size);
 extern const ppc_export os9_loader_exports[];
 extern const unsigned os9_loader_export_count;
