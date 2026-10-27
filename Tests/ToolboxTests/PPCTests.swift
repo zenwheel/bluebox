@@ -28,6 +28,30 @@ extension BlueBox {
             runCase(name)
         }
 
+        /// A program counter with its low bits set (a transition vector's
+        /// tagged code pointer, as MCL's) runs the word they are in, by the
+        /// interpreter and the JIT alike.
+        @Test(arguments: [false, true])
+        func lowBitsOfTheProgramCounterAreIgnored(_ jit: Bool) {
+            if jit {
+                guard ppc_jit_available() else { return }
+                ppc_jit_enable(true, nil, nil)
+            }
+            defer { if jit { ppc_jit_enable(false, nil, nil) } }
+            bootMachine()
+            wr32(Self.codeAt, 0x3860_0007)     // li r3,7
+            wr32(Self.codeAt + 4, 0x4E80_0020) // blr
+            wr32(Self.returnAt, PPC_NATIVE_OP)
+            var c = ppc_cpu()
+            ppc_init(&c)
+            c.native = { c, _ in c?.pointee.halted = true }
+            c.pc = Self.codeAt + 2
+            c.lr = Self.returnAt
+            _ = ppc_run(&c, 100)
+            #expect(c.gpr.3 == 7)
+            #expect(c.pc & 3 == 0)
+        }
+
         /// The same cases through the JIT (where the host has one).
         @Test(arguments: ppcCases.map(\.name))
         func instructionCaseJIT(_ name: String) {

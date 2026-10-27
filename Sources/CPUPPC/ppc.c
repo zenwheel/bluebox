@@ -759,6 +759,10 @@ static void op31(ppc_cpu *c, uint32_t op)
 
 void ppc_step(ppc_cpu *c)
 {
+    /* Instructions are words: a branch to an address with its low bits
+     * set goes to the word they are in, as the processor ignores them
+     * (MCL's tagged code pointers, called through transition vectors). */
+    c->pc &= ~3u;
     if (c->trace)
         c->trace(c);
     uint32_t op = rd32(c->pc);
