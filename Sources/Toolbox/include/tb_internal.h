@@ -233,6 +233,8 @@ void fm_flush_dirty(void); /* open forks written out (filemgr.c) */
 /* The mouse and modifiers now (events.c); the window under a global point (wm.c). */
 bool ev_still_down(void);
 uint32_t ev_mouse_global(void);
+/* Mouse presses since boot, counted so a quick click is never missed (events.c). */
+uint32_t ev_press_count(void);
 uint16_t ev_modifiers(void);
 void ev_wait_tick(void);
 /* Headless, n pixels' worth of QuickDraw time passes (machine.c). */
