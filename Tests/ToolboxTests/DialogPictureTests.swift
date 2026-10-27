@@ -140,6 +140,21 @@ extension BlueBox {
             tb_DisposeDialog(d)
         }
 
+        /// InterfaceLib's StdFilterProc presses the default button on Return
+        /// for a program running a dialog in its own event loop (Conflict
+        /// Catcher's demonstration notice), and leaves other keys alone.
+        @Test func powerPCStandardFilterPressesTheDefaultButton() {
+            let d = open()
+            let evt = tb_NewPtr(16, false, true), hit = tb_NewPtr(2, false, true)
+            wr16(evt, 3) // keyDown
+            wr32(evt + 2, 0x0000_2461) // 'a'
+            #expect(ilCall("StdFilterProc", [d, evt, hit]) & 0xFF == 0)
+            wr32(evt + 2, 0x0000_240D) // Return
+            #expect(ilCall("StdFilterProc", [d, evt, hit]) & 0xFF != 0)
+            #expect(rd16(hit) == 1)
+            tb_DisposeDialog(d)
+        }
+
         /// Snood 2.1's alert filter "presses" its Cancel item on Command-period
         /// with HiliteControl, which in its one-button alert is the static
         /// text: the text's handle is no control record, nothing to change

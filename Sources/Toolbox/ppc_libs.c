@@ -393,9 +393,10 @@ static void g_CountDITL(ppc_cpu *c)
     gaddr items = R(0) ? rd32(R(0) + DialogRecord_items_off) : 0;
     RETURN(items && rd32(items) ? (int32_t)(int16_t)rd16(rd32(items)) + 1 : 0);
 }
-/* StdFilterProc(dialog, event, itemHit): ModalDialog does the standard
- * filtering itself, so here nothing is handled. */
-static void g_StdFilterProc(ppc_cpu *c) { RETURN(0); }
+/* StdFilterProc(dialog, event, itemHit): the standard filter, for a
+ * program that runs a dialog with its own event loop (Conflict Catcher's
+ * demonstration notice) as for ModalDialog's filters. */
+static void g_StdFilterProc(ppc_cpu *c) { RETURN(dialog_std_filter(R(0), R(1), R(2)) ? 1 : 0); }
 
 /* A one-register OS trap: A0 = a; returns D0. */
 static uint32_t a0_trap(uint16_t trap, gaddr a)

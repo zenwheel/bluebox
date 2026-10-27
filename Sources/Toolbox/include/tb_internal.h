@@ -91,6 +91,9 @@ gaddr dialog_in_front(void);
 uint32_t dialog_signature(gaddr d);
 bool dialog_modal(gaddr d);
 int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y);
+/* The standard dialog filter: Return and Enter press the default button,
+ * Escape and Command-period the cancel button (dialogs.c). */
+bool dialog_std_filter(gaddr d, gaddr evt, gaddr itemp);
 void walker_idle(uint64_t now);
 
 /* ---- Resource Manager internals ---- */
