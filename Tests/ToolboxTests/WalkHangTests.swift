@@ -1,6 +1,8 @@
 import CCore
 import CPU68K
 import CPUPPC
+import Foundation
+import ForkStore
 import Testing
 import Toolbox
 
@@ -19,6 +21,12 @@ extension BlueBox {
             }
             fn(&g_ppc)
             return withUnsafeBytes(of: g_ppc.gpr) { $0.load(fromByteOffset: 12, as: UInt32.self) }
+        }
+
+        func pname(_ s: String) -> UInt32 {
+            let p = tb_NewPtr(256, false, true)
+            guestPString(s, at: p)
+            return p
         }
 
         /// Open Transport lists no ports: OTGetIndexedPort says false
@@ -50,6 +58,27 @@ extension BlueBox {
             let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
             #expect(tb_FrontWindow() == d && dialog_in_front() == d)
             tb_DisposeDialog(d)
+        }
+
+        /// PBCatSearch on a volume that isn't there is nsvErr: VISE
+        /// installers search vRefNum -1, -2 and on until one isn't, and
+        /// found every one there.
+        @Test func catSearchOfNoVolumeIsAnError() {
+            launchTestApp()
+            let pb = tb_NewPtr(80, false, true)
+            let matches = tb_NewPtr(70 * 10, false, true)
+            let i1 = tb_NewPtr(108, false, true), i2 = tb_NewPtr(108, false, true)
+            wr32(pb + 24, matches)
+            wr32(pb + 28, 10)
+            wr32(pb + 36, 8)                     // fsSBFlAttrib: attributes, masked to none
+            wr32(pb + 40, i1)
+            wr32(pb + 44, i2)
+            wr16(pb + 22, UInt16(bitPattern: -1))
+            let err = tb_PBCatSearch(pb, false)
+            #expect((err == 0 || err == -39) && rd32(pb + 32) > 0)   // the boot volume's entries
+            wr32(pb + 52, 0)
+            wr16(pb + 22, UInt16(bitPattern: -2))
+            #expect(tb_PBCatSearch(pb, false) == -35)   // nsvErr
         }
 
         /// OTUtilityLib's string and memory helpers do what they say

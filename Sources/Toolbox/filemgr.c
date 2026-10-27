@@ -3218,10 +3218,15 @@ int16_t tb_PBCatSearch(gaddr pb, bool async)
     wr32(pb + CS_ActCount, 0);
     if (!matches || !i1 || !i2 || !want)
         return paramErr;
+    /* The volume ioVRefNum names: none is nsvErr (VISE installers search
+     * vRefNum -1, -2 ... until one isn't there). */
+    mount *m;
+    if (!vinfo_volume(0, (int16_t)rd16(pb + IOParam_ioVRefNum_off), 0, &m))
+        return nsvErr;
     cat_search cs = { .pb = pb, .rec = tb_NewPtr(108, false, true), .i1 = i1, .i2 = i2, .matches = matches,
                       .name = tb_NewPtr(256, false, true), .bits = rd32(pb + CS_Bits), .want = want,
                       .skip = rd32(pb + CS_Position) };
-    bool done = search_dir(&cs, root_path, 0);
+    bool done = search_dir(&cs, m ? m->root : root_path, 0);
     tb_DisposePtr(cs.rec);
     tb_DisposePtr(cs.name);
     wr32(pb + CS_ActCount, cs.found);
