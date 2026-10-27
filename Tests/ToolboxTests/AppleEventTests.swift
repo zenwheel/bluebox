@@ -269,6 +269,23 @@ extension BlueBox {
             #expect(calls == ["pre"])
         }
 
+        /// An event sent with kAEDontExecute is for recording only: its
+        /// handler is not called (PowerPlant sends Close so, then closes).
+        @Test func dontExecute() {
+            launchTestApp()
+            guestStack()
+            var calls = 0
+            let handler = pascalProc([4, 4, 4]) { _ in calls += 1; return 0 }
+            _ = tb_AEInstallEventHandler(code("core"), code("clos"), handler, 0, 0)
+            let evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateAppleEvent(code("core"), code("clos"), 0, -1, 0, evt)
+            #expect(tb_AESend(evt, reply, 0x2001, 0, -1, 0, 0) == 0) // kAEDontExecute + kAENoReply
+            #expect(calls == 0)
+            #expect(descType(reply) == fourCC("null"))
+            #expect(tb_AESend(evt, reply, 1, 0, -1, 0, 0) == 0)
+            #expect(calls == 1)
+        }
+
         /// A handler's error goes into the reply as keyErrorNumber; a queued
         /// reply arrives later as an Answer event.
         @Test func replies() {
@@ -766,6 +783,24 @@ extension BlueBox {
             wr32(e + 2, fourCC(cls))
             wr32(e + 10, fourCC(id))
             return e
+        }
+
+        /// Every process listed has a partition: memory monitors divide
+        /// its free memory by its size (Monitor).
+        @Test func processesHavePartitions() {
+            launchTestApp()
+            let psn = tb_NewPtr(8, false, true), info = tb_NewPtr(Int32(ProcessInfoRec_SIZEOF), false, true)
+            var count = 0
+            while tb_GetNextProcess(psn) == 0 {
+                wr32(info + UInt32(ProcessInfoRec_processInfoLength_off), UInt32(ProcessInfoRec_SIZEOF))
+                wr32(info + UInt32(ProcessInfoRec_processName_off), 0)
+                wr32(info + UInt32(ProcessInfoRec_processAppSpec_off), 0)
+                #expect(tb_GetProcessInformation(psn, info) == 0)
+                let size = rd32(info + UInt32(ProcessInfoRec_processSize_off))
+                #expect(size > 0 && rd32(info + UInt32(ProcessInfoRec_processFreeMem_off)) <= size)
+                count += 1
+            }
+            #expect(count >= 2) // us and the Finder
         }
 
         func ourSignature() -> UInt32 {

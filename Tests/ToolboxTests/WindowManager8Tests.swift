@@ -26,6 +26,19 @@ extension BlueBox {
             return w
         }
 
+        /// The rounded-corner windows' WDEF 1 is a resource programs can get
+        /// and call (DeskMates); NewWindow's procID 16 draws with it.
+        @Test func roundedWindowDefinitionIsAResource() {
+            launchTestApp()
+            _ = initToolbox()
+            let wdef1 = tb_GetResource(Int32(bitPattern: fourCC("WDEF")), 1)
+            #expect(wdef1 != 0 && rd32(wdef1) != 0)
+            #expect(rd16(rd32(wdef1)) == 0x71FF) // our native definition
+            let w = tb_NewWindow(0, rect(60, 60, 160, 260), tb_NewPtr(2, false, true), 1, 16, 0xFFFF_FFFF, 0, 0)
+            #expect(rd32(WindowRecord_windowDefProc(w)) != 0)
+            #expect(rd32(rd32(w + UInt32(WindowRecord_strucRgn_off))) != 0)
+        }
+
         @Test func classesRegionsAndCollapsing() {
             launchTestApp()
             _ = initToolbox()

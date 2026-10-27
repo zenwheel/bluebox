@@ -3,6 +3,7 @@
  * can override any selector (gestalt_set).
  */
 #include "m68k.h"
+#include "ppc_bridge.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -213,9 +214,28 @@ static int16_t gestalt_lookup(int32_t selector, uint32_t *responsep)
     return gestaltUnknownErr;
 }
 
+/* Open Transport is there for PowerPC code only: 68k code linked with
+ * its client glue binds through the Shared Library Manager, which we
+ * don't have, and called through a null table (the 68k eSellerate and
+ * MindPurchase engines in Fetch 4 and Web Writer).  Asked from 68k code,
+ * Open Transport is missing, as it is for 68k programs, and the code
+ * uses MacTCP. */
+static bool hidden_from_68k(uint32_t selector)
+{
+    if (selector != fourcc("otan") && selector != fourcc("otvr"))
+        return false;
+    if (!g_cpu || (rd16(g_cpu->op_pc) & 0xFEFF) != 0xA0AD) /* not from the trap */
+        return false;
+    return !ppc_trap_word_at(g_cpu->op_pc);
+}
+
 int16_t tb_Gestalt(int32_t selector, uint32_t *responsep)
 {
     int16_t err = gestalt_lookup(selector, responsep);
+    if (!err && hidden_from_68k((uint32_t)selector)) {
+        *responsep = 0;
+        err = gestaltUnknownErr;
+    }
     if (g_log_mask & LOG_TRAPS) {
         char tc[5];
         log_printf("  Gestalt '%s' -> %d, %08X\n", fourcc_str((uint32_t)selector, tc), err, *responsep);

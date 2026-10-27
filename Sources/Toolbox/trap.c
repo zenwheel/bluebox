@@ -349,10 +349,37 @@ static void os_epilogue_native(cpu68k *c, uint16_t tw)
  * returning straight away is correct (the stub's RTS returns). */
 static void noop_native(cpu68k *c, uint16_t tw) {}
 
+/* ROMBase+$0A, the ROM's start: programs from before the Shutdown
+ * Manager restart the Mac by jumping there (World Builder's games, the
+ * Macintosh Basics tour, after ejecting their disks when no Finder is to
+ * be found).  Here the run ends. */
+static void restart_native(cpu68k *c, uint16_t tw)
+{
+    cpu_halt(c, "restart (jumped to the ROM's start)");
+}
+
+static void dispatch_aline(cpu68k *c, uint16_t op);
+
 static void aline_vector_native(cpu68k *c, uint16_t tw)
 {
-    /* Only reached if something jumps to the A-line vector itself. */
-    cpu_halt(c, "A-line vector entered directly");
+    /* A program's own A-line handler that passes the trap on jumps here
+     * with the exception frame on the stack, as to the ROM's dispatcher
+     * (Lunar Commando and Grid Warrior watch for some traps and pass the
+     * rest).  Take the frame and dispatch the trap at its PC. */
+    uint16_t fv = c->model == 68000 ? 0x28 : rd16(c->a[7] + 6);
+    uint32_t pc = rd32(c->a[7] + 2);
+    if ((fv & 0xFFF) != 0x28 || (rd16(pc) & 0xF000) != 0xA000) {
+        cpu_halt(c, "A-line vector entered directly");
+        return;
+    }
+    uint16_t sr = cpu_pop16(c);
+    cpu_pop32(c);
+    if (c->model != 68000)
+        cpu_pop16(c);
+    cpu_set_sr(c, sr);
+    c->op_pc = pc;
+    c->pc = pc + 2;
+    dispatch_aline(c, rd16(pc));
 }
 
 /* A package trap ($A9E7-$A9EE _Pack0-7, $A816 _Pack8, $A82B-$A831
@@ -430,6 +457,11 @@ void trap_aline(cpu68k *c, uint16_t op)
         cpu_exception(c, 10, c->op_pc);
         return;
     }
+    dispatch_aline(c, op);
+}
+
+static void dispatch_aline(cpu68k *c, uint16_t op)
+{
     if (op & 0x0800) {
         uint32_t entry = rd32(TB_TRAP_TABLE + (op & 0x3FFu) * 4);
         int n = native_index_for(entry);
@@ -931,6 +963,13 @@ void trap_init(void)
         wr32(LM_JDTInstall, dt);
     wr32(LM_JCrsrTask, noop);
     wr32(LM_JADBProc, noop);
+
+    /* Code that runs off the end of memory, or jumps wild into the ROM's
+     * header, stops at ILLEGALs in the reset vector's place instead of
+     * running on into the restart. */
+    wr32(GA_ROM + 4, 0x4AFC4AFC);
+    wr16(GA_ROM + 0x0A, 0x4EF9); /* JMP */
+    wr32(GA_ROM + 0x0C, native_register(restart_native, "Restart", 0));
 
     /* Exception vectors 2..63 (A-line gets its own marker stub). */
     uint32_t exc = native_register(exception_native, "Exception", 0);

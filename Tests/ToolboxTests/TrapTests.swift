@@ -45,6 +45,63 @@ extension BlueBox {
             #expect(tb_GetHandleSize(h) == 3)
         }
 
+        /// Jumping to ROMBase+$0A restarted a Mac before the Shutdown
+        /// Manager (World Builder's games): the run ends there.
+        @Test func jumpToTheROMsStartRestarts() {
+            let reason = run([
+                0x2078, 0x02AE,                 // MOVEA.L ROMBase,A0
+                0xD0FC, 0x000A,                 // ADDA.W #$A,A0
+                0x4ED0,                         // JMP (A0)
+            ])
+            #expect(reason.hasPrefix("restart"))
+            // Running into the ROM's header from below is no restart.
+            let wild = run([
+                0x41F9, 0xEFFF, 0xFFF0,         // LEA $EFFFFFF0,A0
+                0x4ED0,                         // JMP (A0): zeros up to the ROM
+            ])
+            #expect(!wild.hasPrefix("restart"))
+        }
+
+        /// A program's own A-line handler that passes traps on to the vector
+        /// it found there (Lunar Commando's) has them dispatched.
+        @Test func aLineHandlerPassesTrapsOn() {
+            let reason = run([
+                0x7A00,                         // MOVEQ #0,D5
+                0x2C38, 0x0028,                 // MOVE.L $28.W,D6     the system's vector
+                0x41FA, 0x0012,                 // LEA handler(PC),A0
+                0x21C8, 0x0028,                 // MOVE.L A0,$28.W
+                0x7064,                         // MOVEQ #100,D0
+                0xA11E,                         // _NewPtr
+                0x2E08,                         // MOVE.L A0,D7
+                0x21C6, 0x0028,                 // MOVE.L D6,$28.W
+                0xA9F4,                         // _ExitToShell
+                0x5285,                         // handler: ADDQ.L #1,D5
+                0x2F06,                         // MOVE.L D6,-(SP)
+                0x4E75,                         // RTS: on to the system's
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(cpu.pointee.d.5 == 1)
+            #expect(cpu.pointee.d.7 != 0 && tb_GetPtrSize(cpu.pointee.d.7) == 100)
+        }
+
+        /// In a PowerPC program, 68k code asking Gestalt for Open Transport
+        /// is told it is missing (its client glue needs the Shared Library
+        /// Manager); the PowerPC side and native callers still see it.
+        @Test func openTransportHiddenFrom68kCode() {
+            gestalt_powerpc()
+            let otan = fourCC("otan")
+            let reason = run([
+                0x203C, hi(otan), lo(otan),     // MOVE.L #'otan',D0
+                0xA1AD,                         // _Gestalt
+                0x2E00,                         // MOVE.L D0,D7
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(Int16(truncatingIfNeeded: cpu.pointee.d.7) != 0)
+            var answer: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: otan), &answer) == 0 && answer & 1 != 0)
+        }
+
         @Test func osTrapPreservesRegistersAndReturnsInA0() {
             let reason = run([
                 0x227C, 0x1234, 0x5678,         // MOVEA.L #$12345678,A1
@@ -288,6 +345,49 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
             #expect(g_cpu!.pointee.d.1 == 9)  // CODE 2 ran
             #expect(g_cpu!.pointee.d.2 == 1)  // through the patch, once
+        }
+
+        /// A program in a 24-bit partition that sets a segment's master
+        /// pointer flags itself (Dungeon of Doom locks it so in its LoadSeg
+        /// patch) still has its jump table point at the code.
+        @Test func loadSegIgnoresMasterPointerFlagsIn24BitMode() throws {
+            bootMachine()
+            let jt = cat(
+                be16(0), be16(0x3F3C), be16(1), be16(0xA9F0),     // entry 0: seg 1, offset 0
+                be16(0), be16(0x3F3C), be16(2), be16(0xA9F0))     // entry 1: seg 2, offset 0
+            let code0 = cat(be32(48), be32(256), be32(16), be32(32), jt)
+            let code1 = cat(
+                be16(0), be16(1),
+                be16(0x594F),                                     // SUBQ.W #4,SP
+                be16(0x2F3C), be16(0x434F), be16(0x4445),         // MOVE.L #'CODE',-(SP)
+                be16(0x3F3C), be16(2),                            // MOVE.W #2,-(SP)
+                be16(0xA9A0),                                     // _GetResource
+                be16(0x205F),                                     // MOVEA.L (SP)+,A0
+                be16(0x08D0), be16(7),                            // BSET #7,(A0): locked
+                be16(0x08D0), be16(6),                            // BSET #6,(A0): purgeable
+                be16(0x4EAD), be16(42),                           // JSR 42(A5): entry 1, CODE 2
+                be16(0xA9F4))                                     // _ExitToShell
+            let code2 = cat(be16(8), be16(1), be16(0x7209), be16(0x4E75)) // MOVEQ #9,D1; RTS
+            var fork = buildFork([
+                TestResource(type: "CODE", id: 0, data: code0),
+                TestResource(type: "CODE", id: 1, data: code1),
+                TestResource(type: "CODE", id: 2, data: code2),
+            ])
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let path = dir.appendingPathComponent("Flags").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+
+            #expect(machine_launch(path, &err, err.count))
+            #expect(rd32(UInt32(LM_CurrentA5)) < 0x0100_0000)  // a 24-bit partition
+            #expect(machine_run(10_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.1 == 9)  // CODE 2 ran
         }
 
         /// A program not marked 32-bit compatible gets its stack, A5 world

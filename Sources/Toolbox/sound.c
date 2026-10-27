@@ -1324,6 +1324,10 @@ enum { ffMode = 0, ftMode = 1, swMode = -1, abortErr = -27 };
 #define MAC_RATE 22254.5454
 static channel sd_chan;
 static gaddr sd_pb;            /* the write playing */
+/* Whether it was asynchronous: only then does its completion routine run
+ * (a synchronous call's ioCompletion is whatever was on the stack: the
+ * Reversi games' parameter block lives in their frame). */
+static bool sd_async;
 static gaddr sd_ft;            /* four-tone: its FTSoundRec */
 static uint64_t sd_ft_next;    /* when the next tick of four-tone is due */
 
@@ -1363,7 +1367,8 @@ static void sd_done(int16_t result)
     if (!pb)
         return;
     wr16(pb + IOParam_ioResult_off, (uint16_t)result);
-    io_complete_later(pb, result);
+    if (sd_async)
+        io_complete_later(pb, result);
 }
 
 /* KillIO: the sound stops, and the write's completion runs now. */
@@ -1375,7 +1380,8 @@ static void sd_kill_now(void)
     if (!pb)
         return;
     wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
-    io_complete_now(pb, abortErr);
+    if (sd_async)
+        io_complete_now(pb, abortErr);
 }
 
 /* From the sound pump: four-tone goes on a tick at a time while its
@@ -1448,6 +1454,7 @@ static int16_t sd_write(gaddr pb, bool async)
         sd_ft_next = now_ns();
     }
     sd_pb = pb;
+    sd_async = async;
     if (async) {
         wr16(pb + IOParam_ioResult_off, ioInProgress);
         sd_pump();

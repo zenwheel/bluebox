@@ -10,6 +10,7 @@
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 /* ---------------------------------------------------------------------- */
 /* Memory */
@@ -1482,7 +1483,7 @@ static void op_lineE(cpu68k *c, uint16_t op)
 /* ---------------------------------------------------------------------- */
 /* 68881 floating point (coprocessor 1), in doubles.  Gestalt reports no
  * FPU, so applications that check use SANE; this is for the ones that
- * assume a coprocessor.  Packed decimal operands are not supported. */
+ * assume a coprocessor. */
 
 enum { FPCC_N = 1u << 27, FPCC_Z = 1u << 26, FPCC_I = 1u << 25, FPCC_NAN = 1u << 24 };
 
@@ -1516,13 +1517,84 @@ static void ext_write(cpu68k *c, uint32_t a, double v)
     mw32(c, a + 8, (uint32_t)m);
 }
 
-static const int fmt_size[8] = { 4, 4, 12, 12, 2, 8, 1, 0 };
+static const int fmt_size[8] = { 4, 4, 12, 12, 2, 8, 1, 12 };
+
+/* Packed decimal (format 3, and 7 with the k-factor in a data register):
+ * SM SE YY, three exponent digits, a fourth, the integer digit, then 16
+ * fraction digits.  Compilers' number formatting stores with it
+ * (LoanCalc's FMOVE.P FP0,-(SP){D2}). */
+static double packed_read(cpu68k *c, uint32_t a)
+{
+    uint32_t w0 = mr32(c, a);
+    uint8_t b[8];
+    for (int i = 0; i < 8; i++)
+        b[i] = mr8(c, a + 4 + (uint32_t)i);
+    bool neg = w0 & 0x80000000u;
+    if (((w0 >> 16) & 0x7FFF) == 0x7FFF) { /* YY and the exponent all ones */
+        bool frac = (w0 & 0xF) != 0;
+        for (int i = 0; i < 8 && !frac; i++)
+            frac = b[i] != 0;
+        return frac ? NAN : neg ? -INFINITY : INFINITY;
+    }
+    char s[40], *p = s;
+    if (neg)
+        *p++ = '-';
+    *p++ = (char)('0' + (w0 & 0xF) % 10);
+    *p++ = '.';
+    for (int i = 0; i < 8; i++) {
+        *p++ = (char)('0' + (b[i] >> 4) % 10);
+        *p++ = (char)('0' + (b[i] & 0xF) % 10);
+    }
+    int e = (int)((w0 >> 24) & 0xF) * 100 + (int)((w0 >> 20) & 0xF) * 10 + (int)((w0 >> 16) & 0xF);
+    snprintf(p, (size_t)(s + sizeof s - p), "e%c%d", (w0 & 0x40000000u) ? '-' : '+', e);
+    return strtod(s, NULL);
+}
+
+static void packed_write(cpu68k *c, uint32_t a, double v, int k)
+{
+    uint32_t w0 = signbit(v) ? 0x80000000u : 0;
+    uint8_t b[8] = { 0 };
+    if (isnan(v) || isinf(v)) {
+        w0 |= 0x7FFF0000u;
+        if (isnan(v))
+            b[0] = 0x40;
+    } else if (v != 0) {
+        /* k > 0: that many significant digits; k <= 0: -k digits after
+         * the decimal point.  At most 17. */
+        int ilog = (int)floor(log10(fabs(v)));
+        int digits = k > 0 ? k : ilog + 1 - k;
+        if (digits > 17)
+            digits = 17;
+        if (digits < 1)
+            digits = 1;
+        char s[48];
+        snprintf(s, sizeof s, "%.*e", digits - 1, fabs(v));
+        const char *p = s;
+        w0 |= (uint32_t)(*p++ - '0');
+        if (*p == '.')
+            p++;
+        for (int i = 0; i < 16 && *p >= '0' && *p <= '9'; i++, p++)
+            b[i / 2] |= (uint8_t)((*p - '0') << (i % 2 ? 0 : 4));
+        while (*p && *p != 'e')
+            p++;
+        int e = *p ? atoi(p + 1) : 0;
+        if (e < 0) {
+            w0 |= 0x40000000u;
+            e = -e;
+        }
+        w0 |= (uint32_t)(e / 1000 % 10) << 12 | (uint32_t)(e / 100 % 10) << 24 | (uint32_t)(e / 10 % 10) << 20 |
+              (uint32_t)(e % 10) << 16;
+    }
+    mw32(c, a, w0);
+    for (int i = 0; i < 8; i++)
+        mw8(c, a + 4 + (uint32_t)i, b[i]);
+}
 
 /* An operand of format fmt (L S X P W D B) from an effective address. */
 static bool fp_load(cpu68k *c, int mode, int reg, int fmt, double *out)
 {
     int sz = fmt_size[fmt];
-    if (fmt == 3 || !sz)
+    if (fmt == 7)
         return false;
     if (mode == 0) { /* Dn: integer and single formats only */
         uint32_t v = c->d[reg];
@@ -1556,6 +1628,7 @@ static bool fp_load(cpu68k *c, int mode, int reg, int fmt, double *out)
     case 0: *out = (int32_t)mr32(c, a); break;
     case 1: { uint32_t v = mr32(c, a); float f; memcpy(&f, &v, 4); *out = f; break; }
     case 2: *out = ext_read(c, a); break;
+    case 3: *out = packed_read(c, a); break;
     case 4: *out = (int16_t)mr16(c, a); break;
     case 5: { uint64_t v = (uint64_t)mr32(c, a) << 32 | mr32(c, a + 4); memcpy(out, &v, 8); break; }
     default: *out = (int8_t)mr8(c, a); break;
@@ -1576,11 +1649,9 @@ static int32_t fp_to_int(cpu68k *c, double v, double lo, double hi)
     return (int32_t)r;
 }
 
-static bool fp_store(cpu68k *c, int mode, int reg, int fmt, double v)
+static bool fp_store(cpu68k *c, int mode, int reg, int fmt, int k, double v)
 {
     int sz = fmt_size[fmt];
-    if (fmt == 3 || !sz)
-        return false;
     if (mode == 0) {
         switch (fmt) {
         case 0: c->d[reg] = (uint32_t)fp_to_int(c, v, -2147483648.0, 2147483647.0); return true;
@@ -1604,6 +1675,8 @@ static bool fp_store(cpu68k *c, int mode, int reg, int fmt, double v)
     case 0: mw32(c, a, (uint32_t)fp_to_int(c, v, -2147483648.0, 2147483647.0)); break;
     case 1: { float f = (float)v; uint32_t b; memcpy(&b, &f, 4); mw32(c, a, b); break; }
     case 2: ext_write(c, a, v); break;
+    case 3:
+    case 7: packed_write(c, a, v, k); break;
     case 4: mw16(c, a, (uint16_t)fp_to_int(c, v, -32768, 32767)); break;
     case 5: { uint64_t b; memcpy(&b, &v, 8); mw32(c, a, (uint32_t)(b >> 32)); mw32(c, a + 4, (uint32_t)b); break; }
     default: mw8(c, a, (uint8_t)fp_to_int(c, v, -128, 127)); break;
@@ -1750,10 +1823,13 @@ static void fp_general(cpu68k *c, uint16_t op)
             cpu_exception(c, 11, c->op_pc);
         return;
     }
-    case 3: /* FMOVE FPn to <ea> */
-        if (!fp_store(c, mode, reg, rx, c->fp[ry]))
+    case 3: { /* FMOVE FPn to <ea>; packed's k-factor static or in Dn */
+        int k = rx == 7 ? (int)c->d[(w >> 4) & 7] : (int)w;
+        k = (int)(int8_t)(uint8_t)(k << 1) >> 1; /* 7 bits, signed */
+        if (!fp_store(c, mode, reg, rx, k, c->fp[ry]))
             cpu_exception(c, 11, c->op_pc);
         return;
+    }
     case 4:
     case 5: { /* FMOVE(M) control registers */
         uint32_t *regs[3] = { &c->fpcr, &c->fpsr, &c->fpiar };

@@ -549,6 +549,50 @@ extension BlueBox {
             #expect(Self.hookItems == [-1, 10, -2])           // first call, the filter's item, last call
         }
 
+        nonisolated(unsafe) static var listProc: UInt32 = 0
+
+        /// A hook that keeps the file list's user item procedure on its first call.
+        static let listHook: native_fn = { c, _ in
+            guard let c else { return }
+            let ret = cpu_pop32(c)
+            _ = cpu_pop32(c)                               // data
+            let dialog = cpu_pop32(c)
+            let item = Int16(bitPattern: cpu_pop16(c))
+            if item == -1 {
+                let t = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true)
+                tb_GetDialogItem(dialog, 7, t, h, r)
+                StandardFileExtras.listProc = rd32(h)
+            }
+            wr16(c.pointee.a.7, UInt16(bitPattern: item))
+            cpu_push32(c, ret)
+        }
+
+        /// The package's own user items (the file list, item 7) have a
+        /// drawing procedure that programs wrapping it call: PrettyC's.
+        @Test func standardUserItemsHaveProcedures() {
+            var items = (1...9).map { _ in ditlItem(0, (0, 0, 10, 10), []) }
+            items.append(ditlItem(5, (200, 20, 216, 180), pstr("Show all")))
+            launchTestApp([TestResource(type: "DLOG", id: 302, data: dlog(items: 302, visible: false)),
+                           TestResource(type: "DITL", id: 302, data: ditl(items))])
+            _ = initToolbox()
+            guestStack()
+            Self.listProc = 0
+            let hook = native_register(Self.listHook, "test hook", 0)
+            let reply = tb_NewPtr(Int32(StandardFileReply_SIZEOF), false, true)
+            tb_CustomGetFile(0, -1, 0, reply, 302, 0xFFFF_FFFF, hook, 0, 0, 0, 0)
+            let index = native_index_for(Self.listProc)
+            #expect(index >= 0)
+            // Called as userItem procedures are, it removes its arguments.
+            guard index >= 0, let c = g_cpu, let fn = native_fn_at(index) else { return }
+            let sp = c.pointee.a.7
+            cpu_push32(c, 0x1234)                          // the dialog
+            cpu_push16(c, 7)
+            cpu_push32(c, 0x5678)                          // return address
+            fn(c, 0)
+            #expect(cpu_pop32(c) == 0x5678)
+            #expect(c.pointee.a.7 == sp)
+        }
+
         func writeFile(_ dir: URL, _ name: String, type: String) -> String {
             let path = dir.appendingPathComponent(name).path
             var f = mac_file()

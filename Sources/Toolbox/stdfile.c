@@ -325,6 +325,34 @@ int machine_file_item_hit(int16_t item, const char *text)
     return r == 1 || r == 2 ? r : 0;
 }
 
+/* The package's own user items (the file list, the volume name, the
+ * dividing line) drew through procedures it installed; programs that
+ * wrap one call the package's after their own (PrettyC's file list).
+ * Here they draw nothing, the host showing those parts. */
+static void user_item_native(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    c->a[7] += 6; /* (theDialog, itemNo) */
+    cpu_push32(c, ret);
+}
+
+static void standard_user_items(gaddr d, int first_extra)
+{
+    static gaddr stub;
+    if (!stub || native_fn_at(native_index_for(stub)) != user_item_native)
+        stub = native_register(user_item_native, "SFUserItem", 0);
+    gaddr type = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true);
+    int count = (int16_t)rd16(rd32(rd32(d + DialogRecord_items_off))) + 1;
+    for (int i = 1; i < first_extra && i <= count; i++) {
+        tb_GetDialogItem(d, (int16_t)i, type, h, r);
+        if ((rd16(type) & 0x7F) == userItem)
+            tb_SetDialogItem(d, (int16_t)i, (int16_t)rd16(type), stub, r);
+    }
+    tb_DisposePtr(r);
+    tb_DisposePtr(h);
+    tb_DisposePtr(type);
+}
+
 /* Build the app's dialog, hidden, for a custom call with a hook.  Its own
  * items follow the standard dialog's: 9 or 12 in System 7's, 10 in the
  * original ones. */
@@ -348,6 +376,7 @@ static void begin_session(int16_t dlgid, gaddr hook, gaddr data, bool save, bool
     session.old_hook = old;
     session.filter_proc = filter_proc;
     session.first_extra = old ? 11 : save ? 13 : 10;
+    standard_user_items(d, session.first_extra);
     call_hook(sfHookFirstCall);
 }
 

@@ -243,7 +243,7 @@ void qd_screen_init(int width, int height);
 void qd_gworlds_reset(void);
 void qd_port_pats_reset(void);
 void qd_palettes_reset(void); /* windows' palettes and the default one, for a new launch */
-void qd_device_itable(gaddr gdh); /* an indexed device's inverse table, made again */
+void qd_device_itable(gaddr gdh); /* a device's inverse table handle; an indexed one's table, made again */
 /* The pixel value the current device's search procedures give a colour
  * drawn into pixels at base (false when none answers). */
 bool qd_search_color(gaddr base, const uint16_t rgb[3], uint32_t *out); /* forget the GWorlds of a previous launch */

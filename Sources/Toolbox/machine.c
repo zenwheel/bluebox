@@ -252,6 +252,10 @@ static bool open_system_file(void)
     }
     rsrc_spec specs[512] = {
         { fourcc("WDEF"), 0, NULL, RES_SYS_HEAP, wdef0, 8 },
+        /* Rounded-corner windows (procIDs 16 to 23) are drawn as WDEF 0's,
+         * as NewWindow does for them; some programs get WDEF 1 and call it
+         * themselves (DeskMates, for its regions). */
+        { fourcc("WDEF"), 1, NULL, RES_SYS_HEAP, wdef0, 8 },
         { fourcc("WDEF"), 124, NULL, RES_SYS_HEAP, wdef124, 8 },
         { fourcc("MDEF"), 0, NULL, RES_SYS_HEAP, mdef0, 8 },
         { fourcc("CDEF"), 0, NULL, RES_SYS_HEAP, cdef0, 8 },

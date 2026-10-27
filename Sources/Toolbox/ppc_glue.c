@@ -79,6 +79,8 @@ static void trap_done_native(cpu68k *c, uint16_t tw)
  * table of natives. */
 void ppc_glue_reset(void) { trap_code = 0; }
 
+bool ppc_trap_word_at(gaddr pc) { return trap_code && pc >= trap_code && pc < trap_code + TRAP_DEPTH * 8; }
+
 void ppc_trap(uint16_t trapword)
 {
     if (!trap_code) {

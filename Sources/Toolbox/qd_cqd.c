@@ -178,6 +178,7 @@ gaddr tb_NewGDevice(int16_t refNum, int32_t mode)
     GDevice_set_gdPMap(rd32(h), tb_NewPixMap());
     GDevice_set_gdRefNum(rd32(h), refNum);
     GDevice_set_gdMode(rd32(h), mode);
+    qd_device_itable(h);
     return h;
 }
 
@@ -188,6 +189,8 @@ void tb_DisposeGDevice(gaddr gdh)
     if (!gdh || gdh == rd32(LM_MainDevice))
         return;
     tb_DisposePixMap(GDevice_gdPMap(rd32(gdh)));
+    if (rd32(rd32(gdh) + GDevice_gdITable_off))
+        tb_DisposeHandle(rd32(rd32(gdh) + GDevice_gdITable_off));
     tb_DisposeHandle(gdh);
 }
 
@@ -1485,13 +1488,12 @@ void tb_MakeITable(gaddr ctab, gaddr itab, int16_t res)
     }
 }
 
-/* Give an indexed device an inverse table for its colour table. */
+/* Give a device its inverse table handle, as every device had one (a
+ * direct device's unbuilt: Color It! stores the colour seed in it), and
+ * an indexed device the table for its colour table. */
 void qd_device_itable(gaddr gdh)
 {
     if (!gdh || !rd32(gdh))
-        return;
-    gaddr pmh = GDevice_gdPMap(rd32(gdh));
-    if (!pmh || !rd32(pmh) || PixMap_pixelSize(rd32(pmh)) > 8 || !PixMap_pmTable(rd32(pmh)))
         return;
     gaddr itab = rd32(rd32(gdh) + GDevice_gdITable_off);
     if (!itab) {
@@ -1499,7 +1501,11 @@ void qd_device_itable(gaddr gdh)
         if (!itab)
             return;
         wr32(rd32(gdh) + GDevice_gdITable_off, itab);
+        wr16(rd32(itab) + 4, 4); /* iTabRes */
     }
+    gaddr pmh = GDevice_gdPMap(rd32(gdh));
+    if (!pmh || !rd32(pmh) || PixMap_pixelSize(rd32(pmh)) > 8 || !PixMap_pmTable(rd32(pmh)))
+        return;
     int16_t res = (int16_t)rd16(rd32(gdh) + GDevice_gdResPref_off);
     tb_MakeITable(PixMap_pmTable(rd32(pmh)), itab, res < 3 ? 4 : res);
 }
