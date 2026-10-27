@@ -47,6 +47,20 @@ extension BlueBox {
             return (rd16(t), rd32(h), (0..<4).map { Int16(bitPattern: rd16(r + UInt32($0 * 2))) })
         }
 
+        /// A static text item whose handle isn't one (Numerator 2.2 left a
+        /// master pointer to a nonrelocatable block there) draws no text:
+        /// GetHandleSize's error is no length to copy.
+        @Test func staticTextWithABadHandleDrawsNothing() {
+            let d = open()
+            let it = item(d, 3)
+            let bad = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true)
+            wr32(bad, tb_NewPtr(16, false, true)) // its "block" is a pointer's
+            for (i, v) in it.rect.enumerated() { wr16(r + UInt32(i * 2), UInt16(bitPattern: v)) }
+            tb_SetDialogItem(d, 3, Int16(it.type), bad, r)
+            tb_DrawDialog(d)
+            #expect(item(d, 3).handle == bad)
+        }
+
         @Test func itemsAreBuiltFromTheItemList() {
             let d = open()
             #expect(WindowRecord_windowKind(d) == 2)

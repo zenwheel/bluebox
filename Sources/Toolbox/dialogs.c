@@ -848,7 +848,9 @@ int16_t tb_FindDialogItem(gaddr d, uint32_t pt)
 /* Static text with ^0..^3 replaced by the ParamText strings. */
 static void draw_text_item(gaddr h, qrect r, bool substitute)
 {
-    uint32_t n = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
+    /* A handle that isn't one (GetHandleSize's error) has no text. */
+    int32_t size = h && rd32(h) ? tb_GetHandleSize(h) : 0;
+    uint32_t n = size > 0 ? (uint32_t)size : 0;
     uint8_t *src = malloc(n ? n : 1), *out = malloc(n + 4 * 256 + 1);
     gget(src, rd32(h), n);
     uint32_t k = 0;
