@@ -54,6 +54,12 @@ extension BlueBox {
                 0x4ED0,                         // JMP (A0)
             ])
             #expect(reason.hasPrefix("restart"))
+            // Running into the ROM's header from below is no restart.
+            let wild = run([
+                0x41F9, 0xEFFF, 0xFFF0,         // LEA $EFFFFFF0,A0
+                0x4ED0,                         // JMP (A0): zeros up to the ROM
+            ])
+            #expect(!wild.hasPrefix("restart"))
         }
 
         /// A program's own A-line handler that passes traps on to the vector

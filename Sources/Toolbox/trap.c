@@ -958,6 +958,10 @@ void trap_init(void)
     wr32(LM_JCrsrTask, noop);
     wr32(LM_JADBProc, noop);
 
+    /* Code that runs off the end of memory, or jumps wild into the ROM's
+     * header, stops at ILLEGALs in the reset vector's place instead of
+     * running on into the restart. */
+    wr32(GA_ROM + 4, 0x4AFC4AFC);
     wr16(GA_ROM + 0x0A, 0x4EF9); /* JMP */
     wr32(GA_ROM + 0x0C, native_register(restart_native, "Restart", 0));
 
