@@ -1551,23 +1551,25 @@ static void os_OSASetActiveProc(ppc_cpu *c) { instance_call(c, 0x0009, "44"); }
 static void os_OSAGetActiveProc(ppc_cpu *c) { instance_call(c, 0x000A, "44"); }
 static void os_OSAScriptingComponentName(ppc_cpu *c) { instance_call(c, 0x0102, "4"); }
 static void os_OSAGetSource(ppc_cpu *c) { instance_call(c, 0x0201, "444"); }
-static void os_OSACompile(ppc_cpu *c) { instance_call(c, 0x0203, "444"); }
-static void os_OSACopyID(ppc_cpu *c) { instance_call(c, 0x0204, "44"); }
+static void os_OSACompile(ppc_cpu *c) { instance_call(c, 0x0103, "444"); }
+static void os_OSACopyID(ppc_cpu *c) { instance_call(c, 0x0104, "44"); }
 static void os_OSACoerceFromDesc(ppc_cpu *c) { instance_call(c, 0x0301, "444"); }
 static void os_OSACoerceToDesc(ppc_cpu *c) { instance_call(c, 0x0302, "4444"); }
-static void os_OSASetSendProc(ppc_cpu *c) { instance_call(c, 0x0305, "44"); }
-static void os_OSAGetSendProc(ppc_cpu *c) { instance_call(c, 0x0306, "44"); }
-static void os_OSASetCreateProc(ppc_cpu *c) { instance_call(c, 0x0307, "44"); }
-static void os_OSAGetCreateProc(ppc_cpu *c) { instance_call(c, 0x0308, "44"); }
-static void os_OSASetDefaultTarget(ppc_cpu *c) { instance_call(c, 0x0309, "4"); }
-static void os_OSALoadExecute(ppc_cpu *c) { instance_call(c, 0x0501, "4444"); }
-static void os_OSACompileExecute(ppc_cpu *c) { instance_call(c, 0x0502, "4444"); }
-static void os_OSADoScript(ppc_cpu *c) { instance_call(c, 0x0503, "44444"); }
-static void os_OSASetResumeDispatchProc(ppc_cpu *c) { instance_call(c, 0x0507, "44"); }
-static void os_OSAGetResumeDispatchProc(ppc_cpu *c) { instance_call(c, 0x0508, "44"); }
-static void os_OSAExecuteEvent(ppc_cpu *c) { instance_call(c, 0x0509, "4444"); }
-static void os_OSADoEvent(ppc_cpu *c) { instance_call(c, 0x050A, "4444"); }
-static void os_OSAMakeContext(ppc_cpu *c) { instance_call(c, 0x050B, "444"); }
+static void os_OSASetSendProc(ppc_cpu *c) { instance_call(c, 0x0401, "44"); }
+static void os_OSAGetSendProc(ppc_cpu *c) { instance_call(c, 0x0402, "44"); }
+static void os_OSASetCreateProc(ppc_cpu *c) { instance_call(c, 0x0403, "44"); }
+static void os_OSAGetCreateProc(ppc_cpu *c) { instance_call(c, 0x0404, "44"); }
+static void os_OSASetDefaultTarget(ppc_cpu *c) { instance_call(c, 0x0405, "4"); }
+static void os_OSALoadExecute(ppc_cpu *c) { instance_call(c, 0x0601, "4444"); }
+static void os_OSACompileExecute(ppc_cpu *c) { instance_call(c, 0x0602, "4444"); }
+static void os_OSADoScript(ppc_cpu *c) { instance_call(c, 0x0603, "44444"); }
+static void os_OSASetResumeDispatchProc(ppc_cpu *c) { instance_call(c, 0x0801, "44"); }
+static void os_OSAGetResumeDispatchProc(ppc_cpu *c) { instance_call(c, 0x0802, "44"); }
+static void os_OSAExecuteEvent(ppc_cpu *c) { instance_call(c, 0x0803, "4444"); }
+static void os_OSADoEvent(ppc_cpu *c) { instance_call(c, 0x0804, "4444"); }
+static void os_OSAMakeContext(ppc_cpu *c) { instance_call(c, 0x0805, "444"); }
+static void os_OSAStartRecording(ppc_cpu *c) { instance_call(c, 0x0501, "4"); }
+static void os_OSAStopRecording(ppc_cpu *c) { instance_call(c, 0x0502, "4"); }
 
 /* A new run: the guest blocks went with the old heap. */
 void ppc_libs_reset(void)
@@ -1625,6 +1627,7 @@ const ppc_export lib_exports[] = {
     { "OSADoScript", os_OSADoScript }, { "OSASetResumeDispatchProc", os_OSASetResumeDispatchProc },
     { "OSAGetResumeDispatchProc", os_OSAGetResumeDispatchProc }, { "OSAExecuteEvent", os_OSAExecuteEvent },
     { "OSADoEvent", os_OSADoEvent }, { "OSAMakeContext", os_OSAMakeContext },
+    { "OSAStartRecording", os_OSAStartRecording }, { "OSAStopRecording", os_OSAStopRecording },
     /* Wide arithmetic */
     { "WideAdd", w_WideAdd }, { "WideBitShift", w_WideBitShift }, { "WideCompare", w_WideCompare },
     { "WideDivide", w_WideDivide }, { "WideMultiply", w_WideMultiply }, { "WideNegate", w_WideNegate },
