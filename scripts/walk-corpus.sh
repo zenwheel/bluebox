@@ -103,7 +103,7 @@ done | xargs -0 -n 1 -P "$jobs" sh "$0" "$dir" "$work" "$bin" "$jobs" >"$work/wa
 # The failures by kind: host errors, damaged heaps or code, missing routines,
 # CPU faults, then the rest; walks that finished or reached the limit
 # waiting for input are fine.
-cut -f2 "$work/walk.tsv" | sed -E 's/^(host memory error: [^ ]+ [^ ]+).*/\1/; s/^(heap damaged by [^ ]+).*/\1/; s/^(code changed by [^ ]+).*/\1/; s/^(stopped: unimplemented: [^ ]+).*/\1/; s/^(stopped: menu walk stuck in a dialog).*/\1/' |
+cut -f2 "$work/walk.tsv" | sed -E 's/^(host memory error: [^ ]+ [^ ]+).*/\1/; s/^(heap damaged by [^ ]+).*/\1/; s/^(code changed by [^ ]+).*/\1/; s/^(stopped: unimplemented: [^ ]+).*/\1/; s/^(stopped: library not found: .*) \(for [^)]*\).*/\1/; s/^(stopped: menu walk stuck in a dialog).*/\1/' |
 	grep -v -E 'menu walk finished|waiting for input|not in corpus' | sort | uniq -c | sort -rn >"$work/report.txt" || true
 printf '%s programs, %s finished their walk\n' "$(wc -l <"$work/walk.tsv" | tr -d ' ')" \
 	"$(grep -c 'menu walk finished' "$work/walk.tsv" || true)"

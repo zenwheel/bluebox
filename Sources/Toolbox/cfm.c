@@ -66,6 +66,7 @@ static gaddr glue_alloc(uint32_t n)
 }
 
 static void unimplemented_import(ppc_cpu *c);
+static void missing_library_import(ppc_cpu *c);
 
 static void dispatch_native(ppc_cpu *c, uint32_t index)
 {
@@ -75,6 +76,10 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
     }
     if (natives[index].fn == unimplemented_import) {
         ppc_halt(c, "unimplemented: %s (PowerPC import)", natives[index].name);
+        return;
+    }
+    if (natives[index].fn == missing_library_import) {
+        ppc_halt(c, "library not found: %s", natives[index].name);
         return;
     }
     trap_set_current_word(0); /* not a trap: no HFS or async bits */
@@ -102,7 +107,7 @@ gaddr cfm_native_tvector(void (*fn)(ppc_cpu *), const char *name) { return nativ
 static gaddr native_tvector(void (*fn)(ppc_cpu *), const char *name)
 {
     for (int i = 0; i < nnatives; i++)
-        if (natives[i].fn == fn && fn != unimplemented_import && natives[i].tvector)
+        if (natives[i].fn == fn && fn != unimplemented_import && fn != missing_library_import && natives[i].tvector)
             return natives[i].tvector;
     if (nnatives >= MAX_PPC_NATIVES)
         return 0;
@@ -120,6 +125,7 @@ static gaddr native_tvector(void (*fn)(ppc_cpu *), const char *name)
 }
 
 static void unimplemented_import(ppc_cpu *c) { (void)c; }
+static void missing_library_import(ppc_cpu *c) { (void)c; }
 
 /* ---- Hand-written exports: calls whose 68k forms are raw traps ---- */
 
@@ -732,6 +738,15 @@ static gaddr bind_import(const char *lname, int li, const char *sname, int cls, 
         LOGF(LOG_UNIMPL, "cfm: data %s from %s not provided\n", sname, lname);
         note_missing(lname, sname, true);
         return data_import(sname);
+    }
+    if (li < 0) {
+        /* A library Mac OS didn't have either: a plug-in's host
+         * (NOVA's saverlets import from a fragment inside NOVA, found
+         * only once NOVA has loaded it), or one the program needs
+         * installed.  Called, it stops naming the library. */
+        char both[64];
+        snprintf(both, sizeof both, "%s (for %s)", lname, sname);
+        return native_tvector(missing_library_import, both);
     }
     LOGF(LOG_UNIMPL, "cfm: %s from %s not provided\n", sname, lname);
     note_missing(lname, sname, false);

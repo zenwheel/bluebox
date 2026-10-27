@@ -102,7 +102,7 @@ cut -f1 "$work/batches.txt" | uniq | while IFS= read -r b; do
 done
 
 # The failures by kind over every batch, as walk-corpus.sh counts them.
-cut -f3 "$work/walk.tsv" 2>/dev/null | sed -E 's/^(host memory error: [^ ]+ [^ ]+).*/\1/; s/^(heap damaged by [^ ]+).*/\1/; s/^(code changed by [^ ]+).*/\1/; s/^(stopped: unimplemented: [^ ]+).*/\1/; s/^(stopped: menu walk stuck in a dialog).*/\1/; s/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//; s/^(bluebox: [^/]*).*/\1/' |
+cut -f3 "$work/walk.tsv" 2>/dev/null | sed -E 's/^(host memory error: [^ ]+ [^ ]+).*/\1/; s/^(heap damaged by [^ ]+).*/\1/; s/^(code changed by [^ ]+).*/\1/; s/^(stopped: unimplemented: [^ ]+).*/\1/; s/^(stopped: library not found: .*) \(for [^)]*\).*/\1/; s/^(stopped: menu walk stuck in a dialog).*/\1/; s/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//; s/^(bluebox: [^/]*).*/\1/' |
 	grep -v -E 'menu walk finished|waiting for input|not in corpus' | sort | uniq -c | sort -rn >"$work/report.txt" || true
 touch "$work/walk.tsv"
 printf '%s programs, %s finished their walk\n' "$(wc -l <"$work/walk.tsv" | tr -d ' ')" \

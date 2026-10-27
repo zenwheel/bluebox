@@ -201,6 +201,30 @@ extension BlueBox {
             #expect(reason.hasSuffix(": weak Q3IsInitialized from NoSuchLib, not there"))
         }
 
+        /// A strong import from a library that isn't anywhere (a NOVA
+        /// saverlet's "NOVA Library (PPC)", inside NOVA itself) stops,
+        /// when called, naming the library rather than the routine.
+        @Test func callFromAMissingLibraryNamesIt() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            let toc = cfm_prepare_container(importContainer("SaverInitialize", cls: 2, library: "NOVA Library (PPC)"))
+            #expect(toc != 0 && rd32(toc) != 0)
+            // lwz r12,0(r2); stw r2,20(r1); lwz r0,0(r12); lwz r2,4(r12); mtctr r0; bctr
+            let words: [UInt32] = [0x8182_0000, 0x9041_0014, 0x800C_0000, 0x804C_0004, 0x7C09_03A6, 0x4E80_0420]
+            let glue = bytes(words.flatMap { [UInt8($0 >> 24), UInt8(($0 >> 16) & 0xFF), UInt8(($0 >> 8) & 0xFF), UInt8($0 & 0xFF)] })
+            let stack = tb_NewPtr(4096, false, true)
+            withUnsafeMutableBytes(of: &g_ppc.gpr) { gpr in
+                gpr.storeBytes(of: stack + 2048, toByteOffset: 4, as: UInt32.self)
+                gpr.storeBytes(of: toc, toByteOffset: 8, as: UInt32.self)
+            }
+            g_ppc.pc = glue
+            g_ppc.halted = false
+            _ = ppc_run(&g_ppc, 20)
+            let reason = withUnsafeBytes(of: g_ppc.halt_reason) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+            #expect(reason == "library not found: NOVA Library (PPC) (for SaverInitialize)")
+        }
+
         /// Mixed Mode calls a PowerPC routine with r12 at its transition
         /// vector, as a call through a pointer has it: Hardwood Solitaire
         /// II's trap patches read where to go on from their vectors.
