@@ -269,6 +269,24 @@ extension BlueBox {
             #expect(calls == ["pre"])
         }
 
+        /// A handler in the ROM's native stubs (the applet shell installs
+        /// its own) is 68k code even while PowerPC code sends the event, as
+        /// a Carbon applet's launcher does; it isn't taken for a vector.
+        @Test func nativeHandlersFromPowerPC() {
+            launchTestApp()
+            guestStack()
+            var calls: [UInt32] = []
+            let handler = pascalProc([4, 4, 4]) { a in calls.append(a[2]); return 0 }
+            _ = tb_AEInstallEventHandler(code("aevt"), code("oapp"), handler, 7, 0)
+            let evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateAppleEvent(code("aevt"), code("oapp"), 0, -1, 0, evt)
+            let was = g_ppc_mode
+            g_ppc_mode = true
+            defer { g_ppc_mode = was }
+            #expect(tb_AESend(evt, reply, 1, 0, -1, 0, 0) == 0)
+            #expect(calls == [7])
+        }
+
         /// A handler's error goes into the reply as keyErrorNumber; a queued
         /// reply arrives later as an Answer event.
         @Test func replies() {

@@ -51,6 +51,7 @@ enum { RD_SIZE = 12, RR_SIZE = 20 };
 #define RR_SELECTOR 16
 
 bool mm_is_descriptor(gaddr p) { return p && rd16(p) == 0xAAFE; }
+bool mm_is_native(gaddr p) { return p >= GA_ROM && p - GA_ROM < GA_ROM_SIZE; }
 
 /* The routine of a descriptor for the ISA wanted (else its first). */
 static bool mm_routine(gaddr rd, int want, uint32_t *procinfo, int *isa, gaddr *proc)

@@ -1610,6 +1610,8 @@ static void ppc_GetSharedLibrary(ppc_cpu *c)
     pname_to_c(gptr(c->gpr[3]), name, sizeof name);
     int before = ninit;
     int i = library_named(name, err, sizeof err);
+    if (i < 0)
+        LOGF(LOG_SEG, "cfm: GetSharedLibrary %s: %s\n", name, err);
     run_new_inits(before);
     connect_result(c, i, c->gpr[6], c->gpr[7], c->gpr[8], err);
     c->pc = c->lr;

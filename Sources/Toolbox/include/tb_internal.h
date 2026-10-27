@@ -773,6 +773,9 @@ void tb_MoreMasterPointers(uint32_t count);
 /* Mixed Mode (mixedmode.c). */
 void mixedmode_init(void);
 bool mm_is_descriptor(gaddr p);
+/* A routine of Blue Box's own: 68k code in the ROM's native stubs, never a
+ * transition vector, whichever ISA asks for it. */
+bool mm_is_native(gaddr p);
 /* Call a universal procedure pointer (either ISA) with arguments as the
  * procInfo describes; returns the result. */
 uint32_t mm_call(gaddr upp, uint32_t procinfo, const uint32_t *args, int nargs);

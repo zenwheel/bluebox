@@ -706,12 +706,14 @@ static const coercion_entry *find_coercion(uint32_t from, uint32_t to)
 }
 
 /* A universal procedure pointer: a routine descriptor, 68k code, or (from
- * PowerPC code that skipped NewRoutineDescriptor) a transition vector. */
+ * PowerPC code that skipped NewRoutineDescriptor) a transition vector.
+ * Blue Box's own handlers (the applet shell's, installed while a Carbon
+ * applet's PowerPC code runs) are 68k stubs in the ROM. */
 uint32_t aem_call_proc(gaddr upp, uint32_t procinfo, const uint32_t *args, int n)
 {
     if (!upp)
         return 0;
-    if (!mm_is_descriptor(upp) && g_ppc_mode)
+    if (!mm_is_descriptor(upp) && !mm_is_native(upp) && g_ppc_mode)
         return ppc_call(upp, args, n);
     return mm_call(upp, procinfo, args, n);
 }
