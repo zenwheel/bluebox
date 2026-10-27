@@ -34,7 +34,7 @@ enum {
     errAEHandlerNotFound = -1717,
 };
 
-enum { kAENoReply = 1, kAEQueueReply = 2, kAEWaitReply = 3 };
+enum { kAENoReply = 1, kAEQueueReply = 2, kAEWaitReply = 3, kAEDontExecute = 0x2000 };
 enum { kAENeverInteract = 0x10, kAECanInteract = 0x20, kAEAlwaysInteract = 0x30 };
 enum { kAEDirectCall = 1, kAESameProcess = 2, kAELocalProcess = 3, kAERemoteProcess = 4 };
 enum { kAEInteractWithSelf = 0, kAEInteractWithLocal = 1, kAEInteractWithAll = 2 };
@@ -1880,6 +1880,12 @@ static int16_t finder_event(gaddr evt)
 
 static int16_t send_to_self(gaddr evt, gaddr reply, int32_t send_mode)
 {
+    /* An event sent only for recording (PowerPlant's windows announce
+     * their own closing so, then delete themselves): with no recording
+     * process there is nothing more to do, and running the handler would
+     * close the window under its caller. */
+    if (send_mode & kAEDontExecute)
+        return noErr;
     int mode = send_mode & 3;
     gaddr r = tb_NewPtr(AEDesc_SIZEOF, false, true);
     make_reply(evt, r, mode != kAENoReply);

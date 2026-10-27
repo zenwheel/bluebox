@@ -269,6 +269,24 @@ extension BlueBox {
             #expect(calls == ["pre"])
         }
 
+        /// An event sent with kAEDontExecute is only for recording: its
+        /// handler doesn't run (a PowerPlant window sends Close so, then
+        /// deletes itself).
+        @Test func dontExecute() {
+            launchTestApp()
+            guestStack()
+            var calls = 0
+            let handler = pascalProc([4, 4, 4]) { _ in calls += 1; return 0 }
+            _ = tb_AEInstallEventHandler(code("core"), code("clos"), handler, 0, 0)
+            let evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateAppleEvent(code("core"), code("clos"), 0, -1, 0, evt)
+            #expect(tb_AESend(evt, reply, 0x2001, 0, -1, 0, 0) == 0) // kAENoReply + kAEDontExecute
+            #expect(calls == 0)
+            #expect(descType(reply) == fourCC("null"))
+            #expect(tb_AESend(evt, reply, 1, 0, -1, 0, 0) == 0)
+            #expect(calls == 1)
+        }
+
         /// A handler in the ROM's native stubs (the applet shell installs
         /// its own) is 68k code even while PowerPC code sends the event, as
         /// a Carbon applet's launcher does; it isn't taken for a vector.
