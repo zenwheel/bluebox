@@ -575,6 +575,7 @@ typedef struct {
 
 typedef struct {
     char name[64];       /* the fragment's name (MacRoman), "" for the application */
+    char app_name[64];   /* the application's name in its 'cfrg', which libraries may import from */
     char path[1024];     /* the file it came from */
     uint32_t offset, length;
     gaddr main_tv, init_tv, term_tv;
@@ -1263,6 +1264,7 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
     fragment *f = &frags[i];
     memset(f, 0, sizeof *f);
     snprintf(f->name, sizeof f->name, "%s", want ? s.found.name : "");
+    snprintf(f->app_name, sizeof f->app_name, "%s", want ? "" : s.found.name);
     snprintf(f->path, sizeof f->path, "%s", path);
     f->offset = s.found.where == kDataForkCFragLocator ? s.found.offset : 0;
     f->length = (uint32_t)len;
@@ -1366,6 +1368,11 @@ static int library_named(const char *name, char *err, size_t errlen)
 {
     for (int i = 0; i < nfrags; i++)
         if (!strcmp(frags[i].name, name))
+            return i;
+    /* The application by its fragment's name: MacPerl's is "Perl", whose
+     * routines its extensions (shared libraries it loads) import. */
+    for (int i = 0; i < nfrags; i++)
+        if (frags[i].app_name[0] && !strcmp(frags[i].app_name, name))
             return i;
     if (is_native_library(name)) {
         if (nfrags >= MAX_FRAGMENTS)
@@ -1538,7 +1545,8 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
     else
         app_dir[0] = 0;
     gestalt_powerpc();
-    /* The application is fragment 0 (named "", so no import finds it). */
+    /* The application is fragment 0 (named "": imports find it only by
+     * its name in the 'cfrg', as MacPerl's extensions do). */
     frags[0].path[0] = 0;
     int a = load_from_file(app_path, NULL, err, errlen);
     if (a < 0)
