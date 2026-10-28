@@ -80,39 +80,42 @@ private func hotID(_ u: Int, _ v: Int) -> UInt8 { (100..<140).contains(u) && (20
 /// A video track of tiles of the panorama as QTVR stores it: turned a
 /// quarter turn anticlockwise (stored row r is upright column W-1-r), in
 /// 4 tiles of H by W/4.
-private func tileTrack(_ movie: Int32, hot: Bool) -> Int32 {
+private func tileTrack(_ movie: Int32, hot: Bool, nodes: Int = 1) -> Int32 {
     let track = tb_NewMovieTrack(movie, Int32(H) << 16, Int32(W / 4) << 16, 0)
     let media = tb_NewTrackMedia(track, Int32(bitPattern: fourCC("vide")), 600, 0, 0)
     #expect(tb_BeginMediaEdits(media) == 0)
     let desc = rawDesc(H, W / 4, hot ? 40 : 32)
+    for n in 0..<nodes {
     for k in 0..<4 {
         var b: [UInt8] = []
         for r in 0..<(W / 4) {
             let u = W - 1 - (k * (W / 4) + r)
             for v in 0..<H {
                 if hot {
-                    b.append(hotID(u, v))
+                    b.append(n == 0 ? hotID(u, v) : 0)
                 } else {
                     let p = pano(u, v)
-                    b += [255, p.0, p.1, p.2]
+                    b += [255, p.0, p.1, n == 0 ? p.2 : 200] // node 2: blue 200
                 }
             }
         }
         #expect(tb_AddMediaSample(media, Int32(bitPattern: handle(b)), 0, Int32(b.count), 150,
                                   Int32(bitPattern: desc), 1, 0, 0) == 0)
     }
+    }
     #expect(tb_EndMediaEdits(media) == 0)
-    #expect(tb_InsertMediaIntoTrack(track, 0, 0, 600, 0x10000) == 0)
+    #expect(tb_InsertMediaIntoTrack(track, 0, 0, Int32(600 * nodes), 0x10000) == 0)
     tb_SetTrackEnabled(track, 0)
     return track
 }
 
-/// A one-node QTVR 2 panorama movie: QTVR track, panorama track, image and
-/// hot spot tracks, made with the Movie Toolbox.
-private func makePanorama() -> UInt32 {
+/// A QTVR 2 panorama movie: QTVR track, panorama track, image and hot spot
+/// tracks, made with the Movie Toolbox.  With two nodes, node 1's hot spot
+/// links to node 2 (whose blue is 200) instead of back to itself.
+private func makePanorama(nodes: Int = 1) -> UInt32 {
     let movie = UInt32(bitPattern: tb_NewMovie(1))
     let M = Int32(bitPattern: movie)
-    let image = tileTrack(M, hot: false), hots = tileTrack(M, hot: true)
+    let image = tileTrack(M, hot: false, nodes: nodes), hots = tileTrack(M, hot: true, nodes: nodes)
     // the panorama track: its 'pdat'
     let pdat = cat(be16(2), be16(0), be32(1), be32(1),
                    bef(0), bef(360), bef(-30), bef(30), bef(10), bef(50), bef(90), bef(0), bef(40),
@@ -121,9 +124,11 @@ private func makePanorama() -> UInt32 {
     let panoTrack = tb_NewMovieTrack(M, 200 << 16, 100 << 16, 0)
     let panoMedia = tb_NewTrackMedia(panoTrack, Int32(bitPattern: fourCC("pano")), 600, 0, 0)
     let panoSample = container([atom("pdat", 1, pdat)])
-    #expect(tb_AddMediaSample(panoMedia, Int32(bitPattern: handle(panoSample)), 0, Int32(panoSample.count), 600,
-                              Int32(bitPattern: handle(cat(be32(16), be32(0), be32(0), be32(1)))), 1, 0, 0) == 0)
-    #expect(tb_InsertMediaIntoTrack(panoTrack, 0, 0, 600, 0x10000) == 0)
+    for _ in 0..<nodes {
+        #expect(tb_AddMediaSample(panoMedia, Int32(bitPattern: handle(panoSample)), 0, Int32(panoSample.count), 600,
+                                  Int32(bitPattern: handle(cat(be32(16), be32(0), be32(0), be32(1)))), 1, 0, 0) == 0)
+    }
+    #expect(tb_InsertMediaIntoTrack(panoTrack, 0, 0, Int32(600 * nodes), 0x10000) == 0)
     // the QTVR track: the world in its description, the node in its sample
     let world = container([
         atom("vrsc", 1, cat(be16(2), be16(0), be32(0), be32(1), be32(0), be32(0), be32(0))),
@@ -135,7 +140,7 @@ private func makePanorama() -> UInt32 {
                    bef(0), bef(0), bef(0), bef(0), bef(0), be16(20), be16(100), be16(80), be16(140),
                    be32(0), be32(0), be32(0))
     // a link back to this node, turning to pan 30, tilt 5
-    let link = cat(be16(2), be16(0), be32(1), be32(0), bef(0), bef(0), bef(0), bef(0), bef(0),
+    let link = cat(be16(2), be16(0), be32(UInt32(nodes)), be32(0), bef(0), bef(0), bef(0), bef(0), bef(0),
                    be32(3), bef(30), bef(5), bef(0), bef(0), bef(0), bef(0), be32(0), be32(0), be32(0))
     let node = container([
         atom("ndhd", 1, cat(be16(2), be16(0), Array("pano".utf8), be32(1), be32(0), be32(0), be32(0), be32(0))),
@@ -146,7 +151,13 @@ private func makePanorama() -> UInt32 {
     let vrDesc = handle(cat(be32(UInt32(16 + world.count)), Array("qtvr".utf8), be32(0), be32(1), world))
     #expect(tb_AddMediaSample(vrMedia, Int32(bitPattern: handle(node)), 0, Int32(node.count), 600,
                               Int32(bitPattern: vrDesc), 1, 0, 0) == 0)
-    #expect(tb_InsertMediaIntoTrack(vrTrack, 0, 0, 600, 0x10000) == 0)
+    if nodes > 1 {
+        let node2 = container([atom("ndhd", 1, cat(be16(2), be16(0), Array("pano".utf8), be32(2), be32(0),
+                                                    be32(0), be32(0), be32(0)))])
+        #expect(tb_AddMediaSample(vrMedia, Int32(bitPattern: handle(node2)), 0, Int32(node2.count), 600,
+                                  Int32(bitPattern: vrDesc), 1, 0, 0) == 0)
+    }
+    #expect(tb_InsertMediaIntoTrack(vrTrack, 0, 0, Int32(600 * nodes), 0x10000) == 0)
     let idx = tb_NewPtr(4, false, true)
     #expect(tb_AddTrackReference(vrTrack, panoTrack, Int32(bitPattern: fourCC("pano")), idx) == 0)
     #expect(tb_AddTrackReference(panoTrack, image, Int32(bitPattern: fourCC("imgt")), idx) == 0)
@@ -221,6 +232,41 @@ private let interceptProc: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Vo
     let p = rd32(msg + 20)
     wr32(p, (Float(bitPattern: rd32(p)) + interceptAdd).bitPattern)
     wr8(cancel, interceptCancel ? 1 : 0)
+    c.pointee.pc = c.pointee.lr
+}
+
+/// Node routines: leaving (qtvr, from, to, cancel*, refcon), entering
+/// (qtvr, nodeID, refcon).
+nonisolated(unsafe) private var nodeLog: [String] = []
+nonisolated(unsafe) private var cancelLeaving = false
+private let leavingProc: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+    guard let c = c else { return }
+    nodeLog.append("leave \(c.pointee.gpr.4)->\(c.pointee.gpr.5)")
+    wr8(c.pointee.gpr.6, cancelLeaving ? 1 : 0)
+    c.pointee.gpr.3 = 0
+    c.pointee.pc = c.pointee.lr
+}
+private let enteringProc: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+    guard let c = c else { return }
+    nodeLog.append("enter \(c.pointee.gpr.4)")
+    c.pointee.gpr.3 = 0
+    c.pointee.pc = c.pointee.lr
+}
+
+/// A back buffer routine: (qtvr, drawRect, areaIndex, flagsIn, flagsOut*,
+/// refcon) paints its rectangle red in the port it is given.
+nonisolated(unsafe) private var backRects: [(Int16, Int16, Int16, Int16)] = []
+private let backProc: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+    guard let c = c else { return }
+    let r = c.pointee.gpr.4
+    backRects.append((Int16(bitPattern: rd16(r)), Int16(bitPattern: rd16(r + 2)), Int16(bitPattern: rd16(r + 4)),
+                      Int16(bitPattern: rd16(r + 6))))
+    let rgb = tb_NewPtr(6, false, true)
+    wr16(rgb, 0xFFFF)
+    tb_RGBForeColor(rgb)
+    tb_PaintRect(r)
+    wr32(c.pointee.gpr.7, 1) // kQTVRBackBufferFlagDidDraw
+    c.pointee.gpr.3 = 0
     c.pointee.pc = c.pointee.lr
 }
 
@@ -451,6 +497,89 @@ extension BlueBox {
             #expect(overCalls.count == 3)
             #expect(overCalls.map { $0.1 } == [0, 1, 2])
             #expect(overCalls.allSatisfy { $0.0 == 5 })
+            tb_DisposeMovie(movie)
+        }
+
+        /// Two nodes: a link goes to the other, the program's leaving and
+        /// entering routines hear of it (and can stop it), and the
+        /// previous node is remembered.
+        @Test func nodes() {
+            qtMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            let movie = makePanorama(nodes: 2)
+            let out = tb_NewPtr(16, false, true)
+            #expect(vrCall("QTVRGetQTVRInstance", [out, vrCall("QTVRGetQTVRTrack", [movie, 1]).r, 0]).r == 0)
+            let vr = rd32(out)
+            g_ppc_mode = true
+            vrUseMachineCPU = true
+            defer {
+                g_ppc_mode = false
+                vrUseMachineCPU = false
+            }
+            vrCall("QTVRSetAngularUnits", [vr, 0])
+            #expect(vrCall("QTVRGetCurrentNodeID", [vr]).r == 1)
+            #expect(vrCall("QTVRGetNodeType", [vr, 2]).r == fourCC("pano"))
+            let lp = mm_new_descriptor(cfm_native_tvector(leavingProc, "leaving"), 0xFFE0, 1)
+            let ep = mm_new_descriptor(cfm_native_tvector(enteringProc, "entering"), 0x0FE0, 1)
+            #expect(vrCall("QTVRSetLeavingNodeProc", [vr, lp, 0, 0]).r == 0)
+            #expect(vrCall("QTVRSetEnteringNodeProc", [vr, ep, 0, 0]).r == 0)
+            nodeLog = []
+            #expect(vrCall("QTVRTriggerHotSpot", [vr, 5, 0, 0]).r == 0)
+            #expect(vrCall("QTVRGetCurrentNodeID", [vr]).r == 2)
+            #expect(nodeLog == ["leave 1->2", "enter 2"])
+            #expect(abs(vrCall("QTVRGetPanAngle", [vr]).f - 30) < 0.01)
+            let c = tb_NewPtr(6, false, true)
+            vrCall("QTVRUpdate", [vr, 0])
+            tb_GetCPixel(100, 50, c)
+            #expect(rd16(c + 4) >> 8 == 200) // node 2's picture
+            // a leaving routine that cancels keeps the node
+            cancelLeaving = true
+            #expect(vrCall("QTVRGoToNodeID", [vr, 0x8000_0000]).r == 0) // kQTVRPreviousNode
+            #expect(vrCall("QTVRGetCurrentNodeID", [vr]).r == 2)
+            cancelLeaving = false
+            #expect(vrCall("QTVRGoToNodeID", [vr, 0x8000_0000]).r == 0)
+            #expect(vrCall("QTVRGetCurrentNodeID", [vr]).r == 1)
+            vrCall("QTVRUpdate", [vr, 0])
+            tb_GetCPixel(100, 50, c)
+            #expect(rd16(c + 4) >> 8 == 77)
+            #expect(vrCall("QTVRGoToNodeID", [vr, 0x8000_0001]).r == 0) // kQTVRDefaultNode
+            #expect(vrCall("QTVRGetCurrentNodeID", [vr]).r == 1)
+            tb_DisposeMovie(movie)
+        }
+
+        /// The program's back buffer routine draws into the panorama: its
+        /// paint shows in the view; refreshing brings back the movie's.
+        @Test func backBuffer() {
+            qtMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            let movie = makePanorama()
+            let out = tb_NewPtr(16, false, true)
+            #expect(vrCall("QTVRGetQTVRInstance", [out, vrCall("QTVRGetQTVRTrack", [movie, 1]).r, 0]).r == 0)
+            let vr = rd32(out)
+            g_ppc_mode = true
+            vrUseMachineCPU = true
+            defer {
+                g_ppc_mode = false
+                vrUseMachineCPU = false
+            }
+            vrCall("QTVRSetAngularUnits", [vr, 0])
+            vrCall("QTVRSetPanAngle", [vr], floats: [200])
+            backRects = []
+            let bp = mm_new_descriptor(cfm_native_tvector(backProc, "back buffer"), 0x0003_FBE0, 1)
+            // the whole buffer, no areas: one call with all of it
+            #expect(vrCall("QTVRSetBackBufferImagingProc", [vr, bp, 0, 0, 0]).r == 0)
+            #expect(backRects.count == 1)
+            #expect(backRects.first.map { $0.2 == Int16(W) && $0.3 == Int16(H) } == true) // turned: W rows of H
+            let c = tb_NewPtr(6, false, true)
+            vrCall("QTVRUpdate", [vr, 0])
+            tb_GetCPixel(100, 50, c)
+            #expect(rd16(c) >> 8 == 255 && rd16(c + 2) >> 8 == 0 && rd16(c + 4) >> 8 == 0)
+            #expect(vrCall("QTVRSetBackBufferImagingProc", [vr, 0, 0, 0, 0]).r == 0)
+            #expect(vrCall("QTVRRefreshBackBuffer", [vr, 0]).r == 0)
+            tb_GetCPixel(100, 50, c)
+            #expect(rd16(c + 4) >> 8 == 77)
             tb_DisposeMovie(movie)
         }
 
