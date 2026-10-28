@@ -19,6 +19,7 @@
 #include "tb_internal.h"
 #include "sysres_gen.h"
 #include "machine.h"
+#include "qd3d.h"
 #include "jit.h"
 #include "m68k.h"
 #include "ppc.h"
@@ -436,6 +437,7 @@ bool machine_boot(bool census)
     notify_reset();
     iconservices_reset();
     agl_reset(); /* OpenGL's contexts, on the host */
+    qd3d_reset(); /* QuickDraw 3D's and RAVE's objects */
 
     qd_screen_init(screen_w, screen_h);
     /* CrsrPin: the mouse stays on the screen. */
