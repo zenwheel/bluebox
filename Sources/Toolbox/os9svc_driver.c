@@ -429,6 +429,10 @@ static uint32_t exec_level = kTaskLevel;
 
 static void ds_CurrentExecutionLevel(ppc_cpu *c) { RETURN(exec_level); }
 
+/* TaskLevel's answer (DebugLib): 0 at task level, else the masks of
+ * Debugging.h; the handlers here run as secondary interrupt handlers. */
+uint32_t os9svc_task_level(void) { return exec_level == kTaskLevel ? 0 : 0x40; }
+
 /* Call a handler (void *p1, void *p2) at secondary interrupt level. */
 static uint32_t call_handler(gaddr handler, uint32_t p1, uint32_t p2)
 {

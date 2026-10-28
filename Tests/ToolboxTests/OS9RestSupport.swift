@@ -36,6 +36,22 @@ enum Rest {
     static func b32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
     static func b16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
 
+    /// A PowerPC routine in guest memory: the transition vector of code made
+    /// of these words.
+    static func routine(_ words: [UInt32]) -> UInt32 {
+        let code = tb_NewPtr(Int32(words.count * 4 + 8), true, true)
+        for (i, w) in words.enumerated() { wr32(code + UInt32(i * 4), w) }
+        let tv = tb_NewPtr(8, true, true)
+        wr32(tv, code)
+        return tv
+    }
+
+    /// lis r11,hi(addr); ori r11,r11,lo(addr): the first words of a routine
+    /// that keeps what it is given at addr.
+    static func stash(_ addr: UInt32) -> [UInt32] {
+        [0x3D60_0000 | (addr >> 16), 0x616B_0000 | (addr & 0xFFFF)]
+    }
+
     static func f1() -> Double { ppc_fpr(&g_ppc, 1) }
 
     static func ptr(_ n: Int) -> UInt32 { tb_NewPtr(Int32(n), true, true) }

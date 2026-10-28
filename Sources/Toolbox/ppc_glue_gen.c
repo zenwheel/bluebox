@@ -29409,6 +29409,87 @@ static void ppcglue_SetDimSuspendState(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DebugAssert(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    uint32_t a_options = (uint32_t)c->gpr[4];
+    gaddr a_assertionString = (gaddr)c->gpr[5];
+    gaddr a_exceptionString = (gaddr)c->gpr[6];
+    gaddr a_errorString = (gaddr)c->gpr[7];
+    gaddr a_fileName = (gaddr)c->gpr[8];
+    int32_t a_lineNumber = (int32_t)c->gpr[9];
+    gaddr a_value = (gaddr)c->gpr[10];
+    tb_DebugAssert(a_componentSignature, a_options, a_assertionString, a_exceptionString, a_errorString, a_fileName, a_lineNumber, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TaskLevel(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_TaskLevel();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewDebugComponent(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    gaddr a_componentName = (gaddr)c->gpr[4];
+    gaddr a_componentCallback = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_NewDebugComponent(a_componentSignature, a_componentName, a_componentCallback);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewDebugOption(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    int32_t a_optionSelectorNum = (int32_t)c->gpr[4];
+    gaddr a_optionName = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_NewDebugOption(a_componentSignature, a_optionSelectorNum, a_optionName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeDebugComponent(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_DisposeDebugComponent(a_componentSignature);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDebugComponentInfo(ppc_cpu *c)
+{
+    uint32_t a_index = (uint32_t)c->gpr[3];
+    gaddr a_componentSignature = (gaddr)c->gpr[4];
+    gaddr a_componentName = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDebugComponentInfo(a_index, a_componentSignature, a_componentName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDebugOptionInfo(ppc_cpu *c)
+{
+    uint32_t a_index = (uint32_t)c->gpr[3];
+    int32_t a_componentSignature = (int32_t)c->gpr[4];
+    gaddr a_optionSelectorNum = (gaddr)c->gpr[5];
+    gaddr a_optionName = (gaddr)c->gpr[6];
+    gaddr a_optionSetting = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_GetDebugOptionInfo(a_index, a_componentSignature, a_optionSelectorNum, a_optionName, a_optionSetting);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDebugOptionValue(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    int32_t a_optionSelectorNum = (int32_t)c->gpr[4];
+    int8_t a_newOptionSetting = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDebugOptionValue(a_componentSignature, a_optionSelectorNum, a_newOptionSetting);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallDebugAssertOutputHandler(ppc_cpu *c)
+{
+    gaddr a_handler = (gaddr)c->gpr[3];
+    tb_InstallDebugAssertOutputHandler(a_handler);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParseAIFFHeader(ppc_cpu *c)
 {
     int16_t a_fRefNum = (int16_t)c->gpr[3];
@@ -41621,6 +41702,7 @@ const ppc_export ppc_exports[] = {
     {"DateToSeconds", ppctrap_DateToSeconds},
     {"DeactivateControl", ppcglue_DeactivateControl},
     {"DeactivateTSMDocument", ppcglue_DeactivateTSMDocument},
+    {"DebugAssert", ppcglue_DebugAssert},
     {"DebugStr", ppcglue_DebugStr},
     {"Debugger", ppcglue_Debugger},
     {"DebuggerEnter", ppcglue_DebuggerEnter},
@@ -41674,6 +41756,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeCodecNameList", ppcglue_DisposeCodecNameList},
     {"DisposeCollection", ppcglue_DisposeCollection},
     {"DisposeControl", ppcglue_DisposeControl},
+    {"DisposeDebugComponent", ppcglue_DisposeDebugComponent},
     {"DisposeDialog", ppcglue_DisposeDialog},
     {"DisposeDrag", ppcglue_DisposeDrag},
     {"DisposeGDevice", ppcglue_DisposeGDevice},
@@ -42256,6 +42339,8 @@ const ppc_export ppc_exports[] = {
     {"GetDataHandler", ppctrap_GetDataHandler},
     {"GetDateTime", ppcglue_GetDateTime},
     {"GetDblTime", ppcglue_GetDblTime},
+    {"GetDebugComponentInfo", ppcglue_GetDebugComponentInfo},
+    {"GetDebugOptionInfo", ppcglue_GetDebugOptionInfo},
     {"GetDefaultInputMethod", ppcglue_GetDefaultInputMethod},
     {"GetDefaultOutputVolume", ppcglue_GetDefaultOutputVolume},
     {"GetDefaultSoundOutput", ppcglue_GetDefaultSoundOutput},
@@ -42829,6 +42914,7 @@ const ppc_export ppc_exports[] = {
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
     {"InstallControlManagerDragHandlers", ppcglue_InstallControlManagerDragHandlers},
+    {"InstallDebugAssertOutputHandler", ppcglue_InstallDebugAssertOutputHandler},
     {"InstallExtensionNotificationProc", ppcglue_InstallExtensionNotificationProc},
     {"InstallExtensionTableHandlerProc", ppcglue_InstallExtensionTableHandlerProc},
     {"InstallFS", ppcglue_InstallFS},
@@ -43529,6 +43615,8 @@ const ppc_export ppc_exports[] = {
     {"NewCollection", ppcglue_NewCollection},
     {"NewColorDialog", ppcglue_NewColorDialog},
     {"NewControl", ppcglue_NewControl},
+    {"NewDebugComponent", ppcglue_NewDebugComponent},
+    {"NewDebugOption", ppcglue_NewDebugOption},
     {"NewDialog", ppcglue_NewDialog},
     {"NewDrag", ppcglue_NewDrag},
     {"NewEmptyHandle", ppcglue_NewEmptyHandle},
@@ -44564,6 +44652,7 @@ const ppc_export ppc_exports[] = {
     {"SetDataBrowserUserState", ppcglue_SetDataBrowserUserState},
     {"SetDataBrowserViewStyle", ppcglue_SetDataBrowserViewStyle},
     {"SetDateTime", ppcglue_SetDateTime},
+    {"SetDebugOptionValue", ppcglue_SetDebugOptionValue},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
     {"SetDefaultInputMethod", ppcglue_SetDefaultInputMethod},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},
@@ -44967,6 +45056,7 @@ const ppc_export ppc_exports[] = {
     {"TEUseStyleScrap", ppcglue_TEUseStyleScrap},
     {"TSMEvent", ppcglue_TSMEvent},
     {"TSMMenuSelect", ppcglue_TSMMenuSelect},
+    {"TaskLevel", ppcglue_TaskLevel},
     {"TempDisposeHandle", ppcglue_TempDisposeHandle},
     {"TempFreeMem", ppcglue_TempFreeMem},
     {"TempHLock", ppcglue_TempHLock},

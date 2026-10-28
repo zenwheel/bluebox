@@ -719,6 +719,7 @@ const char *const tb_trap_names[1024] = {
     [0x274] = "AppearanceDispatch",
     [0x275] = "IconServicesDispatch",
     [0x27D] = "ExtensionsDispatch",
+    [0x27E] = "DebugLibDispatch",
     [0x280] = "AVLTreeDispatch",
     [0x281] = "FileMappingDispatch",
     [0x290] = "InitPalettes",
@@ -5194,6 +5195,22 @@ static void glue_DeactivateTSMDocument(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DebugAssert(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_value = (gaddr)cpu_pop32(c);
+    int32_t a_lineNumber = (int32_t)cpu_pop32(c);
+    gaddr a_fileName = (gaddr)cpu_pop32(c);
+    gaddr a_errorString = (gaddr)cpu_pop32(c);
+    gaddr a_exceptionString = (gaddr)cpu_pop32(c);
+    gaddr a_assertionString = (gaddr)cpu_pop32(c);
+    uint32_t a_options = (uint32_t)cpu_pop32(c);
+    int32_t a_componentSignature = (int32_t)cpu_pop32(c);
+    tb_DebugAssert(a_componentSignature, a_options, a_assertionString, a_exceptionString, a_errorString, a_fileName, a_lineNumber, a_value);
+    cpu_push32(c, ret);
+}
+
 static void glue_DebugStr(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5653,6 +5670,16 @@ static void glue_DisposeControl(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     tb_DisposeControl(a_c);
+    cpu_push32(c, ret);
+}
+
+static void glue_DisposeDebugComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_componentSignature = (int32_t)cpu_pop32(c);
+    int32_t r = tb_DisposeDebugComponent(a_componentSignature);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -10467,6 +10494,32 @@ static void glue_GetDblTime(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDebugComponentInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_componentName = (gaddr)cpu_pop32(c);
+    gaddr a_componentSignature = (gaddr)cpu_pop32(c);
+    uint32_t a_index = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_GetDebugComponentInfo(a_index, a_componentSignature, a_componentName);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetDebugOptionInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_optionSetting = (gaddr)cpu_pop32(c);
+    gaddr a_optionName = (gaddr)cpu_pop32(c);
+    gaddr a_optionSelectorNum = (gaddr)cpu_pop32(c);
+    int32_t a_componentSignature = (int32_t)cpu_pop32(c);
+    uint32_t a_index = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_GetDebugOptionInfo(a_index, a_componentSignature, a_optionSelectorNum, a_optionName, a_optionSetting);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDefaultInputMethod(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14804,6 +14857,15 @@ static void glue_InstallControlManagerDragHandlers(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InstallDebugAssertOutputHandler(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_handler = (gaddr)cpu_pop32(c);
+    tb_InstallDebugAssertOutputHandler(a_handler);
+    cpu_push32(c, ret);
+}
+
 static void glue_InstallExtensionNotificationProc(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -16712,6 +16774,30 @@ static void glue_NewControl(cpu68k *c, uint16_t trapword)
     gaddr a_r = (gaddr)cpu_pop32(c);
     gaddr a_wst = (gaddr)cpu_pop32(c);
     gaddr r = tb_NewControl(a_wst, a_r, a_title, a_vis, a_value, a_min, a_max, a_procid, a_rc);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewDebugComponent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_componentCallback = (gaddr)cpu_pop32(c);
+    gaddr a_componentName = (gaddr)cpu_pop32(c);
+    int32_t a_componentSignature = (int32_t)cpu_pop32(c);
+    int32_t r = tb_NewDebugComponent(a_componentSignature, a_componentName, a_componentCallback);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewDebugOption(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_optionName = (gaddr)cpu_pop32(c);
+    int32_t a_optionSelectorNum = (int32_t)cpu_pop32(c);
+    int32_t a_componentSignature = (int32_t)cpu_pop32(c);
+    int32_t r = tb_NewDebugOption(a_componentSignature, a_optionSelectorNum, a_optionName);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -22214,6 +22300,18 @@ static void glue_SetDateTime(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_SetDebugOptionValue(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_newOptionSetting = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_optionSelectorNum = (int32_t)cpu_pop32(c);
+    int32_t a_componentSignature = (int32_t)cpu_pop32(c);
+    int32_t r = tb_SetDebugOptionValue(a_componentSignature, a_optionSelectorNum, a_newOptionSetting);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDebuggerNotificationProcs(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -25538,6 +25636,15 @@ static void glue_TSMMenuSelect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TaskLevel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t r = tb_TaskLevel();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_TempDisposeHandle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -27348,6 +27455,15 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABE0, (int32_t)0x4000Eu, "CursorComponentChanged", CONV_STACK, 4, 2, glue_CursorComponentChanged},
     {0xABE0, (int32_t)0x8000Bu, "OpenCursorComponent", CONV_STACK, 8, 2, glue_OpenCursorComponent},
     {0xABE0, (int32_t)0x8000Fu, "CursorComponentSetData", CONV_STACK, 8, 2, glue_CursorComponentSetData},
+    {0xAA7E, (int32_t)0x0u, "DebugAssert", CONV_STACK, 32, 0, glue_DebugAssert},
+    {0xAA7E, (int32_t)0x1u, "TaskLevel", CONV_STACK, 0, 4, glue_TaskLevel},
+    {0xAA7E, (int32_t)0x2u, "NewDebugComponent", CONV_STACK, 12, 4, glue_NewDebugComponent},
+    {0xAA7E, (int32_t)0x3u, "NewDebugOption", CONV_STACK, 12, 4, glue_NewDebugOption},
+    {0xAA7E, (int32_t)0x4u, "DisposeDebugComponent", CONV_STACK, 4, 4, glue_DisposeDebugComponent},
+    {0xAA7E, (int32_t)0x5u, "GetDebugComponentInfo", CONV_STACK, 12, 4, glue_GetDebugComponentInfo},
+    {0xAA7E, (int32_t)0x6u, "GetDebugOptionInfo", CONV_STACK, 20, 4, glue_GetDebugOptionInfo},
+    {0xAA7E, (int32_t)0x7u, "SetDebugOptionValue", CONV_STACK, 10, 4, glue_SetDebugOptionValue},
+    {0xAA7E, (int32_t)0x8u, "InstallDebugAssertOutputHandler", CONV_STACK, 4, 0, glue_InstallDebugAssertOutputHandler},
     {0xA08D, (int32_t)0x0u, "DebuggerGetMax", CONV_REG, 0, 0, glue_DebuggerGetMax},
     {0xA08D, (int32_t)0x1u, "DebuggerEnter", CONV_STACK, 0, 0, glue_DebuggerEnter},
     {0xA08D, (int32_t)0x2u, "DebuggerExit", CONV_STACK, 0, 0, glue_DebuggerExit},
@@ -29585,6 +29701,7 @@ const dispatcher_info dispatchers[] = {
     {0xAA73, "ControlDispatch", "D0W"},
     {0xAAF2, "ControlStripDispatch", "D0<0xFF>"},
     {0xABE0, "CursorComponentDispatch", "D0L"},
+    {0xAA7E, "DebugLibDispatch", "D0W"},
     {0xA08D, "DebugUtil", "D0W"},
     {0xAA68, "DialogDispatch", "D0W"},
     {0xAA53, "DictionaryDispatch", "D0W"},

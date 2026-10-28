@@ -1,0 +1,124 @@
+# Mac OS 9's remaining library routines that have a 68k trap or a dispatch
+# selector (os9rest*.c), for the 68k programs that call them and the
+# PowerPC libraries that export them.  Same schema as ilutil.yaml.
+
+# DebugLib (Debugging.h): _DebugLibDispatch ($AA7E), the selector in D0
+# (MOVEQ #n,D0), Pascal arguments.
+- dispatcher:
+    name: DebugLibDispatch
+    trap: 0xAA7E
+    selector-location: D0W
+
+- function:
+    name: DebugAssert
+    args:
+      - name: componentSignature
+        type: OSType
+      - name: options
+        type: uint32_t
+      - name: assertionString
+        type: const char*
+      - name: exceptionString
+        type: const char*
+      - name: errorString
+        type: const char*
+      - name: fileName
+        type: const char*
+      - name: lineNumber
+        type: int32_t
+      - name: value
+        type: void*
+    dispatcher: DebugLibDispatch
+    selector: 0x0000
+
+- function:
+    name: TaskLevel
+    return: uint32_t
+    dispatcher: DebugLibDispatch
+    selector: 0x0001
+
+- function:
+    name: NewDebugComponent
+    return: OSStatus
+    args:
+      - name: componentSignature
+        type: OSType
+      - name: componentName
+        type: ConstStr255Param
+      - name: componentCallback
+        type: ProcPtr
+    dispatcher: DebugLibDispatch
+    selector: 0x0002
+
+- function:
+    name: NewDebugOption
+    return: OSStatus
+    args:
+      - name: componentSignature
+        type: OSType
+      - name: optionSelectorNum
+        type: int32_t
+      - name: optionName
+        type: ConstStr255Param
+    dispatcher: DebugLibDispatch
+    selector: 0x0003
+
+- function:
+    name: DisposeDebugComponent
+    return: OSStatus
+    args:
+      - name: componentSignature
+        type: OSType
+    dispatcher: DebugLibDispatch
+    selector: 0x0004
+
+- function:
+    name: GetDebugComponentInfo
+    return: OSStatus
+    args:
+      - name: index
+        type: uint32_t
+      - name: componentSignature
+        type: uint32_t*
+      - name: componentName
+        type: StringPtr
+    dispatcher: DebugLibDispatch
+    selector: 0x0005
+
+- function:
+    name: GetDebugOptionInfo
+    return: OSStatus
+    args:
+      - name: index
+        type: uint32_t
+      - name: componentSignature
+        type: OSType
+      - name: optionSelectorNum
+        type: int32_t*
+      - name: optionName
+        type: StringPtr
+      - name: optionSetting
+        type: Boolean*
+    dispatcher: DebugLibDispatch
+    selector: 0x0006
+
+- function:
+    name: SetDebugOptionValue
+    return: OSStatus
+    args:
+      - name: componentSignature
+        type: OSType
+      - name: optionSelectorNum
+        type: int32_t
+      - name: newOptionSetting
+        type: Boolean
+    dispatcher: DebugLibDispatch
+    selector: 0x0007
+
+- function:
+    name: InstallDebugAssertOutputHandler
+    args:
+      - name: handler
+        type: ProcPtr
+    dispatcher: DebugLibDispatch
+    selector: 0x0008

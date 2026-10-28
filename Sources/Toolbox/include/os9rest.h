@@ -25,6 +25,7 @@ static inline uint32_t os9rest_word(const ppc_cpu *c, unsigned n)
     return n < 8 ? c->gpr[3 + n] : rd32(c->gpr[1] + 24 + 4 * n);
 }
 
+void os9rest_debug_reset(void);
 extern const ppc_export os9rest_math_exports[];
 extern const unsigned os9rest_math_export_count;
 

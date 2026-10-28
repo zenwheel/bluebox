@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "os9rest.h"
+#include "os9svc.h"
 #include "tb_internal.h"
 
 #define GROUP(n) { os9rest_##n##_exports, &os9rest_##n##_export_count }
@@ -21,7 +22,22 @@ void (*os9rest_export_fn(const char *name))(ppc_cpu *)
     return NULL;
 }
 
-bool os9rest_data_known(const char *name) { (void)name; return false; }
-gaddr os9rest_data_export(const char *name) { (void)name; return 0; }
+static const char *const data_names[] = {
+    "KCItemRefArrayCallBacks",
+};
 
-void os9rest_reset(void) {}
+bool os9rest_data_known(const char *name)
+{
+    for (unsigned i = 0; i < sizeof data_names / sizeof data_names[0]; i++)
+        if (!strcmp(name, data_names[i]))
+            return true;
+    return false;
+}
+
+gaddr os9rest_data_export(const char *name)
+{
+    gaddr p = os9svc_keychain_data(name);
+    return p;
+}
+
+void os9rest_reset(void) { os9rest_debug_reset(); }

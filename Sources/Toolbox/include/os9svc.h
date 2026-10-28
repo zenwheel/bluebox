@@ -32,6 +32,7 @@ extern const unsigned os9_driver_export_count;
 extern const os9_alias os9_driver_aliases[];
 extern const unsigned os9_driver_alias_count;
 void os9svc_driver_reset(void);
+uint32_t os9svc_task_level(void);
 
 extern const ppc_export os9_url_exports[];
 extern const unsigned os9_url_export_count;
@@ -48,6 +49,7 @@ extern const unsigned os9_keychain_export_count;
 extern const os9_alias os9_keychain_aliases[];
 extern const unsigned os9_keychain_alias_count;
 void os9svc_keychain_reset(void);
+gaddr os9svc_keychain_data(const char *name);
 extern const ppc_export os9_filesign_exports[];
 extern const unsigned os9_filesign_export_count;
 extern const os9_alias os9_filesign_aliases[];
