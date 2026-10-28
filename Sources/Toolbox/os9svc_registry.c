@@ -41,6 +41,7 @@ typedef struct prop {
     char name[MAX_PROP_NAME + 1];
     uint8_t *value;
     uint32_t size, mods;
+    gaddr copy; /* the value in guest memory, once a program asked for a pointer to it */
     struct prop *next;
 } prop;
 
@@ -50,9 +51,11 @@ typedef struct entry {
     struct entry *parent, *first_child, *next_sibling;
     prop *props;
     uint32_t mods;
+    gaddr node; /* its Open Firmware device node, once a program asked for it */
 } entry;
 
 static entry *root;      /* the unnamed root of the planes */
+static bool resetting;   /* the machine's memory is gone: nothing in it to give back */
 static uint32_t next_serial = 1;
 
 /* Iteration state, for entries and for properties. */
@@ -104,6 +107,13 @@ static entry *new_entry(entry *parent, const char *name)
     return e;
 }
 
+static void drop_copy(prop *p)
+{
+    if (p->copy && !resetting)
+        tb_DisposePtr(p->copy);
+    p->copy = 0;
+}
+
 static prop *prop_find(entry *e, const char *name)
 {
     for (prop *p = e->props; p; p = p->next)
@@ -135,6 +145,7 @@ static int prop_set(entry *e, const char *name, const uint8_t *value, uint32_t s
     if (size)
         memcpy(copy, value, size);
     free(p->value);
+    drop_copy(p);
     p->value = copy;
     p->size = size;
     return noErr;
@@ -145,6 +156,7 @@ static void free_props(entry *e)
     while (e->props) {
         prop *p = e->props;
         e->props = p->next;
+        drop_copy(p);
         free(p->value);
         free(p);
     }
@@ -158,6 +170,8 @@ static void free_tree(entry *e)
         free_tree(k);
     }
     free_props(e);
+    if (e->node && !resetting)
+        tb_DisposePtr(e->node);
     free(e);
 }
 
@@ -178,8 +192,10 @@ static void registry_init(void)
 
 void os9svc_registry_reset(void)
 {
+    resetting = true;
     if (root)
         free_tree(root);
+    resetting = false;
     root = NULL;
     next_serial = 1;
     for (int i = 0; i < MAX_ITERS; i++) {
@@ -917,7 +933,161 @@ static void ds_EntryPropertyMod(ppc_cpu *c)
     RETURN(iterate(R(0), R(1), R(2), R(3), &f));
 }
 
+/* ---- Open Firmware ---- */
+
+/* The Devices plane's device-tree is Open Firmware's, so an entry in it has
+ * the path the firmware would give it: "/" and the names under the tree,
+ * separated by '/'.  Entries of the other planes have none. */
+static int of_path(const entry *e, char *out, size_t max, size_t *len)
+{
+    const entry *chain[64];
+    int n = 0;
+    const entry *k = e;
+    for (; k && k->parent && n < 64; k = k->parent) {
+        if (k->parent->parent && !k->parent->parent->parent && !strcmp(k->parent->name, "Devices")
+            && !strcmp(k->name, "device-tree"))
+            break;
+        chain[n++] = k;
+    }
+    if (!k || !k->parent || !k->parent->parent || k->parent->parent->parent || strcmp(k->name, "device-tree"))
+        return nrNotFoundErr;
+    size_t l = 0;
+    for (int i = n - 1; i >= 0; i--) {
+        int w = snprintf(out ? out + l : NULL, out ? max - l : 0, "/%s", chain[i]->name);
+        l += (size_t)w;
+    }
+    if (!l) {
+        if (out && max > 1) {
+            out[0] = '/';
+            out[1] = 0;
+        }
+        l = 1;
+    }
+    *len = l;
+    return noErr;
+}
+
+/* RegistryEntryToOFPathSize(entry, *size): the path and its NUL. */
+static void ds_EntryToOFPathSize(ppc_cpu *c)
+{
+    entry *e;
+    size_t len;
+    int err = id_entry(R(0), &e);
+    if (!err && !R(1))
+        err = paramErr;
+    if (!err)
+        err = of_path(e, NULL, 0, &len);
+    if (err)
+        RETURN(err);
+    wr32(R(1), (uint32_t)len + 1);
+    RETURN(noErr);
+}
+
+/* RegistryCStrEntryToOFPath(entry, path, room) */
+static void ds_CStrEntryToOFPath(ppc_cpu *c)
+{
+    entry *e;
+    char path[2048];
+    size_t len;
+    int err = id_entry(R(0), &e);
+    if (!err && !R(1))
+        err = paramErr;
+    if (!err)
+        err = of_path(e, path, sizeof path, &len);
+    if (err)
+        RETURN(err);
+    if (len + 1 > R(2))
+        RETURN(nrOverrunErr);
+    for (size_t i = 0; i <= len; i++)
+        wr8(R(1) + i, (uint8_t)path[i]);
+    RETURN(noErr);
+}
+
+/* A device node ID is the address of the node's record, whose first word
+ * is the entry's serial number. */
+static entry *find_node(entry *e, gaddr node)
+{
+    if (e->node == node)
+        return e;
+    for (entry *k = e->first_child; k; k = k->next_sibling) {
+        entry *f = find_node(k, node);
+        if (f)
+            return f;
+    }
+    return NULL;
+}
+
+/* RegistryEntryIDToDeviceNodeID(entry, *node) */
+static void ds_EntryIDToDeviceNodeID(ppc_cpu *c)
+{
+    entry *e;
+    int err = id_entry(R(0), &e);
+    if (!err && !R(1))
+        err = paramErr;
+    if (err)
+        RETURN(err);
+    if (!e->node) {
+        e->node = tb_NewPtr(8, true, true);
+        if (!e->node)
+            RETURN(nrNotEnoughMemoryErr);
+        wr32(e->node, e->serial);
+        wr32(e->node + 4, ID_TAG);
+    }
+    wr32(R(1), e->node);
+    RETURN(noErr);
+}
+
+/* RegistryDeviceNodeIDToEntryID(node, *entry) */
+static void ds_DeviceNodeIDToEntryID(ppc_cpu *c)
+{
+    registry_init();
+    entry *e = R(0) && root ? find_node(root, R(0)) : NULL;
+    if (!e)
+        RETURN(nrInvalidNodeErr);
+    if (!R(1))
+        RETURN(paramErr);
+    id_put(R(1), e);
+    RETURN(noErr);
+}
+
+/* RegistryPropertyGetPtr(entry, name, **value, *size): the value where the
+ * program can read it in place (a copy kept until the property changes). */
+static void ds_PropertyGetPtr(ppc_cpu *c)
+{
+    entry *e;
+    prop *p;
+    int err = prop_of(R(0), R(1), &e, &p);
+    if (!err && (!R(2) || !R(3)))
+        err = paramErr;
+    if (!err && !p->copy) {
+        p->copy = tb_NewPtr((int32_t)(p->size ? p->size : 1), true, true);
+        if (!p->copy)
+            err = nrNotEnoughMemoryErr;
+        for (uint32_t i = 0; !err && i < p->size; i++)
+            wr8(p->copy + i, p->value[i]);
+    }
+    if (err) {
+        if (R(3))
+            wr32(R(3), 0);
+        RETURN(err);
+    }
+    wr32(R(2), p->copy);
+    wr32(R(3), p->size);
+    RETURN(noErr);
+}
+
+/* NR_Init(): the registry exists from the first call on; this makes it. */
+static void ds_NR_Init(ppc_cpu *c)
+{
+    registry_init();
+    RETURN(noErr);
+}
+
 const ppc_export os9_registry_exports[] = {
+    { "RegistryEntryToOFPathSize", ds_EntryToOFPathSize }, { "RegistryCStrEntryToOFPath", ds_CStrEntryToOFPath },
+    { "RegistryEntryIDToDeviceNodeID", ds_EntryIDToDeviceNodeID },
+    { "RegistryDeviceNodeIDToEntryID", ds_DeviceNodeIDToEntryID }, { "RegistryPropertyGetPtr", ds_PropertyGetPtr },
+    { "NR_Init", ds_NR_Init },
     { "RegistryEntryIDInit", ds_IDInit }, { "RegistryEntryIDCompare", ds_IDCompare },
     { "RegistryEntryIDCopy", ds_IDCopy }, { "RegistryEntryIDDispose", ds_IDDispose },
     { "RegistryCStrEntryCreate", ds_CStrEntryCreate }, { "RegistryEntryDelete", ds_EntryDelete },

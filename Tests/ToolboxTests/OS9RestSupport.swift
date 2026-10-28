@@ -33,6 +33,9 @@ enum Rest {
         Int32(bitPattern: call(name, args, fp: fp))
     }
 
+    static func b32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
+    static func b16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
+
     static func f1() -> Double { ppc_fpr(&g_ppc, 1) }
 
     static func ptr(_ n: Int) -> UInt32 { tb_NewPtr(Int32(n), true, true) }
