@@ -5,6 +5,7 @@
  */
 #include <string.h>
 
+#include "os9rest.h"
 #include "os9svc.h"
 
 typedef struct {
@@ -50,4 +51,5 @@ void os9svc_reset(void)
     os9svc_registry_reset();
     os9svc_keychain_reset();
     os9svc_filesign_reset();
+    os9rest_reset();
 }
