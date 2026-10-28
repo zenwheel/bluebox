@@ -38,7 +38,8 @@ static bool describe_image(gaddr desc, qt_video_format *f, uint32_t palette[256]
     if (!b)
         return false;
     gget(b, desc, n);
-    if (!qt_video_format_of_desc(b, n, f, palette)) {
+    /* an effect's description may leave its size to its sources */
+    if (!qt_video_format_of_desc(b, n, f, palette) && !icm_is_effect(f->format)) {
         free(b);
         f->desc = NULL;
         return false;
@@ -192,6 +193,7 @@ typedef struct {
     bool has_matrix;
     gaddr mask;
     int32_t data_size;   /* the description's, for frames given without one */
+    bool effect;         /* an effect's: frames rendered from its sources (qt_icm_more.c) */
 } sequence;
 
 static sequence seqs[MAX_SEQS];
@@ -211,6 +213,7 @@ void icm_reset(void)
         }
     memset(seqs, 0, sizeof seqs);
     icm_compress_reset();
+    icm_more_reset();
 }
 
 int16_t tb_DecompressSequenceBegin(gaddr seqID, int32_t desc, int32_t port, int32_t gdh, gaddr srcRect,
@@ -230,11 +233,12 @@ int16_t tb_DecompressSequenceBegin(gaddr seqID, int32_t desc, int32_t port, int3
         return paramErr;
     if (s->format.palette)
         s->format.palette = s->palette;
-    s->dec = qt_vdec_new(&s->format);
+    s->effect = icm_is_effect(s->format.format);
+    s->dec = s->effect ? NULL : qt_vdec_new(&s->format);
     desc_done(&s->format);
-    if (!s->dec)
+    if (!s->dec && !s->effect)
         return noCodecErr;
-    s->frame = calloc((size_t)s->format.width * (size_t)s->format.height, 4);
+    s->frame = calloc((size_t)(s->format.width > 0 ? s->format.width : 1) * (size_t)(s->format.height > 0 ? s->format.height : 1), 4);
     s->port = port ? (gaddr)port : qd_port();
     s->src = srcRect ? qrect_get(srcRect) : (qrect){ 0, 0, (int16_t)s->format.height, (int16_t)s->format.width };
     if (matrix) {
@@ -256,21 +260,37 @@ int16_t tb_DecompressSequenceBeginS(gaddr seqID, int32_t desc, int32_t data, int
     return tb_DecompressSequenceBegin(seqID, desc, port, gdh, srcRect, matrix, mode, mask, flags, accuracy, codec);
 }
 
-static int16_t sequence_frame(int32_t id, gaddr data, int32_t size, gaddr outFlags)
+static int16_t sequence_frame(int32_t id, gaddr data, int32_t size, gaddr outFlags, gaddr frameTime)
 {
     sequence *s = seq_of(id);
     if (outFlags)
         wr16(outFlags, 0);
     if (!s)
         return paramErr;
-    if (!data)
-        return paramErr;
-    if (size <= 0)
-        size = s->data_size > 0 ? s->data_size : 1 << 18; /* the codec stops where the frame ends */
-    uint8_t *bytes = malloc((size_t)size);
-    gget(bytes, data, (uint32_t)size);
-    bool ok = qt_vdec_decode(s->dec, bytes, (size_t)size, s->frame);
-    free(bytes);
+    bool ok;
+    if (s->effect) { /* from its sources, at the frame time's place in the effect */
+        int w = s->format.width, h = s->format.height;
+        uint8_t *frame = icm_effect_render(id, s->format.format, data, size, frameTime, &w, &h);
+        if (!frame)
+            return codecBadDataErr;
+        if (w != s->format.width || h != s->format.height || qrect_empty(s->src)) {
+            s->format.width = w;
+            s->format.height = h;
+            s->src = (qrect){ 0, 0, (int16_t)h, (int16_t)w };
+        }
+        free(s->frame);
+        s->frame = frame;
+        ok = true;
+    } else {
+        if (!data)
+            return paramErr;
+        if (size <= 0)
+            size = s->data_size > 0 ? s->data_size : 1 << 18; /* the codec stops where the frame ends */
+        uint8_t *bytes = malloc((size_t)size);
+        gget(bytes, data, (uint32_t)size);
+        ok = qt_vdec_decode(s->dec, bytes, (size_t)size, s->frame);
+        free(bytes);
+    }
     gaddr saved = qd_port();
     tb_SetPort(s->port);
     qrect dst = s->src;
@@ -288,24 +308,25 @@ static int16_t sequence_frame(int32_t id, gaddr data, int32_t size, gaddr outFla
 int16_t tb_DecompressSequenceFrame(int32_t seqID, int32_t data, int16_t inFlags, gaddr outFlags,
                                    int32_t asyncCompletionProc)
 {
-    return sequence_frame(seqID, (gaddr)data, 0, outFlags);
+    return sequence_frame(seqID, (gaddr)data, 0, outFlags, 0);
 }
 
 int16_t tb_DecompressSequenceFrameS(int32_t seqID, int32_t data, int32_t dataSize, int16_t inFlags, gaddr outFlags,
                                     int32_t asyncCompletionProc)
 {
-    return sequence_frame(seqID, (gaddr)data, dataSize, outFlags);
+    return sequence_frame(seqID, (gaddr)data, dataSize, outFlags, 0);
 }
 
 int16_t tb_DecompressSequenceFrameWhen(int32_t seqID, int32_t data, int32_t dataSize, int16_t inFlags,
                                        gaddr outFlags, int32_t asyncCompletionProc, gaddr frameTime)
 {
-    return sequence_frame(seqID, (gaddr)data, dataSize, outFlags);
+    return sequence_frame(seqID, (gaddr)data, dataSize, outFlags, frameTime);
 }
 
 int16_t tb_CDSequenceEnd(int32_t seqID)
 {
     sequence *s = seq_of(seqID);
+    icm_sources_drop(seqID);
     if (!s)
         return icm_csequence_end(seqID) ? noErr : paramErr;
     qt_vdec_free(s->dec);
@@ -474,4 +495,48 @@ void tb_AlignScreenRect(gaddr rp, int32_t alignmentProc) {}
 void tb_DragAlignedWindow(int32_t wp, int32_t startPt, gaddr boundsRect, gaddr alignmentRect, int32_t alignmentProc)
 {
     tb_DragWindow((gaddr)wp, (uint32_t)startPt, boundsRect);
+}
+
+/* ---- For qt_icm_more.c ---- */
+
+uint8_t *icm_decode(gaddr desc, gaddr data, int32_t len, int *w, int *h, int16_t *err)
+{
+    return decode_one(desc, data, len, w, h, err);
+}
+
+bool icm_dseq_exists(int32_t id) { return seq_of(id) != NULL; }
+
+const qt_video_format *icm_dseq_format(int32_t id)
+{
+    sequence *s = seq_of(id);
+    return s ? &s->format : NULL;
+}
+
+int16_t icm_dseq_replace(int32_t id, gaddr desc)
+{
+    sequence *s = seq_of(id);
+    if (!s)
+        return paramErr;
+    qt_video_format f;
+    uint32_t palette[256];
+    if (!describe_image(desc, &f, palette))
+        return paramErr;
+    bool effect = icm_is_effect(f.format);
+    qt_vdec *d = effect ? NULL : qt_vdec_new(&f);
+    desc_done(&f);
+    if (!d && !effect)
+        return noCodecErr;
+    qt_vdec_free(s->dec);
+    s->dec = d;
+    s->effect = effect;
+    memcpy(s->palette, palette, sizeof palette);
+    s->format = f;
+    if (f.palette)
+        s->format.palette = s->palette;
+    if (f.width > 0 && f.height > 0) {
+        free(s->frame);
+        s->frame = calloc((size_t)f.width * (size_t)f.height, 4);
+    }
+    s->data_size = (int32_t)rd32(desc + 44);
+    return noErr;
 }

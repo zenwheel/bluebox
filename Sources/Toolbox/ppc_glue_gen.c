@@ -33191,6 +33191,38 @@ static void ppcglue_SetQuickTimePreference(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_QTGetEffectsList(ppc_cpu *c)
+{
+    gaddr a_returnedList = (gaddr)c->gpr[3];
+    int32_t a_minSources = (int32_t)c->gpr[4];
+    int32_t a_maxSources = (int32_t)c->gpr[5];
+    int32_t a_getOptions = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetEffectsList(a_returnedList, a_minSources, a_maxSources, a_getOptions);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetEffectsListExtended(ppc_cpu *c)
+{
+    gaddr a_returnedList = (gaddr)c->gpr[3];
+    int32_t a_minSources = (int32_t)c->gpr[4];
+    int32_t a_maxSources = (int32_t)c->gpr[5];
+    int32_t a_getOptions = (int32_t)c->gpr[6];
+    int32_t a_majorClass = (int32_t)c->gpr[7];
+    int32_t a_minorClass = (int32_t)c->gpr[8];
+    int32_t a_filterProc = (int32_t)c->gpr[9];
+    gaddr a_filterRefCon = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetEffectsListExtended(a_returnedList, a_minSources, a_maxSources, a_getOptions, a_majorClass, a_minorClass, a_filterProc, a_filterRefCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetEffectSpeed(ppc_cpu *c)
+{
+    int32_t a_parameters = (int32_t)c->gpr[3];
+    gaddr a_pFPS = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetEffectSpeed(a_parameters, a_pFPS);
+    c->pc = c->lr;
+}
+
 static void ppcglue_QTAddMovieError(ppc_cpu *c)
 {
     int32_t a_movieH = (int32_t)c->gpr[3];
@@ -34035,6 +34067,41 @@ static void ppcglue_SetDSequenceFlags(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ICMSequenceGetInfo(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_which = (int32_t)c->gpr[4];
+    gaddr a_data = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMSequenceGetInfo(a_seqID, a_which, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMSequenceSetInfo(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_which = (int32_t)c->gpr[4];
+    gaddr a_data = (gaddr)c->gpr[5];
+    int32_t a_dataSize = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMSequenceSetInfo(a_seqID, a_which, a_data, a_dataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDSequenceImageBuffer(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_gworld = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDSequenceImageBuffer(a_seqID, a_gworld);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDSequenceScreenBuffer(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_gworld = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDSequenceScreenBuffer(a_seqID, a_gworld);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetCSequenceQuality(ppc_cpu *c)
 {
     int32_t a_seqID = (int32_t)c->gpr[3];
@@ -34100,6 +34167,33 @@ static void ppcglue_CDSequenceEnd(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_CDSequenceEquivalentImageDescription(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_newDesc = (int32_t)c->gpr[4];
+    gaddr a_equivalent = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceEquivalentImageDescription(a_seqID, a_newDesc, a_equivalent);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceEquivalentImageDescriptionS(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_newDesc = (int32_t)c->gpr[4];
+    gaddr a_equivalent = (gaddr)c->gpr[5];
+    gaddr a_canSwitch = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceEquivalentImageDescriptionS(a_seqID, a_newDesc, a_equivalent, a_canSwitch);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ReplaceDSequenceImageDescription(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_newDesc = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ReplaceDSequenceImageDescription(a_seqID, a_newDesc);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCompressedImageSize(ppc_cpu *c)
 {
     int32_t a_desc = (int32_t)c->gpr[3];
@@ -34111,11 +34205,75 @@ static void ppcglue_GetCompressedImageSize(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetSimilarity(ppc_cpu *c)
+{
+    int32_t a_src = (int32_t)c->gpr[3];
+    gaddr a_srcRect = (gaddr)c->gpr[4];
+    int32_t a_desc = (int32_t)c->gpr[5];
+    int32_t a_data = (int32_t)c->gpr[6];
+    gaddr a_similarity = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetSimilarity(a_src, a_srcRect, a_desc, a_data, a_similarity);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetImageDescriptionCTable(ppc_cpu *c)
 {
     int32_t a_desc = (int32_t)c->gpr[3];
     gaddr a_ctable = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetImageDescriptionCTable(a_desc, a_ctable);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetImageDescriptionCTable(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    int32_t a_ctable = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetImageDescriptionCTable(a_desc, a_ctable);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetImageDescriptionExtension(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    gaddr a_extension = (gaddr)c->gpr[4];
+    int32_t a_idType = (int32_t)c->gpr[5];
+    int32_t a_index = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetImageDescriptionExtension(a_desc, a_extension, a_idType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddImageDescriptionExtension(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    int32_t a_extension = (int32_t)c->gpr[4];
+    int32_t a_idType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddImageDescriptionExtension(a_desc, a_extension, a_idType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveImageDescriptionExtension(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    int32_t a_idType = (int32_t)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveImageDescriptionExtension(a_desc, a_idType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountImageDescriptionExtensionType(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    int32_t a_idType = (int32_t)c->gpr[4];
+    gaddr a_count = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountImageDescriptionExtensionType(a_desc, a_idType, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextImageDescriptionExtensionType(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    gaddr a_idType = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetNextImageDescriptionExtensionType(a_desc, a_idType);
     c->pc = c->lr;
 }
 
@@ -34152,6 +34310,180 @@ static void ppcglue_FCompressPicture(ppc_cpu *c)
     int32_t a_cType = (int32_t)rd32(c->gpr[1] + 56);
     int32_t a_codec = (int32_t)rd32(c->gpr[1] + 60);
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FCompressPicture(a_srcPicture, a_dstPicture, a_colorDepth, a_ctable, a_quality, a_doDither, a_compressAgain, a_progressProc, a_cType, a_codec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CompressPictureFile(ppc_cpu *c)
+{
+    int16_t a_srcRefNum = (int16_t)c->gpr[3];
+    int16_t a_dstRefNum = (int16_t)c->gpr[4];
+    int32_t a_quality = (int32_t)c->gpr[5];
+    int32_t a_cType = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CompressPictureFile(a_srcRefNum, a_dstRefNum, a_quality, a_cType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FCompressPictureFile(ppc_cpu *c)
+{
+    int16_t a_srcRefNum = (int16_t)c->gpr[3];
+    int16_t a_dstRefNum = (int16_t)c->gpr[4];
+    int16_t a_colorDepth = (int16_t)c->gpr[5];
+    int32_t a_ctable = (int32_t)c->gpr[6];
+    int32_t a_quality = (int32_t)c->gpr[7];
+    int16_t a_doDither = (int16_t)c->gpr[8];
+    int16_t a_compressAgain = (int16_t)c->gpr[9];
+    int32_t a_progressProc = (int32_t)c->gpr[10];
+    int32_t a_cType = (int32_t)rd32(c->gpr[1] + 56);
+    int32_t a_codec = (int32_t)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_FCompressPictureFile(a_srcRefNum, a_dstRefNum, a_colorDepth, a_ctable, a_quality, a_doDither, a_compressAgain, a_progressProc, a_cType, a_codec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetPictureFileHeader(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    gaddr a_frame = (gaddr)c->gpr[4];
+    gaddr a_header = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetPictureFileHeader(a_refNum, a_frame, a_header);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawPictureFile(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    gaddr a_frame = (gaddr)c->gpr[4];
+    int32_t a_progressProc = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DrawPictureFile(a_refNum, a_frame, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawTrimmedPicture(ppc_cpu *c)
+{
+    int32_t a_srcPicture = (int32_t)c->gpr[3];
+    gaddr a_frame = (gaddr)c->gpr[4];
+    int32_t a_trimMask = (int32_t)c->gpr[5];
+    int16_t a_doDither = (int16_t)c->gpr[6];
+    int32_t a_progressProc = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DrawTrimmedPicture(a_srcPicture, a_frame, a_trimMask, a_doDither, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DrawTrimmedPictureFile(ppc_cpu *c)
+{
+    int16_t a_srcRefnum = (int16_t)c->gpr[3];
+    gaddr a_frame = (gaddr)c->gpr[4];
+    int32_t a_trimMask = (int32_t)c->gpr[5];
+    int16_t a_doDither = (int16_t)c->gpr[6];
+    int32_t a_progressProc = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DrawTrimmedPictureFile(a_srcRefnum, a_frame, a_trimMask, a_doDither, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MakeThumbnailFromPicture(ppc_cpu *c)
+{
+    int32_t a_picture = (int32_t)c->gpr[3];
+    int16_t a_colorDepth = (int16_t)c->gpr[4];
+    int32_t a_thumbnail = (int32_t)c->gpr[5];
+    int32_t a_progressProc = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeThumbnailFromPicture(a_picture, a_colorDepth, a_thumbnail, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MakeThumbnailFromPictureFile(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    int16_t a_colorDepth = (int16_t)c->gpr[4];
+    int32_t a_thumbnail = (int32_t)c->gpr[5];
+    int32_t a_progressProc = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeThumbnailFromPictureFile(a_refNum, a_colorDepth, a_thumbnail, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MakeThumbnailFromPixMap(ppc_cpu *c)
+{
+    int32_t a_src = (int32_t)c->gpr[3];
+    gaddr a_srcRect = (gaddr)c->gpr[4];
+    int16_t a_colorDepth = (int16_t)c->gpr[5];
+    int32_t a_thumbnail = (int32_t)c->gpr[6];
+    int32_t a_progressProc = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeThumbnailFromPixMap(a_src, a_srcRect, a_colorDepth, a_thumbnail, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TrimImage(ppc_cpu *c)
+{
+    int32_t a_desc = (int32_t)c->gpr[3];
+    int32_t a_inData = (int32_t)c->gpr[4];
+    int32_t a_inBufferSize = (int32_t)c->gpr[5];
+    int32_t a_dataProc = (int32_t)c->gpr[6];
+    int32_t a_outData = (int32_t)c->gpr[7];
+    int32_t a_outBufferSize = (int32_t)c->gpr[8];
+    int32_t a_flushProc = (int32_t)c->gpr[9];
+    gaddr a_trimRect = (gaddr)c->gpr[10];
+    int32_t a_progressProc = (int32_t)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TrimImage(a_desc, a_inData, a_inBufferSize, a_dataProc, a_outData, a_outBufferSize, a_flushProc, a_trimRect, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ConvertImage(ppc_cpu *c)
+{
+    int32_t a_srcDD = (int32_t)c->gpr[3];
+    int32_t a_srcData = (int32_t)c->gpr[4];
+    int16_t a_colorDepth = (int16_t)c->gpr[5];
+    int32_t a_ctable = (int32_t)c->gpr[6];
+    int32_t a_accuracy = (int32_t)c->gpr[7];
+    int32_t a_quality = (int32_t)c->gpr[8];
+    int32_t a_cType = (int32_t)c->gpr[9];
+    int32_t a_codec = (int32_t)c->gpr[10];
+    int32_t a_dstDD = (int32_t)rd32(c->gpr[1] + 56);
+    int32_t a_dstData = (int32_t)rd32(c->gpr[1] + 60);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ConvertImage(a_srcDD, a_srcData, a_colorDepth, a_ctable, a_accuracy, a_quality, a_cType, a_codec, a_dstDD, a_dstData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCompressedPixMapInfo(ppc_cpu *c)
+{
+    int32_t a_pix = (int32_t)c->gpr[3];
+    gaddr a_desc = (gaddr)c->gpr[4];
+    gaddr a_data = (gaddr)c->gpr[5];
+    gaddr a_bufferSize = (gaddr)c->gpr[6];
+    gaddr a_dataProc = (gaddr)c->gpr[7];
+    gaddr a_progressProc = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetCompressedPixMapInfo(a_pix, a_desc, a_data, a_bufferSize, a_dataProc, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetCompressedPixMapInfo(ppc_cpu *c)
+{
+    int32_t a_pix = (int32_t)c->gpr[3];
+    int32_t a_desc = (int32_t)c->gpr[4];
+    int32_t a_data = (int32_t)c->gpr[5];
+    int32_t a_bufferSize = (int32_t)c->gpr[6];
+    int32_t a_dataProc = (int32_t)c->gpr[7];
+    int32_t a_progressProc = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetCompressedPixMapInfo(a_pix, a_desc, a_data, a_bufferSize, a_dataProc, a_progressProc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_StdPix(ppc_cpu *c)
+{
+    int32_t a_src = (int32_t)c->gpr[3];
+    gaddr a_srcRect = (gaddr)c->gpr[4];
+    int32_t a_matrix = (int32_t)c->gpr[5];
+    int16_t a_mode = (int16_t)c->gpr[6];
+    int32_t a_mask = (int32_t)c->gpr[7];
+    int32_t a_matte = (int32_t)c->gpr[8];
+    gaddr a_matteRect = (gaddr)c->gpr[9];
+    int16_t a_flags = (int16_t)c->gpr[10];
+    tb_StdPix(a_src, a_srcRect, a_matrix, a_mode, a_mask, a_matte, a_matteRect, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TransformRgn(ppc_cpu *c)
+{
+    int32_t a_matrix = (int32_t)c->gpr[3];
+    int32_t a_rgn = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TransformRgn(a_matrix, a_rgn);
     c->pc = c->lr;
 }
 
@@ -34256,6 +34588,20 @@ static void ppcglue_DragAlignedWindow(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DragAlignedGrayRgn(ppc_cpu *c)
+{
+    int32_t a_theRgn = (int32_t)c->gpr[3];
+    int32_t a_startPt = (int32_t)c->gpr[4];
+    gaddr a_boundsRect = (gaddr)c->gpr[5];
+    gaddr a_slopRect = (gaddr)c->gpr[6];
+    int16_t a_axis = (int16_t)c->gpr[7];
+    int32_t a_actionProc = (int32_t)c->gpr[8];
+    gaddr a_alignmentRect = (gaddr)c->gpr[9];
+    int32_t a_alignmentProc = (int32_t)c->gpr[10];
+    c->gpr[3] = (uint32_t)tb_DragAlignedGrayRgn(a_theRgn, a_startPt, a_boundsRect, a_slopRect, a_axis, a_actionProc, a_alignmentRect, a_alignmentProc);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetCSequenceDataRateParams(ppc_cpu *c)
 {
     int32_t a_seqID = (int32_t)c->gpr[3];
@@ -34305,6 +34651,22 @@ static void ppcglue_GetCSequenceFrameNumber(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetBestDeviceRect(ppc_cpu *c)
+{
+    gaddr a_gdh = (gaddr)c->gpr[3];
+    gaddr a_rp = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetBestDeviceRect(a_gdh, a_rp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSequenceProgressProc(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_progressProc = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSequenceProgressProc(a_seqID, a_progressProc);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GDHasScale(ppc_cpu *c)
 {
     int32_t a_gdh = (int32_t)c->gpr[3];
@@ -34329,6 +34691,181 @@ static void ppcglue_GDSetScale(ppc_cpu *c)
     int32_t a_scale = (int32_t)c->gpr[4];
     int16_t a_flags = (int16_t)c->gpr[5];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GDSetScale(a_gdh, a_scale, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMShieldSequenceCursor(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMShieldSequenceCursor(a_seqID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMDecompressComplete(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int16_t a_err = (int16_t)c->gpr[4];
+    int16_t a_flag = (int16_t)c->gpr[5];
+    int32_t a_completionRtn = (int32_t)c->gpr[6];
+    tb_ICMDecompressComplete(a_seqID, a_err, a_flag, a_completionRtn);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMDecompressCompleteS(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int16_t a_err = (int16_t)c->gpr[4];
+    int16_t a_flag = (int16_t)c->gpr[5];
+    int32_t a_completionRtn = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMDecompressCompleteS(a_seqID, a_err, a_flag, a_completionRtn);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMSequenceLockBits(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_dst = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMSequenceLockBits(a_seqID, a_dst, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMSequenceUnlockBits(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMSequenceUnlockBits(a_seqID, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMGetPixelFormatInfo(ppc_cpu *c)
+{
+    int32_t a_PixelFormat = (int32_t)c->gpr[3];
+    int32_t a_theInfo = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMGetPixelFormatInfo(a_PixelFormat, a_theInfo);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMSetPixelFormatInfo(ppc_cpu *c)
+{
+    int32_t a_PixelFormat = (int32_t)c->gpr[3];
+    int32_t a_theInfo = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMSetPixelFormatInfo(a_PixelFormat, a_theInfo);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ICMSequenceGetChainMember(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_retSeqID = (gaddr)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ICMSequenceGetChainMember(a_seqID, a_retSeqID, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDSequenceTimeCode(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_timeCodeFormat = (gaddr)c->gpr[4];
+    gaddr a_timeCodeTime = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDSequenceTimeCode(a_seqID, a_timeCodeFormat, a_timeCodeTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceNewMemory(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    int32_t a_dataSize = (int32_t)c->gpr[5];
+    int32_t a_dataUse = (int32_t)c->gpr[6];
+    int32_t a_memoryGoneProc = (int32_t)c->gpr[7];
+    gaddr a_refCon = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceNewMemory(a_seqID, a_data, a_dataSize, a_dataUse, a_memoryGoneProc, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceDisposeMemory(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceDisposeMemory(a_seqID, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceNewDataSource(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_sourceID = (gaddr)c->gpr[4];
+    int32_t a_sourceType = (int32_t)c->gpr[5];
+    int32_t a_sourceInputNumber = (int32_t)c->gpr[6];
+    int32_t a_dataDescription = (int32_t)c->gpr[7];
+    int32_t a_transferProc = (int32_t)c->gpr[8];
+    gaddr a_refCon = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceNewDataSource(a_seqID, a_sourceID, a_sourceType, a_sourceInputNumber, a_dataDescription, a_transferProc, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceDisposeDataSource(ppc_cpu *c)
+{
+    int32_t a_sourceID = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceDisposeDataSource(a_sourceID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceSetSourceData(ppc_cpu *c)
+{
+    int32_t a_sourceID = (int32_t)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    int32_t a_dataSize = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceSetSourceData(a_sourceID, a_data, a_dataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceChangedSourceData(ppc_cpu *c)
+{
+    int32_t a_sourceID = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceChangedSourceData(a_sourceID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceSetSourceDataQueue(ppc_cpu *c)
+{
+    int32_t a_sourceID = (int32_t)c->gpr[3];
+    int32_t a_dataQueue = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceSetSourceDataQueue(a_sourceID, a_dataQueue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceGetDataSource(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_sourceID = (gaddr)c->gpr[4];
+    int32_t a_sourceType = (int32_t)c->gpr[5];
+    int32_t a_sourceInputNumber = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceGetDataSource(a_seqID, a_sourceID, a_sourceType, a_sourceInputNumber);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PtInDSequenceData(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    int32_t a_dataSize = (int32_t)c->gpr[5];
+    int32_t a_where = (int32_t)c->gpr[6];
+    gaddr a_hit = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PtInDSequenceData(a_seqID, a_data, a_dataSize, a_where, a_hit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_HitTestDSequenceData(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    int32_t a_dataSize = (int32_t)c->gpr[5];
+    int32_t a_where = (int32_t)c->gpr[6];
+    gaddr a_hit = (gaddr)c->gpr[7];
+    int32_t a_hitFlags = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_HitTestDSequenceData(a_seqID, a_data, a_dataSize, a_where, a_hit, a_hitFlags);
     c->pc = c->lr;
 }
 
@@ -34377,6 +34914,91 @@ static void ppcglue_QTGetFileNameExtension(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ImageTranscodeSequenceBegin(ppc_cpu *c)
+{
+    gaddr a_its = (gaddr)c->gpr[3];
+    int32_t a_srcDesc = (int32_t)c->gpr[4];
+    int32_t a_destType = (int32_t)c->gpr[5];
+    gaddr a_dstDesc = (gaddr)c->gpr[6];
+    gaddr a_data = (gaddr)c->gpr[7];
+    int32_t a_dataSize = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ImageTranscodeSequenceBegin(a_its, a_srcDesc, a_destType, a_dstDesc, a_data, a_dataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ImageTranscodeSequenceEnd(ppc_cpu *c)
+{
+    int32_t a_its = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ImageTranscodeSequenceEnd(a_its);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ImageTranscodeFrame(ppc_cpu *c)
+{
+    int32_t a_its = (int32_t)c->gpr[3];
+    gaddr a_srcData = (gaddr)c->gpr[4];
+    int32_t a_srcDataSize = (int32_t)c->gpr[5];
+    gaddr a_dstData = (gaddr)c->gpr[6];
+    gaddr a_dstDataSize = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ImageTranscodeFrame(a_its, a_srcData, a_srcDataSize, a_dstData, a_dstDataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ImageTranscodeDisposeFrameData(ppc_cpu *c)
+{
+    int32_t a_its = (int32_t)c->gpr[3];
+    gaddr a_dstData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ImageTranscodeDisposeFrameData(a_its, a_dstData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceInvalidate(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    int32_t a_invalRgn = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceInvalidate(a_seqID, a_invalRgn);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CDSequenceSetTimeBase(ppc_cpu *c)
+{
+    int32_t a_seqID = (int32_t)c->gpr[3];
+    gaddr a_base = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CDSequenceSetTimeBase(a_seqID, a_base);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ImageFieldSequenceBegin(ppc_cpu *c)
+{
+    gaddr a_ifs = (gaddr)c->gpr[3];
+    int32_t a_desc1 = (int32_t)c->gpr[4];
+    int32_t a_desc2 = (int32_t)c->gpr[5];
+    int32_t a_descOut = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ImageFieldSequenceBegin(a_ifs, a_desc1, a_desc2, a_descOut);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ImageFieldSequenceExtractCombine(ppc_cpu *c)
+{
+    int32_t a_ifs = (int32_t)c->gpr[3];
+    int32_t a_fieldFlags = (int32_t)c->gpr[4];
+    gaddr a_data1 = (gaddr)c->gpr[5];
+    int32_t a_dataSize1 = (int32_t)c->gpr[6];
+    gaddr a_data2 = (gaddr)c->gpr[7];
+    int32_t a_dataSize2 = (int32_t)c->gpr[8];
+    gaddr a_outputData = (gaddr)c->gpr[9];
+    gaddr a_outDataSize = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ImageFieldSequenceExtractCombine(a_ifs, a_fieldFlags, a_data1, a_dataSize1, a_data2, a_dataSize2, a_outputData, a_outDataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ImageFieldSequenceEnd(ppc_cpu *c)
+{
+    int32_t a_ifs = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ImageFieldSequenceEnd(a_ifs);
+    c->pc = c->lr;
+}
+
 static void ppcglue_QTNewGWorld(ppc_cpu *c)
 {
     gaddr a_offscreenGWorld = (gaddr)c->gpr[3];
@@ -34420,6 +35042,14 @@ static void ppcglue_MakeImageDescriptionForPixMap(ppc_cpu *c)
     int32_t a_pixmap = (int32_t)c->gpr[3];
     gaddr a_idh = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeImageDescriptionForPixMap(a_pixmap, a_idh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MakeImageDescriptionForEffect(ppc_cpu *c)
+{
+    int32_t a_effectType = (int32_t)c->gpr[3];
+    gaddr a_idh = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeImageDescriptionForEffect(a_effectType, a_idh);
     c->pc = c->lr;
 }
 
@@ -34524,6 +35154,15 @@ static void ppcglue_QTSetPixMapHandleRequestedGammaLevel(ppc_cpu *c)
     int32_t a_pm = (int32_t)c->gpr[3];
     int32_t a_requestedGammaLevel = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetPixMapHandleRequestedGammaLevel(a_pm, a_requestedGammaLevel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QuadToQuadMatrix(ppc_cpu *c)
+{
+    gaddr a_source = (gaddr)c->gpr[3];
+    gaddr a_dest = (gaddr)c->gpr[4];
+    gaddr a_map = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QuadToQuadMatrix(a_source, a_dest, a_map);
     c->pc = c->lr;
 }
 
@@ -38666,42 +39305,6 @@ static void ppctrap_RemoveSoundDescriptionExtension(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTGetEffectsList(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2C9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetEffectsListExtended(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x36Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_QTCreateStandardParameterDialog(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -38754,993 +39357,6 @@ static void ppctrap_QTStandardParameterDialogDoAction(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap_push(4, c->gpr[5]);
     ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetEffectSpeed(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2D2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMSequenceGetInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x89u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMSequenceSetInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDSequenceImageBuffer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x15u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDSequenceScreenBuffer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x16u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceEquivalentImageDescription(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x65u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceEquivalentImageDescriptionS(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ReplaceDSequenceImageDescription(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xA0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetSimilarity(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetImageDescriptionCTable(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetImageDescriptionExtension(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddImageDescriptionExtension(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x21u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveImageDescriptionExtension(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CountImageDescriptionExtensionType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetNextImageDescriptionExtensionType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CompressPictureFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x26u);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FCompressPictureFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x27u);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(2, c->gpr[8]);
-    ppc_trap_push(2, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetPictureFileHeader(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x28u);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DrawPictureFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x29u);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DrawTrimmedPicture(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DrawTrimmedPictureFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2Fu);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MakeThumbnailFromPicture(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MakeThumbnailFromPictureFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2Bu);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MakeThumbnailFromPixMap(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_TrimImage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ConvertImage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x30u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetCompressedPixMapInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x37u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetCompressedPixMapInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_StdPix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xCu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(2, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAA3));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_TransformRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x39u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DragAlignedGrayRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x4Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetBestDeviceRect(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x55u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetSequenceProgressProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x56u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMShieldSequenceCursor(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x62u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMDecompressComplete(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x63u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMDecompressCompleteS(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x82u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMSequenceLockBits(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMSequenceUnlockBits(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMGetPixelFormatInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x83u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMSetPixelFormatInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ICMSequenceGetChainMember(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetDSequenceTimeCode(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x64u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceNewMemory(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x66u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceDisposeMemory(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x67u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceNewDataSource(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x68u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceDisposeDataSource(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x69u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceSetSourceData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceChangedSourceData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceSetSourceDataQueue(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceGetDataSource(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PtInDSequenceData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_HitTestDSequenceData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x87u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ImageTranscodeSequenceBegin(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ImageTranscodeSequenceEnd(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x70u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ImageTranscodeFrame(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x71u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ImageTranscodeDisposeFrameData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x72u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceInvalidate(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x73u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CDSequenceSetTimeBase(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x79u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ImageFieldSequenceBegin(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ImageFieldSequenceExtractCombine(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x75u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ImageFieldSequenceEnd(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x76u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MakeImageDescriptionForEffect(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x92u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QuadToQuadMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x95u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
@@ -40318,7 +39934,7 @@ const ppc_export ppc_exports[] = {
     {"AddFolderDescriptor", ppcglue_AddFolderDescriptor},
     {"AddFolderRouting", ppcglue_AddFolderRouting},
     {"AddIconToSuite", ppcglue_AddIconToSuite},
-    {"AddImageDescriptionExtension", ppctrap_AddImageDescriptionExtension},
+    {"AddImageDescriptionExtension", ppcglue_AddImageDescriptionExtension},
     {"AddMediaDataRef", ppcglue_AddMediaDataRef},
     {"AddMediaSample", ppcglue_AddMediaSample},
     {"AddMediaSampleReference", ppcglue_AddMediaSampleReference},
@@ -40385,20 +40001,20 @@ const ppc_export ppc_exports[] = {
     {"BuildLAPwds", ppcglue_BuildLAPwds},
     {"Button", ppcglue_Button},
     {"CDSequenceBusy", ppcglue_CDSequenceBusy},
-    {"CDSequenceChangedSourceData", ppctrap_CDSequenceChangedSourceData},
-    {"CDSequenceDisposeDataSource", ppctrap_CDSequenceDisposeDataSource},
-    {"CDSequenceDisposeMemory", ppctrap_CDSequenceDisposeMemory},
+    {"CDSequenceChangedSourceData", ppcglue_CDSequenceChangedSourceData},
+    {"CDSequenceDisposeDataSource", ppcglue_CDSequenceDisposeDataSource},
+    {"CDSequenceDisposeMemory", ppcglue_CDSequenceDisposeMemory},
     {"CDSequenceEnd", ppcglue_CDSequenceEnd},
-    {"CDSequenceEquivalentImageDescription", ppctrap_CDSequenceEquivalentImageDescription},
-    {"CDSequenceEquivalentImageDescriptionS", ppctrap_CDSequenceEquivalentImageDescriptionS},
+    {"CDSequenceEquivalentImageDescription", ppcglue_CDSequenceEquivalentImageDescription},
+    {"CDSequenceEquivalentImageDescriptionS", ppcglue_CDSequenceEquivalentImageDescriptionS},
     {"CDSequenceFlush", ppcglue_CDSequenceFlush},
-    {"CDSequenceGetDataSource", ppctrap_CDSequenceGetDataSource},
-    {"CDSequenceInvalidate", ppctrap_CDSequenceInvalidate},
-    {"CDSequenceNewDataSource", ppctrap_CDSequenceNewDataSource},
-    {"CDSequenceNewMemory", ppctrap_CDSequenceNewMemory},
-    {"CDSequenceSetSourceData", ppctrap_CDSequenceSetSourceData},
-    {"CDSequenceSetSourceDataQueue", ppctrap_CDSequenceSetSourceDataQueue},
-    {"CDSequenceSetTimeBase", ppctrap_CDSequenceSetTimeBase},
+    {"CDSequenceGetDataSource", ppcglue_CDSequenceGetDataSource},
+    {"CDSequenceInvalidate", ppcglue_CDSequenceInvalidate},
+    {"CDSequenceNewDataSource", ppcglue_CDSequenceNewDataSource},
+    {"CDSequenceNewMemory", ppcglue_CDSequenceNewMemory},
+    {"CDSequenceSetSourceData", ppcglue_CDSequenceSetSourceData},
+    {"CDSequenceSetSourceDataQueue", ppcglue_CDSequenceSetSourceDataQueue},
+    {"CDSequenceSetTimeBase", ppcglue_CDSequenceSetTimeBase},
     {"CMY2RGB", ppcglue_CMY2RGB},
     {"CTab2Palette", ppcglue_CTab2Palette},
     {"CTabChanged", ppcglue_CTabChanged},
@@ -40485,14 +40101,14 @@ const ppc_export ppc_exports[] = {
     {"CompositeIconRef", ppcglue_CompositeIconRef},
     {"CompressImage", ppcglue_CompressImage},
     {"CompressPicture", ppcglue_CompressPicture},
-    {"CompressPictureFile", ppctrap_CompressPictureFile},
+    {"CompressPictureFile", ppcglue_CompressPictureFile},
     {"CompressSequenceBegin", ppcglue_CompressSequenceBegin},
     {"CompressSequenceFrame", ppcglue_CompressSequenceFrame},
     {"ConcatMatrix", ppcglue_ConcatMatrix},
     {"ContextualMenuSelect", ppcglue_ContextualMenuSelect},
     {"ContinueSpeech", ppcglue_ContinueSpeech},
     {"ConvertFileToMovieFile", ppcglue_ConvertFileToMovieFile},
-    {"ConvertImage", ppctrap_ConvertImage},
+    {"ConvertImage", ppcglue_ConvertImage},
     {"ConvertMovieToFile", ppcglue_ConvertMovieToFile},
     {"ConvertTime", ppcglue_ConvertTime},
     {"ConvertTimeScale", ppcglue_ConvertTimeScale},
@@ -40524,7 +40140,7 @@ const ppc_export ppc_exports[] = {
     {"CountDITL", ppcglue_CountDITL},
     {"CountDragItemFlavors", ppcglue_CountDragItemFlavors},
     {"CountDragItems", ppcglue_CountDragItems},
-    {"CountImageDescriptionExtensionType", ppctrap_CountImageDescriptionExtensionType},
+    {"CountImageDescriptionExtensionType", ppcglue_CountImageDescriptionExtensionType},
     {"CountMItems", ppcglue_CountMItems},
     {"CountResources", ppcglue_CountResources},
     {"CountSubControls", ppcglue_CountSubControls},
@@ -40781,7 +40397,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeUserData", ppcglue_DisposeUserData},
     {"DisposeWindow", ppcglue_DisposeWindow},
     {"DoVBLTask", ppcglue_DoVBLTask},
-    {"DragAlignedGrayRgn", ppctrap_DragAlignedGrayRgn},
+    {"DragAlignedGrayRgn", ppcglue_DragAlignedGrayRgn},
     {"DragAlignedWindow", ppcglue_DragAlignedWindow},
     {"DragControl", ppcglue_DragControl},
     {"DragGrayRgn", ppcglue_DragGrayRgn},
@@ -40800,7 +40416,7 @@ const ppc_export ppc_exports[] = {
     {"DrawMenuBar", ppcglue_DrawMenuBar},
     {"DrawNew", ppcglue_DrawNew},
     {"DrawPicture", ppcglue_DrawPicture},
-    {"DrawPictureFile", ppctrap_DrawPictureFile},
+    {"DrawPictureFile", ppcglue_DrawPictureFile},
     {"DrawString", ppcglue_DrawString},
     {"DrawText", ppcglue_DrawText},
     {"DrawThemeButton", ppcglue_DrawThemeButton},
@@ -40834,8 +40450,8 @@ const ppc_export ppc_exports[] = {
     {"DrawThemeWindowFrame", ppcglue_DrawThemeWindowFrame},
     {"DrawThemeWindowHeader", ppcglue_DrawThemeWindowHeader},
     {"DrawThemeWindowListViewHeader", ppcglue_DrawThemeWindowListViewHeader},
-    {"DrawTrimmedPicture", ppctrap_DrawTrimmedPicture},
-    {"DrawTrimmedPictureFile", ppctrap_DrawTrimmedPictureFile},
+    {"DrawTrimmedPicture", ppcglue_DrawTrimmedPicture},
+    {"DrawTrimmedPictureFile", ppcglue_DrawTrimmedPictureFile},
     {"DriveStatus", ppcglue_DriveStatus},
     {"DriverInstall", ppcglue_DriverInstall},
     {"DriverInstallReserveMem", ppcglue_DriverInstallReserveMem},
@@ -40907,7 +40523,7 @@ const ppc_export ppc_exports[] = {
     {"ExtendedToString", ppcglue_ExtendedToString},
     {"FCompressImage", ppcglue_FCompressImage},
     {"FCompressPicture", ppcglue_FCompressPicture},
-    {"FCompressPictureFile", ppctrap_FCompressPictureFile},
+    {"FCompressPictureFile", ppcglue_FCompressPictureFile},
     {"FDecompressImage", ppcglue_FDecompressImage},
     {"FInitQueue", ppctrap_FInitQueue},
     {"FMSwapFont", ppcglue_FMSwapFont},
@@ -41221,7 +40837,7 @@ const ppc_export ppc_exports[] = {
     {"GetBatteryTimes", ppcglue_GetBatteryTimes},
     {"GetBatteryVoltage", ppcglue_GetBatteryVoltage},
     {"GetBestControlRect", ppcglue_GetBestControlRect},
-    {"GetBestDeviceRect", ppctrap_GetBestDeviceRect},
+    {"GetBestDeviceRect", ppcglue_GetBestDeviceRect},
     {"GetBevelButtonContentInfo", ppcglue_GetBevelButtonContentInfo},
     {"GetBevelButtonMenuHandle", ppcglue_GetBevelButtonMenuHandle},
     {"GetBevelButtonMenuValue", ppcglue_GetBevelButtonMenuValue},
@@ -41251,7 +40867,7 @@ const ppc_export ppc_exports[] = {
     {"GetCollectionItemInfo", ppcglue_GetCollectionItemInfo},
     {"GetColor", ppcglue_GetColor},
     {"GetCompressedImageSize", ppcglue_GetCompressedImageSize},
-    {"GetCompressedPixMapInfo", ppctrap_GetCompressedPixMapInfo},
+    {"GetCompressedPixMapInfo", ppcglue_GetCompressedPixMapInfo},
     {"GetCompressionInfo", ppctrap_GetCompressionInfo},
     {"GetCompressionName", ppcglue_GetCompressionName},
     {"GetCompressionTime", ppcglue_GetCompressionTime},
@@ -41290,9 +40906,9 @@ const ppc_export ppc_exports[] = {
     {"GetCurrentThread", ppcglue_GetCurrentThread},
     {"GetCursor", ppcglue_GetCursor},
     {"GetCustomIconsEnabled", ppcglue_GetCustomIconsEnabled},
-    {"GetDSequenceImageBuffer", ppctrap_GetDSequenceImageBuffer},
+    {"GetDSequenceImageBuffer", ppcglue_GetDSequenceImageBuffer},
     {"GetDSequenceMatrix", ppcglue_GetDSequenceMatrix},
-    {"GetDSequenceScreenBuffer", ppctrap_GetDSequenceScreenBuffer},
+    {"GetDSequenceScreenBuffer", ppcglue_GetDSequenceScreenBuffer},
     {"GetDataBrowserActiveItems", ppcglue_GetDataBrowserActiveItems},
     {"GetDataBrowserCallbacks", ppcglue_GetDataBrowserCallbacks},
     {"GetDataBrowserColumnViewDisplayType", ppcglue_GetDataBrowserColumnViewDisplayType},
@@ -41430,7 +41046,7 @@ const ppc_export ppc_exports[] = {
     {"GetIconSizesFromIconRef", ppcglue_GetIconSizesFromIconRef},
     {"GetIconSuite", ppcglue_GetIconSuite},
     {"GetImageDescriptionCTable", ppcglue_GetImageDescriptionCTable},
-    {"GetImageDescriptionExtension", ppctrap_GetImageDescriptionExtension},
+    {"GetImageDescriptionExtension", ppcglue_GetImageDescriptionExtension},
     {"GetImageWellContentInfo", ppcglue_GetImageWellContentInfo},
     {"GetIndADB", ppcglue_GetIndADB},
     {"GetIndPattern", ppcglue_GetIndPattern},
@@ -41575,7 +41191,7 @@ const ppc_export ppc_exports[] = {
     {"GetNextEvent", ppcglue_GetNextEvent},
     {"GetNextFOND", ppctrap_GetNextFOND},
     {"GetNextFileView", ppcglue_GetNextFileView},
-    {"GetNextImageDescriptionExtensionType", ppctrap_GetNextImageDescriptionExtensionType},
+    {"GetNextImageDescriptionExtensionType", ppcglue_GetNextImageDescriptionExtensionType},
     {"GetNextMappedFile", ppcglue_GetNextMappedFile},
     {"GetNextProcess", ppcglue_GetNextProcess},
     {"GetNextTrackForCompositing", ppcglue_GetNextTrackForCompositing},
@@ -41595,7 +41211,7 @@ const ppc_export ppc_exports[] = {
     {"GetPenState", ppcglue_GetPenState},
     {"GetPictInfo", ppcglue_GetPictInfo},
     {"GetPicture", ppcglue_GetPicture},
-    {"GetPictureFileHeader", ppctrap_GetPictureFileHeader},
+    {"GetPictureFileHeader", ppcglue_GetPictureFileHeader},
     {"GetPixBaseAddr", ppcglue_GetPixBaseAddr},
     {"GetPixMapInfo", ppcglue_GetPixMapInfo},
     {"GetPixPat", ppcglue_GetPixPat},
@@ -41628,7 +41244,7 @@ const ppc_export ppc_exports[] = {
     {"GetScriptVariable", ppcglue_GetScriptVariable},
     {"GetServiceList", ppcglue_GetServiceList},
     {"GetSharedLibrary", ppctrap_GetSharedLibrary},
-    {"GetSimilarity", ppctrap_GetSimilarity},
+    {"GetSimilarity", ppcglue_GetSimilarity},
     {"GetSleepTimeout", ppcglue_GetSleepTimeout},
     {"GetSoundDescriptionExtension", ppctrap_GetSoundDescriptionExtension},
     {"GetSoundHeaderOffset", ppcglue_GetSoundHeaderOffset},
@@ -41824,20 +41440,20 @@ const ppc_export ppc_exports[] = {
     {"HiliteText", ppcglue_HiliteText},
     {"HiliteWindow", ppcglue_HiliteWindow},
     {"HiliteWindowFrameForDrag", ppcglue_HiliteWindowFrameForDrag},
-    {"HitTestDSequenceData", ppctrap_HitTestDSequenceData},
+    {"HitTestDSequenceData", ppcglue_HitTestDSequenceData},
     {"HitTestThemeScrollBarArrows", ppcglue_HitTestThemeScrollBarArrows},
     {"HitTestThemeTrack", ppcglue_HitTestThemeTrack},
     {"HomeResFile", ppcglue_HomeResFile},
-    {"ICMDecompressComplete", ppctrap_ICMDecompressComplete},
-    {"ICMDecompressCompleteS", ppctrap_ICMDecompressCompleteS},
-    {"ICMGetPixelFormatInfo", ppctrap_ICMGetPixelFormatInfo},
-    {"ICMSequenceGetChainMember", ppctrap_ICMSequenceGetChainMember},
-    {"ICMSequenceGetInfo", ppctrap_ICMSequenceGetInfo},
-    {"ICMSequenceLockBits", ppctrap_ICMSequenceLockBits},
-    {"ICMSequenceSetInfo", ppctrap_ICMSequenceSetInfo},
-    {"ICMSequenceUnlockBits", ppctrap_ICMSequenceUnlockBits},
-    {"ICMSetPixelFormatInfo", ppctrap_ICMSetPixelFormatInfo},
-    {"ICMShieldSequenceCursor", ppctrap_ICMShieldSequenceCursor},
+    {"ICMDecompressComplete", ppcglue_ICMDecompressComplete},
+    {"ICMDecompressCompleteS", ppcglue_ICMDecompressCompleteS},
+    {"ICMGetPixelFormatInfo", ppcglue_ICMGetPixelFormatInfo},
+    {"ICMSequenceGetChainMember", ppcglue_ICMSequenceGetChainMember},
+    {"ICMSequenceGetInfo", ppcglue_ICMSequenceGetInfo},
+    {"ICMSequenceLockBits", ppcglue_ICMSequenceLockBits},
+    {"ICMSequenceSetInfo", ppcglue_ICMSequenceSetInfo},
+    {"ICMSequenceUnlockBits", ppcglue_ICMSequenceUnlockBits},
+    {"ICMSetPixelFormatInfo", ppcglue_ICMSetPixelFormatInfo},
+    {"ICMShieldSequenceCursor", ppcglue_ICMShieldSequenceCursor},
     {"INVALID_GetTrapAddress", ppcglue_INVALID_GetTrapAddress},
     {"INVALID_SetTrapAddress", ppcglue_INVALID_SetTrapAddress},
     {"IPCKillListPorts", ppcglue_IPCKillListPorts},
@@ -41871,13 +41487,13 @@ const ppc_export ppc_exports[] = {
     {"IconSuiteToRgn", ppcglue_IconSuiteToRgn},
     {"IdentifyFolder", ppcglue_IdentifyFolder},
     {"IdleControls", ppcglue_IdleControls},
-    {"ImageFieldSequenceBegin", ppctrap_ImageFieldSequenceBegin},
-    {"ImageFieldSequenceEnd", ppctrap_ImageFieldSequenceEnd},
-    {"ImageFieldSequenceExtractCombine", ppctrap_ImageFieldSequenceExtractCombine},
-    {"ImageTranscodeDisposeFrameData", ppctrap_ImageTranscodeDisposeFrameData},
-    {"ImageTranscodeFrame", ppctrap_ImageTranscodeFrame},
-    {"ImageTranscodeSequenceBegin", ppctrap_ImageTranscodeSequenceBegin},
-    {"ImageTranscodeSequenceEnd", ppctrap_ImageTranscodeSequenceEnd},
+    {"ImageFieldSequenceBegin", ppcglue_ImageFieldSequenceBegin},
+    {"ImageFieldSequenceEnd", ppcglue_ImageFieldSequenceEnd},
+    {"ImageFieldSequenceExtractCombine", ppcglue_ImageFieldSequenceExtractCombine},
+    {"ImageTranscodeDisposeFrameData", ppcglue_ImageTranscodeDisposeFrameData},
+    {"ImageTranscodeFrame", ppcglue_ImageTranscodeFrame},
+    {"ImageTranscodeSequenceBegin", ppcglue_ImageTranscodeSequenceBegin},
+    {"ImageTranscodeSequenceEnd", ppcglue_ImageTranscodeSequenceEnd},
     {"Index2Color", ppcglue_Index2Color},
     {"InfoScrap", ppcglue_InfoScrap},
     {"InformFFS", ppcglue_InformFFS},
@@ -42547,13 +42163,13 @@ const ppc_export ppc_exports[] = {
     {"MakeFilePreview", ppcglue_MakeFilePreview},
     {"MakeITable", ppcglue_MakeITable},
     {"MakeIconCache", ppctrap_MakeIconCache},
-    {"MakeImageDescriptionForEffect", ppctrap_MakeImageDescriptionForEffect},
+    {"MakeImageDescriptionForEffect", ppcglue_MakeImageDescriptionForEffect},
     {"MakeImageDescriptionForPixMap", ppcglue_MakeImageDescriptionForPixMap},
     {"MakeMediaTimeTable", ppcglue_MakeMediaTimeTable},
     {"MakeRGBPat", ppcglue_MakeRGBPat},
-    {"MakeThumbnailFromPicture", ppctrap_MakeThumbnailFromPicture},
-    {"MakeThumbnailFromPictureFile", ppctrap_MakeThumbnailFromPictureFile},
-    {"MakeThumbnailFromPixMap", ppctrap_MakeThumbnailFromPixMap},
+    {"MakeThumbnailFromPicture", ppcglue_MakeThumbnailFromPicture},
+    {"MakeThumbnailFromPictureFile", ppcglue_MakeThumbnailFromPictureFile},
+    {"MakeThumbnailFromPixMap", ppcglue_MakeThumbnailFromPixMap},
     {"MakeTrackTimeTable", ppcglue_MakeTrackTimeTable},
     {"MakeVoiceSpec", ppcglue_MakeVoiceSpec},
     {"MapFileView", ppcglue_MapFileView},
@@ -43197,7 +42813,7 @@ const ppc_export ppc_exports[] = {
     {"ProcessIsContextualMenuClient", ppcglue_ProcessIsContextualMenuClient},
     {"ProtectEntry", ppcglue_ProtectEntry},
     {"Pt2Rect", ppcglue_Pt2Rect},
-    {"PtInDSequenceData", ppctrap_PtInDSequenceData},
+    {"PtInDSequenceData", ppcglue_PtInDSequenceData},
     {"PtInIconID", ppcglue_PtInIconID},
     {"PtInIconMethod", ppctrap_PtInIconMethod},
     {"PtInIconRef", ppcglue_PtInIconRef},
@@ -43252,9 +42868,9 @@ const ppc_export ppc_exports[] = {
     {"QTGetAtomParent", ppcglue_QTGetAtomParent},
     {"QTGetAtomTypeAndID", ppcglue_QTGetAtomTypeAndID},
     {"QTGetDataRefMaxFileOffset", ppcglue_QTGetDataRefMaxFileOffset},
-    {"QTGetEffectSpeed", ppctrap_QTGetEffectSpeed},
-    {"QTGetEffectsList", ppctrap_QTGetEffectsList},
-    {"QTGetEffectsListExtended", ppctrap_QTGetEffectsListExtended},
+    {"QTGetEffectSpeed", ppcglue_QTGetEffectSpeed},
+    {"QTGetEffectsList", ppcglue_QTGetEffectsList},
+    {"QTGetEffectsListExtended", ppcglue_QTGetEffectsListExtended},
     {"QTGetFileNameExtension", ppcglue_QTGetFileNameExtension},
     {"QTGetMIMETypeInfo", ppcglue_QTGetMIMETypeInfo},
     {"QTGetMovieRestrictions", ppcglue_QTGetMovieRestrictions},
@@ -43318,7 +42934,7 @@ const ppc_export ppc_exports[] = {
     {"QTUnlockContainer", ppcglue_QTUnlockContainer},
     {"QTUnregisterAccessKey", ppcglue_QTUnregisterAccessKey},
     {"QTUpdateGWorld", ppcglue_QTUpdateGWorld},
-    {"QuadToQuadMatrix", ppctrap_QuadToQuadMatrix},
+    {"QuadToQuadMatrix", ppcglue_QuadToQuadMatrix},
     {"RGB2CMY", ppcglue_RGB2CMY},
     {"RGB2HSL", ppcglue_RGB2HSL},
     {"RGB2HSV", ppcglue_RGB2HSV},
@@ -43415,7 +43031,7 @@ const ppc_export ppc_exports[] = {
     {"RemoveFolderDescriptor", ppcglue_RemoveFolderDescriptor},
     {"RemoveFolderRouting", ppcglue_RemoveFolderRouting},
     {"RemoveIconRefOverride", ppcglue_RemoveIconRefOverride},
-    {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
+    {"RemoveImageDescriptionExtension", ppcglue_RemoveImageDescriptionExtension},
     {"RemoveIndexedCollectionItem", ppctrap_RemoveIndexedCollectionItem},
     {"RemoveMovieExecuteWiredActionsProc", ppctrap_RemoveMovieExecuteWiredActionsProc},
     {"RemoveMovieResource", ppcglue_RemoveMovieResource},
@@ -43427,7 +43043,7 @@ const ppc_export ppc_exports[] = {
     {"RemoveUserDataText", ppcglue_RemoveUserDataText},
     {"RemoveWindowProperty", ppcglue_RemoveWindowProperty},
     {"RemoveWindowProxy", ppcglue_RemoveWindowProxy},
-    {"ReplaceDSequenceImageDescription", ppctrap_ReplaceDSequenceImageDescription},
+    {"ReplaceDSequenceImageDescription", ppcglue_ReplaceDSequenceImageDescription},
     {"ReplaceGestalt", ppctrap_ReplaceGestalt},
     {"ReplaceGestaltValue", ppcglue_ReplaceGestaltValue},
     {"ReplaceIndexedCollectionItem", ppcglue_ReplaceIndexedCollectionItem},
@@ -43597,7 +43213,7 @@ const ppc_export ppc_exports[] = {
     {"SetCollectionDefaultAttributes", ppctrap_SetCollectionDefaultAttributes},
     {"SetCollectionExceptionProc", ppctrap_SetCollectionExceptionProc},
     {"SetCollectionItemInfo", ppctrap_SetCollectionItemInfo},
-    {"SetCompressedPixMapInfo", ppctrap_SetCompressedPixMapInfo},
+    {"SetCompressedPixMapInfo", ppcglue_SetCompressedPixMapInfo},
     {"SetControl32BitMaximum", ppcglue_SetControl32BitMaximum},
     {"SetControl32BitMinimum", ppcglue_SetControl32BitMinimum},
     {"SetControl32BitValue", ppcglue_SetControl32BitValue},
@@ -43634,7 +43250,7 @@ const ppc_export ppc_exports[] = {
     {"SetDSequenceMatrix", ppcglue_SetDSequenceMatrix},
     {"SetDSequenceMatte", ppcglue_SetDSequenceMatte},
     {"SetDSequenceSrcRect", ppcglue_SetDSequenceSrcRect},
-    {"SetDSequenceTimeCode", ppctrap_SetDSequenceTimeCode},
+    {"SetDSequenceTimeCode", ppcglue_SetDSequenceTimeCode},
     {"SetDSequenceTransferMode", ppcglue_SetDSequenceTransferMode},
     {"SetDataBrowserActiveItems", ppcglue_SetDataBrowserActiveItems},
     {"SetDataBrowserCallbacks", ppcglue_SetDataBrowserCallbacks},
@@ -43733,7 +43349,7 @@ const ppc_export ppc_exports[] = {
     {"SetIconCacheProc", ppctrap_SetIconCacheProc},
     {"SetIconFamilyData", ppcglue_SetIconFamilyData},
     {"SetIdentityMatrix", ppcglue_SetIdentityMatrix},
-    {"SetImageDescriptionCTable", ppctrap_SetImageDescriptionCTable},
+    {"SetImageDescriptionCTable", ppcglue_SetImageDescriptionCTable},
     {"SetImageWellContentInfo", ppcglue_SetImageWellContentInfo},
     {"SetImageWellTransform", ppcglue_SetImageWellTransform},
     {"SetIndexedCollectionItemInfo", ppctrap_SetIndexedCollectionItemInfo},
@@ -43842,7 +43458,7 @@ const ppc_export ppc_exports[] = {
     {"SetScriptQDPatchAddress", ppcglue_SetScriptQDPatchAddress},
     {"SetScriptUtilityAddress", ppcglue_SetScriptUtilityAddress},
     {"SetScriptVariable", ppcglue_SetScriptVariable},
-    {"SetSequenceProgressProc", ppctrap_SetSequenceProgressProc},
+    {"SetSequenceProgressProc", ppcglue_SetSequenceProgressProc},
     {"SetSleepTimeout", ppcglue_SetSleepTimeout},
     {"SetSoundMixerState", ppcglue_SetSoundMixerState},
     {"SetSoundOutputInfo", ppcglue_SetSoundOutputInfo},
@@ -44000,7 +43616,7 @@ const ppc_export ppc_exports[] = {
     {"StdLine", ppcglue_StdLine},
     {"StdOpcode", ppcglue_StdOpcode},
     {"StdOval", ppcglue_StdOval},
-    {"StdPix", ppctrap_StdPix},
+    {"StdPix", ppcglue_StdPix},
     {"StdPoly", ppcglue_StdPoly},
     {"StdPutPic", ppcglue_StdPutPic},
     {"StdRRect", ppcglue_StdRRect},
@@ -44117,11 +43733,11 @@ const ppc_export ppc_exports[] = {
     {"TransformFixedRect", ppcglue_TransformFixedRect},
     {"TransformPoints", ppcglue_TransformPoints},
     {"TransformRect", ppcglue_TransformRect},
-    {"TransformRgn", ppctrap_TransformRgn},
+    {"TransformRgn", ppcglue_TransformRgn},
     {"TranslateMatrix", ppcglue_TranslateMatrix},
     {"Transliterate", ppcglue_Transliterate},
     {"TransliterateText", ppcglue_TransliterateText},
-    {"TrimImage", ppctrap_TrimImage},
+    {"TrimImage", ppcglue_TrimImage},
     {"TruncString", ppcglue_TruncString},
     {"TruncText", ppcglue_TruncText},
     {"UTAddFCBToSearchList", ppcglue_UTAddFCBToSearchList},

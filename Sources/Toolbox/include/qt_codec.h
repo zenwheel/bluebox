@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "mem.h"
+#include "qd_internal.h"
 
 /* ---- Video ----
  *
@@ -71,6 +72,10 @@ bool qt_codec_decodes(uint32_t type);
 bool qt_codec_encodes(uint32_t type);
 /* A CodecInfo record (72 bytes) for one of ours. */
 void qt_codec_fill_info(gaddr info, uint32_t type, bool decompress, bool compress);
+/* RGBA scaled into a rectangle of a PixMap (the record; its bounds'
+ * coordinates), and a rectangle of one as RGBA (malloc'd). */
+void qt_codec_frame_to_pixmap(const uint8_t *rgba, int w, int h, gaddr pm, qrect r);
+uint8_t *qt_codec_pixmap_to_rgba(gaddr pm, qrect r);
 
 /* ---- Video compression (qt_encode.c) ----
  *
@@ -97,6 +102,19 @@ size_t qt_venc_encode(const qt_venc_format *f, const uint32_t *px, const uint32_
 /* ---- The Image Compression Manager's compression side (qt_icm_compress.c) ---- */
 
 void icm_compress_reset(void);
+/* qt_icm.c for qt_icm_more.c: one image decoded (RGBA, malloc'd); the
+ * decompression sequences' formats; a sequence's description replaced. */
+uint8_t *icm_decode(gaddr desc, gaddr data, int32_t len, int *w, int *h, int16_t *err);
+bool icm_dseq_exists(int32_t id);
+const qt_video_format *icm_dseq_format(int32_t id);
+int16_t icm_dseq_replace(int32_t id, gaddr desc);
+/* qt_icm_more.c: effects (their types, a frame rendered from a sequence's
+ * sources at frameTime's point, RGBA malloc'd), the sources gone with
+ * their sequence. */
+bool icm_is_effect(uint32_t type);
+uint8_t *icm_effect_render(int32_t seq, uint32_t type, gaddr params, int32_t size, gaddr frameTime, int *w, int *h);
+void icm_sources_drop(int32_t seq);
+void icm_more_reset(void);
 /* CDSequenceEnd for a compression sequence: false if seqID is not one. */
 bool icm_csequence_end(int32_t seqID);
 bool icm_csequence_exists(int32_t seqID);
