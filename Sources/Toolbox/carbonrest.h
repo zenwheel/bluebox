@@ -49,6 +49,7 @@ REST_AREA(rest_osa);
 REST_AREA(rest_ic);
 REST_AREA(rest_ica);
 REST_AREA(rest_nsl);
+REST_AREA(rest_dcm);
 
 /* The lookup over every area, and the reset (carbonrest.c). */
 void (*carbonrest_export_fn(const char *name))(ppc_cpu *);
