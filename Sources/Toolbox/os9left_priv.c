@@ -447,6 +447,30 @@ static void pv_RealScript(ppc_cpu *c)
     RETURN(s);
 }
 
+/* CheckWindow(window): is it a window of the window list? */
+static void pv_CheckWindow(ppc_cpu *c)
+{
+    for (gaddr w = rd32(LM_WindowList); w; w = rd32(w + WindowRecord_nextWindow_off))
+        if (w == R(0))
+            RETURN(1);
+    RETURN(0);
+}
+
+/* EachWindow(proc, refCon): proc(window, refCon) for the windows front to
+ * back until it answers true; that window, or nil. */
+static void pv_EachWindow(ppc_cpu *c)
+{
+    if (!R(0))
+        RETURN(paramErr);
+    for (gaddr w = rd32(LM_WindowList); w; w = rd32(w + WindowRecord_nextWindow_off)) {
+        uint32_t args[2] = { w, R(1) };
+        uint32_t r = mm_is_descriptor(R(0)) ? mm_call(R(0), 0x3D0, args, 2) : ppc_call(R(0), args, 2);
+        if (r & 0xFF)
+            RETURN(w);
+    }
+    RETURN(0);
+}
+
 void os9left_priv_reset(void)
 {
     memset(zone_flags, 0, sizeof zone_flags);
@@ -456,8 +480,10 @@ void os9left_priv_reset(void)
 const ppc_export os9left_priv_exports[] = {
     { "AttachOffscreenBuffer", pv_AttachOffscreenBuffer },
     { "BeginDrawingOffscreen", pv_BeginDrawingOffscreen },
+    { "CheckWindow", pv_CheckWindow },
     { "DetachOffscreenBuffer", pv_DetachOffscreenBuffer },
     { "DisposeOffscreenBuffer", pv_DisposeOffscreenBuffer },
+    { "EachWindow", pv_EachWindow },
     { "EndDrawingOffscreen", pv_EndDrawingOffscreen },
     { "EnoughSystemHeapSlop", pv_EnoughSystemHeapSlop },
     { "FindFolderInternalExtended", pv_FindFolderInternalExtended },

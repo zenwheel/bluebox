@@ -196,6 +196,24 @@ extension BlueBox {
             #expect(tb_GetNextEvent(0x0008, ev) != 0 && rd16(ev) == 3 && rd32(ev + 2) & 0xFF == 0x41)
         }
 
+        @Test func windowsAreChecked() {
+            _ = initToolbox()
+            func make(_ top: Int16) -> UInt32 {
+                let wr = Rest.ptr(8)
+                wr16(wr, UInt16(bitPattern: top)); wr16(wr + 2, 50); wr16(wr + 4, UInt16(bitPattern: top + 60)); wr16(wr + 6, 150)
+                return tb_NewWindow(0, wr, Rest.ptr(8), 1, 0, 0xFFFF_FFFF, 1, 0)
+            }
+            let a = make(50), b = make(100)
+            #expect(Rest.call("CheckWindow", [a]) == 1 && Rest.call("CheckWindow", [b]) == 1)
+            #expect(Rest.call("CheckWindow", [0x1234]) == 0 && Rest.call("CheckWindow", [0]) == 0)
+            // the routine answers true for the window it keeps in its refCon
+            // (cmpw r3,r4: eq -> true): cmplw cr0,r3,r4; mfcr r0; rlwinm r3,r0,3,31,31; blr
+            let proc = Rest.routine([0x7C03_2040, 0x7C00_0026, 0x5403_1FFE, 0x4E80_0020])
+            #expect(Rest.call("EachWindow", [proc, a]) == a)
+            #expect(Rest.call("EachWindow", [proc, 0x77]) == 0)
+            #expect(Rest.signed("EachWindow", [0, 0]) == -50)
+        }
+
         @Test func trapAddresses() {
             let t = Rest.call("GetProcessTrapAddress", [0xA9F4])
             #expect(t == tb_GetTrapAddress(0xA9F4, true, false) || t != 0)
