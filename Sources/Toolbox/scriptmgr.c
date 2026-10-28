@@ -737,13 +737,17 @@ int16_t tb_ReplaceText(gaddr base_text, gaddr subst_text, gaddr key)
     int kl = rd8(key);
     if (kl == 0)
         return 0;
-    uint8_t k[16];
+    uint8_t k[256]; /* a Str15 by the book, but programs pass longer strings */
     gget(k, key + 1, (uint32_t)kl);
     int32_t sl = tb_GetHandleSize(subst_text);
+    if (sl < 0)
+        return 0;
     int count = 0;
     for (int32_t pos = 0;;) {
         int32_t n = tb_GetHandleSize(base_text);
         int32_t found = -1;
+        if (n < 0)
+            break;
         for (int32_t i = pos; i + kl <= n; i++) {
             int j = 0;
             while (j < kl && rd8(rd32(base_text) + (uint32_t)(i + j)) == k[j])

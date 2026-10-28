@@ -227,7 +227,7 @@ static double dec_get(gaddr d)
 static void dec_put(gaddr d, gaddr form, double v)
 {
     int style = decform_style(form), digits = (int16_t)rd16(form + 2);
-    char sig[64];
+    char sig[420]; /* fixed style prints up to 309 integer digits plus the fraction */
     int exp = 0;
     wr8(d, signbit(v) ? 1 : 0);
     wr8(d + 1, 0);
