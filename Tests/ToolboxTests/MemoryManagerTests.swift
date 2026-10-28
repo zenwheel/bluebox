@@ -67,6 +67,22 @@ extension BlueBox {
             tb_DisposeHandle(h)
         }
 
+        /// What MaxMem answers can be had, when it takes both the free
+        /// block ending the zone and the room the zone can still grow into
+        /// (Vampire Castle asks for nearly all of it).
+        @Test func maxMemIsAllThere() {
+            let limit = rd32(UInt32(LM_HeapEnd)) + 0x8_0000
+            tb_SetApplLimit(limit)
+            var grow: UInt32 = 0
+            let most = tb_MaxMem(&grow, false)
+            #expect(most > 0x8_0000)
+            let h = tb_NewHandle(most - 64, false, false)
+            #expect(h != 0 && memErr() == 0)
+            #expect(mm_check_zone(appZone))
+            tb_DisposeHandle(h)
+            tb_SetApplLimit(UInt32(GA_APPLLIMIT))
+        }
+
         /// A master pointer with flags in its top byte, as a program of the
         /// 24-bit days locks with BSET #7, still names its block (RMaker
         /// asks GetHandleSize for its About box's string so).
