@@ -696,6 +696,7 @@ typedef struct {
     gaddr texture;
     uint32_t edit;
     int id, w, h;
+    bool alpha; /* some pixels not opaque: drawn blended, as transparency */
 } texcache;
 
 static texcache *texs;
@@ -704,8 +705,9 @@ static int ntexs, captexs;
 uint32_t *q3_storage_pixmap_argb(const uint32_t *w, gaddr storage);
 uint32_t *q3_texture_argb(q3obj *t, int *w, int *h);
 
-static int texture_id(gaddr shader)
+static int texture_id(gaddr shader, bool *alpha)
 {
+    *alpha = false;
     q3obj *s = q3_get(shader);
     if (!s || s->type != TEXTURE_SHADER || !s->data)
         return 0;
@@ -715,8 +717,10 @@ static int texture_id(gaddr shader)
         return 0;
     for (int i = 0; i < ntexs; i++)
         if (texs[i].texture == tex) {
-            if (texs[i].edit == t->edit)
+            if (texs[i].edit == t->edit) {
+                *alpha = texs[i].alpha;
                 return texs[i].id;
+            }
             r3d_texture_free(texs[i].id);
             texs[i] = texs[--ntexs];
             break;
@@ -725,6 +729,9 @@ static int texture_id(gaddr shader)
     uint32_t *px = q3_texture_argb(t, &w, &h);
     if (!px)
         return 0;
+    bool some_alpha = false;
+    for (int i = 0; i < w * h && !some_alpha; i++)
+        some_alpha = px[i] >> 24 != 0xFF;
     /* QuickDraw 3D's v runs up the image; the renderer's down. */
     int id = r3d_texture_new(w, h, px, true);
     free(px);
@@ -740,7 +747,8 @@ static int texture_id(gaddr shader)
         texs = n;
         captexs = cap;
     }
-    texs[ntexs++] = (texcache){ tex, t->edit, id, w, h };
+    texs[ntexs++] = (texcache){ tex, t->edit, id, w, h, some_alpha };
+    *alpha = some_alpha;
     return id;
 }
 
@@ -1261,7 +1269,12 @@ void q3v_triangles(q3view *v, const q3pv *pv, uint32_t npv, const q3ptri *t, uin
         bool clamp_u = false, clamp_v = false;
         gaddr shader = (fa.has & QA_SHADER) ? fa.shader : v->st.texture;
         if (shader && !points) {
-            texture = texture_id(shader);
+            bool tex_alpha;
+            texture = texture_id(shader, &tex_alpha);
+            /* A texture's alpha is transparency, as the interactive
+             * renderer drew it (Bugdom's menu icons are cut out so). */
+            if (tex_alpha)
+                transparent = true;
             q3obj *sh = q3_get(shader);
             if (sh && sh->data) {
                 clamp_u = ((q3node *)sh->data)->w[9] == 1;
