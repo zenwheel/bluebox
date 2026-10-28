@@ -50,6 +50,7 @@
 #include "qt_native.h"
 #include "qt_stream.h"
 #include "qt_vlc.h"
+#include "qt_wired.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -1311,13 +1312,17 @@ void tb_MoviesTask(gaddr h, int32_t ms)
     qt_stream_task();
     if (h) {
         movie *m = movie_of(h);
-        if (m)
+        if (m) {
             task(m);
+            qt_wired_task(m->mv, m->handle, m->native, m->port, m->box);
+        }
         return;
     }
     for (int i = 0; i < MAX_MOVIES; i++)
-        if (movies[i].used)
+        if (movies[i].used) {
             task(&movies[i]);
+            qt_wired_task(movies[i].mv, movies[i].handle, movies[i].native, movies[i].port, movies[i].box);
+        }
 }
 
 int16_t tb_PrerollMovie(gaddr h, int32_t time, int32_t rate)
@@ -2810,7 +2815,8 @@ static bool mc_click_with(controller *c, uint32_t pt, bool shift)
                     tb_SetMovieSelection((int32_t)m->handle, (int32_t)(ms * m->mv->scale / 1000), 0);
             }
         }
-    } else {
+    } else if (!in_movie || !qt_wired_click(m->mv, m->handle, m->native, m->box, h, v)) {
+        /* (a wired sprite's click is the sprite's, not play and pause) */
         mc_play(c, m->playing ? 0 : (m->mv->pref_rate ? m->mv->pref_rate : 0x10000));
     }
     draw_bar(c);

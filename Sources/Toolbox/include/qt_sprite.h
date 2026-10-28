@@ -57,4 +57,17 @@ bool qt_sprite_set_image(qt_sprite *s, uint32_t id, const uint8_t *desc_and_data
 void qt_sprite_forget_image(qt_sprite *s, uint32_t id);
 bool qt_sprite_bounds(const qt_sprite *s, uint32_t id, int r[4]);
 
+/* Wired sprites (qt_wired.c): the key frame sample's atoms (its event
+ * handlers); samples shown since, with frame-loaded handlers, one at a
+ * time (the caller frees it); the track's variables; its idle events'
+ * frequency in ticks (-1 none) and when they last ran; the sprite the
+ * mouse was last over; the track's size. */
+const uint8_t *qt_sprite_key_data(const qt_sprite *s, uint32_t *len);
+bool qt_sprite_take_frame(qt_sprite *s, uint8_t **data, uint32_t *len);
+double qt_sprite_var(const qt_sprite *s, uint32_t id);
+void qt_sprite_set_var(qt_sprite *s, uint32_t id, double v);
+int32_t *qt_sprite_idle(qt_sprite *s, uint32_t **mark);
+uint32_t *qt_sprite_hover(qt_sprite *s);
+bool qt_sprite_size(const qt_sprite *s, int *w, int *h);
+
 #endif

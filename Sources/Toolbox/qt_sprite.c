@@ -26,6 +26,7 @@
  * look for after the sample description's header: 101 background colour
  * (RGBColor, black by default), 103 sample format (long), 106 visible.
  */
+#define _GNU_SOURCE /* memmem */
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +36,7 @@
 
 enum {
     P_MATRIX = 1, P_VISIBLE = 4, P_LAYER = 5, P_MODE = 6, P_IMAGE = 100,
-    T_BACKGROUND = 101, T_FORMAT = 103, T_VISIBLE = 106,
+    T_BACKGROUND = 101, T_FORMAT = 103, T_VISIBLE = 106, T_IDLE = 107,
     ALL_OVERRIDES = 1 << 2,
 };
 /* graphics modes */
@@ -58,6 +59,9 @@ typedef struct {
     double rx, ry;  /* registration point */
 } image;
 
+#define MAX_VARS 64
+#define MAX_PENDING 8
+
 struct qt_sprite {
     int w, h;
     uint8_t bg[3];
@@ -66,6 +70,23 @@ struct qt_sprite {
     int nimg;
     sprite *key, *cur;
     int nspr;
+    /* wired sprites (qt_wired.c): the key frame's atoms, where the event
+     * handlers are; samples whose frame-loaded handlers are to run; the
+     * track's variables; idle events' frequency (ticks, -1 none) */
+    uint8_t *key_data;
+    uint32_t key_len;
+    struct {
+        uint8_t *data;
+        uint32_t len;
+    } pending[MAX_PENDING];
+    int npending;
+    struct {
+        uint32_t id;
+        double v;
+    } vars[MAX_VARS];
+    int nvars;
+    int32_t idle_frequency;
+    uint32_t idle_mark, hover;
 };
 
 static uint32_t be16(const uint8_t *p) { return (uint32_t)p[0] << 8 | p[1]; }
@@ -145,6 +166,8 @@ static void track_properties(qt_sprite *s, const qtatom *root)
         s->all_overrides = (leaf_len(&a) >= 4 ? be32(a.body) : be16(a.body)) & ALL_OVERRIDES;
     if (find_child(root, T_VISIBLE, 0, &a) && leaf_len(&a) >= 1)
         s->visible = leaf_len(&a) >= 2 ? be16(a.body) != 0 : a.body[0] != 0;
+    if (find_child(root, T_IDLE, 0, &a) && leaf_len(&a) >= 4)
+        s->idle_frequency = (int32_t)be32(a.body);
 }
 
 qt_sprite *qt_sprite_new(const uint8_t *desc, uint32_t len, int w, int h)
@@ -157,6 +180,7 @@ qt_sprite *qt_sprite_new(const uint8_t *desc, uint32_t len, int w, int h)
     s->w = w;
     s->h = h;
     s->visible = true;
+    s->idle_frequency = -1;
     /* SpriteDescription: size, format, reserved, data reference, then
      * version 16, decompressor 20 and the sample flags 24, how overrides
      * apply (a track property may say so too). */
@@ -192,7 +216,74 @@ void qt_sprite_free(qt_sprite *s)
     if (!s)
         return;
     free_scene(s);
+    free(s->key_data);
+    for (int i = 0; i < s->npending; i++)
+        free(s->pending[i].data);
     free(s);
+}
+
+/* A sample with frame-loaded handlers (at the root or a sprite's), for
+ * qt_wired.c to run. */
+static void note_frame(qt_sprite *s, const uint8_t *data, uint32_t len)
+{
+    if (s->npending >= MAX_PENDING || !memmem(data, len, "fram", 4) || !memmem(data, len, "evnt", 4))
+        return;
+    uint8_t *copy = malloc(len);
+    if (!copy)
+        return;
+    memcpy(copy, data, len);
+    s->pending[s->npending].data = copy;
+    s->pending[s->npending++].len = len;
+}
+
+const uint8_t *qt_sprite_key_data(const qt_sprite *s, uint32_t *len)
+{
+    *len = s->key_len;
+    return s->key_data;
+}
+
+bool qt_sprite_take_frame(qt_sprite *s, uint8_t **data, uint32_t *len)
+{
+    if (!s->npending)
+        return false;
+    *data = s->pending[0].data;
+    *len = s->pending[0].len;
+    memmove(&s->pending[0], &s->pending[1], (size_t)(--s->npending) * sizeof s->pending[0]);
+    return true;
+}
+
+double qt_sprite_var(const qt_sprite *s, uint32_t id)
+{
+    for (int i = 0; i < s->nvars; i++)
+        if (s->vars[i].id == id)
+            return s->vars[i].v;
+    return 0;
+}
+
+void qt_sprite_set_var(qt_sprite *s, uint32_t id, double v)
+{
+    for (int i = 0; i < s->nvars; i++)
+        if (s->vars[i].id == id) {
+            s->vars[i].v = v;
+            return;
+        }
+    if (s->nvars < MAX_VARS)
+        s->vars[s->nvars].id = id, s->vars[s->nvars++].v = v;
+}
+
+int32_t *qt_sprite_idle(qt_sprite *s, uint32_t **mark)
+{
+    *mark = &s->idle_mark;
+    return &s->idle_frequency;
+}
+
+uint32_t *qt_sprite_hover(qt_sprite *s) { return &s->hover; }
+
+bool qt_sprite_size(const qt_sprite *s, int *w, int *h)
+{
+    *w = s->w;
+    *h = s->h;
+    return true;
 }
 
 bool qt_sprite_all_overrides(const qt_sprite *s) { return s->all_overrides; }
@@ -282,6 +373,12 @@ bool qt_sprite_key(qt_sprite *s, const uint8_t *data, uint32_t len)
         return false;
     free_scene(s);
     track_properties(s, &root);
+    free(s->key_data);
+    s->key_data = malloc(len);
+    s->key_len = s->key_data ? len : 0;
+    if (s->key_data)
+        memcpy(s->key_data, data, len);
+    note_frame(s, data, len);
     qtatom it = { 0 };
     while (next_child(&imct, &it)) {
         qtatom imda, reg;
@@ -331,6 +428,7 @@ void qt_sprite_override(qt_sprite *s, const uint8_t *data, uint32_t len)
     qtatom root;
     if (!s->cur || !root_of(data, len, &root))
         return;
+    note_frame(s, data, len);
     qtatom it = { 0 };
     while (next_child(&root, &it)) {
         if (it.type != four("sprt"))
