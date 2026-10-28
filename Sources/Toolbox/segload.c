@@ -52,6 +52,13 @@ static gaddr get_code(int16_t seg)
     gaddr h = get_code_patched(seg);
     if (!h)
         h = tb_Get1Resource((int32_t)fourcc("CODE"), seg);
+    if (!h) {
+        /* Not in the application's file: a program may keep segments in
+         * resource files it opened itself (FrameMaker's modules), so look
+         * through the whole chain; a CurMap no file has starts at the top. */
+        wr16(LM_CurMap, 0xFFFF);
+        h = tb_GetResource((int32_t)fourcc("CODE"), seg);
+    }
     wr8(LM_ResLoad, saved_load);
     wr16(LM_CurMap, (uint16_t)saved);
     return h;
