@@ -119,7 +119,8 @@ gaddr q3_mesh_set(q3obj *mesh);
 void q3_mesh_set_set(q3obj *mesh, gaddr set);
 void q3_mesh_classes(void);
 /* A mesh made at once (the 3DMF reader): vertices with their sets, faces
- * of face_nverts[i] vertex indices each (one contour), with their sets. */
+ * of face_nverts[i] vertex indices each (one contour), with their sets;
+ * a count with the top bit set is a contour (hole) of the face before. */
 gaddr q3_mesh_build(uint32_t nverts, const float (*pts)[3], const gaddr *vsets, uint32_t nfaces,
                     const uint32_t *face_nverts, const uint32_t *face_verts, const gaddr *fsets);
 /* A mesh gone through (the 3DMF writer): its vertices in order, its faces

@@ -542,15 +542,24 @@ gaddr q3_mesh_build(uint32_t nverts, const float (*pts)[3], const gaddr *vsets, 
     for (uint32_t i = 0; i < nverts; i++)
         add_vertex(m, pts[i], vsets ? vsets[i] : 0);
     uint32_t at = 0;
+    mface *last = NULL;
     for (uint32_t f = 0; f < nfaces; f++) {
-        uint32_t n = face_nverts[f];
+        /* The top bit: a contour (a hole) of the face before. */
+        bool hole = face_nverts[f] & 0x80000000u;
+        uint32_t n = face_nverts[f] & 0x7FFFFFFFu;
         mvert **vs = malloc((n ? n : 1) * sizeof *vs);
         uint32_t k = 0;
         for (uint32_t i = 0; vs && i < n; i++)
             if (face_verts[at + i] < m->nv)
                 vs[k++] = m->v[face_verts[at + i]];
-        if (vs && k >= 3)
-            add_face(m, vs, k, fsets ? fsets[f] : 0);
+        if (vs && k >= 3 && hole && last) {
+            mcont *c = new_contour(last, vs, k);
+            if (c && !face_add_contour(last, c))
+                free(c);
+            m->dirty = true;
+        } else if (vs && k >= 3) {
+            last = add_face(m, vs, k, fsets ? fsets[f] : 0);
+        }
         free(vs);
         at += n;
     }
