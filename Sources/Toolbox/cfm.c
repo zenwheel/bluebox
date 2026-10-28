@@ -30,6 +30,7 @@
 #include "ppc_bridge.h"
 #include "qt_calls.h"
 #include "qt_stream.h"
+#include "qt_vr.h"
 #include "qd3d.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -283,6 +284,8 @@ static void (*export_fn(const char *name))(ppc_cpu *)
         return qt_export_fn(name);
     if (qtstream_export_fn(name)) /* QTStreamLib's presentations, messages and the rest */
         return qtstream_export_fn(name);
+    if (qt_vr_export_fn(name)) /* QuickTimeVRLib */
+        return qt_vr_export_fn(name);
     unsigned lo = 0, hi = ppc_export_count;
     while (lo < hi) {
         unsigned mid = (lo + hi) / 2;
@@ -648,6 +651,7 @@ static const char *const native_libraries[] = {
     "FontManager", "MPLibrary", "DriverServicesLib", "PowerMgrLib", "URLAccessLib", "NameRegistryLib",
     "DriverLoaderLib", "KeychainLib", "FoldersLib", "FileSigningLib", "UTCUtils", "QTStreamLib",
     "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
+    "QuickTimeVRLib",
 };
 
 /* Apple libraries left unloaded even where an installer put them: the
