@@ -207,6 +207,33 @@ static void p_KillProcessChannels(ppc_cpu *c)
     RETURN(noErr);
 }
 
+/* The TrueType scaler (FontManager's fs_* and the Font Manager's own
+ * fs__ names for the same routines).  Blue Box draws only bitmap strikes
+ * (qd_text.c reads an 'sfnt' for metrics alone) and has no scaler to run:
+ * fs_OpenFonts and fs_CloseFonts are what Mac OS 9's are (the first clears
+ * the scaler's input and gives the sizes of the memory it wants, the second
+ * does nothing), and the entry points that need a scaler to give a
+ * transformation or scan a glyph with answer unimpErr. */
+static void p_fs_OpenFonts(ppc_cpu *c)
+{
+    gaddr in = R(0), out = R(1);
+    for (int i = 0; in && i < 9; i++)
+        wr32(in + 4u * (uint32_t)i, 0);
+    if (out) {
+        static const uint32_t sizes[8] = { 0x33C, 0x404, 0x834, 0, 0, 0, 0, 0 };
+        for (int i = 0; i < 8; i++)
+            wr32(out + 4u * (uint32_t)i, sizes[i]);
+    }
+    RETURN(0);
+}
+static void p_NoScaler(ppc_cpu *c) { RETURN(unimpErr); }
+
+/* The Font Manager's caches and disk cache, partial fonts and glyph
+ * retrieval: Mac OS 9's own routines for them are an empty answer, and
+ * an sfnt always matches the size asked. */
+static void p_FontZero(ppc_cpu *c) { RETURN(0); }
+static void p_FontOne(ppc_cpu *c) { RETURN(1); }
+
 void sound_app_dead(void);
 static void p_SndAppDead(ppc_cpu *c)
 {
@@ -215,6 +242,29 @@ static void p_SndAppDead(ppc_cpu *c)
 }
 
 const ppc_export os9rest_priv_exports[] = {
+    { "fs_OpenFonts", p_fs_OpenFonts }, { "fs__OpenFonts", p_fs_OpenFonts },
+    { "fs_Initialize", p_NoScaler }, { "fs__Initialize", p_NoScaler },
+    { "fs_NewSfnt", p_NoScaler }, { "fs__NewSfnt", p_NoScaler },
+    { "fs_NewTransformation", p_NoScaler }, { "fs__NewTransformation", p_NoScaler },
+    { "fs_NewGlyph", p_NoScaler }, { "fs__NewGlyph", p_NoScaler },
+    { "fs_ContourGridFit", p_NoScaler }, { "fs__ContourGridFit", p_NoScaler },
+    { "fs_ContourNoGridFit", p_NoScaler }, { "fs__ContourNoGridFit", p_NoScaler },
+    { "fs_ContourScan", p_NoScaler }, { "fs__ContourScan", p_NoScaler },
+    { "fs_CloseFonts", p_FontZero }, { "fs__CloseFonts", p_FontZero },
+    { "fs_GetAdvanceWidth", p_NoScaler }, { "fs__GetAdvanceWidth", p_NoScaler },
+    { "fs_SizeOfOutlines", p_NoScaler }, { "fs__SizeOfOutlines", p_NoScaler },
+    { "fs_SaveOutlines", p_NoScaler }, { "fs__SaveOutlines", p_NoScaler },
+    { "fs_RestoreOutlines", p_NoScaler }, { "fs__RestoreOutlines", p_NoScaler },
+    { "fs_FindBitMapSize", p_NoScaler },
+    { "__FillWidthTab", p_FontZero }, { "sb__FillWidthTab", p_FontZero },
+    { "__InitializeDiskCache", p_FontZero }, { "InitializeDiskCache", p_FontZero },
+    { "__InitializePartialFonts", p_FontZero }, { "InitializePartialFonts", p_FontZero },
+    { "__KillSomeCaches", p_FontZero }, { "sb__KillSomeCaches", p_FontZero },
+    { "__PreFlightFontMem", p_FontZero }, { "sb__PreFlightFontMem", p_FontZero },
+    { "__RetrieveGlyph", p_FontZero }, { "sb__RetrieveGlyph", p_FontZero },
+    { "__SearchForCache", p_FontZero }, { "sb__SearchForCache", p_FontZero },
+    { "__SFNTMatchSize", p_FontOne }, { "sb__SFNTMatchSize", p_FontOne },
+    { "CleanUpGlyphRecordArray", p_FontZero },
     { "PMScaledBattery", p_PMScaledBattery }, { "VM_GetPhysicalBytes", p_RamBytes }, { "VM_GetLogicalBytes", p_RamBytes },
     { "VM_HoldSystemHeap", p_NoPagingDone }, { "VM_ReleaseMemory", p_NoPagingDone },
     { "VM_IterateMappedRanges", p_NoPagingDone }, { "VM_FinishInstall", p_Nothing },

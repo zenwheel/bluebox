@@ -171,5 +171,30 @@ extension BlueBox {
             #expect(Rest.signed("ShutDownSpeechManager") == 0)
             #expect(tb_GetSpeechRate(rd32(chan), Rest.ptr(4)) != 0)
         }
+
+        @Test func fontManagersScalerAndCaches() {
+            let inp = Rest.ptr(64), out = Rest.ptr(64)
+            for i in 0..<16 { wr32(inp + UInt32(4 * i), 0xFFFF_FFFF) }
+            for name in ["fs_OpenFonts", "fs__OpenFonts"] {
+                for i in 0..<16 { wr32(inp + UInt32(4 * i), 0xFFFF_FFFF); wr32(out + UInt32(4 * i), 0xFFFF_FFFF) }
+                #expect(Rest.call(name, [inp, out]) == 0)
+                #expect((0..<9).allSatisfy { rd32(inp + UInt32(4 * $0)) == 0 } && rd32(inp + 36) == 0xFFFF_FFFF)
+                #expect([rd32(out), rd32(out + 4), rd32(out + 8), rd32(out + 12)] == [0x33C, 0x404, 0x834, 0])
+                #expect(rd32(out + 28) == 0 && rd32(out + 32) == 0xFFFF_FFFF)
+            }
+            #expect(Rest.call("fs_CloseFonts", [inp, out]) == 0 && Rest.call("fs__CloseFonts", [inp, out]) == 0)
+            for n in ["Initialize", "NewSfnt", "NewTransformation", "NewGlyph", "ContourGridFit", "ContourNoGridFit",
+                      "ContourScan", "GetAdvanceWidth", "SizeOfOutlines", "SaveOutlines", "RestoreOutlines"] {
+                #expect(Rest.signed("fs_" + n, [inp, out]) == -4 && Rest.signed("fs__" + n, [inp, out]) == -4, "\(n)")
+            }
+            #expect(Rest.signed("fs_FindBitMapSize", [inp, out]) == -4)
+            for n in ["__FillWidthTab", "__InitializeDiskCache", "__InitializePartialFonts", "__KillSomeCaches",
+                      "__PreFlightFontMem", "__RetrieveGlyph", "__SearchForCache", "sb__FillWidthTab",
+                      "sb__KillSomeCaches", "sb__PreFlightFontMem", "sb__RetrieveGlyph", "sb__SearchForCache",
+                      "InitializeDiskCache", "InitializePartialFonts", "CleanUpGlyphRecordArray"] {
+                #expect(Rest.call(n, [1, 2, 3]) == 0, "\(n)")
+            }
+            #expect(Rest.call("__SFNTMatchSize", [1, 12]) == 1 && Rest.call("sb__SFNTMatchSize", [1, 12]) == 1)
+        }
     }
 }
