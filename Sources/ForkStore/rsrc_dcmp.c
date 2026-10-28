@@ -1,5 +1,5 @@
 /*
- * Decompression of System 7 compressed resources ('dcmp' 0, 1 and 2).
+ * Decompression of System 7 compressed resources ('dcmp' 0, 1, 2 and 3).
  *
  * The formats and lookup tables follow dgelessus's rsrcfork
  * (https://github.com/dgelessus/python-rsrcfork), MIT License,
@@ -365,9 +365,183 @@ static void dcmp2(dstate *s, const uint8_t *params, uint32_t outlen)
     }
 }
 
+/*
+ * dcmp 3 (System 7.5.3 and later; header type 9, id 3): an LZ77 coder over
+ * an MSB-first bit stream.  A token is a length code and, for a match, a
+ * distance code; length 0 means a run of literal bytes (also read from the
+ * bit stream).  After a literal run shorter than 63 bytes the next token has
+ * to be a match, so its length code counts from 3; otherwise a match counts
+ * from 2 and a zero length means literals.  The distance code depends on how
+ * much has been written: fifteen classes by output position, each with a
+ * short form for near distances, a mid form, and a last form whose field is
+ * just wide enough to reach back to the start of the output.
+ */
+typedef struct {
+    int n0, n1;          /* bits of the near ("0") and mid ("10") forms */
+    uint32_t maxpos;     /* the class covers positions up to this */
+    unsigned nthr;
+    const uint32_t *thr; /* the "11" form: n+1 bits while pos <= thr[n] */
+} dcmp3_class;
+
+static const uint32_t d3t0[] = { 7, 9, 13 };
+static const uint32_t d3t1[] = { 12, 14, 18, 26 };
+static const uint32_t d3t2[] = { 22, 24, 28, 36, 52 };
+static const uint32_t d3t3[] = { 42, 44, 48, 56, 72, 104 };
+static const uint32_t d3t4[] = { 82, 84, 88, 96, 112, 144, 208 };
+static const uint32_t d3t5[] = { 162, 164, 168, 176, 192, 224, 288, 416 };
+static const uint32_t d3t6[] = { 322, 324, 328, 336, 352, 384, 448, 576, 832 };
+/* The last rung here is 1644, not 1664, as Apple's table has it. */
+static const uint32_t d3t7[] = { 642, 644, 648, 656, 672, 704, 768, 896, 1152, 1644 };
+static const uint32_t d3t8[] = { 1282, 1284, 1288, 1296, 1312, 1344, 1408, 1536, 1792, 2304, 3328 };
+static const uint32_t d3t9[] = { 2562, 2564, 2568, 2576, 2592, 2624, 2688, 2816, 3072, 3584, 4608, 6656 };
+static const uint32_t d3t10[] = { 5122, 5124, 5128, 5136, 5152, 5184, 5248, 5376, 5632, 6144, 7168, 9216, 13312 };
+static const uint32_t d3t11[] = { 10242, 10244, 10248, 10256, 10272, 10304, 10368, 10496, 10752, 11264, 12288, 14336, 18432, 26624 };
+static const uint32_t d3t12[] = { 20482, 20484, 20488, 20496, 20512, 20544, 20608, 20736, 20992, 21504, 22528, 24576, 28672, 36864, 53248 };
+static const uint32_t d3t13[] = { 40962, 40964, 40968, 40976, 40992, 41024, 41088, 41216, 41472, 41984, 43008, 45056, 49152, 57344, 73728, 106496 };
+/* Apple's seventh rung is 0x200C where 82048 was meant; it never holds, so
+ * positions up to 82048 get the eighth rung's 8 bits.  Streams were written
+ * to match, so it stays. */
+static const uint32_t d3t14[] = { 81922, 81924, 81928, 81936, 81952, 81984, 0x200C, 82176, 82432, 82944, 83968, 86016, 90112, 98304, 114688, 147456, 212992 };
+
+#define C(n0, n1, maxpos, t) { n0, n1, maxpos, sizeof t / sizeof t[0], t }
+static const dcmp3_class dcmp3_classes[15] = {
+    C(0, 2, 10, d3t0),       C(1, 3, 20, d3t1),        C(2, 4, 40, d3t2),       C(3, 5, 80, d3t3),
+    C(4, 6, 160, d3t4),      C(5, 7, 672, d3t5),       C(6, 8, 1000, d3t6),     C(7, 9, 2688, d3t7),
+    C(8, 10, 5376, d3t8),    C(9, 11, 10752, d3t9),    C(10, 12, 21504, d3t10), C(11, 13, 43008, d3t11),
+    C(12, 14, 70000, d3t12), C(13, 15, 172032, d3t13), C(14, 16, 0xFFFFFFFFu, d3t14),
+};
+#undef C
+
+typedef struct {
+    const uint8_t *p, *end;
+    uint64_t acc;
+    int bits;
+    bool err;
+} d3bits;
+
+static uint32_t d3_get(d3bits *b, int n)
+{
+    if (n == 0)
+        return 0;
+    while (b->bits < n) {
+        if (b->p >= b->end)
+            b->err = true; /* a stream that needs bytes past its end is damaged */
+        b->acc = (b->acc << 8) | (b->p < b->end ? *b->p++ : 0);
+        b->bits += 8;
+    }
+    b->bits -= n;
+    return (uint32_t)((b->acc >> b->bits) & ((1ull << n) - 1));
+}
+
+/* A match length code, before the bias. */
+static uint32_t d3_length(d3bits *b)
+{
+    int k = 0;
+    while (k < 10 && d3_get(b, 1))
+        k++;
+    switch (k) {
+    case 0:
+        return d3_get(b, 1);
+    case 1:
+        return d3_get(b, 1) ? d3_get(b, 1) + 3 : 2;
+    case 2:
+        return d3_get(b, 1) ? d3_get(b, 2) + 7 : d3_get(b, 1) + 5;
+    case 3:
+        return d3_get(b, 3) + 11;
+    case 4:
+        return d3_get(b, 3) + 19;
+    case 5:
+        return d3_get(b, 5) + 27;
+    case 6:
+        return d3_get(b, 6) + 59;
+    case 7:
+        return d3_get(b, 7) + 123;
+    case 8:
+        return d3_get(b, 8) + 251;
+    case 9:
+        return d3_get(b, 9) + 507;
+    default:
+        return d3_get(b, 10) + 1019;
+    }
+}
+
+/* The length of a literal run (1 or more). */
+static uint32_t d3_literals(d3bits *b)
+{
+    if (!d3_get(b, 1))
+        return 1;
+    switch (d3_get(b, 2)) {
+    case 0:
+        return 2;
+    case 1:
+        return 3;
+    case 2:
+        return d3_get(b, 2) + 4;
+    default: {
+        uint32_t x = d3_get(b, 4);
+        if (x <= 7)
+            return x + 8;
+        if (x <= 11)
+            return (x - 8) * 4 + 16 + d3_get(b, 2);
+        return (x - 12) * 8 + 32 + d3_get(b, 3);
+    }
+    }
+}
+
+/* The distance back from the end of the output (1 or more), `pos` bytes in. */
+static uint32_t d3_distance(d3bits *b, uint32_t pos)
+{
+    const dcmp3_class *c = dcmp3_classes;
+    while (pos > c->maxpos)
+        c++;
+    if (!d3_get(b, 1))
+        return d3_get(b, c->n0) + 1;
+    if (!d3_get(b, 1))
+        return d3_get(b, c->n1) + (1u << c->n0) + 1;
+    unsigned n = 0;
+    while (n < c->nthr && pos > c->thr[n])
+        n++;
+    return d3_get(b, (int)n + 1) + (1u << c->n0) + (1u << c->n1) + 1;
+}
+
+static void dcmp3(dstate *s, uint32_t outlen)
+{
+    d3bits b = { s->p, s->end, 0, 0, false };
+    bool after_long = true; /* the last token was not a short literal run */
+    uint32_t pos = 0;
+    while (pos < outlen && !b.err) {
+        uint32_t len = d3_length(&b);
+        if (len == 0 && after_long) {
+            uint32_t n = d3_literals(&b);
+            if (n > outlen - pos) {
+                s->err = true;
+                return;
+            }
+            for (uint32_t i = 0; i < n; i++)
+                s->out[pos++] = (uint8_t)d3_get(&b, 8);
+            after_long = n >= 63;
+            continue;
+        }
+        len += after_long ? 2 : 3;
+        after_long = true;
+        uint32_t dist = d3_distance(&b, pos);
+        if (dist > pos || len > outlen - pos) {
+            s->err = true;
+            return;
+        }
+        for (uint32_t i = 0; i < len; i++, pos++)
+            s->out[pos] = s->out[pos - dist];
+    }
+    s->pos = pos;
+    if (b.err)
+        s->err = true;
+}
+
+/* The header length word is 0x12; some compressors left it 0 (their own
+ * 'dcmp' ids, 128 and up) and the Resource Manager read them all the same. */
 bool rsrc_is_compressed(const uint8_t *d, size_t len)
 {
-    return len >= 18 && be32(d) == 0xA89F6572u && be16(d + 4) == 0x0012 &&
+    return len >= 18 && be32(d) == 0xA89F6572u && (be16(d + 4) == 0x0012 || be16(d + 4) == 0) &&
            (be16(d + 6) == 0x0801 || be16(d + 6) == 0x0901);
 }
 
@@ -396,6 +570,8 @@ bool rsrc_decompress(const uint8_t *d, size_t len, uint8_t **out, size_t *out_le
         dcmp1(&s);
     else if (type == 0x0901 && id == 2)
         dcmp2(&s, d + 14, outlen);
+    else if (type == 0x0901 && id == 3)
+        dcmp3(&s, outlen);
     else {
         snprintf(err, errlen, "unsupported decompressor 'dcmp' %d", id);
         free(s.out);

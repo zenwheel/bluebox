@@ -191,6 +191,70 @@ struct ForkStoreTests {
         #expect(Array(UnsafeBufferPointer(start: out, count: outLen)) == [0, 0, 0, 8, 0x4E, 0xBA])
     }
 
+    /// A type 9 header for dcmp `id`, header length word `hdrLen`, then `body`.
+    func dcmp9Resource(id: Int, hdrLen: Int = 0x12, size: Int, body: [UInt8]) -> [UInt8] {
+        cat([0xA8, 0x9F, 0x65, 0x72], be16(hdrLen), be16(0x0901), be32(UInt32(size)), be16(id), [0, 0, 0, 0], body)
+    }
+
+    func bitString(_ bits: String) -> [UInt8] {
+        let digits = bits.filter { $0 == "0" || $0 == "1" }
+        var out = [UInt8]()
+        var i = digits.startIndex
+        while i < digits.endIndex {
+            let j = digits.index(i, offsetBy: 8, limitedBy: digits.endIndex) ?? digits.endIndex
+            var chunk = String(digits[i..<j])
+            while chunk.count < 8 { chunk += "0" }
+            out.append(UInt8(chunk, radix: 2)!)
+            i = j
+        }
+        return out
+    }
+
+    @Test func dcmp3LiteralsAndMatches() throws {
+        // A literal, a match (min length 3 after a short literal run), a run of
+        // 3 literals, a match through the mid distance form, and a match
+        // through the position-sized tail form.
+        let bits = """
+            0 0  0 01000001
+            0 0  0
+            0 0  1 01  01100010 01100011 01100100
+            1 0 0  1 0 10
+            0 1  1 1 0
+            """
+        var res = dcmp9Resource(id: 3, size: 15, body: bitString(bits))
+        #expect(rsrc_is_compressed(&res, res.count))
+        var out: UnsafeMutablePointer<UInt8>?
+        var outLen = 0
+        var err = [CChar](repeating: 0, count: 256)
+        #expect(rsrc_decompress(&res, res.count, &out, &outLen, &err, err.count))
+        defer { free(out) }
+        #expect(Array(UnsafeBufferPointer(start: out, count: outLen)) == Array("AAAAbcdAbcdAAAA".utf8))
+    }
+
+    @Test func dcmp3TruncatedAndOverlongStreamsAreRejected() {
+        var out: UnsafeMutablePointer<UInt8>?
+        var outLen = 0
+        var err = [CChar](repeating: 0, count: 256)
+        // Wants 15 bytes, has one literal.
+        var short = dcmp9Resource(id: 3, size: 15, body: bitString("0 0 0 01000001"))
+        #expect(!rsrc_decompress(&short, short.count, &out, &outLen, &err, err.count))
+        // A match reaching back before the start of the output.
+        var back = dcmp9Resource(id: 3, size: 6, body: bitString("0 0 0 01000001  0 0  1 1 0 0000"))
+        #expect(!rsrc_decompress(&back, back.count, &out, &outLen, &err, err.count))
+    }
+
+    @Test func compressedHeaderLengthWordMayBeZero() {
+        // Some compressors (with their own dcmp ids) left the header length 0.
+        var res = dcmp9Resource(id: 2, hdrLen: 0, size: 6, body: [0, 1, 2])
+        #expect(rsrc_is_compressed(&res, res.count))
+        var out: UnsafeMutablePointer<UInt8>?
+        var outLen = 0
+        var err = [CChar](repeating: 0, count: 256)
+        #expect(rsrc_decompress(&res, res.count, &out, &outLen, &err, err.count))
+        defer { free(out) }
+        #expect(Array(UnsafeBufferPointer(start: out, count: outLen)) == [0, 0, 0, 8, 0x4E, 0xBA])
+    }
+
     @Test func corruptCompressedDataIsRejected() {
         var res = dcmp0Resource(decompressedSize: 100, body: [0x02, 0x41])
         var out: UnsafeMutablePointer<UInt8>?

@@ -174,6 +174,13 @@ static int32_t call_wdef(gaddr w, int16_t msg, int32_t param)
     return (int32_t)cpu_pop32(c);
 }
 
+/* Whether a window definition is one of ours (a stub that calls native
+ * code) and not the program's. */
+static bool is_native_wdef(gaddr h)
+{
+    return !h || !rd32(h) || rd16(rd32(h)) == 0x71FF;
+}
+
 /* ---------------------------------------------------------------------- */
 /* The standard WDEF (document windows and dialog boxes) */
 
@@ -1256,7 +1263,12 @@ static gaddr new_window(gaddr storage, qrect bounds, gaddr title, bool vis, int1
     WindowRecord_set_refCon(w, refcon);
     link_behind(w, behind);
     call_wdef(w, wNew, 0);
-    call_wdef(w, wCalcRgns, 0);
+    /* A program's own definition on a window that isn't shown yet works out
+     * its regions when it is shown: CanOpener's WDEF calls routines the
+     * program gives it after NewCWindow returns, and crashed asked for the
+     * regions before. */
+    if (vis || is_native_wdef(wdef))
+        call_wdef(w, wCalcRgns, 0);
     tb_SetPort(saved);
     if (vis) {
         update_active();

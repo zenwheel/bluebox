@@ -45,6 +45,8 @@ static bool guest_decompress(const uint8_t *d, uint32_t len, uint8_t **out, size
     int version = d[6];
     int16_t id = version == 8 ? (int16_t)((d[14] << 8) | d[15]) : (int16_t)((d[12] << 8) | d[13]);
     uint32_t hdrlen = (uint32_t)((d[4] << 8) | d[5]);
+    if (hdrlen == 0) /* left unset by some compressors: the standard 18 */
+        hdrlen = 18;
     uint32_t outlen = ((uint32_t)d[8] << 24) | ((uint32_t)d[9] << 16) | ((uint32_t)d[10] << 8) | d[11];
     if ((version != 8 && version != 9) || hdrlen > len || depth > 0 || !g_cpu)
         return false;

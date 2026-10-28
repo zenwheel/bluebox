@@ -1,6 +1,7 @@
 /*
  * BLUEBOX_CODECHECK=N: the program's code compared with a copy after
- * every Nth Toolbox call (1, or nothing, for every one), so a call that
+ * every Nth Toolbox call (1, or nothing after the =, for every one; 0 or
+ * the variable unset for none), so a call that
  * writes into it is named rather than the illegal instruction met later
  * when the program runs into the damage.  The code is the PowerPC code
  * sections of the fragments the Code Fragment Manager loads, each copied
@@ -31,7 +32,9 @@ static bool enabled(void)
 {
     if (every < 0) {
         const char *e = getenv("BLUEBOX_CODECHECK");
-        every = e ? (atoi(e) > 0 ? atoi(e) : 1) : 0;
+        /* "0" is none (the walk script sets it so); unset is none, and a
+         * variable set to anything else that isn't a number is every call. */
+        every = !e ? 0 : atoi(e) > 0 ? atoi(e) : *e == '0' ? 0 : 1;
     }
     return every > 0;
 }
