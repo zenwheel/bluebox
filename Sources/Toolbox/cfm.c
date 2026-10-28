@@ -229,6 +229,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ots_export_count; i++)
         if (!strcmp(ots_exports[i].name, name))
             return ots_exports[i].fn;
+    void (*ot2)(ppc_cpu *) = ot2_export_fn(name); /* Open Transport's utilities, ports, options, XTI ... */
+    if (ot2)
+        return ot2;
     for (unsigned i = 0; i < ctb_export_count; i++)
         if (!strcmp(ctb_exports[i].name, name))
             return ctb_exports[i].fn;

@@ -69,13 +69,18 @@ typedef struct {
     struct sockaddr_in peer;
     bool connecting;     /* a connect in progress */
     bool connected;      /* it finished: T_CONNECT until OTRcvConnect */
-    bool told_connect, told_data, told_ordrel, told_disc, told_listen, flow;
+    bool told_connect, told_data, told_ordrel, told_disc, told_listen, flow, told_exdata;
     bool heard_ordrel; /* the notifier has had T_ORDREL */
     bool eof;            /* the other end released */
     bool disconnected;   /* reset or refused: T_DISCONNECT until OTRcvDisconnect */
     int disc_reason;
     struct ot_atalk *at;
     struct ot_session *ss;
+    struct ot_optstore *opts; /* options negotiated (ot_options.c) */
+    bool m68k;           /* opened by 68k code: its notifier is 68k code */
+    int32_t cancel_err;  /* OTCancelSynchronousCalls: blocked calls return this */
+    int32_t last_err;    /* XTI's t_errno for this endpoint's last call */
+    bool owned_by_xti;   /* opened by t_open */
 } provider;
 
 extern provider ot_providers[MAX_PROVIDERS];
@@ -92,7 +97,7 @@ bool ot_wait_slice(provider *p);
 
 /* Data given as a chain of OTData (fNext, fData, fLen) rather than one
  * buffer: a TNetbuf's len, or OTSnd's byte count, kNetbufDataIsOTData. */
-enum { kNetbufDataIsOTData = 0xFFFFFFFEu };
+enum { kNetbufDataIsOTData = 0xFFFFFFFEu, kNetbufDataIsOTBufferStar = 0xFFFFFFFDu };
 /* The bytes of data at buf (len of them, or an OTData chain). */
 uint32_t ot_data_len(gaddr buf, uint32_t len);
 /* Up to max of them copied out: the number copied. */
@@ -152,5 +157,74 @@ void ots_SndDisconnect(ppc_cpu *c, provider *p);
 void ots_RcvDisconnect(ppc_cpu *c, provider *p);
 void ots_SndURequest(ppc_cpu *c, provider *p);
 void ots_RcvUReply(ppc_cpu *c, provider *p);
+
+
+/* ---- Shared with the other Open Transport files ---- */
+
+/* Whether a notifier is running now (deferred task time: no synchronous
+ * calls, as OTCanMakeSyncCall says). */
+bool ot_in_notifier(void);
+/* Whether the call being served came from 68k code (ot_68k.c sets it): the
+ * program's callbacks and notifiers are then 68k routines. */
+extern bool ot_from_68k;
+/* Run the program's callback proc (PowerPC or 68k) with long arguments;
+ * procinfo describes them as a Mixed Mode procInfo does. */
+uint32_t ot_callproc(gaddr proc, uint32_t procinfo, const uint32_t *args, int n);
+uint32_t ot_callproc_as(bool m68k, gaddr proc, uint32_t procinfo, const uint32_t *args, int n);
+
+/* ot_util.c */
+void ot_util_reset(void);
+uint32_t ot_make_port_ref(uint32_t bus, uint32_t dev, uint32_t slot, uint32_t other);
+gaddr ot_buffer_new(const uint8_t *data, uint32_t len);
+
+/* ot_hostnet.c: the host's network, as Open Transport reports it. */
+typedef struct {
+    char name[16];       /* the host's name for it (en0) */
+    uint32_t addr, mask, bcast, gateway, dns, mtu;
+    char domain[256];
+    uint8_t mac[6];
+    bool up, running, primary;
+    int nsecondary;
+    uint32_t secondary[16];
+} ot_ifinfo;
+int ot_host_interfaces(ot_ifinfo *out, int max);
+bool ot_primary_interface(ot_ifinfo *out);
+void ot_host_name(char *name, size_t size);
+
+/* ot_ports.c: the port registry and registered clients. */
+void ot_ports_reset(void);
+void ot_ports_poll(void);
+/* An event for every registered client, delivered at the next poll. */
+void ot_clients_post(uint32_t code, int32_t result, gaddr cookie);
+/* The port reference of the first (primary) Ethernet port. */
+uint32_t ot_default_port_ref(void);
+/* Open Transport's TCP/IP stack being used for the first time. */
+void ot_stack_loading(void);
+
+/* ot_options.c: what was negotiated stays with the endpoint. */
+void ot_options_free(provider *p);
+int32_t ot_option_mgmt(provider *p, gaddr req, gaddr ret);
+/* Negotiate the options in a call's or datagram's option netbuf. */
+void ot_options_apply(provider *p, gaddr nb);
+/* Put the endpoint's options on a new host socket. */
+void ot_options_reapply(provider *p);
+/* AppleTalk's endpoints read the long or bytes negotiated for an option. */
+bool ot_option_long(provider *p, uint32_t level, uint32_t name, uint32_t *out);
+uint32_t ot_option_bytes(provider *p, uint32_t level, uint32_t name, uint8_t *out, uint32_t max);
+
+/* ot_inet.c */
+void ot_inet_reset(void);
+
+/* Bring one provider's state up to date with its socket. */
+void ot_poll_provider(provider *p);
+void ot_put_info(gaddr info, provider_kind kind);
+
+/* The tables of the files after opentransport.c's (ot_exports.c looks in
+ * them all), and Open Transport's data exports. */
+extern const ppc_export otu_exports[], otp_exports[], oto_exports[], oti_exports[], otc_exports[], otx_exports[];
+extern const unsigned otu_export_count, otp_export_count, oto_export_count, oti_export_count, otc_export_count,
+    otx_export_count;
+gaddr ot_xti_errno_address(void);
+void ot_xti_reset(void);
 
 #endif

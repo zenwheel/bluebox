@@ -828,6 +828,9 @@ void ppc_trap_ctx_save(ppc_trap_ctx *t);
 void ppc_trap_ctx_load(const ppc_trap_ctx *t);
 /* Open Transport (opentransport.c). */
 void opentransport_reset(void);
+/* Open Transport's DNS queries ask this name server (an address and port) instead of the
+ * host's; 0 undoes it (the tests', and a program's environment). */
+void ot_inet_set_dns(uint32_t ip, uint16_t port);
 void opentransport_poll(void);
 bool mm_ctx_returned(void);
 void mm_ctx_set_returned(bool r);

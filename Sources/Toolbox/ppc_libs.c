@@ -1803,6 +1803,8 @@ bool ppc_data_export_known(const char *name)
         return true;
     if (carbon_cf_data_known(name))
         return true;
+    if (ot2_data_known(name))
+        return true;
     static const char *const names[] = { "CallComponentUPP", "pi", "__huge_val" };
     for (unsigned i = 0; i < sizeof names / sizeof names[0]; i++)
         if (!strcmp(name, names[i]))
@@ -1818,6 +1820,8 @@ gaddr ppc_data_export(const char *name)
         return stdclib_data_export(name);
     if (carbon_cf_data_known(name))
         return carbon_cf_data_export(name);
+    if (ot2_data_known(name))
+        return ot2_data_export(name);
     if (!strcmp(name, "CallComponentUPP"))
         return mm_call_component_upp();
     if (!strcmp(name, "pi")) {

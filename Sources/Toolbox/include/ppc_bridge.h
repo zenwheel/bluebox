@@ -112,6 +112,11 @@ void ot_unsupported(ppc_cpu *c); /* the rest of Open Transport: kOTNotSupportedE
 /* Open Transport's AppleTalk (ot_appletalk.c). */
 extern const ppc_export ota_exports[];
 extern const unsigned ota_export_count;
+/* The rest of Open Transport (ot_exports.c finds a name in ot_util.c, ot_ports.c,
+ * ot_options.c, ot_inet.c, ot_client.c, ot_xti.c and ot_68k.c) and its data. */
+void (*ot2_export_fn(const char *name))(ppc_cpu *);
+bool ot2_data_known(const char *name);
+gaddr ot2_data_export(const char *name);
 /* Its PAP and ASP endpoints' transactions (ot_session.c). */
 extern const ppc_export ots_exports[];
 extern const unsigned ots_export_count;

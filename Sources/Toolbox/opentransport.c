@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -56,6 +57,9 @@ provider ot_providers[MAX_PROVIDERS];
 static ot_event events[MAX_EVENTS];
 static int nevents;
 static bool delivering;
+static int notifier_depth; /* notifiers running (deferred task time) */
+
+bool ot_in_notifier(void) { return delivering || notifier_depth > 0; }
 
 static gaddr new_ref(int i)
 {
@@ -79,7 +83,10 @@ int ot_new_provider(provider_kind kind)
 {
     for (int i = 0; i < MAX_PROVIDERS; i++) {
         if (!providers[i].used) {
-            providers[i] = (provider){ .used = true, .kind = kind, .fd = -1, .pending_fd = -1, .state = T_UNBND };
+            providers[i] = (provider){ .used = true, .kind = kind, .fd = -1, .pending_fd = -1, .state = T_UNBND,
+                                       .m68k = ot_from_68k };
+            if (kind == P_TCP || kind == P_UDP || kind == P_INET_SERVICES)
+                ot_stack_loading(); /* the first use loads TCP/IP, and the registered clients hear of it */
             providers[i].ref = new_ref(i);
             if (!providers[i].ref) {
                 providers[i].used = false;
@@ -103,6 +110,7 @@ static void close_provider(provider *p)
     for (int k = 0; k < nevents; k++)
         if (events[k].provider == i)
             events[k].provider = -1;
+    ot_options_free(p);
     wr32(p->ref, 0);
     tb_DisposePtr(p->ref);
     p->used = false;
@@ -117,11 +125,16 @@ void opentransport_reset(void)
             if (providers[i].pending_fd >= 0)
                 close(providers[i].pending_fd);
             free(providers[i].at); /* AppleTalk went with the machine */
+            ot_options_free(&providers[i]);
         }
     }
     memset(providers, 0, sizeof providers);
     nevents = 0;
     delivering = false;
+    notifier_depth = 0;
+    ot_util_reset();
+    ot_ports_reset();
+    ot_inet_reset();
 }
 
 /* ---- Notifiers ---- */
@@ -139,15 +152,29 @@ static void call_notifier(provider *p, uint32_t code, int32_t result, gaddr cook
         p->heard_ordrel = true;
     if (code != kOTSyncIdleEvent)
         LOGF(LOG_TRAPS, "OT: notifier %d event %08X result %d cookie %08X\n", (int)(p - providers), code, result, cookie);
-    /* void (*OTNotifyProcPtr)(void *contextPtr, OTEventCode, OTResult, void *cookie) */
+    /* void (*OTNotifyProcPtr)(void *contextPtr, OTEventCode, OTResult, void *cookie):
+     * a Pascal-convention routine for 68k code */
     uint32_t args[4] = { p->context, code, (uint32_t)result, cookie };
-    if (mm_is_descriptor(p->notifier))
-        mm_call(p->notifier, 0x00003FC1 /* C, four longs */, args, 4);
-    else
-        ppc_call(p->notifier, args, 4);
+    notifier_depth++;
+    ot_callproc_as(p->m68k, p->notifier, 0x00003FC0, args, 4);
+    notifier_depth--;
+}
+
+/* Whether TCP urgent data is waiting on the socket (not read in line): the
+ * socket has an exceptional condition. */
+static bool has_urgent(int fd)
+{
+    if (fd < 0 || fd >= FD_SETSIZE)
+        return false;
+    fd_set ex;
+    FD_ZERO(&ex);
+    FD_SET(fd, &ex);
+    struct timeval none = { 0, 0 };
+    return select(fd + 1, NULL, NULL, &ex, &none) > 0 && FD_ISSET(fd, &ex);
 }
 
 static void poll_provider(provider *p);
+void ot_poll_provider(provider *p) { poll_provider(p); }
 
 /* Bring the providers' events up to date and hand the waiting ones to the
  * notifiers.  Called when the program asks for an event or yields. */
@@ -156,6 +183,7 @@ void opentransport_poll(void)
     if (delivering || g_cpu->halted)
         return;
     delivering = true;
+    ot_ports_poll();
     for (int i = 0; i < MAX_PROVIDERS; i++)
         if (providers[i].used)
             poll_provider(&providers[i]);
@@ -256,7 +284,17 @@ bool ot_wait_slice(provider *p)
     return !g_cpu->halted && p->used;
 }
 
-/* Wait for the socket in blocking mode: false if the machine stopped. */
+/* A blocked call cancelled by OTCancelSynchronousCalls: the error it
+ * returns, once. */
+static int32_t take_cancel(provider *p)
+{
+    int32_t e = p->cancel_err;
+    p->cancel_err = 0;
+    return e;
+}
+
+/* Wait for the socket in blocking mode: false if the machine stopped or the
+ * call was cancelled (take_cancel says which). */
 static bool wait_fd(provider *p, int fd, short what)
 {
     for (;;) {
@@ -266,7 +304,7 @@ static bool wait_fd(provider *p, int fd, short what)
         if (p->notifier && !delivering)
             call_notifier(p, kOTSyncIdleEvent, 0, 0);
         machine_pass_tick();
-        if (g_cpu->halted || !p->used)
+        if (g_cpu->halted || !p->used || p->cancel_err)
             return false;
     }
 }
@@ -334,6 +372,14 @@ static void poll_provider(provider *p)
                 p->disc_reason = errno;
             }
         }
+        if (p->kind == P_TCP && has_urgent(p->fd)) {
+            if (!p->told_exdata) {
+                p->told_exdata = true;
+                ot_post(p, T_EXDATA, 0, 0);
+            }
+        } else {
+            p->told_exdata = false;
+        }
         if (p->eof && !p->told_ordrel) {
             p->told_ordrel = true;
             ot_post(p, T_ORDREL, 0, 0);
@@ -388,7 +434,9 @@ static provider_kind kind_of(gaddr cfg)
 }
 
 /* TEndpointInfo: addr, options, tsdu, etsdu, connect, discon, servtype, flags. */
-static void put_info(gaddr info, provider_kind kind)
+void ot_put_info(gaddr info, provider_kind kind);
+static void put_info(gaddr info, provider_kind kind) { ot_put_info(info, kind); }
+void ot_put_info(gaddr info, provider_kind kind)
 {
     if (!info)
         return;
@@ -403,7 +451,7 @@ static void put_info(gaddr info, provider_kind kind)
     wr32(info + 16, (uint32_t)-2);
     wr32(info + 20, (uint32_t)-2);
     wr32(info + 24, kind == P_UDP ? 3 : 2); /* T_CLTS, T_COTS_ORD */
-    wr32(info + 28, 0);
+    wr32(info + 28, 0x2 | 0x40000000);     /* T_XPG4_1, T_CAN_RESOLVE_ADDR */
 }
 
 static int open_endpoint(gaddr cfg, gaddr info, int32_t *err)
@@ -605,6 +653,7 @@ static void ot_Connect(ppc_cpu *c)
         RETURN((uint32_t)kOTOutStateErr);
         return;
     }
+    ot_options_apply(p, snd + 12); /* the options the connection asks for */
     LOGF(LOG_TRAPS, "OT: connect %d to %s:%u (%s, %s)\n", (int)(p - providers), inet_ntoa(sa.sin_addr),
          ntohs(sa.sin_port), p->async ? "async" : "sync", p->blocking ? "blocking" : "non-blocking");
     p->peer = sa;
@@ -620,7 +669,14 @@ static void ot_Connect(ppc_cpu *c)
         p->connected = true;
     if (!p->async && p->blocking) {
         if (p->connecting && !wait_fd(p, p->fd, POLLOUT)) {
-            RETURN((uint32_t)kETIMEDOUTErr);
+            int32_t ce = p->used ? take_cancel(p) : 0;
+            if (ce) { /* the attempt is given up: a fresh socket */
+                close(p->fd);
+                p->fd = make_socket(p->kind);
+                p->state = T_IDLE;
+                p->connecting = p->connected = false;
+            }
+            RETURN((uint32_t)(ce ? ce : kETIMEDOUTErr));
             return;
         }
         poll_provider(p);
@@ -650,8 +706,14 @@ static void ot_RcvConnect(ppc_cpu *c)
     }
     poll_provider(p);
     while (p->connecting && p->blocking && !p->async) {
-        if (!wait_fd(p, p->fd, POLLOUT))
+        if (!wait_fd(p, p->fd, POLLOUT)) {
+            int32_t ce = p->used ? take_cancel(p) : 0;
+            if (ce) {
+                RETURN((uint32_t)ce);
+                return;
+            }
             break;
+        }
         poll_provider(p);
     }
     if (p->disconnected) {
@@ -675,8 +737,14 @@ static void ot_Listen(ppc_cpu *c)
     ENDPOINT(p, ota_Listen);
     poll_provider(p);
     while (p->pending_fd < 0 && p->blocking && !p->async && p->qlen > 0) {
-        if (!wait_fd(p, p->fd, POLLIN))
+        if (!wait_fd(p, p->fd, POLLIN)) {
+            int32_t ce = p->used ? take_cancel(p) : 0;
+            if (ce) {
+                RETURN((uint32_t)ce);
+                return;
+            }
             break;
+        }
         poll_provider(p);
     }
     if (p->pending_fd < 0) {
@@ -710,6 +778,9 @@ static void ot_Accept(ppc_cpu *c)
         w->peer = p->pending_peer;
         w->state = T_DATAXFER;
         w->connected = w->told_connect = true;
+        ot_options_reapply(w); /* what the worker had negotiated goes on the new socket */
+        if (R(2))
+            ot_options_apply(w, R(2) + 12);
     }
     p->pending_fd = -1;
     p->told_listen = false;
@@ -765,8 +836,13 @@ static void ot_Snd(ppc_cpu *c)
         }
         ot_data_get(gathered, buf, kNetbufDataIsOTData, n);
     }
+    int sendflags = R(3) & T_EXPEDITED ? MSG_OOB : 0; /* expedited data goes as TCP urgent data */
+    /* The host's stack loses urgent data sent on a non-blocking socket. */
+    int oldfl = sendflags ? fcntl(p->fd, F_GETFL) : 0;
+    if (sendflags)
+        fcntl(p->fd, F_SETFL, oldfl & ~O_NONBLOCK);
     while (done < n) {
-        ssize_t r = send(p->fd, gathered ? gathered + done : gptr(buf + done), n - done, 0);
+        ssize_t r = send(p->fd, gathered ? gathered + done : gptr(buf + done), n - done, sendflags);
         LOGF(LOG_TRAPS, "OT: snd %d: %zd of %u\n", (int)(p - providers), r, n - done);
         if (r > 0) {
             done += (uint32_t)r;
@@ -775,9 +851,19 @@ static void ot_Snd(ppc_cpu *c)
         if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
             if (p->blocking && !p->async && wait_fd(p, p->fd, POLLOUT))
                 continue;
+            if (p->used && p->cancel_err) {
+                int32_t ce = take_cancel(p);
+                free(gathered);
+                if (sendflags)
+                    fcntl(p->fd, F_SETFL, oldfl);
+                RETURN((uint32_t)(done ? done : (uint32_t)ce));
+                return;
+            }
             if (!done) {
                 p->flow = true;
                 free(gathered);
+                if (sendflags)
+                    fcntl(p->fd, F_SETFL, oldfl);
                 RETURN((uint32_t)kOTFlowErr);
                 return;
             }
@@ -786,10 +872,14 @@ static void ot_Snd(ppc_cpu *c)
         p->disconnected = true;
         p->disc_reason = errno;
         free(gathered);
+        if (sendflags)
+            fcntl(p->fd, F_SETFL, oldfl);
         RETURN((uint32_t)(done ? done : (uint32_t)kOTLookErr));
         return;
     }
     free(gathered);
+    if (sendflags)
+        fcntl(p->fd, F_SETFL, oldfl);
     RETURN(done);
 }
 
@@ -799,6 +889,11 @@ static void ot_Rcv(ppc_cpu *c)
     ENDPOINT(p, ota_Rcv);
     gaddr buf = R(1), flags = R(3);
     uint32_t n = R(2);
+    bool nocopy = n == kNetbufDataIsOTBufferStar; /* buf is the address of an OTBuffer * to fill */
+    static uint8_t nocopy_bytes[65536];
+    uint8_t *bounce = nocopy ? nocopy_bytes : NULL;
+    if (nocopy)
+        n = sizeof nocopy_bytes;
     if (flags)
         wr32(flags, 0);
     for (;;) {
@@ -810,9 +905,25 @@ static void ot_Rcv(ppc_cpu *c)
             RETURN((uint32_t)kOTOutStateErr);
             return;
         }
-        if (g_code_map && n)
+        if (g_code_map && n && !nocopy)
             mem_code_range(buf, n);
-        ssize_t r = recv(p->fd, gptr(buf), n, 0);
+        ssize_t r;
+        int rflags = 0;
+        if (has_urgent(p->fd)) /* urgent data (not in line with the rest) is read first and flagged */
+            rflags = MSG_OOB;
+        r = recv(p->fd, bounce ? (void *)bounce : gptr(buf), n, rflags);
+        if (r < 0 && rflags) { /* nothing to read as urgent after all */
+            rflags = 0;
+            r = recv(p->fd, bounce ? (void *)bounce : gptr(buf), n, 0);
+        }
+        if (r > 0 && rflags && flags)
+            wr32(flags, T_EXPEDITED);
+        if (r > 0 && bounce) { /* the bytes as a chain of OTBuffer */
+            gaddr head = ot_buffer_new(bounce, (uint32_t)r);
+            wr32(buf, head);
+            RETURN(head ? (uint32_t)r : (uint32_t)kOTOutOfMemoryErr);
+            return;
+        }
         LOGF(LOG_TRAPS, "OT: rcv %d: %zd of %u%s%s\n", (int)(p - providers), r, n, r < 0 ? ", " : "",
              r < 0 ? strerror(errno) : "");
         if (r > 0) {
@@ -846,6 +957,10 @@ static void ot_Rcv(ppc_cpu *c)
         }
         if (p->blocking && !p->async && wait_fd(p, p->fd, POLLIN))
             continue;
+        if (p->used && p->cancel_err) {
+            RETURN((uint32_t)take_cancel(p));
+            return;
+        }
         p->told_data = false; /* the next data says so again */
         RETURN((uint32_t)kOTNoDataErr);
         return;
@@ -863,6 +978,8 @@ static void ot_Look(ppc_cpu *c)
         RETURN(T_CONNECT);
     else if (p->pending_fd >= 0)
         RETURN(T_LISTEN);
+    else if (p->kind == P_TCP && p->fd >= 0 && p->told_exdata)
+        RETURN(T_EXDATA);
     else if (p->eof) {
         /* data still to read comes first */
         char b;
@@ -940,10 +1057,19 @@ static void ot_RcvDisconnect(ppc_cpu *c)
     RETURN(kOTNoError);
 }
 
+/* OTResolveAddress(ep, reqAddr, retAddr, timeout): a DNS address
+ * ("host:port") as the InetAddress it names. */
 static void ot_ResolveAddress(ppc_cpu *c)
 {
     ENDPOINT(p, ota_ResolveAddress);
-    RETURN((uint32_t)kOTNotSupportedErr);
+    gaddr req = R(1), ret = R(2);
+    struct sockaddr_in sa;
+    if (!req || !ret || !get_inet(rd32(req + 8), rd32(req + 4), &sa)) {
+        RETURN((uint32_t)kOTBadAddressErr);
+        return;
+    }
+    netbuf_put_inet(ret, &sa);
+    ot_complete(c, p, T_RESOLVEADDRCOMPLETE, kOTNoError, ret);
 }
 
 static void ot_GetEndpointState(ppc_cpu *c)
@@ -951,20 +1077,6 @@ static void ot_GetEndpointState(ppc_cpu *c)
     PROVIDER(p);
     poll_provider(p);
     RETURN((uint32_t)p->state);
-}
-
-/* OTOptionManagement(ep, req, ret): options are taken as they are */
-static void ot_OptionManagement(ppc_cpu *c)
-{
-    PROVIDER(p);
-    gaddr req = R(1), ret = R(2);
-    if (req && ret && rd32(ret + 8) && rd32(req + 8)) {
-        uint32_t n = rd32(req + 4) < rd32(ret) ? rd32(req + 4) : rd32(ret);
-        gmemcpy(rd32(ret + 8), rd32(req + 8), n);
-        wr32(ret + 4, n);
-        wr32(ret + 12, rd32(req + 12)); /* flags */
-    }
-    ot_complete(c, p, T_OPTMGMTCOMPLETE, kOTNoError, ret);
 }
 
 /* OTGetProtAddress(ep, boundAddr TBind *, peerAddr TBind *) */
@@ -994,6 +1106,7 @@ static void ot_SndUData(ppc_cpu *c)
         RETURN((uint32_t)kOTBadAddressErr);
         return;
     }
+    ot_options_apply(p, ud + 12); /* per-datagram options (TTL, TOS, broadcast ...) */
     static uint8_t data[65536];
     uint32_t n = ot_data_get(data, rd32(ud + 32), rd32(ud + 28), sizeof data);
     ssize_t r = sendto(p->fd, data, n, 0, (struct sockaddr *)&sa, sizeof sa);
@@ -1009,17 +1122,30 @@ static void ot_RcvUData(ppc_cpu *c)
     for (;;) {
         struct sockaddr_in sa;
         socklen_t len = sizeof sa;
-        if (g_code_map && rd32(ud + 24))
+        bool nocopy = rd32(ud + 24) == kNetbufDataIsOTBufferStar; /* the buffer is an OTBuffer * to fill */
+        static uint8_t nocopy_bytes[65536];
+        if (g_code_map && rd32(ud + 24) && !nocopy)
             mem_code_range(rd32(ud + 32), rd32(ud + 24));
-        ssize_t r = recvfrom(p->fd, gptr(rd32(ud + 32)), rd32(ud + 24), 0, (struct sockaddr *)&sa, &len);
+        ssize_t r = recvfrom(p->fd, nocopy ? (void *)nocopy_bytes : gptr(rd32(ud + 32)),
+                             nocopy ? sizeof nocopy_bytes : rd32(ud + 24), 0, (struct sockaddr *)&sa, &len);
         if (r >= 0) {
-            wr32(ud + 28, (uint32_t)r);
+            if (nocopy) {
+                gaddr head = ot_buffer_new(nocopy_bytes, (uint32_t)r);
+                wr32(rd32(ud + 32), head);
+                wr32(ud + 28, (uint32_t)r);
+            } else {
+                wr32(ud + 28, (uint32_t)r);
+            }
             netbuf_put_inet(ud, &sa);
             RETURN(kOTNoError);
             return;
         }
         if ((errno == EAGAIN || errno == EWOULDBLOCK) && p->blocking && !p->async && wait_fd(p, p->fd, POLLIN))
             continue;
+        if (p->used && p->cancel_err) {
+            RETURN((uint32_t)take_cancel(p));
+            return;
+        }
         p->told_data = false;
         RETURN((uint32_t)kOTNoDataErr);
         return;
@@ -1078,8 +1204,6 @@ static void ot_InetStringToAddress(ppc_cpu *c)
     }
 }
 
-static void ot_InetMailExchange(ppc_cpu *c) { RETURN((uint32_t)kOTNotSupportedErr); }
-
 /* OTInetHostToString(host, char *str) */
 static void ot_InetHostToString(ppc_cpu *c)
 {
@@ -1136,45 +1260,6 @@ static void ot_InitDNSAddress(ppc_cpu *c)
         wr8(a + 2 + n, 0);
     }
     RETURN(2 + n);
-}
-
-/* The host's address on the network the default route uses. */
-static uint32_t local_address(void)
-{
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0)
-        return 0x7F000001;
-    struct sockaddr_in sa = { 0 };
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(53);
-    sa.sin_addr.s_addr = htonl(0x08080808);
-    uint32_t ip = 0x7F000001;
-    if (connect(fd, (struct sockaddr *)&sa, sizeof sa) == 0) {
-        socklen_t len = sizeof sa;
-        if (getsockname(fd, (struct sockaddr *)&sa, &len) == 0)
-            ip = ntohl(sa.sin_addr.s_addr);
-    }
-    close(fd);
-    return ip;
-}
-
-/* OTInetGetInterfaceInfo(InetInterfaceInfo *, index): one interface */
-static void ot_InetGetInterfaceInfo(ppc_cpu *c)
-{
-    gaddr info = R(0);
-    if ((R(1) != 0 && R(1) != 0xFFFFFFFFu) || !info) { /* 0 or kDefaultInetInterface */
-        RETURN((uint32_t)kOTNotFoundErr);
-        return;
-    }
-    uint32_t ip = local_address();
-    gmemset(info, 0, 36);
-    wr32(info + 0, ip);
-    wr32(info + 4, 0xFFFFFF00);           /* netmask */
-    wr32(info + 8, (ip & 0xFFFFFF00) | 0xFF);
-    wr32(info + 12, (ip & 0xFFFFFF00) | 1); /* gateway */
-    wr32(info + 16, (ip & 0xFFFFFF00) | 1); /* name server */
-    wr16(info + 20, 1);                    /* fVersion */
-    RETURN(kOTNoError);
 }
 
 /* ---- OTUtilityLib ---- */
@@ -1504,8 +1589,37 @@ static void ot_ReadBuffer(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-/* OTAlloc(ref, structType, fields, &err): an XTI structure with buffers. */
-enum { T_BIND = 1, T_OPTMGMT, T_CALL, T_DIS, T_UNITDATA, T_UDERROR, T_INFO, T_REPLYDATA, T_REQUESTDATA };
+/* OTAlloc(ref, structType, fields, &err): an XTI structure with the buffers
+ * its fields ask for, sized from the endpoint's TEndpointInfo. */
+enum { T_BIND = 1, T_OPTMGMT, T_CALL, T_DIS, T_UNITDATA, T_UDERROR, T_INFO, T_REPLYDATA, T_REQUESTDATA, T_UNITREQUEST,
+       T_UNITREPLY };
+enum { F_ADDR = 1, F_OPT = 2, F_UDATA = 4 };
+
+/* The structure's size and the netbufs it begins with, each with the field
+ * that asks for it: 0 ends the list. */
+typedef struct {
+    uint32_t size;
+    uint8_t nbufs[4]; /* F_ADDR, F_OPT, F_UDATA per netbuf, in order */
+} structdef;
+
+static const structdef *struct_def(uint32_t type)
+{
+    static const structdef defs[] = {
+        [T_BIND] = { 16, { F_ADDR } },
+        [T_OPTMGMT] = { 16, { F_OPT } },
+        [T_CALL] = { 40, { F_ADDR, F_OPT, F_UDATA } },
+        [T_DIS] = { 20, { F_UDATA } },
+        [T_UNITDATA] = { 36, { F_ADDR, F_OPT, F_UDATA } },
+        [T_UDERROR] = { 28, { F_ADDR, F_OPT } },
+        [T_INFO] = { 32, { 0 } },
+        [T_REPLYDATA] = { 28, { F_UDATA, F_OPT } },
+        [T_REQUESTDATA] = { 28, { F_UDATA, F_OPT } },
+        [T_UNITREQUEST] = { 40, { F_ADDR, F_OPT, F_UDATA } },
+        [T_UNITREPLY] = { 28, { F_OPT, F_UDATA } },
+    };
+    return type >= 1 && type <= T_UNITREPLY ? &defs[type] : NULL;
+}
+
 static void alloc_netbuf(gaddr nb, uint32_t size)
 {
     gaddr b = tb_NewPtr((int32_t)size, false, true);
@@ -1513,49 +1627,67 @@ static void alloc_netbuf(gaddr nb, uint32_t size)
     wr32(nb + 4, 0);
     wr32(nb + 8, b);
 }
+
+/* The size of the buffer for a field, from the endpoint's own limits. */
+static uint32_t field_size(provider *p, int field)
+{
+    uint8_t info[32] = { 0 };
+    gaddr tmp = tb_NewPtr(32, true, true);
+    uint32_t size = field == F_ADDR ? 16 : field == F_OPT ? 1024 : 1024;
+    if (tmp && p) {
+        ot_put_info(tmp, p->kind);
+        gget(info, tmp, 32);
+        int32_t v = (int32_t)(info[field == F_ADDR ? 0 : field == F_OPT ? 4 : 8] << 24 |
+                              info[(field == F_ADDR ? 0 : field == F_OPT ? 4 : 8) + 1] << 16 |
+                              info[(field == F_ADDR ? 0 : field == F_OPT ? 4 : 8) + 2] << 8 |
+                              info[(field == F_ADDR ? 0 : field == F_OPT ? 4 : 8) + 3]);
+        if (field == F_UDATA && v <= 0) /* a stream or no limit: a page's worth */
+            v = 4096;
+        if (v > 0)
+            size = (uint32_t)v > 65536 ? 65536 : (uint32_t)v;
+    }
+    if (tmp)
+        tb_DisposePtr(tmp);
+    return size;
+}
+
 static void ot_Alloc(ppc_cpu *c)
 {
+    provider *p = ot_provider_of(R(0));
     uint32_t type = R(1), fields = R(2);
-    static const uint32_t sizes[] = { 0, 16, 16, 40, 20, 36, 28, 32 };
-    if (type < 1 || type > 7) {
+    const structdef *d = struct_def(type);
+    if (!d) {
         if (R(3))
-            wr32(R(3), (uint32_t)kOTNotSupportedErr);
+            wr32(R(3), (uint32_t)(-3149 - 20)); /* TNOSTRUCTYPE */
         RETURN(0);
         return;
     }
-    gaddr t = tb_NewPtr((int32_t)sizes[type], true, true);
-    bool addr = fields & 1, opt = fields & 2, udata = fields & 4;
-    if (t) {
-        switch (type) {
-        case T_BIND: if (addr) alloc_netbuf(t, 16); break;
-        case T_OPTMGMT: if (opt) alloc_netbuf(t, 1024); break;
-        case T_CALL: case T_UNITDATA: case T_UDERROR:
-            if (addr) alloc_netbuf(t, 16);
-            if (opt) alloc_netbuf(t + 12, 1024);
-            if (udata && type != T_UDERROR) alloc_netbuf(t + 24, 1024);
-            break;
-        case T_DIS: if (udata) alloc_netbuf(t, 1024); break;
-        default: break;
-        }
-    }
+    gaddr t = tb_NewPtr((int32_t)d->size, true, true);
+    if (t)
+        for (int i = 0; i < 4 && d->nbufs[i]; i++)
+            if (fields & d->nbufs[i])
+                alloc_netbuf(t + 12 * (uint32_t)i, field_size(p, d->nbufs[i]));
     if (R(3))
         wr32(R(3), t ? 0 : (uint32_t)kOTOutOfMemoryErr);
     RETURN(t);
 }
+
 static void ot_Free(ppc_cpu *c) /* (ptr, structType) */
 {
     gaddr t = R(0);
-    uint32_t type = R(1);
+    const structdef *d = struct_def(R(1));
+    if (!d) {
+        RETURN((uint32_t)(-3149 - 20)); /* TNOSTRUCTYPE */
+        return;
+    }
     if (t) {
-        int nbufs = type == T_CALL || type == T_UNITDATA || type == T_UDERROR ? 3 : type == T_INFO ? 0 : 1;
-        for (int i = 0; i < nbufs; i++)
+        for (int i = 0; i < 4 && d->nbufs[i]; i++)
             if (rd32(t + 12 * (uint32_t)i + 8))
                 tb_DisposePtr(rd32(t + 12 * (uint32_t)i + 8));
         tb_DisposePtr(t);
     }
     RETURN(kOTNoError);
 }
-static void ot_false(ppc_cpu *c) { RETURN(0); }
 
 /* Any other Open Transport call: not supported. */
 void ot_unsupported(ppc_cpu *c) { RETURN((uint32_t)kOTNotSupportedErr); }
@@ -1580,7 +1712,7 @@ const ppc_export ot_exports[] = {
     { "OTSnd", ot_Snd }, { "OTRcv", ot_Rcv }, { "OTLook", ot_Look }, { "OTCountDataBytes", ot_CountDataBytes },
     { "OTSndOrderlyDisconnect", ot_SndOrderlyDisconnect }, { "OTRcvOrderlyDisconnect", ot_RcvOrderlyDisconnect },
     { "OTSndDisconnect", ot_SndDisconnect }, { "OTRcvDisconnect", ot_RcvDisconnect },
-    { "OTGetEndpointState", ot_GetEndpointState }, { "OTOptionManagement", ot_OptionManagement },
+    { "OTGetEndpointState", ot_GetEndpointState },
     { "OTGetProtAddress", ot_GetProtAddress }, { "OTSndUData", ot_SndUData }, { "OTRcvUData", ot_RcvUData },
     { "OTRcvUDErr", ot_RcvUDErr }, { "OTAckSends", ot_AckSends }, { "OTDontAckSends", ot_AckSends },
     { "OTIsAckingSends", ot_AckSends }, { "OTResolveAddress", ot_ResolveAddress },
@@ -1591,10 +1723,9 @@ const ppc_export ot_exports[] = {
     { "OTAsyncOpenInternetServices", ot_AsyncOpenInternetServices },
     { "OTAsyncOpenInternetServicesPriv", ot_AsyncOpenInternetServices },
     { "OTAsyncOpenInternetServicesInContext", ot_AsyncOpenInternetServices },
-    { "OTInetStringToAddress", ot_InetStringToAddress }, { "OTInetMailExchange", ot_InetMailExchange },
+    { "OTInetStringToAddress", ot_InetStringToAddress },
     { "OTInetHostToString", ot_InetHostToString }, { "OTInetStringToHost", ot_InetStringToHost }, { "OTInitInetAddress", ot_InitInetAddress },
     { "OTInitDNSAddress", ot_InitDNSAddress },
-    { "OTInetGetInterfaceInfo", ot_InetGetInterfaceInfo },
     /* OTUtilityLib */
     { "OTAllocMem", ot_AllocMem }, { "OTFreeMem", ot_FreeMem }, { "OTMemcpy", ot_MemcpyOrMove },
     { "OTMemmove", ot_MemcpyOrMove }, { "OTMemzero", ot_Memzero }, { "OTMemset", ot_Memset },
@@ -1614,11 +1745,8 @@ const ppc_export ot_exports[] = {
     { "OTAtomicAdd8", ot_AtomicAdd8 }, { "OTCompareAndSwap32", ot_CompareAndSwap32 },
     { "OTCompareAndSwapPtr", ot_CompareAndSwap32 }, { "OTTimeStampInMilliseconds", ot_TimeStampInMilliseconds },
     { "OTDelay", ot_Delay }, { "OTBufferDataSize", ot_BufferDataSize }, { "OTReadBuffer", ot_ReadBuffer },
-    { "OTReleaseBuffer", ot_void }, { "OTAlloc", ot_Alloc }, { "OTAllocPriv", ot_Alloc },
+    { "OTAlloc", ot_Alloc }, { "OTAllocPriv", ot_Alloc },
     { "OTAllocInContext", ot_Alloc }, { "OTFree", ot_Free },
-    { "OTFindPortByRef", ot_false }, { "OTIoctl", ot_unsupported },
-    /* No ports to list (not kOTNotSupportedErr, which a caller takes as
-     * true: IPNetMonitor lists ports until OTGetIndexedPort says no more). */
-    { "OTGetIndexedPort", ot_false }, { "OTFindPort", ot_false },
+    { "OTIoctl", ot_unsupported },
 };
 const unsigned ot_export_count = sizeof ot_exports / sizeof ot_exports[0];
