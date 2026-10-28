@@ -15,12 +15,42 @@
 /* ---------------------------------------------------------------------- */
 /* Memory */
 
-static inline uint8_t mr8(cpu68k *c, uint32_t a) { return rd8(a & c->addr_mask); }
-static inline uint16_t mr16(cpu68k *c, uint32_t a) { return rd16(a & c->addr_mask); }
-static inline uint32_t mr32(cpu68k *c, uint32_t a) { return rd32(a & c->addr_mask); }
-static inline void mw8(cpu68k *c, uint32_t a, uint8_t v) { watch_store(a & c->addr_mask); wr8(a & c->addr_mask, v); }
-static inline void mw16(cpu68k *c, uint32_t a, uint16_t v) { watch_store(a & c->addr_mask); wr16(a & c->addr_mask, v); }
-static inline void mw32(cpu68k *c, uint32_t a, uint32_t v) { watch_store(a & c->addr_mask); wr32(a & c->addr_mask, v); }
+static inline uint8_t mr8(cpu68k *c, uint32_t a)
+{
+    a &= c->addr_mask;
+    return hw_mapped(a) ? (uint8_t)g_hw_read(a, 1) : rd8(a);
+}
+static inline uint16_t mr16(cpu68k *c, uint32_t a)
+{
+    a &= c->addr_mask;
+    return hw_mapped(a) ? (uint16_t)g_hw_read(a, 2) : rd16(a);
+}
+static inline uint32_t mr32(cpu68k *c, uint32_t a)
+{
+    a &= c->addr_mask;
+    return hw_mapped(a) ? g_hw_read(a, 4) : rd32(a);
+}
+static inline void mw8(cpu68k *c, uint32_t a, uint8_t v)
+{
+    a &= c->addr_mask;
+    if (hw_mapped(a)) { g_hw_write(a, 1, v); return; }
+    watch_store(a);
+    wr8(a, v);
+}
+static inline void mw16(cpu68k *c, uint32_t a, uint16_t v)
+{
+    a &= c->addr_mask;
+    if (hw_mapped(a)) { g_hw_write(a, 2, v); return; }
+    watch_store(a);
+    wr16(a, v);
+}
+static inline void mw32(cpu68k *c, uint32_t a, uint32_t v)
+{
+    a &= c->addr_mask;
+    if (hw_mapped(a)) { g_hw_write(a, 4, v); return; }
+    watch_store(a);
+    wr32(a, v);
+}
 
 static inline uint32_t mread(cpu68k *c, uint32_t a, int sz)
 {
@@ -2098,7 +2128,7 @@ static void execute(cpu68k *c, uint16_t op)
 
 uint64_t cpu_run(cpu68k *c, uint64_t max)
 {
-    if (cpu_jit_enabled && !c->trace)
+    if (cpu_jit_enabled && !c->trace && !g_hw_jit_off)
         return cpu_jit_run(c, max);
     uint64_t start = c->icount;
     while (!c->halted && !c->stopped && c->icount - start < max)

@@ -50,6 +50,14 @@ func defaultJITCache() -> String {
     #endif
 }
 
+/// The machines --machine knows, for its message.
+func machineNames() -> String {
+    var names: [String] = []
+    var i: Int32 = 0
+    while let m = hw_profile_at(i) { names.append(String(cString: m.pointee.name)); i += 1 }
+    return names.joined(separator: ", ")
+}
+
 func usage() -> Never {
     eprint("""
     usage:
@@ -87,6 +95,10 @@ func usage() -> Never {
                      a game known to need another depth gets it (unless it has a depth setting),
                      and one whose alert asks for another is started again at that depth, which
                      replaces its setting
+          --machine M  present a classic Mac: plus, se, classic (512x342, one bit, 24-bit I/O map: the VIA
+                     at $EFE1FE, the SCC, the sound buffer, System 6.0.8) or macii (640x480, 8 bits); quadra
+                     is the default.  Programs that address the chips by number run on them (the 68k
+                     interpreter, without --jit)
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU); a fat
                      application then runs its 68k code
           --appletalk A  AppleTalk on LocalTalk over UDP: local (the default; copies
@@ -397,6 +409,7 @@ func runCommand(_ args: [String]) {
     var scaleOption: Double?
     var redrawCheck: String?
     var cpuModel: Int32?
+    var machineName: String?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
     var appearanceGiven = false
@@ -479,6 +492,12 @@ func runCommand(_ args: [String]) {
                 fail("--depth expects 1, 2, 4, 8, 16 or 32")
             }
             screenDepth = d
+        case "--machine":
+            i += 1
+            guard i < args.count, hw_find_profile(args[i]) != nil else {
+                fail("--machine expects " + machineNames())
+            }
+            machineName = args[i]
         case "--cpu":
             i += 1
             guard i < args.count, let m = Int32(args[i]), [68020, 68040].contains(m) else {
@@ -623,6 +642,9 @@ func runCommand(_ args: [String]) {
         var terr = [CChar](repeating: 0, count: 256)
         guard machine_load_theme(themePath, &terr, terr.count) else { fail(str(terr)) }
     }
+    // A classic Mac by name: its screen, processor, ROM and chips (hardware
+    // programs address them by number); --depth and --cpu still win.
+    if let machineName { _ = hw_select_machine(machineName) }
     if let screenDepth {
         machine_set_screen_depth(screenDepth)
     } else if let d = saved.depth {

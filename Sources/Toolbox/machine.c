@@ -9,6 +9,7 @@
 
 #include "carbon_events.h"
 #include "forks.h"
+#include "hw68k.h"
 #include "hostgl.h"
 #include "legacy.h"
 #include "qd_internal.h"
@@ -301,14 +302,7 @@ static bool open_system_file(void)
  * vectors near address 0.  (The driver unit table is drivers.c's.) */
 static void hardware_globals(void)
 {
-    gaddr via = mm_new_ptr_in(GA_SYSHEAP, 16 * 512, true);
-    if (via)
-        wr8(via, 0x80); /* vBufA: sound off */
-    wr32(LM_VIA, via);
-    gaddr scc = mm_new_ptr_in(GA_SYSHEAP, 64, true);
-    wr32(LM_SCCRd, scc);
-    wr32(LM_SCCWr, scc);
-    wr32(LM_IWM, mm_new_ptr_in(GA_SYSHEAP, 16 * 512, true));
+    /* The chips are at their machine's addresses (hw68k.c). */
     wr32(LM_SoundBase, mm_new_ptr_in(GA_SYSHEAP, 370 * 2, true));
     /* ScrapName: the Clipboard file's name. */
     static const uint8_t scrap[] = "\016Clipboard File";
@@ -316,6 +310,7 @@ static void hardware_globals(void)
     if (name)
         gput(name, scrap, sizeof scrap - 1);
     wr32(LM_ScrapName, name);
+    hw_boot();
 }
 
 /* BLUEBOX_68K_TRACE=n: the last n 68k instructions, printed when an

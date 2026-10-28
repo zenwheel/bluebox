@@ -7,6 +7,11 @@ uint8_t *g_mem;
 gaddr g_watch_lo, g_watch_len;
 void (*g_watch_fn)(gaddr a);
 
+uint8_t g_hw_map[4096];
+bool g_hw_jit_off;
+uint32_t (*g_hw_read)(gaddr a, int size);
+void (*g_hw_write)(gaddr a, int size, uint32_t v);
+
 uint8_t *g_code_map;
 void (*g_code_written[2])(gaddr lo, gaddr hi);
 
