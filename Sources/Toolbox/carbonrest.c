@@ -45,6 +45,7 @@ static const struct {
     { rest_osa_exports, &rest_osa_export_count, rest_osa_reset },
     { rest_ic_exports, &rest_ic_export_count, rest_ic_reset },
     { rest_ica_exports, &rest_ica_export_count, rest_ica_reset },
+    { rest_nsl_exports, &rest_nsl_export_count, rest_nsl_reset },
 };
 
 void (*carbonrest_export_fn(const char *name))(ppc_cpu *)
