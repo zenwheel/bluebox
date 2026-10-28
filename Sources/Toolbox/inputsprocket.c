@@ -110,32 +110,46 @@ static void read_pads(void)
 /* ---- Devices ---- */
 
 enum { DEV_KEYBOARD, DEV_MOUSE, DEV_PAD, NDEVICES = DEV_PAD + MACHINE_PADS };
+/* After the keyboard, mouse and controllers, the devices drivers make
+ * (ISpDevice_New), each with the definition it was made from. */
+enum { MAX_DRIVER_DEVICES = 8, MAX_DEVICES = NDEVICES + MAX_DRIVER_DEVICES };
 static struct {
     gaddr ref;
     bool inactive;
     bool listed; /* its elements made */
-} devices[NDEVICES];
+    bool driver; /* made by a driver, which is in use */
+    uint8_t definition[DEFINITION_SIZE];
+    gaddr meta_handler;
+    uint32_t refcon;
+} devices[MAX_DEVICES];
 static gaddr device_block;
 
-static bool device_present(int d) { return d < DEV_PAD || pads[d - DEV_PAD].connected; }
+static bool device_present(int d)
+{
+    return d >= NDEVICES ? devices[d].driver : d < DEV_PAD || pads[d - DEV_PAD].connected;
+}
 
 static uint32_t device_class(int d)
 {
+    if (d >= NDEVICES)
+        return devices[d].driver ? ((uint32_t)devices[d].definition[132] << 24 | (uint32_t)devices[d].definition[133] << 16 |
+                                    (uint32_t)devices[d].definition[134] << 8 | devices[d].definition[135])
+                                 : 0;
     return d == DEV_KEYBOARD ? kClassKeyboard : d == DEV_MOUSE ? kClassMouse : kClassGamepad;
 }
 
 static gaddr device_ref(int d)
 {
     if (!device_block)
-        device_block = tb_NewPtr(NDEVICES * 4, true, true);
+        device_block = tb_NewPtr(MAX_DEVICES * 4, true, true);
     devices[d].ref = device_block + (gaddr)d * 4;
     return devices[d].ref;
 }
 
 static int device_of(gaddr ref)
 {
-    for (int d = 0; d < NDEVICES; d++)
-        if (ref && devices[d].ref == ref)
+    for (int d = 0; d < MAX_DEVICES; d++)
+        if (ref && devices[d].ref == ref && (d < NDEVICES || devices[d].driver))
             return d;
     return -1;
 }
@@ -158,6 +172,11 @@ typedef struct {
     int32_t mouse_carry; /* an axis: motion beyond its end, for the next reads */
     uint8_t def_key, def_key2; /* as the need was first mapped (the dialog's Defaults) */
     uint32_t refcon;
+    /* A driver's element, or a need a driver took over: the state the
+     * driver last pushed, and what it pushed as complex data. */
+    bool driven, dead;
+    uint32_t value, push_seq, seen_seq, data_size;
+    uint8_t data[64];
 } element;
 
 #define MAX_ELEMENTS 256
@@ -174,13 +193,14 @@ static int config_first, config_count;
 
 static element *new_element(uint32_t kind, uint32_t label)
 {
-    if (nelements >= MAX_ELEMENTS)
+    int at = nelements;
+    if (at >= MAX_ELEMENTS)
         return NULL;
     if (!ref_block)
         ref_block = tb_NewPtr(MAX_ELEMENTS * 4, true, true);
-    element *e = &elements[nelements];
+    element *e = &elements[at];
     memset(e, 0, sizeof *e);
-    e->ref = ref_block + (gaddr)nelements * 4;
+    e->ref = ref_block + (gaddr)at * 4;
     e->kind = kind;
     e->label = label;
     e->device = -1;
@@ -331,7 +351,7 @@ static void map_need(element *e, const char *name)
 static element *find(gaddr ref)
 {
     for (int i = 0; i < nelements; i++)
-        if (ref && elements[i].ref == ref)
+        if (ref && elements[i].ref == ref && !elements[i].dead)
             return &elements[i];
     return NULL;
 }
@@ -459,6 +479,12 @@ static int32_t mouse_motion(const element *e, bool capture)
 /* A delta's movement since it was last read (Fixed points; up positive). */
 static int32_t delta_state(element *e, bool consume)
 {
+    if (e->driven) { /* what drivers pushed since */
+        int32_t v = (int32_t)e->value;
+        if (consume)
+            e->value = 0;
+        return v;
+    }
     if (devices[DEV_MOUSE].inactive)
         return 0;
     bool y = e->label == FOURCC('y', 'a', 'x', 'i');
@@ -503,6 +529,8 @@ static uint32_t state_of(element *e)
 {
     if (suspended)
         return e->kind == kAxis ? (uint32_t)AXIS_MID : 0;
+    if (e->driven)
+        return e->value;
     switch (e->kind) {
     case kDPad: case kMovement: return dpad_state(e);
     case kAxis:
@@ -521,6 +549,8 @@ static void reset_delta(element *e)
 }
 
 static void load_controls(void);
+
+static void drivers_init(uint32_t count, gaddr needs, int first);
 
 /* ISpElement_NewVirtualFromNeeds(count, needs, *elements, flags) */
 static void isp_NewVirtualFromNeeds(ppc_cpu *c)
@@ -570,6 +600,7 @@ static void isp_NewVirtualFromNeeds(ppc_cpu *c)
     load_controls();
     for (int i = first; i < nelements; i++)
         elements[i].last = state_of(&elements[i]);
+    drivers_init(count, needs, first);
     RETURN(0);
 }
 
@@ -586,7 +617,7 @@ static void isp_NewVirtual(ppc_cpu *c)
 /* A device's own elements, made when first asked for. */
 static void device_elements(int d)
 {
-    if (devices[d].listed)
+    if (devices[d].listed || d >= NDEVICES) /* a driver's are the ones it made */
         return;
     devices[d].listed = true;
     element *e;
@@ -673,6 +704,16 @@ static void isp_GetComplexState(ppc_cpu *c)
         RETURN(kISpElementNotInListErr);
         return;
     }
+    if (e->driven && e->data_size > 4) { /* a driver's complex data */
+        if (R(1) < e->data_size) {
+            RETURN(kISpBufferToSmallErr);
+            return;
+        }
+        for (uint32_t i = 0; i < e->data_size; i++)
+            wr8(out + i, e->data[i]);
+        RETURN(0);
+        return;
+    }
     if (e->kind == kMovement) {
         if (R(1) < 12) {
             RETURN(kISpBufferToSmallErr);
@@ -701,7 +742,13 @@ static void isp_GetComplexState(ppc_cpu *c)
 static bool next_event(element *e, gaddr ev)
 {
     uint32_t now = state_of(e);
-    if (e->kind == kDelta) {
+    if (e->driven) { /* an event for every push */
+        if (e->push_seq == e->seen_seq || suspended)
+            return false;
+        e->seen_seq = e->push_seq;
+        if (e->kind == kDelta)
+            e->value = 0;
+    } else if (e->kind == kDelta) {
         if (!now)
             return false;
         delta_state(e, true);
@@ -736,6 +783,7 @@ static void isp_Flush(ppc_cpu *c)
     read_pads();
     element *e = find(R(0));
     if (e) {
+        e->seen_seq = e->push_seq;
         e->last = state_of(e);
         if (e->kind == kDelta)
             delta_state(e, true);
@@ -954,7 +1002,7 @@ static void isp_GetGlobalElementList(ppc_cpu *c)
     int l = list_of(global_list);
     if (l < 0 && (l = new_list()) >= 0)
         global_list = lists[l].ref;
-    for (int d = 0; l >= 0 && d < NDEVICES; d++) {
+    for (int d = 0; l >= 0 && d < MAX_DEVICES; d++) {
         if (!device_present(d))
             continue;
         device_elements(d);
@@ -992,7 +1040,7 @@ static void devices_extract(ppc_cpu *c, bool by_class, uint32_t cls, uint32_t ro
 {
     read_pads();
     uint32_t n = 0;
-    for (int d = 0; d < NDEVICES; d++) {
+    for (int d = 0; d < MAX_DEVICES; d++) {
         if (!device_present(d) || (by_class && device_class(d) != cls))
             continue;
         if (out && n < room)
@@ -1030,6 +1078,12 @@ static void isp_DeviceGetDefinition(ppc_cpu *c)
     }
     if (R(1) < DEFINITION_SIZE) {
         RETURN(kISpBufferToSmallErr);
+        return;
+    }
+    if (d >= NDEVICES) { /* a driver's: as it defined it */
+        for (int i = 0; i < DEFINITION_SIZE; i++)
+            wr8(def + (gaddr)i, devices[d].definition[i]);
+        RETURN(0);
         return;
     }
     for (int i = 0; i < DEFINITION_SIZE; i++)
@@ -1078,8 +1132,8 @@ static void set_class_active(ppc_cpu *c, bool on)
 {
     LOGF(LOG_TRAPS, "  class %c%c%c%c %s\n", (int)(R(0) >> 24), (int)(R(0) >> 16 & 0xFF), (int)(R(0) >> 8 & 0xFF),
          (int)(R(0) & 0xFF), on ? "on" : "off");
-    for (int d = 0; d < NDEVICES; d++)
-        if (device_class(d) == R(0))
+    for (int d = 0; d < MAX_DEVICES; d++)
+        if ((d < NDEVICES || devices[d].driver) && device_class(d) == R(0))
             devices[d].inactive = !on;
     if (R(0) == kClassMouse)
         mouse_wanted = on;
@@ -1499,6 +1553,188 @@ static void isp_PlotAppIconSuite(ppc_cpu *c)
 /* ISpElement_DisposeVirtual(count, elements): their references stay
  * unique, so nothing to do. */
 
+/* ---- Drivers' devices and elements ---- */
+
+/* Call a PowerPC routine of a driver. */
+static uint32_t isp_call(gaddr fn, const uint32_t *args, int n) { return ppc_call(fn, args, n); }
+
+/* A driver's function for a meta handler selector (0 for none). */
+static gaddr driver_function(int d, uint32_t selector)
+{
+    if (!devices[d].meta_handler)
+        return 0;
+    uint32_t a[2] = { devices[d].refcon, selector };
+    return isp_call(devices[d].meta_handler, a, 2);
+}
+
+enum { kISpSelector_Init = 1, kISpSelector_Stop = 2 };
+
+/* Hand each driver the needs just made, as ISpInit does: virtual elements
+ * a driver says it used are its to push data into. */
+static void drivers_init(uint32_t count, gaddr needs, int first)
+{
+    for (int d = NDEVICES; d < MAX_DEVICES; d++) {
+        gaddr fn = devices[d].driver ? driver_function(d, kISpSelector_Init) : 0;
+        if (!fn || !count)
+            continue;
+        gaddr refs = tb_NewPtr((int32_t)(count * 4 + count), true, true);
+        if (!refs)
+            return;
+        gaddr used = refs + count * 4;
+        for (uint32_t i = 0; i < count; i++)
+            wr32(refs + i * 4, elements[first + (int)i].ref);
+        uint32_t args[9] = { devices[d].refcon, count, needs, refs, used, 0x3F3F3F3F, 0x3F3F3F3F, 0, 0 };
+        if (isp_call(fn, args, 9) == 0)
+            for (uint32_t i = 0; i < count; i++)
+                if (rd8(used + i)) {
+                    element *e = &elements[first + (int)i];
+                    e->driven = true;
+                    e->data_size = e->kind == kMovement ? 12 : 4;
+                    e->value = e->kind == kAxis ? (uint32_t)AXIS_MID : 0;
+                    e->last = e->value;
+                }
+        tb_DisposePtr(refs);
+    }
+}
+
+/* ISpStop(): the drivers are told to stop. */
+static void isp_Stop(ppc_cpu *c)
+{
+    for (int d = NDEVICES; d < MAX_DEVICES; d++) {
+        gaddr fn = devices[d].driver ? driver_function(d, kISpSelector_Stop) : 0;
+        if (fn) {
+            uint32_t a[1] = { devices[d].refcon };
+            isp_call(fn, a, 1);
+        }
+    }
+    RETURN(0);
+}
+
+/* ISpDevice_New(definition, metaHandler, refCon, *device) */
+static void isp_DeviceNew(ppc_cpu *c)
+{
+    if (!R(0) || !R(3)) {
+        RETURN(-50);
+        return;
+    }
+    for (int d = NDEVICES; d < MAX_DEVICES; d++)
+        if (!devices[d].driver) {
+            memset(&devices[d], 0, sizeof devices[d]);
+            devices[d].driver = true;
+            for (int i = 0; i < DEFINITION_SIZE; i++)
+                devices[d].definition[i] = rd8(R(0) + (gaddr)i);
+            devices[d].meta_handler = R(1);
+            devices[d].refcon = R(2);
+            wr32(R(3), device_ref(d));
+            RETURN(0);
+            return;
+        }
+    RETURN(-108);
+}
+
+static void element_dispose(element *e)
+{
+    for (int l = 0; l < nlists; l++)
+        for (int k = 0; lists[l].ref && k < lists[l].count; k++)
+            if (lists[l].items[k] == e->ref) {
+                memmove(&lists[l].items[k], &lists[l].items[k + 1], (size_t)(lists[l].count - k - 1) * sizeof(gaddr));
+                lists[l].count--;
+                break;
+            }
+    memset(e, 0, sizeof *e);
+    e->dead = true;
+    while (nelements && elements[nelements - 1].dead)
+        nelements--;
+}
+
+/* ISpDevice_Dispose(device): a driver's, with its elements. */
+static void isp_DeviceDispose(ppc_cpu *c)
+{
+    int d = device_of(R(0));
+    if (d < NDEVICES) {
+        RETURN(-50);
+        return;
+    }
+    for (int i = 0; i < nelements; i++)
+        if (elements[i].device == d && !elements[i].dead)
+            element_dispose(&elements[i]);
+    memset(&devices[d], 0, sizeof devices[d]);
+    RETURN(0);
+}
+
+/* ISpElement_New(definition, *element): an element of a driver's device. */
+static void isp_ElementNew(ppc_cpu *c)
+{
+    gaddr def = R(0);
+    int d = def ? device_of(rd32(def)) : -1;
+    if (d < NDEVICES || !R(1) || rd32(def + 88) > sizeof(((element *)0)->data)) {
+        RETURN(-50);
+        return;
+    }
+    element *e = new_element(rd32(def + 72), rd32(def + 76));
+    if (!e) {
+        RETURN(-108);
+        return;
+    }
+    e->device = d;
+    e->driven = true;
+    e->group = (uint8_t)rd32(def + 4);
+    for (int i = 0; i < 64; i++)
+        e->name[i] = rd8(def + 8 + (gaddr)i);
+    if (e->name[0] > 63)
+        e->name[0] = 63;
+    e->data_size = rd32(def + 88);
+    e->value = e->kind == kAxis ? (uint32_t)AXIS_MID : 0;
+    e->last = e->value;
+    wr32(R(1), e->ref);
+    RETURN(0);
+}
+
+/* ISpElement_Dispose(element): a driver's. */
+static void isp_ElementDispose(ppc_cpu *c)
+{
+    element *e = find(R(0));
+    if (!e || e->device < NDEVICES) {
+        RETURN(-50);
+        return;
+    }
+    element_dispose(e);
+    RETURN(0);
+}
+
+/* ISpElement_PushSimpleData(element, data, time): the state of an element
+ * a driver made or took; a delta's data adds up until it is read. */
+static void isp_PushSimpleData(ppc_cpu *c)
+{
+    element *e = find(R(0));
+    if (!e || !e->driven) {
+        RETURN(-50);
+        return;
+    }
+    e->value = e->kind == kDelta ? e->value + R(1) : R(1);
+    e->push_seq++;
+    RETURN(0);
+}
+
+/* ISpElement_PushComplexData(element, length, data, time): data as large
+ * as the element's definition says. */
+static void isp_PushComplexData(ppc_cpu *c)
+{
+    element *e = find(R(0));
+    if (!e || !e->driven || !R(2) || R(1) != e->data_size || R(1) > sizeof e->data) {
+        RETURN(-50);
+        return;
+    }
+    for (uint32_t i = 0; i < R(1); i++)
+        e->data[i] = rd8(R(2) + i);
+    if (e->kind == kMovement && R(1) >= 12)
+        e->value = rd32(R(2) + 8);
+    else if (R(1) >= 4)
+        e->value = rd32(R(2));
+    e->push_seq++;
+    RETURN(0);
+}
+
 void inputsprocket_reset(void)
 {
     nelements = spare = spare_button = nlists = 0;
@@ -1511,6 +1747,12 @@ void inputsprocket_reset(void)
 
 const ppc_export isp_exports[] = {
     { "ISpConfigure", isp_Configure },
+    { "ISpDevice_Dispose", isp_DeviceDispose },
+    { "ISpDevice_New", isp_DeviceNew },
+    { "ISpElement_Dispose", isp_ElementDispose },
+    { "ISpElement_New", isp_ElementNew },
+    { "ISpElement_PushComplexData", isp_PushComplexData },
+    { "ISpElement_PushSimpleData", isp_PushSimpleData },
     { "ISpDevice_GetDefinition", isp_DeviceGetDefinition },
     { "ISpDevice_GetElementList", isp_DeviceGetElementList },
     { "ISpDevice_IsActive", isp_DeviceIsActive },
@@ -1548,7 +1790,7 @@ const ppc_export isp_exports[] = {
     { "ISpResume", isp_Resume },
     { "ISpShutdown", isp_noErr },
     { "ISpStartup", isp_noErr },
-    { "ISpStop", isp_noErr },
+    { "ISpStop", isp_Stop },
     { "ISpSuspend", isp_Suspend },
     { "ISpTickle", isp_noErr },
     { "ISpTimeToMicroseconds", isp_TimeToMicroseconds },
