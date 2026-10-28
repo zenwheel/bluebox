@@ -30225,6 +30225,22 @@ static void ppcglue_UTGetForkControlBlockSize(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DMGetGDeviceTablecloth(ppc_cpu *c)
+{
+    gaddr a_displayDevice = (gaddr)c->gpr[3];
+    gaddr a_tablecloth = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetGDeviceTablecloth(a_displayDevice, a_tablecloth);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMSetGDeviceTablecloth(ppc_cpu *c)
+{
+    gaddr a_displayDevice = (gaddr)c->gpr[3];
+    gaddr a_tablecloth = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMSetGDeviceTablecloth(a_displayDevice, a_tablecloth);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParseAIFFHeader(ppc_cpu *c)
 {
     int16_t a_fRefNum = (int16_t)c->gpr[3];
@@ -42388,6 +42404,7 @@ const ppc_export ppc_exports[] = {
     {"DMGetEnableByAVID", ppcglue_DMGetEnableByAVID},
     {"DMGetFirstScreenDevice", ppcglue_DMGetFirstScreenDevice},
     {"DMGetGDeviceByDisplayID", ppcglue_DMGetGDeviceByDisplayID},
+    {"DMGetGDeviceTablecloth", ppcglue_DMGetGDeviceTablecloth},
     {"DMGetGammaByAVID", ppcglue_DMGetGammaByAVID},
     {"DMGetGraphicInfoByAVID", ppcglue_DMGetGraphicInfoByAVID},
     {"DMGetIndexedComponentFromList", ppcglue_DMGetIndexedComponentFromList},
@@ -42427,6 +42444,7 @@ const ppc_export ppc_exports[] = {
     {"DMSetDisplayComponent", ppcglue_DMSetDisplayComponent},
     {"DMSetDisplayMode", ppcglue_DMSetDisplayMode},
     {"DMSetEnableByAVID", ppcglue_DMSetEnableByAVID},
+    {"DMSetGDeviceTablecloth", ppcglue_DMSetGDeviceTablecloth},
     {"DMSetGammaByAVID", ppcglue_DMSetGammaByAVID},
     {"DMSetMainDisplay", ppcglue_DMSetMainDisplay},
     {"DMSuspendConfigure", ppcglue_DMSuspendConfigure},

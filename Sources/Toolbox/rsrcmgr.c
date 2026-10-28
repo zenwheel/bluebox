@@ -119,6 +119,13 @@ static resfile *file_for(int16_t rn)
     return NULL;
 }
 
+/* The guest map handle of an open resource file, 0 if there is none. */
+gaddr rm_map_handle(int16_t rn)
+{
+    resfile *f = file_for(rn);
+    return f ? f->maph : 0;
+}
+
 bool rm_fork_of(int16_t rn, const uint8_t **data, uint32_t *len)
 {
     resfile *f = file_for(rn);

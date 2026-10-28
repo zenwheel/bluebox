@@ -35,6 +35,10 @@ void os9rest_locale_reset(void);
 void os9rest_icons_reset(void);
 void os9rest_fsm_reset(void);
 void drawsprocket_reset(void); /* drawsprocket.c */
+extern const ppc_export os9rest_priv_exports[];
+extern const unsigned os9rest_priv_export_count;
+void os9rest_priv_reset(void);
+void os9rest_cloth_reset(void);
 extern const ppc_export os9rest_math_exports[];
 extern const unsigned os9rest_math_export_count;
 

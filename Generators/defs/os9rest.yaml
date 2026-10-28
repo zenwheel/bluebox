@@ -1174,3 +1174,27 @@
         type: uint32_t*
     dispatcher: HFSUtilDispatch
     selector: 0x003C
+
+# The Display Manager's obsolete tablecloth (kDMNoDeviceTableclothErr): the
+# picture a display's desktop was laid with, per graphics device.
+- function:
+    name: DMGetGDeviceTablecloth
+    return: OSErr
+    args:
+      - name: displayDevice
+        type: GDHandle
+      - name: tablecloth
+        type: Handle*
+    dispatcher: DisplayDispatch
+    selector: 0x0404
+
+- function:
+    name: DMSetGDeviceTablecloth
+    return: OSErr
+    args:
+      - name: displayDevice
+        type: GDHandle
+      - name: tablecloth
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0405

@@ -4599,6 +4599,17 @@ static void glue_DMGetGDeviceByDisplayID(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DMGetGDeviceTablecloth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tablecloth = (gaddr)cpu_pop32(c);
+    gaddr a_displayDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMGetGDeviceTablecloth(a_displayDevice, a_tablecloth);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DMGetGammaByAVID(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -5091,6 +5102,17 @@ static void glue_DMSetEnableByAVID(cpu68k *c, uint16_t trapword)
     int8_t a_doEnable = (int8_t)(cpu_pop16(c) >> 8);
     uint32_t a_theAVID = (uint32_t)cpu_pop32(c);
     int16_t r = tb_DMSetEnableByAVID(a_theAVID, a_doEnable, a_displayState);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DMSetGDeviceTablecloth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tablecloth = (gaddr)cpu_pop32(c);
+    gaddr a_displayDevice = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DMSetGDeviceTablecloth(a_displayDevice, a_tablecloth);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -28521,6 +28543,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABEB, (int32_t)0x22Cu, "DMDisposeList", CONV_STACK, 4, 2, glue_DMDisposeList},
     {0xABEB, (int32_t)0x231u, "DMDisposeAVComponent", CONV_STACK, 4, 2, glue_DMDisposeAVComponent},
     {0xABEB, (int32_t)0x3ECu, "DMUseScreenPrefs", CONV_STACK, 6, 2, glue_DMUseScreenPrefs},
+    {0xABEB, (int32_t)0x404u, "DMGetGDeviceTablecloth", CONV_STACK, 8, 2, glue_DMGetGDeviceTablecloth},
+    {0xABEB, (int32_t)0x405u, "DMSetGDeviceTablecloth", CONV_STACK, 8, 2, glue_DMSetGDeviceTablecloth},
     {0xABEB, (int32_t)0x40Au, "DMDisableDisplay", CONV_STACK, 8, 2, glue_DMDisableDisplay},
     {0xABEB, (int32_t)0x40Bu, "DMEnableDisplay", CONV_STACK, 8, 2, glue_DMEnableDisplay},
     {0xABEB, (int32_t)0x40Cu, "DMRemoveDisplay", CONV_STACK, 8, 2, glue_DMRemoveDisplay},

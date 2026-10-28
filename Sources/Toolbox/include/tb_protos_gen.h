@@ -362,6 +362,7 @@ int16_t tb_DMGetDisplayMode(gaddr theDevice, gaddr switchInfo);
 int16_t tb_DMGetEnableByAVID(uint32_t theAVID, gaddr isAVIDEnabledNow, gaddr canChangeEnableNow);
 gaddr tb_DMGetFirstScreenDevice(int8_t activeOnly);
 int16_t tb_DMGetGDeviceByDisplayID(uint32_t displayID, gaddr displayDevice, int8_t failToMain);
+int16_t tb_DMGetGDeviceTablecloth(gaddr displayDevice, gaddr tablecloth);
 int16_t tb_DMGetGammaByAVID(uint32_t gammaAVID, uint32_t getGammaFlags, gaddr theGamma);
 int16_t tb_DMGetGraphicInfoByAVID(uint32_t theID, gaddr theAVPcit, gaddr theAVIconSuite, gaddr theAVLocation);
 int16_t tb_DMGetIndexedComponentFromList(gaddr panelList, uint32_t itemIndex, uint32_t reserved, gaddr listIterator, gaddr userData);
@@ -401,6 +402,7 @@ int16_t tb_DMSetAVPowerState(uint32_t theID, gaddr setPowerState, uint32_t power
 int16_t tb_DMSetDisplayComponent(gaddr theDevice, uint32_t displayComponent);
 int16_t tb_DMSetDisplayMode(gaddr theDevice, uint32_t mode, gaddr depthMode, uint32_t reserved, gaddr displayState);
 int16_t tb_DMSetEnableByAVID(uint32_t theAVID, int8_t doEnable, gaddr displayState);
+int16_t tb_DMSetGDeviceTablecloth(gaddr displayDevice, gaddr tablecloth);
 int16_t tb_DMSetGammaByAVID(uint32_t gammaAVID, uint32_t setGammaFlags, gaddr theGamma);
 int16_t tb_DMSetMainDisplay(gaddr newMainDevice, gaddr displayState);
 int16_t tb_DMSuspendConfigure(gaddr displayState, uint32_t reserved1);

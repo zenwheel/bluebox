@@ -12,6 +12,7 @@
 static const os9rest_group groups[] = {
     GROUP(math),
     GROUP(hw),
+    GROUP(priv),
     GROUP(locale),
 };
 
@@ -59,5 +60,7 @@ void os9rest_reset(void)
     os9rest_locale_reset();
     os9rest_icons_reset();
     os9rest_fsm_reset();
+    os9rest_priv_reset();
+    os9rest_cloth_reset();
     drawsprocket_reset();
 }
