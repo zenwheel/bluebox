@@ -33,6 +33,7 @@ let package = Package(
         .target(name: "Toolbox", dependencies: ["CCore", "CPU68K", "CPUPPC", "ForkStore", "MACE"], cSettings: warnings,
                 linkerSettings: [.linkedLibrary("resolv"), // the resolver: Open Transport's DNS queries
                                 .linkedLibrary("z"), // zlib: QuickTime 3's compressed movie headers
+                                .linkedLibrary("sqlite3"), // the catalog (catalog.c)
                                  // EtherTalk: an interface's own Ethernet address
                                  .linkedFramework("IOKit", .when(platforms: [.macOS])),
                                  .linkedFramework("CoreFoundation", .when(platforms: [.macOS])),

@@ -339,5 +339,141 @@ extension BlueBox {
             #expect((try? String(contentsOfFile: folder.appendingPathComponent("Beta").path, encoding: .utf8)) == "first")
             #expect((try? String(contentsOfFile: folder.appendingPathComponent("Sub/Gamma").path, encoding: .utf8)) == "second, longer")
         }
+
+        /// The test application started again, in a fresh machine.
+        func relaunch(_ folder: URL) {
+            catalog_close()
+            bootMachine()
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(folder.appendingPathComponent("Test App").path, &err, err.count))
+        }
+
+        func catInfo(_ vref: Int16, _ dir: UInt32, _ name: String?) -> UInt32 {
+            let pb = tb_NewPtr(Int32(CInfoPBRec_SIZEOF), false, true)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name.map { pname($0) } ?? tb_NewPtr(256, false, true))
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), UInt16(bitPattern: vref))
+            wr16(pb + UInt32(FileParam_ioFDirIndex_off), name == nil ? UInt16(bitPattern: -1) : 0)
+            wr32(pb + UInt32(HFileInfo_ioDirID_off), dir)
+            #expect(tb_PBGetCatInfo(pb, false) == 0)
+            return pb
+        }
+
+        /// A folder's Finder information and comment are kept in the
+        /// catalog: from one run to the next, and with the folder when it
+        /// is renamed.
+        @Test func folderInformationIsKept() {
+            let folder = launchTestApp()
+            try? FileManager.default.createDirectory(at: folder.appendingPathComponent("Kept"), withIntermediateDirectories: true)
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Kept"), spec) == 0)
+            let vref = Int16(bitPattern: rd16(spec))
+            let parent = rd32(spec + 2)
+            var pb = catInfo(vref, parent, "Kept")
+            // The window's rectangle, the icon's place, a label and the view.
+            let di = (0..<16).map { UInt8($0 + 1) }, dx = (0..<16).map { UInt8(0xA0 + $0) }
+            for (i, b) in di.enumerated() { wr8(pb + UInt32(DirInfo_ioDrUsrWds_off) + UInt32(i), b) }
+            for (i, b) in dx.enumerated() { wr8(pb + UInt32(DirInfo_ioDrFndrInfo_off) + UInt32(i), b) }
+            wr32(pb + UInt32(HFileInfo_ioDirID_off), parent)
+            #expect(tb_PBSetCatInfo(pb, false) == 0)
+            pb = catInfo(vref, parent, "Kept")
+            #expect((0..<16).map { rd8(pb + UInt32(DirInfo_ioDrUsrWds_off) + UInt32($0)) } == di)
+            #expect((0..<16).map { rd8(pb + UInt32(DirInfo_ioDrFndrInfo_off) + UInt32($0)) } == dx)
+
+            // A comment, through the desktop database.
+            let dtp = tb_NewPtr(Int32(DTPBRec_SIZEOF), false, true)
+            wr16(dtp + UInt32(DTPBRec_ioVRefNum_off), UInt16(bitPattern: vref))
+            #expect(tb_PBDTGetPath(dtp) == 0)
+            wr32(dtp + UInt32(DTPBRec_ioNamePtr_off), pname("Kept"))
+            wr32(dtp + UInt32(DTPBRec_ioDirID_off), parent)
+            let text = Array("A folder to keep".utf8)
+            let buf = tb_NewPtr(256, false, true)
+            for (i, b) in text.enumerated() { wr8(buf + UInt32(i), b) }
+            wr32(dtp + UInt32(DTPBRec_ioDTBuffer_off), buf)
+            wr32(dtp + UInt32(DTPBRec_ioDTReqCount_off), UInt32(text.count))
+            #expect(tb_PBDTSetComment(dtp, false) == 0)
+
+            // Renamed, then the machine started again: all still there.
+            #expect(tb_FSpRename(spec, pname("Moved")) == 0)
+            relaunch(folder)
+            let spec2 = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Moved"), spec2) == 0)
+            pb = catInfo(Int16(bitPattern: rd16(spec2)), rd32(spec2 + 2), "Moved")
+            #expect((0..<16).map { rd8(pb + UInt32(DirInfo_ioDrUsrWds_off) + UInt32($0)) } == di)
+            let dtp2 = tb_NewPtr(Int32(DTPBRec_SIZEOF), false, true)
+            wr16(dtp2 + UInt32(DTPBRec_ioVRefNum_off), rd16(spec2))
+            #expect(tb_PBDTGetPath(dtp2) == 0)
+            wr32(dtp2 + UInt32(DTPBRec_ioNamePtr_off), pname("Moved"))
+            wr32(dtp2 + UInt32(DTPBRec_ioDirID_off), rd32(spec2 + 2))
+            let out = tb_NewPtr(256, false, true)
+            wr32(dtp2 + UInt32(DTPBRec_ioDTBuffer_off), out)
+            wr32(dtp2 + UInt32(DTPBRec_ioDTReqCount_off), 256)
+            #expect(tb_PBDTGetComment(dtp2, false) == 0)
+            #expect((0..<text.count).map { rd8(out + UInt32($0)) } == text)
+
+            // The Trash at the root is invisible until the Finder says otherwise.
+            let vr = tb_NewPtr(2, false, true), dir = tb_NewPtr(4, false, true)
+            #expect(tb_FindFolder(-32768, Int32(bitPattern: fourCC("trsh")), 1, vr, dir) == 0)
+            pb = catInfo(Int16(bitPattern: rd16(vr)), rd32(dir), nil)
+            #expect(rd16(pb + UInt32(DirInfo_ioDrUsrWds_off) + 8) & 0x4000 != 0)
+        }
+
+        /// The desktop database in the catalog: new the first time it is
+        /// opened, then the applications and icons programs add, kept from
+        /// run to run until it is reset.
+        @Test func desktopDatabaseIsKept() {
+            let folder = launchTestApp()
+            let dtp = tb_NewPtr(Int32(DTPBRec_SIZEOF), false, true)
+            wr16(dtp + UInt32(DTPBRec_ioVRefNum_off), UInt16(bitPattern: -1))
+            #expect(tb_PBDTOpenInform(dtp) == 0)
+            let first = rd32(dtp + UInt32(DTPBRec_ioTagInfo_off))
+            #expect(tb_PBDTOpenInform(dtp) == 0 && rd32(dtp + UInt32(DTPBRec_ioTagInfo_off)) == 0)
+            _ = first // new unless an earlier test opened it
+
+            try? "x".write(to: folder.appendingPathComponent("Tool"), atomically: true, encoding: .utf8)
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Tool"), spec) == 0)
+            wr32(dtp + UInt32(DTPBRec_ioNamePtr_off), pname("Tool"))
+            wr32(dtp + UInt32(DTPBRec_ioDirID_off), rd32(spec + 2))
+            wr32(dtp + UInt32(DTPBRec_ioFileCreator_off), fourCC("TOOL"))
+            wr32(dtp + UInt32(DTPBRec_ioTagInfo_off), 0)
+            #expect(tb_PBDTAddAPPL(dtp, false) == 0)
+            let icon = (0..<256).map { UInt8(truncatingIfNeeded: $0 * 7) }
+            let buf = tb_NewPtr(1024, false, true)
+            for (i, b) in icon.enumerated() { wr8(buf + UInt32(i), b) }
+            wr32(dtp + UInt32(DTPBRec_ioDTBuffer_off), buf)
+            wr32(dtp + UInt32(DTPBRec_ioDTReqCount_off), 256)
+            wr32(dtp + UInt32(DTPBRec_ioFileType_off), fourCC("TDOC"))
+            wr8(dtp + UInt32(DTPBRec_ioIconType_off), 1)
+            #expect(tb_PBDTAddIcon(dtp, false) == 0)
+            wr32(dtp + UInt32(DTPBRec_ioDTLgLen_off), 0)
+            #expect(tb_PBDTGetInfo(dtp, false) == 0 && rd32(dtp + UInt32(DTPBRec_ioDTLgLen_off)) >= 256)
+
+            relaunch(folder)
+            let d2 = tb_NewPtr(Int32(DTPBRec_SIZEOF), false, true)
+            wr16(d2 + UInt32(DTPBRec_ioVRefNum_off), UInt16(bitPattern: -1))
+            #expect(tb_PBDTGetPath(d2) == 0)
+            let name = tb_NewPtr(64, false, true)
+            wr32(d2 + UInt32(DTPBRec_ioNamePtr_off), name)
+            wr32(d2 + UInt32(DTPBRec_ioFileCreator_off), fourCC("TOOL"))
+            #expect(tb_PBDTGetAPPL(d2, false) == 0 && pstring(at: name) == "Tool")
+            let out = tb_NewPtr(1024, false, true)
+            wr32(d2 + UInt32(DTPBRec_ioDTBuffer_off), out)
+            wr32(d2 + UInt32(DTPBRec_ioDTReqCount_off), 1024)
+            wr32(d2 + UInt32(DTPBRec_ioFileType_off), fourCC("TDOC"))
+            wr8(d2 + UInt32(DTPBRec_ioIconType_off), 1)
+            #expect(tb_PBDTGetIcon(d2, false) == 0)
+            #expect((0..<256).map { rd8(out + UInt32($0)) } == icon)
+
+            // Reset: the icons and applications go; deleted: new again.
+            #expect(tb_PBDTReset(d2, false) == 0)
+            #expect(tb_PBDTGetIcon(d2, false) == -5018)
+            let spec2 = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Tool"), spec2) == 0)
+            wr32(d2 + UInt32(DTPBRec_ioNamePtr_off), pname("Tool"))
+            wr32(d2 + UInt32(DTPBRec_ioDirID_off), rd32(spec2 + 2))
+            #expect(tb_PBDTRemoveAPPL(d2, false) == -5018)
+            #expect(tb_PBDTDelete(d2, false) == 0)
+            #expect(tb_PBDTOpenInform(d2) == 0 && rd32(d2 + UInt32(DTPBRec_ioTagInfo_off)) == 1)
+        }
     }
 }

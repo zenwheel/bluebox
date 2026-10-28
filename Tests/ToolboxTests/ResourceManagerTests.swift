@@ -623,8 +623,8 @@ extension BlueBox {
             try FileManager.default.createDirectory(at: disk, withIntermediateDirectories: true)
             let doc = base.appendingPathComponent("Doc")
             try Data("x".utf8).write(to: doc)
-            machine_set_disk(disk.path)
-            defer { machine_set_disk(nil) }
+            testDiskPath = disk.path
+            defer { testDiskPath = testDisk }
             launchTestApp(documents: [doc.path])
             // The folder holding both, by its path through Host.
             let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(256, false, true)

@@ -30,6 +30,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "catalog.h"
 #include "filemgr_internal.h"
 #include "forks.h"
 #include "tb_internal.h"
@@ -998,6 +999,13 @@ void fm_init(const char *app_dir)
     for (int i = 0; i < MAX_FCBS; i++)
         free(fcbs[i].buf);
     memset(fcbs, 0, sizeof fcbs);
+    /* The catalog beside the Macintosh HD folder. */
+    char cat[PATH_MAX + 32];
+    snprintf(cat, sizeof cat, "%s", disk);
+    char *cut = strrchr(cat, '/');
+    if (cut)
+        snprintf(cut, sizeof cat - (size_t)(cut - cat), "/Catalog.sqlite");
+    catalog_set_path(cat);
     dt_reset();
     char app[PATH_MAX];
     if (!realpath(app_dir, app))
@@ -1691,6 +1699,7 @@ static int16_t delete_path(const char *path)
             return fBsyErr;
         as_deleted(path);
         forget_nodes(path);
+        catalog_moved(path, NULL);
         return noErr;
     }
     char *side = appledouble_sidecar_path(path);
@@ -1739,6 +1748,7 @@ static int16_t rename_host(const char *from, const char *to)
     free(s2);
     as_moved(from, to);
     retarget(from, to);
+    catalog_moved(from, to);
     return noErr;
 }
 
@@ -1910,10 +1920,10 @@ static int16_t set_file_info(const char *path, const uint8_t *finfo, const uint8
 {
     if (!exists(path))
         return fnfErrF;
-    if (is_dir(path))
-        return noErr;
     if (!writable(path))
         return wPrErr;
+    if (is_dir(path)) /* a folder's Finder information is the catalog's */
+        return finfo || fxinfo ? (catalog_set_dirinfo(path, finfo, fxinfo) ? noErr : ioErrF) : noErr;
     mac_file mf;
     char e[256];
     if (!appledouble_read(path, &mf, e, sizeof e))
@@ -2275,6 +2285,22 @@ static int16_t get_cat_info(gaddr pb, char *path)
 }
 
 /* A catalog record (CInfoPBRec) for a host path. */
+/* A folder's Finder information, from the catalog.  The Trash and the
+ * Desktop Folder at a volume's root are invisible, as the Finder makes
+ * them, until the Finder says otherwise. */
+static void dir_finder_info(const char *path, uint8_t di[16], uint8_t dx[16])
+{
+    memset(di, 0, 16);
+    memset(dx, 0, 16);
+    if (catalog_get_dirinfo(path, di, dx))
+        return;
+    char parent[PATH_MAX];
+    parent_of(path, parent, sizeof parent);
+    const char *base = strrchr(path, '/');
+    if (base && (!strcmp(base + 1, "Trash") || !strcmp(base + 1, "Desktop Folder")) && fm_is_volume_root(parent))
+        di[8] = 0x40; /* fInvisible */
+}
+
 static void cat_info_of_path(gaddr pb, const char *path)
 {
     if (is_dir(path)) {
@@ -2288,7 +2314,10 @@ static void cat_info_of_path(gaddr pb, const char *path)
         wr32(pb + DirInfo_ioDrCrDat_off, dc);
         wr32(pb + DirInfo_ioDrMdDat_off, dm);
         wr32(pb + DirInfo_ioDrBkDat_off, 0);
-        gmemset(pb + DirInfo_ioDrFndrInfo_off, 0, 16);
+        uint8_t di[16], dx[16];
+        dir_finder_info(path, di, dx);
+        gput(pb + DirInfo_ioDrUsrWds_off, di, 16);
+        gput(pb + DirInfo_ioDrFndrInfo_off, dx, 16);
         wr32(pb + DirInfo_ioDrParID_off, is_root_id(id) ? 1 : (uint32_t)out_id(parent_id_of(path)));
     } else {
         fill_file_info(pb, path, true);
@@ -3096,11 +3125,14 @@ int16_t tb_PBSetVInfo(gaddr pb, bool async) { return noErr; }
 /* ---------------------------------------------------------------------- */
 /* The Desktop Manager (PBDT calls).  Each volume has a desktop database,
  * its refnum the volume's negated: the applications on it by creator, for
- * opening documents; the icons of their bundles (BNDL, FREF and the icon
- * resources they name), read from an application when its creator is
- * first asked about, with the icons programs add kept beside them for the
- * run; and comments, a file's in its AppleDouble sidecar as the Finder's
- * comment entry, a folder's (which has no sidecar) for the run. */
+ * opening documents (those programs add, kept in the catalog, then those
+ * found on the volume); the icons of their bundles (BNDL, FREF and the
+ * icon resources they name), read from an application when its creator is
+ * first asked about, with the icons programs add kept beside them in the
+ * catalog; and comments, a file's in its AppleDouble sidecar as the
+ * Finder's comment entry, a folder's (which has no sidecar) in the
+ * catalog.  The first time a volume's database is opened it is new, and
+ * the Finder builds it. */
 
 enum { afpItemNotFound = -5018, afpIconTypeError = -5030 };
 
@@ -3190,6 +3222,25 @@ static int16_t dt_vref(gaddr dtp)
     return mount_of_vref(vref) ? vref : VREF;
 }
 
+/* The host folder of a database's volume, its key in the catalog. */
+static const char *dt_root(int16_t vref)
+{
+    mount *m = mount_of_vref(vref);
+    return m ? m->root : root_path;
+}
+
+static void dt_load_icons(int16_t vref);
+
+/* Whether an application was added for its creator (and so listed first). */
+static bool added_appl(const char *root, uint32_t creator, const char *path)
+{
+    char added[PATH_MAX];
+    for (int i = 0; catalog_dt_appl(root, creator, i, added, sizeof added, NULL); i++)
+        if (!strcmp(added, path))
+            return true;
+    return false;
+}
+
 int16_t tb_PBDTGetPath(gaddr dtp)
 {
     gaddr namep = rd32(dtp + DTPBRec_ioNamePtr_off);
@@ -3204,8 +3255,11 @@ int16_t tb_PBDTGetPath(gaddr dtp)
 int16_t tb_PBDTOpenInform(gaddr dtp)
 {
     int16_t err = tb_PBDTGetPath(dtp);
+    /* Newly created (1) the first time a volume's database is opened: the
+     * Finder then builds it, as its rebuild does, adding each
+     * application and its bundle's icons. */
     if (!err)
-        wr32(dtp + DTPBRec_ioTagInfo_off, 0); /* not newly created */
+        wr32(dtp + DTPBRec_ioTagInfo_off, catalog_dt_open(dt_root(dt_vref(dtp))) ? 0 : 1);
     return err;
 }
 
@@ -3221,7 +3275,22 @@ int16_t tb_PBDTGetAPPL(gaddr dtp, bool async)
     int want = (int16_t)rd16(dtp + DTPBRec_ioIndex_off);
     if (want < 1)
         want = 1;
-    for (int i = 0, k = 0; i < nappls; i++) {
+    /* Those added (the most recent first), then those found on the
+     * volume, each once. */
+    char added[PATH_MAX];
+    uint32_t tag;
+    int k = 0;
+    for (int i = 0; catalog_dt_appl(dt_root(vref), creator, i, added, sizeof added, &tag); i++) {
+        if (!exists(added) || ++k != want)
+            continue;
+        put_name(rd32(dtp + DTPBRec_ioNamePtr_off), added);
+        wr32(dtp + DTPBRec_ioAPPLParID_off, (uint32_t)parent_id_of(added));
+        wr32(dtp + DTPBRec_ioTagInfo_off, tag);
+        return noErr;
+    }
+    for (int i = 0; i < nappls; i++) {
+        if (appls[i].creator == creator && added_appl(dt_root(vref), creator, appls[i].path))
+            continue;
         if (appls[i].creator != creator || vref_of_path(appls[i].path) != vref || ++k != want)
             continue;
         if (!exists(appls[i].path))
@@ -3247,9 +3316,21 @@ static void forget_appls(void)
     ndt_read = 0;
 }
 
+/* PBDTAddAPPL: the application named by ioNamePtr and ioDirID, for its
+ * creator, kept in the catalog. */
 int16_t tb_PBDTAddAPPL(gaddr dtp, bool async)
 {
+    char path[PATH_MAX];
+    int16_t vref = dt_vref(dtp);
+    int16_t err = resolve(vref, (int32_t)rd32(dtp + DTPBRec_ioDirID_off), rd32(dtp + DTPBRec_ioNamePtr_off), true,
+                          path, sizeof path);
+    if (err)
+        return err;
+    if (!exists(path))
+        return fnfErr;
     forget_appls();
+    catalog_dt_add_appl(dt_root(vref), rd32(dtp + DTPBRec_ioFileCreator_off), path,
+                        rd32(dtp + DTPBRec_ioTagInfo_off));
     return noErr;
 }
 
@@ -3470,7 +3551,17 @@ int16_t tb_PBDeleteFileIDRef(gaddr pb, bool async)
     return file_of_id((int32_t)rd32(pb + FIDParam_ioFileID), path, sizeof path) ? noErr : fidNotFound;
 }
 
-int16_t tb_PBDTRemoveAPPL(gaddr dtp, bool async) { return noErr; }
+int16_t tb_PBDTRemoveAPPL(gaddr dtp, bool async)
+{
+    char path[PATH_MAX];
+    int16_t vref = dt_vref(dtp);
+    int16_t err = resolve(vref, (int32_t)rd32(dtp + DTPBRec_ioDirID_off), rd32(dtp + DTPBRec_ioNamePtr_off), true,
+                          path, sizeof path);
+    if (err)
+        return err;
+    return catalog_dt_remove_appl(dt_root(vref), rd32(dtp + DTPBRec_ioFileCreator_off), path) ? noErr
+                                                                                           : afpItemNotFound;
+}
 
 /* ---------------------------------------------------------------------- */
 /* Desktop database icons: for each volume and creator, the icons of the
@@ -3655,9 +3746,31 @@ static void dt_read_creator(int16_t vref, uint32_t creator)
 
 /* The icon of a kind for a creator and type: as much of it as the buffer
  * holds, and its tag. */
+/* The icons the catalog keeps for a volume, into the run's list once. */
+static int16_t dt_loaded[MAX_MOUNTS + 1];
+static int ndt_loaded;
+
+static void dt_load_one(uint32_t creator, uint32_t type, int kind, uint32_t tag, const uint8_t *data, int len,
+                        void *ctx)
+{
+    if (kind >= kLargeIcon && kind <= kSmall8BitIcon && (uint32_t)len == dt_kinds[kind].size)
+        dt_put_icon(*(int16_t *)ctx, creator, type, kind, tag, data, true);
+}
+
+static void dt_load_icons(int16_t vref)
+{
+    for (int i = 0; i < ndt_loaded; i++)
+        if (dt_loaded[i] == vref)
+            return;
+    if (ndt_loaded <= MAX_MOUNTS)
+        dt_loaded[ndt_loaded++] = vref;
+    catalog_dt_icons(dt_root(vref), dt_load_one, &vref);
+}
+
 int16_t tb_PBDTGetIcon(gaddr dtp, bool async)
 {
     int16_t vref = dt_vref(dtp);
+    dt_load_icons(vref);
     uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
     int kind = rd8(dtp + DTPBRec_ioIconType_off);
     wr32(dtp + DTPBRec_ioDTActCount_off, 0);
@@ -3681,6 +3794,7 @@ int16_t tb_PBDTGetIcon(gaddr dtp, bool async)
 int16_t tb_PBDTGetIconInfo(gaddr dtp, bool async)
 {
     int16_t vref = dt_vref(dtp);
+    dt_load_icons(vref);
     uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
     int want = (int16_t)rd16(dtp + DTPBRec_ioIndex_off);
     dt_read_creator(vref, creator);
@@ -3713,28 +3827,16 @@ int16_t tb_PBDTAddIcon(gaddr dtp, bool async)
     uint8_t d[1024];
     gget(d, buf, dt_kinds[kind].size);
     dt_put_icon(vref, creator, rd32(dtp + DTPBRec_ioFileType_off), kind, rd32(dtp + DTPBRec_ioTagInfo_off), d, true);
+    catalog_dt_add_icon(dt_root(vref), creator, rd32(dtp + DTPBRec_ioFileType_off), kind,
+                        rd32(dtp + DTPBRec_ioTagInfo_off), d, (int)dt_kinds[kind].size);
     return noErr;
 }
 
 /* ---------------------------------------------------------------------- */
-/* Desktop database comments: at most 200 characters, as the Finder's. */
+/* Desktop database comments: at most 200 characters, as the Finder's; a
+ * file's in its sidecar, a folder's in the catalog. */
 
 enum { kMaxCommentLength = 200 };
-
-static struct {
-    char *path;
-    uint8_t len;
-    uint8_t text[kMaxCommentLength];
-} *folder_comments;
-static int nfolder_comments;
-
-static int folder_comment(const char *path)
-{
-    for (int i = 0; i < nfolder_comments; i++)
-        if (!strcmp(folder_comments[i].path, path))
-            return i;
-    return -1;
-}
 
 /* The file or folder a comment call names: ioDirID and ioNamePtr on the
  * database's volume. */
@@ -3787,17 +3889,9 @@ static int16_t set_comment(gaddr dtp, const uint8_t *text, uint8_t len)
         return err;
     if (!is_dir(path))
         return set_file_comment(path, text, len);
-    int i = folder_comment(path);
-    if (i < 0) {
-        if (!len)
-            return noErr;
-        folder_comments = realloc(folder_comments, (size_t)(nfolder_comments + 1) * sizeof *folder_comments);
-        i = nfolder_comments++;
-        folder_comments[i].path = strdup(path);
-    }
-    folder_comments[i].len = len;
-    memcpy(folder_comments[i].text, text, len);
-    return noErr;
+    if (!writable(path))
+        return wPrErr;
+    return catalog_set_comment(path, text, len) ? noErr : ioErrF; /* a folder's is the catalog's */
 }
 
 int16_t tb_PBDTGetComment(gaddr dtp, bool async)
@@ -3810,11 +3904,7 @@ int16_t tb_PBDTGetComment(gaddr dtp, bool async)
     uint8_t text[kMaxCommentLength];
     uint8_t len = 0;
     if (is_dir(path)) {
-        int i = folder_comment(path);
-        if (i >= 0) {
-            len = folder_comments[i].len;
-            memcpy(text, folder_comments[i].text, len);
-        }
+        len = (uint8_t)catalog_get_comment(path, text, kMaxCommentLength);
     } else {
         mac_file mf;
         if (appledouble_read_meta(path, &mf)) {
@@ -3866,21 +3956,43 @@ static void dt_reset(void)
     free(dt_read);
     dt_read = NULL;
     ndt_read = 0;
-    for (int i = 0; i < nfolder_comments; i++)
-        free(folder_comments[i].path);
-    free(folder_comments);
-    folder_comments = NULL;
-    nfolder_comments = 0;
+    ndt_loaded = 0;
 }
 
 int16_t tb_PBDTFlush(gaddr dtp, bool async) { return noErr; }
-int16_t tb_PBDTReset(gaddr dtp, bool async) { return noErr; }
-int16_t tb_PBDTDelete(gaddr dtp, bool async) { return noErr; }
+
+/* PBDTReset: the volume's applications and icons gone (its comments
+ * stay), to be built again; PBDTDelete: the whole database. */
+static int16_t dt_clear(gaddr dtp, bool all)
+{
+    int16_t vref = dt_vref(dtp);
+    catalog_dt_reset(dt_root(vref), all);
+    for (int i = 0; i < ndt_icons;)
+        if (dt_icons[i].vref == vref) {
+            free(dt_icons[i].data);
+            dt_icons[i] = dt_icons[--ndt_icons];
+        } else {
+            i++;
+        }
+    for (int i = 0; i < ndt_read;)
+        if (dt_read[i].vref == vref)
+            dt_read[i] = dt_read[--ndt_read];
+        else
+            i++;
+    return noErr;
+}
+
+int16_t tb_PBDTReset(gaddr dtp, bool async) { return dt_clear(dtp, false); }
+int16_t tb_PBDTDelete(gaddr dtp, bool async) { return dt_clear(dtp, true); }
 
 int16_t tb_PBDTGetInfo(gaddr dtp, bool async)
 {
-    wr32(dtp + DTPBRec_ioDTLgLen_off, 0);
-    wr32(dtp + DTPBRec_ioDTPyLen_off, 0);
+    /* The database's size: what the catalog keeps for the volume. */
+    int appls_n, icons_n;
+    int bytes = catalog_dt_counts(dt_root(dt_vref(dtp)), &appls_n, &icons_n);
+    uint32_t len = (uint32_t)bytes + (uint32_t)(appls_n + icons_n) * 64u;
+    wr32(dtp + DTPBRec_ioDTLgLen_off, len);
+    wr32(dtp + DTPBRec_ioDTPyLen_off, (len + 511) & ~511u);
     return noErr;
 }
 
