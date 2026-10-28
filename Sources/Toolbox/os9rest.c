@@ -12,6 +12,7 @@
 static const os9rest_group groups[] = {
     GROUP(math),
     GROUP(hw),
+    GROUP(osa),
     GROUP(text),
     GROUP(priv),
     GROUP(locale),

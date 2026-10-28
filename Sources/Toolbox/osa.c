@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "applescript.h"
 #include "as_internal.h"
 #include "tb_internal.h"
 
@@ -108,6 +109,172 @@ static int32_t execute_event(uint32_t context, gaddr evt, uint32_t *result)
     if (!err && !found)
         return errAEEventNotHandled;
     return script_error(err);
+}
+
+
+/* ---- Dialects, properties, handlers and terminology ---- */
+
+enum { errOSANoSuchDialect = -1757, errOSAUndefinedVariable = -1753, kOSAModeDontDefine = 1 };
+
+/* AppleScript has the one dialect, English (code 0, English, Roman). */
+static int16_t dialect_code;
+
+static int32_t dialect_info(int16_t code, uint32_t selector, gaddr out)
+{
+    if (code != 0)
+        return errOSANoSuchDialect;
+    uint8_t shor[2] = { 0, 0 };
+    if (selector == T("dnam"))
+        return put_desc(T("TEXT"), "English", 7, out);
+    if (selector == T("dcod") || selector == T("dlcd") || selector == T("dscd"))
+        return put_desc(T("shor"), shor, 2, out);
+    if (selector == T("difo")) { /* the whole record */
+        int32_t err = tb_AECreateList(0, 0, true, out);
+        gaddr p = tb_NewPtr(8, false, true);
+        if (err || !p)
+            return err ? err : memFullErr;
+        gput(p, "English", 7);
+        tb_AEPutParamPtr(out, (int32_t)T("dnam"), (int32_t)T("TEXT"), p, 7);
+        for (int i = 0; i < 3; i++) {
+            static const char *const keys[3] = { "dcod", "dlcd", "dscd" };
+            gput(p, shor, 2);
+            tb_AEPutParamPtr(out, (int32_t)T(keys[i]), (int32_t)T("shor"), p, 2);
+        }
+        tb_DisposePtr(p);
+        wr32(out + AEDesc_descriptorType_off, T("difo"));
+        return noErr;
+    }
+    return errOSABadSelector;
+}
+
+/* A list of descriptors made of a type and bytes each. */
+static int32_t put_list(gaddr out, uint32_t type, const void *const *items, const size_t *lens, uint32_t n)
+{
+    int32_t err = tb_AECreateList(0, 0, false, out);
+    for (uint32_t i = 0; !err && i < n; i++) {
+        gaddr p = tb_NewPtr(lens[i] ? (int32_t)lens[i] : 1, false, false);
+        if (!p)
+            return memFullErr;
+        gput(p, items[i], lens[i]);
+        err = tb_AEPutPtr(out, (int32_t)i + 1, (int32_t)type, p, (int32_t)lens[i]);
+        tb_DisposePtr(p);
+    }
+    return err;
+}
+
+static int32_t available_dialects(gaddr out, bool codes)
+{
+    uint8_t shor[2] = { 0, 0 };
+    if (codes) {
+        const void *items[1] = { shor };
+        size_t lens[1] = { 2 };
+        return put_list(out, T("shor"), items, lens, 1);
+    }
+    int32_t err = tb_AECreateList(0, 0, false, out);
+    gaddr info = tb_NewPtr(AEDesc_SIZEOF, false, true);
+    if (err || !info)
+        return err ? err : memFullErr;
+    err = dialect_info(0, T("difo"), info);
+    if (!err)
+        err = tb_AEPutDesc(out, 1, info);
+    tb_AEDisposeDesc(info);
+    tb_DisposePtr(info);
+    return err;
+}
+
+/* The text of a descriptor of a name, in a buffer. */
+static bool desc_name(gaddr desc, char *out, size_t cap, size_t *len)
+{
+    gaddr h = desc ? rd32(desc + AEDesc_dataHandle_off) : 0;
+    if (!h || !rd32(h))
+        return false;
+    int32_t n = tb_GetHandleSize(h);
+    if (n < 0 || (size_t)n >= cap)
+        return false;
+    gget(out, rd32(h), (uint32_t)n);
+    out[n] = 0;
+    *len = (size_t)n;
+    return true;
+}
+
+/* OSAGetPropertyNames and OSAGetHandlerNames: a list of TEXT. */
+static int32_t names_list(uint32_t context, int what, gaddr out)
+{
+    if (!as_is_script(context))
+        return errOSAInvalidID;
+    uint32_t n = as_name_count(context, what);
+    const void *items[256];
+    size_t lens[256];
+    if (n > 256)
+        n = 256;
+    for (uint32_t i = 0; i < n; i++)
+        items[i] = as_name_at(context, what, i, &lens[i]);
+    return put_list(out, T("TEXT"), items, lens, n);
+}
+
+/* OSAGetProperty (modeFlags, contextID, variableName, *value) */
+static int32_t get_property(uint32_t context, gaddr name, gaddr result)
+{
+    char buf[256];
+    size_t len;
+    uint32_t v;
+    if (!desc_name(name, buf, sizeof buf, &len))
+        return errOSAInvalidID;
+    v = as_property_value(context, buf, len);
+    wr32(result, v);
+    return v ? noErr : errOSAUndefinedVariable;
+}
+
+static int32_t set_property(uint32_t mode, uint32_t context, gaddr name, uint32_t value)
+{
+    char buf[256];
+    size_t len;
+    if (!desc_name(name, buf, sizeof buf, &len))
+        return errOSAInvalidID;
+    return as_set_property_value(context, buf, len, value, !(mode & kOSAModeDontDefine));
+}
+
+/* A file's terminology ('aete' resources) or the System's ('aeut'), as a
+ * list of descriptors of that type.  The program is never launched. */
+static int32_t terminology(gaddr spec, uint32_t type, int16_t id, gaddr did_launch, gaddr out)
+{
+    if (did_launch)
+        wr8(did_launch, 0);
+    int16_t ref = -1;
+    if (spec) {
+        ref = tb_FSpOpenResFile(spec, 1 /* fsRdPerm */);
+        if (ref <= 0)
+            return errOSASystemError;
+    }
+    gaddr h = spec ? tb_Get1Resource((int32_t)type, id) : tb_GetResource((int32_t)type, id);
+    int32_t err = h && rd32(h) ? noErr : errOSASystemError;
+    if (!err) {
+        int32_t n = tb_GetHandleSize(h);
+        const void *items[1];
+        size_t lens[1] = { (size_t)n };
+        uint8_t *copy = malloc((size_t)(n > 0 ? n : 1));
+        gget(copy, rd32(h), (uint32_t)n);
+        items[0] = copy;
+        err = put_list(out, type, items, lens, 1);
+        free(copy);
+    }
+    if (ref > 0)
+        tb_CloseResFile(ref);
+    return err;
+}
+
+/* The nine source styles' names. */
+static int32_t source_style_names(gaddr out)
+{
+    static const char *const names[] = { "Uncompiled text", "Normal text", "Language keyword", "Application keyword",
+                                         "Comment", "Literal", "User symbol", "Object specifier", "Reserved" };
+    const void *items[9];
+    size_t lens[9];
+    for (int i = 0; i < 9; i++) {
+        items[i] = names[i];
+        lens[i] = strlen(names[i]);
+    }
+    return put_list(out, T("TEXT"), items, lens, 8);
 }
 
 static int32_t cant_compile(void)
@@ -302,6 +469,49 @@ static int32_t osa_call(int16_t what, gaddr params)
     }
     case kOSASelectMakeContext: /* (contextName, parentContext, *resultingContextID) */
         return errOSABadSelector;
+    case 0x0105: /* OSACopyScript (fromID, *toID) */
+        id = as_copy_id(ARG(1));
+        wr32(ARG(0), id);
+        return id ? noErr : errOSAInvalidID;
+    case 0x0701: /* OSASetCurrentDialect (dialectCode) */
+        if ((int16_t)rd16(params + 4) != 0)
+            return errOSANoSuchDialect;
+        dialect_code = 0;
+        return noErr;
+    case 0x0702: /* OSAGetCurrentDialect (*dialectCode) */
+        wr16(ARG(0), (uint16_t)dialect_code);
+        return noErr;
+    case 0x0703: /* OSAAvailableDialects (*list) */
+        return available_dialects(ARG(0), false);
+    case 0x0704: /* OSAGetDialectInfo (dialectCode, selector, *info) */
+        return dialect_info((int16_t)rd16(params + 4 + 8), ARG(1), ARG(0));
+    case 0x0705: /* OSAAvailableDialectCodeList (*list) */
+        return available_dialects(ARG(0), true);
+    case 0x1101: /* ASSetProperty (contextID, variableName, scriptValueID) */
+        return set_property(0, ARG(2), ARG(1), ARG(0));
+    case 0x1102: /* ASGetProperty (contextID, variableName, *value) */
+        return get_property(ARG(2), ARG(1), ARG(0));
+    case 0x1103: /* ASSetHandler */
+    case 0x1104: /* ASGetHandler */
+    case 0x1108: /* OSASetHandler */
+    case 0x1109: /* OSAGetHandler: a handler is not a script of its own here */
+        return errOSABadSelector;
+    case 0x1105: /* ASGetAppTerminology (fileSpec, terminologyID, *didLaunch, *list) */
+        return terminology(rd32(params + 14), T("aete"), (int16_t)rd16(params + 12), ARG(1), ARG(0));
+    case 0x1106: /* OSASetProperty (modeFlags, contextID, variableName, scriptValueID) */
+        return set_property(ARG(3), ARG(2), ARG(1), ARG(0));
+    case 0x1107: /* OSAGetProperty (modeFlags, contextID, variableName, *value) */
+        return get_property(ARG(2), ARG(1), ARG(0));
+    case 0x110A: /* OSAGetAppTerminology (modeFlags, fileSpec, terminologyID, *didLaunch, *list) */
+        return terminology(rd32(params + 4 + 8 + 2), T("aete"), (int16_t)rd16(params + 4 + 8), ARG(1), ARG(0));
+    case 0x110B: /* OSAGetSysTerminology (modeFlags, terminologyID, *list) */
+        return terminology(0, T("aeut"), (int16_t)rd16(params + 4 + 4), 0, ARG(0));
+    case 0x110C: /* OSAGetPropertyNames (modeFlags, contextID, *names) */
+        return names_list(ARG(1), 0, ARG(0));
+    case 0x110D: /* OSAGetHandlerNames (modeFlags, contextID, *names) */
+        return names_list(ARG(1), 1, ARG(0));
+    case 0x110E: /* OSAFlushTerminology: none is kept */
+        return noErr;
     }
     switch ((uint16_t)what) {
     case 0x1001: /* ASInit */
@@ -309,6 +519,8 @@ static int32_t osa_call(int16_t what, gaddr params)
         return noErr;
     case 0x1003: /* ASGetSourceStyles (*resultingSourceStyles) */
         return source_styles(ARG(0));
+    case 0x1004: /* ASGetSourceStyleNames (modeFlags, *list) */
+        return source_style_names(ARG(0));
     }
     return badComponentSelector;
 }

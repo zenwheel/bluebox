@@ -235,6 +235,7 @@ const ppc_export os9rest_priv_exports[] = {
     { "InitializeFolderManager", p_AlreadyDone }, { "InitKeybdMenu", p_AlreadyDone },
     { "InitApplication", p_AlreadyDone }, { "CleanupApplication", p_AlreadyDone },
     { "IUClearCacheSys", p_AlreadyDone },
+    { "DragInitProc", p_AlreadyDone }, { "ReloadContextualMenuPlugins", p_Nothing },
     { "PrintCopyright", p_PrintCopyright }, { "MoveHLow", p_MoveHLow },
     { "GetMBARRect", p_GetMBARRect }, { "GetMenuTitleRect", p_GetMenuTitleRect },
     { "GetProcessFromLayer", p_GetProcessFromLayer }, { "KillProcess", p_KillProcess },
