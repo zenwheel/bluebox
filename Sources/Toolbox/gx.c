@@ -525,6 +525,11 @@ gaddr tb_RetainCollection(gaddr c)
     return c;
 }
 
+/* The older names (Collections.h before Carbon): a clone is a reference to
+ * the same collection, and the owners are the retains. */
+gaddr tb_CloneCollection(gaddr c) { return tb_RetainCollection(c); }
+int32_t tb_CountCollectionOwners(gaddr c) { return tb_GetCollectionRetainCount(c); }
+
 int32_t tb_ReleaseCollection(gaddr c)
 {
     if (!obj(c, K_COLLECTION))

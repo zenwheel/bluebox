@@ -109,3 +109,146 @@
     dispatcher: Pack6
     selector: 0x002E
     executor: C_
+
+# Translation.h: the Translation Manager (Macintosh Easy Open), $ABFC
+- dispatcher:
+    name: TranslationDispatch
+    trap: 0xABFC
+    selector-location: D0W
+
+- function:
+    name: GetFileTypesThatAppCanNativelyOpen
+    return: OSErr
+    args:
+      - name: appVRefNumHint
+        type: INTEGER
+      - name: appSignature
+        type: OSType
+      - name: nativeTypes
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x1C
+
+- function:
+    name: ExtendFileTypeList
+    return: OSErr
+    args:
+      - name: originalTypeList
+        type: Ptr
+      - name: numberOriginalTypes
+        type: INTEGER
+      - name: extendedTypeList
+        type: Ptr
+      - name: numberExtendedTypes
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x09
+
+- function:
+    name: CanDocBeOpened
+    return: OSErr
+    args:
+      - name: targetDocument
+        type: Ptr
+      - name: appVRefNumHint
+        type: INTEGER
+      - name: appSignature
+        type: OSType
+      - name: nativeTypes
+        type: Ptr
+      - name: onlyNative
+        type: Boolean
+      - name: howToOpen
+        type: Ptr
+      - name: howToTranslate
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x1E
+
+- function:
+    name: GetFileTranslationPaths
+    return: INTEGER
+    args:
+      - name: srcDocument
+        type: Ptr
+      - name: dstDocType
+        type: OSType
+      - name: maxResultCount
+        type: uint16_t
+      - name: resultBuffer
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x38
+
+- function:
+    name: GetPathFromTranslationDialog
+    return: OSErr
+    args:
+      - name: theDocument
+        type: Ptr
+      - name: theApplication
+        type: Ptr
+      - name: typeList
+        type: Ptr
+      - name: howToOpen
+        type: Ptr
+      - name: howToTranslate
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x37
+
+- function:
+    name: TranslateFile
+    return: OSErr
+    args:
+      - name: sourceDocument
+        type: Ptr
+      - name: destinationDocument
+        type: Ptr
+      - name: howToTranslate
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x0C
+
+- function:
+    name: GetDocumentKindString
+    return: OSErr
+    args:
+      - name: docVRefNum
+        type: INTEGER
+      - name: docType
+        type: OSType
+      - name: docCreator
+        type: OSType
+      - name: kindString
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x16
+
+- function:
+    name: GetTranslationExtensionName
+    return: OSErr
+    args:
+      - name: translationMethod
+        type: Ptr
+      - name: extensionName
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x36
+
+- function:
+    name: TranslateScrap
+    return: OSErr
+    args:
+      - name: sourceDataGetter
+        type: Ptr
+      - name: sourceDataGetterRefCon
+        type: Ptr
+      - name: destinationFormat
+        type: OSType
+      - name: destinationData
+        type: Handle
+      - name: progressDialogID
+        type: INTEGER
+    dispatcher: TranslationDispatch
+    selector: 0x0E

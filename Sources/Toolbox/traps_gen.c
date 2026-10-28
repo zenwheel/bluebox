@@ -754,6 +754,7 @@ const char *const tb_trap_names[1024] = {
     [0x3F2] = "ThreadDispatch",
     [0x3F6] = "CollectionDispatch",
     [0x3F8] = "StdOpcode",
+    [0x3FC] = "TranslationDispatch",
     [0x3FE] = "GXPrintingDispatch",
     [0x3FF] = "DebugStr",
 };
@@ -2327,6 +2328,22 @@ static void glue_CalcVisBehind(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CanDocBeOpened(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_howToTranslate = (gaddr)cpu_pop32(c);
+    gaddr a_howToOpen = (gaddr)cpu_pop32(c);
+    int8_t a_onlyNative = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_nativeTypes = (gaddr)cpu_pop32(c);
+    int32_t a_appSignature = (int32_t)cpu_pop32(c);
+    int16_t a_appVRefNumHint = (int16_t)cpu_pop16(c);
+    gaddr a_targetDocument = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CanDocBeOpened(a_targetDocument, a_appVRefNumHint, a_appSignature, a_nativeTypes, a_onlyNative, a_howToOpen, a_howToTranslate);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CancelSwitch(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2565,6 +2582,16 @@ static void glue_ClipRect(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_r = (gaddr)cpu_pop32(c);
     tb_ClipRect(a_r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloneCollection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    gaddr r = tb_CloneCollection(a_c);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -3230,6 +3257,16 @@ static void glue_CountCollectionItems(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     int32_t r = tb_CountCollectionItems(a_c);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CountCollectionOwners(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CountCollectionOwners(a_c);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -6785,6 +6822,19 @@ static void glue_Exp1to6(cpu68k *c, uint16_t trapword)
     gaddr a_outp = (gaddr)cpu_pop32(c);
     gaddr a_inp = (gaddr)cpu_pop32(c);
     tb_Exp1to6(a_inp, a_outp, a_cnt, a_instatep, a_outstatep, a_numchannels, a_whichchannel);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExtendFileTypeList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numberExtendedTypes = (gaddr)cpu_pop32(c);
+    gaddr a_extendedTypeList = (gaddr)cpu_pop32(c);
+    int16_t a_numberOriginalTypes = (int16_t)cpu_pop16(c);
+    gaddr a_originalTypeList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExtendFileTypeList(a_originalTypeList, a_numberOriginalTypes, a_extendedTypeList, a_numberExtendedTypes);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -10668,6 +10718,19 @@ static void glue_GetDimmingTimeout(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)r;
 }
 
+static void glue_GetDocumentKindString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_kindString = (gaddr)cpu_pop32(c);
+    int32_t a_docCreator = (int32_t)cpu_pop32(c);
+    int32_t a_docType = (int32_t)cpu_pop32(c);
+    int16_t a_docVRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetDocumentKindString(a_docVRefNum, a_docType, a_docCreator, a_kindString);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDragAttributes(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -10791,6 +10854,31 @@ static void glue_GetFNum(cpu68k *c, uint16_t trapword)
     gaddr a_fnum = (gaddr)cpu_pop32(c);
     gaddr a_fnam = (gaddr)cpu_pop32(c);
     tb_GetFNum(a_fnam, a_fnum);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFileTranslationPaths(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_resultBuffer = (gaddr)cpu_pop32(c);
+    uint16_t a_maxResultCount = (uint16_t)cpu_pop16(c);
+    int32_t a_dstDocType = (int32_t)cpu_pop32(c);
+    gaddr a_srcDocument = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFileTranslationPaths(a_srcDocument, a_dstDocType, a_maxResultCount, a_resultBuffer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFileTypesThatAppCanNativelyOpen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_nativeTypes = (gaddr)cpu_pop32(c);
+    int32_t a_appSignature = (int32_t)cpu_pop32(c);
+    int16_t a_appVRefNumHint = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetFileTypesThatAppCanNativelyOpen(a_appVRefNumHint, a_appSignature, a_nativeTypes);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -12273,6 +12361,20 @@ static void glue_GetParamText(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetPathFromTranslationDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_howToTranslate = (gaddr)cpu_pop32(c);
+    gaddr a_howToOpen = (gaddr)cpu_pop32(c);
+    gaddr a_typeList = (gaddr)cpu_pop32(c);
+    gaddr a_theApplication = (gaddr)cpu_pop32(c);
+    gaddr a_theDocument = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetPathFromTranslationDialog(a_theDocument, a_theApplication, a_typeList, a_howToOpen, a_howToTranslate);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetPattern(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13341,6 +13443,17 @@ static void glue_GetTrackMovie(cpu68k *c, uint16_t trapword)
     int32_t a_theTrack = (int32_t)cpu_pop32(c);
     int32_t r = tb_GetTrackMovie(a_theTrack);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTranslationExtensionName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_extensionName = (gaddr)cpu_pop32(c);
+    gaddr a_translationMethod = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetTranslationExtensionName(a_translationMethod, a_extensionName);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -25891,6 +26004,18 @@ static void glue_TransformRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TranslateFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_howToTranslate = (gaddr)cpu_pop32(c);
+    gaddr a_destinationDocument = (gaddr)cpu_pop32(c);
+    gaddr a_sourceDocument = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TranslateFile(a_sourceDocument, a_destinationDocument, a_howToTranslate);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_TranslateMatrix(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -25899,6 +26024,20 @@ static void glue_TranslateMatrix(cpu68k *c, uint16_t trapword)
     int32_t a_deltaH = (int32_t)cpu_pop32(c);
     gaddr a_m = (gaddr)cpu_pop32(c);
     tb_TranslateMatrix(a_m, a_deltaH, a_deltaV);
+    cpu_push32(c, ret);
+}
+
+static void glue_TranslateScrap(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_progressDialogID = (int16_t)cpu_pop16(c);
+    gaddr a_destinationData = (gaddr)cpu_pop32(c);
+    int32_t a_destinationFormat = (int32_t)cpu_pop32(c);
+    gaddr a_sourceDataGetterRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_sourceDataGetter = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TranslateScrap(a_sourceDataGetter, a_sourceDataGetterRefCon, a_destinationFormat, a_destinationData, a_progressDialogID);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -27352,8 +27491,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA5A, (int32_t)0x7u, "GetIndSymbol", CONV_STACK, 20, 2, 0},
     {0xABF6, (int32_t)0x0u, "NewCollection", CONV_STACK, 0, 4, glue_NewCollection},
     {0xABF6, (int32_t)0x1u, "DisposeCollection", CONV_STACK, 4, 0, glue_DisposeCollection},
-    {0xABF6, (int32_t)0x2u, "CloneCollection", CONV_STACK, 4, 4, 0},
-    {0xABF6, (int32_t)0x3u, "CountCollectionOwners", CONV_STACK, 4, 4, 0},
+    {0xABF6, (int32_t)0x2u, "CloneCollection", CONV_STACK, 4, 4, glue_CloneCollection},
+    {0xABF6, (int32_t)0x3u, "CountCollectionOwners", CONV_STACK, 4, 4, glue_CountCollectionOwners},
     {0xABF6, (int32_t)0x4u, "CopyCollection", CONV_STACK, 8, 4, 0},
     {0xABF6, (int32_t)0x5u, "GetCollectionDefaultAttributes", CONV_STACK, 4, 4, 0},
     {0xABF6, (int32_t)0x6u, "SetCollectionDefaultAttributes", CONV_STACK, 12, 0, 0},
@@ -29672,6 +29811,15 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF2, (int32_t)0x615u, "GetSpecificFreeThreadCount", CONV_STACK, 12, 2, glue_GetSpecificFreeThreadCount},
     {0xABF2, (int32_t)0x70Au, "SetThreadSwitcher", CONV_STACK, 14, 2, glue_SetThreadSwitcher},
     {0xABF2, (int32_t)0xE03u, "NewThread", CONV_STACK, 28, 2, glue_NewThread},
+    {0xABFC, (int32_t)0x9u, "ExtendFileTypeList", CONV_STACK, 14, 2, glue_ExtendFileTypeList},
+    {0xABFC, (int32_t)0xCu, "TranslateFile", CONV_STACK, 12, 2, glue_TranslateFile},
+    {0xABFC, (int32_t)0xEu, "TranslateScrap", CONV_STACK, 18, 2, glue_TranslateScrap},
+    {0xABFC, (int32_t)0x16u, "GetDocumentKindString", CONV_STACK, 14, 2, glue_GetDocumentKindString},
+    {0xABFC, (int32_t)0x1Cu, "GetFileTypesThatAppCanNativelyOpen", CONV_STACK, 10, 2, glue_GetFileTypesThatAppCanNativelyOpen},
+    {0xABFC, (int32_t)0x1Eu, "CanDocBeOpened", CONV_STACK, 24, 2, glue_CanDocBeOpened},
+    {0xABFC, (int32_t)0x36u, "GetTranslationExtensionName", CONV_STACK, 8, 2, glue_GetTranslationExtensionName},
+    {0xABFC, (int32_t)0x37u, "GetPathFromTranslationDialog", CONV_STACK, 20, 2, glue_GetPathFromTranslationDialog},
+    {0xABFC, (int32_t)0x38u, "GetFileTranslationPaths", CONV_STACK, 14, 2, glue_GetFileTranslationPaths},
 };
 const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[0];
 
@@ -29737,5 +29885,6 @@ const dispatcher_info dispatchers[] = {
     {0xA83D, "TEDispatch", "StackW"},
     {0xAA54, "TSMDispatch", "D0W"},
     {0xABF2, "ThreadDispatch", "D0W"},
+    {0xABFC, "TranslationDispatch", "D0W"},
 };
 const unsigned dispatcher_count = sizeof dispatchers / sizeof dispatchers[0];

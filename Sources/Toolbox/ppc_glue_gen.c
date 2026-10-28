@@ -22672,6 +22672,97 @@ static void ppcglue_TypeSelectCompare(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetFileTypesThatAppCanNativelyOpen(ppc_cpu *c)
+{
+    int16_t a_appVRefNumHint = (int16_t)c->gpr[3];
+    int32_t a_appSignature = (int32_t)c->gpr[4];
+    gaddr a_nativeTypes = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFileTypesThatAppCanNativelyOpen(a_appVRefNumHint, a_appSignature, a_nativeTypes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExtendFileTypeList(ppc_cpu *c)
+{
+    gaddr a_originalTypeList = (gaddr)c->gpr[3];
+    int16_t a_numberOriginalTypes = (int16_t)c->gpr[4];
+    gaddr a_extendedTypeList = (gaddr)c->gpr[5];
+    gaddr a_numberExtendedTypes = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExtendFileTypeList(a_originalTypeList, a_numberOriginalTypes, a_extendedTypeList, a_numberExtendedTypes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CanDocBeOpened(ppc_cpu *c)
+{
+    gaddr a_targetDocument = (gaddr)c->gpr[3];
+    int16_t a_appVRefNumHint = (int16_t)c->gpr[4];
+    int32_t a_appSignature = (int32_t)c->gpr[5];
+    gaddr a_nativeTypes = (gaddr)c->gpr[6];
+    int8_t a_onlyNative = (int8_t)c->gpr[7];
+    gaddr a_howToOpen = (gaddr)c->gpr[8];
+    gaddr a_howToTranslate = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CanDocBeOpened(a_targetDocument, a_appVRefNumHint, a_appSignature, a_nativeTypes, a_onlyNative, a_howToOpen, a_howToTranslate);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFileTranslationPaths(ppc_cpu *c)
+{
+    gaddr a_srcDocument = (gaddr)c->gpr[3];
+    int32_t a_dstDocType = (int32_t)c->gpr[4];
+    uint16_t a_maxResultCount = (uint16_t)c->gpr[5];
+    gaddr a_resultBuffer = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetFileTranslationPaths(a_srcDocument, a_dstDocType, a_maxResultCount, a_resultBuffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetPathFromTranslationDialog(ppc_cpu *c)
+{
+    gaddr a_theDocument = (gaddr)c->gpr[3];
+    gaddr a_theApplication = (gaddr)c->gpr[4];
+    gaddr a_typeList = (gaddr)c->gpr[5];
+    gaddr a_howToOpen = (gaddr)c->gpr[6];
+    gaddr a_howToTranslate = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetPathFromTranslationDialog(a_theDocument, a_theApplication, a_typeList, a_howToOpen, a_howToTranslate);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TranslateFile(ppc_cpu *c)
+{
+    gaddr a_sourceDocument = (gaddr)c->gpr[3];
+    gaddr a_destinationDocument = (gaddr)c->gpr[4];
+    gaddr a_howToTranslate = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TranslateFile(a_sourceDocument, a_destinationDocument, a_howToTranslate);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDocumentKindString(ppc_cpu *c)
+{
+    int16_t a_docVRefNum = (int16_t)c->gpr[3];
+    int32_t a_docType = (int32_t)c->gpr[4];
+    int32_t a_docCreator = (int32_t)c->gpr[5];
+    gaddr a_kindString = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDocumentKindString(a_docVRefNum, a_docType, a_docCreator, a_kindString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTranslationExtensionName(ppc_cpu *c)
+{
+    gaddr a_translationMethod = (gaddr)c->gpr[3];
+    gaddr a_extensionName = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTranslationExtensionName(a_translationMethod, a_extensionName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TranslateScrap(ppc_cpu *c)
+{
+    gaddr a_sourceDataGetter = (gaddr)c->gpr[3];
+    gaddr a_sourceDataGetterRefCon = (gaddr)c->gpr[4];
+    int32_t a_destinationFormat = (int32_t)c->gpr[5];
+    gaddr a_destinationData = (gaddr)c->gpr[6];
+    int16_t a_progressDialogID = (int16_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TranslateScrap(a_sourceDataGetter, a_sourceDataGetterRefCon, a_destinationFormat, a_destinationData, a_progressDialogID);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -24315,6 +24406,20 @@ static void ppcglue_DisposeCollection(ppc_cpu *c)
 {
     gaddr a_c = (gaddr)c->gpr[3];
     tb_DisposeCollection(a_c);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloneCollection(ppc_cpu *c)
+{
+    gaddr a_c = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_CloneCollection(a_c);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountCollectionOwners(ppc_cpu *c)
+{
+    gaddr a_c = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_CountCollectionOwners(a_c);
     c->pc = c->lr;
 }
 
@@ -34201,32 +34306,6 @@ static void ppctrap_GXCleanupStartSendPage(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_CloneCollection(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xABF6));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CountCollectionOwners(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xABF6));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_CopyCollection(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -41410,6 +41489,7 @@ const ppc_export ppc_exports[] = {
     {"CallEditionOpenerProc", ppctrap_CallEditionOpenerProc},
     {"CallFormatIOProc", ppctrap_CallFormatIOProc},
     {"CallMeWhen", ppctrap_CallMeWhen},
+    {"CanDocBeOpened", ppcglue_CanDocBeOpened},
     {"CanQuickTimeOpenDataRef", ppctrap_CanQuickTimeOpenDataRef},
     {"CanQuickTimeOpenFile", ppctrap_CanQuickTimeOpenFile},
     {"CancelCallBack", ppctrap_CancelCallBack},
@@ -41438,7 +41518,7 @@ const ppc_export ppc_exports[] = {
     {"ClearMoviesStickyError", ppcglue_ClearMoviesStickyError},
     {"ClipAbove", ppcglue_ClipAbove},
     {"ClipRect", ppcglue_ClipRect},
-    {"CloneCollection", ppctrap_CloneCollection},
+    {"CloneCollection", ppcglue_CloneCollection},
     {"CloseCPort", ppcglue_CloseCPort},
     {"CloseConnection", ppctrap_CloseConnection},
     {"CloseCursorComponent", ppcglue_CloseCursorComponent},
@@ -41519,7 +41599,7 @@ const ppc_export ppc_exports[] = {
     {"Count1Types", ppcglue_Count1Types},
     {"CountADBs", ppcglue_CountADBs},
     {"CountCollectionItems", ppcglue_CountCollectionItems},
-    {"CountCollectionOwners", ppctrap_CountCollectionOwners},
+    {"CountCollectionOwners", ppcglue_CountCollectionOwners},
     {"CountCollectionTags", ppctrap_CountCollectionTags},
     {"CountDITL", ppcglue_CountDITL},
     {"CountDragItemFlavors", ppcglue_CountDragItemFlavors},
@@ -41883,6 +41963,7 @@ const ppc_export ppc_exports[] = {
     {"ExitToShell", ppctrap_ExitToShell},
     {"Exp1to3", ppcglue_Exp1to3},
     {"Exp1to6", ppcglue_Exp1to6},
+    {"ExtendFileTypeList", ppcglue_ExtendFileTypeList},
     {"ExtendedToString", ppcglue_ExtendedToString},
     {"FCompressImage", ppcglue_FCompressImage},
     {"FCompressPicture", ppcglue_FCompressPicture},
@@ -42348,6 +42429,7 @@ const ppc_export ppc_exports[] = {
     {"GetDimSuspendState", ppcglue_GetDimSuspendState},
     {"GetDimmingTimeout", ppcglue_GetDimmingTimeout},
     {"GetDiskFragment", ppctrap_GetDiskFragment},
+    {"GetDocumentKindString", ppcglue_GetDocumentKindString},
     {"GetDragAttributes", ppcglue_GetDragAttributes},
     {"GetDragHiliteColor", ppcglue_GetDragHiliteColor},
     {"GetDragItemBounds", ppcglue_GetDragItemBounds},
@@ -42363,6 +42445,8 @@ const ppc_export ppc_exports[] = {
     {"GetEntryUsage", ppcglue_GetEntryUsage},
     {"GetFNum", ppcglue_GetFNum},
     {"GetFSInfo", ppcglue_GetFSInfo},
+    {"GetFileTranslationPaths", ppcglue_GetFileTranslationPaths},
+    {"GetFileTypesThatAppCanNativelyOpen", ppcglue_GetFileTypesThatAppCanNativelyOpen},
     {"GetFileViewAccessOptions", ppcglue_GetFileViewAccessOptions},
     {"GetFileViewFromAddress", ppcglue_GetFileViewFromAddress},
     {"GetFileViewInformation", ppcglue_GetFileViewInformation},
@@ -42566,6 +42650,7 @@ const ppc_export ppc_exports[] = {
     {"GetPaletteUpdates", ppcglue_GetPaletteUpdates},
     {"GetParamText", ppcglue_GetParamText},
     {"GetParent", ppcglue_GetParent},
+    {"GetPathFromTranslationDialog", ppcglue_GetPathFromTranslationDialog},
     {"GetPattern", ppcglue_GetPattern},
     {"GetPen", ppcglue_GetPen},
     {"GetPenState", ppcglue_GetPenState},
@@ -42707,6 +42792,7 @@ const ppc_export ppc_exports[] = {
     {"GetTrackUsage", ppctrap_GetTrackUsage},
     {"GetTrackUserData", ppctrap_GetTrackUserData},
     {"GetTrackVolume", ppctrap_GetTrackVolume},
+    {"GetTranslationExtensionName", ppcglue_GetTranslationExtensionName},
     {"GetTrapAddress", ppcglue_GetTrapAddress},
     {"GetUserData", ppctrap_GetUserData},
     {"GetUserDataItem", ppctrap_GetUserDataItem},
@@ -45074,7 +45160,9 @@ const ppc_export ppc_exports[] = {
     {"TransformPoints", ppcglue_TransformPoints},
     {"TransformRect", ppcglue_TransformRect},
     {"TransformRgn", ppctrap_TransformRgn},
+    {"TranslateFile", ppcglue_TranslateFile},
     {"TranslateMatrix", ppcglue_TranslateMatrix},
+    {"TranslateScrap", ppcglue_TranslateScrap},
     {"Transliterate", ppcglue_Transliterate},
     {"TransliterateText", ppcglue_TransliterateText},
     {"TrimImage", ppctrap_TrimImage},
