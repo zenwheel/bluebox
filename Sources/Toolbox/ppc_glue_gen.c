@@ -29791,6 +29791,440 @@ static void ppcglue_SetDeepIconsEnabled(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_UTAllocateFCB(ppc_cpu *c)
+{
+    gaddr a_fileRefNum = (gaddr)c->gpr[3];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAllocateFCB(a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTReleaseFCB(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTReleaseFCB(a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateFCB(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    gaddr a_namePtr = (gaddr)c->gpr[5];
+    gaddr a_fileRefNum = (gaddr)c->gpr[6];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateFCB(a_volCtrlBlockPtr, a_fileNum, a_namePtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateNextFCB(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    gaddr a_namePtr = (gaddr)c->gpr[5];
+    gaddr a_fileRefNum = (gaddr)c->gpr[6];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateNextFCB(a_volCtrlBlockPtr, a_fileNum, a_namePtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTIndexFCB(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    gaddr a_fileRefNum = (gaddr)c->gpr[4];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTIndexFCB(a_volCtrlBlockPtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTResolveFCB(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTResolveFCB(a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAllocateVCB(ppc_cpu *c)
+{
+    gaddr a_sysVCBLength = (gaddr)c->gpr[3];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[4];
+    uint16_t a_addSize = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAllocateVCB(a_sysVCBLength, a_volCtrlBlockPtr, a_addSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAddNewVCB(ppc_cpu *c)
+{
+    int16_t a_driveNum = (int16_t)c->gpr[3];
+    gaddr a_vRefNum = (gaddr)c->gpr[4];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAddNewVCB(a_driveNum, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTDisposeVCB(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTDisposeVCB(a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateVCBByRefNum(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    gaddr a_vRefNum = (gaddr)c->gpr[4];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateVCBByRefNum(a_refNum, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateVCBByName(ppc_cpu *c)
+{
+    gaddr a_namePtr = (gaddr)c->gpr[3];
+    gaddr a_moreMatches = (gaddr)c->gpr[4];
+    gaddr a_vRefNum = (gaddr)c->gpr[5];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateVCBByName(a_namePtr, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateNextVCB(ppc_cpu *c)
+{
+    gaddr a_namePtr = (gaddr)c->gpr[3];
+    gaddr a_moreMatches = (gaddr)c->gpr[4];
+    gaddr a_vRefNum = (gaddr)c->gpr[5];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateNextVCB(a_namePtr, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAllocateWDCB(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAllocateWDCB(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTReleaseWDCB(ppc_cpu *c)
+{
+    int16_t a_wdRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTReleaseWDCB(a_wdRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTResolveWDCB(ppc_cpu *c)
+{
+    int32_t a_procID = (int32_t)c->gpr[3];
+    int16_t a_wdIndex = (int16_t)c->gpr[4];
+    int16_t a_wdRefNum = (int16_t)c->gpr[5];
+    gaddr a_wdCtrlBlockPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTResolveWDCB(a_procID, a_wdIndex, a_wdRefNum, a_wdCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTFindDrive(ppc_cpu *c)
+{
+    int16_t a_driveNum = (int16_t)c->gpr[3];
+    gaddr a_driveQElementPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTFindDrive(a_driveNum, a_driveQElementPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAdjustEOF(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAdjustEOF(a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTSetDefaultVol(ppc_cpu *c)
+{
+    int32_t a_nodeHint = (int32_t)c->gpr[3];
+    uint32_t a_dirID = (uint32_t)c->gpr[4];
+    int16_t a_refNum = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTSetDefaultVol(a_nodeHint, a_dirID, a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTGetDefaultVol(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTGetDefaultVol(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckWDRefNum(ppc_cpu *c)
+{
+    int16_t a_wdRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckWDRefNum(a_wdRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckFileRefNum(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckFileRefNum(a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckVolRefNum(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckVolRefNum(a_vRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckPermission(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    gaddr a_modByte = (gaddr)c->gpr[4];
+    uint32_t a_fileNum = (uint32_t)c->gpr[5];
+    gaddr a_paramBlock = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckPermission(a_volCtrlBlockPtr, a_modByte, a_fileNum, a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckVolOffline(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckVolOffline(a_vRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckVolModifiable(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckVolModifiable(a_vRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckFileModifiable(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckFileModifiable(a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckDirBusy(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_dirID = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckDirBusy(a_volCtrlBlockPtr, a_dirID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTParsePathname(ppc_cpu *c)
+{
+    gaddr a_volNamelength = (gaddr)c->gpr[3];
+    gaddr a_namePtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTParsePathname(a_volNamelength, a_namePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTGetPathComponentName(ppc_cpu *c)
+{
+    gaddr a_parseRec = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTGetPathComponentName(a_parseRec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTDetermineVol(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    gaddr a_status = (gaddr)c->gpr[4];
+    gaddr a_moreMatches = (gaddr)c->gpr[5];
+    gaddr a_vRefNum = (gaddr)c->gpr[6];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTDetermineVol(a_paramBlock, a_status, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTGetBlock(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    gaddr a_log2PhyProc = (gaddr)c->gpr[4];
+    uint32_t a_blockNum = (uint32_t)c->gpr[5];
+    int16_t a_gbOption = (int16_t)c->gpr[6];
+    gaddr a_buffer = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTGetBlock(a_refNum, a_log2PhyProc, a_blockNum, a_gbOption, a_buffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTReleaseBlock(ppc_cpu *c)
+{
+    gaddr a_buffer = (gaddr)c->gpr[3];
+    int16_t a_rbOption = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTReleaseBlock(a_buffer, a_rbOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTFlushCache(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    int16_t a_fcOption = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTFlushCache(a_refNum, a_fcOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTMarkDirty(ppc_cpu *c)
+{
+    gaddr a_buffer = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTMarkDirty(a_buffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTTrashVolBlocks(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTTrashVolBlocks(a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTTrashFileBlocks(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTTrashFileBlocks(a_volCtrlBlockPtr, a_fileNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTTrashBlocks(ppc_cpu *c)
+{
+    uint32_t a_beginPosition = (uint32_t)c->gpr[3];
+    uint32_t a_byteCount = (uint32_t)c->gpr[4];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[5];
+    int16_t a_fileRefNum = (int16_t)c->gpr[6];
+    int16_t a_tbOption = (int16_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTTrashBlocks(a_beginPosition, a_byteCount, a_volCtrlBlockPtr, a_fileRefNum, a_tbOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCacheReadIP(ppc_cpu *c)
+{
+    gaddr a_log2PhyProc = (gaddr)c->gpr[3];
+    uint32_t a_filePosition = (uint32_t)c->gpr[4];
+    gaddr a_ioBuffer = (gaddr)c->gpr[5];
+    int16_t a_fileRefNum = (int16_t)c->gpr[6];
+    uint32_t a_reqCount = (uint32_t)c->gpr[7];
+    gaddr a_actCount = (gaddr)c->gpr[8];
+    int16_t a_cacheOption = (int16_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCacheReadIP(a_log2PhyProc, a_filePosition, a_ioBuffer, a_fileRefNum, a_reqCount, a_actCount, a_cacheOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCacheWriteIP(ppc_cpu *c)
+{
+    gaddr a_log2PhyProc = (gaddr)c->gpr[3];
+    uint32_t a_filePosition = (uint32_t)c->gpr[4];
+    gaddr a_ioBuffer = (gaddr)c->gpr[5];
+    int16_t a_fileRefNum = (int16_t)c->gpr[6];
+    uint32_t a_reqCount = (uint32_t)c->gpr[7];
+    gaddr a_actCount = (gaddr)c->gpr[8];
+    int16_t a_cacheOption = (int16_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCacheWriteIP(a_log2PhyProc, a_filePosition, a_ioBuffer, a_fileRefNum, a_reqCount, a_actCount, a_cacheOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTEjectVol(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTEjectVol(a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTBlockInFQHashP(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    uint32_t a_diskBlock = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTBlockInFQHashP(a_vRefNum, a_diskBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTVolCacheReadIP(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_blockPosition = (uint32_t)c->gpr[4];
+    gaddr a_ioBuffer = (gaddr)c->gpr[5];
+    uint32_t a_reqCount = (uint32_t)c->gpr[6];
+    gaddr a_actCount = (gaddr)c->gpr[7];
+    int16_t a_cacheOption = (int16_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTVolCacheReadIP(a_volCtrlBlockPtr, a_blockPosition, a_ioBuffer, a_reqCount, a_actCount, a_cacheOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTVolCacheWriteIP(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_blockPosition = (uint32_t)c->gpr[4];
+    gaddr a_ioBuffer = (gaddr)c->gpr[5];
+    uint32_t a_reqCount = (uint32_t)c->gpr[6];
+    gaddr a_actCount = (gaddr)c->gpr[7];
+    int16_t a_cacheOption = (int16_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTVolCacheWriteIP(a_volCtrlBlockPtr, a_blockPosition, a_ioBuffer, a_reqCount, a_actCount, a_cacheOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTResolveFileRefNum(ppc_cpu *c)
+{
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[3];
+    gaddr a_fileRefNum = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTResolveFileRefNum(a_fileCtrlBlockPtr, a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckFCB(ppc_cpu *c)
+{
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckFCB(a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckForkPermissions(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    uint32_t a_forkID = (uint32_t)c->gpr[5];
+    int8_t a_fileLocked = (int8_t)c->gpr[6];
+    int8_t a_permissions = (int8_t)c->gpr[7];
+    int8_t a_useSearchList = (int8_t)c->gpr[8];
+    gaddr a_fcbFlags = (gaddr)c->gpr[9];
+    gaddr a_openForkRefNum = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckForkPermissions(a_volCtrlBlockPtr, a_fileNum, a_forkID, a_fileLocked, a_permissions, a_useSearchList, a_fcbFlags, a_openForkRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAddFCBToSearchList(ppc_cpu *c)
+{
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAddFCBToSearchList(a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTRemoveFCBFromSearchList(ppc_cpu *c)
+{
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTRemoveFCBFromSearchList(a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateFCBInSearchList(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    gaddr a_fileRefNum = (gaddr)c->gpr[5];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateFCBInSearchList(a_volCtrlBlockPtr, a_fileNum, a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTGetForkControlBlockSize(ppc_cpu *c)
+{
+    gaddr a_fcbSize = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTGetForkControlBlockSize(a_fcbSize);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParseAIFFHeader(ppc_cpu *c)
 {
     int16_t a_fRefNum = (int16_t)c->gpr[3];
@@ -45433,6 +45867,56 @@ const ppc_export ppc_exports[] = {
     {"TrimImage", ppctrap_TrimImage},
     {"TruncString", ppcglue_TruncString},
     {"TruncText", ppcglue_TruncText},
+    {"UTAddFCBToSearchList", ppcglue_UTAddFCBToSearchList},
+    {"UTAddNewVCB", ppcglue_UTAddNewVCB},
+    {"UTAdjustEOF", ppcglue_UTAdjustEOF},
+    {"UTAllocateFCB", ppcglue_UTAllocateFCB},
+    {"UTAllocateVCB", ppcglue_UTAllocateVCB},
+    {"UTAllocateWDCB", ppcglue_UTAllocateWDCB},
+    {"UTBlockInFQHashP", ppcglue_UTBlockInFQHashP},
+    {"UTCacheReadIP", ppcglue_UTCacheReadIP},
+    {"UTCacheWriteIP", ppcglue_UTCacheWriteIP},
+    {"UTCheckDirBusy", ppcglue_UTCheckDirBusy},
+    {"UTCheckFCB", ppcglue_UTCheckFCB},
+    {"UTCheckFileModifiable", ppcglue_UTCheckFileModifiable},
+    {"UTCheckFileRefNum", ppcglue_UTCheckFileRefNum},
+    {"UTCheckForkPermissions", ppcglue_UTCheckForkPermissions},
+    {"UTCheckPermission", ppcglue_UTCheckPermission},
+    {"UTCheckVolModifiable", ppcglue_UTCheckVolModifiable},
+    {"UTCheckVolOffline", ppcglue_UTCheckVolOffline},
+    {"UTCheckVolRefNum", ppcglue_UTCheckVolRefNum},
+    {"UTCheckWDRefNum", ppcglue_UTCheckWDRefNum},
+    {"UTDetermineVol", ppcglue_UTDetermineVol},
+    {"UTDisposeVCB", ppcglue_UTDisposeVCB},
+    {"UTEjectVol", ppcglue_UTEjectVol},
+    {"UTFindDrive", ppcglue_UTFindDrive},
+    {"UTFlushCache", ppcglue_UTFlushCache},
+    {"UTGetBlock", ppcglue_UTGetBlock},
+    {"UTGetDefaultVol", ppcglue_UTGetDefaultVol},
+    {"UTGetForkControlBlockSize", ppcglue_UTGetForkControlBlockSize},
+    {"UTGetPathComponentName", ppcglue_UTGetPathComponentName},
+    {"UTIndexFCB", ppcglue_UTIndexFCB},
+    {"UTLocateFCB", ppcglue_UTLocateFCB},
+    {"UTLocateFCBInSearchList", ppcglue_UTLocateFCBInSearchList},
+    {"UTLocateNextFCB", ppcglue_UTLocateNextFCB},
+    {"UTLocateNextVCB", ppcglue_UTLocateNextVCB},
+    {"UTLocateVCBByName", ppcglue_UTLocateVCBByName},
+    {"UTLocateVCBByRefNum", ppcglue_UTLocateVCBByRefNum},
+    {"UTMarkDirty", ppcglue_UTMarkDirty},
+    {"UTParsePathname", ppcglue_UTParsePathname},
+    {"UTReleaseBlock", ppcglue_UTReleaseBlock},
+    {"UTReleaseFCB", ppcglue_UTReleaseFCB},
+    {"UTReleaseWDCB", ppcglue_UTReleaseWDCB},
+    {"UTRemoveFCBFromSearchList", ppcglue_UTRemoveFCBFromSearchList},
+    {"UTResolveFCB", ppcglue_UTResolveFCB},
+    {"UTResolveFileRefNum", ppcglue_UTResolveFileRefNum},
+    {"UTResolveWDCB", ppcglue_UTResolveWDCB},
+    {"UTSetDefaultVol", ppcglue_UTSetDefaultVol},
+    {"UTTrashBlocks", ppcglue_UTTrashBlocks},
+    {"UTTrashFileBlocks", ppcglue_UTTrashFileBlocks},
+    {"UTTrashVolBlocks", ppcglue_UTTrashVolBlocks},
+    {"UTVolCacheReadIP", ppcglue_UTVolCacheReadIP},
+    {"UTVolCacheWriteIP", ppcglue_UTVolCacheWriteIP},
     {"UnRegisterSection", ppcglue_UnRegisterSection},
     {"UnflattenCollection", ppctrap_UnflattenCollection},
     {"UnflattenCollectionFromHdl", ppctrap_UnflattenCollectionFromHdl},

@@ -58,4 +58,6 @@ void os9rest_reset(void)
     os9rest_hw_reset();
     os9rest_locale_reset();
     os9rest_icons_reset();
+    os9rest_fsm_reset();
+    drawsprocket_reset();
 }

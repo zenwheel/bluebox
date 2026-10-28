@@ -161,6 +161,7 @@ const char *const tb_trap_names[1024] = {
     [0x021] = "GetMaxResourceSize",
     [0x022] = "ResourceDispatch",
     [0x023] = "AliasDispatch",
+    [0x024] = "HFSUtilDispatch",
     [0x025] = "MenuDispatch",
     [0x026] = "InsertMenuItem",
     [0x027] = "HideDialogItem",
@@ -26425,6 +26426,590 @@ static void glue_TruncText(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UTAddFCBToSearchList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTAddFCBToSearchList(a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTAddNewVCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_vRefNum = (gaddr)cpu_pop32(c);
+    int16_t a_driveNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTAddNewVCB(a_driveNum, a_vRefNum, a_volCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTAdjustEOF(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fileRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTAdjustEOF(a_fileRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTAllocateFCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_fileRefNum = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTAllocateFCB(a_fileRefNum, a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTAllocateVCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_addSize = (uint16_t)cpu_pop16(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_sysVCBLength = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTAllocateVCB(a_sysVCBLength, a_volCtrlBlockPtr, a_addSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTAllocateWDCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_paramBlock = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTAllocateWDCB(a_paramBlock);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTBlockInFQHashP(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_diskBlock = (uint32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTBlockInFQHashP(a_vRefNum, a_diskBlock);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCacheReadIP(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_cacheOption = (int16_t)cpu_pop16(c);
+    gaddr a_actCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reqCount = (uint32_t)cpu_pop32(c);
+    int16_t a_fileRefNum = (int16_t)cpu_pop16(c);
+    gaddr a_ioBuffer = (gaddr)cpu_pop32(c);
+    uint32_t a_filePosition = (uint32_t)cpu_pop32(c);
+    gaddr a_log2PhyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTCacheReadIP(a_log2PhyProc, a_filePosition, a_ioBuffer, a_fileRefNum, a_reqCount, a_actCount, a_cacheOption);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCacheWriteIP(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_cacheOption = (int16_t)cpu_pop16(c);
+    gaddr a_actCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reqCount = (uint32_t)cpu_pop32(c);
+    int16_t a_fileRefNum = (int16_t)cpu_pop16(c);
+    gaddr a_ioBuffer = (gaddr)cpu_pop32(c);
+    uint32_t a_filePosition = (uint32_t)cpu_pop32(c);
+    gaddr a_log2PhyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTCacheWriteIP(a_log2PhyProc, a_filePosition, a_ioBuffer, a_fileRefNum, a_reqCount, a_actCount, a_cacheOption);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckDirBusy(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_dirID = (uint32_t)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTCheckDirBusy(a_volCtrlBlockPtr, a_dirID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckFCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTCheckFCB(a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckFileModifiable(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fileRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTCheckFileModifiable(a_fileRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckFileRefNum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fileRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTCheckFileRefNum(a_fileRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckForkPermissions(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_openForkRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_fcbFlags = (gaddr)cpu_pop32(c);
+    int8_t a_useSearchList = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_permissions = (int8_t)(cpu_pop16(c) >> 8);
+    int8_t a_fileLocked = (int8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_forkID = (uint32_t)cpu_pop32(c);
+    uint32_t a_fileNum = (uint32_t)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTCheckForkPermissions(a_volCtrlBlockPtr, a_fileNum, a_forkID, a_fileLocked, a_permissions, a_useSearchList, a_fcbFlags, a_openForkRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckPermission(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_paramBlock = (gaddr)cpu_pop32(c);
+    uint32_t a_fileNum = (uint32_t)cpu_pop32(c);
+    gaddr a_modByte = (gaddr)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTCheckPermission(a_volCtrlBlockPtr, a_modByte, a_fileNum, a_paramBlock);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckVolModifiable(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTCheckVolModifiable(a_vRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckVolOffline(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTCheckVolOffline(a_vRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckVolRefNum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTCheckVolRefNum(a_vRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTCheckWDRefNum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_wdRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTCheckWDRefNum(a_wdRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTDetermineVol(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_vRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_moreMatches = (gaddr)cpu_pop32(c);
+    gaddr a_status = (gaddr)cpu_pop32(c);
+    gaddr a_paramBlock = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTDetermineVol(a_paramBlock, a_status, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTDisposeVCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTDisposeVCB(a_volCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTEjectVol(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTEjectVol(a_volCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTFindDrive(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_driveQElementPtr = (gaddr)cpu_pop32(c);
+    int16_t a_driveNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTFindDrive(a_driveNum, a_driveQElementPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTFlushCache(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fcOption = (int16_t)cpu_pop16(c);
+    int16_t a_refNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTFlushCache(a_refNum, a_fcOption);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTGetBlock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    int16_t a_gbOption = (int16_t)cpu_pop16(c);
+    uint32_t a_blockNum = (uint32_t)cpu_pop32(c);
+    gaddr a_log2PhyProc = (gaddr)cpu_pop32(c);
+    int16_t a_refNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTGetBlock(a_refNum, a_log2PhyProc, a_blockNum, a_gbOption, a_buffer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTGetDefaultVol(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_paramBlock = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTGetDefaultVol(a_paramBlock);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTGetForkControlBlockSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fcbSize = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTGetForkControlBlockSize(a_fcbSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTGetPathComponentName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_parseRec = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTGetPathComponentName(a_parseRec);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTIndexFCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_fileRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTIndexFCB(a_volCtrlBlockPtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTLocateFCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_fileRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_namePtr = (gaddr)cpu_pop32(c);
+    uint32_t a_fileNum = (uint32_t)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTLocateFCB(a_volCtrlBlockPtr, a_fileNum, a_namePtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTLocateFCBInSearchList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_fileRefNum = (gaddr)cpu_pop32(c);
+    uint32_t a_fileNum = (uint32_t)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTLocateFCBInSearchList(a_volCtrlBlockPtr, a_fileNum, a_fileRefNum, a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTLocateNextFCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_fileRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_namePtr = (gaddr)cpu_pop32(c);
+    uint32_t a_fileNum = (uint32_t)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTLocateNextFCB(a_volCtrlBlockPtr, a_fileNum, a_namePtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTLocateNextVCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_vRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_moreMatches = (gaddr)cpu_pop32(c);
+    gaddr a_namePtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTLocateNextVCB(a_namePtr, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTLocateVCBByName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_vRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_moreMatches = (gaddr)cpu_pop32(c);
+    gaddr a_namePtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTLocateVCBByName(a_namePtr, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTLocateVCBByRefNum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    gaddr a_vRefNum = (gaddr)cpu_pop32(c);
+    int16_t a_refNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTLocateVCBByRefNum(a_refNum, a_vRefNum, a_volCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTMarkDirty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTMarkDirty(a_buffer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTParsePathname(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_namePtr = (gaddr)cpu_pop32(c);
+    gaddr a_volNamelength = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTParsePathname(a_volNamelength, a_namePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTReleaseBlock(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_rbOption = (int16_t)cpu_pop16(c);
+    gaddr a_buffer = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTReleaseBlock(a_buffer, a_rbOption);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTReleaseFCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fileRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTReleaseFCB(a_fileRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTReleaseWDCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_wdRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTReleaseWDCB(a_wdRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTRemoveFCBFromSearchList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTRemoveFCBFromSearchList(a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTResolveFCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t a_fileRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_UTResolveFCB(a_fileRefNum, a_fileCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTResolveFileRefNum(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fileRefNum = (gaddr)cpu_pop32(c);
+    gaddr a_fileCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTResolveFileRefNum(a_fileCtrlBlockPtr, a_fileRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTResolveWDCB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wdCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t a_wdRefNum = (int16_t)cpu_pop16(c);
+    int16_t a_wdIndex = (int16_t)cpu_pop16(c);
+    int32_t a_procID = (int32_t)cpu_pop32(c);
+    int16_t r = tb_UTResolveWDCB(a_procID, a_wdIndex, a_wdRefNum, a_wdCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTSetDefaultVol(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_refNum = (int16_t)cpu_pop16(c);
+    uint32_t a_dirID = (uint32_t)cpu_pop32(c);
+    int32_t a_nodeHint = (int32_t)cpu_pop32(c);
+    int16_t r = tb_UTSetDefaultVol(a_nodeHint, a_dirID, a_refNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTTrashBlocks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_tbOption = (int16_t)cpu_pop16(c);
+    int16_t a_fileRefNum = (int16_t)cpu_pop16(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    uint32_t a_byteCount = (uint32_t)cpu_pop32(c);
+    uint32_t a_beginPosition = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_UTTrashBlocks(a_beginPosition, a_byteCount, a_volCtrlBlockPtr, a_fileRefNum, a_tbOption);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTTrashFileBlocks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_fileNum = (uint32_t)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTTrashFileBlocks(a_volCtrlBlockPtr, a_fileNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTTrashVolBlocks(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTTrashVolBlocks(a_volCtrlBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTVolCacheReadIP(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_cacheOption = (int16_t)cpu_pop16(c);
+    gaddr a_actCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reqCount = (uint32_t)cpu_pop32(c);
+    gaddr a_ioBuffer = (gaddr)cpu_pop32(c);
+    uint32_t a_blockPosition = (uint32_t)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTVolCacheReadIP(a_volCtrlBlockPtr, a_blockPosition, a_ioBuffer, a_reqCount, a_actCount, a_cacheOption);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_UTVolCacheWriteIP(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_cacheOption = (int16_t)cpu_pop16(c);
+    gaddr a_actCount = (gaddr)cpu_pop32(c);
+    uint32_t a_reqCount = (uint32_t)cpu_pop32(c);
+    gaddr a_ioBuffer = (gaddr)cpu_pop32(c);
+    uint32_t a_blockPosition = (uint32_t)cpu_pop32(c);
+    gaddr a_volCtrlBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_UTVolCacheWriteIP(a_volCtrlBlockPtr, a_blockPosition, a_ioBuffer, a_reqCount, a_actCount, a_cacheOption);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UnRegisterSection(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28683,6 +29268,56 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF1, (int32_t)0x401u, "NewGestaltValue", CONV_STACK, 8, 2, glue_NewGestaltValue},
     {0xABF1, (int32_t)0x402u, "ReplaceGestaltValue", CONV_STACK, 8, 2, glue_ReplaceGestaltValue},
     {0xABF1, (int32_t)0x404u, "SetGestaltValue", CONV_STACK, 8, 2, glue_SetGestaltValue},
+    {0xA824, (int32_t)0x0u, "UTAllocateFCB", CONV_STACK, 8, 2, glue_UTAllocateFCB},
+    {0xA824, (int32_t)0x1u, "UTReleaseFCB", CONV_STACK, 2, 2, glue_UTReleaseFCB},
+    {0xA824, (int32_t)0x2u, "UTLocateFCB", CONV_STACK, 20, 2, glue_UTLocateFCB},
+    {0xA824, (int32_t)0x3u, "UTLocateNextFCB", CONV_STACK, 20, 2, glue_UTLocateNextFCB},
+    {0xA824, (int32_t)0x4u, "UTIndexFCB", CONV_STACK, 12, 2, glue_UTIndexFCB},
+    {0xA824, (int32_t)0x5u, "UTResolveFCB", CONV_STACK, 6, 2, glue_UTResolveFCB},
+    {0xA824, (int32_t)0x6u, "UTAllocateVCB", CONV_STACK, 10, 2, glue_UTAllocateVCB},
+    {0xA824, (int32_t)0x7u, "UTAddNewVCB", CONV_STACK, 10, 2, glue_UTAddNewVCB},
+    {0xA824, (int32_t)0x8u, "UTDisposeVCB", CONV_STACK, 4, 2, glue_UTDisposeVCB},
+    {0xA824, (int32_t)0x9u, "UTLocateVCBByRefNum", CONV_STACK, 10, 2, glue_UTLocateVCBByRefNum},
+    {0xA824, (int32_t)0xAu, "UTLocateVCBByName", CONV_STACK, 16, 2, glue_UTLocateVCBByName},
+    {0xA824, (int32_t)0xBu, "UTLocateNextVCB", CONV_STACK, 16, 2, glue_UTLocateNextVCB},
+    {0xA824, (int32_t)0xCu, "UTAllocateWDCB", CONV_STACK, 4, 2, glue_UTAllocateWDCB},
+    {0xA824, (int32_t)0xDu, "UTReleaseWDCB", CONV_STACK, 2, 2, glue_UTReleaseWDCB},
+    {0xA824, (int32_t)0xEu, "UTResolveWDCB", CONV_STACK, 12, 2, glue_UTResolveWDCB},
+    {0xA824, (int32_t)0xFu, "UTFindDrive", CONV_STACK, 6, 2, glue_UTFindDrive},
+    {0xA824, (int32_t)0x10u, "UTAdjustEOF", CONV_STACK, 2, 2, glue_UTAdjustEOF},
+    {0xA824, (int32_t)0x11u, "UTSetDefaultVol", CONV_STACK, 10, 2, glue_UTSetDefaultVol},
+    {0xA824, (int32_t)0x12u, "UTGetDefaultVol", CONV_STACK, 4, 2, glue_UTGetDefaultVol},
+    {0xA824, (int32_t)0x13u, "UTCheckWDRefNum", CONV_STACK, 2, 2, glue_UTCheckWDRefNum},
+    {0xA824, (int32_t)0x14u, "UTCheckFileRefNum", CONV_STACK, 2, 2, glue_UTCheckFileRefNum},
+    {0xA824, (int32_t)0x15u, "UTCheckVolRefNum", CONV_STACK, 2, 2, glue_UTCheckVolRefNum},
+    {0xA824, (int32_t)0x16u, "UTCheckPermission", CONV_STACK, 16, 2, glue_UTCheckPermission},
+    {0xA824, (int32_t)0x17u, "UTCheckVolOffline", CONV_STACK, 2, 2, glue_UTCheckVolOffline},
+    {0xA824, (int32_t)0x18u, "UTCheckVolModifiable", CONV_STACK, 2, 2, glue_UTCheckVolModifiable},
+    {0xA824, (int32_t)0x19u, "UTCheckFileModifiable", CONV_STACK, 2, 2, glue_UTCheckFileModifiable},
+    {0xA824, (int32_t)0x1Au, "UTCheckDirBusy", CONV_STACK, 8, 2, glue_UTCheckDirBusy},
+    {0xA824, (int32_t)0x1Bu, "UTParsePathname", CONV_STACK, 8, 2, glue_UTParsePathname},
+    {0xA824, (int32_t)0x1Cu, "UTGetPathComponentName", CONV_STACK, 4, 2, glue_UTGetPathComponentName},
+    {0xA824, (int32_t)0x1Du, "UTDetermineVol", CONV_STACK, 20, 2, glue_UTDetermineVol},
+    {0xA824, (int32_t)0x1Fu, "UTGetBlock", CONV_STACK, 16, 2, glue_UTGetBlock},
+    {0xA824, (int32_t)0x20u, "UTReleaseBlock", CONV_STACK, 6, 2, glue_UTReleaseBlock},
+    {0xA824, (int32_t)0x21u, "UTFlushCache", CONV_STACK, 4, 2, glue_UTFlushCache},
+    {0xA824, (int32_t)0x23u, "UTMarkDirty", CONV_STACK, 4, 2, glue_UTMarkDirty},
+    {0xA824, (int32_t)0x24u, "UTTrashVolBlocks", CONV_STACK, 4, 2, glue_UTTrashVolBlocks},
+    {0xA824, (int32_t)0x25u, "UTTrashFileBlocks", CONV_STACK, 8, 2, glue_UTTrashFileBlocks},
+    {0xA824, (int32_t)0x26u, "UTTrashBlocks", CONV_STACK, 16, 2, glue_UTTrashBlocks},
+    {0xA824, (int32_t)0x27u, "UTCacheReadIP", CONV_STACK, 24, 2, glue_UTCacheReadIP},
+    {0xA824, (int32_t)0x28u, "UTCacheWriteIP", CONV_STACK, 24, 2, glue_UTCacheWriteIP},
+    {0xA824, (int32_t)0x2Bu, "UTEjectVol", CONV_STACK, 4, 2, glue_UTEjectVol},
+    {0xA824, (int32_t)0x2Cu, "UTBlockInFQHashP", CONV_STACK, 6, 2, glue_UTBlockInFQHashP},
+    {0xA824, (int32_t)0x34u, "UTVolCacheReadIP", CONV_STACK, 22, 2, glue_UTVolCacheReadIP},
+    {0xA824, (int32_t)0x35u, "UTVolCacheWriteIP", CONV_STACK, 22, 2, glue_UTVolCacheWriteIP},
+    {0xA824, (int32_t)0x36u, "UTResolveFileRefNum", CONV_STACK, 8, 2, glue_UTResolveFileRefNum},
+    {0xA824, (int32_t)0x37u, "UTCheckFCB", CONV_STACK, 4, 2, glue_UTCheckFCB},
+    {0xA824, (int32_t)0x38u, "UTCheckForkPermissions", CONV_STACK, 26, 2, glue_UTCheckForkPermissions},
+    {0xA824, (int32_t)0x39u, "UTAddFCBToSearchList", CONV_STACK, 4, 2, glue_UTAddFCBToSearchList},
+    {0xA824, (int32_t)0x3Au, "UTRemoveFCBFromSearchList", CONV_STACK, 4, 2, glue_UTRemoveFCBFromSearchList},
+    {0xA824, (int32_t)0x3Bu, "UTLocateFCBInSearchList", CONV_STACK, 16, 2, glue_UTLocateFCBInSearchList},
+    {0xA824, (int32_t)0x3Cu, "UTGetForkControlBlockSize", CONV_STACK, 4, 2, glue_UTGetForkControlBlockSize},
     {0xAA52, (int32_t)0x1u, "FSMakeFSSpec", CONV_STACK, 14, 2, glue_FSMakeFSSpec},
     {0xAA52, (int32_t)0x2u, "FSpOpenDF", CONV_STACK, 10, 2, glue_FSpOpenDF},
     {0xAA52, (int32_t)0x3u, "FSpOpenRF", CONV_STACK, 10, 2, glue_FSpOpenRF},
@@ -30165,6 +30800,7 @@ const dispatcher_info dispatchers[] = {
     {0xABFE, "GXPrintingDispatch", "D0L"},
     {0xA1AD, "GestaltDispatch", "TrapBits"},
     {0xABF1, "GestaltValueDispatch", "D0W"},
+    {0xA824, "HFSUtilDispatch", "D0W"},
     {0xAA52, "HighLevelFSDispatch", "D0<0xFF>"},
     {0xABC9, "IconDispatch", "D0W"},
     {0xAA75, "IconServicesDispatch", "D0W"},

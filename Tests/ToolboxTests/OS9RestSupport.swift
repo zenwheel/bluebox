@@ -6,6 +6,15 @@ import Toolbox
 
 /// Helpers for the Mac OS 9 remaining-exports suites (os9rest*.c).
 enum Rest {
+    /// A fresh machine with a PowerPC processor and no fragments from an
+    /// earlier test (the native vectors of a test before are in memory this
+    /// boot threw away).
+    static func boot() {
+        bootMachine()
+        cfm_reset()
+        _ = cfm_ppc_cpu()
+    }
+
     /// Call an export: integer args from r3 (the ninth on in the parameter
     /// area), floating args from f1; r3 after.
     @discardableResult

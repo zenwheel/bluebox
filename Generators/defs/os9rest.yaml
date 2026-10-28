@@ -547,3 +547,630 @@
         type: Boolean
     dispatcher: IconServicesDispatch
     selector: 0x002D
+
+# The File System Manager's HFS utilities (FSM.h): _HFSUtilDispatch
+# ($A824), the selector MOVEQ'd into D0, Pascal arguments.  os9rest_fsm.c
+# keeps them on the File Manager's FCB table, volume queue, drive queue and
+# working directories.
+- dispatcher:
+    name: HFSUtilDispatch
+    trap: 0xA824
+    selector-location: D0W
+
+- function:
+    name: UTAllocateFCB
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0000
+
+- function:
+    name: UTReleaseFCB
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0001
+
+- function:
+    name: UTLocateFCB
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+      - name: namePtr
+        type: StringPtr
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0002
+
+- function:
+    name: UTLocateNextFCB
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+      - name: namePtr
+        type: StringPtr
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0003
+
+- function:
+    name: UTIndexFCB
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0004
+
+- function:
+    name: UTResolveFCB
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0005
+
+- function:
+    name: UTAllocateVCB
+    return: OSErr
+    args:
+      - name: sysVCBLength
+        type: uint16_t*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+      - name: addSize
+        type: uint16_t
+    dispatcher: HFSUtilDispatch
+    selector: 0x0006
+
+- function:
+    name: UTAddNewVCB
+    return: OSErr
+    args:
+      - name: driveNum
+        type: INTEGER
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0007
+
+- function:
+    name: UTDisposeVCB
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0008
+
+- function:
+    name: UTLocateVCBByRefNum
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0009
+
+- function:
+    name: UTLocateVCBByName
+    return: OSErr
+    args:
+      - name: namePtr
+        type: StringPtr
+      - name: moreMatches
+        type: INTEGER*
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x000A
+
+- function:
+    name: UTLocateNextVCB
+    return: OSErr
+    args:
+      - name: namePtr
+        type: StringPtr
+      - name: moreMatches
+        type: INTEGER*
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x000B
+
+- function:
+    name: UTAllocateWDCB
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x000C
+
+- function:
+    name: UTReleaseWDCB
+    return: OSErr
+    args:
+      - name: wdRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x000D
+
+- function:
+    name: UTResolveWDCB
+    return: OSErr
+    args:
+      - name: procID
+        type: int32_t
+      - name: wdIndex
+        type: INTEGER
+      - name: wdRefNum
+        type: INTEGER
+      - name: wdCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x000E
+
+- function:
+    name: UTFindDrive
+    return: OSErr
+    args:
+      - name: driveNum
+        type: INTEGER
+      - name: driveQElementPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x000F
+
+- function:
+    name: UTAdjustEOF
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0010
+
+- function:
+    name: UTSetDefaultVol
+    return: OSErr
+    args:
+      - name: nodeHint
+        type: int32_t
+      - name: dirID
+        type: uint32_t
+      - name: refNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0011
+
+- function:
+    name: UTGetDefaultVol
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0012
+
+- function:
+    name: UTCheckWDRefNum
+    return: OSErr
+    args:
+      - name: wdRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0013
+
+- function:
+    name: UTCheckFileRefNum
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0014
+
+- function:
+    name: UTCheckVolRefNum
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0015
+
+- function:
+    name: UTCheckPermission
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: modByte
+        type: INTEGER*
+      - name: fileNum
+        type: uint32_t
+      - name: paramBlock
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0016
+
+- function:
+    name: UTCheckVolOffline
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0017
+
+- function:
+    name: UTCheckVolModifiable
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0018
+
+- function:
+    name: UTCheckFileModifiable
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0019
+
+- function:
+    name: UTCheckDirBusy
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: dirID
+        type: uint32_t
+    dispatcher: HFSUtilDispatch
+    selector: 0x001A
+
+- function:
+    name: UTParsePathname
+    return: OSErr
+    args:
+      - name: volNamelength
+        type: INTEGER*
+      - name: namePtr
+        type: StringPtr
+    dispatcher: HFSUtilDispatch
+    selector: 0x001B
+
+- function:
+    name: UTGetPathComponentName
+    return: OSErr
+    args:
+      - name: parseRec
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x001C
+
+- function:
+    name: UTDetermineVol
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+      - name: status
+        type: INTEGER*
+      - name: moreMatches
+        type: INTEGER*
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x001D
+
+- function:
+    name: UTGetBlock
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: log2PhyProc
+        type: Ptr
+      - name: blockNum
+        type: uint32_t
+      - name: gbOption
+        type: INTEGER
+      - name: buffer
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x001F
+
+- function:
+    name: UTReleaseBlock
+    return: OSErr
+    args:
+      - name: buffer
+        type: Ptr
+      - name: rbOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0020
+
+- function:
+    name: UTFlushCache
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: fcOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0021
+
+- function:
+    name: UTMarkDirty
+    return: OSErr
+    args:
+      - name: buffer
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0023
+
+- function:
+    name: UTTrashVolBlocks
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0024
+
+- function:
+    name: UTTrashFileBlocks
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+    dispatcher: HFSUtilDispatch
+    selector: 0x0025
+
+- function:
+    name: UTTrashBlocks
+    return: OSErr
+    args:
+      - name: beginPosition
+        type: uint32_t
+      - name: byteCount
+        type: uint32_t
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER
+      - name: tbOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0026
+
+- function:
+    name: UTCacheReadIP
+    return: OSErr
+    args:
+      - name: log2PhyProc
+        type: Ptr
+      - name: filePosition
+        type: uint32_t
+      - name: ioBuffer
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER
+      - name: reqCount
+        type: uint32_t
+      - name: actCount
+        type: uint32_t*
+      - name: cacheOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0027
+
+- function:
+    name: UTCacheWriteIP
+    return: OSErr
+    args:
+      - name: log2PhyProc
+        type: Ptr
+      - name: filePosition
+        type: uint32_t
+      - name: ioBuffer
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER
+      - name: reqCount
+        type: uint32_t
+      - name: actCount
+        type: uint32_t*
+      - name: cacheOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0028
+
+- function:
+    name: UTEjectVol
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x002B
+
+- function:
+    name: UTBlockInFQHashP
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: diskBlock
+        type: uint32_t
+    dispatcher: HFSUtilDispatch
+    selector: 0x002C
+
+- function:
+    name: UTVolCacheReadIP
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: blockPosition
+        type: uint32_t
+      - name: ioBuffer
+        type: Ptr
+      - name: reqCount
+        type: uint32_t
+      - name: actCount
+        type: uint32_t*
+      - name: cacheOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0034
+
+- function:
+    name: UTVolCacheWriteIP
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: blockPosition
+        type: uint32_t
+      - name: ioBuffer
+        type: Ptr
+      - name: reqCount
+        type: uint32_t
+      - name: actCount
+        type: uint32_t*
+      - name: cacheOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0035
+
+- function:
+    name: UTResolveFileRefNum
+    return: OSErr
+    args:
+      - name: fileCtrlBlockPtr
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0036
+
+- function:
+    name: UTCheckFCB
+    return: OSErr
+    args:
+      - name: fileCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0037
+
+- function:
+    name: UTCheckForkPermissions
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+      - name: forkID
+        type: uint32_t
+      - name: fileLocked
+        type: Boolean
+      - name: permissions
+        type: int8_t
+      - name: useSearchList
+        type: Boolean
+      - name: fcbFlags
+        type: int8_t*
+      - name: openForkRefNum
+        type: INTEGER*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0038
+
+- function:
+    name: UTAddFCBToSearchList
+    return: OSErr
+    args:
+      - name: fileCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0039
+
+- function:
+    name: UTRemoveFCBFromSearchList
+    return: OSErr
+    args:
+      - name: fileCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x003A
+
+- function:
+    name: UTLocateFCBInSearchList
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x003B
+
+- function:
+    name: UTGetForkControlBlockSize
+    return: OSErr
+    args:
+      - name: fcbSize
+        type: uint32_t*
+    dispatcher: HFSUtilDispatch
+    selector: 0x003C

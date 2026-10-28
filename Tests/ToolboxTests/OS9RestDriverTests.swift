@@ -9,7 +9,7 @@ extension BlueBox {
     /// DriverServicesLib's interrupt source trees and I/O commands, and the
     /// Driver Loader's descriptions and candidate comparison.
     @Suite struct OS9RestDriver {
-        init() { bootMachine() }
+        init() { Rest.boot() }
 
         // MARK: Driver Services
 
@@ -112,6 +112,7 @@ extension BlueBox {
 
         @Test func driverDescriptionFromMemory() {
             launchTestApp()
+            cfm_reset()
             _ = cfm_ppc_cpu()
             let (pef, len) = driverContainer(services: [("ndrv", "blok", 0x0100_8000), ("file", "gnrc", 0x0200_8000)])
             let out = Rest.ptr(4)

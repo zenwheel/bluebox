@@ -110,4 +110,17 @@ int16_t hfs_fsref_path(gaddr ref, char *out, size_t outsize);
 /* The HFS Plus calls' state, cleared at each launch (hfsplus.c). */
 void hfsplus_reset(void);
 
+
+/* The File System Manager's utilities (os9rest_fsm.c): FCB slots, working
+ * directories. */
+int16_t fm_fcb_claim(int16_t *refnum);
+int16_t fm_fcb_release(int16_t refnum);
+gaddr fm_fcb_addr(int16_t refnum);
+int16_t fm_fcb_refnum_at(gaddr fcb);
+int fm_fcb_slots(void);
+bool fm_fcb_is_claimed(int16_t refnum);
+bool fm_fcb_in_use(int16_t refnum);
+bool fm_wd_resolve(int16_t ref, int16_t *vref, int32_t *dirid);
+int fm_wd_index(int16_t ref);
+
 #endif

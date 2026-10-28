@@ -9,8 +9,7 @@ extension BlueBox {
     /// callbacks and start-up routines.
     @Suite struct OS9RestServices {
         init() {
-            bootMachine()
-            _ = cfm_ppc_cpu()
+            Rest.boot()
         }
 
         func fourCC(_ s: String) -> UInt32 { s.utf8.reduce(0) { $0 << 8 | UInt32($1) } }

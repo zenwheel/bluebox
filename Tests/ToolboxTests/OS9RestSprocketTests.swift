@@ -9,8 +9,7 @@ extension BlueBox {
     /// and the data it pushes into them.
     @Suite struct OS9RestInputSprocket {
         init() {
-            bootMachine()
-            _ = cfm_ppc_cpu()
+            Rest.boot()
             inputsprocket_reset()
         }
 

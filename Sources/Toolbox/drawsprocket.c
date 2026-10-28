@@ -49,6 +49,14 @@ static int depth_before; /* the screen's depth before a context changed it */
 
 static bool started;
 
+/* A new run: the context was in the old run's memory. */
+void drawsprocket_reset(void)
+{
+    ctx = 0;
+    depth_before = 0;
+    started = false;
+}
+
 static int screen_depth(void)
 {
     gaddr gd = rd32(LM_MainDevice);

@@ -8,8 +8,7 @@ extension BlueBox {
     /// DebugLib: DebugAssert, the components and their options, TaskLevel.
     @Suite struct OS9RestDebug {
         init() {
-            bootMachine()
-            _ = cfm_ppc_cpu()
+            Rest.boot()
         }
 
         func pstr(_ s: String) -> UInt32 {
