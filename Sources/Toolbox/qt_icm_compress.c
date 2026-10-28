@@ -666,27 +666,32 @@ int16_t tb_MakeImageDescriptionForPixMap(int32_t pixmap, gaddr idh)
 }
 
 /* CodecNameSpecList: a count, then per codec its component, type, type
- * name (Str31) and a handle to its name; 44 bytes each, from offset 2. */
+ * name (Str31) and a handle to its name; 44 bytes each, from offset 2.
+ * Every compressor registered, ours and programs'. */
 int16_t tb_GetCodecNameList(gaddr list, int16_t showAll)
 {
-    static const uint32_t types[] = { RAW, RLE, JPEG };
     if (!list)
         return paramErr;
+    uint32_t comps[64];
     int n = 0;
-    for (size_t i = 0; i < sizeof types / sizeof *types; i++)
-        n += qt_venc_supported(types[i], 24);
+    for (uint32_t c = components_find_next(0, fourcc("imco"), 0, 0); c && n < 64;
+         c = components_find_next(c, fourcc("imco"), 0, 0))
+        comps[n++] = c;
     gaddr p = tb_NewPtr(2 + n * 44, false, true);
     if (!p)
         return memFullErr;
     wr16(p, (uint16_t)n);
     gaddr e = p + 2;
-    for (size_t i = 0; i < sizeof types / sizeof *types; i++) {
-        if (!qt_venc_supported(types[i], 24))
-            continue;
-        const char *name = compressor_name(types[i]);
+    for (int i = 0; i < n; i++) {
+        uint32_t t, type = 0, m;
+        components_describe(comps[i], &t, &type, &m);
+        const char *name = qt_codec_type_name(type);
+        char own[5] = { (char)(type >> 24), (char)(type >> 16), (char)(type >> 8), (char)type, 0 };
+        if (!name)
+            name = own;
         uint32_t len = (uint32_t)strlen(name);
-        wr32(e, types[i]); /* our codecs' component ids are their types */
-        wr32(e + 4, types[i]);
+        wr32(e, comps[i]);
+        wr32(e + 4, type);
         wr8(e + 8, (uint8_t)len);
         gput(e + 9, name, len);
         gaddr h = tb_NewHandle((int32_t)len + 1, false, true);

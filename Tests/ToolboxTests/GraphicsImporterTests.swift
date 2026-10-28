@@ -81,6 +81,7 @@ extension BlueBox {
             #expect(rd32(base + row * 3 + 28) & 0x00FF_FFFF == 0x0000_00FF)   // blue at (7, 3)
             let back = rect(0, 0, 0, 0)
             #expect(call("GraphicsImportGetBoundsRect", [ci, back]) == 0 && rd16(back + 6) == 8)
+            // no exporter for no type (the exporters' own tests: QTCodecComponentTests)
             #expect(Int16(truncatingIfNeeded: call("GraphicsImportExportImageFile", [ci, 0, 0, 0, 0])) == -2003)
             components_close(ci)
 

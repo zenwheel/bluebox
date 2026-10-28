@@ -18,7 +18,7 @@ import Toolbox
         #expect(qt_vdec_supported(codec, Int32(depth)))
         return try Self.palette.withUnsafeBufferPointer { p in
             var format = qt_video_format(format: codec, width: Int32(width), height: Int32(height),
-                                         depth: Int32(depth), palette: p.baseAddress)
+                                         depth: Int32(depth), palette: p.baseAddress, desc: nil, desc_len: 0)
             return try #require(qt_vdec_new(&format))
         }
     }

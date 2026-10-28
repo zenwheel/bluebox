@@ -655,7 +655,7 @@ static uint32_t *compressed_argb(const uint32_t *d, int *w, int *h)
         uint32_t ctype = be32(desc + 4);
         int dw = be16(desc + 32), dh = be16(desc + 34), depth = (int16_t)be16(desc + 82);
         if (dw > 0 && dh > 0 && dw <= 8192 && dh <= 8192 && qt_vdec_supported(ctype, depth)) {
-            qt_video_format f = { ctype, dw, dh, depth, NULL };
+            qt_video_format f = { ctype, dw, dh, depth, NULL, NULL, 0 };
             qt_vdec *dec = qt_vdec_new(&f);
             uint8_t *frame = dec ? calloc((size_t)dw * (size_t)dh, 4) : NULL;
             if (frame && qt_vdec_decode(dec, img, isize, frame)) {

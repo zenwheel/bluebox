@@ -66,6 +66,12 @@ typedef struct {
     uint64_t *chunk_offset;
     uint64_t *chunk_first;          /* the chunk's first frame */
     uint32_t *chunk_frames;
+    uint8_t *cookie;                /* the decoder's magic cookie, a copy */
+    /* sound the host decodes in packets of their own sizes (stsz) */
+    uint32_t *pkt_size;
+    uint32_t *chunk_pkt_first, *chunk_pkts;
+    /* video: each description whole, for the host's and programs' codecs */
+    uint8_t *vdesc[MAX_DESCS];
 } trak;
 
 /* A track that draws: where its picture goes in the movie's frame. */
@@ -155,6 +161,12 @@ static void free_trak(trak *t)
     free(t->chunk_frames);
     free(t->tune_header);
     free(t->raw_desc);
+    free(t->cookie);
+    free(t->pkt_size);
+    free(t->chunk_pkt_first);
+    free(t->chunk_pkts);
+    for (int i = 0; i < MAX_DESCS; i++)
+        free(t->vdesc[i]);
     memset(t, 0, sizeof *t);
 }
 
@@ -170,6 +182,11 @@ static bool video_descs(trak *t, const uint8_t *stsd, uint32_t len)
         if (sz < 86 || sz > (uint64_t)(end - p))
             return false;
         qt_video_format *f = &t->vf[i];
+        t->vdesc[i] = malloc(sz);
+        if (t->vdesc[i])
+            memcpy(t->vdesc[i], p, sz);
+        f->desc = t->vdesc[i];
+        f->desc_len = t->vdesc[i] ? sz : 0;
         f->format = be32(p + 4);
         f->width = (int)be16(p + 32);
         f->height = (int)be16(p + 34);
@@ -204,6 +221,18 @@ static bool sound_desc(trak *t, const uint8_t *stsd, uint32_t len)
     t->sf.rate = be32(p + 32) / 65536.0;
     if (t->sf.rate < 1000)
         t->sf.rate = t->scale;
+    uint32_t sz = be32(p);
+    if (sz >= 36 && sz <= len - 8) {
+        qt_sound_desc_extras(p, sz, &t->sf);
+        if (t->sf.cookie) { /* kept past the atom it is in */
+            t->cookie = malloc(t->sf.cookie_len);
+            if (t->cookie)
+                memcpy(t->cookie, t->sf.cookie, t->sf.cookie_len);
+            t->sf.cookie = t->cookie;
+            if (!t->cookie)
+                t->sf.cookie_len = 0;
+        }
+    }
     if (t->sf.format == four("raw ") || t->sf.format == four("twos") || t->sf.format == four("sowt")) {
         if (t->sf.bits != 16)
             t->sf.bits = 8;
@@ -375,6 +404,46 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
                 t->key[0] = true;
             ok = t->nsamples > 0;
         }
+    } else if (qt_adec_host(&t->sf) && stsz && zl >= 12 && be32(stsz + 4) != 1) {
+        /* packets: a sample each, of its own size, lasting its stts time */
+        uint32_t fixed = be32(stsz + 4), count = be32(stsz + 8);
+        if (!fixed && count > (zl - 12) / 4)
+            count = (zl - 12) / 4;
+        if (count > 10000000)
+            count = 0;
+        t->nchunks = nchunks;
+        t->pkt_size = calloc(count + 1, sizeof *t->pkt_size);
+        t->chunk_offset = calloc(nchunks, sizeof *t->chunk_offset);
+        t->chunk_first = calloc(nchunks, sizeof *t->chunk_first);
+        t->chunk_frames = calloc(nchunks, sizeof *t->chunk_frames);
+        t->chunk_pkt_first = calloc(nchunks, sizeof *t->chunk_pkt_first);
+        t->chunk_pkts = calloc(nchunks, sizeof *t->chunk_pkts);
+        for (uint32_t k = 0; k < count; k++)
+            t->pkt_size[k] = fixed ? fixed : be32(stsz + 12 + k * 4);
+        /* each packet's duration (media time) to frames */
+        uint32_t tts = 0, left = ntts ? be32(stts + 8) : 0, delta = ntts ? be32(stts + 12) : 0;
+        double fpm = t->sf.rate / (t->scale > 0 ? t->scale : 1); /* frames per media time */
+        uint64_t at = 0;
+        uint32_t k = 0;
+        for (uint32_t c = 0; c < nchunks; c++) {
+            t->chunk_offset[c] = co64 ? be64(stco + 8 + c * 8) : be32(stco + 8 + c * 4);
+            t->chunk_first[c] = at;
+            t->chunk_pkt_first[c] = k;
+            uint64_t media = 0;
+            for (uint32_t j = 0; j < per[c] && k < count; j++, k++) {
+                while (!left && ++tts < ntts) {
+                    left = be32(stts + 8 + tts * 8);
+                    delta = be32(stts + 12 + tts * 8);
+                }
+                media += delta;
+                if (left)
+                    left--;
+            }
+            t->chunk_pkts[c] = k - t->chunk_pkt_first[c];
+            t->chunk_frames[c] = (uint32_t)(media * fpm + 0.5);
+            at += t->chunk_frames[c];
+        }
+        ok = count > 0;
     } else {
         t->nchunks = nchunks;
         t->chunk_offset = calloc(nchunks, sizeof *t->chunk_offset);
@@ -994,12 +1063,21 @@ uint32_t qt_native_sound(qt_native *p, int64_t from_ms, int64_t to_ms, int16_t *
         uint64_t c0 = t->chunk_first[c], c1 = c0 + t->chunk_frames[c];
         if (c1 <= fa || c0 >= fb)
             continue;
-        size_t bytes = qt_adec_bytes(&t->sf, t->chunk_frames[c]);
-        uint8_t *data = read_at(p, t->chunk_offset[c], (uint32_t)bytes);
+        size_t bytes = 0;
+        const uint32_t *sizes = NULL;
+        if (t->pkt_size) {
+            sizes = t->pkt_size + t->chunk_pkt_first[c];
+            for (uint32_t j = 0; j < t->chunk_pkts[c]; j++)
+                bytes += sizes[j];
+        } else {
+            bytes = qt_adec_bytes(&t->sf, t->chunk_frames[c]);
+        }
+        uint8_t *data = bytes ? read_at(p, t->chunk_offset[c], (uint32_t)bytes) : NULL;
         if (!data)
             continue;
         int16_t *dec = NULL;
-        uint32_t got = qt_adec_decode(&t->sf, data, bytes, &dec);
+        uint32_t got = sizes ? qt_adec_decode_packets(&t->sf, data, bytes, sizes, (int)t->chunk_pkts[c], &dec)
+                             : qt_adec_decode(&t->sf, data, bytes, &dec);
         free(data);
         for (uint64_t f = c0 > fa ? c0 : fa; f < c1 && f < fb && f - c0 < got; f++)
             memcpy(out + (f - fa) * nch, dec + (f - c0) * nch, nch * sizeof *out);
