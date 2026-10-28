@@ -113,6 +113,18 @@ extension BlueBox {
             #expect(pstring(at: out) == "0.00")
         }
 
+        /// A huge value in fixed style used to overflow a 64-byte buffer in
+        /// the host (PictWave's Option dialog); SANE answers '?' digits.
+        @Test func hugeFixedDecimalDoesNotOverflow() {
+            let big = ext(1e300)
+            let form = tb_NewPtr(4, false, true)
+            wr16(form, 0x0100); wr16(form + 2, 60)
+            let dec = tb_NewPtr(26, false, true)
+            let code = pea(form) + pea(big) + pea(dec) + op(0x000B) + [0xA9F4]
+            #expect(run(code) == "ExitToShell")
+            #expect(pstring(at: dec + 4) == "?")
+        }
+
         @Test func floatingPointCoprocessor() {
             let x = tb_NewPtr(8, false, true)
             let code: [UInt16] = [
@@ -177,6 +189,30 @@ extension BlueBox {
             #expect(run(code) == "ExitToShell")
             #expect(cpu.pointee.d.7 == 0)
             #expect(cpu.pointee.d.6 & 0xFF == 0x41)
+        }
+    }
+}
+
+extension BlueBox {
+    /// ReplaceText takes a Str15 key by the book, but programs pass longer
+    /// strings (T-Minus Ten); the host's copy used to overflow its buffer.
+    @Suite struct ReplaceTextKey {
+        init() { bootMachine() }
+
+        @Test func longKeyIsReplaced() {
+            func handle(_ s: String) -> UInt32 {
+                let h = tb_NewHandle(Int32(s.utf8.count), false, true)
+                for (i, b) in s.utf8.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+                return h
+            }
+            let key = "0123456789abcdefghij" // 20 bytes
+            let k = tb_NewPtr(256, false, true)
+            wr8(k, UInt8(key.utf8.count))
+            for (i, b) in key.utf8.enumerated() { wr8(k + 1 + UInt32(i), b) }
+            let base = handle("x" + key + "y")
+            let subst = handle("--")
+            #expect(tb_ReplaceText(base, subst, k) == 1)
+            #expect(tb_GetHandleSize(base) == 4)
         }
     }
 }
