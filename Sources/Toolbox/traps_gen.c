@@ -9061,6 +9061,14 @@ static void glue_FlattenMovieDataToDataRef(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FlushCodeCache(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_FlushCodeCache();
+    cpu_push32(c, ret);
+}
+
 static void glue_FlushEvents(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -31497,7 +31505,7 @@ const trap_sig trap_sigs[] = {
     {0xA08F, -1, "DeferUserFn", CONV_REG, 0, 0, glue_DeferUserFn},
     {0xA090, -1, "SysEnvirons", CONV_REG, 0, 0, glue_SysEnvirons},
     {0xA091, -1, "Translate24To32", CONV_REG, 0, 0, glue_Translate24To32},
-    {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, 0},
+    {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, glue_FlushCodeCache},
     {0xA0DD, -1, "PPCDispatch", CONV_REG, 0, 0, glue_PPCDispatch},
     {0xA11A, -1, "GetZone", CONV_REG, 0, 0, glue_GetZone},
     {0xA11D, -1, "MaxMem", CONV_REG, 0, 0, glue_MaxMem},

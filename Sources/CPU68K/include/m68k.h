@@ -1,5 +1,14 @@
 /*
- * 68020 integer interpreter (user and supervisor mode, no MMU, no FPU yet).
+ * 68000, 68020, 68030 and 68040 interpreter (user and supervisor mode, no
+ * MMU), with the 68881/68882 or the 68040's FPU.
+ *
+ * The models differ as the chips did: the 68000 has only its own
+ * instructions and addressing modes, takes an address error for a word or
+ * long at an odd address (with its 7-word frame), has MOVE from SR
+ * unprivileged and pushes no format word; the 68020 and 68030 have
+ * instruction caches that a program's own stores don't update, so code it
+ * changes without flushing runs as it did there; the 68040 has MOVE16 and
+ * its own FPU.
  *
  * Special opcodes:
  *   0xAxxx            A-line: handed to the aline hook (the trap dispatcher).
@@ -34,6 +43,15 @@ struct cpu68k {
 
     uint32_t op_pc;      /* address of the instruction being executed */
     uint16_t op;         /* its first word */
+    int last_vector;     /* the exception taken last (a 68000's frame doesn't say) */
+    void *fault;         /* where a 68000 address error unwinds to (cpu_step's) */
+    /* The 68020's and 68030's instruction cache: 16 lines of 16 bytes
+     * (the 68020's 64 longs are lines of one long), a tag per line and a
+     * valid bit per long, filled from what the CPU fetches; NULL when the
+     * model has none to model. */
+    struct cpu_icache *icache;
+    bool strict;         /* a 68000 or a cache: the interpreter's slower paths */
+    uint32_t odd_mask;   /* 1 on a 68000: the address bit that faults */
     uint64_t icount;     /* instructions executed */
     bool stopped;        /* STOP executed */
     bool halted;         /* emulation must stop; see halt_reason */
@@ -59,8 +77,15 @@ void cpu_step(cpu68k *c);
  * one it doesn't translate). */
 void cpu_execute_at(cpu68k *c, uint32_t pc);
 void cpu_set_sr(cpu68k *c, uint16_t sr);
-/* Take exception `vector` with the given return PC (format 0 frame). */
+/* Take exception `vector` with the given return PC (format 0 frame; the
+ * 68000's has no format word). */
 void cpu_exception(cpu68k *c, int vector, uint32_t return_pc);
+/* Set the model and FPU (after cpu_init): the caches and frames follow. */
+void cpu_set_model(cpu68k *c, int model, int fpu);
+/* The instruction cache forgets [addr, addr + len) (all of it when len is
+ * 0), as FlushInstructionCache, CACR's clear bits and the Toolbox's own
+ * stores into code make it. */
+void cpu_icache_flush(cpu68k *c, uint32_t addr, uint32_t len);
 void cpu_halt(cpu68k *c, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
 /* Stack helpers for native code. */

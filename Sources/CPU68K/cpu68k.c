@@ -1,26 +1,167 @@
 /*
- * 68020 integer interpreter.
+ * 68000, 68020, 68030 and 68040 interpreter.
  *
  * Straightforward decode-and-execute; correctness first.  Condition codes are
  * computed eagerly.  Memory goes through the guest arena with the current
  * address mask (24-bit or 32-bit mode).
+ *
+ * The interpreter is built twice: here, and again by cpu68k_strict.c with
+ * CPU68K_STRICT set, for the models whose differences cost every access
+ * something (the 68000's address errors, the 68020's and 68030's
+ * instruction caches), so the 68040 doesn't pay for them.  This build has
+ * the public functions; the other only cpu68k_step_strict.
  */
 #include "m68k.h"
 
+#ifndef CPU68K_STRICT
+#define CPU68K_STRICT 0
+#endif
+
 #include <math.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 /* ---------------------------------------------------------------------- */
+/* The 68000's address errors */
+
+/* A word or long at an odd address, or an instruction fetched from one:
+ * the 68000 stops the instruction and takes vector 3 with its group 0
+ * frame (the access's kind, its address, the instruction's first word,
+ * the SR and a PC), unwinding to cpu_step. */
+static void address_error(cpu68k *c, uint32_t a, bool read, bool program) __attribute__((noreturn));
+static void group0_frame(cpu68k *c, uint32_t a, uint16_t status, uint32_t pc);
+
+static inline bool odd_fault(cpu68k *c, uint32_t a) { return CPU68K_STRICT && __builtin_expect(a & c->odd_mask, 0); }
+
+/* ---------------------------------------------------------------------- */
+/* The 68020's and 68030's instruction cache */
+
+struct cpu_icache {
+    uint32_t tag[64];     /* the line's address >> 8, bit 31 for supervisor space */
+    uint8_t valid[64];    /* a bit per long */
+    uint32_t data[64][4];
+};
+
+enum { CACR_EI = 1, CACR_FI = 2, CACR_CEI = 4, CACR_CI = 8, CACR_IBE = 0x10 };
+
+/* The CPU whose cache the Toolbox's stores flush, and whether the store
+ * under way is the CPU's own (which a 68020 or 68030 cache never saw). */
+static cpu68k *icache_cpu;
+extern bool cpu68k_own_store;
+#if !CPU68K_STRICT
+bool cpu68k_own_store;
+#endif
+void cpu68k_step_strict(cpu68k *c);
+
+static void icache_written(gaddr lo, gaddr hi)
+{
+    if (!cpu68k_own_store && icache_cpu && icache_cpu->icache)
+        cpu_icache_flush(icache_cpu, lo, hi - lo);
+}
+
+/* Line and long within it: the 68020's 64 lines hold a long each, the
+ * 68030's 16 hold four. */
+static inline unsigned ic_line(const cpu68k *c, uint32_t a) { return c->model == 68030 ? (a >> 4) & 15 : (a >> 2) & 63; }
+static inline unsigned ic_long_of(const cpu68k *c, uint32_t a) { return c->model == 68030 ? (a >> 2) & 3 : 0; }
+
+#if !CPU68K_STRICT
+void cpu_icache_flush(cpu68k *c, uint32_t addr, uint32_t len)
+{
+    struct cpu_icache *ic = c->icache;
+    if (!ic)
+        return;
+    if (len == 0 || len >= 256) {
+        memset(ic->valid, 0, sizeof ic->valid);
+        return;
+    }
+    for (uint32_t a = addr & ~3u; a < addr + len; a += 4) {
+        unsigned line = ic_line(c, a);
+        if ((ic->tag[line] & 0x00FFFFFFu) == ((a >> 8) & 0x00FFFFFFu))
+            ic->valid[line] &= (uint8_t)~(1u << ic_long_of(c, a));
+    }
+}
+#endif
+
+/* The long at a (long-aligned, masked) as the instruction stream sees
+ * it: from the cache when it holds it, else from memory, kept unless the
+ * cache is frozen; with burst fill, a 68030 fills the whole line. */
+static uint32_t ic_long(cpu68k *c, uint32_t a)
+{
+    struct cpu_icache *ic = c->icache;
+    unsigned line = ic_line(c, a), k = ic_long_of(c, a);
+    uint32_t tag = (a >> 8) | (c->sr & SR_S ? 0x80000000u : 0);
+    if (ic->tag[line] == tag && (ic->valid[line] >> k & 1))
+        return ic->data[line][k];
+    uint32_t v = rd32(a);
+    if (!(c->cacr & CACR_FI)) {
+        if (ic->tag[line] != tag) {
+            ic->tag[line] = tag;
+            ic->valid[line] = 0;
+        }
+        if (c->model == 68030 && (c->cacr & CACR_IBE)) {
+            for (unsigned i = 0; i < 4; i++)
+                ic->data[line][i] = rd32((a & ~15u) + i * 4);
+            ic->valid[line] = 15;
+        } else {
+            ic->data[line][k] = v;
+            ic->valid[line] |= (uint8_t)(1u << k);
+        }
+        mem_code_mark(a & ~15u, (a & ~15u) + 16, CODE_ICACHE);
+    }
+    return v;
+}
+
+static inline bool ic_on(const cpu68k *c) { return c->icache && (c->cacr & CACR_EI); }
+
+/* ---------------------------------------------------------------------- */
 /* Memory */
 
 static inline uint8_t mr8(cpu68k *c, uint32_t a) { return rd8(a & c->addr_mask); }
-static inline uint16_t mr16(cpu68k *c, uint32_t a) { return rd16(a & c->addr_mask); }
-static inline uint32_t mr32(cpu68k *c, uint32_t a) { return rd32(a & c->addr_mask); }
-static inline void mw8(cpu68k *c, uint32_t a, uint8_t v) { watch_store(a & c->addr_mask); wr8(a & c->addr_mask, v); }
-static inline void mw16(cpu68k *c, uint32_t a, uint16_t v) { watch_store(a & c->addr_mask); wr16(a & c->addr_mask, v); }
-static inline void mw32(cpu68k *c, uint32_t a, uint32_t v) { watch_store(a & c->addr_mask); wr32(a & c->addr_mask, v); }
+static inline uint16_t mr16(cpu68k *c, uint32_t a)
+{
+    if (odd_fault(c, a))
+        address_error(c, a, true, false);
+    return rd16(a & c->addr_mask);
+}
+static inline uint32_t mr32(cpu68k *c, uint32_t a)
+{
+    if (odd_fault(c, a))
+        address_error(c, a, true, false);
+    return rd32(a & c->addr_mask);
+}
+/* The CPU's own stores, which a 68020's or 68030's instruction cache
+ * doesn't see. */
+#define OWN_STORE(c, store)                \
+    do {                                   \
+        if (CPU68K_STRICT && c->icache) {  \
+            cpu68k_own_store = true;       \
+            store;                         \
+            cpu68k_own_store = false;      \
+        } else {                           \
+            store;                         \
+        }                                  \
+    } while (0)
+static inline void mw8(cpu68k *c, uint32_t a, uint8_t v)
+{
+    watch_store(a & c->addr_mask);
+    OWN_STORE(c, wr8(a & c->addr_mask, v));
+}
+static inline void mw16(cpu68k *c, uint32_t a, uint16_t v)
+{
+    if (odd_fault(c, a))
+        address_error(c, a, false, false);
+    watch_store(a & c->addr_mask);
+    OWN_STORE(c, wr16(a & c->addr_mask, v));
+}
+static inline void mw32(cpu68k *c, uint32_t a, uint32_t v)
+{
+    if (odd_fault(c, a))
+        address_error(c, a, false, false);
+    watch_store(a & c->addr_mask);
+    OWN_STORE(c, wr32(a & c->addr_mask, v));
+}
 
 static inline uint32_t mread(cpu68k *c, uint32_t a, int sz)
 {
@@ -36,15 +177,31 @@ static inline void mwrite(cpu68k *c, uint32_t a, int sz, uint32_t v)
         mw32(c, a, v);
 }
 
+/* The instruction stream: through the instruction cache when there is
+ * one and it is on. */
+static uint16_t ifetch16_strict(cpu68k *c, uint32_t a)
+{
+    if (odd_fault(c, a))
+        address_error(c, a, true, true);
+    a &= c->addr_mask;
+    if (ic_on(c))
+        return (uint16_t)(ic_long(c, a & ~3u) >> (a & 2 ? 0 : 16));
+    return rd16(a);
+}
+
 static inline uint16_t fetch16(cpu68k *c)
 {
-    uint16_t v = mr16(c, c->pc);
+    uint16_t v = CPU68K_STRICT ? ifetch16_strict(c, c->pc) : rd16(c->pc & c->addr_mask);
     c->pc += 2;
     return v;
 }
 static inline uint32_t fetch32(cpu68k *c)
 {
-    uint32_t v = mr32(c, c->pc);
+    if (CPU68K_STRICT) {
+        uint32_t hi = fetch16(c);
+        return hi << 16 | fetch16(c);
+    }
+    uint32_t v = rd32(c->pc & c->addr_mask);
     c->pc += 4;
     return v;
 }
@@ -156,6 +313,7 @@ static bool cond(cpu68k *c, int cc)
 /* ---------------------------------------------------------------------- */
 /* Status register and exceptions */
 
+#if !CPU68K_STRICT
 void cpu_set_sr(cpu68k *c, uint16_t sr)
 {
     sr &= c->model == 68000 ? 0xA71F : 0xF71F; /* the 68000 has no T0 or M */
@@ -175,19 +333,76 @@ void cpu_set_sr(cpu68k *c, uint16_t sr)
 void cpu_exception(cpu68k *c, int vector, uint32_t return_pc)
 {
     uint16_t old = c->sr;
+    c->last_vector = vector;
     cpu_set_sr(c, (uint16_t)((c->sr | SR_S) & ~SR_T));
-    if (c->model != 68000)
-        cpu_push16(c, (uint16_t)(vector * 4)); /* format 0 */
+    if (c->model != 68000) {
+        /* Format 2, with the instruction's address, for the traps an
+         * instruction makes (zero divide, CHK, TRAPV and TRAPcc) and
+         * trace; format 0 for the rest. */
+        if (vector == 5 || vector == 6 || vector == 7 || vector == 9) {
+            cpu_push32(c, c->op_pc);
+            cpu_push16(c, (uint16_t)(0x2000 | vector * 4));
+        } else {
+            cpu_push16(c, (uint16_t)(vector * 4));
+        }
+    }
     cpu_push32(c, return_pc);
     cpu_push16(c, old);
-    uint32_t handler = mr32(c, c->vbr + (uint32_t)vector * 4);
+    uint32_t handler = rd32((c->vbr + (uint32_t)vector * 4) & c->addr_mask);
     if (handler == 0) {
         cpu_halt(c, "exception %d at pc %08X with no handler", vector, c->op_pc);
         return;
     }
     c->pc = handler;
 }
+#endif
 
+/* The 68000's group 0 frame: the PC, the SR, the instruction's first word,
+ * the access address and a word saying what the access was (read or
+ * write, instruction or not, its function code: user or supervisor data
+ * or program) under the instruction word's upper bits, as the chip left
+ * them.  The PC is the last word fetched before the access: the chip's
+ * prefetch had read up to it. */
+static void group0_frame(cpu68k *c, uint32_t a, uint16_t status, uint32_t pc)
+{
+    uint16_t old = c->sr;
+    c->last_vector = 3;
+    cpu_set_sr(c, (uint16_t)((old | SR_S) & ~SR_T));
+    cpu_push32(c, pc);
+    cpu_push16(c, old);
+    cpu_push16(c, c->op);
+    cpu_push32(c, a);
+    cpu_push16(c, status);
+    uint32_t handler = rd32((c->vbr + 12) & c->addr_mask);
+    if (handler == 0)
+        cpu_halt(c, "exception 3 at pc %08X with no handler", c->op_pc);
+    else
+        c->pc = handler;
+}
+
+/* Where the PC stands from the last word fetched, for the writes whose
+ * prefetch the 68000 does in another order (MOVE's). */
+static int ae_pc_adjust;
+
+static void address_error(cpu68k *c, uint32_t a, bool read, bool program)
+{
+    uint16_t fc = (uint16_t)((c->sr & SR_S ? 4 : 0) | (program ? 2 : 1));
+    group0_frame(c, a, (uint16_t)((c->op & 0xFFE0) | (read ? 0x10 : 0) | fc), c->pc - 2 + (uint32_t)ae_pc_adjust);
+    if (c->fault)
+        _longjmp(*(jmp_buf *)c->fault, 1);
+    abort(); /* only cpu_step runs a 68000's instructions */
+}
+
+/* A jump, branch or return to an odd address: the 68000 finishes the
+ * instruction (all but JSR's push) and faults fetching the next, an
+ * instruction fetch outside any instruction, with a PC two words back. */
+static void odd_branch(cpu68k *c)
+{
+    uint16_t fc = c->sr & SR_S ? 6 : 2;
+    group0_frame(c, c->pc, (uint16_t)((c->op & 0xFFE0) | 0x10 | 0x08 | fc), c->pc - 4);
+}
+
+#if !CPU68K_STRICT
 void cpu_halt(cpu68k *c, const char *fmt, ...)
 {
     va_list ap;
@@ -196,6 +411,7 @@ void cpu_halt(cpu68k *c, const char *fmt, ...)
     va_end(ap);
     c->halted = true;
 }
+#endif
 
 static void illegal(cpu68k *c)
 {
@@ -205,6 +421,39 @@ static void illegal(cpu68k *c)
 static void privilege(cpu68k *c)
 {
     cpu_exception(c, 8, c->op_pc);
+}
+
+/* An instruction from a later processor than this one: illegal on it.
+ * Returns whether the instruction can go on. */
+static bool has(cpu68k *c, int model)
+{
+    if (c->model >= model)
+        return true;
+    illegal(c);
+    return false;
+}
+
+/* CACR as each processor has it: the bits it keeps (the clear bits read
+ * as 0), and what writing them does to the instruction cache. */
+static uint32_t cacr_mask(const cpu68k *c)
+{
+    switch (c->model) {
+    case 68020: return 0x00000003u;
+    case 68030: return 0x00003313u;
+    case 68040: return 0x80008000u;
+    default: return 0;
+    }
+}
+
+static void cacr_write(cpu68k *c, uint32_t v)
+{
+    if (c->model == 68020 || c->model == 68030) {
+        if (v & CACR_CI)
+            cpu_icache_flush(c, 0, 0);
+        else if (v & CACR_CEI) /* the entry (68020) or long (68030) CAAR names */
+            cpu_icache_flush(c, c->caar & ~3u, 4);
+    }
+    c->cacr = v & cacr_mask(c);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -577,7 +826,12 @@ static void op_movem(cpu68k *c, uint16_t op)
                 int r = 15 - i;
                 uint32_t v = r < 8 ? c->d[r] : c->a[r - 8];
                 addr -= (uint32_t)sz;
-                mwrite(c, addr, sz, v);
+                if (sz == 4 && c->model == 68000) { /* the low word first */
+                    mw16(c, addr + 2, (uint16_t)v);
+                    mw16(c, addr, (uint16_t)(v >> 16));
+                } else {
+                    mwrite(c, addr, sz, v);
+                }
             }
         }
         c->a[reg] = addr;
@@ -586,6 +840,8 @@ static void op_movem(cpu68k *c, uint16_t op)
     uint32_t addr;
     if (mode == 3) {
         addr = c->a[reg];
+        if (odd_fault(c, addr) && mask) /* a 68000 has stepped it a word */
+            c->a[reg] += 2;
     } else if (!ea_control(c, mode, reg, &addr)) {
         illegal(c);
         return;
@@ -803,6 +1059,29 @@ static void op_line0(cpu68k *c, uint16_t op)
     int szbits = (op >> 6) & 3;
     if (szbits == 3) {
         /* CHK2/CMP2 (0x00C0, 0x02C0, 0x04C0) and CAS (0x0AC0...) */
+        if (kind <= 2 || kind >= 5) {
+            if (!has(c, 68020))
+                return;
+        }
+        if ((op & 0xFDFF) == 0x0CFC) { /* CAS2 */
+            int sz = op & 0x0200 ? 4 : 2;
+            uint16_t e1 = fetch16(c), e2 = fetch16(c);
+            uint32_t a1 = (e1 & 0x8000) ? c->a[(e1 >> 12) & 7] : c->d[(e1 >> 12) & 7];
+            uint32_t a2 = (e2 & 0x8000) ? c->a[(e2 >> 12) & 7] : c->d[(e2 >> 12) & 7];
+            int dc1 = e1 & 7, du1 = (e1 >> 6) & 7, dc2 = e2 & 7, du2 = (e2 >> 6) & 7;
+            uint32_t m1 = mread(c, a1, sz), m2 = mread(c, a2, sz);
+            do_sub(c, c->d[dc1], m1, sz, 0, false, false);
+            if (c->sr & SR_Z)
+                do_sub(c, c->d[dc2], m2, sz, 0, false, false);
+            if (c->sr & SR_Z) {
+                mwrite(c, a1, sz, c->d[du1]);
+                mwrite(c, a2, sz, c->d[du2]);
+            } else {
+                c->d[dc1] = (c->d[dc1] & ~szmask(sz)) | m1;
+                c->d[dc2] = (c->d[dc2] & ~szmask(sz)) | m2;
+            }
+            return;
+        }
         if (kind <= 2) {
             int sz = kind == 0 ? 1 : kind == 1 ? 2 : 4;
             uint16_t ext = fetch16(c);
@@ -860,6 +1139,29 @@ static void op_line0(cpu68k *c, uint16_t op)
         return;
     }
 
+    if (kind == 7) { /* MOVES: the 68010's on; one address space here */
+        if (!has(c, 68020))
+            return;
+        uint16_t ext = fetch16(c);
+        if (!(c->sr & SR_S)) {
+            privilege(c);
+            return;
+        }
+        ea_t e = ea_resolve(c, mode, reg, sz);
+        int rn = (ext >> 12) & 7;
+        if (ext & 0x0800) {
+            ea_put(c, &e, sz, ext & 0x8000 ? c->a[rn] : c->d[rn]);
+        } else {
+            uint32_t v = ea_get(c, &e, sz);
+            if (ext & 0x8000)
+                c->a[rn] = (uint32_t)sext(v, sz);
+            else
+                c->d[rn] = (c->d[rn] & ~szmask(sz)) | v;
+        }
+        return;
+    }
+    if (kind == 6 && mode == 7 && (reg == 2 || reg == 3) && !has(c, 68020)) /* CMPI to (PC) */
+        return;
     uint32_t imm = sz == 1 ? (fetch16(c) & 0xFF) : sz == 2 ? fetch16(c) : fetch32(c);
     ea_t e = ea_resolve(c, mode, reg, sz);
     uint32_t d = ea_get(c, &e, sz), r;
@@ -870,9 +1172,6 @@ static void op_line0(cpu68k *c, uint16_t op)
     case 3: r = do_add(c, imm, d, sz, 0, false); ea_put(c, &e, sz, r); break;  /* ADDI */
     case 5: r = d ^ imm; flags_logic(c, r, sz); ea_put(c, &e, sz, r); break;   /* EORI */
     case 6: do_sub(c, imm, d, sz, 0, false, false); break;                     /* CMPI */
-    case 7: /* MOVES */
-        illegal(c);
-        break;
     default: illegal(c); break;
     }
 }
@@ -891,8 +1190,32 @@ static void op_move(cpu68k *c, uint16_t op)
         c->a[dreg] = sz == 2 ? (uint32_t)(int32_t)(int16_t)v : v;
         return;
     }
-    ea_t d = ea_resolve(c, dmode, dreg, sz);
     flags_logic(c, v, sz);
+    if (c->model == 68000) {
+        /* The 68000's order: (An)+ counts once the write is done; -(An)
+         * has the next word prefetched first, and a long goes low word
+         * first, the register stepped before each; (xxx).l, after a
+         * source read from memory, is written before its last word is
+         * in. */
+        if (dmode == 3) {
+            mwrite(c, c->a[dreg], sz, v);
+            c->a[dreg] += (sz == 1 && dreg == 7) ? 2 : (uint32_t)sz;
+            return;
+        }
+        if (dmode == 4 && sz == 4) {
+            ae_pc_adjust = 2;
+            c->a[dreg] -= 2;
+            mw16(c, c->a[dreg], (uint16_t)v);
+            c->a[dreg] -= 2;
+            mw16(c, c->a[dreg], (uint16_t)(v >> 16));
+            return;
+        }
+        if (dmode == 4)
+            ae_pc_adjust = 2;
+        else if (dmode == 7 && dreg == 1 && s.kind == EA_M)
+            ae_pc_adjust = -2;
+    }
+    ea_t d = ea_resolve(c, dmode, dreg, sz);
     ea_put(c, &d, sz, v);
 }
 
@@ -907,6 +1230,8 @@ static void op_line4(cpu68k *c, uint16_t op)
         uint32_t addr;
         if (!ea_control(c, mode, reg, &addr)) {
             if (op == 0x49C0 + reg && mode == 0) { /* EXTB.L */
+                if (!has(c, 68020))
+                    return;
                 c->d[reg] = (uint32_t)(int32_t)(int8_t)c->d[reg];
                 flags_logic(c, c->d[reg], 4);
                 return;
@@ -919,6 +1244,8 @@ static void op_line4(cpu68k *c, uint16_t op)
     }
     if ((op & 0xF140) == 0x4100) { /* CHK */
         int sz = (op & 0x80) ? 2 : 4;
+        if (sz == 4 && !has(c, 68020))
+            return;
         ea_t e = ea_resolve(c, mode, reg, sz);
         int32_t bound = sext(ea_get(c, &e, sz), sz);
         int32_t v = sext(c->d[(op >> 9) & 7], sz);
@@ -943,10 +1270,14 @@ static void op_line4(cpu68k *c, uint16_t op)
             return;
         }
         ea_t e = ea_resolve(c, mode, reg, 2);
+        if (c->model == 68000 && e.kind == EA_M) /* as CLR, a read first */
+            mread(c, e.addr, 2);
         ea_put(c, &e, 2, c->sr);
         return;
     }
-    case 0x02C0: { /* MOVE from CCR */
+    case 0x02C0: { /* MOVE from CCR (the 68010's on) */
+        if (!has(c, 68020))
+            return;
         ea_t e = ea_resolve(c, mode, reg, 2);
         ea_put(c, &e, 2, c->sr & 0x1F);
         return;
@@ -967,6 +1298,8 @@ static void op_line4(cpu68k *c, uint16_t op)
     }
     case 0x0800: /* NBCD / LINK.L */
         if (mode == 1) {
+            if (!has(c, 68020))
+                return;
             int32_t disp = (int32_t)fetch32(c);
             cpu_push32(c, reg == 7 ? c->a[7] - 4 : c->a[reg]);
             c->a[reg] = c->a[7];
@@ -1023,15 +1356,22 @@ static void op_line4(cpu68k *c, uint16_t op)
             ea_put(c, &e, 1, v | 0x80);
             return;
         }
-    case 0x0C00: op_mull(c, op); return;
-    case 0x0C40: op_divl(c, op); return;
+    case 0x0C00:
+        if (has(c, 68020))
+            op_mull(c, op);
+        return;
+    case 0x0C40:
+        if (has(c, 68020))
+            op_divl(c, op);
+        return;
     case 0x0E80: { /* JSR */
         uint32_t addr;
         if (!ea_control(c, mode, reg, &addr)) {
             illegal(c);
             return;
         }
-        cpu_push32(c, c->pc);
+        if (!odd_fault(c, addr)) /* a 68000 faults on the target before pushing */
+            cpu_push32(c, c->pc);
         c->pc = addr;
         return;
     }
@@ -1098,16 +1438,24 @@ static void op_line4(cpu68k *c, uint16_t op)
         uint16_t sr = cpu_pop16(c);
         uint32_t pc = cpu_pop32(c);
         uint16_t fmt = c->model == 68000 ? 0 : cpu_pop16(c);
-        switch (fmt >> 12) {
-        case 0: break;
-        case 2: c->a[7] += 4; break;
-        default: break;
+        /* The words after the format word, by format: 2 and 3 a long,
+         * 4 two, 7 the 68040's access error frame, 9 the coprocessor
+         * mid-instruction frame, A and B the 68020's and 68030's bus
+         * fault frames; another is a format error. */
+        static const int8_t extra[16] = { 0, -1, 4, 4, 8, -1, -1, 52, -1, 12, 24, 84, -1, -1, -1, -1 };
+        if (extra[fmt >> 12] < 0) {
+            c->a[7] -= 8;
+            cpu_exception(c, 14, c->op_pc);
+            return;
         }
+        c->a[7] += (uint32_t)extra[fmt >> 12];
         cpu_set_sr(c, sr);
         c->pc = pc;
         return;
     }
-    case 0x4E74: { /* RTD */
+    case 0x4E74: { /* RTD (the 68010's on) */
+        if (!has(c, 68020))
+            return;
         int16_t disp = (int16_t)fetch16(c);
         c->pc = cpu_pop32(c);
         c->a[7] += (uint32_t)(int32_t)disp;
@@ -1126,6 +1474,8 @@ static void op_line4(cpu68k *c, uint16_t op)
     }
     case 0x4E7A:
     case 0x4E7B: { /* MOVEC */
+        if (!has(c, 68020))
+            return;
         uint16_t ext = fetch16(c);
         if (!(c->sr & SR_S)) {
             privilege(c);
@@ -1137,10 +1487,21 @@ static void op_line4(cpu68k *c, uint16_t op)
         switch (ext & 0xFFF) {
         case 0x000: cr = &c->sfc; break;
         case 0x001: cr = &c->dfc; break;
-        case 0x002: cr = &c->cacr; break;
+        case 0x002:
+            if (op == 0x4E7A)
+                *r = c->cacr;
+            else
+                cacr_write(c, *r);
+            return;
         case 0x800: cr = &c->usp; break;
         case 0x801: cr = &c->vbr; break;
-        case 0x802: cr = &c->caar; break;
+        case 0x802: /* CAAR: the 68020's and 68030's */
+            if (c->model >= 68040) {
+                illegal(c);
+                return;
+            }
+            cr = &c->caar;
+            break;
         case 0x803: /* MSP */
         case 0x804: cr = &c->isp; break;
         default:
@@ -1178,8 +1539,10 @@ static void op_line4(cpu68k *c, uint16_t op)
         ea_put(c, &e, sz, do_sub(c, v, 0, sz, (c->sr & SR_X) ? 1 : 0, true, true));
         return;
     }
-    case 0x0200: { /* CLR */
+    case 0x0200: { /* CLR (a 68000 reads the operand first) */
         ea_t e = ea_resolve(c, mode, reg, sz);
+        if (c->model == 68000 && e.kind == EA_M)
+            mread(c, e.addr, sz);
         ea_put(c, &e, sz, 0);
         flags_logic(c, 0, sz);
         return;
@@ -1197,7 +1560,9 @@ static void op_line4(cpu68k *c, uint16_t op)
         ea_put(c, &e, sz, v);
         return;
     }
-    case 0x0A00: { /* TST */
+    case 0x0A00: { /* TST; of An, an immediate or (PC) from the 68020 on */
+        if ((mode == 1 || (mode == 7 && reg >= 2)) && !has(c, 68020))
+            return;
         ea_t e = ea_resolve(c, mode, reg, sz);
         flags_logic(c, ea_get(c, &e, sz), sz);
         return;
@@ -1226,6 +1591,8 @@ static void op_line5(cpu68k *c, uint16_t op)
             return;
         }
         if (mode == 7 && reg >= 2) { /* TRAPcc */
+            if (!has(c, 68020))
+                return;
             if (reg == 2)
                 c->pc += 2;
             else if (reg == 3)
@@ -1352,6 +1719,8 @@ static void op_arith(cpu68k *c, uint16_t op)
             }
             /* PACK (opmode 5) / UNPK (opmode 6) */
             if (opmode == 5 || opmode == 6) {
+                if (!has(c, 68020))
+                    return;
                 uint16_t adj = fetch16(c);
                 if (opmode == 5) {
                     uint16_t src;
@@ -1390,6 +1759,19 @@ static void op_arith(cpu68k *c, uint16_t op)
                 uint32_t r = line == 0xD ? do_add(c, c->d[reg], c->d[rn], sz, x, true)
                                          : do_sub(c, c->d[reg], c->d[rn], sz, x, true, true);
                 c->d[rn] = (c->d[rn] & ~szmask(sz)) | r;
+            } else if (sz == 4 && c->model == 68000) {
+                /* A 68000 reads a long down from -(An) a word at a time,
+                 * the register stepped before each. */
+                c->a[reg] -= 2;
+                uint32_t s = mr16(c, c->a[reg]);
+                c->a[reg] -= 2;
+                s |= (uint32_t)mr16(c, c->a[reg]) << 16;
+                c->a[rn] -= 2;
+                uint32_t d = mr16(c, c->a[rn]);
+                c->a[rn] -= 2;
+                d |= (uint32_t)mr16(c, c->a[rn]) << 16;
+                uint32_t r = line == 0xD ? do_add(c, s, d, sz, x, true) : do_sub(c, s, d, sz, x, true, true);
+                mwrite(c, c->a[rn], sz, r);
             } else {
                 c->a[reg] -= (sz == 1 && reg == 7) ? 2 : (uint32_t)sz;
                 uint32_t s = mread(c, c->a[reg], sz);
@@ -1401,11 +1783,13 @@ static void op_arith(cpu68k *c, uint16_t op)
             return;
         }
         case 0xB: /* CMPM (mode 1) / EOR to Dn (mode 0) */
-            if (mode == 1) {
-                uint32_t s = mread(c, c->a[reg], sz);
+            if (mode == 1) { /* each register stepped before its read */
+                uint32_t sa = c->a[reg];
                 c->a[reg] += (sz == 1 && reg == 7) ? 2 : (uint32_t)sz;
-                uint32_t d = mread(c, c->a[rn], sz);
+                uint32_t s = mread(c, sa, sz);
+                uint32_t da = c->a[rn];
                 c->a[rn] += (sz == 1 && rn == 7) ? 2 : (uint32_t)sz;
+                uint32_t d = mread(c, da, sz);
                 do_sub(c, s, d, sz, 0, false, false);
                 return;
             }
@@ -1454,7 +1838,8 @@ static void op_arith(cpu68k *c, uint16_t op)
 static void op_lineE(cpu68k *c, uint16_t op)
 {
     if ((op & 0xF8C0) == 0xE8C0) {
-        op_bitfield(c, op);
+        if (has(c, 68020))
+            op_bitfield(c, op);
         return;
     }
     bool left = op & 0x0100;
@@ -1481,9 +1866,10 @@ static void op_lineE(cpu68k *c, uint16_t op)
 /* Main loop */
 
 /* ---------------------------------------------------------------------- */
-/* 68881 floating point (coprocessor 1), in doubles.  Gestalt reports no
- * FPU, so applications that check use SANE; this is for the ones that
- * assume a coprocessor. */
+/* Floating point (coprocessor 1), in doubles: a 68881 or 68882, or the
+ * 68040's own (which has the single and double rounding forms; the
+ * functions its FPSP emulated in software are done here as on the
+ * 68881).  Without an FPU, these are F-line exceptions. */
 
 enum { FPCC_N = 1u << 27, FPCC_Z = 1u << 26, FPCC_I = 1u << 25, FPCC_NAN = 1u << 24 };
 
@@ -1729,6 +2115,8 @@ static bool fp_arith(cpu68k *c, int opmode, double src, int dst)
     double d = c->fp[dst], r;
     int op = opmode & 0x7F;
     if (op >= 0x40) { /* 68040 single (FS) and double (FD) rounding forms */
+        if (c->fpu != 68040)
+            return false; /* a 68881's or 68882's F-line */
         switch (op) {
         case 0x40: case 0x44: op = 0x00; break; /* FMOVE */
         case 0x41: case 0x45: op = 0x04; break; /* FSQRT */
@@ -1955,11 +2343,91 @@ static bool op_040(cpu68k *c, uint16_t op)
     return false;
 }
 
+/* The 68030's MMU instructions (coprocessor 0's encodings): PMOVE to
+ * and from TC, TT0, TT1, the root pointers and MMUSR, PFLUSH, PLOAD and
+ * PTEST.  There is no translation to change: the registers keep what is
+ * written, and PTEST finds every address resident. */
+static bool op_pmmu030(cpu68k *c, uint16_t op)
+{
+    if ((op & 0xFFC0) != 0xF000)
+        return false;
+    int mode = (op >> 3) & 7, reg = op & 7;
+    uint16_t ext = fetch16(c);
+    if (!(c->sr & SR_S)) {
+        privilege(c);
+        return true;
+    }
+    static uint32_t tc, tt[2], mmusr, srp[2], crp[2];
+    unsigned preg = (ext >> 10) & 7;
+    bool to_mem = ext & 0x0200;
+    uint32_t *r = NULL;
+    int n = 1;
+    switch (ext >> 13) {
+    case 0: /* PMOVE TT0, TT1 */
+        if (preg == 2 || preg == 3)
+            r = &tt[preg - 2];
+        break;
+    case 1: /* PFLUSH, PFLUSHA, PLOAD: the ones naming an address decode it */
+        if (preg == 0 || preg == 6)
+            ea_resolve(c, mode, reg, 4);
+        return true;
+    case 2: /* PMOVE TC, SRP, CRP (the root pointers are quads) */
+        if (preg == 0)
+            r = &tc;
+        else if (preg == 2 || preg == 3) {
+            r = preg == 2 ? srp : crp;
+            n = 2;
+        }
+        break;
+    case 3: { /* PMOVE MMUSR, a word */
+        ea_t e = ea_resolve(c, mode, reg, 2);
+        if (to_mem)
+            ea_put(c, &e, 2, mmusr);
+        else
+            mmusr = ea_get(c, &e, 2);
+        return true;
+    }
+    case 4: /* PTEST: resident, no fault */
+        ea_resolve(c, mode, reg, 4);
+        mmusr = 0;
+        return true;
+    default: break;
+    }
+    if (!r) {
+        illegal(c);
+        return true;
+    }
+    if (n == 2) { /* a quad: only from or to memory, or an immediate */
+        ea_t e = ea_resolve(c, mode, reg, 8);
+        if (e.kind == EA_M) {
+            for (int i = 0; i < 2; i++)
+                if (to_mem)
+                    mw32(c, e.addr + (uint32_t)i * 4, r[i]);
+                else
+                    r[i] = mr32(c, e.addr + (uint32_t)i * 4);
+        } else if (e.kind == EA_I && !to_mem) {
+            r[0] = e.imm;
+            r[1] = fetch32(c);
+        } else {
+            illegal(c);
+        }
+        return true;
+    }
+    ea_t e = ea_resolve(c, mode, reg, 4);
+    if (to_mem)
+        ea_put(c, &e, 4, *r);
+    else
+        *r = ea_get(c, &e, 4);
+    return true;
+}
+
 static void op_lineF(cpu68k *c, uint16_t op)
 {
     if (c->model >= 68040 && op_040(c, op))
         return;
-    if ((op & 0x0E00) != 0x0200) { /* not coprocessor 1 */
+    if (c->model == 68030 && op_pmmu030(c, op))
+        return;
+    if ((op & 0x0E00) != 0x0200 || !c->fpu) { /* not coprocessor 1, or there is none */
         cpu_exception(c, 11, c->op_pc);
         return;
     }
@@ -1998,21 +2466,36 @@ static void op_lineF(cpu68k *c, uint16_t op)
             c->pc = base + (uint32_t)disp;
         break;
     }
-    case 4: { /* FSAVE: the 68040's idle frame, a format word of version
-               * $41 and size 0 and nothing more, so FRESTORE takes back
-               * just the 4 bytes pushed (Safari's sound interrupt saves
-               * and restores the FPU around its work) */
-        int mode = (op >> 3) & 7, reg = op & 7;
-        if (mode == 4) {
-            c->a[reg] -= 4;
-            mw32(c, c->a[reg], 0x41000000u);
-        } else {
-            ea_t e = ea_resolve(c, mode, reg, 4);
-            mw32(c, e.addr, 0x41000000u);
+    case 4: { /* FSAVE: an idle frame, which FRESTORE takes back by its
+               * size (Safari's sound interrupt saves and restores the FPU
+               * around its work): the 68040's a format word of version
+               * $41 and size 0 and nothing more; the 68881's and 68882's
+               * version $1F with $18 and $38 bytes after it, the last long
+               * the BIU flags with the processor's bit set. */
+        if (!(c->sr & SR_S)) {
+            privilege(c);
+            break;
         }
+        int mode = (op >> 3) & 7, reg = op & 7;
+        uint32_t size = c->fpu == 68040 ? 0 : c->fpu == 68882 ? 0x38 : 0x18;
+        uint32_t word = c->fpu == 68040 ? 0x41000000u : 0x1F000000u | size << 16;
+        uint32_t a;
+        if (mode == 4) {
+            c->a[reg] -= 4 + size;
+            a = c->a[reg];
+        } else {
+            a = ea_resolve(c, mode, reg, 4).addr;
+        }
+        mw32(c, a, word);
+        for (uint32_t i = 0; i < size; i += 4)
+            mw32(c, a + 4 + i, i + 4 == size ? 0x70000000u : 0);
         break;
     }
     case 5: { /* FRESTORE */
+        if (!(c->sr & SR_S)) {
+            privilege(c);
+            break;
+        }
         int mode = (op >> 3) & 7, reg = op & 7;
         uint32_t a = mode == 3 ? c->a[reg] : ea_resolve(c, mode, reg, 4).addr;
         uint32_t fmt = mr32(c, a);
@@ -2030,35 +2513,108 @@ static void op_lineF(cpu68k *c, uint16_t op)
     }
 }
 
+static void execute(cpu68k *c, uint16_t op);
+
+#if CPU68K_STRICT
+/* A 68000's instruction, with somewhere for an address error to unwind
+ * to (natives may run instructions of their own inside it). */
+static void step_68000(cpu68k *c)
+{
+    jmp_buf here;
+    void *outer = c->fault;
+    c->fault = &here;
+    ae_pc_adjust = 0;
+    if (!_setjmp(here)) {
+        uint16_t op = fetch16(c);
+        c->op = op;
+        execute(c, op);
+        if ((c->pc & 1) && !c->halted)
+            odd_branch(c);
+    }
+    c->fault = outer;
+}
+
+void cpu68k_step_strict(cpu68k *c)
+{
+    if (c->model == 68000) {
+        step_68000(c);
+        return;
+    }
+    uint16_t op = fetch16(c);
+    c->op = op;
+    execute(c, op);
+}
+#else
 void cpu_init(cpu68k *c)
 {
+    if (icache_cpu == c)
+        icache_cpu = NULL;
     memset(c, 0, sizeof *c);
     c->sr = 0x2700;
     c->addr_mask = 0xFFFFFFFFu;
     c->model = 68020;
+    c->fpu = 68881;
 }
 
-static void execute(cpu68k *c, uint16_t op);
+/* One cache: one CPU at a time has a model with one. */
+static struct cpu_icache the_icache;
+
+void cpu_set_model(cpu68k *c, int model, int fpu)
+{
+    c->model = model;
+    c->fpu = model == 68000 ? 0 : fpu;
+    c->icache = NULL;
+    c->strict = model == 68000 || model == 68020 || model == 68030;
+    c->odd_mask = model == 68000;
+    if (model == 68020 || model == 68030) {
+        memset(&the_icache, 0, sizeof the_icache);
+        c->icache = &the_icache;
+        icache_cpu = c;
+        g_code_written[2] = icache_written;
+    } else if (icache_cpu == c) {
+        icache_cpu = NULL;
+    }
+}
+
+static inline void step(cpu68k *c)
+{
+    if (__builtin_expect(c->strict, 0)) {
+        cpu68k_step_strict(c);
+        return;
+    }
+    uint16_t op = fetch16(c);
+    c->op = op;
+    execute(c, op);
+}
 
 void cpu_step(cpu68k *c)
 {
     if (c->trace)
         c->trace(c);
     c->op_pc = c->pc;
-    uint16_t op = fetch16(c);
-    c->op = op;
     c->icount++;
-    execute(c, op);
+    step(c);
 }
 
 void cpu_execute_at(cpu68k *c, uint32_t pc)
 {
     c->pc = pc;
     c->op_pc = pc;
-    uint16_t op = fetch16(c);
-    c->op = op;
-    execute(c, op);
+    step(c);
 }
+
+uint64_t cpu_run(cpu68k *c, uint64_t max)
+{
+    /* The JIT keeps code coherent and has no address errors: the 68000,
+     * and the 68020's and 68030's caches, are the interpreter's. */
+    if (cpu_jit_enabled && !c->trace && c->model != 68000 && !ic_on(c))
+        return cpu_jit_run(c, max);
+    uint64_t start = c->icount;
+    while (!c->halted && !c->stopped && c->icount - start < max)
+        cpu_step(c);
+    return c->icount - start;
+}
+#endif
 
 static void execute(cpu68k *c, uint16_t op)
 {
@@ -2094,14 +2650,4 @@ static void execute(cpu68k *c, uint16_t op)
     case 0xF: op_lineF(c, op); break;
     default: op_arith(c, op); break;
     }
-}
-
-uint64_t cpu_run(cpu68k *c, uint64_t max)
-{
-    if (cpu_jit_enabled && !c->trace)
-        return cpu_jit_run(c, max);
-    uint64_t start = c->icount;
-    while (!c->halted && !c->stopped && c->icount - start < max)
-        cpu_step(c);
-    return c->icount - start;
 }

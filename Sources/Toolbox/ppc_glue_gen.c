@@ -9844,6 +9844,12 @@ static void ppcglue_Debugger(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_FlushCodeCache(ppc_cpu *c)
+{
+    tb_FlushCodeCache();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HWPriv(ppc_cpu *c)
 {
     int32_t a_d0 = (int32_t)c->gpr[3];
@@ -36107,14 +36113,6 @@ static void ppctrap_SwapMMUMode(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_FlushCodeCache(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap((uint16_t)(0xA0BD));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_PrJobMerge(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -41031,7 +41029,7 @@ const ppc_export ppc_exports[] = {
     {"FlattenMovieData", ppcglue_FlattenMovieData},
     {"FlattenMovieDataToDataRef", ppcglue_FlattenMovieDataToDataRef},
     {"FlattenPartialCollection", ppctrap_FlattenPartialCollection},
-    {"FlushCodeCache", ppctrap_FlushCodeCache},
+    {"FlushCodeCache", ppcglue_FlushCodeCache},
     {"FlushEvents", ppcglue_FlushEvents},
     {"FlushFonts", ppcglue_FlushFonts},
     {"FlushIconRefs", ppcglue_FlushIconRefs},

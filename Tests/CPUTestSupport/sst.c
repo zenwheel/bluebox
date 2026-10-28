@@ -173,12 +173,13 @@ static uint32_t vec3(const state *s)
     return found == 4 ? v : 0xFFFFFFFFu;
 }
 
-static bool run_one(const char *name, const state *in, const state *out, char *why, size_t whylen, bool *skip)
+static bool run_one(const char *name, const state *in, const state *out, char *why, size_t whylen, bool *skip,
+                    bool *addr_error)
 {
     static cpu68k c;
     *skip = false;
     cpu_init(&c);
-    c.model = 68000;
+    cpu_set_model(&c, 68000, 0);
     c.addr_mask = 0x00FFFFFF;
     for (int i = 0; i < 8; i++)
         c.d[i] = in->d[i];
@@ -230,9 +231,11 @@ static bool run_one(const char *name, const state *in, const state *out, char *w
     else
         cpu_step(&c);
 
-    /* 68000 address errors (odd word/long accesses) are not modelled. */
+    /* A 68000 address error (an odd word or long access): counted apart,
+     * and the interpreter's alone (a 68000 never runs through the JIT). */
     uint32_t v3 = vec3(in);
-    if (v3 != 0xFFFFFFFFu && out->pc == v3) {
+    *addr_error = v3 != 0xFFFFFFFFu && out->pc == v3;
+    if (*addr_error && sst_jit) {
         *skip = true;
         goto clean;
     }
@@ -332,9 +335,11 @@ bool sst_run_file(const char *path, sst_result *res)
         if (j.err)
             break;
         res->total++;
-        bool skip;
+        bool skip, ae = false;
         char why[sizeof res->first_failure];
-        if (run_one(name, &in, &out, why, sizeof why, &skip)) {
+        bool ok = run_one(name, &in, &out, why, sizeof why, &skip, &ae);
+        res->addr_errors += ae;
+        if (ok) {
             if (skip)
                 res->skipped++;
             else
@@ -342,6 +347,8 @@ bool sst_run_file(const char *path, sst_result *res)
         } else {
             if (!res->failed)
                 snprintf(res->first_failure, sizeof res->first_failure, "%s", why);
+            if (getenv("SST_VERBOSE"))
+                fprintf(stderr, "%s\n", why);
             res->failed++;
         }
     } while (eat(&j, ',') && !j.err);

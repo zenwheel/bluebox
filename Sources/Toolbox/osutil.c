@@ -134,15 +134,43 @@ void tb_SwapMMUMode(uint32_t *bp)
  * own 24 bits name the same memory with 32-bit addressing (the screen and
  * the ROM are inside the 16 MB); in 32-bit mode it is already one. */
 uint32_t tb_Translate24To32(uint32_t addr24) { return g_mem_24bit ? addr24 & 0x00FFFFFFu : addr24; }
-/* HWPriv: no caches to turn off or flush; translated code already goes
- * when it is stored over, and FlushCodeCacheRange (9: A0 address, A1
- * count) drops what was translated from the range all the same. */
+/* HWPriv: the caches.  0 SwapInstructionCache and 2 SwapDataCache turn a
+ * cache on or off (A0) and answer whether it was on (A0); 1
+ * FlushInstructionCache and 9 FlushCodeCacheRange (A0 address, A1 count)
+ * empty the 68020's or 68030's instruction cache (all of it, or the
+ * range) and drop what was translated from the range; 3 FlushDataCache
+ * and the external cache's 4 to 6 have nothing to do, a data cache here
+ * never being stale. */
 void tb_HWPriv(int32_t d0, int32_t a0)
 {
-    if ((d0 & 0xFFFF) == 9 && g_code_map && g_cpu->a[1])
-        mem_code_range((gaddr)a0, g_cpu->a[1]);
-    g_cpu->d[0] = 0;
+    cpu68k *c = g_cpu;
+    int model = c->model;
+    uint32_t icache = model >= 68040 ? 0x8000u : model >= 68020 ? 0x1u : 0;
+    uint32_t dcache = model >= 68040 ? 0x80000000u : model == 68030 ? 0x100u : 0;
+    switch (d0 & 0xFFFF) {
+    case 0:
+    case 2: {
+        uint32_t bit = (d0 & 0xFFFF) == 0 ? icache : dcache;
+        c->a[0] = (c->cacr & bit) != 0;
+        if (bit)
+            c->cacr = a0 & 0xFF ? c->cacr | bit : c->cacr & ~bit;
+        if (bit == icache)
+            cpu_icache_flush(c, 0, 0);
+        break;
+    }
+    case 1: cpu_icache_flush(c, 0, 0); break;
+    case 9:
+        cpu_icache_flush(c, (uint32_t)a0, c->a[1] ? c->a[1] : 1);
+        if (g_code_map && c->a[1])
+            mem_code_range((gaddr)a0, c->a[1]);
+        break;
+    default: break;
+    }
+    c->d[0] = 0;
 }
+
+/* FlushCodeCache ($A0BD): the whole instruction cache. */
+void tb_FlushCodeCache(void) { cpu_icache_flush(g_cpu, 0, 0); }
 
 void tb_Debugger(void)
 {

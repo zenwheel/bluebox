@@ -762,6 +762,7 @@ void tb_FlashMenuBar(int16_t mid);
 void tb_FlattenMovie(int32_t theMovie, int32_t movieFlattenFlags, gaddr theFile, int32_t creator, int16_t scriptTag, int32_t createMovieFileFlags, gaddr resId, int32_t resName);
 int32_t tb_FlattenMovieData(int32_t theMovie, int32_t movieFlattenFlags, gaddr theFile, int32_t creator, int16_t scriptTag, int32_t createMovieFileFlags);
 int32_t tb_FlattenMovieDataToDataRef(int32_t theMovie, int32_t movieFlattenFlags, int32_t dataRef, int32_t dataRefType, int32_t creator, int16_t scriptTag, int32_t createMovieFileFlags);
+void tb_FlushCodeCache(void);
 void tb_FlushEvents(int16_t evmask, int16_t stopmask);
 int16_t tb_FlushFonts(void);
 int16_t tb_FlushIconRefs(int32_t creator, int32_t iconType);

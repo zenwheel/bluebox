@@ -96,10 +96,12 @@ static inline void watch_store(gaddr a)
  * bulk copies below) checks it, so a translation never outlives the code
  * it came from: a store into a marked region calls mem_code_written, which
  * tells each translator owning it to drop the blocks it overlaps. */
-enum { CODE_MAP_SHIFT = 8, CODE_PPC = 1, CODE_68K = 2 };
+enum { CODE_MAP_SHIFT = 8, CODE_PPC = 1, CODE_68K = 2, CODE_ICACHE = 4 };
 extern uint8_t *g_code_map;
-/* A translator's handler for a store of [lo, hi) touching its regions. */
-extern void (*g_code_written[2])(gaddr lo, gaddr hi);
+/* A translator's handler for a store of [lo, hi) touching its regions
+ * (the third is the 68020's and 68030's instruction cache, which the
+ * Toolbox's own stores flush as the routines that moved code did). */
+extern void (*g_code_written[3])(gaddr lo, gaddr hi);
 void mem_code_written(gaddr a, uint32_t len);
 /* Mark [lo, hi) as holding a translator's code (also the region just
  * before, so a misaligned store starting there is seen).  Returns false if

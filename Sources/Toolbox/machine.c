@@ -410,9 +410,12 @@ bool machine_boot(bool census)
         return false;
     mem_reset();
     cpu_init(&cpu);
-    cpu.model = cpu_model;
-    cpu.fpu = fpu_for(cpu_model);
+    cpu_set_model(&cpu, cpu_model, fpu_for(cpu_model));
     cpu.addr_mask = g_mem_24bit ? 0x00FFFFFFu : 0xFFFFFFFFu;
+    /* The caches on, as the ROM left them: the 68020's instruction
+     * cache; the 68030's with burst fill, and its data cache (write
+     * allocate, burst); the 68040's both. */
+    cpu.cacr = cpu_model == 68020 ? 0x1 : cpu_model == 68030 ? 0x3111 : cpu_model == 68040 ? 0x80008000u : 0;
     g_cpu = &cpu;
     cpu.aline = trap_aline;
     cpu.native = trap_native;

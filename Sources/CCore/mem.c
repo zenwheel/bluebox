@@ -13,7 +13,7 @@ gaddr g_watch_lo, g_watch_len;
 void (*g_watch_fn)(gaddr a);
 
 uint8_t *g_code_map;
-void (*g_code_written[2])(gaddr lo, gaddr hi);
+void (*g_code_written[3])(gaddr lo, gaddr hi);
 
 /* 4 GB plus slack so a multi-byte access at the very top cannot run off. */
 #define ARENA_SIZE ((size_t)1 << 32)
@@ -56,7 +56,7 @@ void mem_code_written(gaddr a, uint32_t len)
         if (r == last)
             break;
     }
-    for (int t = 0; t < 2; t++)
+    for (int t = 0; t < 3; t++)
         if ((m & (1 << t)) && g_code_written[t])
             g_code_written[t](a, a + len);
 }
