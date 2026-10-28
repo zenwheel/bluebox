@@ -9,8 +9,11 @@
  * part) and nothing else while it lives.
  */
 #include <stdio.h>
+#include <dirent.h>
 #include <stdlib.h>
 
+#include "filemgr_internal.h"
+#include "forks.h"
 #include "q3_obj.h"
 #include "tb_internal.h"
 
@@ -553,11 +556,46 @@ static void ready_classes(void)
     q3_controller_classes();
 }
 
+/* Plug-ins in the Extensions folder (files of type 'shlb', creator
+ * 'Q3XT'), loaded once, as QuickDraw 3D loaded them at its first
+ * Q3Initialize: each registers its classes through
+ * Q3XSharedLibrary_Register.  Apple's own two (the interactive renderer
+ * and Custom Elements) are QuickDraw 3D's here already. */
+static void load_plugins(void)
+{
+    static bool loaded;
+    char dir[1024];
+    if (loaded || fm_find_folder(Q3T('e', 'x', 't', 'n'), false, dir, sizeof dir) != 0)
+        return;
+    loaded = true;
+    DIR *d = opendir(dir);
+    struct dirent *e;
+    while (d && (e = readdir(d)) != NULL) {
+        if (e->d_name[0] == '.' || strstr(e->d_name, "QuickDraw\xE2\x84\xA2 3D IR") ||
+            !strcmp(e->d_name, "QD3DCustomElements"))
+            continue;
+        char path[2048], err[256];
+        snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
+        mac_file mf;
+        memset(&mf, 0, sizeof mf);
+        if (!appledouble_read_meta(path, &mf))
+            continue;
+        bool plugin = mf.has_finder_info && !memcmp(mf.finder_info, "shlbQ3XT", 8);
+        mac_file_free(&mf);
+        if (plugin && !cfm_load_library_file(path, err, sizeof err))
+            LOGF(LOG_TRAPS, "  QuickDraw 3D plug-in %s: %s\n", e->d_name, err);
+    }
+    if (d)
+        closedir(d);
+}
+
 static void Q3Initialize(ppc_cpu *c)
 {
     ready_classes();
     if (initialized++)
         q3_notice(kQ3NoticeSystemAlreadyInitialized);
+    else
+        load_plugins();
     Q3RETURN(kQ3Success);
 }
 
@@ -1437,8 +1475,14 @@ static void register_class(ppc_cpu *c, bool by_type)
         return;
     }
     /* A type ours already has stays ours: Apple's interactive renderer,
-     * brought as a plug-in, gives way to the one built in. */
-    if (old || (by_type && q3_class(Q3R(1)))) {
+     * brought as a plug-in, gives way to the one built in, quietly (an
+     * error posted would be the program's next Q3Error_Get: Bugdom took
+     * it for its model files failing). */
+    if (by_type && q3_class(Q3R(1))) {
+        Q3RETURN(0);
+        return;
+    }
+    if (old) {
         q3_error(kQ3ErrorInvalidObjectClass);
         Q3RETURN(0);
         return;
@@ -1516,6 +1560,7 @@ gaddr q3_registered_new(q3class *k, gaddr param)
     q3obj *o = k ? q3_new(k->type, NULL) : NULL;
     if (!o)
         return 0;
+    o->cls = k;
     if (k->instance_size)
         o->instance = tb_NewPtr((int32_t)k->instance_size, false, true);
     gaddr fn = method_of(k, kQ3XMethodTypeObjectNew);
