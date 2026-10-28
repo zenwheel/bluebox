@@ -119,5 +119,32 @@ extension BlueBox {
             #expect(Rest.signed("DMGetGDeviceTablecloth", [gd, out]) == -6231)
             #expect(Rest.signed("DMGetGDeviceTablecloth", [0, out]) == -50)
         }
+
+        @Test func virtualMemoryAnswersAsAMacWithoutIt() {
+            launchTestApp()
+            var ram: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("ram ")), &ram) == 0 && ram > 0)
+            #expect(Rest.call("VM_GetPhysicalBytes") == ram && Rest.call("VM_GetLogicalBytes") == ram)
+            #expect(Rest.signed("VM_HoldSystemHeap") == 0 && Rest.signed("VM_ReleaseMemory", [0x1000, 64]) == 0)
+            #expect(Rest.signed("VM_IterateMappedRanges", [0]) == 0)
+            Rest.call("VM_FinishInstall")
+            Rest.call("VM_SetVMJCrsrTask", [0])
+            for n in ["WriteProtectMemory", "UnWriteProtectMemory", "VMWriteProtectMemory", "VMUnWriteProtectMemory",
+                      "MapFile", "UnMapFile", "VM_GrowFileMapping"] {
+                #expect(Rest.signed(n, [0x1000, 64]) == -4, "\(n)")
+            }
+        }
+
+        @Test func soundChannelsGoWithTheirProgram() {
+            launchTestApp()
+            let chanp = Rest.ptr(4)
+            #expect(tb_SndNewChannel(chanp, 5, 0, 0) == 0)
+            let chan = rd32(chanp)
+            let status = Rest.ptr(24)
+            #expect(tb_SndChannelStatus(chan, 24, status) == 0)
+            Rest.call("SndAppDead")
+            #expect(tb_SndChannelStatus(chan, 24, status) != 0) // no such channel now
+            Rest.call("SynchIdleTime")
+        }
     }
 }

@@ -19,7 +19,7 @@
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(int32_t)(v); c->pc = c->lr; return; } while (0)
 #define DONE() do { c->pc = c->lr; return; } while (0)
 
-enum { procNotFound = -600, kDMNoDeviceTableclothErr = -6231 };
+enum { unimpErr = -4, procNotFound = -600, kDMNoDeviceTableclothErr = -6231 };
 bool menu_title_rect_of(int16_t menuID, int16_t out[4]);
 void menu_bar_rect(int16_t out[4]);
 gaddr rm_map_handle(int16_t rn);
@@ -171,7 +171,40 @@ static void p_KillProcess(ppc_cpu *c)
     RETURN(procNotFound);
 }
 
+/* ---- Virtual memory and the sound manager ---- */
+
+/* Blue Box's memory is all there and nothing pages: the physical and
+ * logical sizes are the same, nothing needs holding, there is nothing to
+ * release, no file maps into memory and no page can be protected (a
+ * Mac with virtual memory off, or without the hardware, answered
+ * unimpErr to the calls that need it). */
+static void p_RamBytes(ppc_cpu *c)
+{
+    uint32_t ram = 0;
+    tb_Gestalt((int32_t)fourcc("ram "), &ram);
+    RETURN(ram);
+}
+
+static void p_Unimplemented(ppc_cpu *c) { RETURN(unimpErr); }
+static void p_NoPagingDone(ppc_cpu *c) { RETURN(noErr); }
+static void p_Nothing(ppc_cpu *c) { DONE(); }
+
+void sound_app_dead(void);
+static void p_SndAppDead(ppc_cpu *c)
+{
+    sound_app_dead();
+    DONE();
+}
+
 const ppc_export os9rest_priv_exports[] = {
+    { "VM_GetPhysicalBytes", p_RamBytes }, { "VM_GetLogicalBytes", p_RamBytes },
+    { "VM_HoldSystemHeap", p_NoPagingDone }, { "VM_ReleaseMemory", p_NoPagingDone },
+    { "VM_IterateMappedRanges", p_NoPagingDone }, { "VM_FinishInstall", p_Nothing },
+    { "VM_SetVMJCrsrTask", p_Nothing }, { "VM_GrowFileMapping", p_Unimplemented },
+    { "WriteProtectMemory", p_Unimplemented }, { "UnWriteProtectMemory", p_Unimplemented },
+    { "VMWriteProtectMemory", p_Unimplemented }, { "VMUnWriteProtectMemory", p_Unimplemented },
+    { "MapFile", p_Unimplemented }, { "UnMapFile", p_Unimplemented },
+    { "SndAppDead", p_SndAppDead }, { "SynchIdleTime", p_Nothing },
     { "GetMap", p_GetMap }, { "IsThisASystemResourceMap", p_IsThisASystemResourceMap },
     { "GetQDGlobals", p_GetQDGlobals }, { "GlobalPortRect", p_GlobalPortRect },
     { "GetEmulatorRegister", p_GetEmulatorRegister }, { "SetEmulatorRegister", p_SetEmulatorRegister },
