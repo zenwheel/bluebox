@@ -35,6 +35,8 @@ void os9rest_hw_reset(void);
 extern const ppc_export os9rest_locale_exports[];
 extern const unsigned os9rest_locale_export_count;
 void os9rest_locale_reset(void);
+/* The string a LocaleRef names ("en_US"); ref 0 is the user's own locale; NULL for a bad ref. */
+const char *rest_locale_id(uint32_t ref, char *buf, size_t cap);
 void os9rest_icons_reset(void);
 void os9rest_sound_reset(void);
 bool os9rest_sound_data_known(const char *name);
