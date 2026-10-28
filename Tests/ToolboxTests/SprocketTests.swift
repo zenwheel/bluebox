@@ -220,6 +220,37 @@ extension BlueBox {
             #expect(rd32(out) == 0)
         }
 
+        /// The display's depth and the back buffer's are asked for apart:
+        /// Bugdom's 16-bit display with a 1-bit back buffer it never uses.
+        @Test func displayAndBackBufferDepthsApart() {
+            launchTestApp()
+            _ = initToolbox()
+            let attrs = tb_NewPtr(72, false, true), ctxp = tb_NewPtr(4, false, true)
+            wr32(attrs + 4, 640)
+            wr32(attrs + 8, 480)
+            wr32(attrs + 32, 1)  // backBufferDepthMask: 1 bit
+            wr32(attrs + 36, 16) // displayDepthMask: 16 bits
+            wr32(attrs + 40, 1)
+            wr32(attrs + 44, 16)
+            wr32(attrs + 48, 1)
+            func call(_ name: String, _ args: [UInt32]) -> UInt32 {
+                for (i, a) in args.enumerated() {
+                    withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+                }
+                cfm_export_fn(name)!(&g_ppc)
+                return g_ppc.gpr.3
+            }
+            #expect(call("DSpStartup", []) == 0)
+            #expect(call("DSpFindBestContext", [attrs, ctxp]) == 0)
+            let ctx = rd32(ctxp)
+            #expect(call("DSpContext_Reserve", [ctx, attrs]) == 0)
+            #expect(qd_screen_depth() == 16)
+            let got = tb_NewPtr(72, false, true)
+            #expect(call("DSpContext_GetAttributes", [ctx, got]) == 0)
+            #expect(rd32(got + 40) == 1 && rd32(got + 44) == 16)
+            #expect(call("DSpContext_Release", [ctx]) == 0)
+        }
+
         /// Alternate buffers are GWorlds of the context's depth; a blit
         /// between them with a source key leaves the keyed pixels alone.
         @Test func altBuffersAndKeyedBlits() {
