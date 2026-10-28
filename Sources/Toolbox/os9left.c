@@ -12,7 +12,7 @@ static const struct {
     const unsigned *count;
     void (*reset)(void);
 } groups[] = {
-    G(text), G(mp), G(display), G(threads), G(ui),
+    G(text), G(mp), G(display), G(threads), G(ui), G(misc),
 };
 
 void (*os9left_export_fn(const char *name))(ppc_cpu *)
