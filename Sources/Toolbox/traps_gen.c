@@ -4160,6 +4160,20 @@ static void glue_CreateLittleArrowsControl(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CreateMovieControl(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_returnedControl = (gaddr)cpu_pop32(c);
+    int32_t a_options = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    gaddr a_localRect = (gaddr)cpu_pop32(c);
+    int32_t a_theWindow = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CreateMovieControl(a_theWindow, a_localRect, a_theMovie, a_options, a_returnedControl);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CreateMovieFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -29413,6 +29427,17 @@ static void glue_ShowHide(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ShowMovieInformation(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    int32_t a_filterProc = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    tb_ShowMovieInformation(a_theMovie, a_filterProc, a_refCon);
+    cpu_push32(c, ret);
+}
+
 static void glue_ShowMoviePoster(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -35290,7 +35315,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x206u, "GetMovieColorTable", CONV_STACK, 8, 2, glue_GetMovieColorTable},
     {0xAAAA, (int32_t)0x207u, "MovieSearchText", CONV_STACK, 28, 2, glue_MovieSearchText},
     {0xAAAA, (int32_t)0x208u, "GetMovieIndTrackType", CONV_STACK, 16, 4, glue_GetMovieIndTrackType},
-    {0xAAAA, (int32_t)0x209u, "ShowMovieInformation", CONV_STACK, 12, 0, 0},
+    {0xAAAA, (int32_t)0x209u, "ShowMovieInformation", CONV_STACK, 12, 0, glue_ShowMovieInformation},
     {0xAAAA, (int32_t)0x20Cu, "QTNewAtomContainer", CONV_STACK, 4, 2, glue_QTNewAtomContainer},
     {0xAAAA, (int32_t)0x20Du, "QTDisposeAtomContainer", CONV_STACK, 4, 2, glue_QTDisposeAtomContainer},
     {0xAAAA, (int32_t)0x20Eu, "QTGetNextChildType", CONV_STACK, 12, 4, glue_QTGetNextChildType},
@@ -35420,7 +35445,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x375u, "QTIdleManagerSetNextIdleTimeDelta", CONV_STACK, 12, 2, glue_QTIdleManagerSetNextIdleTimeDelta},
     {0xAAAA, (int32_t)0x376u, "QTInstallNextTaskNeededSoonerCallback", CONV_STACK, 16, 2, glue_QTInstallNextTaskNeededSoonerCallback},
     {0xAAAA, (int32_t)0x377u, "QTUninstallNextTaskNeededSoonerCallback", CONV_STACK, 8, 2, glue_QTUninstallNextTaskNeededSoonerCallback},
-    {0xAAAA, (int32_t)0x378u, "CreateMovieControl", CONV_STACK, 20, 2, 0},
+    {0xAAAA, (int32_t)0x378u, "CreateMovieControl", CONV_STACK, 20, 2, glue_CreateMovieControl},
     {0xAAAA, (int32_t)0x37Au, "QTAddMovieError", CONV_STACK, 16, 2, glue_QTAddMovieError},
     {0xAAAA, (int32_t)0x380u, "PutMovieForDataRefIntoHandle", CONV_STACK, 16, 2, glue_PutMovieForDataRefIntoHandle},
     {0xAAAA, (int32_t)0x381u, "NewMovieForDataRefFromHandle", CONV_STACK, 22, 2, glue_NewMovieForDataRefFromHandle},

@@ -30490,6 +30490,17 @@ static void ppcglue_QTIdleManagerNeedsAnIdle(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_CreateMovieControl(ppc_cpu *c)
+{
+    int32_t a_theWindow = (int32_t)c->gpr[3];
+    gaddr a_localRect = (gaddr)c->gpr[4];
+    int32_t a_theMovie = (int32_t)c->gpr[5];
+    int32_t a_options = (int32_t)c->gpr[6];
+    gaddr a_returnedControl = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateMovieControl(a_theWindow, a_localRect, a_theMovie, a_options, a_returnedControl);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GoToEndOfMovie(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
@@ -32802,6 +32813,15 @@ static void ppcglue_CanQuickTimeOpenDataRef(ppc_cpu *c)
     gaddr a_outPreferGraphicsImporter = (gaddr)c->gpr[7];
     int32_t a_inFlags = (int32_t)c->gpr[8];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CanQuickTimeOpenDataRef(a_dataRef, a_dataRefType, a_outCanOpenWithGraphicsImporter, a_outCanOpenAsMovie, a_outPreferGraphicsImporter, a_inFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShowMovieInformation(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_filterProc = (int32_t)c->gpr[4];
+    int32_t a_refCon = (int32_t)c->gpr[5];
+    tb_ShowMovieInformation(a_theMovie, a_filterProc, a_refCon);
     c->pc = c->lr;
 }
 
@@ -39113,35 +39133,6 @@ static void ppctrap_SetMoviesErrorProc(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_CreateMovieControl(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x378u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShowMovieInformation(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x209u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_AddMovieExecuteWiredActionsProc(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -40034,7 +40025,7 @@ const ppc_export ppc_exports[] = {
     {"CreateListBoxControl", ppcglue_CreateListBoxControl},
     {"CreateLittleArrowsControl", ppcglue_CreateLittleArrowsControl},
     {"CreateLogicalDescriptor", ppcglue_CreateLogicalDescriptor},
-    {"CreateMovieControl", ppctrap_CreateMovieControl},
+    {"CreateMovieControl", ppcglue_CreateMovieControl},
     {"CreateMovieFile", ppcglue_CreateMovieFile},
     {"CreateMovieStorage", ppcglue_CreateMovieStorage},
     {"CreateNewWindow", ppcglue_CreateNewWindow},
@@ -43419,7 +43410,7 @@ const ppc_export ppc_exports[] = {
     {"ShowDragHilite", ppcglue_ShowDragHilite},
     {"ShowFloatingWindows", ppcglue_ShowFloatingWindows},
     {"ShowHide", ppcglue_ShowHide},
-    {"ShowMovieInformation", ppctrap_ShowMovieInformation},
+    {"ShowMovieInformation", ppcglue_ShowMovieInformation},
     {"ShowMoviePoster", ppcglue_ShowMoviePoster},
     {"ShowPen", ppcglue_ShowPen},
     {"ShowWindow", ppcglue_ShowWindow},

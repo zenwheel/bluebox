@@ -322,6 +322,7 @@ int32_t tb_CreateImageWellControl(gaddr window, gaddr boundsRect, gaddr info, ga
 int32_t tb_CreateListBoxControl(gaddr window, gaddr boundsRect, int8_t autoSize, int16_t numRows, int16_t numColumns, int8_t horizScroll, int8_t vertScroll, int16_t cellHeight, int16_t cellWidth, int8_t hasGrowSpace, gaddr listDef, gaddr outControl);
 int32_t tb_CreateLittleArrowsControl(gaddr window, gaddr boundsRect, int32_t value, int32_t minimum, int32_t maximum, int32_t increment, gaddr outControl);
 int16_t tb_CreateLogicalDescriptor(gaddr theLogicalTerms, int32_t theLogicOperator, int8_t disposeInputs, gaddr theDescriptor);
+int16_t tb_CreateMovieControl(int32_t theWindow, gaddr localRect, int32_t theMovie, int32_t options, gaddr returnedControl);
 int16_t tb_CreateMovieFile(gaddr fileSpec, int32_t creator, int16_t scriptTag, int32_t createMovieFileFlags, gaddr resRefNum, gaddr newmovie);
 int16_t tb_CreateMovieStorage(int32_t dataRef, int32_t dataRefType, int32_t creator, int16_t scriptTag, int32_t createMovieFileFlags, gaddr outDataHandler, gaddr newmovie);
 int16_t tb_CreateNewWindow(uint32_t windowClass, uint32_t attributes, gaddr contentBounds, gaddr outWindow);
@@ -2781,6 +2782,7 @@ void tb_ShowDialogItem(gaddr dp, int16_t item);
 int16_t tb_ShowDragHilite(gaddr theDrag, gaddr hiliteFrame, int8_t inside);
 int16_t tb_ShowFloatingWindows(void);
 void tb_ShowHide(gaddr w, int8_t flag);
+void tb_ShowMovieInformation(int32_t theMovie, int32_t filterProc, int32_t refCon);
 void tb_ShowMoviePoster(int32_t theMovie);
 void tb_ShowPen(void);
 void tb_ShowWindow(gaddr w);

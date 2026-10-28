@@ -380,3 +380,54 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    @Suite struct QTMovieControl {
+        func box(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
+            let p = tb_NewPtr(8, false, true)
+            wr16(p, UInt16(t)); wr16(p + 2, UInt16(l)); wr16(p + 4, UInt16(b)); wr16(p + 6, UInt16(r))
+            return p
+        }
+        func title(_ s: String) -> UInt32 {
+            let p = tb_NewPtr(256, false, true)
+            wr8(p, UInt8(s.utf8.count))
+            for (i, c) in s.utf8.enumerated() { wr8(p + 1 + UInt32(i), c) }
+            return p
+        }
+        /// CreateMovieControl: a control in the window holding a movie
+        /// controller, which GetControlData gives with its movie.
+        @Test func movieControlHoldsAController() throws {
+            let dir = qtMachineDir()
+            let ramp: [Int16] = (0..<800).map { Int16($0) }
+            let movie = try movieOf(aiff(ramp), named: "Ctl.aif", in: dir)
+            let w = tb_NewCWindow(0, box(40, 40, 240, 340), title("Movie"), 1, 0, 0xFFFF_FFFF, 0, 0)
+            let r = box(10, 10, 60, 210)
+            let out = tb_NewPtr(4, false, true)
+            #expect(tb_CreateMovieControl(Int32(bitPattern: w), r, movie, 1 << 2, out) == 0)
+            let ch = rd32(out)
+            #expect(ch != 0)
+            let buf = tb_NewPtr(8, false, true)
+            #expect(tb_GetControlData(ch, 0, Int32(bitPattern: fourCC("mc  ")), 4, buf, buf + 4) == 0)
+            let mc = rd32(buf)
+            #expect(mc != 0 && rd32(buf + 4) == 4)
+            #expect(tb_GetControlData(ch, 0, Int32(bitPattern: fourCC("moov")), 4, buf, 0) == 0)
+            #expect(rd32(buf) == UInt32(bitPattern: movie))
+            #expect(tb_GetControlData(ch, 0, Int32(bitPattern: fourCC("manu")), 1, buf, 0) == 0 && rd8(buf) == 0)
+            #expect(qtCall("MCGetControllerPort", [mc]) == w)
+            tb_DrawControls(w)
+        }
+
+        /// ShowMovieInformation's dialog, dismissed by a filter procedure
+        /// that answers OK at once.
+        @Test func movieInformationShowsAndCloses() throws {
+            let dir = qtMachineDir()
+            let movie = try movieOf(aiff((0..<800).map { Int16($0) }), named: "Info.aif", in: dir)
+            // pascal Boolean filter(dialog, event, short *item): *item = 1; return true
+            let words: [UInt16] = [0x206F, 0x0004, 0x30BC, 0x0001, 0x1F7C, 0x0001, 0x0010, 0x205F, 0x4FEF, 0x000C, 0x4ED0]
+            let f = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(f + UInt32(i * 2), w) }
+            tb_ShowMovieInformation(movie, Int32(bitPattern: f), 0)
+            #expect(tb_GetMoviesError() == 0)
+        }
+    }
+}

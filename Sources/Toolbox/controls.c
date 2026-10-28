@@ -16,6 +16,7 @@
 
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "qt_movie_internal.h"
 
 enum { drawCntl = 0, testCntl, calcCRgns, initCntl, dispCntl, posCntl, thumbCntl, dragCntl, autoTrack };
 enum { inButton = 10, inCheckBox = 11, inUpButton = 20, inDownButton = 21, inPageUp = 22, inPageDown = 23,
@@ -2003,6 +2004,9 @@ int16_t tb_SetControlData(gaddr ch, int16_t part, int32_t tag, int32_t size, gad
 
 int16_t tb_GetControlData(gaddr ch, int16_t part, int32_t tag, int32_t size, gaddr buffer, gaddr actual)
 {
+    int16_t movie_err;
+    if (qt_movie_control_data(ch, (uint32_t)tag, size, buffer, actual, &movie_err)) /* QuickTime's movie controls */
+        return movie_err;
     return data_access(ch, part, tag, size, buffer, actual, false);
 }
 

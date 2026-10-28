@@ -74,4 +74,8 @@ void qt_mhlr_task(void);
 /* qt_import.c: a file that isn't a movie, through a movie importer of ours. */
 int16_t qt_import_file_as_movie(const char *path, gaddr moviep, int16_t flags);
 
+/* qt_info.c: GetControlData on a movie control (CreateMovieControl's); false for other controls. */
+bool qt_movie_control_data(gaddr ch, uint32_t tag, int32_t size, gaddr buffer, gaddr actual, int16_t *err);
+void qt_movie_controls_reset(void);
+
 #endif
