@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "filemgr_internal.h"
 #include "qd_internal.h"
@@ -22,6 +23,7 @@
 #include "qt_errors.h"
 #include "qt_model.h"
 #include "qt_movie_internal.h"
+#include "qt_stream.h"
 #include "tb_internal.h"
 
 enum {
@@ -148,9 +150,15 @@ int16_t tb_NewMovieFromDataRef(gaddr m, int16_t flags, gaddr id, int32_t dataRef
         int16_t rid = id ? (int16_t)rd16(id) : 0;
         err = qt_open_movie_path(path, &rid, 0, false, m, flags);
         if (err == noMovieFound)
+            err = qt_stream_import_file(path, m, flags);
+        if (err == noMovieFound)
             err = qt_import_file_as_movie(path, m, flags);
         if (!err && id)
             wr16(id, (uint16_t)rid);
+    } else if ((uint32_t)dataRefType == fourcc("url ") && n >= 7 && !strncasecmp((char *)ref, "rtsp://", 7)) {
+        char url[1024];
+        snprintf(url, sizeof url, "%.*s", (int)n, (char *)ref);
+        err = qt_stream_open_movie(url, m, flags);
     } else {
         qt_src src;
         if (!qt_src_open((uint32_t)dataRefType, 0, ref, n, NULL, false, &src)) {

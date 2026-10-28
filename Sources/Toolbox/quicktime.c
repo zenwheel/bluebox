@@ -48,6 +48,7 @@
 #include "qt_model.h"
 #include "qt_movie_internal.h"
 #include "qt_native.h"
+#include "qt_stream.h"
 #include "qt_vlc.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -747,6 +748,7 @@ static int16_t take_description(uint8_t *moov, uint32_t len, const char *path, b
     LOGF(LOG_TRAPS, "  movie %s: %s\n", path ? path : "(memory)", m->native ? "our decoders" : "VLC");
     prepare_vlc(m, flattened);
     wr32(moviep, m->handle);
+    qt_stream_adopt(m->handle);
     return set_error(noErr);
 }
 
@@ -802,6 +804,8 @@ int16_t qt_movie_from_bytes(const uint8_t *bytes, uint32_t len, const char *path
 gaddr qt_new_movie_for(qtm_movie *mv, const char *path)
 {
     movie *m = new_movie(mv, path);
+    if (m)
+        qt_stream_adopt(m->handle);
     return m ? m->handle : 0;
 }
 
@@ -1304,6 +1308,7 @@ void tb_MoviesTask(gaddr h, int32_t ms)
 {
     qt_callbacks_poll();
     qt_mhlr_task();
+    qt_stream_task();
     if (h) {
         movie *m = movie_of(h);
         if (m)
