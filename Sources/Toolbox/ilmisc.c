@@ -503,6 +503,10 @@ int16_t tb_LaunchDeskAccessory(gaddr pFileSpec, gaddr pDAName)
     gaddr name = pDAName && rd8(pDAName) ? pDAName : pFileSpec ? pFileSpec + 6 : 0;
     if (!name)
         return paramErr;
+    char path[1024];
+    if (pFileSpec && fm_host_path((int16_t)rd16(pFileSpec), (int32_t)rd32(pFileSpec + 2), pFileSpec + 6, true, path, sizeof path) &&
+        fm_type_of_path(path) == 0x6466696Cu) /* dfil */
+        return drv68k_open_da_path(path) ? noErr : resNotFound;
     uint8_t s[256];
     int n = rd8(name);
     gget(s, name + 1, (uint32_t)n);

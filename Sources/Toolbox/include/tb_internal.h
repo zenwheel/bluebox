@@ -586,6 +586,21 @@ enum { CD_UNIT = 35 };                    /* .AppleCD, the mounted volumes' driv
 void io_complete_now(gaddr pb, int16_t result); /* KillIO's: inside the call (timemgr.c) */
 void io_complete_now_for(int16_t refnum);
 void drivers_reset(void);                 /* the unit table, at boot */
+/* Drivers a program supplies, in 68k code (driver68k.c). */
+bool drv68k_refnum(int16_t refnum);
+bool drv68k_open_name(gaddr pb, int16_t *err); /* false: no such driver or DRVR resource */
+int16_t drv68k_call(gaddr pb, bool async, int kind);
+int16_t drv68k_install(gaddr drvr, int16_t refnum);
+void drv68k_reset(void);
+int16_t drv68k_open_desk_acc(gaddr name, bool *found);
+void drv68k_close_desk_acc(int16_t refnum);
+bool drv68k_system_event(gaddr evp, bool automatic); /* automatic: GetNextEvent's own call */
+void drv68k_system_click(gaddr evp, gaddr wp);
+void drv68k_system_menu(int32_t result);
+bool drv68k_system_edit(int16_t cmd);
+void drv68k_periodic(void);
+int16_t drv68k_take_opened(void);
+bool drv68k_open_da_path(const char *path); /* a desk accessory file's DRVRs installed, the first opened */
 /* The whole screen in one window instead of rootless windows (display.c). */
 void display_want_screen(const char *why);
 /* QuickDraw drew rectangle r (global) on the screen: a program filling much

@@ -1671,6 +1671,9 @@ int16_t tb_FindWindow(uint32_t p, gaddr wpp)
     return rd32(LM_DeskHook) ? inSysWindow : inDesk;
 }
 
+/* Where in a window a point is (wInContent ... ), for SystemClick. */
+int32_t wm_window_hit(gaddr w, uint32_t pt) { return call_wdef(w, wHit, (int32_t)pt); }
+
 /* ---------------------------------------------------------------------- */
 /* Update regions */
 
