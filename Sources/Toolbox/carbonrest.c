@@ -10,7 +10,7 @@ size_t rest_cstr(gaddr p, char *out, size_t max)
 {
     size_t n = 0;
     while (p && n + 1 < max && rd8(p + n))
-        out[n] = (char)rd8(p + n), n++;
+        out[n] = (char)rd8(p + (uint32_t)n), n++;
     out[n] = 0;
     return n;
 }
@@ -21,7 +21,7 @@ void rest_pstr_get(gaddr p, char *out, size_t max)
     if (n + 1 > max)
         n = max - 1;
     for (size_t i = 0; i < n; i++)
-        out[i] = (char)rd8(p + 1 + i);
+        out[i] = (char)rd8(p + 1 + (uint32_t)i);
     out[n] = 0;
 }
 
@@ -32,7 +32,7 @@ void rest_pstr_put(gaddr dst, const char *s, size_t max)
         n = max;
     wr8(dst, (uint8_t)n);
     for (size_t i = 0; i < n; i++)
-        wr8(dst + 1 + i, (uint8_t)s[i]);
+        wr8(dst + 1 + (uint32_t)i, (uint8_t)s[i]);
 }
 
 static const struct {
@@ -41,6 +41,7 @@ static const struct {
     void (*reset)(void);
 } areas[] = {
     { rest_misc_exports, &rest_misc_export_count, rest_misc_reset },
+    { rest_ae_exports, &rest_ae_export_count, rest_ae_reset },
 };
 
 void (*carbonrest_export_fn(const char *name))(ppc_cpu *)
