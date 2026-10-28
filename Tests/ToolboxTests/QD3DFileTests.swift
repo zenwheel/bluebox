@@ -210,6 +210,44 @@ extension BlueBox {
             for o in objs { Q.call("Q3Object_Dispose", [o]) }
         }
 
+        /// Immediate mode in a writing loop: what is submitted from its
+        /// data is written as the object it would make (a transform, a
+        /// style, a push and pop, a triangle), in both formats.
+        @Test func writesImmediateMode() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            #expect(Q.call("Q3Initialize") == 1)
+            func words(_ v: [Float]) -> UInt32 { Q.floats(v) }
+            for mode: UInt32 in [0, 4] {
+                let st = Q.call("Q3MemoryStorage_New", [0, 0])
+                let f = Q.call("Q3File_New")
+                #expect(Q.call("Q3File_SetStorage", [f, st]) == 1)
+                #expect(Q.call("Q3File_OpenWrite", [f, mode]) == 1)
+                let view = Q.call("Q3View_New")
+                #expect(Q.call("Q3View_StartWriting", [view, f]) == 1)
+                #expect(Q.call("Q3Push_Submit", [view]) == 1)
+                #expect(Q.call("Q3TranslateTransform_Submit", [words([1, 2, 3]), view]) == 1)
+                #expect(Q.call("Q3BackfacingStyle_Submit", [1, view]) == 1)
+                let tri = Q.words([0, 0, 0, 0, 0x3F80_0000, 0, 0, 0, 0, 0x3F80_0000, 0, 0, 0])
+                #expect(Q.call("Q3Triangle_Submit", [tri, view]) == 1)
+                #expect(Q.call("Q3Pop_Submit", [view]) == 1)
+                #expect(Q.call("Q3View_EndWriting", [view]) == 0)
+                #expect(Q.call("Q3File_Close", [f]) == 1)
+                let buf = tb_NewPtr(12, false, true)
+                #expect(Q.call("Q3MemoryStorage_GetBuffer", [st, buf, buf + 4, buf + 8]) == 1)
+                let bytes = (0..<rd32(buf + 4)).map { rd8(rd32(buf) + $0) }
+                let again = readAll(bytes, mode: mode)
+                #expect(again.map { leaf($0) } == ["push", "trns", "bckf", "trng", "pop "].map { Self.type($0) })
+                if again.count == 5 {
+                    let d = tb_NewPtr(64, false, true)
+                    #expect(Q.call("Q3Triangle_GetData", [again[3], d]) == 1)
+                    #expect(Q.float(d + 16) == 1 && Q.float(d + 36) == 1)
+                    Q.call("Q3Triangle_EmptyData", [d])
+                }
+                for o in again + [f, st, view] { Q.call("Q3Object_Dispose", [o]) }
+            }
+        }
+
         /// The primitives, written then read, in both formats.
         @Test func primitivesRoundTrip() {
             launchTestApp()

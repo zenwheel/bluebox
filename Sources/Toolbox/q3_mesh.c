@@ -566,6 +566,45 @@ gaddr q3_mesh_build(uint32_t nverts, const float (*pts)[3], const gaddr *vsets, 
     return g;
 }
 
+static bool face_has(mface *f, mvert *v);
+
+/* A corner's or an edge's set on a mesh made at once (the 3DMF reader),
+ * by vertex and face index. */
+void q3_mesh_set_corner(gaddr g, uint32_t vertex, uint32_t face, gaddr set)
+{
+    q3obj *o = q3_get(g);
+    mesh *m = o && o->type == MESH ? o->data : NULL;
+    if (!m || !set || vertex >= m->nv || face >= m->nf || !face_has(m->f[face], m->v[vertex]))
+        return;
+    mface *f = m->f[face];
+    for (uint32_t i = 0; i < f->ncorners; i++)
+        if (f->corners[i].v == m->v[vertex]) {
+            q3_assign(&f->corners[i].set, set);
+            return;
+        }
+    mcorner *n = realloc(f->corners, (f->ncorners + 1) * sizeof *n);
+    if (!n)
+        return;
+    f->corners = n;
+    f->corners[f->ncorners++] = (mcorner){ m->v[vertex], q3_ref(set) };
+}
+
+void q3_mesh_set_edge(gaddr g, uint32_t v1, uint32_t v2, gaddr set)
+{
+    q3obj *o = q3_get(g);
+    mesh *m = o && o->type == MESH ? o->data : NULL;
+    if (!m || v1 >= m->nv || v2 >= m->nv)
+        return;
+    rebuild(m);
+    for (uint32_t i = 0; i < m->ne; i++) {
+        medge *e = m->e[i];
+        if ((e->a == m->v[v1] && e->b == m->v[v2]) || (e->a == m->v[v2] && e->b == m->v[v1])) {
+            q3_assign(&e->set, set);
+            return;
+        }
+    }
+}
+
 void q3_mesh_walk(q3obj *o, const q3mesh_walker *w, void *ctx)
 {
     mesh *m = o && o->type == MESH ? o->data : NULL;

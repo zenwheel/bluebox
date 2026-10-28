@@ -65,6 +65,59 @@ extension BlueBox {
             return (mesh, a, b, v + h)
         }
 
+        /// A mesh's corner and edge attribute sets go into 3DMF and come
+        /// back, in both formats.
+        @Test func cornersAndEdgesInFiles() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            #expect(Q.call("Q3Initialize") == 1)
+            let (mesh, a, _, v) = build()
+            let blue = colour(0, 0, 1), white = colour(1, 1, 1)
+            #expect(Q.call("Q3Mesh_SetCornerAttributeSet", [mesh, v[1], a, blue]) == 1)
+            func edge(_ m: UInt32, _ x: UInt32, _ y: UInt32) -> UInt32 {
+                let pair = tb_NewPtr(8, false, true)
+                for e in walk("Q3Mesh_FirstMeshEdge", "Q3Mesh_NextMeshEdge", m) {
+                    _ = Q.call("Q3Mesh_GetEdgeVertices", [m, e, pair, pair + 4])
+                    if Set([rd32(pair), rd32(pair + 4)]) == Set([x, y]) { return e }
+                }
+                return 0
+            }
+            #expect(Q.call("Q3Mesh_SetEdgeAttributeSet", [mesh, edge(mesh, v[1], v[2]), white]) == 1)
+            let file = QD3DFile()
+            for mode: UInt32 in [0, 4] {
+                let st = Q.call("Q3MemoryStorage_New", [0, 0])
+                let f = Q.call("Q3File_New")
+                #expect(Q.call("Q3File_SetStorage", [f, st]) == 1)
+                #expect(Q.call("Q3File_OpenWrite", [f, mode]) == 1)
+                let view = Q.call("Q3View_New")
+                #expect(Q.call("Q3View_StartWriting", [view, f]) == 1)
+                #expect(Q.call("Q3Object_Submit", [mesh, view]) == 1)
+                #expect(Q.call("Q3View_EndWriting", [view]) == 0)
+                #expect(Q.call("Q3File_Close", [f]) == 1)
+                let buf = tb_NewPtr(12, false, true)
+                #expect(Q.call("Q3MemoryStorage_GetBuffer", [st, buf, buf + 4, buf + 8]) == 1)
+                let bytes = (0..<rd32(buf + 4)).map { rd8(rd32(buf) + $0) }
+                let again = file.readAll(bytes, mode: mode)
+                #expect(again.count == 1)
+                if let m = again.first {
+                    let vs = walk("Q3Mesh_FirstMeshVertex", "Q3Mesh_NextMeshVertex", m)
+                    let fs = walk("Q3Mesh_FirstMeshFace", "Q3Mesh_NextMeshFace", m)
+                    #expect(vs.count == 10 && fs.count == 2)
+                    if vs.count == 10 && fs.count == 2 {
+                        let out = tb_NewPtr(12, false, true)
+                        let set = number("Q3Mesh_GetCornerAttributeSet", [m, vs[1], fs[0]])
+                        #expect(set != 0 && Q.call("Q3AttributeSet_Get", [set, 5, out]) == 1 && Q.float(out + 8) == 1)
+                        #expect(number("Q3Mesh_GetCornerAttributeSet", [m, vs[0], fs[0]]) == 0)
+                        let eset = number("Q3Mesh_GetEdgeAttributeSet", [m, edge(m, vs[1], vs[2])])
+                        #expect(eset != 0 && Q.call("Q3AttributeSet_Get", [eset, 5, out]) == 1 && Q.float(out) == 1)
+                        for o in [set, eset] where o != 0 { Q.call("Q3Object_Dispose", [o]) }
+                    }
+                }
+                for o in again + [f, st, view] { Q.call("Q3Object_Dispose", [o]) }
+            }
+            for o in [mesh, blue, white] { Q.call("Q3Object_Dispose", [o]) }
+        }
+
         @Test func topologyAndWalks() {
             launchTestApp()
             #expect(Q.call("Q3Initialize") == 1)

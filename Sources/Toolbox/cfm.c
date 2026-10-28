@@ -1740,6 +1740,35 @@ static void ppc_GetDiskFragment(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* A shared library file (an extension's plug-in) loaded whole and its
+ * initialization routine run, as the extension that looks for its
+ * plug-ins loads them (QuickDraw 3D's, at Q3Initialize). */
+bool cfm_load_library_file(const char *path, char *err, size_t errlen)
+{
+    mac_file mf;
+    if (!appledouble_read(path, &mf, err, errlen))
+        return false;
+    bool ok = false;
+    if (mf.data_len >= 40 && nfrags < MAX_FRAGMENTS) {
+        fragment *f = &frags[nfrags];
+        memset(f, 0, sizeof *f);
+        snprintf(f->name, sizeof f->name, "%s", path);
+        snprintf(f->path, sizeof f->path, "%s", path);
+        f->length = (uint32_t)mf.data_len;
+        int before = ninit, idx = nfrags++;
+        if (pef_load(mf.data, mf.data_len, 0, f, err, errlen)) {
+            if (f->init_tv && ninit < MAX_FRAGMENTS)
+                init_queue[ninit++] = idx;
+            ok = true;
+        } else {
+            nfrags--;
+        }
+        run_new_inits(before);
+    }
+    mac_file_free(&mf);
+    return ok;
+}
+
 /* A container from memory, copied whole into memory of its own: the
  * fragment's code and data are used there (pef_load), and the original
  * (a code resource, which may move) is left as it was. */

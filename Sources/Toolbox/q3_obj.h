@@ -122,6 +122,11 @@ void q3_class_ops(uint32_t type, void (*dispose)(q3obj *), bool (*duplicate)(q3o
 /* Only the submit method (a class whose data another file keeps). */
 void q3_class_submit(uint32_t type, void (*submit)(q3obj *, q3view *));
 bool q3_type_is(uint32_t leaf, uint32_t type);
+/* A method from a registered class's metahandler (or its parents'); 0
+ * if none gives it. */
+gaddr q3_class_method(const q3class *k, uint32_t method);
+/* An object of a registered class, its New method called with param. */
+gaddr q3_registered_new(q3class *k, gaddr param);
 /* The type on leaf's line just below `above` (Q3Shape_GetType: below
  * kQ3SharedTypeShape), or 0. */
 uint32_t q3_type_below(uint32_t leaf, uint32_t above);
@@ -161,6 +166,7 @@ typedef struct {
     int32_t type;
     uint32_t size;
     uint8_t *bytes;
+    gaddr g; /* a guest copy, for Q3XAttributeSet_GetPointer (0: none yet) */
 } q3elem;
 typedef struct {
     int n;
@@ -178,6 +184,9 @@ void q3set_empty(q3set *s);
 void q3set_copy(q3set *to, const q3set *from);
 /* A registered element type of this name (registered now if need be). */
 int32_t q3_register_element(const char *name, uint32_t size);
+/* Registered element classes (Q3XElementClass_Register). */
+bool q3_element_class_named(const char *name, int32_t *type, gaddr *meta);
+bool q3_element_class_of(int32_t type, const char **name, gaddr *meta);
 /* The elements of a set or shape (a shape's set made if make). */
 q3set *q3_elements_of(q3obj *o, bool make);
 /* An attribute set object's set (NULL for none). */

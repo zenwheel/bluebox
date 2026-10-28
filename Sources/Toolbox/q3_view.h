@@ -62,6 +62,11 @@ bool q3v_writing(q3view *v);
 void q3v_begin_object(q3view *v, gaddr object);
 void q3v_end_object(q3view *v);
 
+/* A geometry a renderer plug-in may take whole (q3_xrender.c): true if
+ * it did.  obj is the geometry (0 in immediate mode), data its public
+ * structure in guest memory (0: made from obj). */
+bool q3xr_geometry(q3view *v, uint32_t type, gaddr obj, gaddr data);
+
 /* The view's state for submitting: attribute sets, transforms, styles,
  * shaders (q3_view.c), groups (q3_group.c). */
 void q3v_submit(q3view *v, gaddr object);
@@ -70,6 +75,8 @@ void q3v_transform(q3view *v, const float m[16]);
 void q3v_push(q3view *v);
 void q3v_pop(q3view *v);
 q3view *q3v_of(gaddr view);
+/* The view's own handle. */
+gaddr q3v_guest(q3view *v);
 /* The bounding box of obj submitted alone: min, max, isEmpty (1 or 0). */
 void q3v_bound(q3view *v, gaddr obj, bool exact, float box[7]);
 
@@ -123,6 +130,10 @@ void q3_mesh_classes(void);
  * a count with the top bit set is a contour (hole) of the face before. */
 gaddr q3_mesh_build(uint32_t nverts, const float (*pts)[3], const gaddr *vsets, uint32_t nfaces,
                     const uint32_t *face_nverts, const uint32_t *face_verts, const gaddr *fsets);
+/* A corner's set (by vertex and face index) or an edge's (by its two
+ * vertices) on a mesh just built. */
+void q3_mesh_set_corner(gaddr mesh, uint32_t vertex, uint32_t face, gaddr set);
+void q3_mesh_set_edge(gaddr mesh, uint32_t v1, uint32_t v2, gaddr set);
 /* A mesh gone through (the 3DMF writer): its vertices in order, its faces
  * (contours as vertex indices, the outside first), the corners and the
  * edges with attribute sets.  Callbacks may be NULL. */

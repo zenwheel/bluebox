@@ -73,6 +73,17 @@ static int depth_from_mask(uint32_t mask, int fallback)
     return fallback;
 }
 
+static bool valid_depth(uint32_t d) { return d == 1 || d == 2 || d == 4 || d == 8 || d == 16 || d == 32; }
+
+/* A depth from a mask and the best depth: the best if the mask allows
+ * it, else the deepest the mask allows, else 8. */
+static int pick_depth(uint32_t mask, uint32_t best)
+{
+    if (valid_depth(best) && (!mask || (mask & best)))
+        return (int)best;
+    return depth_from_mask(mask, 8);
+}
+
 static void context_make(void)
 {
     if (ctx)
@@ -159,8 +170,8 @@ static void dsp_GetDisplayID(ppc_cpu *c)
     RETURN(0);
 }
 
-/* DSpContext_Reserve(context, desired): the size and depth asked for
- * become the back buffer's. */
+/* DSpContext_Reserve(context, desired): the size asked for becomes the
+ * back buffer's, the depths the display's and the back buffer's. */
 static void dsp_Reserve(ppc_cpu *c)
 {
     if (!is_context(R(0))) {
@@ -173,18 +184,18 @@ static void dsp_Reserve(ppc_cpu *c)
         w = (uint32_t)g_screen_width;
     if (!h || h > (uint32_t)g_screen_height)
         h = (uint32_t)g_screen_height;
-    int depth = want ? depth_from_mask(rd32(want + 32), 0) : 0;
-    if (!depth && want)
-        depth = (int)rd32(want + 40);
-    if (depth != 1 && depth != 2 && depth != 4 && depth != 8 && depth != 16 && depth != 32)
-        depth = 8;
+    /* The display's depth and the back buffer's are asked for apart
+     * (Bugdom wants a 16-bit display and a 1-bit back buffer it never
+     * uses). */
+    int back = want ? pick_depth(rd32(want + 32), rd32(want + 40)) : 8;
+    int depth = want && (rd32(want + 36) || rd32(want + 44)) ? pick_depth(rd32(want + 36), rd32(want + 44)) : back;
     if (want)
         ppc_copy(ctx, want, ATTR_SIZE);
     wr32(ctx + 4, w);
     wr32(ctx + 8, h);
-    wr32(ctx + 40, (uint32_t)depth);
+    wr32(ctx + 40, (uint32_t)back);
     wr32(ctx + 44, (uint32_t)depth);
-    wr32(ctx + 32, (uint32_t)depth);
+    wr32(ctx + 32, (uint32_t)back);
     wr32(ctx + 36, (uint32_t)depth);
     if (!rd32(ctx + 48))
         wr32(ctx + 48, 1);
@@ -204,8 +215,8 @@ static void dsp_Reserve(ppc_cpu *c)
     gaddr r = tb_NewPtr(8, true, true), gwp = tb_NewPtr(4, true, true);
     wr16(r + 4, (uint16_t)h);
     wr16(r + 6, (uint16_t)w);
-    gaddr ctab = want && depth <= 8 ? rd32(want + 24) : 0;
-    int16_t err = tb_NewGWorld(gwp, (int16_t)depth, r, ctab, 0, 0);
+    gaddr ctab = want && back <= 8 ? rd32(want + 24) : 0;
+    int16_t err = tb_NewGWorld(gwp, (int16_t)back, r, ctab, 0, 0);
     if (!err) /* games take the back buffer's baseAddr as it is */
         tb_LockPixels(tb_GetGWorldPixMap(rd32(gwp)));
     wr32(ctx + CTX_GWORLD, err ? 0 : rd32(gwp));

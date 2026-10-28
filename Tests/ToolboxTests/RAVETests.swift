@@ -158,5 +158,88 @@ extension BlueBox {
             Q.call("QATextureDelete", [engine, tex])
             Q.call("QADrawContextDelete", [dc])
         }
+
+        /// A CL4 texture drawn through the colour table bound to it, then
+        /// through another, index 0 clear where the table says so.
+        @Test func colourTableTextures() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            let (dc, pixels) = context(16, 16)
+            let engine = Q.call("QADeviceGetFirstEngine", [Q.words([0, 64, 3, 16, 16, pixels])])
+            let r = Q.words([0])
+            #expect(Q.call("QAEngineGestalt", [engine, 0, r]) == 0 && rd32(r) & (1 << 13) != 0) // kQAOptional_CL4
+            // 2 by 2 texels: indices 1 2 / 3 0, high nibble first.
+            let image = Q.words([0x1200_0000, 0x3000_0000])
+            let out = Q.words([0])
+            #expect(Q.call("QATextureNew", [engine, 0, 5 /* CL4 */, Q.words([2, 2, 4, image]), out]) == 0)
+            let tex = rd32(out)
+            var entries = [UInt32](repeating: 0, count: 16)
+            entries[0] = 0xFFFFFF; entries[1] = 0xFF0000; entries[2] = 0x00FF00; entries[3] = 0x0000FF
+            #expect(Q.call("QAColorTableNew", [engine, 1 /* CL4_RGB32 */, Q.words(entries), 0, out]) == 0)
+            let table = rd32(out)
+            #expect(Q.call("QATextureBindColorTable", [engine, tex, table]) == 0)
+            _ = ppc_call(method(dc, 2), [dc, 13, tex], 3)
+            _ = ppc_call(method(dc, 1), [dc, 12, 1], 3)
+            func v(_ x: Float, _ y: Float, _ u: Float, _ vv: Float) -> [Float] {
+                [x, y, 0.5, 1, 1, 1, 1, 1, u, vv, 1, 1, 1, 0, 0, 0]
+            }
+            let quad = Q.floats(v(0, 0, 0, 0) + v(16, 0, 1, 0) + v(0, 16, 0, 1) + v(16, 0, 1, 0) + v(16, 16, 1, 1) + v(0, 16, 0, 1))
+            func draw() {
+                _ = ppc_call(method(dc, 13), [dc, 0, 0], 3)
+                _ = ppc_call(method(dc, 11), [dc, 6, 3, quad, 0], 5)
+                _ = ppc_call(method(dc, 14), [dc, 0], 2)
+            }
+            draw()
+            #expect(px(pixels, 16, 3, 3) == 0xFF0000 && px(pixels, 16, 12, 3) == 0x00FF00)
+            #expect(px(pixels, 16, 3, 12) == 0x0000FF && px(pixels, 16, 12, 12) == 0xFFFFFF)
+            // Another table, with index 0 clear: the background shows there.
+            entries[1] = 0xFFFF00
+            #expect(Q.call("QAColorTableNew", [engine, 1, Q.words(entries), 1, out]) == 0)
+            #expect(Q.call("QATextureBindColorTable", [engine, tex, rd32(out)]) == 0)
+            draw()
+            #expect(px(pixels, 16, 3, 3) == 0xFFFF00)
+            #expect(px(pixels, 16, 12, 12) == 0x000000) // cleared to the default background
+            Q.call("QAColorTableDelete", [engine, table])
+            Q.call("QAColorTableDelete", [engine, rd32(out)])
+            Q.call("QATextureDelete", [engine, tex])
+            Q.call("QADrawContextDelete", [dc])
+        }
+
+        /// The draw buffer and z buffer read mid-frame, changed and put
+        /// back; a texture made from what the context drew.
+        @Test func bufferAccess() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            let (dc, pixels) = context(8, 8)
+            _ = ppc_call(method(dc, 13), [dc, 0, 0], 3) // renderStart
+            let red = Q.floats([0, 0, 0.5, 1, 1, 0, 0, 1,  8, 0, 0.5, 1, 1, 0, 0, 1,  0, 8, 0.5, 1, 1, 0, 0, 1])
+            _ = ppc_call(method(dc, 8), [dc, red, red + 32, red + 64, 0], 5)
+            let buf = Q.words([0, 0, 0, 0, 0, 0])
+            #expect(ppc_call(method(dc, 25), [dc, buf], 2) == 0) // accessDrawBuffer
+            #expect(rd32(buf) == 32 && rd32(buf + 4) == 3 && rd32(buf + 8) == 8)
+            let base = rd32(buf + 16)
+            #expect(rd32(base) & 0xFFFFFF == 0xFF0000)        // drawn
+            #expect(rd32(base + 4 * 63) & 0xFFFFFF == 0)      // not drawn
+            wr32(base + 4 * 63, 0x00FF00)                      // the corner made green
+            #expect(ppc_call(method(dc, 26), [dc, 0], 2) == 0) // accessDrawBufferEnd
+            #expect(ppc_call(method(dc, 27), [dc, buf], 2) == 0) // accessZBuffer
+            #expect(rd32(buf) == 8 && rd32(buf + 16) == 32 && rd32(buf + 20) == 1)
+            let z = rd32(buf + 12)
+            #expect(rd32(z) < 0x8100_0000 && rd32(z) > 0x7F00_0000) // 0.5
+            #expect(rd32(z + 4 * 63) == 0xFFFF_FFFF)                // cleared: far
+            wr32(z + 4 * 63, 0)                                     // nearest: nothing passes there
+            #expect(ppc_call(method(dc, 28), [dc, 0], 2) == 0)
+            let blue = Q.floats([-8, -8, 0.1, 1, 0, 0, 1, 1,  24, -8, 0.1, 1, 0, 0, 1, 1,  -8, 24, 0.1, 1, 0, 0, 1, 1])
+            _ = ppc_call(method(dc, 8), [dc, blue, blue + 32, blue + 64, 0], 5)
+            _ = ppc_call(method(dc, 14), [dc, 0], 2) // renderEnd
+            #expect(px(pixels, 8, 1, 1) == 0x0000FF)
+            #expect(px(pixels, 8, 7, 7) == 0x00FF00) // kept by its depth
+            let out = Q.words([0])
+            #expect(ppc_call(method(dc, 31), [dc, 0, out], 3) == 0) // textureFromContext
+            #expect(rd32(out) != 0)
+            let engine = Q.call("QADeviceGetFirstEngine", [0])
+            Q.call("QATextureDelete", [engine, rd32(out)])
+            Q.call("QADrawContextDelete", [dc])
+        }
     }
 }

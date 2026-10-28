@@ -16,9 +16,13 @@
  * fast, as games choose an engine on that; and Apple's software engine
  * (kQAEngine_AppleSW), saying none is, which some programs look for as
  * well (Combat Mission draws offscreen with it and won't start without
- * it).  Both draw through the host's renderer.  Colour
- * table pixel types (CL4, CL8), the buffer access calls and multiple
- * textures are not supported yet.
+ * it).  Both draw through the host's renderer.  Textures and bitmaps of
+ * colour table pixels (CL4, CL8) draw through the table bound to them,
+ * index 0 clear if the table says so.  The buffer access calls read the
+ * frame drawn so far into memory the program may change (32-bit pixels,
+ * 32-bit depths) and put back what it changed; a texture or bitmap can be
+ * made from what a context has drawn.  Multiple textures are not
+ * supported yet.
  */
 #include <math.h>
 #include <stdio.h>
@@ -33,7 +37,7 @@ enum {
 enum { kQADeviceMemory = 0, kQADeviceGDevice = 1 };
 enum {
     kQAPixel_Alpha1 = 0, kQAPixel_RGB16 = 1, kQAPixel_ARGB16 = 2, kQAPixel_RGB32 = 3, kQAPixel_ARGB32 = 4,
-    kQAPixel_RGB16_565 = 7, kQAPixel_RGB24 = 8, kQAPixel_ARGB16_4444 = 10,
+    kQAPixel_CL4 = 5, kQAPixel_CL8 = 6, kQAPixel_RGB16_565 = 7, kQAPixel_RGB24 = 8, kQAPixel_ARGB16_4444 = 10,
 };
 enum {
     TAG_ZFunction = 0, TAG_Antialias = 8, TAG_Blend = 9, TAG_PerspectiveZ = 10, TAG_TextureFilter = 11,
@@ -74,6 +78,12 @@ typedef struct {
     uint32_t flags;
     gaddr image;
     uint32_t row_bytes;
+    /* Colour table pixels: the indices, kept to draw again through
+     * another table; the table bound (a guest TQAColorTable or 0). */
+    int cl_bits;
+    uint8_t *indices;
+    gaddr ctab;
+    bool owns_image; /* made from a context: ours to free */
 } rtex;
 
 typedef struct {
@@ -95,6 +105,10 @@ typedef struct {
     gaddr notice[5], notice_ref[5];
     r3d_vertex *submitted;
     int nsubmitted;
+    /* The buffer access calls' memory. */
+    gaddr draw_buffer, z_buffer;
+    uint32_t *access_px;
+    float *access_z;
 } rctx;
 
 enum { MAX_CTX = 64, MAX_TEX = 4096 };
@@ -685,6 +699,113 @@ static void m_swapBuffers(ppc_cpu *c)
     Q3RETURN(kQANoErr);
 }
 
+/* ---------------------------------------------------------------------- */
+/* Buffer access: the frame drawn so far, in memory the program may
+ * change, put back when it says it has finished. */
+
+static bool access_ready(rctx *x)
+{
+    size_t n = (size_t)x->width * (size_t)x->height;
+    if (!x->frame || !n)
+        return false;
+    if (!x->access_px)
+        x->access_px = malloc(n * 4);
+    if (!x->access_z)
+        x->access_z = malloc(n * 4);
+    return x->access_px && x->access_z;
+}
+
+/* accessDrawBuffer(drawContext, TQAPixelBuffer *): RGB32 pixels. */
+static void m_accessDrawBuffer(ppc_cpu *c)
+{
+    rctx *x = ctx_of(Q3R(0));
+    gaddr out = Q3R(1);
+    if (!x || !out || !access_ready(x)) {
+        Q3RETURN(x && out ? kQAOutOfMemory : kQAParamErr);
+        return;
+    }
+    uint32_t n = (uint32_t)(x->width * x->height);
+    if (!x->draw_buffer)
+        x->draw_buffer = tb_NewPtr((int32_t)(n * 4), false, false);
+    if (!x->draw_buffer) {
+        Q3RETURN(kQAOutOfMemory);
+        return;
+    }
+    begin(x);
+    r3d_read(x->frame, x->access_px, NULL);
+    for (uint32_t i = 0; i < n; i++)
+        wr32(x->draw_buffer + 4 * i, x->access_px[i] & 0xFFFFFF);
+    wr32(out, (uint32_t)x->width * 4);
+    wr32(out + 4, kQAPixel_RGB32);
+    wr32(out + 8, (uint32_t)x->width);
+    wr32(out + 12, (uint32_t)x->height);
+    wr32(out + 16, x->draw_buffer);
+    Q3RETURN(kQANoErr);
+}
+
+static void m_accessDrawBufferEnd(ppc_cpu *c)
+{
+    rctx *x = ctx_of(Q3R(0));
+    if (!x || !x->draw_buffer || !access_ready(x)) {
+        Q3RETURN(kQAParamErr);
+        return;
+    }
+    uint32_t n = (uint32_t)(x->width * x->height);
+    for (uint32_t i = 0; i < n; i++)
+        x->access_px[i] = rd32(x->draw_buffer + 4 * i) | 0xFF000000u;
+    r3d_write(x->frame, x->access_px, NULL);
+    Q3RETURN(kQANoErr);
+}
+
+/* The depths as 32-bit unsigned numbers, big-endian, 0 near. */
+static const double z_scale = 4294967295.0 / (1.0 - 1.0 / 65536);
+
+static void m_accessZBuffer(ppc_cpu *c)
+{
+    rctx *x = ctx_of(Q3R(0));
+    gaddr out = Q3R(1);
+    if (!x || !out || (x->flags & kQAContext_NoZBuffer) || !access_ready(x)) {
+        Q3RETURN(x && out && (x->flags & kQAContext_NoZBuffer) ? kQANotSupported : kQAParamErr);
+        return;
+    }
+    uint32_t n = (uint32_t)(x->width * x->height);
+    if (!x->z_buffer)
+        x->z_buffer = tb_NewPtr((int32_t)(n * 4), false, false);
+    if (!x->z_buffer) {
+        Q3RETURN(kQAOutOfMemory);
+        return;
+    }
+    begin(x);
+    r3d_read(x->frame, NULL, x->access_z);
+    for (uint32_t i = 0; i < n; i++)
+        wr32(x->z_buffer + 4 * i, (uint32_t)fmin(fmax(x->access_z[i] * z_scale, 0), 4294967295.0));
+    wr32(out, (uint32_t)x->width);
+    wr32(out + 4, (uint32_t)x->height);
+    wr32(out + 8, (uint32_t)x->width * 4);
+    wr32(out + 12, x->z_buffer);
+    wr32(out + 16, 32);
+    wr32(out + 20, 1);
+    Q3RETURN(kQANoErr);
+}
+
+static void m_accessZBufferEnd(ppc_cpu *c)
+{
+    rctx *x = ctx_of(Q3R(0));
+    if (!x || !x->z_buffer || !access_ready(x)) {
+        Q3RETURN(kQAParamErr);
+        return;
+    }
+    uint32_t n = (uint32_t)(x->width * x->height);
+    for (uint32_t i = 0; i < n; i++)
+        x->access_z[i] = (float)(rd32(x->z_buffer + 4 * i) / z_scale);
+    r3d_write(x->frame, NULL, x->access_z);
+    Q3RETURN(kQANoErr);
+}
+
+static void new_rtex_from(ppc_cpu *c, bool bitmap);
+static void m_textureFromContext(ppc_cpu *c) { new_rtex_from(c, false); }
+static void m_bitmapFromContext(ppc_cpu *c) { new_rtex_from(c, true); }
+
 static void (*const methods[35])(ppc_cpu *) = {
     m_setFloat,       m_setInt,         m_setPtr,
     m_getFloat,       m_getInt,         m_getPtr,
@@ -695,9 +816,9 @@ static void (*const methods[35])(ppc_cpu *) = {
     m_submitVerticesGouraud, m_submitVerticesTexture, m_drawTriMeshGouraud,
     m_drawTriMeshTexture, m_setNoticeMethod, m_getNoticeMethod,
     m_nothing, /* submitMultiTextureParams */
-    m_notSupported, m_notSupported, m_notSupported, m_notSupported, /* buffer access */
+    m_accessDrawBuffer, m_accessDrawBufferEnd, m_accessZBuffer, m_accessZBufferEnd,
     m_clearDrawBuffer, m_clearZBuffer,
-    m_notSupported, m_notSupported, /* texture and bitmap from the context */
+    m_textureFromContext, m_bitmapFromContext,
     m_busy,           m_swapBuffers,
 };
 static const char *const method_names[35] = {
@@ -749,7 +870,8 @@ static void QAEngineGestalt(ppc_cpu *c)
     uint32_t v;
     switch (Q3R(1)) {
     case kQAGestalt_OptionalFeatures:
-        v = 1u << 0 | 1u << 1 | 1u << 2 | 1u << 3 | 1u << 4 | 1u << 5 | 1u << 8 | 1u << 22 | 1u << 28 | 1u << 29;
+        v = 1u << 0 | 1u << 1 | 1u << 2 | 1u << 3 | 1u << 4 | 1u << 5 | 1u << 8 | 1u << 13 | 1u << 14 | 1u << 22 |
+            1u << 26 | 1u << 27 | 1u << 28 | 1u << 29; /* CL4, CL8, the draw and z buffers' access */
         break;
     case kQAGestalt_FastFeatures: v = e ? 0 : 1u << 0 | 1u << 1 | 1u << 2 | 1u << 3 | 1u << 4; break;
     case kQAGestalt_VendorID: v = 0; break; /* kQAVendor_Apple */
@@ -764,11 +886,13 @@ static void QAEngineGestalt(ppc_cpu *c)
     case kQAGestalt_FastTextureMemory: v = 64u << 20; break;
     case kQAGestalt_DrawContextPixelTypesAllowed:
     case kQAGestalt_DrawContextPixelTypesPreferred:
-    case kQAGestalt_TexturePixelTypesAllowed:
+    case kQAGestalt_TexturePixelTypesAllowed: v = px16_32 | 1u << kQAPixel_CL4 | 1u << kQAPixel_CL8; break;
     case kQAGestalt_TexturePixelTypesPreferred: v = px16_32; break;
-    case kQAGestalt_BitmapPixelTypesAllowed:
+    case kQAGestalt_BitmapPixelTypesAllowed: v = px16_32 | 1u << kQAPixel_Alpha1 | 1u << kQAPixel_CL4 | 1u << kQAPixel_CL8; break;
     case kQAGestalt_BitmapPixelTypesPreferred: v = px16_32 | 1u << kQAPixel_Alpha1; break;
-    case kQAGestalt_OptionalFeatures2: v = 1u << 4; break; /* kQAOptional2_SwapBuffers */
+    case kQAGestalt_OptionalFeatures2: /* texture and bitmap from contexts, SwapBuffers */
+        v = 1u << 1 | 1u << 2 | 1u << 4;
+        break;
     case kQAGestalt_MultiTextureMax: v = 0; break;
     default:
         LOGF(LOG_TRAPS, "  QAEngineGestalt %u: unknown\n", Q3R(1));
@@ -912,6 +1036,12 @@ static void QADrawContextDelete(ppc_cpu *c)
         r3d_frame_free(x->frame);
         free(x->pixels);
         free(x->submitted);
+        free(x->access_px);
+        free(x->access_z);
+        if (x->draw_buffer)
+            tb_DisposePtr(x->draw_buffer);
+        if (x->z_buffer)
+            tb_DisposePtr(x->z_buffer);
         wr32(x->guest, 0);
         tb_DisposePtr(x->guest);
         free(x);
@@ -947,10 +1077,38 @@ static int new_tex_slot(void)
     return -1;
 }
 
+/* A colour table: its tag, entry count, whether index 0 is clear, then
+ * its 0xRRGGBB entries. */
+#define TAG_CTAB 0x51416374 /* 'QAct' */
+
+static uint32_t *cl_pixels(const rtex *t)
+{
+    uint32_t *px = malloc((size_t)t->width * (size_t)t->height * 4);
+    uint32_t entries = t->ctab ? rd32(t->ctab + 4) : 0;
+    bool clear0 = t->ctab && rd32(t->ctab + 8);
+    for (int y = 0; px && y < t->height; y++) {
+        int sy = (t->flags & kQATexture_FlipOrigin) ? t->height - 1 - y : y;
+        for (int x = 0; x < t->width; x++) {
+            uint32_t i = t->indices[(size_t)sy * (size_t)t->width + (size_t)x];
+            uint32_t v;
+            if (!entries) /* no table yet: the index as grey */
+                v = 0xFF000000u | (t->cl_bits == 4 ? i * 0x111111u : i * 0x010101u);
+            else
+                v = i < entries ? 0xFF000000u | (rd32(t->ctab + 12 + 4 * i) & 0xFFFFFF) : 0xFF000000u;
+            if (clear0 && i == 0) /* clear, and black as premultiplied blending wants */
+                v = 0;
+            px[(size_t)y * (size_t)t->width + (size_t)x] = v;
+        }
+    }
+    return px;
+}
+
 static int upload(rtex *t)
 {
     uint32_t *px;
-    if (t->alpha1) {
+    if (t->cl_bits) {
+        px = cl_pixels(t);
+    } else if (t->alpha1) {
         px = malloc((size_t)t->width * (size_t)t->height * 4);
         for (int y = 0; px && y < t->height; y++)
             for (int x = 0; x < t->width; x++) {
@@ -974,7 +1132,8 @@ static void new_image(ppc_cpu *c, bool bitmap)
     gaddr images = Q3R(3), out = Q3R(4);
     if (out)
         wr32(out, 0);
-    int fmt = type == kQAPixel_Alpha1 && bitmap ? 0 : texture_format(type);
+    int cl_bits = type == kQAPixel_CL4 ? 4 : type == kQAPixel_CL8 ? 8 : 0;
+    int fmt = (type == kQAPixel_Alpha1 && bitmap) || cl_bits ? 0 : texture_format(type);
     if (engine_index(Q3R(0)) < 0 || !images || !out || fmt < 0) {
         Q3RETURN(fmt < 0 ? kQANotSupported : kQAParamErr);
         return;
@@ -996,6 +1155,16 @@ static void new_image(ppc_cpu *c, bool bitmap)
     t->height = (int32_t)rd32(images + 4);
     t->row_bytes = rd32(images + 8);
     t->image = rd32(images + 12);
+    t->cl_bits = cl_bits;
+    if (cl_bits) { /* the indices, one a byte (CL4's high nibble first) */
+        t->indices = t->width > 0 && t->height > 0 ? malloc((size_t)t->width * (size_t)t->height) : NULL;
+        for (int y = 0; t->indices && y < t->height; y++)
+            for (int x = 0; x < t->width; x++) {
+                uint8_t b = rd8(t->image + (uint32_t)y * t->row_bytes + (uint32_t)(cl_bits == 4 ? x >> 1 : x));
+                t->indices[(size_t)y * (size_t)t->width + (size_t)x] =
+                    cl_bits == 8 ? b : (uint8_t)((x & 1) ? b & 0xF : b >> 4);
+            }
+    }
     t->texture = upload(t);
     if (!t->texture) {
         tb_DisposePtr(g);
@@ -1010,6 +1179,52 @@ static void new_image(ppc_cpu *c, bool bitmap)
     Q3RETURN(kQANoErr);
 }
 static void QATextureNew(ppc_cpu *c) { new_image(c, false); }
+
+/* A texture or bitmap of what the context has drawn (its frame so far, or
+ * its last if it isn't drawing). */
+static void new_rtex_from(ppc_cpu *c, bool bitmap)
+{
+    rctx *x = ctx_of(Q3R(0));
+    gaddr out = Q3R(2);
+    if (out)
+        wr32(out, 0);
+    if (!x || !out || !access_ready(x)) {
+        Q3RETURN(kQAParamErr);
+        return;
+    }
+    if (x->rendering)
+        r3d_read(x->frame, x->access_px, NULL);
+    else if (x->pixels)
+        memcpy(x->access_px, x->pixels, (size_t)x->width * (size_t)x->height * 4);
+    int slot = new_tex_slot();
+    rtex *t = slot > 0 ? calloc(1, sizeof *t) : NULL;
+    gaddr g = t ? tb_NewPtr(8, false, true) : 0;
+    gaddr image = g ? tb_NewPtr(x->width * x->height * 4, false, false) : 0;
+    if (!image) {
+        if (g)
+            tb_DisposePtr(g);
+        free(t);
+        Q3RETURN(kQAOutOfMemory);
+        return;
+    }
+    for (int i = 0; i < x->width * x->height; i++)
+        wr32(image + 4 * (uint32_t)i, x->access_px[i] & 0xFFFFFF);
+    t->guest = g;
+    t->bitmap = bitmap;
+    t->format = Q3PX_RGB32;
+    t->flags = Q3R(1) & ~(uint32_t)kQATexture_FlipOrigin;
+    t->width = x->width;
+    t->height = x->height;
+    t->row_bytes = (uint32_t)x->width * 4;
+    t->image = image;
+    t->owns_image = true;
+    t->texture = upload(t);
+    wr32(g, bitmap ? TAG_BMP : TAG_TEX);
+    wr32(g + 4, (uint32_t)slot);
+    texs[slot] = t;
+    wr32(out, g);
+    Q3RETURN(t->texture ? kQANoErr : kQAOutOfMemory);
+}
 static void QABitmapNew(ppc_cpu *c) { new_image(c, true); }
 
 static void QATextureDetach(ppc_cpu *c)
@@ -1033,16 +1248,70 @@ static void QATextureDelete(ppc_cpu *c)
         r3d_texture_free(t->texture);
         wr32(t->guest, 0);
         tb_DisposePtr(t->guest);
+        if (t->owns_image && t->image)
+            tb_DisposePtr(t->image);
+        free(t->indices);
         free(t);
     }
     Q3RETURN(0);
 }
 
+/* QAColorTableNew(engine, tableType, pixelData, transparentIndexFlag,
+ * &table): 256 entries (CL8) or 16 (CL4) of RGB32. */
 static void QAColorTableNew(ppc_cpu *c)
 {
-    if (Q3R(4))
-        wr32(Q3R(4), 0);
-    Q3RETURN(kQANotSupported);
+    uint32_t type = Q3R(1), n = type == 0 ? 256 : type == 1 ? 16 : 0;
+    gaddr data = Q3R(2), out = Q3R(4);
+    if (out)
+        wr32(out, 0);
+    if (engine_index(Q3R(0)) < 0 || !n || !data || !out) {
+        Q3RETURN(kQAParamErr);
+        return;
+    }
+    gaddr t = tb_NewPtr((int32_t)(12 + 4 * n), true, true);
+    if (!t) {
+        Q3RETURN(kQAOutOfMemory);
+        return;
+    }
+    wr32(t, TAG_CTAB);
+    wr32(t + 4, n);
+    wr32(t + 8, Q3R(3) ? 1 : 0);
+    for (uint32_t i = 0; i < n; i++)
+        wr32(t + 12 + 4 * i, rd32(data + 4 * i));
+    wr32(out, t);
+    Q3RETURN(kQANoErr);
+}
+
+static void QAColorTableDelete(ppc_cpu *c)
+{
+    gaddr t = Q3R(1);
+    if (t && rd32(t) == TAG_CTAB) {
+        for (int i = 1; i < MAX_TEX; i++) /* nothing draws through it now */
+            if (texs[i] && texs[i]->ctab == t)
+                texs[i]->ctab = 0;
+        wr32(t, 0);
+        tb_DisposePtr(t);
+    }
+    Q3RETURN(0);
+}
+
+/* A colour table bound to a texture or bitmap of its pixels: drawn
+ * through it from now on. */
+static void bind_table(ppc_cpu *c)
+{
+    rtex *t = tex_of(Q3R(1));
+    gaddr table = Q3R(2);
+    if (!t || !t->cl_bits || (table && rd32(table) != TAG_CTAB)) {
+        Q3RETURN(kQAParamErr);
+        return;
+    }
+    t->ctab = table;
+    int id = upload(t);
+    if (id) {
+        r3d_texture_free(t->texture);
+        t->texture = id;
+    }
+    Q3RETURN(id ? kQANoErr : kQAOutOfMemory);
 }
 static void QARegisterDrawNotificationProc(ppc_cpu *c)
 {
@@ -1065,13 +1334,13 @@ const ppc_export rave_exports[] = {
     { "QATextureNew", QATextureNew },
     { "QATextureDetach", QATextureDetach },
     { "QATextureDelete", QATextureDelete },
-    { "QATextureBindColorTable", m_notSupported },
+    { "QATextureBindColorTable", bind_table },
     { "QABitmapNew", QABitmapNew },
     { "QABitmapDetach", QATextureDetach },
     { "QABitmapDelete", QATextureDelete },
-    { "QABitmapBindColorTable", m_notSupported },
+    { "QABitmapBindColorTable", bind_table },
     { "QAColorTableNew", QAColorTableNew },
-    { "QAColorTableDelete", m_nothing },
+    { "QAColorTableDelete", QAColorTableDelete },
     { "QAAccessTexture", m_notSupported },
     { "QAAccessTextureEnd", m_notSupported },
     { "QAAccessBitmap", m_notSupported },

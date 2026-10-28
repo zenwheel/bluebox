@@ -16,31 +16,8 @@
 #include <math.h>
 #include <stdlib.h>
 
-#include "q3_view.h"
+#include "q3_viewpriv.h"
 #include "tb_internal.h"
-
-#define CAMERA_ORTH Q3T('o', 'r', 't', 'h')
-#define CAMERA_VIEWPLANE Q3T('v', 'w', 'p', 'l')
-#define CAMERA_VANA Q3T('v', 'a', 'n', 'a')
-#define LIGHT_AMBIENT Q3T('a', 'm', 'b', 'n')
-#define LIGHT_DIRECTIONAL Q3T('d', 'r', 'c', 't')
-#define LIGHT_POINT Q3T('p', 'n', 't', 'l')
-#define LIGHT_SPOT Q3T('s', 'p', 'o', 't')
-#define DC_PIXMAP Q3T('d', 'p', 'x', 'p')
-#define DC_MAC Q3T('d', 'm', 'a', 'c')
-#define RENDERER_WIREFRAME Q3T('w', 'r', 'f', 'r')
-#define RENDERER_GENERIC Q3T('g', 'n', 'r', 'r')
-#define ILLUM_PHONG Q3T('p', 'h', 'i', 'l')
-#define ILLUM_LAMBERT Q3T('l', 'm', 'i', 'l')
-#define ILLUM_NULL Q3T('n', 'u', 'i', 'l')
-#define TEXTURE_SHADER Q3T('t', 'x', 's', 'u')
-
-enum { kQ3ViewStatusDone, kQ3ViewStatusRetraverse, kQ3ViewStatusError, kQ3ViewStatusCancelled };
-enum { LOOP_NONE, LOOP_RENDER, LOOP_BOUND_BOX, LOOP_BOUND_SPHERE, LOOP_PICK, LOOP_WRITE };
-enum { kQ3BackfacingStyleBoth, kQ3BackfacingStyleRemove, kQ3BackfacingStyleFlip };
-enum { kQ3InterpolationStyleNone, kQ3InterpolationStyleVertex, kQ3InterpolationStylePixel };
-enum { kQ3FillStyleFilled, kQ3FillStyleEdges, kQ3FillStylePoints };
-enum { kQ3SubdivisionMethodConstant, kQ3SubdivisionMethodWorldSpace, kQ3SubdivisionMethodScreenSpace };
 
 /* ---------------------------------------------------------------------- */
 /* Matrices */
@@ -235,72 +212,6 @@ void q3attrs_merge(q3attrs *a, const q3attrs *b)
 /* ---------------------------------------------------------------------- */
 /* The view */
 
-typedef struct {
-    float m[16];
-    q3attrs a;
-    uint32_t backfacing, interpolation, fill, orientation, receive, pickid, pickparts;
-    gaddr highlight;
-    uint32_t subdiv_method;
-    float subdiv_c1, subdiv_c2;
-    uint32_t aa[3], fog[9];
-    uint32_t illumination;
-    gaddr texture;      /* the texture shader in force */
-} vstate;
-
-typedef struct {
-    int kind;
-    float color[3], dir[3], pos[3];
-    int atten, falloff;
-    float hot, outer;
-} vlight;
-
-typedef struct {
-    r3d_vertex v[3];
-    float depth;
-    int texture;
-    bool clamp_u, clamp_v;
-} deferred;
-
-struct q3view {
-    gaddr g;
-    gaddr renderer, camera, lights, dctx, default_set;
-    int loop;
-    bool exact, cancelled, retraverse;
-    vstate st, *stack;
-    int depth, cap;
-    /* The frame. */
-    r3d_frame *frame;
-    uint32_t *pixels;
-    int fw, fh, px, py; /* its size; the pane's top left in the port */
-    float w2v[16], v2f[16], w2f[16], f2w[16];
-    float eye[3], look[3];
-    bool ortho;
-    vlight *L;
-    int nL;
-    float ambient[3];
-    deferred *defer;
-    int ndefer, capdefer;
-    int *frame_textures; /* made for this frame (markers), freed at its end */
-    int nframe_tex, capframe_tex;
-    /* Bounds. */
-    float bmin[3], bmax[3];
-    bool bempty;
-    float *bpts;
-    uint32_t nbpts, capbpts;
-    /* Picking. */
-    gaddr pick, object;
-    q3pickq pq;
-    gaddr path[64];
-    int pathlen;
-    /* Writing. */
-    gaddr file;
-    gaddr idle, idle_data, progress, progress_data, end_frame, end_frame_data;
-    /* The interactive renderer's RAVE draw context on the frame, for the
-     * program (Q3InteractiveRenderer_GetRAVEDrawContexts), and what to
-     * call when it goes. */
-    gaddr rave_dc, rave_engine, rave_destroy;
-};
-
 gaddr rave_frame_context(r3d_frame *f, int width, int height, gaddr *engine);
 void rave_frame_context_free(gaddr dc);
 
@@ -369,6 +280,21 @@ static void default_state(q3view *v)
     v->depth = 0;
 }
 
+void q3v_default_state(q3view *v) { default_state(v); }
+
+q3view *q3v_drawing_into(gaddr dctx)
+{
+    for (int i = 0; i < MAX_VIEWS; i++)
+        if (views[i] && views[i]->dctx == dctx && views[i]->loop == LOOP_RENDER)
+            return views[i];
+    for (int i = 0; i < MAX_VIEWS; i++)
+        if (views[i] && views[i]->dctx == dctx)
+            return views[i];
+    return NULL;
+}
+
+gaddr q3v_guest(q3view *v) { return v ? v->g : 0; }
+
 q3view *q3v_of(gaddr g)
 {
     q3obj *o = q3_of(g, Q3_VIEW);
@@ -386,6 +312,8 @@ void q3v_push(q3view *v)
         v->cap = cap;
     }
     v->stack[v->depth++] = v->st;
+    if (v->xr)
+        q3xr_push(v);
 }
 
 void q3v_pop(q3view *v)
@@ -395,6 +323,8 @@ void q3v_pop(q3view *v)
         return;
     }
     v->st = v->stack[--v->depth];
+    if (v->xr)
+        q3xr_pop(v);
 }
 
 void q3v_transform(q3view *v, const float m[16]) { q3m_mul(m, v->st.m, v->st.m); }
@@ -578,9 +508,17 @@ static void camera_view_to_frustum(uint32_t type, const uint32_t *w, float m[16]
         m[5] = sy;
         m[8] = cx; /* x_clip = x*sx + z*cx ... with w = -z: x/w = (x*sx - cx*w)/w */
         m[9] = cy;
-        m[10] = f / (f - n);
-        m[11] = -1;
-        m[14] = n * f / (f - n);
+        /* Scaled by 1/yon, as QuickDraw 3D's own matrix is (w is the
+         * distance over yon): the same frustum, but programs that do
+         * their own sums with it (Bugdom's culling multiplies by w)
+         * need these numbers. */
+        m[0] /= f;
+        m[5] /= f;
+        m[8] /= f;
+        m[9] /= f;
+        m[10] = 1 / (f - n);
+        m[11] = -1 / f;
+        m[14] = n / (f - n);
     }
     /* The camera's view port: its part of the view plane made -1..1. */
     float ox = q3d_f(w, 11), oy = q3d_f(w, 12), vw = q3d_f(w, 13), vh = q3d_f(w, 14);
@@ -643,6 +581,11 @@ static bool dctx_area(gaddr dctx, gaddr *port, int *x, int *y, int *w, int *h, b
         }
     }
     return *w > 0 && *h > 0 && *w <= 8192 && *h <= 8192;
+}
+
+bool q3v_dctx_area(gaddr dctx, gaddr *port, int *x, int *y, int *w, int *h, bool *pixmap)
+{
+    return dctx_area(dctx, port, x, y, w, h, pixmap);
 }
 
 static uint32_t argb_of(const uint32_t *d, int at)
@@ -721,6 +664,33 @@ static void present(q3view *v)
     q3_put_port(v->pixels, v->fw, v->fh, port, v->px, v->py);
 }
 
+void q3v_present(q3view *v) { present(v); }
+
+void q3v_read_destination(q3view *v)
+{
+    q3obj *d = q3_get(v->dctx);
+    if (!d || !d->data || !v->pixels)
+        return;
+    const uint32_t *dw = ((q3node *)d->data)->w;
+    if (d->type == DC_PIXMAP) {
+        pixmap_rw(dw, v->pixels, v->px, v->py, v->fw, v->fh, false);
+    } else {
+        gaddr port = dw[20] ? dw[20] : dw[17];
+        pixdst pd = qd_port_pixels(port);
+        q3_get_pixels(v->pixels, v->fw, v->fh, &pd, v->px, v->py);
+    }
+}
+
+bool q3v_clear_color(gaddr dctx, uint32_t *argb)
+{
+    q3obj *d = q3_get(dctx);
+    if (!d || !d->data)
+        return false;
+    const uint32_t *dw = ((q3node *)d->data)->w;
+    *argb = argb_of(dw, 1);
+    return dw[0] == 1; /* kQ3ClearMethodWithColor */
+}
+
 /* ---------------------------------------------------------------------- */
 /* Textures (data in q3_shapes.c) to the renderer's, kept until edited */
 
@@ -728,6 +698,7 @@ typedef struct {
     gaddr texture;
     uint32_t edit;
     int id, w, h;
+    bool alpha; /* some pixels not opaque: drawn blended, as transparency */
 } texcache;
 
 static texcache *texs;
@@ -736,8 +707,9 @@ static int ntexs, captexs;
 uint32_t *q3_storage_pixmap_argb(const uint32_t *w, gaddr storage);
 uint32_t *q3_texture_argb(q3obj *t, int *w, int *h);
 
-static int texture_id(gaddr shader)
+static int texture_id(gaddr shader, bool *alpha)
 {
+    *alpha = false;
     q3obj *s = q3_get(shader);
     if (!s || s->type != TEXTURE_SHADER || !s->data)
         return 0;
@@ -747,8 +719,10 @@ static int texture_id(gaddr shader)
         return 0;
     for (int i = 0; i < ntexs; i++)
         if (texs[i].texture == tex) {
-            if (texs[i].edit == t->edit)
+            if (texs[i].edit == t->edit) {
+                *alpha = texs[i].alpha;
                 return texs[i].id;
+            }
             r3d_texture_free(texs[i].id);
             texs[i] = texs[--ntexs];
             break;
@@ -757,6 +731,9 @@ static int texture_id(gaddr shader)
     uint32_t *px = q3_texture_argb(t, &w, &h);
     if (!px)
         return 0;
+    bool some_alpha = false;
+    for (int i = 0; i < w * h && !some_alpha; i++)
+        some_alpha = px[i] >> 24 != 0xFF;
     /* QuickDraw 3D's v runs up the image; the renderer's down. */
     int id = r3d_texture_new(w, h, px, true);
     free(px);
@@ -772,7 +749,8 @@ static int texture_id(gaddr shader)
         texs = n;
         captexs = cap;
     }
-    texs[ntexs++] = (texcache){ tex, t->edit, id, w, h };
+    texs[ntexs++] = (texcache){ tex, t->edit, id, w, h, some_alpha };
+    *alpha = some_alpha;
     return id;
 }
 
@@ -1201,6 +1179,10 @@ void q3v_triangles(q3view *v, const q3pv *pv, uint32_t npv, const q3ptri *t, uin
 {
     if (!v || !npv || !nt)
         return;
+    if (v->xr && v->loop == LOOP_RENDER) {
+        q3xr_triangles(v, pv, npv, t, nt, geom_set);
+        return;
+    }
     if (v->loop == LOOP_BOUND_BOX || v->loop == LOOP_BOUND_SPHERE) {
         for (uint32_t i = 0; i < npv; i++)
             bound_point(v, pv[i].p);
@@ -1289,7 +1271,12 @@ void q3v_triangles(q3view *v, const q3pv *pv, uint32_t npv, const q3ptri *t, uin
         bool clamp_u = false, clamp_v = false;
         gaddr shader = (fa.has & QA_SHADER) ? fa.shader : v->st.texture;
         if (shader && !points) {
-            texture = texture_id(shader);
+            bool tex_alpha;
+            texture = texture_id(shader, &tex_alpha);
+            /* A texture's alpha is transparency, as the interactive
+             * renderer drew it (Bugdom's menu icons are cut out so). */
+            if (tex_alpha)
+                transparent = true;
             q3obj *sh = q3_get(shader);
             if (sh && sh->data) {
                 clamp_u = ((q3node *)sh->data)->w[9] == 1;
@@ -1394,6 +1381,10 @@ void q3v_lines(q3view *v, const q3pv *pv, uint32_t nseg, gaddr geom_set)
 {
     if (!v)
         return;
+    if (v->xr && v->loop == LOOP_RENDER) {
+        q3xr_lines(v, pv, nseg, geom_set);
+        return;
+    }
     if (v->loop == LOOP_BOUND_BOX || v->loop == LOOP_BOUND_SPHERE) {
         for (uint32_t i = 0; i < 2 * nseg; i++)
             bound_point(v, pv[i].p);
@@ -1426,6 +1417,10 @@ void q3v_points(q3view *v, const q3pv *pv, uint32_t n, gaddr geom_set)
 {
     if (!v)
         return;
+    if (v->xr && v->loop == LOOP_RENDER) {
+        q3xr_points(v, pv, n, geom_set);
+        return;
+    }
     if (v->loop == LOOP_BOUND_BOX || v->loop == LOOP_BOUND_SPHERE) {
         for (uint32_t i = 0; i < n; i++)
             bound_point(v, pv[i].p);
@@ -1457,6 +1452,10 @@ void q3v_image(q3view *v, const float p[3], int dx, int dy, int w, int h, const 
 {
     if (!v)
         return;
+    if (v->xr && v->loop == LOOP_RENDER) {
+        q3xr_image(v, p, dx, dy, w, h, argb, set);
+        return;
+    }
     if (v->loop == LOOP_BOUND_BOX || v->loop == LOOP_BOUND_SPHERE) {
         bound_point(v, p);
         return;
@@ -1527,6 +1526,29 @@ static bool frame_setup(q3view *v)
             v->pixels = NULL;
             return false;
         }
+    }
+    v->fw = w;
+    v->fh = h;
+    v->px = x;
+    v->py = y;
+    return true;
+}
+
+static bool plugin_frame_setup(q3view *v)
+{
+    gaddr port = 0;
+    int x = 0, y = 0, w = 0, h = 0;
+    bool pixmap = false;
+    if (!dctx_area(v->dctx, &port, &x, &y, &w, &h, &pixmap))
+        return false;
+    if (!v->pixels || v->fw != w || v->fh != h) {
+        drop_rave_context(v);
+        r3d_frame_free(v->frame);
+        v->frame = NULL;
+        free(v->pixels);
+        v->pixels = malloc((size_t)w * (size_t)h * 4);
+        if (!v->pixels)
+            return false;
     }
     v->fw = w;
     v->fh = h;
@@ -1609,6 +1631,7 @@ static void view_dispose(q3obj *o)
         if (views[i] == v)
             views[i] = NULL;
     drop_rave_context(v);
+    q3xr_free(v);
     q3_assign(&v->renderer, 0);
     q3_assign(&v->camera, 0);
     q3_assign(&v->lights, 0);
@@ -1630,8 +1653,11 @@ static q3view *view_arg(ppc_cpu *c) { return q3v_of(Q3R(0)); }
 static void Q3View_Cancel(ppc_cpu *c)
 {
     q3view *v = view_arg(c);
-    if (v)
+    if (v) {
         v->cancelled = true;
+        if (v->xr)
+            q3xr_cancel(v);
+    }
     Q3RETURN(v ? kQ3Success : kQ3Failure);
 }
 
@@ -1688,6 +1714,17 @@ static void Q3View_StartRendering(ppc_cpu *c)
     }
     if (!v->renderer) /* no renderer set: the interactive one */
         v->renderer = q3_renderer_new(Q3T('c', 't', 'w', 'n'));
+    if (q3xr_is_plugin(v->renderer)) {
+        /* A plug-in draws for itself: the frame is only its pixels. */
+        if (!plugin_frame_setup(v) || !camera_setup(v)) {
+            q3_error(kQ3ErrorBadDrawContext);
+            Q3RETURN(kQ3Failure);
+            return;
+        }
+        start_loop(v, LOOP_RENDER);
+        Q3RETURN(q3xr_start(v) ? kQ3Success : kQ3Failure);
+        return;
+    }
     if (!frame_setup(v) || !camera_setup(v)) {
         q3_error(kQ3ErrorBadDrawContext);
         Q3RETURN(kQ3Failure);
@@ -1722,7 +1759,22 @@ static void Q3View_EndRendering(ppc_cpu *c)
         Q3RETURN(kQ3ViewStatusError);
         return;
     }
+    if (v->xr && !v->cancelled) {
+        int status = q3xr_end_pass(v);
+        if (status == kQ3ViewStatusRetraverse) {
+            Q3RETURN(status);
+            return;
+        }
+        v->loop = LOOP_NONE;
+        Q3RETURN(status);
+        return;
+    }
     if (v->cancelled) {
+        if (v->xr) {
+            v->loop = LOOP_NONE;
+            Q3RETURN(kQ3ViewStatusCancelled);
+            return;
+        }
         r3d_end(v->frame, NULL);
         end_frame_textures(v);
         v->loop = LOOP_NONE;
@@ -1757,8 +1809,20 @@ static void Q3View_EndRendering(ppc_cpu *c)
     Q3RETURN(kQ3ViewStatusDone);
 }
 
-static void Q3View_Flush(ppc_cpu *c) { Q3RETURN(view_arg(c) ? kQ3Success : kQ3Failure); }
-static void Q3View_Sync(ppc_cpu *c) { Q3RETURN(view_arg(c) ? kQ3Success : kQ3Failure); }
+static void Q3View_Flush(ppc_cpu *c)
+{
+    q3view *v = view_arg(c);
+    if (v && v->xr)
+        q3xr_flush(v);
+    Q3RETURN(v ? kQ3Success : kQ3Failure);
+}
+static void Q3View_Sync(ppc_cpu *c)
+{
+    q3view *v = view_arg(c);
+    if (v && v->xr)
+        q3xr_sync(v);
+    Q3RETURN(v ? kQ3Success : kQ3Failure);
+}
 
 static void start_bounds(ppc_cpu *c, int loop)
 {
@@ -1947,10 +2011,23 @@ static void Q3View_SetEndFrameMethod(ppc_cpu *c)
     Q3RETURN(v ? kQ3Success : kQ3Failure);
 }
 
+/* A push or pop in a writing loop is written as one. */
+static bool write_operator(q3view *v, uint32_t type)
+{
+    if (v->loop != LOOP_WRITE)
+        return false;
+    gaddr g = q3_data_new(type, 0);
+    if (g) {
+        q3v_submit(v, g);
+        q3_release(g);
+    }
+    return true;
+}
+
 static void Q3Push_Submit(ppc_cpu *c)
 {
     q3view *v = view_arg(c);
-    if (v)
+    if (v && !write_operator(v, Q3T('p', 'u', 's', 'h')))
         q3v_push(v);
     Q3RETURN(v ? kQ3Success : kQ3Failure);
 }
@@ -1958,7 +2035,7 @@ static void Q3Push_Submit(ppc_cpu *c)
 static void Q3Pop_Submit(ppc_cpu *c)
 {
     q3view *v = view_arg(c);
-    if (v)
+    if (v && !write_operator(v, Q3T('p', 'o', 'p', ' ')))
         q3v_pop(v);
     Q3RETURN(v ? kQ3Success : kQ3Failure);
 }
@@ -1974,6 +2051,11 @@ static void Q3View_IsBoundingBoxVisible(ppc_cpu *c)
     }
     if (rd32(b + 24)) { /* empty */
         Q3RETURN(kQ3False);
+        return;
+    }
+    int answer = v->xr ? q3xr_box_visible(v, b) : -1;
+    if (answer >= 0) {
+        Q3RETURN(answer);
         return;
     }
     float w2v[16], v2f[16], w2f[16], m[16];
@@ -2181,8 +2263,10 @@ void q3v_set_style(q3view *v, uint32_t type, const uint32_t *w)
 void q3v_set_shader(q3view *v, q3obj *shader);
 void q3v_set_shader(q3view *v, q3obj *shader)
 {
-    if (q3_type_is(shader->type, Q3_ILLUMINATION))
+    if (q3_type_is(shader->type, Q3_ILLUMINATION)) {
         v->st.illumination = shader->type;
+        v->st.illum = shader->g;
+    }
     else if (q3_type_is(shader->type, Q3_SURFACE_SHADER))
         v->st.texture = shader->g;
 }

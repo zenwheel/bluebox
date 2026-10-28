@@ -71,7 +71,11 @@ typedef struct {
     id<MTLBuffer> readback;
     uint32_t clear_argb;
     float clear_z;
-    bool load; /* the colours came in through readback */
+    /* Where the next pass's colour and depth come from: cleared, the
+     * readback buffers (r3d_begin's pixels, r3d_write's), or the textures
+     * as the last pass left them (after r3d_read). */
+    int color_src, depth_src;
+    id<MTLBuffer> depthback;
     r3d_vertex *verts;
     int nverts, capverts;
     command *cmds;
@@ -79,6 +83,7 @@ typedef struct {
 }
 @end
 @implementation R3DFrame
+enum { SRC_CLEAR, SRC_BUFFER, SRC_TEXTURE };
 - (void)dealloc
 {
     free(verts);
@@ -199,7 +204,9 @@ r3d_frame *r3d_frame_new(int width, int height)
     f->depth = [device newTextureWithDescriptor:dd];
     f->readback = [device newBufferWithLength:(NSUInteger)width * (NSUInteger)height * 4
                                       options:MTLResourceStorageModeShared];
-    if (!f->color || !f->depth || !f->readback)
+    f->depthback = [device newBufferWithLength:(NSUInteger)width * (NSUInteger)height * 4
+                                       options:MTLResourceStorageModeShared];
+    if (!f->color || !f->depth || !f->readback || !f->depthback)
         return NULL;
     return (__bridge_retained r3d_frame *)f;
 }
@@ -240,7 +247,8 @@ void r3d_begin(r3d_frame *f, const uint32_t *pixels, uint32_t clear_argb, float 
     o->nverts = o->ncmds = 0;
     o->clear_argb = clear_argb;
     o->clear_z = clear_z;
-    o->load = pixels != NULL;
+    o->color_src = pixels ? SRC_BUFFER : SRC_CLEAR;
+    o->depth_src = SRC_CLEAR;
     if (pixels)
         memcpy([o->readback contents], pixels, (size_t)o->width * (size_t)o->height * 4);
 }
@@ -332,15 +340,27 @@ static void encode_clear(R3DFrame *o, id<MTLRenderCommandEncoder> e, const comma
     [e drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
 }
 
-void r3d_end(r3d_frame *f, uint32_t *pixels)
+/* The frame's commands drawn; the colour (and depth) read back if asked.
+ * keep: more of the frame follows, so its buffers are kept. */
+static void run(R3DFrame *o, bool keep, uint32_t *pixels, float *depth_out)
 {
-    if (!f)
-        return;
-    R3DFrame *o = frame(f);
     @autoreleasepool {
         id<MTLCommandBuffer> cb = [queue commandBuffer];
         NSUInteger w = (NSUInteger)o->width, h = (NSUInteger)o->height;
-        if (o->load) {
+        if (o->depth_src == SRC_BUFFER) {
+            id<MTLBlitCommandEncoder> b = [cb blitCommandEncoder];
+            [b copyFromBuffer:o->depthback
+                       sourceOffset:0
+                  sourceBytesPerRow:w * 4
+                sourceBytesPerImage:w * h * 4
+                         sourceSize:MTLSizeMake(w, h, 1)
+                          toTexture:o->depth
+                   destinationSlice:0
+                   destinationLevel:0
+                  destinationOrigin:MTLOriginMake(0, 0, 0)];
+            [b endEncoding];
+        }
+        if (o->color_src == SRC_BUFFER) {
             id<MTLBlitCommandEncoder> b = [cb blitCommandEncoder];
             [b copyFromBuffer:o->readback
                        sourceOffset:0
@@ -355,13 +375,13 @@ void r3d_end(r3d_frame *f, uint32_t *pixels)
         }
         MTLRenderPassDescriptor *rp = [MTLRenderPassDescriptor renderPassDescriptor];
         rp.colorAttachments[0].texture = o->color;
-        rp.colorAttachments[0].loadAction = o->load ? MTLLoadActionLoad : MTLLoadActionClear;
+        rp.colorAttachments[0].loadAction = o->color_src == SRC_CLEAR ? MTLLoadActionClear : MTLLoadActionLoad;
         rp.colorAttachments[0].clearColor = clear_color(o->clear_argb);
         rp.colorAttachments[0].storeAction = MTLStoreActionStore;
         rp.depthAttachment.texture = o->depth;
-        rp.depthAttachment.loadAction = MTLLoadActionClear;
+        rp.depthAttachment.loadAction = o->depth_src == SRC_CLEAR ? MTLLoadActionClear : MTLLoadActionLoad;
         rp.depthAttachment.clearDepth = o->clear_z;
-        rp.depthAttachment.storeAction = MTLStoreActionDontCare;
+        rp.depthAttachment.storeAction = keep ? MTLStoreActionStore : MTLStoreActionDontCare;
         id<MTLRenderCommandEncoder> e = [cb renderCommandEncoderWithDescriptor:rp];
         id<MTLBuffer> vb = o->nverts ? [device newBufferWithBytes:o->verts
                                                            length:(NSUInteger)o->nverts * sizeof(r3d_vertex)
@@ -402,14 +422,60 @@ void r3d_end(r3d_frame *f, uint32_t *pixels)
                destinationOffset:0
           destinationBytesPerRow:w * 4
         destinationBytesPerImage:w * h * 4];
+        if (depth_out)
+            [b copyFromTexture:o->depth
+                         sourceSlice:0
+                         sourceLevel:0
+                        sourceOrigin:MTLOriginMake(0, 0, 0)
+                          sourceSize:MTLSizeMake(w, h, 1)
+                            toBuffer:o->depthback
+                   destinationOffset:0
+              destinationBytesPerRow:w * 4
+            destinationBytesPerImage:w * h * 4];
         [b endEncoding];
         [cb commit];
         [cb waitUntilCompleted];
         if (pixels)
             memcpy(pixels, [o->readback contents], w * h * 4);
+        if (depth_out)
+            memcpy(depth_out, [o->depthback contents], w * h * 4);
         o->nverts = o->ncmds = 0;
+        if (keep)
+            o->color_src = o->depth_src = SRC_TEXTURE;
     }
 }
+
+void r3d_end(r3d_frame *f, uint32_t *pixels)
+{
+    if (f)
+        run(frame(f), false, pixels, NULL);
+}
+
+void r3d_read(r3d_frame *f, uint32_t *pixels, float *depth)
+{
+    if (f)
+        run(frame(f), true, pixels, depth);
+}
+
+void r3d_write(r3d_frame *f, const uint32_t *pixels, const float *depth)
+{
+    if (!f)
+        return;
+    R3DFrame *o = frame(f);
+    if (o->ncmds) /* what was drawn before stays before */
+        run(o, true, NULL, NULL);
+    size_t n = (size_t)o->width * (size_t)o->height * 4;
+    if (pixels) {
+        memcpy([o->readback contents], pixels, n);
+        o->color_src = SRC_BUFFER;
+    }
+    if (depth) {
+        memcpy([o->depthback contents], depth, n);
+        o->depth_src = SRC_BUFFER;
+    }
+}
+
+
 
 int r3d_texture_new(int width, int height, const uint32_t *pixels, bool mipmap)
 {

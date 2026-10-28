@@ -792,6 +792,7 @@ gaddr ctl_drag_tracking_handler(void);
 gaddr ctl_drag_receive_handler(void);
 bool cfm_launch(const char *app_path, char *err, size_t errlen);
 bool cfm_app_fragment_loadable(const char *path);
+bool cfm_load_library_file(const char *path, char *err, size_t errlen);
 /* Load a PEF container in memory (an accelerated code resource's) once;
  * returns its main transition vector, or 0. */
 gaddr cfm_prepare_container(gaddr pef);

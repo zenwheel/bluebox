@@ -15,6 +15,8 @@ extern const unsigned q3_controller_export_count, q3_extras_export_count;
 extern const char *const q3_aliases[][2];
 extern const ppc_export q3_shapes_exports[], q3_group_exports[], q3_pick_exports[], q3_mesh_exports[];
 extern const unsigned q3_shapes_export_count, q3_group_export_count, q3_pick_export_count, q3_mesh_export_count;
+extern const ppc_export q3_xrender_exports[];
+extern const unsigned q3_xrender_export_count;
 
 static const struct {
     const ppc_export *table;
@@ -34,6 +36,7 @@ static const struct {
     { q3_math_exports, &q3_math_export_count },
     { q3_controller_exports, &q3_controller_export_count },
     { q3_extras_exports, &q3_extras_export_count },
+    { q3_xrender_exports, &q3_xrender_export_count },
 };
 
 /* The library's routine of this name, or NULL: QuickDraw 3D's start Q3
