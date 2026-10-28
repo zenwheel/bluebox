@@ -611,5 +611,41 @@ extension BlueBox {
             let (dir2, file2) = ids("Renamed")
             #expect(dir2 == dir && file2 == file)
         }
+
+        /// A mounted volume is put away: unmounted, its drive ejected, its
+        /// refnum gone; the startup disk is not.
+        @Test func puttingAwayAVolume() {
+            let folder = launchTestApp()
+            let spare = tempDir()
+            bootMachine()
+            machine_mount_folder(spare.path, "Spare")
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(folder.appendingPathComponent("Test App").path, &err, err.count))
+            let pb = tb_NewPtr(Int32(HParamBlockRec_SIZEOF), false, true)
+            let name = tb_NewPtr(64, false, true)
+            func volume(_ index: Int16) -> (Int16, Int16)? {
+                wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+                wr16(pb + UInt32(IOParam_ioVRefNum_off), 0)
+                wr16(pb + 28, UInt16(bitPattern: index)) // ioVolIndex
+                guard tb_PBHGetVInfo(pb, false) == 0 else { return nil }
+                return (Int16(bitPattern: rd16(pb + UInt32(IOParam_ioVRefNum_off))), Int16(bitPattern: rd16(pb + 48 - 2 + 2)))
+            }
+            guard let (vref, _) = volume(2) else { Issue.record("no second volume"); return }
+            #expect(pstring(at: name) == "Spare")
+            // Its drive, from the VCB.
+            var drive: Int16 = 0
+            var v = rd32(UInt32(LM_VCBQHdr) + 2)
+            while v != 0 { if Int16(bitPattern: rd16(v + UInt32(VCB_vcbVRefNum_off))) == vref { drive = Int16(bitPattern: rd16(v + UInt32(VCB_vcbDrvNum_off))) }; v = rd32(v) }
+            #expect(drive > 1)
+            gmemset(pb, 0, UInt32(HParamBlockRec_SIZEOF))
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), UInt16(bitPattern: vref))
+            #expect(tb_PBUnmountVol(pb) == 0)
+            #expect(volume(2) == nil)
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), UInt16(bitPattern: drive))
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), 0)
+            #expect(tb_PBEject(pb) == 0) // the drive, its volume gone already
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), UInt16(bitPattern: -1))
+            #expect(tb_PBUnmountVol(pb) == -47) // fBsyErr: the startup disk
+        }
     }
 }

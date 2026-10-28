@@ -3134,9 +3134,73 @@ int16_t tb_PBAllocate(gaddr pb, bool async)
 
 /* There is one volume, and it stays mounted. */
 int16_t tb_PBMountVol(gaddr pb) { return -56; /* nsDrvErr: no such drive */ }
-int16_t tb_PBUnmountVol(gaddr pb) { return fBsyErr; }
-int16_t tb_PBEject(gaddr pb) { return -56; }
-int16_t tb_PBOffLine(gaddr pb) { return -56; }
+
+/* A mounted volume (a folder mounted as one: a CD's or disk image's
+ * contents) can be put away: its VCB leaves the queue, its drive has no
+ * disk in it any more, and its refnum names nothing (the Finder's Eject
+ * and Put Away).  The main volume, the startup disk, cannot, and nor can a
+ * volume with files open on it. */
+static int16_t unmount(gaddr pb)
+{
+    int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
+    gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
+    mount *m = NULL;
+    /* A drive number names the volume on that drive (the main one's is 1,
+     * each mounted one's the next). */
+    if (vref > 1 && !(namep && rd8(namep))) {
+        int16_t drive = vref;
+        for (gaddr v = rd32(LM_VCBQHdr + 2); v; v = rd32(v))
+            if ((int16_t)rd16(v + VCB_vcbDrvNum_off) == drive)
+                vref = (int16_t)rd16(v + VCB_vcbVRefNum_off);
+        if (vref > 1) {
+            /* No volume on the drive (unmounted already): the drive is
+             * ejected, which a mounted volume's may be. */
+            for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e))
+                if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == drive) {
+                    wr8(e - 3, 0);
+                    return drive == 1 ? fBsyErr : noErr;
+                }
+            return -56; /* nsDrvErr */
+        }
+    }
+    if (!vinfo_volume(namep && rd8(namep) ? -1 : 0, vref, namep, &m))
+        return nsvErr;
+    if (!m)
+        return fBsyErr; /* the startup disk */
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && under(fcbs[i].path, m->root))
+            return fBsyErr;
+    gaddr prev = 0;
+    for (gaddr v = rd32(LM_VCBQHdr + 2); v; prev = v, v = rd32(v)) {
+        if ((int16_t)rd16(v + VCB_vcbVRefNum_off) != m->vref)
+            continue;
+        int16_t drive = (int16_t)rd16(v + VCB_vcbDrvNum_off);
+        if (prev)
+            wr32(prev, rd32(v));
+        else
+            wr32(LM_VCBQHdr + 2, rd32(v));
+        if (rd32(LM_VCBQHdr + 6) == v)
+            wr32(LM_VCBQHdr + 6, prev);
+        if (rd32(LM_DefVCBPtr) == v)
+            wr32(LM_DefVCBPtr, rd32(LM_VCBQHdr + 2));
+        for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e))
+            if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == drive)
+                wr8(e - 3, 0); /* no disk in place */
+        break;
+    }
+    if (default_vref == m->vref) {
+        default_vref = VREF;
+        default_dir = ROOT_ID;
+    }
+    int i = (int)(m - mounts);
+    memmove(&mounts[i], &mounts[i + 1], (size_t)(nmounts - i - 1) * sizeof *mounts);
+    nmounts--;
+    return noErr;
+}
+
+int16_t tb_PBUnmountVol(gaddr pb) { return unmount(pb); }
+int16_t tb_PBEject(gaddr pb) { return unmount(pb); }
+int16_t tb_PBOffLine(gaddr pb) { return unmount(pb); }
 
 /* DiskEject(drive): the drives are fixed disks, which don't eject. */
 int16_t tb_DiskEject(int16_t rn)
