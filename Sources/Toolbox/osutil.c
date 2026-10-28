@@ -112,8 +112,28 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
     return vers > 2 ? -5502 : noErr;   /* envVersTooBig */
 }
 
-gaddr tb_StripAddress(gaddr p) { return g_cpu ? p & g_cpu->addr_mask : p; }
-void tb_SwapMMUMode(uint32_t *bp) { *bp = 1; }
+/* In 24-bit mode the top byte is flags, and goes. */
+gaddr tb_StripAddress(gaddr p) { return g_mem_24bit && !rd8(LM_MMU32Bit) ? p & 0x00FFFFFFu : p; }
+
+/* SwapMMUMode: a machine started in 24-bit mode switches between 24- and
+ * 32-bit addressing as asked (D0's low byte: 0 false32b, 1 true32b) and
+ * answers the mode it was in.  Started in 32-bit mode it stays there, as
+ * the 32-bit System had it. */
+void tb_SwapMMUMode(uint32_t *bp)
+{
+    uint8_t was = rd8(LM_MMU32Bit);
+    if (g_mem_24bit && g_cpu) {
+        bool to32 = (*bp & 0xFF) != 0;
+        wr8(LM_MMU32Bit, to32);
+        g_cpu->addr_mask = to32 ? 0xFFFFFFFFu : 0x00FFFFFFu;
+    }
+    *bp = (*bp & 0xFFFFFF00u) | was;
+}
+
+/* Translate24To32 ($A091, D0 in and out): in 24-bit mode an address's
+ * own 24 bits name the same memory with 32-bit addressing (the screen and
+ * the ROM are inside the 16 MB); in 32-bit mode it is already one. */
+uint32_t tb_Translate24To32(uint32_t addr24) { return g_mem_24bit ? addr24 & 0x00FFFFFFu : addr24; }
 /* HWPriv: no caches to turn off or flush; translated code already goes
  * when it is stored over, and FlushCodeCacheRange (9: A0 address, A1
  * count) drops what was translated from the range all the same. */

@@ -28819,6 +28819,13 @@ static void ppcglue_SetFileViewBackingBase(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_Translate24To32(ppc_cpu *c)
+{
+    uint32_t a_addr24 = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_Translate24To32(a_addr24);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -44118,6 +44125,7 @@ const ppc_export ppc_exports[] = {
     {"TransformPoints", ppcglue_TransformPoints},
     {"TransformRect", ppcglue_TransformRect},
     {"TransformRgn", ppctrap_TransformRgn},
+    {"Translate24To32", ppcglue_Translate24To32},
     {"TranslateMatrix", ppcglue_TranslateMatrix},
     {"Transliterate", ppcglue_Transliterate},
     {"TransliterateText", ppcglue_TransliterateText},

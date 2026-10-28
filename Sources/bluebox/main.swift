@@ -87,8 +87,14 @@ func usage() -> Never {
                      a game known to need another depth gets it (unless it has a depth setting),
                      and one whose alert asks for another is started again at that depth, which
                      replaces its setting
-          --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU); a fat
-                     application then runs its 68k code
+          --cpu M    processor: 68040 (the default, as a Quadra 800), 68030 (a Mac IIci),
+                     68020 (a Mac II) or 68000 (a Mac SE: 24-bit addressing, odd-address
+                     errors, no 68020 instructions); a fat application then runs its 68k code
+          --fpu F    floating point: none, 68881, 68882 or 68040 (default: the 68040's own,
+                     a 68882 with a 68030, none with a 68020 or 68000)
+          --addressing B  24 or 32 (default: 24 for a 68k program whose SIZE resource
+                     doesn't say it is 32-bit clean, as such a program had on a Mac in
+                     24-bit mode; the address's top byte is then ignored)
           --appletalk A  AppleTalk on LocalTalk over UDP: local (the default; copies
                      on this host play each other), lan (the local network, other
                      emulators and routers that speak LToUDP), lan:IF (the local
@@ -140,8 +146,9 @@ func usage() -> Never {
           Make a macOS application bundle for a classic application (default folder
           ~/Applications/Blue Box) with its Finder icon; documents dropped on it open
           in the application.
-      bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
-                [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
+      bluebox set <app>|--default [depth 1|2|4|8|16|32|default]
+                [cpu 68000|68020|68030|68040|ppc|default] [fpu none|68881|68882|68040|default]
+                [addressing 24|32|default] [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
                 [appleshare S|none|default] [display rootless|screen|default] [jit on|off|default]
                 [real-name|email|organization|mail-account|smtp-host|news-host|
@@ -152,7 +159,8 @@ func usage() -> Never {
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
           game that wants 256 colours, cpu 68020 for one that misbehaves on a
-          68040, or cpu 68040 for a fat application to run its 68k code.
+          68040, cpu 68000 for one written for a Mac Plus or SE, or cpu 68040 for
+          a fat application to run its 68k code.
           --default sets them for every application without its own (bluebox set
           --default scale 2 doubles every classic window).  The Internet settings
           are Internet Config's preferences, which programs that use it read: bluebox
@@ -397,6 +405,8 @@ func runCommand(_ args: [String]) {
     var scaleOption: Double?
     var redrawCheck: String?
     var cpuModel: Int32?
+    var fpuModel: Int32?
+    var addressingBits: Int32?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
     var appearanceGiven = false
@@ -481,10 +491,20 @@ func runCommand(_ args: [String]) {
             screenDepth = d
         case "--cpu":
             i += 1
-            guard i < args.count, let m = Int32(args[i]), [68020, 68040].contains(m) else {
-                fail("--cpu expects 68020 or 68040")
+            guard i < args.count, let m = Int32(args[i]), [68000, 68020, 68030, 68040].contains(m) else {
+                fail("--cpu expects 68000, 68020, 68030 or 68040")
             }
             cpuModel = m
+        case "--fpu":
+            i += 1
+            guard i < args.count, let f = parseFPU(args[i]) else { fail("--fpu expects none, 68881, 68882 or 68040") }
+            fpuModel = Int32(f)
+        case "--addressing":
+            i += 1
+            guard i < args.count, let b = Int32(args[i]), [24, 32].contains(b) else {
+                fail("--addressing expects 24 or 32")
+            }
+            addressingBits = b
         case "--appletalk":
             i += 1
             if i < args.count, args[i].hasPrefix("bridge:"), isWireless(String(args[i].dropFirst(7))) {
@@ -633,6 +653,10 @@ func runCommand(_ args: [String]) {
     // its 68k code on that model; a 68k application gets the default 68040.
     let processor = cpuModel ?? saved.cpu.map(Int32.init)
     if let m = processor, m != Int32(powerPCSetting) { machine_set_cpu(m) }
+    if let f = fpuModel ?? saved.fpu.map(Int32.init) { machine_set_fpu(f) }
+    // Addressing: as chosen, else what the program's SIZE resource says
+    // (24-bit for a 68k program not marked 32-bit clean).
+    machine_set_addressing(addressingBits ?? saved.addressing.map(Int32.init) ?? machine_app_addressing(app))
     machine_set_depth_alerts(depthRelaunch != nil)
     machine_set_prefer_ppc(preferPPC ?? (processor == nil || processor == Int32(powerPCSetting)))
     if saved.jit == true { useJIT = true } /* the jit setting; --jit turns it on for a run */

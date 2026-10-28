@@ -52,7 +52,7 @@ enum { RD_SIZE = 12, RR_SIZE = 20 };
 #define RR_SELECTOR 16
 
 bool mm_is_descriptor(gaddr p) { return p && rd16(p) == 0xAAFE; }
-bool mm_is_native(gaddr p) { return p >= GA_ROM && p - GA_ROM < GA_ROM_SIZE; }
+bool mm_is_native(gaddr p) { return mem_strip(p) - GA_ROM < GA_ROM_SIZE; }
 
 /* 68k code a PowerPC program runs through Mixed Mode (CallUniversalProc)
  * can install handlers of its own, plain 68k procedure pointers: the

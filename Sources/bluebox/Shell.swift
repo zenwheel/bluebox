@@ -799,9 +799,25 @@ struct SettingsForm: View {
                 Text("\(inherit) (\(fallback.cpu.map(cpuName) ?? "PowerPC for fat applications, else 68040"))")
                     .tag(Int?.none)
                 Text(cpuName(68040)).tag(Int?.some(68040))
+                Text(cpuName(68030)).tag(Int?.some(68030))
                 Text(cpuName(68020)).tag(Int?.some(68020))
+                Text(cpuName(68000)).tag(Int?.some(68000))
                 Text(cpuName(powerPCSetting)).tag(Int?.some(powerPCSetting))
             }
+            Picker("Floating point", selection: $settings.fpu) {
+                Text("\(inherit) (\(fallback.fpu.map(fpuName) ?? "the processor's own"))").tag(Int?.none)
+                ForEach([0, 68881, 68882, 68040], id: \.self) { f in Text(fpuName(f)).tag(Int?.some(f)) }
+            }
+            .help("The FPU: the 68040's is inside it; a 68020 or 68030 had a 68881 or 68882 beside it, or "
+                  + "none. By default a 68030 has a 68882 and a 68020 or 68000 none.")
+            Picker("Addressing", selection: $settings.addressing) {
+                Text("\(inherit) (\(fallback.addressing.map { "\($0)-bit" } ?? "24-bit unless the program is 32-bit clean"))")
+                    .tag(Int?.none)
+                Text("24-bit").tag(Int?.some(24))
+                Text("32-bit").tag(Int?.some(32))
+            }
+            .help("24-bit addressing ignores the top byte of every address, as a Mac without 32-bit mode did, "
+                  + "for programs that keep flags there; the program then has about 7 MB. A 68000 always has it.")
             Picker("Translate code (JIT)", selection: $settings.jit) {
                 Text("\(inherit) (\(fallback.jit == true ? "on" : "off"))").tag(Bool?.none)
                 Text("On").tag(Bool?.some(true))
@@ -926,8 +942,16 @@ struct SettingsForm: View {
 
     private func scaleName(_ v: Double) -> String { v == 1.5 ? "1.5×" : "\(Int(v))×" }
     private func cpuName(_ m: Int) -> String {
-        m == powerPCSetting ? "PowerPC (fat applications)" : m == 68020 ? "68020 without FPU (68k code)"
-            : "68040 with FPU (68k code)"
+        switch m {
+        case powerPCSetting: return "PowerPC (fat applications)"
+        case 68000: return "68000, a Mac SE (68k code)"
+        case 68020: return "68020, a Mac II (68k code)"
+        case 68030: return "68030, a Mac IIci (68k code)"
+        default: return "68040, a Quadra 800 (68k code)"
+        }
+    }
+    private func fpuName(_ f: Int) -> String {
+        f == 0 ? "None" : f == 68040 ? "The 68040's own" : "\(f)"
     }
     private func appearanceName(_ a: String) -> String {
         switch a {

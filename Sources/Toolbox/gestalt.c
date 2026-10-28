@@ -82,21 +82,28 @@ void gestalt_init(void)
     gestalt_set(fourcc("sysv"), 0x0710);      /* System 7.1 */
     gestalt_set(fourcc("thds"), 0x3);         /* the Thread Manager, with exact-match pools */
     gestalt_set(fourcc("sysa"), 1);           /* 68k architecture */
-    gestalt_set(fourcc("mach"), 35);          /* Quadra 800 */
+    /* The machine standing for the processor (machine.c): a Mac SE, II,
+     * IIci or Quadra 800. */
+    gestalt_set(fourcc("mach"), (uint32_t)machine_gestalt_type());
     /* Open Transport for 68k programs, on the host's sockets: through the glue and the
      * Shared Library Manager ot_68k.c stands in for (the same TCP/IP and AppleTalk
      * the PowerPC programs get) */
     gestalt_set(fourcc("otan"), 0x33 | (appletalk_enabled() ? 0x0C : 0));
     gestalt_set(fourcc("otvr"), 0x01208000);
-    bool m040 = g_cpu && g_cpu->model == 68040;
-    gestalt_set(fourcc("proc"), m040 ? 5 : 3); /* 68040 or 68020 */
-    gestalt_set(fourcc("fpu "), m040 ? 3 : 0); /* the 68040's own FPU, or none */
-    gestalt_set(fourcc("mmu "), 0);
+    /* gestalt68000 1, gestalt68020 3, gestalt68030 4, gestalt68040 5; the
+     * FPU (gestalt68881 1, gestalt68882 2, gestalt68040FPU 3) and MMU as
+     * MMUType has them. */
+    int model = machine_cpu_model(), fpu = machine_fpu_model();
+    gestalt_set(fourcc("proc"), model == 68000 ? 1 : (uint32_t)(model - 68000) / 10 + 1);
+    gestalt_set(fourcc("fpu "), fpu == 68881 ? 1 : fpu == 68882 ? 2 : fpu == 68040 ? 3 : 0);
+    gestalt_set(fourcc("mmu "), (uint32_t)machine_mmu_type());
     gestalt_set(fourcc("qd  "), 0x0230);      /* gestalt32BitQD13: 32-Bit QuickDraw 1.3 */
     /* gestaltQuickdrawFeatures: colour, deep GWorlds, direct pixel maps,
      * grayish text-or. */
     gestalt_set(fourcc("qdrw"), 0x0F);
-    gestalt_set(fourcc("addr"), 0x7);         /* 32-bit addressing, sys zone, capable */
+    /* gestaltAddressingModeAttr: 32-bit addressing, system zone and
+     * capable; in 24-bit mode capable only (not on a 68000). */
+    gestalt_set(fourcc("addr"), !g_mem_24bit ? 0x7 : model == 68000 ? 0 : 0x4);
     gestalt_set(fourcc("ram "), g_mem_report_cap);
     gestalt_set(fourcc("qtim"), 0x02508000); /* QuickTime 2.5 (movies play as zero length) */
     gestalt_set(fourcc("cpnt"), 0x00030000); /* the Component Manager, as QuickTime 2.5 has it */

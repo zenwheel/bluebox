@@ -2867,6 +2867,7 @@ int16_t tb_TransformFixedPoints(gaddr m, gaddr fpt, int32_t count);
 int8_t tb_TransformFixedRect(gaddr m, gaddr fr, gaddr fpp);
 int16_t tb_TransformPoints(gaddr mp, gaddr pt1, int32_t count);
 int8_t tb_TransformRect(gaddr m, gaddr r, gaddr fpp);
+uint32_t tb_Translate24To32(uint32_t addr24);
 void tb_TranslateMatrix(gaddr m, int32_t deltaH, int32_t deltaV);
 int16_t tb_Transliterate(gaddr srch, gaddr dsth, int16_t target, int32_t srcmask);
 int16_t tb_TransliterateText(gaddr srch, gaddr dsth, int16_t target, int32_t srcmask, int16_t script);

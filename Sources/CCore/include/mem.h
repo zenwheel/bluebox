@@ -34,17 +34,44 @@ enum {
     /* A program not marked 32-bit clean gets its partition below 16 MB, as
      * on a Mac in 24-bit mode: the A5 world ends here, and the heap may
      * grow to GA_STACK_24 below the stack's base. */
-    GA_A5WORLD_TOP_24 = 0x01000000u,
     GA_STACK_24      = 0x00100000u,
-    GA_ROM           = 0xF0000000u, /* fake ROM: header + native stubs */
-    GA_ROM_SIZE      = 0x00100000u,
-    GA_SCREEN        = 0xF8000000u, /* framebuffer */
+    GA_ROM_32        = 0xF0000000u, /* fake ROM: header + native stubs */
+    GA_ROM_SIZE_32   = 0x00100000u,
+    GA_SCREEN_32     = 0xF8000000u, /* framebuffer */
+    /* In 24-bit mode (mem_set_24bit) everything is inside the 16 MB a
+     * 24-bit Mac addressed, laid out as a Mac II's: RAM (the partition
+     * ending at GA24_TOP), the screen where a video card's slot space
+     * was, the I/O space at $F00000 (for the hardware a program touches
+     * directly), and the ROM above it. */
+    GA24_TOP         = 0x00B00000u,
+    GA24_SCREEN      = 0x00B00000u,
+    GA24_SCREEN_SIZE = 0x00400000u,
+    GA24_IO          = 0x00F00000u,
+    GA24_ROM         = 0x00F80000u,
+    GA24_ROM_SIZE    = 0x00080000u,
 };
+
+/* Where the ROM and the screen are, which depends on the addressing mode,
+ * and the top of a partition kept below 16 MB (a program not 32-bit clean
+ * in 32-bit mode, or any in 24-bit mode). */
+extern gaddr g_rom_base, g_rom_size, g_screen_base, g_screen_size, g_low_top;
+#define GA_ROM g_rom_base
+#define GA_ROM_SIZE g_rom_size
+#define GA_SCREEN g_screen_base
+#define GA_A5WORLD_TOP_24 g_low_top
 
 extern uint8_t *g_mem;
 
 /* Reserve the arena. Returns false on failure. Safe to call more than once. */
 bool mem_init(void);
+/* 24-bit mode: the arena becomes 256 mirrors of one 16 MB space, so an
+ * address's top byte is ignored by every access (the CPUs', the
+ * Toolbox's own and the JIT's), as the 24-bit address bus of a Mac
+ * without 32-bit mode ignored it; the layout moves inside it.  Off, the
+ * flat 4 GB arena.  Either way the arena is left zeroed. */
+bool mem_set_24bit(bool on);
+extern bool g_mem_24bit;
+static inline gaddr mem_strip(gaddr a) { return g_mem_24bit ? a & 0x00FFFFFFu : a; }
 /* Zero the whole arena and give the pages back to the host. */
 void mem_reset(void);
 /* Tell the host a guest range is no longer needed (contents become zero). */

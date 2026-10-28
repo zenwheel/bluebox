@@ -1,14 +1,23 @@
 #include "mem.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 uint8_t *g_mem;
+bool g_mem_24bit;
+gaddr g_rom_base = GA_ROM_32, g_rom_size = GA_ROM_SIZE_32, g_screen_base = GA_SCREEN_32;
+gaddr g_screen_size = 0u - GA_SCREEN_32, g_low_top = 0x01000000u;
 gaddr g_watch_lo, g_watch_len;
 void (*g_watch_fn)(gaddr a);
 
 uint8_t *g_code_map;
 void (*g_code_written[2])(gaddr lo, gaddr hi);
+
+/* 4 GB plus slack so a multi-byte access at the very top cannot run off. */
+#define ARENA_SIZE ((size_t)1 << 32)
+#define ARENA_SLACK ((size_t)1 << 16)
 
 #define CODE_REGION ((gaddr)1 << CODE_MAP_SHIFT)
 #define CODE_MAP_SIZE ((size_t)1 << (32 - CODE_MAP_SHIFT))
@@ -69,9 +78,6 @@ void mem_code_range(gaddr a, uint32_t n)
     }
 }
 
-/* 4 GB plus slack so a multi-byte access at the very top cannot run off. */
-#define ARENA_SIZE ((size_t)1 << 32)
-#define ARENA_SLACK ((size_t)1 << 16)
 
 bool mem_init(void)
 {
@@ -87,10 +93,89 @@ bool mem_init(void)
     return true;
 }
 
+/* 24-bit mode's one 16 MB space and its mirrors. */
+#define SPACE_24 ((size_t)1 << 24)
+static int space_fd = -1;
+
+/* A fresh (zeroed) space mapped at every 16 MB of the arena, and over the
+ * slack too, so an access running off the top wraps to address 0 as it
+ * did on a 24-bit bus.  A new object each time: the old pages go back to
+ * the host, and macOS sizes a shared memory object only once. */
+static bool map_space(void)
+{
+    char name[48];
+    snprintf(name, sizeof name, "/bluebox24.%ld", (long)getpid());
+    int fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+    if (fd < 0) {
+        perror("mem_set_24bit: shm_open");
+        return false;
+    }
+    shm_unlink(name);
+    if (ftruncate(fd, (off_t)SPACE_24) != 0) {
+        perror("mem_set_24bit: ftruncate");
+        close(fd);
+        return false;
+    }
+    for (size_t off = 0; off < ARENA_SIZE + ARENA_SLACK; off += SPACE_24) {
+        size_t n = ARENA_SIZE + ARENA_SLACK - off < SPACE_24 ? ARENA_SIZE + ARENA_SLACK - off : SPACE_24;
+        if (mmap(g_mem + off, n, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED) {
+            perror("mem_set_24bit: mmap");
+            close(fd);
+            return false;
+        }
+    }
+    if (space_fd >= 0)
+        close(space_fd);
+    space_fd = fd;
+    return true;
+}
+
+static bool map_flat(void)
+{
+    void *p = mmap(g_mem, ARENA_SIZE + ARENA_SLACK, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_NORESERVE, -1, 0);
+    if (p == MAP_FAILED) {
+        perror("mem_set_24bit: mmap");
+        return false;
+    }
+    if (space_fd >= 0)
+        close(space_fd);
+    space_fd = -1;
+    return true;
+}
+
+bool mem_set_24bit(bool on)
+{
+    if (!mem_init())
+        return false;
+    if (on ? !map_space() : g_mem_24bit && !map_flat())
+        return false;
+    g_mem_24bit = on;
+    g_rom_base = on ? GA24_ROM : GA_ROM_32;
+    g_rom_size = on ? GA24_ROM_SIZE : GA_ROM_SIZE_32;
+    g_screen_base = on ? GA24_SCREEN : GA_SCREEN_32;
+    g_screen_size = on ? GA24_SCREEN_SIZE : 0u - GA_SCREEN_32;
+    g_low_top = on ? GA24_TOP : 0x01000000u;
+    if (g_code_map) /* whatever was translated is gone with the memory */
+        mem_code_range(0, 0xFFFFFFFFu);
+    return true;
+}
+
 void mem_discard(gaddr addr, uint32_t len)
 {
     if (g_code_map && len)
         mem_code_range(addr, len);
+    if (g_mem_24bit) { /* within the one space, which wraps */
+        if (len >= SPACE_24) {
+            map_space();
+            return;
+        }
+        gaddr a = addr & (SPACE_24 - 1);
+        uint32_t first = (uint32_t)(SPACE_24 - a) < len ? (uint32_t)(SPACE_24 - a) : len;
+        memset(g_mem + a, 0, first);
+        memset(g_mem, 0, len - first);
+        return;
+    }
     /* Only whole pages can go back to the host; zero the ragged edges. */
     const uintptr_t page = 16384;
     uintptr_t start = (uintptr_t)(g_mem + addr);

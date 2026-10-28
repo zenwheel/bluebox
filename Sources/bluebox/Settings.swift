@@ -28,6 +28,8 @@ let powerPCSetting = 750
 struct AppSettings: Codable {
     var depth: Int?
     var cpu: Int?
+    var fpu: Int? /* 0 (none), 68881, 68882 or 68040; unset: the processor's own */
+    var addressing: Int? /* 24 or 32; unset: 24 for a program whose SIZE resource doesn't say 32-bit clean */
     var scale: Double? /* host points per Mac pixel */
     var appearance: String? /* bw, native, or a theme's name */
     var highlight: String? /* host (the host's selection colour) or #RRGGBB */
@@ -40,7 +42,7 @@ struct AppSettings: Codable {
     var jit: Bool? /* translate the program's code to host code (--jit) */
     var internet: InternetSettings? /* Internet Config's preferences */
     var isEmpty: Bool {
-        depth == nil && cpu == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
+        depth == nil && cpu == nil && fpu == nil && addressing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
             && modemPort == nil && printerPort == nil && printFolder == nil && appleShare == nil && display == nil
             && jit == nil
             && (internet?.isEmpty ?? true)
@@ -48,6 +50,8 @@ struct AppSettings: Codable {
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), "
             + "cpu \(cpu.map { $0 == powerPCSetting ? "ppc" : String($0) } ?? "default (ppc if fat, else 68040)"), "
+            + "fpu \(fpu.map { $0 == 0 ? "none" : String($0) } ?? "default (the processor's own)"), "
+            + "addressing \(addressing.map(String.init) ?? "default (24 unless the program is 32-bit clean)"), "
             + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
             + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)"), "
             + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
@@ -62,7 +66,8 @@ struct AppSettings: Codable {
     /// These settings, with any left unset taken from `fallback`.
     func over(_ fallback: AppSettings?) -> AppSettings {
         guard let f = fallback else { return self }
-        return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, scale: scale ?? f.scale,
+        return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, fpu: fpu ?? f.fpu,
+                           addressing: addressing ?? f.addressing, scale: scale ?? f.scale,
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
                            appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
@@ -277,10 +282,26 @@ func setCommand(_ args: [String]) {
                 s.cpu = nil
             } else if value == "ppc" || value == "powerpc" {
                 s.cpu = powerPCSetting /* a fat application runs its PowerPC code */
-            } else if let m = Int(value), [68020, 68040].contains(m) {
+            } else if let m = Int(value), [68000, 68020, 68030, 68040].contains(m) {
                 s.cpu = m
             } else {
-                fail("cpu expects 68020, 68040, ppc or default")
+                fail("cpu expects 68000, 68020, 68030, 68040, ppc or default")
+            }
+        case "fpu":
+            if value == "default" {
+                s.fpu = nil
+            } else if let f = parseFPU(value) {
+                s.fpu = f
+            } else {
+                fail("fpu expects none, 68881, 68882, 68040 or default")
+            }
+        case "addressing":
+            if value == "default" {
+                s.addressing = nil
+            } else if let b = Int(value), [24, 32].contains(b) {
+                s.addressing = b
+            } else {
+                fail("addressing expects 24, 32 or default")
             }
         case "scale":
             if value == "default" {
@@ -390,4 +411,14 @@ func validSerialSpec(_ s: String) -> Bool {
         return !rest[..<c].isEmpty && num(rest[rest.index(after: c)...])
     }
     return false
+}
+
+/// An FPU by its setting's name: none (0), 68881, 68882 or 68040 (the 68040's own).
+func parseFPU(_ value: String) -> Int? {
+    switch value {
+    case "none", "0": return 0
+    case "68881", "68882", "68040": return Int(value)
+    case "040": return 68040
+    default: return nil
+    }
 }

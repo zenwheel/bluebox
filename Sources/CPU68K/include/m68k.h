@@ -26,8 +26,9 @@ struct cpu68k {
     uint32_t usp, isp;   /* inactive stack pointers */
     uint32_t vbr, sfc, dfc, cacr, caar;
     uint32_t addr_mask;  /* 0xFFFFFFFF (32-bit mode) or 0x00FFFFFF */
-    int model;           /* 68020 (default), 68040, or 68000 (for test vectors) */
-    /* 68881 floating point, kept as doubles (53-bit precision). */
+    int model;           /* 68000, 68020 (the default), 68030 or 68040 */
+    int fpu;             /* 0 (none), 68881, 68882 or 68040 (its own) */
+    /* Floating point, kept as doubles (53-bit precision). */
     double fp[8];
     uint32_t fpcr, fpsr, fpiar;
 

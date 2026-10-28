@@ -1,0 +1,14 @@
+# M22's processor and addressing calls (osutil.c): what the 68k Macs of
+# the 24-bit days had beyond Mac OS 9's.  Same schema as Defs/multiversal/defs.
+
+# Translate24To32 ($A091): a 24-bit address in D0, its 32-bit equivalent
+# back in D0.
+- function:
+    name: Translate24To32
+    return: uint32_t
+    returnreg: D0
+    args:
+      - name: addr24
+        type: uint32_t
+        register: D0
+    trap: 0xA091
