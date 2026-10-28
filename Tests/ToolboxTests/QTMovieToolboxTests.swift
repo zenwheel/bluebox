@@ -250,5 +250,50 @@ extension BlueBox {
             tb_DisposeCallBack(atRate)
             tb_DisposeTimeBase(tb)
         }
+    
+        /// The movie controller's QuickTime 3 and 4 calls and actions:
+        /// stepping, the selection, trimming, chapters from a text track.
+        @Test func controllerNewerCalls() {
+            qtMachine()
+            let movie = UInt32(bitPattern: tb_NewMovie(1))
+            let M = Int32(bitPattern: movie)
+            let (track, _) = buildMovie(movie)
+            // chapters: a text track the video refers to
+            let ct = tb_NewMovieTrack(M, 0, 0, 0)
+            let cm = tb_NewTrackMedia(ct, Int32(bitPattern: fourCC("text")), 600, 0, 0)
+            let mh = UInt32(bitPattern: tb_GetMediaHandler(cm))
+            for name in ["Start", "Middle"] {
+                let p = tb_NewPtr(16, false, true)
+                gput(p, Array(name.utf8), UInt32(name.utf8.count))
+                #expect(qtCall("TextMediaAddTextSample", [mh, p, UInt32(name.utf8.count), 0, 12, 0, 0, 0, 0, 0, 0, 0,
+                                                          0, 0, 0, 600, 0]) == 0)
+            }
+            #expect(tb_InsertMediaIntoTrack(ct, 0, 0, 1200, 0x10000) == 0)
+            #expect(tb_AddTrackReference(track, ct, Int32(bitPattern: fourCC("chap")), 0) == 0)
+            let rect = tb_NewPtr(8, false, true)
+            wr16(rect + 4, 40); wr16(rect + 6, 40)
+            let mc = UInt32(bitPattern: Int32(bitPattern: tb_NewMovieController(movie, rect, 0)))
+            #expect(mc != 0)
+            // the second chapter: "Middle" at 600
+            let info = tb_NewPtr(264, false, true)
+            wr32(info, 2)
+            #expect(qtCall("MCDoAction", [mc, 80, info]) == 0)
+            #expect(rd32(info + 4) == 600 && pstring(at: info + 8) == "Middle")
+            // stepping goes to the next frame
+            #expect(qtCall("MCDoAction", [mc, 18, 1]) == 0)
+            #expect(tb_GetMovieTime(M, 0) == 600)
+            // editing: the selection, and trimmed to it
+            #expect(qtCall("MCEnableEditing", [mc, 1]) == 0)
+            tb_SetMovieSelection(M, 600, 600)
+            let flags = tb_NewPtr(4, false, true)
+            #expect(qtCall("MCGetControllerInfo", [mc, flags]) == 0)
+            #expect(rd32(flags) & (1 << 9) != 0 && rd32(flags) & 4 != 0) // editing, copy available
+            #expect(qtCall("MCTrimMovieSegment", [mc]) == 0)
+            #expect(tb_GetMovieDuration(M) == 600)
+            let proc = tb_NewPtr(8, false, true)
+            #expect(qtCall("MCGetDoActionsProc", [mc, proc, proc + 4]) == 0 && rd32(proc) != 0 && rd32(proc + 4) == mc)
+            tb_DisposeMovieController(mc)
+            tb_DisposeMovie(movie)
+        }
     }
 }

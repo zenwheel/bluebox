@@ -3238,6 +3238,101 @@ void tb_DisposeMatte(int32_t theMatte)
         qt_dispose_pixmap((gaddr)theMatte);
 }
 
+/* ---- Chapters ---- */
+
+static qtm_track *chapter_track(qtm_movie *mv)
+{
+    for (int i = 0; i < mv->ntracks; i++)
+        for (int r = 0; r < mv->tracks[i]->ntrefs; r++)
+            if (mv->tracks[i]->trefs[r].type == fourcc("chap") && mv->tracks[i]->trefs[r].n) {
+                qtm_track *t = qtm_track_by_id(mv, mv->tracks[i]->trefs[r].ids[0]);
+                if (t && t->media && t->media->type == fourcc("text"))
+                    return t;
+            }
+    return NULL;
+}
+
+/* A chapter: its sample's text (as a Pascal string) and movie time. */
+static bool chapter(qtm_movie *mv, qtm_track *t, uint32_t n, uint8_t name[256], int64_t *when)
+{
+    qtm_media *md = t->media;
+    uint64_t off, bytes;
+    uint32_t desc;
+    if (!qtm_sample_info(md, n, &off, &bytes, &desc, NULL, NULL))
+        return false;
+    int64_t st;
+    qtm_sample_time(md, n, &st, NULL);
+    int16_t di = qtm_desc_dref(md, desc);
+    if (di < 1 || di > md->ndrefs)
+        return false;
+    const qtm_dref *d = &md->drefs[di - 1];
+    qt_src src;
+    uint8_t b[258] = { 0 };
+    uint32_t want = bytes < sizeof b ? (uint32_t)bytes : (uint32_t)sizeof b;
+    if (!qt_src_open(d->type, d->flags, d->data, d->len, qt_movie_path(mv), false, &src))
+        return false;
+    bool ok = want >= 2 && qt_src_read(&src, off, b, want);
+    qt_src_close(&src);
+    if (!ok)
+        return false;
+    uint32_t tl = (uint32_t)(b[0] << 8 | b[1]);
+    if (tl > want - 2)
+        tl = want - 2;
+    if (tl > 255)
+        tl = 255;
+    name[0] = (uint8_t)tl;
+    memcpy(name + 1, b + 2, tl);
+    /* the media time in the movie, through the first edit that shows it */
+    *when = -1;
+    int64_t edge = 0;
+    for (int e = 0; e < t->nedits && *when < 0; e++) {
+        const qtm_edit *x = &t->edits[e];
+        int64_t mlen = x->duration * md->scale / mv->scale;
+        if (x->media_time >= 0 && st >= x->media_time && st < x->media_time + mlen)
+            *when = edge + (st - x->media_time) * mv->scale / md->scale;
+        edge += x->duration;
+    }
+    return *when >= 0;
+}
+
+bool qt_ind_chapter(qtm_movie *mv, int32_t index, gaddr time_out, gaddr name_out)
+{
+    qtm_track *t = chapter_track(mv);
+    uint8_t name[256];
+    int64_t when;
+    if (!t || index < 1 || !chapter(mv, t, (uint32_t)index, name, &when))
+        return false;
+    if (time_out)
+        wr32(time_out, (uint32_t)when);
+    if (name_out)
+        gput(name_out, name, 1u + name[0]);
+    return true;
+}
+
+bool qt_chapter_time(qtm_movie *mv, gaddr name, gaddr record)
+{
+    qtm_track *t = chapter_track(mv);
+    if (!t || !name)
+        return false;
+    uint8_t want[256];
+    gget(want, name, 1u + rd8(name));
+    uint32_t count = qtm_sample_count(t->media);
+    for (uint32_t n = 1; n <= count; n++) {
+        uint8_t got[256];
+        int64_t when;
+        if (chapter(mv, t, n, got, &when) && got[0] == want[0] && !memcmp(got + 1, want + 1, got[0])) {
+            if (record) {
+                wr32(record, (uint32_t)((uint64_t)when >> 32));
+                wr32(record + 4, (uint32_t)when);
+                wr32(record + 8, (uint32_t)mv->scale);
+                wr32(record + 12, 0);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 /* ---- A movie going away ---- */
 
 void qt_movie_forget(qtm_movie *mv)

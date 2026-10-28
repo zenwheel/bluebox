@@ -41,6 +41,10 @@ bool qt_any_movie_playing(void);
  * tracks; whether a media type has a characteristic; the program's
  * drawing-complete routine. */
 void qt_movie_forget(qtm_movie *mv);
+/* Chapters: the text track a track refers to as its chapters ('chap'):
+ * the index'th chapter's time (movie time) and name, and a name's time. */
+bool qt_ind_chapter(qtm_movie *mv, int32_t index, gaddr time_out, gaddr name_out);
+bool qt_chapter_time(qtm_movie *mv, gaddr name, gaddr time_record);
 void qt_movies_reset(void);
 int16_t qt_insert_movie_segment(qtm_movie *src, qtm_movie *dst, int64_t src_in, int64_t len, int64_t dst_in);
 bool qt_media_has_characteristic(uint32_t media_type, uint32_t characteristic);

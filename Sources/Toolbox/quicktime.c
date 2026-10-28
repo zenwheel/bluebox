@@ -2576,7 +2576,9 @@ enum {
     mcActionKey = 6, mcActionPlay = 8, mcActionGoToTime = 12, mcActionSetVolume = 14, mcActionGetVolume = 15,
     mcActionStep = 18, mcActionSetLooping = 21, mcActionGetLooping = 22, mcActionSetFlags = 38,
     mcActionGetFlags = 39, mcActionGetPlayRate = 42, mcActionSuspend = 46, mcActionResume = 47,
-    mcInfoIsPlaying = 1 << 6, mcInfoIsLooping = 1 << 7, mcInfoHasSound = 1 << 2,
+    mcInfoUndoAvailable = 1, mcInfoCutAvailable = 2, mcInfoCopyAvailable = 4, mcInfoPasteAvailable = 8,
+    mcInfoClearAvailable = 16, mcInfoHasSound = 1 << 5, mcInfoIsPlaying = 1 << 6, mcInfoIsLooping = 1 << 7,
+    mcInfoIsInPalindrome = 1 << 8, mcInfoEditingEnabled = 1 << 9,
     BAR = 16,
 };
 
@@ -2595,10 +2597,18 @@ typedef struct {
     int drawn_x;       /* where the slider's thumb was drawn (-1: none) */
     int drawn_playing; /* and the button, 1 pause or 0 play (-1: not drawn) */
     bool editing;      /* MCEnableEditing */
+    /* what the actions set (QuickTime 2 to 4) */
+    bool palindrome, keys_enabled, play_selection, use_badge, every_frame, drag_enabled, cursor_enabled;
+    bool ctl_keys_enabled;
+    int16_t volume_step;
+    qrect grow_box;
+    gaddr clip;        /* MCSetClip's for the controller */
+    int32_t duration;  /* MCSetDuration's, with no movie */
 } controller;
 
 static controller controllers[MAX_CONTROLLERS];
 static uint32_t mc_component;
+static gaddr mc_do_actions_stub(void);
 
 static controller *controller_of(uint32_t ci)
 {
@@ -2909,9 +2919,123 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
             case mcActionSetFlags: c->flags = (int32_t)p; break;
             case mcActionGetFlags: if (p) wr32(p, (uint32_t)c->flags); break;
             case mcActionGetPlayRate: if (p) wr32(p, (uint32_t)(m && m->playing ? m->rate : 0)); break;
-            case mcActionStep:
+            case mcActionStep: /* frames: to the next sample boundaries */
+                if (m) {
+                    int16_t steps = (int16_t)(int32_t)p;
+                    int32_t t = (int32_t)(movie_ms(m) * m->mv->scale / 1000);
+                    gaddr it = tb_NewPtr(8, false, true);
+                    for (int i = 0; i < (steps < 0 ? -steps : steps); i++) { /* sample starts, before or after */
+                        tb_GetMovieNextInterestingTime((int32_t)m->handle, 1, 0, 0, t, steps < 0 ? -0x10000 : 0x10000,
+                                                       it, it + 4);
+                        if ((int32_t)rd32(it) < 0)
+                            break;
+                        t = (int32_t)rd32(it);
+                    }
+                    tb_DisposePtr(it);
+                    if (m->playing)
+                        start(m, 0);
+                    seek(m, (int64_t)(t < 0 ? 0 : t) * 1000 / m->mv->scale);
+                    draw_frame(m, true);
+                    draw_bar(c);
+                }
+                break;
+            case 23: /* mcActionSetLoopIsPalindrome */
+                c->palindrome = ((uint32_t)p & 0xFF) || ((uint32_t)p >> 8 & 0xFF);
+                if (m) {
+                    int32_t f = tb_GetTimeBaseFlags((int32_t)m->timebase);
+                    tb_SetTimeBaseFlags((int32_t)m->timebase, c->palindrome ? f | 2 : f & ~2);
+                }
+                break;
+            case 24: if (p) wr8(p, c->palindrome); break;          /* mcActionGetLoopIsPalindrome */
+            case 25: if (p) c->grow_box = qrect_get(p); break;      /* mcActionSetGrowBoxBounds */
+            case 26: case 50: case 61: case 77: draw_bar(c); break; /* size changed, edited, time table, changed */
+            case 29: /* mcActionSetSelectionBegin(TimeRecord) */
+                if (m && p)
+                    tb_SetMovieSelection((int32_t)m->handle,
+                                         (int32_t)(time_in_scale(p, m->mv->scale) * 1), m->mv->sel_duration);
+                draw_bar(c);
+                break;
+            case 30: /* mcActionSetSelectionDuration(TimeRecord) */
+                if (m && p)
+                    tb_SetMovieSelection((int32_t)m->handle, m->mv->sel_time, (int32_t)time_in_scale(p, m->mv->scale));
+                draw_bar(c);
+                break;
+            case 53: case 54: /* mcActionGetSelectionBegin / Duration (TimeRecord) */
+                if (m && p) {
+                    set_time_value(p, action == 53 ? m->mv->sel_time : m->mv->sel_duration);
+                    wr32(p + 8, (uint32_t)m->mv->scale);
+                    wr32(p + 12, m->timebase);
+                }
+                break;
+            case 32: c->keys_enabled = ((uint32_t)p & 0xFF) || ((uint32_t)p >> 8 & 0xFF); break;
+            case 33: if (p) wr8(p, c->keys_enabled); break;
+            case 34: /* mcActionSetPlaySelection: the active segment is the selection */
+                c->play_selection = ((uint32_t)p & 0xFF) || ((uint32_t)p >> 8 & 0xFF);
                 if (m)
-                    seek(m, movie_ms(m) + (int16_t)(int32_t)p * 100);
+                    tb_SetMovieActiveSegment((int32_t)m->handle, c->play_selection && m->mv->sel_duration > 0
+                                                                     ? m->mv->sel_time : -1, m->mv->sel_duration);
+                break;
+            case 35: if (p) wr8(p, c->play_selection); break;
+            case 36: c->use_badge = ((uint32_t)p & 0xFF) || ((uint32_t)p >> 8 & 0xFF); break;
+            case 37: if (p) wr8(p, c->use_badge); break;
+            case 40: c->every_frame = ((uint32_t)p & 0xFF) || ((uint32_t)p >> 8 & 0xFF); break;
+            case 41: if (p) wr8(p, c->every_frame); break;
+            case 43: case 44: case 45: case 60: case 65: break;    /* balloon, badge click, movie click, custom button, cursor */
+            case mcActionSuspend: case mcActionResume: c->active = action == mcActionResume; break;
+            case 48: c->ctl_keys_enabled = ((uint32_t)p & 0xFF) || ((uint32_t)p >> 8 & 0xFF); break;
+            case 49: if (p) qrect_put(p, bar_rect(c)); break;      /* mcActionGetTimeSliderRect */
+            case 51: if (p) wr8(p, c->drag_enabled); break;
+            case 52: c->drag_enabled = ((uint32_t)p & 0xFF) || ((uint32_t)p >> 8 & 0xFF); break;
+            case 55: /* mcActionPrerollAndPlay */
+            case 83: /* mcActionAutoPlay */
+                if (m) {
+                    tb_PrerollMovie(m->handle, 0, (int32_t)p);
+                    mc_play(c, (int32_t)p ? (int32_t)p : 0x10000);
+                }
+                break;
+            case 56: if (p) wr8(p, c->cursor_enabled); break;
+            case 57: c->cursor_enabled = ((uint32_t)p & 0xFF) || ((uint32_t)p >> 8 & 0xFF); break;
+            case 58: if (m) tb_SetMovieColorTable((int32_t)m->handle, (int32_t)p); break;
+            case 59: /* mcActionLinkToURL: a handle with the URL, to the program the user chose for it */
+                if (p && rd32(p)) {
+                    int32_t n = tb_GetHandleSize(p);
+                    ic_launch_url(rd32(p), n && rd8(rd32(p) + (uint32_t)n - 1) == 0 ? n - 1 : n, 0, 0);
+                }
+                break;
+            case 67: if (p) wr8(p, 0); break;                       /* mcActionClickAndHoldPoint: none */
+            case 68: case 69: break;                                /* message and status strings: no status line */
+            case 71: /* mcActionGetChapterTime(QTGetChapterTimeRecord: name, TimeRecord) */
+                if (!p || !m || !qt_chapter_time(m->mv, p, p + 256))
+                    result = paramErr;
+                break;
+            case 80: /* mcActionGetIndChapter(QTChapterInfoRec: index, time, name) */
+                if (!p || !m || !qt_ind_chapter(m->mv, (int32_t)rd32(p), p + 4, p + 8))
+                    result = paramErr;
+                break;
+            case 82: c->volume_step = (int16_t)(int32_t)p; break;  /* mcActionSetVolumeStep */
+            case 84: if (m) mc_play(c, 0); break;                  /* mcActionPauseToBuffer: (never short) */
+            case 90: /* mcActionGetMovieName(Str255 handle): the movie's name from its user data */
+                if (p && m) {
+                    gaddr text = tb_NewHandle(0, false, false);
+                    bool got = tb_GetUserDataText((int32_t)m->mv->udata, (int32_t)text, (int32_t)0xA96E616D, 1, 0) == noErr;
+                    int32_t n = got ? tb_GetHandleSize(text) : 0;
+                    if (n > 255)
+                        n = 255;
+                    tb_SetHandleSize(p, n + 1);
+                    if (rd32(p)) {
+                        wr8(rd32(p), (uint8_t)n);
+                        if (n)
+                            gmemcpy(rd32(p) + 1, rd32(text), (uint32_t)n);
+                    }
+                    tb_DisposeHandle(text);
+                }
+                break;
+            case 91: if (p) wr32(p, 0); break;                     /* mcActionGetMovieID */
+            case 92: if (p) wr8(p, m && m->active); break;         /* mcActionGetMovieActive */
+            case 62: case 66: case 85: break;                      /* internal ones and app messages */
+            case 63: case 64: case 72: case 73: case 74: case 75: case 76: case 78: case 79: case 81: case 89:
+            case 70: /* wired actions, expressions and scripts: none in our movies' playing */
+                result = 0;
                 break;
             default: break;
             }
@@ -3024,12 +3148,123 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
                 f |= mcInfoIsPlaying;
             if (m && m->looping)
                 f |= mcInfoIsLooping;
+            if (c->palindrome)
+                f |= mcInfoIsInPalindrome;
+            if (c->editing) {
+                f |= mcInfoEditingEnabled;
+                if (undo_moov && m && undo_movie == m->handle)
+                    f |= mcInfoUndoAvailable;
+                if (m && m->mv->sel_duration > 0)
+                    f |= mcInfoCutAvailable | mcInfoCopyAvailable | mcInfoClearAvailable;
+                if (scrap_moov)
+                    f |= mcInfoPasteAvailable;
+            }
             for (int k = 0; m && k < m->mv->ntracks; k++)
                 if (m->mv->tracks[k]->media && m->mv->tracks[k]->media->type == fourcc("soun"))
                     f |= mcInfoHasSound;
             wr32(rd32(a), (uint32_t)f);
             break;
         }
+        case 21: c->duration = (int32_t)rd32(a); break;      /* MCSetDuration */
+        case 23: {                                        /* MCNewAttachedController(m, w, where) */
+            c->movie = rd32(a + 8);
+            c->port = rd32(a + 4) ? rd32(a + 4) : c->port;
+            c->attached = true;
+            place(c, (qrect){ (int16_t)pt_v(rd32(a)), (int16_t)pt_h(rd32(a)), 0, 0 });
+            break;
+        }
+        case 40: {                                        /* MCSetClip(theClip, movieClip) */
+            if (c->clip)
+                tb_DisposeRgn(c->clip);
+            c->clip = 0;
+            if (rd32(a + 4)) {
+                c->clip = tb_NewRgn();
+                tb_CopyRgn(rd32(a + 4), c->clip);
+            }
+            if (m)
+                tb_SetMovieDisplayClipRgn((int32_t)m->handle, (int32_t)rd32(a));
+            break;
+        }
+        case 41: {                                        /* MCGetClip(*theClip, *movieClip) */
+            if (rd32(a + 4)) {
+                gaddr r = 0;
+                if (c->clip) {
+                    r = tb_NewRgn();
+                    tb_CopyRgn(c->clip, r);
+                }
+                wr32(rd32(a + 4), r);
+            }
+            if (rd32(a))
+                wr32(rd32(a), m ? (uint32_t)tb_GetMovieDisplayClipRgn((int32_t)m->handle) : 0);
+            break;
+        }
+        case 42: {                                        /* MCDrawBadge(movieRgn, *badgeRgn): a little film frame */
+            qrect b = m ? m->box : c->bounds;
+            qrect r = { (int16_t)(b.bottom - 14), (int16_t)(b.left + 2), (int16_t)(b.bottom - 2), (int16_t)(b.left + 16) };
+            gaddr rp = tb_NewPtr(8, false, false), saved = qd_port();
+            qrect_put(rp, r);
+            tb_SetPort(c->port);
+            tb_EraseRect(rp);
+            tb_FrameRect(rp);
+            tb_SetPort(saved);
+            if (rd32(a)) {
+                gaddr rgn = tb_NewRgn();
+                tb_RectRgn(rgn, rp);
+                wr32(rd32(a), rgn);
+            }
+            tb_DisposePtr(rp);
+            break;
+        }
+        case 47: mc_draw(c); break;                       /* MCInvalidate(w, rgn) */
+        case 48: result = 0; break;                       /* MCAdjustCursor(w, where, mods): the arrow stays */
+        case 49: {                                        /* MCGetInterfaceElement(which, element) */
+            int32_t which = (int32_t)rd32(a + 4);
+            gaddr el = rd32(a);
+            if (which == 257 && el)                       /* kMCIEIsFlatAppearance */
+                wr8(el, 0);
+            else if (which == 256 && el)                  /* kMCIEColorTable */
+                wr32(el, 0);
+            else
+                result = paramErr;
+            break;
+        }
+        case 50:                                          /* MCGetDoActionsProc(*proc, *refcon) */
+            if (rd32(a + 4))
+                wr32(rd32(a + 4), mc_do_actions_stub());
+            if (rd32(a))
+                wr32(rd32(a), c->ci);
+            break;
+        case 51: {                                        /* MCAddMovieSegment(src, scaled) */
+            int32_t src = (int32_t)rd32(a + 2);
+            if (!c->editing || !m || !src) {
+                result = paramErr;
+                break;
+            }
+            remember(m);
+            if ((rd16(a) >> 8) && m->mv->sel_duration > 0) { /* scaled into the selection */
+                int32_t at = m->mv->sel_time, sd = m->mv->sel_duration;
+                insert_segment(movie_of((gaddr)src), m, 0, movie_of((gaddr)src)->mv->duration, at);
+                int32_t inserted = (int32_t)(movie_of((gaddr)src)->mv->duration * m->mv->scale / movie_of((gaddr)src)->mv->scale);
+                tb_ScaleMovieSegment((int32_t)m->handle, at, inserted, sd);
+            } else {
+                tb_AddMovieSelection((int32_t)m->handle, src);
+            }
+            draw_frame(m, true);
+            draw_bar(c);
+            break;
+        }
+        case 52:                                          /* MCTrimMovieSegment: all but the selection goes */
+            if (!c->editing || !m || m->mv->sel_duration <= 0) {
+                result = paramErr;
+                break;
+            }
+            remember(m);
+            delete_segment(m, m->mv->sel_time + m->mv->sel_duration, m->mv->duration);
+            delete_segment(m, 0, m->mv->sel_time);
+            m->mv->sel_time = 0;
+            draw_frame(m, true);
+            draw_bar(c);
+            break;
         case 46: {                                        /* MCPtInController(pt, Boolean*) */
             uint32_t pt = rd32(a + 4);
             int h = pt_h(pt), v = pt_v(pt);
@@ -3042,6 +3277,40 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
     }
     wr32(cpu->a[7], (uint32_t)result);
     cpu_push32(cpu, ret);
+}
+
+/* The controller's own action procedure (MCGetDoActionsProc): pascal
+ * OSErr (long refcon, short action, void *params), the refcon the
+ * controller; its result is MCDoAction's. */
+static void mc_do_actions(cpu68k *cpu, uint16_t tw)
+{
+    (void)tw;
+    uint32_t ret = cpu_pop32(cpu);
+    gaddr params = cpu_pop32(cpu);
+    int16_t action = (int16_t)cpu_pop16(cpu);
+    uint32_t ci = cpu_pop32(cpu);
+    gaddr p = tb_NewPtr(12, false, true);
+    /* MCDoAction through the controller's entry: ComponentParameters
+     * (flags, size, what), the action's params, then the action, then
+     * the instance */
+    wr8(p + 1, 6);
+    wr16(p + 2, 9);
+    wr32(p + 4, params);
+    wr16(p + 8, (uint16_t)action);
+    wr32(p + 10, ci);
+    int32_t r = components_call(ci, p);
+    tb_DisposePtr(p);
+    wr16(cpu->a[7], (uint16_t)r);
+    cpu_push32(cpu, ret);
+}
+
+static gaddr do_actions_stub;
+
+static gaddr mc_do_actions_stub(void)
+{
+    if (!do_actions_stub)
+        do_actions_stub = native_register(mc_do_actions, "MCDoActionsProc", 0);
+    return do_actions_stub;
 }
 
 gaddr tb_NewMovieController(gaddr movie_h, gaddr rect, int32_t flags)
@@ -3068,6 +3337,9 @@ gaddr tb_NewMovieController(gaddr movie_h, gaddr rect, int32_t flags)
     c->attached = true;
     c->active = true;
     c->drawn_x = c->drawn_playing = -1;
+    c->keys_enabled = c->ctl_keys_enabled = c->cursor_enabled = true;
+    c->volume_step = 64;
+    c->use_badge = (flags & 4) != 0; /* mcWithBadge */
     movie *m = movie_of(movie_h);
     c->port = m ? m->port : qd_port();
     place(c, rect ? qrect_get(rect) : (qrect){ 0, 0, 0, 0 });
@@ -3092,6 +3364,7 @@ void quicktime_reset(void)
     memset(timebases, 0, sizeof timebases);
     memset(controllers, 0, sizeof controllers);
     mc_component = 0;
+    do_actions_stub = 0;
     movies_error = sticky_error = 0;
     qt_movies_reset();
     qt_callbacks_reset();
