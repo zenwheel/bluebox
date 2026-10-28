@@ -17,6 +17,8 @@ void r3d_begin(r3d_frame *f, const uint32_t *pixels, uint32_t clear_argb, float 
 void r3d_clear(r3d_frame *f, int x0, int y0, int x1, int y1, bool color, uint32_t argb, bool depth, float z) {}
 void r3d_draw(r3d_frame *f, const r3d_state *s, int primitive, const r3d_vertex *v, int count) {}
 void r3d_end(r3d_frame *f, uint32_t *pixels) {}
+void r3d_read(r3d_frame *f, uint32_t *pixels, float *depth) {}
+void r3d_write(r3d_frame *f, const uint32_t *pixels, const float *depth) {}
 int r3d_texture_new(int width, int height, const uint32_t *pixels, bool mipmap) { return 0; }
 void r3d_texture_free(int texture) {}
 #endif

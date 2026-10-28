@@ -68,6 +68,13 @@ void r3d_draw(r3d_frame *f, const r3d_state *s, int primitive, const r3d_vertex 
 /* Finish the frame and read it into pixels (as r3d_begin's). */
 void r3d_end(r3d_frame *f, uint32_t *pixels);
 
+/* Mid-frame: what has been drawn so far, its colours into pixels and its
+ * depths (0 to 1) into depth (either may be NULL), the frame going on. */
+void r3d_read(r3d_frame *f, uint32_t *pixels, float *depth);
+/* Mid-frame: the colours, or the depths, replaced (either may be NULL),
+ * for what is drawn after. */
+void r3d_write(r3d_frame *f, const uint32_t *pixels, const float *depth);
+
 /* A texture from width * height 0xAARRGGBB pixels, top row first; 0 if
  * it can't be made. */
 int r3d_texture_new(int width, int height, const uint32_t *pixels, bool mipmap);
