@@ -74,6 +74,9 @@ int16_t tb_AddAppleMenuItem(gaddr name, int16_t key, int16_t a, gaddr icon_suite
 
 int finder_apple_menu_items(void) { return apple_items; }
 
+/* MenuDispatch -5: taken (see finder.yaml). */
+int16_t tb_MenuDispatchFB(gaddr name, int16_t script, int16_t flag) { return noErr; }
+
 /* ---- Command-period ----
  * DialogDispatch 7 and 8: whether an event is Escape or Command-period,
  * and whether one waits in the event queue (taken, with the mouse and

@@ -152,3 +152,21 @@
     dispatcher: DialogDispatch
     selector: 0x0008
     ppc: false
+
+# MenuDispatch -5 ($08FB), which the Finder calls as it opens an
+# application, with the item's name, its script and 1: by its use about
+# the Application menu's entry for the program starting.  A program the
+# Finder opens is its own run here, with its own menu bar, so it is taken.
+- function:
+    name: MenuDispatchFB
+    return: OSErr
+    args:
+      - name: name
+        type: StringPtr
+      - name: script
+        type: INTEGER
+      - name: flag
+        type: INTEGER
+    dispatcher: MenuDispatch
+    selector: 0x08FB
+    ppc: false

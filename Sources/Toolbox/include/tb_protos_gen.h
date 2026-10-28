@@ -1714,6 +1714,7 @@ void tb_MeasureJustified(gaddr text, int32_t length, int32_t slop, gaddr charLoc
 void tb_MeasureText(int16_t n, gaddr text, gaddr chars);
 void tb_MediaTimeToSampleNum(int32_t theMedia, int32_t time, gaddr sampleNum, gaddr sampleTime, gaddr sampleDuration);
 int32_t tb_MenuChoice(void);
+int16_t tb_MenuDispatchFB(gaddr name, int16_t script, int16_t flag);
 uint32_t tb_MenuEvent(gaddr event);
 int32_t tb_MenuKey(int16_t thec);
 int32_t tb_MenuSelect(uint32_t p);
@@ -2772,6 +2773,10 @@ void tb_ShowHide(gaddr w, int8_t flag);
 void tb_ShowMoviePoster(int32_t theMovie);
 void tb_ShowPen(void);
 void tb_ShowWindow(gaddr w);
+void tb_ShutDwnInstall(gaddr shutdown_proc, int16_t flags);
+void tb_ShutDwnPower(void);
+void tb_ShutDwnRemove(gaddr shutdown_proc);
+void tb_ShutDwnStart(void);
 void tb_SizeControl(gaddr c, int16_t width, int16_t height);
 int16_t tb_SizeDialogItem(gaddr dialog, int16_t item, int16_t width, int16_t height);
 void tb_SizeWindow(gaddr w, int16_t width, int16_t height, int8_t flag);

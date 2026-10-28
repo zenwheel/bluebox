@@ -6,6 +6,8 @@ import Toolbox
 
 /// Native routines for the Finder tests' callbacks: each pops its
 /// arguments (sizes in bytes) and leaves a long result.
+nonisolated(unsafe) var finderLaunched: [String] = []
+nonisolated(unsafe) var finderStages: [UInt32] = []
 nonisolated(unsafe) var finderLongBodies: [(sizes: [Int], body: ([UInt32]) -> UInt32)] = []
 let finderLongTrampoline: native_fn = { c, trapword in
     guard let c else { return }
@@ -474,6 +476,82 @@ extension BlueBox {
             #expect(tb_PBDTRemoveAPPL(d2, false) == -5018)
             #expect(tb_PBDTDelete(d2, false) == 0)
             #expect(tb_PBDTOpenInform(d2) == 0 && rd32(d2 + UInt32(DTPBRec_ioTagInfo_off)) == 1)
+        }
+
+        /// The Finder goes on after it launches a program, whatever the
+        /// flags: the program is its own run.
+        @Test func launchingFromTheFinderGoesOn() {
+            let folder = launchTestApp()
+            g_is_finder = true
+            defer { g_is_finder = false }
+            finderLaunched = []
+            machine_set_launch_handler({ path, _, _, _ in
+                finderLaunched.append(String(cString: path!))
+                return true
+            }, nil)
+            defer { machine_set_launch_handler(nil, nil) }
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            fm_spec_for_path(folder.appendingPathComponent("Test App").path, spec)
+            let pb = tb_NewPtr(Int32(LaunchParamBlockRec_SIZEOF), false, true)
+            wr16(pb + UInt32(LaunchParamBlockRec_launchBlockID_off), 0x4C43)
+            wr16(pb + UInt32(LaunchParamBlockRec_launchControlFlags_off), 0) // no launchContinue
+            wr32(pb + UInt32(LaunchParamBlockRec_launchAppSpec_off), spec)
+            #expect(tb_LaunchApplication(pb) == 0)
+            #expect(finderLaunched.count == 1 && !g_cpu!.pointee.halted)
+            #expect(tb_MenuDispatchFB(pname("Test App"), 0, 1) == 0)
+        }
+
+        /// WakeUpProcess ends this process's sleep; asleep, a headless
+        /// machine's clock moves on by the ticks asked for and no more.
+        @Test func sleepingAndWaking() {
+            launchTestApp()
+            let ev = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            tb_FlushEvents(-1, 0)
+            var before = g_cpu!.pointee.icount
+            _ = tb_WaitNextEvent(0, ev, 6, 0)
+            let slept = g_cpu!.pointee.icount - before
+            #expect(slept >= 6 * 166_000 && slept < 7 * 166_667 + 10_000)
+            let me = psn(0, 2)
+            #expect(tb_WakeUpProcess(me) == 0)
+            before = g_cpu!.pointee.icount
+            _ = tb_WaitNextEvent(0, ev, 60, 0)
+            #expect(g_cpu!.pointee.icount - before < 200_000) // a tick at most
+        }
+
+        /// Quit All Applications to the system process quits this one.
+        @Test func quitAllToTheSystemProcess() {
+            launchTestApp(sizeFlags: 0x0040) // takes high-level events
+            g_is_finder = true
+            defer { g_is_finder = false }
+            let evt = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            wr16(evt, 23)
+            wr32(evt + UInt32(EventRecord_message_off), fourCC("aevt"))
+            wr32(evt + UInt32(EventRecord_where_off), fourCC("quia"))
+            #expect(tb_PostHighLevelEvent(evt, psn(0, 1), 0, 0, 0, 0x8000) == 0) // receiverIDisPSN
+            let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            #expect(tb_GetNextEvent(0x0400, e) != 0 && rd16(e) == 23)
+            #expect(rd32(e + UInt32(EventRecord_message_off)) == fourCC("aevt"))
+            #expect(rd32(e + UInt32(EventRecord_where_off)) == fourCC("quit"))
+            // An event to the Finder's own serial number is its own.
+            wr32(evt + UInt32(EventRecord_where_off), fourCC("abcd"))
+            #expect(tb_PostHighLevelEvent(evt, psn(0, 0x1001), 0, 0, 0, 0x8000) == 0)
+            #expect(tb_GetNextEvent(0x0400, e) != 0 && rd32(e + UInt32(EventRecord_where_off)) == fourCC("abcd"))
+        }
+
+        /// The Shutdown Manager: procedures for each stage, then the run ends.
+        @Test func shutdownManager() {
+            launchTestApp()
+            guestStack()
+            finderStages = []
+            let proc = native_register({ c, _ in finderStages.append(c!.pointee.d.0 & 0xFFFF) }, "SDProc", 0)
+            let other = native_register({ _, _ in finderStages.append(99) }, "SDOther", 0)
+            tb_ShutDwnInstall(proc, 3 | 8)  // power off or restart, and drivers
+            tb_ShutDwnInstall(other, 3)
+            tb_ShutDwnRemove(other)
+            tb_ShutDwnStart()
+            #expect(finderStages == [8, 2])
+            #expect(g_cpu!.pointee.halted)
+            #expect(String(cString: machine_halt_reason()).contains("restart"))
         }
     }
 }

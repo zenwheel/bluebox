@@ -720,6 +720,8 @@ func runCommand(_ args: [String]) {
     // The whole screen in one window, as the setting says, or when the
     // program turns out to want it: then that becomes its setting.
     if interactive && !screenWindow && saved.display == "screen" { screenWindow = true }
+    // The Finder draws the desktop: the whole screen, unless its setting says otherwise.
+    if interactive && !screenWindow && machine_is_finder() && saved.display != "rootless" { screenWindow = true }
     let chosenFor = app
     MainActor.assumeIsolated {
         RootlessHost.switchesToScreen = saved.display != "rootless"

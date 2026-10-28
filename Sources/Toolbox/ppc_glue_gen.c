@@ -15560,6 +15560,33 @@ static void ppcglue_GetAppParms(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ShutDwnPower(ppc_cpu *c)
+{
+    tb_ShutDwnPower();
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShutDwnStart(ppc_cpu *c)
+{
+    tb_ShutDwnStart();
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShutDwnInstall(ppc_cpu *c)
+{
+    gaddr a_shutdown_proc = (gaddr)c->gpr[3];
+    int16_t a_flags = (int16_t)c->gpr[4];
+    tb_ShutDwnInstall(a_shutdown_proc, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShutDwnRemove(ppc_cpu *c)
+{
+    gaddr a_shutdown_proc = (gaddr)c->gpr[3];
+    tb_ShutDwnRemove(a_shutdown_proc);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndGetSysBeepState(ppc_cpu *c)
 {
     gaddr a_statep = (gaddr)c->gpr[3];
@@ -37143,45 +37170,6 @@ static void ppctrap_UnloadSeg(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_ShutDwnPower(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0x1);
-    ppc_trap((uint16_t)(0xA895));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShutDwnStart(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0x2);
-    ppc_trap((uint16_t)(0xA895));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShutDwnInstall(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, 0x3);
-    ppc_trap((uint16_t)(0xA895));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShutDwnRemove(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, 0x4);
-    ppc_trap((uint16_t)(0xA895));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_UnsignedFixedMulDiv(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -44381,10 +44369,10 @@ const ppc_export ppc_exports[] = {
     {"ShowMoviePoster", ppcglue_ShowMoviePoster},
     {"ShowPen", ppcglue_ShowPen},
     {"ShowWindow", ppcglue_ShowWindow},
-    {"ShutDwnInstall", ppctrap_ShutDwnInstall},
-    {"ShutDwnPower", ppctrap_ShutDwnPower},
-    {"ShutDwnRemove", ppctrap_ShutDwnRemove},
-    {"ShutDwnStart", ppctrap_ShutDwnStart},
+    {"ShutDwnInstall", ppcglue_ShutDwnInstall},
+    {"ShutDwnPower", ppcglue_ShutDwnPower},
+    {"ShutDwnRemove", ppcglue_ShutDwnRemove},
+    {"ShutDwnStart", ppcglue_ShutDwnStart},
     {"SizeControl", ppcglue_SizeControl},
     {"SizeDialogItem", ppcglue_SizeDialogItem},
     {"SizeWindow", ppcglue_SizeWindow},

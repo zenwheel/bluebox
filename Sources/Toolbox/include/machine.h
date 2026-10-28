@@ -17,6 +17,8 @@ bool machine_boot(bool census);
 bool machine_provides_export(const char *name, bool data);
 /* Load an application (AppleDouble data-fork path) and prepare to run it. */
 bool machine_launch(const char *app_path, char *err, size_t errlen);
+/* Whether the run launched is the Finder (file type FNDR). */
+bool machine_is_finder(void);
 /* Run a fat application's PowerPC code rather than its 68k code. */
 void machine_set_prefer_ppc(bool on);
 /* The JIT (off by default): translate the program's 68k and PowerPC code

@@ -167,7 +167,18 @@ int16_t tb_SameProcess(gaddr a, gaddr b, gaddr same_out)
 }
 
 int16_t tb_SetFrontProcess(gaddr psn) { return is_us(psn) || is_finder(psn) ? noErr : procNotFound; }
-int16_t tb_WakeUpProcess(gaddr psn) { return is_us(psn) || is_finder(psn) ? noErr : procNotFound; }
+void ev_wake_process(void);
+
+/* Woken, this process's sleep in WaitNextEvent ends; the Finder of
+ * another run is only a name here. */
+int16_t tb_WakeUpProcess(gaddr psn)
+{
+    if (is_us(psn)) {
+        ev_wake_process();
+        return noErr;
+    }
+    return is_finder(psn) ? noErr : procNotFound;
+}
 int16_t tb_GetProcessSerialNumberFromPortName(gaddr port_name, gaddr psn) { return procNotFound; }
 
 /* Our high-level event port, named as the Process Manager names them: the
@@ -263,7 +274,8 @@ int16_t tb_GetFrontProcess(gaddr psn, int32_t dummy)
 
 /* ---------------------------------------------------------------------- */
 /* LaunchApplication: the host starts the other application as its own run.
- * Without launchContinue the caller ends, as the Process Manager did. */
+ * Without launchContinue the caller ends, as the Process Manager did,
+ * unless the caller is the Finder, which goes on beside it. */
 
 int aem_launch_documents(gaddr params, char ***paths_out);
 static machine_launch_fn launch_fn;
@@ -303,6 +315,8 @@ int16_t tb_LaunchApplication(gaddr pb)
             return fnfErr;
         if (!process_launch(path, NULL, 0))
             return -600;
+        if (g_is_finder)
+            return noErr;
         rm_update_all();
         cpu_halt(g_cpu, "ExitToShell (launched %s)", path);
         return noErr;
@@ -321,7 +335,9 @@ int16_t tb_LaunchApplication(gaddr pb)
     if (!ok)
         return -600; /* procNotFound: nothing could be started */
     gmemset(pb + LaunchParamBlockRec_launchProcessSN_off, 0, 8);
-    if (!(flags & 0x4000)) { /* launchContinue */
+    /* The Finder keeps running whatever it asks: the program is its own
+     * run beside it. */
+    if (!(flags & 0x4000) && !g_is_finder) { /* launchContinue */
         rm_update_all();
         cpu_halt(g_cpu, "ExitToShell (launched %s)", path);
     }

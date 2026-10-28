@@ -18864,6 +18864,18 @@ static void glue_MenuChoice(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MenuDispatchFB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_flag = (int16_t)cpu_pop16(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int16_t r = tb_MenuDispatchFB(a_name, a_script, a_flag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MenuEvent(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -29217,6 +29229,41 @@ static void glue_ShowWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ShutDwnInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_flags = (int16_t)cpu_pop16(c);
+    gaddr a_shutdown_proc = (gaddr)cpu_pop32(c);
+    tb_ShutDwnInstall(a_shutdown_proc, a_flags);
+    cpu_push32(c, ret);
+}
+
+static void glue_ShutDwnPower(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_ShutDwnPower();
+    cpu_push32(c, ret);
+}
+
+static void glue_ShutDwnRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_shutdown_proc = (gaddr)cpu_pop32(c);
+    tb_ShutDwnRemove(a_shutdown_proc);
+    cpu_push32(c, ret);
+}
+
+static void glue_ShutDwnStart(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_ShutDwnStart();
+    cpu_push32(c, ret);
+}
+
 static void glue_SizeControl(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -34423,6 +34470,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA825, (int32_t)0x601u, "InsertIntlResMenu", CONV_STACK, 12, 0, glue_InsertIntlResMenu},
     {0xA825, (int32_t)0x606u, "SetMenuItemIconHandle", CONV_STACK, 12, 2, glue_SetMenuItemIconHandle},
     {0xA825, (int32_t)0x707u, "GetMenuItemIconHandle", CONV_STACK, 14, 2, glue_GetMenuItemIconHandle},
+    {0xA825, (int32_t)0x8FBu, "MenuDispatchFB", CONV_STACK, 8, 2, glue_MenuDispatchFB},
     {0xAA59, (int32_t)0x0u, "NewRoutineDescriptor", CONV_STACK, 10, 4, 0},
     {0xAA59, (int32_t)0x1u, "DisposeRoutineDescriptor", CONV_STACK, 4, 0, 0},
     {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, 0},
@@ -35369,10 +35417,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0xC20E0018u, "TransliterateText", CONV_STACK, 16, 2, glue_TransliterateText},
     {0xA8B5, (int32_t)0xC4040038u, "GetScriptUtilityAddress", CONV_STACK, 6, 4, glue_GetScriptUtilityAddress},
     {0xA8B5, (int32_t)0xC406003Cu, "GetScriptQDPatchAddress", CONV_STACK, 8, 4, glue_GetScriptQDPatchAddress},
-    {0xA895, (int32_t)0x1u, "ShutDwnPower", CONV_STACK, 0, 0, 0},
-    {0xA895, (int32_t)0x2u, "ShutDwnStart", CONV_STACK, 0, 0, 0},
-    {0xA895, (int32_t)0x3u, "ShutDwnInstall", CONV_STACK, 6, 0, 0},
-    {0xA895, (int32_t)0x4u, "ShutDwnRemove", CONV_STACK, 4, 0, 0},
+    {0xA895, (int32_t)0x1u, "ShutDwnPower", CONV_STACK, 0, 0, glue_ShutDwnPower},
+    {0xA895, (int32_t)0x2u, "ShutDwnStart", CONV_STACK, 0, 0, glue_ShutDwnStart},
+    {0xA895, (int32_t)0x3u, "ShutDwnInstall", CONV_STACK, 6, 0, glue_ShutDwnInstall},
+    {0xA895, (int32_t)0x4u, "ShutDwnRemove", CONV_STACK, 4, 0, glue_ShutDwnRemove},
     {0xA800, (int32_t)0x0u, "FinaleUnknown1", CONV_STACK, 2, 4, glue_FinaleUnknown1},
     {0xA800, (int32_t)0x4u, "DirectorUnknown3", CONV_STACK, 0, 4, glue_DirectorUnknown3},
     {0xA800, (int32_t)0xCu, "SpeechManagerVersion", CONV_STACK, 0, 4, glue_SpeechManagerVersion},

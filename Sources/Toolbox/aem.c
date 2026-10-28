@@ -2410,7 +2410,7 @@ int8_t tb_GetSpecificHighLevelEvent(gaddr fn, gaddr data, gaddr err_return)
 }
 
 /* Our serial number: kCurrentProcess or the one GetCurrentProcess gives. */
-static bool psn_is_us(uint32_t hi, uint32_t lo) { return hi == 0 && (lo == 2 || lo == 0x1000); }
+static bool psn_is_us(uint32_t hi, uint32_t lo) { return process_is_us(hi, lo); }
 
 /* The other run an event goes to, by an address as AESend's ('sign',
  * 'kpid', 'psn '); procNotFound if none listens. */
@@ -2481,6 +2481,15 @@ int16_t tb_PostHighLevelEvent(gaddr evt, gaddr receiver_id, int32_t refcon, gadd
     }
     default:
         return paramErr;
+    }
+    /* To the system process ({0, kSystemProcess}): Quit All Applications,
+     * which the Finder's Shut Down and Restart post.  The Process Manager
+     * sends each application Quit; here the other programs are runs of
+     * their own, so this one is told to quit (the Finder then shuts down). */
+    if (atype == T("psn ") && a0 == 0 && a1 == 1) {
+        if (e.cls == T("aevt") && e.id == T("quia"))
+            machine_send_quit();
+        return noErr;
     }
     if (!self) {
         int16_t err = post_to_run(&e, atype, a0, a1, msg_buf, (uint32_t)msg_length);

@@ -296,6 +296,7 @@ void machine_set_time(uint32_t secs); /* SetDateTime: Time counts from secs */
 bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
+void machine_idle_for(int32_t sleep); /* the same, the clock moving on no more than sleep ticks */
 void time_reset(void);
 /* Layers and Open Transport's tasks (vam.c): a new run; the tasks due. */
 void vam_reset(void);
@@ -339,6 +340,7 @@ void notify_pump(void);
 void notify_reset(void);
 void icons_reset(void); /* the Icon Utilities' labels and caches (icons.c) */
 void finder_reset(void); /* the Finder's Process Manager calls (finder.c) */
+void shutdown_reset(void); /* the Shutdown Manager's procedures (shutdown.c) */
 int finder_apple_menu_items(void); /* the items the Finder last gave the Apple menu */
 void iconservices_reset(void); /* Icon Services (iconservices.c) */
 

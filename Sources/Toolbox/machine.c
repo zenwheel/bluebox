@@ -31,6 +31,7 @@ uint32_t g_app_creator;
 /* The run is the Finder (file type 'FNDR'): the Process Manager reports it
  * as the system's Finder process rather than an application. */
 bool g_is_finder;
+bool machine_is_finder(void) { return g_is_finder; }
 
 static cpu68k cpu;
 static int screen_w = 1024, screen_h = 768;
@@ -442,6 +443,7 @@ bool machine_boot(bool census)
     icons_reset();
     disk_driver_reset();
     finder_reset();
+    shutdown_reset();
     iconservices_reset();
     agl_reset(); /* OpenGL's contexts, on the host */
     qd3d_reset(); /* QuickDraw 3D's and RAVE's objects */
