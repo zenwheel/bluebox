@@ -20592,6 +20592,15 @@ static void glue_PBEject(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBExchangeFiles(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBExchangeFiles(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBExchangeObjects(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20763,6 +20772,15 @@ static void glue_PBGetXCatInfo(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBHCopyFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_a = (trapword & 0x400) != 0;
+    int16_t r = tb_PBHCopyFile(a_pb, a_a);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBHCreate(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20823,6 +20841,15 @@ static void glue_PBHGetVolParms(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBHGetVolParms(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBHMoveRename(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_a = (trapword & 0x400) != 0;
+    int16_t r = tb_PBHMoveRename(a_pb, a_a);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -33398,7 +33425,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x14u, "PBCreateFileIDRef", CONV_REG, 0, 0, glue_PBCreateFileIDRef},
     {0xA060, (int32_t)0x15u, "PBDeleteFileIDRef", CONV_REG, 0, 0, glue_PBDeleteFileIDRef},
     {0xA060, (int32_t)0x16u, "PBResolveFileIDRef", CONV_REG, 0, 0, glue_PBResolveFileIDRef},
-    {0xA060, (int32_t)0x17u, "PBExchangeFiles", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x17u, "PBExchangeFiles", CONV_REG, 0, 0, glue_PBExchangeFiles},
     {0xA060, (int32_t)0x18u, "PBCatSearch", CONV_REG, 0, 0, glue_PBCatSearch},
     {0xA060, (int32_t)0x1Au, "PBOpenDF", CONV_REG, 0, 0, glue_PBOpenDF},
     {0xA060, (int32_t)0x1Au, "PBHOpenDF", CONV_REG, 0, 0, glue_PBHOpenDF},
@@ -33427,8 +33454,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x33u, "PBHSetDirAccess", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x34u, "PBHMapID", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x35u, "PBHMapName", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x36u, "PBHCopyFile", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x37u, "PBHMoveRename", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x36u, "PBHCopyFile", CONV_REG, 0, 0, glue_PBHCopyFile},
+    {0xA060, (int32_t)0x37u, "PBHMoveRename", CONV_REG, 0, 0, glue_PBHMoveRename},
     {0xA060, (int32_t)0x38u, "PBHOpenDeny", CONV_REG, 0, 0, glue_PBHOpenDeny},
     {0xA060, (int32_t)0x39u, "PBHOpenRFDeny", CONV_REG, 0, 0, glue_PBHOpenRFDeny},
     {0xA060, (int32_t)0x3Au, "PBGetXCatInfo", CONV_REG, 0, 0, glue_PBGetXCatInfo},

@@ -1281,3 +1281,4 @@ void raw_InitZone(cpu68k *c, uint16_t tw)
     set_mem_err(noErr);
     c->d[0] = 0;
 }
+

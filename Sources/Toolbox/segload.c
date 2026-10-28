@@ -135,7 +135,21 @@ static void raw_UnloadSeg(cpu68k *c, uint16_t tw)
     (void)a5;
     int16_t seg = -1;
     gaddr code = 0;
-    for (gaddr e = jt; e < jt + jtsize; e += 8) {
+    /* The address of a routine as Pascal's @ gives it, its jump table
+     * entry (the JMP in it, as System 7.1's Finder passes when its code
+     * zone is full): the segment its entry names. */
+    if (addr >= jt && addr < jt + jtsize) {
+        gaddr e = jt + (addr - jt) / 8 * 8;
+        int16_t s = rd16(e + 2) == JMP_ABS_L ? (int16_t)rd16(e) : rd16(e + 6) == LOADSEG_TRAP ? (int16_t)rd16(e + 4) : -1;
+        gaddr h = s >= 0 ? get_code(s) : 0;
+        if (h && rd32(h)) {
+            seg = s;
+            code = rd32(h);
+            if (rd32(LM_CurrentA5) < GA_A5WORLD_TOP_24)
+                code &= 0x00FFFFFFu;
+        }
+    }
+    for (gaddr e = jt; e < jt + jtsize && seg < 0; e += 8) {
         if (rd16(e + 2) != JMP_ABS_L)
             continue;
         int16_t s = (int16_t)rd16(e);

@@ -2355,6 +2355,98 @@ int16_t tb_PBCatMove(gaddr pb, bool async)
 }
 
 /* Move a file or folder into the folder the destination FSSpec names. */
+/* PBHCopyFile and PBHMoveRename (CopyParam: ioDstVRefNum at 24, ioNewName
+ * 28, ioCopyName 32, ioNewDirID 36, the source's ioDirID 48): a file
+ * copied, or moved and renamed, into a folder named by the destination
+ * volume, directory and name; the copy's name is ioCopyName, or the
+ * source's when that is nil.  The Finder uses them on volumes that say
+ * they have them (PBHGetVolParms). */
+static int16_t copy_param_paths(gaddr pb, char *from, char *dir, char *dest, size_t size)
+{
+    int16_t err = resolve((int16_t)rd16(pb + IOParam_ioVRefNum_off), (int32_t)rd32(pb + HFileParam_ioDirID_off),
+                          rd32(pb + IOParam_ioNamePtr_off), true, from, size);
+    if (err)
+        return err;
+    if (!exists(from))
+        return fnfErrF;
+    err = resolve((int16_t)rd16(pb + 24), (int32_t)rd32(pb + 36), rd32(pb + 28), true, dir, size);
+    if (err)
+        return err;
+    if (!is_dir(dir))
+        return dirNFErr;
+    gaddr copy_name = rd32(pb + 32);
+    if (copy_name && rd8(copy_name)) {
+        char host[256];
+        mac_to_host(gptr(copy_name + 1), rd8(copy_name), host, sizeof host);
+        snprintf(dest, size, "%s/%s", dir, host);
+    } else {
+        const char *base = strrchr(from, '/');
+        snprintf(dest, size, "%s%s", dir, base ? base : "/");
+    }
+    return noErr;
+}
+
+/* A file and its forks and Finder information, at a new path. */
+int16_t fm_copy_file(const char *from, const char *dest)
+{
+    if (is_dir(from))
+        return -1302; /* notAFileErr */
+    if (exists(dest))
+        return dupFNErr;
+    char parent[PATH_MAX];
+    parent_of(dest, parent, sizeof parent);
+    if (!writable(parent))
+        return wPrErr;
+    mac_file mf;
+    char msg[256];
+    if (!appledouble_read(from, &mf, msg, sizeof msg))
+        return ioErrF;
+    bool ok = appledouble_write(dest, &mf, msg, sizeof msg);
+    mac_file_free(&mf);
+    if (!ok)
+        return dskFulErr;
+    as_file_changed(dest);
+    return noErr;
+}
+
+int16_t tb_PBHCopyFile(gaddr pb, bool async)
+{
+    char from[PATH_MAX], dir[PATH_MAX], dest[PATH_MAX];
+    int16_t err = copy_param_paths(pb, from, dir, dest, sizeof from);
+    return err ? err : fm_copy_file(from, dest);
+}
+
+int16_t tb_PBHMoveRename(gaddr pb, bool async)
+{
+    char from[PATH_MAX], dir[PATH_MAX], dest[PATH_MAX];
+    int16_t err = copy_param_paths(pb, from, dir, dest, sizeof from);
+    if (err)
+        return err;
+    if (vref_of_path(from) != vref_of_path(dir))
+        return badMovErr;
+    if (under(dir, from))
+        return badMovErr;
+    if (exists(dest) && strcmp(from, dest))
+        return dupFNErr;
+    return rename_host(from, dest);
+}
+
+/* PBExchangeFiles (FIDParam: ioDestNamePtr at 28, ioDestDirID 36,
+ * ioSrcDirID 48): two files on a volume trade contents. */
+int16_t tb_PBExchangeFiles(gaddr pb, bool async)
+{
+    char a[PATH_MAX], b[PATH_MAX];
+    int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
+    int16_t err = resolve(vref, (int32_t)rd32(pb + 48), rd32(pb + IOParam_ioNamePtr_off), true, a, sizeof a);
+    if (!err)
+        err = resolve(vref, (int32_t)rd32(pb + 36), rd32(pb + 28), true, b, sizeof b);
+    if (err)
+        return err;
+    if (!exists(a) || !exists(b))
+        return fnfErrF;
+    return fm_exchange(a, b);
+}
+
 int16_t tb_FSpCatMove(gaddr src, gaddr dst)
 {
     if (rd16(src + FSSpec_vRefNum_off) != rd16(dst + FSSpec_vRefNum_off))
@@ -2806,8 +2898,6 @@ static const struct {
     { "prnt", "PrintMonitor Documents" },
     { "temp", "Temporary Items" },
     { "flnt", "Temporary Items" }, /* kChewableItemsFolderType */
-    { "trsh", "Trash" },
-    { "empt", "Trash" },
     { "asup", "Application Support" },
     { "appr", "Appearance" },
     { "cmnu", "Contextual Menu Items" },
@@ -2835,15 +2925,33 @@ bool fm_standard_folder(int i, uint32_t *type, const char **name)
     return true;
 }
 
-/* A folder type's host folder; the standard folders always exist, as on
- * a working System, so they are made when missing.  Others are those a
- * program described (folders.c). */
-int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
+/* A volume's own folders, at its root as System 7 has them: the Desktop
+ * Folder and the Trash (where to empty it, too), each volume's own. */
+static const char *volume_folder(uint32_t type)
+{
+    switch (type) {
+    case 0x6465736B: return "Desktop Folder"; /* 'desk' */
+    case 0x74727368: return "Trash";          /* 'trsh' */
+    case 0x656D7074: return "Trash";          /* 'empt' */
+    }
+    return NULL;
+}
+
+/* A folder type's host folder on a volume (vref 0, or one not mounted:
+ * the main volume, where the System Folder is); the standard folders
+ * always exist on a volume Blue Box can write, as on a working System, so
+ * they are made when missing.  Others are those a program described
+ * (folders.c). */
+int16_t fm_find_folder_on(int16_t vref, uint32_t type, bool create, char *out, size_t outsize)
 {
     char path[PATH_MAX];
     bool found = false;
-    if (type == 0x6465736B /* 'desk' */) {
-        snprintf(path, sizeof path, "%s/Desktop Folder", disk_path());
+    const char *own = volume_folder(type);
+    if (own) {
+        mount *m = mount_of_vref(vref);
+        snprintf(path, sizeof path, "%s/%s", m ? m->root : disk_path(), own);
+        if (m && !is_dir(path))
+            return fnfErrF; /* a mounted volume is read-only */
         found = true;
     }
     for (size_t i = 0; i < sizeof folders / sizeof folders[0] && !found; i++) {
@@ -2864,17 +2972,22 @@ int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
     return realpath(path, out) && strlen(out) < outsize ? noErr : fnfErrF;
 }
 
+int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
+{
+    return fm_find_folder_on(VREF, type, create, out, outsize);
+}
+
 int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, gaddr foundVRefNum,
                       gaddr foundDirID)
 {
     char full[PATH_MAX];
-    int16_t err = fm_find_folder((uint32_t)folderType, createFolder, full, sizeof full);
+    int16_t err = fm_find_folder_on(vRefNum, (uint32_t)folderType, createFolder, full, sizeof full);
     if (err)
         return err;
     if (foundVRefNum)
-        wr16(foundVRefNum, (uint16_t)VREF);
+        wr16(foundVRefNum, (uint16_t)vref_of_path(full));
     if (foundDirID)
-        wr32(foundDirID, (uint32_t)dir_id_for(rel_of(full)));
+        wr32(foundDirID, (uint32_t)out_id(dir_id_for(rel_of(full))));
     return noErr;
 }
 
@@ -2884,11 +2997,15 @@ int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, 
 int16_t tb_PBHGetVolParms(gaddr pb, bool async)
 {
     int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
-    if (vref != 0 && vref != VREF && vref != 1 && !(vref <= -32000 && vref > -32000 - MAX_WDS))
+    if (vref != 0 && vref != VREF && vref != 1 && !(vref <= -32000 && vref > -32000 - MAX_WDS) && !mount_of_vref(vref))
         return nsvErr;
     gaddr buf = rd32(pb + HIoParam_ioBuffer_off);
     int32_t want = (int32_t)rd32(pb + HIoParam_ioReqCount_off);
-    uint8_t info[20] = { 0, 2 }; /* vMVersion 2, vMAttrib 0, no local handle or server */
+    /* vMVersion 2; vMAttrib: a desktop database (the Finder keeps its icons
+     * and comments there rather than in a Desktop file), PBCatSearch, file
+     * IDs, deny modes, PBHCopyFile and PBHMoveRename; no local handle or
+     * server. */
+    uint8_t info[20] = { 0, 2, 0, 0, 0xF0, 0xC0 };
     int32_t n = want < (int32_t)sizeof info ? want : (int32_t)sizeof info;
     if (n < 0)
         n = 0;

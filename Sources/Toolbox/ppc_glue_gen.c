@@ -6142,6 +6142,28 @@ static void ppcglue_PBResolveFileIDRefAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PBExchangeFiles(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    bool a_async = c->gpr[4] != 0;
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeFiles(a_pb, a_async), a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBExchangeFilesSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeFiles(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBExchangeFilesAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeFiles(a_pb, true), true);
+    c->pc = c->lr;
+}
+
 static void ppcglue_PBCatSearch(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
@@ -6249,6 +6271,50 @@ static void ppcglue_PBHGetDirAccessAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetDirAccess(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHCopyFile(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    bool a_a = c->gpr[4] != 0;
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCopyFile(a_pb, a_a), a_a);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHCopyFileSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCopyFile(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHCopyFileAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCopyFile(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHMoveRename(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    bool a_a = c->gpr[4] != 0;
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHMoveRename(a_pb, a_a), a_a);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHMoveRenameSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHMoveRename(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHMoveRenameAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHMoveRename(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -36048,42 +36114,6 @@ static void ppctrap_PBUnlockRangeAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_PBExchangeFiles(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x17u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | (c->gpr[4] ? 0x400 : 0)));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBExchangeFilesSync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x17u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBExchangeFilesAsync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x17u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | 0x400));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_PBHGetLogInInfo(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -36220,78 +36250,6 @@ static void ppctrap_PBHMapNameAsync(ppc_cpu *c)
 {
     ppc_trap_begin();
     ppc_trap_set(0, 0x35u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | 0x400));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHCopyFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x36u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | (c->gpr[4] ? 0x400 : 0)));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHCopyFileSync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x36u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHCopyFileAsync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x36u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | 0x400));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHMoveRename(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x37u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | (c->gpr[4] ? 0x400 : 0)));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHMoveRenameSync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x37u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHMoveRenameAsync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x37u);
     ppc_trap_set(8, c->gpr[3]);
     ppc_trap((uint16_t)(0xA060 | 0x400));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
@@ -43283,9 +43241,9 @@ const ppc_export ppc_exports[] = {
     {"PBDirCreateAsync", ppcglue_PBDirCreateAsync},
     {"PBDirCreateSync", ppcglue_PBDirCreateSync},
     {"PBEject", ppcglue_PBEject},
-    {"PBExchangeFiles", ppctrap_PBExchangeFiles},
-    {"PBExchangeFilesAsync", ppctrap_PBExchangeFilesAsync},
-    {"PBExchangeFilesSync", ppctrap_PBExchangeFilesSync},
+    {"PBExchangeFiles", ppcglue_PBExchangeFiles},
+    {"PBExchangeFilesAsync", ppcglue_PBExchangeFilesAsync},
+    {"PBExchangeFilesSync", ppcglue_PBExchangeFilesSync},
     {"PBExchangeObjects", ppcglue_PBExchangeObjects},
     {"PBExchangeObjectsAsync", ppcglue_PBExchangeObjectsAsync},
     {"PBExchangeObjectsSync", ppcglue_PBExchangeObjectsSync},
@@ -43343,9 +43301,9 @@ const ppc_export ppc_exports[] = {
     {"PBGetXCatInfo", ppcglue_PBGetXCatInfo},
     {"PBGetXCatInfoAsync", ppcglue_PBGetXCatInfoAsync},
     {"PBGetXCatInfoSync", ppcglue_PBGetXCatInfoSync},
-    {"PBHCopyFile", ppctrap_PBHCopyFile},
-    {"PBHCopyFileAsync", ppctrap_PBHCopyFileAsync},
-    {"PBHCopyFileSync", ppctrap_PBHCopyFileSync},
+    {"PBHCopyFile", ppcglue_PBHCopyFile},
+    {"PBHCopyFileAsync", ppcglue_PBHCopyFileAsync},
+    {"PBHCopyFileSync", ppcglue_PBHCopyFileSync},
     {"PBHCreate", ppcglue_PBHCreate},
     {"PBHCreateAsync", ppcglue_PBHCreateAsync},
     {"PBHCreateSync", ppcglue_PBHCreateSync},
@@ -43376,9 +43334,9 @@ const ppc_export ppc_exports[] = {
     {"PBHMapName", ppctrap_PBHMapName},
     {"PBHMapNameAsync", ppctrap_PBHMapNameAsync},
     {"PBHMapNameSync", ppctrap_PBHMapNameSync},
-    {"PBHMoveRename", ppctrap_PBHMoveRename},
-    {"PBHMoveRenameAsync", ppctrap_PBHMoveRenameAsync},
-    {"PBHMoveRenameSync", ppctrap_PBHMoveRenameSync},
+    {"PBHMoveRename", ppcglue_PBHMoveRename},
+    {"PBHMoveRenameAsync", ppcglue_PBHMoveRenameAsync},
+    {"PBHMoveRenameSync", ppcglue_PBHMoveRenameSync},
     {"PBHOpen", ppcglue_PBHOpen},
     {"PBHOpenAsync", ppcglue_PBHOpenAsync},
     {"PBHOpenDF", ppcglue_PBHOpenDF},

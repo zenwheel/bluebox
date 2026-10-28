@@ -251,5 +251,93 @@ extension BlueBox {
             #expect(tb_CheckEventQueueForUserCancel(0) != 0)
             #expect(tb_CheckEventQueueForUserCancel(0) == 0)
         }
+
+        func pname(_ s: String) -> UInt32 {
+            let p = tb_NewPtr(256, false, true)
+            guestPString(s, at: p)
+            return p
+        }
+
+        /// A file in the test application's folder, with some data.
+        func makeFile(_ folder: URL, _ name: String, _ text: String) -> UInt32 {
+            try? text.write(to: folder.appendingPathComponent(name), atomically: true, encoding: .utf8)
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, pname(name), spec) == 0)
+            return spec
+        }
+
+        /// System 7's volume folders are at the volume's root, and volumes
+        /// say they have a desktop database, file IDs, CatSearch, deny modes,
+        /// CopyFile and MoveRename.
+        @Test func volumeFoldersAndParameters() {
+            launchTestApp()
+            let vref = tb_NewPtr(2, false, true), dir = tb_NewPtr(4, false, true)
+            #expect(tb_FindFolder(-32768, Int32(bitPattern: fourCC("trsh")), 1, vref, dir) == 0)
+            let pb = tb_NewPtr(Int32(CInfoPBRec_SIZEOF), false, true)
+            let name = tb_NewPtr(256, false, true)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), rd16(vref))
+            wr16(pb + UInt32(FileParam_ioFDirIndex_off), UInt16(bitPattern: -1))
+            wr32(pb + UInt32(HFileInfo_ioDirID_off), rd32(dir))
+            #expect(tb_PBGetCatInfo(pb, false) == 0 && pstring(at: name) == "Trash")
+            #expect(rd32(pb + UInt32(DirInfo_ioDrParID_off)) == 2) // at the root
+            #expect(tb_FindFolder(-32768, Int32(bitPattern: fourCC("desk")), 1, vref, dir) == 0)
+            wr32(pb + UInt32(HFileInfo_ioDirID_off), rd32(dir))
+            #expect(tb_PBGetCatInfo(pb, false) == 0 && pstring(at: name) == "Desktop Folder")
+            #expect(rd32(pb + UInt32(DirInfo_ioDrParID_off)) == 2)
+
+            let vp = tb_NewPtr(Int32(HParamBlockRec_SIZEOF), false, true)
+            let buf = tb_NewPtr(20, false, true)
+            wr16(vp + UInt32(IOParam_ioVRefNum_off), rd16(vref))
+            wr32(vp + UInt32(HIoParam_ioBuffer_off), buf)
+            wr32(vp + UInt32(HIoParam_ioReqCount_off), 20)
+            #expect(tb_PBHGetVolParms(vp, false) == 0)
+            let attrib = rd32(buf + 2)
+            for bit in [6, 7, 12, 13, 14, 15] { #expect(attrib & (1 << UInt32(bit)) != 0) }
+        }
+
+        /// PBHCopyFile, PBHMoveRename and PBExchangeFiles.
+        @Test func copyMoveAndExchange() {
+            let folder = launchTestApp()
+            let a = makeFile(folder, "Alpha", "first")
+            _ = makeFile(folder, "Beta", "second, longer")
+            let sub = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            _ = tb_FSMakeFSSpec(0, 0, pname("Sub"), sub)
+            let subID = tb_NewPtr(4, false, true)
+            #expect(tb_FSpDirCreate(sub, 0, subID) == 0)
+            let vref = Int16(bitPattern: rd16(a + UInt32(FSSpec_vRefNum_off)))
+            let parent = rd32(a + UInt32(FSSpec_parID_off))
+
+            let pb = tb_NewPtr(Int32(HParamBlockRec_SIZEOF), false, true)
+            func setup(_ src: String, into dirID: UInt32, as copyName: String?) {
+                gmemset(pb, 0, UInt32(HParamBlockRec_SIZEOF))
+                wr32(pb + UInt32(IOParam_ioNamePtr_off), pname(src))
+                wr16(pb + UInt32(IOParam_ioVRefNum_off), UInt16(bitPattern: vref))
+                wr32(pb + 48, parent)
+                wr16(pb + 24, UInt16(bitPattern: vref))
+                wr32(pb + 36, dirID)
+                wr32(pb + 32, copyName.map { pname($0) } ?? 0)
+            }
+            setup("Alpha", into: rd32(subID), as: nil)
+            #expect(tb_PBHCopyFile(pb, false) == 0)
+            let copied = folder.appendingPathComponent("Sub/Alpha").path
+            #expect((try? String(contentsOfFile: copied, encoding: .utf8)) == "first")
+            #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("Alpha").path))
+            #expect(tb_PBHCopyFile(pb, false) == -48) // dupFNErr
+            setup("Alpha", into: rd32(subID), as: "Gamma")
+            #expect(tb_PBHMoveRename(pb, false) == 0)
+            #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("Alpha").path))
+            #expect((try? String(contentsOfFile: folder.appendingPathComponent("Sub/Gamma").path, encoding: .utf8)) == "first")
+
+            gmemset(pb, 0, UInt32(HParamBlockRec_SIZEOF))
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), pname("Beta"))
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), UInt16(bitPattern: vref))
+            wr32(pb + 48, parent)
+            wr32(pb + 28, pname("Gamma"))
+            wr32(pb + 36, rd32(subID))
+            #expect(tb_PBExchangeFiles(pb, false) == 0)
+            #expect((try? String(contentsOfFile: folder.appendingPathComponent("Beta").path, encoding: .utf8)) == "first")
+            #expect((try? String(contentsOfFile: folder.appendingPathComponent("Sub/Gamma").path, encoding: .utf8)) == "second, longer")
+        }
     }
 }
