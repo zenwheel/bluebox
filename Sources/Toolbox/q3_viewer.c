@@ -64,6 +64,7 @@ typedef struct {
     int lastx, lasty;
     int camera_view;
     gaddr draw_cb, draw_data, resize_cb, resize_data, pane_cb, pane_data;
+    gaddr render_cb, render_data; /* the program renders the content itself */
 } viewer;
 
 /* ---------------------------------------------------------------------- */
@@ -309,6 +310,11 @@ static void draw_content(viewer *v)
     if (!v->port || c.right <= c.left || c.bottom <= c.top)
         return;
     sync(v);
+    if (v->render_cb) { /* Q3ViewerSetCustomRenderingCallback's, in place of ours */
+        uint32_t args[2] = { v->g, v->render_data };
+        ppc_call(v->render_cb, args, 2);
+        return;
+    }
     for (int pass = 0; pass < 4; pass++) {
         if (CALL("Q3View_StartRendering", v->view) != kQ3Success)
             return;
@@ -858,8 +864,80 @@ static void apply_drag(viewer *v, int dx, int dy)
 
 static bool in_rect(int x, int y, qrect r) { return x >= r.left && x < r.right && y >= r.top && y < r.bottom; }
 
-/* A click in the strip: a mode chosen, the camera turned to the next
- * view, or the camera reset. */
+static int model_cameras(viewer *v, int want, gaddr *found);
+static void set_camera_number(viewer *v, int n);
+
+/* The camera button's menu, as the Viewer had it: the model's own
+ * cameras, the six views along the axes, the view fitted to the model
+ * and the view it opened with.  0 if nothing was chosen. */
+enum { CAMERA_MENU_ID = 32123 };
+static const char *const view_names[] = { "Front", "Back", "Left", "Right", "Top", "Bottom" };
+
+static void menu_item(gaddr mh, const char *text)
+{
+    gaddr p = tb_NewPtr(256, false, true);
+    size_t n = strlen(text);
+    wr8(p, (uint8_t)n);
+    gput(p + 1, text, (uint32_t)n);
+    tb_AppendMenu(mh, p);
+    tb_DisposePtr(p);
+}
+
+static void camera_menu(viewer *v, qrect b)
+{
+    gaddr title = tb_NewPtr(8, true, true);
+    gaddr mh = title ? tb_NewMenu(CAMERA_MENU_ID, title) : 0;
+    if (!mh) {
+        if (title)
+            tb_DisposePtr(title);
+        return;
+    }
+    int ncams = model_cameras(v, 0, NULL);
+    char text[32];
+    for (int i = 0; i < ncams; i++) {
+        snprintf(text, sizeof text, "Camera %d", i + 1);
+        menu_item(mh, text);
+    }
+    if (ncams)
+        menu_item(mh, "(-");
+    for (int i = 0; i < 6; i++) {
+        snprintf(text, sizeof text, "%s View", view_names[i]);
+        menu_item(mh, text);
+    }
+    menu_item(mh, "(-");
+    menu_item(mh, "Fit to View");
+    menu_item(mh, "Restore View");
+    tb_InsertMenu(mh, -1);
+    gaddr saved = begin_port(v);
+    gaddr pt = v->scratch + 128;
+    wr16(pt, (uint16_t)b.bottom);
+    wr16(pt + 2, (uint16_t)b.left);
+    tb_LocalToGlobal(pt);
+    int32_t r = tb_PopUpMenuSelect(mh, (int16_t)rd16(pt), (int16_t)rd16(pt + 2), 0);
+    end_port(saved);
+    tb_DeleteMenu(CAMERA_MENU_ID);
+    tb_DisposeMenu(mh);
+    tb_DisposePtr(title);
+    int item = (int16_t)(r & 0xFFFF);
+    if (!r || item <= 0)
+        return;
+    save_undo(v);
+    int first_view = ncams ? ncams + 2 : 1;
+    if (item <= ncams) {
+        set_camera_number(v, item);
+    } else if (item >= first_view && item < first_view + 6) {
+        v->camera_view = kQ3ViewerCameraFront + (item - first_view);
+        set_view_direction(v, v->camera_view);
+    } else if (item == first_view + 7) {
+        set_view_direction(v, kQ3ViewerCameraFit);
+    } else if (item == first_view + 8) {
+        set_view_direction(v, kQ3ViewerCameraRestore);
+    }
+    draw_all(v, true, true);
+}
+
+/* A click in the strip: a mode chosen, a view chosen from the camera
+ * button's menu, or the camera reset. */
 static bool click_strip(viewer *v, int x, int y)
 {
     for (int i = 0; i < 6; i++) {
@@ -868,12 +946,7 @@ static bool click_strip(viewer *v, int x, int y)
             continue;
         uint32_t button = button_order[i];
         if (button == kQ3ViewerButtonCamera) {
-            save_undo(v);
-            v->camera_view = v->camera_view >= kQ3ViewerCameraBottom ? kQ3ViewerCameraFront : v->camera_view + 1;
-            if (v->camera_view < kQ3ViewerCameraFront)
-                v->camera_view = kQ3ViewerCameraFront;
-            set_view_direction(v, v->camera_view);
-            draw_all(v, true, true);
+            camera_menu(v, b);
         } else if (button == kQ3ViewerButtonReset) {
             save_undo(v);
             set_view_direction(v, kQ3ViewerCameraRestore);
@@ -1367,15 +1440,12 @@ static void Q3ViewerGetCameraCount(ppc_cpu *c)
     Q3RETURN(noErr);
 }
 
-static void Q3ViewerSetCameraByNumber(ppc_cpu *c)
+/* The model's camera n (from 1) as the viewer's. */
+static void set_camera_number(viewer *v, int n)
 {
-    viewer *v = viewer_of(Q3R(0));
     gaddr cam = 0;
-    if (!v || !model_cameras(v, (int)Q3R(1), &cam) || !cam) {
-        Q3RETURN(paramErr);
+    if (!model_cameras(v, n, &cam) || !cam)
         return;
-    }
-    save_undo(v);
     gaddr s = v->scratch;
     CALL("Q3Camera_GetData", cam, s);
     for (int k = 0; k < 3; k++) {
@@ -1389,6 +1459,48 @@ static void Q3ViewerSetCameraByNumber(ppc_cpu *c)
         CALL("Q3ViewAngleAspectCamera_GetFOV", cam, s);
         v->cam.fov = rdf(s);
     }
+}
+
+/* Two calls Apple's Viewer exported without a header: the program draws
+ * the content itself, with the viewer's view (Q3ViewerGetView), in
+ * place of the model; and the model's own transform, which the Viewer
+ * kept as it turned the model and this one, turning the camera instead,
+ * keeps as no transform at all.  Both answer a Boolean. */
+static void Q3ViewerSetCustomRenderingCallback(ppc_cpu *c)
+{
+    viewer *v = viewer_of(Q3R(0));
+    if (!v || !Q3R(1)) {
+        Q3RETURN(kQ3False);
+        return;
+    }
+    v->render_cb = Q3R(1);
+    v->render_data = Q3R(2);
+    Q3RETURN(kQ3True);
+}
+
+static void Q3ViewerGetTransformMatrix(ppc_cpu *c)
+{
+    viewer *v = viewer_of(Q3R(0));
+    if (!v || !Q3R(1)) {
+        Q3RETURN(kQ3False);
+        return;
+    }
+    float m[16];
+    q3m_identity(m);
+    q3m_put(Q3R(1), m);
+    Q3RETURN(kQ3True);
+}
+
+static void Q3ViewerSetCameraByNumber(ppc_cpu *c)
+{
+    viewer *v = viewer_of(Q3R(0));
+    gaddr cam = 0;
+    if (!v || !model_cameras(v, (int)Q3R(1), &cam) || !cam) {
+        Q3RETURN(paramErr);
+        return;
+    }
+    save_undo(v);
+    set_camera_number(v, (int)Q3R(1));
     Q3RETURN(noErr);
 }
 
@@ -1512,7 +1624,7 @@ const ppc_export q3_viewer_exports[] = {
     E(Q3ViewerCopy), E(Q3ViewerPaste), E(Q3ViewerMouseDown), E(Q3ViewerContinueTracking), E(Q3ViewerMouseUp),
     E(Q3ViewerHandleKeyEvent), E(Q3ViewerSetDrawingCallbackMethod), E(Q3ViewerSetWindowResizeCallback),
     E(Q3ViewerSetPaneResizeNotifyCallback), E(Q3ViewerUndo), E(Q3ViewerGetUndoString), E(Q3ViewerGetCameraCount),
-    E(Q3ViewerSetCameraByNumber), E(Q3ViewerSetCameraByView), E(Q3ViewerSetRendererType),
+    E(Q3ViewerSetCameraByNumber), E(Q3ViewerSetCustomRenderingCallback), E(Q3ViewerGetTransformMatrix), E(Q3ViewerSetCameraByView), E(Q3ViewerSetRendererType),
     E(Q3ViewerGetRendererType), E(Q3ViewerChangeBrightness), E(Q3ViewerSetRemoveBackfaces),
     E(Q3ViewerGetRemoveBackfaces), E(Q3ViewerSetPhongShading), E(Q3ViewerGetPhongShading),
 };

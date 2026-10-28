@@ -103,9 +103,28 @@ extension BlueBox {
             #expect(pict != 0 && tb_GetHandleSize(pict) > 10)
             #expect(Q.call("Q3ViewerGetView", [viewer]) != 0)
             #expect(Q.call("Q3ViewerGetPort", [viewer]) == w)
+            // The two calls Apple's Viewer had without a header: the model's
+            // transform (none: the camera turns) and drawing done by the
+            // program in place of the model.
+            let m = tb_NewPtr(64, false, true)
+            #expect(Q.call("Q3ViewerGetTransformMatrix", [viewer, m]) == 1)
+            #expect(Q.float(m) == 1 && Q.float(m + 4) == 0 && Q.float(m + 60) == 1)
+            vwRendered = 0
+            #expect(Q.call("Q3ViewerSetCustomRenderingCallback",
+                           [viewer, cfm_native_tvector(vwRender, "vwRender"), 0x1234]) == 1)
+            #expect(Q.call("Q3ViewerDraw", [viewer]) == 0)
+            #expect(vwRendered == 0x1234)
             #expect(Q.call("Q3ViewerDispose", [viewer]) == 0)
             Q.call("Q3Object_Dispose", [group])
             tb_DisposeWindow(w)
         }
     }
+}
+
+nonisolated(unsafe) var vwRendered: UInt32 = 0
+
+let vwRender: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+    guard let c else { return }
+    vwRendered = ceArg(c, 1)
+    ceReturn(c, 0)
 }
