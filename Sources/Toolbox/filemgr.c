@@ -3820,6 +3820,8 @@ bool fm_open_apple_menu_item(const uint8_t *name, int n)
     snprintf(full, sizeof full, "%s/%s", dir, path);
     if (!exists(full))
         return false;
+    if (fm_type_of_path(full) == 0x6466696Cu) /* dfil: a desk accessory file */
+        return drv68k_open_da_path(full);
     if (fm_type_of_path(full) != 0x4150504Cu) /* APPL */
         return false;
     return process_launch(full, NULL, 0);

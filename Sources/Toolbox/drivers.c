@@ -60,6 +60,7 @@ static gaddr dce[NDRIVERS];
 
 void drivers_reset(void)
 {
+    drv68k_reset();
     gaddr table = tb_NewPtr(UNITS * 4, true, true);
     wr32(LM_UTableBase, table);
     wr16(LM_UnitNtryCnt, UNITS);
@@ -114,10 +115,12 @@ bool driver_open(gaddr pb, int16_t *err)
             set_opened(drivers[i], true);
         return true;
     }
-    return false;
+    return drv68k_open_name(pb, err);
 }
 
-bool driver_refnum(int16_t refnum) { return driver_for(refnum) != NULL; }
+bool driver_is_native(int16_t refnum) { return driver_for(refnum) != NULL; }
+
+bool driver_refnum(int16_t refnum) { return driver_for(refnum) != NULL || drv68k_refnum(refnum); }
 
 static int16_t call(const native_driver *d, gaddr pb, bool async, int kind)
 {
@@ -140,7 +143,7 @@ int16_t driver_call(gaddr pb, bool async, int kind)
 {
     const native_driver *d = driver_for((int16_t)rd16(pb + IOParam_ioRefNum_off));
     if (!d)
-        return -51; /* rfNumErr */
+        return drv68k_call(pb, async, kind); /* a driver of a program's, or none */
     int16_t r = call(d, pb, async, kind);
     if (kind == DRIVER_CLOSE && r == noErr)
         set_opened(d, false);
@@ -150,25 +153,12 @@ int16_t driver_call(gaddr pb, bool async, int kind)
 }
 
 /* DrvrInstall: a program's own driver gets a device control entry in the
- * unit table, so GetDCtlEntry and programs walking the table find it.
- * Its routines aren't called (the Device Manager answers only for ours),
- * and a unit one of ours has keeps ours (the installation is accepted, as
- * it was before there were entries). */
+ * unit table (driver68k.c runs its routines); a unit one of ours has keeps
+ * ours (the installation is accepted, as it was before there were
+ * entries). */
 int16_t driver_install(gaddr drvr, int16_t refnum)
 {
-    int16_t unit = (int16_t)(-1 - refnum);
-    gaddr table = rd32(LM_UTableBase);
-    if (refnum >= 0 || !table || unit >= (int16_t)rd16(LM_UnitNtryCnt))
-        return -21; /* badUnitErr */
     if (driver_for(refnum))
         return noErr;
-    gaddr h = tb_NewHandle(DCtlEntry_SIZEOF, true, true);
-    if (!h)
-        return memFullErr;
-    gaddr e = rd32(h);
-    wr32(e + DCtlEntry_dCtlDriver_off, drvr);
-    wr16(e + DCtlEntry_dCtlFlags_off, drvr ? rd16(drvr) : 0);
-    wr16(e + DCtlEntry_dCtlRefNum_off, (uint16_t)refnum);
-    wr32(table + 4 * (uint32_t)unit, h);
-    return noErr;
+    return drv68k_install(drvr, refnum);
 }

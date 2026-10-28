@@ -696,6 +696,16 @@ static void note_repeated_update(gaddr evt)
 
 static bool gne_idled; /* GetNextEvent let time pass for a null event */
 
+/* SystemEvent, as GetNextEvent and WaitNextEvent call it: an event a desk
+ * accessory or driver took comes back to the program as a null event. */
+static bool system_took(gaddr evt)
+{
+    if (!drv68k_system_event(evt, true))
+        return false;
+    EventRecord_set_what(evt, nullEvent);
+    return true;
+}
+
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
     sound_pump();
@@ -704,7 +714,10 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
     notify_pump();
     machine_advance_ticks();
     display_sync();
+    drv68k_periodic();
     if (next_event(em, evt, true, false)) {
+        if (system_took(evt))
+            return 0;
         LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evt), rd32(evt + 2), rd32(evt + 6), rd32(evt + 10), rd16(evt + 14));
         note_repeated_update(evt);
         return 1;
@@ -713,7 +726,7 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
      * waits up to a tick for input, as time passed on a real Mac too. */
     if (host_attached) {
         ev_wait_tick();
-        return next_event(em, evt, true, false);
+        return next_event(em, evt, true, false) && !system_took(evt);
     }
     machine_idle();
     gne_idled = true;
@@ -779,7 +792,8 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     notify_pump();
     display_sync();
     bool idled;
-    if (wne_event(mask, evp, &idled)) {
+    drv68k_periodic();
+    if (wne_event(mask, evp, &idled) && !system_took(evp)) {
         LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evp), rd32(evp + 2), rd32(evp + 6), rd32(evp + 10), rd16(evp + 14));
         note_repeated_update(evp);
         return 1;
@@ -1066,14 +1080,19 @@ void tb_SystemTask(void)
     machine_advance_ticks();
     sound_pump();
     time_pump();
+    drv68k_periodic();
 }
 void tb_SystemClick(gaddr evp, gaddr wp)
 {
+    if (wp && WindowRecord_windowKind(wp) < 0) { /* a desk accessory's or driver's window */
+        drv68k_system_click(evp, wp);
+        return;
+    }
     /* A click on the desktop goes to the desk hook: D0 -1, A0 the event. */
     if (!wp && rd32(LM_DeskHook))
         hook_call(rd32(LM_DeskHook), 0xFFFFFFFFu, evp, g_cpu->a[7]);
 }
-int8_t tb_SystemEvent(gaddr evp) { return 0; }
+int8_t tb_SystemEvent(gaddr evp) { return drv68k_system_event(evp, false); }
 
 void events_reset(void)
 {

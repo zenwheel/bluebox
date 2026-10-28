@@ -166,7 +166,7 @@ void tb_SetTrapAddress(gaddr addr, uint16_t n, bool newTraps, bool tool)
 
 /* ---- Desk accessories (none are installed) ---- */
 
-int8_t tb_SystemEdit(int16_t editcmd) { return 0; } /* not handled: the app does it */
+int8_t tb_SystemEdit(int16_t editcmd) { return drv68k_system_edit(editcmd); } /* else the app does it */
 /* A desk accessory by name: one in the Apple Menu Items folder opens as
  * the Finder would open it (applications launch). */
 int16_t tb_OpenDeskAcc(gaddr acc)
@@ -177,11 +177,17 @@ int16_t tb_OpenDeskAcc(gaddr acc)
     if (n && name[0] == 0) { /* desk accessories' names start with a NUL */
         memmove(name, name + 1, (size_t)--n);
     }
-    fm_open_apple_menu_item(name, n);
+    bool found;
+    int16_t rn = drv68k_open_desk_acc(acc, &found);
+    if (found)
+        return rn;
+    drv68k_take_opened();
+    if (fm_open_apple_menu_item(name, n))
+        return drv68k_take_opened(); /* a desk accessory file's: its refnum */
     return 0;
 }
-void tb_CloseDeskAcc(int16_t rn) {}
-void tb_SystemMenu(int32_t menu) {}
+void tb_CloseDeskAcc(int16_t rn) { drv68k_close_desk_acc(rn); }
+void tb_SystemMenu(int32_t menu) { drv68k_system_menu(menu); }
 
 /* ---- String comparison (register-based OS traps) ---- */
 
