@@ -36,7 +36,7 @@ import Toolbox
 
     @Test func keyAndInterFrames() throws {
         #expect(qt_vdec_supported(0x6376_6964, 24))
-        var format = qt_video_format(format: 0x6376_6964, width: 8, height: 4, depth: 24, palette: nil)
+        var format = qt_video_format(format: 0x6376_6964, width: 8, height: 4, depth: 24, palette: nil, desc: nil, desc_len: 0)
         let d = try #require(qt_vdec_new(&format))
         defer { qt_vdec_free(d) }
 

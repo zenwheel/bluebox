@@ -362,7 +362,7 @@ void sound_host_midi(int id, const machine_midi_event *events, int n);
 extern int g_appearance;
 #include "qd_internal.h"
 /* A compressed picture's image ($8200 opcode), drawn at dst in the current port. */
-void icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mask);
+bool icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mask);
 
 /* Themes (theme.c): each returns false when no theme applies, and the
  * standard black-and-white drawing is used instead. */

@@ -6,11 +6,13 @@ import Toolbox
 
 /// A classic Mac by name, booted for a test; the default machine again after.
 func withMachine(_ name: String, _ body: () -> Void) {
-    let depth = machine_screen_depth()
+    let depth = machine_screen_depth_setting()
+    var w: Int32 = 0, h: Int32 = 0
+    machine_screen_size(&w, &h)
     #expect(hw_select_machine(name))
     defer {
         _ = hw_select_machine("quadra")
-        machine_set_screen(1024, 768)
+        machine_set_screen(w, h)
         machine_set_screen_depth(depth)
         machine_set_cpu(68040)
     }

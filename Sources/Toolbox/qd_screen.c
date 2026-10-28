@@ -18,6 +18,7 @@ static gaddr screen_ctab;
 static unsigned nports; /* ports drawing on the screen, below */
 
 void machine_set_screen_depth(int depth) { depth_pref = qd_screen_supports(depth) ? depth : 1; }
+int machine_screen_depth_setting(void) { return depth_pref; }
 int qd_screen_depth(void) { return screen_depth; }
 int machine_screen_depth(void) { return screen_depth; }
 gaddr qd_screen_ctab(void) { return screen_depth == 1 ? 0 : screen_ctab; }

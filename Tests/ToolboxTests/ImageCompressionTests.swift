@@ -91,7 +91,7 @@ extension BlueBox {
             var bytes: [UInt8] = [0, 0] + [0, 0, 0, 0, 0, 20, 0, 20] + [0x00, 0x11, 0x02, 0xFF]
                 + [0x0C, 0x00] + [UInt8](repeating: 0, count: 24) + [0x82, 0x00]
             func be32(_ v: UInt32) -> [UInt8] { (0..<4).map { UInt8(v >> (24 - 8 * UInt32($0)) & 0xFF) } }
-            var body: [UInt8] = be32(0x10000) + be32(0) + be32(0) + be32(0) + be32(0x10000) + be32(0)
+            var body: [UInt8] = [0, 0] + be32(0x10000) + be32(0) + be32(0) + be32(0) + be32(0x10000) + be32(0)
                 + be32(2 << 16) + be32(2 << 16) + be32(0x4000_0000)            // matrix: translate 2,2
             body += be32(0) + [UInt8](repeating: 0, count: 8) + [0, 0]          // no matte; mode
             body += [0, 0, 0, 0, 0, 2, 0, 2] + be32(0) + be32(0)                 // srcRect; accuracy; no mask
@@ -100,12 +100,19 @@ extension BlueBox {
             body += (0..<86).map { rd8(d + UInt32($0)) } + pixels.flatMap(be32)
             bytes += be32(UInt32(body.count)) + body
             if bytes.count % 2 == 1 { bytes.append(0) }
+            // the warning for Macs without QuickTime, which isn't drawn
+            bytes += [0x00, 0x03, 0x00, 0x03, 0x00, 0x0D, 0x00, 0x0C, 0x00, 0x28, 0x00, 0x10, 0x00, 0x08, 0x02]
+                + Array("QT".utf8) + [0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x00, 0x14]
             bytes += [0x00, 0xFF]
             let pic = tb_NewHandle(Int32(bytes.count), false, true)
             for (i, b) in bytes.enumerated() { wr8(rd32(pic) + UInt32(i), b) }
             tb_DrawPicture(pic, rect(0, 0, 20, 20))
             #expect(pixel(2, 2) == (0xFFFF, 0, 0))
             #expect(pixel(3, 3) == (0xFFFF, 0xFFFF, 0xFFFF))
+            var inked = 0
+            for y in 6..<18 { for x in 6..<18 where pixel(x, y) != (0xFFFF, 0xFFFF, 0xFFFF) { inked += 1 } }
+            #expect(inked == 0)
+            #expect(pixel(0, 10) == (0, 0, 0)) // the frame after the warning is drawn
             tb_DisposeGWorld(port)
         }
 
@@ -206,7 +213,9 @@ extension BlueBox {
             let info = tb_NewPtr(80, false, true)
             #expect(tb_GetCodecInfo(info, Int32(bitPattern: jpeg), 0) == 0 && rd32(info + 44) != 0) // a compressor
             let comp = tb_NewPtr(8, false, true)
-            #expect(tb_FindCodec(Int32(bitPattern: rle), 0, comp, comp + 4) == 0 && rd32(comp) == rle)
+            #expect(tb_FindCodec(Int32(bitPattern: rle), 0, comp, comp + 4) == 0 && rd32(comp) != 0 && rd32(comp + 4) != 0)
+            var t: UInt32 = 0, st: UInt32 = 0, m: UInt32 = 0
+            #expect(components_describe(rd32(comp), &t, &st, &m) && t == 0x696D_636F && st == rle)
             let list = tb_NewPtr(4, false, true)
             #expect(tb_GetCodecNameList(list, 0) == 0 && rd16(rd32(list)) == 3)
             #expect(tb_DisposeCodecNameList(Int32(bitPattern: rd32(list))) == 0)

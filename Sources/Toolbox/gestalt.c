@@ -8,6 +8,7 @@
 #include "r3d.h"
 #include "tb_internal.h"
 #include "trap.h"
+#include "qt_vr.h"
 
 #define MAX_GESTALT 128
 
@@ -129,7 +130,15 @@ void gestalt_init(void)
     gestalt_set(fourcc("qdrw"), 0x0F);
     gestalt_set(fourcc("addr"), 0x7);         /* 32-bit addressing, sys zone, capable */
     gestalt_set(fourcc("ram "), g_mem_report_cap);
-    gestalt_set(fourcc("qtim"), 0x02508000); /* QuickTime 2.5 (movies play as zero length) */
+    /* QuickTime 4.1.2, the last for 68k Macs: its importers and exporters,
+     * graphics importers and exporters, wired sprites, tweens, effects,
+     * streaming and QuickTime VR are there */
+    gestalt_set(fourcc("qtim"), 0x04128000);
+    gestalt_set(fourcc("qtst"), 0x04128000); /* QuickTime Streaming (QTStreamLib) */
+    if (qt_vr_available()) {
+        gestalt_set(fourcc("qtvr"), 0xF);    /* the API; objects, cylindrical and cubic panoramas */
+        gestalt_set(fourcc("qtvv"), 0x03008000); /* QuickTime VR 3.0, QuickTime 4's */
+    }
     gestalt_set(fourcc("cpnt"), 0x00030000); /* the Component Manager, as QuickTime 2.5 has it */
     gestalt_set(fourcc("lram"), g_mem_report_cap);
     gestalt_set(fourcc("vm  "), 0);

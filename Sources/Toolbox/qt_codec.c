@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "hostvideo.h"
 #include "machine.h"
 #include "mace_decoder.h"
 #include "qd_internal.h"
@@ -18,6 +19,9 @@
 #include "tb_internal.h"
 
 /* ---- Video ---- */
+
+static uint32_t be16(const uint8_t *p) { return (uint32_t)p[0] << 8 | p[1]; }
+static uint32_t be32(const uint8_t *p) { return be16(p) << 16 | be16(p + 2); }
 
 /* Photo-JPEG ('jpeg'): each sample a JPEG image, through the host. */
 static machine_image_fn image_fn;
@@ -59,6 +63,21 @@ static const qt_video_codec qt_codec_jpeg = { 0x6A706567, jpeg_supports, jpeg_op
 static const qt_video_codec *const codecs[] = { &qt_codec_cvid, &qt_codec_rle, &qt_codec_smc, &qt_codec_rpza,
                                                &qt_codec_raw, &qt_codec_jpeg };
 
+/* The host's decoders (hostvideo.h), for codecs we have none of our own for. */
+static bool host_supports(int depth) { return depth > 0; }
+static void *host_open(const qt_video_format *f)
+{
+    return hostvideo_open(f->format, f->width, f->height, f->desc, f->desc_len);
+}
+static bool host_decode(void *s, const qt_video_format *f, const uint32_t *palette, const uint8_t *data, size_t len,
+                        uint8_t *frame)
+{
+    (void)f, (void)palette;
+    return hostvideo_decode(s, data, len, frame);
+}
+static void host_close(void *s) { hostvideo_close(s); }
+static const qt_video_codec qt_codec_host = { 0, host_supports, host_open, host_decode, host_close };
+
 struct qt_vdec {
     const qt_video_codec *codec;
     qt_video_format format;
@@ -66,12 +85,43 @@ struct qt_vdec {
     void *state;
 };
 
+/* Ours first, then the host's, then a codec component the program brought. */
 static const qt_video_codec *codec_for(uint32_t format, int depth)
 {
     for (size_t i = 0; i < sizeof codecs / sizeof *codecs; i++)
         if (codecs[i]->format == format && codecs[i]->supports(depth))
             return codecs[i];
+    if (format && hostvideo_supported(format))
+        return &qt_codec_host;
+    if (format && qt_codec_program_supports(format))
+        return &qt_codec_program;
     return NULL;
+}
+
+bool qt_video_format_of_desc(const uint8_t *d, uint32_t len, qt_video_format *f, uint32_t palette[256])
+{
+    if (len < 86)
+        return false;
+    f->format = be32(d + 4);
+    f->width = (int16_t)be16(d + 32);
+    f->height = (int16_t)be16(d + 34);
+    f->depth = (int16_t)be16(d + 82);
+    f->palette = NULL;
+    f->desc = d;
+    f->desc_len = len;
+    int16_t clut = (int16_t)be16(d + 84);
+    if (clut == 0 && f->depth >= 1 && f->depth <= 8 && len >= 94) {
+        const uint8_t *c = d + 86;
+        int count = (int)be16(c + 6) + 1;
+        memset(palette, 0, 256 * sizeof *palette);
+        for (int k = 0; k < count && k < 256 && 94 + (uint32_t)k * 8 + 8 <= len; k++) {
+            const uint8_t *e = c + 8 + k * 8;
+            int v = (be16(c + 4) & 0x8000 ? k : (int)be16(e)) & 255;
+            palette[v] = (uint32_t)e[2] << 16 | (uint32_t)e[4] << 8 | e[6];
+        }
+        f->palette = palette;
+    }
+    return f->width > 0 && f->height > 0;
 }
 
 bool qt_vdec_supported(uint32_t format, int depth) { return codec_for(format, depth) != NULL; }
@@ -143,13 +193,33 @@ const uint32_t *qt_standard_palette(int depth)
 
 static bool is(uint32_t format, const char *s) { return format == fourcc(s); }
 
+/* The plain formats of QuickTime 4 and later, decoded here. */
+static int pcm_bytes(uint32_t format)
+{
+    if (is(format, "ulaw") || is(format, "alaw"))
+        return 1;
+    if (is(format, "in24"))
+        return 3;
+    if (is(format, "in32") || is(format, "fl32"))
+        return 4;
+    return is(format, "fl64") ? 8 : 0;
+}
+
+bool qt_adec_host(const qt_sound_format *f)
+{
+    return !pcm_bytes(f->format) && !is(f->format, "ima4") && !is(f->format, "MAC3") && !is(f->format, "MAC6") &&
+           !is(f->format, "raw ") && !is(f->format, "twos") && !is(f->format, "sowt") && !is(f->format, "NONE") &&
+           hostaudio_supported(f->format);
+}
+
 bool qt_adec_supported(const qt_sound_format *f)
 {
     if (f->channels < 1 || f->channels > 2 || f->rate < 1000 || f->rate > 200000)
         return false;
     if (is(f->format, "raw ") || is(f->format, "twos") || is(f->format, "sowt") || is(f->format, "NONE"))
         return f->bits == 8 || f->bits == 16;
-    return is(f->format, "ima4") || is(f->format, "MAC3") || is(f->format, "MAC6");
+    return is(f->format, "ima4") || is(f->format, "MAC3") || is(f->format, "MAC6") || pcm_bytes(f->format) ||
+           qt_adec_host(f);
 }
 
 size_t qt_adec_bytes(const qt_sound_format *f, uint32_t frames)
@@ -161,7 +231,105 @@ size_t qt_adec_bytes(const qt_sound_format *f, uint32_t frames)
         return (frames + 5) / 6 * 2 * ch;
     if (is(f->format, "MAC6"))
         return (frames + 5) / 6 * ch;
+    if (pcm_bytes(f->format))
+        return (size_t)frames * ch * (size_t)pcm_bytes(f->format);
+    if (qt_adec_host(f)) /* a constant rate: whole packets */
+        return f->frames_per_packet && f->bytes_per_packet
+                   ? (frames + f->frames_per_packet - 1) / f->frames_per_packet * (size_t)f->bytes_per_packet
+                   : 0;
     return (size_t)frames * ch * (size_t)(f->bits / 8);
+}
+
+/* G.711: the ITU's expansions. */
+static int16_t ulaw(uint8_t u)
+{
+    u = (uint8_t)~u;
+    int t = ((u & 0x0F) << 3) + 0x84;
+    t <<= (u & 0x70) >> 4;
+    return (int16_t)(u & 0x80 ? 0x84 - t : t - 0x84);
+}
+
+static int16_t alaw(uint8_t a)
+{
+    a ^= 0x55;
+    int t = (a & 0x0F) << 4, seg = (a & 0x70) >> 4;
+    t = seg ? (t + 0x108) << (seg - 1) : t + 8;
+    return (int16_t)(a & 0x80 ? t : -t);
+}
+
+static int16_t pcm_sample(const qt_sound_format *f, const uint8_t *p)
+{
+    uint8_t b[8];
+    int n = pcm_bytes(f->format);
+    for (int i = 0; i < n; i++) /* big-endian, as the description says unless 'enda' */
+        b[i] = f->little ? p[n - 1 - i] : p[i];
+    if (is(f->format, "ulaw"))
+        return ulaw(b[0]);
+    if (is(f->format, "alaw"))
+        return alaw(b[0]);
+    if (is(f->format, "in24") || is(f->format, "in32"))
+        return (int16_t)(b[0] << 8 | b[1]);
+    double v;
+    if (is(f->format, "fl32")) {
+        uint32_t u = (uint32_t)b[0] << 24 | (uint32_t)b[1] << 16 | (uint32_t)b[2] << 8 | b[3];
+        float x;
+        memcpy(&x, &u, 4);
+        v = x;
+    } else {
+        uint64_t u = 0;
+        for (int i = 0; i < 8; i++)
+            u = u << 8 | b[i];
+        memcpy(&v, &u, 8);
+    }
+    v *= 32767.0;
+    return (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+}
+
+void qt_sound_desc_extras(const uint8_t *e, uint32_t len, qt_sound_format *f)
+{
+    if (len < 36)
+        return;
+    uint32_t version = (uint32_t)e[16] << 8 | e[17], at = 36;
+    if (version == 1 && len >= 52) {
+        f->frames_per_packet = (uint32_t)e[36] << 24 | (uint32_t)e[37] << 16 | (uint32_t)e[38] << 8 | e[39];
+        f->bytes_per_packet = (uint32_t)e[44] << 24 | (uint32_t)e[45] << 16 | (uint32_t)e[46] << 8 | e[47];
+        at = 52;
+    }
+    /* extension atoms, and a 'wave' atom's children: 'enda', 'esds' */
+    for (int pass = 0; pass < 2; pass++) {
+        uint32_t end = len, wave = 0;
+        while (at + 8 <= end) {
+            uint32_t sz = (uint32_t)e[at] << 24 | (uint32_t)e[at + 1] << 16 | (uint32_t)e[at + 2] << 8 | e[at + 3];
+            if (sz < 8 || at + sz > end)
+                break;
+            const uint8_t *t = e + at + 4;
+            if (!memcmp(t, "enda", 4) && sz >= 10)
+                f->little = e[at + 9] || e[at + 8];
+            else if (!memcmp(t, "esds", 4) && sz > 12) {
+                f->cookie = e + at + 12; /* past the version and flags */
+                f->cookie_len = sz - 12;
+            } else if (!memcmp(t, "wave", 4))
+                wave = at;
+            at += sz;
+        }
+        if (!wave)
+            break;
+        uint32_t wsz = (uint32_t)e[wave] << 24 | (uint32_t)e[wave + 1] << 16 | (uint32_t)e[wave + 2] << 8 | e[wave + 3];
+        at = wave + 8;
+        len = wave + wsz;
+    }
+}
+
+uint32_t qt_adec_decode_packets(const qt_sound_format *f, const uint8_t *data, size_t len, const uint32_t *sizes,
+                                int npackets, int16_t **pcm)
+{
+    *pcm = NULL;
+    hostaudio_dec *d = hostaudio_open(f->format, f->channels, f->rate, f->cookie, f->cookie_len);
+    if (!d)
+        return 0;
+    uint32_t n = hostaudio_decode(d, data, len, sizes, npackets, pcm);
+    hostaudio_close(d);
+    return n;
 }
 
 /* IMA 4:1: packets of 34 bytes per channel, a 2-byte header (the
@@ -212,12 +380,16 @@ uint32_t qt_adec_decode(const qt_sound_format *f, const uint8_t *data, size_t le
         return 0;
     size_t nch = (size_t)f->channels;
     size_t frames;
+    if (qt_adec_host(f))
+        return qt_adec_decode_packets(f, data, len, NULL, 0, pcm);
     if (is(f->format, "ima4"))
         frames = len / (34 * nch) * 64;
     else if (is(f->format, "MAC3"))
         frames = len / nch * 3;
     else if (is(f->format, "MAC6"))
         frames = len / nch * 6;
+    else if (pcm_bytes(f->format))
+        frames = len / (nch * (size_t)pcm_bytes(f->format));
     else
         frames = len / (nch * (size_t)(f->bits / 8));
     if (!frames || frames > 0x1000000)
@@ -231,6 +403,11 @@ uint32_t qt_adec_decode(const qt_sound_format *f, const uint8_t *data, size_t le
     if (is(f->format, "MAC3") || is(f->format, "MAC6"))
         return (uint32_t)mace_decode(data, len, (int)nch, is(f->format, "MAC3"), out);
     size_t n = frames * nch;
+    if (pcm_bytes(f->format)) {
+        for (size_t i = 0; i < n; i++)
+            out[i] = pcm_sample(f, data + i * (size_t)pcm_bytes(f->format));
+        return (uint32_t)frames;
+    }
     for (size_t i = 0; i < n; i++) {
         if (f->bits == 16)
             out[i] = is(f->format, "sowt") ? (int16_t)(data[i * 2] | data[i * 2 + 1] << 8)

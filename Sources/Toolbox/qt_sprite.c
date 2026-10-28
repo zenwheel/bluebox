@@ -26,6 +26,7 @@
  * look for after the sample description's header: 101 background colour
  * (RGBColor, black by default), 103 sample format (long), 106 visible.
  */
+#define _GNU_SOURCE /* memmem */
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +36,7 @@
 
 enum {
     P_MATRIX = 1, P_VISIBLE = 4, P_LAYER = 5, P_MODE = 6, P_IMAGE = 100,
-    T_BACKGROUND = 101, T_FORMAT = 103, T_VISIBLE = 106,
+    T_BACKGROUND = 101, T_FORMAT = 103, T_VISIBLE = 106, T_IDLE = 107,
     ALL_OVERRIDES = 1 << 2,
 };
 /* graphics modes */
@@ -58,6 +59,9 @@ typedef struct {
     double rx, ry;  /* registration point */
 } image;
 
+#define MAX_VARS 64
+#define MAX_PENDING 8
+
 struct qt_sprite {
     int w, h;
     uint8_t bg[3];
@@ -66,6 +70,23 @@ struct qt_sprite {
     int nimg;
     sprite *key, *cur;
     int nspr;
+    /* wired sprites (qt_wired.c): the key frame's atoms, where the event
+     * handlers are; samples whose frame-loaded handlers are to run; the
+     * track's variables; idle events' frequency (ticks, -1 none) */
+    uint8_t *key_data;
+    uint32_t key_len;
+    struct {
+        uint8_t *data;
+        uint32_t len;
+    } pending[MAX_PENDING];
+    int npending;
+    struct {
+        uint32_t id;
+        double v;
+    } vars[MAX_VARS];
+    int nvars;
+    int32_t idle_frequency;
+    uint32_t idle_mark, hover;
 };
 
 static uint32_t be16(const uint8_t *p) { return (uint32_t)p[0] << 8 | p[1]; }
@@ -145,6 +166,8 @@ static void track_properties(qt_sprite *s, const qtatom *root)
         s->all_overrides = (leaf_len(&a) >= 4 ? be32(a.body) : be16(a.body)) & ALL_OVERRIDES;
     if (find_child(root, T_VISIBLE, 0, &a) && leaf_len(&a) >= 1)
         s->visible = leaf_len(&a) >= 2 ? be16(a.body) != 0 : a.body[0] != 0;
+    if (find_child(root, T_IDLE, 0, &a) && leaf_len(&a) >= 4)
+        s->idle_frequency = (int32_t)be32(a.body);
 }
 
 qt_sprite *qt_sprite_new(const uint8_t *desc, uint32_t len, int w, int h)
@@ -157,6 +180,7 @@ qt_sprite *qt_sprite_new(const uint8_t *desc, uint32_t len, int w, int h)
     s->w = w;
     s->h = h;
     s->visible = true;
+    s->idle_frequency = -1;
     /* SpriteDescription: size, format, reserved, data reference, then
      * version 16, decompressor 20 and the sample flags 24, how overrides
      * apply (a track property may say so too). */
@@ -192,7 +216,74 @@ void qt_sprite_free(qt_sprite *s)
     if (!s)
         return;
     free_scene(s);
+    free(s->key_data);
+    for (int i = 0; i < s->npending; i++)
+        free(s->pending[i].data);
     free(s);
+}
+
+/* A sample with frame-loaded handlers (at the root or a sprite's), for
+ * qt_wired.c to run. */
+static void note_frame(qt_sprite *s, const uint8_t *data, uint32_t len)
+{
+    if (s->npending >= MAX_PENDING || !memmem(data, len, "fram", 4) || !memmem(data, len, "evnt", 4))
+        return;
+    uint8_t *copy = malloc(len);
+    if (!copy)
+        return;
+    memcpy(copy, data, len);
+    s->pending[s->npending].data = copy;
+    s->pending[s->npending++].len = len;
+}
+
+const uint8_t *qt_sprite_key_data(const qt_sprite *s, uint32_t *len)
+{
+    *len = s->key_len;
+    return s->key_data;
+}
+
+bool qt_sprite_take_frame(qt_sprite *s, uint8_t **data, uint32_t *len)
+{
+    if (!s->npending)
+        return false;
+    *data = s->pending[0].data;
+    *len = s->pending[0].len;
+    memmove(&s->pending[0], &s->pending[1], (size_t)(--s->npending) * sizeof s->pending[0]);
+    return true;
+}
+
+double qt_sprite_var(const qt_sprite *s, uint32_t id)
+{
+    for (int i = 0; i < s->nvars; i++)
+        if (s->vars[i].id == id)
+            return s->vars[i].v;
+    return 0;
+}
+
+void qt_sprite_set_var(qt_sprite *s, uint32_t id, double v)
+{
+    for (int i = 0; i < s->nvars; i++)
+        if (s->vars[i].id == id) {
+            s->vars[i].v = v;
+            return;
+        }
+    if (s->nvars < MAX_VARS)
+        s->vars[s->nvars].id = id, s->vars[s->nvars++].v = v;
+}
+
+int32_t *qt_sprite_idle(qt_sprite *s, uint32_t **mark)
+{
+    *mark = &s->idle_mark;
+    return &s->idle_frequency;
+}
+
+uint32_t *qt_sprite_hover(qt_sprite *s) { return &s->hover; }
+
+bool qt_sprite_size(const qt_sprite *s, int *w, int *h)
+{
+    *w = s->w;
+    *h = s->h;
+    return true;
 }
 
 bool qt_sprite_all_overrides(const qt_sprite *s) { return s->all_overrides; }
@@ -207,7 +298,7 @@ static bool decode_image(image *im, const uint8_t *d, uint32_t len)
     uint32_t idsize = be32(d);
     if (idsize < 86 || idsize > len)
         return false;
-    qt_video_format f = { be32(d + 4), (int)be16(d + 32), (int)be16(d + 34), (int16_t)be16(d + 82), NULL };
+    qt_video_format f = { be32(d + 4), (int)be16(d + 32), (int)be16(d + 34), (int16_t)be16(d + 82), NULL, d, idsize };
     uint32_t palette[256];
     int bits = f.depth > 32 ? f.depth - 32 : f.depth;
     if ((int16_t)be16(d + 84) == 0 && bits >= 1 && bits <= 8 && f.depth <= 8 && idsize >= 94) {
@@ -282,6 +373,12 @@ bool qt_sprite_key(qt_sprite *s, const uint8_t *data, uint32_t len)
         return false;
     free_scene(s);
     track_properties(s, &root);
+    free(s->key_data);
+    s->key_data = malloc(len);
+    s->key_len = s->key_data ? len : 0;
+    if (s->key_data)
+        memcpy(s->key_data, data, len);
+    note_frame(s, data, len);
     qtatom it = { 0 };
     while (next_child(&imct, &it)) {
         qtatom imda, reg;
@@ -331,6 +428,7 @@ void qt_sprite_override(qt_sprite *s, const uint8_t *data, uint32_t len)
     qtatom root;
     if (!s->cur || !root_of(data, len, &root))
         return;
+    note_frame(s, data, len);
     qtatom it = { 0 };
     while (next_child(&root, &it)) {
         if (it.type != four("sprt"))
@@ -423,13 +521,19 @@ bool qt_sprite_draw(const qt_sprite *s, uint8_t *rgba)
         memcpy(rgba + i * 4, s->bg, 3);
         rgba[i * 4 + 3] = 255;
     }
+    qt_sprite_draw_over(s, rgba);
+    return true;
+}
+
+void qt_sprite_draw_over(const qt_sprite *s, uint8_t *rgba)
+{
     if (!s->cur)
-        return true;
+        return;
     /* Back to front: the highest layer first, and within a layer the
      * sprites in order of their IDs. */
     int *order = malloc((size_t)(s->nspr ? s->nspr : 1) * sizeof *order);
     if (!order)
-        return true;
+        return;
     for (int i = 0; i < s->nspr; i++)
         order[i] = i;
     for (int i = 1; i < s->nspr; i++)
@@ -445,7 +549,6 @@ bool qt_sprite_draw(const qt_sprite *s, uint8_t *rgba)
         if (s->cur[order[i]].visible)
             draw_sprite(s, &s->cur[order[i]], rgba);
     free(order);
-    return true;
 }
 
 /* ---- At run time: the sprite media handler's calls ---- */
@@ -646,3 +749,65 @@ void qt_sprite_set_track_visible(qt_sprite *s, bool visible) { s->visible = visi
 
 void qt_sprite_background(const qt_sprite *s, uint8_t rgb[3]) { memcpy(rgb, s->bg, 3); }
 void qt_sprite_set_background(qt_sprite *s, const uint8_t rgb[3]) { memcpy(s->bg, rgb, 3); }
+
+/* ---- The Sprite Toolbox's worlds (qt_spriteworld.c) ---- */
+
+qt_sprite *qt_sprite_world(int w, int h)
+{
+    qt_sprite *s = qt_sprite_new(NULL, 0, w, h);
+    if (s) {
+        s->key = calloc(1, sizeof *s->key);
+        s->cur = calloc(1, sizeof *s->cur);
+    }
+    return s;
+}
+
+bool qt_sprite_set_image(qt_sprite *s, uint32_t id, const uint8_t *desc_and_data, uint32_t len)
+{
+    image im = { id, 0, 0, NULL, 0, 0 };
+    if (!decode_image(&im, desc_and_data, len)) {
+        free(im.rgba);
+        return false;
+    }
+    for (int i = 0; i < s->nimg; i++)
+        if (s->img[i].id == id) {
+            free(s->img[i].rgba);
+            s->img[i] = im;
+            return true;
+        }
+    image *n = realloc(s->img, (size_t)(s->nimg + 1) * sizeof *n);
+    if (!n) {
+        free(im.rgba);
+        return false;
+    }
+    s->img = n;
+    s->img[s->nimg++] = im;
+    return true;
+}
+
+void qt_sprite_forget_image(qt_sprite *s, uint32_t id)
+{
+    for (int i = 0; i < s->nimg; i++)
+        if (s->img[i].id == id) {
+            free(s->img[i].rgba);
+            memmove(&s->img[i], &s->img[i + 1], (size_t)(s->nimg - i - 1) * sizeof *s->img);
+            s->nimg--;
+            return;
+        }
+}
+
+bool qt_sprite_bounds(const qt_sprite *s, uint32_t id, int r[4])
+{
+    const sprite *sp = find_sprite(s, id);
+    const image *im = sp ? image_of(s, sp->image) : NULL;
+    if (!im)
+        return false;
+    double x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (int k = 0; k < 4; k++) {
+        double x = (k & 1 ? im->w : 0) - im->rx, y = (k & 2 ? im->h : 0) - im->ry;
+        double X = sp->a * x + sp->c * y + sp->tx, Y = sp->b * x + sp->d * y + sp->ty;
+        x0 = fmin(x0, X), x1 = fmax(x1, X), y0 = fmin(y0, Y), y1 = fmax(y1, Y);
+    }
+    r[0] = (int)floor(y0), r[1] = (int)floor(x0), r[2] = (int)ceil(y1), r[3] = (int)ceil(x1);
+    return true;
+}

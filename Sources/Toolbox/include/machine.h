@@ -93,6 +93,8 @@ void machine_set_accent_color(uint16_t r, uint16_t g, uint16_t b);
 bool machine_load_theme(const char *path, char *err, size_t errlen);
 /* Screen depth: 1 (black and white, the default), 8 or 32; before boot. */
 void machine_set_screen_depth(int depth);
+/* The depth the next boot gives the screen (machine_screen_depth is the one it has). */
+int machine_screen_depth_setting(void);
 /* The screen's depth now (a program may have changed it). */
 int machine_screen_depth(void);
 /* 68040 (with FPU, the default) or 68020 (no FPU). Before machine_boot. */
