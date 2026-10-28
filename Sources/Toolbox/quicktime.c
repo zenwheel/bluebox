@@ -49,6 +49,7 @@
 #include "qt_movie_internal.h"
 #include "qt_native.h"
 #include "qt_vlc.h"
+#include "qt_vr.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -257,9 +258,13 @@ static int vlc_volume(const movie *m)
 static qrect natural_rect(const movie *m)
 {
     int w = 0, h = 0;
+    /* Disabled tracks take no space (a VR movie's tiles) when enabled ones show. */
+    bool any_enabled = false;
+    for (int k = 0; k < m->mv->ntracks; k++)
+        any_enabled |= m->mv->tracks[k]->width && m->mv->tracks[k]->height && (m->mv->tracks[k]->flags & 1);
     for (int k = 0; k < m->mv->ntracks; k++) {
         const qtm_track *t = m->mv->tracks[k];
-        if (!t->width || !t->height)
+        if (!t->width || !t->height || (any_enabled && !(t->flags & 1)))
             continue;
         if (t->media && (t->media->type == fourcc("soun") || t->media->type == fourcc("musi")))
             continue;
@@ -566,6 +571,7 @@ static void close_sources(movie *m)
 
 static void free_movie(movie *m)
 {
+    qt_vr_movie_gone(m->handle);
     qt_callbacks_timebase_gone(m->timebase);
     stop_sound(m);
     release_slaves(m->handle);
@@ -1016,6 +1022,8 @@ static void seek(movie *m, int64_t ms)
 
 static void draw_frame(movie *m, bool force)
 {
+    if (m->active && qt_vr_movie_draw(m->handle, m->port, m->box, force)) /* a QuickTime VR movie: its view */
+        return;
     refresh(m);
     bool fresh;
     if (m->native) {
@@ -1160,6 +1168,7 @@ static void follow_master(movie *m)
 
 static void task(movie *m)
 {
+    qt_vr_movie_idle(m->handle);
     if (!m->playing)
         return;
     follow_master(m);
@@ -2869,6 +2878,8 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
             gaddr e = rd32(a);
             int ew = (int16_t)rd16(e);
             if (ew == 0) { /* null: time passes */
+                if (m)
+                    qt_vr_movie_modifiers(m->handle, rd16(e + 14));
                 mc_idle(c);
             } else if (ew == 6 && rd32(e + 2) == c->port) { /* update */
                 tb_BeginUpdate(c->port);
@@ -2882,9 +2893,14 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
                 tb_SetPort(c->port);
                 tb_GlobalToLocal(pt);
                 tb_SetPort(saved);
-                if (!filter(c, mcActionMouseDown, e) && mc_click_with(c, rd32(pt), rd16(e + 14) & 0x0200))
+                if (!filter(c, mcActionMouseDown, e) &&
+                    ((m && qt_vr_movie_click(m->handle, c->ci, rd32(pt), rd16(e + 14))) ||
+                     mc_click_with(c, rd32(pt), rd16(e + 14) & 0x0200)))
                     result = 1;
                 tb_DisposePtr(pt);
+            } else if ((ew == 3 || ew == 5) && c->active && m && qt_vr_movie(m->handle)) { /* QuickTime VR's keys */
+                if (!filter(c, mcActionKey, e) && qt_vr_movie_key(m->handle, (uint8_t)rd32(e + 2), rd16(e + 14)))
+                    result = 1;
             } else if ((ew == 3 || ew == 5) && c->active && (rd32(e + 2) & 0xFF) == ' ') { /* space */
                 if (!filter(c, mcActionKey, e) && m)
                     mc_play(c, m->playing ? 0 : m->mv->pref_rate);
@@ -3369,6 +3385,7 @@ void quicktime_reset(void)
     qt_movies_reset();
     qt_callbacks_reset();
     qt_util_reset();
+    qt_vr_reset();
 }
 
 /* ---------------------------------------------------------------------- */
