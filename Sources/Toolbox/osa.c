@@ -410,7 +410,7 @@ static int32_t osa_call(int16_t what, gaddr params)
         static const uint16_t sels[] = {
             kOSASelectLoad, kOSASelectStore, kOSASelectExecute, kOSASelectDisplay, kOSASelectScriptError,
             kOSASelectDispose, kOSASelectSetScriptInfo, kOSASelectGetScriptInfo, kOSASelectSetActiveProc,
-            kOSASelectGetActiveProc, kOSASelectScriptingComponentName, kOSASelectCompile, kOSASelectCopyID,
+            kOSASelectGetActiveProc, kOSASelectScriptingComponentName, kOSASelectCompile, kOSASelectCopyID, 0x0105,
             kOSASelectGetSource, kOSASelectCoerceFromDesc, kOSASelectCoerceToDesc, kOSASelectSetSendProc,
             kOSASelectGetSendProc, kOSASelectSetCreateProc, kOSASelectGetCreateProc, kOSASelectSetDefaultTarget,
             kOSASelectStartRecording, kOSASelectStopRecording, kOSASelectLoadExecute, kOSASelectCompileExecute,
@@ -485,6 +485,10 @@ static int32_t osa_call(int16_t what, gaddr params)
         return cant_compile();
     case kOSASelectCopyID: /* (fromID, *toID) */
         id = as_copy_id(ARG(1));
+        wr32(ARG(0), id);
+        return id ? noErr : errOSAInvalidID;
+    case 0x0105: /* OSACopyScript (fromID, *toID) */
+        id = as_copy_script(ARG(1));
         wr32(ARG(0), id);
         return id ? noErr : errOSAInvalidID;
     case kOSASelectCoerceFromDesc: /* (scriptData, modeFlags, *resultingScriptID) */

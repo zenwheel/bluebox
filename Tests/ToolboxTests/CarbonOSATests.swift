@@ -171,5 +171,25 @@ extension BlueBox {
             #expect(svcStatus(svcCall("OSAGetAppTerminology", ci, 0, spec, 5, launched, list)) == -2709)
             #expect(svcStatus(svcCall("OSAGetSysTerminology", ci, 0, 0, list)) == -2709)
         }
+
+        @Test func copiedScriptsAreTheirOwn() {
+            launchTestApp()
+            let q = QTTune()
+            q.install()
+            let ci = svcCall("OpenDefaultComponent", fourCC("osa "), fourCC("ascr"))
+            let data = AS.script([(.ident("x"), .long(5))])
+            let script = loaded(ci, data)
+            let copy = svcPtr(4)
+            #expect(svcCall("OSACopyScript", ci, script, copy) == 0 && rd32(copy) != script)
+            let newValue = svcPtr(4), vid = svcPtr(4)
+            #expect(svcCall("OSACoerceFromDesc", ci, textDesc("changed"), 0, newValue) == 0)
+            #expect(svcCall("OSASetProperty", ci, 0, rd32(copy), textDesc("x"), rd32(newValue)) == 0)
+            #expect(svcCall("OSAGetProperty", ci, 0, script, textDesc("x"), vid) == 0)
+            #expect(shown(ci, rd32(vid)) == "5") // the original keeps its own
+            #expect(svcCall("OSAGetProperty", ci, 0, rd32(copy), textDesc("x"), vid) == 0)
+            #expect(shown(ci, rd32(vid)) == "\"changed\"")
+            #expect(svcStatus(svcCall("OSACopyScript", ci, 999, copy)) == -1751)
+            _ = q
+        }
     }
 }

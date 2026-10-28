@@ -94,5 +94,31 @@ extension BlueBox {
             // Sending it to an application that isn't there fails as AESend does, and doesn't hang
             #expect(svcCall("ICSendGURLEvent", ic, ev) != 0)
         }
+
+        @Test func componentLevelNamesAndInterruptSafeCalls() {
+            launchTestApp()
+            machine_set_internet_pref("Email", [3] + Array("a@b".utf8), 4)
+            machine_set_internet_pref("Mapping", [1, 2, 3, 4, 5], 5)
+            let inst = svcPtr(4)
+            #expect(svcCall("ICCStart", inst, fourCC("TEST")) == 0 && rd32(inst) != 0)
+            let ic = instance() // the component itself, as the component-level calls take it
+            // The ICC names are the same calls under another name
+            let count = svcPtr(4)
+            #expect(svcCall("ICCCountPref", ic, count) == 0 && rd32(count) >= 2)
+            let key = svcPtr(256)
+            #expect(svcCall("ICCGetIndPref", ic, 1, key) == 0 && rd8(key) > 0)
+            let seed = svcPtr(4), seed2 = svcPtr(4)
+            #expect(svcCall("ICCGetSeed", ic, seed) == 0 && svcCall("ICGetSeedInterruptSafe", ic, seed2) == 0 && rd32(seed) == rd32(seed2))
+            let ptr = svcPtr(4), size = svcPtr(4)
+            #expect(svcCall("ICGetMappingInterruptSafe", ic, ptr, size) == 0 && rd32(size) == 5)
+            #expect(svcBytes(rd32(ptr), 5) == [1, 2, 3, 4, 5])
+            #expect(svcCall("ICRequiresInterruptSafe", ic) == 0 && svcCall("ICRefreshCaches", ic) == 0)
+            #expect(svcCall("ICCBegin", ic, 1) == 0 && svcCall("ICCEnd", ic) == 0)
+            let perm = svcPtr(1)
+            #expect(svcCall("ICCGetPerm", ic, perm) == 0)
+            let name = svcPtr(64)
+            #expect(svcCall("ICDefaultFileName", ic, name) == 0 && rd8(name) == 20)
+            #expect(svcCall("ICCStop", rd32(inst)) == 0)
+        }
     }
 }

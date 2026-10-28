@@ -35,6 +35,7 @@ static uint32_t instance_call(ppc_cpu *c, int16_t what, const char *sizes)
 
 #define CALL(name, sel, sizes) static void os_##name(ppc_cpu *c) { RET(instance_call(c, sel, sizes)); }
 /* OSA.h */
+CALL(OSACopyScript, 0x0105, "44")
 CALL(OSASetCurrentDialect, 0x0701, "2")
 CALL(OSAGetCurrentDialect, 0x0702, "4")
 CALL(OSAAvailableDialects, 0x0703, "4")
@@ -123,7 +124,7 @@ void rest_osa_reset(void) {}
 const ppc_export rest_osa_exports[] = {
     X(ASGetAppTerminology), X(ASGetHandler), X(ASGetProperty), X(ASGetSourceStyleNames), X(ASGetSourceStyles),
     X(ASInit), X(ASSetHandler), X(ASSetProperty), X(ASSetSourceStyles),
-    X(OSAAddStorageType), X(OSAAvailableDialectCodeList), X(OSAAvailableDialects),
+    X(OSACopyScript), X(OSAAddStorageType), X(OSAAvailableDialectCodeList), X(OSAAvailableDialects),
     X(OSADebuggerCreateSession), X(OSADebuggerDisposeCallFrame), X(OSADebuggerDisposeSession),
     X(OSADebuggerGetBreakpoint), X(OSADebuggerGetCallFrameState), X(OSADebuggerGetCurrentCallFrame),
     X(OSADebuggerGetDefaultBreakpoint), X(OSADebuggerGetPreviousCallFrame), X(OSADebuggerGetSessionState),

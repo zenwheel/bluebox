@@ -150,5 +150,20 @@ extension BlueBox {
             #expect(svcStatus(svcCall("NSLErrorToString", 0, 0, 0, s)) == -4176)
             #expect(svcCall("NSLLibraryVersion") != 0)
         }
+
+        @Test func urlAliasFiles() {
+            launchTestApp()
+            let fileName = "Example " + UUID().uuidString.prefix(8) // the Desktop Folder outlives a run
+            let e = svcStatus(svcCall("NSLSaveURLAliasToFolder", fourCC("desk"), cstr("http://example.org/a"), cstr(fileName)))
+            #expect(e == 0)
+            let spec = svcPtr(70), info = svcPtr(16)
+            let vref = svcPtr(2), dir = svcPtr(4)
+            #expect(tb_FindFolder(-1, Int32(bitPattern: fourCC("desk")), 0, vref, dir) == 0)
+            #expect(tb_FSMakeFSSpec(Int16(bitPattern: rd16(vref)), Int32(bitPattern: rd32(dir)), svcPStr(fileName), spec) == 0)
+            #expect(tb_FSpGetFInfo(spec, info) == 0 && rd32(info) == fourCC("ilht") && rd32(info + 4) == fourCC("MACS"))
+            #expect(svcStatus(svcCall("NSLSaveURLAliasToFolder", fourCC("desk"), cstr("http://example.org/a"), cstr(fileName))) == -48)
+            #expect(svcStatus(svcCall("NSLSaveURLAliasToFolder", fourCC("desk"), cstr("nonsense"), cstr("X"))) == -4172)
+            #expect(svcStatus(svcCall("NSLSaveURLAliasToFolder", fourCC("desk"), 0, cstr("X"))) == -4176)
+        }
     }
 }

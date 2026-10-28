@@ -3552,3 +3552,30 @@ size_t as_list_text(uint32_t id, size_t i, const uint8_t **text)
     *text = l->items[i]->bytes;
     return l->items[i]->n;
 }
+
+/* OSACopyScript: a script object of its own, with its properties' values copied. */
+uint32_t as_copy_script(uint32_t id)
+{
+    as_obj *s = of_id(id);
+    if (!s || s->kind != V_SCRIPT)
+        return 0;
+    as_obj *n = as_new(V_SCRIPT);
+    n->a = as_new(V_VECTOR);
+    n->a->btype = s->a->btype;
+    for (uint32_t i = 0; i < s->a->n; i++)
+        as_list_push(n->a, s->a->items[i]);
+    n->b = as_list(s->b->n);
+    for (uint32_t i = 0; i < s->b->n; i++)
+        as_list_push(n->b, as_clone(s->b->items[i]));
+    n->c = as_clone(s->c);
+    n->d = s->d;
+    uint32_t out = new_id(n);
+    size_t len;
+    const uint8_t *d = as_script_data(id, &len);
+    if (d) {
+        ids[out - 1].data = malloc(len);
+        memcpy(ids[out - 1].data, d, len);
+        ids[out - 1].len = len;
+    }
+    return out;
+}

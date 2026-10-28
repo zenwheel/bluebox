@@ -45,6 +45,8 @@ int32_t as_run_idle(uint32_t id, int *found);
 int32_t as_display(uint32_t id, char *out, size_t cap);
 void as_dispose(uint32_t id);
 uint32_t as_copy_id(uint32_t id);
+/* A script object of its own, its values copied (OSACopyScript); 0 for none. */
+uint32_t as_copy_script(uint32_t id);
 /* A value's ID for text (MacRoman), an integer, or an Apple Event
  * descriptor in guest memory (Open Documents' list of aliases). */
 uint32_t as_new_text(const char *s);

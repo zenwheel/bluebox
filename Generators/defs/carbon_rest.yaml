@@ -252,3 +252,28 @@
         type: INTEGER
     dispatcher: TranslationDispatch
     selector: 0x0E
+
+# TranslationExtensions.h: calls a translator makes back to the Translation Manager
+- function:
+    name: SetTranslationAdvertisement
+    return: OSErr
+    args:
+      - name: refNum
+        type: LONGINT
+      - name: advertisement
+        type: Handle
+    dispatcher: TranslationDispatch
+    selector: 0x02
+
+- function:
+    name: UpdateTranslationProgress
+    return: OSErr
+    args:
+      - name: refNum
+        type: LONGINT
+      - name: percentDone
+        type: INTEGER
+      - name: canceled
+        type: Ptr
+    dispatcher: TranslationDispatch
+    selector: 0x01

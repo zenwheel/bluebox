@@ -22763,6 +22763,23 @@ static void ppcglue_TranslateScrap(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetTranslationAdvertisement(ppc_cpu *c)
+{
+    int32_t a_refNum = (int32_t)c->gpr[3];
+    gaddr a_advertisement = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetTranslationAdvertisement(a_refNum, a_advertisement);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UpdateTranslationProgress(ppc_cpu *c)
+{
+    int32_t a_refNum = (int32_t)c->gpr[3];
+    int16_t a_percentDone = (int16_t)c->gpr[4];
+    gaddr a_canceled = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UpdateTranslationProgress(a_refNum, a_percentDone, a_canceled);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -44946,6 +44963,7 @@ const ppc_export ppc_exports[] = {
     {"SetTrackSoundLocalizationSettings", ppctrap_SetTrackSoundLocalizationSettings},
     {"SetTrackUsage", ppctrap_SetTrackUsage},
     {"SetTrackVolume", ppctrap_SetTrackVolume},
+    {"SetTranslationAdvertisement", ppcglue_SetTranslationAdvertisement},
     {"SetTrapAddress", ppcglue_SetTrapAddress},
     {"SetUpControlBackground", ppcglue_SetUpControlBackground},
     {"SetUpControlTextColor", ppcglue_SetUpControlTextColor},
@@ -45200,6 +45218,7 @@ const ppc_export ppc_exports[] = {
     {"UpdateMovieResource", ppcglue_UpdateMovieResource},
     {"UpdateResFile", ppcglue_UpdateResFile},
     {"UpdateSystemActivity", ppcglue_UpdateSystemActivity},
+    {"UpdateTranslationProgress", ppcglue_UpdateTranslationProgress},
     {"UseDictionary", ppcglue_UseDictionary},
     {"UseInputWindow", ppcglue_UseInputWindow},
     {"UseMovieEditState", ppctrap_UseMovieEditState},

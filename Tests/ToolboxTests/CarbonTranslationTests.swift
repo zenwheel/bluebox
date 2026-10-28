@@ -115,5 +115,13 @@ extension BlueBox {
             #expect(Self.asked == [fourCC("TEXT"), fourCC("PICT")])
             #expect(svcStatus(svcCall("TranslateScrap", 0, 0, fourCC("TEXT"), h, 0)) == -50)
         }
+
+        @Test func translatorCallbacksNeedATranslation() {
+            bootMachine()
+            let canceled = svcPtr(1)
+            wr8(canceled, 9)
+            #expect(tb_UpdateTranslationProgress(1, 50, canceled) == -3031 && rd8(canceled) == 0)
+            #expect(tb_SetTranslationAdvertisement(1, 0) == -3031)
+        }
     }
 }

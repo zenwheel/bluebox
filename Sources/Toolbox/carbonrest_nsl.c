@@ -18,10 +18,13 @@
  * back through the pointer in r3 and goes in as two words.
  */
 #include <ctype.h>
+#include <stdio.h>
+#include <strings.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "carbonrest.h"
+#include "filemgr_internal.h"
 
 enum {
     kNSLSchedulerError = -4171,
@@ -683,7 +686,56 @@ static void nsl_FreeURL(ppc_cpu *c)
     RET(0);
 }
 
+/* NSLSaveURLAliasToFolder(folderSelectorType, url, userFriendlyName): an Internet location
+ * file in a standard folder: its data fork the URL, its type by the kind of URL, 'MACS' its creator. */
+static void nsl_SaveURLAliasToFolder(ppc_cpu *c)
+{
+    char url[1024], name[64];
+    if (!A(1) || !A(2))
+        RET(kNSLErrNullPtrError);
+    rest_cstr(A(1), url, sizeof url);
+    rest_cstr(A(2), name, sizeof name);
+    const char *colon = strchr(url, ':');
+    if (!colon || colon == url)
+        RET(kNSLBadURLSyntax);
+    if (!name[0] || strlen(name) > 31 || strchr(name, ':'))
+        RET(kNSLBadURLSyntax);
+    uint32_t type = fourcc("ilge");
+    static const struct { const char *scheme; const char *type; } kinds[] = {
+        { "http", "ilht" }, { "https", "ilht" }, { "ftp", "ilft" }, { "afp", "ilaf" }, { "file", "ilfi" },
+        { "news", "ilnw" }, { "nntp", "ilnw" }, { "mailto", "ilmt" }, { "telnet", "iltn" }, { "gopher", "ilgo" },
+    };
+    for (unsigned i = 0; i < sizeof kinds / sizeof *kinds; i++)
+        if (strlen(kinds[i].scheme) == (size_t)(colon - url) && !strncasecmp(url, kinds[i].scheme, (size_t)(colon - url)))
+            type = fourcc(kinds[i].type);
+    gaddr p = tb_NewPtr(8 + 64 + FSSpec_SIZEOF, false, true);
+    if (!p)
+        RET(rest_memFullErr);
+    gaddr vref = p, dir = p + 2, pname = p + 8, spec = p + 8 + 64;
+    int16_t e = tb_FindFolder(-1, (int32_t)A(0), 1, vref, dir);
+    rest_pstr_put(pname, name, 31);
+    if (!e)
+        e = tb_FSMakeFSSpec((int16_t)rd16(vref), (int32_t)rd32(dir), pname, spec);
+    if (e == noErr)
+        e = rest_dupFNErr;
+    else if (e == fnfErr)
+        e = tb_FSpCreate(spec, (int32_t)fourcc("MACS"), (int32_t)type, 0);
+    if (!e) {
+        char path[1024];
+        FILE *f = fm_resolve((int16_t)rd16(spec), (int32_t)rd32(spec + 2), spec + 6, path, sizeof path) == noErr
+                      ? fopen(path, "wb")
+                      : NULL;
+        if (!f || fwrite(url, 1, strlen(url), f) != strlen(url))
+            e = ioErr;
+        if (f)
+            fclose(f);
+    }
+    tb_DisposePtr(p);
+    RET((int32_t)e);
+}
+
 const ppc_export rest_nsl_exports[] = {
+    { "NSLSaveURLAliasToFolder", nsl_SaveURLAliasToFolder },
     { "NSLAddServiceToServicesList", nsl_AddServiceToServicesList },
     { "NSLCancelRequest", nsl_CancelRequest },
     { "NSLCloseNavigationAPI", nsl_CloseNavigationAPI },

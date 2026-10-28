@@ -241,3 +241,15 @@ int16_t tb_TranslateScrap(gaddr sourceDataGetter, gaddr sourceDataGetterRefCon, 
     int16_t err = (int16_t)aem_call_proc(sourceDataGetter, 0x00000FE0, args, 3);
     return err ? noTranslationPathErr : noErr;
 }
+
+/* SetTranslationAdvertisement(refNum, advertisement), UpdateTranslationProgress(refNum,
+ * percentDone, &canceled): what a translator calls while it translates; no translation
+ * is going on, so the reference is no translation's. */
+int16_t tb_SetTranslationAdvertisement(int32_t refNum, gaddr advertisement) { return badTranslationSpecErr; }
+
+int16_t tb_UpdateTranslationProgress(int32_t refNum, int16_t percentDone, gaddr canceled)
+{
+    if (canceled)
+        wr8(canceled, 0);
+    return badTranslationSpecErr;
+}

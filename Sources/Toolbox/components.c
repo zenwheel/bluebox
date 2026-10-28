@@ -751,6 +751,35 @@ void machine_set_internet_pref(const char *key, const uint8_t *data, int32_t len
     }
 }
 
+/* The Mapping preference in memory that stays (an interrupt-safe caller cannot ask for a handle). */
+static int16_t ic_get_mapping_safe(gaddr ptrp, gaddr sizep)
+{
+    static gaddr kept;
+    static uint32_t kept_seed;
+    uint8_t key[256] = { 7, 'M', 'a', 'p', 'p', 'i', 'n', 'g' };
+    int i = ic_find(key);
+    if (ptrp)
+        wr32(ptrp, 0);
+    if (sizep)
+        wr32(sizep, 0);
+    if (i < 0)
+        return icPrefNotFoundErr;
+    if (!kept || kept_seed != ic_seed) {
+        if (kept)
+            tb_DisposePtr(kept);
+        kept = tb_NewPtr(ic_prefs[i].len > 0 ? ic_prefs[i].len : 1, true, false);
+        kept_seed = ic_seed;
+        if (!kept)
+            return memFullErr;
+        gput(kept, ic_prefs[i].data, (uint32_t)ic_prefs[i].len);
+    }
+    if (ptrp)
+        wr32(ptrp, kept);
+    if (sizep)
+        wr32(sizep, (uint32_t)ic_prefs[i].len);
+    return noErr;
+}
+
 /* ICGetDefaultPref(key, prefH): the default's data into the handle. */
 static int16_t ic_get_default_pref(gaddr key, gaddr h)
 {
@@ -1218,6 +1247,13 @@ static void ic_component(cpu68k *c, uint16_t tw)
         break;
     case 0x34: /* ICSendGURLEvent(event) */
         r = ic_send_gurl_event(last);
+        break;
+    case 0x30: /* ICGetSeedInterruptSafe(&seed) */
+        if (last)
+            wr32(last, ic_get_seed());
+        break;
+    case 0x2E: /* ICGetMappingInterruptSafe(&mappingPref, &mappingPrefSize): the Mapping preference, kept for the caller */
+        r = ic_get_mapping_safe(rd32(params + 8), last);
         break;
     /* The mappings database, URLs and the configuration (vam.c): */
     case 0x0F: /* ICEditPreferences(key) */

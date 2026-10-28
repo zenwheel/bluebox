@@ -24011,6 +24011,17 @@ static void glue_SetTrackEnabled(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetTranslationAdvertisement(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_advertisement = (gaddr)cpu_pop32(c);
+    int32_t a_refNum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetTranslationAdvertisement(a_refNum, a_advertisement);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetTrapAddress(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -26384,6 +26395,18 @@ static void glue_UpdateSystemActivity(cpu68k *c, uint16_t trapword)
     uint8_t a_activity = (uint8_t)(c->d[0] >> 16);
     int16_t r = tb_UpdateSystemActivity(a_activity);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_UpdateTranslationProgress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_canceled = (gaddr)cpu_pop32(c);
+    int16_t a_percentDone = (int16_t)cpu_pop16(c);
+    int32_t a_refNum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_UpdateTranslationProgress(a_refNum, a_percentDone, a_canceled);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_UseDictionary(cpu68k *c, uint16_t trapword)
@@ -29811,6 +29834,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF2, (int32_t)0x615u, "GetSpecificFreeThreadCount", CONV_STACK, 12, 2, glue_GetSpecificFreeThreadCount},
     {0xABF2, (int32_t)0x70Au, "SetThreadSwitcher", CONV_STACK, 14, 2, glue_SetThreadSwitcher},
     {0xABF2, (int32_t)0xE03u, "NewThread", CONV_STACK, 28, 2, glue_NewThread},
+    {0xABFC, (int32_t)0x1u, "UpdateTranslationProgress", CONV_STACK, 10, 2, glue_UpdateTranslationProgress},
+    {0xABFC, (int32_t)0x2u, "SetTranslationAdvertisement", CONV_STACK, 8, 2, glue_SetTranslationAdvertisement},
     {0xABFC, (int32_t)0x9u, "ExtendFileTypeList", CONV_STACK, 14, 2, glue_ExtendFileTypeList},
     {0xABFC, (int32_t)0xCu, "TranslateFile", CONV_STACK, 12, 2, glue_TranslateFile},
     {0xABFC, (int32_t)0xEu, "TranslateScrap", CONV_STACK, 18, 2, glue_TranslateScrap},
