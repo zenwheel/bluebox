@@ -18,7 +18,7 @@ per-app quirks list is the reality, and the test oracle keeps us honest about th
 |---|---|
 | Host platforms | macOS and Linux. No iPadOS. |
 | Binaries | Run existing 68k and PPC binaries unmodified. No source toolchain for bluebox apps. |
-| Process model | One classic app per host process, launched from the host OS. No inter-app communication except via host clipboard and files. No Finder. |
+| Process model | One classic app per host process, launched from the host OS. No inter-app communication except via host clipboard and files. No Finder. Revisited 2026-10-28: M21 runs Apple's own Finder, first on its own and launching programs as their own runs, then with several programs in one machine. |
 | Core language | C17 for the CPU cores, memory model, trap dispatch, and the whole Toolbox. |
 | Host language | Swift for the macOS host and the CLI. Python for code generation (and possibly import/install tooling). |
 | Linux UI | GTK4/GDK, written in Swift (decided 2026-10-12) through a module map and a thin hand-written C shim. |
@@ -862,6 +862,53 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 - **Test programs:** Retro68's Carbon samples, small Carbon programs built with Retro68 for each area, and the corpus's Carbon programs (Super Snake, BBEdit Lite 6.1 for OS X).
 
 **Exit:** `bluebox exports --missing` lists only phase 2 and later names for CarbonLib; Retro68's Carbon samples, Super Snake and BBEdit Lite 6.1 run.
+
+### M21: The Finder
+
+**Goal:** Apple's own Finder runs in Blue Box: System 7.1's (68k) first, then Mac OS 8's and 9's (PowerPC), from the user's System disk images (Apple's software stays out of the repo). Added 2026-10-28.
+
+- **Where it stands:** a scratch copy of System 7.1's Finder (type `FNDR`, relabelled `APPL` because `bluebox run` takes only applications) reads its resources, loads segments and sets up TextEdit and its palette, then stops after 170,000 instructions at `OSDispatch` selector `$42`, the first of the private Process Manager calls it uses to become the system's shell.
+- **Phase 1, the Finder on its own:**
+  - `bluebox run` (and the shell app) accept the Finder: file type `FNDR`, launched as the system's Finder process.
+  - The Process Manager's Finder-only selectors.
+  - The Desktop Database (`PBDTGetPath`, `PBDTGetIcon`/`PBDTAddIcon`, APPL mappings, comments, `PBDTGetInfo`; on the SQLite catalog, built from the volumes' `BNDL`s as the Finder's rebuild did).
+  - The Desktop Folder and Trash on each volume, icon positions and window states kept in the Finder info, labels, aliases, Get Info, copying and moving through the File Manager, Put Away, Empty Trash, Eject.
+  - The Finder's own trap patches, and its Apple events (the `FNDR` suite: open, print, reveal, sleep, restart, shut down).
+  - Launching a program or a document starts it as its own Blue Box run, as `LaunchApplication` does today, while the Finder keeps running. The Application menu lists the other runs, through the host.
+- **Phase 2, several programs in one machine:**
+  - A Process Manager with real application partitions in one address space and cooperative switching at WaitNextEvent, as MultiFinder and System 7 had: layers (`_LayerDispatch` is in), suspend/resume events, the Application menu, background tasks, Apple events between processes delivered in-machine, the Finder as the process programs quit back to, desk accessories in their own layer (M-later's Device Manager has them), `LaunchApplication`'s whole interface.
+  - A Blue Box run then holds a whole session: the Finder plus the programs opened from it.
+  - The single-program run stays the default for launching from the host.
+- **Phase 3, Mac OS 8 and 9's Finders:**
+  - PowerPC, on the Appearance, Window, Menu, Control, Icon Services, Contextual Menu, Navigation and PrivateInterfaceLib work of M17/M20.
+  - Finder extensions (Contextual Menu plug-ins), Sherlock's Find By Content hooks, the Finder's scripting dictionary, the Desktop printer and spring-loaded folders.
+- **Approach:** as with the private libraries, the Finder's private calls are found from its code and implemented on Blue Box's real structures; Mac OS 8 and 9's CFM dumps name the PowerPC ones.
+
+**Exit:** System 7.1's Finder shows the desktop and the volumes, opens folders, copies, moves, trashes and renames files, rebuilds its desktop database and launches programs and documents; in phase 2 several programs run beside it in one session and quit back to it; in phase 3 the Mac OS 8.1 and 9.x Finders do the same.
+
+### M22: Classic 68k compatibility (System 6 and 7 programs)
+
+**Goal:** programs written for System 6 and early System 7 run as they did, beyond what the shared Toolbox gives them. Most of the Toolbox has one implementation serving 68k traps and PowerPC imports, so M17/M20's work already reaches 68k programs wherever a call has a trap; what's here is what older programs depend on that Mac OS 9 had dropped or changed. Added 2026-10-28. As everywhere (Completeness, 2026-10-28), the whole of each area, with the archive walks to check it.
+
+- **24-bit addressing:** programs in a 24-bit partition that keep flags in a pointer's high byte (the 68k-exceptions work, 2026-10-27, found these still go wrong). The CPU has `addr_mask`, but it can't simply be 24 bits: Blue Box's ROM stubs and the screen live at `$F0`/`$F8xxxxxx`. Design: 24-bit runs map those at 24-bit addresses (ROM at `$40xxxx`-style, screen inside the 16 MB space) and mask every guest access, as a Mac without 32-bit mode did; `StripAddress`, `SwapMMUMode`, `GetMMUMode`, `MMU32Bit` and the master pointers' flag byte follow the mode; the per-program setting chooses.
+- **The 68000 CPU:** a true 68000 mode (odd-address errors, the 24-bit bus, `MOVE from SR` unprivileged, no 68020 addressing modes or instructions, the 68000's exception frames) and a 68020/68030 mode with their caches (self-modifying code that worked without `FlushInstructionCache`), chosen per program, alongside today's 68040 with FPU.
+- **Hardware the program touches directly:**
+  - The VIA (timers, the one-second interrupt, the sound and video page bits) and the SCC (serial, the AppleTalk-less polled mode) as memory-mapped devices.
+  - The classic screen: `ScrnBase`, a 512×342 one-bit screen with the alternate page, and the Mac II video cards' frame buffers, so programs that write the screen directly draw.
+  - The sound buffer at its fixed address and the alternate sound page, played through the host.
+  - The mouse and keyboard low-memory globals programs read directly (`MTemp`, `RawMouse`, `KeyMap`).
+- **The Sound Driver:** the pre-Sound Manager `.Sound` driver's square-wave, four-tone and free-form synthesizers (`StartSound`, `StopSound`, `SoundDone`, `GetSoundVol`/`SetSoundVol`), on the host's audio. Many early games use it.
+- **System 6–era interfaces and behaviour:**
+  - `SysEnvirons` answered as each machine did, and older ROM and machine-type checks (`ROM85`, `HWCfgFlags`, `CPUFlag`, the ROM version word) giving answers those programs accept.
+  - Running without MultiFinder: the single-application `Launch`, `Chain`, `ExitToShell` to a shell; Switcher.
+  - The old Standard File, Print Manager (`PrGlue` and the `.Print` driver's calls) and List Manager variants.
+  - INITs and cdevs: running a program's own INIT at startup and showing a cdev in a Control Panel window.
+  - Trap patching through `SetTrapAddress` with the old semantics: no `NGetTrapAddress` distinction, and tool and OS traps sharing one table on the 64K and 128K ROMs.
+  - The 64K/128K ROM programs' expectations (the ROM's own routines called at fixed offsets): answered where the program would otherwise stop.
+- **Copy protection and key disks:** programs that check a floppy's sectors pass when the original disk image is given (a disk image as `.Sony` drive 1 with its raw sectors).
+- **Validation:** the walks' 68k stops sorted by these causes; System 6 and 7 programs from the archive and the System 6 image (`system6`) with the oracle (Basilisk II, Mini vMac for 68000 behaviour).
+
+**Exit:** System 6–era programs from the archive that write the screen or sound directly, use the Sound Driver, or need 24-bit addressing or a 68000 run as on their machines; a program's INIT and cdev run; a key-disk game passes with its disk image.
 
 ### Backlog
 
