@@ -84,7 +84,9 @@ typedef struct {
 } visual;
 
 struct qt_native {
-    FILE *fp;
+    FILE *fp;                       /* the movie's data, or */
+    qt_native_reader reader;        /* a reader of every sample's place */
+    void *reader_ctx;
     int32_t scale;                  /* the movie's */
     trak video, sound, music;
     trak extra[MAX_VISUAL];         /* text and sprite tracks */
@@ -386,8 +388,12 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
     return ok;
 }
 
+static bool any_reader; /* the movie being opened has a reader: every reference reaches its data */
+
 static void self_contained_check(const uint8_t *tr, uint32_t len, bool *ok)
 {
+    if (any_reader)
+        return;
     static const char *const dref_path[] = { "mdia", "minf", "dinf", "dref" };
     uint32_t n;
     const uint8_t *dref = path(tr, len, dref_path, 4, &n);
@@ -481,11 +487,27 @@ static bool set_up_composite(qt_native *p)
     return p->canvas != NULL;
 }
 
+static qt_native *open_native(const uint8_t *moov, uint32_t len, const char *data_path, qt_native_reader reader,
+                              void *ctx, int32_t movie_scale, const uint32_t *screen_palette, int screen_depth);
+
 qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_path, int32_t movie_scale,
                           const uint32_t *screen_palette, int screen_depth)
 {
+    return open_native(moov, len, data_path, NULL, NULL, movie_scale, screen_palette, screen_depth);
+}
+
+qt_native *qt_native_open_reader(const uint8_t *moov, uint32_t len, qt_native_reader reader, void *ctx,
+                                 int32_t movie_scale, const uint32_t *screen_palette, int screen_depth)
+{
+    return open_native(moov, len, NULL, reader, ctx, movie_scale, screen_palette, screen_depth);
+}
+
+static qt_native *open_native(const uint8_t *moov, uint32_t len, const char *data_path, qt_native_reader reader,
+                              void *ctx, int32_t movie_scale, const uint32_t *screen_palette, int screen_depth)
+{
     if (len < 8 || memcmp(moov + 4, "moov", 4))
         return NULL;
+    any_reader = reader != NULL;
     qt_native *p = calloc(1, sizeof *p);
     if (!p)
         return NULL;
@@ -549,18 +571,20 @@ qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_pa
     }
     if (ok && p->composite)
         ok = set_up_composite(p);
-    if (ok && (p->video.present || p->sound.present || p->music.present || p->nextra))
+    p->reader = reader;
+    p->reader_ctx = ctx;
+    if (ok && !reader && (p->video.present || p->sound.present || p->music.present || p->nextra))
         p->fp = fopen(data_path, "rb");
-    if (ok && p->fp && p->music.present)
+    if (ok && (p->fp || p->reader) && p->music.present)
         ok = read_music(p);
-    if (!ok || !p->fp) {
+    if (!ok || (!p->fp && !p->reader)) {
         qt_native_close(p);
         return NULL;
     }
     return p;
 }
 
-static uint8_t *read_at(FILE *fp, uint64_t off, uint32_t size);
+static uint8_t *read_at(const qt_native *p, uint64_t off, uint32_t size);
 
 /* Movie time (ms) of a moment of the track's media (the first edit that
  * shows media, or none). */
@@ -581,7 +605,7 @@ static bool read_music(qt_native *p)
         return false;
     bool ok = true;
     for (uint32_t k = 0; k < t->nsamples && ok; k++) {
-        s[k].data = read_at(p->fp, t->offset[k], t->size[k]);
+        s[k].data = read_at(p, t->offset[k], t->size[k]);
         s[k].len = t->size[k];
         s[k].time = t->time[k];
         ok = s[k].data != NULL;
@@ -676,12 +700,19 @@ static int64_t sample_at(const trak *t, int64_t mt)
     return lo;
 }
 
-static uint8_t *read_at(FILE *fp, uint64_t off, uint32_t size)
+static uint8_t *read_at(const qt_native *p, uint64_t off, uint32_t size)
 {
     if (size > 64u << 20)
         return NULL;
     uint8_t *buf = malloc(size ? size : 1);
-    if (!buf || fseeko(fp, (off_t)off, SEEK_SET) != 0 || fread(buf, 1, size, fp) != size) {
+    if (buf && p->reader) {
+        if (!p->reader(p->reader_ctx, off, buf, size)) {
+            free(buf);
+            return NULL;
+        }
+        return buf;
+    }
+    if (!buf || !p->fp || fseeko(p->fp, (off_t)off, SEEK_SET) != 0 || fread(buf, 1, size, p->fp) != size) {
         free(buf);
         return NULL;
     }
@@ -706,7 +737,7 @@ static bool decode_sample(qt_native *p, int64_t k)
             p->fh = h;
         }
     }
-    uint8_t *data = read_at(p->fp, t->offset[k], t->size[k]);
+    uint8_t *data = read_at(p, t->offset[k], t->size[k]);
     if (!data)
         return false;
     bool ok = qt_vdec_decode(p->dec, data, t->size[k], p->frame);
@@ -744,7 +775,7 @@ static void text_to(qt_native *p, visual *v, int64_t want)
     v->drawn = false;
     if (want < 0)
         return;
-    uint8_t *data = read_at(p->fp, v->t->offset[want], v->t->size[want]);
+    uint8_t *data = read_at(p, v->t->offset[want], v->t->size[want]);
     if (data)
         v->drawn = qt_text_draw(v->text, data, v->t->size[want], v->rgba);
     free(data);
@@ -752,7 +783,7 @@ static void text_to(qt_native *p, visual *v, int64_t want)
 
 static void sprite_apply(qt_native *p, visual *v, int64_t k)
 {
-    uint8_t *data = read_at(p->fp, v->t->offset[k], v->t->size[k]);
+    uint8_t *data = read_at(p, v->t->offset[k], v->t->size[k]);
     if (data)
         qt_sprite_override(v->sprite, data, v->t->size[k]);
     free(data);
@@ -771,7 +802,7 @@ static void sprite_to(qt_native *p, visual *v, int64_t want)
         k--;
     if (k != v->key) {
         for (;;) {
-            uint8_t *data = read_at(p->fp, t->offset[k], t->size[k]);
+            uint8_t *data = read_at(p, t->offset[k], t->size[k]);
             bool is_key = data && qt_sprite_key(v->sprite, data, t->size[k]);
             free(data);
             if (is_key || k == 0)
@@ -946,7 +977,7 @@ uint32_t qt_native_sound(qt_native *p, int64_t from_ms, int64_t to_ms, int16_t *
         if (c1 <= fa || c0 >= fb)
             continue;
         size_t bytes = qt_adec_bytes(&t->sf, t->chunk_frames[c]);
-        uint8_t *data = read_at(p->fp, t->chunk_offset[c], (uint32_t)bytes);
+        uint8_t *data = read_at(p, t->chunk_offset[c], (uint32_t)bytes);
         if (!data)
             continue;
         int16_t *dec = NULL;

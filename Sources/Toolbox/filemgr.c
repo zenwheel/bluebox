@@ -3959,6 +3959,17 @@ int16_t fm_open_fork(const char *host, bool rsrc, uint8_t perm, int16_t *refnum)
     return open_path(host, rsrc, perm, refnum);
 }
 
+/* The refnum of a fork open for writing on this host file, or 0: what is
+ * in it may not be on the disk yet (QuickTime's data handlers read and
+ * write a movie's data through it). */
+int16_t fm_write_refnum(const char *host, bool rsrc)
+{
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && fcbs[i].rsrc == rsrc && fcbs[i].write && !strcmp(fcbs[i].path, host))
+            return fcb_refnum(i);
+    return 0;
+}
+
 int16_t fm_flush_fork(int16_t refnum)
 {
     fcb *f = fcb_for(refnum);

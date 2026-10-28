@@ -242,6 +242,7 @@ bool components_describe(uint32_t cid, uint32_t *type, uint32_t *subtype, uint32
 uint32_t components_find_next(uint32_t after, uint32_t type, uint32_t subtype, uint32_t manufacturer);
 uint32_t components_open_component(uint32_t cid, int16_t *err);
 void qt_components_reset(void);
+void qt_callbacks_periodic(void); /* QuickTime's interrupt-time callbacks (qt_callbacks.c) */
 void components_reset(void);
 void quicktime_reset(void);
 /* Mouse button and location into low memory (events.c). */

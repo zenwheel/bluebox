@@ -1,21 +1,27 @@
 /*
- * QuickTime's Movie Toolbox, with movies decoded by libvlc (qt_vlc.c).
+ * QuickTime's Movie Toolbox: movies opened, played, edited and saved.
  *
- * A movie's description (its 'moov' atom: time scale, duration, tracks,
- * natural size) is read here, from the file's resource fork as classic
- * movies kept it or from the data fork of a flattened one, so timing is
- * right with or without VLC.  For playing, VLC gets the file itself when it
- * is flattened, or else a temporary flattened copy: the data fork behind an
- * 'mdat' header, then the 'moov' atom with its chunk offsets moved to match.
- * With a host attached and libvlc available, frames are drawn into the
- * movie's GWorld when the application gives the movie time (MoviesTask,
- * UpdateMovie, the movie controller) and VLC plays the sound; otherwise
- * (headless runs) movies keep time without pictures or sound.
+ * A movie's description (its 'moov' atom: time scale, duration, tracks and
+ * their media) is read from the file's resource fork as classic movies
+ * kept it, or from the data fork of a flattened one, into the records the
+ * Movie Toolbox's calls read and change (qt_model.c; the track, media and
+ * sample calls are qt_movies.c).  It is played from those records,
+ * written out again as a 'moov' atom whenever they change.
  *
  * Movies whose codecs we have (Cinepak, Animation, Graphics, Apple Video,
- * None; uncompressed, IMA and MACE sound) play through our own decoders
- * instead (qt_native.c), headless runs included: frames for the movie's
- * clock, and sound sent to the host a second ahead.  VLC is the fallback.
+ * None, Photo-JPEG and the host's; uncompressed, IMA and MACE sound; music,
+ * text and sprite tracks) play through our own decoders (qt_native.c),
+ * headless runs included: frames for the movie's clock, and sound sent to
+ * the host a second ahead.  Samples are read wherever their data
+ * references say (the movie's file, others, handles in memory).  Movies
+ * that need something else are played by libvlc (qt_vlc.c), given the
+ * file itself when it is flattened or else a flattened copy (the data
+ * fork behind an 'mdat' header, then the 'moov' atom with its chunk
+ * offsets moved to match); with a host attached and libvlc available,
+ * frames are drawn into the movie's GWorld when the application gives the
+ * movie time (MoviesTask, UpdateMovie, the movie controller) and VLC plays
+ * the sound; otherwise (headless runs) such movies keep time without
+ * pictures or sound.
  *
  * Time bases (NewTimeBase, GetMovieTimeBase) keep time from the machine's
  * clock or from a master time base, so one movie can follow another's time
@@ -24,6 +30,7 @@
  * The movie controller is a component of our own: a play/pause button and a
  * time slider under the movie, with the standard actions and action filters.
  */
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,21 +42,22 @@
 #include "forks.h"
 #include "m68k.h"
 #include "qd_internal.h"
+#include "qt_atoms.h"
+#include "qt_dref.h"
 #include "qt_edit.h"
+#include "qt_model.h"
+#include "qt_movie_internal.h"
 #include "qt_native.h"
 #include "qt_vlc.h"
 #include "tb_internal.h"
 #include "trap.h"
 
-enum {
-    noMovieFound = -2048, invalidMovie = -2010, invalidTrack = -2009, badImageDescription = -2001,
-    movieToolboxUninitialized = -2020,
-};
+#include "qt_errors.h"
 enum { newMovieActive = 1 };
 
 static int16_t movies_error, sticky_error;
 
-static int16_t set_error(int16_t err)
+int16_t qt_set_error(int16_t err)
 {
     movies_error = err;
     if (err && !sticky_error)
@@ -57,30 +65,26 @@ static int16_t set_error(int16_t err)
     return err;
 }
 
+static int16_t set_error(int16_t err) { return qt_set_error(err); }
+
 /* ---------------------------------------------------------------------- */
 /* Movies */
 
-#define MAX_MOVIES 32
-#define MAX_TRACKS 16
-
-typedef struct {
-    uint32_t type; /* 'vide', 'soun', ... */
-    int16_t width, height;
-    gaddr handle;  /* the Track (and its Media, handle + 2) */
-    bool disabled; /* SetTrackEnabled(false) */
-} track;
+#define MAX_MOVIES 64
+#define MAX_SOURCES 16
 
 typedef struct {
     bool used;
     gaddr handle;        /* the Movie the application holds */
+    qtm_movie *mv;       /* its description */
+    char *data_path;     /* the file it came from (its own data's), or NULL */
     char *play_path;     /* what VLC plays */
     bool temp_file;      /* play_path is ours to delete */
-    int32_t scale, duration;
-    qrect natural, box;
+    qrect box;
     gaddr port, gdh;
     bool active, playing, looping;
-    int32_t rate, pref_rate; /* Fixed */
-    int16_t volume, pref_volume;
+    int32_t rate;        /* Fixed */
+    int16_t volume;
     int64_t base_ms;     /* time when stopped, or at start_ns */
     int64_t start_ns;    /* the time source's (the machine's, or the master's), ns */
     gaddr timebase;      /* the TimeBase GetMovieTimeBase gives */
@@ -89,13 +93,12 @@ typedef struct {
     bool vlc_held;       /* VLC paused while the master stands still */
     gaddr clip;          /* SetMovieClipRgn's, in the movie's coordinates (ours) */
     gaddr display_clip;  /* SetMovieDisplayClipRgn's, in the port's (ours) */
-    uint32_t created, modified; /* the 'mvhd' atom's, seconds since 1904 */
     qt_vlc_player *player;
     qt_native *native;   /* our decoders, when they cover the movie */
-    uint8_t *moov;       /* the description, edited in place of the file's */
+    uint8_t *moov;       /* the description as played (written from mv) */
     uint32_t moov_len;
-    char *data_path;     /* the file holding the samples */
-    int32_t sel_start, sel_duration; /* the selection, movie time units */
+    bool virtual_play;   /* its chunk offsets name their tracks and references (qtm_serialize) */
+    bool stale;          /* mv changed since: played from it again */
     bool changed;        /* edited since opened or last saved */
     int64_t sound_ms;    /* native sound sent to the host up to here */
     bool sound_on;
@@ -106,29 +109,13 @@ typedef struct {
     bool frame_indexed;
     int index_depth;     /* palettized video with the standard colours (0: none) */
     uint32_t serial;
-    track tracks[MAX_TRACKS];
-    int ntracks;
+    struct {             /* samples' sources, for a description played with virtual offsets */
+        uint64_t key;    /* track << 8 | reference */
+        qt_src src;
+        bool ok;
+    } srcs[MAX_SOURCES];
+    int nsrcs;
 } movie;
-
-/* Whether any enabled track has this media type (or there are no tracks of
- * it to go by). */
-static bool plays(const movie *m, const char *type)
-{
-    bool any = false;
-    for (int k = 0; k < m->ntracks; k++)
-        if (m->tracks[k].type == fourcc(type)) {
-            any = true;
-            if (!m->tracks[k].disabled)
-                return true;
-        }
-    return !any;
-}
-
-/* VLC's volume (0-100) for the movie's: silent with its sound disabled. */
-static int vlc_volume(const movie *m)
-{
-    return m->volume < 0 || !plays(m, "soun") ? 0 : m->volume * 100 / 256;
-}
 
 static movie movies[MAX_MOVIES];
 
@@ -140,26 +127,169 @@ static movie *movie_of(gaddr h)
     return NULL;
 }
 
-static movie *movie_of_track(gaddr t)
+static movie *movie_of_model(const qtm_movie *mv)
 {
-    for (int i = 0; t && i < MAX_MOVIES; i++)
-        for (int k = 0; movies[i].used && k < movies[i].ntracks; k++)
-            if (movies[i].tracks[k].handle == t || movies[i].tracks[k].handle + 2 == t)
-                return &movies[i];
+    for (int i = 0; mv && i < MAX_MOVIES; i++)
+        if (movies[i].used && movies[i].mv == mv)
+            return &movies[i];
     return NULL;
 }
 
-static track *track_of(gaddr t)
+/* The track and media tokens the program holds. */
+static qtm_track *find_track(gaddr t, movie **mp)
 {
-    movie *m = movie_of_track(t);
-    for (int k = 0; m && k < m->ntracks; k++)
-        if (m->tracks[k].handle == t || m->tracks[k].handle + 2 == t)
-            return &m->tracks[k];
+    for (int i = 0; t && i < MAX_MOVIES; i++)
+        for (int k = 0; movies[i].used && k < movies[i].mv->ntracks; k++)
+            if (movies[i].mv->tracks[k]->token == t) {
+                if (mp)
+                    *mp = &movies[i];
+                return movies[i].mv->tracks[k];
+            }
     return NULL;
+}
+
+static qtm_media *find_media(gaddr md, qtm_track **tp, movie **mp)
+{
+    for (int i = 0; md && i < MAX_MOVIES; i++)
+        for (int k = 0; movies[i].used && k < movies[i].mv->ntracks; k++) {
+            qtm_track *t = movies[i].mv->tracks[k];
+            if (t->media && t->media->token == md) {
+                if (tp)
+                    *tp = t;
+                if (mp)
+                    *mp = &movies[i];
+                return t->media;
+            }
+        }
+    return NULL;
+}
+
+/* For qt_movies.c and the media handlers: a movie's, track's or media's records. */
+qtm_movie *qt_movie_model(gaddr theMovie)
+{
+    movie *m = movie_of(theMovie);
+    return m ? m->mv : NULL;
+}
+
+qtm_track *qt_track_model(gaddr theTrack, qtm_movie **mv)
+{
+    movie *m = NULL;
+    qtm_track *t = find_track(theTrack, &m);
+    if (mv)
+        *mv = m ? m->mv : NULL;
+    return t;
+}
+
+qtm_media *qt_media_model(gaddr theMedia, qtm_track **t, qtm_movie **mv)
+{
+    movie *m = NULL;
+    qtm_media *md = find_media(theMedia, t, &m);
+    if (mv)
+        *mv = m ? m->mv : NULL;
+    return md;
+}
+
+gaddr qt_movie_handle(const qtm_movie *mv)
+{
+    movie *m = movie_of_model(mv);
+    return m ? m->handle : 0;
+}
+
+const char *qt_movie_path(const qtm_movie *mv)
+{
+    movie *m = movie_of_model(mv);
+    return m ? m->data_path : NULL;
+}
+
+void qt_movie_set_path(qtm_movie *mv, const char *path)
+{
+    movie *m = movie_of_model(mv);
+    if (!m)
+        return;
+    free(m->data_path);
+    m->data_path = path ? strdup(path) : NULL;
 }
 
 /* Pictures and sound only with a person to see and hear them. */
 static bool use_vlc(void) { return events_host_attached() || getenv("BLUEBOX_QUICKTIME_HEADLESS"); }
+
+static int64_t duration_ms(const movie *m) { return m->mv->duration * 1000 / m->mv->scale; }
+
+/* Where the movie plays from and to: its active segment (the preview, in
+ * preview mode), else all of it. */
+static int64_t start_ms(const movie *m)
+{
+    return m->mv->active_start >= 0 ? (int64_t)m->mv->active_start * 1000 / m->mv->scale : 0;
+}
+
+static int64_t end_ms(const movie *m)
+{
+    if (m->mv->active_start < 0)
+        return duration_ms(m);
+    int64_t e = ((int64_t)m->mv->active_start + m->mv->active_duration) * 1000 / m->mv->scale;
+    return e < duration_ms(m) ? e : duration_ms(m);
+}
+
+/* Whether any enabled track has this media type (or there are no tracks of
+ * it to go by). */
+static bool plays(const movie *m, const char *type)
+{
+    bool any = false;
+    for (int k = 0; k < m->mv->ntracks; k++) {
+        const qtm_track *t = m->mv->tracks[k];
+        if (t->media && t->media->type == fourcc(type)) {
+            any = true;
+            if (t->flags & 1)
+                return true;
+        }
+    }
+    return !any;
+}
+
+/* VLC's volume (0-100) for the movie's: silent with its sound disabled. */
+static int vlc_volume(const movie *m)
+{
+    return m->volume < 0 || !plays(m, "soun") ? 0 : m->volume * 100 / 256;
+}
+
+/* The movie's natural size: as far as its visual tracks reach, through
+ * their matrices. */
+static qrect natural_rect(const movie *m)
+{
+    int w = 0, h = 0;
+    for (int k = 0; k < m->mv->ntracks; k++) {
+        const qtm_track *t = m->mv->tracks[k];
+        if (!t->width || !t->height)
+            continue;
+        if (t->media && (t->media->type == fourcc("soun") || t->media->type == fourcc("musi")))
+            continue;
+        int16_t top, left, bottom, right;
+        qtm_track_bounds(t, &top, &left, &bottom, &right);
+        if (right > w)
+            w = right;
+        if (bottom > h)
+            h = bottom;
+    }
+    return (qrect){ 0, 0, (int16_t)h, (int16_t)w };
+}
+
+/* A video track whose first sample description is palettized (1 to 8 bits)
+ * without a colour table of its own: QuickTime copied such pixels to a
+ * screen of that depth as they are, so they take the screen's colours. */
+static void find_index_depth(movie *m)
+{
+    m->index_depth = 0;
+    for (int k = 0; k < m->mv->ntracks; k++) {
+        const qtm_media *md = m->mv->tracks[k]->media;
+        if (!md || md->type != fourcc("vide") || !md->ndescs || md->desc_len[0] < 86)
+            continue;
+        const uint8_t *e = md->descs[0];
+        int16_t depth = (int16_t)(e[82] << 8 | e[83]), ctab = (int16_t)(e[84] << 8 | e[85]);
+        if ((depth == 1 || depth == 2 || depth == 4 || depth == 8) && ctab != 0)
+            m->index_depth = depth;
+        return;
+    }
+}
 
 /* ---- Atoms ---- */
 
@@ -186,90 +316,6 @@ static uint8_t *find_atom(uint8_t *p, uint8_t *end, const char *type, uint32_t *
         p += n;
     }
     return NULL;
-}
-
-/* A video track whose first sample description is palettized (1 to 8 bits)
- * without a colour table of its own: QuickTime copied such pixels to a
- * screen of that depth as they are, so they take the screen's colours. */
-static void index_depth(movie *m, uint8_t *mdia, uint32_t len)
-{
-    static const char *const path[] = { "minf", "stbl", "stsd" };
-    uint8_t *p = mdia, *end = mdia + len;
-    uint32_t n = len;
-    for (int i = 0; i < 3 && p; i++) {
-        p = find_atom(p + 8, end, path[i], &n);
-        end = p ? p + n : NULL;
-    }
-    if (!p || n < 16 + 86 || be32(p + 12) < 1)
-        return;
-    uint8_t *e = p + 16;
-    int16_t depth = (int16_t)(e[82] << 8 | e[83]), ctab = (int16_t)(e[84] << 8 | e[85]);
-    if ((depth == 1 || depth == 2 || depth == 4 || depth == 8) && ctab != 0)
-        m->index_depth = depth;
-}
-
-/* Read time scale, duration and tracks from a 'moov' atom. */
-static bool describe(movie *m, uint8_t *moov, uint32_t len)
-{
-    uint8_t *end = moov + len;
-    uint32_t n;
-    uint8_t *mvhd = find_atom(moov + 8, end, "mvhd", &n);
-    if (!mvhd || n < 32)
-        return false;
-    if (mvhd[8] == 1 && n >= 44) { /* 64-bit times: their low halves fit a classic Mac's */
-        m->created = be32(mvhd + 16);
-        m->modified = be32(mvhd + 24);
-        m->scale = (int32_t)be32(mvhd + 28);
-        m->duration = (int32_t)be32(mvhd + 36);
-    } else {
-        m->created = be32(mvhd + 12);
-        m->modified = be32(mvhd + 16);
-        m->scale = (int32_t)be32(mvhd + 20);
-        m->duration = (int32_t)be32(mvhd + 24);
-    }
-    if (m->scale <= 0)
-        m->scale = 600;
-    int w = 0, h = 0;
-    for (uint8_t *t = moov + 8; t + 8 <= end;) {
-        uint32_t tn = be32(t);
-        if (tn < 8 || t + tn > end)
-            break;
-        if (!memcmp(t + 4, "trak", 4) && m->ntracks < MAX_TRACKS) {
-            track *tr = &m->tracks[m->ntracks++];
-            uint32_t k;
-            uint8_t *tkhd = find_atom(t + 8, t + tn, "tkhd", &k);
-            int right = 0, bottom = 0; /* as far as the track's matrix puts it */
-            if (tkhd && k >= 92) {
-                int off = tkhd[8] == 1 ? 96 : 84;
-                if ((uint32_t)off + 8 <= k) {
-                    tr->width = (int16_t)(be32(tkhd + off) >> 16);
-                    tr->height = (int16_t)(be32(tkhd + off + 4) >> 16);
-                    const uint8_t *mx = tkhd + off - 36;
-                    int64_t sx = (int32_t)be32(mx), sy = (int32_t)be32(mx + 16);
-                    if (!sx && !sy) /* no matrix at all: as the identity */
-                        sx = sy = 0x10000;
-                    right = (int)((tr->width * sx + (int32_t)be32(mx + 24) + 0x8000) >> 16);
-                    bottom = (int)((tr->height * sy + (int32_t)be32(mx + 28) + 0x8000) >> 16);
-                }
-            }
-            uint8_t *mdia = find_atom(t + 8, t + tn, "mdia", &k);
-            uint32_t hk;
-            uint8_t *hdlr = mdia ? find_atom(mdia + 8, mdia + k, "hdlr", &hk) : NULL;
-            if (hdlr && hk >= 20)
-                tr->type = be32(hdlr + 16);
-            if (tr->type == fourcc("vide"))
-                index_depth(m, mdia, k);
-            if (tr->type == fourcc("vide") || tr->type == fourcc("text") || tr->type == fourcc("sprt")) {
-                if (right > w)
-                    w = right;
-                if (bottom > h)
-                    h = bottom;
-            }
-        }
-        t += tn;
-    }
-    m->natural = (qrect){ 0, 0, (int16_t)h, (int16_t)w };
-    return true;
 }
 
 /* Move every chunk offset (stco, co64) by delta and make data references
@@ -365,7 +411,7 @@ static uint8_t *moov_resource(const char *path, int16_t *id, uint32_t *len)
 }
 
 /* A 'moov' atom among the data fork's top-level atoms from offset on. */
-static uint8_t *moov_in_data(const char *path, uint32_t offset, uint32_t *len)
+static uint8_t *moov_in_data(const char *path, uint64_t offset, uint32_t *len)
 {
     FILE *fp = fopen(path, "rb");
     if (!fp)
@@ -398,9 +444,8 @@ static uint8_t *moov_in_data(const char *path, uint32_t offset, uint32_t *len)
 }
 
 /* A compressed header (QuickTime 3's 'cmov': 'dcom' naming the method,
- * 'cmvd' the uncompressed size and the data) as the 'moov' atom it holds,
- * so the movie's size and length are known and VLC can play it (QuickTime
- * 2.5 itself refused these).  Takes moov; NULL if it can't be read. */
+ * 'cmvd' the uncompressed size and the data) as the 'moov' atom it holds.
+ * Takes moov; NULL if it can't be read. */
 static uint8_t *uncompress_moov(uint8_t *moov, uint32_t *len)
 {
     uint32_t n, dn, cn;
@@ -423,6 +468,8 @@ static uint8_t *uncompress_moov(uint8_t *moov, uint32_t *len)
     free(moov);
     return out;
 }
+
+uint8_t *qt_moov_uncompress(uint8_t *moov, uint32_t *len) { return uncompress_moov(moov, len); }
 
 static int temp_count;
 
@@ -470,7 +517,10 @@ static void remove_temp_files(void)
             unlink(movies[i].play_path);
 }
 
-static movie *new_movie(void)
+uint32_t mac_now(void);
+
+/* A movie for a description (taken), from a file or not. */
+static movie *new_movie(qtm_movie *mv, const char *path)
 {
     static bool registered;
     if (!registered) {
@@ -483,26 +533,40 @@ static movie *new_movie(void)
         movie *m = &movies[i];
         memset(m, 0, sizeof *m);
         m->used = true;
+        m->mv = mv ? mv : qtm_new(600, mac_now());
+        m->data_path = path ? strdup(path) : NULL;
         m->handle = tb_NewHandle(4, false, true);
         wr32(rd32(m->handle), 0x6D6F6F76); /* 'moov', for anyone looking */
-        m->scale = 600;
-        m->rate = m->pref_rate = 0x00010000;
-        m->volume = m->pref_volume = 0x0100;
+        m->rate = 0x00010000;
+        m->volume = m->mv->pref_volume;
         m->port = qd_port();
         m->gdh = tb_GetGDevice();
         m->timebase = tb_NewHandle(4, false, true);
         wr32(rd32(m->timebase), 0x74626173); /* 'tbas' */
         m->start_ns = (int64_t)machine_time_ns();
+        m->box = natural_rect(m);
+        m->stale = true;
+        find_index_depth(m);
         return m;
     }
+    qtm_free(mv);
     return NULL;
 }
 
 static void stop_sound(movie *m);
 static void release_slaves(gaddr tb);
 
+static void close_sources(movie *m)
+{
+    for (int i = 0; i < m->nsrcs; i++)
+        if (m->srcs[i].ok)
+            qt_src_close(&m->srcs[i].src);
+    m->nsrcs = 0;
+}
+
 static void free_movie(movie *m)
 {
+    qt_callbacks_timebase_gone(m->timebase);
     stop_sound(m);
     release_slaves(m->handle);
     release_slaves(m->timebase);
@@ -513,6 +577,9 @@ static void free_movie(movie *m)
     if (m->display_clip)
         tb_DisposeRgn(m->display_clip);
     qt_native_close(m->native);
+    close_sources(m);
+    qt_movie_forget(m->mv);
+    qtm_free(m->mv);
     free(m->moov);
     free(m->data_path);
     if (m->player)
@@ -521,12 +588,59 @@ static void free_movie(movie *m)
         unlink(m->play_path);
     free(m->play_path);
     free(m->frame);
-    for (int k = 0; k < m->ntracks; k++)
-        if (m->tracks[k].handle)
-            tb_DisposeHandle(m->tracks[k].handle);
     if (m->handle)
         tb_DisposeHandle(m->handle);
     m->used = false;
+}
+
+/* ---- Playing from the description ---- */
+
+/* A sample's bytes for our decoders, from a description with virtual
+ * offsets: the track and data reference say where. */
+static bool read_virtual(void *ctx, uint64_t offset, void *buf, uint32_t n)
+{
+    movie *m = ctx;
+    uint64_t key = offset >> 40;
+    int ti = (int)(key >> 8), di = (int)(key & 0xFF);
+    uint64_t off = offset & ((1ull << 40) - 1);
+    int s = 0;
+    while (s < m->nsrcs && m->srcs[s].key != key)
+        s++;
+    if (s == m->nsrcs) {
+        if (m->nsrcs == MAX_SOURCES)
+            close_sources(m), s = 0;
+        m->nsrcs++;
+        m->srcs[s].key = key;
+        m->srcs[s].ok = false;
+        const qtm_media *md = ti >= 1 && ti <= m->mv->ntracks ? m->mv->tracks[ti - 1]->media : NULL;
+        if (md && di >= 1 && di <= md->ndrefs) {
+            const qtm_dref *d = &md->drefs[di - 1];
+            m->srcs[s].ok = qt_src_open(d->type, d->flags, d->data, d->len, m->data_path, false, &m->srcs[s].src);
+        }
+    }
+    return m->srcs[s].ok && qt_src_read(&m->srcs[s].src, off, buf, n);
+}
+
+/* Whether every sample is in the movie's own file (so its description can
+ * be played, and flattened for VLC, as it is). */
+static bool all_in_own_file(const movie *m)
+{
+    if (!m->data_path)
+        return false;
+    for (int k = 0; k < m->mv->ntracks; k++) {
+        const qtm_media *md = m->mv->tracks[k]->media;
+        if (!md || !md->nruns)
+            continue;
+        for (int i = 0; i < md->ndrefs; i++) {
+            const qtm_dref *d = &md->drefs[i];
+            char path[PATH_MAX];
+            if (d->flags & 1)
+                continue;
+            if (!qt_dref_path(d->type, d->data, d->len, m->data_path, path, sizeof path) || strcmp(path, m->data_path))
+                return false;
+        }
+    }
+    return true;
 }
 
 /* Our decoders for the movie's description (none: VLC, or timing alone).
@@ -535,8 +649,12 @@ static void open_native(movie *m)
 {
     qt_native_close(m->native);
     m->native = NULL;
-    if (!m->moov || !m->data_path)
-        return;
+    close_sources(m);
+    free(m->moov);
+    m->virtual_play = !all_in_own_file(m);
+    m->moov = qtm_serialize(m->mv, m->virtual_play, &m->moov_len);
+    m->stale = false;
+    find_index_depth(m);
     uint32_t screen[256];
     pixdst d = qd_port_pixels(m->port);
     int sd = d.depth <= 8 ? d.depth : 0;
@@ -545,12 +663,96 @@ static void open_native(movie *m)
         qd_px_rgb(sd, d.ctab, (uint32_t)v, c);
         screen[v] = (uint32_t)(c[0] >> 8) << 16 | (uint32_t)(c[1] >> 8) << 8 | (c[2] >> 8);
     }
-    m->native = qt_native_open(m->moov, m->moov_len, m->data_path, m->scale, sd ? screen : NULL, sd);
+    if (m->virtual_play)
+        m->native = qt_native_open_reader(m->moov, m->moov_len, read_virtual, m, m->mv->scale, sd ? screen : NULL, sd);
+    else
+        m->native = qt_native_open(m->moov, m->moov_len, m->data_path, m->mv->scale, sd ? screen : NULL, sd);
+}
+
+/* VLC's copy of a movie our decoders don't play: the file itself when it
+ * is flattened, else a flattened copy. */
+static void prepare_vlc(movie *m, bool flattened)
+{
+    if (m->native || m->virtual_play || !m->data_path)
+        return;
+    if (flattened) {
+        m->play_path = strdup(m->data_path);
+    } else { /* (flatten moves the copy's chunk offsets) */
+        uint8_t *copy = malloc(m->moov_len);
+        if (copy) {
+            memcpy(copy, m->moov, m->moov_len);
+            m->play_path = flatten(m->data_path, copy, m->moov_len);
+            free(copy);
+        }
+        m->temp_file = m->play_path != NULL;
+    }
+}
+
+/* The description changed: played from it again. */
+static void refresh(movie *m)
+{
+    if (!m->stale)
+        return;
+    qtm_update_duration(m->mv);
+    stop_sound(m);
+    open_native(m);
+    m->serial = 0;
+    if (m->base_ms > duration_ms(m))
+        m->base_ms = duration_ms(m);
+}
+
+void qt_movie_touch(qtm_movie *mv)
+{
+    movie *m = movie_of_model(mv);
+    if (!m)
+        return;
+    qtm_update_duration(mv);
+    m->stale = true;
+    m->changed = true;
+}
+
+/* A movie from a description (taken) and the file it came from. */
+static int16_t open_movie(const char *path, int16_t *resid, uint64_t data_offset, bool from_data, gaddr moviep);
+
+static int16_t take_description(uint8_t *moov, uint32_t len, const char *path, bool flattened, gaddr moviep)
+{
+    moov = uncompress_moov(moov, &len);
+    if (!moov)
+        return set_error(invalidMovie);
+    /* a reference movie (QuickTime 4's shortcuts and alternates): the
+     * movie its first reference names */
+    uint32_t rtype, rn;
+    uint8_t *ref;
+    static int depth;
+    if (depth < 4 && qt_reference_movie_target(moov, len, &rtype, &ref, &rn)) {
+        char target[PATH_MAX];
+        free(moov);
+        bool ok = qt_dref_path(rtype, ref, rn, path, target, sizeof target);
+        free(ref);
+        if (!ok)
+            return set_error(couldNotResolveDataRef);
+        depth++;
+        int16_t err = open_movie(target, NULL, 0, false, moviep);
+        depth--;
+        return err;
+    }
+    qtm_movie *mv = qtm_parse(moov, len);
+    free(moov);
+    if (!mv)
+        return set_error(invalidMovie);
+    movie *m = new_movie(mv, path);
+    if (!m)
+        return set_error(memFullErr);
+    open_native(m);
+    LOGF(LOG_TRAPS, "  movie %s: %s\n", path ? path : "(memory)", m->native ? "our decoders" : "VLC");
+    prepare_vlc(m, flattened);
+    wr32(moviep, m->handle);
+    return set_error(noErr);
 }
 
 /* A movie from a host file: the description from the resource fork (resid,
  * 0 for the first) or the data fork at offset; flattened for playing. */
-static int16_t open_movie(const char *path, int16_t *resid, uint32_t data_offset, bool from_data, gaddr moviep)
+static int16_t open_movie(const char *path, int16_t *resid, uint64_t data_offset, bool from_data, gaddr moviep)
 {
     wr32(moviep, 0);
     uint32_t len = 0;
@@ -565,46 +767,45 @@ static int16_t open_movie(const char *path, int16_t *resid, uint32_t data_offset
     }
     if (!moov)
         return set_error(noMovieFound);
-    moov = uncompress_moov(moov, &len);
-    if (!moov)
-        return set_error(invalidMovie);
-    movie *m = new_movie();
-    if (!m) {
-        free(moov);
-        return set_error(memFullErr);
-    }
-    describe(m, moov, len);
-    m->box = m->natural;
-    for (int k = 0; k < m->ntracks; k++) {
-        m->tracks[k].handle = tb_NewHandle(4, false, true);
-    }
-    m->moov = moov;
-    m->moov_len = len;
-    m->data_path = strdup(path);
-    open_native(m);
-    LOGF(LOG_TRAPS, "  movie %s: %s\n", path, m->native ? "our decoders" : "VLC");
-    if (m->native) {
-        m->play_path = NULL;
-    } else if (flattened) {
-        m->play_path = strdup(path);
-    } else { /* (flatten moves the copy's chunk offsets) */
-        uint8_t *copy = malloc(len);
-        if (copy) {
-            memcpy(copy, moov, len);
-            m->play_path = flatten(path, copy, len);
-            free(copy);
-        }
-        m->temp_file = m->play_path != NULL;
-    }
-    if (resid)
+    int16_t err = take_description(moov, len, path, flattened, moviep);
+    if (!err && resid)
         *resid = id;
-    wr32(moviep, m->handle);
-    return set_error(noErr);
+    return err;
+}
+
+int16_t qt_open_movie_path(const char *path, int16_t *resid, uint64_t offset, bool from_data, gaddr moviep, int16_t flags)
+{
+    int16_t err = open_movie(path, resid, offset, from_data, moviep);
+    if (!err && (flags & newMovieActive))
+        movie_of(rd32(moviep))->active = true;
+    return err;
+}
+
+int16_t qt_movie_from_bytes(const uint8_t *bytes, uint32_t len, const char *path, gaddr moviep, int16_t flags)
+{
+    wr32(moviep, 0);
+    uint8_t *buf = malloc(len + 8);
+    if (len >= 8 && !memcmp(bytes + 4, "moov", 4)) {
+        memcpy(buf, bytes, len);
+    } else {
+        put_be32(buf, len + 8);
+        memcpy(buf + 4, "moov", 4);
+        memcpy(buf + 8, bytes, len);
+        len += 8;
+    }
+    int16_t err = take_description(buf, len, path, false, moviep);
+    if (!err && (flags & newMovieActive))
+        movie_of(rd32(moviep))->active = true;
+    return err;
+}
+
+gaddr qt_new_movie_for(qtm_movie *mv, const char *path)
+{
+    movie *m = new_movie(mv, path);
+    return m ? m->handle : 0;
 }
 
 /* ---- Time ---- */
-
-static int64_t duration_ms(const movie *m) { return (int64_t)m->duration * 1000 / m->scale; }
 
 /* A movie keeps time from a source: the machine's clock, or the time base
  * it is slaved to (SetMovieMasterTimeBase), so that it follows that one's
@@ -630,8 +831,8 @@ static int64_t movie_ms_at(movie *m, int depth)
         t = m->base_ms + (int64_t)((__int128)(source_ns(m, depth) - m->start_ns) * m->rate / 0x10000 / 1000000);
     else
         t = m->base_ms;
-    int64_t d = duration_ms(m);
-    return t > d ? d : t < 0 ? 0 : t;
+    int64_t d = end_ms(m), s0 = start_ms(m);
+    return t > d ? d : t < s0 ? s0 : t;
 }
 
 static int64_t movie_ms(movie *m) { return movie_ms_at(m, 0); }
@@ -651,10 +852,17 @@ static int32_t movie_effective_rate(movie *m) { return movie_effective_rate_at(m
 static bool movie_done(movie *m)
 {
     if (!m->playing)
-        return movie_ms(m) >= duration_ms(m);
-    if (m->player && !m->master)
+        return movie_ms(m) >= end_ms(m);
+    if (m->player && !m->master && m->mv->active_start < 0)
         return qt_vlc_ended(m->player);
-    return movie_ms(m) >= duration_ms(m);
+    return movie_ms(m) >= end_ms(m);
+}
+
+/* For qt_movies.c: the movie's time now, in its time scale. */
+int64_t qt_movie_now(const qtm_movie *mv)
+{
+    movie *m = movie_of_model(mv);
+    return m ? movie_ms(m) * mv->scale / 1000 : 0;
 }
 
 /* ---- Native sound ---- */
@@ -738,6 +946,7 @@ static void feed_sound(movie *m)
 
 static void ensure_player(movie *m)
 {
+    refresh(m);
     if (!m->player && !m->native && m->play_path && use_vlc()) {
         m->player = qt_vlc_open(m->play_path, m->index_depth != 0);
         if (m->player)
@@ -763,7 +972,7 @@ static void start(movie *m, int32_t rate)
         m->base_ms = movie_ms(m); /* a new rate from where it is */
     m->rate = rate;
     if (movie_done(m) && !m->playing && !m->master)
-        m->base_ms = 0; /* playing a finished movie starts it again */
+        m->base_ms = start_ms(m); /* playing a finished movie starts it again */
     ensure_player(m);
     if (m->player && m->master) {
         /* VLC keeps its own clock: put it where the master says; task keeps
@@ -781,9 +990,12 @@ static void start(movie *m, int32_t rate)
             qt_vlc_set_rate(m->player, (float)rate / 65536.0f);
     }
     m->start_ns = source_ns(m, 0);
+    bool was = m->playing;
     m->playing = true;
     feed_sound(m);
     feed_music(m);
+    if (!was)
+        qt_task_needed_sooner();
 }
 
 static void seek(movie *m, int64_t ms)
@@ -797,12 +1009,14 @@ static void seek(movie *m, int64_t ms)
         else
             qt_vlc_seek(m->player, ms);
     }
+    qt_callbacks_jumped(m->timebase);
 }
 
 /* ---- Pictures ---- */
 
 static void draw_frame(movie *m, bool force)
 {
+    refresh(m);
     bool fresh;
     if (m->native) {
         if (!qt_native_has_video(m->native))
@@ -827,11 +1041,12 @@ static void draw_frame(movie *m, bool force)
         gaddr clip = tb_NewRgn();
         tb_CopyRgn(port_clip, clip);
         if (m->clip) {
+            qrect natural = natural_rect(m);
             gaddr r = tb_NewRgn(), from = tb_NewPtr(8, false, false), to = tb_NewPtr(8, false, false);
             tb_CopyRgn(m->clip, r);
-            qrect_put(from, m->natural);
+            qrect_put(from, natural);
             qrect_put(to, m->box);
-            if (m->natural.right > m->natural.left && m->natural.bottom > m->natural.top)
+            if (natural.right > natural.left && natural.bottom > natural.top)
                 tb_MapRgn(r, from, to);
             tb_SectRgn(clip, r, clip);
             tb_DisposeRgn(r);
@@ -870,6 +1085,20 @@ static void draw_frame(movie *m, bool force)
         tb_DisposeRgn(port_clip);
     }
     tb_SetPort(saved);
+    qt_movie_drawing_complete(m->mv);
+}
+
+/* For GetMoviePict and the like: the movie's picture at a time, RGBA. */
+bool qt_movie_frame_at(const qtm_movie *mv, int64_t time, uint8_t **rgba, int *w, int *h)
+{
+    movie *m = movie_of_model(mv);
+    if (!m)
+        return false;
+    refresh(m);
+    if (!m->native || !qt_native_has_video(m->native))
+        return false;
+    uint32_t serial = 0;
+    return qt_native_frame(m->native, time * 1000 / mv->scale, &serial, rgba, w, h) && *rgba;
 }
 
 /* A slaved movie that VLC plays: VLC keeps its own clock, so it is held
@@ -910,12 +1139,12 @@ static void task(movie *m)
     /* A slaved movie goes where its master takes it, back again included. */
     if (!m->master && movie_done(m)) {
         if (m->looping) {
-            m->base_ms = 0;
+            m->base_ms = start_ms(m);
             if (m->player)
                 qt_vlc_rewind(m->player);
             start(m, m->rate);
         } else {
-            m->base_ms = duration_ms(m);
+            m->base_ms = end_ms(m);
             m->playing = false;
         }
     }
@@ -947,6 +1176,12 @@ int16_t tb_OpenMovieFile(gaddr spec, gaddr refnum, uint8_t perm)
 
 int16_t tb_CloseMovieFile(int16_t refnum)
 {
+    char path[1024];
+    if (!fm_refnum_host_path(refnum, path, sizeof path) && rm_host_path(refnum, path, sizeof path)) {
+        /* CreateMovieFile's resource file */
+        tb_CloseResFile(refnum);
+        return set_error(tb_ResError());
+    }
     gaddr pb = tb_NewPtr(IOParam_SIZEOF, false, true);
     wr16(pb + IOParam_ioRefNum_off, (uint16_t)refnum);
     int16_t err = tb_PBClose(pb, false);
@@ -970,7 +1205,11 @@ int16_t tb_NewMovieFromFile(gaddr moviep, int16_t refnum, gaddr resid, gaddr res
         return set_error(-51 /* rfNumErr */);
     }
     int16_t id = resid ? (int16_t)rd16(resid) : 0;
+    /* QuickTime 3 opens files that aren't movies (pictures, sounds, MIDI)
+     * through a movie importer, when one of ours takes the file */
     int16_t err = open_movie(path, &id, 0, false, moviep);
+    if (err == noMovieFound && qt_import_file_as_movie(path, moviep, flags) == noErr)
+        return set_error(noErr);
     if (!err && (flags & newMovieActive))
         movie_of(rd32(moviep))->active = true;
     if (!err && resid)
@@ -997,46 +1236,25 @@ int16_t tb_NewMovieFromDataFork(gaddr moviep, int16_t refnum, int32_t offset, in
 
 int16_t tb_NewMovieFromHandle(gaddr moviep, int32_t h, int16_t flags, gaddr changed)
 {
-    /* The description alone: its data is elsewhere (an alias in its data
-     * references), so the movie keeps time without pictures. */
+    /* The description alone: its data is wherever its data references say. */
     if (changed)
         wr8(changed, 0);
     wr32(moviep, 0);
     if (!h || !rd32((gaddr)h))
         return set_error(invalidMovie);
     uint32_t len = (uint32_t)tb_GetHandleSize((gaddr)h);
-    uint8_t *buf = malloc(len + 8);
-    uint8_t *moov = buf;
-    gget(buf + 8, rd32((gaddr)h), len);
-    if (len >= 8 && !memcmp(buf + 12, "moov", 4)) {
-        moov = buf + 8;
-    } else {
-        put_be32(buf, len + 8);
-        memcpy(buf + 4, "moov", 4);
-        len += 8;
-    }
-    movie *m = new_movie();
-    if (!m) {
-        free(buf);
-        return set_error(memFullErr);
-    }
-    describe(m, moov, moov == buf ? len : len);
-    m->box = m->natural;
-    for (int k = 0; k < m->ntracks; k++)
-        m->tracks[k].handle = tb_NewHandle(4, false, true);
-    m->active = (flags & newMovieActive) != 0;
+    uint8_t *buf = malloc(len ? len : 1);
+    gget(buf, rd32((gaddr)h), len);
+    int16_t err = qt_movie_from_bytes(buf, len, NULL, moviep, flags);
     free(buf);
-    wr32(moviep, m->handle);
-    return set_error(noErr);
+    return err;
 }
-
-uint32_t mac_now(void);
 
 int32_t tb_NewMovie(int32_t flags)
 {
-    movie *m = new_movie();
-    if (m)
-        m->created = m->modified = mac_now();
+    movie *m = new_movie(NULL, NULL);
+    if (m && (flags & newMovieActive))
+        m->active = true;
     set_error(m ? noErr : memFullErr);
     return m ? (int32_t)m->handle : 0;
 }
@@ -1050,6 +1268,7 @@ void tb_DisposeMovie(gaddr h)
 
 void tb_MoviesTask(gaddr h, int32_t ms)
 {
+    qt_callbacks_poll();
     if (h) {
         movie *m = movie_of(h);
         if (m)
@@ -1079,16 +1298,47 @@ void tb_SetMovieActive(gaddr h, int8_t active)
 
 /* ---- Editing ----
  *
- * Edits change the movie's description, each track's edit list (qt_edit.c),
- * and the movie plays from it again: the samples stay where they are.
- * Pasting takes another movie's media only when it is in the same file
- * (a movie and copies made from it); saving writes the description as the
- * file's 'moov' resource.
+ * Edits change each track's edit list (qt_edit.c), and the movie plays
+ * from it again: the samples stay where they are.  Pasting takes another
+ * movie's media only when it is in the same file (a movie and copies made
+ * from it); saving writes the description as the file's 'moov' resource.
  */
 
-enum { invalidDuration = -2014, invalidTime = -2015 };
 
-static bool read_edits(const movie *m, qt_edits *e) { return m->moov && qt_edits_read(m->moov, m->moov_len, e); }
+/* Each track's edits, as qt_edit.c works on them. */
+static bool read_edits(const movie *m, qt_edits *e)
+{
+    memset(e, 0, sizeof *e);
+    e->scale = m->mv->scale;
+    e->ntracks = m->mv->ntracks;
+    e->tracks = calloc((size_t)(e->ntracks ? e->ntracks : 1), sizeof *e->tracks);
+    for (int k = 0; k < e->ntracks; k++) {
+        const qtm_track *t = m->mv->tracks[k];
+        qt_edit_track *et = &e->tracks[k];
+        et->movie_scale = m->mv->scale;
+        et->media_scale = t->media ? t->media->scale : m->mv->scale;
+        et->n = t->nedits;
+        et->e = malloc((size_t)(t->nedits ? t->nedits : 1) * sizeof *et->e);
+        for (int i = 0; i < t->nedits; i++)
+            et->e[i] = (qt_edit){ t->edits[i].duration, t->edits[i].media_time, t->edits[i].rate };
+    }
+    return true;
+}
+
+/* The tracks' edits from qt_edit.c's, back in the description. */
+static void apply_edits(movie *m, const qt_edits *e)
+{
+    for (int k = 0; k < e->ntracks && k < m->mv->ntracks; k++) {
+        qtm_track *t = m->mv->tracks[k];
+        const qt_edit_track *et = &e->tracks[k];
+        qtm_edit *n = malloc((size_t)(et->n ? et->n : 1) * sizeof *n);
+        for (int i = 0; i < et->n; i++)
+            n[i] = (qtm_edit){ et->e[i].len, et->e[i].media_time, et->e[i].rate };
+        qtm_set_edits(t, n, et->n);
+        free(n);
+    }
+    qt_movie_touch(m->mv);
+}
 
 /* Keep the description before an edit, for undo. */
 static uint8_t *undo_moov;
@@ -1098,61 +1348,38 @@ static gaddr undo_movie;
 static void remember(movie *m)
 {
     free(undo_moov);
-    undo_moov = malloc(m->moov_len);
-    if (undo_moov)
-        memcpy(undo_moov, m->moov, m->moov_len);
-    undo_len = m->moov_len;
+    undo_moov = qtm_serialize(m->mv, false, &undo_len);
     undo_movie = m->handle;
-}
-
-/* The movie with a new description: its length, and its player on it. */
-static void take_moov(movie *m, uint8_t *moov, uint32_t len)
-{
-    free(m->moov);
-    m->moov = moov;
-    m->moov_len = len;
-    qt_edits e;
-    if (qt_edits_read(moov, len, &e)) {
-        m->duration = (int32_t)qt_edits_duration(&e);
-        qt_edits_free(&e);
-    }
-    stop_sound(m);
-    open_native(m);
-    m->serial = 0;
-    m->changed = true;
-    if (m->base_ms > duration_ms(m))
-        m->base_ms = duration_ms(m);
 }
 
 static bool edited(movie *m, qt_edits *e)
 {
-    uint32_t n;
-    uint8_t *nm = qt_edits_write(m->moov, m->moov_len, e, &n);
-    if (!nm)
-        return false;
-    take_moov(m, nm, n);
+    apply_edits(m, e);
     return true;
 }
+
+/* A copy of a movie's description: written out and read back. */
+static qtm_movie *copy_model(const qtm_movie *mv)
+{
+    uint32_t n;
+    uint8_t *b = qtm_serialize(mv, false, &n);
+    qtm_movie *c = qtm_parse(b, n);
+    free(b);
+    return c;
+}
+
+qtm_movie *qt_copy_model(const qtm_movie *mv) { return copy_model(mv); }
 
 /* A new movie of another's edits (the same file and tracks). */
 static movie *movie_from_edits(movie *from, qt_edits *e)
 {
-    uint32_t n;
-    uint8_t *nm = qt_edits_write(from->moov, from->moov_len, e, &n);
-    movie *m = nm ? new_movie() : NULL;
-    if (!m) {
-        free(nm);
+    qtm_movie *mv = copy_model(from->mv);
+    movie *m = mv ? new_movie(mv, from->data_path) : NULL;
+    if (!m)
         return NULL;
-    }
-    describe(m, nm, n);
-    m->scale = from->scale;
-    m->duration = (int32_t)qt_edits_duration(e);
-    m->box = m->natural;
-    for (int k = 0; k < m->ntracks; k++)
-        m->tracks[k].handle = tb_NewHandle(4, false, true);
-    m->moov = nm;
-    m->moov_len = n;
-    m->data_path = from->data_path ? strdup(from->data_path) : NULL;
+    apply_edits(m, e);
+    m->changed = false;
+    m->box = natural_rect(m);
     open_native(m);
     return m;
 }
@@ -1161,9 +1388,9 @@ void tb_GetMovieSelection(int32_t theMovie, gaddr selectionTime, gaddr selection
 {
     movie *m = movie_of((gaddr)theMovie);
     if (selectionTime)
-        wr32(selectionTime, m ? (uint32_t)m->sel_start : 0);
+        wr32(selectionTime, m ? (uint32_t)m->mv->sel_time : 0);
     if (selectionDuration)
-        wr32(selectionDuration, m ? (uint32_t)m->sel_duration : 0);
+        wr32(selectionDuration, m ? (uint32_t)m->mv->sel_duration : 0);
 }
 
 void tb_SetMovieSelection(int32_t theMovie, int32_t selectionTime, int32_t selectionDuration)
@@ -1175,8 +1402,9 @@ void tb_SetMovieSelection(int32_t theMovie, int32_t selectionTime, int32_t selec
         selectionTime += selectionDuration;
         selectionDuration = -selectionDuration;
     }
-    m->sel_start = selectionTime < 0 ? 0 : selectionTime > m->duration ? m->duration : selectionTime;
-    m->sel_duration = m->sel_start + selectionDuration > m->duration ? m->duration - m->sel_start : selectionDuration;
+    int32_t d = (int32_t)m->mv->duration;
+    m->mv->sel_time = selectionTime < 0 ? 0 : selectionTime > d ? d : selectionTime;
+    m->mv->sel_duration = m->mv->sel_time + selectionDuration > d ? d - m->mv->sel_time : selectionDuration;
 }
 
 int32_t tb_CopyMovieSelection(int32_t theMovie)
@@ -1187,7 +1415,7 @@ int32_t tb_CopyMovieSelection(int32_t theMovie)
         set_error(invalidMovie);
         return 0;
     }
-    bool ok = qt_edits_copy(&e, m->sel_start, m->sel_duration, &part);
+    bool ok = qt_edits_copy(&e, m->mv->sel_time, m->mv->sel_duration, &part);
     movie *c = ok ? movie_from_edits(m, &part) : NULL;
     qt_edits_free(&e);
     qt_edits_free(&part);
@@ -1209,10 +1437,10 @@ int32_t tb_CutMovieSelection(int32_t theMovie)
 {
     movie *m = movie_of((gaddr)theMovie);
     int32_t copy = tb_CopyMovieSelection(theMovie);
-    if (copy && m && m->sel_duration > 0) {
+    if (copy && m && m->mv->sel_duration > 0) {
         remember(m);
-        delete_segment(m, m->sel_start, m->sel_duration);
-        m->sel_duration = 0;
+        delete_segment(m, m->mv->sel_time, m->mv->sel_duration);
+        m->mv->sel_duration = 0;
     }
     return copy;
 }
@@ -1220,21 +1448,20 @@ int32_t tb_CutMovieSelection(int32_t theMovie)
 void tb_ClearMovieSelection(int32_t theMovie)
 {
     movie *m = movie_of((gaddr)theMovie);
-    if (!m || m->sel_duration <= 0)
+    if (!m || m->mv->sel_duration <= 0)
         return;
     remember(m);
-    set_error(delete_segment(m, m->sel_start, m->sel_duration) ? noErr : invalidMovie);
-    m->sel_duration = 0;
+    set_error(delete_segment(m, m->mv->sel_time, m->mv->sel_duration) ? noErr : invalidMovie);
+    m->mv->sel_duration = 0;
 }
 
 static int16_t insert_segment(movie *src, movie *dst, int64_t src_in, int64_t len, int64_t dst_in)
 {
     if (!src || !dst)
         return invalidMovie;
-    if (!src->data_path || !dst->data_path || strcmp(src->data_path, dst->data_path)) {
-        LOGF(LOG_UNIMPL, "QuickTime: pasting a movie from another file is not done\n");
-        return paramErr;
-    }
+    if (!src->data_path || !dst->data_path || strcmp(src->data_path, dst->data_path) ||
+        src->mv->ntracks != dst->mv->ntracks)
+        return qt_insert_movie_segment(src->mv, dst->mv, src_in, len, dst_in);
     qt_edits s, d;
     if (!read_edits(src, &s))
         return invalidMovie;
@@ -1256,11 +1483,11 @@ void tb_PasteMovieSelection(int32_t theMovie, int32_t src)
         return;
     }
     remember(m);
-    if (m->sel_duration > 0)
-        delete_segment(m, m->sel_start, m->sel_duration);
-    int16_t err = insert_segment(s, m, 0, s->duration, m->sel_start);
+    if (m->mv->sel_duration > 0)
+        delete_segment(m, m->mv->sel_time, m->mv->sel_duration);
+    int16_t err = insert_segment(s, m, 0, s->mv->duration, m->mv->sel_time);
     if (!err)
-        m->sel_duration = (int32_t)((int64_t)s->duration * m->scale / s->scale);
+        m->mv->sel_duration = (int32_t)(s->mv->duration * m->mv->scale / s->mv->scale);
     set_error(err);
 }
 
@@ -1289,7 +1516,7 @@ int16_t tb_DeleteMovieSegment(int32_t theMovie, int32_t startTime, int32_t durat
     movie *m = movie_of((gaddr)theMovie);
     if (!m)
         return set_error(invalidMovie);
-    if (startTime < 0 || startTime > m->duration)
+    if (startTime < 0 || startTime > m->mv->duration)
         return set_error(invalidTime);
     if (duration < 0)
         return set_error(invalidDuration);
@@ -1306,22 +1533,18 @@ static char *scrap_path;
 int16_t tb_PutMovieOnScrap(int32_t theMovie, int32_t movieScrapFlags)
 {
     movie *m = movie_of((gaddr)theMovie);
-    if (!m || !m->moov)
+    if (!m)
         return set_error(invalidMovie);
     free(scrap_moov);
     free(scrap_path);
-    scrap_moov = malloc(m->moov_len);
-    if (!scrap_moov)
-        return set_error(memFullErr);
-    memcpy(scrap_moov, m->moov, m->moov_len);
-    scrap_len = m->moov_len;
+    scrap_moov = qtm_serialize(m->mv, false, &scrap_len);
     scrap_path = m->data_path ? strdup(m->data_path) : NULL;
     if (!(movieScrapFlags & 1)) /* movieScrapDontZeroScrap */
         tb_ZeroScrap();
-    gaddr p = tb_NewPtr((int32_t)m->moov_len, false, false);
+    gaddr p = tb_NewPtr((int32_t)scrap_len, false, false);
     if (p) {
-        gput(p, m->moov, m->moov_len);
-        tb_PutScrap((int32_t)m->moov_len, 0x6D6F6F76, p);
+        gput(p, scrap_moov, scrap_len);
+        tb_PutScrap((int32_t)scrap_len, 0x6D6F6F76, p);
         tb_DisposePtr(p);
     }
     return set_error(noErr);
@@ -1333,25 +1556,26 @@ int32_t tb_NewMovieFromScrap(int32_t newMovieFlags)
         set_error(noMovieFound);
         return 0;
     }
-    movie *m = new_movie();
+    qtm_movie *mv = qtm_parse(scrap_moov, scrap_len);
+    movie *m = mv ? new_movie(mv, scrap_path) : NULL;
     if (!m) {
         set_error(memFullErr);
         return 0;
     }
-    describe(m, scrap_moov, scrap_len);
-    m->box = m->natural;
-    for (int k = 0; k < m->ntracks; k++)
-        m->tracks[k].handle = tb_NewHandle(4, false, true);
-    m->moov = malloc(scrap_len);
-    if (m->moov) {
-        memcpy(m->moov, scrap_moov, scrap_len);
-        m->moov_len = scrap_len;
-    }
-    m->data_path = scrap_path ? strdup(scrap_path) : NULL;
     m->active = (newMovieFlags & newMovieActive) != 0;
     open_native(m);
     set_error(noErr);
     return (int32_t)m->handle;
+}
+
+bool qt_scrap_has_movie(void) { return scrap_moov != NULL; }
+
+bool qt_any_movie_playing(void)
+{
+    for (int i = 0; i < MAX_MOVIES; i++)
+        if (movies[i].used && movies[i].playing)
+            return true;
+    return false;
 }
 
 int8_t tb_HasMovieChanged(int32_t h)
@@ -1370,7 +1594,7 @@ void tb_ClearMovieChanged(int32_t h)
 /* The description saved as the file's 'moov' resource (the whole atom). */
 static int16_t save_moov(movie *m, int16_t resRefNum, int16_t id, gaddr name)
 {
-    if (!m || !m->moov)
+    if (!m)
         return set_error(invalidMovie);
     int16_t saved = tb_CurResFile();
     tb_UseResFile(resRefNum);
@@ -1378,20 +1602,25 @@ static int16_t save_moov(movie *m, int16_t resRefNum, int16_t id, gaddr name)
         tb_UseResFile(saved);
         return set_error(-51 /* rfNumErr */);
     }
+    qtm_update_duration(m->mv);
+    m->mv->modified = mac_now();
+    uint32_t len;
+    uint8_t *moov = qtm_serialize(m->mv, false, &len);
     gaddr h = tb_Get1Resource(0x6D6F6F76, id);
     if (h) {
-        tb_SetHandleSize(h, (int32_t)m->moov_len);
-        gput(rd32(h), m->moov, m->moov_len);
+        tb_SetHandleSize(h, (int32_t)len);
+        gput(rd32(h), moov, len);
         tb_ChangedResource(h);
     } else {
-        h = tb_NewHandle((int32_t)m->moov_len, false, false);
+        h = tb_NewHandle((int32_t)len, false, false);
         if (h) {
-            gput(rd32(h), m->moov, m->moov_len);
+            gput(rd32(h), moov, len);
             gaddr empty = tb_NewPtr(1, false, true);
             tb_AddResource(h, 0x6D6F6F76, id, name ? name : empty);
             tb_DisposePtr(empty);
         }
     }
+    free(moov);
     int16_t err = tb_ResError();
     tb_UpdateResFile(resRefNum);
     tb_UseResFile(saved);
@@ -1421,10 +1650,16 @@ static bool undo_edit(movie *m)
 {
     if (!m || !undo_moov || undo_movie != m->handle)
         return false;
-    uint8_t *mv = undo_moov;
-    uint32_t len = undo_len;
+    qtm_movie *was = qtm_parse(undo_moov, undo_len);
+    free(undo_moov);
     undo_moov = NULL;
-    take_moov(m, mv, len);
+    if (!was)
+        return false;
+    /* the tracks' edits go back; the rest stays as it is */
+    for (int k = 0; k < was->ntracks && k < m->mv->ntracks; k++)
+        qtm_set_edits(m->mv->tracks[k], was->tracks[k]->edits, was->tracks[k]->nedits);
+    qtm_free(was);
+    qt_movie_touch(m->mv);
     return true;
 }
 
@@ -1452,7 +1687,7 @@ void tb_StartMovie(gaddr h)
     if (!m)
         return;
     m->active = true;
-    start(m, m->pref_rate ? m->pref_rate : 0x10000);
+    start(m, m->mv->pref_rate ? m->mv->pref_rate : 0x10000);
 }
 
 void tb_StopMovie(gaddr h)
@@ -1520,14 +1755,14 @@ void tb_SetMovieVolume(int32_t h, int16_t volume)
 int16_t tb_GetMoviePreferredVolume(int32_t h)
 {
     movie *m = movie_of((gaddr)h);
-    return m ? m->pref_volume : 0;
+    return m ? m->mv->pref_volume : 0;
 }
 
 void tb_SetMoviePreferredVolume(int32_t h, int16_t volume)
 {
     movie *m = movie_of((gaddr)h);
     if (m)
-        m->pref_volume = volume;
+        m->mv->pref_volume = volume;
 }
 
 int8_t tb_IsMovieDone(gaddr h)
@@ -1542,14 +1777,14 @@ int8_t tb_IsMovieDone(gaddr h)
 int32_t tb_GetMoviePreferredRate(gaddr h)
 {
     movie *m = movie_of(h);
-    return m ? m->pref_rate : 0x10000;
+    return m ? m->mv->pref_rate : 0x10000;
 }
 
 void tb_SetMoviePreferredRate(int32_t h, int32_t rate)
 {
     movie *m = movie_of((gaddr)h);
     if (m)
-        m->pref_rate = rate;
+        m->mv->pref_rate = rate;
 }
 
 int32_t tb_GetMovieRate(int32_t h)
@@ -1581,19 +1816,19 @@ void tb_SetMovieBox(gaddr h, gaddr box)
 void tb_GetMovieNaturalBoundsRect(int32_t h, gaddr r)
 {
     movie *m = movie_of((gaddr)h);
-    qrect_put(r, m ? m->natural : (qrect){ 0, 0, 0, 0 });
+    qrect_put(r, m ? natural_rect(m) : (qrect){ 0, 0, 0, 0 });
 }
 
 int32_t tb_GetMovieTimeScale(int32_t h)
 {
     movie *m = movie_of((gaddr)h);
-    return m ? m->scale : 600;
+    return m ? m->mv->scale : 600;
 }
 
 int32_t tb_GetMovieDuration(int32_t h)
 {
     movie *m = movie_of((gaddr)h);
-    return m ? m->duration : 0;
+    return m ? (int32_t)m->mv->duration : 0;
 }
 
 /* TimeRecord: value (wide), scale, base. */
@@ -1602,11 +1837,11 @@ int32_t tb_GetMovieTime(int32_t h, gaddr tr)
     movie *m = movie_of((gaddr)h);
     if (!m)
         return 0;
-    int32_t v = (int32_t)(movie_ms(m) * m->scale / 1000);
+    int32_t v = (int32_t)(movie_ms(m) * m->mv->scale / 1000);
     if (tr) {
         wr32(tr, 0);
         wr32(tr + 4, (uint32_t)v);
-        wr32(tr + 8, (uint32_t)m->scale);
+        wr32(tr + 8, (uint32_t)m->mv->scale);
         wr32(tr + 12, (uint32_t)h);
     }
     return v;
@@ -1616,7 +1851,7 @@ void tb_SetMovieTimeValue(int32_t h, int32_t t)
 {
     movie *m = movie_of((gaddr)h);
     if (m)
-        seek(m, (int64_t)t * 1000 / m->scale);
+        seek(m, (int64_t)t * 1000 / m->mv->scale);
 }
 
 void tb_SetMovieTime(int32_t h, gaddr tr)
@@ -1625,7 +1860,7 @@ void tb_SetMovieTime(int32_t h, gaddr tr)
     if (!m || !tr)
         return;
     int32_t scale = (int32_t)rd32(tr + 8);
-    seek(m, (int64_t)(int32_t)rd32(tr + 4) * 1000 / (scale > 0 ? scale : m->scale));
+    seek(m, (int64_t)(int32_t)rd32(tr + 4) * 1000 / (scale > 0 ? scale : m->mv->scale));
 }
 
 /* A TimeRecord's value in another scale, rounded toward zero. */
@@ -1898,6 +2133,7 @@ void tb_DisposeTimeBase(int32_t tb)
     timebase *t = timebase_of((gaddr)tb);
     if (!t) /* a movie's goes with the movie */
         return;
+    qt_callbacks_timebase_gone(t->handle);
     release_slaves(t->handle);
     tb_DisposeHandle(t->handle);
     t->used = false;
@@ -1911,7 +2147,7 @@ int32_t tb_GetTimeBaseTime(int32_t tb, int32_t s, gaddr tr)
     if (!m && !t)
         return 0;
     if (s <= 0)
-        s = m ? m->scale : t->own_scale;
+        s = m ? m->mv->scale : t->own_scale;
     int64_t v = timebase_time_in((gaddr)tb, s, 0);
     if (tr) {
         set_time_value(tr, v);
@@ -1925,7 +2161,7 @@ void tb_SetTimeBaseValue(int32_t tb, int32_t t, int32_t s)
 {
     movie *m = movie_of_timebase((gaddr)tb);
     if (m) {
-        seek(m, div_round((__int128)t * 1000, s > 0 ? s : m->scale));
+        seek(m, div_round((__int128)t * 1000, s > 0 ? s : m->mv->scale));
         return;
     }
     timebase *b = timebase_of((gaddr)tb);
@@ -1934,6 +2170,7 @@ void tb_SetTimeBaseValue(int32_t tb, int32_t t, int32_t s)
     b->value = t;
     b->scale = b->own_scale = s > 0 ? s : b->own_scale;
     b->anchor_ns = tbs_source_ns(b, 0);
+    qt_callbacks_jumped(b->handle);
 }
 
 void tb_SetTimeBaseTime(int32_t tb, gaddr tr)
@@ -1942,7 +2179,7 @@ void tb_SetTimeBaseTime(int32_t tb, gaddr tr)
         return;
     movie *m = movie_of_timebase((gaddr)tb);
     if (m) {
-        seek(m, div_round((__int128)time_in_scale(tr, 0) * 1000, record_scale(tr, m->scale)));
+        seek(m, div_round((__int128)time_in_scale(tr, 0) * 1000, record_scale(tr, m->mv->scale)));
         return;
     }
     timebase *b = timebase_of((gaddr)tb);
@@ -1951,6 +2188,7 @@ void tb_SetTimeBaseTime(int32_t tb, gaddr tr)
     b->value = time_in_scale(tr, 0);
     b->scale = b->own_scale = record_scale(tr, b->own_scale);
     b->anchor_ns = tbs_source_ns(b, 0);
+    qt_callbacks_jumped(b->handle);
 }
 
 int32_t tb_GetTimeBaseRate(int32_t tb)
@@ -1986,10 +2224,10 @@ static int32_t get_limit(int32_t tb, int32_t s, gaddr tr, bool stop)
     if (!m && !t)
         return 0;
     if (s <= 0)
-        s = m ? m->scale : t->own_scale;
+        s = m ? m->mv->scale : t->own_scale;
     int64_t v = 0;
     if (m)
-        v = stop ? div_round((__int128)m->duration * s, m->scale) : 0;
+        v = stop ? div_round((__int128)m->mv->duration * s, m->mv->scale) : 0;
     else if (stop ? t->stop_scale : t->start_scale)
         v = div_round((__int128)(stop ? t->stop : t->start) * s, stop ? t->stop_scale : t->start_scale);
     if (tr) {
@@ -2048,7 +2286,7 @@ int32_t tb_GetTimeBaseStatus(int32_t tb, gaddr unpinnedTime)
 {
     movie *m = movie_of_timebase((gaddr)tb);
     timebase *t = m ? NULL : timebase_of((gaddr)tb);
-    int32_t status = 0, s = m ? m->scale : t ? t->own_scale : 600;
+    int32_t status = 0, s = m ? m->mv->scale : t ? t->own_scale : 600;
     int64_t v = 0;
     if (t) {
         tbs_time(t, s, 0, &status);
@@ -2149,108 +2387,100 @@ void tb_SetMovieMasterClock(int32_t theMovie, int32_t clockMeister, gaddr slaveZ
 int32_t tb_GetMovieTrackCount(int32_t h)
 {
     movie *m = movie_of((gaddr)h);
-    return m ? m->ntracks : 0;
+    return m ? m->mv->ntracks : 0;
 }
 
 int32_t tb_GetMovieIndTrack(int32_t h, int32_t index)
 {
     movie *m = movie_of((gaddr)h);
-    if (!m || index < 1 || index > m->ntracks) {
+    if (!m || index < 1 || index > m->mv->ntracks) {
         set_error(invalidTrack);
         return 0;
     }
-    return (int32_t)m->tracks[index - 1].handle;
+    return (int32_t)m->mv->tracks[index - 1]->token;
 }
 
-/* flags: 1 the type is a media type, 2 a characteristic ('eyes', 'ears'). */
+/* flags: movieTrackMediaType (1) the type is a media type,
+ * movieTrackCharacteristic (2) a characteristic ('eyes', 'ears', ...),
+ * movieTrackEnabledOnly (4) only enabled tracks count. */
 int32_t tb_GetMovieIndTrackType(int32_t h, int32_t index, int32_t type, int32_t flags)
 {
     movie *m = movie_of((gaddr)h);
-    for (int k = 0, n = 0; m && k < m->ntracks; k++) {
-        uint32_t t = m->tracks[k].type;
-        bool match = (flags & 2) ? ((uint32_t)type == fourcc("eyes") && t == fourcc("vide")) ||
-                                       ((uint32_t)type == fourcc("ears") && t == fourcc("soun"))
-                                 : t == (uint32_t)type;
+    for (int k = 0, n = 0; m && k < m->mv->ntracks; k++) {
+        const qtm_track *t = m->mv->tracks[k];
+        if ((flags & 4) && !(t->flags & 1))
+            continue;
+        uint32_t mt = t->media ? t->media->type : 0;
+        bool match = (flags & 2) ? qt_media_has_characteristic(mt, (uint32_t)type) : mt == (uint32_t)type;
         if (match && ++n == index)
-            return (int32_t)m->tracks[k].handle;
+            return (int32_t)t->token;
     }
     return 0;
 }
 
 int32_t tb_GetTrackMovie(int32_t t)
 {
-    movie *m = movie_of_track((gaddr)t);
+    movie *m = NULL;
+    find_track((gaddr)t, &m);
+    if (!m)
+        set_error(invalidTrack);
     return m ? (int32_t)m->handle : 0;
 }
 
 int8_t tb_GetTrackEnabled(int32_t t)
 {
-    track *tr = track_of((gaddr)t);
-    return tr && !tr->disabled;
+    qtm_track *tr = find_track((gaddr)t, NULL);
+    return tr && (tr->flags & 1);
 }
 
 void tb_SetTrackEnabled(int32_t t, int8_t enabled)
 {
-    track *tr = track_of((gaddr)t);
-    movie *m = movie_of_track((gaddr)t);
-    if (!tr || !m)
+    movie *m = NULL;
+    qtm_track *tr = find_track((gaddr)t, &m);
+    if (!tr) {
+        set_error(invalidTrack);
         return;
-    tr->disabled = !enabled;
+    }
+    tr->flags = enabled ? tr->flags | 1 : tr->flags & ~1u;
+    qt_movie_touch(m->mv);
     if (m->player)
         qt_vlc_set_volume(m->player, vlc_volume(m));
 }
 
 int32_t tb_GetTrackMedia(int32_t t)
 {
-    track *tr = track_of((gaddr)t);
-    return tr ? (int32_t)(tr->handle + 2) : 0; /* the media: inside its track's handle */
+    qtm_track *tr = find_track((gaddr)t, NULL);
+    if (!tr)
+        set_error(invalidTrack);
+    return tr && tr->media ? (int32_t)tr->media->token : 0;
 }
 
 void tb_GetMediaHandlerDescription(int32_t media, gaddr type, int32_t name, gaddr manufacturer)
 {
-    track *tr = track_of((gaddr)media);
+    qtm_media *md = find_media((gaddr)media, NULL, NULL);
     if (type)
-        wr32(type, tr ? tr->type : 0);
-    if (name)
-        wr8((gaddr)name, 0);
+        wr32(type, md ? md->type : 0);
+    if (name) {
+        size_t n = md ? strlen(md->handler_name) : 0;
+        wr8((gaddr)name, (uint8_t)n);
+        if (n)
+            gput((gaddr)name + 1, md->handler_name, (uint32_t)n);
+    }
     if (manufacturer)
-        wr32(manufacturer, fourcc("appl"));
-}
-
-int32_t tb_GetMovieDataSize(int32_t h, int32_t start_time, int32_t dur)
-{
-    movie *m = movie_of((gaddr)h);
-    struct stat st;
-    return m && m->play_path && stat(m->play_path, &st) == 0 ? (int32_t)st.st_size : 0;
-}
-
-void tb_GetMovieNextInterestingTime(int32_t h, int16_t flags, int16_t ntypes, gaddr types, int32_t time, int32_t rate,
-                                    gaddr itime, gaddr idur)
-{
-    if (itime)
-        wr32(itime, (uint32_t)-1); /* nothing more of interest */
-    if (idur)
-        wr32(idur, 0);
-}
-
-int32_t tb_GetMovieStatus(int32_t h, gaddr track_out)
-{
-    if (track_out)
-        wr32(track_out, 0);
-    return noErr;
+        wr32(manufacturer, md && md->manufacturer ? md->manufacturer : fourcc("appl"));
 }
 
 /* The 'mvhd' atom's dates; a movie made by NewMovie was made now. */
 int32_t tb_GetMovieCreationTime(int32_t theMovie)
 {
     movie *m = movie_of((gaddr)theMovie);
-    return m ? (int32_t)m->created : 0;
+    return m ? (int32_t)m->mv->created : 0;
 }
 
 int32_t tb_GetMovieModificationTime(int32_t theMovie)
 {
     movie *m = movie_of((gaddr)theMovie);
-    return m ? (int32_t)m->modified : 0;
+    return m ? (int32_t)m->mv->modified : 0;
 }
 
 /* Clip regions: ours are copies, and the Get calls give a copy of them
@@ -2301,10 +2531,6 @@ void tb_SetMovieDisplayClipRgn(int32_t theMovie, int32_t theClip)
         keep_clip(&m->display_clip, (gaddr)theClip);
 }
 
-void tb_SetMoviePlayHints(int32_t h, int32_t flags, int32_t mask) {}
-void tb_ShowMoviePoster(int32_t h) {}
-int32_t tb_GetMoviePict(int32_t h, int32_t time) { return 0; }
-int32_t tb_GetMoviePosterPict(int32_t h) { return 0; }
 
 /* ---------------------------------------------------------------------- */
 /* The movie controller: a component of our own */
@@ -2372,7 +2598,7 @@ static int thumb_x(const controller *c, movie *m)
 {
     qrect b = bar_rect(c);
     int left = b.left + 18, right = b.right - 6;
-    if (!m || m->duration <= 0 || right <= left)
+    if (!m || m->mv->duration <= 0 || right <= left)
         return -1;
     return left + (int)((right - left) * movie_ms(m) / (duration_ms(m) ? duration_ms(m) : 1));
 }
@@ -2416,9 +2642,9 @@ static void draw_bar(controller *c)
     int left = b.left + 18, right = b.right - 6;
     tb_MoveTo((int16_t)left, (int16_t)(b.top + 8));
     tb_LineTo((int16_t)right, (int16_t)(b.top + 8));
-    if (m && m->sel_duration > 0 && m->duration > 0 && right > left) {
-        int x0 = left + (int)((int64_t)(right - left) * m->sel_start / m->duration);
-        int x1 = left + (int)((int64_t)(right - left) * (m->sel_start + m->sel_duration) / m->duration);
+    if (m && m->mv->sel_duration > 0 && m->mv->duration > 0 && right > left) {
+        int x0 = left + (int)((int64_t)(right - left) * m->mv->sel_time / m->mv->duration);
+        int x1 = left + (int)((int64_t)(right - left) * (m->mv->sel_time + m->mv->sel_duration) / m->mv->duration);
         qrect_put(r, (qrect){ (int16_t)(b.top + 6), (int16_t)x0, (int16_t)(b.top + 11), (int16_t)(x1 > x0 ? x1 : x0 + 1) });
         tb_PaintRect(r);
     }
@@ -2440,7 +2666,7 @@ static void update_bar(controller *c)
     if (!c->visible || !c->attached)
         return;
     int x = thumb_x(c, m), playing = m && m->playing;
-    if (playing != c->drawn_playing || c->drawn_x < 0 || x < 0 || (m && m->sel_duration > 0)) {
+    if (playing != c->drawn_playing || c->drawn_x < 0 || x < 0 || (m && m->mv->sel_duration > 0)) {
         draw_bar(c);
         return;
     }
@@ -2520,22 +2746,22 @@ static bool mc_click_with(controller *c, uint32_t pt, bool shift)
         if (right > left) {
             int64_t ms = duration_ms(m) * (h < left ? 0 : h > right ? right - left : h - left) / (right - left);
             if (shift && c->editing) { /* the selection from the current time (or its far end) to here */
-                int64_t at = ms * m->scale / 1000, now = movie_ms(m) * m->scale / 1000;
-                int64_t anchor = m->sel_duration > 0
-                                     ? (llabs(at - m->sel_start) > llabs(at - (m->sel_start + m->sel_duration))
-                                            ? m->sel_start
-                                            : m->sel_start + m->sel_duration)
+                int64_t at = ms * m->mv->scale / 1000, now = movie_ms(m) * m->mv->scale / 1000;
+                int64_t anchor = m->mv->sel_duration > 0
+                                     ? (llabs(at - m->mv->sel_time) > llabs(at - (m->mv->sel_time + m->mv->sel_duration))
+                                            ? m->mv->sel_time
+                                            : m->mv->sel_time + m->mv->sel_duration)
                                      : now;
                 tb_SetMovieSelection((int32_t)m->handle, (int32_t)(at < anchor ? at : anchor),
                                      (int32_t)llabs(at - anchor));
             } else {
                 seek(m, ms);
                 if (c->editing)
-                    tb_SetMovieSelection((int32_t)m->handle, (int32_t)(ms * m->scale / 1000), 0);
+                    tb_SetMovieSelection((int32_t)m->handle, (int32_t)(ms * m->mv->scale / 1000), 0);
             }
         }
     } else {
-        mc_play(c, m->playing ? 0 : (m->pref_rate ? m->pref_rate : 0x10000));
+        mc_play(c, m->playing ? 0 : (m->mv->pref_rate ? m->mv->pref_rate : 0x10000));
     }
     draw_bar(c);
     return true;
@@ -2550,7 +2776,8 @@ static void place(controller *c, qrect r)
         c->bounds = r;
         return;
     }
-    int w = m->natural.right - m->natural.left, h = m->natural.bottom - m->natural.top;
+    qrect natural = natural_rect(m);
+    int w = natural.right - natural.left, h = natural.bottom - natural.top;
     if (c->flags & mcScaleMovieToFit || w <= 0 || h <= 0) {
         w = r.right - r.left;
         h = r.bottom - r.top - bar;
@@ -2615,7 +2842,7 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
                 tb_DisposePtr(pt);
             } else if ((ew == 3 || ew == 5) && c->active && (rd32(e + 2) & 0xFF) == ' ') { /* space */
                 if (!filter(c, mcActionKey, e) && m)
-                    mc_play(c, m->playing ? 0 : m->pref_rate);
+                    mc_play(c, m->playing ? 0 : m->mv->pref_rate);
                 result = 1;
             } else if (ew == 8 && rd32(e + 2) == c->port) { /* activate */
                 c->active = (rd16(e + 14) & 1) != 0;
@@ -2676,15 +2903,15 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
         case 20: draw_bar(c); break;                      /* MCMovieChanged */
         case 22:                                          /* MCGetCurrentTime(scale*) */
             if (rd32(a))
-                wr32(rd32(a), (uint32_t)(m ? m->scale : 600));
-            result = m ? (int32_t)(movie_ms(m) * m->scale / 1000) : 0;
+                wr32(rd32(a), (uint32_t)(m ? m->mv->scale : 600));
+            result = m ? (int32_t)(movie_ms(m) * m->mv->scale / 1000) : 0;
             break;
         case 24: mc_draw(c); break;                       /* MCDraw(w) */
         case 25: c->active = (rd16(a) >> 8) != 0; break; /* MCActivate(w, activate) */
         case 26: mc_idle(c); break;                       /* MCIdle */
         case 27:                                          /* MCKey(key, modifiers) */
             if (c->active && (rd16(a + 4) & 0xFF) == ' ' && m) {
-                mc_play(c, m->playing ? 0 : m->pref_rate);
+                mc_play(c, m->playing ? 0 : m->mv->pref_rate);
                 result = 1;
             }
             break;
@@ -2726,7 +2953,7 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
             break;
         case 43: {                                         /* MCSetUpEditMenu(modifiers, mh) */
             gaddr mh = rd32(a);
-            bool sel = m && m->sel_duration > 0 && c->editing;
+            bool sel = m && m->mv->sel_duration > 0 && c->editing;
             if (mh) {
                 bool on[7] = { false, c->editing && undo_moov && m && undo_movie == m->handle, false, sel, sel,
                                c->editing && scrap_moov, sel };
@@ -2762,8 +2989,8 @@ static void mc_entry(cpu68k *cpu, uint16_t tw)
                 f |= mcInfoIsPlaying;
             if (m && m->looping)
                 f |= mcInfoIsLooping;
-            for (int k = 0; m && k < m->ntracks; k++)
-                if (m->tracks[k].type == fourcc("soun"))
+            for (int k = 0; m && k < m->mv->ntracks; k++)
+                if (m->mv->tracks[k]->media && m->mv->tracks[k]->media->type == fourcc("soun"))
                     f |= mcInfoHasSound;
             wr32(rd32(a), (uint32_t)f);
             break;
@@ -2826,11 +3053,14 @@ void quicktime_reset(void)
     for (int i = 0; i < MAX_MOVIES; i++)
         if (movies[i].used && movies[i].temp_file && movies[i].play_path)
             unlink(movies[i].play_path);
-    memset(movies, 0, sizeof movies);
+    memset(movies, 0, sizeof movies); /* (their descriptions' guest handles went with the old heap) */
     memset(timebases, 0, sizeof timebases);
     memset(controllers, 0, sizeof controllers);
     mc_component = 0;
     movies_error = sticky_error = 0;
+    qt_movies_reset();
+    qt_callbacks_reset();
+    qt_util_reset();
 }
 
 /* ---------------------------------------------------------------------- */

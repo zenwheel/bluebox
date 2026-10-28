@@ -20,14 +20,9 @@
 #include <string.h>
 
 #include "qt_atoms.h"
+#include "qt_errors.h"
 #include "tb_internal.h"
 
-enum {
-    userDataItemNotFound = -2026,
-    cannotFindAtomErr = -2101, notLeafAtomErr = -2102, atomsNotOfSameTypeErr = -2103,
-    atomIndexInvalidErr = -2104, duplicateAtomTypeAndIDErr = -2105, invalidAtomErr = -2106,
-    invalidAtomContainerErr = -2107, invalidAtomTypeErr = -2108, cannotBeLeafAtomErr = -2109,
-};
 
 #define SEAN 0x7365616Eu /* 'sean' */
 

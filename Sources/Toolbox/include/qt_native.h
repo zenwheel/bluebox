@@ -15,6 +15,12 @@ typedef struct qt_native qt_native;
  * takes screen_palette (0x00RRGGBB) when screen_depth matches. */
 qt_native *qt_native_open(const uint8_t *moov, uint32_t len, const char *data_path, int32_t movie_scale,
                           const uint32_t *screen_palette, int screen_depth);
+/* The same with a reader for the samples: offset is the chunk offset as
+ * the description has it (one with virtual offsets: data reference index
+ * << 40 | offset). */
+typedef bool (*qt_native_reader)(void *ctx, uint64_t offset, void *buf, uint32_t n);
+qt_native *qt_native_open_reader(const uint8_t *moov, uint32_t len, qt_native_reader reader, void *ctx,
+                                 int32_t movie_scale, const uint32_t *screen_palette, int screen_depth);
 void qt_native_close(qt_native *p);
 bool qt_native_has_video(const qt_native *p);
 bool qt_native_has_sound(const qt_native *p);

@@ -379,6 +379,7 @@ void time_pump(void)
     ctb_poll();           /* Communications Toolbox connections and their completion routines */
     appletalk_poll();     /* datagrams for socket listeners, NBP's answers */
     ppc_toolbox_poll();   /* PPC Toolbox sessions: requests, answers and blocks */
+    qt_callbacks_periodic(); /* QuickTime's time base callbacks at interrupt time */
     adb_pump();
     uint64_t t = now();
     for (int i = 0; i < MAX_TASKS; i++) {
