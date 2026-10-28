@@ -744,6 +744,7 @@ const char *const tb_trap_names[1024] = {
     [0x2A3] = "ImageCompressionDispatch",
     [0x2AA] = "QuickTime",
     [0x2F2] = "ControlStripDispatch",
+    [0x2F3] = "ExpansionMgrDispatch",
     [0x31D] = "QDExtensions",
     [0x3C2] = "MatrixDispatch",
     [0x3C9] = "IconDispatch",
@@ -6812,6 +6813,204 @@ static void glue_Exp1to6(cpu68k *c, uint16_t trapword)
     gaddr a_outp = (gaddr)cpu_pop32(c);
     gaddr a_inp = (gaddr)cpu_pop32(c);
     tb_Exp1to6(a_inp, a_outp, a_cnt, a_instatep, a_outstatep, a_numchannels, a_whichchannel);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrConfigReadByte(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_configAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrConfigReadByte(a_node, a_configAddr, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrConfigReadLong(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_configAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrConfigReadLong(a_node, a_configAddr, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrConfigReadWord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_configAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrConfigReadWord(a_node, a_configAddr, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrConfigWriteByte(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint8_t a_value = (uint8_t)(cpu_pop16(c) >> 8);
+    gaddr a_configAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrConfigWriteByte(a_node, a_configAddr, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrConfigWriteLong(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_value = (uint32_t)cpu_pop32(c);
+    gaddr a_configAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrConfigWriteLong(a_node, a_configAddr, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrConfigWriteWord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_value = (uint16_t)cpu_pop16(c);
+    gaddr a_configAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrConfigWriteWord(a_node, a_configAddr, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrIOReadByte(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_ioAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrIOReadByte(a_node, a_ioAddr, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrIOReadLong(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_ioAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrIOReadLong(a_node, a_ioAddr, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrIOReadWord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_ioAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrIOReadWord(a_node, a_ioAddr, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrIOWriteByte(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint8_t a_value = (uint8_t)(cpu_pop16(c) >> 8);
+    gaddr a_ioAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrIOWriteByte(a_node, a_ioAddr, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrIOWriteLong(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_value = (uint32_t)cpu_pop32(c);
+    gaddr a_ioAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrIOWriteLong(a_node, a_ioAddr, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrIOWriteWord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint16_t a_value = (uint16_t)cpu_pop16(c);
+    gaddr a_ioAddr = (gaddr)cpu_pop32(c);
+    gaddr a_node = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrIOWriteWord(a_node, a_ioAddr, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrInterruptAcknowledgeReadByte(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_entry = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrInterruptAcknowledgeReadByte(a_entry, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrInterruptAcknowledgeReadLong(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_entry = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrInterruptAcknowledgeReadLong(a_entry, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrInterruptAcknowledgeReadWord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_valuePtr = (gaddr)cpu_pop32(c);
+    gaddr a_entry = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrInterruptAcknowledgeReadWord(a_entry, a_valuePtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrSpecialCycleBroadcastLong(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_value = (uint32_t)cpu_pop32(c);
+    int16_t r = tb_ExpMgrSpecialCycleBroadcastLong(a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExpMgrSpecialCycleWriteLong(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_value = (uint32_t)cpu_pop32(c);
+    gaddr a_entry = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExpMgrSpecialCycleWriteLong(a_entry, a_value);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -27603,6 +27802,23 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABED, (int32_t)0x26u, "GetDragHiliteColor", CONV_STACK, 8, 2, glue_GetDragHiliteColor},
     {0xABED, (int32_t)0x27u, "SetDragImage", CONV_STACK, 20, 2, glue_SetDragImage},
     {0xABED, (int32_t)0x28u, "ChangeDragBehaviors", CONV_STACK, 12, 2, glue_ChangeDragBehaviors},
+    {0xAAF3, (int32_t)0x21Au, "ExpMgrSpecialCycleBroadcastLong", CONV_STACK, 4, 2, glue_ExpMgrSpecialCycleBroadcastLong},
+    {0xAAF3, (int32_t)0x411u, "ExpMgrInterruptAcknowledgeReadByte", CONV_STACK, 8, 2, glue_ExpMgrInterruptAcknowledgeReadByte},
+    {0xAAF3, (int32_t)0x412u, "ExpMgrInterruptAcknowledgeReadWord", CONV_STACK, 8, 2, glue_ExpMgrInterruptAcknowledgeReadWord},
+    {0xAAF3, (int32_t)0x413u, "ExpMgrInterruptAcknowledgeReadLong", CONV_STACK, 8, 2, glue_ExpMgrInterruptAcknowledgeReadLong},
+    {0xAAF3, (int32_t)0x419u, "ExpMgrSpecialCycleWriteLong", CONV_STACK, 8, 2, glue_ExpMgrSpecialCycleWriteLong},
+    {0xAAF3, (int32_t)0x523u, "ExpMgrConfigWriteByte", CONV_STACK, 10, 2, glue_ExpMgrConfigWriteByte},
+    {0xAAF3, (int32_t)0x524u, "ExpMgrConfigWriteWord", CONV_STACK, 10, 2, glue_ExpMgrConfigWriteWord},
+    {0xAAF3, (int32_t)0x529u, "ExpMgrIOWriteByte", CONV_STACK, 10, 2, glue_ExpMgrIOWriteByte},
+    {0xAAF3, (int32_t)0x52Au, "ExpMgrIOWriteWord", CONV_STACK, 10, 2, glue_ExpMgrIOWriteWord},
+    {0xAAF3, (int32_t)0x620u, "ExpMgrConfigReadByte", CONV_STACK, 12, 2, glue_ExpMgrConfigReadByte},
+    {0xAAF3, (int32_t)0x621u, "ExpMgrConfigReadWord", CONV_STACK, 12, 2, glue_ExpMgrConfigReadWord},
+    {0xAAF3, (int32_t)0x622u, "ExpMgrConfigReadLong", CONV_STACK, 12, 2, glue_ExpMgrConfigReadLong},
+    {0xAAF3, (int32_t)0x625u, "ExpMgrConfigWriteLong", CONV_STACK, 12, 2, glue_ExpMgrConfigWriteLong},
+    {0xAAF3, (int32_t)0x626u, "ExpMgrIOReadByte", CONV_STACK, 12, 2, glue_ExpMgrIOReadByte},
+    {0xAAF3, (int32_t)0x627u, "ExpMgrIOReadWord", CONV_STACK, 12, 2, glue_ExpMgrIOReadWord},
+    {0xAAF3, (int32_t)0x628u, "ExpMgrIOReadLong", CONV_STACK, 12, 2, glue_ExpMgrIOReadLong},
+    {0xAAF3, (int32_t)0x62Bu, "ExpMgrIOWriteLong", CONV_STACK, 12, 2, glue_ExpMgrIOWriteLong},
     {0xAA7D, (int32_t)0x0u, "InstallExtensionNotificationProc", CONV_STACK, 4, 2, glue_InstallExtensionNotificationProc},
     {0xAA7D, (int32_t)0x1u, "RemoveExtensionNotificationProc", CONV_STACK, 4, 2, glue_RemoveExtensionNotificationProc},
     {0xAA7D, (int32_t)0x2u, "InstallExtensionTableHandlerProc", CONV_STACK, 8, 2, glue_InstallExtensionTableHandlerProc},
@@ -29707,6 +29923,7 @@ const dispatcher_info dispatchers[] = {
     {0xAA53, "DictionaryDispatch", "D0W"},
     {0xABEB, "DisplayDispatch", "D0<0xFF>"},
     {0xABED, "DragDispatch", "D0W"},
+    {0xAAF3, "ExpansionMgrDispatch", "D0W"},
     {0xAA7D, "ExtensionsDispatch", "D0W"},
     {0xA060, "FSDispatch", "D0W"},
     {0xA0A8, "FSForkIODispatch", "D0W"},

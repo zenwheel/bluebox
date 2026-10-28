@@ -254,6 +254,25 @@ int os9_registry_property(gaddr id, const char *name, const uint8_t **data, uint
     return noErr;
 }
 
+/* Whether an ID names an entry (nrInvalidNodeErr if not), and whether it
+ * is on a PCI bus: itself or an ancestor has device_type "pci". */
+int os9_registry_on_pci(gaddr id, bool *pci)
+{
+    entry *e;
+    int err = id_entry(id, &e);
+    if (err)
+        return err;
+    *pci = false;
+    for (; e; e = e->parent) {
+        prop *p = prop_find(e, "device_type");
+        if (p && p->size >= 3 && !memcmp(p->value, "pci", 3) && (p->size == 3 || p->value[3] == 0)) {
+            *pci = true;
+            break;
+        }
+    }
+    return noErr;
+}
+
 static void ds_IDInit(ppc_cpu *c)
 {
     if (!R(0))

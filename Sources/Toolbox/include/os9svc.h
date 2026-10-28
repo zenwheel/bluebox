@@ -55,6 +55,7 @@ extern const unsigned os9_filesign_export_count;
 extern const os9_alias os9_filesign_aliases[];
 extern const unsigned os9_filesign_alias_count;
 void os9svc_filesign_reset(void);
+int os9_registry_on_pci(gaddr id, bool *pci);
 int os9_registry_property(gaddr id, const char *name, const uint8_t **data, uint32_t *size);
 extern const ppc_export os9_loader_exports[];
 extern const unsigned os9_loader_export_count;

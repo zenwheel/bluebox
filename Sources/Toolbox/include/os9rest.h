@@ -26,6 +26,9 @@ static inline uint32_t os9rest_word(const ppc_cpu *c, unsigned n)
 }
 
 void os9rest_debug_reset(void);
+extern const ppc_export os9rest_hw_exports[];
+extern const unsigned os9rest_hw_export_count;
+void os9rest_hw_reset(void);
 extern const ppc_export os9rest_math_exports[];
 extern const unsigned os9rest_math_export_count;
 

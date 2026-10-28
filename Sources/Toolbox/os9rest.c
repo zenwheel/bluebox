@@ -11,6 +11,7 @@
 
 static const os9rest_group groups[] = {
     GROUP(math),
+    GROUP(hw),
 };
 
 void (*os9rest_export_fn(const char *name))(ppc_cpu *)
@@ -40,4 +41,8 @@ gaddr os9rest_data_export(const char *name)
     return p;
 }
 
-void os9rest_reset(void) { os9rest_debug_reset(); }
+void os9rest_reset(void)
+{
+    os9rest_debug_reset();
+    os9rest_hw_reset();
+}

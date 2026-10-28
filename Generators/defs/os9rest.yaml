@@ -122,3 +122,219 @@
         type: ProcPtr
     dispatcher: DebugLibDispatch
     selector: 0x0008
+
+# The Expansion Manager (PCI.h): _ExpansionMgr ($AAF3), the selector in D0
+# with the arguments' size in words in its high byte, Pascal arguments.
+- dispatcher:
+    name: ExpansionMgrDispatch
+    trap: 0xAAF3
+    selector-location: D0W
+
+- function:
+    name: ExpMgrConfigReadByte
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint8_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0620
+
+- function:
+    name: ExpMgrConfigReadWord
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint16_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0621
+
+- function:
+    name: ExpMgrConfigReadLong
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint32_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0622
+
+- function:
+    name: ExpMgrIOReadByte
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint8_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0626
+
+- function:
+    name: ExpMgrIOReadWord
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint16_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0627
+
+- function:
+    name: ExpMgrIOReadLong
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint32_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0628
+
+- function:
+    name: ExpMgrConfigWriteByte
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: value
+        type: uint8_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0523
+
+- function:
+    name: ExpMgrConfigWriteWord
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: value
+        type: uint16_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0524
+
+- function:
+    name: ExpMgrConfigWriteLong
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: value
+        type: uint32_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0625
+
+- function:
+    name: ExpMgrIOWriteByte
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: value
+        type: uint8_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0529
+
+- function:
+    name: ExpMgrIOWriteWord
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: value
+        type: uint16_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x052A
+
+- function:
+    name: ExpMgrIOWriteLong
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: value
+        type: uint32_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x062B
+
+- function:
+    name: ExpMgrInterruptAcknowledgeReadByte
+    return: OSErr
+    args:
+      - name: entry
+        type: RegEntryIDPtr
+      - name: valuePtr
+        type: uint8_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0411
+
+- function:
+    name: ExpMgrInterruptAcknowledgeReadWord
+    return: OSErr
+    args:
+      - name: entry
+        type: RegEntryIDPtr
+      - name: valuePtr
+        type: uint16_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0412
+
+- function:
+    name: ExpMgrInterruptAcknowledgeReadLong
+    return: OSErr
+    args:
+      - name: entry
+        type: RegEntryIDPtr
+      - name: valuePtr
+        type: uint32_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0413
+
+- function:
+    name: ExpMgrSpecialCycleWriteLong
+    return: OSErr
+    args:
+      - name: entry
+        type: RegEntryIDPtr
+      - name: value
+        type: uint32_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0419
+
+- function:
+    name: ExpMgrSpecialCycleBroadcastLong
+    return: OSErr
+    args:
+      - name: value
+        type: uint32_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x021A

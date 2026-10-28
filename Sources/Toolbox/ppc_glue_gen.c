@@ -9852,6 +9852,60 @@ static void ppcglue_HWPriv(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ExpMgrConfigReadByte(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigReadByte(a_node, a_configAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigReadWord(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigReadWord(a_node, a_configAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigReadLong(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigReadLong(a_node, a_configAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigWriteByte(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    uint8_t a_value = (uint8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigWriteByte(a_node, a_configAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigWriteWord(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    uint16_t a_value = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigWriteWord(a_node, a_configAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigWriteLong(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    uint32_t a_value = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigWriteLong(a_node, a_configAddr, a_value);
+    c->pc = c->lr;
+}
+
 static void ppcpatched_InitPack(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -29490,6 +29544,99 @@ static void ppcglue_InstallDebugAssertOutputHandler(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ExpMgrIOReadByte(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOReadByte(a_node, a_ioAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOReadWord(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOReadWord(a_node, a_ioAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOReadLong(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOReadLong(a_node, a_ioAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOWriteByte(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    uint8_t a_value = (uint8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOWriteByte(a_node, a_ioAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOWriteWord(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    uint16_t a_value = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOWriteWord(a_node, a_ioAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOWriteLong(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    uint32_t a_value = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOWriteLong(a_node, a_ioAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrInterruptAcknowledgeReadByte(ppc_cpu *c)
+{
+    gaddr a_entry = (gaddr)c->gpr[3];
+    gaddr a_valuePtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrInterruptAcknowledgeReadByte(a_entry, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrInterruptAcknowledgeReadWord(ppc_cpu *c)
+{
+    gaddr a_entry = (gaddr)c->gpr[3];
+    gaddr a_valuePtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrInterruptAcknowledgeReadWord(a_entry, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrInterruptAcknowledgeReadLong(ppc_cpu *c)
+{
+    gaddr a_entry = (gaddr)c->gpr[3];
+    gaddr a_valuePtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrInterruptAcknowledgeReadLong(a_entry, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrSpecialCycleWriteLong(ppc_cpu *c)
+{
+    gaddr a_entry = (gaddr)c->gpr[3];
+    uint32_t a_value = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrSpecialCycleWriteLong(a_entry, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrSpecialCycleBroadcastLong(ppc_cpu *c)
+{
+    uint32_t a_value = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrSpecialCycleBroadcastLong(a_value);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParseAIFFHeader(ppc_cpu *c)
 {
     int16_t a_fRefNum = (int16_t)c->gpr[3];
@@ -41895,6 +42042,23 @@ const ppc_export ppc_exports[] = {
     {"ExitToShell", ppctrap_ExitToShell},
     {"Exp1to3", ppcglue_Exp1to3},
     {"Exp1to6", ppcglue_Exp1to6},
+    {"ExpMgrConfigReadByte", ppcglue_ExpMgrConfigReadByte},
+    {"ExpMgrConfigReadLong", ppcglue_ExpMgrConfigReadLong},
+    {"ExpMgrConfigReadWord", ppcglue_ExpMgrConfigReadWord},
+    {"ExpMgrConfigWriteByte", ppcglue_ExpMgrConfigWriteByte},
+    {"ExpMgrConfigWriteLong", ppcglue_ExpMgrConfigWriteLong},
+    {"ExpMgrConfigWriteWord", ppcglue_ExpMgrConfigWriteWord},
+    {"ExpMgrIOReadByte", ppcglue_ExpMgrIOReadByte},
+    {"ExpMgrIOReadLong", ppcglue_ExpMgrIOReadLong},
+    {"ExpMgrIOReadWord", ppcglue_ExpMgrIOReadWord},
+    {"ExpMgrIOWriteByte", ppcglue_ExpMgrIOWriteByte},
+    {"ExpMgrIOWriteLong", ppcglue_ExpMgrIOWriteLong},
+    {"ExpMgrIOWriteWord", ppcglue_ExpMgrIOWriteWord},
+    {"ExpMgrInterruptAcknowledgeReadByte", ppcglue_ExpMgrInterruptAcknowledgeReadByte},
+    {"ExpMgrInterruptAcknowledgeReadLong", ppcglue_ExpMgrInterruptAcknowledgeReadLong},
+    {"ExpMgrInterruptAcknowledgeReadWord", ppcglue_ExpMgrInterruptAcknowledgeReadWord},
+    {"ExpMgrSpecialCycleBroadcastLong", ppcglue_ExpMgrSpecialCycleBroadcastLong},
+    {"ExpMgrSpecialCycleWriteLong", ppcglue_ExpMgrSpecialCycleWriteLong},
     {"ExtendedToString", ppcglue_ExtendedToString},
     {"FCompressImage", ppcglue_FCompressImage},
     {"FCompressPicture", ppcglue_FCompressPicture},
