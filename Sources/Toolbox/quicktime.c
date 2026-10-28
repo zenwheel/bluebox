@@ -2668,6 +2668,8 @@ static void draw_bar(controller *c)
     movie *m = movie_of(c->movie);
     if (!c->visible || !c->attached)
         return;
+    if (m && qt_vr_draw_bar(m->handle, c->port, bar_rect(c), c->flags)) /* QuickTime VR's buttons */
+        return;
     gaddr saved = qd_port();
     tb_SetPort(c->port);
     qrect b = bar_rect(c);
@@ -2717,7 +2719,7 @@ static void draw_bar(controller *c)
 static void update_bar(controller *c)
 {
     movie *m = movie_of(c->movie);
-    if (!c->visible || !c->attached)
+    if (!c->visible || !c->attached || (m && qt_vr_movie(m->handle)))
         return;
     int x = thumb_x(c, m), playing = m && m->playing;
     if (playing != c->drawn_playing || c->drawn_x < 0 || x < 0 || (m && m->mv->sel_duration > 0)) {
@@ -2795,6 +2797,8 @@ static bool mc_click_with(controller *c, uint32_t pt, bool shift)
     bool in_movie = v >= m->box.top && v < m->box.bottom && h >= m->box.left && h < m->box.right;
     if (!in_bar && !in_movie)
         return false;
+    if (in_bar && qt_vr_bar_click(m->handle, c->ci, pt, b, c->flags))
+        return true;
     if (in_bar && h >= b.left + 18) {
         int left = b.left + 18, right = b.right - 6;
         if (right > left) {

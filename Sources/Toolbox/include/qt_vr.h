@@ -24,6 +24,11 @@ void qt_vr_movie_idle(gaddr movie);
 bool qt_vr_movie_click(gaddr movie, gaddr mc, uint32_t pt, uint16_t modifiers);
 bool qt_vr_movie_key(gaddr movie, uint8_t ch, uint16_t modifiers);
 void qt_vr_movie_modifiers(gaddr movie, uint16_t modifiers);
+/* The controller's bar for a VR movie: QuickTime VR's buttons (back, zoom
+ * out and in, show hot spots) drawn, and a click in them followed while
+ * the button is held; false for other movies. */
+bool qt_vr_draw_bar(gaddr movie, gaddr port, qrect bar, int32_t mc_flags);
+bool qt_vr_bar_click(gaddr movie, gaddr mc, uint32_t pt, qrect bar, int32_t mc_flags);
 /* The movie went away. */
 void qt_vr_movie_gone(gaddr movie);
 void qt_vr_reset(void);

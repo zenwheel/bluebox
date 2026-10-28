@@ -1653,6 +1653,21 @@ void vr_refresh_back_buffer(vr *v)
     vr_update(v, false);
 }
 
+/* Zooming while a button or key is held: by time, not by how often the
+ * program asks (QuickTime VR's zoom speed 5 is about a third a second). */
+static uint32_t zoom_ticks;
+
+static void zoom_step(vr *v, int dir, bool first)
+{
+    uint32_t now = tb_TickCount();
+    uint32_t t = first || now - zoom_ticks > 30 ? 1 : now - zoom_ticks;
+    zoom_ticks = now;
+    if (!t && !first)
+        return;
+    float speed = (float)(v->interaction[4] ? v->interaction[4] : 5) / 5;
+    vr_set_angle(v, VR_FOV, v->fov * powf(dir > 0 ? 0.993f : 1.007f, (float)t * speed));
+}
+
 /* ---- The Movie Toolbox's hooks ---- */
 
 bool qt_vr_movie_draw(gaddr movie, gaddr port, qrect box, bool force)
@@ -1710,7 +1725,8 @@ bool qt_vr_movie_click(gaddr movie, gaddr mc, uint32_t pt, uint16_t modifiers)
     uint32_t p[6] = { pt, tb_TickCount(), modifiers, 0, 0, 0 };
     vr_call(v, SEL_DOWN, p, 5);
     uint32_t last = pt;
-    for (int guard = 0; guard < 100000 && tb_StillDown(); guard++) {
+    for (int guard = 0; guard < 100000 && tb_StillDown() && !g_cpu->halted; guard++) {
+        ev_wait_tick(); /* time passes (the view turns by time) */
         last = local_mouse(v);
         uint32_t q[6] = { last, 0, 0, 0, 0, 0 };
         vr_call(v, SEL_STILLDOWN, q, 3);
@@ -1750,11 +1766,142 @@ void qt_vr_movie_modifiers(gaddr movie, uint16_t modifiers)
     vr *v = vr_for_movie(movie, false);
     if (!v)
         return;
-    float speed = 0.01f * (float)(v->interaction[4] ? v->interaction[4] : 5);
+    static bool held;
     if (modifiers & 0x0200) /* shift: in */
-        vr_set_angle(v, VR_FOV, v->fov * (1 - speed));
+        zoom_step(v, 1, !held);
     else if (modifiers & 0x1000) /* control: out */
-        vr_set_angle(v, VR_FOV, v->fov * (1 + speed));
+        zoom_step(v, -1, !held);
+    held = (modifiers & 0x1200) != 0;
+}
+
+/* ---- The controller's bar ---- */
+
+enum { BTN_BACK, BTN_ZOOM_OUT, BTN_ZOOM_IN, BTN_HOTS, NBTN };
+
+/* The buttons shown, left to right (mcFlagQTVRSuppress... hide some). */
+static int bar_buttons(const vr *v, int32_t flags, int out[NBTN])
+{
+    int n = 0;
+    if (!(flags & (1 << 16)) && v->nnodes > 1)
+        out[n++] = BTN_BACK;
+    if (!(flags & (1 << 17)) && (!v->object || (v->control & 4))) {
+        out[n++] = BTN_ZOOM_OUT;
+        out[n++] = BTN_ZOOM_IN;
+    }
+    if (!(flags & (1 << 18)))
+        out[n++] = BTN_HOTS;
+    return n;
+}
+
+static qrect button_rect(qrect bar, int i)
+{
+    int16_t l = (int16_t)(bar.left + 3 + i * 22);
+    return (qrect){ (int16_t)(bar.top + 2), l, (int16_t)(bar.bottom - 2), (int16_t)(l + 20) };
+}
+
+static void line(int h0, int v0, int h1, int v1)
+{
+    tb_MoveTo((int16_t)h0, (int16_t)v0);
+    tb_LineTo((int16_t)h1, (int16_t)v1);
+}
+
+static void draw_button(qrect r, int kind, bool pressed)
+{
+    gaddr p = tb_NewPtr(8, false, true);
+    qrect_put(p, r);
+    tb_EraseRect(p);
+    tb_FrameRect(p);
+    int ch = (r.left + r.right) / 2, cv = (r.top + r.bottom) / 2;
+    switch (kind) {
+    case BTN_BACK: /* a left arrow */
+        line(ch - 4, cv, ch + 4, cv);
+        line(ch - 4, cv, ch - 1, cv - 3);
+        line(ch - 4, cv, ch - 1, cv + 3);
+        break;
+    case BTN_ZOOM_OUT: line(ch - 4, cv, ch + 4, cv); break;
+    case BTN_ZOOM_IN:
+        line(ch - 4, cv, ch + 4, cv);
+        line(ch, cv - 4, ch, cv + 4);
+        break;
+    case BTN_HOTS: /* an up arrow */
+        line(ch, cv - 4, ch, cv + 4);
+        line(ch, cv - 4, ch - 3, cv - 1);
+        line(ch, cv - 4, ch + 3, cv - 1);
+        break;
+    }
+    if (pressed)
+        tb_InvertRect(p);
+    tb_DisposePtr(p);
+}
+
+bool qt_vr_draw_bar(gaddr movie, gaddr port, qrect bar, int32_t mc_flags)
+{
+    vr *v = vr_for_movie(movie, true);
+    if (!v)
+        return false;
+    gaddr saved = qd_port();
+    tb_SetPort(port);
+    tb_PenNormal();
+    gaddr p = tb_NewPtr(8, false, true);
+    qrect_put(p, bar);
+    tb_EraseRect(p);
+    tb_FrameRect(p);
+    tb_DisposePtr(p);
+    int b[NBTN], n = bar_buttons(v, mc_flags, b);
+    for (int i = 0; i < n; i++)
+        draw_button(button_rect(bar, i), b[i], b[i] == BTN_HOTS && v->hots_visible);
+    tb_SetPort(saved);
+    return true;
+}
+
+bool qt_vr_bar_click(gaddr movie, gaddr mc, uint32_t pt, qrect bar, int32_t mc_flags)
+{
+    vr *v = vr_for_movie(movie, true);
+    if (!v)
+        return false;
+    if (mc)
+        v->mc = mc;
+    int b[NBTN], n = bar_buttons(v, mc_flags, b), hit = -1;
+    for (int i = 0; i < n; i++) {
+        qrect r = button_rect(bar, i);
+        if (pt_h(pt) >= r.left && pt_h(pt) < r.right && pt_v(pt) >= r.top && pt_v(pt) < r.bottom)
+            hit = i;
+    }
+    if (hit < 0)
+        return true; /* the rest of the bar does nothing */
+    gaddr saved = qd_port();
+    tb_SetPort(v->port ? v->port : saved);
+    qrect r = button_rect(bar, hit);
+    draw_button(r, b[hit], true);
+    switch (b[hit]) {
+    case BTN_BACK:
+        vr_go_to_node(v, kQTVRPreviousNode);
+        break;
+    case BTN_ZOOM_OUT:
+    case BTN_ZOOM_IN: {
+        int guard = 0;
+        do {
+            zoom_step(v, b[hit] == BTN_ZOOM_IN ? 1 : -1, guard == 0);
+            if (v->dirty)
+                draw(v);
+            ev_wait_tick();
+        } while (tb_StillDown() && !g_cpu->halted && ++guard < 100000);
+        break;
+    }
+    case BTN_HOTS: /* shown while the button is held */
+        v->hots_visible = true;
+        draw(v);
+        for (int guard = 0; tb_StillDown() && !g_cpu->halted && guard < 100000; guard++)
+            ev_wait_tick();
+        v->hots_visible = false;
+        break;
+    }
+    for (int guard = 0; tb_StillDown() && !g_cpu->halted && guard < 100000; guard++)
+        ev_wait_tick();
+    draw_button(r, b[hit], false);
+    tb_SetPort(saved);
+    draw(v);
+    return true;
 }
 
 void qt_vr_movie_gone(gaddr movie)
