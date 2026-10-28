@@ -1865,6 +1865,8 @@ static void fill_file_info(gaddr pb, const char *path, bool cat)
     fm_info in;
     fm_info_of(path, &in);
     wr8(pb + FileParam_ioFlAttrib_off, is_open(path) ? 0x80 : 0);
+    if (cat)
+        wr8(pb + HFileInfo_ioACUser_off, 0);
     gput(pb + FileParam_ioFlFndrInfo_off, in.finder_info, 16);
     if (cat)
         gput(pb + HFileInfo_ioFlXFndrInfo_off, in.finder_info + 16, 16);
@@ -2306,6 +2308,10 @@ static void cat_info_of_path(gaddr pb, const char *path)
     if (is_dir(path)) {
         int32_t id = dir_id_for(rel_of(path));
         wr8(pb + DirInfo_ioFlAttrib_off, 0x10);
+        /* The user's access (the Finder checks it before putting things
+         * in a folder): all of it, or no changes where Blue Box may not
+         * write. */
+        wr8(pb + DirInfo_ioACUser_off, writable(path) ? 0 : 0x04);
         gmemset(pb + DirInfo_ioDrUsrWds_off, 0, 16);
         wr32(pb + DirInfo_ioDrDirID_off, (uint32_t)out_id(id));
         wr16(pb + DirInfo_ioDrNmFls_off, (uint16_t)count_entries(path));

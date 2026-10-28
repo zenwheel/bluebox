@@ -40,6 +40,21 @@ int16_t tb_DeclineVolumeNotification(gaddr proc, int32_t refcon)
     return paramErr;
 }
 
+/* ---- Whose window ----
+ * The token is the process's serial number's low long: every window in
+ * the machine is this run's. */
+
+int32_t tb_CurrentProcessToken(void)
+{
+    gaddr psn = tb_NewPtr(8, false, true);
+    int32_t t = psn && tb_GetCurrentProcess(psn) == noErr ? (int32_t)rd32(psn + 4) : 1;
+    if (psn)
+        tb_DisposePtr(psn);
+    return t;
+}
+
+int32_t tb_ProcessTokenAt(uint32_t where) { return wm_window_at(where) ? tb_CurrentProcessToken() : 0; }
+
 /* ---- The desktop ---- */
 
 /* The desktop window (wm.c): outside the window list, so FindWindow still

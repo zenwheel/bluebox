@@ -553,5 +553,36 @@ extension BlueBox {
             #expect(g_cpu!.pointee.halted)
             #expect(String(cString: machine_halt_reason()).contains("restart"))
         }
+
+        /// Whose window is under the mouse: this run's, or none over the desktop.
+        @Test func windowOwners() {
+            launchTestApp()
+            _ = initToolbox()
+            let me = tb_CurrentProcessToken()
+            #expect(me != 0)
+            #expect(tb_ProcessTokenAt(UInt32(300 << 16 | 400)) == 0)
+            let r = tb_NewPtr(8, false, true)
+            wr16(r, 100); wr16(r + 2, 100); wr16(r + 4, 200); wr16(r + 6, 300)
+            _ = tb_NewWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+            #expect(tb_ProcessTokenAt(UInt32(150 << 16 | 150)) == me)
+        }
+
+        /// A folder Blue Box may write gives the user every access; the
+        /// Finder asks before putting things in it.
+        @Test func folderAccess() {
+            let folder = launchTestApp()
+            try? FileManager.default.createDirectory(at: folder.appendingPathComponent("Open"), withIntermediateDirectories: true)
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            #expect(tb_FSMakeFSSpec(0, 0, pname("Open"), spec) == 0)
+            let pb = tb_NewPtr(Int32(CInfoPBRec_SIZEOF), false, true)
+            gmemset(pb, 0xFF, UInt32(CInfoPBRec_SIZEOF))
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), pname("Open"))
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), rd16(spec))
+            wr16(pb + UInt32(FileParam_ioFDirIndex_off), 0)
+            wr32(pb + UInt32(HFileInfo_ioDirID_off), rd32(spec + 2))
+            wr32(pb + UInt32(IOParam_ioCompletion_off), 0)
+            #expect(tb_PBGetCatInfo(pb, false) == 0)
+            #expect(rd8(pb + UInt32(DirInfo_ioACUser_off)) == 0)
+        }
     }
 }

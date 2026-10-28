@@ -4390,6 +4390,15 @@ static void glue_CurResFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CurrentProcessToken(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_CurrentProcessToken();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CurrentProcessorSpeed(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -22161,6 +22170,16 @@ static void glue_ProcessIsContextualMenuClient(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ProcessTokenAt(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_where = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_ProcessTokenAt(a_where);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ProtectEntry(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -34479,6 +34498,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x1u, "GetActiveTaskInfo", CONV_STACK, 6, 2, glue_GetActiveTaskInfo},
     {0xA88F, (int32_t)0x2u, "GetSwitchInfo", CONV_STACK, 4, 0, glue_GetSwitchInfo},
     {0xA88F, (int32_t)0x3u, "CancelSwitch", CONV_STACK, 0, 0, glue_CancelSwitch},
+    {0xA88F, (int32_t)0x4u, "CurrentProcessToken", CONV_STACK, 0, 4, glue_CurrentProcessToken},
+    {0xA88F, (int32_t)0xFu, "ProcessTokenAt", CONV_STACK, 4, 4, glue_ProcessTokenAt},
     {0xA88F, (int32_t)0x14u, "NewDesktopWindow", CONV_STACK, 4, 2, glue_NewDesktopWindow},
     {0xA88F, (int32_t)0x15u, "TempMaxMem", CONV_STACK, 4, 4, glue_TempMaxMem},
     {0xA88F, (int32_t)0x16u, "TempTopMem", CONV_STACK, 0, 4, glue_TempTopMem},

@@ -170,3 +170,24 @@
     dispatcher: MenuDispatch
     selector: 0x08FB
     ppc: false
+
+# $04 and $0F: as the mouse moves, the Finder asks whose window is under
+# it ($0F, with the point; nil over the desktop) and otherwise whose the
+# current process is ($04), and sets the cursor only for its own.  Both
+# answer a token the Finder only compares.
+- function:
+    name: CurrentProcessToken
+    return: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0004
+
+- function:
+    name: ProcessTokenAt
+    return: LONGINT
+    args:
+      - name: where
+        type: Point
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x000F

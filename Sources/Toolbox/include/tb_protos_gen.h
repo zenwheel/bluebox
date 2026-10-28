@@ -341,6 +341,7 @@ int16_t tb_CreateThreadPool(int32_t threadStyle, int16_t numToCreate, int32_t st
 int32_t tb_CreateUserPaneControl(gaddr window, gaddr boundsRect, uint32_t features, gaddr outControl);
 int32_t tb_CreateWindowHeaderControl(gaddr window, gaddr boundsRect, int8_t isListHeader, gaddr outControl);
 int16_t tb_CurResFile(void);
+int32_t tb_CurrentProcessToken(void);
 int16_t tb_CurrentProcessorSpeed(void);
 int16_t tb_CursorComponentChanged(uint32_t ci);
 int16_t tb_CursorComponentSetData(uint32_t ci, int32_t data);
@@ -2086,6 +2087,7 @@ int16_t tb_PrerollMovie(gaddr movie, int32_t time, int32_t rate);
 void tb_PrimeTime(gaddr taskp, int32_t count);
 void tb_PrintDefault(gaddr hPrint);
 int8_t tb_ProcessIsContextualMenuClient(gaddr inPSN);
+int32_t tb_ProcessTokenAt(uint32_t where);
 void tb_ProtectEntry(int16_t arg0, int8_t arg1);
 void tb_Pt2Rect(uint32_t p1, uint32_t p2, gaddr dest);
 int8_t tb_PtInIconID(uint32_t test_pt, gaddr rect, int16_t align, int16_t icon_id);
