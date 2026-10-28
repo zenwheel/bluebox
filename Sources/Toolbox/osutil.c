@@ -107,13 +107,12 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
     const hw_profile *m = hw_machine();
     int v = vers > 2 ? 2 : vers;
     SysEnvRec_set_environsVersion(p, (int16_t)v);
-    SysEnvRec_set_machineType(p, (int16_t)m->env_machine);
+    SysEnvRec_set_machineType(p, (int16_t)machine_env_type());
     SysEnvRec_set_systemVersion(p, (int16_t)rd16(LM_SysVersion));
     /* Numbered as Gestalt's: env68000 1, env68010 2, env68020 3, env68030 4,
      * env68040 5. */
-    int proc = hw_machine_chosen() ? (m->cpu == 68000 ? 1 : m->cpu == 68030 ? 4 : m->cpu == 68040 ? 5 : 3)
-                                   : (g_cpu && g_cpu->model == 68040 ? 5 : 3);
-    SysEnvRec_set_processor(p, (int16_t)proc);
+    int model = machine_cpu_model();
+    SysEnvRec_set_processor(p, (int16_t)(model == 68000 ? 1 : (model - 68000) / 10 + 1));
     SysEnvRec_set_hasFPU(p, gestalt_value(fourcc("fpu "), 0) != 0);
     SysEnvRec_set_hasColorQD(p, m->color_qd);
     SysEnvRec_set_keyBoardType(p, (int16_t)m->env_keyboard);
@@ -124,17 +123,66 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
     return vers > 2 ? -5502 : noErr; /* envVersTooBig */
 }
 
-gaddr tb_StripAddress(gaddr p) { return g_cpu ? p & g_cpu->addr_mask : p; }
-void tb_SwapMMUMode(uint32_t *bp) { *bp = 1; }
-/* HWPriv: no caches to turn off or flush; translated code already goes
- * when it is stored over, and FlushCodeCacheRange (9: A0 address, A1
- * count) drops what was translated from the range all the same. */
+/* In 24-bit mode the top byte is flags, and goes. */
+gaddr tb_StripAddress(gaddr p) { return g_mem_24bit && !rd8(LM_MMU32Bit) ? p & 0x00FFFFFFu : p; }
+
+/* SwapMMUMode: a machine started in 24-bit mode switches between 24- and
+ * 32-bit addressing as asked (D0's low byte: 0 false32b, 1 true32b) and
+ * answers the mode it was in.  Started in 32-bit mode it stays there, as
+ * the 32-bit System had it. */
+void tb_SwapMMUMode(uint32_t *bp)
+{
+    uint8_t was = rd8(LM_MMU32Bit);
+    /* Not a 68000's 24 lines, or a compact Mac's bus, whatever its CPU. */
+    if (g_mem_24bit && g_cpu && g_cpu->model != 68000 && g_mem_layout != MEM_LAYOUT_COMPACT) {
+        bool to32 = (*bp & 0xFF) != 0;
+        wr8(LM_MMU32Bit, to32);
+        g_cpu->addr_mask = to32 ? 0xFFFFFFFFu : 0x00FFFFFFu;
+    }
+    *bp = (*bp & 0xFFFFFF00u) | was;
+}
+
+/* Translate24To32 ($A091, D0 in and out): in 24-bit mode an address's
+ * own 24 bits name the same memory with 32-bit addressing (the screen and
+ * the ROM are inside the 16 MB); in 32-bit mode it is already one. */
+uint32_t tb_Translate24To32(uint32_t addr24) { return g_mem_24bit ? addr24 & 0x00FFFFFFu : addr24; }
+/* HWPriv: the caches.  0 SwapInstructionCache and 2 SwapDataCache turn a
+ * cache on or off (A0) and answer whether it was on (A0); 1
+ * FlushInstructionCache and 9 FlushCodeCacheRange (A0 address, A1 count)
+ * empty the 68020's or 68030's instruction cache (all of it, or the
+ * range) and drop what was translated from the range; 3 FlushDataCache
+ * and the external cache's 4 to 6 have nothing to do, a data cache here
+ * never being stale. */
 void tb_HWPriv(int32_t d0, int32_t a0)
 {
-    if ((d0 & 0xFFFF) == 9 && g_code_map && g_cpu->a[1])
-        mem_code_range((gaddr)a0, g_cpu->a[1]);
-    g_cpu->d[0] = 0;
+    cpu68k *c = g_cpu;
+    int model = c->model;
+    uint32_t icache = model >= 68040 ? 0x8000u : model >= 68020 ? 0x1u : 0;
+    uint32_t dcache = model >= 68040 ? 0x80000000u : model == 68030 ? 0x100u : 0;
+    switch (d0 & 0xFFFF) {
+    case 0:
+    case 2: {
+        uint32_t bit = (d0 & 0xFFFF) == 0 ? icache : dcache;
+        c->a[0] = (c->cacr & bit) != 0;
+        if (bit)
+            c->cacr = a0 & 0xFF ? c->cacr | bit : c->cacr & ~bit;
+        if (bit == icache)
+            cpu_icache_flush(c, 0, 0);
+        break;
+    }
+    case 1: cpu_icache_flush(c, 0, 0); break;
+    case 9:
+        cpu_icache_flush(c, (uint32_t)a0, c->a[1] ? c->a[1] : 1);
+        if (g_code_map && c->a[1])
+            mem_code_range((gaddr)a0, c->a[1]);
+        break;
+    default: break;
+    }
+    c->d[0] = 0;
 }
+
+/* FlushCodeCache ($A0BD): the whole instruction cache. */
+void tb_FlushCodeCache(void) { cpu_icache_flush(g_cpu, 0, 0); }
 
 void tb_Debugger(void)
 {

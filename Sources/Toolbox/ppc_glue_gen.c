@@ -9994,6 +9994,12 @@ static void ppcglue_Debugger(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_FlushCodeCache(ppc_cpu *c)
+{
+    tb_FlushCodeCache();
+    c->pc = c->lr;
+}
+
 static void ppcglue_HWPriv(ppc_cpu *c)
 {
     int32_t a_d0 = (int32_t)c->gpr[3];
@@ -29512,6 +29518,13 @@ static void ppcglue_SetFileViewBackingBase(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_Translate24To32(ppc_cpu *c)
+{
+    uint32_t a_addr24 = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_Translate24To32(a_addr24);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InitContextualMenus(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InitContextualMenus();
@@ -37420,14 +37433,6 @@ static void ppctrap_SwapMMUMode(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_FlushCodeCache(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap((uint16_t)(0xA0BD));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_PrJobMerge(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -40883,7 +40888,7 @@ const ppc_export ppc_exports[] = {
     {"FlattenMovieData", ppcglue_FlattenMovieData},
     {"FlattenMovieDataToDataRef", ppcglue_FlattenMovieDataToDataRef},
     {"FlattenPartialCollection", ppctrap_FlattenPartialCollection},
-    {"FlushCodeCache", ppctrap_FlushCodeCache},
+    {"FlushCodeCache", ppcglue_FlushCodeCache},
     {"FlushEvents", ppcglue_FlushEvents},
     {"FlushFonts", ppcglue_FlushFonts},
     {"FlushIconRefs", ppcglue_FlushIconRefs},
@@ -44026,6 +44031,7 @@ const ppc_export ppc_exports[] = {
     {"TransformPoints", ppcglue_TransformPoints},
     {"TransformRect", ppcglue_TransformRect},
     {"TransformRgn", ppcglue_TransformRgn},
+    {"Translate24To32", ppcglue_Translate24To32},
     {"TranslateFile", ppcglue_TranslateFile},
     {"TranslateMatrix", ppcglue_TranslateMatrix},
     {"TranslateScrap", ppcglue_TranslateScrap},

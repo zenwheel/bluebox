@@ -14,6 +14,12 @@
  *
  * The application zone can grow on demand up to its limit, so there is no
  * fixed partition: memory is committed by the host only when touched.
+ *
+ * In 24-bit mode a relocatable block's lock, purge and resource flags
+ * live where a 24-bit heap kept them, in the top byte of its master
+ * pointer: programs of those days set and test them there themselves
+ * (BSET #7,(A0) to lock), and read master pointers with the flags in.
+ * The header's byte is kept the same.
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -47,6 +53,32 @@ static inline uint32_t b_lsize(gaddr b) { return b_psize(b) - HDR - b_sizec(b); 
  * on it for good (Squark's heap, and MaxBlock never returned). */
 static inline gaddr b_next(gaddr b) { return b_psize(b) < HDR ? 0xFFFFFFF0u : b + b_psize(b); }
 static inline gaddr b_data(gaddr b) { return b + HDR; }
+
+/* A master pointer's address, without the flags 24-bit mode keeps in it. */
+static inline gaddr mp_ptr(gaddr mp) { return mem_strip(rd32(mp)); }
+
+/* Point master pointer mp at data, keeping its flags in 24-bit mode. */
+static inline void mp_point(gaddr mp, gaddr data)
+{
+    wr32(mp, g_mem_24bit ? ((uint32_t)rd8(mp) << 24) | (data & 0x00FFFFFFu) : data);
+}
+
+/* Block b's handle state (b in zone z): in 24-bit mode its master
+ * pointer's top byte, all of it, as HGetState gave it. */
+static inline uint8_t blk_state(gaddr z, gaddr b)
+{
+    return g_mem_24bit && b_use(b) == USE_REL ? rd8(z + b_loc(b)) : b_state(b);
+}
+
+/* The same for handle h's block b. */
+static inline uint8_t h_state(gaddr h, gaddr b) { return g_mem_24bit ? rd8(mem_strip(h)) : b_state(b); }
+
+static inline void h_set_state(gaddr h, gaddr b, uint8_t state)
+{
+    wr8(b + 1, state & (ST_LOCK | ST_PURGE | ST_RSRC));
+    if (g_mem_24bit)
+        wr8(mem_strip(h), state);
+}
 
 static void b_set(gaddr b, unsigned use, uint8_t state, uint8_t sizec, uint32_t psize, uint32_t loc)
 {
@@ -151,6 +183,7 @@ static bool in_zone(gaddr z, gaddr addr) { return z && addr >= z && addr < z_lim
 /* Which zone owns this address?  The innermost one that holds it. */
 static gaddr zone_of(gaddr addr)
 {
+    addr = mem_strip(addr);
     gaddr best = 0;
     for (int i = 0; i < nsubzones; i++)
         if (z_lim(subzones[i].z) == subzones[i].lim && in_zone(subzones[i].z, addr) && subzones[i].z > best)
@@ -177,7 +210,7 @@ static gaddr handle_block(gaddr h, int16_t *err)
         *err = nilHandleErr;
         return 0;
     }
-    gaddr p = rd32(h);
+    gaddr p = mp_ptr(mem_strip(h));
     if (p == 0) {
         *err = nilHandleErr;
         return 0;
@@ -185,7 +218,7 @@ static gaddr handle_block(gaddr h, int16_t *err)
     gaddr b = p - HDR;
     /* The top byte may be the handle's flags, as programs of the 24-bit
      * days set them (RMaker locks its strings with BSET #7 and then asks
-     * GetHandleSize), for a block below 16 MB. */
+     * GetHandleSize), for a block below 16 MB, in 32-bit mode too. */
     if (b_use(b) != USE_REL && (p >> 24) && (p & 0x00FFFFFFu) >= HDR)
         b = (p & 0x00FFFFFFu) - HDR;
     if (b_use(b) != USE_REL) {
@@ -249,8 +282,12 @@ static bool grow_zone(gaddr z, uint32_t need)
     limit &= ~3u;
     if (lim + HDR >= limit)
         return false;
-    uint64_t room = limit - HDR - lim;
-    if (room < need)
+    /* With less room than asked for, all of it: the free block ending the
+     * zone makes up the rest, as MaxMem counted it (Vampire Castle asks
+     * for nearly what MaxMem said and makes its own heap at address 0 if
+     * it doesn't get it). */
+    uint64_t room = (limit - HDR - lim) & ~(uint64_t)3;
+    if (room < MIN_BLOCK)
         return false;
     if (want > room)
         want = room;
@@ -319,9 +356,9 @@ static uint32_t compact(gaddr z)
             b += ps;
             continue;
         }
-        if (dst && use == USE_REL && !(b_state(b) & ST_LOCK)) {
+        if (dst && use == USE_REL && !(blk_state(z, b) & ST_LOCK)) {
             gmemcpy(dst, b, ps);
-            wr32(z + b_loc(dst), dst + HDR); /* update the master pointer */
+            mp_point(z + b_loc(dst), dst + HDR); /* update the master pointer */
             dst += ps;
             gaddr next = b + ps;
             if (next > dst) /* mark the gap free so the walk stays valid */
@@ -353,7 +390,7 @@ static void purge(gaddr z)
 {
     gaddr lim = z_lim(z);
     for (gaddr b = z_first(z); b < lim; b = b_next(b)) {
-        if (b_use(b) == USE_REL && (b_state(b) & (ST_PURGE | ST_LOCK)) == ST_PURGE) {
+        if (b_use(b) == USE_REL && (blk_state(z, b) & (ST_PURGE | ST_LOCK)) == ST_PURGE) {
             gaddr h = z + b_loc(b);
             wr32(h, 0);
             b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
@@ -480,7 +517,7 @@ static gaddr alloc_rel(gaddr z, gaddr mp, uint32_t size, bool clear)
     carve(b, ps, USE_REL, 0, size, mp - z);
     if (clear)
         gmemset(b_data(b), 0, size);
-    wr32(mp, b_data(b));
+    mp_point(mp, b_data(b));
     return b;
 }
 
@@ -517,6 +554,7 @@ gaddr tb_NewPtr(int32_t size, bool sys_p, bool clear_p)
 void tb_DisposePtr(gaddr p)
 {
     LOGF(LOG_MEM, "DisposePtr(%08X)\n", p);
+    p = mem_strip(p);
     if (!p) {
         set_mem_err(noErr);
         return;
@@ -533,6 +571,7 @@ void tb_DisposePtr(gaddr p)
 
 int32_t tb_GetPtrSize(gaddr p)
 {
+    p = mem_strip(p);
     gaddr b = p - HDR;
     if (!p || b_use(b) != USE_NREL) {
         set_mem_err(memWZErr);
@@ -605,7 +644,7 @@ static bool clear_after(gaddr z, gaddr b, uint32_t need)
     for (gaddr n = b + b_psize(b); n < end; n = b_next(n)) {
         if (n >= lim || b_psize(n) < HDR)
             return false;
-        if (b_use(n) != USE_FREE && (b_use(n) != USE_REL || (b_state(n) & ST_LOCK)))
+        if (b_use(n) != USE_FREE && (b_use(n) != USE_REL || (blk_state(z, n) & ST_LOCK)))
             return false; /* a pointer or a locked handle in the way */
     }
     for (gaddr n = b + b_psize(b); n < end;) {
@@ -618,7 +657,7 @@ static bool clear_after(gaddr z, gaddr b, uint32_t need)
                 return false; /* what moved stays moved: the heap is whole */
             carve(f, ps, USE_REL, b_state(n), b_lsize(n), b_loc(n));
             gmemcpy(b_data(f), b_data(n), b_lsize(n));
-            wr32(z + b_loc(n), b_data(f)); /* the master pointer follows */
+            mp_point(z + b_loc(n), b_data(f)); /* the master pointer follows */
             b_set(n, USE_FREE, 0, 0, ps, 0);
         }
         n += ps;
@@ -629,6 +668,7 @@ static bool clear_after(gaddr z, gaddr b, uint32_t need)
 void tb_SetPtrSize(gaddr p, int32_t newsize)
 {
     LOGF(LOG_MEM, "SetPtrSize(%08X, %d)\n", p, newsize);
+    p = mem_strip(p);
     gaddr b = p - HDR;
     if (!p || b_use(b) != USE_NREL || newsize < 0) {
         set_mem_err(newsize < 0 ? memFullErr : memWZErr);
@@ -645,6 +685,7 @@ void tb_SetPtrSize(gaddr p, int32_t newsize)
 
 gaddr tb_PtrZone(gaddr p)
 {
+    p = mem_strip(p);
     gaddr b = p - HDR;
     if (!p || b_use(b) != USE_NREL) {
         set_mem_err(memWZErr);
@@ -659,6 +700,7 @@ gaddr tb_PtrZone(gaddr p)
  * empty one in a zone), and the heaps are intact. */
 bool mm_pointer_valid(gaddr p)
 {
+    p = mem_strip(p);
     if (!p || p < HDR)
         return false;
     gaddr b = p - HDR, z = zone_of(b);
@@ -670,13 +712,13 @@ bool mm_handle_valid(gaddr h)
     gaddr z = h ? zone_of(h) : 0;
     if (!z)
         return false;
-    gaddr p = rd32(h);
+    gaddr p = mp_ptr(h);
     if (!p)
         return true; /* empty or purged */
     if (p < HDR)
         return false;
     gaddr b = p - HDR, bz = zone_of(b);
-    return bz && b_use(b) == USE_REL && bz + b_loc(b) == h;
+    return bz && b_use(b) == USE_REL && bz + b_loc(b) == mem_strip(h);
 }
 
 bool mm_heap_valid(void)
@@ -713,7 +755,8 @@ void tb_DisposeHandle(gaddr h)
         return;
     }
     LOGF(LOG_MEM, "DisposeHandle(%08X)\n", h);
-    gaddr p = rd32(h);
+    h = mem_strip(h);
+    gaddr p = mp_ptr(h);
     gaddr z = 0;
     if (p) {
         gaddr b = p - HDR;
@@ -757,7 +800,7 @@ void tb_SetHandleSize(gaddr h, int32_t newsize)
         set_mem_err(noErr);
         return;
     }
-    if (b_state(b) & ST_LOCK) {
+    if (h_state(h, b) & ST_LOCK) {
         bool grew = clear_after(z, b, phys_for((uint32_t)newsize)) && resize_in_place(z, b, (uint32_t)newsize);
         if (!grew)
             LOGF(LOG_MEM, "SetHandleSize(%08X, %d): locked, no room after it\n", h, newsize);
@@ -765,21 +808,24 @@ void tb_SetHandleSize(gaddr h, int32_t newsize)
         return;
     }
     /* Move the block: lock it while room is made so it stays put, then copy. */
-    uint8_t state = b_state(b);
+    h = mem_strip(h);
+    uint8_t state = h_state(h, b);
     uint32_t old = b_lsize(b);
-    wr8(b + 1, state | ST_LOCK);
+    h_set_state(h, b, state | ST_LOCK);
     uint32_t ps = phys_for((uint32_t)newsize);
     gaddr nb = ps ? make_room(z, ps) : 0;
-    b = rd32(h) - HDR;
+    b = mp_ptr(h) - HDR;
     if (!nb) {
-        wr8(b + 1, state);
+        h_set_state(h, b, state);
         set_mem_err(memFullErr);
         return;
     }
-    carve(nb, ps, USE_REL, state, (uint32_t)newsize, h - z);
+    carve(nb, ps, USE_REL, state & (ST_LOCK | ST_PURGE | ST_RSRC), (uint32_t)newsize, h - z);
     gmemcpy(b_data(nb), b_data(b), old < (uint32_t)newsize ? old : (uint32_t)newsize);
     b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
-    wr32(h, b_data(nb));
+    mp_point(h, b_data(nb));
+    if (g_mem_24bit)
+        wr8(h, state); /* the flags as they were, unlocked again */
     set_mem_err(noErr);
 }
 
@@ -789,7 +835,7 @@ gaddr tb_HandleZone(gaddr h)
         set_mem_err(nilHandleErr);
         return 0;
     }
-    gaddr p = rd32(h);
+    gaddr p = mp_ptr(mem_strip(h));
     gaddr z = zone_of(p ? p : h);
     set_mem_err(z ? noErr : memWZErr);
     return z;
@@ -797,6 +843,7 @@ gaddr tb_HandleZone(gaddr h)
 
 gaddr tb_RecoverHandle(gaddr p, bool sys_p)
 {
+    p = mem_strip(p);
     gaddr b = p - HDR;
     if (!p || b_use(b) != USE_REL) {
         set_mem_err(memWZErr);
@@ -815,18 +862,19 @@ void tb_ReallocateHandle(gaddr h, int32_t size)
         set_mem_err(h ? memFullErr : nilHandleErr);
         return;
     }
-    gaddr p = rd32(h);
+    h = mem_strip(h);
+    gaddr p = mp_ptr(h);
     gaddr z = zone_of(p ? p : h);
     if (!z)
         z = cur_zone();
     uint8_t state = 0;
     if (p) {
         gaddr b = p - HDR;
-        if (b_state(b) & ST_LOCK) {
+        if (h_state(h, b) & ST_LOCK) {
             set_mem_err(memLockedErr);
             return;
         }
-        state = b_state(b) & ST_RSRC;
+        state = h_state(h, b) & ST_RSRC;
         b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
         wr32(h, 0);
     }
@@ -835,7 +883,7 @@ void tb_ReallocateHandle(gaddr h, int32_t size)
         set_mem_err(memFullErr);
         return;
     }
-    wr8(b + 1, state);
+    h_set_state(h, b, state);
     set_mem_err(noErr);
 }
 
@@ -844,15 +892,15 @@ void tb_EmptyHandle(gaddr h)
     int16_t err;
     gaddr b = handle_block(h, &err);
     if (!b) {
-        set_mem_err(h && rd32(h) == 0 ? noErr : err);
+        set_mem_err(h && mp_ptr(mem_strip(h)) == 0 ? noErr : err);
         return;
     }
-    if (b_state(b) & ST_LOCK) {
+    if (h_state(h, b) & ST_LOCK) {
         set_mem_err(memPurErr);
         return;
     }
     b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
-    wr32(h, 0);
+    wr32(mem_strip(h), 0);
     set_mem_err(noErr);
 }
 
@@ -864,7 +912,7 @@ static void set_state_bits(gaddr h, uint8_t set, uint8_t clear)
         set_mem_err(err);
         return;
     }
-    wr8(b + 1, (uint8_t)((b_state(b) | set) & ~clear));
+    h_set_state(h, b, (uint8_t)((h_state(h, b) | set) & ~clear));
     set_mem_err(noErr);
 }
 
@@ -885,7 +933,7 @@ int8_t tb_HGetState(gaddr h)
         return 0;
     }
     set_mem_err(noErr);
-    return (int8_t)b_state(b);
+    return (int8_t)h_state(h, b);
 }
 
 void tb_HSetState(gaddr h, int8_t flags)
@@ -896,7 +944,8 @@ void tb_HSetState(gaddr h, int8_t flags)
         set_mem_err(err);
         return;
     }
-    wr8(b + 1, (uint8_t)flags & (ST_LOCK | ST_PURGE | ST_RSRC));
+    /* In 24-bit mode the whole byte, as it was the master pointer's top. */
+    h_set_state(h, b, (uint8_t)(g_mem_24bit ? flags : flags & (ST_LOCK | ST_PURGE | ST_RSRC)));
     set_mem_err(noErr);
 }
 
@@ -966,7 +1015,7 @@ static uint32_t largest_possible(gaddr z, bool with_purge)
     gaddr lim = z_lim(z);
     for (gaddr b = z_first(z); b < lim; b = b_next(b)) {
         unsigned use = b_use(b);
-        uint8_t st = b_state(b);
+        uint8_t st = blk_state(z, b);
         bool movable = use == USE_FREE || (use == USE_REL && !(st & ST_LOCK));
         if (!movable) {
             if (run > best)
@@ -1028,7 +1077,7 @@ void tb_PurgeSpace(uint32_t *totalp, uint32_t *contigp, bool sys_p)
     uint32_t total = total_free(z);
     gaddr lim = z_lim(z);
     for (gaddr b = z_first(z); b < lim; b = b_next(b))
-        if (b_use(b) == USE_REL && (b_state(b) & (ST_PURGE | ST_LOCK)) == ST_PURGE)
+        if (b_use(b) == USE_REL && (blk_state(z, b) & (ST_PURGE | ST_LOCK)) == ST_PURGE)
             total += b_psize(b);
     *totalp = cap(total);
     *contigp = cap(largest_possible(z, true));
@@ -1171,7 +1220,7 @@ bool mm_check_zone(gaddr z)
              * the Memory Manager's to read: programs step it through the
              * block for a while (Bloodsuckers steps past a length word with
              * ADDQ.L #4,(A4) and puts it back before it disposes). */
-            bool stepped = (b_state(b) & ST_LOCK) && v > b + HDR && v <= b + ps;
+            bool stepped = (blk_state(z, b) & ST_LOCK) && mem_strip(v) > b + HDR && mem_strip(v) <= b + ps;
             if (v != b + HDR && !stepped && ((v & 0x00FFFFFFu) != b + HDR || b + HDR > 0x00FFFFFFu)) {
                 log_printf("mm: zone %08X: block %08X master pointer %08X does not point back (it holds %08X)\n", z, b,
                            mp, rd32(mp));

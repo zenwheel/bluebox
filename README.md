@@ -156,11 +156,14 @@ Some useful options for `run`:
 | `--depth 1\|2\|4\|8\|16\|32` | Screen depth. Older games often want 8. |
 | `--scale 1\|1.5\|2` | Make classic windows bigger on modern displays. |
 | `--ppc` / `--68k` | Choose the code to run in a fat application: PowerPC by default, or 68k (as `bluebox set <app> cpu 68040` does for one application). PowerPC-only applications always run PowerPC code. |
+| `--cpu 68000\|68020\|68030\|68040` | The processor a 68k program runs on: a Quadra 800's 68040 by default; a 68030, 68020 or 68000 for programs written for those (the 68000 takes address errors and has no 68020 instructions; the 68020 and 68030 have their instruction caches). `--fpu none\|68881\|68882\|68040` chooses the FPU. |
+| `--addressing 24\|32` | 24-bit addressing ignores the top byte of every address, as a Mac without 32-bit mode did. A 68k program not marked 32-bit clean gets it by default. |
+| `--machine plus\|se\|classic\|macii` | Present a classic Mac: its processor (a 68000, or the Mac II's 68020 and 68881), 24-bit addressing, its memory map (a compact Mac's 4 MB with the 512×342 screen near the top of RAM and its chips at `$EFE1FE` and the rest; the Mac II's 8 MB, ROM at `$800000` and chips at `$F00000`), ROM and System 6.0.8. `--cpu`, `--fpu` and `--addressing` change the machine's own. |
 | `--appearance native` | Use macOS window frames. A Kaleidoscope scheme can be given instead. |
 | `--headless --screenshot out.png` | Run without a window and save the screen at the end. |
 
-`bluebox set <app> depth 8` (or `cpu`, `scale`) remembers a setting for one
-application. `bluebox --help` lists everything.
+`bluebox set <app> depth 8` (or `cpu`, `fpu`, `addressing`, `scale`)
+remembers a setting for one application. `bluebox --help` lists everything.
 
 ### Apple Events
 

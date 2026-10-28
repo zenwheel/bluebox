@@ -1,7 +1,8 @@
 /*
- * The screen: a framebuffer at GA_SCREEN (1, 8, 16 or 32 bits deep), the main
- * GDevice describing it, and PNG snapshots for headless runs.  SetDepth can
- * change the depth while an application runs.
+ * The screen: a framebuffer at GA_SCREEN (1, 8, 16 or 32 bits deep, as
+ * deep as fits there), the main GDevice describing it, and PNG snapshots
+ * for headless runs.  SetDepth can change the depth while an application
+ * runs.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +18,10 @@ static int depth_pref = 32, screen_depth = 1;
 static gaddr screen_ctab;
 static unsigned nports; /* ports drawing on the screen, below */
 
-void machine_set_screen_depth(int depth) { depth_pref = qd_screen_supports(depth) ? depth : 1; }
+void machine_set_screen_depth(int depth)
+{
+    depth_pref = depth == 2 || depth == 4 || depth == 8 || depth == 16 || depth == 32 ? depth : 1;
+}
 int machine_screen_depth_setting(void) { return depth_pref; }
 int qd_screen_depth(void) { return screen_depth; }
 int machine_screen_depth(void) { return screen_depth; }
@@ -110,7 +114,15 @@ static void describe_screen(gaddr gd, gaddr pm)
     wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
 }
 
-static gaddr display_base = GA_SCREEN; /* see qd_screen_set_display_base */
+/* Whether the screen fits its space at a depth: in 24-bit mode that is
+ * the 4 MB of slot space it has, as a video card's was, or a compact
+ * Mac's one-bit page in RAM. */
+static bool fits(int depth, int width, int height)
+{
+    return (uint64_t)row_bytes_for(depth, width) * (uint32_t)height <= g_screen_size;
+}
+
+static gaddr display_base; /* see qd_screen_set_display_base; qd_screen_init sets it */
 
 void qd_screen_init(int width, int height)
 {
@@ -118,6 +130,8 @@ void qd_screen_init(int width, int height)
     g_screen_width = width;
     g_screen_height = height;
     screen_depth = depth_pref;
+    while (screen_depth > 1 && !fits(screen_depth, width, height))
+        screen_depth /= 2;
     screen_row_bytes = row_bytes_for(screen_depth, width);
     /* White: 0 in the 1- and 8-bit tables, all ones in direct colour. */
     gmemset(GA_SCREEN, screen_depth >= 16 ? 0xFF : 0, screen_row_bytes * (uint32_t)height);
@@ -181,7 +195,8 @@ void qd_screen_port_closed(gaddr port)
 
 bool qd_screen_supports(int depth)
 {
-    return depth == 1 || depth == 2 || depth == 4 || depth == 8 || depth == 16 || depth == 32;
+    return (depth == 1 || depth == 2 || depth == 4 || depth == 8 || depth == 16 || depth == 32) &&
+           fits(depth, g_screen_width, g_screen_height);
 }
 
 /* Switch the screen to another depth: the device, screenBits, and every

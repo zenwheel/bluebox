@@ -73,28 +73,115 @@ static uint64_t now_ns(void)
     return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
 }
 
-/* The processor we present: a 68040 with its FPU (a Quadra 800), or a
- * 68020 with no FPU for applications that misbehave on the 68040. */
+/* The processor we present: a 68040 with its FPU (a Quadra 800) by
+ * default; a 68000 (a Mac SE), a 68020 (a Mac II) or a 68030 (a Mac IIci)
+ * for programs written for those, each with the FPU it had or the one
+ * chosen; and 24- or 32-bit addressing.  A machine chosen by name
+ * (hw_select_machine) sets all three to its own first; --cpu, --fpu and
+ * --addressing then change them. */
 static int cpu_model = 68040;
-void machine_set_cpu(int model) { cpu_model = model == 68020 ? 68020 : 68040; }
+static int fpu_choice = -1; /* -1: the model's own */
+static int addressing;      /* 0: 32-bit where the processor can */
+void machine_set_cpu(int model)
+{
+    cpu_model = model == 68000 || model == 68020 || model == 68030 ? model : 68040;
+}
+void machine_set_fpu(int fpu) { fpu_choice = fpu == 0 || fpu == 68881 || fpu == 68882 || fpu == 68040 ? fpu : -1; }
+void machine_set_addressing(int bits) { addressing = bits == 24 || bits == 32 ? bits : 0; }
+
+/* The FPU a model gets: its own coprocessor (the 68040's is inside it;
+ * the 68020 defaults to none, as before there was a choice), or the one
+ * chosen where that model could have it. */
+static int fpu_for(int model)
+{
+    if (model == 68000)
+        return 0;
+    if (model == 68040)
+        return fpu_choice == 0 ? 0 : 68040; /* a 68LC040 has none */
+    if (fpu_choice == 68881 || fpu_choice == 68882 || fpu_choice == 0)
+        return fpu_choice;
+    return model == 68030 ? 68882 : 0;
+}
+
+int machine_cpu_model(void) { return g_cpu ? g_cpu->model : cpu_model; }
+int machine_fpu_model(void) { return g_cpu ? g_cpu->fpu : fpu_for(cpu_model); }
+int machine_addressing(void) { return g_mem_24bit ? 24 : 32; }
+
+/* The memory layout for the machine and processor: a compact Mac's is
+ * always 24-bit (its bus decoded 24 address bits whatever the processor);
+ * a 68000 has only 24 address lines; otherwise as chosen. */
+static int layout_for(void)
+{
+    const hw_profile *m = hw_machine();
+    bool bits24 = m->compact_io || cpu_model == 68000 || addressing == 24;
+    if (!bits24)
+        return MEM_LAYOUT_32;
+    if (m->compact_io)
+        return MEM_LAYOUT_COMPACT;
+    return hw_machine_chosen() ? MEM_LAYOUT_MACII : MEM_LAYOUT_24;
+}
+
+/* Everything that reports the machine answers from here: Gestalt,
+ * SysEnvirons, CPUFlag, MMUType and HWCfgFlags.  A machine chosen by name
+ * is itself whatever processor it was given; the default one is the
+ * machine standing for its processor. */
+int machine_gestalt_type(void)
+{
+    if (hw_machine_chosen())
+        return hw_machine()->gestalt_mach;
+    switch (machine_cpu_model()) {
+    case 68000: return 5;  /* gestaltMacSE */
+    case 68020: return 6;  /* gestaltMacII */
+    case 68030: return 11; /* gestaltMacIIci */
+    default: return 35;    /* gestaltQuadra800 */
+    }
+}
+
+/* SysEnvirons' machineType: Gestalt's less two for every machine. */
+int machine_env_type(void) { return machine_gestalt_type() - 2; }
+
+/* MMUType's (and Gestalt 'mmu ''s) numbering: none, the Mac II's AMU,
+ * the 68030's and the 68040's own. */
+int machine_mmu_type(void)
+{
+    switch (machine_cpu_model()) {
+    case 68000: return 0;
+    case 68020: return 1;
+    case 68030: return 3;
+    default: return 4;
+    }
+}
+
+/* HWCfgFlags (SCSIFlags): the machine's own bits (SCSI, the clock chip,
+ * extended PRAM, ADB), and an FPU and a paged MMU (a 68030's or 68040's;
+ * the Mac II's AMU isn't one) as the processor has them. */
+int machine_hwcfg(void)
+{
+    uint16_t own = hw_machine_chosen() ? hw_machine()->hwcfg : 0xE400;
+    int model = machine_cpu_model();
+    return (own & ~0x1800) | (machine_fpu_model() ? 0x1000 : 0) | (model >= 68030 ? 0x0800 : 0);
+}
 
 static void init_lowmem(void)
 {
-    wr32(LM_MemTop, GA_ROM);
-    wr32(LM_BufPtr, GA_A5WORLD_TOP);
+    int model = g_cpu->model;
+    /* RAM ends where the layout has it (where the ROM starts in 32-bit
+     * mode); in 24-bit mode the partition's top is under what sits at
+     * the top of RAM (a compact Mac's screen pages and sound buffers). */
+    wr32(LM_MemTop, g_mem_top);
+    wr32(LM_BufPtr, g_mem_24bit ? g_low_top : GA_A5WORLD_TOP);
     wr32(LM_ROMBase, GA_ROM);
     wr16(LM_ROM85, 0x3FFF);           /* new ROMs, Color QuickDraw */
-    wr8(LM_CPUFlag, g_cpu->model == 68040 ? 4 : 2);
+    wr8(LM_CPUFlag, (uint8_t)(model == 68000 ? 0 : (model - 68000) / 10)); /* 0, 2, 3 or 4 */
+    wr8(LM_MMUType, (uint8_t)machine_mmu_type());
     /* The highlight colour: the host's selection colour when the host gave
      * one, else Mac OS 8's lavender (the Color control panel's). */
     wr16(LM_HiliteRGB, hilite_rgb[0]);
     wr16(LM_HiliteRGB + 2, hilite_rgb[1]);
     wr16(LM_HiliteRGB + 4, hilite_rgb[2]);
     wr8(LM_HiliteMode, 0xFF); /* no highlighting pending */
-    wr8(LM_MMU32Bit, 1);              /* 32-bit addressing */
-    /* HWCfgFlags (SCSIFlags): SCSI, clock chip, extended PRAM, FPU (when
-     * there is one), MMU and ADB, as a Quadra has them. */
-    wr16(LM_SCSIFlags, (uint16_t)(0xEC00 | (g_cpu->model == 68040 ? 0x1000 : 0)));
+    wr8(LM_MMU32Bit, g_mem_24bit ? 0 : 1); /* the addressing mode */
+    wr16(LM_SCSIFlags, (uint16_t)machine_hwcfg());
     wr16(LM_SysVersion, 0x0710);
     wr32(LM_Lo3Bytes, 0x00FFFFFF);
     wr32(LM_MinusOne, 0xFFFFFFFF);
@@ -350,9 +437,16 @@ bool machine_boot(bool census)
 {
     if (!mem_init())
         return false;
+    if (!mem_set_layout(layout_for()))
+        return false;
     mem_reset();
     cpu_init(&cpu);
-    cpu.model = cpu_model;
+    cpu_set_model(&cpu, cpu_model, fpu_for(cpu_model));
+    cpu.addr_mask = g_mem_24bit ? 0x00FFFFFFu : 0xFFFFFFFFu;
+    /* The caches on, as the ROM left them: the 68020's instruction
+     * cache; the 68030's with burst fill, and its data cache (write
+     * allocate, burst); the 68040's both. */
+    cpu.cacr = cpu_model == 68020 ? 0x1 : cpu_model == 68030 ? 0x3111 : cpu_model == 68040 ? 0x80008000u : 0;
     g_cpu = &cpu;
     cpu.aline = trap_aline;
     cpu.native = trap_native;
@@ -377,9 +471,10 @@ bool machine_boot(bool census)
     mm_init_zone(GA_APPHEAP, GA_APPHEAP + 0x00100000u, 64);
     wr32(LM_ApplZone, GA_APPHEAP);
     wr32(LM_TheZone, GA_APPHEAP);
-    wr32(LM_ApplLimit, GA_APPLLIMIT);
+    gaddr appl_limit = g_mem_24bit ? g_low_top - GA_STACK_24 : GA_APPLLIMIT;
+    wr32(LM_ApplLimit, appl_limit);
     wr32(LM_HeapEnd, Zone_bkLim(GA_APPHEAP));
-    mm_set_appl_growth(GA_APPLLIMIT);
+    mm_set_appl_growth(appl_limit);
     trap_autovectors();
     hardware_globals();
 
@@ -650,6 +745,35 @@ static bool is_installer(const char *name, uint32_t creator)
     return false;
 }
 
+int machine_app_addressing(const char *app_path)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(app_path, &mf, err, sizeof err))
+        return 32;
+    rsrc_index idx;
+    int bits = 32;
+    if (mf.rsrc_len && rsrc_parse(mf.rsrc, mf.rsrc_len, &idx, err, sizeof err)) {
+        const rsrc_entry *size = NULL;
+        bool code = false, ppc = false;
+        for (size_t i = 0; i < idx.count; i++) {
+            const rsrc_entry *e = &idx.entries[i];
+            if (e->type == fourcc("SIZE") && (e->id == -1 || (e->id == 0 && !size)))
+                size = e;
+            code |= e->type == fourcc("CODE") && e->id == 0;
+            ppc |= e->type == fourcc("cfrg");
+        }
+        /* SIZE -1 (user-modified) over SIZE 0, as at launch; a program
+         * from before MultiFinder has none, and was 24-bit. */
+        const uint8_t *d = size && size->data_len >= 2 ? rsrc_data(mf.rsrc, &idx, size) : NULL;
+        if (code && !ppc && !(d && (d[1] & 0x80)))
+            bits = 24;
+        rsrc_index_free(&idx);
+    }
+    mac_file_free(&mf);
+    return bits;
+}
+
 bool machine_launch(const char *app_path, char *err, size_t errlen)
 {
     mac_file mf;
@@ -717,6 +841,14 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
      * code, as on a 68k Mac. */
     if (has_68k && prefer_ppc && cfm_has_ppc() && !cfm_app_fragment_loadable(app_path)) {
         LOGF(LOG_SEG, "launch: the PowerPC fragment is not a container; running the 68k code\n");
+        prefer_ppc_now = false;
+    }
+    /* PowerPC code runs only with 32-bit addressing. */
+    if (g_mem_24bit && cfm_has_ppc()) {
+        if (!has_68k) {
+            snprintf(err, errlen, "a PowerPC application needs 32-bit addressing");
+            return false;
+        }
         prefer_ppc_now = false;
     }
     if (cfm_has_ppc() && (!has_68k || prefer_ppc_now)) {

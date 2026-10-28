@@ -16,8 +16,7 @@
 typedef struct {
     const char *name;          /* "plus", "se", "classic", "macii", "quadra" */
     const char *title;         /* "Macintosh Plus" */
-    int gestalt_mach;          /* gestaltMachineType */
-    int env_machine;           /* SysEnvirons machineType */
+    int gestalt_mach;          /* gestaltMachineType (SysEnvirons' is two less) */
     int cpu;                   /* 68000, 68020, 68030 or 68040 */
     bool fpu;
     bool color_qd;

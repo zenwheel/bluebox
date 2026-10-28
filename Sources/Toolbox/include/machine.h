@@ -99,8 +99,30 @@ void machine_set_screen_depth(int depth);
 int machine_screen_depth_setting(void);
 /* The screen's depth now (a program may have changed it). */
 int machine_screen_depth(void);
-/* 68040 (with FPU, the default) or 68020 (no FPU). Before machine_boot. */
+/* The processor: 68040 (the default), 68030, 68020 or 68000.  Before
+ * machine_boot. */
 void machine_set_cpu(int model);
+/* Its FPU: 0 (none), 68881, 68882 or 68040 (the 68040's own), where the
+ * processor could have it; -1 (the default) gives the model its usual
+ * one: the 68040's own, a 68882 with a 68030, none with a 68020 or 68000.
+ * Before machine_boot. */
+void machine_set_fpu(int fpu);
+/* Addressing: 24 or 32 bits (0, the default: 32, but always 24 on a
+ * 68000).  Before machine_boot. */
+void machine_set_addressing(int bits);
+/* What an application asks for: 32 if its SIZE resource says it is
+ * 32-bit clean (or it has PowerPC code), else 24. */
+int machine_app_addressing(const char *app_path);
+/* The machine as booted: processor, FPU (as above), addressing mode, the
+ * Gestalt machine type and MMU type standing for them. */
+int machine_cpu_model(void);
+int machine_fpu_model(void);
+int machine_addressing(void);
+int machine_gestalt_type(void);
+int machine_mmu_type(void);
+/* SysEnvirons' machine type and HWCfgFlags for the same machine. */
+int machine_env_type(void);
+int machine_hwcfg(void);
 bool machine_halted(void);
 /* With depth alerts on, an alert saying the program needs another screen
  * depth ends the run instead of showing ("asks for depth N"), and

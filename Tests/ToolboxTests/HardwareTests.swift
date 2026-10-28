@@ -13,6 +13,8 @@ func withMachine(_ name: String, _ body: () -> Void) {
         machine_set_screen(1024, 768) // the size the tests boot with
         machine_set_screen_depth(depth)
         machine_set_cpu(68040)
+        machine_set_fpu(-1)
+        machine_set_addressing(0)
     }
     body()
 }
@@ -282,7 +284,7 @@ extension BlueBox {
         @Test func alternateScreenPage() {
             plus {
                 var px = [UInt8](repeating: 0, count: 4)
-                let main = UInt32(GA_SCREEN), alt = main - 0x8000
+                let main = g_screen_base, alt = main - 0x8000
                 gmemset(main, 0, 64 * 342)
                 gmemset(alt, 0, 64 * 342)
                 wr8(alt, 0x80)   // the alternate's top-left pixel is black

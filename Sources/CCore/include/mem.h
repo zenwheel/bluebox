@@ -23,28 +23,70 @@ typedef uint32_t gaddr;
 /* Guest address space layout (32-bit mode). */
 enum {
     GA_SYSHEAP       = 0x00004000u, /* system heap start */
-    GA_SYSHEAP_END   = 0x00400000u,
-    GA_APPHEAP       = 0x00400000u, /* application heap start (grows up) */
     /* The heap, stack and A5 world stay below 2 GB: applications do signed
      * arithmetic on addresses (free memory as ApplLimit - HeapEnd …). */
     GA_APPLLIMIT     = 0x7F000000u, /* application heap may grow to here */
     /* Not at 2 GB itself: far-model jump tables end at A5 + their size,
      * which signed comparisons must still see as positive. */
     GA_A5WORLD_TOP   = 0x7FF00000u, /* A5 world ends here; stack below it */
-    /* A program not marked 32-bit clean gets its partition below 16 MB, as
-     * on a Mac in 24-bit mode: the A5 world ends here, and the heap may
-     * grow to GA_STACK_24 below the stack's base. */
-    GA_A5WORLD_TOP_24 = 0x01000000u,
-    GA_STACK_24      = 0x00100000u,
-    GA_ROM           = 0xF0000000u, /* fake ROM: header + native stubs */
-    GA_ROM_SIZE      = 0x00100000u,
-    GA_SCREEN        = 0xF8000000u, /* framebuffer */
+    GA_ROM_32        = 0xF0000000u, /* fake ROM: header + native stubs */
+    GA_ROM_SIZE_32   = 0x00100000u,
+    GA_SCREEN_32     = 0xF8000000u, /* framebuffer */
+    /* In 24-bit mode (mem_set_layout) everything is inside the 16 MB a
+     * 24-bit Mac addressed.  Blue Box's own layout (no machine named) is
+     * a Mac II's with more RAM: RAM (the partition ending at GA24_TOP),
+     * the screen where a video card's slot space was, the I/O space at
+     * $F00000 (for the hardware a program touches directly), and the ROM
+     * above it.  A Mac II and the compact Macs have their own (mem.c). */
+    GA24_TOP         = 0x00B00000u,
+    GA24_SCREEN      = 0x00B00000u,
+    GA24_SCREEN_SIZE = 0x00400000u,
+    GA24_IO          = 0x00F00000u,
+    GA24_ROM         = 0x00F80000u,
+    GA24_ROM_SIZE    = 0x00080000u,
+    /* The compact Macs' (Plus, SE, Classic) with 4 MB: the screen $5900
+     * below the top of RAM and its alternate page $8000 under it, the
+     * sound buffer $300 below the top, the ROM at $400000 and the chips
+     * between $800000 and $EFFFFF. */
+    GAC_MEMTOP       = 0x00400000u,
+    GAC_SCREEN       = 0x003FA700u,
+    GAC_SOUND        = 0x003FFD00u,
+    GAC_ROM          = 0x00400000u,
 };
+
+/* The layouts: the flat 32-bit space; and in 24-bit mode Blue Box's own,
+ * a Mac II's (8 MB of RAM, the ROM at $800000, the screen on a video card
+ * in slot 9, I/O at $F00000) or a compact Mac's (above). */
+enum { MEM_LAYOUT_32, MEM_LAYOUT_24, MEM_LAYOUT_MACII, MEM_LAYOUT_COMPACT };
+
+/* Where things are in the layout chosen: the ROM, the screen, the top of
+ * RAM (MemTop), the top of a partition kept below 16 MB (a program not
+ * 32-bit clean in 32-bit mode, or any in 24-bit mode), the system heap's
+ * end and the application heap's start, and the stack a partition below
+ * 16 MB keeps under its A5 world. */
+extern gaddr g_rom_base, g_rom_size, g_screen_base, g_screen_size, g_low_top;
+extern gaddr g_mem_top, g_sysheap_end, g_appheap, g_stack_24;
+extern int g_mem_layout;
+#define GA_ROM g_rom_base
+#define GA_ROM_SIZE g_rom_size
+#define GA_SCREEN g_screen_base
+#define GA_A5WORLD_TOP_24 g_low_top
+#define GA_SYSHEAP_END g_sysheap_end
+#define GA_APPHEAP g_appheap
+#define GA_STACK_24 g_stack_24
 
 extern uint8_t *g_mem;
 
 /* Reserve the arena. Returns false on failure. Safe to call more than once. */
 bool mem_init(void);
+/* Choose the layout.  The 24-bit ones make the arena 256 mirrors of one
+ * 16 MB space, so an address's top byte is ignored by every access (the
+ * CPUs', the Toolbox's own and the JIT's), as the 24-bit address bus of a
+ * Mac without 32-bit mode ignored it; MEM_LAYOUT_32 is the flat 4 GB
+ * arena.  Either way the arena is left zeroed. */
+bool mem_set_layout(int layout);
+extern bool g_mem_24bit;
+static inline gaddr mem_strip(gaddr a) { return g_mem_24bit ? a & 0x00FFFFFFu : a; }
 /* Zero the whole arena and give the pages back to the host. */
 void mem_reset(void);
 /* Tell the host a guest range is no longer needed (contents become zero). */
@@ -80,10 +122,12 @@ static inline bool hw_mapped(gaddr a) { return __builtin_expect(g_hw_map[a >> 20
  * bulk copies below) checks it, so a translation never outlives the code
  * it came from: a store into a marked region calls mem_code_written, which
  * tells each translator owning it to drop the blocks it overlaps. */
-enum { CODE_MAP_SHIFT = 8, CODE_PPC = 1, CODE_68K = 2 };
+enum { CODE_MAP_SHIFT = 8, CODE_PPC = 1, CODE_68K = 2, CODE_ICACHE = 4 };
 extern uint8_t *g_code_map;
-/* A translator's handler for a store of [lo, hi) touching its regions. */
-extern void (*g_code_written[2])(gaddr lo, gaddr hi);
+/* A translator's handler for a store of [lo, hi) touching its regions
+ * (the third is the 68020's and 68030's instruction cache, which the
+ * Toolbox's own stores flush as the routines that moved code did). */
+extern void (*g_code_written[3])(gaddr lo, gaddr hi);
 void mem_code_written(gaddr a, uint32_t len);
 /* Mark [lo, hi) as holding a translator's code (also the region just
  * before, so a misaligned store starting there is seen).  Returns false if

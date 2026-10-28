@@ -117,6 +117,7 @@ const char *const os_trap_names[256] = {
     [0x8D] = "DebugUtil",
     [0x8F] = "DeferUserFn",
     [0x90] = "SysEnvirons",
+    [0x91] = "Translate24To32",
     [0x98] = "HWPriv",
     [0x9E] = "PowerDispatch",
     [0xA8] = "FSForkIODispatch",
@@ -9482,6 +9483,14 @@ static void glue_FlattenMovieDataToDataRef(cpu68k *c, uint16_t trapword)
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int32_t r = tb_FlattenMovieDataToDataRef(a_theMovie, a_movieFlattenFlags, a_dataRef, a_dataRefType, a_creator, a_scriptTag, a_createMovieFileFlags);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FlushCodeCache(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_FlushCodeCache();
     cpu_push32(c, ret);
 }
 
@@ -32214,6 +32223,14 @@ static void glue_TransformRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_Translate24To32(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t a_addr24 = (uint32_t)c->d[0];
+    uint32_t r = tb_Translate24To32(a_addr24);
+    c->d[0] = (uint32_t)r;
+}
+
 static void glue_TranslateFile(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -33645,7 +33662,8 @@ const trap_sig trap_sigs[] = {
     {0xA084, -1, "GetOSDefault", CONV_REG, 0, 0, glue_GetOSDefault},
     {0xA08F, -1, "DeferUserFn", CONV_REG, 0, 0, glue_DeferUserFn},
     {0xA090, -1, "SysEnvirons", CONV_REG, 0, 0, glue_SysEnvirons},
-    {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, 0},
+    {0xA091, -1, "Translate24To32", CONV_REG, 0, 0, glue_Translate24To32},
+    {0xA0BD, -1, "FlushCodeCache", CONV_STACK, 0, 0, glue_FlushCodeCache},
     {0xA0DD, -1, "PPCDispatch", CONV_REG, 0, 0, glue_PPCDispatch},
     {0xA11A, -1, "GetZone", CONV_REG, 0, 0, glue_GetZone},
     {0xA11D, -1, "MaxMem", CONV_REG, 0, 0, glue_MaxMem},

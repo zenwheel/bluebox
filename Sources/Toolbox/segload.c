@@ -238,7 +238,8 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
      * local array, the top byte of its saved frame pointer, and returned
      * to address 0 when that byte wasn't already 0. */
     gaddr top = GA_A5WORLD_TOP;
-    if (!(g_app_size_flags & 0x0080) && (uint64_t)above + below + GA_STACK_24 < GA_A5WORLD_TOP_24 - GA_APPHEAP) {
+    if ((g_mem_24bit || !(g_app_size_flags & 0x0080)) &&
+        (uint64_t)above + below + GA_STACK_24 < GA_A5WORLD_TOP_24 - GA_APPHEAP) {
         gaddr limit = (((GA_A5WORLD_TOP_24 - above) & ~3u) - below - GA_STACK_24) & ~3u; /* whole longs */
         if (Zone_bkLim(rd32(LM_ApplZone)) < limit) {
             top = GA_A5WORLD_TOP_24;
@@ -246,6 +247,11 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
             wr32(LM_ApplLimit, limit);
             mm_set_appl_growth(limit);
         }
+    }
+    if (g_mem_24bit && top != GA_A5WORLD_TOP_24) {
+        snprintf(err, errlen, "the application's globals and stack (%u bytes) don't fit in 24-bit addressing",
+                 above + below);
+        return 0;
     }
     gaddr a5 = (top - above) & ~3u;
     /* CurStackBase is exactly A5 less the globals: MPW's runtime unpacks

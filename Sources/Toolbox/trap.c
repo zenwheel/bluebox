@@ -22,7 +22,9 @@ void trap_set_current_word(uint16_t w) { last_trapword = w; }
 #define STUB_BASE (GA_ROM + 0x1000u)
 /* 68000 routines the ROM provides, below the stubs. */
 #define METHOD_DISPATCH_CODE (GA_ROM + 0x800u)
-#define EXCEPTION_JMP (GA_ROM + 0x800000u) /* beyond the stubs: see trap_init */
+/* Beyond the stubs (see trap_init): 8 MB up in 32-bit mode; half the
+ * ROM up in 24-bit mode, where the ROM is smaller. */
+#define EXCEPTION_JMP (GA_ROM + (g_mem_24bit ? GA_ROM_SIZE / 2 : 0x800000u))
 #define STUB_SIZE 8u
 #define MAX_NATIVES 8192
 
@@ -315,10 +317,13 @@ static void unimplemented_native(cpu68k *c, uint16_t tw)
 
 static void exception_native(cpu68k *c, uint16_t tw)
 {
-    /* Frame: SR, PC, format/vector. */
-    uint16_t sr = rd16(c->a[7]);
-    uint32_t pc = rd32(c->a[7] + 2);
-    uint16_t fv = rd16(c->a[7] + 6);
+    /* Frame: SR, PC, format/vector; a 68000's has no format word (the
+     * CPU says which vector it took), and its address error frame has
+     * the SR and PC after four words of its own. */
+    unsigned at = c->model == 68000 && c->last_vector == 3 ? 8 : 0;
+    uint16_t sr = rd16(c->a[7] + at);
+    uint32_t pc = rd32(c->a[7] + at + 2);
+    uint16_t fv = c->model == 68000 ? (uint16_t)(c->last_vector * 4) : rd16(c->a[7] + 6);
     static const char *const names[] = {
         [2] = "bus error", [3] = "address error", [4] = "illegal instruction",
         [5] = "divide by zero", [6] = "CHK", [7] = "TRAPV", [8] = "privilege violation",

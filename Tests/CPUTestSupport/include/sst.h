@@ -7,8 +7,9 @@
 typedef struct {
     int total;
     int passed;
-    int skipped;  /* address-error cases: a 68000-only behaviour we do not model */
+    int skipped;     /* the suite's own errors, and one known divergence */
     int failed;
+    int addr_errors; /* how many of the total were address errors */
     char first_failure[512];
 } sst_result;
 
