@@ -55,6 +55,21 @@ int32_t tb_CurrentProcessToken(void)
 
 int32_t tb_ProcessTokenAt(uint32_t where) { return wm_window_at(where) ? tb_CurrentProcessToken() : 0; }
 
+/* The Process Manager's entry for a process: this run's is a block of its
+ * own, all zero, so nothing it is asked about (a heap, a handle) is found
+ * to be a process's own; another run's has none (nil). */
+#define PENTRY_SIZE 0x200
+static gaddr pentry;
+
+gaddr tb_PEntryFromProcessSerialNumber(gaddr psn)
+{
+    if (!psn || !process_is_us(rd32(psn), rd32(psn + 4)))
+        return 0;
+    if (!pentry)
+        pentry = mm_new_ptr_in(rd32(LM_SysZone), PENTRY_SIZE, true);
+    return pentry;
+}
+
 /* ---- The desktop ---- */
 
 /* The desktop window (wm.c): outside the window list, so FindWindow still
@@ -135,6 +150,7 @@ void finder_reset(void)
 {
     memset(vn, 0, sizeof vn);
     apple_items = 0;
+    pentry = 0;
     gaddr em = rd32(LM_EXPAND_MEM);
     if (!em || (uint32_t)tb_GetPtrSize(em) < EXPANDMEM_SIZE) {
         gaddr grown = mm_new_ptr_in(rd32(LM_SysZone), EXPANDMEM_SIZE, true);

@@ -55,6 +55,10 @@ extension BlueBox {
             let next = tb_GetNextProcess(walk)
             #expect(next != 0 || rd32(walk) == 1) // only other runs follow
             #expect(process_is_us(0, 0x1001) && process_is_us(0, 2) && !process_is_us(0, 0x1000))
+            // Its Process Manager entry, and none for another.
+            let entry = tb_PEntryFromProcessSerialNumber(p)
+            #expect(entry != 0 && rd32(entry + 0x2C) == 0)
+            #expect(tb_PEntryFromProcessSerialNumber(psn(1, 99999)) == 0)
         }
 
         @Test func volumeNotificationAndTheSystemHeap() {

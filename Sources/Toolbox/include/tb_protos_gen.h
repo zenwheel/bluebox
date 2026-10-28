@@ -1981,6 +1981,7 @@ int16_t tb_PBWriteFork(gaddr pb, bool async);
 int16_t tb_PBWriteImmed(gaddr paramBlock);
 int16_t tb_PBXGetVolInfo(gaddr pb, bool async);
 int16_t tb_PDetachPH(gaddr thePBptr, int8_t async);
+gaddr tb_PEntryFromProcessSerialNumber(gaddr psn);
 uint32_t tb_PMFeatures(void);
 int16_t tb_PMSelectorCount(void);
 int16_t tb_PMgrStateQInstall(gaddr theElement);

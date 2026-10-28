@@ -191,3 +191,16 @@
     dispatcher: OSDispatch
     ppc: false
     selector: 0x000F
+
+# $4F: a process's entry in the Process Manager's table, by serial number
+# (PEntryFromProcessSerialNumber).  The Finder reads a few of its fields
+# to tell whether a block of memory is a process's own.
+- function:
+    name: PEntryFromProcessSerialNumber
+    return: Ptr
+    args:
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x004F

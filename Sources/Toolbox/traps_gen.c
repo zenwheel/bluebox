@@ -21275,6 +21275,16 @@ static void glue_PBXGetVolInfo(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PEntryFromProcessSerialNumber(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_psn = (gaddr)cpu_pop32(c);
+    gaddr r = tb_PEntryFromProcessSerialNumber(a_psn);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_PMFeatures(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -34530,6 +34540,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, glue_GetPortNameFromProcessSerialNumber},
     {0xA88F, (int32_t)0x47u, "SystemHeapRoom", CONV_STACK, 8, 2, glue_SystemHeapRoom},
+    {0xA88F, (int32_t)0x4Fu, "PEntryFromProcessSerialNumber", CONV_STACK, 4, 4, glue_PEntryFromProcessSerialNumber},
     {0xA88F, (int32_t)0x55u, "OSDispatch55", CONV_STACK, 4, 2, glue_OSDispatch55},
     {0xA88F, (int32_t)0x5Au, "OSDispatch5A", CONV_STACK, 30, 4, glue_OSDispatch5A},
     {0xA88F, (int32_t)0x64u, "OSDispatch64", CONV_STACK, 8, 2, glue_OSDispatch64},
