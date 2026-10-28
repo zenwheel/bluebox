@@ -135,6 +135,7 @@ void opentransport_reset(void)
     ot_util_reset();
     ot_ports_reset();
     ot_inet_reset();
+    ot_68k_reset();
 }
 
 /* ---- Notifiers ---- */

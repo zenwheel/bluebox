@@ -28,11 +28,31 @@
 /* Whether the call being served came from 68k code (set by ot_68k.c). */
 bool ot_from_68k;
 
+/* Routines 68k code gave Open Transport to call later (tasks): 68k code
+ * whichever ISA the program runs. */
+static gaddr procs_68k[256];
+static int nprocs_68k;
+
+void ot_note_68k_proc(gaddr p)
+{
+    if (!p || ot_is_68k_proc(p) || nprocs_68k >= 256)
+        return;
+    procs_68k[nprocs_68k++] = p;
+}
+
+bool ot_is_68k_proc(gaddr p)
+{
+    for (int i = 0; i < nprocs_68k; i++)
+        if (procs_68k[i] == p)
+            return true;
+    return false;
+}
+
 uint32_t ot_callproc_as(bool m68k, gaddr proc, uint32_t procinfo, const uint32_t *args, int n)
 {
     if (!proc)
         return 0;
-    if (m68k || mm_is_descriptor(proc) || mm_is_68k_proc(proc))
+    if (m68k || mm_is_descriptor(proc) || mm_is_68k_proc(proc) || ot_is_68k_proc(proc))
         return mm_call(proc, procinfo, args, n);
     return ppc_call(proc, args, n);
 }
@@ -88,6 +108,7 @@ void ot_util_reset(void)
 {
     interrupt_level = 0;
     sync_sections = 0;
+    nprocs_68k = 0;
 }
 
 /* ---- Time ---- */

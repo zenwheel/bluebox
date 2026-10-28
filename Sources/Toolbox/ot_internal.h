@@ -174,6 +174,8 @@ uint32_t ot_callproc_as(bool m68k, gaddr proc, uint32_t procinfo, const uint32_t
 
 /* ot_util.c */
 void ot_util_reset(void);
+void ot_note_68k_proc(gaddr p);
+bool ot_is_68k_proc(gaddr p);
 uint32_t ot_make_port_ref(uint32_t bus, uint32_t dev, uint32_t slot, uint32_t other);
 gaddr ot_buffer_new(const uint8_t *data, uint32_t len);
 

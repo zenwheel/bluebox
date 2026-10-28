@@ -82,6 +82,11 @@ void gestalt_init(void)
     gestalt_set(fourcc("thds"), 0x3);         /* the Thread Manager, with exact-match pools */
     gestalt_set(fourcc("sysa"), 1);           /* 68k architecture */
     gestalt_set(fourcc("mach"), 35);          /* Quadra 800 */
+    /* Open Transport for 68k programs, on the host's sockets: through the glue and the
+     * Shared Library Manager ot_68k.c stands in for (the same TCP/IP and AppleTalk
+     * the PowerPC programs get) */
+    gestalt_set(fourcc("otan"), 0x33 | (appletalk_enabled() ? 0x0C : 0));
+    gestalt_set(fourcc("otvr"), 0x01208000);
     bool m040 = g_cpu && g_cpu->model == 68040;
     gestalt_set(fourcc("proc"), m040 ? 5 : 3); /* 68040 or 68020 */
     gestalt_set(fourcc("fpu "), m040 ? 3 : 0); /* the 68040's own FPU, or none */
@@ -218,13 +223,11 @@ static int16_t gestalt_lookup(int32_t selector, uint32_t *responsep)
     return gestaltUnknownErr;
 }
 
-/* Open Transport is there for PowerPC code only: 68k code linked with
- * its client glue binds through the Shared Library Manager, which we
- * don't have, and called through a null table (the 68k eSellerate and
- * MindPurchase engines in Fetch 4 and Web Writer).  Asked from 68k code,
- * Open Transport is missing, as it is for 68k programs, and the code
- * uses MacTCP. */
-static bool hidden_from_68k(uint32_t selector)
+/* Open Transport's selectors asked from 68k code (the trap, as the glue linked
+ * into 68k programs and the 68k code in PowerPC ones asks): the glue goes on
+ * to find the Shared Library Manager through the Expand Memory record, which
+ * ot_68k.c makes ready. */
+static bool asked_by_68k_code(uint32_t selector)
 {
     if (selector != fourcc("otan") && selector != fourcc("otvr"))
         return false;
@@ -236,10 +239,8 @@ static bool hidden_from_68k(uint32_t selector)
 int16_t tb_Gestalt(int32_t selector, uint32_t *responsep)
 {
     int16_t err = gestalt_lookup(selector, responsep);
-    if (!err && hidden_from_68k((uint32_t)selector)) {
-        *responsep = 0;
-        err = gestaltUnknownErr;
-    }
+    if (!err && asked_by_68k_code((uint32_t)selector))
+        ot_68k_prepare();
     if (g_log_mask & LOG_TRAPS) {
         char tc[5];
         log_printf("  Gestalt '%s' -> %d, %08X\n", fourcc_str((uint32_t)selector, tc), err, *responsep);

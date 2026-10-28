@@ -828,6 +828,13 @@ void ppc_trap_ctx_save(ppc_trap_ctx *t);
 void ppc_trap_ctx_load(const ppc_trap_ctx *t);
 /* Open Transport (opentransport.c). */
 void opentransport_reset(void);
+/* Open Transport for 68k code (ot_68k.c): the Shared Library Manager the glue finds, made
+ * ready when 68k code asks Gestalt for Open Transport. */
+void ot_68k_prepare(void);
+void ot_68k_reset(void);
+/* A routine 68k code gave Open Transport to call later is 68k code, whichever ISA the program runs. */
+bool ot_is_68k_proc(gaddr p);
+bool ot_68k_find(const char *name, char lib[64], int *index, char *conv, char sig[24], char *ret);
 /* Open Transport's DNS queries ask this name server (an address and port) instead of the
  * host's; 0 undoes it (the tests', and a program's environment). */
 void ot_inet_set_dns(uint32_t ip, uint16_t port);
