@@ -8,11 +8,22 @@
 #include "qd3d.h"
 #include "tb_internal.h"
 
+extern const ppc_export q3_shapes_exports[], q3_group_exports[], q3_pick_exports[], q3_mesh_exports[];
+extern const unsigned q3_shapes_export_count, q3_group_export_count, q3_pick_export_count, q3_mesh_export_count;
+
 static const struct {
     const ppc_export *table;
     const unsigned *count;
 } tables[] = {
     { rave_exports, &rave_export_count },
+    { q3_exports, &q3_export_count },
+    { q3_geom_exports, &q3_geom_export_count },
+    { q3_mesh_exports, &q3_mesh_export_count },
+    { q3_view_exports, &q3_view_export_count },
+    { q3_shapes_exports, &q3_shapes_export_count },
+    { q3_group_exports, &q3_group_export_count },
+    { q3_pick_exports, &q3_pick_export_count },
+    { q3_file_exports, &q3_file_export_count },
     { q3_math_exports, &q3_math_export_count },
 };
 
@@ -40,5 +51,12 @@ bool qd3d_library(const char *name)
 }
 
 void rave_reset(void);
+void q3_object_reset(void);
+void q3_view_reset(void);
 
-void qd3d_reset(void) { rave_reset(); }
+void qd3d_reset(void)
+{
+    q3_view_reset();
+    q3_object_reset();
+    rave_reset();
+}
