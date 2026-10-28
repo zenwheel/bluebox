@@ -20655,6 +20655,70 @@ static void glue_RstFLock(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SBDrawBarGraph(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_barGraphTopLeft = (uint32_t)cpu_pop32(c);
+    int16_t a_direction = (int16_t)cpu_pop16(c);
+    int16_t a_barCount = (int16_t)cpu_pop16(c);
+    int16_t a_level = (int16_t)cpu_pop16(c);
+    tb_SBDrawBarGraph(a_level, a_barCount, a_direction, a_barGraphTopLeft);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBEnableShowHideHotKey(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_enabled = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t r = tb_SBEnableShowHideHotKey(a_enabled);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBGetBarGraphWidth(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_barCount = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SBGetBarGraphWidth(a_barCount);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBGetControlStripFontID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fontID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBGetControlStripFontID(a_fontID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBGetControlStripFontSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_fontSize = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBGetControlStripFontSize(a_fontSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBGetDetachIconSuite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_selector = (uint32_t)cpu_pop32(c);
+    int16_t a_theResID = (int16_t)cpu_pop16(c);
+    gaddr a_theIconSuite = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBGetDetachIconSuite(a_theIconSuite, a_theResID, a_selector);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SBGetDetachedIndString(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20663,6 +20727,30 @@ static void glue_SBGetDetachedIndString(cpu68k *c, uint16_t trapword)
     gaddr a_stringList = (gaddr)cpu_pop32(c);
     gaddr a_theString = (gaddr)cpu_pop32(c);
     tb_SBGetDetachedIndString(a_theString, a_stringList, a_whichString);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBGetShowHideHotKey(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_keyCode = (gaddr)cpu_pop32(c);
+    gaddr a_modifiers = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBGetShowHideHotKey(a_modifiers, a_keyCode);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBHitTrackSlider(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_hit = (gaddr)cpu_pop32(c);
+    int16_t a_initialValue = (int16_t)cpu_pop16(c);
+    int16_t a_ticksOnSlider = (int16_t)cpu_pop16(c);
+    gaddr a_moduleRect = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBHitTrackSlider(a_moduleRect, a_ticksOnSlider, a_initialValue, a_hit);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -20675,6 +20763,16 @@ static void glue_SBIsControlStripVisible(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SBIsShowHideHotKeyEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_enabled = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBIsShowHideHotKeyEnabled(a_enabled);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SBLoadPreferences(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20683,6 +20781,16 @@ static void glue_SBLoadPreferences(cpu68k *c, uint16_t trapword)
     gaddr a_prefsResourceName = (gaddr)cpu_pop32(c);
     int16_t r = tb_SBLoadPreferences(a_prefsResourceName, a_preferences);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBModalDialogInContext(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_itemHit = (gaddr)cpu_pop32(c);
+    gaddr a_filterProc = (gaddr)cpu_pop32(c);
+    tb_SBModalDialogInContext(a_filterProc, a_itemHit);
     cpu_push32(c, ret);
 }
 
@@ -20716,12 +20824,77 @@ static void glue_SBSavePreferences(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SBSetControlStripFontID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fontID = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SBSetControlStripFontID(a_fontID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBSetControlStripFontSize(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fontSize = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SBSetControlStripFontSize(a_fontSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBSetShowHideHotKey(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint8_t a_keyCode = (uint8_t)(cpu_pop16(c) >> 8);
+    int16_t a_modifiers = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SBSetShowHideHotKey(a_modifiers, a_keyCode);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBShowHelpString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_helpString = (gaddr)cpu_pop32(c);
+    gaddr a_moduleRect = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBShowHelpString(a_moduleRect, a_helpString);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SBShowHideControlStrip(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int8_t a_showIt = (int8_t)(cpu_pop16(c) >> 8);
     tb_SBShowHideControlStrip(a_showIt);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBTrackPopupMenu(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theMenu = (gaddr)cpu_pop32(c);
+    gaddr a_moduleRect = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBTrackPopupMenu(a_moduleRect, a_theMenu);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SBTrackSlider(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_initialValue = (int16_t)cpu_pop16(c);
+    int16_t a_ticksOnSlider = (int16_t)cpu_pop16(c);
+    gaddr a_moduleRect = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SBTrackSlider(a_moduleRect, a_ticksOnSlider, a_initialValue);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -27645,10 +27818,26 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAF2, (int32_t)0x0u, "SBIsControlStripVisible", CONV_STACK, 0, 2, glue_SBIsControlStripVisible},
     {0xAAF2, (int32_t)0x2u, "SBSafeToAccessStartupDisk", CONV_STACK, 0, 2, glue_SBSafeToAccessStartupDisk},
     {0xAAF2, (int32_t)0x101u, "SBShowHideControlStrip", CONV_STACK, 2, 0, glue_SBShowHideControlStrip},
+    {0xAAF2, (int32_t)0x10Bu, "SBGetBarGraphWidth", CONV_STACK, 2, 2, glue_SBGetBarGraphWidth},
+    {0xAAF2, (int32_t)0x10Fu, "SBSetControlStripFontID", CONV_STACK, 2, 2, glue_SBSetControlStripFontID},
+    {0xAAF2, (int32_t)0x111u, "SBSetControlStripFontSize", CONV_STACK, 2, 2, glue_SBSetControlStripFontSize},
+    {0xAAF2, (int32_t)0x115u, "SBEnableShowHideHotKey", CONV_STACK, 2, 2, glue_SBEnableShowHideHotKey},
     {0xAAF2, (int32_t)0x203u, "SBOpenModuleResourceFile", CONV_STACK, 4, 2, glue_SBOpenModuleResourceFile},
+    {0xAAF2, (int32_t)0x20Eu, "SBGetControlStripFontID", CONV_STACK, 4, 2, glue_SBGetControlStripFontID},
+    {0xAAF2, (int32_t)0x210u, "SBGetControlStripFontSize", CONV_STACK, 4, 2, glue_SBGetControlStripFontSize},
+    {0xAAF2, (int32_t)0x213u, "SBSetShowHideHotKey", CONV_STACK, 4, 2, glue_SBSetShowHideHotKey},
+    {0xAAF2, (int32_t)0x214u, "SBIsShowHideHotKeyEnabled", CONV_STACK, 4, 2, glue_SBIsShowHideHotKeyEnabled},
     {0xAAF2, (int32_t)0x404u, "SBLoadPreferences", CONV_STACK, 8, 2, glue_SBLoadPreferences},
     {0xAAF2, (int32_t)0x405u, "SBSavePreferences", CONV_STACK, 8, 2, glue_SBSavePreferences},
+    {0xAAF2, (int32_t)0x408u, "SBTrackPopupMenu", CONV_STACK, 8, 2, glue_SBTrackPopupMenu},
+    {0xAAF2, (int32_t)0x409u, "SBTrackSlider", CONV_STACK, 8, 2, glue_SBTrackSlider},
+    {0xAAF2, (int32_t)0x40Au, "SBShowHelpString", CONV_STACK, 8, 2, glue_SBShowHelpString},
+    {0xAAF2, (int32_t)0x40Du, "SBModalDialogInContext", CONV_STACK, 8, 0, glue_SBModalDialogInContext},
+    {0xAAF2, (int32_t)0x412u, "SBGetShowHideHotKey", CONV_STACK, 8, 2, glue_SBGetShowHideHotKey},
     {0xAAF2, (int32_t)0x506u, "SBGetDetachedIndString", CONV_STACK, 10, 0, glue_SBGetDetachedIndString},
+    {0xAAF2, (int32_t)0x507u, "SBGetDetachIconSuite", CONV_STACK, 10, 2, glue_SBGetDetachIconSuite},
+    {0xAAF2, (int32_t)0x50Cu, "SBDrawBarGraph", CONV_STACK, 10, 0, glue_SBDrawBarGraph},
+    {0xAAF2, (int32_t)0x616u, "SBHitTrackSlider", CONV_STACK, 12, 2, glue_SBHitTrackSlider},
     {0xABE0, (int32_t)0x4000Cu, "CloseCursorComponent", CONV_STACK, 4, 2, glue_CloseCursorComponent},
     {0xABE0, (int32_t)0x4000Du, "SetCursorComponent", CONV_STACK, 4, 2, glue_SetCursorComponent},
     {0xABE0, (int32_t)0x4000Eu, "CursorComponentChanged", CONV_STACK, 4, 2, glue_CursorComponentChanged},

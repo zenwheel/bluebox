@@ -338,3 +338,178 @@
         type: uint32_t
     dispatcher: ExpansionMgrDispatch
     selector: 0x021A
+
+# The rest of the Control Strip's module services (ControlStrip.h), same
+# dispatcher: _ControlStripDispatch's selector in D0's low byte, the size of
+# the arguments in words above it.
+- function:
+    name: SBGetDetachIconSuite
+    return: OSErr
+    args:
+      - name: theIconSuite
+        type: Handle*
+      - name: theResID
+        type: INTEGER
+      - name: selector
+        type: uint32_t
+    dispatcher: ControlStripDispatch
+    selector: 0x0507
+
+- function:
+    name: SBTrackPopupMenu
+    return: INTEGER
+    args:
+      - name: moduleRect
+        type: Rect*
+      - name: theMenu
+        type: MenuHandle
+    dispatcher: ControlStripDispatch
+    selector: 0x0408
+
+- function:
+    name: SBTrackSlider
+    return: INTEGER
+    args:
+      - name: moduleRect
+        type: Rect*
+      - name: ticksOnSlider
+        type: INTEGER
+      - name: initialValue
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x0409
+
+- function:
+    name: SBShowHelpString
+    return: OSErr
+    args:
+      - name: moduleRect
+        type: Rect*
+      - name: helpString
+        type: StringPtr
+    dispatcher: ControlStripDispatch
+    selector: 0x040A
+
+- function:
+    name: SBGetBarGraphWidth
+    return: INTEGER
+    args:
+      - name: barCount
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x010B
+
+- function:
+    name: SBDrawBarGraph
+    args:
+      - name: level
+        type: INTEGER
+      - name: barCount
+        type: INTEGER
+      - name: direction
+        type: INTEGER
+      - name: barGraphTopLeft
+        type: Point
+    dispatcher: ControlStripDispatch
+    selector: 0x050C
+
+- function:
+    name: SBModalDialogInContext
+    args:
+      - name: filterProc
+        type: ProcPtr
+      - name: itemHit
+        type: INTEGER*
+    dispatcher: ControlStripDispatch
+    selector: 0x040D
+
+- function:
+    name: SBGetControlStripFontID
+    return: OSErr
+    args:
+      - name: fontID
+        type: INTEGER*
+    dispatcher: ControlStripDispatch
+    selector: 0x020E
+
+- function:
+    name: SBSetControlStripFontID
+    return: OSErr
+    args:
+      - name: fontID
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x010F
+
+- function:
+    name: SBGetControlStripFontSize
+    return: OSErr
+    args:
+      - name: fontSize
+        type: INTEGER*
+    dispatcher: ControlStripDispatch
+    selector: 0x0210
+
+- function:
+    name: SBSetControlStripFontSize
+    return: OSErr
+    args:
+      - name: fontSize
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x0111
+
+- function:
+    name: SBGetShowHideHotKey
+    return: OSErr
+    args:
+      - name: modifiers
+        type: INTEGER*
+      - name: keyCode
+        type: uint8_t*
+    dispatcher: ControlStripDispatch
+    selector: 0x0412
+
+- function:
+    name: SBSetShowHideHotKey
+    return: OSErr
+    args:
+      - name: modifiers
+        type: INTEGER
+      - name: keyCode
+        type: uint8_t
+    dispatcher: ControlStripDispatch
+    selector: 0x0213
+
+- function:
+    name: SBIsShowHideHotKeyEnabled
+    return: OSErr
+    args:
+      - name: enabled
+        type: Boolean*
+    dispatcher: ControlStripDispatch
+    selector: 0x0214
+
+- function:
+    name: SBEnableShowHideHotKey
+    return: OSErr
+    args:
+      - name: enabled
+        type: Boolean
+    dispatcher: ControlStripDispatch
+    selector: 0x0115
+
+- function:
+    name: SBHitTrackSlider
+    return: INTEGER
+    args:
+      - name: moduleRect
+        type: Rect*
+      - name: ticksOnSlider
+        type: INTEGER
+      - name: initialValue
+        type: INTEGER
+      - name: hit
+        type: Boolean*
+    dispatcher: ControlStripDispatch
+    selector: 0x0616

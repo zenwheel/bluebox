@@ -29637,6 +29637,133 @@ static void ppcglue_ExpMgrSpecialCycleBroadcastLong(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SBGetDetachIconSuite(ppc_cpu *c)
+{
+    gaddr a_theIconSuite = (gaddr)c->gpr[3];
+    int16_t a_theResID = (int16_t)c->gpr[4];
+    uint32_t a_selector = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetDetachIconSuite(a_theIconSuite, a_theResID, a_selector);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBTrackPopupMenu(ppc_cpu *c)
+{
+    gaddr a_moduleRect = (gaddr)c->gpr[3];
+    gaddr a_theMenu = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBTrackPopupMenu(a_moduleRect, a_theMenu);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBTrackSlider(ppc_cpu *c)
+{
+    gaddr a_moduleRect = (gaddr)c->gpr[3];
+    int16_t a_ticksOnSlider = (int16_t)c->gpr[4];
+    int16_t a_initialValue = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBTrackSlider(a_moduleRect, a_ticksOnSlider, a_initialValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBShowHelpString(ppc_cpu *c)
+{
+    gaddr a_moduleRect = (gaddr)c->gpr[3];
+    gaddr a_helpString = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBShowHelpString(a_moduleRect, a_helpString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetBarGraphWidth(ppc_cpu *c)
+{
+    int16_t a_barCount = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetBarGraphWidth(a_barCount);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBDrawBarGraph(ppc_cpu *c)
+{
+    int16_t a_level = (int16_t)c->gpr[3];
+    int16_t a_barCount = (int16_t)c->gpr[4];
+    int16_t a_direction = (int16_t)c->gpr[5];
+    uint32_t a_barGraphTopLeft = (uint32_t)c->gpr[6];
+    tb_SBDrawBarGraph(a_level, a_barCount, a_direction, a_barGraphTopLeft);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBModalDialogInContext(ppc_cpu *c)
+{
+    gaddr a_filterProc = (gaddr)c->gpr[3];
+    gaddr a_itemHit = (gaddr)c->gpr[4];
+    tb_SBModalDialogInContext(a_filterProc, a_itemHit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetControlStripFontID(ppc_cpu *c)
+{
+    gaddr a_fontID = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetControlStripFontID(a_fontID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSetControlStripFontID(ppc_cpu *c)
+{
+    int16_t a_fontID = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBSetControlStripFontID(a_fontID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetControlStripFontSize(ppc_cpu *c)
+{
+    gaddr a_fontSize = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetControlStripFontSize(a_fontSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSetControlStripFontSize(ppc_cpu *c)
+{
+    int16_t a_fontSize = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBSetControlStripFontSize(a_fontSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetShowHideHotKey(ppc_cpu *c)
+{
+    gaddr a_modifiers = (gaddr)c->gpr[3];
+    gaddr a_keyCode = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetShowHideHotKey(a_modifiers, a_keyCode);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSetShowHideHotKey(ppc_cpu *c)
+{
+    int16_t a_modifiers = (int16_t)c->gpr[3];
+    uint8_t a_keyCode = (uint8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBSetShowHideHotKey(a_modifiers, a_keyCode);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBIsShowHideHotKeyEnabled(ppc_cpu *c)
+{
+    gaddr a_enabled = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBIsShowHideHotKeyEnabled(a_enabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBEnableShowHideHotKey(ppc_cpu *c)
+{
+    int8_t a_enabled = (int8_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBEnableShowHideHotKey(a_enabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBHitTrackSlider(ppc_cpu *c)
+{
+    gaddr a_moduleRect = (gaddr)c->gpr[3];
+    int16_t a_ticksOnSlider = (int16_t)c->gpr[4];
+    int16_t a_initialValue = (int16_t)c->gpr[5];
+    gaddr a_hit = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBHitTrackSlider(a_moduleRect, a_ticksOnSlider, a_initialValue, a_hit);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParseAIFFHeader(ppc_cpu *c)
 {
     int16_t a_fRefNum = (int16_t)c->gpr[3];
@@ -44608,13 +44735,29 @@ const ppc_export ppc_exports[] = {
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"RstFLock", ppcglue_RstFLock},
+    {"SBDrawBarGraph", ppcglue_SBDrawBarGraph},
+    {"SBEnableShowHideHotKey", ppcglue_SBEnableShowHideHotKey},
+    {"SBGetBarGraphWidth", ppcglue_SBGetBarGraphWidth},
+    {"SBGetControlStripFontID", ppcglue_SBGetControlStripFontID},
+    {"SBGetControlStripFontSize", ppcglue_SBGetControlStripFontSize},
+    {"SBGetDetachIconSuite", ppcglue_SBGetDetachIconSuite},
     {"SBGetDetachedIndString", ppcglue_SBGetDetachedIndString},
+    {"SBGetShowHideHotKey", ppcglue_SBGetShowHideHotKey},
+    {"SBHitTrackSlider", ppcglue_SBHitTrackSlider},
     {"SBIsControlStripVisible", ppcglue_SBIsControlStripVisible},
+    {"SBIsShowHideHotKeyEnabled", ppcglue_SBIsShowHideHotKeyEnabled},
     {"SBLoadPreferences", ppcglue_SBLoadPreferences},
+    {"SBModalDialogInContext", ppcglue_SBModalDialogInContext},
     {"SBOpenModuleResourceFile", ppcglue_SBOpenModuleResourceFile},
     {"SBSafeToAccessStartupDisk", ppcglue_SBSafeToAccessStartupDisk},
     {"SBSavePreferences", ppcglue_SBSavePreferences},
+    {"SBSetControlStripFontID", ppcglue_SBSetControlStripFontID},
+    {"SBSetControlStripFontSize", ppcglue_SBSetControlStripFontSize},
+    {"SBSetShowHideHotKey", ppcglue_SBSetShowHideHotKey},
+    {"SBShowHelpString", ppcglue_SBShowHelpString},
     {"SBShowHideControlStrip", ppcglue_SBShowHideControlStrip},
+    {"SBTrackPopupMenu", ppcglue_SBTrackPopupMenu},
+    {"SBTrackSlider", ppcglue_SBTrackSlider},
     {"SCSIAction", ppcglue_SCSIAction},
     {"SCSICmd", ppcglue_SCSICmd},
     {"SCSIComplete", ppcglue_SCSIComplete},
