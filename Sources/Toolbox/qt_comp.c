@@ -22,6 +22,7 @@
 void qt_dhlr_register(void); /* qt_dhlr.c */
 void qt_mhlr_register(void); /* qt_mhlr.c */
 void qt_spriteworld_reset(void); /* qt_spriteworld.c */
+void qt_tween_register(void);     /* qt_tween.c */
 
 #define MAX_SLOTS 1024 /* the Component Manager's instances (their IDs' low word) */
 
@@ -224,6 +225,7 @@ void qt_components_reset(void)
     qt_mhlr_register();
     qt_import_register();
     qt_spriteworld_reset();
+    qt_tween_register();
     qt_export_register();
     qt_idh_register();
     qt_stream_reset();

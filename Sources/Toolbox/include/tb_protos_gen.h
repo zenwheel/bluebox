@@ -2160,6 +2160,9 @@ int16_t tb_QTCreateStandardParameterDialog(int32_t effectList, int32_t parameter
 int16_t tb_QTCreateUUID(gaddr outUUID, int32_t creationFlags);
 int16_t tb_QTDismissStandardParameterDialog(int32_t createdDialog);
 int16_t tb_QTDisposeAtomContainer(int32_t atomData);
+int16_t tb_QTDisposeTween(int32_t tween);
+int16_t tb_QTDoTween(int32_t tween, int32_t atTime, int32_t result, gaddr resultSize, int32_t tweenDataProc, gaddr tweenDataRefCon);
+int16_t tb_QTDoTweenPtr(int32_t tween, int32_t atTime, int32_t result, int32_t resultSize);
 int8_t tb_QTEqualUUIDs(gaddr uuid1, gaddr uuid2);
 int32_t tb_QTFindChildByID(int32_t container, int32_t parentAtom, int32_t atomType, int32_t id, gaddr index);
 int32_t tb_QTFindChildByIndex(int32_t container, int32_t parentAtom, int32_t atomType, int16_t index, gaddr id);
@@ -2205,6 +2208,7 @@ int16_t tb_QTNewAlias(gaddr fss, gaddr alias, int8_t minimal);
 int16_t tb_QTNewAtomContainer(gaddr atomData);
 int16_t tb_QTNewGWorld(gaddr offscreenGWorld, int32_t PixelFormat, gaddr boundsRect, int32_t cTable, int32_t aGDevice, int32_t flags);
 int16_t tb_QTNewGWorldFromPtr(gaddr gw, int32_t pixelFormat, gaddr boundsRect, int32_t cTable, int32_t aGDevice, int32_t flags, gaddr baseAddr, int32_t rowBytes);
+int16_t tb_QTNewTween(gaddr tween, int32_t container, int32_t tweenAtom, int32_t maxTime);
 int16_t tb_QTNextChildAnyType(int32_t container, int32_t parentAtom, int32_t currentChild, gaddr nextChild);
 int16_t tb_QTParseTextHREF(gaddr href, int32_t hrefLen, int32_t inContainer, gaddr outContainer);
 int16_t tb_QTPrivateCall273(gaddr data);

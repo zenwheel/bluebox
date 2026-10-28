@@ -33316,6 +33316,45 @@ static void ppcglue_GetMediaPropertyAtom(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_QTNewTween(ppc_cpu *c)
+{
+    gaddr a_tween = (gaddr)c->gpr[3];
+    int32_t a_container = (int32_t)c->gpr[4];
+    int32_t a_tweenAtom = (int32_t)c->gpr[5];
+    int32_t a_maxTime = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNewTween(a_tween, a_container, a_tweenAtom, a_maxTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTDisposeTween(ppc_cpu *c)
+{
+    int32_t a_tween = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTDisposeTween(a_tween);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTDoTween(ppc_cpu *c)
+{
+    int32_t a_tween = (int32_t)c->gpr[3];
+    int32_t a_atTime = (int32_t)c->gpr[4];
+    int32_t a_result = (int32_t)c->gpr[5];
+    gaddr a_resultSize = (gaddr)c->gpr[6];
+    int32_t a_tweenDataProc = (int32_t)c->gpr[7];
+    gaddr a_tweenDataRefCon = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTDoTween(a_tween, a_atTime, a_result, a_resultSize, a_tweenDataProc, a_tweenDataRefCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTDoTweenPtr(ppc_cpu *c)
+{
+    int32_t a_tween = (int32_t)c->gpr[3];
+    int32_t a_atTime = (int32_t)c->gpr[4];
+    int32_t a_result = (int32_t)c->gpr[5];
+    int32_t a_resultSize = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTDoTweenPtr(a_tween, a_atTime, a_result, a_resultSize);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetQuickTimePreference(ppc_cpu *c)
 {
     int32_t a_preferenceType = (int32_t)c->gpr[3];
@@ -39148,69 +39187,6 @@ static void ppctrap_MovieExecuteWiredActions(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTNewTween(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x29Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTDisposeTween(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x29Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTDoTween(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x29Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTDoTweenPtr(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x36Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_AddSoundDescriptionExtension(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -42749,9 +42725,9 @@ const ppc_export ppc_exports[] = {
     {"QTCreateUUID", ppcglue_QTCreateUUID},
     {"QTDismissStandardParameterDialog", ppcglue_QTDismissStandardParameterDialog},
     {"QTDisposeAtomContainer", ppcglue_QTDisposeAtomContainer},
-    {"QTDisposeTween", ppctrap_QTDisposeTween},
-    {"QTDoTween", ppctrap_QTDoTween},
-    {"QTDoTweenPtr", ppctrap_QTDoTweenPtr},
+    {"QTDisposeTween", ppcglue_QTDisposeTween},
+    {"QTDoTween", ppcglue_QTDoTween},
+    {"QTDoTweenPtr", ppcglue_QTDoTweenPtr},
     {"QTEqualUUIDs", ppcglue_QTEqualUUIDs},
     {"QTFindChildByID", ppcglue_QTFindChildByID},
     {"QTFindChildByIndex", ppcglue_QTFindChildByIndex},
@@ -42797,7 +42773,7 @@ const ppc_export ppc_exports[] = {
     {"QTNewAtomContainer", ppcglue_QTNewAtomContainer},
     {"QTNewGWorld", ppcglue_QTNewGWorld},
     {"QTNewGWorldFromPtr", ppcglue_QTNewGWorldFromPtr},
-    {"QTNewTween", ppctrap_QTNewTween},
+    {"QTNewTween", ppcglue_QTNewTween},
     {"QTNextChildAnyType", ppcglue_QTNextChildAnyType},
     {"QTParseTextHREF", ppcglue_QTParseTextHREF},
     {"QTPrivateCall273", ppcglue_QTPrivateCall273},

@@ -332,3 +332,51 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    @Suite struct QTTweens {
+        /// A Fixed tween and a rectangle tween half way, into a handle and a
+        /// pointer; a change since the last call when asked; tweener components.
+        @Test func tweensInterpolate() {
+            qtMachine()
+            let c = qt_atoms_new()
+            var err: Int16 = 0
+            func ins(_ parent: UInt32, _ type: String, _ data: [UInt8]) -> UInt32 {
+                var d = data
+                return qt_atoms_insert(c, parent, fourCC(type), 1, 0, &d, UInt32(d.count), &err)
+            }
+            let tw = qt_atoms_insert(c, 0, fourCC("twen"), 1, 0, nil, 0, &err)
+            _ = ins(tw, "twnt", be32(3))
+            _ = ins(tw, "data", be32(0) + be32(10 << 16))
+            _ = ins(tw, "twdu", be32(100))
+            let out = tb_NewPtr(4, false, true)
+            #expect(tb_QTNewTween(out, Int32(bitPattern: c), Int32(bitPattern: tw), 1000) == 0)
+            let tween = Int32(bitPattern: rd32(out))
+            let h = tb_NewHandle(0, false, false)
+            #expect(tb_QTDoTween(tween, 50, Int32(bitPattern: h), out, 0, 0) == 0)
+            #expect(rd32(out) == 4 && rd32(rd32(h)) == 5 << 16)
+            #expect(tb_QTDoTween(tween, 500, Int32(bitPattern: h), out, 0, 0) == 0 && rd32(rd32(h)) == 10 << 16)
+            #expect(tb_QTDisposeTween(tween) == 0)
+            // a rectangle, into a pointer
+            let r = qt_atoms_insert(c, 0, fourCC("twen"), 2, 0, nil, 0, &err)
+            var t5 = be32(5), rects = be16(0) + be16(0) + be16(10) + be16(20) + be16(10) + be16(20) + be16(30) + be16(60)
+            _ = qt_atoms_insert(c, r, fourCC("twnt"), 1, 0, &t5, 4, &err)
+            _ = qt_atoms_insert(c, r, fourCC("data"), 1, 0, &rects, 16, &err)
+            #expect(tb_QTNewTween(out, Int32(bitPattern: c), Int32(bitPattern: r), 100) == 0)
+            let rt = Int32(bitPattern: rd32(out))
+            let p = tb_NewPtr(8, false, true)
+            #expect(tb_QTDoTweenPtr(rt, 20, Int32(bitPattern: p), 8) == 0)
+            #expect(rd16(p) == 2 && rd16(p + 2) == 4 && rd16(p + 4) == 14 && rd16(p + 6) == 28)
+            // the Fixed tweener component, through a TweenRecord with no data proc
+            let tc = components_open_default(fourCC("twen"), 3)
+            #expect(tc != 0)
+            #expect(qtCall("TweenerInitialize", [tc, c, tw, 0]) == 0)
+            components_close(tc)
+            // a 3D tween isn't ours
+            let q = qt_atoms_insert(c, 0, fourCC("twen"), 3, 0, nil, 0, &err)
+            var t3 = be32(fourCC("3rot"))
+            _ = qt_atoms_insert(c, q, fourCC("twnt"), 1, 0, &t3, 4, &err)
+            #expect(tb_QTNewTween(out, Int32(bitPattern: c), Int32(bitPattern: q), 100) == -2053)
+        }
+    }
+}

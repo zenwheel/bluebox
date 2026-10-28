@@ -23083,6 +23083,44 @@ static void glue_QTDisposeAtomContainer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_QTDisposeTween(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_tween = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTDisposeTween(a_tween);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTDoTween(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tweenDataRefCon = (gaddr)cpu_pop32(c);
+    int32_t a_tweenDataProc = (int32_t)cpu_pop32(c);
+    gaddr a_resultSize = (gaddr)cpu_pop32(c);
+    int32_t a_result = (int32_t)cpu_pop32(c);
+    int32_t a_atTime = (int32_t)cpu_pop32(c);
+    int32_t a_tween = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTDoTween(a_tween, a_atTime, a_result, a_resultSize, a_tweenDataProc, a_tweenDataRefCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTDoTweenPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_resultSize = (int32_t)cpu_pop32(c);
+    int32_t a_result = (int32_t)cpu_pop32(c);
+    int32_t a_atTime = (int32_t)cpu_pop32(c);
+    int32_t a_tween = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTDoTweenPtr(a_tween, a_atTime, a_result, a_resultSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_QTEqualUUIDs(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -23606,6 +23644,19 @@ static void glue_QTNewGWorldFromPtr(cpu68k *c, uint16_t trapword)
     int32_t a_pixelFormat = (int32_t)cpu_pop32(c);
     gaddr a_gw = (gaddr)cpu_pop32(c);
     int16_t r = tb_QTNewGWorldFromPtr(a_gw, a_pixelFormat, a_boundsRect, a_cTable, a_aGDevice, a_flags, a_baseAddr, a_rowBytes);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTNewTween(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_maxTime = (int32_t)cpu_pop32(c);
+    int32_t a_tweenAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    gaddr a_tween = (gaddr)cpu_pop32(c);
+    int16_t r = tb_QTNewTween(a_tween, a_container, a_tweenAtom, a_maxTime);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -35295,9 +35346,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x283u, "SetTrackSoundLocalizationSettings", CONV_STACK, 8, 2, glue_SetTrackSoundLocalizationSettings},
     {0xAAAA, (int32_t)0x284u, "SetMoviePropertyAtom", CONV_STACK, 8, 2, glue_SetMoviePropertyAtom},
     {0xAAAA, (int32_t)0x285u, "GetMoviePropertyAtom", CONV_STACK, 8, 2, glue_GetMoviePropertyAtom},
-    {0xAAAA, (int32_t)0x29Du, "QTNewTween", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x29Eu, "QTDoTween", CONV_STACK, 24, 2, 0},
-    {0xAAAA, (int32_t)0x29Fu, "QTDisposeTween", CONV_STACK, 4, 2, 0},
+    {0xAAAA, (int32_t)0x29Du, "QTNewTween", CONV_STACK, 16, 2, glue_QTNewTween},
+    {0xAAAA, (int32_t)0x29Eu, "QTDoTween", CONV_STACK, 24, 2, glue_QTDoTween},
+    {0xAAAA, (int32_t)0x29Fu, "QTDisposeTween", CONV_STACK, 4, 2, glue_QTDisposeTween},
     {0xAAAA, (int32_t)0x2B2u, "GetMediaSyncSampleCount", CONV_STACK, 4, 4, glue_GetMediaSyncSampleCount},
     {0xAAAA, (int32_t)0x2B3u, "QTGetAccessKeys", CONV_STACK, 12, 2, glue_QTGetAccessKeys},
     {0xAAAA, (int32_t)0x2B4u, "QTRegisterAccessKey", CONV_STACK, 12, 2, glue_QTRegisterAccessKey},
@@ -35361,7 +35412,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x34Cu, "QTIdleManagerSetParent", CONV_STACK, 8, 2, glue_QTIdleManagerSetParent},
     {0xAAAA, (int32_t)0x36Au, "QTGetMIMETypeInfo", CONV_STACK, 18, 2, glue_QTGetMIMETypeInfo},
     {0xAAAA, (int32_t)0x36Du, "QTGetEffectsListExtended", CONV_STACK, 32, 2, glue_QTGetEffectsListExtended},
-    {0xAAAA, (int32_t)0x36Eu, "QTDoTweenPtr", CONV_STACK, 16, 2, 0},
+    {0xAAAA, (int32_t)0x36Eu, "QTDoTweenPtr", CONV_STACK, 16, 2, glue_QTDoTweenPtr},
     {0xAAAA, (int32_t)0x36Fu, "QTGetTimeUntilNextTask", CONV_STACK, 8, 2, glue_QTGetTimeUntilNextTask},
     {0xAAAA, (int32_t)0x371u, "QTIdleManagerNeedsAnIdle", CONV_STACK, 8, 2, glue_QTIdleManagerNeedsAnIdle},
     {0xAAAA, (int32_t)0x373u, "QTIdleManagerSetNextIdleTimeNever", CONV_STACK, 4, 2, glue_QTIdleManagerSetNextIdleTimeNever},
