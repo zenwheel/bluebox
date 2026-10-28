@@ -15,6 +15,7 @@
 
 #include "qt_atoms.h"
 #include "qt_comp.h"
+#include "qt_stream.h"
 #include "tb_internal.h"
 
 void qt_dhlr_register(void); /* qt_dhlr.c */
@@ -219,4 +220,6 @@ void qt_components_reset(void)
     qt_udata_reset();
     qt_dhlr_register();
     qt_mhlr_register();
+    qt_idh_register();
+    qt_stream_reset();
 }

@@ -48,6 +48,7 @@
 #include "qt_model.h"
 #include "qt_movie_internal.h"
 #include "qt_native.h"
+#include "qt_stream.h"
 #include "qt_vlc.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -1304,6 +1305,7 @@ void tb_MoviesTask(gaddr h, int32_t ms)
 {
     qt_callbacks_poll();
     qt_mhlr_task();
+    qt_stream_task();
     if (h) {
         movie *m = movie_of(h);
         if (m)
