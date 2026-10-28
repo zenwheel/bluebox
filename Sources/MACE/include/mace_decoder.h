@@ -13,4 +13,11 @@
  * or 6 (MACE 6) frames per byte per channel.  Returns the frames written. */
 size_t mace_decode(const uint8_t *buf, size_t size, int channels, bool mace3, int16_t *out);
 
+/* A channel's decoder state, and one code decoded through it (for an
+ * encoder to try codes with); layout as the decoder's own. */
+typedef struct {
+    int16_t index, factor, prev2, previous, level;
+} mace_state;
+int mace_step(mace_state *st, bool is_mace3, int tab_idx, uint8_t code, int16_t out[2]);
+
 #endif

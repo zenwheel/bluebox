@@ -15502,6 +15502,32 @@ static void ppcglue_SndPlayDoubleBuffer(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_Comp3to1(ppc_cpu *c)
+{
+    gaddr a_inp = (gaddr)c->gpr[3];
+    gaddr a_outp = (gaddr)c->gpr[4];
+    int32_t a_cnt = (int32_t)c->gpr[5];
+    gaddr a_instatep = (gaddr)c->gpr[6];
+    gaddr a_outstatep = (gaddr)c->gpr[7];
+    int32_t a_numchannels = (int32_t)c->gpr[8];
+    int32_t a_whichchannel = (int32_t)c->gpr[9];
+    tb_Comp3to1(a_inp, a_outp, a_cnt, a_instatep, a_outstatep, a_numchannels, a_whichchannel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_Comp6to1(ppc_cpu *c)
+{
+    gaddr a_inp = (gaddr)c->gpr[3];
+    gaddr a_outp = (gaddr)c->gpr[4];
+    int32_t a_cnt = (int32_t)c->gpr[5];
+    gaddr a_instatep = (gaddr)c->gpr[6];
+    gaddr a_outstatep = (gaddr)c->gpr[7];
+    int32_t a_numchannels = (int32_t)c->gpr[8];
+    int32_t a_whichchannel = (int32_t)c->gpr[9];
+    tb_Comp6to1(a_inp, a_outp, a_cnt, a_instatep, a_outstatep, a_numchannels, a_whichchannel);
+    c->pc = c->lr;
+}
+
 static void ppcglue_Exp1to3(ppc_cpu *c)
 {
     gaddr a_inp = (gaddr)c->gpr[3];
@@ -33866,38 +33892,6 @@ static void ppctrap_ShutDwnRemove(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_Comp3to1(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x40010u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xA800));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_Comp6to1(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xC0010u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xA800));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_UnsignedFixedMulDiv(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -42227,8 +42221,8 @@ const ppc_export ppc_exports[] = {
     {"CollectionTagExists", ppctrap_CollectionTagExists},
     {"Color2Index", ppcglue_Color2Index},
     {"ColorBit", ppcglue_ColorBit},
-    {"Comp3to1", ppctrap_Comp3to1},
-    {"Comp6to1", ppctrap_Comp6to1},
+    {"Comp3to1", ppcglue_Comp3to1},
+    {"Comp6to1", ppcglue_Comp6to1},
     {"CompAdd", ppcglue_CompAdd},
     {"CompCompare", ppcglue_CompCompare},
     {"CompDiv", ppcglue_CompDiv},

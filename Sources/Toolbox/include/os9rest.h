@@ -33,6 +33,9 @@ extern const ppc_export os9rest_locale_exports[];
 extern const unsigned os9rest_locale_export_count;
 void os9rest_locale_reset(void);
 void os9rest_icons_reset(void);
+void os9rest_sound_reset(void);
+bool os9rest_sound_data_known(const char *name);
+gaddr os9rest_sound_data(const char *name);
 void os9rest_fsm_reset(void);
 void drawsprocket_reset(void); /* drawsprocket.c */
 extern const ppc_export os9rest_priv_exports[];

@@ -210,6 +210,8 @@ int16_t tb_CollapseAllWindows(int8_t collapse);
 int16_t tb_CollapseWindow(gaddr window, int8_t collapse);
 int32_t tb_Color2Index(gaddr arg0);
 void tb_ColorBit(int16_t b);
+void tb_Comp3to1(gaddr inp, gaddr outp, int32_t cnt, gaddr instatep, gaddr outstatep, int32_t numchannels, int32_t whichchannel);
+void tb_Comp6to1(gaddr inp, gaddr outp, int32_t cnt, gaddr instatep, gaddr outstatep, int32_t numchannels, int32_t whichchannel);
 void tb_CompAdd(gaddr src, gaddr dst);
 int32_t tb_CompCompare(gaddr a, gaddr minusb);
 int32_t tb_CompDiv(gaddr numerator, int32_t denominator, gaddr remainder);

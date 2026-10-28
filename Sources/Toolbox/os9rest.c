@@ -19,6 +19,7 @@ static const os9rest_group groups[] = {
 /* Names that are other exports under a second name. */
 static const struct { const char *name, *target; } aliases[] = {
     { "CloneIconRef", "AcquireIconRef" }, { "DisposeIconRef", "ReleaseIconRef" },
+    { "__Comp3to1", "Comp3to1" }, { "__Comp6to1", "Comp6to1" }, { "__Exp1to3", "Exp1to3" }, { "__Exp1to6", "Exp1to6" },
 };
 
 void (*cfm_export_fn(const char *name))(ppc_cpu *);
@@ -44,13 +45,13 @@ bool os9rest_data_known(const char *name)
     for (unsigned i = 0; i < sizeof data_names / sizeof data_names[0]; i++)
         if (!strcmp(name, data_names[i]))
             return true;
-    return false;
+    return os9rest_sound_data_known(name);
 }
 
 gaddr os9rest_data_export(const char *name)
 {
     gaddr p = os9svc_keychain_data(name);
-    return p;
+    return p ? p : os9rest_sound_data(name);
 }
 
 void os9rest_reset(void)
@@ -59,6 +60,7 @@ void os9rest_reset(void)
     os9rest_hw_reset();
     os9rest_locale_reset();
     os9rest_icons_reset();
+    os9rest_sound_reset();
     os9rest_fsm_reset();
     os9rest_priv_reset();
     os9rest_cloth_reset();
