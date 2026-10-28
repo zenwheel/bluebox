@@ -118,6 +118,20 @@ void q3v_leave(q3view *v);
 gaddr q3_mesh_set(q3obj *mesh);
 void q3_mesh_set_set(q3obj *mesh, gaddr set);
 void q3_mesh_classes(void);
+/* A mesh made at once (the 3DMF reader): vertices with their sets, faces
+ * of face_nverts[i] vertex indices each (one contour), with their sets. */
+gaddr q3_mesh_build(uint32_t nverts, const float (*pts)[3], const gaddr *vsets, uint32_t nfaces,
+                    const uint32_t *face_nverts, const uint32_t *face_verts, const gaddr *fsets);
+/* A mesh gone through (the 3DMF writer): its vertices in order, its faces
+ * (contours as vertex indices, the outside first), the corners and the
+ * edges with attribute sets.  Callbacks may be NULL. */
+typedef struct {
+    void (*vertex)(void *ctx, uint32_t i, const float p[3], gaddr set);
+    void (*face)(void *ctx, uint32_t i, uint32_t ncontours, const uint32_t *nverts, const uint32_t *verts, gaddr set);
+    void (*corner)(void *ctx, uint32_t vertex, uint32_t face, gaddr set);
+    void (*edge)(void *ctx, uint32_t v1, uint32_t v2, gaddr set);
+} q3mesh_walker;
+void q3_mesh_walk(q3obj *mesh, const q3mesh_walker *w, void *ctx);
 
 /* 3DMF (q3_file.c): a metafile's objects, read from its bytes into a
  * new display group (0 if it isn't one); and objects written as one
