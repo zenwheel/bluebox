@@ -31,6 +31,8 @@ typedef struct {
     int16_t last[2];  /* the last input frame converted, at the output's channels */
     bool have_last;
     int32_t roll_off;  /* the rate converter's filter slope, dB (siRateConverterRollOffSlope) */
+    uint8_t *pending;  /* input a FillBuffer call fetched and had no room to convert */
+    uint32_t pending_len;
 } converter;
 
 enum { MAX_CONVERTERS = 16, CONVERTER_TAG = 0x53430000 };
@@ -38,6 +40,8 @@ static converter converters[MAX_CONVERTERS];
 
 void sound_converters_reset(void)
 {
+    for (int i = 0; i < MAX_CONVERTERS; i++)
+        free(converters[i].pending);
     memset(converters, 0, sizeof converters);
     os9svc_reset();
 }
@@ -61,16 +65,9 @@ static converter *conv_of(uint32_t sc)
 
 /* Bytes in one frame of the input (a packet, for the compressed formats)
  * and the samples it holds. */
-static uint32_t frame_bytes(const qt_sound_format *f)
-{
-    if (is(f->format, "ima4"))
-        return 34 * (uint32_t)f->channels;
-    if (is(f->format, "MAC3"))
-        return 2 * (uint32_t)f->channels;
-    if (is(f->format, "MAC6"))
-        return (uint32_t)f->channels;
-    return (uint32_t)(f->channels * f->bits / 8);
-}
+static uint32_t frame_samples(const qt_sound_format *f);
+
+static uint32_t frame_bytes(const qt_sound_format *f) { return (uint32_t)qt_adec_bytes(f, frame_samples(f)); }
 
 static uint32_t frame_samples(const qt_sound_format *f)
 {
@@ -87,13 +84,15 @@ static int16_t sc_open(gaddr in, gaddr out, gaddr scp)
     if (!in || !out || !scp)
         return paramErr;
     int in_bits = (int16_t)rd16(in + 10), out_bits = (int16_t)rd16(out + 10);
-    qt_sound_format f = { real_format(rd32(in + 4), in_bits), (int16_t)rd16(in + 8), in_bits, fixed_rate(rd32(in + 12)) };
+    qt_sound_format f = { .format = real_format(rd32(in + 4), in_bits), .channels = (int16_t)rd16(in + 8),
+                          .bits = in_bits, .rate = fixed_rate(rd32(in + 12)) };
     if (!uncompressed(f.format))
         f.bits = 16;
     uint32_t of = real_format(rd32(out + 4), out_bits);
     int och = (int16_t)rd16(out + 8);
     double orate = fixed_rate(rd32(out + 12));
-    if (!qt_adec_supported(&f) || !uncompressed(of) || (out_bits != 8 && out_bits != 16) || och < 1 || och > 2)
+    /* the host's formats come in packets, not the frames converters take */
+    if (!qt_adec_supported(&f) || qt_adec_host(&f) || !uncompressed(of) || (out_bits != 8 && out_bits != 16) || och < 1 || och > 2)
         return badFormat;
     for (int i = 0; i < MAX_CONVERTERS; i++)
         if (!converters[i].used) {
@@ -243,8 +242,10 @@ static void s_SoundConverterOpen(ppc_cpu *c) { RETURN(sc_open(R(0), R(1), R(2)))
 static void s_SoundConverterClose(ppc_cpu *c)
 {
     converter *k = conv_of(R(0));
-    if (k)
+    if (k) {
+        free(k->pending);
         k->used = false;
+    }
     RETURN(k ? noErr : paramErr);
 }
 
@@ -267,8 +268,11 @@ static void s_SoundConverterGetBufferSizes(ppc_cpu *c)
 static void s_SoundConverterBeginConversion(ppc_cpu *c)
 {
     converter *k = conv_of(R(0));
-    if (k)
+    if (k) {
         k->pos = 0, k->have_last = false;
+        free(k->pending);
+        k->pending = NULL, k->pending_len = 0;
+    }
     RETURN(k ? noErr : paramErr);
 }
 
@@ -304,6 +308,78 @@ static void s_SoundConverterEndConversion(ppc_cpu *c)
     if (k)
         k->have_last = false;
     RETURN(k ? noErr : paramErr);
+}
+
+/* SoundConverterFillBuffer(sc, fillBufferDataUPP, refCon, outputBuffer,
+ * outputBufferByteSize, *bytesWritten, *framesWritten, *outputFlags): the
+ * converter asks the program's routine for input (a SoundComponentData,
+ * pascal Boolean (SoundComponentDataPtr *data, void *refCon)) until the
+ * output buffer is full or the routine has no more.  What it fetched and
+ * had no room for waits for the next call. */
+enum { kSoundConverterDidntFillBuffer = 1 << 0, kSoundConverterHasLeftOverData = 1 << 1 };
+enum { uppFillBufferDataProcInfo = 0x000003D0 };
+
+int16_t tb_SoundConverterFillBuffer(int32_t sc, gaddr upp, gaddr refcon, gaddr outbuf, uint32_t outsize, gaddr bytes,
+                                    gaddr frames, gaddr flags)
+{
+    converter *k = conv_of((uint32_t)sc);
+    out32(bytes, 0);
+    out32(frames, 0);
+    out32(flags, 0);
+    if (!k || !upp || !outbuf)
+        return paramErr;
+    uint32_t fb_in = frame_bytes(&k->in), fb_out = out_frame_bytes(k);
+    uint32_t room = outsize / fb_out, done = 0;
+    gaddr slot = tb_NewPtr(4, true, true);
+    if (!slot)
+        return memFullErr;
+    while (done < room) {
+        if (!k->pending_len) {
+            wr32(slot, 0);
+            uint32_t args[2] = { slot, refcon };
+            uint8_t ok = (uint8_t)aem_call_proc(upp, uppFillBufferDataProcInfo, args, 2);
+            gaddr scd = rd32(slot);
+            if (!ok || !scd) {
+                break;
+            }
+            uint32_t count = rd32(scd + 16);
+            if (!count) {
+                break;
+            }
+            uint32_t len = count * fb_in;
+            free(k->pending);
+            k->pending = malloc(len);
+            if (!k->pending) {
+                tb_DisposePtr(slot);
+                return memFullErr;
+            }
+            gget(k->pending, rd32(scd + 20), len);
+            k->pending_len = len;
+        }
+        /* As many whole input frames as the room left holds. */
+        uint32_t frames_in = k->pending_len / fb_in;
+        while (frames_in > 1 && out_frames_for(k, frames_in) > room - done)
+            frames_in--;
+        if (!frames_in || out_frames_for(k, frames_in) > room - done)
+            break;
+        uint8_t *out = malloc((size_t)out_frames_for(k, frames_in) * fb_out + 4);
+        uint32_t n = convert(k, k->pending, frames_in * fb_in, out);
+        gput(outbuf + done * fb_out, out, n * fb_out);
+        free(out);
+        done += n;
+        k->pending_len -= frames_in * fb_in;
+        memmove(k->pending, k->pending + frames_in * fb_in, k->pending_len);
+    }
+    tb_DisposePtr(slot);
+    out32(bytes, done * fb_out);
+    out32(frames, done);
+    out32(flags, (done < room ? kSoundConverterDidntFillBuffer : 0) | (k->pending_len ? kSoundConverterHasLeftOverData : 0));
+    return noErr;
+}
+
+static void s_SoundConverterFillBuffer(ppc_cpu *c)
+{
+    RETURN(tb_SoundConverterFillBuffer((int32_t)R(0), R(1), R(2), R(3), R(4), R(5), R(6), R(7)));
 }
 
 /* ParseSndHeader(sndHandle, *sndInfo, *numFrames, *dataOffset): the first
@@ -369,6 +445,7 @@ const ppc_export snd_exports[] = {
     { "SoundConverterClose", s_SoundConverterClose },
     { "SoundConverterConvertBuffer", s_SoundConverterConvertBuffer },
     { "SoundConverterEndConversion", s_SoundConverterEndConversion },
+    { "SoundConverterFillBuffer", s_SoundConverterFillBuffer },
     { "SoundConverterGetBufferSizes", s_SoundConverterGetBufferSizes },
     { "SoundConverterOpen", s_SoundConverterOpen },
 };

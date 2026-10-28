@@ -399,6 +399,30 @@ static void purge(gaddr z)
     }
 }
 
+/* The zone's grow-zone function, FUNCTION (cbNeeded: Size): LONGINT,
+ * called when compacting and purging leave too little room, for as long as
+ * it says it freed something (System 7.1's Finder unloads code segments
+ * from its code zone so).  Not again while one runs. */
+static bool call_gz_proc(gaddr z, uint32_t psize)
+{
+    static bool in_gz;
+    gaddr proc = Zone_gzProc(z);
+    if (!proc || in_gz || !g_cpu)
+        return false;
+    in_gz = true;
+    gaddr saved = rd32(LM_TheZone);
+    wr32(LM_TheZone, z);
+    wr32(LM_GZRootHnd, 0);
+    wr32(LM_GZMoveHnd, 0);
+    cpu_push32(g_cpu, 0);
+    cpu_push32(g_cpu, psize);
+    guest_call(proc);
+    uint32_t freed = cpu_pop32(g_cpu);
+    wr32(LM_TheZone, saved);
+    in_gz = false;
+    return freed != 0;
+}
+
 /* Find (making room if needed) a free block of at least psize bytes. */
 static gaddr make_room(gaddr z, uint32_t psize)
 {
@@ -415,6 +439,12 @@ static gaddr make_room(gaddr z, uint32_t psize)
     if (grow_zone(z, psize)) {
         compact(z);
         return find_free(z, psize);
+    }
+    for (int tries = 0; tries < 64 && call_gz_proc(z, psize); tries++) {
+        purge(z);
+        compact(z);
+        if ((b = find_free(z, psize)))
+            return b;
     }
     return 0;
 }
@@ -1300,3 +1330,4 @@ void raw_InitZone(cpu68k *c, uint16_t tw)
     set_mem_err(noErr);
     c->d[0] = 0;
 }
+

@@ -90,6 +90,17 @@ static inline void watch_store(gaddr a)
         g_watch_fn(a);
 }
 
+/* Memory-mapped devices (the VIA, SCC, IWM ... of a classic Mac, hw68k.c):
+ * one byte per megabyte of the address space says whether a device answers
+ * in it.  The 68k interpreter's data accesses there go to g_hw_read and
+ * g_hw_write (which fall back to plain memory outside the devices' own
+ * windows); a JIT's don't, so a machine with devices runs interpreted. */
+extern uint8_t g_hw_map[4096];
+extern uint32_t (*g_hw_read)(gaddr a, int size);
+extern void (*g_hw_write)(gaddr a, int size, uint32_t v);
+extern bool g_hw_jit_off;
+static inline bool hw_mapped(gaddr a) { return __builtin_expect(g_hw_map[a >> 20] != 0, 0); }
+
 /* Guest memory a JIT has translated code from, in 256-byte regions: one
  * byte each, a bit per translator (CODE_PPC, CODE_68K).  NULL until a JIT
  * starts.  Every store into guest memory (the CPUs', the Toolbox's, the

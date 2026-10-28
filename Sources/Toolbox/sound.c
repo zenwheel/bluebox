@@ -1360,10 +1360,19 @@ static void ft_render_tick(void)
     emit(&sd_chan, pcm, frames, 1, MAC_RATE);
 }
 
+/* The driver's low memory: SoundPtr the record being played, SoundActive
+ * nonzero while it is (the glue's SoundDone looks at it). */
+static void sd_lowmem(gaddr rec)
+{
+    wr32(LM_SoundPtr, rec);
+    wr8(LM_SoundActive, rec ? 0xFF : 0);
+}
+
 static void sd_done(int16_t result)
 {
     gaddr pb = sd_pb;
     sd_pb = sd_ft = 0;
+    sd_lowmem(0);
     if (!pb)
         return;
     wr16(pb + IOParam_ioResult_off, (uint16_t)result);
@@ -1377,6 +1386,7 @@ static void sd_kill_now(void)
     gaddr pb = sd_pb;
     stop_host(&sd_chan);
     sd_pb = sd_ft = 0;
+    sd_lowmem(0);
     if (!pb)
         return;
     wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
@@ -1424,8 +1434,10 @@ static int16_t sd_write(gaddr pb, bool async)
         sd_stop(); /* a new sound replaces the one playing */
     if (!sd_chan.id)
         sd_chan.id = next_id++;
-    sd_chan.amp = 255;
+    /* The speaker's volume is SdVolume's three bits (SetSoundVol). */
+    sd_chan.amp = (uint8_t)(255 * (rd8(LM_SdVolume) & 7) / 7);
     sd_chan.volume = 0x01000100;
+    sd_lowmem(rec);
     wr32(pb + IOParam_ioActCount_off, len);
     if (mode == ffMode && len > 6) {
         double rate = MAC_RATE * fixed_rate(rd32(rec + 2));
@@ -1491,6 +1503,24 @@ static int16_t sd_control(gaddr pb, bool async)
     if ((int16_t)rd16(pb + CntrlParam_csCode_off) == 1) /* killCode */
         sd_kill_now();
     return noErr;
+}
+
+/* The compact Macs' sound buffer: 370 samples (the high bytes of 370
+ * words) a retrace, played at the Mac's 22.25 kHz; the volume is the VIA's
+ * three bits. */
+static channel hw_chan;
+void sound_hw_play(const uint8_t *samples, int n, int volume)
+{
+    int16_t pcm[1024];
+    if (n > 1024)
+        n = 1024;
+    if (!hw_chan.id)
+        hw_chan.id = next_id++;
+    hw_chan.amp = 255;
+    hw_chan.volume = 0x01000100;
+    for (int i = 0; i < n; i++)
+        pcm[i] = (int16_t)(((int)samples[i] - 128) * 192 * (volume + 1) / 8);
+    emit(&hw_chan, pcm, n, 1, MAC_RATE);
 }
 
 const native_driver sound_driver = { ".Sound", 3, NULL, NULL, sd_control, NULL, NULL, sd_write, sd_kill };

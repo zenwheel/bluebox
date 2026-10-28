@@ -3446,3 +3446,136 @@ uint32_t as_new_from_desc(uint32_t desc) { return new_id(as_from_desc(desc)); }
 int32_t as_error_number(void) { return as_last_error.number; }
 const char *as_error_message(void) { return as_last_error.message; }
 uint64_t as_instructions(void) { return instructions; }
+
+/* ---------------------------------------------------------------------- */
+/* Contexts (ASDebugging.h): a script object's properties and handlers,
+ * by name, as OSAGetProperty and its kin reach them. */
+
+enum { ctxInvalidID = -1751, ctxNoSuchObject = -1728 };
+
+static as_obj *context_of(uint32_t id)
+{
+    as_obj *s = of_id(id);
+    return s && s->kind == V_SCRIPT ? s : NULL;
+}
+
+/* The names of the properties (handlers: false) or the handlers, in a
+ * list of text; the list's value ID. */
+int32_t as_context_names(uint32_t ctx, bool handlers, uint32_t *list_id)
+{
+    as_obj *s = context_of(ctx);
+    *list_id = 0;
+    if (!s)
+        return ctxInvalidID;
+    as_obj *l = as_list(s->a->n);
+    for (uint32_t i = 0; i < s->a->n; i++) {
+        as_obj *n = s->a->items[i];
+        bool is_handler = s->b->items[i]->kind == V_HANDLER;
+        if (n->kind == V_IDENT && is_handler == handlers)
+            as_list_push(l, as_text(n->bytes, n->n));
+    }
+    if (!handlers) /* the script's globals are properties of it too */
+        for (uint32_t i = 0; i < s->c->n; i++)
+            if (s->c->keys[i]->kind == V_IDENT)
+                as_list_push(l, as_text(s->c->keys[i]->bytes, s->c->keys[i]->n));
+    *list_id = new_id(l);
+    return 0;
+}
+
+/* A property or handler by name: its value's ID. */
+int32_t as_context_get(uint32_t ctx, const uint8_t *name, size_t n, bool handler, uint32_t *value_id)
+{
+    as_obj *s = context_of(ctx);
+    *value_id = 0;
+    if (!s)
+        return ctxInvalidID;
+    as_obj *key = as_new(V_IDENT);
+    key->n = (uint32_t)n;
+    key->bytes = malloc(n ? n : 1);
+    memcpy(key->bytes, name, n);
+    as_obj *v = script_property(s, key);
+    if (!v && !handler)
+        v = as_record_get(s->c, key);
+    free(key->bytes);
+    key->bytes = NULL;
+    if (!v || (v->kind == V_HANDLER) != handler)
+        return ctxNoSuchObject;
+    *value_id = new_id(v);
+    return 0;
+}
+
+/* Set one (a handler's value is a handler value); a name the context
+ * lacks is defined unless dont_define. */
+int32_t as_context_set(uint32_t ctx, const uint8_t *name, size_t n, bool handler, uint32_t value_id, bool dont_define)
+{
+    as_obj *s = context_of(ctx), *v = of_id(value_id);
+    if (!s || !v)
+        return ctxInvalidID;
+    if (handler != (v->kind == V_HANDLER))
+        return -1700; /* errAECoercionFail: not a handler / a handler where a value goes */
+    as_obj *key = as_ident("");
+    free(key->bytes);
+    key->n = (uint32_t)n;
+    key->bytes = malloc(n ? n : 1);
+    memcpy(key->bytes, name, n);
+    for (uint32_t i = 0; i < s->a->n; i++)
+        if (s->a->items[i]->kind == V_IDENT && key_eq(s->a->items[i], key)) {
+            s->b->items[i] = v;
+            return 0;
+        }
+    if (!handler) {
+        int at = record_find(s->c, key);
+        if (at >= 0) {
+            s->c->items[at] = v;
+            return 0;
+        }
+    }
+    if (dont_define)
+        return ctxNoSuchObject;
+    as_list_push(s->a, key);
+    as_list_push(s->b, v);
+    return 0;
+}
+
+size_t as_list_length(uint32_t id)
+{
+    as_obj *l = of_id(id);
+    return l && l->kind == V_LIST ? l->n : 0;
+}
+
+size_t as_list_text(uint32_t id, size_t i, const uint8_t **text)
+{
+    as_obj *l = of_id(id);
+    *text = NULL;
+    if (!l || l->kind != V_LIST || i >= l->n || l->items[i]->kind != V_TEXT)
+        return 0;
+    *text = l->items[i]->bytes;
+    return l->items[i]->n;
+}
+
+/* OSACopyScript: a script object of its own, with its properties' values copied. */
+uint32_t as_copy_script(uint32_t id)
+{
+    as_obj *s = of_id(id);
+    if (!s || s->kind != V_SCRIPT)
+        return 0;
+    as_obj *n = as_new(V_SCRIPT);
+    n->a = as_new(V_VECTOR);
+    n->a->btype = s->a->btype;
+    for (uint32_t i = 0; i < s->a->n; i++)
+        as_list_push(n->a, s->a->items[i]);
+    n->b = as_list(s->b->n);
+    for (uint32_t i = 0; i < s->b->n; i++)
+        as_list_push(n->b, as_clone(s->b->items[i]));
+    n->c = as_clone(s->c);
+    n->d = s->d;
+    uint32_t out = new_id(n);
+    size_t len;
+    const uint8_t *d = as_script_data(id, &len);
+    if (d) {
+        ids[out - 1].data = malloc(len);
+        memcpy(ids[out - 1].data, d, len);
+        ids[out - 1].len = len;
+    }
+    return out;
+}

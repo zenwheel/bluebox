@@ -16,7 +16,9 @@ extension BlueBox {
         /// Call an export; r3 after.
         @discardableResult
         func call(_ name: String, _ args: [UInt32] = [], fp: [Double] = []) -> UInt32 {
-            let stack = tb_NewPtr(256, true, true)
+            // r1 well inside its block: a callee pushes its frames below it, the
+            // parameter area is above
+            let block = tb_NewPtr(4096, true, true), stack = block + 3072
             withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: stack, toByteOffset: 4, as: UInt32.self) }
             for (i, a) in args.enumerated() {
                 if i < 8 {
@@ -31,7 +33,7 @@ extension BlueBox {
                 return 0xFFFF_FFFF
             }
             fn(&g_ppc)
-            tb_DisposePtr(stack)
+            tb_DisposePtr(block)
             return g_ppc.gpr.3
         }
 

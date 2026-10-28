@@ -32,7 +32,11 @@ let package = Package(
         .target(name: "MACE"),
         .target(name: "Toolbox", dependencies: ["CCore", "CPU68K", "CPUPPC", "ForkStore", "MACE"], cSettings: warnings,
                 linkerSettings: [.linkedLibrary("resolv"), // the resolver: Open Transport's DNS queries
+                                 // Unicode character properties (os9left_text.c): the host's ICU
+                                 .linkedLibrary("icucore", .when(platforms: [.macOS])),
+                                 .linkedLibrary("icuuc", .when(platforms: [.linux])),
                                 .linkedLibrary("z"), // zlib: QuickTime 3's compressed movie headers
+                                .linkedLibrary("sqlite3"), // the catalog (catalog.c)
                                  // EtherTalk: an interface's own Ethernet address
                                  .linkedFramework("IOKit", .when(platforms: [.macOS])),
                                  .linkedFramework("CoreFoundation", .when(platforms: [.macOS])),
@@ -40,7 +44,14 @@ let package = Package(
                                  .linkedFramework("OpenGL", .when(platforms: [.macOS])),
                                  // QuickDraw 3D and RAVE, drawn with Metal (r3d_metal.m)
                                  .linkedFramework("Metal", .when(platforms: [.macOS])),
-                                 .linkedFramework("Foundation", .when(platforms: [.macOS]))]),
+                                 .linkedFramework("Foundation", .when(platforms: [.macOS])),
+                                 // QuickTime's codecs Blue Box has none of its own for (hostvideo_apple.m)
+                                 .linkedFramework("VideoToolbox", .when(platforms: [.macOS])),
+                                 .linkedFramework("CoreMedia", .when(platforms: [.macOS])),
+                                 .linkedFramework("CoreVideo", .when(platforms: [.macOS])),
+                                 .linkedFramework("AudioToolbox", .when(platforms: [.macOS])),
+                                 .linkedFramework("ImageIO", .when(platforms: [.macOS])),
+                                 .linkedFramework("CoreGraphics", .when(platforms: [.macOS]))]),
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
         .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
         // Command-line tool: run, import, install, apps, rsrc, inspect.

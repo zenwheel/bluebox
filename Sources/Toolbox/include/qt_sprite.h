@@ -25,6 +25,8 @@ bool qt_sprite_all_overrides(const qt_sprite *s);
 /* The scene over the background colour into rgba (w * h * 4, opaque);
  * false if the track is invisible. */
 bool qt_sprite_draw(const qt_sprite *s, uint8_t *rgba);
+/* The sprites alone, over what rgba holds. */
+void qt_sprite_draw_over(const qt_sprite *s, uint8_t *rgba);
 
 /* At run time (the sprite media handler): sprites by index (1-based) and
  * ID; their properties as atoms hold them (big-endian: matrix 36 bytes,
@@ -46,5 +48,26 @@ bool qt_sprite_track_visible(const qt_sprite *s);
 void qt_sprite_set_track_visible(qt_sprite *s, bool visible);
 void qt_sprite_background(const qt_sprite *s, uint8_t rgb[3]);
 void qt_sprite_set_background(qt_sprite *s, const uint8_t rgb[3]);
+
+/* The Sprite Toolbox's worlds: an empty scene of w x h; an image (an
+ * ImageDescription then its data) given or replaced; a sprite's bounds
+ * (top, left, bottom, right). */
+qt_sprite *qt_sprite_world(int w, int h);
+bool qt_sprite_set_image(qt_sprite *s, uint32_t id, const uint8_t *desc_and_data, uint32_t len);
+void qt_sprite_forget_image(qt_sprite *s, uint32_t id);
+bool qt_sprite_bounds(const qt_sprite *s, uint32_t id, int r[4]);
+
+/* Wired sprites (qt_wired.c): the key frame sample's atoms (its event
+ * handlers); samples shown since, with frame-loaded handlers, one at a
+ * time (the caller frees it); the track's variables; its idle events'
+ * frequency in ticks (-1 none) and when they last ran; the sprite the
+ * mouse was last over; the track's size. */
+const uint8_t *qt_sprite_key_data(const qt_sprite *s, uint32_t *len);
+bool qt_sprite_take_frame(qt_sprite *s, uint8_t **data, uint32_t *len);
+double qt_sprite_var(const qt_sprite *s, uint32_t id);
+void qt_sprite_set_var(qt_sprite *s, uint32_t id, double v);
+int32_t *qt_sprite_idle(qt_sprite *s, uint32_t **mark);
+uint32_t *qt_sprite_hover(qt_sprite *s);
+bool qt_sprite_size(const qt_sprite *s, int *w, int *h);
 
 #endif

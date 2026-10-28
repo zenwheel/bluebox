@@ -30,6 +30,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "catalog.h"
 #include "filemgr_internal.h"
 #include "forks.h"
 #include "tb_internal.h"
@@ -399,6 +400,12 @@ static void host_component(const char *dir, const uint8_t *mac, int n, char *out
     closedir(d);
 }
 
+/* Directories are recorded relative to the volume's folder ("" for its
+ * root), or as \1 and the absolute path for the host's ("\1" alone for
+ * "/", the Host folder).  Those on the volume keep their IDs from run to
+ * run in the catalog. */
+#define HOST_MARK '\1'
+
 static uint32_t path_hash(const char *s)
 {
     uint32_t h = 2166136261u; /* FNV-1a */
@@ -428,6 +435,41 @@ static void hash_rebuild(void)
             hash_insert(i);
 }
 
+/* Room in the table for an ID. */
+static bool dirs_room(int32_t id)
+{
+    while (id >= dirs_cap) {
+        int cap = dirs_cap ? dirs_cap * 2 : 1024;
+        char **nd = realloc(dirs, (size_t)cap * sizeof *nd);
+        if (!nd)
+            return false;
+        memset(nd + dirs_cap, 0, (size_t)(cap - dirs_cap) * sizeof *nd);
+        dirs = nd;
+        dirs_cap = cap;
+    }
+    return true;
+}
+
+/* A path at an ID (one the catalog gave it, or the next). */
+static int32_t place_dir(int32_t id, const char *rel)
+{
+    if (id >= MAX_DIRS || !dirs_room(id))
+        return 0;
+    free(dirs[id]);
+    dirs[id] = strdup(rel);
+    if (id >= ndirs)
+        ndirs = id + 1;
+    if (!dir_hash || (uint32_t)ndirs * 2 > dir_hash_size)
+        hash_rebuild();
+    else
+        hash_insert(id);
+    return id;
+}
+
+/* IDs the catalog keeps stop being given out short of the limit, so a
+ * run always has room for the paths it meets (the host's are never kept). */
+#define KEPT_IDS_MAX (MAX_DIRS - 4096)
+
 static int32_t dir_id_for(const char *rel)
 {
     if (dir_hash)
@@ -436,28 +478,25 @@ static int32_t dir_id_for(const char *rel)
                 return dir_hash[h];
     if (ndirs >= MAX_DIRS)
         return 0;
-    if (ndirs >= dirs_cap) {
-        int cap = dirs_cap ? dirs_cap * 2 : 1024;
-        char **nd = realloc(dirs, (size_t)cap * sizeof *nd);
-        if (!nd)
-            return 0;
-        memset(nd + dirs_cap, 0, (size_t)(cap - dirs_cap) * sizeof *nd);
-        dirs = nd;
-        dirs_cap = cap;
+    /* On the volume, the ID is kept in the catalog (another run may have
+     * given the path one, or taken the next ID, meanwhile). */
+    if (rel[0] && rel[0] != HOST_MARK && ndirs < KEPT_IDS_MAX && !catalog_add_node(rel, ndirs)) {
+        int32_t id = catalog_node_id(rel);
+        if (id > ROOT_ID && id < MAX_DIRS && (id >= ndirs || !dirs[id]))
+            return place_dir(id, rel);
+        int32_t top = catalog_node_id(NULL);
+        if (top >= ndirs && top + 1 < KEPT_IDS_MAX && catalog_add_node(rel, top + 1))
+            return place_dir(top + 1, rel);
     }
-    dirs[ndirs] = strdup(rel);
-    ndirs++;
-    if (!dir_hash || (uint32_t)ndirs * 2 > dir_hash_size)
-        hash_rebuild();
-    else
-        hash_insert(ndirs - 1);
-    return ndirs - 1;
+    return place_dir(ndirs, rel);
 }
 
-/* Directories are recorded relative to the volume's folder ("" for its
- * root), or as \1 and the absolute path for the host's ("\1" alone for
- * "/", the Host folder). */
-#define HOST_MARK '\1'
+static void load_kept_id(const char *rel, int32_t id, void *ctx)
+{
+    if (id > ROOT_ID && id < MAX_DIRS && rel[0] && rel[0] != HOST_MARK)
+        place_dir(id, rel);
+}
+
 
 static bool host_of_dir(int32_t id, char *out, size_t outsize)
 {
@@ -872,7 +911,7 @@ static void guest_tables_init(void)
     wr16(v + VCB_vcbFreeBks_off, 0xC000);
     gput(v + VCB_vcbVN_off, vol_name, (uint32_t)vol_name[0] + 1);
     wr16(v + VCB_vcbDrvNum_off, 1);
-    wr16(v + VCB_vcbDRefNum_off, (uint16_t)-5);
+    wr16(v + VCB_vcbDRefNum_off, (uint16_t)(-1 - DISK_DRIVER_UNIT));
     wr16(v + VCB_vcbVRefNum_off, (uint16_t)VREF);
     wr16(LM_VCBQHdr, 0);
     wr32(LM_VCBQHdr + 2, v);
@@ -916,7 +955,7 @@ static void guest_tables_init(void)
         gaddr e = dq + 4;
         wr16(e + DrvQEl_qType_off, 1); /* dQDrvSz2 is valid */
         wr16(e + DrvQEl_dQDrive_off, (uint16_t)(2 + i));
-        wr16(e + DrvQEl_dQRefNum_off, (uint16_t)(i < 0 ? -5 : -1 - CD_UNIT));
+        wr16(e + DrvQEl_dQRefNum_off, (uint16_t)(i < 0 ? -1 - DISK_DRIVER_UNIT : -1 - CD_UNIT));
         wr16(e + DrvQEl_dQDrvSz_off, 0); /* 2 GB in 512-byte blocks */
         wr16(e + DrvQEl_dQDrvSz2_off, 0x40);
         if (rd32(LM_DrvQHdr + 6))
@@ -925,6 +964,7 @@ static void guest_tables_init(void)
             wr32(LM_DrvQHdr + 2, e);
         wr32(LM_DrvQHdr + 6, e);
     }
+    sony_install_drive(zone, (int16_t)(2 + nmounts)); /* a floppy image given to the run, if any */
 }
 
 void fm_fcb_record(int16_t rn, const char *path, bool rsrc, bool write, uint32_t eof, uint32_t pos)
@@ -993,7 +1033,15 @@ void fm_init(const char *app_dir)
     ndirs = ROOT_ID;
     free(dir_hash);
     dir_hash = NULL;
-    dir_id_for(""); /* the root, 2 */
+    /* The catalog beside the Macintosh HD folder, with the IDs it keeps. */
+    char cat[PATH_MAX + 32];
+    snprintf(cat, sizeof cat, "%s", disk);
+    char *cut = strrchr(cat, '/');
+    if (cut)
+        snprintf(cut, sizeof cat - (size_t)(cut - cat), "/Catalog.sqlite");
+    catalog_set_path(cat);
+    place_dir(ROOT_ID, ""); /* the root, 2 */
+    catalog_nodes(load_kept_id, NULL);
     memset(wds, 0, sizeof wds);
     for (int i = 0; i < MAX_FCBS; i++)
         free(fcbs[i].buf);
@@ -1592,6 +1640,7 @@ static void forget_nodes(const char *path)
             dirs[i] = NULL;
         }
     hash_rebuild();
+    catalog_nodes_moved(r, NULL);
 }
 
 /* A renamed or moved object keeps its directory ID or file number, as
@@ -1616,6 +1665,7 @@ static void retarget(const char *from, const char *to)
         dirs[i] = strdup(nr);
     }
     hash_rebuild();
+    catalog_nodes_moved(f, t);
     size_t pl = strlen(from);
     for (int i = 0; i < MAX_FCBS; i++)
         if (fcbs[i].used && under(fcbs[i].path, from)) {
@@ -1691,6 +1741,7 @@ static int16_t delete_path(const char *path)
             return fBsyErr;
         as_deleted(path);
         forget_nodes(path);
+        catalog_moved(path, NULL);
         return noErr;
     }
     char *side = appledouble_sidecar_path(path);
@@ -1739,6 +1790,7 @@ static int16_t rename_host(const char *from, const char *to)
     free(s2);
     as_moved(from, to);
     retarget(from, to);
+    catalog_moved(from, to);
     return noErr;
 }
 
@@ -1855,6 +1907,8 @@ static void fill_file_info(gaddr pb, const char *path, bool cat)
     fm_info in;
     fm_info_of(path, &in);
     wr8(pb + FileParam_ioFlAttrib_off, is_open(path) ? 0x80 : 0);
+    if (cat)
+        wr8(pb + HFileInfo_ioACUser_off, 0);
     gput(pb + FileParam_ioFlFndrInfo_off, in.finder_info, 16);
     if (cat)
         gput(pb + HFileInfo_ioFlXFndrInfo_off, in.finder_info + 16, 16);
@@ -1910,10 +1964,10 @@ static int16_t set_file_info(const char *path, const uint8_t *finfo, const uint8
 {
     if (!exists(path))
         return fnfErrF;
-    if (is_dir(path))
-        return noErr;
     if (!writable(path))
         return wPrErr;
+    if (is_dir(path)) /* a folder's Finder information is the catalog's */
+        return finfo || fxinfo ? (catalog_set_dirinfo(path, finfo, fxinfo) ? noErr : ioErrF) : noErr;
     mac_file mf;
     char e[256];
     if (!appledouble_read(path, &mf, e, sizeof e))
@@ -2099,7 +2153,7 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     if (hfs) {
         wr16(pb + HVolumeParam_ioVSigWord_off, 0x4244);
         wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)(m ? 2 + (m - mounts) : 1));
-        wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)(m ? -1 - CD_UNIT : -5));
+        wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)(m ? -1 - CD_UNIT : -1 - DISK_DRIVER_UNIT));
         wr16(pb + HVolumeParam_ioVFSID_off, 0);
         wr32(pb + HVolumeParam_ioVBkUp_off, 0);
         wr16(pb + HVolumeParam_ioVSeqNum_off, 0);
@@ -2275,11 +2329,31 @@ static int16_t get_cat_info(gaddr pb, char *path)
 }
 
 /* A catalog record (CInfoPBRec) for a host path. */
+/* A folder's Finder information, from the catalog.  The Trash and the
+ * Desktop Folder at a volume's root are invisible, as the Finder makes
+ * them, until the Finder says otherwise. */
+static void dir_finder_info(const char *path, uint8_t di[16], uint8_t dx[16])
+{
+    memset(di, 0, 16);
+    memset(dx, 0, 16);
+    if (catalog_get_dirinfo(path, di, dx))
+        return;
+    char parent[PATH_MAX];
+    parent_of(path, parent, sizeof parent);
+    const char *base = strrchr(path, '/');
+    if (base && (!strcmp(base + 1, "Trash") || !strcmp(base + 1, "Desktop Folder")) && fm_is_volume_root(parent))
+        di[8] = 0x40; /* fInvisible */
+}
+
 static void cat_info_of_path(gaddr pb, const char *path)
 {
     if (is_dir(path)) {
         int32_t id = dir_id_for(rel_of(path));
         wr8(pb + DirInfo_ioFlAttrib_off, 0x10);
+        /* The user's access (the Finder checks it before putting things
+         * in a folder): all of it, or no changes where Blue Box may not
+         * write. */
+        wr8(pb + DirInfo_ioACUser_off, writable(path) ? 0 : 0x04);
         gmemset(pb + DirInfo_ioDrUsrWds_off, 0, 16);
         wr32(pb + DirInfo_ioDrDirID_off, (uint32_t)out_id(id));
         wr16(pb + DirInfo_ioDrNmFls_off, (uint16_t)count_entries(path));
@@ -2288,7 +2362,10 @@ static void cat_info_of_path(gaddr pb, const char *path)
         wr32(pb + DirInfo_ioDrCrDat_off, dc);
         wr32(pb + DirInfo_ioDrMdDat_off, dm);
         wr32(pb + DirInfo_ioDrBkDat_off, 0);
-        gmemset(pb + DirInfo_ioDrFndrInfo_off, 0, 16);
+        uint8_t di[16], dx[16];
+        dir_finder_info(path, di, dx);
+        gput(pb + DirInfo_ioDrUsrWds_off, di, 16);
+        gput(pb + DirInfo_ioDrFndrInfo_off, dx, 16);
         wr32(pb + DirInfo_ioDrParID_off, is_root_id(id) ? 1 : (uint32_t)out_id(parent_id_of(path)));
     } else {
         fill_file_info(pb, path, true);
@@ -2355,6 +2432,98 @@ int16_t tb_PBCatMove(gaddr pb, bool async)
 }
 
 /* Move a file or folder into the folder the destination FSSpec names. */
+/* PBHCopyFile and PBHMoveRename (CopyParam: ioDstVRefNum at 24, ioNewName
+ * 28, ioCopyName 32, ioNewDirID 36, the source's ioDirID 48): a file
+ * copied, or moved and renamed, into a folder named by the destination
+ * volume, directory and name; the copy's name is ioCopyName, or the
+ * source's when that is nil.  The Finder uses them on volumes that say
+ * they have them (PBHGetVolParms). */
+static int16_t copy_param_paths(gaddr pb, char *from, char *dir, char *dest, size_t size)
+{
+    int16_t err = resolve((int16_t)rd16(pb + IOParam_ioVRefNum_off), (int32_t)rd32(pb + HFileParam_ioDirID_off),
+                          rd32(pb + IOParam_ioNamePtr_off), true, from, size);
+    if (err)
+        return err;
+    if (!exists(from))
+        return fnfErrF;
+    err = resolve((int16_t)rd16(pb + 24), (int32_t)rd32(pb + 36), rd32(pb + 28), true, dir, size);
+    if (err)
+        return err;
+    if (!is_dir(dir))
+        return dirNFErr;
+    gaddr copy_name = rd32(pb + 32);
+    if (copy_name && rd8(copy_name)) {
+        char host[256];
+        mac_to_host(gptr(copy_name + 1), rd8(copy_name), host, sizeof host);
+        snprintf(dest, size, "%s/%s", dir, host);
+    } else {
+        const char *base = strrchr(from, '/');
+        snprintf(dest, size, "%s%s", dir, base ? base : "/");
+    }
+    return noErr;
+}
+
+/* A file and its forks and Finder information, at a new path. */
+int16_t fm_copy_file(const char *from, const char *dest)
+{
+    if (is_dir(from))
+        return -1302; /* notAFileErr */
+    if (exists(dest))
+        return dupFNErr;
+    char parent[PATH_MAX];
+    parent_of(dest, parent, sizeof parent);
+    if (!writable(parent))
+        return wPrErr;
+    mac_file mf;
+    char msg[256];
+    if (!appledouble_read(from, &mf, msg, sizeof msg))
+        return ioErrF;
+    bool ok = appledouble_write(dest, &mf, msg, sizeof msg);
+    mac_file_free(&mf);
+    if (!ok)
+        return dskFulErr;
+    as_file_changed(dest);
+    return noErr;
+}
+
+int16_t tb_PBHCopyFile(gaddr pb, bool async)
+{
+    char from[PATH_MAX], dir[PATH_MAX], dest[PATH_MAX];
+    int16_t err = copy_param_paths(pb, from, dir, dest, sizeof from);
+    return err ? err : fm_copy_file(from, dest);
+}
+
+int16_t tb_PBHMoveRename(gaddr pb, bool async)
+{
+    char from[PATH_MAX], dir[PATH_MAX], dest[PATH_MAX];
+    int16_t err = copy_param_paths(pb, from, dir, dest, sizeof from);
+    if (err)
+        return err;
+    if (vref_of_path(from) != vref_of_path(dir))
+        return badMovErr;
+    if (under(dir, from))
+        return badMovErr;
+    if (exists(dest) && strcmp(from, dest))
+        return dupFNErr;
+    return rename_host(from, dest);
+}
+
+/* PBExchangeFiles (FIDParam: ioDestNamePtr at 28, ioDestDirID 36,
+ * ioSrcDirID 48): two files on a volume trade contents. */
+int16_t tb_PBExchangeFiles(gaddr pb, bool async)
+{
+    char a[PATH_MAX], b[PATH_MAX];
+    int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
+    int16_t err = resolve(vref, (int32_t)rd32(pb + 48), rd32(pb + IOParam_ioNamePtr_off), true, a, sizeof a);
+    if (!err)
+        err = resolve(vref, (int32_t)rd32(pb + 36), rd32(pb + 28), true, b, sizeof b);
+    if (err)
+        return err;
+    if (!exists(a) || !exists(b))
+        return fnfErrF;
+    return fm_exchange(a, b);
+}
+
 int16_t tb_FSpCatMove(gaddr src, gaddr dst)
 {
     if (rd16(src + FSSpec_vRefNum_off) != rd16(dst + FSSpec_vRefNum_off))
@@ -2806,8 +2975,6 @@ static const struct {
     { "prnt", "PrintMonitor Documents" },
     { "temp", "Temporary Items" },
     { "flnt", "Temporary Items" }, /* kChewableItemsFolderType */
-    { "trsh", "Trash" },
-    { "empt", "Trash" },
     { "asup", "Application Support" },
     { "appr", "Appearance" },
     { "cmnu", "Contextual Menu Items" },
@@ -2835,15 +3002,33 @@ bool fm_standard_folder(int i, uint32_t *type, const char **name)
     return true;
 }
 
-/* A folder type's host folder; the standard folders always exist, as on
- * a working System, so they are made when missing.  Others are those a
- * program described (folders.c). */
-int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
+/* A volume's own folders, at its root as System 7 has them: the Desktop
+ * Folder and the Trash (where to empty it, too), each volume's own. */
+static const char *volume_folder(uint32_t type)
+{
+    switch (type) {
+    case 0x6465736B: return "Desktop Folder"; /* 'desk' */
+    case 0x74727368: return "Trash";          /* 'trsh' */
+    case 0x656D7074: return "Trash";          /* 'empt' */
+    }
+    return NULL;
+}
+
+/* A folder type's host folder on a volume (vref 0, or one not mounted:
+ * the main volume, where the System Folder is); the standard folders
+ * always exist on a volume Blue Box can write, as on a working System, so
+ * they are made when missing.  Others are those a program described
+ * (folders.c). */
+int16_t fm_find_folder_on(int16_t vref, uint32_t type, bool create, char *out, size_t outsize)
 {
     char path[PATH_MAX];
     bool found = false;
-    if (type == 0x6465736B /* 'desk' */) {
-        snprintf(path, sizeof path, "%s/Desktop Folder", disk_path());
+    const char *own = volume_folder(type);
+    if (own) {
+        mount *m = mount_of_vref(vref);
+        snprintf(path, sizeof path, "%s/%s", m ? m->root : disk_path(), own);
+        if (m && !is_dir(path))
+            return fnfErrF; /* a mounted volume is read-only */
         found = true;
     }
     for (size_t i = 0; i < sizeof folders / sizeof folders[0] && !found; i++) {
@@ -2864,17 +3049,22 @@ int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
     return realpath(path, out) && strlen(out) < outsize ? noErr : fnfErrF;
 }
 
+int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize)
+{
+    return fm_find_folder_on(VREF, type, create, out, outsize);
+}
+
 int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, gaddr foundVRefNum,
                       gaddr foundDirID)
 {
     char full[PATH_MAX];
-    int16_t err = fm_find_folder((uint32_t)folderType, createFolder, full, sizeof full);
+    int16_t err = fm_find_folder_on(vRefNum, (uint32_t)folderType, createFolder, full, sizeof full);
     if (err)
         return err;
     if (foundVRefNum)
-        wr16(foundVRefNum, (uint16_t)VREF);
+        wr16(foundVRefNum, (uint16_t)vref_of_path(full));
     if (foundDirID)
-        wr32(foundDirID, (uint32_t)dir_id_for(rel_of(full)));
+        wr32(foundDirID, (uint32_t)out_id(dir_id_for(rel_of(full))));
     return noErr;
 }
 
@@ -2884,11 +3074,15 @@ int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, 
 int16_t tb_PBHGetVolParms(gaddr pb, bool async)
 {
     int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
-    if (vref != 0 && vref != VREF && vref != 1 && !(vref <= -32000 && vref > -32000 - MAX_WDS))
+    if (vref != 0 && vref != VREF && vref != 1 && !(vref <= -32000 && vref > -32000 - MAX_WDS) && !mount_of_vref(vref))
         return nsvErr;
     gaddr buf = rd32(pb + HIoParam_ioBuffer_off);
     int32_t want = (int32_t)rd32(pb + HIoParam_ioReqCount_off);
-    uint8_t info[20] = { 0, 2 }; /* vMVersion 2, vMAttrib 0, no local handle or server */
+    /* vMVersion 2; vMAttrib: a desktop database (the Finder keeps its icons
+     * and comments there rather than in a Desktop file), PBCatSearch, file
+     * IDs, deny modes, PBHCopyFile and PBHMoveRename; no local handle or
+     * server. */
+    uint8_t info[20] = { 0, 2, 0, 0, 0xF0, 0xC0 };
     int32_t n = want < (int32_t)sizeof info ? want : (int32_t)sizeof info;
     if (n < 0)
         n = 0;
@@ -2941,9 +3135,73 @@ int16_t tb_PBAllocate(gaddr pb, bool async)
 
 /* There is one volume, and it stays mounted. */
 int16_t tb_PBMountVol(gaddr pb) { return -56; /* nsDrvErr: no such drive */ }
-int16_t tb_PBUnmountVol(gaddr pb) { return fBsyErr; }
-int16_t tb_PBEject(gaddr pb) { return -56; }
-int16_t tb_PBOffLine(gaddr pb) { return -56; }
+
+/* A mounted volume (a folder mounted as one: a CD's or disk image's
+ * contents) can be put away: its VCB leaves the queue, its drive has no
+ * disk in it any more, and its refnum names nothing (the Finder's Eject
+ * and Put Away).  The main volume, the startup disk, cannot, and nor can a
+ * volume with files open on it. */
+static int16_t unmount(gaddr pb)
+{
+    int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
+    gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
+    mount *m = NULL;
+    /* A drive number names the volume on that drive (the main one's is 1,
+     * each mounted one's the next). */
+    if (vref > 1 && !(namep && rd8(namep))) {
+        int16_t drive = vref;
+        for (gaddr v = rd32(LM_VCBQHdr + 2); v; v = rd32(v))
+            if ((int16_t)rd16(v + VCB_vcbDrvNum_off) == drive)
+                vref = (int16_t)rd16(v + VCB_vcbVRefNum_off);
+        if (vref > 1) {
+            /* No volume on the drive (unmounted already): the drive is
+             * ejected, which a mounted volume's may be. */
+            for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e))
+                if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == drive) {
+                    wr8(e - 3, 0);
+                    return drive == 1 ? fBsyErr : noErr;
+                }
+            return -56; /* nsDrvErr */
+        }
+    }
+    if (!vinfo_volume(namep && rd8(namep) ? -1 : 0, vref, namep, &m))
+        return nsvErr;
+    if (!m)
+        return fBsyErr; /* the startup disk */
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && under(fcbs[i].path, m->root))
+            return fBsyErr;
+    gaddr prev = 0;
+    for (gaddr v = rd32(LM_VCBQHdr + 2); v; prev = v, v = rd32(v)) {
+        if ((int16_t)rd16(v + VCB_vcbVRefNum_off) != m->vref)
+            continue;
+        int16_t drive = (int16_t)rd16(v + VCB_vcbDrvNum_off);
+        if (prev)
+            wr32(prev, rd32(v));
+        else
+            wr32(LM_VCBQHdr + 2, rd32(v));
+        if (rd32(LM_VCBQHdr + 6) == v)
+            wr32(LM_VCBQHdr + 6, prev);
+        if (rd32(LM_DefVCBPtr) == v)
+            wr32(LM_DefVCBPtr, rd32(LM_VCBQHdr + 2));
+        for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e))
+            if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == drive)
+                wr8(e - 3, 0); /* no disk in place */
+        break;
+    }
+    if (default_vref == m->vref) {
+        default_vref = VREF;
+        default_dir = ROOT_ID;
+    }
+    int i = (int)(m - mounts);
+    memmove(&mounts[i], &mounts[i + 1], (size_t)(nmounts - i - 1) * sizeof *mounts);
+    nmounts--;
+    return noErr;
+}
+
+int16_t tb_PBUnmountVol(gaddr pb) { return unmount(pb); }
+int16_t tb_PBEject(gaddr pb) { return unmount(pb); }
+int16_t tb_PBOffLine(gaddr pb) { return unmount(pb); }
 
 /* DiskEject(drive): the drives are fixed disks, which don't eject. */
 int16_t tb_DiskEject(int16_t rn)
@@ -2979,11 +3237,14 @@ int16_t tb_PBSetVInfo(gaddr pb, bool async) { return noErr; }
 /* ---------------------------------------------------------------------- */
 /* The Desktop Manager (PBDT calls).  Each volume has a desktop database,
  * its refnum the volume's negated: the applications on it by creator, for
- * opening documents; the icons of their bundles (BNDL, FREF and the icon
- * resources they name), read from an application when its creator is
- * first asked about, with the icons programs add kept beside them for the
- * run; and comments, a file's in its AppleDouble sidecar as the Finder's
- * comment entry, a folder's (which has no sidecar) for the run. */
+ * opening documents (those programs add, kept in the catalog, then those
+ * found on the volume); the icons of their bundles (BNDL, FREF and the
+ * icon resources they name), read from an application when its creator is
+ * first asked about, with the icons programs add kept beside them in the
+ * catalog; and comments, a file's in its AppleDouble sidecar as the
+ * Finder's comment entry, a folder's (which has no sidecar) in the
+ * catalog.  The first time a volume's database is opened it is new, and
+ * the Finder builds it. */
 
 enum { afpItemNotFound = -5018, afpIconTypeError = -5030 };
 
@@ -3073,6 +3334,25 @@ static int16_t dt_vref(gaddr dtp)
     return mount_of_vref(vref) ? vref : VREF;
 }
 
+/* The host folder of a database's volume, its key in the catalog. */
+static const char *dt_root(int16_t vref)
+{
+    mount *m = mount_of_vref(vref);
+    return m ? m->root : root_path;
+}
+
+static void dt_load_icons(int16_t vref);
+
+/* Whether an application was added for its creator (and so listed first). */
+static bool added_appl(const char *root, uint32_t creator, const char *path)
+{
+    char added[PATH_MAX];
+    for (int i = 0; catalog_dt_appl(root, creator, i, added, sizeof added, NULL); i++)
+        if (!strcmp(added, path))
+            return true;
+    return false;
+}
+
 int16_t tb_PBDTGetPath(gaddr dtp)
 {
     gaddr namep = rd32(dtp + DTPBRec_ioNamePtr_off);
@@ -3087,8 +3367,11 @@ int16_t tb_PBDTGetPath(gaddr dtp)
 int16_t tb_PBDTOpenInform(gaddr dtp)
 {
     int16_t err = tb_PBDTGetPath(dtp);
+    /* Newly created (1) the first time a volume's database is opened: the
+     * Finder then builds it, as its rebuild does, adding each
+     * application and its bundle's icons. */
     if (!err)
-        wr32(dtp + DTPBRec_ioTagInfo_off, 0); /* not newly created */
+        wr32(dtp + DTPBRec_ioTagInfo_off, catalog_dt_open(dt_root(dt_vref(dtp))) ? 0 : 1);
     return err;
 }
 
@@ -3104,7 +3387,22 @@ int16_t tb_PBDTGetAPPL(gaddr dtp, bool async)
     int want = (int16_t)rd16(dtp + DTPBRec_ioIndex_off);
     if (want < 1)
         want = 1;
-    for (int i = 0, k = 0; i < nappls; i++) {
+    /* Those added (the most recent first), then those found on the
+     * volume, each once. */
+    char added[PATH_MAX];
+    uint32_t tag;
+    int k = 0;
+    for (int i = 0; catalog_dt_appl(dt_root(vref), creator, i, added, sizeof added, &tag); i++) {
+        if (!exists(added) || ++k != want)
+            continue;
+        put_name(rd32(dtp + DTPBRec_ioNamePtr_off), added);
+        wr32(dtp + DTPBRec_ioAPPLParID_off, (uint32_t)parent_id_of(added));
+        wr32(dtp + DTPBRec_ioTagInfo_off, tag);
+        return noErr;
+    }
+    for (int i = 0; i < nappls; i++) {
+        if (appls[i].creator == creator && added_appl(dt_root(vref), creator, appls[i].path))
+            continue;
         if (appls[i].creator != creator || vref_of_path(appls[i].path) != vref || ++k != want)
             continue;
         if (!exists(appls[i].path))
@@ -3130,9 +3428,21 @@ static void forget_appls(void)
     ndt_read = 0;
 }
 
+/* PBDTAddAPPL: the application named by ioNamePtr and ioDirID, for its
+ * creator, kept in the catalog. */
 int16_t tb_PBDTAddAPPL(gaddr dtp, bool async)
 {
+    char path[PATH_MAX];
+    int16_t vref = dt_vref(dtp);
+    int16_t err = resolve(vref, (int32_t)rd32(dtp + DTPBRec_ioDirID_off), rd32(dtp + DTPBRec_ioNamePtr_off), true,
+                          path, sizeof path);
+    if (err)
+        return err;
+    if (!exists(path))
+        return fnfErr;
     forget_appls();
+    catalog_dt_add_appl(dt_root(vref), rd32(dtp + DTPBRec_ioFileCreator_off), path,
+                        rd32(dtp + DTPBRec_ioTagInfo_off));
     return noErr;
 }
 
@@ -3353,7 +3663,17 @@ int16_t tb_PBDeleteFileIDRef(gaddr pb, bool async)
     return file_of_id((int32_t)rd32(pb + FIDParam_ioFileID), path, sizeof path) ? noErr : fidNotFound;
 }
 
-int16_t tb_PBDTRemoveAPPL(gaddr dtp, bool async) { return noErr; }
+int16_t tb_PBDTRemoveAPPL(gaddr dtp, bool async)
+{
+    char path[PATH_MAX];
+    int16_t vref = dt_vref(dtp);
+    int16_t err = resolve(vref, (int32_t)rd32(dtp + DTPBRec_ioDirID_off), rd32(dtp + DTPBRec_ioNamePtr_off), true,
+                          path, sizeof path);
+    if (err)
+        return err;
+    return catalog_dt_remove_appl(dt_root(vref), rd32(dtp + DTPBRec_ioFileCreator_off), path) ? noErr
+                                                                                           : afpItemNotFound;
+}
 
 /* ---------------------------------------------------------------------- */
 /* Desktop database icons: for each volume and creator, the icons of the
@@ -3538,9 +3858,31 @@ static void dt_read_creator(int16_t vref, uint32_t creator)
 
 /* The icon of a kind for a creator and type: as much of it as the buffer
  * holds, and its tag. */
+/* The icons the catalog keeps for a volume, into the run's list once. */
+static int16_t dt_loaded[MAX_MOUNTS + 1];
+static int ndt_loaded;
+
+static void dt_load_one(uint32_t creator, uint32_t type, int kind, uint32_t tag, const uint8_t *data, int len,
+                        void *ctx)
+{
+    if (kind >= kLargeIcon && kind <= kSmall8BitIcon && (uint32_t)len == dt_kinds[kind].size)
+        dt_put_icon(*(int16_t *)ctx, creator, type, kind, tag, data, true);
+}
+
+static void dt_load_icons(int16_t vref)
+{
+    for (int i = 0; i < ndt_loaded; i++)
+        if (dt_loaded[i] == vref)
+            return;
+    if (ndt_loaded <= MAX_MOUNTS)
+        dt_loaded[ndt_loaded++] = vref;
+    catalog_dt_icons(dt_root(vref), dt_load_one, &vref);
+}
+
 int16_t tb_PBDTGetIcon(gaddr dtp, bool async)
 {
     int16_t vref = dt_vref(dtp);
+    dt_load_icons(vref);
     uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
     int kind = rd8(dtp + DTPBRec_ioIconType_off);
     wr32(dtp + DTPBRec_ioDTActCount_off, 0);
@@ -3564,6 +3906,7 @@ int16_t tb_PBDTGetIcon(gaddr dtp, bool async)
 int16_t tb_PBDTGetIconInfo(gaddr dtp, bool async)
 {
     int16_t vref = dt_vref(dtp);
+    dt_load_icons(vref);
     uint32_t creator = rd32(dtp + DTPBRec_ioFileCreator_off);
     int want = (int16_t)rd16(dtp + DTPBRec_ioIndex_off);
     dt_read_creator(vref, creator);
@@ -3596,28 +3939,16 @@ int16_t tb_PBDTAddIcon(gaddr dtp, bool async)
     uint8_t d[1024];
     gget(d, buf, dt_kinds[kind].size);
     dt_put_icon(vref, creator, rd32(dtp + DTPBRec_ioFileType_off), kind, rd32(dtp + DTPBRec_ioTagInfo_off), d, true);
+    catalog_dt_add_icon(dt_root(vref), creator, rd32(dtp + DTPBRec_ioFileType_off), kind,
+                        rd32(dtp + DTPBRec_ioTagInfo_off), d, (int)dt_kinds[kind].size);
     return noErr;
 }
 
 /* ---------------------------------------------------------------------- */
-/* Desktop database comments: at most 200 characters, as the Finder's. */
+/* Desktop database comments: at most 200 characters, as the Finder's; a
+ * file's in its sidecar, a folder's in the catalog. */
 
 enum { kMaxCommentLength = 200 };
-
-static struct {
-    char *path;
-    uint8_t len;
-    uint8_t text[kMaxCommentLength];
-} *folder_comments;
-static int nfolder_comments;
-
-static int folder_comment(const char *path)
-{
-    for (int i = 0; i < nfolder_comments; i++)
-        if (!strcmp(folder_comments[i].path, path))
-            return i;
-    return -1;
-}
 
 /* The file or folder a comment call names: ioDirID and ioNamePtr on the
  * database's volume. */
@@ -3670,17 +4001,9 @@ static int16_t set_comment(gaddr dtp, const uint8_t *text, uint8_t len)
         return err;
     if (!is_dir(path))
         return set_file_comment(path, text, len);
-    int i = folder_comment(path);
-    if (i < 0) {
-        if (!len)
-            return noErr;
-        folder_comments = realloc(folder_comments, (size_t)(nfolder_comments + 1) * sizeof *folder_comments);
-        i = nfolder_comments++;
-        folder_comments[i].path = strdup(path);
-    }
-    folder_comments[i].len = len;
-    memcpy(folder_comments[i].text, text, len);
-    return noErr;
+    if (!writable(path))
+        return wPrErr;
+    return catalog_set_comment(path, text, len) ? noErr : ioErrF; /* a folder's is the catalog's */
 }
 
 int16_t tb_PBDTGetComment(gaddr dtp, bool async)
@@ -3693,11 +4016,7 @@ int16_t tb_PBDTGetComment(gaddr dtp, bool async)
     uint8_t text[kMaxCommentLength];
     uint8_t len = 0;
     if (is_dir(path)) {
-        int i = folder_comment(path);
-        if (i >= 0) {
-            len = folder_comments[i].len;
-            memcpy(text, folder_comments[i].text, len);
-        }
+        len = (uint8_t)catalog_get_comment(path, text, kMaxCommentLength);
     } else {
         mac_file mf;
         if (appledouble_read_meta(path, &mf)) {
@@ -3749,21 +4068,43 @@ static void dt_reset(void)
     free(dt_read);
     dt_read = NULL;
     ndt_read = 0;
-    for (int i = 0; i < nfolder_comments; i++)
-        free(folder_comments[i].path);
-    free(folder_comments);
-    folder_comments = NULL;
-    nfolder_comments = 0;
+    ndt_loaded = 0;
 }
 
 int16_t tb_PBDTFlush(gaddr dtp, bool async) { return noErr; }
-int16_t tb_PBDTReset(gaddr dtp, bool async) { return noErr; }
-int16_t tb_PBDTDelete(gaddr dtp, bool async) { return noErr; }
+
+/* PBDTReset: the volume's applications and icons gone (its comments
+ * stay), to be built again; PBDTDelete: the whole database. */
+static int16_t dt_clear(gaddr dtp, bool all)
+{
+    int16_t vref = dt_vref(dtp);
+    catalog_dt_reset(dt_root(vref), all);
+    for (int i = 0; i < ndt_icons;)
+        if (dt_icons[i].vref == vref) {
+            free(dt_icons[i].data);
+            dt_icons[i] = dt_icons[--ndt_icons];
+        } else {
+            i++;
+        }
+    for (int i = 0; i < ndt_read;)
+        if (dt_read[i].vref == vref)
+            dt_read[i] = dt_read[--ndt_read];
+        else
+            i++;
+    return noErr;
+}
+
+int16_t tb_PBDTReset(gaddr dtp, bool async) { return dt_clear(dtp, false); }
+int16_t tb_PBDTDelete(gaddr dtp, bool async) { return dt_clear(dtp, true); }
 
 int16_t tb_PBDTGetInfo(gaddr dtp, bool async)
 {
-    wr32(dtp + DTPBRec_ioDTLgLen_off, 0);
-    wr32(dtp + DTPBRec_ioDTPyLen_off, 0);
+    /* The database's size: what the catalog keeps for the volume. */
+    int appls_n, icons_n;
+    int bytes = catalog_dt_counts(dt_root(dt_vref(dtp)), &appls_n, &icons_n);
+    uint32_t len = (uint32_t)bytes + (uint32_t)(appls_n + icons_n) * 64u;
+    wr32(dtp + DTPBRec_ioDTLgLen_off, len);
+    wr32(dtp + DTPBRec_ioDTPyLen_off, (len + 511) & ~511u);
     return noErr;
 }
 
@@ -4121,7 +4462,7 @@ bool fm_volume(uint32_t index, int16_t vref, int16_t *vref_out, char *root, size
     const char *n = m ? m->name : vol_name;
     memcpy(name, n, (size_t)(uint8_t)n[0] + 1);
     *drive = (int16_t)(m ? 2 + (m - mounts) : 1);
-    *driver = (int16_t)(m ? -1 - CD_UNIT : -5);
+    *driver = (int16_t)(m ? -1 - CD_UNIT : -1 - DISK_DRIVER_UNIT);
     return true;
 }
 

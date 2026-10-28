@@ -9,6 +9,7 @@
 
 #include "carbon_events.h"
 #include "forks.h"
+#include "hw68k.h"
 #include "hostgl.h"
 #include "legacy.h"
 #include "qd_internal.h"
@@ -28,6 +29,10 @@ cpu68k *g_cpu;
 char g_app_dir[1024];
 char g_app_path[1024];
 uint32_t g_app_creator;
+/* The run is the Finder (file type 'FNDR'): the Process Manager reports it
+ * as the system's Finder process rather than an application. */
+bool g_is_finder;
+bool machine_is_finder(void) { return g_is_finder; }
 
 static cpu68k cpu;
 static int screen_w = 1024, screen_h = 768;
@@ -254,6 +259,9 @@ static void apply_lowmem_overrides(void)
 }
 
 void threads_reset(void);
+void startup_run_inits(void);
+bool startup_is_cdev_file(void);
+uint32_t startup_cdev_entry(void);
 void help_reset(void);
 void scriptmgr_reset(void);
 void dialog_reset(void);
@@ -358,14 +366,7 @@ static bool open_system_file(void)
  * vectors near address 0.  (The driver unit table is drivers.c's.) */
 static void hardware_globals(void)
 {
-    gaddr via = mm_new_ptr_in(GA_SYSHEAP, 16 * 512, true);
-    if (via)
-        wr8(via, 0x80); /* vBufA: sound off */
-    wr32(LM_VIA, via);
-    gaddr scc = mm_new_ptr_in(GA_SYSHEAP, 64, true);
-    wr32(LM_SCCRd, scc);
-    wr32(LM_SCCWr, scc);
-    wr32(LM_IWM, mm_new_ptr_in(GA_SYSHEAP, 16 * 512, true));
+    /* The chips are at their machine's addresses (hw68k.c). */
     wr32(LM_SoundBase, mm_new_ptr_in(GA_SYSHEAP, 370 * 2, true));
     /* ScrapName: the Clipboard file's name. */
     static const uint8_t scrap[] = "\016Clipboard File";
@@ -373,6 +374,7 @@ static void hardware_globals(void)
     if (name)
         gput(name, scrap, sizeof scrap - 1);
     wr32(LM_ScrapName, name);
+    hw_boot();
 }
 
 /* BLUEBOX_68K_TRACE=n: the last n 68k instructions, printed when an
@@ -473,6 +475,7 @@ bool machine_boot(bool census)
     drag_reset();
     print_reset();
     carbonsvc_reset();
+    carbonrest_reset();
     icm_reset();
     gx_reset();
     aem_reset();
@@ -501,6 +504,10 @@ bool machine_boot(bool census)
     cursor_devices_reset();
     legacy_reset();
     notify_reset();
+    icons_reset();
+    disk_driver_reset();
+    finder_reset();
+    shutdown_reset();
     iconservices_reset();
     agl_reset(); /* OpenGL's contexts, on the host */
     qd3d_reset(); /* QuickDraw 3D's and RAVE's objects */
@@ -761,6 +768,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     mactcp_install_resolver();
     snprintf(g_app_path, sizeof g_app_path, "%s", app_path);
     g_app_creator = mac_file_creator(&mf);
+    g_is_finder = mac_file_type(&mf) == fourcc("FNDR");
 
     const char *base = strrchr(app_path, '/');
     base = base ? base + 1 : app_path;
@@ -782,6 +790,17 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
         size = tb_Get1Resource((int32_t)fourcc("SIZE"), 0);
     g_app_size_flags = size && rd32(size) ? rd16(rd32(size)) : 0;
     build_app_parms();
+
+    /* A cdev file has no program: the Control Panel's host stands in. */
+    if (startup_is_cdev_file()) {
+        gaddr stack = tb_NewPtr(65536, false, true);
+        cpu.a[7] = stack + 65536 - 16;
+        g_ppc_mode = false;
+        cfm_reset();
+        startup_run_inits();
+        cpu.pc = startup_cdev_entry();
+        return true;
+    }
 
     /* PowerPC: an application with no 68k code, or any with a PowerPC
      * fragment when PowerPC is preferred. */
@@ -823,6 +842,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     uint32_t entry = seg_launch(rn, &a5, err, errlen);
     if (!entry)
         return false;
+    startup_run_inits(); /* the INITs asked for, before the program's first instruction */
     cpu.pc = entry;
     return true;
 }

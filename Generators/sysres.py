@@ -588,6 +588,10 @@ def main():
         parts.append(c_array(f"ditl_m{n}", ditl(items)))
         table.append(("DLOG", rid, f"dlog_m{n}"))
         table.append(("DITL", rid, f"ditl_m{n}"))
+    # PAT 16, the desktop pattern (deskPatID): the 50% gray every System had,
+    # read by the General control panel and by programs that draw the desktop.
+    parts.append("/* PAT 16: the desktop pattern */\n" + c_array("pat_16", bytes.fromhex("AA55AA55AA55AA55")))
+    table.append(("PAT ", 16, "pat_16"))
     parts.append("/* KCHR 0: U.S. keyboard layout */\n" + c_array("kchr_0", kchr()))
     table.append(("KCHR", 0, "kchr_0"))
     for typ, rid, label, data in intlres.resources():

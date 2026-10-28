@@ -18,6 +18,7 @@
 #include "carbon_events.h"
 #include "ppc_bridge.h"
 #include "tb_internal.h"
+#include "os9left_mp.h"
 
 #define R(n) (c->gpr[3 + (n)])
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; return; } while (0)
@@ -41,9 +42,7 @@ enum { kStoppedThreadState = 1, kRunningThreadState = 2, kPreemptiveThread = 2, 
 enum { kCurrentThreadID = 1, kApplicationThreadID = 2 };
 enum { NS_PER_ABS = 40 }; /* UpTime's unit, as driverservices.c has it */
 
-/* Reference kinds (carbon_events.c has its own, below 100). */
-enum { REF_TASK = 101, REF_QUEUE, REF_SEMAPHORE, REF_REGION, REF_EVENT, REF_NOTIFICATION, REF_TIMER,
-       REF_PROCESS, REF_CPU, REF_COHERENCE, REF_SPACE };
+/* Reference kinds (carbon_events.c has its own, below 100): REF_TASK ... REF_SPACE, os9left_mp.h. */
 
 #define MAX_STORAGE 64
 #define TASK_STACK 0x10000u
@@ -59,6 +58,7 @@ typedef struct task {
     bool terminated;  /* by MPTerminateTask: status as given */
     uint64_t created;
     gaddr exception_queue;
+    gaddr blocked_on; /* the object it waits on now (os9left_mp.c's MPQueryBlocking) */
     uint32_t storage[MAX_STORAGE];
     struct task *next;
 } task;
@@ -201,10 +201,12 @@ static void task_yield(task *t)
 
 static void fire_timers(void);
 
+bool mp_scheduling = true; /* MPStopScheduling clears it: tasks get no turns */
+
 int mp_run_tasks(void)
 {
     fire_timers();
-    if (in_task() || !tasks)
+    if (in_task() || !tasks || !mp_scheduling)
         return 0;
     /* Each task once, those made meanwhile next time. */
     uint32_t ids[64];
@@ -241,6 +243,9 @@ static void pause_once(void)
 static int32_t wait_for(object *o, bool (*ready)(void *), void *arg, int32_t timeout)
 {
     uint64_t deadline = timeout == kDurationForever ? UINT64_MAX : now_ns() + duration_ns(timeout);
+    task *me = current_task();
+    gaddr was = me->blocked_on;
+    me->blocked_on = o->id;
     o->waiters++;
     int32_t err = noErr;
     for (;;) {
@@ -257,6 +262,7 @@ static int32_t wait_for(object *o, bool (*ready)(void *), void *arg, int32_t tim
         pause_once();
     }
     o->waiters--;
+    me->blocked_on = was;
     return err;
 }
 
@@ -908,8 +914,10 @@ static void mp_MPAllocate(ppc_cpu *c) { RETURN(allocate(R(0), 5, kMPAllocateClea
 
 static void mp_MPFree(ppc_cpu *c)
 {
-    if (R(0))
+    if (R(0)) {
+        os9left_mp_freed(R(0));
         tb_DisposePtr(rd32(R(0) - 8));
+    }
     c->pc = c->lr;
 }
 
@@ -1055,7 +1063,8 @@ static int32_t next_id(uint32_t cls, gaddr idp)
         wr32(idp, ids[at + 1]);
         return noErr;
     }
-    default: return cls == kOpaqueAreaID || cls == kOpaqueConsoleID ? kMPIterationEndErr : paramErr;
+    case kOpaqueAreaID: return os9left_mp_next_area(after, idp);
+    default: return cls == kOpaqueConsoleID ? kMPIterationEndErr : paramErr;
     }
     if (kind == REF_PROCESS || kind == REF_CPU || kind == REF_COHERENCE || kind == REF_SPACE) {
         gaddr one = fixed_ref(kind);
@@ -1087,6 +1096,77 @@ static void mp_MPGetPageSize(ppc_cpu *c) { RETURN(R(0) == 1 ? 4096 : 0); }
 /* _MPTaskIsToolboxSafe(): tasks run on the application's thread of
  * control here, so they can make Toolbox calls. */
 static void mp_TaskIsToolboxSafe(ppc_cpu *c) { RETURN(1); }
+
+/* ---- What MPLibrary's queries (os9left_mp.c) ask of the objects ---- */
+
+/* The state of a queue, semaphore, critical region or event group:
+ * out = { kind, first, second, waiters } (queue: messages, reserve;
+ * semaphore: value, maximum; region: owner task, depth; event: flags);
+ * 0 when id is none of them. */
+int mp_query(gaddr id, uint32_t out[4])
+{
+    int kind = ref_kind(id);
+    out[0] = (uint32_t)kind;
+    switch (kind) {
+    case REF_QUEUE: {
+        mpqueue *q = ref_get(id, kind);
+        out[1] = q->count; out[2] = q->cap; out[3] = (uint32_t)q->o.waiters;
+        return kind;
+    }
+    case REF_SEMAPHORE: {
+        semaphore *s = ref_get(id, kind);
+        out[1] = s->value; out[2] = s->max; out[3] = (uint32_t)s->o.waiters;
+        return kind;
+    }
+    case REF_REGION: {
+        region *r = ref_get(id, kind);
+        out[1] = r->owner ? r->owner->id : 0; out[2] = r->depth; out[3] = (uint32_t)r->o.waiters;
+        return kind;
+    }
+    case REF_EVENT: {
+        eventgroup *e = ref_get(id, kind);
+        out[1] = e->flags; out[2] = 0; out[3] = (uint32_t)e->o.waiters;
+        return kind;
+    }
+    }
+    return 0;
+}
+
+/* The object a task waits on now (0 for none); false if id is no task. */
+bool mp_task_blocking(gaddr id, gaddr *on)
+{
+    task *t = ref_get(id, REF_TASK);
+    if (!t)
+        return false;
+    *on = t->blocked_on;
+    return true;
+}
+
+/* Every task's ID, the main task's first; the number there are. */
+unsigned mp_task_ids(gaddr *ids, unsigned max)
+{
+    unsigned n = 0;
+    current_task();
+    if (n < max)
+        ids[n++] = main_task.id;
+    for (task *t = tasks; t && n < max; t = t->next)
+        ids[n++] = t->id;
+    return n;
+}
+
+/* Terminate every task but the caller's: MPTerminateProcess. */
+void mp_terminate_all(int32_t status)
+{
+    task *me = current_task();
+    for (task *t = tasks, *next; t; t = next) {
+        next = t->next;
+        if (t != me && t->thread) {
+            t->terminated = true;
+            t->status = status;
+            tb_DisposeThread((int32_t)t->thread, (uint32_t)status, 0);
+        }
+    }
+}
 
 /* ---- The library ---- */
 

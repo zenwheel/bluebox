@@ -14,28 +14,18 @@
 /* The CD-ROM driver (.AppleCD, on SCSI ID 3) that a mounted volume's drive
  * belongs to: programs find a volume's drive in the drive queue and look
  * at its driver's name to learn that it is a CD (Prince of Persia 2's
- * Mohawk engine).  Its one call is the drive's status. */
-static int16_t cd_status(gaddr pb, bool async)
+ * Mohawk engine).  It gives the drive's status, and the drive icons the
+ * Finder draws its volumes with (diskdriver.c). */
+static int16_t cd_status(gaddr pb, bool async) { return disk_drive_status(pb); }
+static int16_t cd_control(gaddr pb, bool async)
 {
-    if ((int16_t)rd16(pb + CntrlParam_csCode_off) != 8) /* drvStsCode */
-        return -18;                                    /* statusErr */
-    int16_t drive = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
-    for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e)) {
-        if ((int16_t)rd16(e + DrvQEl_dQDrive_off) != drive)
-            continue;
-        gaddr st = pb + CntrlParam_csParam_off;
-        gmemset(st, 0, DrvSts_SIZEOF);
-        for (uint32_t i = 0; i < 4; i++) /* writeProt, diskInPlace, installed, sides */
-            wr8(st + DrvSts_writeProt_off + i, rd8(e - 4 + i));
-        gmemcpy(st + DrvSts_qLink_off, e, DrvSts_twoSideFmt_off - DrvSts_qLink_off);
-        return noErr;
-    }
-    return -56; /* nsDrvErr */
+    int16_t r = disk_icon_control(pb, true);
+    return r == -1 ? -17 /* controlErr */ : r;
 }
-static const native_driver cd_driver = { ".AppleCD", CD_UNIT, NULL, NULL, NULL, cd_status, NULL, NULL, NULL };
+static const native_driver cd_driver = { ".AppleCD", CD_UNIT, NULL, NULL, cd_control, cd_status, NULL, NULL, NULL };
 
 static const native_driver *const drivers[] = {
-    &cd_driver, &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
+    &cd_driver, &disk_driver, &sony_driver, &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
 };
 enum { NDRIVERS = sizeof drivers / sizeof drivers[0] };
 

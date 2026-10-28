@@ -304,10 +304,7 @@ int16_t tb_NavDisposeReply(gaddr reply)
 /* Nothing is translated: the files are the program's own kind. */
 int16_t tb_NavCompleteSave(gaddr reply, uint32_t howToTranslate) { return noErr; }
 int16_t tb_NavTranslateFile(gaddr reply, uint32_t howToTranslate) { return noErr; }
-int16_t tb_NavCreatePreview(gaddr theObject, int32_t previewDataType, gaddr previewData, int32_t previewDataSize)
-{
-    return noErr;
-}
+/* NavCreatePreview (the preview stored in the file): os9left_misc.c. */
 /* Only an event procedure calls it, during a dialog of Navigation's own. */
 int16_t tb_NavCustomControl(gaddr context, int32_t selector, gaddr parms) { return paramErr; }
 

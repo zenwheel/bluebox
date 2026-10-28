@@ -50,6 +50,14 @@ func defaultJITCache() -> String {
     #endif
 }
 
+/// The machines --machine knows, for its message.
+func machineNames() -> String {
+    var names: [String] = []
+    var i: Int32 = 0
+    while let m = hw_profile_at(i) { names.append(String(cString: m.pointee.name)); i += 1 }
+    return names.joined(separator: ", ")
+}
+
 func usage() -> Never {
     eprint("""
     usage:
@@ -87,13 +95,24 @@ func usage() -> Never {
                      a game known to need another depth gets it (unless it has a depth setting),
                      and one whose alert asks for another is started again at that depth, which
                      replaces its setting
+          --machine M  present a classic Mac: plus, se, classic (a 68000 with 24-bit addressing,
+                     4 MB of RAM with the 512x342 one-bit screen near its top as theirs was, the 24-bit
+                     I/O map: the VIA at $EFE1FE, the SCC, the IWM, the sound buffer; System 6.0.8) or
+                     macii (a 68020 and 68881, 24-bit, 640x480 at 8 bits on a video card in slot 9, its
+                     I/O at $F00000); quadra (a 68040, 32-bit) is the default.  --cpu, --fpu and
+                     --addressing change the machine's own.  Programs that address the chips by number
+                     run on them (the 68k interpreter, without --jit)
+          --floppy F the raw floppy disk image F (a sector dump, or Disk Copy 4.2) as the disk in the Sony
+                     driver's drive 1: a key disk whose sectors a program's copy protection reads
+          --init F   run the INIT resources of file F (an INIT or extension) before the program starts, as the
+                     Start Manager would; may be repeated
           --cpu M    processor: 68040 (the default, as a Quadra 800), 68030 (a Mac IIci),
                      68020 (a Mac II) or 68000 (a Mac SE: 24-bit addressing, odd-address
                      errors, no 68020 instructions); a fat application then runs its 68k code
-          --fpu F    floating point: none, 68881, 68882 or 68040 (default: the 68040's own,
-                     a 68882 with a 68030, none with a 68020 or 68000)
-          --addressing B  24 or 32 (default: 24 for a 68k program whose SIZE resource
-                     doesn't say it is 32-bit clean, as such a program had on a Mac in
+          --fpu F    floating point: none, 68881, 68882 or 68040 (default: the machine's, else the
+                     68040's own, a 68882 with a 68030, none with a 68020 or 68000)
+          --addressing B  24 or 32 (default: the machine's; else 24 for a 68k program whose SIZE
+                     resource doesn't say it is 32-bit clean, as such a program had on a Mac in
                      24-bit mode; the address's top byte is then ignored)
           --appletalk A  AppleTalk on LocalTalk over UDP: local (the default; copies
                      on this host play each other), lan (the local network, other
@@ -407,6 +426,9 @@ func runCommand(_ args: [String]) {
     var cpuModel: Int32?
     var fpuModel: Int32?
     var addressingBits: Int32?
+    var machineName: String?
+    var initFiles: [String] = []
+    var floppyImage: String?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
     var appearanceGiven = false
@@ -489,6 +511,20 @@ func runCommand(_ args: [String]) {
                 fail("--depth expects 1, 2, 4, 8, 16 or 32")
             }
             screenDepth = d
+        case "--machine":
+            i += 1
+            guard i < args.count, hw_find_profile(args[i]) != nil else {
+                fail("--machine expects " + machineNames())
+            }
+            machineName = args[i]
+        case "--floppy":
+            i += 1
+            guard i < args.count else { usage() }
+            floppyImage = args[i]
+        case "--init":
+            i += 1
+            guard i < args.count else { usage() }
+            initFiles.append(args[i])
         case "--cpu":
             i += 1
             guard i < args.count, let m = Int32(args[i]), [68000, 68020, 68030, 68040].contains(m) else {
@@ -643,6 +679,10 @@ func runCommand(_ args: [String]) {
         var terr = [CChar](repeating: 0, count: 256)
         guard machine_load_theme(themePath, &terr, terr.count) else { fail(str(terr)) }
     }
+    // A classic Mac by name: its screen, processor and FPU, addressing, ROM
+    // and chips (hardware programs address them by number); --depth, --cpu,
+    // --fpu and --addressing still win.
+    if let machineName { _ = hw_select_machine(machineName) }
     if let screenDepth {
         machine_set_screen_depth(screenDepth)
     } else if let d = saved.depth {
@@ -654,9 +694,14 @@ func runCommand(_ args: [String]) {
     let processor = cpuModel ?? saved.cpu.map(Int32.init)
     if let m = processor, m != Int32(powerPCSetting) { machine_set_cpu(m) }
     if let f = fpuModel ?? saved.fpu.map(Int32.init) { machine_set_fpu(f) }
-    // Addressing: as chosen, else what the program's SIZE resource says
-    // (24-bit for a 68k program not marked 32-bit clean).
-    machine_set_addressing(addressingBits ?? saved.addressing.map(Int32.init) ?? machine_app_addressing(app))
+    // Addressing: as chosen, else the named machine's, else what the
+    // program's SIZE resource says (24-bit for a 68k program not marked
+    // 32-bit clean).
+    if let b = addressingBits ?? saved.addressing.map(Int32.init) {
+        machine_set_addressing(b)
+    } else if !hw_machine_chosen() {
+        machine_set_addressing(machine_app_addressing(app))
+    }
     machine_set_depth_alerts(depthRelaunch != nil)
     machine_set_prefer_ppc(preferPPC ?? (processor == nil || processor == Int32(powerPCSetting)))
     if saved.jit == true { useJIT = true } /* the jit setting; --jit turns it on for a run */
@@ -706,6 +751,13 @@ func runCommand(_ args: [String]) {
         var aerr = [CChar](repeating: 0, count: 256)
         guard machine_mount_appleshare(spec, &aerr, aerr.count) else { fail(str(aerr)) }
     }
+    if let floppyImage {
+        var ferr = [CChar](repeating: 0, count: 256)
+        guard machine_set_floppy(floppyImage, &ferr, ferr.count) else { fail(str(ferr)) }
+    }
+    for f in initFiles {
+        guard machine_add_init(resolveFile(f, kinds: ["INIT", "appe", "ZSYS", "dfil"])) else { fail("too many --init files") }
+    }
     guard machine_launch(app, &err, err.count) else { fail(str(err)) }
     // Other programs (other runs, bluebox send) can send it Apple Events.
     _ = machine_listen_for_apple_events()
@@ -744,6 +796,8 @@ func runCommand(_ args: [String]) {
     // The whole screen in one window, as the setting says, or when the
     // program turns out to want it: then that becomes its setting.
     if interactive && !screenWindow && saved.display == "screen" { screenWindow = true }
+    // The Finder draws the desktop: the whole screen, unless its setting says otherwise.
+    if interactive && !screenWindow && machine_is_finder() && saved.display != "rootless" { screenWindow = true }
     let chosenFor = app
     MainActor.assumeIsolated {
         RootlessHost.switchesToScreen = saved.display != "rootless"
@@ -948,7 +1002,7 @@ func findListedApplication(_ spec: String) -> String? {
     if spec.contains("/") { return nil }
     var found: [String] = []
     for root in [library, disk] where fm.fileExists(atPath: root) {
-        found += scan(root).filter { $0.isApplication && ($0.path as NSString).lastPathComponent == spec }.map(\.path)
+        found += scan(root).filter { $0.isLaunchable && ($0.path as NSString).lastPathComponent == spec }.map(\.path)
     }
     if found.count > 1 {
         eprint("several applications named \(spec):\n")
@@ -956,6 +1010,22 @@ func findListedApplication(_ spec: String) -> String? {
         exit(2)
     }
     return found.first
+}
+
+/// A file that is not an application (an INIT, a cdev) by path, ingesting
+/// MacBinary and archives first; `kinds` are the types preferred.
+func resolveFile(_ given: String, kinds: [String]) -> String {
+    let path = findListedApplication(given) ?? given
+    switch classify(path) {
+    case .appleDouble: return path
+    case .plain: fail("\(path) has no resource fork")
+    case .macBinary, .archive, .diskImage: break
+    }
+    guard let entry = try? ingest(path, library: defaultLibrary()).entry else { fail("cannot read \(path)") }
+    let files = scan(entry)
+    let wanted = kinds.map(fourCCValue)
+    if let f = files.first(where: { wanted.contains($0.type) }) ?? files.first { return f.path }
+    fail("no file in \(entry)")
 }
 
 func resolveApplication(_ given: String, named: String?) -> String {
@@ -976,7 +1046,7 @@ func resolveApplication(_ given: String, named: String?) -> String {
     } catch {
         fail("\(error)")
     }
-    let apps = scan(entry).filter { $0.isApplication }
+    let apps = scan(entry).filter { $0.isLaunchable }
     var candidates = apps.filter { $0.hasCODE || $0.hasCfrg } /* 68k, PowerPC or both */
     // Each one's path inside the archive: what the list below shows, and
     // what --app takes to tell apart applications of the same name.
@@ -987,6 +1057,10 @@ func resolveApplication(_ given: String, named: String?) -> String {
         candidates = matchApplications(candidates.map(inside), wanted: named).map { candidates[$0] }
     }
     if candidates.count == 1 { return candidates[0].path }
+    // No program, but a cdev: the Control Panel's host shows it.
+    if candidates.isEmpty, named == nil, let cdev = scan(entry).first(where: { $0.type == fourCCValue("cdev") }) {
+        return cdev.path
+    }
     if candidates.isEmpty {
         fail(named == nil ? "no application found in \(entry)" : "no application matching \"\(named!)\" in \(entry)")
     }

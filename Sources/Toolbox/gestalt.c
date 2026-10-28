@@ -2,11 +2,13 @@
  * Gestalt.  Values describe the machine we present; the environment profile
  * can override any selector (gestalt_set).
  */
+#include "hw68k.h"
 #include "m68k.h"
 #include "ppc_bridge.h"
 #include "r3d.h"
 #include "tb_internal.h"
 #include "trap.h"
+#include "qt_vr.h"
 
 #define MAX_GESTALT 128
 
@@ -75,6 +77,36 @@ uint32_t gestalt_value(uint32_t selector, uint32_t fallback)
     return fallback;
 }
 
+/* A classic Mac chosen by name (--machine): its numbers, and for those that
+ * ran System 6 only what System 6.0.8's Gestalt knew (no Apple Events,
+ * PPC Toolbox, Help Manager and the rest of System 7). */
+static void gestalt_machine(const hw_profile *m)
+{
+    static const int proc_of[] = { 0, 1, 3, 4, 5 };
+    int idx = m->cpu == 68000 ? 1 : m->cpu == 68020 ? 2 : m->cpu == 68030 ? 3 : 4;
+    gestalt_set(fourcc("mach"), (uint32_t)m->gestalt_mach);
+    gestalt_set(fourcc("proc"), (uint32_t)proc_of[idx]);
+    gestalt_set(fourcc("fpu "), m->fpu ? (m->cpu == 68040 ? 3 : 2) : 0);
+    gestalt_set(fourcc("kbd "), (uint32_t)m->gestalt_kbd);
+    gestalt_set(fourcc("rom "), m->rom_version);
+    gestalt_set(fourcc("romv"), m->rom_version);
+    gestalt_set(fourcc("sysv"), m->sys_version);
+    gestalt_set(fourcc("scri"), m->sys_version);
+    gestalt_set(fourcc("qd  "), m->color_qd ? 0x0100 : 0); /* Color QuickDraw, or the original */
+    gestalt_set(fourcc("hdwr"), m->adb ? (m->via_sound ? 0x0091 : 0x009B) : 0x0091);
+    gestalt_set(fourcc("addr"), 0x0);         /* 24-bit addressing only */
+    if (m->sys_version >= 0x0700)
+        return;
+    static const char *const system7[] = {
+        "evnt", "os  ", "ppc ", "edtn", "help", "alis", "fold", "fs  ", "stdf", "icon", "tmgr", "snd ", "qdgx", "pmgr",
+        "teat", "drag", "cmnu", "pop!", "nmgr", "ttsc", "font", "appr", "apvr", "qtim", "cpnt", "thds", "sysa",
+        "otan", "otvr", "qdrw", "rsrc", "scr#", "te  ", "scsi", "vm  ", "lram", "ram ", "blbx", "mmu ",
+    };
+    for (unsigned i = 0; i < sizeof system7 / sizeof system7[0]; i++)
+        gestalt_delete(fourcc(system7[i]));
+    gestalt_set(fourcc("ram "), 0x00400000); /* 4 MB */
+}
+
 void gestalt_init(void)
 {
     count = 0;
@@ -105,7 +137,15 @@ void gestalt_init(void)
      * capable; in 24-bit mode capable only (not on a 68000). */
     gestalt_set(fourcc("addr"), !g_mem_24bit ? 0x7 : model == 68000 ? 0 : 0x4);
     gestalt_set(fourcc("ram "), g_mem_report_cap);
-    gestalt_set(fourcc("qtim"), 0x02508000); /* QuickTime 2.5 (movies play as zero length) */
+    /* QuickTime 4.1.2, the last for 68k Macs: its importers and exporters,
+     * graphics importers and exporters, wired sprites, tweens, effects,
+     * streaming and QuickTime VR are there */
+    gestalt_set(fourcc("qtim"), 0x04128000);
+    gestalt_set(fourcc("qtst"), 0x04128000); /* QuickTime Streaming (QTStreamLib) */
+    if (qt_vr_available()) {
+        gestalt_set(fourcc("qtvr"), 0xF);    /* the API; objects, cylindrical and cubic panoramas */
+        gestalt_set(fourcc("qtvv"), 0x03008000); /* QuickTime VR 3.0, QuickTime 4's */
+    }
     gestalt_set(fourcc("cpnt"), 0x00030000); /* the Component Manager, as QuickTime 2.5 has it */
     gestalt_set(fourcc("lram"), g_mem_report_cap);
     gestalt_set(fourcc("vm  "), 0);
@@ -174,6 +214,8 @@ void gestalt_init(void)
 #else
     gestalt_set(fourcc("blbx"), 0x01000002);
 #endif
+    if (hw_machine_chosen())
+        gestalt_machine(hw_machine());
 }
 
 /* A PowerPC application: a PowerPC Mac's answers (a G3 with Mac OS 8.1,

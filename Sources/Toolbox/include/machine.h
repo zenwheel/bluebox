@@ -17,6 +17,8 @@ bool machine_boot(bool census);
 bool machine_provides_export(const char *name, bool data);
 /* Load an application (AppleDouble data-fork path) and prepare to run it. */
 bool machine_launch(const char *app_path, char *err, size_t errlen);
+/* Whether the run launched is the Finder (file type FNDR). */
+bool machine_is_finder(void);
 /* Run a fat application's PowerPC code rather than its 68k code. */
 void machine_set_prefer_ppc(bool on);
 /* The JIT (off by default): translate the program's 68k and PowerPC code
@@ -38,6 +40,19 @@ void machine_close_appleshares(void); /* logged out, forgotten */
  * panels: the name (UTF-8) and the host folder each lives in. */
 int machine_volume_count(void);
 bool machine_volume_info(int i, char *name, size_t namesize, char *root, size_t rootsize);
+/* A program's own INIT file (an extension or INIT: its 'INIT' resources) to
+ * run at startup, before the application's first instruction, as the Start
+ * Manager would; the list is kept across boots (startup_reset empties it). */
+bool machine_add_init(const char *path);
+void startup_reset(void);
+int startup_run_init_file(const char *path, char *err, size_t errlen);
+/* A raw floppy disk image (a sector dump of 400K/720K/800K/1440K, or Disk
+ * Copy 4.2) as the disk in the Sony driver's drive 1: a key disk whose
+ * sectors the program's own copy protection reads (sony.c). */
+bool machine_set_floppy(const char *path, char *err, size_t errlen);
+bool sony_has_disk(void);
+uint32_t sony_disk_size(void);
+bool sony_sector_tags(uint32_t sector, uint8_t out[12]);
 /* Run up to max_instructions. */
 run_status machine_run(uint64_t max_instructions);
 const char *machine_halt_reason(void);
@@ -80,6 +95,8 @@ void machine_set_accent_color(uint16_t r, uint16_t g, uint16_t b);
 bool machine_load_theme(const char *path, char *err, size_t errlen);
 /* Screen depth: 1 (black and white, the default), 8 or 32; before boot. */
 void machine_set_screen_depth(int depth);
+/* The depth the next boot gives the screen (machine_screen_depth is the one it has). */
+int machine_screen_depth_setting(void);
 /* The screen's depth now (a program may have changed it). */
 int machine_screen_depth(void);
 /* The processor: 68040 (the default), 68030, 68020 or 68000.  Before

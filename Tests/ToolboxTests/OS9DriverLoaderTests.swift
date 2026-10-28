@@ -65,7 +65,7 @@ extension BlueBox {
 
         @Test func renamingAndRemoving() {
             launchTestApp()
-            let empty = UInt32(bitPattern: -33) // unit 32, nothing installed
+            let empty = UInt32(bitPattern: -34) // unit 33, nothing installed (32 is the main disk's)
             let name = tb_NewPtr(64, false, true)
             guestPString(".Renamed", at: name)
             #expect(err("RenameDriver", [empty, name]) == -21)

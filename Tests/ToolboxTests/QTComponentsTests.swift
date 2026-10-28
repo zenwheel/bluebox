@@ -25,7 +25,7 @@ func qtCall(_ name: String, _ args: [UInt32]) -> UInt32 {
     }
     var c = ppc_cpu()
     ppc_init(&c)
-    let area = tb_NewPtr(256, false, true)
+    let area = tb_NewPtr(4096, false, true) + 3072 // frames go below r1
     withUnsafeMutableBytes(of: &c.gpr) { raw in
         raw.storeBytes(of: area, toByteOffset: 4, as: UInt32.self) // r1
         for (i, v) in args.prefix(8).enumerated() { raw.storeBytes(of: v, toByteOffset: (3 + i) * 4, as: UInt32.self) }

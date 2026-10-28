@@ -139,7 +139,9 @@ typedef struct {
     unsigned count;
 } disp_entry;
 
-static disp_entry disps[64];
+/* Room for every dispatcher (66 now; a table that fills silently drops the
+ * rest, whose traps then answer "unimplemented"). */
+static disp_entry disps[256];
 static unsigned ndisps;
 
 static const disp_entry *find_disp(uint16_t tw)
@@ -182,7 +184,7 @@ static bool answers_zero(const char *dispatcher)
  * run: GetTrapAddress still finds Unimplemented there, as it would in an
  * ordinary run, so a program testing for the trap (Tubular Worlds, for
  * the Code Fragment Manager) takes the same path. */
-static uint32_t census_only[64];
+static uint32_t census_only[256];
 static unsigned ncensus_only;
 
 gaddr trap_visible_address(gaddr a)
@@ -588,7 +590,13 @@ static uint64_t last_idle; /* instruction count at the last idle moment */
 
 bool machine_waiting_for_input(void) { return g_cpu && g_cpu->icount - last_idle < 2000000; }
 
-void machine_idle(void)
+void machine_idle(void) { machine_idle_for(-1); }
+
+/* The same for WaitNextEvent's sleep, in ticks (negative: as long as the
+ * script lets it): the clock moves on no further than the program asked
+ * to sleep, so a program doing its work between null events (the Finder
+ * filling its windows) gets them as often as it did on a Mac. */
+void machine_idle_for(int32_t sleep)
 {
     cpu68k *c = g_cpu;
     if (!c || c->halted)
@@ -606,6 +614,11 @@ void machine_idle(void)
         return;
     /* Waiting: scripted input comes now, or the clock moves on to it. */
     uint64_t next = events_script_next_at();
+    if (sleep >= 0) {
+        uint64_t slept = c->icount + (uint64_t)(sleep ? sleep : 1) * 166667u; /* a tick at 10 MIPS */
+        if (!next || slept < next)
+            next = slept;
+    }
     if (next > c->icount && (!icount_cap || next < icount_cap))
         c->icount = next;
     events_script_pump(c->icount);

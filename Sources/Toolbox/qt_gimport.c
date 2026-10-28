@@ -386,9 +386,10 @@ static int32_t gi_call(importer *g, int16_t what, const uint32_t *a)
     case 0x2B: if (a[0]) wr32(a[0], 1); return noErr;                    /* GetImageCount */
     case 0x2C: return a[0] == 1 ? noErr : paramErr;                      /* SetImageIndex */
     case 0x2D: if (a[0]) wr32(a[0], 1); return noErr;                    /* GetImageIndex */
-    case 0x24:                                                           /* ExportImageFile */
-    case 0x26:                                                           /* DoExportImageFileDialog */
-        return cantFindHandler; /* there are no graphics exporters */
+    case 0x24: /* ExportImageFile(fileType, fileCreator, fileSpec, scriptTag) */
+        return qt_gexport_importer(g->ci, a[0], a[1], a[2], (int16_t)a[3]);
+    case 0x26: /* DoExportImageFileDialog(inDefaultSpec, prompt, filterProc, outType*, outSpec*, outScript*) */
+        return qt_gexport_dialog(g->ci, a[0], a[1], a[3], a[4], a[5]);
     default: return badComponentSelector;
     }
 }
@@ -440,9 +441,11 @@ static void grip_entry(cpu68k *c, uint16_t tw)
     } else {
         uint32_t ci = rd32(params + 4 + size);
         importer *g = ci ? importer_of(ci) : NULL;
-        uint32_t a[4] = { 0 };
-        for (uint32_t i = 0; i < 4 && 4 * (i + 1) <= size; i++)
+        uint32_t a[6] = { 0 };
+        for (uint32_t i = 0; i < 6 && 4 * (i + 1) <= size; i++)
             a[i] = rd32(params + 4 + size - 4 * (i + 1));
+        if (what == 0x24 && size == 14) /* ExportImageFile ends with a word, the script */
+            a[3] = rd16(params + 4);
         r = g ? gi_call(g, what, a) : badComponentInstance;
     }
     wr32(c->a[7], (uint32_t)r);
@@ -539,7 +542,7 @@ GI(GetQuality, 0x1A, "4")
 GI(Validate, 0x1F, "4")
 GI(DoesDrawAllPixels, 0x22, "4")
 GI(GetAsPicture, 0x23, "4")
-GI(ExportImageFile, 0x24, "44444")
+GI(ExportImageFile, 0x24, "4442")
 GI(DoExportImageFileDialog, 0x26, "444444")
 GI(GetImageCount, 0x2B, "4")
 GI(SetImageIndex, 0x2C, "4")
@@ -557,6 +560,25 @@ const ppc_export gimport_exports[] = {
 #undef E
 };
 const unsigned gimport_export_count = sizeof gimport_exports / sizeof gimport_exports[0];
+
+bool qt_gimport_image(uint32_t ci, uint8_t **rgba, int *w, int *h, gaddr *pict)
+{
+    importer *g = ci ? importer_of(ci) : NULL;
+    *rgba = NULL;
+    *pict = 0;
+    if (!g || g->kind == KIND_NONE)
+        return false;
+    *w = g->w;
+    *h = g->h;
+    if (g->kind == KIND_PICT) {
+        *pict = pict_handle(g);
+        return *pict != 0;
+    }
+    *rgba = malloc((size_t)g->w * (size_t)g->h * 4);
+    if (*rgba)
+        memcpy(*rgba, g->rgba, (size_t)g->w * (size_t)g->h * 4);
+    return *rgba != NULL;
+}
 
 /* A new run: no importers; the component registered (components_reset). */
 void qt_gimport_register(void)

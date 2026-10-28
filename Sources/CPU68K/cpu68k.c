@@ -118,18 +118,27 @@ static inline bool ic_on(const cpu68k *c) { return c->icache && (c->cacr & CACR_
 /* ---------------------------------------------------------------------- */
 /* Memory */
 
-static inline uint8_t mr8(cpu68k *c, uint32_t a) { return rd8(a & c->addr_mask); }
+/* Device windows (g_hw_map, a machine's memory-mapped chips) go to the
+ * device callbacks in every model; a 68000's odd word or long faults
+ * first, as the chip checked the address before the bus cycle. */
+static inline uint8_t mr8(cpu68k *c, uint32_t a)
+{
+    a &= c->addr_mask;
+    return hw_mapped(a) ? (uint8_t)g_hw_read(a, 1) : rd8(a);
+}
 static inline uint16_t mr16(cpu68k *c, uint32_t a)
 {
     if (odd_fault(c, a))
         address_error(c, a, true, false);
-    return rd16(a & c->addr_mask);
+    a &= c->addr_mask;
+    return hw_mapped(a) ? (uint16_t)g_hw_read(a, 2) : rd16(a);
 }
 static inline uint32_t mr32(cpu68k *c, uint32_t a)
 {
     if (odd_fault(c, a))
         address_error(c, a, true, false);
-    return rd32(a & c->addr_mask);
+    a &= c->addr_mask;
+    return hw_mapped(a) ? g_hw_read(a, 4) : rd32(a);
 }
 /* The CPU's own stores, which a 68020's or 68030's instruction cache
  * doesn't see. */
@@ -145,22 +154,28 @@ static inline uint32_t mr32(cpu68k *c, uint32_t a)
     } while (0)
 static inline void mw8(cpu68k *c, uint32_t a, uint8_t v)
 {
-    watch_store(a & c->addr_mask);
-    OWN_STORE(c, wr8(a & c->addr_mask, v));
+    a &= c->addr_mask;
+    if (hw_mapped(a)) { g_hw_write(a, 1, v); return; }
+    watch_store(a);
+    OWN_STORE(c, wr8(a, v));
 }
 static inline void mw16(cpu68k *c, uint32_t a, uint16_t v)
 {
     if (odd_fault(c, a))
         address_error(c, a, false, false);
-    watch_store(a & c->addr_mask);
-    OWN_STORE(c, wr16(a & c->addr_mask, v));
+    a &= c->addr_mask;
+    if (hw_mapped(a)) { g_hw_write(a, 2, v); return; }
+    watch_store(a);
+    OWN_STORE(c, wr16(a, v));
 }
 static inline void mw32(cpu68k *c, uint32_t a, uint32_t v)
 {
     if (odd_fault(c, a))
         address_error(c, a, false, false);
-    watch_store(a & c->addr_mask);
-    OWN_STORE(c, wr32(a & c->addr_mask, v));
+    a &= c->addr_mask;
+    if (hw_mapped(a)) { g_hw_write(a, 4, v); return; }
+    watch_store(a);
+    OWN_STORE(c, wr32(a, v));
 }
 
 static inline uint32_t mread(cpu68k *c, uint32_t a, int sz)
@@ -2605,9 +2620,10 @@ void cpu_execute_at(cpu68k *c, uint32_t pc)
 
 uint64_t cpu_run(cpu68k *c, uint64_t max)
 {
-    /* The JIT keeps code coherent and has no address errors: the 68000,
-     * and the 68020's and 68030's caches, are the interpreter's. */
-    if (cpu_jit_enabled && !c->trace && c->model != 68000 && !ic_on(c))
+    /* The JIT keeps code coherent, has no address errors and doesn't see
+     * devices: the 68000, the 68020's and 68030's caches and a machine
+     * with memory-mapped chips are the interpreter's. */
+    if (cpu_jit_enabled && !c->trace && c->model != 68000 && !ic_on(c) && !g_hw_jit_off)
         return cpu_jit_run(c, max);
     uint64_t start = c->icount;
     while (!c->halted && !c->stopped && c->icount - start < max)

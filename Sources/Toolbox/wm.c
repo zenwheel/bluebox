@@ -894,6 +894,13 @@ void wm_rebuild_desk(void) { set_desk((int16_t)rd16(LM_MBarHeight)); }
 
 void display_windows_changed(void);
 
+/* The Finder's desktop window (M21): a window outside the window list that
+ * is the desktop itself, so FindWindow still answers inDesk there.  Its
+ * port covers the screen; what of the gray region no window covers is its
+ * visRgn, and what of that is uncovered goes into its update region, so
+ * the Finder draws its desktop icons in update events like a window's. */
+static gaddr desk_window;
+
 /* Recompute every window's visRgn (local coordinates). */
 static void calc_all_vis(void)
 {
@@ -918,6 +925,13 @@ static void calc_all_vis(void)
             hrgn_offset(&vis, dh, dv);
         }
         rgn_write(GrafPort_visRgn(w), &vis);
+    }
+    if (desk_window) {
+        hrgn_op(&vis, &gray, &covered, RGN_DIFF);
+        int dh, dv;
+        port_offset(desk_window, &dh, &dv);
+        hrgn_offset(&vis, dh, dv);
+        rgn_write(GrafPort_visRgn(desk_window), &vis);
     }
     hrgn_free(&covered);
     hrgn_free(&vis);
@@ -1037,8 +1051,17 @@ static void repaint(const hrgn *clobbered)
     }
     hrgn_op(&area, clobbered, &gray, RGN_SECT);
     hrgn_op(&area, &area, &covered, RGN_DIFF);
-    if (!hrgn_empty(&area))
+    if (!hrgn_empty(&area)) {
         paint_desk(&area);
+        if (desk_window) { /* the Finder draws its icons there */
+            hrgn upd;
+            hrgn_init(&upd);
+            rgn_read(WindowRecord_updateRgn(desk_window), &upd);
+            hrgn_op(&upd, &upd, &area, RGN_UNION);
+            rgn_write(WindowRecord_updateRgn(desk_window), &upd);
+            hrgn_free(&upd);
+        }
+    }
     hrgn_free(&covered);
     hrgn_free(&area);
     hrgn_free(&tmp);
@@ -1692,6 +1715,8 @@ int32_t wm_window_hit(gaddr w, uint32_t pt) { return call_wdef(w, wHit, (int32_t
 /* Whether a port is a window (in the window list). */
 static bool is_window(gaddr p)
 {
+    if (p && p == desk_window)
+        return true;
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
         if (w == p)
             return true;
@@ -1795,8 +1820,49 @@ int8_t tb_CheckUpdate(gaddr ev)
         wr32(ev + 2, w);
         return 1;
     }
+    if (desk_window && !tb_EmptyRgn(WindowRecord_updateRgn(desk_window))) { /* behind them all */
+        wr16(ev, 6);
+        wr32(ev + 2, desk_window);
+        return 1;
+    }
     return 0;
 }
+
+/* The Finder's desktop window: made once, in the current zone (the
+ * Finder asks with the system heap current), its port the whole screen,
+ * its regions the gray region and all of it to be drawn. */
+gaddr wm_new_desk_window(void)
+{
+    if (desk_window)
+        return desk_window;
+    gaddr saved = qd_port();
+    gaddr w = tb_NewPtr(WindowRecord_SIZEOF, false, true);
+    if (!w)
+        return 0;
+    tb_OpenCPort(w);
+    WindowRecord_set_windowKind(w, userKind);
+    WindowRecord_set_visible(w, 1);
+    WindowRecord_set_strucRgn(w, tb_NewRgn());
+    WindowRecord_set_contRgn(w, tb_NewRgn());
+    WindowRecord_set_updateRgn(w, tb_NewRgn());
+    tb_CopyRgn(rd32(LM_GrayRgn), WindowRecord_strucRgn(w));
+    tb_CopyRgn(rd32(LM_GrayRgn), WindowRecord_contRgn(w));
+    WindowRecord_set_nextWindow(w, 0);
+    tb_SetPort(saved);
+    desk_window = w;
+    calc_all_vis();
+    hrgn gray, covered;
+    hrgn_init(&gray);
+    hrgn_init(&covered);
+    gray_rgn(&gray);
+    rgn_read(GrafPort_visRgn(w), &covered);
+    rgn_write(WindowRecord_updateRgn(w), &covered);
+    hrgn_free(&gray);
+    hrgn_free(&covered);
+    return w;
+}
+
+gaddr wm_desk_window(void) { return desk_window; }
 
 /* Exposed so other managers can repaint after drawing over windows. */
 void wm_repaint_all(void) { repaint_all(); }
@@ -2332,6 +2398,7 @@ void tb_InitWindows(void)
     active_window = 0;
     old_window = 0;
     floats_hidden = false;
+    desk_window = 0;
     float_layer = false;
     floats_inactive = false;
     nhidden_floats = 0;

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "hw68k.h"
 #include "m68k.h"
 #include "machine.h"
 #include "tb_internal.h"
@@ -93,23 +94,34 @@ void tb_SysBeep(int16_t i) { sound_beep(); }
 int16_t tb_InitUtil(void) { return noErr; }
 int16_t tb_WriteParam(void) { return noErr; }
 
+/* SysEnvirons as the machine presented answers it (hw68k.c's profile).  The
+ * record's version is the one asked for, up to the 2 this System knows:
+ * version 1 has the machine, system, processor, FPU, colour QuickDraw and
+ * keyboard, version 2 adds the AppleTalk driver's version and the System
+ * Folder's volume.  A newer version than that is answered as version 2 with
+ * envVersTooBig; version 0 or less is envBadVers. */
 int16_t tb_SysEnvirons(int16_t vers, gaddr p)
 {
     if (vers < 1)
         return -5501; /* envBadVers */
-    SysEnvRec_set_environsVersion(p, vers > 2 ? 2 : vers);
-    /* As System 7 does, from Gestalt: the machine (its Gestalt number less
-     * two), the processor and the FPU. */
-    uint32_t mach = gestalt_value(fourcc("mach"), 0), proc = gestalt_value(fourcc("proc"), 3);
-    SysEnvRec_set_machineType(p, (int16_t)(mach > 2 ? mach - 2 : 0));
+    const hw_profile *m = hw_machine();
+    int v = vers > 2 ? 2 : vers;
+    SysEnvRec_set_environsVersion(p, (int16_t)v);
+    SysEnvRec_set_machineType(p, (int16_t)m->env_machine);
     SysEnvRec_set_systemVersion(p, (int16_t)rd16(LM_SysVersion));
-    SysEnvRec_set_processor(p, (int16_t)proc); /* numbered alike: env68040 = 5 */
+    /* Numbered as Gestalt's: env68000 1, env68010 2, env68020 3, env68030 4,
+     * env68040 5. */
+    int proc = hw_machine_chosen() ? (m->cpu == 68000 ? 1 : m->cpu == 68030 ? 4 : m->cpu == 68040 ? 5 : 3)
+                                   : (g_cpu && g_cpu->model == 68040 ? 5 : 3);
+    SysEnvRec_set_processor(p, (int16_t)proc);
     SysEnvRec_set_hasFPU(p, gestalt_value(fourcc("fpu "), 0) != 0);
-    SysEnvRec_set_hasColorQD(p, 1);
-    SysEnvRec_set_keyBoardType(p, 4);  /* envAExtendKbd */
-    SysEnvRec_set_atDrvrVersNum(p, 0);
-    SysEnvRec_set_sysVRefNum(p, fm_system_vref());
-    return vers > 2 ? -5502 : noErr;   /* envVersTooBig */
+    SysEnvRec_set_hasColorQD(p, m->color_qd);
+    SysEnvRec_set_keyBoardType(p, (int16_t)m->env_keyboard);
+    if (v >= 2) {
+        SysEnvRec_set_atDrvrVersNum(p, 0);
+        SysEnvRec_set_sysVRefNum(p, fm_system_vref());
+    }
+    return vers > 2 ? -5502 : noErr; /* envVersTooBig */
 }
 
 /* In 24-bit mode the top byte is flags, and goes. */

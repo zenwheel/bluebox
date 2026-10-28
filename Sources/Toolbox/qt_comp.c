@@ -15,10 +15,15 @@
 
 #include "qt_atoms.h"
 #include "qt_comp.h"
+#include "qt_import.h"
+#include "qt_stream.h"
 #include "tb_internal.h"
+#include "qt_movie_internal.h"
 
 void qt_dhlr_register(void); /* qt_dhlr.c */
 void qt_mhlr_register(void); /* qt_mhlr.c */
+void qt_spriteworld_reset(void); /* qt_spriteworld.c */
+void qt_tween_register(void);     /* qt_tween.c */
 
 #define MAX_SLOTS 1024 /* the Component Manager's instances (their IDs' low word) */
 
@@ -219,4 +224,11 @@ void qt_components_reset(void)
     qt_udata_reset();
     qt_dhlr_register();
     qt_mhlr_register();
+    qt_import_register();
+    qt_spriteworld_reset();
+    qt_tween_register();
+    qt_movie_controls_reset();
+    qt_export_register();
+    qt_idh_register();
+    qt_stream_reset();
 }

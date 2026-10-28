@@ -6,13 +6,17 @@
  * same one for the same string.  The region and language codes of the
  * Script Manager convert to locales and back by the tables here; names are
  * English (a locale asked for in another display language is named in
- * English and says so, kLocalesDefaultDisplayStatus).  There are no
- * locale operation tables (collation, date formats) installed, so no
- * operation class has locales or names.
+ * English and says so, kLocalesDefaultDisplayStatus).  The operation
+ * classes the Unicode Utilities define (collation 'ucol', text breaking
+ * 'ubrk') are served from the host's locale data and have those locales
+ * and a name; any other class has no tables installed and so no locales or
+ * names.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "hostuc.h"
 #include "os9rest.h"
 #include "tb_internal.h"
 
@@ -224,6 +228,18 @@ static const locale *ref_of(uint32_t ref)
 {
     uint32_t i = (ref & 0xFFFF) - 1;
     return (ref & 0xFFFF0000u) == REF_TAG && i < MAX_LOCALES && locales[i].used ? &locales[i] : NULL;
+}
+
+/* The string a LocaleRef names ("en_US") for the Unicode Utilities; ref 0
+ * is the user's own locale; NULL for a ref that is none. */
+const char *rest_locale_id(uint32_t ref, char *buf, size_t cap)
+{
+    const locale *l = ref_of(ref);
+    if (l) {
+        join(l, kLocaleAllPartsMask, buf, cap);
+        return buf;
+    }
+    return !ref && hu_current_locale(buf, cap) ? buf : NULL;
 }
 
 static void get_cstr(gaddr p, char *out, size_t max)
@@ -474,33 +490,107 @@ static void loc_GetRegionLanguageName(ppc_cpu *c)
 
 /* ---- Operations ---- */
 
-/* No locale operation tables are installed: a class has no locales and no
- * names, and nothing can be loaded or unloaded. */
+/* The classes the Unicode Utilities define are served from the host's
+ * locale data; no other class has tables installed, so none has locales
+ * or names, and nothing can be loaded or unloaded. */
+static const char *op_name(uint32_t op)
+{
+    return op == 0x75636F6C ? "Collation" : op == 0x7562726B ? "Text Breaking" : NULL; /* 'ucol', 'ubrk' */
+}
+
+static size_t op_locales(uint32_t op, char (*ids)[32], size_t max)
+{
+    return op_name(op) && hu_available() ? hu_available_locales(ids, max) : 0;
+}
+
 static void loc_OpCountLocales(ppc_cpu *c)
 {
     if (!R(1))
         RETURN(paramErr);
-    wr32(R(1), 0);
+    char (*ids)[32] = malloc(512 * 32);
+    if (!ids)
+        RETURN(memFullErr);
+    wr32(R(1), (uint32_t)op_locales(R(0), ids, 512));
+    free(ids);
     RETURN(noErr);
 }
 
+/* LocaleOperationGetLocales(opClass, max, *actual, list): the locales of
+ * the class, each with variant 0. */
 static void loc_OpGetLocales(ppc_cpu *c)
 {
     if (!R(2))
         RETURN(paramErr);
-    wr32(R(2), 0);
+    char (*ids)[32] = malloc(512 * 32);
+    if (!ids)
+        RETURN(memFullErr);
+    size_t n = op_locales(R(0), ids, 512);
+    uint32_t k = 0;
+    for (size_t i = 0; R(3) && i < n && k < R(1); i++) {
+        locale l;
+        if (!parse(ids[i], &l))
+            continue;
+        uint32_t ref = intern(&l);
+        if (!ref)
+            continue;
+        wr32(R(3) + 8 * k, ref);
+        wr32(R(3) + 8 * k + 4, 0);
+        k++;
+    }
+    free(ids);
+    wr32(R(2), R(3) ? k : (uint32_t)n);
     RETURN(noErr);
 }
 
+static void put_ascii_name(const char *s, uint32_t max, gaddr actual, gaddr buf, int32_t *err)
+{
+    size_t n = strlen(s);
+    if (actual)
+        wr32(actual, (uint32_t)n);
+    if (n > max) {
+        *err = kLocalesBufferTooSmallErr;
+        return;
+    }
+    if (buf)
+        put_unichars(buf, s, n);
+}
+
+/* LocaleOperationGetName(opClass, displayLocale, maxLen, *actualLen, name) */
+static void loc_OpGetName(ppc_cpu *c)
+{
+    const char *name = op_name(R(0));
+    if (!name || (R(1) && !ref_of(R(1))))
+        RETURN(paramErr);
+    int32_t err = is_english(R(1)) ? noErr : kLocalesDefaultDisplayStatus;
+    put_ascii_name(name, R(2), R(3), R(4), &err);
+    RETURN(err);
+}
+
+/* LocaleOperationCountNames(opClass, *count): the one name there is. */
 static void loc_OpCountNames(ppc_cpu *c)
 {
     if (!R(1))
         RETURN(paramErr);
-    wr32(R(1), 0);
+    wr32(R(1), op_name(R(0)) ? 1 : 0);
     RETURN(noErr);
 }
 
-static void loc_OpNoName(ppc_cpu *c) { RETURN(paramErr); }
+/* LocaleOperationGetIndName(opClass, index, maxLen, *actualLen, name,
+ * *displayLocale) */
+static void loc_OpGetIndName(ppc_cpu *c)
+{
+    const char *name = op_name(R(0));
+    if (!name || R(1) != 1)
+        RETURN(paramErr);
+    int32_t err = noErr;
+    put_ascii_name(name, R(2), R(3), R(4), &err);
+    if (R(5)) {
+        locale en;
+        parse("en_US", &en);
+        wr32(R(5), intern(&en));
+    }
+    RETURN(err);
+}
 
 /* LocaleOperationLoadData(.., opClass, .., *index, *data): nothing to load. */
 static void loc_OpLoadData(ppc_cpu *c)
@@ -521,8 +611,8 @@ const ppc_export os9rest_locale_exports[] = {
     { "LocaleOperationCountLocales", loc_OpCountLocales }, { "LocaleOperationGetLocales", loc_OpGetLocales },
     { "LocaleGetName", loc_GetName }, { "LocaleCountNames", loc_CountNames }, { "LocaleGetIndName", loc_GetIndName },
     { "LocaleGetRegionLanguageName", loc_GetRegionLanguageName },
-    { "LocaleOperationGetName", loc_OpNoName }, { "LocaleOperationCountNames", loc_OpCountNames },
-    { "LocaleOperationGetIndName", loc_OpNoName },
+    { "LocaleOperationGetName", loc_OpGetName }, { "LocaleOperationCountNames", loc_OpCountNames },
+    { "LocaleOperationGetIndName", loc_OpGetIndName },
     { "LocaleOperationLoadData", loc_OpLoadData }, { "LocaleOperationUnloadData", loc_OpUnloadData },
 };
 const unsigned os9rest_locale_export_count = sizeof os9rest_locale_exports / sizeof os9rest_locale_exports[0];

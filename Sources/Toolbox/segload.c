@@ -135,7 +135,21 @@ static void raw_UnloadSeg(cpu68k *c, uint16_t tw)
     (void)a5;
     int16_t seg = -1;
     gaddr code = 0;
-    for (gaddr e = jt; e < jt + jtsize; e += 8) {
+    /* The address of a routine as Pascal's @ gives it, its jump table
+     * entry (the JMP in it, as System 7.1's Finder passes when its code
+     * zone is full): the segment its entry names. */
+    if (addr >= jt && addr < jt + jtsize) {
+        gaddr e = jt + (addr - jt) / 8 * 8;
+        int16_t s = rd16(e + 2) == JMP_ABS_L ? (int16_t)rd16(e) : rd16(e + 6) == LOADSEG_TRAP ? (int16_t)rd16(e + 4) : -1;
+        gaddr h = s >= 0 ? get_code(s) : 0;
+        if (h && rd32(h)) {
+            seg = s;
+            code = rd32(h);
+            if (rd32(LM_CurrentA5) < GA_A5WORLD_TOP_24)
+                code &= 0x00FFFFFFu;
+        }
+    }
+    for (gaddr e = jt; e < jt + jtsize && seg < 0; e += 8) {
         if (rd16(e + 2) != JMP_ABS_L)
             continue;
         int16_t s = (int16_t)rd16(e);
@@ -175,6 +189,13 @@ static void raw_ExitToShell(cpu68k *c, uint16_t tw)
 {
     rm_update_all();
     cpu_halt(c, "ExitToShell");
+}
+
+/* _Chain ($A9F3, System 6): Launch under another name; the program that
+ * called it is replaced, as with Launch, its record the same. */
+static void raw_Chain(cpu68k *c, uint16_t tw)
+{
+    c->d[0] = (uint32_t)(int32_t)tb_LaunchApplication(c->a[0]);
 }
 
 /* Return address for the application's main routine. */
@@ -283,6 +304,7 @@ const raw_trap raw_traps[] = {
     { 0xA9EC, "Elems68K", raw_Elems68K },
     { 0xA9F0, "LoadSeg", raw_LoadSeg },
     { 0xA9F1, "UnloadSeg", raw_UnloadSeg },
+    { 0xA9F3, "Chain", raw_Chain },
     { 0xA9F4, "ExitToShell", raw_ExitToShell },
     { 0, NULL, NULL },
 };

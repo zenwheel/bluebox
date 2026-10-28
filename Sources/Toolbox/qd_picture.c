@@ -655,6 +655,11 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
     hrgn_init(&ls.rgn);
     memset(ls.fill_pat, 0xFF, 8);
     int text_h = 0, text_v = 0;
+    /* After a compressed image QuickTime drew, the warning the picture
+     * carries for Macs without QuickTime ("QuickTime and a ... decompressor
+     * are needed") isn't shown: its text, and the text state before it, up
+     * to the next other opcode. */
+    bool fallback = false;
     for (;;) {
         compact(r);
         need(r, r->v2 ? 2 : 1);
@@ -663,6 +668,20 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         int op = r->v2 ? (uint16_t)r16(r) : r8(r);
         if (op == 0xFF || (r->v2 && op == 0x00FF))
             break;
+        if (fallback && r->v2) {
+            bool state = op == 0x00 || (op >= 0x03 && op <= 0x05) || op == 0x07 || op == 0x08 ||
+                         (op >= 0x0D && op <= 0x10) || op == 0x1A || op == 0x1B || op == 0x1F || op == 0x2C ||
+                         op == 0x2E;
+            if (op >= 0x28 && op <= 0x2B) {
+                skip(r, op == 0x28 ? 4 : op == 0x2B ? 2 : 1);
+                skip(r, (uint32_t)r8(r));
+                if (r->p & 1)
+                    skip(r, 1);
+                continue;
+            }
+            if (!state)
+                fallback = false;
+        }
         gaddr before = r->p;
         qd_fill_pixpat = ls.fill_pp; /* fill verbs use the picture's colour pattern */
         switch (op) {
@@ -800,20 +819,21 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
             break;
         }
         case 0x0C00: skip(r, 24); break;
-        case 0x8200: { /* CompressedQuickTime: matrix, matte, mode, srcRect, accuracy, mask, then the image */
+        case 0x8200: { /* CompressedQuickTime: version, matrix, matte, mode, srcRect, accuracy, mask, then the image */
             uint32_t len = r32(r);
             need(r, len);
             gaddr q = r->p;
-            if (len >= 66 && q + len <= r->end) {
-                qrect src = qrect_get(q + 50);
-                uint32_t matte = rd32(q + 36), mask = rd32(q + 62);
-                gaddr desc = q + 66 + matte + mask;
-                if (desc + 86 <= q + len && desc + rd32(desc) <= q + len) {
-                    double sx = (int32_t)rd32(q) / 65536.0, sy = (int32_t)rd32(q + 16) / 65536.0;
-                    double tx = (int32_t)rd32(q + 24) / 65536.0, ty = (int32_t)rd32(q + 28) / 65536.0;
+            if (len >= 68 && q + len <= r->end) {
+                gaddr mx = q + 2;
+                qrect src = qrect_get(q + 52);
+                uint32_t matte = rd32(q + 38), mask = rd32(q + 64);
+                gaddr desc = q + 68 + matte + mask;
+                if (matte < len && mask < len && desc + 86 <= q + len && desc + rd32(desc) <= q + len) {
+                    double sx = (int32_t)rd32(mx) / 65536.0, sy = (int32_t)rd32(mx + 16) / 65536.0;
+                    double tx = (int32_t)rd32(mx + 24) / 65536.0, ty = (int32_t)rd32(mx + 28) / 65536.0;
                     qrect at = { (int16_t)(src.top * sy + ty), (int16_t)(src.left * sx + tx),
                                  (int16_t)(src.bottom * sy + ty), (int16_t)(src.right * sx + tx) };
-                    icm_draw_compressed(desc, desc + rd32(desc), src, map_rect(m, at), 0);
+                    fallback = icm_draw_compressed(desc, desc + rd32(desc), src, map_rect(m, at), 0);
                 }
             }
             r->p = q;

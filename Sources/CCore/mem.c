@@ -12,6 +12,11 @@ gaddr g_screen_size = 0u - GA_SCREEN_32, g_low_top = 0x01000000u;
 gaddr g_watch_lo, g_watch_len;
 void (*g_watch_fn)(gaddr a);
 
+uint8_t g_hw_map[4096];
+bool g_hw_jit_off;
+uint32_t (*g_hw_read)(gaddr a, int size);
+void (*g_hw_write)(gaddr a, int size, uint32_t v);
+
 uint8_t *g_code_map;
 void (*g_code_written[3])(gaddr lo, gaddr hi);
 

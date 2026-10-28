@@ -592,7 +592,7 @@ int16_t tb_FCompressPicture(int32_t srcPicture, int32_t dstPicture, int16_t colo
     uint32_t dsize = rd32(rd32(desc));
 
     /* The picture: header, $8200, end. */
-    uint32_t body = 66 + dsize + (uint32_t)len;
+    uint32_t body = 68 + dsize + (uint32_t)len;
     uint32_t total = 10 + 4 + 2 + 24 + 2 + 4 + body + (body & 1) + 2;
     tb_SetHandleSize(dst, (int32_t)total);
     if ((uint32_t)tb_GetHandleSize(dst) < total) {
@@ -625,17 +625,18 @@ int16_t tb_FCompressPicture(int32_t srcPicture, int32_t dstPicture, int16_t colo
     be16(q, 0x8200);
     be32(q + 2, body);
     uint8_t *b = q + 6;
-    be32(b, 0x10000); /* the matrix: the image at the frame's corner */
-    be32(b + 16, 0x10000);
-    be32(b + 24, (uint32_t)(int32_t)frame.left << 16);
-    be32(b + 28, (uint32_t)(int32_t)frame.top << 16);
-    be32(b + 32, 0x40000000);
+    /* version 0, then the matrix: the image at the frame's corner */
+    be32(b + 2, 0x10000);
+    be32(b + 18, 0x10000);
+    be32(b + 26, (uint32_t)(int32_t)frame.left << 16);
+    be32(b + 30, (uint32_t)(int32_t)frame.top << 16);
+    be32(b + 34, 0x40000000);
     /* matteSize, matteRect and mode (srcCopy) are 0 */
-    be16(b + 54, (uint16_t)h); /* srcRect */
-    be16(b + 56, (uint16_t)w);
+    be16(b + 56, (uint16_t)h); /* srcRect */
+    be16(b + 58, (uint16_t)w);
     /* accuracy and maskSize are 0 */
-    gget(b + 66, rd32(desc), dsize);
-    memcpy(b + 66 + dsize, data, len);
+    gget(b + 68, rd32(desc), dsize);
+    memcpy(b + 68 + dsize, data, len);
     be16(b + body + (body & 1), 0x00FF);
     gput(rd32(dst), p, total);
     free(p);
@@ -665,27 +666,32 @@ int16_t tb_MakeImageDescriptionForPixMap(int32_t pixmap, gaddr idh)
 }
 
 /* CodecNameSpecList: a count, then per codec its component, type, type
- * name (Str31) and a handle to its name; 44 bytes each, from offset 2. */
+ * name (Str31) and a handle to its name; 44 bytes each, from offset 2.
+ * Every compressor registered, ours and programs'. */
 int16_t tb_GetCodecNameList(gaddr list, int16_t showAll)
 {
-    static const uint32_t types[] = { RAW, RLE, JPEG };
     if (!list)
         return paramErr;
+    uint32_t comps[64];
     int n = 0;
-    for (size_t i = 0; i < sizeof types / sizeof *types; i++)
-        n += qt_venc_supported(types[i], 24);
+    for (uint32_t c = components_find_next(0, fourcc("imco"), 0, 0); c && n < 64;
+         c = components_find_next(c, fourcc("imco"), 0, 0))
+        comps[n++] = c;
     gaddr p = tb_NewPtr(2 + n * 44, false, true);
     if (!p)
         return memFullErr;
     wr16(p, (uint16_t)n);
     gaddr e = p + 2;
-    for (size_t i = 0; i < sizeof types / sizeof *types; i++) {
-        if (!qt_venc_supported(types[i], 24))
-            continue;
-        const char *name = compressor_name(types[i]);
+    for (int i = 0; i < n; i++) {
+        uint32_t t, type = 0, m;
+        components_describe(comps[i], &t, &type, &m);
+        const char *name = qt_codec_type_name(type);
+        char own[5] = { (char)(type >> 24), (char)(type >> 16), (char)(type >> 8), (char)type, 0 };
+        if (!name)
+            name = own;
         uint32_t len = (uint32_t)strlen(name);
-        wr32(e, types[i]); /* our codecs' component ids are their types */
-        wr32(e + 4, types[i]);
+        wr32(e, comps[i]);
+        wr32(e + 4, type);
         wr8(e + 8, (uint8_t)len);
         gput(e + 9, name, len);
         gaddr h = tb_NewHandle((int32_t)len + 1, false, true);

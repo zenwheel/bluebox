@@ -431,4 +431,5 @@ void icm_components_reset(void)
     /* The natives are registered afresh each boot (trap_init). */
     gaddr entry = native_register(sc_component, "StandardCompression", 0);
     components_register_native(fourcc("scdi"), fourcc("imag"), fourcc("appl"), entry);
+    qt_codec_components_register(); /* the codecs (qt_codec_comp.c) */
 }

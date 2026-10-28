@@ -7,6 +7,7 @@
 
 #include "os9rest.h"
 #include "os9svc.h"
+#include "os9left.h"
 
 typedef struct {
     const ppc_export *exports;
@@ -52,4 +53,5 @@ void os9svc_reset(void)
     os9svc_keychain_reset();
     os9svc_filesign_reset();
     os9rest_reset();
+    os9left_reset();
 }

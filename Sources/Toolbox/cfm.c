@@ -24,11 +24,14 @@
 #include "hostgl.h"
 #include "machine.h"
 #include "os9rest.h"
+#include "os9left.h"
 #include "os9svc.h"
 #include "carbon_hi.h"
 #include "os9_toolbox.h"
 #include "ppc_bridge.h"
 #include "qt_calls.h"
+#include "qt_stream.h"
+#include "qt_vr.h"
 #include "qd3d.h"
 #include "tb_internal.h"
 #include "trap.h"
@@ -211,12 +214,18 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     void (*svc)(ppc_cpu *) = carbonsvc_export_fn(name);
     if (svc)
         return svc;
+    void (*rest)(ppc_cpu *) = carbonrest_export_fn(name); /* the remaining Carbon managers */
+    if (rest)
+        return rest;
+    void (*left)(ppc_cpu *) = os9left_export_fn(name); /* Mac OS 9's libraries' leftovers */
+    if (left)
+        return left;
     void (*os9)(ppc_cpu *) = os9svc_export_fn(name); /* Mac OS 9's service libraries */
     if (os9)
         return os9;
-    void (*rest)(ppc_cpu *) = os9rest_export_fn(name); /* and their remaining exports */
-    if (rest)
-        return rest;
+    void (*orest)(ppc_cpu *) = os9rest_export_fn(name); /* and their remaining exports */
+    if (orest)
+        return orest;
     void (*cf)(ppc_cpu *) = carbon_cf_export_fn(name);
     if (cf)
         return cf;
@@ -280,6 +289,10 @@ static void (*export_fn(const char *name))(ppc_cpu *)
         return os9tbx_export_fn(name);
     if (qt_export_fn(name)) /* QuickTime's component calls, QuickTime VR and streaming */
         return qt_export_fn(name);
+    if (qtstream_export_fn(name)) /* QTStreamLib's presentations, messages and the rest */
+        return qtstream_export_fn(name);
+    if (qt_vr_export_fn(name)) /* QuickTimeVRLib */
+        return qt_vr_export_fn(name);
     unsigned lo = 0, hi = ppc_export_count;
     while (lo < hi) {
         unsigned mid = (lo + hi) / 2;
@@ -643,8 +656,9 @@ static const char *const native_libraries[] = {
     "OpenTptAppleTalkLib", "OTNtvUtilLib", "QuickDrawGXLib", "CollectionsLib", "ContextualMenu", "IconServicesLib",
     "TextCommon", "UnicodeConverter", "TextEncodingConverter", "CarbonLib",
     "FontManager", "MPLibrary", "DriverServicesLib", "PowerMgrLib", "URLAccessLib", "NameRegistryLib",
-    "DriverLoaderLib", "KeychainLib", "FoldersLib", "FileSigningLib", "UTCUtils",
+    "DriverLoaderLib", "KeychainLib", "FoldersLib", "FileSigningLib", "UTCUtils", "QTStreamLib",
     "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
+    "QuickTimeVRLib",
 };
 
 /* Apple libraries left unloaded even where an installer put them: the

@@ -117,6 +117,7 @@ int16_t rm_open_empty_system(void);
  * there is none or it failed. */
 bool process_launch(const char *app, const char *const *docs, int ndocs);
 bool process_is_finder(uint32_t hi, uint32_t lo); /* the Finder's serial number */
+bool process_is_us(uint32_t hi, uint32_t lo); /* this run's serial number or kCurrentProcess */
 bool process_open_url(const char *url);
 /* Internet Config's ICLaunchURL: the URL in data[a..b) (all len bytes when
  * the selection is empty) opened by the host; an Internet Config error. */
@@ -260,6 +261,9 @@ void machine_charge_pixels(uint64_t n);
 /* TickCount polled: headless, a tight loop of polls skips to the next tick. */
 void machine_tick_polled(void);
 gaddr wm_window_at(uint32_t p);
+/* The Finder's desktop window (outside the window list; FindWindow answers inDesk there). */
+gaddr wm_new_desk_window(void);
+gaddr wm_desk_window(void);
 void drag_reset(void); /* Drag Manager (drag.c): a fresh machine */
 void print_reset(void); /* Printing Manager (print.c) */
 /* A print record's page setup in points, and one put in at a resolution
@@ -267,6 +271,7 @@ void print_reset(void); /* Printing Manager (print.c) */
 void print_get_setup(gaddr p, machine_page_setup *ps);
 void print_put_setup(gaddr p, const machine_page_setup *ps, int vres, int hres);
 void carbonsvc_reset(void); /* CarbonLib's services (carbon_svc.c) */
+void carbonrest_reset(void); /* CarbonLib's remaining managers (carbonrest.c) */
 void icm_reset(void); /* Image Compression Manager (qt_icm.c) */
 void gx_reset(void); /* QuickDraw GX (gx.c) */
 /* The mouse's own motion for ADB packets (events.c). */
@@ -291,6 +296,7 @@ void machine_set_time(uint32_t secs); /* SetDateTime: Time counts from secs */
 bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
+void machine_idle_for(int32_t sleep); /* the same, the clock moving on no more than sleep ticks */
 void time_reset(void);
 /* Layers and Open Transport's tasks (vam.c): a new run; the tasks due. */
 void vam_reset(void);
@@ -332,6 +338,10 @@ uint8_t *intl_itl2(uint32_t *lenp);
 
 void notify_pump(void);
 void notify_reset(void);
+void icons_reset(void); /* the Icon Utilities' labels and caches (icons.c) */
+void finder_reset(void); /* the Finder's Process Manager calls (finder.c) */
+void shutdown_reset(void); /* the Shutdown Manager's procedures (shutdown.c) */
+int finder_apple_menu_items(void); /* the items the Finder last gave the Apple menu */
 void iconservices_reset(void); /* Icon Services (iconservices.c) */
 
 /* ---- Sound Manager ---- */
@@ -361,7 +371,7 @@ void sound_host_midi(int id, const machine_midi_event *events, int n);
 extern int g_appearance;
 #include "qd_internal.h"
 /* A compressed picture's image ($8200 opcode), drawn at dst in the current port. */
-void icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mask);
+bool icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mask);
 
 /* Themes (theme.c): each returns false when no theme applies, and the
  * standard black-and-white drawing is used instead. */
@@ -547,6 +557,7 @@ int16_t alias_new_for_host(const char *host, gaddr alias_out);
 
 /* The application's SIZE flags (isHighLevelEventAware is 0x0040). */
 extern uint16_t g_app_size_flags;
+extern bool g_is_finder;
 
 /* Dialog Manager (dialog.c): text with ^0..^3 replaced by the ParamText
  * strings; a message asking for another screen depth ends the run when
@@ -594,6 +605,7 @@ typedef struct {
  * driver completes it, with its ioCompletion, later. */
 enum { ioInProgress = 1 };
 bool driver_open(gaddr pb, int16_t *err); /* false: no driver of that name */
+enum { DISK_DRIVER_UNIT = 32 };              /* the main volume's disk, as SCSI ID 0 (.Sony keeps -5 for floppies) */
 enum { CD_UNIT = 35 };                    /* .AppleCD, the mounted volumes' driver */
 void io_complete_now(gaddr pb, int16_t result); /* KillIO's: inside the call (timemgr.c) */
 void io_complete_now_for(int16_t refnum);
@@ -631,8 +643,18 @@ extern const native_driver mactcp_driver;
 void mactcp_poll(void);
 void mactcp_reset(void);
 void mactcp_install_resolver(void);
+/* The Sony driver (.Sony) for a raw floppy disk image, key-disk checks (sony.c). */
+extern const native_driver sony_driver;
+void sony_install_drive(gaddr zone, int16_t drive);
+void sony_reset(void);
 /* The Sound Driver (.Sound) of the first Macs (sound.c). */
 extern const native_driver sound_driver;
+/* The main volume's disk driver (diskdriver.c), and the icon and status
+ * calls the CD driver shares with it. */
+extern const native_driver disk_driver;
+int16_t disk_icon_control(gaddr pb, bool removable);
+int16_t disk_drive_status(gaddr pb);
+void disk_driver_reset(void);
 /* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */
 extern const native_driver mpp_driver, atp_driver, xpp_driver, dsp_driver;
 void adsp_poll(void);

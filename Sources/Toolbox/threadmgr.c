@@ -13,7 +13,10 @@
  * part at its top and, for PowerPC programs, the PowerPC part below.
  * Preemptive threads are scheduled as cooperative ones: they run when
  * another thread yields, and not at interrupt time.  A custom scheduler set
- * with SetThreadScheduler is recorded but not consulted.
+ * with SetThreadScheduler is asked which thread to go to when a thread
+ * yields (its SchedulerInfoRec has the current and suggested thread); the
+ * debugger's notification procedures are told of each thread made and
+ * disposed of.
  */
 #include <pthread.h>
 #include <setjmp.h>
@@ -81,6 +84,7 @@ static int pool[3]; /* premade threads by style */
 static pthread_mutex_t baton = PTHREAD_MUTEX_INITIALIZER;
 static host_thread app_host;
 static void (*main_pump)(void);
+static gaddr scheduler, dbg_new, dbg_dispose, dbg_schedule; /* the custom scheduler, the debugger's procs */
 
 void machine_set_main_thread_pump(void (*fn)(void)) { main_pump = fn; }
 
@@ -108,6 +112,7 @@ void threads_reset(void)
     current = 0;
     next_id = kApplicationThreadID + 1;
     memset(pool, 0, sizeof pool);
+    scheduler = dbg_new = dbg_dispose = dbg_schedule = 0;
 }
 
 static int find(int32_t id)
@@ -149,6 +154,19 @@ static void call_proc(gaddr fn, uint32_t id, gaddr param)
     cpu_push32(c, id);
     cpu_push32(c, param);
     guest_call(fn);
+}
+
+/* Call a routine that takes a ThreadID or a pointer and gives a ThreadID
+ * (the scheduler, the debugger's scheduling notification). */
+static uint32_t call_ret(gaddr fn, uint32_t arg)
+{
+    if (native_ppc(fn))
+        return ppc_call(fn, &arg, 1);
+    cpu68k *c = g_cpu;
+    cpu_push32(c, 0);
+    cpu_push32(c, arg);
+    guest_call(fn);
+    return cpu_pop32(c);
 }
 
 /* ---- Saving and loading a thread's state ---- */
@@ -466,6 +484,8 @@ int16_t tb_NewThread(int32_t style, gaddr entry, gaddr param, int32_t stack_size
     x->ppc_returned = false;
     if (madep)
         wr32(madep, t->id);
+    if (dbg_new)
+        call_proc(dbg_new, t->id, 0);
     return noErr;
 }
 
@@ -482,7 +502,11 @@ void thread_set_exit(uint32_t id, void (*hook)(uint32_t id, uint32_t result), ui
 
 uint32_t thread_current_id(void) { return threads[current].id; }
 
-int16_t tb_SetThreadScheduler(gaddr proc) { return noErr; }
+int16_t tb_SetThreadScheduler(gaddr proc)
+{
+    scheduler = proc;
+    return noErr;
+}
 
 int16_t tb_SetThreadSwitcher(int32_t id, gaddr proc, gaddr param, int8_t in)
 {
@@ -509,7 +533,13 @@ int16_t tb_SetThreadTerminator(int32_t id, gaddr proc, gaddr param)
     return noErr;
 }
 
-int16_t tb_SetDebuggerNotificationProcs(gaddr a, gaddr b, gaddr c) { return noErr; }
+int16_t tb_SetDebuggerNotificationProcs(gaddr a, gaddr b, gaddr c)
+{
+    dbg_new = a;
+    dbg_dispose = b;
+    dbg_schedule = c;
+    return noErr;
+}
 
 int16_t tb_DisposeThread(int32_t id, gaddr result, int8_t recycle)
 {
@@ -519,6 +549,8 @@ int16_t tb_DisposeThread(int32_t id, gaddr result, int8_t recycle)
     if (i == 0)
         return threadProtocolErr; /* not the application thread */
     int style = threads[i].style;
+    if (dbg_dispose)
+        call_proc(dbg_dispose, threads[i].id, 0);
     finish_thread(i, result, true);
     if (recycle && (style == kCooperativeThread || style == kPreemptiveThread))
         pool[style]++;
@@ -536,6 +568,21 @@ int16_t tb_YieldToThread(int32_t suggested)
     int i = suggested == kNoThreadID ? -1 : find(suggested);
     if (!(i >= 0 && i != current && threads[i].state == kReadyThreadState))
         i = next_ready();
+    if (scheduler || dbg_schedule) {
+        /* SchedulerInfoRec: size, current, suggested, interrupted */
+        gaddr rec = tb_NewPtr(16, false, true);
+        if (rec) {
+            wr32(rec, 16);
+            wr32(rec + 4, threads[current].id);
+            wr32(rec + 8, i >= 0 ? threads[i].id : kNoThreadID);
+            if (dbg_schedule)
+                call_ret(dbg_schedule, rec);
+            int j = scheduler ? find((int32_t)call_ret(scheduler, rec)) : -1;
+            if (j >= 0 && j != current && threads[j].state == kReadyThreadState)
+                i = j;
+            tb_DisposePtr(rec);
+        }
+    }
     if (i >= 0)
         switch_to(i, false);
     return noErr;
@@ -611,4 +658,65 @@ int16_t tb_SetThreadReadyGivenTaskRef(int32_t ref, int32_t id)
     if (threads[i].state == kStoppedThreadState)
         threads[i].state = kReadyThreadState;
     return noErr;
+}
+
+/* ---- What ThreadsLib's own calls (os9left_threads.c) ask of the threads ---- */
+
+gaddr thread_scheduler(void) { return scheduler; }
+gaddr thread_debug_proc(int which) { return which == 0 ? dbg_new : which == 1 ? dbg_dispose : dbg_schedule; }
+
+/* A thread's record: size 32, ID, state, style, stack size, stack base,
+ * entry, parameter. */
+int16_t thread_info(int32_t id, gaddr out)
+{
+    int i = find(id);
+    if (i < 0)
+        return threadNotFoundErr;
+    const thread *t = &threads[i];
+    uint32_t v[8] = { 32, t->id, (uint32_t)t->state, (uint32_t)t->style, t->stack_size, t->stack, t->entry, t->param };
+    for (int k = 0; k < 8; k++)
+        wr32(out + 4u * (unsigned)k, v[k]);
+    return noErr;
+}
+
+unsigned thread_ids(uint32_t *ids, unsigned max)
+{
+    unsigned n = 0;
+    for (int i = 0; i < MAX_THREADS && n < max; i++)
+        if (threads[i].used)
+            ids[n++] = threads[i].id;
+    return n;
+}
+
+/* The PowerPC registers of a thread: 32 GPRs, LR, CTR, CR, XER and the PC,
+ * 37 longs; read from the running thread's live registers or the others'
+ * saved ones, and written back. */
+int16_t thread_registers(int32_t id, bool write, gaddr rec)
+{
+    int i = find(id);
+    if (i < 0)
+        return threadNotFoundErr;
+    ppc_cpu *p = i == current ? &g_ppc : threads[i].ctx ? &threads[i].ctx->ppc : NULL;
+    if (!p)
+        return threadProtocolErr;
+    uint32_t *f[37];
+    for (int k = 0; k < 32; k++)
+        f[k] = &p->gpr[k];
+    f[32] = &p->lr; f[33] = &p->ctr; f[34] = &p->cr; f[35] = &p->xer; f[36] = &p->pc;
+    for (int k = 0; k < 37; k++) {
+        if (write)
+            *f[k] = rd32(rec + 4u * (unsigned)k);
+        else
+            wr32(rec + 4u * (unsigned)k, *f[k]);
+    }
+    return noErr;
+}
+
+/* The program's threads but its own are done with: CleanupThreadsPowerPC. */
+void thread_cleanup(void)
+{
+    for (int i = 1; i < MAX_THREADS; i++)
+        if (threads[i].used && i != current)
+            tb_DisposeThread((int32_t)threads[i].id, 0, false);
+    memset(pool, 0, sizeof pool);
 }

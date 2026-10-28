@@ -1352,6 +1352,12 @@ static gaddr resolve_bits(gaddr bm)
     return bm;
 }
 
+/* Bits that are the port's own: its BitMap, or a colour port's PixMap. */
+static bool is_port_bits(gaddr port, gaddr bits)
+{
+    return bits == port + GrafPort_portBits_off || bits == resolve_bits(port + GrafPort_portBits_off);
+}
+
 /* Copying into a printing port: record the source pixels as an image. */
 static void record_copy(gaddr src_bitmap, gaddr src_rect, gaddr dst_rect)
 {
@@ -1566,7 +1572,7 @@ void tb_CopyBits(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_r
     /* Into the current port: through its bitsProc, when it has one. */
     gaddr port = qd_port();
     gaddr proc = bottleneck(QDProcs_bitsProc_off);
-    if (proc && port && resolve_bits(dst_bitmap) == port + GrafPort_portBits_off) {
+    if (proc && port && is_port_bits(port, resolve_bits(dst_bitmap))) {
         cpu_push32(g_cpu, src_bitmap);
         cpu_push32(g_cpu, src_rect);
         cpu_push32(g_cpu, dst_rect);
@@ -1588,7 +1594,7 @@ static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, 
 {
     gaddr port = qd_port();
     gaddr db = resolve_bits(dst_bitmap);
-    bool into_port = port && db == port + GrafPort_portBits_off;
+    bool into_port = port && is_port_bits(port, db);
     if (rd32(db) == rd32(LM_ScrnBase) && into_port)
         note_screen_draw(qrect_get(dst_rect));
     if (into_port && qd_rec_active(port) && !qd_rec_suppressed())

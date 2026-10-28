@@ -13,6 +13,7 @@
 #include "machine.h"
 #include "ppc.h"
 #include "qd_internal.h"
+#include "hw68k.h"
 #include "tb_internal.h"
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -376,7 +377,19 @@ const char *machine_screen_mode_wanted(void) { return screen_reason; }
 /* A store the program made into the screen (mem.h's watch). */
 static void screen_written(gaddr a)
 {
-    uint32_t off = a - g_watch_lo, rb = qd_screen_row_bytes();
+    gaddr base = rd32(LM_ScrnBase);
+    /* The compact Macs' two pages are watched together; only the one the
+     * video circuitry shows counts. */
+    if (hw_machine()->via_sound) {
+        if (a < base) {
+            if (!hw_screen_alternate())
+                return;
+            a += 0x8000;
+        } else if (hw_screen_alternate()) {
+            return;
+        }
+    }
+    uint32_t off = a - base, rb = qd_screen_row_bytes();
     int y = (int)(off / rb), x = (int)((off % rb) * 8 / (uint32_t)qd_screen_depth());
     if (!direct_written) {
         direct_written = true;
@@ -478,6 +491,10 @@ static void check_screen_mode(void)
     g_watch_fn = screen_written;
     g_watch_lo = rd32(LM_ScrnBase);
     g_watch_len = screen_reason ? 0 : qd_screen_row_bytes() * (uint32_t)h; /* decided: no more watching */
+    if (hw_machine()->via_sound && g_watch_len) { /* and the alternate page below the main */
+        g_watch_lo -= 0x8000;
+        g_watch_len += 0x8000;
+    }
 }
 
 /* Called by the Event Manager on the emulator thread: a safe point. */
