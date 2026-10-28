@@ -165,12 +165,25 @@ static void c_CancelReply(ppc_cpu *c)
     forward(c, "OTCancelUReply");
 }
 
+/* OTCloneConfiguration(cfig): a configuration is its path string here; the copy has its own. */
+static void c_CloneConfiguration(ppc_cpu *c)
+{
+    gaddr cfg = R(0);
+    uint32_t n = 0;
+    while (cfg && cfg != 0xFFFFFFFFu && n < 255 && rd8(cfg + n))
+        n++;
+    gaddr copy = cfg && cfg != 0xFFFFFFFFu ? tb_NewPtr((int32_t)n + 1, true, true) : 0;
+    if (copy)
+        gmemcpy(copy, cfg, n);
+    RETURN(copy);
+}
+
 /* OTIsPortReal(portRef): a port with hardware behind it, not a pseudo-device. */
 static void c_IsPortReal(ppc_cpu *c) { RETURN((R(0) & 0x3FF) != 0x3FF && (R(0) & 0x3FF) != 0); }
 
 const ppc_export otc_exports[] = {
     { "OTCreateDeferredTaskPriv", c_CreateDeferredTaskPriv }, { "OTCreateSystemTaskPriv", c_CreateSystemTaskPriv },
-    { "OTCancelRequest", c_CancelRequest }, { "OTCancelReply", c_CancelReply }, { "OTIsPortReal", c_IsPortReal },
+    { "OTCloneConfiguration", c_CloneConfiguration }, { "OTCancelRequest", c_CancelRequest }, { "OTCancelReply", c_CancelReply }, { "OTIsPortReal", c_IsPortReal },
     { "OTDoTimingLog", c_noErr },
     { "OTGetEndpointInfo", c_GetEndpointInfo }, { "OTSync", c_Sync },
     { "OTIsSynchronous", c_IsSynchronous }, { "OTIsBlocking", c_IsBlocking },

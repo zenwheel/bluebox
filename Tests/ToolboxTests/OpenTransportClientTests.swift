@@ -1110,6 +1110,19 @@ extension BlueBox {
             #expect(ot("OTCloseProvider", ep) == 0)
         }
 
+        @Test func configurationsCloneAndOpen() {
+            launchTestApp()
+            let cfg = ot("OTCreateConfiguration", cstr("udp"))
+            let copy = ot("OTCloneConfiguration", cfg)
+            #expect(copy != 0 && copy != cfg && cstring(at: copy) == "udp")
+            ot("OTDestroyConfiguration", cfg)
+            let ep = openEndpoint("udp") // (a clone is a configuration for an endpoint too)
+            let e = block(4)
+            let ep2 = ot("OTOpenEndpoint", copy, 0, 0, e)
+            #expect(rd32(e) == 0 && ep2 != 0)
+            #expect(ot("OTCloseProvider", ep) == 0 && ot("OTCloseProvider", ep2) == 0)
+        }
+
         @Test func openProviderPicksTheKindOfProvider() {
             launchTestApp()
             let e = block(4)
