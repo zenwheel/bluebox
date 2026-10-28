@@ -267,6 +267,7 @@ void print_reset(void); /* Printing Manager (print.c) */
 void print_get_setup(gaddr p, machine_page_setup *ps);
 void print_put_setup(gaddr p, const machine_page_setup *ps, int vres, int hres);
 void carbonsvc_reset(void); /* CarbonLib's services (carbon_svc.c) */
+void carbonrest_reset(void); /* CarbonLib's remaining managers (carbonrest.c) */
 void icm_reset(void); /* Image Compression Manager (qt_icm.c) */
 void gx_reset(void); /* QuickDraw GX (gx.c) */
 /* The mouse's own motion for ADB packets (events.c). */

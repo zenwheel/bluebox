@@ -302,10 +302,50 @@ int16_t tb_FindServiceWindow(uint32_t thePoint, gaddr theWindow)
     return part;
 }
 
+/* TSMGetActiveDocument: the document last activated, or none. */
+gaddr tb_TSMGetActiveDocument(void) { return active_doc; }
+
+/* TSMSetInlineInputRegion(doc, window, region): where inline input may
+ * show (the text area); kept for the document, which no input method is
+ * composing in. */
+static struct {
+    gaddr doc, window, region;
+} inline_regions[MAX_DOCS];
+
+int16_t tb_TSMSetInlineInputRegion(gaddr doc, gaddr window, gaddr region)
+{
+    if (!doc_valid(doc))
+        return tsmInvalidDocIDErr;
+    int free_slot = -1, at = -1;
+    for (int i = 0; i < MAX_DOCS; i++) {
+        if (inline_regions[i].doc == doc)
+            at = i;
+        else if (!inline_regions[i].doc && free_slot < 0)
+            free_slot = i;
+    }
+    if (at < 0)
+        at = free_slot;
+    if (at < 0)
+        return memFullErr;
+    if (inline_regions[at].region)
+        tb_DisposeRgn(inline_regions[at].region);
+    inline_regions[at].doc = doc;
+    inline_regions[at].window = window;
+    inline_regions[at].region = 0;
+    if (region) {
+        gaddr copy = tb_NewRgn();
+        if (copy)
+            tb_CopyRgn(region, copy);
+        inline_regions[at].region = copy;
+    }
+    return noErr;
+}
+
 /* A fresh machine. */
 void tsm_reset(void)
 {
     memset(docs, 0, sizeof docs);
+    memset(inline_regions, 0, sizeof inline_regions);
     memset(services, 0, sizeof services);
     memset(service_windows, 0, sizeof service_windows);
     active_doc = 0;

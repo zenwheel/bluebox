@@ -12,6 +12,12 @@ import Toolbox
 /// back afterwards, so calls nest (from a callback inside another call).
 @discardableResult
 func svcCall(_ name: String, _ args: UInt32..., f1: Double? = nil) -> UInt32 {
+    svcCallArray(name, args, f1: f1)
+}
+
+/// The same, with the arguments in an array (varargs calls built at run time).
+@discardableResult
+func svcCallArray(_ name: String, _ args: [UInt32], f1: Double? = nil) -> UInt32 {
     guard let fn = cfm_export_fn(name) else {
         Issue.record("\(name) is not exported")
         return 0

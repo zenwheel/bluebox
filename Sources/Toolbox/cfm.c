@@ -211,12 +211,15 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     void (*svc)(ppc_cpu *) = carbonsvc_export_fn(name);
     if (svc)
         return svc;
+    void (*rest)(ppc_cpu *) = carbonrest_export_fn(name); /* the remaining Carbon managers */
+    if (rest)
+        return rest;
     void (*os9)(ppc_cpu *) = os9svc_export_fn(name); /* Mac OS 9's service libraries */
     if (os9)
         return os9;
-    void (*rest)(ppc_cpu *) = os9rest_export_fn(name); /* and their remaining exports */
-    if (rest)
-        return rest;
+    void (*orest)(ppc_cpu *) = os9rest_export_fn(name); /* and their remaining exports */
+    if (orest)
+        return orest;
     void (*cf)(ppc_cpu *) = carbon_cf_export_fn(name);
     if (cf)
         return cf;

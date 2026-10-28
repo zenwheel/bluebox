@@ -1864,3 +1864,55 @@ const ppc_export hfs_exports[] = {
     { "PBWriteImmed", g_PBWriteImmed },
 };
 const unsigned hfs_export_count = sizeof hfs_exports / sizeof hfs_exports[0];
+
+/* ---------------------------------------------------------------------- */
+/* Resource files by fork name (CarbonLib 1.4: Resources.h) */
+
+int16_t rm_open_data_fork(const char *path); /* rsrcmgr.c */
+
+/* FSOpenResourceFile(ref, forkNameLength, forkName, permissions, refNum):
+ * the resource fork (named so), or a data fork read as a resource file;
+ * an error is returned, and ResError set. */
+int16_t tb_FSOpenResourceFile(gaddr ref, uint32_t forkNameLength, gaddr forkName, int8_t permissions, gaddr refNum)
+{
+    char path[PATH_MAX];
+    if (refNum)
+        wr16(refNum, 0);
+    int16_t err = ref_file(ref, path, sizeof path);
+    int kind = err ? 0 : fork_kind(forkNameLength, forkName);
+    if (!err && kind < 0)
+        err = errFSBadForkName;
+    int16_t rn = -1;
+    if (!err && kind == 1) {
+        rn = rm_open_path(path, permissions);
+        if (rn < 0)
+            err = (int16_t)rd16(LM_ResErr) ? (int16_t)rd16(LM_ResErr) : -39;
+    } else if (!err) {
+        if (permissions & 2) /* a data fork is read here */
+            err = wrPermErr;
+        else {
+            rn = rm_open_data_fork(path);
+            if (rn < 0)
+                err = rn;
+        }
+    }
+    set_res_err(err);
+    if (!err && refNum)
+        wr16(refNum, (uint16_t)rn);
+    return err;
+}
+
+/* FSCreateResourceFile(parentRef, nameLength, name, whichInfo, catalogInfo,
+ * forkNameLength, forkName, newRef, newSpec): a new file with an empty
+ * resource fork (a data fork can't hold one here: it is read-only). */
+int16_t tb_FSCreateResourceFile(gaddr parentRef, uint32_t nameLength, gaddr name, uint32_t whichInfo, gaddr catalogInfo,
+                                uint32_t forkNameLength, gaddr forkName, gaddr newRef, gaddr newSpec)
+{
+    int kind = fork_kind(forkNameLength, forkName);
+    if (kind < 0)
+        return errFSBadForkName;
+    if (kind == 0)
+        return -4; /* unimpErr */
+    tb_FSCreateResFile(parentRef, nameLength, name, whichInfo, catalogInfo, newRef, newSpec);
+    return (int16_t)rd16(LM_ResErr);
+}

@@ -31,7 +31,7 @@
 enum {
     errAECoercionFail = -1700, errAEDescNotFound = -1701, errAEWrongDataType = -1703, errAENotAEDesc = -1704,
     errAEBadListItem = -1705, errAEEventNotHandled = -1708, errAENoUserInteraction = -1713,
-    errAEHandlerNotFound = -1717,
+    errAEHandlerNotFound = -1717, errAEIllegalIndex = -1719,
 };
 
 enum { kAENoReply = 1, kAEQueueReply = 2, kAEWaitReply = 3 };
@@ -2603,4 +2603,39 @@ int16_t tb__AE_hdlr_delete(gaddr table, int32_t unused, gaddr selector)
     wr32(rd32(table), (uint32_t)(n - 1));
     tb_SetHandleSize(table, 4 + (n - 1) * HDLR_ENTRY);
     return noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* For the Apple event helpers (carbonrest_ae.c): what a descriptor holds
+ * and its entries, one at a time. */
+
+/* 0 for data, 1 for a list, 2 for a record or event. */
+int aem_desc_shape(gaddr desc) { return shape(desc_handle(desc)); }
+
+/* How many attributes (attr) or items, parameters or keyed items. */
+uint32_t aem_entry_count(gaddr desc, bool attr)
+{
+    gaddr h = desc_handle(desc);
+    if (shape(h) == PLAIN || (attr && shape(h) != RECORD))
+        return 0;
+    uint32_t n;
+    first_entry(h, &n, attr);
+    return n;
+}
+
+/* Entry i (from 0) as a descriptor of its own (a copy); its keyword. */
+int16_t aem_entry_desc(gaddr desc, bool attr, uint32_t i, uint32_t *key, gaddr out)
+{
+    gaddr h = desc_handle(desc);
+    uint32_t n, off = first_entry(h, &n, attr);
+    if (shape(h) == PLAIN || i >= n)
+        return errAEIllegalIndex;
+    for (uint32_t k = 0; k < i; k++)
+        off += 12 + pad(rd32(rd32(h) + off + 8));
+    gaddr p = rd32(h) + off;
+    if (key)
+        *key = rd32(p);
+    gaddr data = handle_from_guest(p + 12, rd32(p + 8));
+    set_desc(out, rd32(p + 4), data);
+    return data || !rd32(p + 8) ? noErr : memFullErr;
 }

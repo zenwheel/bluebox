@@ -705,6 +705,7 @@ const char *const tb_trap_names[1024] = {
     [0x252] = "HighLevelFSDispatch",
     [0x253] = "DictionaryDispatch",
     [0x254] = "TSMDispatch",
+    [0x256] = "SpeechRecognitionDispatch",
     [0x259] = "MixedModeDispatch",
     [0x25A] = "CodeFragmentDispatch",
     [0x260] = "DeleteMCEntries",
@@ -757,6 +758,7 @@ const char *const tb_trap_names[1024] = {
     [0x3F2] = "ThreadDispatch",
     [0x3F6] = "CollectionDispatch",
     [0x3F8] = "StdOpcode",
+    [0x3FC] = "TranslationDispatch",
     [0x3FE] = "GXPrintingDispatch",
     [0x3FF] = "DebugStr",
 };
@@ -2538,6 +2540,22 @@ static void glue_CallMeWhen(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CanDocBeOpened(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_howToTranslate = (gaddr)cpu_pop32(c);
+    gaddr a_howToOpen = (gaddr)cpu_pop32(c);
+    int8_t a_onlyNative = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_nativeTypes = (gaddr)cpu_pop32(c);
+    int32_t a_appSignature = (int32_t)cpu_pop32(c);
+    int16_t a_appVRefNumHint = (int16_t)cpu_pop16(c);
+    gaddr a_targetDocument = (gaddr)cpu_pop32(c);
+    int16_t r = tb_CanDocBeOpened(a_targetDocument, a_appVRefNumHint, a_appSignature, a_nativeTypes, a_onlyNative, a_howToOpen, a_howToTranslate);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CanQuickTimeOpenDataRef(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2836,6 +2854,16 @@ static void glue_ClipRect(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_r = (gaddr)cpu_pop32(c);
     tb_ClipRect(a_r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CloneCollection(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    gaddr r = tb_CloneCollection(a_c);
+    wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
 
@@ -3647,6 +3675,16 @@ static void glue_CountCollectionItems(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_c = (gaddr)cpu_pop32(c);
     int32_t r = tb_CountCollectionItems(a_c);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CountCollectionOwners(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_c = (gaddr)cpu_pop32(c);
+    int32_t r = tb_CountCollectionOwners(a_c);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -7634,6 +7672,19 @@ static void glue_ExpMgrSpecialCycleWriteLong(cpu68k *c, uint16_t trapword)
     uint32_t a_value = (uint32_t)cpu_pop32(c);
     gaddr a_entry = (gaddr)cpu_pop32(c);
     int16_t r = tb_ExpMgrSpecialCycleWriteLong(a_entry, a_value);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_ExtendFileTypeList(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_numberExtendedTypes = (gaddr)cpu_pop32(c);
+    gaddr a_extendedTypeList = (gaddr)cpu_pop32(c);
+    int16_t a_numberOriginalTypes = (int16_t)cpu_pop16(c);
+    gaddr a_originalTypeList = (gaddr)cpu_pop32(c);
+    int16_t r = tb_ExtendFileTypeList(a_originalTypeList, a_numberOriginalTypes, a_extendedTypeList, a_numberExtendedTypes);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -11669,6 +11720,19 @@ static void glue_GetDimmingTimeout(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)r;
 }
 
+static void glue_GetDocumentKindString(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_kindString = (gaddr)cpu_pop32(c);
+    int32_t a_docCreator = (int32_t)cpu_pop32(c);
+    int32_t a_docType = (int32_t)cpu_pop32(c);
+    int16_t a_docVRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetDocumentKindString(a_docVRefNum, a_docType, a_docCreator, a_kindString);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDragAttributes(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -11792,6 +11856,31 @@ static void glue_GetFNum(cpu68k *c, uint16_t trapword)
     gaddr a_fnum = (gaddr)cpu_pop32(c);
     gaddr a_fnam = (gaddr)cpu_pop32(c);
     tb_GetFNum(a_fnam, a_fnum);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFileTranslationPaths(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_resultBuffer = (gaddr)cpu_pop32(c);
+    uint16_t a_maxResultCount = (uint16_t)cpu_pop16(c);
+    int32_t a_dstDocType = (int32_t)cpu_pop32(c);
+    gaddr a_srcDocument = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetFileTranslationPaths(a_srcDocument, a_dstDocType, a_maxResultCount, a_resultBuffer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetFileTypesThatAppCanNativelyOpen(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_nativeTypes = (gaddr)cpu_pop32(c);
+    int32_t a_appSignature = (int32_t)cpu_pop32(c);
+    int16_t a_appVRefNumHint = (int16_t)cpu_pop16(c);
+    int16_t r = tb_GetFileTypesThatAppCanNativelyOpen(a_appVRefNumHint, a_appSignature, a_nativeTypes);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -13899,6 +13988,20 @@ static void glue_GetParamText(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetPathFromTranslationDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_howToTranslate = (gaddr)cpu_pop32(c);
+    gaddr a_howToOpen = (gaddr)cpu_pop32(c);
+    gaddr a_typeList = (gaddr)cpu_pop32(c);
+    gaddr a_theApplication = (gaddr)cpu_pop32(c);
+    gaddr a_theDocument = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetPathFromTranslationDialog(a_theDocument, a_theApplication, a_typeList, a_howToOpen, a_howToTranslate);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetPattern(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -15310,6 +15413,17 @@ static void glue_GetTrackVolume(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t a_theTrack = (int32_t)cpu_pop32(c);
     int16_t r = tb_GetTrackVolume(a_theTrack);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetTranslationExtensionName(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_extensionName = (gaddr)cpu_pop32(c);
+    gaddr a_translationMethod = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetTranslationExtensionName(a_translationMethod, a_extensionName);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -18651,6 +18765,13 @@ static void glue_MenuSelect(cpu68k *c, uint16_t trapword)
     int32_t r = tb_MenuSelect(a_p);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
+}
+
+static void glue_MinimumProcessorSpeed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_MinimumProcessorSpeed();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
 static void glue_ModalDialog(cpu68k *c, uint16_t trapword)
@@ -24617,6 +24738,446 @@ static void glue_SPBVersion(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SRAddLanguageObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_addon = (int32_t)cpu_pop32(c);
+    int32_t a_base = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRAddLanguageObject(a_base, a_addon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRAddText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int32_t a_base = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRAddText(a_base, a_text, a_textLength, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRCancelRecognition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRCancelRecognition(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRChangeLanguageObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int32_t a_languageObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRChangeLanguageObject(a_languageObject, a_text, a_textLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRCloseRecognitionSystem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRCloseRecognitionSystem(a_system);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRContinueRecognition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRContinueRecognition(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRCountItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_count = (gaddr)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRCountItems(a_container, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRDrawRecognizedText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dispLength = (int32_t)cpu_pop32(c);
+    gaddr a_dispText = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRDrawRecognizedText(a_recognizer, a_dispText, a_dispLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRDrawText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dispLength = (int32_t)cpu_pop32(c);
+    gaddr a_dispText = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRDrawText(a_recognizer, a_dispText, a_dispLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SREmptyLanguageObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_languageObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SREmptyLanguageObject(a_languageObject);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRGetIndexedItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRGetIndexedItem(a_container, a_item, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRGetLanguageModel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_languageModel = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRGetLanguageModel(a_recognizer, a_languageModel);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRGetProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyLen = (gaddr)cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int32_t a_srObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRGetProperty(a_srObject, a_selector, a_property, a_propertyLen);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRGetReference(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newObjectRef = (gaddr)cpu_pop32(c);
+    int32_t a_srObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRGetReference(a_srObject, a_newObjectRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRIdle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_SRIdle();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewLanguageModel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_nameLength = (int32_t)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    gaddr a_model = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewLanguageModel(a_system, a_model, a_name, a_nameLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewLanguageObjectFromDataFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fRefNum = (int16_t)cpu_pop16(c);
+    gaddr a_languageObject = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewLanguageObjectFromDataFile(a_system, a_languageObject, a_fRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewLanguageObjectFromHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_lObjHandle = (gaddr)cpu_pop32(c);
+    gaddr a_languageObject = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewLanguageObjectFromHandle(a_system, a_languageObject, a_lObjHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewPath(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_path = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewPath(a_system, a_path);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewPhrase(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_phrase = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewPhrase(a_system, a_phrase, a_text, a_textLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewRecognizer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_sourceID = (int32_t)cpu_pop32(c);
+    gaddr a_recognizer = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewRecognizer(a_system, a_recognizer, a_sourceID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewWord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_word = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewWord(a_system, a_word, a_text, a_textLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SROpenRecognitionSystem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_systemID = (int32_t)cpu_pop32(c);
+    gaddr a_system = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SROpenRecognitionSystem(a_system, a_systemID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRProcessBegin(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_failed = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRProcessBegin(a_recognizer, a_failed);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRProcessEnd(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_failed = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRProcessEnd(a_recognizer, a_failed);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRPutLanguageObjectIntoDataFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fRefNum = (int16_t)cpu_pop16(c);
+    int32_t a_languageObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRPutLanguageObjectIntoDataFile(a_languageObject, a_fRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRPutLanguageObjectIntoHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_lobjHandle = (gaddr)cpu_pop32(c);
+    int32_t a_languageObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRPutLanguageObjectIntoHandle(a_languageObject, a_lobjHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRReleaseObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_srObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRReleaseObject(a_srObject);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRRemoveIndexedItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRRemoveIndexedItem(a_container, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRRemoveLanguageObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_toRemove = (int32_t)cpu_pop32(c);
+    int32_t a_base = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRRemoveLanguageObject(a_base, a_toRemove);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSetIndexedItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_item = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSetIndexedItem(a_container, a_item, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSetLanguageModel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_languageModel = (int32_t)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSetLanguageModel(a_recognizer, a_languageModel);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSetProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_propertyLen = (int32_t)cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int32_t a_srObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSetProperty(a_srObject, a_selector, a_property, a_propertyLen);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSpeakAndDrawText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSpeakAndDrawText(a_recognizer, a_text, a_textLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSpeakText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_speakLength = (int32_t)cpu_pop32(c);
+    gaddr a_speakText = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSpeakText(a_recognizer, a_speakText, a_speakLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSpeechBusy(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int8_t r = tb_SRSpeechBusy(a_recognizer);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_SRStartListening(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRStartListening(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRStopListening(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRStopListening(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRStopSpeech(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRStopSpeech(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SameProcess(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28170,6 +28731,17 @@ static void glue_SetTrackVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetTranslationAdvertisement(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_advertisement = (gaddr)cpu_pop32(c);
+    int32_t a_refNum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetTranslationAdvertisement(a_refNum, a_advertisement);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetTrapAddress(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28740,6 +29312,23 @@ static void glue_SortDataBrowserContainer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SoundConverterFillBuffer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outputFlags = (gaddr)cpu_pop32(c);
+    gaddr a_framesWritten = (gaddr)cpu_pop32(c);
+    gaddr a_bytesWritten = (gaddr)cpu_pop32(c);
+    uint32_t a_outputBufferByteSize = (uint32_t)cpu_pop32(c);
+    gaddr a_outputBuffer = (gaddr)cpu_pop32(c);
+    gaddr a_fillBufferDataRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_fillBufferDataUPP = (gaddr)cpu_pop32(c);
+    int32_t a_sc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundConverterFillBuffer(a_sc, a_fillBufferDataUPP, a_fillBufferDataRefCon, a_outputBuffer, a_outputBufferByteSize, a_bytesWritten, a_framesWritten, a_outputFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SoundConverterGetInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28760,6 +29349,28 @@ static void glue_SoundConverterSetInfo(cpu68k *c, uint16_t trapword)
     int32_t a_selector = (int32_t)cpu_pop32(c);
     int32_t a_sc = (int32_t)cpu_pop32(c);
     int16_t r = tb_SoundConverterSetInfo(a_sc, a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SoundManagerGetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundManagerGetInfo(a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SoundManagerSetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundManagerSetInfo(a_selector, a_infoPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -30158,6 +30769,18 @@ static void glue_TransformRect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TranslateFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_howToTranslate = (gaddr)cpu_pop32(c);
+    gaddr a_destinationDocument = (gaddr)cpu_pop32(c);
+    gaddr a_sourceDocument = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TranslateFile(a_sourceDocument, a_destinationDocument, a_howToTranslate);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_TranslateMatrix(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -30166,6 +30789,20 @@ static void glue_TranslateMatrix(cpu68k *c, uint16_t trapword)
     int32_t a_deltaH = (int32_t)cpu_pop32(c);
     gaddr a_m = (gaddr)cpu_pop32(c);
     tb_TranslateMatrix(a_m, a_deltaH, a_deltaV);
+    cpu_push32(c, ret);
+}
+
+static void glue_TranslateScrap(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_progressDialogID = (int16_t)cpu_pop16(c);
+    gaddr a_destinationData = (gaddr)cpu_pop32(c);
+    int32_t a_destinationFormat = (int32_t)cpu_pop32(c);
+    gaddr a_sourceDataGetterRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_sourceDataGetter = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TranslateScrap(a_sourceDataGetter, a_sourceDataGetterRefCon, a_destinationFormat, a_destinationData, a_progressDialogID);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -30218,6 +30855,52 @@ static void glue_TruncText(cpu68k *c, uint16_t trapword)
     int16_t a_width = (int16_t)cpu_pop16(c);
     int16_t r = tb_TruncText(a_width, a_textPtr, a_length, a_truncWhere);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectClear(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    tb_TypeSelectClear(a_tsr);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectCompare(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_testStringPtr = (gaddr)cpu_pop32(c);
+    int16_t a_testStringScript = (int16_t)cpu_pop16(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TypeSelectCompare(a_tsr, a_testStringScript, a_testStringPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectFindItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_yourDataPtr = (gaddr)cpu_pop32(c);
+    gaddr a_getStringProc = (gaddr)cpu_pop32(c);
+    int16_t a_selectMode = (int16_t)cpu_pop16(c);
+    int16_t a_listSize = (int16_t)cpu_pop16(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TypeSelectFindItem(a_tsr, a_listSize, a_selectMode, a_getStringProc, a_yourDataPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectNewKey(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    gaddr a_theEvent = (gaddr)cpu_pop32(c);
+    int8_t r = tb_TypeSelectNewKey(a_theEvent, a_tsr);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -31061,6 +31744,18 @@ static void glue_UpdateSystemActivity(cpu68k *c, uint16_t trapword)
     uint8_t a_activity = (uint8_t)(c->d[0] >> 16);
     int16_t r = tb_UpdateSystemActivity(a_activity);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_UpdateTranslationProgress(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_canceled = (gaddr)cpu_pop32(c);
+    int16_t a_percentDone = (int16_t)cpu_pop16(c);
+    int32_t a_refNum = (int32_t)cpu_pop32(c);
+    int16_t r = tb_UpdateTranslationProgress(a_refNum, a_percentDone, a_canceled);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_UseDictionary(cpu68k *c, uint16_t trapword)
@@ -32190,8 +32885,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA5A, (int32_t)0x7u, "GetIndSymbol", CONV_STACK, 20, 2, 0},
     {0xABF6, (int32_t)0x0u, "NewCollection", CONV_STACK, 0, 4, glue_NewCollection},
     {0xABF6, (int32_t)0x1u, "DisposeCollection", CONV_STACK, 4, 0, glue_DisposeCollection},
-    {0xABF6, (int32_t)0x2u, "CloneCollection", CONV_STACK, 4, 4, 0},
-    {0xABF6, (int32_t)0x3u, "CountCollectionOwners", CONV_STACK, 4, 4, 0},
+    {0xABF6, (int32_t)0x2u, "CloneCollection", CONV_STACK, 4, 4, glue_CloneCollection},
+    {0xABF6, (int32_t)0x3u, "CountCollectionOwners", CONV_STACK, 4, 4, glue_CountCollectionOwners},
     {0xABF6, (int32_t)0x4u, "CopyCollection", CONV_STACK, 8, 4, 0},
     {0xABF6, (int32_t)0x5u, "GetCollectionDefaultAttributes", CONV_STACK, 4, 4, 0},
     {0xABF6, (int32_t)0x6u, "SetCollectionDefaultAttributes", CONV_STACK, 12, 0, 0},
@@ -33710,6 +34405,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9ED, (int32_t)0x20u, "IULangOrder", CONV_STACK, 4, 2, glue_IULangOrder},
     {0xA9ED, (int32_t)0x22u, "IUTextOrder", CONV_STACK, 20, 2, glue_IUTextOrder},
     {0xA9ED, (int32_t)0x24u, "GetIntlResourceTable", CONV_STACK, 16, 0, glue_GetIntlResourceTable},
+    {0xA9ED, (int32_t)0x28u, "TypeSelectClear", CONV_STACK, 4, 0, glue_TypeSelectClear},
+    {0xA9ED, (int32_t)0x2Au, "TypeSelectNewKey", CONV_STACK, 8, 2, glue_TypeSelectNewKey},
+    {0xA9ED, (int32_t)0x2Cu, "TypeSelectFindItem", CONV_STACK, 16, 2, glue_TypeSelectFindItem},
+    {0xA9ED, (int32_t)0x2Eu, "TypeSelectCompare", CONV_STACK, 10, 2, glue_TypeSelectCompare},
     {0xA9EE, (int32_t)0x0u, "NumToString", CONV_REG, 0, 0, glue_NumToString},
     {0xA9EE, (int32_t)0x1u, "StringToNum", CONV_REG, 0, 0, glue_StringToNum},
     {0xA9EE, (int32_t)0x2u, "ROMlib_Fpstr2dec", CONV_STACK, 16, 0, glue_ROMlib_Fpstr2dec},
@@ -33833,6 +34532,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA09E, (int32_t)0x2Au, "SetSoundMixerState", CONV_REG, 0, 0, glue_SetSoundMixerState},
     {0xA09E, (int32_t)0x2Bu, "GetDimSuspendState", CONV_REG, 0, 0, glue_GetDimSuspendState},
     {0xA09E, (int32_t)0x2Cu, "SetDimSuspendState", CONV_REG, 0, 0, glue_SetDimSuspendState},
+    {0xA09E, (int32_t)0x36u, "MinimumProcessorSpeed", CONV_REG, 0, 0, glue_MinimumProcessorSpeed},
     {0xA8FD, (int32_t)0x4000C00u, "PrOpenDoc", CONV_STACK, 12, 4, glue_PrOpenDoc},
     {0xA8FD, (int32_t)0x8000484u, "PrCloseDoc", CONV_STACK, 4, 0, glue_PrCloseDoc},
     {0xA8FD, (int32_t)0x10000808u, "PrOpenPage", CONV_STACK, 8, 0, glue_PrOpenPage},
@@ -34508,6 +35208,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x44C0018u, "GetCompressionName", CONV_STACK, 8, 2, glue_GetCompressionName},
     {0xA800, (int32_t)0x450000Cu, "GetSpeechPitch", CONV_STACK, 8, 2, glue_GetSpeechPitch},
     {0xA800, (int32_t)0x460000Cu, "UseDictionary", CONV_STACK, 8, 2, glue_UseDictionary},
+    {0xA800, (int32_t)0x47C0018u, "SoundManagerGetInfo", CONV_STACK, 8, 2, glue_SoundManagerGetInfo},
+    {0xA800, (int32_t)0x4800018u, "SoundManagerSetInfo", CONV_STACK, 8, 2, glue_SoundManagerSetInfo},
     {0xA800, (int32_t)0x5100008u, "SndChannelStatus", CONV_STACK, 10, 2, glue_SndChannelStatus},
     {0xA800, (int32_t)0x5140014u, "SPBGetIndexedDevice", CONV_STACK, 10, 2, glue_SPBGetIndexedDevice},
     {0xA800, (int32_t)0x5180014u, "SPBOpenDevice", CONV_STACK, 10, 2, glue_SPBOpenDevice},
@@ -34539,6 +35241,46 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0xD000008u, "SndStartFilePlay", CONV_STACK, 26, 2, glue_SndStartFilePlay},
     {0xA800, (int32_t)0xD480014u, "SetupSndHeader", CONV_STACK, 26, 2, glue_SetupSndHeader},
     {0xA800, (int32_t)0xE340014u, "SPBGetRecordingStatus", CONV_STACK, 28, 2, glue_SPBGetRecordingStatus},
+    {0xA800, (int32_t)0x10780018u, "SoundConverterFillBuffer", CONV_STACK, 32, 2, glue_SoundConverterFillBuffer},
+    {0xAA56, (int32_t)0x28u, "SRIdle", CONV_STACK, 0, 2, glue_SRIdle},
+    {0xAA56, (int32_t)0x201u, "SRCloseRecognitionSystem", CONV_STACK, 4, 2, glue_SRCloseRecognitionSystem},
+    {0xAA56, (int32_t)0x204u, "SRReleaseObject", CONV_STACK, 4, 2, glue_SRReleaseObject},
+    {0xAA56, (int32_t)0x20Cu, "SRStartListening", CONV_STACK, 4, 2, glue_SRStartListening},
+    {0xAA56, (int32_t)0x20Du, "SRStopListening", CONV_STACK, 4, 2, glue_SRStopListening},
+    {0xAA56, (int32_t)0x210u, "SRContinueRecognition", CONV_STACK, 4, 2, glue_SRContinueRecognition},
+    {0xAA56, (int32_t)0x211u, "SRCancelRecognition", CONV_STACK, 4, 2, glue_SRCancelRecognition},
+    {0xAA56, (int32_t)0x218u, "SREmptyLanguageObject", CONV_STACK, 4, 2, glue_SREmptyLanguageObject},
+    {0xAA56, (int32_t)0x223u, "SRStopSpeech", CONV_STACK, 4, 2, glue_SRStopSpeech},
+    {0xAA56, (int32_t)0x224u, "SRSpeechBusy", CONV_STACK, 4, 2, glue_SRSpeechBusy},
+    {0xAA56, (int32_t)0x31Du, "SRProcessBegin", CONV_STACK, 6, 2, glue_SRProcessBegin},
+    {0xAA56, (int32_t)0x31Eu, "SRProcessEnd", CONV_STACK, 6, 2, glue_SRProcessEnd},
+    {0xAA56, (int32_t)0x328u, "SRPutLanguageObjectIntoDataFile", CONV_STACK, 6, 2, glue_SRPutLanguageObjectIntoDataFile},
+    {0xAA56, (int32_t)0x400u, "SROpenRecognitionSystem", CONV_STACK, 8, 2, glue_SROpenRecognitionSystem},
+    {0xAA56, (int32_t)0x405u, "SRCountItems", CONV_STACK, 8, 2, glue_SRCountItems},
+    {0xAA56, (int32_t)0x408u, "SRRemoveIndexedItem", CONV_STACK, 8, 2, glue_SRRemoveIndexedItem},
+    {0xAA56, (int32_t)0x40Eu, "SRSetLanguageModel", CONV_STACK, 8, 2, glue_SRSetLanguageModel},
+    {0xAA56, (int32_t)0x40Fu, "SRGetLanguageModel", CONV_STACK, 8, 2, glue_SRGetLanguageModel},
+    {0xAA56, (int32_t)0x413u, "SRNewPath", CONV_STACK, 8, 2, glue_SRNewPath},
+    {0xAA56, (int32_t)0x416u, "SRPutLanguageObjectIntoHandle", CONV_STACK, 8, 2, glue_SRPutLanguageObjectIntoHandle},
+    {0xAA56, (int32_t)0x417u, "SRNewLanguageObjectFromHandle", CONV_STACK, 12, 2, glue_SRNewLanguageObjectFromHandle},
+    {0xAA56, (int32_t)0x41Au, "SRAddLanguageObject", CONV_STACK, 8, 2, glue_SRAddLanguageObject},
+    {0xAA56, (int32_t)0x41Cu, "SRRemoveLanguageObject", CONV_STACK, 8, 2, glue_SRRemoveLanguageObject},
+    {0xAA56, (int32_t)0x425u, "SRGetReference", CONV_STACK, 8, 2, glue_SRGetReference},
+    {0xAA56, (int32_t)0x427u, "SRNewLanguageObjectFromDataFile", CONV_STACK, 10, 2, glue_SRNewLanguageObjectFromDataFile},
+    {0xAA56, (int32_t)0x606u, "SRGetIndexedItem", CONV_STACK, 12, 2, glue_SRGetIndexedItem},
+    {0xAA56, (int32_t)0x607u, "SRSetIndexedItem", CONV_STACK, 12, 2, glue_SRSetIndexedItem},
+    {0xAA56, (int32_t)0x60Au, "SRNewRecognizer", CONV_STACK, 12, 2, glue_SRNewRecognizer},
+    {0xAA56, (int32_t)0x619u, "SRChangeLanguageObject", CONV_STACK, 12, 2, glue_SRChangeLanguageObject},
+    {0xAA56, (int32_t)0x61Fu, "SRSpeakAndDrawText", CONV_STACK, 12, 2, glue_SRSpeakAndDrawText},
+    {0xAA56, (int32_t)0x620u, "SRSpeakText", CONV_STACK, 12, 2, glue_SRSpeakText},
+    {0xAA56, (int32_t)0x621u, "SRDrawText", CONV_STACK, 12, 2, glue_SRDrawText},
+    {0xAA56, (int32_t)0x622u, "SRDrawRecognizedText", CONV_STACK, 12, 2, glue_SRDrawRecognizedText},
+    {0xAA56, (int32_t)0x802u, "SRSetProperty", CONV_STACK, 16, 2, glue_SRSetProperty},
+    {0xAA56, (int32_t)0x803u, "SRGetProperty", CONV_STACK, 16, 2, glue_SRGetProperty},
+    {0xAA56, (int32_t)0x812u, "SRNewLanguageModel", CONV_STACK, 16, 2, glue_SRNewLanguageModel},
+    {0xAA56, (int32_t)0x814u, "SRNewPhrase", CONV_STACK, 16, 2, glue_SRNewPhrase},
+    {0xAA56, (int32_t)0x815u, "SRNewWord", CONV_STACK, 16, 2, glue_SRNewWord},
+    {0xAA56, (int32_t)0x81Bu, "SRAddText", CONV_STACK, 16, 2, glue_SRAddText},
     {0xA83D, (int32_t)0x0u, "TEStylePaste", CONV_STACK, 4, 0, glue_TEStylePaste},
     {0xA83D, (int32_t)0x1u, "TESetStyle", CONV_STACK, 12, 0, glue_TESetStyle},
     {0xA83D, (int32_t)0x2u, "TEReplaceStyle", CONV_STACK, 16, 0, glue_TEReplaceStyle},
@@ -34600,6 +35342,17 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABF2, (int32_t)0x615u, "GetSpecificFreeThreadCount", CONV_STACK, 12, 2, glue_GetSpecificFreeThreadCount},
     {0xABF2, (int32_t)0x70Au, "SetThreadSwitcher", CONV_STACK, 14, 2, glue_SetThreadSwitcher},
     {0xABF2, (int32_t)0xE03u, "NewThread", CONV_STACK, 28, 2, glue_NewThread},
+    {0xABFC, (int32_t)0x1u, "UpdateTranslationProgress", CONV_STACK, 10, 2, glue_UpdateTranslationProgress},
+    {0xABFC, (int32_t)0x2u, "SetTranslationAdvertisement", CONV_STACK, 8, 2, glue_SetTranslationAdvertisement},
+    {0xABFC, (int32_t)0x9u, "ExtendFileTypeList", CONV_STACK, 14, 2, glue_ExtendFileTypeList},
+    {0xABFC, (int32_t)0xCu, "TranslateFile", CONV_STACK, 12, 2, glue_TranslateFile},
+    {0xABFC, (int32_t)0xEu, "TranslateScrap", CONV_STACK, 18, 2, glue_TranslateScrap},
+    {0xABFC, (int32_t)0x16u, "GetDocumentKindString", CONV_STACK, 14, 2, glue_GetDocumentKindString},
+    {0xABFC, (int32_t)0x1Cu, "GetFileTypesThatAppCanNativelyOpen", CONV_STACK, 10, 2, glue_GetFileTypesThatAppCanNativelyOpen},
+    {0xABFC, (int32_t)0x1Eu, "CanDocBeOpened", CONV_STACK, 24, 2, glue_CanDocBeOpened},
+    {0xABFC, (int32_t)0x36u, "GetTranslationExtensionName", CONV_STACK, 8, 2, glue_GetTranslationExtensionName},
+    {0xABFC, (int32_t)0x37u, "GetPathFromTranslationDialog", CONV_STACK, 20, 2, glue_GetPathFromTranslationDialog},
+    {0xABFC, (int32_t)0x38u, "GetFileTranslationPaths", CONV_STACK, 14, 2, glue_GetFileTranslationPaths},
 };
 const unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[0];
 
@@ -34665,8 +35418,10 @@ const dispatcher_info dispatchers[] = {
     {0xA8B5, "ScriptUtil", "StackL"},
     {0xA895, "ShutDown", "StackW"},
     {0xA800, "SoundDispatch", "D0<0xFFFFFF>"},
+    {0xAA56, "SpeechRecognitionDispatch", "D0W"},
     {0xA83D, "TEDispatch", "StackW"},
     {0xAA54, "TSMDispatch", "D0W"},
     {0xABF2, "ThreadDispatch", "D0W"},
+    {0xABFC, "TranslationDispatch", "D0W"},
 };
 const unsigned dispatcher_count = sizeof dispatchers / sizeof dispatchers[0];
