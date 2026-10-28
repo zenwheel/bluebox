@@ -176,6 +176,10 @@ bool q3set_add_bytes(q3set *s, int32_t type, const uint8_t *bytes, uint32_t size
 void q3set_clear(q3set *s, int32_t type);
 void q3set_empty(q3set *s);
 void q3set_copy(q3set *to, const q3set *from);
+/* A registered element type of this name (registered now if need be). */
+int32_t q3_register_element(const char *name, uint32_t size);
+/* The elements of a set or shape (a shape's set made if make). */
+q3set *q3_elements_of(q3obj *o, bool make);
 /* An attribute set object's set (NULL for none). */
 q3set *q3_set_of(gaddr set);
 

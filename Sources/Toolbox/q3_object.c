@@ -539,6 +539,7 @@ static void Q3XMacintoshError_Post(ppc_cpu *c)
 /* The library */
 
 static void object_classes(void);
+void q3_controller_classes(void);
 
 static void ready_classes(void)
 {
@@ -549,6 +550,7 @@ static void ready_classes(void)
     q3_geom_classes();
     q3_view_classes();
     q3_file_classes();
+    q3_controller_classes();
 }
 
 static void Q3Initialize(ppc_cpu *c)
@@ -1179,6 +1181,25 @@ static gaddr new_element_class(int32_t *type, const char *name, uint32_t size, g
     e->guest = q3_handle_new(Q3H_CLASS, NULL);
     *type = e->type;
     return e->guest;
+}
+
+int32_t q3_register_element(const char *name, uint32_t size)
+{
+    for (int i = 0; i < nelements; i++)
+        if (!strcmp(elements[i].name, name))
+            return elements[i].type;
+    int32_t type = 0;
+    new_element_class(&type, name, size, 0, false);
+    return type;
+}
+
+q3set *q3_elements_of(q3obj *o, bool make)
+{
+    if (q3_type_is(o->type, Q3_SET))
+        return o->data;
+    if (q3_type_is(o->type, Q3_SHAPE))
+        return shape_set(o, make);
+    return NULL;
 }
 
 static void register_element(ppc_cpu *c, bool attribute)
