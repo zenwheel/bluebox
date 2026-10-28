@@ -431,3 +431,16 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    @Suite struct QTGestalt {
+        /// QuickTime 4.1.2, with QuickTime VR and streaming.
+        @Test func quickTimeVersions() {
+            qtMachine()
+            var v: Int32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("qtim")), &v) == 0 && UInt32(bitPattern: v) == 0x0412_8000)
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("qtvr")), &v) == 0 && v & 0x7 == 0x7)
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("qtst")), &v) == 0 && v >> 16 == 0x0412)
+        }
+    }
+}
