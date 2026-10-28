@@ -37,4 +37,15 @@ uint32_t qt_native_sound(qt_native *p, int64_t from_ms, int64_t to_ms, int16_t *
  * fields in ms): *first, and the count. */
 size_t qt_native_music(qt_native *p, int64_t from_ms, int64_t to_ms, const qt_midi_event **first);
 
+/* The media handlers' hold on what plays: a sprite track's sprites (its
+ * place among the movie's tracks, 0-based), a track's picture made again
+ * after they changed, and the sample showing (-1 none). */
+struct qt_sprite;
+struct qt_sprite *qt_native_sprite(qt_native *p, int track);
+struct qt_text;
+struct qt_text *qt_native_text(qt_native *p, int track);
+void qt_native_redraw(qt_native *p, int track);
+int64_t qt_native_showing(qt_native *p, int track);
+void qt_native_text_override(qt_native *p, int track, int64_t sample, const uint8_t *bytes, uint32_t len, bool hidden);
+
 #endif

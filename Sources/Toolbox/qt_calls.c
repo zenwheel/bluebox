@@ -25,7 +25,7 @@ uint32_t qt_call_param_size(const char *sizes)
 {
     uint32_t n = 0;
     for (const char *s = sizes; *s; s++)
-        n += *s == '4' ? 4 : 2;
+        n += *s == '4' || *s == 'f' ? 4 : 2;
     return n;
 }
 
@@ -42,8 +42,17 @@ void qt_call_ppc(ppc_cpu *c, unsigned index)
     ppc_trap_begin();
     ppc_trap_push(4, 0);              /* the result */
     ppc_trap_push(4, c->gpr[3]);      /* the instance */
-    for (int i = 0; q->sizes[i]; i++)
-        ppc_trap_push(q->sizes[i] - '0', ppc_arg(c, 1 + i));
+    int fpr = 1;
+    for (int i = 0; q->sizes[i]; i++) {
+        if (q->sizes[i] == 'f') { /* a float: in the next floating-point register */
+            float f = (float)ppc_fpr(c, fpr++);
+            uint32_t bits;
+            memcpy(&bits, &f, 4);
+            ppc_trap_push(4, bits);
+        } else {
+            ppc_trap_push(q->sizes[i] - '0', ppc_arg(c, 1 + i));
+        }
+    }
     ppc_trap_push(4, qt_call_param_size(q->sizes) << 16 | q->what);
     ppc_trap_set(0, 0);
     ppc_trap(0xA82A);

@@ -1278,9 +1278,35 @@ int32_t tb_GetMediaHandler(int32_t theMedia)
         uint32_t c = components_find_next(0, fourcc("mhlr"), md->type, 0);
         int16_t err = noErr;
         md->handler = c ? components_open_component(c, &err) : 0;
-        if (md->handler) { /* MediaInitialize(mh, ...): ours take the media from GetMediaHandler's caller */
-            uint32_t args[] = { 0, (uint32_t)theMedia, 0 };
+        if (md->handler) { /* MediaInitialize(mh, GetMovieCompleteParams *): the media and its setting */
+            qtm_track *t;
+            qtm_movie *mv;
+            qt_media_model((gaddr)theMedia, &t, &mv);
+            gaddr g = tb_NewPtr(104, false, true);
+            wr16(g, 1);
+            wr32(g + 2, qt_movie_handle(mv));
+            wr32(g + 6, t->token);
+            wr32(g + 10, (uint32_t)theMedia);
+            wr32(g + 14, (uint32_t)mv->scale);
+            wr32(g + 18, (uint32_t)md->scale);
+            wr32(g + 22, (uint32_t)mv->duration);
+            wr32(g + 26, (uint32_t)qtm_track_duration(t));
+            wr32(g + 30, (uint32_t)md->duration);
+            wr32(g + 34, 0x10000);
+            wr32(g + 38, (uint32_t)tb_GetMovieTimeBase((int32_t)qt_movie_handle(mv)));
+            wr16(g + 42, (uint16_t)t->volume);
+            wr32(g + 44, (uint32_t)t->width);
+            wr32(g + 48, (uint32_t)t->height);
+            put_matrix(g + 52, t->matrix);
+            gaddr port = tb_NewPtr(8, false, true);
+            tb_GetMovieGWorld((int32_t)qt_movie_handle(mv), port, port + 4);
+            wr32(g + 88, rd32(port));
+            wr32(g + 92, rd32(port + 4));
+            tb_DisposePtr(port);
+            wr32(g + 100, md->input_map);
+            uint32_t args[] = { g };
             qtc_call_named(md->handler, "MediaInitialize", args);
+            tb_DisposePtr(g);
         }
         if (!md->handler)
             qt_set_error(noMediaHandler);
@@ -1507,7 +1533,7 @@ int16_t tb_OpenADataHandler(int32_t dataRef, int32_t dataHandlerSubType, int32_t
     (void)anchorDataRef, (void)anchorDataRefType, (void)tb;
     int16_t err;
     uint32_t h = open_handler((uint32_t)dataHandlerSubType, (gaddr)dataRef, (flags & 1) != 0, &err);
-    if (!err && (flags & 2)) { /* kDataHCanWrite */
+    if (!err && (flags & 8)) { /* kDataHCanWrite */
         uint32_t none[1] = { 0 };
         int32_t r = qtc_call_named(h, "DataHOpenForWrite", none);
         if (r) {

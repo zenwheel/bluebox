@@ -1901,6 +1901,17 @@ static void glue_AddMovieSelection(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddMovieToStorage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dh = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AddMovieToStorage(a_theMovie, a_dh);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AddPt(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2913,6 +2924,16 @@ static void glue_CloseMovieFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CloseMovieStorage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dh = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CloseMovieStorage(a_dh);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ClosePicture(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3916,6 +3937,22 @@ static void glue_CreateMovieFile(cpu68k *c, uint16_t trapword)
     int32_t a_creator = (int32_t)cpu_pop32(c);
     gaddr a_fileSpec = (gaddr)cpu_pop32(c);
     int16_t r = tb_CreateMovieFile(a_fileSpec, a_creator, a_scriptTag, a_createMovieFileFlags, a_resRefNum, a_newmovie);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CreateMovieStorage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newmovie = (gaddr)cpu_pop32(c);
+    gaddr a_outDataHandler = (gaddr)cpu_pop32(c);
+    int32_t a_createMovieFileFlags = (int32_t)cpu_pop32(c);
+    int16_t a_scriptTag = (int16_t)cpu_pop16(c);
+    int32_t a_creator = (int32_t)cpu_pop32(c);
+    int32_t a_dataRefType = (int32_t)cpu_pop32(c);
+    int32_t a_dataRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CreateMovieStorage(a_dataRef, a_dataRefType, a_creator, a_scriptTag, a_createMovieFileFlags, a_outDataHandler, a_newmovie);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -5867,6 +5904,17 @@ static void glue_DeleteMovieSegment(cpu68k *c, uint16_t trapword)
     int32_t a_startTime = (int32_t)cpu_pop32(c);
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int16_t r = tb_DeleteMovieSegment(a_theMovie, a_startTime, a_duration);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DeleteMovieStorage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dataRefType = (int32_t)cpu_pop32(c);
+    int32_t a_dataRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DeleteMovieStorage(a_dataRef, a_dataRefType);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -19449,6 +19497,19 @@ static void glue_OpenMovieFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_OpenMovieStorage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outDataHandler = (gaddr)cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    int32_t a_dataRefType = (int32_t)cpu_pop32(c);
+    int32_t a_dataRef = (int32_t)cpu_pop32(c);
+    int16_t r = tb_OpenMovieStorage(a_dataRef, a_dataRefType, a_flags, a_outDataHandler);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_OpenPicture(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -21659,6 +21720,19 @@ static void glue_PutMovieIntoHandle(cpu68k *c, uint16_t trapword)
     int32_t a_publicMovie = (int32_t)cpu_pop32(c);
     int32_t a_theMovie = (int32_t)cpu_pop32(c);
     int16_t r = tb_PutMovieIntoHandle(a_theMovie, a_publicMovie);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_PutMovieIntoStorage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_maxSize = (int32_t)cpu_pop32(c);
+    gaddr a_offset = (gaddr)cpu_pop32(c);
+    int32_t a_dh = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_PutMovieIntoStorage(a_theMovie, a_dh, a_offset, a_maxSize);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -29794,6 +29868,17 @@ static void glue_UpdateMovie(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UpdateMovieInStorage(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dh = (int32_t)cpu_pop32(c);
+    int32_t a_theMovie = (int32_t)cpu_pop32(c);
+    int16_t r = tb_UpdateMovieInStorage(a_theMovie, a_dh);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UpdateMovieResource(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -32977,13 +33062,13 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x387u, "CopyTrackUserData", CONV_STACK, 12, 2, glue_CopyTrackUserData},
     {0xAAAA, (int32_t)0x388u, "CopyMediaUserData", CONV_STACK, 12, 2, glue_CopyMediaUserData},
     {0xAAAA, (int32_t)0x389u, "CopyUserData", CONV_STACK, 12, 2, glue_CopyUserData},
-    {0xAAAA, (int32_t)0x38Au, "CreateMovieStorage", CONV_STACK, 26, 2, 0},
-    {0xAAAA, (int32_t)0x38Bu, "OpenMovieStorage", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x38Cu, "CloseMovieStorage", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x38Du, "DeleteMovieStorage", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x38Fu, "AddMovieToStorage", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x390u, "UpdateMovieInStorage", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x391u, "PutMovieIntoStorage", CONV_STACK, 16, 2, 0},
+    {0xAAAA, (int32_t)0x38Au, "CreateMovieStorage", CONV_STACK, 26, 2, glue_CreateMovieStorage},
+    {0xAAAA, (int32_t)0x38Bu, "OpenMovieStorage", CONV_STACK, 16, 2, glue_OpenMovieStorage},
+    {0xAAAA, (int32_t)0x38Cu, "CloseMovieStorage", CONV_STACK, 4, 2, glue_CloseMovieStorage},
+    {0xAAAA, (int32_t)0x38Du, "DeleteMovieStorage", CONV_STACK, 8, 2, glue_DeleteMovieStorage},
+    {0xAAAA, (int32_t)0x38Fu, "AddMovieToStorage", CONV_STACK, 8, 2, glue_AddMovieToStorage},
+    {0xAAAA, (int32_t)0x390u, "UpdateMovieInStorage", CONV_STACK, 8, 2, glue_UpdateMovieInStorage},
+    {0xAAAA, (int32_t)0x391u, "PutMovieIntoStorage", CONV_STACK, 16, 2, glue_PutMovieIntoStorage},
     {0xAAAA, (int32_t)0x392u, "FlattenMovieDataToDataRef", CONV_STACK, 26, 4, glue_FlattenMovieDataToDataRef},
     {0xAAAA, (int32_t)0x39Bu, "QTCreateUUID", CONV_STACK, 8, 2, glue_QTCreateUUID},
     {0xAAAA, (int32_t)0x39Cu, "QTEqualUUIDs", CONV_STACK, 8, 2, glue_QTEqualUUIDs},

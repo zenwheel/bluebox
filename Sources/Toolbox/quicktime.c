@@ -1101,6 +1101,40 @@ bool qt_movie_frame_at(const qtm_movie *mv, int64_t time, uint8_t **rgba, int *w
     return qt_native_frame(m->native, time * 1000 / mv->scale, &serial, rgba, w, h) && *rgba;
 }
 
+/* For the media handlers: what plays the movie now (our decoders, or
+ * none), a track's place in it, and the movie drawn again. */
+qt_native *qt_movie_native(const qtm_movie *mv)
+{
+    movie *m = movie_of_model(mv);
+    if (!m)
+        return NULL;
+    refresh(m);
+    return m->native;
+}
+
+int qt_track_index(const qtm_movie *mv, const qtm_track *t)
+{
+    for (int i = 0; i < mv->ntracks; i++)
+        if (mv->tracks[i] == t)
+            return i;
+    return -1;
+}
+
+void qt_movie_redraw(const qtm_movie *mv)
+{
+    movie *m = movie_of_model(mv);
+    if (m)
+        draw_frame(m, true);
+}
+
+/* The movie's port, GWorld device and box, for drawing beside it. */
+void qt_movie_place(const qtm_movie *mv, gaddr *port, qrect *box)
+{
+    movie *m = movie_of_model(mv);
+    *port = m ? m->port : 0;
+    *box = m ? m->box : (qrect){ 0, 0, 0, 0 };
+}
+
 /* A slaved movie that VLC plays: VLC keeps its own clock, so it is held
  * while the master stands still and put back where the master says when
  * it strays. */
@@ -1269,6 +1303,7 @@ void tb_DisposeMovie(gaddr h)
 void tb_MoviesTask(gaddr h, int32_t ms)
 {
     qt_callbacks_poll();
+    qt_mhlr_task();
     if (h) {
         movie *m = movie_of(h);
         if (m)

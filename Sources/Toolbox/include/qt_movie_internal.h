@@ -31,6 +31,10 @@ uint8_t *qt_moov_uncompress(uint8_t *moov, uint32_t *len);
 int64_t qt_movie_now(const qtm_movie *mv);
 bool qt_movie_frame_at(const qtm_movie *mv, int64_t time, uint8_t **rgba, int *w, int *h);
 bool qt_scrap_has_movie(void);
+struct qt_native;
+struct qt_native *qt_movie_native(const qtm_movie *mv);
+int qt_track_index(const qtm_movie *mv, const qtm_track *t);
+void qt_movie_redraw(const qtm_movie *mv);
 bool qt_any_movie_playing(void);
 
 /* qt_movies.c: a movie going away; one movie's segment into another's
@@ -59,6 +63,9 @@ void qt_util_reset(void);
 /* qt_mfile.c: a reference movie's target ('rmra'), and a picture of pixels. */
 bool qt_reference_movie_target(const uint8_t *moov, uint32_t len, uint32_t *type, uint8_t **ref, uint32_t *rn);
 gaddr qt_picture_of_rgba(const uint8_t *rgba, int w, int h);
+
+/* qt_mhlr.c: the media handlers' part of MoviesTask. */
+void qt_mhlr_task(void);
 
 /* qt_import.c: a file that isn't a movie, through a movie importer of ours. */
 int16_t qt_import_file_as_movie(const char *path, gaddr moviep, int16_t flags);

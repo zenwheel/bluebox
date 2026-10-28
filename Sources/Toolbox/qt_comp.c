@@ -17,6 +17,9 @@
 #include "qt_comp.h"
 #include "tb_internal.h"
 
+void qt_dhlr_register(void); /* qt_dhlr.c */
+void qt_mhlr_register(void); /* qt_mhlr.c */
+
 #define MAX_SLOTS 1024 /* the Component Manager's instances (their IDs' low word) */
 
 typedef struct {
@@ -65,9 +68,9 @@ static void read_args(qtc_call *k, uint32_t size)
     k->n = 0;
     for (int i = 0; k->call->sizes[i] && i < 32; i++) {
         char t = k->call->sizes[i];
-        off -= t == '4' ? 4 : 2;
+        off -= t == '4' || t == 'f' ? 4 : 2;
         gaddr p = k->params + 4 + off;
-        k->a[k->n++] = t == '4' ? rd32(p) : t == '2' ? rd16(p) : rd8(p);
+        k->a[k->n++] = t == '4' || t == 'f' ? rd32(p) : t == '2' ? rd16(p) : rd8(p);
     }
 }
 
@@ -146,6 +149,13 @@ uint32_t qtc_register(qtc_class *cls)
     return cls->component;
 }
 
+void qtc_each(const qtc_class *cls, void (*fn)(void *self, uint32_t ci))
+{
+    for (int i = 0; i < MAX_SLOTS; i++)
+        if (slots[i].ci && slots[i].cls == cls)
+            fn(slots[i].self, slots[i].ci);
+}
+
 uint32_t qtc_open(const qtc_class *cls)
 {
     int16_t err;
@@ -163,8 +173,8 @@ static int32_t call_with(uint32_t ci, const qt_call_info *q, const uint32_t *arg
     uint32_t off = size;
     for (int i = 0; q->sizes[i]; i++) {
         char t = q->sizes[i];
-        off -= t == '4' ? 4 : 2;
-        if (t == '4')
+        off -= t == '4' || t == 'f' ? 4 : 2;
+        if (t == '4' || t == 'f')
             wr32(p + 4 + off, args[i]);
         else if (t == '2')
             wr16(p + 4 + off, (uint16_t)args[i]);
@@ -207,4 +217,6 @@ void qt_components_reset(void)
         free(slots[i].self);
     memset(slots, 0, sizeof slots);
     qt_udata_reset();
+    qt_dhlr_register();
+    qt_mhlr_register();
 }

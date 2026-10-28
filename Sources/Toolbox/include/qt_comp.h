@@ -51,6 +51,8 @@ void *qtc_self(uint32_t ci);
 const qtc_class *qtc_class_of(uint32_t ci);
 /* An instance of the class (opened through the Component Manager), or 0. */
 uint32_t qtc_open(const qtc_class *cls);
+/* Each instance of ours of the class. */
+void qtc_each(const qtc_class *cls, void (*fn)(void *self, uint32_t ci));
 
 /* Call any instance (ours or a program's) as its callers do: the call of
  * the family and selector, with the arguments given in declared order. */

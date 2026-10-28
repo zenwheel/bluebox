@@ -17,4 +17,15 @@ void qt_text_free(qt_text *t);
  * displayed.  Draws with QuickDraw in guest memory: call from the Toolbox. */
 bool qt_text_draw(qt_text *t, const uint8_t *sample, uint32_t len, uint8_t *rgba);
 
+/* The description's display flags, justification, background and text
+ * box, as changed at run time. */
+uint32_t qt_text_flags(const qt_text *t);
+void qt_text_set_flags(qt_text *t, uint32_t flags);
+int16_t qt_text_justification(const qt_text *t);
+void qt_text_set_justification(qt_text *t, int16_t just);
+void qt_text_background(const qt_text *t, uint16_t rgb[3]);
+void qt_text_set_background(qt_text *t, const uint16_t rgb[3]);
+void qt_text_box(const qt_text *t, int16_t r[4]);
+void qt_text_set_box(qt_text *t, const int16_t r[4]);
+
 #endif

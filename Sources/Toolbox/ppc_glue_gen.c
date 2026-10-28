@@ -29933,6 +29933,16 @@ static void ppcglue_PutMovieIntoDataFork64(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PutMovieIntoStorage(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dh = (int32_t)c->gpr[4];
+    gaddr a_offset = (gaddr)c->gpr[5];
+    int32_t a_maxSize = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutMovieIntoStorage(a_theMovie, a_dh, a_offset, a_maxSize);
+    c->pc = c->lr;
+}
+
 static void ppcglue_PutMovieForDataRefIntoHandle(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
@@ -31630,6 +31640,60 @@ static void ppcglue_RemoveMovieResource(ppc_cpu *c)
     int16_t a_resRefNum = (int16_t)c->gpr[3];
     int16_t a_resId = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveMovieResource(a_resRefNum, a_resId);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateMovieStorage(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    int32_t a_creator = (int32_t)c->gpr[5];
+    int16_t a_scriptTag = (int16_t)c->gpr[6];
+    int32_t a_createMovieFileFlags = (int32_t)c->gpr[7];
+    gaddr a_outDataHandler = (gaddr)c->gpr[8];
+    gaddr a_newmovie = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateMovieStorage(a_dataRef, a_dataRefType, a_creator, a_scriptTag, a_createMovieFileFlags, a_outDataHandler, a_newmovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenMovieStorage(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    gaddr a_outDataHandler = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenMovieStorage(a_dataRef, a_dataRefType, a_flags, a_outDataHandler);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseMovieStorage(ppc_cpu *c)
+{
+    int32_t a_dh = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseMovieStorage(a_dh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteMovieStorage(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteMovieStorage(a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddMovieToStorage(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dh = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddMovieToStorage(a_theMovie, a_dh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UpdateMovieInStorage(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dh = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UpdateMovieInStorage(a_theMovie, a_dh);
     c->pc = c->lr;
 }
 
@@ -37387,112 +37451,6 @@ static void ppctrap_CreateMovieControl(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_PutMovieIntoStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x391u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CreateMovieStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_OpenMovieStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CloseMovieStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DeleteMovieStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddMovieToStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_UpdateMovieInStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x390u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_ShowMovieInformation(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -39543,7 +39501,7 @@ const ppc_export ppc_exports[] = {
     {"AddMovieExecuteWiredActionsProc", ppctrap_AddMovieExecuteWiredActionsProc},
     {"AddMovieResource", ppcglue_AddMovieResource},
     {"AddMovieSelection", ppcglue_AddMovieSelection},
-    {"AddMovieToStorage", ppctrap_AddMovieToStorage},
+    {"AddMovieToStorage", ppcglue_AddMovieToStorage},
     {"AddPt", ppcglue_AddPt},
     {"AddResource", ppcglue_AddResource},
     {"AddSearch", ppcglue_AddSearch},
@@ -39666,7 +39624,7 @@ const ppc_export ppc_exports[] = {
     {"CloseMappedFile", ppcglue_CloseMappedFile},
     {"CloseMixerSoundComponent", ppcglue_CloseMixerSoundComponent},
     {"CloseMovieFile", ppcglue_CloseMovieFile},
-    {"CloseMovieStorage", ppctrap_CloseMovieStorage},
+    {"CloseMovieStorage", ppcglue_CloseMovieStorage},
     {"ClosePicture", ppcglue_ClosePicture},
     {"ClosePoly", ppcglue_ClosePoly},
     {"ClosePort", ppcglue_ClosePort},
@@ -39768,7 +39726,7 @@ const ppc_export ppc_exports[] = {
     {"CreateLogicalDescriptor", ppcglue_CreateLogicalDescriptor},
     {"CreateMovieControl", ppctrap_CreateMovieControl},
     {"CreateMovieFile", ppcglue_CreateMovieFile},
-    {"CreateMovieStorage", ppctrap_CreateMovieStorage},
+    {"CreateMovieStorage", ppcglue_CreateMovieStorage},
     {"CreateNewWindow", ppcglue_CreateNewWindow},
     {"CreateObjSpecifier", ppcglue_CreateObjSpecifier},
     {"CreateOffsetDescriptor", ppcglue_CreateOffsetDescriptor},
@@ -39934,7 +39892,7 @@ const ppc_export ppc_exports[] = {
     {"DeleteMenuItem", ppcglue_DeleteMenuItem},
     {"DeleteMovieFile", ppcglue_DeleteMovieFile},
     {"DeleteMovieSegment", ppcglue_DeleteMovieSegment},
-    {"DeleteMovieStorage", ppctrap_DeleteMovieStorage},
+    {"DeleteMovieStorage", ppcglue_DeleteMovieStorage},
     {"DeleteRecordFromDictionary", ppcglue_DeleteRecordFromDictionary},
     {"DeleteTSMDocument", ppcglue_DeleteTSMDocument},
     {"DeleteTrackReference", ppcglue_DeleteTrackReference},
@@ -41900,7 +41858,7 @@ const ppc_export ppc_exports[] = {
     {"OpenMappedScratchFile", ppcglue_OpenMappedScratchFile},
     {"OpenMixerSoundComponent", ppcglue_OpenMixerSoundComponent},
     {"OpenMovieFile", ppcglue_OpenMovieFile},
-    {"OpenMovieStorage", ppctrap_OpenMovieStorage},
+    {"OpenMovieStorage", ppcglue_OpenMovieStorage},
     {"OpenNewEdition", ppctrap_OpenNewEdition},
     {"OpenPicture", ppcglue_OpenPicture},
     {"OpenPoly", ppcglue_OpenPoly},
@@ -42408,7 +42366,7 @@ const ppc_export ppc_exports[] = {
     {"PutMovieIntoDataFork", ppcglue_PutMovieIntoDataFork},
     {"PutMovieIntoDataFork64", ppcglue_PutMovieIntoDataFork64},
     {"PutMovieIntoHandle", ppcglue_PutMovieIntoHandle},
-    {"PutMovieIntoStorage", ppctrap_PutMovieIntoStorage},
+    {"PutMovieIntoStorage", ppcglue_PutMovieIntoStorage},
     {"PutMovieIntoTypedHandle", ppcglue_PutMovieIntoTypedHandle},
     {"PutMovieOnScrap", ppcglue_PutMovieOnScrap},
     {"PutScrap", ppcglue_PutScrap},
@@ -43316,7 +43274,7 @@ const ppc_export ppc_exports[] = {
     {"UpdateGWorld", ppcglue_UpdateGWorld},
     {"UpdateIconRef", ppcglue_UpdateIconRef},
     {"UpdateMovie", ppcglue_UpdateMovie},
-    {"UpdateMovieInStorage", ppctrap_UpdateMovieInStorage},
+    {"UpdateMovieInStorage", ppcglue_UpdateMovieInStorage},
     {"UpdateMovieResource", ppcglue_UpdateMovieResource},
     {"UpdateResFile", ppcglue_UpdateResFile},
     {"UpdateSystemActivity", ppcglue_UpdateSystemActivity},

@@ -1436,3 +1436,128 @@ int16_t tb_MovieSearchText(int32_t theMovie, int32_t text, int32_t size, int32_t
     free(needle);
     return qt_set_error(err);
 }
+
+/* ---- Movie storage (QuickTime 6): a movie kept through a data handler ---- */
+
+int16_t tb_CreateMovieStorage(int32_t dataRef, int32_t dataRefType, int32_t creator, int16_t scriptTag,
+                              int32_t createMovieFileFlags, gaddr outDataHandler, gaddr newmovie)
+{
+    (void)scriptTag;
+    if (outDataHandler)
+        wr32(outDataHandler, 0);
+    if (newmovie)
+        wr32(newmovie, 0);
+    gaddr dhp = tb_NewPtr(4, false, true);
+    int16_t err = tb_OpenADataHandler(dataRef, dataRefType, 0, 0, 0, 0, dhp);
+    uint32_t dh = rd32(dhp);
+    tb_DisposePtr(dhp);
+    if (err)
+        return err;
+    uint32_t cargs[] = { (uint32_t)creator, (createMovieFileFlags & createMovieFileDeleteCurFile) ? 1u : 0u, 0 };
+    int32_t r = qtc_call_named(dh, "DataHCreateFileWithFlags", cargs);
+    uint32_t none[1] = { 0 };
+    if (!r)
+        r = qtc_call_named(dh, "DataHOpenForWrite", none);
+    if (r) {
+        components_close(dh);
+        return qt_set_error((int16_t)r);
+    }
+    if (!(createMovieFileFlags & createMovieFileDontCreateMovie) && newmovie) {
+        uint32_t rn;
+        uint8_t *ref = qt_dref_bytes((gaddr)dataRef, &rn);
+        char path[PATH_MAX];
+        bool file = qt_dref_path((uint32_t)dataRefType, ref, rn, NULL, path, sizeof path);
+        qtm_movie *mv = qtm_new(600, mac_now());
+        if (!file) { /* where its samples go: the storage */
+            mv->default_dref = ref;
+            mv->default_dref_len = rn;
+            mv->default_dref_type = (uint32_t)dataRefType;
+            ref = NULL;
+        }
+        free(ref);
+        gaddr m = qt_new_movie_for(mv, file ? path : NULL);
+        if (m && (createMovieFileFlags & newMovieActive))
+            tb_SetMovieActive(m, 1);
+        wr32(newmovie, m);
+    }
+    if (outDataHandler)
+        wr32(outDataHandler, dh);
+    else
+        components_close(dh);
+    return qt_set_error(noErr);
+}
+
+int16_t tb_OpenMovieStorage(int32_t dataRef, int32_t dataRefType, int32_t flags, gaddr outDataHandler)
+{
+    if (outDataHandler)
+        wr32(outDataHandler, 0);
+    /* kDataHCanRead (1), kDataHCanWrite (8): opened for those */
+    return tb_OpenADataHandler(dataRef, dataRefType, 0, 0, 0, flags | 1, outDataHandler);
+}
+
+int16_t tb_CloseMovieStorage(int32_t dh)
+{
+    if (!dh)
+        return qt_set_error(paramErr);
+    uint32_t none[1] = { 0 };
+    qtc_call_named((uint32_t)dh, "DataHCloseForWrite", none);
+    qtc_call_named((uint32_t)dh, "DataHCloseForRead", none);
+    components_close((uint32_t)dh);
+    return qt_set_error(noErr);
+}
+
+int16_t tb_DeleteMovieStorage(int32_t dataRef, int32_t dataRefType)
+{
+    uint32_t rn;
+    uint8_t *ref = qt_dref_bytes((gaddr)dataRef, &rn);
+    char path[PATH_MAX];
+    bool file = qt_dref_path((uint32_t)dataRefType, ref, rn, NULL, path, sizeof path);
+    free(ref);
+    if (!file)
+        return qt_set_error(paramErr);
+    gaddr spec = tb_NewPtr(FSSpec_SIZEOF, false, true);
+    fm_spec_for_path(path, spec);
+    int16_t err = tb_FSpDelete(spec);
+    tb_DisposePtr(spec);
+    return qt_set_error(err);
+}
+
+int16_t tb_AddMovieToStorage(int32_t theMovie, int32_t dh)
+{
+    if (!qt_movie_model((gaddr)theMovie))
+        return qt_set_error(invalidMovie);
+    gaddr id = tb_NewPtr(2, false, true);
+    uint32_t args[] = { (uint32_t)theMovie, id };
+    int32_t r = qtc_call_named((uint32_t)dh, "DataHAddMovie", args);
+    tb_DisposePtr(id);
+    return qt_set_error((int16_t)r);
+}
+
+int16_t tb_UpdateMovieInStorage(int32_t theMovie, int32_t dh)
+{
+    if (!qt_movie_model((gaddr)theMovie))
+        return qt_set_error(invalidMovie);
+    uint32_t args[] = { (uint32_t)theMovie, 0 };
+    return qt_set_error((int16_t)qtc_call_named((uint32_t)dh, "DataHUpdateMovie", args));
+}
+
+int16_t tb_PutMovieIntoStorage(int32_t theMovie, int32_t dh, gaddr offset, int32_t maxSize)
+{
+    qtm_movie *mv = qt_movie_model((gaddr)theMovie);
+    if (!mv)
+        return qt_set_error(invalidMovie);
+    qtm_update_duration(mv);
+    uint32_t n;
+    uint8_t *b = qtm_serialize(mv, false, &n);
+    if (maxSize > 0 && n > (uint32_t)maxSize) {
+        free(b);
+        return qt_set_error(paramErr);
+    }
+    gaddr g = tb_NewPtr((int32_t)n, false, false);
+    gput(g, b, n);
+    free(b);
+    uint32_t args[] = { g, offset, n, 0, 0 };
+    int32_t r = qtc_call_named((uint32_t)dh, "DataHWrite64", args);
+    tb_DisposePtr(g);
+    return qt_set_error((int16_t)r);
+}

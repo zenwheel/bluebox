@@ -1504,7 +1504,7 @@ const qt_call_info qt_calls[] = {
     { "Media3DGetViewObject", 0x010F, "4", "Media3D", q381 },
     { "Media3DRotateNamedObjectTo", 0x0106, "4444", "Media3D", q382 },
     { "Media3DScaleNamedObjectTo", 0x0105, "4444", "Media3D", q383 },
-    { "Media3DSetCameraAngleAspect", 0x0109, "44", "Media3D", q384 },
+    { "Media3DSetCameraAngleAspect", 0x0109, "ff", "Media3D", q384 },
     { "Media3DSetCameraData", 0x0107, "4", "Media3D", q385 },
     { "Media3DSetCameraRange", 0x010D, "4", "Media3D", q386 },
     { "Media3DTranslateNamedObjectTo", 0x0104, "4444", "Media3D", q387 },

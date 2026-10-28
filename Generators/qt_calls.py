@@ -5,7 +5,8 @@
       68k form is _ComponentDispatch with a selector) and writes
       Generators/defs/qt_calls.tsv: name, selector, the sizes of the
       arguments after the instance (4 a long or pointer, 2 a short, 1 a
-      Boolean or byte, passed as a word), and the call's family.
+      Boolean or byte, passed as a word, f a float, which PowerPC code
+      passes in a floating-point register), and the call's family.
   uv run python Generators/qt_calls.py
       writes Sources/Toolbox/qt_calls_gen.c from that table.
 """
@@ -55,6 +56,8 @@ def arg_size(a):
     if "*" in a or "[" in a:
         return 4
     ty = " ".join(a.split()[:-1])
+    if ty in ("QTFloatSingle", "float"):
+        return "f"
     if ty in ONE:
         return 1
     if ty in TWO:
@@ -70,7 +73,7 @@ def scan(inc):
             _, name, args, size, sel = m.groups()
             args = [a.strip() for a in args.split(",") if a.strip() and a.strip() != "void"]
             sizes = "".join(str(arg_size(a)) for a in args[1:])
-            total = sum(2 if c == "1" else int(c) for c in sizes)
+            total = sum(2 if c == "1" else 4 if c == "f" else int(c) for c in sizes)
             if total != int(size, 16):
                 bad.append((name, sizes, int(size, 16)))
             if name not in rows:

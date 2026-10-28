@@ -71,6 +71,7 @@ typedef struct {
 /* A track that draws: where its picture goes in the movie's frame. */
 typedef struct {
     int kind;                       /* VIDEO, TEXT or SPRITE */
+    int track;                      /* its track's place in the movie (0-based) */
     trak *t;
     int16_t layer;
     double a, b, c, d, tx, ty;      /* the track's matrix */
@@ -81,6 +82,10 @@ typedef struct {
     int64_t key, applied;           /* sprites: the key frame read, the last override applied */
     uint8_t *rgba;                  /* text and sprites: tw x th */
     bool drawn;
+    uint8_t *alt;                   /* text: a sample's bytes changed at run time, */
+    uint32_t alt_len;
+    int64_t alt_for;                /* for this sample (-1 none) */
+    bool alt_hidden;                /* or the sample not to be shown */
 } visual;
 
 struct qt_native {
@@ -95,6 +100,7 @@ struct qt_native {
     int nvis;
     bool composite;                 /* text or sprites: frames are composited */
     bool composed;
+    bool dirty;                     /* a track's picture changed: compose again */
     uint8_t *canvas;
     int cw, ch;
     qt_midi_event *midi;            /* the music track's events, times in movie ms */
@@ -515,11 +521,13 @@ static qt_native *open_native(const uint8_t *moov, uint32_t len, const char *dat
     p->decoded = -1;
     bool ok = true;
     const uint8_t *end = moov + len;
+    int track = -1;
     for (const uint8_t *t = moov + 8; t + 8 <= end;) {
         uint32_t tn = be32(t);
         if (tn < 8 || tn > (uint64_t)(end - t))
             break;
         if (!memcmp(t + 4, "trak", 4)) {
+            track++;
             uint32_t hn, kn;
             static const char *const hdlr_path[] = { "mdia", "hdlr" };
             const uint8_t *hdlr = path(t + 8, tn - 8, hdlr_path, 2, &hn);
@@ -531,6 +539,7 @@ static qt_native *open_native(const uint8_t *moov, uint32_t len, const char *dat
                 if (!read_trak(&p->video, t + 8, tn - 8, VIDEO))
                     ok = false;
                 visual *v = &p->vis[p->nvis++];
+                v->track = track;
                 v->kind = VIDEO;
                 v->t = &p->video;
                 place(v, tkhd, kn);
@@ -549,6 +558,8 @@ static qt_native *open_native(const uint8_t *moov, uint32_t len, const char *dat
                 if (!read_trak(x, t + 8, tn - 8, kind))
                     ok = false;
                 visual *v = &p->vis[p->nvis++];
+                v->track = track;
+                v->alt_for = -1;
                 v->kind = kind;
                 v->t = x;
                 place(v, tkhd, kn);
@@ -632,6 +643,7 @@ void qt_native_close(qt_native *p)
     free_trak(&p->music);
     for (int i = 0; i < p->nvis; i++) {
         qt_text_free(p->vis[i].text);
+        free(p->vis[i].alt);
         qt_sprite_free(p->vis[i].sprite);
         free(p->vis[i].rgba);
     }
@@ -775,6 +787,11 @@ static void text_to(qt_native *p, visual *v, int64_t want)
     v->drawn = false;
     if (want < 0)
         return;
+    if (v->alt_for == want) {
+        if (!v->alt_hidden)
+            v->drawn = qt_text_draw(v->text, v->alt, v->alt_len, v->rgba);
+        return;
+    }
     uint8_t *data = read_at(p, v->t->offset[want], v->t->size[want]);
     if (data)
         v->drawn = qt_text_draw(v->text, data, v->t->size[want], v->rgba);
@@ -877,7 +894,8 @@ static void compose(qt_native *p)
 
 static bool composite_frame(qt_native *p, int64_t ms)
 {
-    bool changed = !p->composed;
+    bool changed = !p->composed || p->dirty;
+    p->dirty = false;
     for (int i = 0; i < p->nvis; i++) {
         visual *v = &p->vis[i];
         if (v->kind == VIDEO) {
@@ -989,4 +1007,69 @@ uint32_t qt_native_sound(qt_native *p, int64_t from_ms, int64_t to_ms, int16_t *
     }
     *pcm = out;
     return (uint32_t)(fb - fa);
+}
+
+/* A sprite track's sprites as they are showing (for the sprite media
+ * handler), and its picture made again after they changed. */
+qt_sprite *qt_native_sprite(qt_native *p, int track)
+{
+    for (int i = 0; p && i < p->nvis; i++)
+        if (p->vis[i].track == track && p->vis[i].kind == SPRITE)
+            return p->vis[i].sprite;
+    return NULL;
+}
+
+void qt_native_redraw(qt_native *p, int track)
+{
+    for (int i = 0; p && i < p->nvis; i++) {
+        visual *v = &p->vis[i];
+        if (v->track != track)
+            continue;
+        if (v->kind == SPRITE && v->sprite && v->rgba)
+            v->drawn = qt_sprite_draw(v->sprite, v->rgba);
+        else if (v->kind == TEXT)
+            v->shown = -2; /* drawn again from its sample */
+        p->dirty = true;
+    }
+}
+
+/* A text track's drawing, as it shows. */
+qt_text *qt_native_text(qt_native *p, int track)
+{
+    for (int i = 0; p && i < p->nvis; i++)
+        if (p->vis[i].track == track && p->vis[i].kind == TEXT)
+            return p->vis[i].text;
+    return NULL;
+}
+
+/* A text sample shown other than as it is (TextMediaSetTextProperty and
+ * the text procedure's dfDontDisplay), until another is. */
+void qt_native_text_override(qt_native *p, int track, int64_t sample, const uint8_t *bytes, uint32_t len, bool hidden)
+{
+    for (int i = 0; p && i < p->nvis; i++) {
+        visual *v = &p->vis[i];
+        if (v->track != track || v->kind != TEXT)
+            continue;
+        free(v->alt);
+        v->alt = NULL;
+        v->alt_len = 0;
+        v->alt_for = sample;
+        v->alt_hidden = hidden;
+        if (bytes && len) {
+            v->alt = malloc(len);
+            memcpy(v->alt, bytes, len);
+            v->alt_len = len;
+        }
+        v->shown = -2;
+        p->dirty = true;
+    }
+}
+
+/* The sample of a track showing at ms, and its size (text and sprites). */
+int64_t qt_native_showing(qt_native *p, int track)
+{
+    for (int i = 0; p && i < p->nvis; i++)
+        if (p->vis[i].track == track)
+            return p->vis[i].shown;
+    return -1;
 }
