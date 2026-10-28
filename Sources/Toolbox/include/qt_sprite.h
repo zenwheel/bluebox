@@ -25,6 +25,8 @@ bool qt_sprite_all_overrides(const qt_sprite *s);
 /* The scene over the background colour into rgba (w * h * 4, opaque);
  * false if the track is invisible. */
 bool qt_sprite_draw(const qt_sprite *s, uint8_t *rgba);
+/* The sprites alone, over what rgba holds. */
+void qt_sprite_draw_over(const qt_sprite *s, uint8_t *rgba);
 
 /* At run time (the sprite media handler): sprites by index (1-based) and
  * ID; their properties as atoms hold them (big-endian: matrix 36 bytes,
@@ -46,5 +48,13 @@ bool qt_sprite_track_visible(const qt_sprite *s);
 void qt_sprite_set_track_visible(qt_sprite *s, bool visible);
 void qt_sprite_background(const qt_sprite *s, uint8_t rgb[3]);
 void qt_sprite_set_background(qt_sprite *s, const uint8_t rgb[3]);
+
+/* The Sprite Toolbox's worlds: an empty scene of w x h; an image (an
+ * ImageDescription then its data) given or replaced; a sprite's bounds
+ * (top, left, bottom, right). */
+qt_sprite *qt_sprite_world(int w, int h);
+bool qt_sprite_set_image(qt_sprite *s, uint32_t id, const uint8_t *desc_and_data, uint32_t len);
+void qt_sprite_forget_image(qt_sprite *s, uint32_t id);
+bool qt_sprite_bounds(const qt_sprite *s, uint32_t id, int r[4]);
 
 #endif

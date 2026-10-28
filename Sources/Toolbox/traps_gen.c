@@ -6158,6 +6158,15 @@ static void glue_DiskEject(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DisposeAllSprites(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theSpriteWorld = (int32_t)cpu_pop32(c);
+    tb_DisposeAllSprites(a_theSpriteWorld);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposeCCursor(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6412,6 +6421,24 @@ static void glue_DisposeSpeechChannel(cpu68k *c, uint16_t trapword)
     gaddr a_chan = (gaddr)cpu_pop32(c);
     int16_t r = tb_DisposeSpeechChannel(a_chan);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_DisposeSprite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theSprite = (int32_t)cpu_pop32(c);
+    tb_DisposeSprite(a_theSprite);
+    cpu_push32(c, ret);
+}
+
+static void glue_DisposeSpriteWorld(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theSpriteWorld = (int32_t)cpu_pop32(c);
+    tb_DisposeSpriteWorld(a_theSpriteWorld);
     cpu_push32(c, ret);
 }
 
@@ -14378,6 +14405,18 @@ static void glue_GetSpeechRate(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetSpriteProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyValue = (gaddr)cpu_pop32(c);
+    int32_t a_propertyType = (int32_t)cpu_pop32(c);
+    int32_t a_theSprite = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetSpriteProperty(a_theSprite, a_propertyType, a_propertyValue);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetStartupTimer(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17051,6 +17090,26 @@ static void glue_InvalidateMovieRegion(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_InvalidateSprite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theSprite = (int32_t)cpu_pop32(c);
+    tb_InvalidateSprite(a_theSprite);
+    cpu_push32(c, ret);
+}
+
+static void glue_InvalidateSpriteWorld(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_invalidArea = (gaddr)cpu_pop32(c);
+    int32_t a_theSpriteWorld = (int32_t)cpu_pop32(c);
+    int16_t r = tb_InvalidateSpriteWorld(a_theSpriteWorld, a_invalidArea);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_InverseMatrix(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19430,6 +19489,36 @@ static void glue_NewSpeechChannel(cpu68k *c, uint16_t trapword)
     gaddr a_chan = (gaddr)cpu_pop32(c);
     gaddr a_voice = (gaddr)cpu_pop32(c);
     int16_t r = tb_NewSpeechChannel(a_voice, a_chan);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewSprite(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_layer = (int16_t)cpu_pop16(c);
+    int8_t a_visible = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_matrix = (gaddr)cpu_pop32(c);
+    int32_t a_imageDataPtr = (int32_t)cpu_pop32(c);
+    int32_t a_idh = (int32_t)cpu_pop32(c);
+    int32_t a_itsSpriteWorld = (int32_t)cpu_pop32(c);
+    gaddr a_newSprite = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewSprite(a_newSprite, a_itsSpriteWorld, a_idh, a_imageDataPtr, a_matrix, a_visible, a_layer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewSpriteWorld(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_background = (int32_t)cpu_pop32(c);
+    gaddr a_backgroundColor = (gaddr)cpu_pop32(c);
+    int32_t a_spriteLayer = (int32_t)cpu_pop32(c);
+    int32_t a_destination = (int32_t)cpu_pop32(c);
+    gaddr a_newSpriteWorld = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewSpriteWorld(a_newSpriteWorld, a_destination, a_spriteLayer, a_backgroundColor, a_background);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -27657,6 +27746,64 @@ static void glue_SetSpindownDisable(cpu68k *c, uint16_t trapword)
     tb_SetSpindownDisable(a_setDisable);
 }
 
+static void glue_SetSpriteProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyValue = (gaddr)cpu_pop32(c);
+    int32_t a_propertyType = (int32_t)cpu_pop32(c);
+    int32_t a_theSprite = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetSpriteProperty(a_theSprite, a_propertyType, a_propertyValue);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetSpriteWorldClip(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_clipRgn = (int32_t)cpu_pop32(c);
+    int32_t a_theSpriteWorld = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetSpriteWorldClip(a_theSpriteWorld, a_clipRgn);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetSpriteWorldFlags(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_flagsMask = (int32_t)cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    int32_t a_spriteWorld = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetSpriteWorldFlags(a_spriteWorld, a_flags, a_flagsMask);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetSpriteWorldGraphicsMode(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_opColor = (gaddr)cpu_pop32(c);
+    int32_t a_mode = (int32_t)cpu_pop32(c);
+    int32_t a_theSpriteWorld = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetSpriteWorldGraphicsMode(a_theSpriteWorld, a_mode, a_opColor);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetSpriteWorldMatrix(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_matrix = (gaddr)cpu_pop32(c);
+    int32_t a_theSpriteWorld = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetSpriteWorldMatrix(a_theSpriteWorld, a_matrix);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetStartupTimer(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28840,6 +28987,44 @@ static void glue_SpinDownHardDisk(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     tb_SpinDownHardDisk();
+    cpu_push32(c, ret);
+}
+
+static void glue_SpriteHitTest(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasHit = (gaddr)cpu_pop32(c);
+    int32_t a_loc = (int32_t)cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    int32_t a_theSprite = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SpriteHitTest(a_theSprite, a_flags, a_loc, a_wasHit);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SpriteWorldHitTest(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_spriteHit = (gaddr)cpu_pop32(c);
+    int32_t a_loc = (int32_t)cpu_pop32(c);
+    int32_t a_flags = (int32_t)cpu_pop32(c);
+    int32_t a_theSpriteWorld = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SpriteWorldHitTest(a_theSpriteWorld, a_flags, a_loc, a_spriteHit);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SpriteWorldIdle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_flagsOut = (gaddr)cpu_pop32(c);
+    int32_t a_flagsIn = (int32_t)cpu_pop32(c);
+    int32_t a_theSpriteWorld = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SpriteWorldIdle(a_theSpriteWorld, a_flagsIn, a_flagsOut);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -34205,20 +34390,20 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x233u, "BeginFullScreen", CONV_STACK, 28, 2, glue_BeginFullScreen},
     {0xAAAA, (int32_t)0x234u, "EndFullScreen", CONV_STACK, 8, 2, glue_EndFullScreen},
     {0xAAAA, (int32_t)0x235u, "GetMediaSampleReferences", CONV_STACK, 32, 2, glue_GetMediaSampleReferences},
-    {0xAAAA, (int32_t)0x239u, "NewSpriteWorld", CONV_STACK, 20, 2, 0},
-    {0xAAAA, (int32_t)0x23Au, "DisposeSpriteWorld", CONV_STACK, 4, 0, 0},
-    {0xAAAA, (int32_t)0x23Bu, "SetSpriteWorldClip", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x23Cu, "SetSpriteWorldMatrix", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x23Du, "SpriteWorldIdle", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x23Eu, "InvalidateSpriteWorld", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x23Fu, "DisposeAllSprites", CONV_STACK, 4, 0, 0},
-    {0xAAAA, (int32_t)0x240u, "NewSprite", CONV_STACK, 24, 2, 0},
-    {0xAAAA, (int32_t)0x241u, "DisposeSprite", CONV_STACK, 4, 0, 0},
-    {0xAAAA, (int32_t)0x242u, "InvalidateSprite", CONV_STACK, 4, 0, 0},
-    {0xAAAA, (int32_t)0x243u, "SetSpriteProperty", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x244u, "GetSpriteProperty", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x246u, "SpriteWorldHitTest", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x247u, "SpriteHitTest", CONV_STACK, 16, 2, 0},
+    {0xAAAA, (int32_t)0x239u, "NewSpriteWorld", CONV_STACK, 20, 2, glue_NewSpriteWorld},
+    {0xAAAA, (int32_t)0x23Au, "DisposeSpriteWorld", CONV_STACK, 4, 0, glue_DisposeSpriteWorld},
+    {0xAAAA, (int32_t)0x23Bu, "SetSpriteWorldClip", CONV_STACK, 8, 2, glue_SetSpriteWorldClip},
+    {0xAAAA, (int32_t)0x23Cu, "SetSpriteWorldMatrix", CONV_STACK, 8, 2, glue_SetSpriteWorldMatrix},
+    {0xAAAA, (int32_t)0x23Du, "SpriteWorldIdle", CONV_STACK, 12, 2, glue_SpriteWorldIdle},
+    {0xAAAA, (int32_t)0x23Eu, "InvalidateSpriteWorld", CONV_STACK, 8, 2, glue_InvalidateSpriteWorld},
+    {0xAAAA, (int32_t)0x23Fu, "DisposeAllSprites", CONV_STACK, 4, 0, glue_DisposeAllSprites},
+    {0xAAAA, (int32_t)0x240u, "NewSprite", CONV_STACK, 24, 2, glue_NewSprite},
+    {0xAAAA, (int32_t)0x241u, "DisposeSprite", CONV_STACK, 4, 0, glue_DisposeSprite},
+    {0xAAAA, (int32_t)0x242u, "InvalidateSprite", CONV_STACK, 4, 0, glue_InvalidateSprite},
+    {0xAAAA, (int32_t)0x243u, "SetSpriteProperty", CONV_STACK, 12, 2, glue_SetSpriteProperty},
+    {0xAAAA, (int32_t)0x244u, "GetSpriteProperty", CONV_STACK, 12, 2, glue_GetSpriteProperty},
+    {0xAAAA, (int32_t)0x246u, "SpriteWorldHitTest", CONV_STACK, 16, 2, glue_SpriteWorldHitTest},
+    {0xAAAA, (int32_t)0x247u, "SpriteHitTest", CONV_STACK, 16, 2, glue_SpriteHitTest},
     {0xAAAA, (int32_t)0x249u, "GetMediaInputMap", CONV_STACK, 8, 2, glue_GetMediaInputMap},
     {0xAAAA, (int32_t)0x24Au, "SetMediaInputMap", CONV_STACK, 8, 2, glue_SetMediaInputMap},
     {0xAAAA, (int32_t)0x263u, "GetTrackDisplayMatrix", CONV_STACK, 8, 2, glue_GetTrackDisplayMatrix},
@@ -34242,7 +34427,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x2BEu, "MakeTrackTimeTable", CONV_STACK, 28, 2, glue_MakeTrackTimeTable},
     {0xAAAA, (int32_t)0x2BFu, "MakeMediaTimeTable", CONV_STACK, 28, 2, glue_MakeMediaTimeTable},
     {0xAAAA, (int32_t)0x2C0u, "GetMaxLoadedTimeInMovie", CONV_STACK, 8, 2, glue_GetMaxLoadedTimeInMovie},
-    {0xAAAA, (int32_t)0x2C2u, "SetSpriteWorldFlags", CONV_STACK, 12, 2, 0},
+    {0xAAAA, (int32_t)0x2C2u, "SetSpriteWorldFlags", CONV_STACK, 12, 2, glue_SetSpriteWorldFlags},
     {0xAAAA, (int32_t)0x2C3u, "QTMovieNeedsTimeTable", CONV_STACK, 8, 2, glue_QTMovieNeedsTimeTable},
     {0xAAAA, (int32_t)0x2C6u, "QTGetDataRefMaxFileOffset", CONV_STACK, 16, 2, glue_QTGetDataRefMaxFileOffset},
     {0xAAAA, (int32_t)0x2C7u, "GetMovieImporterForDataRef", CONV_STACK, 16, 2, glue_GetMovieImporterForDataRef},
@@ -34258,7 +34443,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x2D2u, "QTGetEffectSpeed", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x2D4u, "GetQuickTimePreference", CONV_STACK, 8, 2, glue_GetQuickTimePreference},
     {0xAAAA, (int32_t)0x2D5u, "SetQuickTimePreference", CONV_STACK, 8, 2, glue_SetQuickTimePreference},
-    {0xAAAA, (int32_t)0x2D9u, "SetSpriteWorldGraphicsMode", CONV_STACK, 12, 2, 0},
+    {0xAAAA, (int32_t)0x2D9u, "SetSpriteWorldGraphicsMode", CONV_STACK, 12, 2, glue_SetSpriteWorldGraphicsMode},
     {0xAAAA, (int32_t)0x2DAu, "CheckQuickTimeRegistration", CONV_STACK, 8, 0, glue_CheckQuickTimeRegistration},
     {0xAAAA, (int32_t)0x2DBu, "QTTextToNativeText", CONV_STACK, 12, 2, glue_QTTextToNativeText},
     {0xAAAA, (int32_t)0x2E8u, "AddMediaSampleReferences64", CONV_STACK, 20, 2, glue_AddMediaSampleReferences64},

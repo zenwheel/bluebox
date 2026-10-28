@@ -32946,6 +32946,147 @@ static void ppcglue_EndFullScreen(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NewSpriteWorld(ppc_cpu *c)
+{
+    gaddr a_newSpriteWorld = (gaddr)c->gpr[3];
+    int32_t a_destination = (int32_t)c->gpr[4];
+    int32_t a_spriteLayer = (int32_t)c->gpr[5];
+    gaddr a_backgroundColor = (gaddr)c->gpr[6];
+    int32_t a_background = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewSpriteWorld(a_newSpriteWorld, a_destination, a_spriteLayer, a_backgroundColor, a_background);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeSpriteWorld(ppc_cpu *c)
+{
+    int32_t a_theSpriteWorld = (int32_t)c->gpr[3];
+    tb_DisposeSpriteWorld(a_theSpriteWorld);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSpriteWorldClip(ppc_cpu *c)
+{
+    int32_t a_theSpriteWorld = (int32_t)c->gpr[3];
+    int32_t a_clipRgn = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSpriteWorldClip(a_theSpriteWorld, a_clipRgn);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSpriteWorldMatrix(ppc_cpu *c)
+{
+    int32_t a_theSpriteWorld = (int32_t)c->gpr[3];
+    gaddr a_matrix = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSpriteWorldMatrix(a_theSpriteWorld, a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSpriteWorldGraphicsMode(ppc_cpu *c)
+{
+    int32_t a_theSpriteWorld = (int32_t)c->gpr[3];
+    int32_t a_mode = (int32_t)c->gpr[4];
+    gaddr a_opColor = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSpriteWorldGraphicsMode(a_theSpriteWorld, a_mode, a_opColor);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SpriteWorldIdle(ppc_cpu *c)
+{
+    int32_t a_theSpriteWorld = (int32_t)c->gpr[3];
+    int32_t a_flagsIn = (int32_t)c->gpr[4];
+    gaddr a_flagsOut = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SpriteWorldIdle(a_theSpriteWorld, a_flagsIn, a_flagsOut);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InvalidateSpriteWorld(ppc_cpu *c)
+{
+    int32_t a_theSpriteWorld = (int32_t)c->gpr[3];
+    gaddr a_invalidArea = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InvalidateSpriteWorld(a_theSpriteWorld, a_invalidArea);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SpriteWorldHitTest(ppc_cpu *c)
+{
+    int32_t a_theSpriteWorld = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    int32_t a_loc = (int32_t)c->gpr[5];
+    gaddr a_spriteHit = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SpriteWorldHitTest(a_theSpriteWorld, a_flags, a_loc, a_spriteHit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SpriteHitTest(ppc_cpu *c)
+{
+    int32_t a_theSprite = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    int32_t a_loc = (int32_t)c->gpr[5];
+    gaddr a_wasHit = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SpriteHitTest(a_theSprite, a_flags, a_loc, a_wasHit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeAllSprites(ppc_cpu *c)
+{
+    int32_t a_theSpriteWorld = (int32_t)c->gpr[3];
+    tb_DisposeAllSprites(a_theSpriteWorld);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSpriteWorldFlags(ppc_cpu *c)
+{
+    int32_t a_spriteWorld = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    int32_t a_flagsMask = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSpriteWorldFlags(a_spriteWorld, a_flags, a_flagsMask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewSprite(ppc_cpu *c)
+{
+    gaddr a_newSprite = (gaddr)c->gpr[3];
+    int32_t a_itsSpriteWorld = (int32_t)c->gpr[4];
+    int32_t a_idh = (int32_t)c->gpr[5];
+    int32_t a_imageDataPtr = (int32_t)c->gpr[6];
+    gaddr a_matrix = (gaddr)c->gpr[7];
+    int8_t a_visible = (int8_t)c->gpr[8];
+    int16_t a_layer = (int16_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewSprite(a_newSprite, a_itsSpriteWorld, a_idh, a_imageDataPtr, a_matrix, a_visible, a_layer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeSprite(ppc_cpu *c)
+{
+    int32_t a_theSprite = (int32_t)c->gpr[3];
+    tb_DisposeSprite(a_theSprite);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InvalidateSprite(ppc_cpu *c)
+{
+    int32_t a_theSprite = (int32_t)c->gpr[3];
+    tb_InvalidateSprite(a_theSprite);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetSpriteProperty(ppc_cpu *c)
+{
+    int32_t a_theSprite = (int32_t)c->gpr[3];
+    int32_t a_propertyType = (int32_t)c->gpr[4];
+    gaddr a_propertyValue = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetSpriteProperty(a_theSprite, a_propertyType, a_propertyValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetSpriteProperty(ppc_cpu *c)
+{
+    int32_t a_theSprite = (int32_t)c->gpr[3];
+    int32_t a_propertyType = (int32_t)c->gpr[4];
+    gaddr a_propertyValue = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetSpriteProperty(a_theSprite, a_propertyType, a_propertyValue);
+    c->pc = c->lr;
+}
+
 static void ppcglue_QTNewAtomContainer(ppc_cpu *c)
 {
     gaddr a_atomData = (gaddr)c->gpr[3];
@@ -38334,231 +38475,6 @@ static void ppctrap_MovieExecuteWiredActions(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_NewSpriteWorld(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x239u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeSpriteWorld(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x23Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetSpriteWorldClip(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x23Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetSpriteWorldMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x23Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetSpriteWorldGraphicsMode(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2D9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SpriteWorldIdle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x23Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_InvalidateSpriteWorld(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x23Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SpriteWorldHitTest(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x246u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SpriteHitTest(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x247u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeAllSprites(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x23Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetSpriteWorldFlags(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2C2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewSprite(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x240u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(1, c->gpr[8]);
-    ppc_trap_push(2, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeSprite(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x241u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_InvalidateSprite(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x242u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetSpriteProperty(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x243u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetSpriteProperty(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x244u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_QTNewTween(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -40740,7 +40656,7 @@ const ppc_export ppc_exports[] = {
     {"DisableMenuItemIcon", ppcglue_DisableMenuItemIcon},
     {"DisableWUTime", ppcglue_DisableWUTime},
     {"DiskEject", ppcglue_DiskEject},
-    {"DisposeAllSprites", ppctrap_DisposeAllSprites},
+    {"DisposeAllSprites", ppcglue_DisposeAllSprites},
     {"DisposeCCursor", ppcglue_DisposeCCursor},
     {"DisposeCIcon", ppcglue_DisposeCIcon},
     {"DisposeCTable", ppcglue_DisposeCTable},
@@ -40771,8 +40687,8 @@ const ppc_export ppc_exports[] = {
     {"DisposeRoutineDescriptor", ppctrap_DisposeRoutineDescriptor},
     {"DisposeScreenBuffer", ppcglue_DisposeScreenBuffer},
     {"DisposeSpeechChannel", ppcglue_DisposeSpeechChannel},
-    {"DisposeSprite", ppctrap_DisposeSprite},
-    {"DisposeSpriteWorld", ppctrap_DisposeSpriteWorld},
+    {"DisposeSprite", ppcglue_DisposeSprite},
+    {"DisposeSpriteWorld", ppcglue_DisposeSpriteWorld},
     {"DisposeThemeDrawingState", ppcglue_DisposeThemeDrawingState},
     {"DisposeThread", ppcglue_DisposeThread},
     {"DisposeTimeBase", ppcglue_DisposeTimeBase},
@@ -41640,7 +41556,7 @@ const ppc_export ppc_exports[] = {
     {"GetSpeechInfo", ppcglue_GetSpeechInfo},
     {"GetSpeechPitch", ppcglue_GetSpeechPitch},
     {"GetSpeechRate", ppcglue_GetSpeechRate},
-    {"GetSpriteProperty", ppctrap_GetSpriteProperty},
+    {"GetSpriteProperty", ppcglue_GetSpriteProperty},
     {"GetStandardFormats", ppctrap_GetStandardFormats},
     {"GetStartupTimer", ppcglue_GetStartupTimer},
     {"GetStdFilterProc", ppcglue_GetStdFilterProc},
@@ -41939,8 +41855,8 @@ const ppc_export ppc_exports[] = {
     {"InvalRgn", ppcglue_InvalRgn},
     {"InvalidateFolderDescriptorCache", ppcglue_InvalidateFolderDescriptorCache},
     {"InvalidateMovieRegion", ppcglue_InvalidateMovieRegion},
-    {"InvalidateSprite", ppctrap_InvalidateSprite},
-    {"InvalidateSpriteWorld", ppctrap_InvalidateSpriteWorld},
+    {"InvalidateSprite", ppcglue_InvalidateSprite},
+    {"InvalidateSpriteWorld", ppcglue_InvalidateSpriteWorld},
     {"InverseMatrix", ppcglue_InverseMatrix},
     {"InvertArc", ppcglue_InvertArc},
     {"InvertColor", ppcglue_InvertColor},
@@ -42676,8 +42592,8 @@ const ppc_export ppc_exports[] = {
     {"NewSection", ppctrap_NewSection},
     {"NewServiceWindow", ppcglue_NewServiceWindow},
     {"NewSpeechChannel", ppcglue_NewSpeechChannel},
-    {"NewSprite", ppctrap_NewSprite},
-    {"NewSpriteWorld", ppctrap_NewSpriteWorld},
+    {"NewSprite", ppcglue_NewSprite},
+    {"NewSpriteWorld", ppcglue_NewSpriteWorld},
     {"NewString", ppcglue_NewString},
     {"NewSubscriberDialog", ppcglue_NewSubscriberDialog},
     {"NewSubscriberExpDialog", ppctrap_NewSubscriberExpDialog},
@@ -43851,11 +43767,11 @@ const ppc_export ppc_exports[] = {
     {"SetSpeechPitch", ppcglue_SetSpeechPitch},
     {"SetSpeechRate", ppcglue_SetSpeechRate},
     {"SetSpindownDisable", ppcglue_SetSpindownDisable},
-    {"SetSpriteProperty", ppctrap_SetSpriteProperty},
-    {"SetSpriteWorldClip", ppctrap_SetSpriteWorldClip},
-    {"SetSpriteWorldFlags", ppctrap_SetSpriteWorldFlags},
-    {"SetSpriteWorldGraphicsMode", ppctrap_SetSpriteWorldGraphicsMode},
-    {"SetSpriteWorldMatrix", ppctrap_SetSpriteWorldMatrix},
+    {"SetSpriteProperty", ppcglue_SetSpriteProperty},
+    {"SetSpriteWorldClip", ppcglue_SetSpriteWorldClip},
+    {"SetSpriteWorldFlags", ppcglue_SetSpriteWorldFlags},
+    {"SetSpriteWorldGraphicsMode", ppcglue_SetSpriteWorldGraphicsMode},
+    {"SetSpriteWorldMatrix", ppcglue_SetSpriteWorldMatrix},
     {"SetStartupTimer", ppcglue_SetStartupTimer},
     {"SetStdCProcs", ppcglue_SetStdCProcs},
     {"SetStdProcs", ppcglue_SetStdProcs},
@@ -43983,9 +43899,9 @@ const ppc_export ppc_exports[] = {
     {"SpeechBusySystemWide", ppcglue_SpeechBusySystemWide},
     {"SpeechManagerVersion", ppcglue_SpeechManagerVersion},
     {"SpinDownHardDisk", ppcglue_SpinDownHardDisk},
-    {"SpriteHitTest", ppctrap_SpriteHitTest},
-    {"SpriteWorldHitTest", ppctrap_SpriteWorldHitTest},
-    {"SpriteWorldIdle", ppctrap_SpriteWorldIdle},
+    {"SpriteHitTest", ppcglue_SpriteHitTest},
+    {"SpriteWorldHitTest", ppcglue_SpriteWorldHitTest},
+    {"SpriteWorldIdle", ppcglue_SpriteWorldIdle},
     {"StackSpace", ppcglue_StackSpace},
     {"StandardAlert", ppcglue_StandardAlert},
     {"StandardGetFile", ppcglue_StandardGetFile},

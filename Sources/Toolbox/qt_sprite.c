@@ -423,13 +423,19 @@ bool qt_sprite_draw(const qt_sprite *s, uint8_t *rgba)
         memcpy(rgba + i * 4, s->bg, 3);
         rgba[i * 4 + 3] = 255;
     }
+    qt_sprite_draw_over(s, rgba);
+    return true;
+}
+
+void qt_sprite_draw_over(const qt_sprite *s, uint8_t *rgba)
+{
     if (!s->cur)
-        return true;
+        return;
     /* Back to front: the highest layer first, and within a layer the
      * sprites in order of their IDs. */
     int *order = malloc((size_t)(s->nspr ? s->nspr : 1) * sizeof *order);
     if (!order)
-        return true;
+        return;
     for (int i = 0; i < s->nspr; i++)
         order[i] = i;
     for (int i = 1; i < s->nspr; i++)
@@ -445,7 +451,6 @@ bool qt_sprite_draw(const qt_sprite *s, uint8_t *rgba)
         if (s->cur[order[i]].visible)
             draw_sprite(s, &s->cur[order[i]], rgba);
     free(order);
-    return true;
 }
 
 /* ---- At run time: the sprite media handler's calls ---- */
@@ -646,3 +651,65 @@ void qt_sprite_set_track_visible(qt_sprite *s, bool visible) { s->visible = visi
 
 void qt_sprite_background(const qt_sprite *s, uint8_t rgb[3]) { memcpy(rgb, s->bg, 3); }
 void qt_sprite_set_background(qt_sprite *s, const uint8_t rgb[3]) { memcpy(s->bg, rgb, 3); }
+
+/* ---- The Sprite Toolbox's worlds (qt_spriteworld.c) ---- */
+
+qt_sprite *qt_sprite_world(int w, int h)
+{
+    qt_sprite *s = qt_sprite_new(NULL, 0, w, h);
+    if (s) {
+        s->key = calloc(1, sizeof *s->key);
+        s->cur = calloc(1, sizeof *s->cur);
+    }
+    return s;
+}
+
+bool qt_sprite_set_image(qt_sprite *s, uint32_t id, const uint8_t *desc_and_data, uint32_t len)
+{
+    image im = { id, 0, 0, NULL, 0, 0 };
+    if (!decode_image(&im, desc_and_data, len)) {
+        free(im.rgba);
+        return false;
+    }
+    for (int i = 0; i < s->nimg; i++)
+        if (s->img[i].id == id) {
+            free(s->img[i].rgba);
+            s->img[i] = im;
+            return true;
+        }
+    image *n = realloc(s->img, (size_t)(s->nimg + 1) * sizeof *n);
+    if (!n) {
+        free(im.rgba);
+        return false;
+    }
+    s->img = n;
+    s->img[s->nimg++] = im;
+    return true;
+}
+
+void qt_sprite_forget_image(qt_sprite *s, uint32_t id)
+{
+    for (int i = 0; i < s->nimg; i++)
+        if (s->img[i].id == id) {
+            free(s->img[i].rgba);
+            memmove(&s->img[i], &s->img[i + 1], (size_t)(s->nimg - i - 1) * sizeof *s->img);
+            s->nimg--;
+            return;
+        }
+}
+
+bool qt_sprite_bounds(const qt_sprite *s, uint32_t id, int r[4])
+{
+    const sprite *sp = find_sprite(s, id);
+    const image *im = sp ? image_of(s, sp->image) : NULL;
+    if (!im)
+        return false;
+    double x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (int k = 0; k < 4; k++) {
+        double x = (k & 1 ? im->w : 0) - im->rx, y = (k & 2 ? im->h : 0) - im->ry;
+        double X = sp->a * x + sp->c * y + sp->tx, Y = sp->b * x + sp->d * y + sp->ty;
+        x0 = fmin(x0, X), x1 = fmax(x1, X), y0 = fmin(y0, Y), y1 = fmax(y1, Y);
+    }
+    r[0] = (int)floor(y0), r[1] = (int)floor(x0), r[2] = (int)ceil(y1), r[3] = (int)ceil(x1);
+    return true;
+}

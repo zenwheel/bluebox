@@ -257,3 +257,78 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    @Suite struct QTSpriteToolbox {
+        func gworld(_ w: Int, _ h: Int) -> UInt32 {
+            let gw = tb_NewPtr(4, false, true)
+            let r = tb_NewPtr(8, false, true)
+            wr16(r + 4, UInt16(h)); wr16(r + 6, UInt16(w))
+            #expect(tb_NewGWorld(gw, 32, r, 0, 0, 0) == 0)
+            return rd32(gw)
+        }
+
+        func pixel(_ port: UInt32, _ h: Int16, _ v: Int16) -> UInt32 {
+            let saved = tb_NewPtr(8, false, true)
+            tb_GetGWorld(saved, saved + 4)
+            tb_SetGWorld(port, 0)
+            let c = tb_NewPtr(6, false, true)
+            tb_GetCPixel(h, v, c)
+            tb_SetGWorld(rd32(saved), rd32(saved + 4))
+            return UInt32(rd16(c) >> 8) << 16 | UInt32(rd16(c + 2) >> 8) << 8 | UInt32(rd16(c + 4) >> 8)
+        }
+
+        /// A 4x4 red image as a raw 32-bit ImageDescription and its data.
+        func redImage() -> (UInt32, UInt32) {
+            let idh = tb_NewHandle(86, false, true)
+            let d = rd32(idh)
+            wr32(d, 86); wr32(d + 4, fourCC("raw "))
+            wr16(d + 32, 4); wr16(d + 34, 4)
+            wr32(d + 36, 72 << 16); wr32(d + 40, 72 << 16)
+            wr32(d + 44, 64); wr16(d + 48, 1); wr16(d + 82, 32); wr16(d + 84, 0xFFFF)
+            let data = tb_NewPtr(64, false, true)
+            for i in 0..<16 { wr32(data + UInt32(i * 4), 0xFFFF_0000) }
+            return (idh, data)
+        }
+
+        /// Sprites composited over the background colour and copied to the
+        /// destination when the world is idled; moved, hidden and hit tested.
+        @Test func spritesDrawMoveAndHit() {
+            qtMachine()
+            let dest = gworld(32, 32), layer = gworld(32, 32)
+            let blue = tb_NewPtr(6, false, true)
+            wr16(blue + 4, 0xFFFF)
+            let out = tb_NewPtr(4, false, true)
+            #expect(tb_NewSpriteWorld(out, Int32(bitPattern: dest), Int32(bitPattern: layer), blue, 0) == 0)
+            let world = Int32(bitPattern: rd32(out))
+            let (idh, data) = redImage()
+            let m = tb_NewPtr(36, false, true)
+            wr32(m, 0x10000); wr32(m + 16, 0x10000); wr32(m + 24, 8 << 16); wr32(m + 28, 10 << 16); wr32(m + 32, 0x4000_0000)
+            #expect(tb_NewSprite(out, world, Int32(bitPattern: idh), Int32(bitPattern: data), m, 1, 0) == 0)
+            let sprite = Int32(bitPattern: rd32(out))
+            let flags = tb_NewPtr(4, false, true)
+            #expect(tb_SpriteWorldIdle(world, 0, flags) == 0 && rd32(flags) & 1 == 1)
+            #expect(pixel(dest, 9, 11) == 0xFF0000)
+            #expect(pixel(dest, 2, 2) == 0x0000FF)
+            // nothing changed: nothing drawn
+            #expect(tb_SpriteWorldIdle(world, 0, flags) == 0 && rd32(flags) == 0)
+            // hit tests: on the sprite, beside it
+            let hit = tb_NewPtr(4, false, true)
+            #expect(tb_SpriteWorldHitTest(world, 1, 11 << 16 | 9, hit) == 0 && rd32(hit) == UInt32(bitPattern: sprite))
+            #expect(tb_SpriteWorldHitTest(world, 1, 2 << 16 | 2, hit) == 0 && rd32(hit) == 0)
+            // moved, then hidden
+            wr32(m + 24, 20 << 16)
+            #expect(tb_SetSpriteProperty(sprite, 1, m) == 0)
+            #expect(tb_SpriteWorldIdle(world, 0, flags) == 0)
+            #expect(pixel(dest, 9, 11) == 0x0000FF && pixel(dest, 21, 11) == 0xFF0000)
+            #expect(tb_SetSpriteProperty(sprite, 4, 0) == 0)
+            let vis = tb_NewPtr(2, false, true)
+            #expect(tb_GetSpriteProperty(sprite, 4, vis) == 0 && rd8(vis) == 0)
+            #expect(tb_SpriteWorldIdle(world, 0, flags) == 0)
+            #expect(pixel(dest, 21, 11) == 0x0000FF)
+            #expect(tb_SetSpriteProperty(sprite, 99, 0) == -2065)
+            tb_DisposeSprite(sprite)
+            tb_DisposeSpriteWorld(world)
+        }
+    }
+}
