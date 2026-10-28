@@ -29848,6 +29848,143 @@ static void ppcglue_GetMovieDataSize(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetUserData(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_udType = (int32_t)c->gpr[5];
+    int32_t a_index = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetUserData(a_theUserData, a_data, a_udType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddUserData(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_udType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddUserData(a_theUserData, a_data, a_udType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveUserData(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_udType = (int32_t)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveUserData(a_theUserData, a_udType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountUserDataType(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_udType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountUserDataType(a_theUserData, a_udType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextUserDataType(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_udType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetNextUserDataType(a_theUserData, a_udType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetUserDataItem(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    int32_t a_size = (int32_t)c->gpr[5];
+    int32_t a_udType = (int32_t)c->gpr[6];
+    int32_t a_index = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetUserDataItem(a_theUserData, a_data, a_size, a_udType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetUserDataItem(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    int32_t a_size = (int32_t)c->gpr[5];
+    int32_t a_udType = (int32_t)c->gpr[6];
+    int32_t a_index = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetUserDataItem(a_theUserData, a_data, a_size, a_udType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddUserDataText(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_udType = (int32_t)c->gpr[5];
+    int32_t a_index = (int32_t)c->gpr[6];
+    int16_t a_itlRegionTag = (int16_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddUserDataText(a_theUserData, a_data, a_udType, a_index, a_itlRegionTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetUserDataText(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_udType = (int32_t)c->gpr[5];
+    int32_t a_index = (int32_t)c->gpr[6];
+    int16_t a_itlRegionTag = (int16_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetUserDataText(a_theUserData, a_data, a_udType, a_index, a_itlRegionTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveUserDataText(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_udType = (int32_t)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    int16_t a_itlRegionTag = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveUserDataText(a_theUserData, a_udType, a_index, a_itlRegionTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewUserData(ppc_cpu *c)
+{
+    gaddr a_theUserData = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewUserData(a_theUserData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeUserData(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisposeUserData(a_theUserData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewUserDataFromHandle(ppc_cpu *c)
+{
+    int32_t a_h = (int32_t)c->gpr[3];
+    gaddr a_theUserData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewUserDataFromHandle(a_h, a_theUserData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PutUserDataIntoHandle(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_h = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutUserDataIntoHandle(a_theUserData, a_h);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyUserData(ppc_cpu *c)
+{
+    int32_t a_srcUserData = (int32_t)c->gpr[3];
+    int32_t a_dstUserData = (int32_t)c->gpr[4];
+    int32_t a_copyRule = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CopyUserData(a_srcUserData, a_dstUserData, a_copyRule);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMovieNextInterestingTime(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
@@ -29967,6 +30104,235 @@ static void ppcglue_EndFullScreen(ppc_cpu *c)
     int32_t a_fullState = (int32_t)c->gpr[3];
     int32_t a_flags = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EndFullScreen(a_fullState, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTNewAtomContainer(ppc_cpu *c)
+{
+    gaddr a_atomData = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNewAtomContainer(a_atomData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTDisposeAtomContainer(ppc_cpu *c)
+{
+    int32_t a_atomData = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTDisposeAtomContainer(a_atomData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetNextChildType(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_currentChildType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_QTGetNextChildType(a_container, a_parentAtom, a_currentChildType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCountChildrenOfType(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_childType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCountChildrenOfType(a_container, a_parentAtom, a_childType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTFindChildByIndex(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_atomType = (int32_t)c->gpr[5];
+    int16_t a_index = (int16_t)c->gpr[6];
+    gaddr a_id = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_QTFindChildByIndex(a_container, a_parentAtom, a_atomType, a_index, a_id);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTFindChildByID(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_atomType = (int32_t)c->gpr[5];
+    int32_t a_id = (int32_t)c->gpr[6];
+    gaddr a_index = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_QTFindChildByID(a_container, a_parentAtom, a_atomType, a_id, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTNextChildAnyType(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_currentChild = (int32_t)c->gpr[5];
+    gaddr a_nextChild = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNextChildAnyType(a_container, a_parentAtom, a_currentChild, a_nextChild);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetAtomData(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    int32_t a_dataSize = (int32_t)c->gpr[5];
+    gaddr a_atomData = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetAtomData(a_container, a_atom, a_dataSize, a_atomData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCopyAtomDataToHandle(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    int32_t a_targetHandle = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCopyAtomDataToHandle(a_container, a_atom, a_targetHandle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCopyAtomDataToPtr(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    int8_t a_sizeOrLessOK = (int8_t)c->gpr[5];
+    int32_t a_size = (int32_t)c->gpr[6];
+    gaddr a_targetPtr = (gaddr)c->gpr[7];
+    gaddr a_actualSize = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCopyAtomDataToPtr(a_container, a_atom, a_sizeOrLessOK, a_size, a_targetPtr, a_actualSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetAtomTypeAndID(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    gaddr a_atomType = (gaddr)c->gpr[5];
+    gaddr a_id = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetAtomTypeAndID(a_container, a_atom, a_atomType, a_id);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCopyAtom(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    gaddr a_targetContainer = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCopyAtom(a_container, a_atom, a_targetContainer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTLockContainer(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTLockContainer(a_container);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetAtomDataPtr(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    gaddr a_dataSize = (gaddr)c->gpr[5];
+    gaddr a_atomData = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetAtomDataPtr(a_container, a_atom, a_dataSize, a_atomData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTUnlockContainer(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTUnlockContainer(a_container);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTInsertChild(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_atomType = (int32_t)c->gpr[5];
+    int32_t a_id = (int32_t)c->gpr[6];
+    int16_t a_index = (int16_t)c->gpr[7];
+    int32_t a_dataSize = (int32_t)c->gpr[8];
+    gaddr a_data = (gaddr)c->gpr[9];
+    gaddr a_newAtom = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTInsertChild(a_container, a_parentAtom, a_atomType, a_id, a_index, a_dataSize, a_data, a_newAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTInsertChildren(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_childrenContainer = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTInsertChildren(a_container, a_parentAtom, a_childrenContainer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTRemoveAtom(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTRemoveAtom(a_container, a_atom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTRemoveChildren(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTRemoveChildren(a_container, a_atom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTReplaceAtom(ppc_cpu *c)
+{
+    int32_t a_targetContainer = (int32_t)c->gpr[3];
+    int32_t a_targetAtom = (int32_t)c->gpr[4];
+    int32_t a_replacementContainer = (int32_t)c->gpr[5];
+    int32_t a_replacementAtom = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTReplaceAtom(a_targetContainer, a_targetAtom, a_replacementContainer, a_replacementAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSwapAtoms(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom1 = (int32_t)c->gpr[4];
+    int32_t a_atom2 = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSwapAtoms(a_container, a_atom1, a_atom2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetAtomID(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    int32_t a_newID = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetAtomID(a_container, a_atom, a_newID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetAtomParent(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_childAtom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_QTGetAtomParent(a_container, a_childAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCreateUUID(ppc_cpu *c)
+{
+    gaddr a_outUUID = (gaddr)c->gpr[3];
+    int32_t a_creationFlags = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCreateUUID(a_outUUID, a_creationFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTEqualUUIDs(ppc_cpu *c)
+{
+    gaddr a_uuid1 = (gaddr)c->gpr[3];
+    gaddr a_uuid2 = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_QTEqualUUIDs(a_uuid1, a_uuid2);
     c->pc = c->lr;
 }
 
@@ -36908,218 +37274,6 @@ static void ppctrap_SetMovieLanguage(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_GetUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xA0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CountUserDataType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetNextUserDataType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1A5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetUserDataItem(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x126u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetUserDataItem(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x12Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddUserDataText(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetUserDataText(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveUserDataText(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x12Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x130u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewUserDataFromHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x131u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PutUserDataIntoHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x132u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_CopyMovieUserData(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -37155,21 +37309,6 @@ static void ppctrap_CopyMediaUserData(ppc_cpu *c)
     ppc_trap_begin();
     ppc_trap_push(2, 0);
     ppc_trap_set(0, 0x388u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CopyUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x389u);
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap_push(4, c->gpr[5]);
@@ -38235,357 +38374,6 @@ static void ppctrap_GetSpriteProperty(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTNewAtomContainer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTDisposeAtomContainer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetNextChildType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x20Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCountChildrenOfType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTFindChildByIndex(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x210u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTFindChildByID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x21Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTNextChildAnyType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x200u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetAtomData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x211u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCopyAtomDataToHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x212u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCopyAtomDataToPtr(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x213u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetAtomTypeAndID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x232u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCopyAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x214u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTLockContainer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x215u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetAtomDataPtr(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x216u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTUnlockContainer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x217u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTInsertChild(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x218u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTInsertChildren(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x219u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTRemoveAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x21Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTRemoveChildren(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x21Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTReplaceAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x21Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSwapAtoms(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1FFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetAtomID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x231u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetAtomParent(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x2EFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_SetMediaPropertyAtom(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -38987,34 +38775,6 @@ static void ppctrap_QTGetSupportedRestrictions(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap((uint16_t)(0xAAAA));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCreateUUID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x39Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTEqualUUIDs(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x39Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
     ppc_trap_end();
     c->gpr[3] = r;
     c->pc = c->lr;
@@ -41263,8 +41023,8 @@ const ppc_export ppc_exports[] = {
     {"AddSoundDescriptionExtension", ppctrap_AddSoundDescriptionExtension},
     {"AddTime", ppcglue_AddTime},
     {"AddTrackReference", ppctrap_AddTrackReference},
-    {"AddUserData", ppctrap_AddUserData},
-    {"AddUserDataText", ppctrap_AddUserDataText},
+    {"AddUserData", ppcglue_AddUserData},
+    {"AddUserDataText", ppcglue_AddUserDataText},
     {"AdvanceKeyboardFocus", ppcglue_AdvanceKeyboardFocus},
     {"Alert", ppcglue_Alert},
     {"AlignScreenRect", ppcglue_AlignScreenRect},
@@ -41441,7 +41201,7 @@ const ppc_export ppc_exports[] = {
     {"CopyRgn", ppcglue_CopyRgn},
     {"CopyTrackSettings", ppctrap_CopyTrackSettings},
     {"CopyTrackUserData", ppctrap_CopyTrackUserData},
-    {"CopyUserData", ppctrap_CopyUserData},
+    {"CopyUserData", ppcglue_CopyUserData},
     {"CouldAlert", ppcglue_CouldAlert},
     {"CouldDialog", ppcglue_CouldDialog},
     {"Count1Resources", ppcglue_Count1Resources},
@@ -41460,7 +41220,7 @@ const ppc_export ppc_exports[] = {
     {"CountSymbols", ppctrap_CountSymbols},
     {"CountTaggedCollectionItems", ppctrap_CountTaggedCollectionItems},
     {"CountTypes", ppcglue_CountTypes},
-    {"CountUserDataType", ppctrap_CountUserDataType},
+    {"CountUserDataType", ppcglue_CountUserDataType},
     {"CountVoices", ppcglue_CountVoices},
     {"CreateBevelButtonControl", ppcglue_CreateBevelButtonControl},
     {"CreateChasingArrowsControl", ppcglue_CreateChasingArrowsControl},
@@ -41703,7 +41463,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeTimeBase", ppcglue_DisposeTimeBase},
     {"DisposeTrackEditState", ppctrap_DisposeTrackEditState},
     {"DisposeTrackMedia", ppctrap_DisposeTrackMedia},
-    {"DisposeUserData", ppctrap_DisposeUserData},
+    {"DisposeUserData", ppcglue_DisposeUserData},
     {"DisposeWindow", ppcglue_DisposeWindow},
     {"DoVBLTask", ppcglue_DoVBLTask},
     {"DragAlignedGrayRgn", ppctrap_DragAlignedGrayRgn},
@@ -42485,7 +42245,7 @@ const ppc_export ppc_exports[] = {
     {"GetNextProcess", ppcglue_GetNextProcess},
     {"GetNextTrackForCompositing", ppctrap_GetNextTrackForCompositing},
     {"GetNextTrackReferenceType", ppctrap_GetNextTrackReferenceType},
-    {"GetNextUserDataType", ppctrap_GetNextUserDataType},
+    {"GetNextUserDataType", ppcglue_GetNextUserDataType},
     {"GetOSDefault", ppcglue_GetOSDefault},
     {"GetOSEvent", ppcglue_GetOSEvent},
     {"GetOSTrapAddress", ppcglue_GetOSTrapAddress},
@@ -42637,9 +42397,9 @@ const ppc_export ppc_exports[] = {
     {"GetTrackUserData", ppctrap_GetTrackUserData},
     {"GetTrackVolume", ppctrap_GetTrackVolume},
     {"GetTrapAddress", ppcglue_GetTrapAddress},
-    {"GetUserData", ppctrap_GetUserData},
-    {"GetUserDataItem", ppctrap_GetUserDataItem},
-    {"GetUserDataText", ppctrap_GetUserDataText},
+    {"GetUserData", ppcglue_GetUserData},
+    {"GetUserDataItem", ppcglue_GetUserDataItem},
+    {"GetUserDataText", ppcglue_GetUserDataText},
     {"GetVoiceDescription", ppcglue_GetVoiceDescription},
     {"GetVoiceInfo", ppcglue_GetVoiceInfo},
     {"GetWMgrPort", ppcglue_GetWMgrPort},
@@ -43587,8 +43347,8 @@ const ppc_export ppc_exports[] = {
     {"NewTimeBase", ppcglue_NewTimeBase},
     {"NewTrackEditState", ppctrap_NewTrackEditState},
     {"NewTrackMedia", ppctrap_NewTrackMedia},
-    {"NewUserData", ppctrap_NewUserData},
-    {"NewUserDataFromHandle", ppctrap_NewUserDataFromHandle},
+    {"NewUserData", ppcglue_NewUserData},
+    {"NewUserDataFromHandle", ppcglue_NewUserDataFromHandle},
     {"NewWindow", ppcglue_NewWindow},
     {"NoPurgePixels", ppcglue_NoPurgePixels},
     {"NormalizeThemeDrawingState", ppcglue_NormalizeThemeDrawingState},
@@ -44125,7 +43885,7 @@ const ppc_export ppc_exports[] = {
     {"PutMovieIntoTypedHandle", ppctrap_PutMovieIntoTypedHandle},
     {"PutMovieOnScrap", ppcglue_PutMovieOnScrap},
     {"PutScrap", ppcglue_PutScrap},
-    {"PutUserDataIntoHandle", ppctrap_PutUserDataIntoHandle},
+    {"PutUserDataIntoHandle", ppcglue_PutUserDataIntoHandle},
     {"QDDone", ppcglue_QDDone},
     {"QDError", ppcglue_QDError},
     {"QDTextBounds", ppcglue_QDTextBounds},
@@ -44133,24 +43893,24 @@ const ppc_export ppc_exports[] = {
     {"QTBandwidthRelease", ppctrap_QTBandwidthRelease},
     {"QTBandwidthRequest", ppctrap_QTBandwidthRequest},
     {"QTBandwidthRequestForTimeBase", ppctrap_QTBandwidthRequestForTimeBase},
-    {"QTCopyAtom", ppctrap_QTCopyAtom},
-    {"QTCopyAtomDataToHandle", ppctrap_QTCopyAtomDataToHandle},
-    {"QTCopyAtomDataToPtr", ppctrap_QTCopyAtomDataToPtr},
-    {"QTCountChildrenOfType", ppctrap_QTCountChildrenOfType},
+    {"QTCopyAtom", ppcglue_QTCopyAtom},
+    {"QTCopyAtomDataToHandle", ppcglue_QTCopyAtomDataToHandle},
+    {"QTCopyAtomDataToPtr", ppcglue_QTCopyAtomDataToPtr},
+    {"QTCountChildrenOfType", ppcglue_QTCountChildrenOfType},
     {"QTCreateStandardParameterDialog", ppctrap_QTCreateStandardParameterDialog},
-    {"QTCreateUUID", ppctrap_QTCreateUUID},
+    {"QTCreateUUID", ppcglue_QTCreateUUID},
     {"QTDismissStandardParameterDialog", ppctrap_QTDismissStandardParameterDialog},
-    {"QTDisposeAtomContainer", ppctrap_QTDisposeAtomContainer},
+    {"QTDisposeAtomContainer", ppcglue_QTDisposeAtomContainer},
     {"QTDisposeTween", ppctrap_QTDisposeTween},
     {"QTDoTween", ppctrap_QTDoTween},
     {"QTDoTweenPtr", ppctrap_QTDoTweenPtr},
-    {"QTEqualUUIDs", ppctrap_QTEqualUUIDs},
-    {"QTFindChildByID", ppctrap_QTFindChildByID},
-    {"QTFindChildByIndex", ppctrap_QTFindChildByIndex},
+    {"QTEqualUUIDs", ppcglue_QTEqualUUIDs},
+    {"QTFindChildByID", ppcglue_QTFindChildByID},
+    {"QTFindChildByIndex", ppcglue_QTFindChildByIndex},
     {"QTGetAccessKeys", ppctrap_QTGetAccessKeys},
-    {"QTGetAtomDataPtr", ppctrap_QTGetAtomDataPtr},
-    {"QTGetAtomParent", ppctrap_QTGetAtomParent},
-    {"QTGetAtomTypeAndID", ppctrap_QTGetAtomTypeAndID},
+    {"QTGetAtomDataPtr", ppcglue_QTGetAtomDataPtr},
+    {"QTGetAtomParent", ppcglue_QTGetAtomParent},
+    {"QTGetAtomTypeAndID", ppcglue_QTGetAtomTypeAndID},
     {"QTGetDataRefMaxFileOffset", ppctrap_QTGetDataRefMaxFileOffset},
     {"QTGetEffectSpeed", ppctrap_QTGetEffectSpeed},
     {"QTGetEffectsList", ppctrap_QTGetEffectsList},
@@ -44158,7 +43918,7 @@ const ppc_export ppc_exports[] = {
     {"QTGetFileNameExtension", ppctrap_QTGetFileNameExtension},
     {"QTGetMIMETypeInfo", ppctrap_QTGetMIMETypeInfo},
     {"QTGetMovieRestrictions", ppctrap_QTGetMovieRestrictions},
-    {"QTGetNextChildType", ppctrap_QTGetNextChildType},
+    {"QTGetNextChildType", ppcglue_QTGetNextChildType},
     {"QTGetPixMapHandleGammaLevel", ppctrap_QTGetPixMapHandleGammaLevel},
     {"QTGetPixMapHandleRequestedGammaLevel", ppctrap_QTGetPixMapHandleRequestedGammaLevel},
     {"QTGetPixMapHandleRowBytes", ppctrap_QTGetPixMapHandleRowBytes},
@@ -44179,32 +43939,32 @@ const ppc_export ppc_exports[] = {
     {"QTIdleManagerSetNextIdleTimeNever", ppctrap_QTIdleManagerSetNextIdleTimeNever},
     {"QTIdleManagerSetNextIdleTimeNow", ppctrap_QTIdleManagerSetNextIdleTimeNow},
     {"QTIdleManagerSetParent", ppctrap_QTIdleManagerSetParent},
-    {"QTInsertChild", ppctrap_QTInsertChild},
-    {"QTInsertChildren", ppctrap_QTInsertChildren},
+    {"QTInsertChild", ppcglue_QTInsertChild},
+    {"QTInsertChildren", ppcglue_QTInsertChildren},
     {"QTInstallNextTaskNeededSoonerCallback", ppctrap_QTInstallNextTaskNeededSoonerCallback},
     {"QTIsStandardParameterDialogEvent", ppctrap_QTIsStandardParameterDialogEvent},
-    {"QTLockContainer", ppctrap_QTLockContainer},
+    {"QTLockContainer", ppcglue_QTLockContainer},
     {"QTMovieNeedsTimeTable", ppctrap_QTMovieNeedsTimeTable},
     {"QTNewAlias", ppctrap_QTNewAlias},
-    {"QTNewAtomContainer", ppctrap_QTNewAtomContainer},
+    {"QTNewAtomContainer", ppcglue_QTNewAtomContainer},
     {"QTNewGWorld", ppctrap_QTNewGWorld},
     {"QTNewGWorldFromPtr", ppcglue_QTNewGWorldFromPtr},
     {"QTNewTween", ppctrap_QTNewTween},
-    {"QTNextChildAnyType", ppctrap_QTNextChildAnyType},
+    {"QTNextChildAnyType", ppcglue_QTNextChildAnyType},
     {"QTParseTextHREF", ppctrap_QTParseTextHREF},
     {"QTPrivateCall273", ppcglue_QTPrivateCall273},
     {"QTPrivateCall274", ppcglue_QTPrivateCall274},
     {"QTRegisterAccessKey", ppctrap_QTRegisterAccessKey},
-    {"QTRemoveAtom", ppctrap_QTRemoveAtom},
-    {"QTRemoveChildren", ppctrap_QTRemoveChildren},
-    {"QTReplaceAtom", ppctrap_QTReplaceAtom},
+    {"QTRemoveAtom", ppcglue_QTRemoveAtom},
+    {"QTRemoveChildren", ppcglue_QTRemoveChildren},
+    {"QTReplaceAtom", ppcglue_QTReplaceAtom},
     {"QTRestrictionsGetIndClass", ppctrap_QTRestrictionsGetIndClass},
     {"QTRestrictionsGetInfo", ppctrap_QTRestrictionsGetInfo},
     {"QTRestrictionsGetItem", ppctrap_QTRestrictionsGetItem},
     {"QTScheduledBandwidthRelease", ppctrap_QTScheduledBandwidthRelease},
     {"QTScheduledBandwidthRequest", ppctrap_QTScheduledBandwidthRequest},
-    {"QTSetAtomData", ppctrap_QTSetAtomData},
-    {"QTSetAtomID", ppctrap_QTSetAtomID},
+    {"QTSetAtomData", ppcglue_QTSetAtomData},
+    {"QTSetAtomID", ppcglue_QTSetAtomID},
     {"QTSetPixMapHandleGammaLevel", ppctrap_QTSetPixMapHandleGammaLevel},
     {"QTSetPixMapHandleRequestedGammaLevel", ppctrap_QTSetPixMapHandleRequestedGammaLevel},
     {"QTSetPixMapHandleRowBytes", ppctrap_QTSetPixMapHandleRowBytes},
@@ -44212,10 +43972,10 @@ const ppc_export ppc_exports[] = {
     {"QTSetPixMapPtrRequestedGammaLevel", ppctrap_QTSetPixMapPtrRequestedGammaLevel},
     {"QTSetPixMapPtrRowBytes", ppctrap_QTSetPixMapPtrRowBytes},
     {"QTStandardParameterDialogDoAction", ppctrap_QTStandardParameterDialogDoAction},
-    {"QTSwapAtoms", ppctrap_QTSwapAtoms},
+    {"QTSwapAtoms", ppcglue_QTSwapAtoms},
     {"QTTextToNativeText", ppctrap_QTTextToNativeText},
     {"QTUninstallNextTaskNeededSoonerCallback", ppctrap_QTUninstallNextTaskNeededSoonerCallback},
-    {"QTUnlockContainer", ppctrap_QTUnlockContainer},
+    {"QTUnlockContainer", ppcglue_QTUnlockContainer},
     {"QTUnregisterAccessKey", ppctrap_QTUnregisterAccessKey},
     {"QTUpdateGWorld", ppctrap_QTUpdateGWorld},
     {"QuadToQuadMatrix", ppctrap_QuadToQuadMatrix},
@@ -44323,8 +44083,8 @@ const ppc_export ppc_exports[] = {
     {"RemoveResource", ppcglue_RemoveResource},
     {"RemoveSoundDescriptionExtension", ppctrap_RemoveSoundDescriptionExtension},
     {"RemoveTrackingHandler", ppcglue_RemoveTrackingHandler},
-    {"RemoveUserData", ppctrap_RemoveUserData},
-    {"RemoveUserDataText", ppctrap_RemoveUserDataText},
+    {"RemoveUserData", ppcglue_RemoveUserData},
+    {"RemoveUserDataText", ppcglue_RemoveUserDataText},
     {"RemoveWindowProperty", ppcglue_RemoveWindowProperty},
     {"RemoveWindowProxy", ppcglue_RemoveWindowProxy},
     {"ReplaceDSequenceImageDescription", ppctrap_ReplaceDSequenceImageDescription},
@@ -44791,7 +44551,7 @@ const ppc_export ppc_exports[] = {
     {"SetTrapAddress", ppcglue_SetTrapAddress},
     {"SetUpControlBackground", ppcglue_SetUpControlBackground},
     {"SetUpControlTextColor", ppcglue_SetUpControlTextColor},
-    {"SetUserDataItem", ppctrap_SetUserDataItem},
+    {"SetUserDataItem", ppcglue_SetUserDataItem},
     {"SetVideoDefault", ppcglue_SetVideoDefault},
     {"SetWRefCon", ppcglue_SetWRefCon},
     {"SetWTitle", ppcglue_SetWTitle},

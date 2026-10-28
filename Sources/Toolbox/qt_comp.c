@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "qt_atoms.h"
 #include "qt_comp.h"
 #include "tb_internal.h"
 
@@ -205,4 +206,5 @@ void qt_components_reset(void)
     for (int i = 0; i < MAX_SLOTS; i++)
         free(slots[i].self);
     memset(slots, 0, sizeof slots);
+    qt_udata_reset();
 }

@@ -1809,6 +1809,32 @@ static void glue_AddTime(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddUserData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AddUserData(a_theUserData, a_data, a_udType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_AddUserDataText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_itlRegionTag = (int16_t)cpu_pop16(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_AddUserDataText(a_theUserData, a_data, a_udType, a_index, a_itlRegionTag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AdvanceKeyboardFocus(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3180,6 +3206,18 @@ static void glue_CopyRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CopyUserData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_copyRule = (int32_t)cpu_pop32(c);
+    int32_t a_dstUserData = (int32_t)cpu_pop32(c);
+    int32_t a_srcUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CopyUserData(a_srcUserData, a_dstUserData, a_copyRule);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CouldAlert(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -3303,6 +3341,17 @@ static void glue_CountTypes(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     int16_t r = tb_CountTypes();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_CountUserDataType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_CountUserDataType(a_theUserData, a_udType);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -5839,6 +5888,16 @@ static void glue_DisposeTimeBase(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t a_tb = (int32_t)cpu_pop32(c);
     tb_DisposeTimeBase(a_tb);
+    cpu_push32(c, ret);
+}
+
+static void glue_DisposeUserData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DisposeUserData(a_theUserData);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -12208,6 +12267,17 @@ static void glue_GetNextProcess(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetNextUserDataType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int32_t r = tb_GetNextUserDataType(a_theUserData, a_udType);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetOSDefault(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -13352,6 +13422,47 @@ static void glue_GetTrapAddress(cpu68k *c, uint16_t trapword)
     bool a_tool = (trapword & 0x400) != 0;
     gaddr r = tb_GetTrapAddress(a_n, a_newTraps, a_tool);
     c->a[0] = (uint32_t)r;
+}
+
+static void glue_GetUserData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetUserData(a_theUserData, a_data, a_udType, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetUserDataItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_size = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetUserDataItem(a_theUserData, a_data, a_size, a_udType, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetUserDataText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_itlRegionTag = (int16_t)cpu_pop16(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_data = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_GetUserDataText(a_theUserData, a_data, a_udType, a_index, a_itlRegionTag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_GetVoiceDescription(cpu68k *c, uint16_t trapword)
@@ -17112,6 +17223,27 @@ static void glue_NewTimeBase(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewUserData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theUserData = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewUserData(a_theUserData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewUserDataFromHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_theUserData = (gaddr)cpu_pop32(c);
+    int32_t a_h = (int32_t)cpu_pop32(c);
+    int16_t r = tb_NewUserDataFromHandle(a_h, a_theUserData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewWindow(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19535,6 +19667,17 @@ static void glue_PutScrap(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_PutUserDataIntoHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_h = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_PutUserDataIntoHandle(a_theUserData, a_h);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_QDDone(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19565,6 +19708,215 @@ static void glue_QDTextBounds(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_QTCopyAtom(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_targetContainer = (gaddr)cpu_pop32(c);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTCopyAtom(a_container, a_atom, a_targetContainer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTCopyAtomDataToHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_targetHandle = (int32_t)cpu_pop32(c);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTCopyAtomDataToHandle(a_container, a_atom, a_targetHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTCopyAtomDataToPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_actualSize = (gaddr)cpu_pop32(c);
+    gaddr a_targetPtr = (gaddr)cpu_pop32(c);
+    int32_t a_size = (int32_t)cpu_pop32(c);
+    int8_t a_sizeOrLessOK = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTCopyAtomDataToPtr(a_container, a_atom, a_sizeOrLessOK, a_size, a_targetPtr, a_actualSize);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTCountChildrenOfType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_childType = (int32_t)cpu_pop32(c);
+    int32_t a_parentAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTCountChildrenOfType(a_container, a_parentAtom, a_childType);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTCreateUUID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_creationFlags = (int32_t)cpu_pop32(c);
+    gaddr a_outUUID = (gaddr)cpu_pop32(c);
+    int16_t r = tb_QTCreateUUID(a_outUUID, a_creationFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTDisposeAtomContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_atomData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTDisposeAtomContainer(a_atomData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTEqualUUIDs(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_uuid2 = (gaddr)cpu_pop32(c);
+    gaddr a_uuid1 = (gaddr)cpu_pop32(c);
+    int8_t r = tb_QTEqualUUIDs(a_uuid1, a_uuid2);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_QTFindChildByID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_index = (gaddr)cpu_pop32(c);
+    int32_t a_id = (int32_t)cpu_pop32(c);
+    int32_t a_atomType = (int32_t)cpu_pop32(c);
+    int32_t a_parentAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int32_t r = tb_QTFindChildByID(a_container, a_parentAtom, a_atomType, a_id, a_index);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTFindChildByIndex(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_id = (gaddr)cpu_pop32(c);
+    int16_t a_index = (int16_t)cpu_pop16(c);
+    int32_t a_atomType = (int32_t)cpu_pop32(c);
+    int32_t a_parentAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int32_t r = tb_QTFindChildByIndex(a_container, a_parentAtom, a_atomType, a_index, a_id);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTGetAtomDataPtr(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_atomData = (gaddr)cpu_pop32(c);
+    gaddr a_dataSize = (gaddr)cpu_pop32(c);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTGetAtomDataPtr(a_container, a_atom, a_dataSize, a_atomData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTGetAtomParent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_childAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int32_t r = tb_QTGetAtomParent(a_container, a_childAtom);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTGetAtomTypeAndID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_id = (gaddr)cpu_pop32(c);
+    gaddr a_atomType = (gaddr)cpu_pop32(c);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTGetAtomTypeAndID(a_container, a_atom, a_atomType, a_id);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTGetNextChildType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_currentChildType = (int32_t)cpu_pop32(c);
+    int32_t a_parentAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int32_t r = tb_QTGetNextChildType(a_container, a_parentAtom, a_currentChildType);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTInsertChild(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newAtom = (gaddr)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int32_t a_dataSize = (int32_t)cpu_pop32(c);
+    int16_t a_index = (int16_t)cpu_pop16(c);
+    int32_t a_id = (int32_t)cpu_pop32(c);
+    int32_t a_atomType = (int32_t)cpu_pop32(c);
+    int32_t a_parentAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTInsertChild(a_container, a_parentAtom, a_atomType, a_id, a_index, a_dataSize, a_data, a_newAtom);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTInsertChildren(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_childrenContainer = (int32_t)cpu_pop32(c);
+    int32_t a_parentAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTInsertChildren(a_container, a_parentAtom, a_childrenContainer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTLockContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTLockContainer(a_container);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTNewAtomContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_atomData = (gaddr)cpu_pop32(c);
+    int16_t r = tb_QTNewAtomContainer(a_atomData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_QTNewGWorldFromPtr(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19578,6 +19930,19 @@ static void glue_QTNewGWorldFromPtr(cpu68k *c, uint16_t trapword)
     int32_t a_pixelFormat = (int32_t)cpu_pop32(c);
     gaddr a_gw = (gaddr)cpu_pop32(c);
     int16_t r = tb_QTNewGWorldFromPtr(a_gw, a_pixelFormat, a_boundsRect, a_cTable, a_aGDevice, a_flags, a_baseAddr, a_rowBytes);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTNextChildAnyType(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_nextChild = (gaddr)cpu_pop32(c);
+    int32_t a_currentChild = (int32_t)cpu_pop32(c);
+    int32_t a_parentAtom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTNextChildAnyType(a_container, a_parentAtom, a_currentChild, a_nextChild);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -19599,6 +19964,88 @@ static void glue_QTPrivateCall274(cpu68k *c, uint16_t trapword)
     int8_t a_flag = (int8_t)(cpu_pop16(c) >> 8);
     int32_t a_container = (int32_t)cpu_pop32(c);
     int16_t r = tb_QTPrivateCall274(a_container, a_flag);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTRemoveAtom(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTRemoveAtom(a_container, a_atom);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTRemoveChildren(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTRemoveChildren(a_container, a_atom);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTReplaceAtom(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_replacementAtom = (int32_t)cpu_pop32(c);
+    int32_t a_replacementContainer = (int32_t)cpu_pop32(c);
+    int32_t a_targetAtom = (int32_t)cpu_pop32(c);
+    int32_t a_targetContainer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTReplaceAtom(a_targetContainer, a_targetAtom, a_replacementContainer, a_replacementAtom);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTSetAtomData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_atomData = (gaddr)cpu_pop32(c);
+    int32_t a_dataSize = (int32_t)cpu_pop32(c);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTSetAtomData(a_container, a_atom, a_dataSize, a_atomData);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTSetAtomID(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_newID = (int32_t)cpu_pop32(c);
+    int32_t a_atom = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTSetAtomID(a_container, a_atom, a_newID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTSwapAtoms(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_atom2 = (int32_t)cpu_pop32(c);
+    int32_t a_atom1 = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTSwapAtoms(a_container, a_atom1, a_atom2);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTUnlockContainer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTUnlockContainer(a_container);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -20120,6 +20567,31 @@ static void glue_RemoveTrackingHandler(cpu68k *c, uint16_t trapword)
     gaddr a_theWindow = (gaddr)cpu_pop32(c);
     gaddr a_trackingHandler = (gaddr)cpu_pop32(c);
     int16_t r = tb_RemoveTrackingHandler(a_trackingHandler, a_theWindow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveUserData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RemoveUserData(a_theUserData, a_udType, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RemoveUserDataText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_itlRegionTag = (int16_t)cpu_pop16(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RemoveUserDataText(a_theUserData, a_udType, a_index, a_itlRegionTag);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -23921,6 +24393,20 @@ static void glue_SetUpControlTextColor(cpu68k *c, uint16_t trapword)
     int16_t a_inDepth = (int16_t)cpu_pop16(c);
     gaddr a_inControl = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetUpControlTextColor(a_inControl, a_inDepth, a_inIsColorDevice);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetUserDataItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_udType = (int32_t)cpu_pop32(c);
+    int32_t a_size = (int32_t)cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    int32_t a_theUserData = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SetUserDataItem(a_theUserData, a_data, a_size, a_udType, a_index);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -28971,9 +29457,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x9Bu, "PtInTrack", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x9Cu, "SetMovieLanguage", CONV_STACK, 8, 0, 0},
     {0xAAAA, (int32_t)0x9Du, "SetTrackGWorld", CONV_STACK, 20, 0, 0},
-    {0xAAAA, (int32_t)0x9Eu, "GetUserData", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x9Fu, "AddUserData", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0xA0u, "RemoveUserData", CONV_STACK, 12, 2, 0},
+    {0xAAAA, (int32_t)0x9Eu, "GetUserData", CONV_STACK, 16, 2, glue_GetUserData},
+    {0xAAAA, (int32_t)0x9Fu, "AddUserData", CONV_STACK, 12, 2, glue_AddUserData},
+    {0xAAAA, (int32_t)0xA0u, "RemoveUserData", CONV_STACK, 12, 2, glue_RemoveUserData},
     {0xAAAA, (int32_t)0xA5u, "NewTimeBase", CONV_STACK, 0, 4, glue_NewTimeBase},
     {0xAAAA, (int32_t)0xA6u, "GetTimeBaseTime", CONV_STACK, 12, 4, glue_GetTimeBaseTime},
     {0xAAAA, (int32_t)0xA7u, "SetTimeBaseTime", CONV_STACK, 8, 0, glue_SetTimeBaseTime},
@@ -29051,7 +29537,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x122u, "GetMediaShadowSync", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x123u, "GetTrackEditRate", CONV_STACK, 8, 4, 0},
     {0xAAAA, (int32_t)0x124u, "GetTimeBaseEffectiveRate", CONV_STACK, 4, 4, glue_GetTimeBaseEffectiveRate},
-    {0xAAAA, (int32_t)0x126u, "GetUserDataItem", CONV_STACK, 20, 2, 0},
+    {0xAAAA, (int32_t)0x126u, "GetUserDataItem", CONV_STACK, 20, 2, glue_GetUserDataItem},
     {0xAAAA, (int32_t)0x127u, "GetTrackID", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x128u, "SetTimeBaseZero", CONV_STACK, 8, 0, glue_SetTimeBaseZero},
     {0xAAAA, (int32_t)0x129u, "AddCallBackToTimeBase", CONV_STACK, 4, 2, 0},
@@ -29059,17 +29545,17 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x12Bu, "GetFirstCallBack", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x12Cu, "GetNextCallBack", CONV_STACK, 4, 4, 0},
     {0xAAAA, (int32_t)0x12Du, "ExecuteCallBack", CONV_STACK, 4, 0, 0},
-    {0xAAAA, (int32_t)0x12Eu, "SetUserDataItem", CONV_STACK, 20, 2, 0},
-    {0xAAAA, (int32_t)0x12Fu, "NewUserData", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x130u, "DisposeUserData", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x131u, "NewUserDataFromHandle", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x132u, "PutUserDataIntoHandle", CONV_STACK, 8, 2, 0},
+    {0xAAAA, (int32_t)0x12Eu, "SetUserDataItem", CONV_STACK, 20, 2, glue_SetUserDataItem},
+    {0xAAAA, (int32_t)0x12Fu, "NewUserData", CONV_STACK, 4, 2, glue_NewUserData},
+    {0xAAAA, (int32_t)0x130u, "DisposeUserData", CONV_STACK, 4, 2, glue_DisposeUserData},
+    {0xAAAA, (int32_t)0x131u, "NewUserDataFromHandle", CONV_STACK, 8, 2, glue_NewUserDataFromHandle},
+    {0xAAAA, (int32_t)0x132u, "PutUserDataIntoHandle", CONV_STACK, 8, 2, glue_PutUserDataIntoHandle},
     {0xAAAA, (int32_t)0x149u, "GetTrackDataSize", CONV_STACK, 12, 4, 0},
     {0xAAAA, (int32_t)0x14Au, "DisposeMatte", CONV_STACK, 4, 0, 0},
-    {0xAAAA, (int32_t)0x14Bu, "CountUserDataType", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x14Cu, "AddUserDataText", CONV_STACK, 18, 2, 0},
-    {0xAAAA, (int32_t)0x14Du, "GetUserDataText", CONV_STACK, 18, 2, 0},
-    {0xAAAA, (int32_t)0x14Eu, "RemoveUserDataText", CONV_STACK, 14, 2, 0},
+    {0xAAAA, (int32_t)0x14Bu, "CountUserDataType", CONV_STACK, 8, 2, glue_CountUserDataType},
+    {0xAAAA, (int32_t)0x14Cu, "AddUserDataText", CONV_STACK, 18, 2, glue_AddUserDataText},
+    {0xAAAA, (int32_t)0x14Du, "GetUserDataText", CONV_STACK, 18, 2, glue_GetUserDataText},
+    {0xAAAA, (int32_t)0x14Eu, "RemoveUserDataText", CONV_STACK, 14, 2, glue_RemoveUserDataText},
     {0xAAAA, (int32_t)0x152u, "AddMovieSelection", CONV_STACK, 8, 0, 0},
     {0xAAAA, (int32_t)0x153u, "CopyTrackSettings", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x154u, "CopyMovieSettings", CONV_STACK, 8, 2, 0},
@@ -29112,7 +29598,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x1A0u, "SetMediaDataHandler", CONV_STACK, 10, 2, 0},
     {0xAAAA, (int32_t)0x1A1u, "SetMoviePlayHints", CONV_STACK, 12, 0, glue_SetMoviePlayHints},
     {0xAAAA, (int32_t)0x1A2u, "SetMediaPlayHints", CONV_STACK, 12, 0, 0},
-    {0xAAAA, (int32_t)0x1A5u, "GetNextUserDataType", CONV_STACK, 8, 4, 0},
+    {0xAAAA, (int32_t)0x1A5u, "GetNextUserDataType", CONV_STACK, 8, 4, glue_GetNextUserDataType},
     {0xAAAA, (int32_t)0x1B3u, "NewMovieFromDataFork", CONV_STACK, 16, 2, glue_NewMovieFromDataFork},
     {0xAAAA, (int32_t)0x1B4u, "PutMovieIntoDataFork", CONV_STACK, 14, 2, 0},
     {0xAAAA, (int32_t)0x1C1u, "SetMovieDefaultDataRef", CONV_STACK, 12, 2, 0},
@@ -29141,39 +29627,39 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x1F9u, "GetMediaPreferredChunkSize", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x1FAu, "GetNextTrackForCompositing", CONV_STACK, 8, 4, 0},
     {0xAAAA, (int32_t)0x1FBu, "GetPrevTrackForCompositing", CONV_STACK, 8, 4, 0},
-    {0xAAAA, (int32_t)0x1FFu, "QTSwapAtoms", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x200u, "QTNextChildAnyType", CONV_STACK, 16, 2, 0},
+    {0xAAAA, (int32_t)0x1FFu, "QTSwapAtoms", CONV_STACK, 12, 2, glue_QTSwapAtoms},
+    {0xAAAA, (int32_t)0x200u, "QTNextChildAnyType", CONV_STACK, 16, 2, glue_QTNextChildAnyType},
     {0xAAAA, (int32_t)0x201u, "QTNewAlias", CONV_STACK, 10, 2, 0},
     {0xAAAA, (int32_t)0x205u, "SetMovieColorTable", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x206u, "GetMovieColorTable", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x207u, "MovieSearchText", CONV_STACK, 28, 2, 0},
     {0xAAAA, (int32_t)0x208u, "GetMovieIndTrackType", CONV_STACK, 16, 4, glue_GetMovieIndTrackType},
     {0xAAAA, (int32_t)0x209u, "ShowMovieInformation", CONV_STACK, 12, 0, 0},
-    {0xAAAA, (int32_t)0x20Cu, "QTNewAtomContainer", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x20Du, "QTDisposeAtomContainer", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x20Eu, "QTGetNextChildType", CONV_STACK, 12, 4, 0},
-    {0xAAAA, (int32_t)0x20Fu, "QTCountChildrenOfType", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x210u, "QTFindChildByIndex", CONV_STACK, 18, 4, 0},
-    {0xAAAA, (int32_t)0x211u, "QTSetAtomData", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x212u, "QTCopyAtomDataToHandle", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x213u, "QTCopyAtomDataToPtr", CONV_STACK, 22, 2, 0},
-    {0xAAAA, (int32_t)0x214u, "QTCopyAtom", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x215u, "QTLockContainer", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x216u, "QTGetAtomDataPtr", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x217u, "QTUnlockContainer", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x218u, "QTInsertChild", CONV_STACK, 30, 2, 0},
-    {0xAAAA, (int32_t)0x219u, "QTInsertChildren", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x21Au, "QTRemoveAtom", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x21Bu, "QTRemoveChildren", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x21Cu, "QTReplaceAtom", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x21Du, "QTFindChildByID", CONV_STACK, 20, 4, 0},
+    {0xAAAA, (int32_t)0x20Cu, "QTNewAtomContainer", CONV_STACK, 4, 2, glue_QTNewAtomContainer},
+    {0xAAAA, (int32_t)0x20Du, "QTDisposeAtomContainer", CONV_STACK, 4, 2, glue_QTDisposeAtomContainer},
+    {0xAAAA, (int32_t)0x20Eu, "QTGetNextChildType", CONV_STACK, 12, 4, glue_QTGetNextChildType},
+    {0xAAAA, (int32_t)0x20Fu, "QTCountChildrenOfType", CONV_STACK, 12, 2, glue_QTCountChildrenOfType},
+    {0xAAAA, (int32_t)0x210u, "QTFindChildByIndex", CONV_STACK, 18, 4, glue_QTFindChildByIndex},
+    {0xAAAA, (int32_t)0x211u, "QTSetAtomData", CONV_STACK, 16, 2, glue_QTSetAtomData},
+    {0xAAAA, (int32_t)0x212u, "QTCopyAtomDataToHandle", CONV_STACK, 12, 2, glue_QTCopyAtomDataToHandle},
+    {0xAAAA, (int32_t)0x213u, "QTCopyAtomDataToPtr", CONV_STACK, 22, 2, glue_QTCopyAtomDataToPtr},
+    {0xAAAA, (int32_t)0x214u, "QTCopyAtom", CONV_STACK, 12, 2, glue_QTCopyAtom},
+    {0xAAAA, (int32_t)0x215u, "QTLockContainer", CONV_STACK, 4, 2, glue_QTLockContainer},
+    {0xAAAA, (int32_t)0x216u, "QTGetAtomDataPtr", CONV_STACK, 16, 2, glue_QTGetAtomDataPtr},
+    {0xAAAA, (int32_t)0x217u, "QTUnlockContainer", CONV_STACK, 4, 2, glue_QTUnlockContainer},
+    {0xAAAA, (int32_t)0x218u, "QTInsertChild", CONV_STACK, 30, 2, glue_QTInsertChild},
+    {0xAAAA, (int32_t)0x219u, "QTInsertChildren", CONV_STACK, 12, 2, glue_QTInsertChildren},
+    {0xAAAA, (int32_t)0x21Au, "QTRemoveAtom", CONV_STACK, 8, 2, glue_QTRemoveAtom},
+    {0xAAAA, (int32_t)0x21Bu, "QTRemoveChildren", CONV_STACK, 8, 2, glue_QTRemoveChildren},
+    {0xAAAA, (int32_t)0x21Cu, "QTReplaceAtom", CONV_STACK, 16, 2, glue_QTReplaceAtom},
+    {0xAAAA, (int32_t)0x21Du, "QTFindChildByID", CONV_STACK, 20, 4, glue_QTFindChildByID},
     {0xAAAA, (int32_t)0x220u, "NewMovieFromDataRef", CONV_STACK, 18, 2, 0},
     {0xAAAA, (int32_t)0x22Au, "InvalidateMovieRegion", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x22Cu, "GetMovieNaturalBoundsRect", CONV_STACK, 8, 0, glue_GetMovieNaturalBoundsRect},
     {0xAAAA, (int32_t)0x22Eu, "SetMediaPropertyAtom", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x22Fu, "GetMediaPropertyAtom", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x231u, "QTSetAtomID", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x232u, "QTGetAtomTypeAndID", CONV_STACK, 16, 2, 0},
+    {0xAAAA, (int32_t)0x231u, "QTSetAtomID", CONV_STACK, 12, 2, glue_QTSetAtomID},
+    {0xAAAA, (int32_t)0x232u, "QTGetAtomTypeAndID", CONV_STACK, 16, 2, glue_QTGetAtomTypeAndID},
     {0xAAAA, (int32_t)0x233u, "BeginFullScreen", CONV_STACK, 28, 2, glue_BeginFullScreen},
     {0xAAAA, (int32_t)0x234u, "EndFullScreen", CONV_STACK, 8, 2, glue_EndFullScreen},
     {0xAAAA, (int32_t)0x235u, "GetMediaSampleReferences", CONV_STACK, 32, 2, 0},
@@ -29240,7 +29726,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x2ECu, "GetTrackDataSize64", CONV_STACK, 16, 2, 0},
     {0xAAAA, (int32_t)0x2EDu, "GetMediaDataSize64", CONV_STACK, 16, 2, 0},
     {0xAAAA, (int32_t)0x2EEu, "NewMovieFromDataFork64", CONV_STACK, 18, 2, 0},
-    {0xAAAA, (int32_t)0x2EFu, "QTGetAtomParent", CONV_STACK, 8, 4, 0},
+    {0xAAAA, (int32_t)0x2EFu, "QTGetAtomParent", CONV_STACK, 8, 4, glue_QTGetAtomParent},
     {0xAAAA, (int32_t)0x2F5u, "QTBandwidthRequest", CONV_STACK, 20, 2, 0},
     {0xAAAA, (int32_t)0x2F6u, "QTBandwidthRelease", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x2F7u, "PrePrerollMovie", CONV_STACK, 20, 2, 0},
@@ -29285,7 +29771,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x386u, "CopyMovieUserData", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x387u, "CopyTrackUserData", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x388u, "CopyMediaUserData", CONV_STACK, 12, 2, 0},
-    {0xAAAA, (int32_t)0x389u, "CopyUserData", CONV_STACK, 12, 2, 0},
+    {0xAAAA, (int32_t)0x389u, "CopyUserData", CONV_STACK, 12, 2, glue_CopyUserData},
     {0xAAAA, (int32_t)0x38Au, "CreateMovieStorage", CONV_STACK, 26, 2, 0},
     {0xAAAA, (int32_t)0x38Bu, "OpenMovieStorage", CONV_STACK, 16, 2, 0},
     {0xAAAA, (int32_t)0x38Cu, "CloseMovieStorage", CONV_STACK, 4, 2, 0},
@@ -29294,8 +29780,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x390u, "UpdateMovieInStorage", CONV_STACK, 8, 2, 0},
     {0xAAAA, (int32_t)0x391u, "PutMovieIntoStorage", CONV_STACK, 16, 2, 0},
     {0xAAAA, (int32_t)0x392u, "FlattenMovieDataToDataRef", CONV_STACK, 26, 4, 0},
-    {0xAAAA, (int32_t)0x39Bu, "QTCreateUUID", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x39Cu, "QTEqualUUIDs", CONV_STACK, 8, 2, 0},
+    {0xAAAA, (int32_t)0x39Bu, "QTCreateUUID", CONV_STACK, 8, 2, glue_QTCreateUUID},
+    {0xAAAA, (int32_t)0x39Cu, "QTEqualUUIDs", CONV_STACK, 8, 2, glue_QTEqualUUIDs},
     {0xAAAA, (int32_t)0x3A1u, "QTRestrictionsGetInfo", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x3A2u, "QTRestrictionsGetIndClass", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x3A3u, "QTRestrictionsGetItem", CONV_STACK, 12, 2, 0},
