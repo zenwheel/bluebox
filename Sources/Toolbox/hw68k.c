@@ -734,11 +734,15 @@ void hw_boot(void)
     wr32(LM_SCCWr, m->scc_wr);
     wr32(LM_IWM, m->iwm);
     wr16(LM_ROM85, m->rom85);
-    wr16(LM_SCSIFlags, (uint16_t)(m->hwcfg & (m->fpu ? 0xFFFF : ~0x1000)));
+    /* The default machine's processor is the run's (68040 with its FPU, or a
+     * 68020 without); a chosen machine's is its own. */
+    int cpu = chosen ? m->cpu : (g_cpu && g_cpu->model == 68040 ? 68040 : 68020);
+    bool fpu = chosen ? m->fpu : cpu == 68040;
+    wr16(LM_SCSIFlags, (uint16_t)(m->hwcfg & (fpu ? 0xFFFF : ~0x1000)));
     wr16(GA_ROM + 8, m->rom_version);
     if (chosen)
         wr16(LM_SysVersion, m->sys_version);
-    wr8(LM_CPUFlag, m->cpu == 68040 ? 4 : m->cpu == 68030 ? 3 : m->cpu == 68020 ? 2 : 0);
+    wr8(LM_CPUFlag, cpu == 68040 ? 4 : cpu == 68030 ? 3 : cpu == 68020 ? 2 : 0);
     wr8(LM_MBState, 0x80);
     if (m->via_sound) {
         /* The sound buffers, the alternate $5C00 below the main as on a Plus. */

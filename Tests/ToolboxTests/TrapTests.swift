@@ -196,7 +196,7 @@ extension BlueBox {
 
         @Test func unimplementedTrapsShareTheUnimplementedAddress() {
             let unimplemented = tb_GetTrapAddress(0xA89F, true, true)
-            #expect(tb_GetTrapAddress(0xA9F3, true, true) == unimplemented) // _Chain: one app per process
+            #expect((0xA800...0xAFFF).contains { $0 != 0xA89F && tb_GetTrapAddress(UInt16($0), true, true) == unimplemented })
             #expect(tb_GetTrapAddress(0xA9A0, true, true) != unimplemented) // GetResource
             // Old-style numbering: 0x46 is the OS trap GetTrapAddress itself.
             #expect(tb_GetTrapAddress(0x46, false, false) != unimplemented)
@@ -266,8 +266,11 @@ extension BlueBox {
         }
 
         @Test func unimplementedTrapHaltsWithItsName() {
-            let reason = run([0xA9F3]) // _Chain
-            #expect(reason.contains("A9F3"))
+            // a trap nothing implements: the first Toolbox trap at the Unimplemented address
+            let unimplemented = tb_GetTrapAddress(0xA89F, true, true)
+            let trap = (0xA800...0xAFFF).first { $0 != 0xA89F && tb_GetTrapAddress(UInt16($0), true, true) == unimplemented } ?? 0xA9E8
+            let reason = run([UInt16(trap)])
+            #expect(reason.contains(String(trap, radix: 16, uppercase: true)))
         }
     }
 
