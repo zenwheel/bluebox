@@ -82,6 +82,19 @@ extension BlueBox {
             #expect(Rest.call("__LowestPPEM", [3, 12]) >= 1)
         }
 
+        /// A call forwarded to another export pushes a frame below r1, as a
+        /// PowerPC routine does: below the caller's stack pointer, never into
+        /// the block before it (the back chain once landed in a FOND's block
+        /// header there, and the family's next lookup found no FOND).
+        @Test func aForwardedCallStaysOnItsStack() {
+            _ = initToolbox()
+            let before = Rest.ptr(256)
+            for i in UInt32(0) ..< 256 { wr8(before + i, 0xA5) }
+            for _ in 0 ..< 4 { Rest.call("QDFontFromFontObject", [0x40001]) }
+            #expect((UInt32(0) ..< 256).allSatisfy { rd8(before + $0) == 0xA5 })
+            #expect(tb_GetPtrSize(before) == 256)
+        }
+
         @Test func imageBoundingBox() {
             _ = initToolbox()
             tb_TextFont(0)

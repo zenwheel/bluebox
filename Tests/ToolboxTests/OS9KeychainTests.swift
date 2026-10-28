@@ -56,7 +56,7 @@ extension BlueBox {
             #expect(err("KCAddGenericPassword", [pstr("svc"), pstr("scott"), 6, data, item]) == noDefault && rd32(item) == 0)
             #expect(err("KCFindGenericPassword", [pstr("svc"), pstr("scott"), 16, data, len, item]) == noDefault && rd32(len) == 0)
             // Internet passwords: item is argument 8, the path version's 9 (the rest on the stack)
-            let sp = tb_NewPtr(128, false, true)
+            let sp = tb_NewPtr(4096, false, true) + 3072 // frames go below r1
             func stackArgs(_ n: Int, _ values: [UInt32]) {
                 // r1 points at a frame whose parameter area starts at 24
                 for (i, v) in values.enumerated() { wr32(sp + 24 + UInt32(4 * (n + i)), v) }
