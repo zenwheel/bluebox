@@ -189,6 +189,15 @@ static void p_Unimplemented(ppc_cpu *c) { RETURN(unimpErr); }
 static void p_NoPagingDone(ppc_cpu *c) { RETURN(noErr); }
 static void p_Nothing(ppc_cpu *c) { DONE(); }
 
+/* PMScaledBattery(whichBattery): the BatteryInfo GetScaledBatteryInfo
+ * stores, returned (a Mac with no battery installed says zero). */
+static void p_PMScaledBattery(ppc_cpu *c)
+{
+    uint32_t info = 0;
+    tb_GetScaledBatteryInfo((int16_t)R(0), &info);
+    RETURN(info);
+}
+
 void sound_app_dead(void);
 static void p_SndAppDead(ppc_cpu *c)
 {
@@ -197,7 +206,7 @@ static void p_SndAppDead(ppc_cpu *c)
 }
 
 const ppc_export os9rest_priv_exports[] = {
-    { "VM_GetPhysicalBytes", p_RamBytes }, { "VM_GetLogicalBytes", p_RamBytes },
+    { "PMScaledBattery", p_PMScaledBattery }, { "VM_GetPhysicalBytes", p_RamBytes }, { "VM_GetLogicalBytes", p_RamBytes },
     { "VM_HoldSystemHeap", p_NoPagingDone }, { "VM_ReleaseMemory", p_NoPagingDone },
     { "VM_IterateMappedRanges", p_NoPagingDone }, { "VM_FinishInstall", p_Nothing },
     { "VM_SetVMJCrsrTask", p_Nothing }, { "VM_GrowFileMapping", p_Unimplemented },

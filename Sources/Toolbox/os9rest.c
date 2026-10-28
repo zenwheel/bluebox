@@ -18,6 +18,9 @@ static const os9rest_group groups[] = {
 
 /* Names that are other exports under a second name. */
 static const struct { const char *name, *target; } aliases[] = {
+    /* the Window Manager's screen bits under the names its own code gave them */
+    { "SaveBits", "SaveScreenBits" }, { "RestoreBits", "RestoreScreenBits" },
+    { "DiscardBits", "DisposeSavedScreenBits" },
     { "CloneIconRef", "AcquireIconRef" }, { "DisposeIconRef", "ReleaseIconRef" },
     { "__Comp3to1", "Comp3to1" }, { "__Comp6to1", "Comp6to1" }, { "__Exp1to3", "Exp1to3" }, { "__Exp1to6", "Exp1to6" },
 };

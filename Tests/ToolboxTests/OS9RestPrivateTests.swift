@@ -146,5 +146,16 @@ extension BlueBox {
             #expect(tb_SndChannelStatus(chan, 24, status) != 0) // no such channel now
             Rest.call("SynchIdleTime")
         }
+
+        @Test func batteryInfoAndScreenBits() {
+            launchTestApp()
+            #expect(Rest.call("PMScaledBattery", [0]) == 0 && Rest.call("PMScaledBattery", [1]) == 0) // no battery
+            func same(_ a: String, _ b: String) -> Bool {
+                guard let x = cfm_export_fn(a), let y = cfm_export_fn(b) else { return false }
+                return unsafeBitCast(x, to: Int.self) == unsafeBitCast(y, to: Int.self)
+            }
+            #expect(same("SaveBits", "SaveScreenBits") && same("RestoreBits", "RestoreScreenBits"))
+            #expect(same("DiscardBits", "DisposeSavedScreenBits"))
+        }
     }
 }
