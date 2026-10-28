@@ -28,6 +28,7 @@
 #include "carbon_hi.h"
 #include "os9_toolbox.h"
 #include "ppc_bridge.h"
+#include "qt_calls.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -273,6 +274,8 @@ static void (*export_fn(const char *name))(ppc_cpu *)
                 return gl_exports[i].fn;
     if (os9tbx_export_fn(name)) /* WindowsLib, ControlsLib, MenusLib and AppearanceLib's own */
         return os9tbx_export_fn(name);
+    if (qt_export_fn(name)) /* QuickTime's component calls, QuickTime VR and streaming */
+        return qt_export_fn(name);
     unsigned lo = 0, hi = ppc_export_count;
     while (lo < hi) {
         unsigned mid = (lo + hi) / 2;

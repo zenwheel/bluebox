@@ -69,6 +69,7 @@ int16_t fm_set_info(const char *host, const uint8_t *finfo, const uint8_t *fxinf
 
 /* Forks. */
 int16_t fm_open_fork(const char *host, bool rsrc, uint8_t perm, int16_t *refnum);
+int16_t fm_write_refnum(const char *host, bool rsrc);
 int16_t fm_close_fork(int16_t refnum);
 int16_t fm_flush_fork(int16_t refnum);
 /* An open fork's state (a Resource Manager file's too, read-only). */

@@ -81,6 +81,19 @@ qt_text *qt_text_new(const uint8_t *desc, uint32_t len, int w, int h)
 
 void qt_text_free(qt_text *t) { free(t); }
 
+/* What the description says, changed at run time (TextMediaSetTextProperty). */
+uint32_t qt_text_flags(const qt_text *t) { return t->flags; }
+void qt_text_set_flags(qt_text *t, uint32_t flags) { t->flags = flags; }
+int16_t qt_text_justification(const qt_text *t) { return t->just; }
+void qt_text_set_justification(qt_text *t, int16_t just) { t->just = just; }
+void qt_text_background(const qt_text *t, uint16_t rgb[3]) { memcpy(rgb, t->bg, sizeof t->bg); }
+void qt_text_set_background(qt_text *t, const uint16_t rgb[3]) { memcpy(t->bg, rgb, sizeof t->bg); }
+void qt_text_box(const qt_text *t, int16_t r[4])
+{
+    r[0] = t->box.top, r[1] = t->box.left, r[2] = t->box.bottom, r[3] = t->box.right;
+}
+void qt_text_set_box(qt_text *t, const int16_t r[4]) { t->box = (qrect){ r[0], r[1], r[2], r[3] }; }
+
 /* The installed family with this name, or -1. */
 static int font_named(const uint8_t *name)
 {
