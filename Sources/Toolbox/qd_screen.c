@@ -109,8 +109,11 @@ static void describe_screen(gaddr gd, gaddr pm)
     wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
 }
 
+static gaddr display_base = GA_SCREEN; /* see qd_screen_set_display_base */
+
 void qd_screen_init(int width, int height)
 {
+    display_base = GA_SCREEN;
     g_screen_width = width;
     g_screen_height = height;
     screen_depth = depth_pref;
@@ -283,9 +286,23 @@ void machine_screen_size(int *width, int *height)
 }
 
 /* A rectangle of the screen as RGBA (out holds w*h*4 bytes). */
+/* The page the video circuitry shows (the compact Macs' alternate screen
+ * is a second buffer below the main one): the host sees that, and all of
+ * it is new. */
+void qd_screen_set_display_base(gaddr base)
+{
+    if (base == display_base)
+        return;
+    display_base = base;
+    if (g_watch_fn && g_watch_len) {
+        g_watch_fn(base);
+        g_watch_fn(base + screen_row_bytes * (uint32_t)g_screen_height - 1);
+    }
+}
+
 void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
 {
-    pixdst d = { GA_SCREEN, screen_row_bytes, { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width },
+    pixdst d = { display_base, screen_row_bytes, { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width },
                  screen_depth, qd_screen_ctab() };
     for (int r = 0; r < h; r++) {
         uint8_t *o = out + (size_t)r * (size_t)w * 4;

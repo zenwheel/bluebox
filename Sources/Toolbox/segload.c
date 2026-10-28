@@ -177,6 +177,13 @@ static void raw_ExitToShell(cpu68k *c, uint16_t tw)
     cpu_halt(c, "ExitToShell");
 }
 
+/* _Chain ($A9F3, System 6): Launch under another name; the program that
+ * called it is replaced, as with Launch, its record the same. */
+static void raw_Chain(cpu68k *c, uint16_t tw)
+{
+    c->d[0] = (uint32_t)(int32_t)tb_LaunchApplication(c->a[0]);
+}
+
 /* Return address for the application's main routine. */
 static void app_returned(cpu68k *c, uint16_t tw)
 {
@@ -277,6 +284,7 @@ const raw_trap raw_traps[] = {
     { 0xA9EC, "Elems68K", raw_Elems68K },
     { 0xA9F0, "LoadSeg", raw_LoadSeg },
     { 0xA9F1, "UnloadSeg", raw_UnloadSeg },
+    { 0xA9F3, "Chain", raw_Chain },
     { 0xA9F4, "ExitToShell", raw_ExitToShell },
     { 0, NULL, NULL },
 };

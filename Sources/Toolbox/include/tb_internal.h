@@ -632,6 +632,11 @@ extern const native_driver mactcp_driver;
 void mactcp_poll(void);
 void mactcp_reset(void);
 void mactcp_install_resolver(void);
+/* The Sony driver (.Sony) for a raw floppy disk image, key-disk checks (sony.c). */
+extern const native_driver sony_driver;
+void sony_install_drive(gaddr zone, int16_t drive);
+void sony_reset(void);
+int16_t driver_drive_status(gaddr pb);
 /* The Sound Driver (.Sound) of the first Macs (sound.c). */
 extern const native_driver sound_driver;
 /* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */

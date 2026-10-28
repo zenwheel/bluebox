@@ -2,6 +2,7 @@
  * Gestalt.  Values describe the machine we present; the environment profile
  * can override any selector (gestalt_set).
  */
+#include "hw68k.h"
 #include "m68k.h"
 #include "ppc_bridge.h"
 #include "r3d.h"
@@ -73,6 +74,36 @@ uint32_t gestalt_value(uint32_t selector, uint32_t fallback)
         if (table[i].selector == selector && !table[i].proc)
             return table[i].value;
     return fallback;
+}
+
+/* A classic Mac chosen by name (--machine): its numbers, and for those that
+ * ran System 6 only what System 6.0.8's Gestalt knew (no Apple Events,
+ * PPC Toolbox, Help Manager and the rest of System 7). */
+static void gestalt_machine(const hw_profile *m)
+{
+    static const int proc_of[] = { 0, 1, 3, 4, 5 };
+    int idx = m->cpu == 68000 ? 1 : m->cpu == 68020 ? 2 : m->cpu == 68030 ? 3 : 4;
+    gestalt_set(fourcc("mach"), (uint32_t)m->gestalt_mach);
+    gestalt_set(fourcc("proc"), (uint32_t)proc_of[idx]);
+    gestalt_set(fourcc("fpu "), m->fpu ? (m->cpu == 68040 ? 3 : 2) : 0);
+    gestalt_set(fourcc("kbd "), (uint32_t)m->gestalt_kbd);
+    gestalt_set(fourcc("rom "), m->rom_version);
+    gestalt_set(fourcc("romv"), m->rom_version);
+    gestalt_set(fourcc("sysv"), m->sys_version);
+    gestalt_set(fourcc("scri"), m->sys_version);
+    gestalt_set(fourcc("qd  "), m->color_qd ? 0x0100 : 0); /* Color QuickDraw, or the original */
+    gestalt_set(fourcc("hdwr"), m->adb ? (m->via_sound ? 0x0091 : 0x009B) : 0x0091);
+    gestalt_set(fourcc("addr"), 0x0);         /* 24-bit addressing only */
+    if (m->sys_version >= 0x0700)
+        return;
+    static const char *const system7[] = {
+        "evnt", "os  ", "ppc ", "edtn", "help", "alis", "fold", "fs  ", "stdf", "icon", "tmgr", "snd ", "qdgx", "pmgr",
+        "teat", "drag", "cmnu", "pop!", "nmgr", "ttsc", "font", "appr", "apvr", "qtim", "cpnt", "thds", "sysa",
+        "otan", "otvr", "qdrw", "rsrc", "scr#", "te  ", "scsi", "vm  ", "lram", "ram ", "blbx", "mmu ",
+    };
+    for (unsigned i = 0; i < sizeof system7 / sizeof system7[0]; i++)
+        gestalt_delete(fourcc(system7[i]));
+    gestalt_set(fourcc("ram "), 0x00400000); /* 4 MB */
 }
 
 void gestalt_init(void)
@@ -167,6 +198,8 @@ void gestalt_init(void)
 #else
     gestalt_set(fourcc("blbx"), 0x01000002);
 #endif
+    if (hw_machine_chosen())
+        gestalt_machine(hw_machine());
 }
 
 /* A PowerPC application: a PowerPC Mac's answers (a G3 with Mac OS 8.1,

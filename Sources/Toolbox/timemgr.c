@@ -17,6 +17,7 @@
 #include <time.h>
 
 #include "m68k.h"
+#include "hw68k.h"
 #include "legacy.h"
 #include "os9svc.h"
 #include "tb_internal.h"
@@ -207,6 +208,7 @@ static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0)
 }
 
 static void interrupt_call(gaddr fn, gaddr a0, gaddr a1) { interrupt_call_d0(fn, a0, a1, 0); }
+void time_interrupt_call(gaddr fn, gaddr a0, gaddr a1) { interrupt_call(fn, a0, a1); }
 
 /* Completion routines of asynchronous File and Device Manager calls: our
  * calls finish at once, and their completions run soon after, at interrupt
@@ -381,6 +383,7 @@ void time_pump(void)
     ppc_toolbox_poll();   /* PPC Toolbox sessions: requests, answers and blocks */
     qt_callbacks_periodic(); /* QuickTime's time base callbacks at interrupt time */
     adb_pump();
+    hw_pump();            /* the VIA's timers and interrupts, the sound buffer */
     uint64_t t = now();
     for (int i = 0; i < MAX_TASKS; i++) {
         if (!timers[i].tm || !timers[i].active || timers[i].due > t)

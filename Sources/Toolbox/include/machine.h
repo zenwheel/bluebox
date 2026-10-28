@@ -38,6 +38,19 @@ void machine_close_appleshares(void); /* logged out, forgotten */
  * panels: the name (UTF-8) and the host folder each lives in. */
 int machine_volume_count(void);
 bool machine_volume_info(int i, char *name, size_t namesize, char *root, size_t rootsize);
+/* A program's own INIT file (an extension or INIT: its 'INIT' resources) to
+ * run at startup, before the application's first instruction, as the Start
+ * Manager would; the list is kept across boots (startup_reset empties it). */
+bool machine_add_init(const char *path);
+void startup_reset(void);
+int startup_run_init_file(const char *path, char *err, size_t errlen);
+/* A raw floppy disk image (a sector dump of 400K/720K/800K/1440K, or Disk
+ * Copy 4.2) as the disk in the Sony driver's drive 1: a key disk whose
+ * sectors the program's own copy protection reads (sony.c). */
+bool machine_set_floppy(const char *path, char *err, size_t errlen);
+bool sony_has_disk(void);
+uint32_t sony_disk_size(void);
+bool sony_sector_tags(uint32_t sector, uint8_t out[12]);
 /* Run up to max_instructions. */
 run_status machine_run(uint64_t max_instructions);
 const char *machine_halt_reason(void);

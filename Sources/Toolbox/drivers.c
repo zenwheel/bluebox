@@ -15,7 +15,7 @@
  * belongs to: programs find a volume's drive in the drive queue and look
  * at its driver's name to learn that it is a CD (Prince of Persia 2's
  * Mohawk engine).  Its one call is the drive's status. */
-static int16_t cd_status(gaddr pb, bool async)
+int16_t driver_drive_status(gaddr pb)
 {
     if ((int16_t)rd16(pb + CntrlParam_csCode_off) != 8) /* drvStsCode */
         return -18;                                    /* statusErr */
@@ -32,10 +32,11 @@ static int16_t cd_status(gaddr pb, bool async)
     }
     return -56; /* nsDrvErr */
 }
+static int16_t cd_status(gaddr pb, bool async) { return driver_drive_status(pb); }
 static const native_driver cd_driver = { ".AppleCD", CD_UNIT, NULL, NULL, NULL, cd_status, NULL, NULL, NULL };
 
 static const native_driver *const drivers[] = {
-    &cd_driver, &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
+    &cd_driver, &sony_driver, &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
 };
 enum { NDRIVERS = sizeof drivers / sizeof drivers[0] };
 
