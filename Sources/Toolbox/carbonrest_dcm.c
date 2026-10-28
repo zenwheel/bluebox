@@ -1665,6 +1665,59 @@ static void dcm_DCMGetFieldFindMethods(ppc_cpu *c)
     RET(A(2) && f.nfind > A(1) ? dcmBufferOverflowErr : noErr);
 }
 
+/* ---- For Language Analysis (carbonrest_la.c): a dictionary by its file, and its words ---- */
+
+/* The dictionary of a file (registered if need be): its ID, or 0 and the error. */
+uint32_t rest_dcm_id_for_file(gaddr spec, int16_t *err)
+{
+    char path[1024];
+    bool exists;
+    *err = noErr;
+    if (!spec_path(spec, path, sizeof path, &exists) || !exists) {
+        *err = fnfErr;
+        return 0;
+    }
+    for (int i = 0; i < MAX_DICTS; i++)
+        if (dicts[i].used && !strcmp(dicts[i].path, path))
+            return DICT_TAG + (uint32_t)i + 1;
+    uint32_t id;
+    dict *d = new_dict(&id);
+    if (!d) {
+        *err = memFullErr;
+        return 0;
+    }
+    snprintf(d->path, sizeof d->path, "%s", path);
+    gget(d->spec, spec, 70);
+    *err = load_dict(d);
+    if (*err) {
+        free_dict(d);
+        return 0;
+    }
+    init_properties(d);
+    return id;
+}
+
+/* Whether a dictionary has the Japanese fields analysis needs (yomi and hyoki). */
+bool rest_dcm_has_word_fields(uint32_t id)
+{
+    dict *d = dict_of(id);
+    return d && field_of(d, T("yomi")) && field_of(d, T("hyok"));
+}
+
+/* Each record's hyoki (UTF-16 bytes), yomi, part of speech and weight, for Language Analysis. */
+void rest_dcm_words(uint32_t id, void (*fn)(void *ctx, uint32_t uid, const uint8_t *hyoki, uint32_t hlen,
+                                             uint32_t pos, uint16_t weight), void *ctx)
+{
+    dict *d = dict_of(id);
+    for (int i = 0; d && i < d->nr; i++) {
+        dvalue *h = value_of(&d->r[i], T("hyok")), *p = value_of(&d->r[i], T("hins")), *w = value_of(&d->r[i], T("hind"));
+        if (!h)
+            continue;
+        fn(ctx, d->r[i].uid, h->data, h->len, p && p->len == 4 ? be32get(p->data) : 0,
+           w && w->len == 2 ? (uint16_t)(w->data[0] << 8 | w->data[1]) : 0);
+    }
+}
+
 const ppc_export rest_dcm_exports[] = {
     { "DCMAddRecord", dcm_DCMAddRecord },
     { "DCMCloseDictionary", dcm_DCMCloseDictionary },
