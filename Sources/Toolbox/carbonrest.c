@@ -42,6 +42,7 @@ static const struct {
 } areas[] = {
     { rest_misc_exports, &rest_misc_export_count, rest_misc_reset },
     { rest_ae_exports, &rest_ae_export_count, rest_ae_reset },
+    { rest_osa_exports, &rest_osa_export_count, rest_osa_reset },
 };
 
 void (*carbonrest_export_fn(const char *name))(ppc_cpu *)

@@ -45,6 +45,7 @@ void rest_pstr_get(gaddr p, char *out, size_t max);         /* a Pascal string a
     void name##_reset(void)
 REST_AREA(rest_misc);
 REST_AREA(rest_ae);
+REST_AREA(rest_osa);
 
 /* The lookup over every area, and the reset (carbonrest.c). */
 void (*carbonrest_export_fn(const char *name))(ppc_cpu *);
