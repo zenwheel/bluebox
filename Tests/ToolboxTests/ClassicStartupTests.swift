@@ -109,6 +109,7 @@ extension BlueBox {
             var err = [CChar](repeating: 0, count: 256)
             #expect(machine_launch(path, &err, err.count))
             machine_set_instruction_limit(g_cpu!.pointee.icount + 300_000) // the host loop idles to it
+            defer { machine_set_instruction_limit(0) }
             _ = machine_run(400_000)
             let n = Int(rd16(log))
             let seen = (0..<n).map { rd16(log + 2 + UInt32($0 * 2)) }

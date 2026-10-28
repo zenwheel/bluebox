@@ -66,7 +66,10 @@ extension BlueBox {
             #expect(all(2) == [main])
             wr32(id, 0)
             #expect(err("MPGetNextCpuID", [0, id]) == 0 && rd32(id) == all(7)[0])
-            #expect(err("MPGetNextAreaID", [0, id]) == iterationEnd)
+            wr32(id, 0)
+            #expect(err("MPGetNextAreaID", [0, id]) == iterationEnd) // no areas made
+            wr32(id, main) // an ID that is no area's
+            #expect(err("MPGetNextAreaID", [0, id]) == -29299)
         }
 
         @Test func pagesAndOldCalls() {

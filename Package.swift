@@ -32,6 +32,9 @@ let package = Package(
         .target(name: "MACE"),
         .target(name: "Toolbox", dependencies: ["CCore", "CPU68K", "CPUPPC", "ForkStore", "MACE"], cSettings: warnings,
                 linkerSettings: [.linkedLibrary("resolv"), // the resolver: Open Transport's DNS queries
+                                 // Unicode character properties (os9left_text.c): the host's ICU
+                                 .linkedLibrary("icucore", .when(platforms: [.macOS])),
+                                 .linkedLibrary("icuuc", .when(platforms: [.linux])),
                                 .linkedLibrary("z"), // zlib: QuickTime 3's compressed movie headers
                                  // EtherTalk: an interface's own Ethernet address
                                  .linkedFramework("IOKit", .when(platforms: [.macOS])),

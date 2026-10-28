@@ -24,6 +24,7 @@
 #include "hostgl.h"
 #include "machine.h"
 #include "os9rest.h"
+#include "os9left.h"
 #include "os9svc.h"
 #include "carbon_hi.h"
 #include "os9_toolbox.h"
@@ -214,6 +215,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     void (*rest)(ppc_cpu *) = carbonrest_export_fn(name); /* the remaining Carbon managers */
     if (rest)
         return rest;
+    void (*left)(ppc_cpu *) = os9left_export_fn(name); /* Mac OS 9's libraries' leftovers */
+    if (left)
+        return left;
     void (*os9)(ppc_cpu *) = os9svc_export_fn(name); /* Mac OS 9's service libraries */
     if (os9)
         return os9;

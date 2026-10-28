@@ -488,7 +488,7 @@ const ppc_export rest_uc_exports[] = {
     { "UCDisposeCollator", uc_UCDisposeCollator },
     { "UCDisposeTextBreakLocator", uc_UCDisposeTextBreakLocator },
     { "UCFindTextBreak", uc_UCFindTextBreak },
-    { "UCGetCharProperty", uc_UCGetCharProperty },
+    /* UCGetCharProperty: os9left_text.c's, on the host's ICU like its property table */
     { "UCGetCollationKey", uc_UCGetCollationKey },
     { "UCKeyTranslate", uc_UCKeyTranslate },
 };

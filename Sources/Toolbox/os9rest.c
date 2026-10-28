@@ -5,6 +5,7 @@
 
 #include "os9rest.h"
 #include "os9svc.h"
+#include "os9left.h"
 #include "tb_internal.h"
 
 #define GROUP(n) { os9rest_##n##_exports, &os9rest_##n##_export_count }
@@ -50,13 +51,15 @@ bool os9rest_data_known(const char *name)
     for (unsigned i = 0; i < sizeof data_names / sizeof data_names[0]; i++)
         if (!strcmp(name, data_names[i]))
             return true;
-    return os9rest_sound_data_known(name);
+    return os9rest_sound_data_known(name) || os9left_data_known(name);
 }
 
 gaddr os9rest_data_export(const char *name)
 {
     gaddr p = os9svc_keychain_data(name);
-    return p ? p : os9rest_sound_data(name);
+    if (!p)
+        p = os9rest_sound_data(name);
+    return p ? p : os9left_data_export(name);
 }
 
 void os9rest_reset(void)

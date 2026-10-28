@@ -52,12 +52,22 @@ static const struct {
  * all sound the same and a program that names a voice we don't list (a
  * third-party synthesizer's, or one it remembers from another Mac) would
  * otherwise not speak at all. */
+/* The voices a program registered (RegisterVoices), after ours. */
+enum { MAX_EXTRA = 16 };
+static struct { uint32_t creator; int32_t id; } extra[MAX_EXTRA];
+static int nextra;
+/* SetSpeechDefaults': the voice and settings a new channel starts with. */
+static struct { bool set; uint32_t creator; int32_t id; int32_t rate, pitch, volume; } speech_defaults;
+
 static int voice_index(gaddr spec)
 {
     if (!spec)
         return DEFAULT_VOICE;
     uint32_t creator = rd32(spec);
     int32_t id = (int32_t)rd32(spec + 4);
+    for (int k = 0; k < nextra; k++)
+        if (extra[k].creator == creator && extra[k].id == id)
+            return NVOICES + k;
     if (creator != VOICE_CREATOR || id < 1 || id > NVOICES)
         return DEFAULT_VOICE;
     return id - 1;
@@ -197,10 +207,10 @@ static int chan_id(const channel *c) { return (int)(c - channels); }
 static void defaults(channel *c, int voice)
 {
     c->voice = voice;
-    c->rate = FIXED(180);
-    c->pitch = FIXED(46);
+    c->rate = speech_defaults.set ? speech_defaults.rate : FIXED(180);
+    c->pitch = speech_defaults.set ? speech_defaults.pitch : FIXED(46);
     c->modulation = FIXED(35);
-    c->volume = FIXED(1);
+    c->volume = speech_defaults.set ? speech_defaults.volume : FIXED(1);
     c->input_mode = 0x54455854u; /* 'TEXT' */
     c->char_mode = 0x4E4F524Du;  /* 'NORM' */
     c->number_mode = 0x4E4F524Du;
@@ -388,6 +398,8 @@ void speech_pump(void)
 
 void speech_reset(void)
 {
+    nextra = 0; /* voices registered and defaults set belong to a run */
+    speech_defaults.set = false;
     memset(channels, 0, sizeof channels);
     default_channel = NULL;
     pthread_mutex_lock(&lock);
@@ -437,12 +449,17 @@ int16_t tb_SpeechBusySystemWide(void) { return tb_SpeechBusy(); }
 int16_t tb_CountVoices(gaddr numVoices)
 {
     if (numVoices)
-        wr16(numVoices, NVOICES);
+        wr16(numVoices, (uint16_t)(NVOICES + nextra));
     return noErr;
 }
 
 int16_t tb_GetIndVoice(int16_t index, gaddr voice)
 {
+    if (index > NVOICES && index <= NVOICES + nextra) {
+        wr32(voice, extra[index - NVOICES - 1].creator);
+        wr32(voice + 4, (uint32_t)extra[index - NVOICES - 1].id);
+        return noErr;
+    }
     if (index < 1 || index > NVOICES)
         return voiceNotFound;
     wr32(voice, VOICE_CREATOR);
@@ -470,14 +487,28 @@ static void describe(int v, gaddr info, int32_t len)
     d[4] = 'g', d[5] = 'a', d[6] = 'l', d[7] = 'a';
     d[11] = (uint8_t)(v + 1);
     d[12] = 0, d[13] = 0, d[14] = 0x01, d[15] = 0x00; /* version 1 */
-    size_t nl = strlen(voices[v].name);
+    char registered[40];
+    const char *name;
+    int gender = 0, age = 0;
+    if (v >= NVOICES) {
+        memcpy(d + 4, &(uint32_t[]){ __builtin_bswap32(extra[v - NVOICES].creator) }, 4);
+        uint32_t id = (uint32_t)extra[v - NVOICES].id;
+        d[8] = (uint8_t)(id >> 24), d[9] = (uint8_t)(id >> 16), d[10] = (uint8_t)(id >> 8), d[11] = (uint8_t)id;
+        snprintf(registered, sizeof registered, "Voice %d", (int)id);
+        name = registered;
+    } else {
+        name = voices[v].name;
+        gender = voices[v].gender;
+        age = voices[v].age;
+    }
+    size_t nl = strlen(name);
     d[16] = (uint8_t)nl;
-    memcpy(d + 17, voices[v].name, nl);
+    memcpy(d + 17, name, nl);
     const char *comment = "A MacinTalk voice.";
     d[80] = (uint8_t)strlen(comment);
     memcpy(d + 81, comment, strlen(comment));
-    d[336] = 0, d[337] = (uint8_t)voices[v].gender;
-    d[338] = 0, d[339] = (uint8_t)voices[v].age;
+    d[336] = 0, d[337] = (uint8_t)gender;
+    d[338] = 0, d[339] = (uint8_t)age;
     /* script, language, region: Roman, English, US (0, 0, 0) */
     gput(info, d, (uint32_t)n);
 }
@@ -749,4 +780,59 @@ int16_t tb_TextToPhonemes(gaddr chan, gaddr textBuf, uint32_t textBytes, gaddr p
     if (phonemeBytes)
         wr32(phonemeBytes, (uint32_t)n);
     return noErr;
+}
+
+/* ---- For SpeechLib's own calls (os9left_misc.c) ---- */
+
+/* RegisterVoices / UnRegisterVoices: a voice by its creator and ID. */
+int16_t speech_register_voice(uint32_t creator, int32_t id)
+{
+    for (int k = 0; k < nextra; k++)
+        if (extra[k].creator == creator && extra[k].id == id)
+            return noErr;
+    if (creator == VOICE_CREATOR && id >= 1 && id <= NVOICES)
+        return noErr;
+    if (nextra == MAX_EXTRA)
+        return memFullErr;
+    extra[nextra].creator = creator;
+    extra[nextra++].id = id;
+    return noErr;
+}
+
+int16_t speech_unregister_voice(uint32_t creator, int32_t id)
+{
+    for (int k = 0; k < nextra; k++)
+        if (extra[k].creator == creator && extra[k].id == id) {
+            for (int j = k; j + 1 < nextra; j++)
+                extra[j] = extra[j + 1];
+            nextra--;
+            return noErr;
+        }
+    return voiceNotFound;
+}
+
+/* The defaults: voice (creator, ID), rate, pitch, volume. */
+void speech_get_defaults(uint32_t *creator, int32_t *id, int32_t *rate, int32_t *pitch, int32_t *volume)
+{
+    *creator = speech_defaults.set ? speech_defaults.creator : VOICE_CREATOR;
+    *id = speech_defaults.set ? speech_defaults.id : DEFAULT_VOICE + 1;
+    *rate = speech_defaults.set ? speech_defaults.rate : FIXED(180);
+    *pitch = speech_defaults.set ? speech_defaults.pitch : FIXED(46);
+    *volume = speech_defaults.set ? speech_defaults.volume : FIXED(1);
+}
+
+void speech_set_defaults(uint32_t creator, int32_t id, int32_t rate, int32_t pitch, int32_t volume)
+{
+    speech_defaults.set = true;
+    speech_defaults.creator = creator;
+    speech_defaults.id = id;
+    speech_defaults.rate = rate;
+    speech_defaults.pitch = pitch;
+    speech_defaults.volume = volume;
+}
+
+int speech_channel_voice(gaddr chan)
+{
+    channel *c = chan_of(chan);
+    return c ? c->voice : -1;
 }

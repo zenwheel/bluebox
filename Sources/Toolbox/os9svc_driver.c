@@ -926,3 +926,22 @@ const ppc_export os9_driver_exports[] = {
     { "GetInterruptSetOptions", ds_GetInterruptSetOptions },
 };
 const unsigned os9_driver_export_count = sizeof os9_driver_exports / sizeof os9_driver_exports[0];
+
+/* LookupInterruptMembers(setID, firstMember, count, records): the
+ * functions of `count` members from the first (as GetInterruptFunctions
+ * gives one's), each 4 longs: refCon, handler, enabler, disabler
+ * (os9left_misc.c). */
+int32_t os9svc_lookup_members(uint32_t setID, int32_t first, int32_t count, gaddr out)
+{
+    intset *s = set_of(setID);
+    if (!s || first < 1 || count < 1 || first + count - 1 > s->size || !out)
+        return paramErr;
+    for (int32_t i = 0; i < count; i++) {
+        gaddr r = out + 16u * (uint32_t)i;
+        wr32(r, s->member[first - 1 + i].refcon);
+        wr32(r + 4, s->member[first - 1 + i].handler);
+        wr32(r + 8, s->member[first - 1 + i].enabler);
+        wr32(r + 12, s->member[first - 1 + i].disabler);
+    }
+    return noErr;
+}
