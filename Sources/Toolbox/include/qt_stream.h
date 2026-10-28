@@ -109,6 +109,8 @@ int16_t qt_stream_open_movie(const char *url, gaddr moviep, int16_t flags);
 int16_t qt_stream_import_file(const char *path, gaddr moviep, int16_t flags);
 /* MoviesTask's part: streaming movies' presentations kept going. */
 void qt_stream_task(void);
+/* A movie just opened: its streaming track's presentation made. */
+void qt_stream_adopt(gaddr movie);
 void qt_stream_reset(void);
 
 /* The FireWire DV isochronous data handler ('ihlr', qt_idh.c). */

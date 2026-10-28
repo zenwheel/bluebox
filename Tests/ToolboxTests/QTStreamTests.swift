@@ -181,12 +181,24 @@ extension BlueBox {
             #expect(tb_GetMovieDuration(Int32(bitPattern: movie)) == 6000)
             tb_StartMovie(movie)
             tb_MoviesTask(movie, 0)
+            // saved and opened again, its streaming track names the presentation
+            let h = tb_NewHandle(0, false, false)
+            #expect(tb_PutMovieIntoHandle(Int32(bitPattern: movie), Int32(bitPattern: h)) == 0)
             tb_DisposeMovie(movie)
             tb_MoviesTask(0, 0)
             usleep(200_000)
             var m = [CChar](repeating: 0, count: 256)
             rtsp_server_methods(&m, m.count)
-            #expect(String(cString: m).hasPrefix("DESCRIBE SETUP SETUP PLAY"))
+            #expect(String(cString: m) == "DESCRIBE SETUP SETUP PLAY TEARDOWN")
+            #expect(tb_NewMovieFromHandle(out, Int32(bitPattern: h), 0, 0) == 0)
+            let again = rd32(out)
+            tb_StartMovie(again)
+            tb_MoviesTask(again, 0)
+            tb_DisposeMovie(again)
+            tb_MoviesTask(0, 0)
+            usleep(200_000)
+            rtsp_server_methods(&m, m.count)
+            #expect(String(cString: m) == "DESCRIBE SETUP SETUP PLAY TEARDOWN DESCRIBE SETUP SETUP PLAY TEARDOWN")
         }
 
         /// A server that isn't there: the documented failure, not a presentation.

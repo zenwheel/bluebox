@@ -711,7 +711,6 @@ static void QTS_QTSDisposePresentation(ppc_cpu *c)
         RET(paramErrQ);
         return;
     }
-    stop_playing(p);
     notify(p, 0, "xprs", p->token);
     pres_free(p);
     RET(0);
@@ -2423,14 +2422,57 @@ int16_t qt_stream_import_file(const char *path, gaddr moviep, int16_t flags)
     return err;
 }
 
+/* A movie opened from a file or data whose streaming track ('strm') names
+ * a presentation in its sample (a URL, an RTSPtext reference, SDP text or
+ * an atom container holding SDP): the presentation is made for it, and
+ * plays with it.  One that can't be reached leaves the track silent. */
+void qt_stream_adopt(gaddr movie)
+{
+    for (int i = 0; i < MAX_PRES; i++)
+        if (press[i] && press[i]->movie == movie)
+            return;
+    int32_t n = tb_GetMovieTrackCount((int32_t)movie);
+    for (int32_t t = 1; t <= n; t++) {
+        int32_t media = tb_GetTrackMedia(tb_GetMovieIndTrack((int32_t)movie, t));
+        if (!media)
+            continue;
+        gaddr type = tb_NewPtr(4, false, true);
+        tb_GetMediaHandlerDescription(media, type, 0, 0);
+        bool strm = rd32(type) == fourcc("strm");
+        tb_DisposePtr(type);
+        if (!strm)
+            continue;
+        gaddr h = tb_NewHandle(0, false, false), size = tb_NewPtr(4, false, true);
+        int16_t err = tb_GetMediaSample(media, (int32_t)h, 0, size, 0, 0, 0, 0, 0, 1, 0, 0);
+        pres *p = err ? NULL : pres_new(kPresTimeScale, 0, 0, 0);
+        if (p) {
+            uint32_t len = (uint32_t)tb_GetHandleSize(h);
+            uint8_t *b = malloc(len + 1);
+            gget(b, rd32(h), len);
+            err = len >= 20 && !memcmp(b + 16, "sean", 4) ? pres_from_atoms(p, h, 0) : pres_from_bytes(p, b, len, NULL);
+            free(b);
+            if (err) {
+                pres_free(p);
+            } else {
+                add_streams(p, false);
+                p->movie = movie;
+                p->movie_last = -1;
+            }
+        }
+        tb_DisposeHandle(h);
+        tb_DisposePtr(size);
+        tb_ClearMoviesStickyError();
+        return;
+    }
+}
+
 void qt_stream_task(void)
 {
     for (int i = 0; i < MAX_PRES; i++) {
         pres *p = press[i];
         if (!p || !p->movie)
             continue;
-        if (!qt_movie_model(p->movie)) { /* the movie went: so does its presentation */
-            stop_playing(p);
+        if (!qt_movie_model(p->movie)) { /* the movie went: so does its presentation (TEARDOWN) */
             pres_free(p);
             continue;
         }

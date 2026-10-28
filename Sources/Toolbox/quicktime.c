@@ -748,6 +748,7 @@ static int16_t take_description(uint8_t *moov, uint32_t len, const char *path, b
     LOGF(LOG_TRAPS, "  movie %s: %s\n", path ? path : "(memory)", m->native ? "our decoders" : "VLC");
     prepare_vlc(m, flattened);
     wr32(moviep, m->handle);
+    qt_stream_adopt(m->handle);
     return set_error(noErr);
 }
 
@@ -803,6 +804,8 @@ int16_t qt_movie_from_bytes(const uint8_t *bytes, uint32_t len, const char *path
 gaddr qt_new_movie_for(qtm_movie *mv, const char *path)
 {
     movie *m = new_movie(mv, path);
+    if (m)
+        qt_stream_adopt(m->handle);
     return m ? m->handle : 0;
 }
 
