@@ -75,10 +75,56 @@ extension BlueBox {
 
         // MARK: Code Fragment Manager and Mixed Mode
 
+        /// An import slot of a routine is set to its vector, not added to what
+        /// the container had in it: an XCMD saved after it was prepared on the
+        /// author's machine holds that machine's old addresses (Bob's Bricks,
+        /// QuickFiles, EasyMail, ...).  A data import still takes an addend.
+        @Test func routineImportSlotsAreSetNotAddedTo() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            let clean = rd32(cfm_prepare_container(importContainer("GetCurrentProcess", cls: 2)))
+            let stale = rd32(cfm_prepare_container(importContainer("GetCurrentProcess", cls: 2, stale: 0x1AFB8)))
+            #expect(clean != 0 && stale == clean)
+        }
+
+        /// A routine descriptor an XCMD's tool saved after preparing it in
+        /// memory has stale addresses in procDescriptor and the container's
+        /// offset in the reserved word after it: the call still reaches the
+        /// code (HyperCard stacks' PowerPC XCMDs: Bob's Bricks, Weather or Not?).
+        @Test func staleRoutineDescriptorFindsItsContainer() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
+            func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
+            // A PEF: code (li r3,7; blr), a data section holding main's vector,
+            // and a loader section that relocates the vector (RelocTVector8).
+            var loader = be32(1) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+            loader += be32(0) + be32(0) + be32(1) + be32(68) + be32(72) + be32(72) + be32(0) + be32(0)
+            loader += be16(1) + be16(0) + be32(1) + be32(0)                                 // relocations for section 1
+            loader += be16(0x4600) + be16(0)                                                // RelocTVector8, once
+            loader += be32(0)                                                               // one empty hash slot
+            let codeOff: UInt32 = 40 + 3 * 28, dataOff = codeOff + 8, loaderOff = dataOff + 8
+            var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(3) + be16(2) + be32(0)
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(codeOff) + [0, 1, 2, 0]
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(dataOff) + [1, 1, 2, 0]
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count)) + be32(loaderOff) + [4, 1, 0, 0]
+            pef += be32(0x3860_0007) + be32(0x4E80_0020) + be32(0) + be32(0) + loader
+            // The descriptor: one PowerPC routine, relative, needs preparing,
+            // procDescriptor stale, the container's offset (32) in reserved2.
+            let rdBytes = be16(0xAAFE) + [7, 0] + be32(0x00AE9FA0) + [0, 0] + be16(0)
+                + be32(0x30) + [0, 1] + be16(7) + be32(0x00AF588C) + be32(32) + be32(0) + pef
+            let rd = bytes(rdBytes)
+            #expect(mm_call(rd, 0, nil, 0) == 7)
+            #expect(mm_call(rd, 0, nil, 0) == 7)                                            // and again, once prepared
+        }
+
         /// A PEF container in guest memory: one 8-byte data section whose
         /// first word is relocated by one import (of class cls) from
         /// InterfaceLib, and main at the data section's start.
-        func importContainer(_ symbol: String, cls: UInt8, library: String = "InterfaceLib", weak: Bool = false) -> UInt32 {
+        func importContainer(_ symbol: String, cls: UInt8, library: String = "InterfaceLib", weak: Bool = false,
+                             stale: UInt32 = 0) -> UInt32 {
             func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
             func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
             let strings = Array(library.utf8) + [0] + Array(symbol.utf8) + [0]
@@ -97,7 +143,7 @@ extension BlueBox {
             var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(2) + be16(1) + be32(0)
             pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(dataOff) + [1, 1, 0, 0]
             pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count)) + be32(loaderOff) + [4, 1, 0, 0]
-            pef += [UInt8](repeating: 0, count: 8) + loader
+            pef += be32(stale) + be32(0) + loader
             return bytes(pef)
         }
 
