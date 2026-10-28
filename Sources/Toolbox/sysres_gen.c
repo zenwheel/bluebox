@@ -3639,6 +3639,10 @@ static const uint8_t ditl_m3999[164] = {
 static const uint8_t pat_16[8] = {
     0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55,
 };
+/* PAT -15904: the Control Panel's pattern */
+static const uint8_t pat_m15904[8] = {
+    0x40, 0x00, 0x04, 0x00, 0x40, 0x00, 0x04, 0x00,
+};
 /* KCHR 0: U.S. keyboard layout */
 static const uint8_t kchr_0[774] = {
     0x00, 0x02, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x01, 0x01, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02,
@@ -4050,6 +4054,7 @@ const sysres_entry sysres[] = {
     { 0x444C4F47, -3999, dlog_m3999, sizeof dlog_m3999 }, /* 'DLOG' */
     { 0x4449544C, -3999, ditl_m3999, sizeof ditl_m3999 }, /* 'DITL' */
     { 0x50415420, 16, pat_16, sizeof pat_16 }, /* 'PAT ' */
+    { 0x50415420, -15904, pat_m15904, sizeof pat_m15904 }, /* 'PAT ' */
     { 0x4B434852, 0, kchr_0, sizeof kchr_0 }, /* 'KCHR' */
     { 0x69746C30, 0, itl0_0, sizeof itl0_0 }, /* 'itl0' */
     { 0x69746C31, 0, itl1_0, sizeof itl1_0 }, /* 'itl1' */

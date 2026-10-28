@@ -132,7 +132,13 @@ enum {
 };
 /* cdevValue is cdevUnset until initDev returns the cdev's storage (or an
  * error), and the cdev takes the value it gets as "nothing yet". */
-enum { cdevMemErr = 0, cdevResErr = 1, cdevUnset = 3 };
+enum { cdevGenErr = -1, cdevMemErr = 0, cdevResErr = 1, cdevUnset = 3 };
+/* CPanelID: the Control Panel's own resources' base (it is DRVR 15, its
+ * DLOG and PAT are -15904); cdevs find the Control Panel's pattern by it. */
+enum { CPANEL_ID = -15904 };
+/* A value a call answered that says the cdev failed: the Control Panel
+ * stops calling it. */
+static bool cdev_failed(int32_t v) { return v == cdevGenErr || v == cdevMemErr || v == cdevResErr; }
 
 /* The call: pascal long main(message, item, numItems, CPanelID, theEvent,
  * cdevValue, cpDialog). */
@@ -150,7 +156,7 @@ static int32_t cdev_call(gaddr code, int rn, int16_t msg, int16_t item, int16_t 
     cpu_push16(c, (uint16_t)msg);
     cpu_push16(c, (uint16_t)item);
     cpu_push16(c, (uint16_t)nitems);
-    cpu_push16(c, 1); /* CPanelID */
+    cpu_push16(c, (uint16_t)CPANEL_ID);
     cpu_push32(c, evt);
     cpu_push32(c, (uint32_t)value);
     cpu_push32(c, dlg);
@@ -216,11 +222,26 @@ static void cdev_host_native(cpu68k *c, uint16_t tw)
     int16_t id = (int16_t)rd16(tmp);
     tb_MoveHHi(code);
     tb_HLock(code);
-    gaddr entry = rd32(code);
+    gaddr entry = mem_strip(rd32(code));
 
-    /* May it run here? */
-    int32_t ok = cdev_call(entry, rn, macDev, 0, 0, 0, cdevUnset, 0);
-    if (ok == 0) {
+    /* May it run here?  Its 'mach' resource says: a softMask of $0000 and
+     * hardMask of $FFFF ask the cdev (macDev); otherwise every bit clear in
+     * softMask must be clear in ROM85, and every bit set in hardMask set in
+     * HWCfgFlags.  The masks decide alone: the General, Keyboard and Mouse
+     * of System 6 ($FFFF0000, every machine) take the macDev message as one
+     * with their storage in cdevValue, and on a 68000 fault on cdevUnset. */
+    gaddr mach = tb_Get1Resource((int32_t)fourcc("mach"), id);
+    uint16_t soft = 0, hard = 0xFFFF;
+    if (mach && rd32(mach) && tb_GetHandleSize(mach) >= 4) {
+        soft = rd16(mem_strip(rd32(mach)));
+        hard = rd16(mem_strip(rd32(mach)) + 2);
+    }
+    bool ok;
+    if (soft == 0 && hard == 0xFFFF)
+        ok = cdev_call(entry, rn, macDev, 0, 0, 0, cdevUnset, 0) != 0;
+    else
+        ok = !(rd16(LM_ROM85) & ~soft) && (rd16(LM_SCSIFlags) & hard) == hard;
+    if (!ok) {
         cpu_halt(c, "ExitToShell (the cdev does not run on this Macintosh)");
         return;
     }
@@ -260,7 +281,7 @@ static void cdev_host_native(cpu68k *c, uint16_t tw)
     tb_SetOrigin((int16_t)(il - margin), (int16_t)(it - margin));
 
     int32_t value = cdev_call(entry, rn, initDev, 1, (int16_t)nitems, 0, cdevUnset, dlg);
-    if (value == cdevMemErr || value == cdevResErr) {
+    if (cdev_failed(value)) {
         cpu_halt(c, "ExitToShell (the cdev could not start: %d)", (int)value);
         return;
     }
@@ -270,6 +291,13 @@ static void cdev_host_native(cpu68k *c, uint16_t tw)
     tb_DrawDialog(dlg);
     cdev_native_running = true;
     while (!c->halted) {
+        if (cdev_failed(value)) {
+            /* The Control Panel closes a cdev that answers an error (and
+             * alerts for memory or resources); it isn't called again. */
+            tb_DisposeDialog(dlg);
+            cpu_halt(c, "ExitToShell (the cdev failed: %d)", (int)value);
+            break;
+        }
         bool got = tb_WaitNextEvent(0xFFFF & ~0x0400, evt, 6, 0) != 0;
         int what = got ? (int16_t)rd16(evt) : nullEvent;
         if (what == nullEvent) {

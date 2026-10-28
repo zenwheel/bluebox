@@ -592,6 +592,11 @@ def main():
     # read by the General control panel and by programs that draw the desktop.
     parts.append("/* PAT 16: the desktop pattern */\n" + c_array("pat_16", bytes.fromhex("AA55AA55AA55AA55")))
     table.append(("PAT ", 16, "pat_16"))
+    # PAT -15904, the Control Panel's own (owned by its DRVR 15): a sparse dot
+    # pattern.  A cdev is called with CPanelID -15904 and some draw with
+    # GetPattern(CPanelID): the System 6 Keyboard cdev dims its items so.
+    parts.append("/* PAT -15904: the Control Panel's pattern */\n" + c_array("pat_m15904", bytes.fromhex("4000040040000400")))
+    table.append(("PAT ", -15904, "pat_m15904"))
     parts.append("/* KCHR 0: U.S. keyboard layout */\n" + c_array("kchr_0", kchr()))
     table.append(("KCHR", 0, "kchr_0"))
     for typ, rid, label, data in intlres.resources():

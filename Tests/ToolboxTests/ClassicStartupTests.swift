@@ -86,35 +86,59 @@ extension BlueBox {
         /// activDev first, nulDev while it idles, and a click on its button
         /// is hitDev with the item.
         @Test func cdevReceivesTheMessages() {
-            bootMachine()
-            let log = tb_NewPtr(256, false, true)
-            // pascal long main(message, item, numItems, id, event, value, dialog)
-            let main: [UInt16] = [
-                0x302F, 0x0016,                                    // MOVE.W 22(SP),D0   the message
-                0x207C, UInt16(log >> 16), UInt16(log & 0xFFFF),   // MOVEA.L #log,A0
-                0x3210,                                            // MOVE.W (A0),D1     the count
-                0x43E8, 0x0002,                                    // LEA 2(A0),A1
-                0xD2C1, 0xD2C1,                                    // ADDA.W D1,A1 twice
-                0x3280,                                            // MOVE.W D0,(A1)
-                0x5250,                                            // ADDQ.W #1,(A0)
-                0x2F6F, 0x0008, 0x0018,                            // MOVE.L 8(SP),24(SP) the value is the result
-                0x225F, 0xDEFC, 0x0014, 0x4ED1,                    // MOVEA.L (SP)+,A1; ADDA #20,SP; JMP (A1)
-            ]
-            // DITL: one button "OK" at 10,10,30,80
-            let ditl = cat(be16(0), be32(0), be16(10), be16(10), be16(30), be16(80), [4, 2], Array("OK".utf8))
-            let path = writeResourceFile([
-                TestResource(type: "cdev", id: -4064, data: code68k(main)),
-                TestResource(type: "DITL", id: -4064, data: ditl),
-            ], name: "Test cdev", in: tempDir())
-            var err = [CChar](repeating: 0, count: 256)
-            #expect(machine_launch(path, &err, err.count))
-            machine_set_instruction_limit(g_cpu!.pointee.icount + 300_000) // the host loop idles to it
-            defer { machine_set_instruction_limit(0) }
-            _ = machine_run(400_000)
-            let n = Int(rd16(log))
-            let seen = (0..<n).map { rd16(log + 2 + UInt32($0 * 2)) }
-            #expect(Array(seen.prefix(3)) == [8, 0, 5]) // macDev, initDev, activDev
-            #expect(seen.dropFirst(3).contains(3))      // nulDev
+            // 'mach' $0000FFFF: the cdev is asked (macDev); $FFFF0000: it runs
+            // on every machine and isn't.
+            for (mach, first) in [(cat(be16(0), be16(0xFFFF)), [8, 0, 5] as [UInt16]), (cat(be16(0xFFFF), be16(0)), [0, 5])] {
+                bootMachine()
+                let log = tb_NewPtr(256, false, true)
+                // pascal long main(message, item, numItems, id, event, value, dialog)
+                let main: [UInt16] = [
+                    0x302F, 0x0016,                                    // MOVE.W 22(SP),D0   the message
+                    0x207C, UInt16(log >> 16), UInt16(log & 0xFFFF),   // MOVEA.L #log,A0
+                    0x3210,                                            // MOVE.W (A0),D1     the count
+                    0x43E8, 0x0002,                                    // LEA 2(A0),A1
+                    0xD2C1, 0xD2C1,                                    // ADDA.W D1,A1 twice
+                    0x3280,                                            // MOVE.W D0,(A1)
+                    0x5250,                                            // ADDQ.W #1,(A0)
+                    0x2F6F, 0x0008, 0x0018,                            // MOVE.L 8(SP),24(SP) the value is the result
+                    0x225F, 0xDEFC, 0x0014, 0x4ED1,                    // MOVEA.L (SP)+,A1; ADDA #20,SP; JMP (A1)
+                ]
+                // DITL: one button "OK" at 10,10,30,80
+                let ditl = cat(be16(0), be32(0), be16(10), be16(10), be16(30), be16(80), [4, 2], Array("OK".utf8))
+                let path = writeResourceFile([
+                    TestResource(type: "cdev", id: -4064, data: code68k(main)),
+                    TestResource(type: "DITL", id: -4064, data: ditl),
+                    TestResource(type: "mach", id: -4064, data: mach),
+                ], name: "Test cdev", in: tempDir())
+                var err = [CChar](repeating: 0, count: 256)
+                #expect(machine_launch(path, &err, err.count))
+                machine_set_instruction_limit(g_cpu!.pointee.icount + 300_000) // the host loop idles to it
+                _ = machine_run(400_000)
+                machine_set_instruction_limit(0)
+                let n = Int(rd16(log))
+                let seen = (0..<n).map { rd16(log + 2 + UInt32($0 * 2)) }
+                #expect(Array(seen.prefix(first.count)) == first) // macDev when asked, initDev, activDev
+                #expect(seen.dropFirst(2).contains(3))  // nulDev
+            }
+        }
+
+        /// A 'mach' whose masks the machine doesn't meet: the cdev isn't run.
+        @Test func cdevForAnotherMachineIsNot() {
+            withMachine("plus") {
+                bootMachine()
+                // softMask $3FFF: ROM85's bit 14 must be clear (Color QuickDraw), which a Plus's isn't
+                let path = writeResourceFile([
+                    TestResource(type: "cdev", id: -4064, data: code68k([0x4E75])),
+                    TestResource(type: "DITL", id: -4064, data: cat(be16(0), be32(0), be16(10), be16(10), be16(30), be16(80), [4, 2], Array("OK".utf8))),
+                    TestResource(type: "mach", id: -4064, data: cat(be16(0x3FFF), be16(0))),
+                ], name: "Color cdev", in: tempDir())
+                var err = [CChar](repeating: 0, count: 256)
+                #expect(machine_launch(path, &err, err.count))
+                machine_set_instruction_limit(g_cpu!.pointee.icount + 300_000)
+                _ = machine_run(400_000)
+                machine_set_instruction_limit(0)
+                #expect(String(cString: machine_halt_reason()).contains("does not run on this Macintosh"))
+            }
         }
     }
 }
