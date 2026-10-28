@@ -281,9 +281,23 @@ static gaddr new_words(uint32_t type, const uint32_t *w, uint32_t n)
 {
     gaddr g = q3_data_new(type, 0);
     q3node *d = g ? q3_get(g)->data : NULL;
-    if (d)
+    if (d && n)
         memcpy(d->w, w, n * 4);
     return g;
+}
+
+/* Immediate mode in a writing loop: what was submitted is written as the
+ * object it would make.  True if it was. */
+static bool write_now(q3view *v, uint32_t type, const uint32_t *w, uint32_t n)
+{
+    if (!q3v_writing(v))
+        return false;
+    gaddr g = new_words(type, w, n);
+    if (g) {
+        q3v_submit(v, g);
+        q3_release(g);
+    }
+    return true;
 }
 
 static void Q3Shape_Submit_generic(ppc_cpu *c, uint32_t type)
@@ -432,7 +446,7 @@ static void Q3Style_Submit(ppc_cpu *c) { Q3Shape_Submit_generic(c, Q3_STYLE); }
     {                                                                                                                \
         uint32_t w = Q3R(0);                                                                                         \
         q3view *v = q3v_of(Q3R(1));                                                                                  \
-        if (v)                                                                                                       \
+        if (v && !write_now(v, TYPE, &w, 1))                                                                         \
             q3v_set_style(v, TYPE, &w);                                                                              \
         Q3RETURN(v ? kQ3Success : kQ3Failure);                                                                       \
     }                                                                                                                \
@@ -459,7 +473,16 @@ static void Q3HighlightStyle_Submit(ppc_cpu *c)
 {
     uint32_t w = Q3R(0);
     q3view *v = q3v_of(Q3R(1));
-    if (v)
+    if (v && q3v_writing(v)) {
+        gaddr g = q3_data_new(HIGH, 0);
+        q3node *d = g ? q3_get(g)->data : NULL;
+        if (d)
+            q3_assign(&d->w[0], w);
+        if (g) {
+            q3v_submit(v, g);
+            q3_release(g);
+        }
+    } else if (v)
         q3v_set_style(v, HIGH, &w);
     Q3RETURN(v ? kQ3Success : kQ3Failure);
 }
@@ -476,7 +499,8 @@ Q3_SETO(Q3HighlightStyle_Set, HIGH, 0)
         if (v && Q3R(0)) {                                                                                           \
             for (int i = 0; i < (N); i++)                                                                            \
                 w[i] = rd32(Q3R(0) + 4 * (uint32_t)i);                                                               \
-            q3v_set_style(v, TYPE, w);                                                                               \
+            if (!write_now(v, TYPE, w, N))                                                                           \
+                q3v_set_style(v, TYPE, w);                                                                           \
         }                                                                                                            \
         Q3RETURN(v && Q3R(0) ? kQ3Success : kQ3Failure);                                                             \
     }                                                                                                                \
@@ -518,6 +542,10 @@ static void submit_transform_now(ppc_cpu *c, uint32_t type, gaddr p, uint32_t n,
     uint32_t w[16] = { 0 };
     for (uint32_t i = 0; i < n; i++)
         w[i] = rd32(p + 4 * i);
+    if (write_now(v, type, w, n)) {
+        Q3RETURN(kQ3Success);
+        return;
+    }
     float m[16];
     transform_matrix(type, w, m);
     if (v)
@@ -571,7 +599,7 @@ static void Q3ResetTransform_New(ppc_cpu *c) { Q3RETURN(q3_data_new(RSET, 0)); }
 static void Q3ResetTransform_Submit(ppc_cpu *c)
 {
     q3view *v = q3v_of(Q3R(0));
-    if (v)
+    if (v && !write_now(v, RSET, NULL, 0))
         q3v_reset_transform(v);
     Q3RETURN(v ? kQ3Success : kQ3Failure);
 }
@@ -895,9 +923,23 @@ Q3_GETW(Q3MacDrawContext_Get2DLibrary, DMAC, 18, 1)
 
 enum { R_CSG, R_VENDOR, R_ENGINE, R_BYPASS, R_HINTS, R_FILTER };
 
+gaddr q3xr_class_method(uint32_t renderer_type, uint32_t method);
+bool q3xr_interactive(gaddr renderer);
+
+/* A renderer class a program registered: its object, made by its New
+ * method. */
+static q3class *plugin_renderer_class(uint32_t type)
+{
+    q3class *k = q3_class(type);
+    return k && k->registered && q3_type_is(type, Q3_RENDERER) ? k : NULL;
+}
+
 gaddr q3_renderer_new(uint32_t type);
 gaddr q3_renderer_new(uint32_t type)
 {
+    q3class *plugin = plugin_renderer_class(type);
+    if (plugin)
+        return q3_registered_new(plugin, 0);
     if (type != CTWN && type != WRFR && type != GNRR) {
         q3_error(kQ3ErrorInvalidObjectClass);
         return 0;
@@ -917,11 +959,27 @@ static void Q3Renderer_GetType(ppc_cpu *c) { Q3RETURN(type_below(Q3R(0), Q3_REND
 static void Q3Renderer_IsInteractive(ppc_cpu *c)
 {
     q3obj *o = q3_of(Q3R(0), Q3_RENDERER);
-    Q3RETURN(o && o->type == CTWN);
+    Q3RETURN(o && (o->type == CTWN || q3xr_interactive(o->g)));
 }
-static void Q3Renderer_HasModalConfigure(ppc_cpu *c) { Q3RETURN(kQ3False); }
+
+static gaddr renderer_method(gaddr renderer, uint32_t method)
+{
+    q3obj *o = q3_of(renderer, Q3_RENDERER);
+    return o ? q3xr_class_method(o->type, method) : 0;
+}
+
+static void Q3Renderer_HasModalConfigure(ppc_cpu *c) { Q3RETURN(renderer_method(Q3R(0), T4("rdmc")) != 0); }
+
+/* The renderer's settings dialog, if it has one; ours have none, and
+ * that is a cancel. */
 static void Q3Renderer_ModalConfigure(ppc_cpu *c)
 {
+    gaddr fn = renderer_method(Q3R(0), T4("rdmc"));
+    if (fn) {
+        uint32_t args[4] = { Q3R(0), Q3R(1), Q3R(2), q3_get(Q3R(0))->instance };
+        Q3RETURN(ppc_call(fn, args, 4));
+        return;
+    }
     if (Q3R(2))
         wr32(Q3R(2), kQ3True);
     Q3RETURN(kQ3Success);
@@ -929,7 +987,18 @@ static void Q3Renderer_ModalConfigure(ppc_cpu *c)
 
 static void Q3RendererClass_GetNickNameString(ppc_cpu *c)
 {
-    const char *name = Q3R(0) == CTWN ? "Interactive Renderer" : Q3R(0) == WRFR ? "WireFrame" : Q3R(0) == GNRR ? "Generic" : NULL;
+    gaddr fn = q3xr_class_method(Q3R(0), T4("rdns"));
+    if (fn && Q3R(1)) {
+        gaddr actual = q3_galloc(4);
+        uint32_t args[3] = { Q3R(1), 256, actual };
+        uint32_t status = ppc_call(fn, args, 3);
+        q3_gfree(actual);
+        Q3RETURN(status);
+        return;
+    }
+    q3class *plugin = plugin_renderer_class(Q3R(0));
+    const char *name = Q3R(0) == CTWN ? "Interactive Renderer" : Q3R(0) == WRFR ? "WireFrame" : Q3R(0) == GNRR ? "Generic"
+                       : plugin ? plugin->name : NULL;
     if (Q3R(1))
         gput(Q3R(1), name ? name : "", name ? (uint32_t)strlen(name) + 1 : 1);
     Q3RETURN(name ? kQ3Success : kQ3Failure);
@@ -938,6 +1007,12 @@ static void Q3RendererClass_GetNickNameString(ppc_cpu *c)
 /* The configuration data: the interactive renderer's preferences. */
 static void Q3Renderer_GetConfigurationData(ppc_cpu *c)
 {
+    gaddr fn = renderer_method(Q3R(0), T4("rdgp"));
+    if (fn) {
+        uint32_t args[5] = { Q3R(0), Q3R(1), Q3R(2), Q3R(3), q3_get(Q3R(0))->instance };
+        Q3RETURN(ppc_call(fn, args, 5));
+        return;
+    }
     q3node *d = q3_data_of(Q3R(0), Q3_RENDERER);
     gaddr buf = Q3R(1);
     uint32_t size = Q3R(2);
@@ -951,6 +1026,12 @@ static void Q3Renderer_GetConfigurationData(ppc_cpu *c)
 
 static void Q3Renderer_SetConfigurationData(ppc_cpu *c)
 {
+    gaddr fn = renderer_method(Q3R(0), T4("rdsp"));
+    if (fn) {
+        uint32_t args[4] = { Q3R(0), Q3R(1), Q3R(2), q3_get(Q3R(0))->instance };
+        Q3RETURN(ppc_call(fn, args, 4));
+        return;
+    }
     q3node *d = q3_data_of(Q3R(0), Q3_RENDERER);
     gaddr buf = Q3R(1);
     if (d && buf && Q3R(2) >= 24)
@@ -1111,7 +1192,10 @@ static void Q3Attribute_Submit(ppc_cpu *c)
         return;
     }
     q3set_add(s, type, Q3R(1));
-    q3v_attribute_set(v, o->g);
+    if (q3v_writing(v))
+        q3v_submit(v, o->g);
+    else
+        q3v_attribute_set(v, o->g);
     q3_release(o->g);
     Q3RETURN(kQ3Success);
 }

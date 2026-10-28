@@ -122,6 +122,11 @@ void q3_class_ops(uint32_t type, void (*dispose)(q3obj *), bool (*duplicate)(q3o
 /* Only the submit method (a class whose data another file keeps). */
 void q3_class_submit(uint32_t type, void (*submit)(q3obj *, q3view *));
 bool q3_type_is(uint32_t leaf, uint32_t type);
+/* A method from a registered class's metahandler (or its parents'); 0
+ * if none gives it. */
+gaddr q3_class_method(const q3class *k, uint32_t method);
+/* An object of a registered class, its New method called with param. */
+gaddr q3_registered_new(q3class *k, gaddr param);
 /* The type on leaf's line just below `above` (Q3Shape_GetType: below
  * kQ3SharedTypeShape), or 0. */
 uint32_t q3_type_below(uint32_t leaf, uint32_t above);
@@ -161,6 +166,7 @@ typedef struct {
     int32_t type;
     uint32_t size;
     uint8_t *bytes;
+    gaddr g; /* a guest copy, for Q3XAttributeSet_GetPointer (0: none yet) */
 } q3elem;
 typedef struct {
     int n;

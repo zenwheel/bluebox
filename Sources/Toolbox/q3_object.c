@@ -800,6 +800,9 @@ static void elem_free(q3elem *e)
         q3_release(sh);
     }
     free(e->bytes);
+    if (e->g)
+        tb_DisposePtr(e->g);
+    e->g = 0;
 }
 
 bool q3set_add_bytes(q3set *s, int32_t type, const uint8_t *bytes, uint32_t size)
@@ -825,7 +828,7 @@ bool q3set_add_bytes(q3set *s, int32_t type, const uint8_t *bytes, uint32_t size
         return false;
     }
     s->e = n;
-    s->e[s->n++] = (q3elem){ type, size, copy };
+    s->e[s->n++] = (q3elem){ type, size, copy, 0 };
     return true;
 }
 
@@ -1341,6 +1344,8 @@ static gaddr method_of(const q3class *k, uint32_t method)
     return 0;
 }
 
+gaddr q3_class_method(const q3class *k, uint32_t method) { return method_of(k, method); }
+
 static q3class *class_of_handle(gaddr g)
 {
     for (int i = 0; i < nregistered; i++)
@@ -1386,10 +1391,12 @@ static void call_duplicate(q3obj *from, q3obj *to)
     }
 }
 
-static void Q3XObjectHierarchy_RegisterClass(ppc_cpu *c)
+/* A class registered (QD3DExtension.h's arguments from r3 on): with a
+ * new type, or with its own (the libraries' private ByType call). */
+static void register_class(ppc_cpu *c, bool by_type)
 {
     uint32_t parent = Q3R(0);
-    gaddr type_out = Q3R(1);
+    gaddr type_out = by_type ? 0 : Q3R(1);
     char name[256];
     q3_gstr(Q3R(2), name, sizeof name);
     q3class *p = q3_class(parent);
@@ -1399,10 +1406,17 @@ static void Q3XObjectHierarchy_RegisterClass(ppc_cpu *c)
         return;
     }
     q3class *old = q3_class_named(name);
-    if (old) { /* the same class again (the program run twice) */
+    if (old && old->registered) { /* the same class again (the program run twice) */
         if (type_out)
             wr32(type_out, old->type);
         Q3RETURN(class_handle(old));
+        return;
+    }
+    /* A type ours already has stays ours: Apple's interactive renderer,
+     * brought as a plug-in, gives way to the one built in. */
+    if (old || (by_type && q3_class(Q3R(1)))) {
+        q3_error(kQ3ErrorInvalidObjectClass);
+        Q3RETURN(0);
         return;
     }
     q3class *k = calloc(1, sizeof *k);
@@ -1415,8 +1429,8 @@ static void Q3XObjectHierarchy_RegisterClass(ppc_cpu *c)
     }
     registered = n;
     registered[nregistered++] = k;
-    static uint32_t next_type = 0x80000001u; /* negative, as 3DMF's custom types are */
-    k->type = next_type++;
+    static uint32_t next_type = 0xFFFFFFFFu; /* -1 down, as QuickDraw 3D numbered them */
+    k->type = by_type ? Q3R(1) : next_type--;
     k->parent = parent;
     k->own_name = strdup(name);
     k->name = k->own_name;
@@ -1437,6 +1451,19 @@ static void Q3XObjectHierarchy_RegisterClass(ppc_cpu *c)
         ppc_call(reg, args, 2);
     }
     Q3RETURN(class_handle(k));
+}
+
+static void Q3XObjectHierarchy_RegisterClass(ppc_cpu *c) { register_class(c, false); }
+static void EiObjectHierarchy_RegisterClassByType(ppc_cpu *c) { register_class(c, true); }
+
+/* The error method and its reference, for the libraries' own use. */
+static void EiErrorClient_GetPostMethod(ppc_cpu *c)
+{
+    if (Q3R(0))
+        wr32(Q3R(0), err_method);
+    if (Q3R(1))
+        wr32(Q3R(1), err_ref);
+    Q3RETURN(kQ3Success);
 }
 
 static void Q3XObjectHierarchy_UnregisterClass(ppc_cpu *c)
@@ -1460,30 +1487,28 @@ static void Q3XObjectHierarchy_UnregisterClass(ppc_cpu *c)
 
 static void Q3XObjectClass_GetMethod(ppc_cpu *c) { Q3RETURN(method_of(class_of_handle(Q3R(0)), Q3R(1))); }
 
-static void Q3XObjectHierarchy_NewObject(ppc_cpu *c)
+gaddr q3_registered_new(q3class *k, gaddr param)
 {
-    q3class *k = class_of_handle(Q3R(0));
     q3obj *o = k ? q3_new(k->type, NULL) : NULL;
-    if (!o) {
-        Q3RETURN(0);
-        return;
-    }
+    if (!o)
+        return 0;
     if (k->instance_size)
         o->instance = tb_NewPtr((int32_t)k->instance_size, false, true);
     gaddr fn = method_of(k, kQ3XMethodTypeObjectNew);
     if (fn) {
-        uint32_t args[3] = { o->g, o->instance, Q3R(1) };
+        uint32_t args[3] = { o->g, o->instance, param };
         if (ppc_call(fn, args, 3) != kQ3Success) {
             if (o->instance)
                 tb_DisposePtr(o->instance);
             q3_handle_free(o->g);
             free(o);
-            Q3RETURN(0);
-            return;
+            return 0;
         }
     }
-    Q3RETURN(o->g);
+    return o->g;
 }
+
+static void Q3XObjectHierarchy_NewObject(ppc_cpu *c) { Q3RETURN(q3_registered_new(class_of_handle(Q3R(0)), Q3R(1))); }
 
 static void Q3XObjectClass_GetLeafType(ppc_cpu *c)
 {
@@ -1608,6 +1633,8 @@ const ppc_export q3_exports[] = {
     { "Q3CString_GetString", Q3CString_GetString },
     { "Q3CString_EmptyData", Q3CString_EmptyData },
     { "Q3XObjectHierarchy_RegisterClass", Q3XObjectHierarchy_RegisterClass },
+    { "EiObjectHierarchy_RegisterClassByType", EiObjectHierarchy_RegisterClassByType },
+    { "EiErrorClient_GetPostMethod", EiErrorClient_GetPostMethod },
     { "Q3XObjectHierarchy_UnregisterClass", Q3XObjectHierarchy_UnregisterClass },
     { "Q3XObjectClass_GetMethod", Q3XObjectClass_GetMethod },
     { "Q3XObjectHierarchy_NewObject", Q3XObjectHierarchy_NewObject },

@@ -234,6 +234,8 @@ static void trimesh_bounds(q3node *d)
 static void geom_submit(q3obj *o, q3view *v)
 {
     const struct geom *g = geom_of(o->type);
+    if (g && o->data && q3xr_geometry(v, o->type, o->g, 0))
+        return;
     if (g && o->data) {
         q3v_begin_object(v, o->g);
         g->tess(v, o->data);
@@ -255,13 +257,29 @@ void q3_geom_classes(void)
     q3_group_classes();
 }
 
-/* Immediate mode: the program's structure drawn and forgotten. */
+static gaddr new_geom(uint32_t type, gaddr data);
+
+/* Immediate mode: the program's structure drawn and forgotten (or, in a
+ * writing loop, written). */
 static void submit_now(ppc_cpu *c, uint32_t type)
 {
     const struct geom *g = geom_of(type);
     q3view *v = q3v_of(Q3R(1));
     if (!v || !Q3R(0)) {
         Q3RETURN(kQ3Failure);
+        return;
+    }
+    if (q3v_writing(v)) { /* written as the object it would make */
+        gaddr obj = new_geom(type, Q3R(0));
+        if (obj) {
+            q3v_submit(v, obj);
+            q3_release(obj);
+        }
+        Q3RETURN(obj ? kQ3Success : kQ3Failure);
+        return;
+    }
+    if (q3xr_geometry(v, type, 0, Q3R(0))) {
+        Q3RETURN(kQ3Success);
         return;
     }
     q3node *d = q3d_from_guest(Q3R(0), g->s, 1, NULL);

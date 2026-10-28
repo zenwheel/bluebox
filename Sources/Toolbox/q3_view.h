@@ -62,6 +62,11 @@ bool q3v_writing(q3view *v);
 void q3v_begin_object(q3view *v, gaddr object);
 void q3v_end_object(q3view *v);
 
+/* A geometry a renderer plug-in may take whole (q3_xrender.c): true if
+ * it did.  obj is the geometry (0 in immediate mode), data its public
+ * structure in guest memory (0: made from obj). */
+bool q3xr_geometry(q3view *v, uint32_t type, gaddr obj, gaddr data);
+
 /* The view's state for submitting: attribute sets, transforms, styles,
  * shaders (q3_view.c), groups (q3_group.c). */
 void q3v_submit(q3view *v, gaddr object);
