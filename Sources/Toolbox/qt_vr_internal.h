@@ -69,6 +69,10 @@ typedef struct vr {
     uint8_t *hot;
     int hw, hh;
     bool wraps, horizontal;
+    bool cube;              /* QTVR 5's cubic panorama: six faces, front, right, back, left, top, bottom */
+    uint32_t *faces[6];
+    uint8_t *hot_faces[6];  /* and their hot spots, at the faces' size */
+    int fw, fh;
     uint32_t image_size[2], hot_size[2];
     uint16_t frames[2], hot_frames[2];
     gaddr image_track, hot_track;

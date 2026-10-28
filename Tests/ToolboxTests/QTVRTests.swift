@@ -278,6 +278,56 @@ private let overProc: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = 
     c.pointee.pc = c.pointee.lr
 }
 
+/// A QTVR 5 cubic panorama: six 16 by 16 faces (front, right, back, left,
+/// top, bottom) whose blue is 40 times the face's number; the front face's
+/// left half red.  Stored turned a quarter turn anticlockwise as QTVR does.
+private func makeCube() -> UInt32 {
+    let movie = UInt32(bitPattern: tb_NewMovie(1))
+    let M = Int32(bitPattern: movie)
+    let image = tb_NewMovieTrack(M, 16 << 16, 16 << 16, 0)
+    let media = tb_NewTrackMedia(image, Int32(bitPattern: fourCC("vide")), 600, 0, 0)
+    let desc = rawDesc(16, 16, 32)
+    for face in 0..<6 {
+        var b: [UInt8] = []
+        for r in 0..<16 { // stored row r: upright column 15 - r
+            let u = 15 - r
+            for _ in 0..<16 { b += [255, face == 0 && u < 8 ? 255 : 0, 0, UInt8(face * 40)] }
+        }
+        #expect(tb_AddMediaSample(media, Int32(bitPattern: handle(b)), 0, Int32(b.count), 100,
+                                  Int32(bitPattern: desc), 1, 0, 0) == 0)
+    }
+    #expect(tb_InsertMediaIntoTrack(image, 0, 0, 600, 0x10000) == 0)
+    tb_SetTrackEnabled(image, 0)
+    let pdat = cat(be16(2), be16(0), be32(1), be32(0),
+                   bef(0), bef(0), bef(0), bef(0), bef(0), bef(0), bef(0), bef(0), bef(0),
+                   be32(16), be32(96), be16(1), be16(6), be32(0), be32(0), be16(0), be16(0), be32(0),
+                   Array("cube".utf8), be32(0))
+    let cuvw = cat(bef(-180), bef(180), bef(-90), bef(90), bef(10), bef(120), bef(0), bef(0), bef(90))
+    let panoTrack = tb_NewMovieTrack(M, 64 << 16, 64 << 16, 0)
+    let panoMedia = tb_NewTrackMedia(panoTrack, Int32(bitPattern: fourCC("pano")), 600, 0, 0)
+    let sample = container([atom("pdat", 1, pdat), atom("cuvw", 1, cuvw)])
+    #expect(tb_AddMediaSample(panoMedia, Int32(bitPattern: handle(sample)), 0, Int32(sample.count), 600,
+                              Int32(bitPattern: handle(cat(be32(16), be32(0), be32(0), be32(1)))), 1, 0, 0) == 0)
+    #expect(tb_InsertMediaIntoTrack(panoTrack, 0, 0, 600, 0x10000) == 0)
+    let world = container([atom("vrsc", 1, cat(be16(2), be16(0), be32(0), be32(1), be32(0), be32(0), be32(0)))])
+    let node = container([atom("ndhd", 1, cat(be16(2), be16(0), Array("pano".utf8), be32(1), be32(0), be32(0),
+                                               be32(0), be32(0)))])
+    let vrTrack = tb_NewMovieTrack(M, 64 << 16, 64 << 16, 0)
+    let vrMedia = tb_NewTrackMedia(vrTrack, Int32(bitPattern: fourCC("qtvr")), 600, 0, 0)
+    let vrDesc = handle(cat(be32(UInt32(16 + world.count)), Array("qtvr".utf8), be32(0), be32(1), world))
+    #expect(tb_AddMediaSample(vrMedia, Int32(bitPattern: handle(node)), 0, Int32(node.count), 600,
+                              Int32(bitPattern: vrDesc), 1, 0, 0) == 0)
+    #expect(tb_InsertMediaIntoTrack(vrTrack, 0, 0, 600, 0x10000) == 0)
+    let idx = tb_NewPtr(4, false, true)
+    #expect(tb_AddTrackReference(vrTrack, panoTrack, Int32(bitPattern: fourCC("pano")), idx) == 0)
+    #expect(tb_AddTrackReference(panoTrack, image, Int32(bitPattern: fourCC("imgt")), idx) == 0)
+    let box = tb_NewPtr(8, false, true)
+    wr16(box + 4, 64)
+    wr16(box + 6, 64)
+    tb_SetMovieBox(movie, box)
+    return movie
+}
+
 extension BlueBox {
     @Suite struct QTVR {
         /// Every QuickTimeVRLib export is there.
@@ -580,6 +630,41 @@ extension BlueBox {
             #expect(vrCall("QTVRRefreshBackBuffer", [vr, 0]).r == 0)
             tb_GetCPixel(100, 50, c)
             #expect(rd16(c + 4) >> 8 == 77)
+            tb_DisposeMovie(movie)
+        }
+
+        /// A cubic panorama: the face the view looks at, the way up.
+        @Test func cube() {
+            qtMachine()
+            let movie = makeCube()
+            let out = tb_NewPtr(16, false, true)
+            #expect(vrCall("QTVRGetQTVRInstance", [out, vrCall("QTVRGetQTVRTrack", [movie, 1]).r, 0]).r == 0)
+            let vr = rd32(out)
+            vrCall("QTVRSetAngularUnits", [vr, 0])
+            #expect(abs(vrCall("QTVRGetFieldOfView", [vr]).f - 90) < 0.01)
+            let c = tb_NewPtr(6, false, true)
+            func face(_ pan: Float, _ tilt: Float) -> Int {
+                vrCall("QTVRSetPanAngle", [vr], floats: [pan])
+                vrCall("QTVRSetTiltAngle", [vr], floats: [tilt])
+                vrCall("QTVRUpdate", [vr, 0])
+                tb_GetCPixel(32, 32, c)
+                return Int(rd16(c + 4) >> 8) / 40
+            }
+            #expect(face(0, 0) == 0)
+            #expect(face(-90, 0) == 1) // turned right
+            #expect(face(180, 0) == 2)
+            #expect(face(90, 0) == 3)
+            #expect(face(0, 90) == 4)  // straight up
+            #expect(face(0, -90) == 5)
+            // the front face upright: its red half on the left
+            _ = face(0, 0)
+            tb_GetCPixel(16, 32, c)
+            #expect(rd16(c) >> 8 == 255)
+            tb_GetCPixel(48, 32, c)
+            #expect(rd16(c) >> 8 == 0)
+            let g = tb_NewPtr(12, false, true)
+            #expect(vrCall("QTVRGetBackBufferSettings", [vr, g, g + 4, g + 6, g + 10]).r == 0)
+            #expect(rd32(g) == fourCC("cube"))
             tb_DisposeMovie(movie)
         }
 

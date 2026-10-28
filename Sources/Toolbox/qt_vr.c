@@ -301,11 +301,23 @@ gaddr vr_find_track(gaddr movie, int32_t index)
     return t ? t->token : 0;
 }
 
+static void free_faces(vr *v)
+{
+    for (int i = 0; i < 6; i++) {
+        free(v->faces[i]);
+        free(v->hot_faces[i]);
+        v->faces[i] = NULL;
+        v->hot_faces[i] = NULL;
+    }
+    v->cube = false;
+}
+
 static void free_node_state(vr *v)
 {
     free(v->image);
     free(v->hot);
     free(v->obj_frame);
+    free_faces(v);
     v->image = NULL;
     v->hot = NULL;
     v->obj_frame = NULL;
@@ -556,6 +568,51 @@ static void load_picture(vr *v, qtm_movie *mv, int64_t time)
     }
 }
 
+/* A cubic panorama's six faces (QuickTime VR 5): the image track's six
+ * frames from the node's time, each turned upright as a cylinder's tiles
+ * are unless kept horizontal; its hot spots likewise. */
+static bool load_faces(vr *v, qtm_movie *mv, int64_t time)
+{
+    qtm_track *it = qt_track_model(v->image_track, NULL), *ht = qt_track_model(v->hot_track, NULL);
+    for (int pass = 0; pass < 2; pass++) {
+        qtm_track *t = pass ? ht : it;
+        uint32_t first = sample_at_movie_time(mv, t, time);
+        if (!t || !first)
+            continue;
+        frames r = { .mv = mv, .md = t->media, .ids = pass == 1 };
+        for (int f = 0; f < 6; f++) {
+            const uint8_t *px = frames_get(&r, first + (uint32_t)f);
+            if (!px)
+                break;
+            uint32_t sx = (uint32_t)r.f.width, sy = (uint32_t)r.f.height;
+            uint32_t *s = malloc((size_t)sx * sy * 4);
+            for (size_t i = 0; i < (size_t)sx * sy; i++)
+                s[i] = pass ? px[i * 4 + 2] : (uint32_t)px[i * 4] << 16 | (uint32_t)px[i * 4 + 1] << 8 | px[i * 4 + 2];
+            int w, h;
+            uint32_t *u = unrotate(s, sx, sy, v->horizontal, &w, &h);
+            if (!u)
+                break;
+            if (pass) {
+                v->hot_faces[f] = malloc((size_t)w * h);
+                for (size_t i = 0; i < (size_t)w * h; i++)
+                    v->hot_faces[f][i] = (uint8_t)u[i];
+                free(u);
+                v->hw = w;
+                v->hh = h;
+            } else {
+                v->faces[f] = u;
+                v->fw = w;
+                v->fh = h;
+            }
+        }
+        frames_close(&r);
+    }
+    for (int f = 0; f < 6; f++)
+        if (!v->faces[f])
+            return false;
+    return true;
+}
+
 static bool load_pano(vr *v, qtm_movie *mv, const vr_node *nd)
 {
     qtm_track *qt = qt_track_model(v->track, NULL);
@@ -583,11 +640,28 @@ static bool load_pano(vr *v, qtm_movie *mv, const vr_node *nd)
     v->hot_frames[0] = be16(d + 68);
     v->hot_frames[1] = be16(d + 70);
     v->horizontal = (be32(d + 72) & 1) != 0;
+    bool cube = n >= 80 && be32(d + 76) == fourcc("cube");
+    float cv[9] = { -180, 180, -90, 90, 5, 120, 0, 0, 90 }; /* a cube's view limits and defaults ('cuvw') */
+    const uint8_t *cuvw = cube ? atom_leaf(c, len, 0, fourcc("cuvw"), 0, &n) : NULL;
+    for (int k = 0; cuvw && n >= 36 && k < 9; k++)
+        cv[k] = bef(cuvw + 4 * k);
     free(c);
     qtm_track *it = track_ref(mv, pt, fourcc("imgt"), iref ? iref : 1);
     qtm_track *ht = href ? track_ref(mv, pt, fourcc("hott"), href) : NULL;
     v->image_track = it ? it->token : 0;
     v->hot_track = ht ? ht->token : 0;
+    if (cube) {
+        v->cube = true;
+        if (!load_faces(v, mv, nd->time))
+            return false;
+        float f0 = cv[4] > 0 ? cv[4] : 5, f1 = cv[5] > f0 ? cv[5] : 120;
+        set_limits(v, cv[0], cv[1], cv[2], cv[3], f0, f1);
+        v->wraps = cv[1] - cv[0] >= 359.9f;
+        v->def_pan = cv[6];
+        v->def_tilt = cv[7];
+        v->def_fov = cv[8] > 0 && cv[8] <= f1 ? cv[8] : f1;
+        return true;
+    }
     if (max_pan <= min_pan)
         max_pan = min_pan + 360;
     load_picture(v, mv, nd->time);
@@ -872,14 +946,16 @@ void vr_effective_limits(const vr *v, int kind, float *lo, float *hi)
     *hi = v->con_max[kind];
     if (v->object || !v->loaded)
         return;
-    if (kind == VR_TILT) {
+    if (kind == VR_TILT && v->cube) {
+        /* a cube's view may look straight up and down */
+    } else if (kind == VR_TILT) {
         *lo += v->fov / 2;
         *hi -= v->fov / 2;
     } else if (kind == VR_PAN && !v->wraps) {
         float half = (float)deg(atan(tan(rad(v->fov / 2)) * view_aspect(v)));
         *lo += half;
         *hi -= half;
-    } else if (kind == VR_FOV && v->con_max[VR_TILT] - v->con_min[VR_TILT] < *hi) {
+    } else if (kind == VR_FOV && !v->cube && v->con_max[VR_TILT] - v->con_min[VR_TILT] < *hi) {
         *hi = v->con_max[VR_TILT] - v->con_min[VR_TILT];
     }
     if (*lo > *hi)
@@ -1206,6 +1282,8 @@ static uint8_t object_hot(vr *v, int ox, int oy)
 
 /* ---- Drawing ---- */
 
+static void render_cube(vr *v, int w, int h);
+
 static void render(vr *v, int w, int h)
 {
     if (w != v->vw || h != v->vh || !v->view) {
@@ -1224,6 +1302,10 @@ static void render(vr *v, int w, int h)
                 int ox, oy;
                 v->view[(size_t)y * w + x] = object_xy(v, x, y, w, h, &ox, &oy) ? v->obj_frame[(size_t)oy * v->ow + ox] : 0;
             }
+        return;
+    }
+    if (v->cube) {
+        render_cube(v, w, h);
         return;
     }
     if (!v->image) {
@@ -1264,12 +1346,65 @@ static void render(vr *v, int w, int h)
     }
 }
 
+/* A cube's face and the face's pixel for a view pixel: the ray turned by
+ * the tilt and pan, then the face it meets most squarely. */
+static const int8_t face_axes[6][3][3] = {
+    /* forward, right, up for front, right, back, left, top, bottom */
+    { { 0, 0, 1 }, { 1, 0, 0 }, { 0, 1, 0 } },   { { 1, 0, 0 }, { 0, 0, -1 }, { 0, 1, 0 } },
+    { { 0, 0, -1 }, { -1, 0, 0 }, { 0, 1, 0 } }, { { -1, 0, 0 }, { 0, 0, 1 }, { 0, 1, 0 } },
+    { { 0, 1, 0 }, { 1, 0, 0 }, { 0, 0, -1 } },  { { 0, -1, 0 }, { 1, 0, 0 }, { 0, 0, 1 } },
+};
+
+static int cube_face(const vr *v, double f, double ct, double st, double dx, double dy, double *u, double *y)
+{
+    double cx = dx, cy = dy * ct + f * st, cz = f * ct - dy * st; /* tilted */
+    double p = rad(v->pan), sp = sin(p), cp = cos(p);
+    double d[3] = { cx * cp - cz * sp, cy, cx * sp + cz * cp }; /* panned (to the left) */
+    int best = 0;
+    double bd = -1e30;
+    for (int i = 0; i < 6; i++) {
+        double k = d[0] * face_axes[i][0][0] + d[1] * face_axes[i][0][1] + d[2] * face_axes[i][0][2];
+        if (k > bd) {
+            bd = k;
+            best = i;
+        }
+    }
+    const int8_t (*a)[3] = face_axes[best];
+    double r = d[0] * a[1][0] + d[1] * a[1][1] + d[2] * a[1][2], up = d[0] * a[2][0] + d[1] * a[2][1] + d[2] * a[2][2];
+    *u = (0.5 + 0.5 * r / bd) * v->fw;
+    *y = (0.5 - 0.5 * up / bd) * v->fh;
+    return best;
+}
+
+static void render_cube(vr *v, int w, int h)
+{
+    double f = focal(v, h), ct = cos(rad(v->tilt)), st = sin(rad(v->tilt));
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) {
+            double u, yy;
+            int k = cube_face(v, f, ct, st, x - w / 2.0 + 0.5, h / 2.0 - y - 0.5, &u, &yy);
+            int iu = (int)u, iv = (int)yy;
+            iu = iu < 0 ? 0 : iu >= v->fw ? v->fw - 1 : iu;
+            iv = iv < 0 ? 0 : iv >= v->fh ? v->fh - 1 : iv;
+            v->view[(size_t)y * w + x] = v->faces[k] ? v->faces[k][(size_t)iv * v->fw + iu] : 0;
+        }
+}
+
 /* The hot spot under a view pixel (0 none), whether enabled or not. */
 static uint32_t raw_hot(vr *v, int x, int y, int w, int h)
 {
     if (v->object) {
         int ox, oy;
         return v->obj_frame && object_xy(v, x, y, w, h, &ox, &oy) ? object_hot(v, ox, oy) : 0;
+    }
+    if (v->cube) {
+        double u, yy;
+        int k = cube_face(v, focal(v, h), cos(rad(v->tilt)), sin(rad(v->tilt)), x - w / 2.0 + 0.5, h / 2.0 - y - 0.5,
+                          &u, &yy);
+        if (!v->hot_faces[k] || !v->fw)
+            return 0;
+        int hx = (int)(u * v->hw / v->fw), hy = (int)(yy * v->hh / v->fh);
+        return hx >= 0 && hx < v->hw && hy >= 0 && hy < v->hh ? v->hot_faces[k][(size_t)hy * v->hw + hx] : 0;
     }
     if (!v->hot)
         return 0;

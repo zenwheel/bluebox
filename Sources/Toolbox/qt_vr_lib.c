@@ -1340,7 +1340,7 @@ static void QTVRGetBackBufferSettings(ppc_cpu *c)
         return;
     }
     if (R(1))
-        wr32(R(1), v->horizontal ? fourcc("hcyl") : v->bb_geometry);
+        wr32(R(1), v->cube ? fourcc("cube") : v->horizontal ? fourcc("hcyl") : v->bb_geometry);
     if (R(2))
         wr16(R(2), v->bb_resolution);
     if (R(3))
