@@ -32,6 +32,20 @@ extension BlueBox {
             #expect(Rest.signed("KCGetData", [it, 8, out, actual]) == -25304) // and now it is gone
         }
 
+        @Test func iconServicesSwitchesAndAliases() {
+            let p = Rest.ptr(2)
+            #expect(Rest.signed("IconServicesInit", [0]) == 0)
+            Rest.call("IconServicesTerminate")
+            #expect(Rest.signed("GetDeepIconsEnabled", [p]) == 0 && rd8(p) == 1)
+            #expect(Rest.signed("SetDeepIconsEnabled", [0]) == 0)
+            #expect(Rest.signed("GetDeepIconsEnabled", [p]) == 0 && rd8(p) == 0)
+            func same(_ a: String, _ b: String) -> Bool {
+                guard let x = cfm_export_fn(a), let y = cfm_export_fn(b) else { return false }
+                return unsafeBitCast(x, to: Int.self) == unsafeBitCast(y, to: Int.self)
+            }
+            #expect(same("CloneIconRef", "AcquireIconRef") && same("DisposeIconRef", "ReleaseIconRef"))
+        }
+
         @Test func keychainStartAndStop() {
             #expect(Rest.signed("init", [0]) == 0)
             Rest.call("term")

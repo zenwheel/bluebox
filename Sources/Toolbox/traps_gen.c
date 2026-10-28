@@ -10719,6 +10719,16 @@ static void glue_GetDebugOptionInfo(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetDeepIconsEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_deepIconsEnabled = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetDeepIconsEnabled(a_deepIconsEnabled);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetDefaultInputMethod(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -14625,6 +14635,24 @@ static void glue_IconRefToRgn(cpu68k *c, uint16_t trapword)
     gaddr a_theRgn = (gaddr)cpu_pop32(c);
     int16_t r = tb_IconRefToRgn(a_theRgn, a_iconRect, a_align, a_iconServicesUsageFlags, a_theIconRef);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IconServicesInit(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_initBlockPtr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IconServicesInit(a_initBlockPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IconServicesTerminate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_IconServicesTerminate();
     cpu_push32(c, ret);
 }
 
@@ -22696,6 +22724,16 @@ static void glue_SetDebuggerNotificationProcs(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetDeepIconsEnabled(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_enableDeepIcons = (int8_t)(cpu_pop16(c) >> 8);
+    int16_t r = tb_SetDeepIconsEnabled(a_enableDeepIcons);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetDefaultInputMethod(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28733,6 +28771,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA75, (int32_t)0x11u, "IconRefToRgn", CONV_STACK, 18, 2, glue_IconRefToRgn},
     {0xAA75, (int32_t)0x12u, "GetIconSizesFromIconRef", CONV_STACK, 16, 2, glue_GetIconSizesFromIconRef},
     {0xAA75, (int32_t)0x14u, "CompositeIconRef", CONV_STACK, 12, 2, glue_CompositeIconRef},
+    {0xAA75, (int32_t)0x15u, "IconServicesInit", CONV_STACK, 4, 2, glue_IconServicesInit},
+    {0xAA75, (int32_t)0x16u, "IconServicesTerminate", CONV_STACK, 0, 0, glue_IconServicesTerminate},
     {0xAA75, (int32_t)0x18u, "FlushIconRefsByVolume", CONV_STACK, 2, 2, glue_FlushIconRefsByVolume},
     {0xAA75, (int32_t)0x1Au, "IsIconRefComposite", CONV_STACK, 12, 2, glue_IsIconRefComposite},
     {0xAA75, (int32_t)0x1Cu, "RegisterIconRefFromIconFamily", CONV_STACK, 16, 2, glue_RegisterIconRefFromIconFamily},
@@ -28750,6 +28790,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA75, (int32_t)0x29u, "FlushIconRefs", CONV_STACK, 8, 2, glue_FlushIconRefs},
     {0xAA75, (int32_t)0x2Au, "OverrideIconRefFromResource", CONV_STACK, 10, 2, glue_OverrideIconRefFromResource},
     {0xAA75, (int32_t)0x2Bu, "OverrideIconRef", CONV_STACK, 8, 2, glue_OverrideIconRef},
+    {0xAA75, (int32_t)0x2Cu, "GetDeepIconsEnabled", CONV_STACK, 4, 2, glue_GetDeepIconsEnabled},
+    {0xAA75, (int32_t)0x2Du, "SetDeepIconsEnabled", CONV_STACK, 2, 2, glue_SetDeepIconsEnabled},
     {0xAA75, (int32_t)0x30u, "SetIconFamilyData", CONV_STACK, 12, 2, glue_SetIconFamilyData},
     {0xAA75, (int32_t)0x31u, "GetIconFamilyData", CONV_STACK, 12, 2, glue_GetIconFamilyData},
     {0xAA75, (int32_t)0x32u, "IsValidIconRef", CONV_STACK, 4, 2, glue_IsValidIconRef},

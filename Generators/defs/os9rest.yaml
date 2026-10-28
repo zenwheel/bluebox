@@ -513,3 +513,37 @@
         type: Boolean*
     dispatcher: ControlStripDispatch
     selector: 0x0616
+
+# Icon Services' start-up and shut-down for 68k programs (Icons.h), and its
+# switch for deep (colour) icons; IconServicesDispatch is iconservices.yaml's.
+- function:
+    name: IconServicesInit
+    return: OSErr
+    args:
+      - name: initBlockPtr
+        type: Ptr
+    dispatcher: IconServicesDispatch
+    selector: 0x0015
+
+- function:
+    name: IconServicesTerminate
+    dispatcher: IconServicesDispatch
+    selector: 0x0016
+
+- function:
+    name: GetDeepIconsEnabled
+    return: OSErr
+    args:
+      - name: deepIconsEnabled
+        type: Boolean*
+    dispatcher: IconServicesDispatch
+    selector: 0x002C
+
+- function:
+    name: SetDeepIconsEnabled
+    return: OSErr
+    args:
+      - name: enableDeepIcons
+        type: Boolean
+    dispatcher: IconServicesDispatch
+    selector: 0x002D

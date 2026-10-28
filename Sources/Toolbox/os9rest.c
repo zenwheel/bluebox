@@ -15,8 +15,18 @@ static const os9rest_group groups[] = {
     GROUP(locale),
 };
 
+/* Names that are other exports under a second name. */
+static const struct { const char *name, *target; } aliases[] = {
+    { "CloneIconRef", "AcquireIconRef" }, { "DisposeIconRef", "ReleaseIconRef" },
+};
+
+void (*cfm_export_fn(const char *name))(ppc_cpu *);
+
 void (*os9rest_export_fn(const char *name))(ppc_cpu *)
 {
+    for (unsigned a = 0; a < sizeof aliases / sizeof aliases[0]; a++)
+        if (!strcmp(aliases[a].name, name))
+            return cfm_export_fn(aliases[a].target);
     for (unsigned g = 0; g < sizeof groups / sizeof groups[0]; g++)
         for (unsigned i = 0; i < *groups[g].count; i++)
             if (!strcmp(groups[g].exports[i].name, name))
@@ -47,4 +57,5 @@ void os9rest_reset(void)
     os9rest_debug_reset();
     os9rest_hw_reset();
     os9rest_locale_reset();
+    os9rest_icons_reset();
 }

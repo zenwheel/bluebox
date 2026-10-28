@@ -29764,6 +29764,33 @@ static void ppcglue_SBHitTrackSlider(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_IconServicesInit(ppc_cpu *c)
+{
+    gaddr a_initBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IconServicesInit(a_initBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IconServicesTerminate(ppc_cpu *c)
+{
+    tb_IconServicesTerminate();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDeepIconsEnabled(ppc_cpu *c)
+{
+    gaddr a_deepIconsEnabled = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDeepIconsEnabled(a_deepIconsEnabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDeepIconsEnabled(ppc_cpu *c)
+{
+    int8_t a_enableDeepIcons = (int8_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDeepIconsEnabled(a_enableDeepIcons);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParseAIFFHeader(ppc_cpu *c)
 {
     int16_t a_fRefNum = (int16_t)c->gpr[3];
@@ -42632,6 +42659,7 @@ const ppc_export ppc_exports[] = {
     {"GetDblTime", ppcglue_GetDblTime},
     {"GetDebugComponentInfo", ppcglue_GetDebugComponentInfo},
     {"GetDebugOptionInfo", ppcglue_GetDebugOptionInfo},
+    {"GetDeepIconsEnabled", ppcglue_GetDeepIconsEnabled},
     {"GetDefaultInputMethod", ppcglue_GetDefaultInputMethod},
     {"GetDefaultOutputVolume", ppcglue_GetDefaultOutputVolume},
     {"GetDefaultSoundOutput", ppcglue_GetDefaultSoundOutput},
@@ -43146,6 +43174,8 @@ const ppc_export ppc_exports[] = {
     {"IconMethodToRgn", ppctrap_IconMethodToRgn},
     {"IconRefToIconFamily", ppcglue_IconRefToIconFamily},
     {"IconRefToRgn", ppcglue_IconRefToRgn},
+    {"IconServicesInit", ppcglue_IconServicesInit},
+    {"IconServicesTerminate", ppcglue_IconServicesTerminate},
     {"IconSuiteToIconFamily", ppcglue_IconSuiteToIconFamily},
     {"IconSuiteToRgn", ppcglue_IconSuiteToRgn},
     {"IdentifyFolder", ppcglue_IdentifyFolder},
@@ -44961,6 +44991,7 @@ const ppc_export ppc_exports[] = {
     {"SetDateTime", ppcglue_SetDateTime},
     {"SetDebugOptionValue", ppcglue_SetDebugOptionValue},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
+    {"SetDeepIconsEnabled", ppcglue_SetDeepIconsEnabled},
     {"SetDefaultInputMethod", ppcglue_SetDefaultInputMethod},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},
     {"SetDefaultSoundOutput", ppcglue_SetDefaultSoundOutput},
