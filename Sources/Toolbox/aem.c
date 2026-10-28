@@ -1840,6 +1840,17 @@ static bool to_finder(gaddr evt)
     return rd32(p + 4) == T("sign") && rd32(p + 12) == T("MACS");
 }
 
+/* Whether a run of the Finder (signature 'MACS') takes Apple events. */
+static bool finder_listening(void)
+{
+    machine_ae_process procs[64];
+    int n = machine_ae_processes(procs, 64);
+    for (int i = 0; i < n; i++)
+        if (procs[i].signature == T("MACS") && procs[i].pid != getpid())
+            return true;
+    return false;
+}
+
 /* Open one item as the Finder would. */
 static int16_t finder_open(const char *path)
 {
@@ -1927,9 +1938,15 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
      * delete themselves; executing it deleted them twice. */
     if (send_mode & kAEDontExecute)
         return noErr;
-    if (to_finder(evt))
-        return finder_event(evt);
-    if (to_self(evt))
+    /* The Finder: a run of Apple's Finder takes its events (open, print,
+     * reveal and the rest of its suite), or Blue Box carries them out. */
+    bool finder_run = false;
+    if (to_finder(evt)) {
+        if (!finder_listening())
+            return finder_event(evt);
+        finder_run = true;
+    }
+    if (!finder_run && to_self(evt))
         return send_to_self(evt, reply, send_mode);
     gaddr h = desc_handle(evt);
     uint32_t off = find_entry(h, T("addr"), true);
@@ -1937,6 +1954,11 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
     uint32_t atype = rd32(p + 4), alen = rd32(p + 8);
     uint8_t addr[64] = { 0 };
     gget(addr, p + 12, alen > 64 ? 64 : alen);
+    if (finder_run) { /* by its signature, however it was addressed */
+        atype = T("sign");
+        alen = 4;
+        put32(addr, T("MACS"));
+    }
     int mode = send_mode & 3;
     uint8_t repq = mode != kAENoReply, inte = (uint8_t)(send_mode & 0x30);
     put_keyed(evt, true, T("repq"), T("bool"), 0, 1, &repq);
