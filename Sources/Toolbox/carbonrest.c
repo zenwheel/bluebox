@@ -51,6 +51,7 @@ static const struct {
     { rest_uc_exports, &rest_uc_export_count, rest_uc_reset },
     { rest_la_exports, &rest_la_export_count, rest_la_reset },
     { rest_fbc_exports, &rest_fbc_export_count, rest_fbc_reset },
+    { rest_fns_exports, &rest_fns_export_count, rest_fns_reset },
 };
 
 void rest_sr_reset(void); /* the Speech Recognition Manager's objects (carbonrest_sr.c) */
