@@ -9,14 +9,13 @@ import Toolbox
 @discardableResult
 func ppcExport(_ name: String, _ args: [UInt32]) -> UInt32 {
     // The first eight in r3-r10, the rest in the caller's parameter area at 24(r1) on.
-    var sp: UInt32 = 0
-    if args.count > 8 {
-        sp = tb_NewPtr(Int32(24 + 4 * args.count), false, true)
-        for (i, a) in args.enumerated() { wr32(sp + 24 + UInt32(4 * i), a) }
-    }
+    // r1 well inside its block: a callee pushes its frames below it.
+    let block = tb_NewPtr(4096, false, true), sp = block + 3072
+    defer { tb_DisposePtr(block) }
+    for (i, a) in args.enumerated() { wr32(sp + 24 + UInt32(4 * i), a) }
     withUnsafeMutableBytes(of: &g_ppc.gpr) { gpr in
         for (i, a) in args.prefix(8).enumerated() { gpr.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
-        if sp != 0 { gpr.storeBytes(of: sp, toByteOffset: 4, as: UInt32.self) }
+        gpr.storeBytes(of: sp, toByteOffset: 4, as: UInt32.self)
     }
     guard let fn = cfm_export_fn(name) else {
         Issue.record("no export \(name)")
