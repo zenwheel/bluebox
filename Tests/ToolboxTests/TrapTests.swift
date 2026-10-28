@@ -84,10 +84,10 @@ extension BlueBox {
             #expect(cpu.pointee.d.7 != 0 && tb_GetPtrSize(cpu.pointee.d.7) == 100)
         }
 
-        /// In a PowerPC program, 68k code asking Gestalt for Open Transport
-        /// is told it is missing (its client glue needs the Shared Library
-        /// Manager); the PowerPC side and native callers still see it.
-        @Test func openTransportHiddenFrom68kCode() {
+        /// 68k code asking Gestalt for Open Transport (in a PowerPC program or
+        /// not) is told it is there, and finds the Shared Library Manager its
+        /// client glue needs: the Expand Memory record with the manager's global.
+        @Test func openTransportIsThereFor68kCode() {
             gestalt_powerpc()
             let otan = fourCC("otan")
             let reason = run([
@@ -97,7 +97,9 @@ extension BlueBox {
                 0xA9F4,
             ])
             #expect(reason == "ExitToShell")
-            #expect(Int16(truncatingIfNeeded: cpu.pointee.d.7) != 0)
+            #expect(Int16(truncatingIfNeeded: cpu.pointee.d.7) == 0)
+            let em = rd32(0x2B6)
+            #expect(em != 0 && rd32(em + 0x10C) != 0 && rd32(rd32(em + 0x10C) + 0x10) != 0)
             var answer: UInt32 = 0
             #expect(tb_Gestalt(Int32(bitPattern: otan), &answer) == 0 && answer & 1 != 0)
         }

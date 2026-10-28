@@ -567,5 +567,57 @@ extension BlueBox {
             #expect(rd32(back + 16) == 8 && bytes(rd32(back + 20), 8) == "RESPpong")
             #expect(ot("OTCloseProvider", asker) == 0 && ot("OTCloseProvider", answerer) == 0)
         }
+
+        /// OTOptionManagement on an AppleTalk endpoint: a request, its options.
+        func negotiate(_ ep: UInt32, level: UInt32, name: UInt32, value: UInt32, size: Int = 4) -> (UInt32, UInt32) {
+            let n = 16 + ((size + 3) & ~3)
+            let buf = tb_NewPtr(Int32(n), false, true), out = tb_NewPtr(64, false, true)
+            wr32(buf, UInt32(16 + size)); wr32(buf + 4, level); wr32(buf + 8, name)
+            if size == 1 { wr8(buf + 16, UInt8(value)) } else { wr32(buf + 16, value) }
+            let req = tb_NewPtr(16, false, true), ret = tb_NewPtr(16, false, true)
+            wr32(req, UInt32(n)); wr32(req + 4, UInt32(n)); wr32(req + 8, buf); wr32(req + 12, 4) // T_NEGOTIATE
+            wr32(ret, 64); wr32(ret + 8, out)
+            #expect(ot("OTOptionManagement", ep, req, ret) == 0)
+            return (rd32(ret + 12), size == 1 ? UInt32(rd8(out + 16)) : rd32(out + 16))
+        }
+
+        /// The options an ATP request takes: retries and the interval between them (a request to
+        /// a socket nobody has gives up in a moment instead of Open Transport's 8 times 2 seconds).
+        @Test func atpOptions() {
+            start()
+            let asker = open("atp")
+            _ = bind(asker)
+            // Defaults.
+            #expect(negotiate(asker, level: 0xFFFF, name: 0x601, value: 8) == (0x20, 8))
+            // T_SUCCESS (0x20) for the ones ATP has; an ADSP-only option isn't there.
+            #expect(negotiate(asker, level: 0xFFFF, name: 0x603, value: 1, size: 1).0 == 0x400) // T_NOTSUPPORT
+            #expect(negotiate(asker, level: 0xFFFF, name: 0x601, value: 0).0 == 0x20)
+            #expect(negotiate(asker, level: 0xFFFF, name: 0x602, value: 60).0 == 0x20)
+            #expect(negotiate(asker, level: 0x4154_5020, name: 0x2110, value: 2).0 == 0x20) // ATP_OPT_REPLYCNT
+            let req = tb_NewPtr(40, false, true)
+            wr32(req + 0, 8); wr32(req + 4, 8); wr32(req + 8, ddp(77))
+            netbuf(req + 24, max: 16, text: "USERnobody")
+            #expect(ot("OTSndURequest", asker, req, 0) == 0)
+            let back = tb_NewPtr(28, false, true), flags = tb_NewPtr(4, false, true)
+            netbuf(back + 12, max: 64)
+            var r = UInt32(0)
+            for _ in 0..<2000 {
+                r = ot("OTRcvUReply", asker, back, flags)
+                if r != UInt32(bitPattern: -3162) { break }
+                usleep(1000)
+                appletalk_poll()
+            }
+            #expect(err(r) == -3259) // kETIMEDOUTErr, after one try of 60 ms
+            #expect(ot("OTCloseProvider", asker) == 0)
+        }
+
+        @Test func adspOptions() {
+            start()
+            let a = open("adsp")
+            #expect(negotiate(a, level: 0xFFFF, name: 0x603, value: 0, size: 1) == (0x20, 0)) // OPT_ENABLEEOM, off
+            #expect(negotiate(a, level: 0xFFFF, name: 0x603, value: 1, size: 1) == (0x20, 1))
+            #expect(negotiate(a, level: 0xFFFF, name: 0x602, value: 1).0 == 0x400) // ADSP has no interval
+            #expect(ot("OTCloseProvider", a) == 0)
+        }
     }
 }
