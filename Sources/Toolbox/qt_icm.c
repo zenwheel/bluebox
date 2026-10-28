@@ -126,7 +126,7 @@ static uint8_t *decode_one(gaddr desc, gaddr data, int32_t len, int *w, int *h, 
 }
 
 /* A compressed picture's image ($8200), drawn at dst in the current port. */
-void icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mask)
+bool icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mask)
 {
     int w, h;
     int16_t err;
@@ -134,10 +134,11 @@ void icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mas
     if (!frame) {
         LOGF(LOG_UNIMPL, "compressed picture: codec '%c%c%c%c' not decoded (%d)\n", rd8(desc + 4), rd8(desc + 5),
              rd8(desc + 6), rd8(desc + 7), err);
-        return;
+        return false;
     }
     draw(frame, w, h, src, dst, mask);
     free(frame);
+    return true;
 }
 
 int16_t tb_DecompressImage(int32_t data, int32_t desc, int32_t dst, gaddr srcRect, gaddr dstRect, int16_t mode,

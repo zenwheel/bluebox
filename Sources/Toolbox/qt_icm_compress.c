@@ -592,7 +592,7 @@ int16_t tb_FCompressPicture(int32_t srcPicture, int32_t dstPicture, int16_t colo
     uint32_t dsize = rd32(rd32(desc));
 
     /* The picture: header, $8200, end. */
-    uint32_t body = 66 + dsize + (uint32_t)len;
+    uint32_t body = 68 + dsize + (uint32_t)len;
     uint32_t total = 10 + 4 + 2 + 24 + 2 + 4 + body + (body & 1) + 2;
     tb_SetHandleSize(dst, (int32_t)total);
     if ((uint32_t)tb_GetHandleSize(dst) < total) {
@@ -625,17 +625,18 @@ int16_t tb_FCompressPicture(int32_t srcPicture, int32_t dstPicture, int16_t colo
     be16(q, 0x8200);
     be32(q + 2, body);
     uint8_t *b = q + 6;
-    be32(b, 0x10000); /* the matrix: the image at the frame's corner */
-    be32(b + 16, 0x10000);
-    be32(b + 24, (uint32_t)(int32_t)frame.left << 16);
-    be32(b + 28, (uint32_t)(int32_t)frame.top << 16);
-    be32(b + 32, 0x40000000);
+    /* version 0, then the matrix: the image at the frame's corner */
+    be32(b + 2, 0x10000);
+    be32(b + 18, 0x10000);
+    be32(b + 26, (uint32_t)(int32_t)frame.left << 16);
+    be32(b + 30, (uint32_t)(int32_t)frame.top << 16);
+    be32(b + 34, 0x40000000);
     /* matteSize, matteRect and mode (srcCopy) are 0 */
-    be16(b + 54, (uint16_t)h); /* srcRect */
-    be16(b + 56, (uint16_t)w);
+    be16(b + 56, (uint16_t)h); /* srcRect */
+    be16(b + 58, (uint16_t)w);
     /* accuracy and maskSize are 0 */
-    gget(b + 66, rd32(desc), dsize);
-    memcpy(b + 66 + dsize, data, len);
+    gget(b + 68, rd32(desc), dsize);
+    memcpy(b + 68 + dsize, data, len);
     be16(b + body + (body & 1), 0x00FF);
     gput(rd32(dst), p, total);
     free(p);
