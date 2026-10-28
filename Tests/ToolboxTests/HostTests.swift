@@ -302,6 +302,26 @@ extension BlueBox {
             #expect(rd32(d + 178) == h)                           // hPrintUsr
             let itemProc = rd32(d + 174)
             #expect(itemProc != 0)
+            // The filter procedure (pFltrProc) is the standard one, which a program
+            // that replaces it calls on: it answers false for an event it ignores.
+            let filter = rd32(d + 170)
+            #expect(filter != 0)
+            let evt = tb_NewPtr(16, false, true), hit = tb_NewPtr(2, false, true)
+            wr16(evt, 0)                                          // nullEvent
+            cpu_push16(g_cpu, 0xFFFF)                             // the Boolean result
+            cpu_push32(g_cpu, d)
+            cpu_push32(g_cpu, evt)
+            cpu_push32(g_cpu, hit)
+            guest_call(filter)
+            #expect(cpu_pop16(g_cpu) >> 8 == 0)
+            wr16(evt, 3)                                          // keyDown
+            wr32(evt + 2, 27)                                     // Escape: no cancel button is set
+            cpu_push16(g_cpu, 0xFFFF)
+            cpu_push32(g_cpu, d)
+            cpu_push32(g_cpu, evt)
+            cpu_push32(g_cpu, hit)
+            guest_call(filter)
+            #expect(cpu_pop16(g_cpu) >> 8 == 0)
             cpu_push32(g_cpu, d)                                  // the program's item procedure calls ours
             cpu_push16(g_cpu, 2)                                  // Cancel
             guest_call(itemProc)

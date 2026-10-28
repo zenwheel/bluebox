@@ -211,7 +211,15 @@ static gaddr new_print_dialog(gaddr h, int height, int width, const ditem *items
     wr8(r + 8, 0); /* no title */
     tb_NewDialog(d, r, r + 8, 0, 1 /* dBoxProc */, 0xFFFFFFFFu, 0, 0, ditl);
     tb_DisposePtr(r);
-    wr32(d + pFltrProc_off, 0);
+    /* The Printing Manager's filter is the standard one; programs that
+     * replace it keep this one to call (FileMaker Pro Runtime's calls it
+     * for every event, without looking whether it is there). */
+    gaddr fp = tb_NewPtr(4, false, true);
+    if (fp) {
+        tb_GetStdFilterProc(fp);
+        wr32(d + pFltrProc_off, rd32(fp));
+        tb_DisposePtr(fp);
+    }
     wr32(d + pItemProc_off, item_stub);
     wr32(d + hPrintUsr_off, h);
     wr8(d + fDoIt_off, 0);
