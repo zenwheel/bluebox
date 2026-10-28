@@ -277,3 +277,461 @@
         type: Ptr
     dispatcher: TranslationDispatch
     selector: 0x01
+
+# SpeechRecognition.h (Universal Interfaces 3.4): the Speech Recognition Manager, $AA56.
+# The selector is the whole of D0's word: the parameter size in words and the routine.
+
+- dispatcher:
+    name: SpeechRecognitionDispatch
+    trap: 0xAA56
+    selector-location: D0W
+
+- function:
+    name: SROpenRecognitionSystem
+    return: OSErr
+    args:
+      - name: system
+        type: Ptr
+      - name: systemID
+        type: OSType
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0400
+
+- function:
+    name: SRCloseRecognitionSystem
+    return: OSErr
+    args:
+      - name: system
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0201
+
+- function:
+    name: SRSetProperty
+    return: OSErr
+    args:
+      - name: srObject
+        type: LONGINT
+      - name: selector
+        type: OSType
+      - name: property
+        type: Ptr
+      - name: propertyLen
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0802
+
+- function:
+    name: SRGetProperty
+    return: OSErr
+    args:
+      - name: srObject
+        type: LONGINT
+      - name: selector
+        type: OSType
+      - name: property
+        type: Ptr
+      - name: propertyLen
+        type: Ptr
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0803
+
+- function:
+    name: SRReleaseObject
+    return: OSErr
+    args:
+      - name: srObject
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0204
+
+- function:
+    name: SRGetReference
+    return: OSErr
+    args:
+      - name: srObject
+        type: LONGINT
+      - name: newObjectRef
+        type: Ptr
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0425
+
+- function:
+    name: SRNewRecognizer
+    return: OSErr
+    args:
+      - name: system
+        type: LONGINT
+      - name: recognizer
+        type: Ptr
+      - name: sourceID
+        type: OSType
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x060A
+
+- function:
+    name: SRStartListening
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x020C
+
+- function:
+    name: SRStopListening
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x020D
+
+- function:
+    name: SRSetLanguageModel
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+      - name: languageModel
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x040E
+
+- function:
+    name: SRGetLanguageModel
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+      - name: languageModel
+        type: Ptr
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x040F
+
+- function:
+    name: SRContinueRecognition
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0210
+
+- function:
+    name: SRCancelRecognition
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0211
+
+- function:
+    name: SRIdle
+    return: OSErr
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0028
+
+- function:
+    name: SRNewLanguageModel
+    return: OSErr
+    args:
+      - name: system
+        type: LONGINT
+      - name: model
+        type: Ptr
+      - name: name
+        type: Ptr
+      - name: nameLength
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0812
+
+- function:
+    name: SRNewPath
+    return: OSErr
+    args:
+      - name: system
+        type: LONGINT
+      - name: path
+        type: Ptr
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0413
+
+- function:
+    name: SRNewPhrase
+    return: OSErr
+    args:
+      - name: system
+        type: LONGINT
+      - name: phrase
+        type: Ptr
+      - name: text
+        type: Ptr
+      - name: textLength
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0814
+
+- function:
+    name: SRNewWord
+    return: OSErr
+    args:
+      - name: system
+        type: LONGINT
+      - name: word
+        type: Ptr
+      - name: text
+        type: Ptr
+      - name: textLength
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0815
+
+- function:
+    name: SRPutLanguageObjectIntoHandle
+    return: OSErr
+    args:
+      - name: languageObject
+        type: LONGINT
+      - name: lobjHandle
+        type: Handle
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0416
+
+- function:
+    name: SRPutLanguageObjectIntoDataFile
+    return: OSErr
+    args:
+      - name: languageObject
+        type: LONGINT
+      - name: fRefNum
+        type: INTEGER
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0328
+
+- function:
+    name: SRNewLanguageObjectFromHandle
+    return: OSErr
+    args:
+      - name: system
+        type: LONGINT
+      - name: languageObject
+        type: Ptr
+      - name: lObjHandle
+        type: Handle
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0417
+
+- function:
+    name: SRNewLanguageObjectFromDataFile
+    return: OSErr
+    args:
+      - name: system
+        type: LONGINT
+      - name: languageObject
+        type: Ptr
+      - name: fRefNum
+        type: INTEGER
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0427
+
+- function:
+    name: SREmptyLanguageObject
+    return: OSErr
+    args:
+      - name: languageObject
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0218
+
+- function:
+    name: SRChangeLanguageObject
+    return: OSErr
+    args:
+      - name: languageObject
+        type: LONGINT
+      - name: text
+        type: Ptr
+      - name: textLength
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0619
+
+- function:
+    name: SRAddLanguageObject
+    return: OSErr
+    args:
+      - name: base
+        type: LONGINT
+      - name: addon
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x041A
+
+- function:
+    name: SRAddText
+    return: OSErr
+    args:
+      - name: base
+        type: LONGINT
+      - name: text
+        type: Ptr
+      - name: textLength
+        type: LONGINT
+      - name: refCon
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x081B
+
+- function:
+    name: SRRemoveLanguageObject
+    return: OSErr
+    args:
+      - name: base
+        type: LONGINT
+      - name: toRemove
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x041C
+
+- function:
+    name: SRCountItems
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: count
+        type: Ptr
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0405
+
+- function:
+    name: SRGetIndexedItem
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: item
+        type: Ptr
+      - name: index
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0606
+
+- function:
+    name: SRSetIndexedItem
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: item
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0607
+
+- function:
+    name: SRRemoveIndexedItem
+    return: OSErr
+    args:
+      - name: container
+        type: LONGINT
+      - name: index
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0408
+
+- function:
+    name: SRDrawText
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+      - name: dispText
+        type: Ptr
+      - name: dispLength
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0621
+
+- function:
+    name: SRDrawRecognizedText
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+      - name: dispText
+        type: Ptr
+      - name: dispLength
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0622
+
+- function:
+    name: SRSpeakText
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+      - name: speakText
+        type: Ptr
+      - name: speakLength
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0620
+
+- function:
+    name: SRSpeakAndDrawText
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+      - name: text
+        type: Ptr
+      - name: textLength
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x061F
+
+- function:
+    name: SRStopSpeech
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0223
+
+- function:
+    name: SRSpeechBusy
+    return: Boolean
+    args:
+      - name: recognizer
+        type: LONGINT
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x0224
+
+- function:
+    name: SRProcessBegin
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+      - name: failed
+        type: Boolean
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x031D
+
+- function:
+    name: SRProcessEnd
+    return: OSErr
+    args:
+      - name: recognizer
+        type: LONGINT
+      - name: failed
+        type: Boolean
+    dispatcher: SpeechRecognitionDispatch
+    selector: 0x031E

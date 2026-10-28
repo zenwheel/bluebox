@@ -704,6 +704,7 @@ const char *const tb_trap_names[1024] = {
     [0x252] = "HighLevelFSDispatch",
     [0x253] = "DictionaryDispatch",
     [0x254] = "TSMDispatch",
+    [0x256] = "SpeechRecognitionDispatch",
     [0x259] = "MixedModeDispatch",
     [0x25A] = "CodeFragmentDispatch",
     [0x260] = "DeleteMCEntries",
@@ -21019,6 +21020,446 @@ static void glue_SPBVersion(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SRAddLanguageObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_addon = (int32_t)cpu_pop32(c);
+    int32_t a_base = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRAddLanguageObject(a_base, a_addon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRAddText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int32_t a_base = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRAddText(a_base, a_text, a_textLength, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRCancelRecognition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRCancelRecognition(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRChangeLanguageObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int32_t a_languageObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRChangeLanguageObject(a_languageObject, a_text, a_textLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRCloseRecognitionSystem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRCloseRecognitionSystem(a_system);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRContinueRecognition(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRContinueRecognition(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRCountItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_count = (gaddr)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRCountItems(a_container, a_count);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRDrawRecognizedText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dispLength = (int32_t)cpu_pop32(c);
+    gaddr a_dispText = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRDrawRecognizedText(a_recognizer, a_dispText, a_dispLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRDrawText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_dispLength = (int32_t)cpu_pop32(c);
+    gaddr a_dispText = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRDrawText(a_recognizer, a_dispText, a_dispLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SREmptyLanguageObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_languageObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SREmptyLanguageObject(a_languageObject);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRGetIndexedItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    gaddr a_item = (gaddr)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRGetIndexedItem(a_container, a_item, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRGetLanguageModel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_languageModel = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRGetLanguageModel(a_recognizer, a_languageModel);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRGetProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_propertyLen = (gaddr)cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int32_t a_srObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRGetProperty(a_srObject, a_selector, a_property, a_propertyLen);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRGetReference(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_newObjectRef = (gaddr)cpu_pop32(c);
+    int32_t a_srObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRGetReference(a_srObject, a_newObjectRef);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRIdle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t r = tb_SRIdle();
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewLanguageModel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_nameLength = (int32_t)cpu_pop32(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    gaddr a_model = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewLanguageModel(a_system, a_model, a_name, a_nameLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewLanguageObjectFromDataFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fRefNum = (int16_t)cpu_pop16(c);
+    gaddr a_languageObject = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewLanguageObjectFromDataFile(a_system, a_languageObject, a_fRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewLanguageObjectFromHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_lObjHandle = (gaddr)cpu_pop32(c);
+    gaddr a_languageObject = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewLanguageObjectFromHandle(a_system, a_languageObject, a_lObjHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewPath(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_path = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewPath(a_system, a_path);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewPhrase(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_phrase = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewPhrase(a_system, a_phrase, a_text, a_textLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewRecognizer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_sourceID = (int32_t)cpu_pop32(c);
+    gaddr a_recognizer = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewRecognizer(a_system, a_recognizer, a_sourceID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRNewWord(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    gaddr a_word = (gaddr)cpu_pop32(c);
+    int32_t a_system = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRNewWord(a_system, a_word, a_text, a_textLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SROpenRecognitionSystem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_systemID = (int32_t)cpu_pop32(c);
+    gaddr a_system = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SROpenRecognitionSystem(a_system, a_systemID);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRProcessBegin(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_failed = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRProcessBegin(a_recognizer, a_failed);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRProcessEnd(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t a_failed = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRProcessEnd(a_recognizer, a_failed);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRPutLanguageObjectIntoDataFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_fRefNum = (int16_t)cpu_pop16(c);
+    int32_t a_languageObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRPutLanguageObjectIntoDataFile(a_languageObject, a_fRefNum);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRPutLanguageObjectIntoHandle(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_lobjHandle = (gaddr)cpu_pop32(c);
+    int32_t a_languageObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRPutLanguageObjectIntoHandle(a_languageObject, a_lobjHandle);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRReleaseObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_srObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRReleaseObject(a_srObject);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRRemoveIndexedItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRRemoveIndexedItem(a_container, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRRemoveLanguageObject(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_toRemove = (int32_t)cpu_pop32(c);
+    int32_t a_base = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRRemoveLanguageObject(a_base, a_toRemove);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSetIndexedItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_index = (int32_t)cpu_pop32(c);
+    int32_t a_item = (int32_t)cpu_pop32(c);
+    int32_t a_container = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSetIndexedItem(a_container, a_item, a_index);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSetLanguageModel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_languageModel = (int32_t)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSetLanguageModel(a_recognizer, a_languageModel);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSetProperty(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_propertyLen = (int32_t)cpu_pop32(c);
+    gaddr a_property = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int32_t a_srObject = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSetProperty(a_srObject, a_selector, a_property, a_propertyLen);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSpeakAndDrawText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_textLength = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSpeakAndDrawText(a_recognizer, a_text, a_textLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSpeakText(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_speakLength = (int32_t)cpu_pop32(c);
+    gaddr a_speakText = (gaddr)cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRSpeakText(a_recognizer, a_speakText, a_speakLength);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRSpeechBusy(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int8_t r = tb_SRSpeechBusy(a_recognizer);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_SRStartListening(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRStartListening(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRStopListening(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRStopListening(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SRStopSpeech(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recognizer = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SRStopSpeech(a_recognizer);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SameProcess(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -29773,6 +30214,45 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0xD480014u, "SetupSndHeader", CONV_STACK, 26, 2, glue_SetupSndHeader},
     {0xA800, (int32_t)0xE340014u, "SPBGetRecordingStatus", CONV_STACK, 28, 2, glue_SPBGetRecordingStatus},
     {0xA800, (int32_t)0x10780018u, "SoundConverterFillBuffer", CONV_STACK, 32, 2, glue_SoundConverterFillBuffer},
+    {0xAA56, (int32_t)0x28u, "SRIdle", CONV_STACK, 0, 2, glue_SRIdle},
+    {0xAA56, (int32_t)0x201u, "SRCloseRecognitionSystem", CONV_STACK, 4, 2, glue_SRCloseRecognitionSystem},
+    {0xAA56, (int32_t)0x204u, "SRReleaseObject", CONV_STACK, 4, 2, glue_SRReleaseObject},
+    {0xAA56, (int32_t)0x20Cu, "SRStartListening", CONV_STACK, 4, 2, glue_SRStartListening},
+    {0xAA56, (int32_t)0x20Du, "SRStopListening", CONV_STACK, 4, 2, glue_SRStopListening},
+    {0xAA56, (int32_t)0x210u, "SRContinueRecognition", CONV_STACK, 4, 2, glue_SRContinueRecognition},
+    {0xAA56, (int32_t)0x211u, "SRCancelRecognition", CONV_STACK, 4, 2, glue_SRCancelRecognition},
+    {0xAA56, (int32_t)0x218u, "SREmptyLanguageObject", CONV_STACK, 4, 2, glue_SREmptyLanguageObject},
+    {0xAA56, (int32_t)0x223u, "SRStopSpeech", CONV_STACK, 4, 2, glue_SRStopSpeech},
+    {0xAA56, (int32_t)0x224u, "SRSpeechBusy", CONV_STACK, 4, 2, glue_SRSpeechBusy},
+    {0xAA56, (int32_t)0x31Du, "SRProcessBegin", CONV_STACK, 6, 2, glue_SRProcessBegin},
+    {0xAA56, (int32_t)0x31Eu, "SRProcessEnd", CONV_STACK, 6, 2, glue_SRProcessEnd},
+    {0xAA56, (int32_t)0x328u, "SRPutLanguageObjectIntoDataFile", CONV_STACK, 6, 2, glue_SRPutLanguageObjectIntoDataFile},
+    {0xAA56, (int32_t)0x400u, "SROpenRecognitionSystem", CONV_STACK, 8, 2, glue_SROpenRecognitionSystem},
+    {0xAA56, (int32_t)0x405u, "SRCountItems", CONV_STACK, 8, 2, glue_SRCountItems},
+    {0xAA56, (int32_t)0x408u, "SRRemoveIndexedItem", CONV_STACK, 8, 2, glue_SRRemoveIndexedItem},
+    {0xAA56, (int32_t)0x40Eu, "SRSetLanguageModel", CONV_STACK, 8, 2, glue_SRSetLanguageModel},
+    {0xAA56, (int32_t)0x40Fu, "SRGetLanguageModel", CONV_STACK, 8, 2, glue_SRGetLanguageModel},
+    {0xAA56, (int32_t)0x413u, "SRNewPath", CONV_STACK, 8, 2, glue_SRNewPath},
+    {0xAA56, (int32_t)0x416u, "SRPutLanguageObjectIntoHandle", CONV_STACK, 8, 2, glue_SRPutLanguageObjectIntoHandle},
+    {0xAA56, (int32_t)0x417u, "SRNewLanguageObjectFromHandle", CONV_STACK, 12, 2, glue_SRNewLanguageObjectFromHandle},
+    {0xAA56, (int32_t)0x41Au, "SRAddLanguageObject", CONV_STACK, 8, 2, glue_SRAddLanguageObject},
+    {0xAA56, (int32_t)0x41Cu, "SRRemoveLanguageObject", CONV_STACK, 8, 2, glue_SRRemoveLanguageObject},
+    {0xAA56, (int32_t)0x425u, "SRGetReference", CONV_STACK, 8, 2, glue_SRGetReference},
+    {0xAA56, (int32_t)0x427u, "SRNewLanguageObjectFromDataFile", CONV_STACK, 10, 2, glue_SRNewLanguageObjectFromDataFile},
+    {0xAA56, (int32_t)0x606u, "SRGetIndexedItem", CONV_STACK, 12, 2, glue_SRGetIndexedItem},
+    {0xAA56, (int32_t)0x607u, "SRSetIndexedItem", CONV_STACK, 12, 2, glue_SRSetIndexedItem},
+    {0xAA56, (int32_t)0x60Au, "SRNewRecognizer", CONV_STACK, 12, 2, glue_SRNewRecognizer},
+    {0xAA56, (int32_t)0x619u, "SRChangeLanguageObject", CONV_STACK, 12, 2, glue_SRChangeLanguageObject},
+    {0xAA56, (int32_t)0x61Fu, "SRSpeakAndDrawText", CONV_STACK, 12, 2, glue_SRSpeakAndDrawText},
+    {0xAA56, (int32_t)0x620u, "SRSpeakText", CONV_STACK, 12, 2, glue_SRSpeakText},
+    {0xAA56, (int32_t)0x621u, "SRDrawText", CONV_STACK, 12, 2, glue_SRDrawText},
+    {0xAA56, (int32_t)0x622u, "SRDrawRecognizedText", CONV_STACK, 12, 2, glue_SRDrawRecognizedText},
+    {0xAA56, (int32_t)0x802u, "SRSetProperty", CONV_STACK, 16, 2, glue_SRSetProperty},
+    {0xAA56, (int32_t)0x803u, "SRGetProperty", CONV_STACK, 16, 2, glue_SRGetProperty},
+    {0xAA56, (int32_t)0x812u, "SRNewLanguageModel", CONV_STACK, 16, 2, glue_SRNewLanguageModel},
+    {0xAA56, (int32_t)0x814u, "SRNewPhrase", CONV_STACK, 16, 2, glue_SRNewPhrase},
+    {0xAA56, (int32_t)0x815u, "SRNewWord", CONV_STACK, 16, 2, glue_SRNewWord},
+    {0xAA56, (int32_t)0x81Bu, "SRAddText", CONV_STACK, 16, 2, glue_SRAddText},
     {0xA83D, (int32_t)0x0u, "TEStylePaste", CONV_STACK, 4, 0, glue_TEStylePaste},
     {0xA83D, (int32_t)0x1u, "TESetStyle", CONV_STACK, 12, 0, glue_TESetStyle},
     {0xA83D, (int32_t)0x2u, "TEReplaceStyle", CONV_STACK, 16, 0, glue_TEReplaceStyle},
@@ -29907,6 +30387,7 @@ const dispatcher_info dispatchers[] = {
     {0xA8B5, "ScriptUtil", "StackL"},
     {0xA895, "ShutDown", "StackW"},
     {0xA800, "SoundDispatch", "D0<0xFFFFFF>"},
+    {0xAA56, "SpeechRecognitionDispatch", "D0W"},
     {0xA83D, "TEDispatch", "StackW"},
     {0xAA54, "TSMDispatch", "D0W"},
     {0xABF2, "ThreadDispatch", "D0W"},

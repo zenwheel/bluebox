@@ -22780,6 +22780,329 @@ static void ppcglue_UpdateTranslationProgress(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SROpenRecognitionSystem(ppc_cpu *c)
+{
+    gaddr a_system = (gaddr)c->gpr[3];
+    int32_t a_systemID = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SROpenRecognitionSystem(a_system, a_systemID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRCloseRecognitionSystem(ppc_cpu *c)
+{
+    int32_t a_system = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRCloseRecognitionSystem(a_system);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRSetProperty(ppc_cpu *c)
+{
+    int32_t a_srObject = (int32_t)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_property = (gaddr)c->gpr[5];
+    int32_t a_propertyLen = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRSetProperty(a_srObject, a_selector, a_property, a_propertyLen);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRGetProperty(ppc_cpu *c)
+{
+    int32_t a_srObject = (int32_t)c->gpr[3];
+    int32_t a_selector = (int32_t)c->gpr[4];
+    gaddr a_property = (gaddr)c->gpr[5];
+    gaddr a_propertyLen = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRGetProperty(a_srObject, a_selector, a_property, a_propertyLen);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRReleaseObject(ppc_cpu *c)
+{
+    int32_t a_srObject = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRReleaseObject(a_srObject);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRGetReference(ppc_cpu *c)
+{
+    int32_t a_srObject = (int32_t)c->gpr[3];
+    gaddr a_newObjectRef = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRGetReference(a_srObject, a_newObjectRef);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRNewRecognizer(ppc_cpu *c)
+{
+    int32_t a_system = (int32_t)c->gpr[3];
+    gaddr a_recognizer = (gaddr)c->gpr[4];
+    int32_t a_sourceID = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRNewRecognizer(a_system, a_recognizer, a_sourceID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRStartListening(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRStartListening(a_recognizer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRStopListening(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRStopListening(a_recognizer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRSetLanguageModel(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    int32_t a_languageModel = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRSetLanguageModel(a_recognizer, a_languageModel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRGetLanguageModel(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    gaddr a_languageModel = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRGetLanguageModel(a_recognizer, a_languageModel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRContinueRecognition(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRContinueRecognition(a_recognizer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRCancelRecognition(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRCancelRecognition(a_recognizer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRIdle(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRIdle();
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRNewLanguageModel(ppc_cpu *c)
+{
+    int32_t a_system = (int32_t)c->gpr[3];
+    gaddr a_model = (gaddr)c->gpr[4];
+    gaddr a_name = (gaddr)c->gpr[5];
+    int32_t a_nameLength = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRNewLanguageModel(a_system, a_model, a_name, a_nameLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRNewPath(ppc_cpu *c)
+{
+    int32_t a_system = (int32_t)c->gpr[3];
+    gaddr a_path = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRNewPath(a_system, a_path);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRNewPhrase(ppc_cpu *c)
+{
+    int32_t a_system = (int32_t)c->gpr[3];
+    gaddr a_phrase = (gaddr)c->gpr[4];
+    gaddr a_text = (gaddr)c->gpr[5];
+    int32_t a_textLength = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRNewPhrase(a_system, a_phrase, a_text, a_textLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRNewWord(ppc_cpu *c)
+{
+    int32_t a_system = (int32_t)c->gpr[3];
+    gaddr a_word = (gaddr)c->gpr[4];
+    gaddr a_text = (gaddr)c->gpr[5];
+    int32_t a_textLength = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRNewWord(a_system, a_word, a_text, a_textLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRPutLanguageObjectIntoHandle(ppc_cpu *c)
+{
+    int32_t a_languageObject = (int32_t)c->gpr[3];
+    gaddr a_lobjHandle = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRPutLanguageObjectIntoHandle(a_languageObject, a_lobjHandle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRPutLanguageObjectIntoDataFile(ppc_cpu *c)
+{
+    int32_t a_languageObject = (int32_t)c->gpr[3];
+    int16_t a_fRefNum = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRPutLanguageObjectIntoDataFile(a_languageObject, a_fRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRNewLanguageObjectFromHandle(ppc_cpu *c)
+{
+    int32_t a_system = (int32_t)c->gpr[3];
+    gaddr a_languageObject = (gaddr)c->gpr[4];
+    gaddr a_lObjHandle = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRNewLanguageObjectFromHandle(a_system, a_languageObject, a_lObjHandle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRNewLanguageObjectFromDataFile(ppc_cpu *c)
+{
+    int32_t a_system = (int32_t)c->gpr[3];
+    gaddr a_languageObject = (gaddr)c->gpr[4];
+    int16_t a_fRefNum = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRNewLanguageObjectFromDataFile(a_system, a_languageObject, a_fRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SREmptyLanguageObject(ppc_cpu *c)
+{
+    int32_t a_languageObject = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SREmptyLanguageObject(a_languageObject);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRChangeLanguageObject(ppc_cpu *c)
+{
+    int32_t a_languageObject = (int32_t)c->gpr[3];
+    gaddr a_text = (gaddr)c->gpr[4];
+    int32_t a_textLength = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRChangeLanguageObject(a_languageObject, a_text, a_textLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRAddLanguageObject(ppc_cpu *c)
+{
+    int32_t a_base = (int32_t)c->gpr[3];
+    int32_t a_addon = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRAddLanguageObject(a_base, a_addon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRAddText(ppc_cpu *c)
+{
+    int32_t a_base = (int32_t)c->gpr[3];
+    gaddr a_text = (gaddr)c->gpr[4];
+    int32_t a_textLength = (int32_t)c->gpr[5];
+    int32_t a_refCon = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRAddText(a_base, a_text, a_textLength, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRRemoveLanguageObject(ppc_cpu *c)
+{
+    int32_t a_base = (int32_t)c->gpr[3];
+    int32_t a_toRemove = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRRemoveLanguageObject(a_base, a_toRemove);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRCountItems(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    gaddr a_count = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRCountItems(a_container, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRGetIndexedItem(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    gaddr a_item = (gaddr)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRGetIndexedItem(a_container, a_item, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRSetIndexedItem(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_item = (int32_t)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRSetIndexedItem(a_container, a_item, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRRemoveIndexedItem(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_index = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRRemoveIndexedItem(a_container, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRDrawText(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    gaddr a_dispText = (gaddr)c->gpr[4];
+    int32_t a_dispLength = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRDrawText(a_recognizer, a_dispText, a_dispLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRDrawRecognizedText(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    gaddr a_dispText = (gaddr)c->gpr[4];
+    int32_t a_dispLength = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRDrawRecognizedText(a_recognizer, a_dispText, a_dispLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRSpeakText(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    gaddr a_speakText = (gaddr)c->gpr[4];
+    int32_t a_speakLength = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRSpeakText(a_recognizer, a_speakText, a_speakLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRSpeakAndDrawText(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    gaddr a_text = (gaddr)c->gpr[4];
+    int32_t a_textLength = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRSpeakAndDrawText(a_recognizer, a_text, a_textLength);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRStopSpeech(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRStopSpeech(a_recognizer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRSpeechBusy(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_SRSpeechBusy(a_recognizer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRProcessBegin(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    int8_t a_failed = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRProcessBegin(a_recognizer, a_failed);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SRProcessEnd(ppc_cpu *c)
+{
+    int32_t a_recognizer = (int32_t)c->gpr[3];
+    int8_t a_failed = (int8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SRProcessEnd(a_recognizer, a_failed);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -44598,6 +44921,45 @@ const ppc_export ppc_exports[] = {
     {"SPrimaryInit", ppcglue_SPrimaryInit},
     {"SPtrToSlot", ppcglue_SPtrToSlot},
     {"SPutPRAMRec", ppcglue_SPutPRAMRec},
+    {"SRAddLanguageObject", ppcglue_SRAddLanguageObject},
+    {"SRAddText", ppcglue_SRAddText},
+    {"SRCancelRecognition", ppcglue_SRCancelRecognition},
+    {"SRChangeLanguageObject", ppcglue_SRChangeLanguageObject},
+    {"SRCloseRecognitionSystem", ppcglue_SRCloseRecognitionSystem},
+    {"SRContinueRecognition", ppcglue_SRContinueRecognition},
+    {"SRCountItems", ppcglue_SRCountItems},
+    {"SRDrawRecognizedText", ppcglue_SRDrawRecognizedText},
+    {"SRDrawText", ppcglue_SRDrawText},
+    {"SREmptyLanguageObject", ppcglue_SREmptyLanguageObject},
+    {"SRGetIndexedItem", ppcglue_SRGetIndexedItem},
+    {"SRGetLanguageModel", ppcglue_SRGetLanguageModel},
+    {"SRGetProperty", ppcglue_SRGetProperty},
+    {"SRGetReference", ppcglue_SRGetReference},
+    {"SRIdle", ppcglue_SRIdle},
+    {"SRNewLanguageModel", ppcglue_SRNewLanguageModel},
+    {"SRNewLanguageObjectFromDataFile", ppcglue_SRNewLanguageObjectFromDataFile},
+    {"SRNewLanguageObjectFromHandle", ppcglue_SRNewLanguageObjectFromHandle},
+    {"SRNewPath", ppcglue_SRNewPath},
+    {"SRNewPhrase", ppcglue_SRNewPhrase},
+    {"SRNewRecognizer", ppcglue_SRNewRecognizer},
+    {"SRNewWord", ppcglue_SRNewWord},
+    {"SROpenRecognitionSystem", ppcglue_SROpenRecognitionSystem},
+    {"SRProcessBegin", ppcglue_SRProcessBegin},
+    {"SRProcessEnd", ppcglue_SRProcessEnd},
+    {"SRPutLanguageObjectIntoDataFile", ppcglue_SRPutLanguageObjectIntoDataFile},
+    {"SRPutLanguageObjectIntoHandle", ppcglue_SRPutLanguageObjectIntoHandle},
+    {"SRReleaseObject", ppcglue_SRReleaseObject},
+    {"SRRemoveIndexedItem", ppcglue_SRRemoveIndexedItem},
+    {"SRRemoveLanguageObject", ppcglue_SRRemoveLanguageObject},
+    {"SRSetIndexedItem", ppcglue_SRSetIndexedItem},
+    {"SRSetLanguageModel", ppcglue_SRSetLanguageModel},
+    {"SRSetProperty", ppcglue_SRSetProperty},
+    {"SRSpeakAndDrawText", ppcglue_SRSpeakAndDrawText},
+    {"SRSpeakText", ppcglue_SRSpeakText},
+    {"SRSpeechBusy", ppcglue_SRSpeechBusy},
+    {"SRStartListening", ppcglue_SRStartListening},
+    {"SRStopListening", ppcglue_SRStopListening},
+    {"SRStopSpeech", ppcglue_SRStopSpeech},
     {"SReadFHeader", ppcglue_SReadFHeader},
     {"SReadInfo", ppcglue_SReadInfo},
     {"SReadPBSize", ppcglue_SReadPBSize},

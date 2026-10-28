@@ -53,6 +53,8 @@ static const struct {
     { rest_fbc_exports, &rest_fbc_export_count, rest_fbc_reset },
 };
 
+void rest_sr_reset(void); /* the Speech Recognition Manager's objects (carbonrest_sr.c) */
+
 void (*carbonrest_export_fn(const char *name))(ppc_cpu *)
 {
     for (unsigned t = 0; t < sizeof areas / sizeof *areas; t++)
@@ -64,6 +66,7 @@ void (*carbonrest_export_fn(const char *name))(ppc_cpu *)
 
 void carbonrest_reset(void)
 {
+    rest_sr_reset();
     for (unsigned t = 0; t < sizeof areas / sizeof *areas; t++)
         if (areas[t].reset)
             areas[t].reset();
