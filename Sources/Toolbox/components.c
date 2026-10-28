@@ -714,6 +714,14 @@ static void ic_store(const uint8_t *key, const uint8_t *data, int32_t len)
     ic_seed++;
 }
 
+/* The preferences the host gave at the start: what ICGetDefaultPref gives. */
+static struct ic_default {
+    uint8_t key[256];
+    uint8_t *data;
+    int32_t len;
+} ic_defaults[IC_MAX_PREFS];
+static int ic_ndefault;
+
 static void ic_key(gaddr key, uint8_t out[256])
 {
     out[0] = key ? rd8(key) : 0;
@@ -728,6 +736,257 @@ void machine_set_internet_pref(const char *key, const uint8_t *data, int32_t len
     k[0] = (uint8_t)n;
     memcpy(k + 1, key, n);
     ic_store(k, data, len);
+    int i = 0;
+    while (i < ic_ndefault && !(ic_defaults[i].key[0] == k[0] && !memcmp(ic_defaults[i].key + 1, k + 1, n)))
+        i++;
+    if (i == ic_ndefault && ic_ndefault < IC_MAX_PREFS)
+        ic_ndefault++;
+    if (i < ic_ndefault) {
+        free(ic_defaults[i].data);
+        memcpy(ic_defaults[i].key, k, n + 1);
+        ic_defaults[i].data = malloc(len > 0 ? (size_t)len : 1);
+        if (len > 0)
+            memcpy(ic_defaults[i].data, data, (size_t)len);
+        ic_defaults[i].len = len;
+    }
+}
+
+/* ICGetDefaultPref(key, prefH): the default's data into the handle. */
+static int16_t ic_get_default_pref(gaddr key, gaddr h)
+{
+    uint8_t k[256];
+    ic_key(key, k);
+    if (!h)
+        return paramErr;
+    for (int i = 0; i < ic_ndefault; i++) {
+        if (ic_defaults[i].key[0] != k[0])
+            continue;
+        int j = 1;
+        while (j <= k[0] && tolower(ic_defaults[i].key[j]) == tolower(k[j]))
+            j++;
+        if (j <= k[0])
+            continue;
+        tb_SetHandleSize(h, ic_defaults[i].len);
+        if (!rd32(h) || tb_GetHandleSize(h) != ic_defaults[i].len)
+            return memFullErr;
+        gput(rd32(h), ic_defaults[i].data, (uint32_t)ic_defaults[i].len);
+        return noErr;
+    }
+    return icPrefNotFoundErr;
+}
+
+/* Profiles (Internet Config 2.0): each its own set of preferences; the
+ * one in use is the working set above, the others are kept here. */
+enum { IC_MAX_PROFILES = 16, icProfileNotFoundErr = -676, icTooManyProfilesErr = -677 };
+static struct ic_profile {
+    int32_t id;
+    uint8_t name[256];
+    struct ic_pref *saved; /* its preferences while it is not the current profile */
+    int nsaved;
+} ic_profiles[IC_MAX_PROFILES];
+static int ic_nprofile, ic_current_profile;
+
+static void ic_profiles_init(void)
+{
+    if (ic_nprofile)
+        return;
+    ic_nprofile = 1;
+    ic_profiles[0].id = 1;
+    ic_profiles[0].name[0] = 7;
+    memcpy(ic_profiles[0].name + 1, "Default", 7);
+    ic_current_profile = 0;
+}
+
+static int ic_profile_find(int32_t id)
+{
+    for (int i = 0; i < ic_nprofile; i++)
+        if (ic_profiles[i].id == id)
+            return i;
+    return -1;
+}
+
+static struct ic_pref *ic_copy_prefs(const struct ic_pref *p, int n)
+{
+    struct ic_pref *c = calloc(n ? (size_t)n : 1, sizeof *c);
+    for (int i = 0; i < n; i++) {
+        c[i] = p[i];
+        c[i].data = malloc(p[i].len > 0 ? (size_t)p[i].len : 1);
+        if (p[i].len > 0)
+            memcpy(c[i].data, p[i].data, (size_t)p[i].len);
+    }
+    return c;
+}
+
+static void ic_free_prefs(struct ic_pref *p, int n)
+{
+    for (int i = 0; i < n; i++)
+        free(p[i].data);
+    free(p);
+}
+
+int16_t ic_get_current_profile(gaddr out)
+{
+    ic_profiles_init();
+    if (out)
+        wr32(out, (uint32_t)ic_profiles[ic_current_profile].id);
+    return noErr;
+}
+
+int16_t ic_set_current_profile(int32_t id)
+{
+    ic_profiles_init();
+    int to = ic_profile_find(id);
+    if (to < 0)
+        return icProfileNotFoundErr;
+    if (to == ic_current_profile)
+        return noErr;
+    struct ic_profile *from = &ic_profiles[ic_current_profile];
+    ic_free_prefs(from->saved, from->nsaved);
+    from->saved = ic_copy_prefs(ic_prefs, ic_npref);
+    from->nsaved = ic_npref;
+    for (int i = 0; i < ic_npref; i++)
+        free(ic_prefs[i].data);
+    struct ic_profile *dst = &ic_profiles[to];
+    ic_npref = dst->nsaved;
+    for (int i = 0; i < ic_npref; i++) {
+        ic_prefs[i] = dst->saved[i];
+        dst->saved[i].data = NULL; /* moved into the working set */
+    }
+    free(dst->saved);
+    dst->saved = NULL;
+    dst->nsaved = 0;
+    ic_current_profile = to;
+    ic_seed++;
+    return noErr;
+}
+
+int16_t ic_count_profiles(gaddr out)
+{
+    ic_profiles_init();
+    if (out)
+        wr32(out, (uint32_t)ic_nprofile);
+    return noErr;
+}
+
+int16_t ic_get_ind_profile(int32_t index, gaddr out)
+{
+    ic_profiles_init();
+    if (index < 1 || index > ic_nprofile)
+        return icProfileNotFoundErr;
+    if (out)
+        wr32(out, (uint32_t)ic_profiles[index - 1].id);
+    return noErr;
+}
+
+int16_t ic_get_profile_name(int32_t id, gaddr name)
+{
+    ic_profiles_init();
+    int i = ic_profile_find(id);
+    if (i < 0)
+        return icProfileNotFoundErr;
+    if (name)
+        gput(name, ic_profiles[i].name, (uint32_t)ic_profiles[i].name[0] + 1);
+    return noErr;
+}
+
+int16_t ic_set_profile_name(int32_t id, gaddr name)
+{
+    ic_profiles_init();
+    int i = ic_profile_find(id);
+    if (i < 0)
+        return icProfileNotFoundErr;
+    if (!name)
+        return paramErr;
+    ic_profiles[i].name[0] = rd8(name);
+    for (uint32_t k = 0; k < rd8(name); k++)
+        ic_profiles[i].name[k + 1] = rd8(name + 1 + k);
+    ic_seed++;
+    return noErr;
+}
+
+/* ICAddProfile(prototypeID, &newID): a profile starting as a copy of the
+ * prototype's preferences (none for kICNilProfileID). */
+int16_t ic_add_profile(int32_t proto, gaddr out)
+{
+    ic_profiles_init();
+    if (ic_nprofile == IC_MAX_PROFILES)
+        return icTooManyProfilesErr;
+    int p = proto ? ic_profile_find(proto) : -1;
+    if (proto && p < 0)
+        return icProfileNotFoundErr;
+    struct ic_profile *n = &ic_profiles[ic_nprofile];
+    memset(n, 0, sizeof *n);
+    int32_t id = 1;
+    for (int i = 0; i < ic_nprofile; i++)
+        if (ic_profiles[i].id >= id)
+            id = ic_profiles[i].id + 1;
+    n->id = id;
+    n->name[0] = 12;
+    memcpy(n->name + 1, "New Profile ", 12);
+    if (p >= 0) {
+        bool cur = p == ic_current_profile;
+        n->saved = ic_copy_prefs(cur ? ic_prefs : ic_profiles[p].saved, cur ? ic_npref : ic_profiles[p].nsaved);
+        n->nsaved = cur ? ic_npref : ic_profiles[p].nsaved;
+    }
+    ic_nprofile++;
+    if (out)
+        wr32(out, (uint32_t)id);
+    ic_seed++;
+    return noErr;
+}
+
+int16_t ic_delete_profile(int32_t id)
+{
+    ic_profiles_init();
+    int i = ic_profile_find(id);
+    if (i < 0)
+        return icProfileNotFoundErr;
+    if (i == ic_current_profile || ic_nprofile == 1)
+        return paramErr; /* the profile in use stays */
+    ic_free_prefs(ic_profiles[i].saved, ic_profiles[i].nsaved);
+    memmove(&ic_profiles[i], &ic_profiles[i + 1], (size_t)(ic_nprofile - i - 1) * sizeof ic_profiles[0]);
+    if (ic_current_profile > i)
+        ic_current_profile--;
+    ic_nprofile--;
+    ic_seed++;
+    return noErr;
+}
+
+/* ICCreateGURLEvent(helperCreator, urlH, &event): a GURL event for the
+ * helper application, the URL its direct parameter. */
+int16_t ic_create_gurl_event(int32_t helper, gaddr urlh, gaddr event)
+{
+    if (!urlh || !rd32(urlh) || !event)
+        return paramErr;
+    gaddr target = tb_NewPtr(8, false, true), sig = tb_NewPtr(4, false, true);
+    if (!target || !sig)
+        return memFullErr;
+    wr32(sig, (uint32_t)helper);
+    int16_t err = tb_AECreateDesc((int32_t)fourcc("sign"), sig, 4, target);
+    if (!err)
+        err = tb_AECreateAppleEvent((int32_t)fourcc("GURL"), (int32_t)fourcc("GURL"), target, -1 /* auto */, 0, event);
+    tb_AEDisposeDesc(target);
+    tb_DisposePtr(target);
+    tb_DisposePtr(sig);
+    if (!err)
+        err = tb_AEPutParamPtr(event, (int32_t)fourcc("----"), (int32_t)fourcc("TEXT"), rd32(urlh), tb_GetHandleSize(urlh));
+    return err;
+}
+
+/* ICSendGURLEvent(event): sent without waiting for an answer. */
+int16_t ic_send_gurl_event(gaddr event)
+{
+    if (!event)
+        return paramErr;
+    gaddr reply = tb_NewPtr(8, false, true);
+    if (!reply)
+        return memFullErr;
+    wr32(reply, fourcc("null"));
+    wr32(reply + 4, 0);
+    int16_t err = tb_AESend(event, reply, 1 /* kAENoReply */ | 0x10 /* kAENeverInteract */, 0, -1, 0, 0);
+    tb_AEDisposeDesc(reply);
+    tb_DisposePtr(reply);
+    return err;
 }
 
 /* ICGetPref: the data into buf (size in: its room, out: the data's
@@ -880,7 +1139,7 @@ static void ic_component(cpu68k *c, uint16_t tw)
     int32_t r = noErr;
     switch (what) {
     case -3: /* kComponentCanDoSelect */
-        r = (int16_t)rd16(params + 4) <= kICCFindPrefHandle;
+        r = (int16_t)rd16(params + 4) <= 0x34;
         break;
     case -4: /* kComponentVersionSelect */
         r = 0x00020000;
@@ -925,6 +1184,40 @@ static void ic_component(cpu68k *c, uint16_t tw)
         break;
     case kICCDeletePref: /* (key) */
         r = ic_delete_pref(last);
+        break;
+    /* Profiles, defaults and GURL events (Internet Config 2.0 and 2.5) */
+    case 0x25: /* ICGetCurrentProfile(&id) */
+        r = ic_get_current_profile(last);
+        break;
+    case 0x26: /* ICSetCurrentProfile(id) */
+        r = ic_set_current_profile((int32_t)last);
+        break;
+    case 0x27: /* ICCountProfiles(&count) */
+        r = ic_count_profiles(last);
+        break;
+    case 0x28: /* ICGetIndProfile(index, &id) */
+        r = ic_get_ind_profile((int32_t)rd32(params + 8), last);
+        break;
+    case 0x29: /* ICGetProfileName(id, name) */
+        r = ic_get_profile_name((int32_t)rd32(params + 8), last);
+        break;
+    case 0x2A: /* ICSetProfileName(id, name) */
+        r = ic_set_profile_name((int32_t)rd32(params + 8), last);
+        break;
+    case 0x2B: /* ICAddProfile(prototypeID, &newID) */
+        r = ic_add_profile((int32_t)rd32(params + 8), last);
+        break;
+    case 0x2C: /* ICDeleteProfile(id) */
+        r = ic_delete_profile((int32_t)last);
+        break;
+    case 0x31: /* ICGetDefaultPref(key, prefH) */
+        r = ic_get_default_pref(rd32(params + 8), last);
+        break;
+    case 0x33: /* ICCreateGURLEvent(helperCreator, urlH, &event) */
+        r = ic_create_gurl_event((int32_t)rd32(params + 12), rd32(params + 8), last);
+        break;
+    case 0x34: /* ICSendGURLEvent(event) */
+        r = ic_send_gurl_event(last);
         break;
     /* The mappings database, URLs and the configuration (vam.c): */
     case 0x0F: /* ICEditPreferences(key) */
@@ -998,6 +1291,14 @@ gaddr components_open_default(uint32_t type, uint32_t subtype)
 /* Forget everything registered: a new run. */
 void components_reset(void)
 {
+    for (int i = 0; i < ic_nprofile; i++)
+        ic_free_prefs(ic_profiles[i].saved, ic_profiles[i].nsaved);
+    memset(ic_profiles, 0, sizeof ic_profiles);
+    ic_nprofile = ic_current_profile = 0;
+    for (int i = 0; i < ic_ndefault; i++)
+        free(ic_defaults[i].data);
+    memset(ic_defaults, 0, sizeof ic_defaults);
+    ic_ndefault = 0;
     memset(comps, 0, sizeof comps);
     memset(insts, 0, sizeof insts);
     register_component(fourcc("PREF"), fourcc("ICAp"), fourcc("JPQE"), 0,
