@@ -989,8 +989,9 @@ gaddr qt_picture_of_rgba(const uint8_t *rgba, int w, int h)
         tb_LockPixels(tb_GetGWorldPixMap(gw));
         qd_draw_rgba(rgba, w, h, (qrect){ 0, 0, (int16_t)h, (int16_t)w });
         pic = tb_OpenPicture(r);
+        /* into the port's own bits, so that the picture records them */
         gaddr pm = rd32(tb_GetGWorldPixMap(gw));
-        tb_CopyBits(pm, pm, r, r, 0, 0);
+        tb_CopyBits(pm, gw + GrafPort_portBits_off, r, r, 0, 0);
         tb_ClosePicture();
         tb_SetGWorld(rd32(saved), rd32(saved + 4));
         tb_DisposePtr(saved);
