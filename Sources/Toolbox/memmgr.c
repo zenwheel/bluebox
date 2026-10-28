@@ -282,8 +282,12 @@ static bool grow_zone(gaddr z, uint32_t need)
     limit &= ~3u;
     if (lim + HDR >= limit)
         return false;
-    uint64_t room = limit - HDR - lim;
-    if (room < need)
+    /* With less room than asked for, all of it: the free block ending the
+     * zone makes up the rest, as MaxMem counted it (Vampire Castle asks
+     * for nearly what MaxMem said and makes its own heap at address 0 if
+     * it doesn't get it). */
+    uint64_t room = (limit - HDR - lim) & ~(uint64_t)3;
+    if (room < MIN_BLOCK)
         return false;
     if (want > room)
         want = room;
