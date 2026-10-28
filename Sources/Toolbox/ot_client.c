@@ -138,7 +138,40 @@ static void c_AsyncOpenProvider(ppc_cpu *c)
     }
 }
 
+/* The Priv forms take the client record last; the call is the same. */
+static void c_CreateDeferredTaskPriv(ppc_cpu *c) { forward(c, "OTCreateDeferredTask"); }
+static void c_CreateSystemTaskPriv(ppc_cpu *c) { forward(c, "OTCreateSystemTask"); }
+
+/* OTCancelRequest and OTCancelReply (ref, sequence) are for transaction endpoints with
+ * connection-less-less requests; the endpoints here that have transactions (atp, asp, pap)
+ * cancel through OTCancelURequest and OTCancelUReply. */
+static void c_CancelRequest(ppc_cpu *c)
+{
+    provider *p = ot_provider_of(R(0));
+    if (!p) {
+        RETURN((uint32_t)kOTBadReferenceErr);
+        return;
+    }
+    forward(c, "OTCancelURequest");
+}
+
+static void c_CancelReply(ppc_cpu *c)
+{
+    provider *p = ot_provider_of(R(0));
+    if (!p) {
+        RETURN((uint32_t)kOTBadReferenceErr);
+        return;
+    }
+    forward(c, "OTCancelUReply");
+}
+
+/* OTIsPortReal(portRef): a port with hardware behind it, not a pseudo-device. */
+static void c_IsPortReal(ppc_cpu *c) { RETURN((R(0) & 0x3FF) != 0x3FF && (R(0) & 0x3FF) != 0); }
+
 const ppc_export otc_exports[] = {
+    { "OTCreateDeferredTaskPriv", c_CreateDeferredTaskPriv }, { "OTCreateSystemTaskPriv", c_CreateSystemTaskPriv },
+    { "OTCancelRequest", c_CancelRequest }, { "OTCancelReply", c_CancelReply }, { "OTIsPortReal", c_IsPortReal },
+    { "OTDoTimingLog", c_noErr },
     { "OTGetEndpointInfo", c_GetEndpointInfo }, { "OTSync", c_Sync },
     { "OTIsSynchronous", c_IsSynchronous }, { "OTIsBlocking", c_IsBlocking },
     { "OTCancelSynchronousCalls", c_CancelSynchronousCalls },

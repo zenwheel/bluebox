@@ -132,6 +132,13 @@ static bool wait_slice(provider *p)
 
 static bool blocking(provider *p) { return p->blocking && !p->async; }
 
+/* Messages rather than a stream: "adsp(EnableEOM=1)" at open, or the OPT_ENABLEEOM option. */
+static bool eom_on(provider *p)
+{
+    uint32_t v = 0;
+    return p->at->eom || (ot_option_long(p, 0xFFFF, 0x603, &v) && (v & 0xFF));
+}
+
 /* ---------------------------------------------------------------------- */
 /* Names and addresses */
 
@@ -829,9 +836,17 @@ static void ota_SndURequest(ppc_cpu *c)
         return;
     }
     uint32_t user = (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 | data[3];
-    /* OPT_RETRYCNT 8 and OPT_INTERVAL 2 seconds, Open Transport's defaults */
+    /* The request's options, over the endpoint's: OPT_RETRYCNT (8 by default) and
+     * OPT_INTERVAL (2 seconds), and ATP_OPT_REPLYCNT, the response packets expected. */
+    if (rd32(req + 12) && rd32(req + 20))
+        ot_options_apply(p, req + 12);
+    uint32_t retries = 8, interval = 2000, replies = 0;
+    ot_option_long(p, 0xFFFF, 0x601, &retries);
+    ot_option_long(p, 0xFFFF, 0x602, &interval);
+    ot_option_long(p, 0x41545020 /* ATK_ATP */, 0x2110, &replies);
     int16_t e = atp_host_start(a->skt, node ? node : at_node(), skt, user, data + 4, n > 4 ? (int)n - 4 : 0,
-                               (R(2) & T_ACKNOWLEDGED) != 0, 8, 2000, 8, &q->reply);
+                               (R(2) & T_ACKNOWLEDGED) != 0, replies >= 1 && replies <= 8 ? (int)replies : 8,
+                               interval ? (int)interval : 2000, retries > 255 ? 255 : (int)retries, &q->reply);
     if (e != noErr) {
         RETURN((uint32_t)kOTFlowErr);
         return;
@@ -1331,7 +1346,7 @@ void ota_Snd(ppc_cpu *c, provider *p)
         wr16(pb + P_REQCOUNT, (uint16_t)k);
         wr32(pb + P_DATAPTR, buf + done);
         /* with EOM, the end of a send without T_MORE ends a message */
-        wr8(pb + P_EOM, a->eom && !(R(3) & T_MORE) && done + k == n);
+        wr8(pb + P_EOM, eom_on(p) && !(R(3) & T_MORE) && done + k == n);
         wr8(pb + P_FLUSH, 1);
         if (dsp(pb, dspWrite, false) != noErr)
             break;
@@ -1404,7 +1419,7 @@ void ota_Rcv(ppc_cpu *c, provider *p)
         return;
     }
     uint32_t got = rd16(pb + P_ACTCOUNT);
-    if (flags && a->eom && !rd8(pb + P_EOM))
+    if (flags && eom_on(p) && !rd8(pb + P_EOM))
         wr32(flags, T_MORE); /* the rest of the message to come */
     RETURN(got);
 }

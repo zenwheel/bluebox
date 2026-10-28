@@ -517,7 +517,13 @@ int32_t ot_option_mgmt(provider *p, gaddr req, gaddr ret)
         return kOTBadOptionErr;
     gaddr inbuf = rd32(req + 8);
     uint32_t inlen = rd32(req + 4);
-    outbuf o = { rd32(ret + 8), 0, rd32(ret), false };
+    LOGF(LOG_TRAPS, "OT: options flags %04X, %u bytes in, room %u\n", flags, inlen, rd32(ret));
+    /* Asked and answered in the same buffer (Easy Serve's), it holds what it held, whatever
+     * maxlen says. */
+    uint32_t room = rd32(ret);
+    if (rd32(ret + 8) == inbuf && room < inlen)
+        room = inlen;
+    outbuf o = { rd32(ret + 8), 0, room, false };
     uint32_t overall = T_SUCCESS;
     /* An absolute request is all or nothing: check first. */
     bool apply = true;
