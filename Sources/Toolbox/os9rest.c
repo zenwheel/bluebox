@@ -12,6 +12,7 @@
 static const os9rest_group groups[] = {
     GROUP(math),
     GROUP(hw),
+    GROUP(locale),
 };
 
 void (*os9rest_export_fn(const char *name))(ppc_cpu *)
@@ -45,4 +46,5 @@ void os9rest_reset(void)
 {
     os9rest_debug_reset();
     os9rest_hw_reset();
+    os9rest_locale_reset();
 }

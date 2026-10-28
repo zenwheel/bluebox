@@ -29,6 +29,9 @@ void os9rest_debug_reset(void);
 extern const ppc_export os9rest_hw_exports[];
 extern const unsigned os9rest_hw_export_count;
 void os9rest_hw_reset(void);
+extern const ppc_export os9rest_locale_exports[];
+extern const unsigned os9rest_locale_export_count;
+void os9rest_locale_reset(void);
 extern const ppc_export os9rest_math_exports[];
 extern const unsigned os9rest_math_export_count;
 
