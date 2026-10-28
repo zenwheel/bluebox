@@ -130,5 +130,23 @@ extension BlueBox {
             #expect(simple(fire) == (0, 1))
             #expect(Rest.signed("ISpElement_PushSimpleData", [jump, 1, 0]) == -50) // the driver didn't take it
         }
+
+        @Test func drawSprocketsCurrentContext() {
+            launchTestApp()
+            _ = initToolbox()
+            let attrs = Rest.ptr(72), ctxp = Rest.ptr(4), cur = Rest.ptr(4)
+            wr32(attrs + 4, 64)
+            wr32(attrs + 8, 32)
+            wr32(attrs + 32, 8)
+            #expect(Rest.signed("DSpStartup") == 0)
+            #expect(Rest.signed("DSpFindBestContext", [attrs, ctxp]) == 0)
+            wr32(cur, 9)
+            #expect(Rest.signed("DSpGetCurrentContext", [1, cur]) == -30446 && rd32(cur) == 0) // none reserved yet
+            #expect(Rest.signed("DSpContext_Reserve", [rd32(ctxp), attrs]) == 0)
+            #expect(Rest.signed("DSpGetCurrentContext", [1, cur]) == 0 && rd32(cur) == rd32(ctxp))
+            #expect(Rest.signed("DSpGetCurrentContext", [77, cur]) == -30446) // no such display
+            #expect(Rest.signed("DSpContext_Release", [rd32(ctxp)]) == 0)
+            #expect(Rest.signed("DSpGetCurrentContext", [1, cur]) == -30446)
+        }
     }
 }

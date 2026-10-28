@@ -135,6 +135,15 @@ static void dsp_GetAttributes(ppc_cpu *c)
         RETURN(0);
     }
 }
+/* DSpGetCurrentContext(displayID, *context): the one a game has reserved
+ * on that display (the display ours is on), else none is found. */
+static void dsp_GetCurrentContext(ppc_cpu *c)
+{
+    bool have = ctx && R(0) == 1 && rd8(ctx + CTX_RESERVED);
+    if (R(1))
+        wr32(R(1), have ? ctx : 0);
+    RETURN(have ? 0 : kDSpContextNotFoundErr);
+}
 static void dsp_GetDisplayID(ppc_cpu *c)
 {
     if (R(1))
@@ -705,6 +714,7 @@ const ppc_export dsp_exports[] = {
     { "DSpContext_GetMaxFrameRate", dsp_GetMaxFrameRate },
     { "DSpContext_GetMonitorFrequency", dsp_GetMonitorFrequency },
     { "DSpContext_GetState", dsp_GetState },
+    { "DSpGetCurrentContext", dsp_GetCurrentContext },
     { "DSpContext_GlobalToLocal", dsp_GlobalToLocal },
     { "DSpContext_InvalBackBufferRect", dsp_InvalBackBufferRect },
     { "DSpContext_IsBusy", dsp_false },
