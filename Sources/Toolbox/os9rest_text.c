@@ -59,7 +59,13 @@ static void plain_runs(ppc_cpu *c, const char *forward)
 static void tx_ConvertPlainUnicodeToTextRun(ppc_cpu *c) { plain_runs(c, "ConvertFromUnicodeToTextRun"); }
 static void tx_ConvertPlainUnicodeToScriptCodeRun(ppc_cpu *c) { plain_runs(c, "ConvertFromUnicodeToScriptCodeRun"); }
 
+/* TECGetOption and TECSetOption: Mac OS 9 has no options to give or take
+ * and answers unimpErr to both. */
+static void tx_TECOption(ppc_cpu *c) { RETURN(-4); }
+
 const ppc_export os9rest_text_exports[] = {
+    { "TECGetOption", tx_TECOption },
+    { "TECSetOption", tx_TECOption },
     { "ConvertTextToUnicode", tx_ConvertTextToUnicode },
     { "ConvertUnicodeToText", tx_ConvertUnicodeToText },
     { "ConvertPlainUnicodeToTextRun", tx_ConvertPlainUnicodeToTextRun },

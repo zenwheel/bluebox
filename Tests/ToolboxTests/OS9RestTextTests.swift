@@ -66,5 +66,10 @@ extension BlueBox {
             #expect(read(out, rd32(length)) == [0x41, 0x82, 0xA0] && rd32(nruns) == 2)
             #expect(rd16(runs + 4) == 0 && rd16(runs + 10) == 1) // ScriptCodeRun: offset, script
         }
+
+        @Test func tecOptionsAreUnimplemented() {
+            #expect(Rest.signed("TECGetOption", [0, 0, 0]) == -4)
+            #expect(Rest.signed("TECSetOption", [0, 0, 0]) == -4)
+        }
     }
 }
