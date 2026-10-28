@@ -1495,6 +1495,14 @@ static int16_t sd_control(gaddr pb, bool async)
 
 const native_driver sound_driver = { ".Sound", 3, NULL, NULL, sd_control, NULL, NULL, sd_write, sd_kill };
 
+/* SndAppDead: the program is gone, and its channels with it. */
+void sound_app_dead(void)
+{
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (chans[i].chan)
+            tb_SndDisposeChannel(chans[i].chan, true);
+}
+
 void sound_reset(void)
 {
     sd_pb = sd_ft = 0;

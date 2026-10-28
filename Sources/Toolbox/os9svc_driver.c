@@ -429,6 +429,10 @@ static uint32_t exec_level = kTaskLevel;
 
 static void ds_CurrentExecutionLevel(ppc_cpu *c) { RETURN(exec_level); }
 
+/* TaskLevel's answer (DebugLib): 0 at task level, else the masks of
+ * Debugging.h; the handlers here run as secondary interrupt handlers. */
+uint32_t os9svc_task_level(void) { return exec_level == kTaskLevel ? 0 : 0x40; }
+
 /* Call a handler (void *p1, void *p2) at secondary interrupt level. */
 static uint32_t call_handler(gaddr handler, uint32_t p1, uint32_t p2)
 {
@@ -629,6 +633,10 @@ typedef struct {
     int32_t size;
     uint32_t options;
     struct { gaddr refcon, handler, enabler, disabler; } member[MAX_MEMBERS];
+    uint32_t parent;     /* the set this one is a member of, and which member */
+    int32_t parent_member;
+    bool tree;           /* a root made a source of interrupts */
+    int32_t vector;      /* the hardware vector it is active on; 0 when inactive */
 } intset;
 static intset sets[MAX_SETS];
 
@@ -652,6 +660,8 @@ static void ds_CreateInterruptSet(ppc_cpu *c)
             sets[i].used = true;
             sets[i].size = size;
             sets[i].options = R(4);
+            sets[i].parent = R(0);
+            sets[i].parent_member = (int32_t)R(1);
             wr32(R(3), 0x49530000u | (uint32_t)(i + 1));
             RETURN(noErr);
         }
@@ -728,6 +738,142 @@ static void ds_GetInterruptSetOptions(ppc_cpu *c)
     RETURN(noErr);
 }
 
+/* ---- Interrupt source trees ---- */
+
+/* A root set that interrupts arrive at, through one of the interrupt
+ * controller's vectors: a tree is made for the set, activated to be given
+ * a vector and deactivated to give it back.  Mac OS 9 has room for 24. */
+enum { kMaxTrees = 24, kTooManyTreesErr = -2420, kTreeActiveErr = -2416, kTreeNotActiveErr = -2421,
+       kEmptyTreeErr = -2401 };
+
+static intset *tree_of(uint32_t id)
+{
+    intset *s = set_of(id);
+    return s && s->tree ? s : NULL;
+}
+
+/* CreateInterruptSourceTree(rootSet) */
+static void ds_CreateInterruptSourceTree(ppc_cpu *c)
+{
+    intset *s = set_of(R(0));
+    if (!s || s->parent)
+        RETURN(paramErr);
+    int trees = 0;
+    for (int i = 0; i < MAX_SETS; i++)
+        trees += sets[i].used && sets[i].tree;
+    if (!s->tree && trees >= kMaxTrees)
+        RETURN(kTooManyTreesErr);
+    s->tree = true;
+    s->vector = 0;
+    RETURN(noErr);
+}
+
+/* ActivateInterruptSourceTree(rootSet): the lowest vector no tree has. */
+static void ds_ActivateInterruptSourceTree(ppc_cpu *c)
+{
+    intset *s = tree_of(R(0));
+    if (!s)
+        RETURN(paramErr);
+    if (s->vector)
+        RETURN(kTreeActiveErr);
+    bool any = false;
+    for (int m = 0; m < s->size; m++)
+        any |= s->member[m].handler != 0;
+    if (!any)
+        RETURN(kEmptyTreeErr);
+    for (int v = 1; v <= kMaxTrees; v++) {
+        bool taken = false;
+        for (int i = 0; i < MAX_SETS; i++)
+            taken |= sets[i].used && sets[i].tree && sets[i].vector == v;
+        if (!taken) {
+            s->vector = v;
+            RETURN(noErr);
+        }
+    }
+    RETURN(kTooManyTreesErr);
+}
+
+static void ds_DeactivateInterruptSourceTree(ppc_cpu *c)
+{
+    intset *s = tree_of(R(0));
+    if (!s)
+        RETURN(paramErr);
+    if (!s->vector)
+        RETURN(kTreeNotActiveErr);
+    s->vector = 0;
+    RETURN(noErr);
+}
+
+/* GetInterruptSourceTreeVector(rootSet, *vector): -1 when not active. */
+static void ds_GetInterruptSourceTreeVector(ppc_cpu *c)
+{
+    intset *s = tree_of(R(0));
+    if (!s || !R(1))
+        RETURN(paramErr);
+    wr32(R(1), s->vector ? (uint32_t)s->vector : 0xFFFFFFFFu);
+    RETURN(noErr);
+}
+
+/* LookupRootSet(set, *root): the set at the top of the one it is in. */
+static void ds_LookupRootSet(ppc_cpu *c)
+{
+    intset *s = set_of(R(0));
+    uint32_t id = R(0);
+    if (!s || !R(1))
+        RETURN(paramErr);
+    while (s->parent && set_of(s->parent)) {
+        id = s->parent;
+        s = set_of(id);
+    }
+    wr32(R(1), id);
+    RETURN(noErr);
+}
+
+/* LookupParentMember(set, *parentSet, *parentMember): 0 and 0 for a root. */
+static void ds_LookupParentMember(ppc_cpu *c)
+{
+    intset *s = set_of(R(0));
+    if (!s || !R(1) || !R(2))
+        RETURN(paramErr);
+    bool has = s->parent && set_of(s->parent);
+    wr32(R(1), has ? s->parent : 0);
+    wr32(R(2), has ? (uint32_t)s->parent_member : 0);
+    RETURN(noErr);
+}
+
+/* ---- I/O commands ---- */
+
+/* An I/O command is a record the Device Manager makes for a driver's
+ * entry point: the command code in the low byte of the word at +6 and
+ * its kind in the high byte, the result stored at +8 when the driver
+ * reports it done (and the flag at +10 that it has). */
+static void ds_IOCommandIsComplete(ppc_cpu *c)
+{
+    if (!R(0))
+        RETURN(paramErr);
+    wr16(R(0) + 8, (uint16_t)R(1));
+    wr16(R(0) + 10, 1);
+    RETURN(noErr);
+}
+
+/* GetIOCommandInfo(id, *contents, *command, *kind) */
+static void ds_GetIOCommandInfo(ppc_cpu *c)
+{
+    if (!R(0))
+        RETURN(paramErr);
+    uint16_t w = rd16(R(0) + 6);
+    if (R(1))
+        wr32(R(1), R(0));
+    if (R(2))
+        wr32(R(2), w & 0xFF);
+    if (R(3))
+        wr32(R(3), w >> 8);
+    RETURN(noErr);
+}
+
+/* DSL_Init(): the library's own start-up, done by the time a program runs. */
+static void ds_DSL_Init(ppc_cpu *c) { RETURN(noErr); }
+
 void os9svc_driver_reset(void)
 {
     memset(softs, 0, sizeof softs);
@@ -758,6 +904,13 @@ const ppc_export os9_driver_exports[] = {
     { "PrepareMemoryForIO", ds_PrepareMemoryForIO }, { "CheckpointIO", ds_CheckpointIO },
     { "GetPageInformation", ds_GetPageInformation },
     { "RemoveInterruptFunctions", ds_RemoveInterruptFunctions },
+    { "CreateInterruptSourceTree", ds_CreateInterruptSourceTree },
+    { "ActivateInterruptSourceTree", ds_ActivateInterruptSourceTree },
+    { "DeactivateInterruptSourceTree", ds_DeactivateInterruptSourceTree },
+    { "GetInterruptSourceTreeVector", ds_GetInterruptSourceTreeVector },
+    { "LookupRootSet", ds_LookupRootSet }, { "LookupParentMember", ds_LookupParentMember },
+    { "IOCommandIsComplete", ds_IOCommandIsComplete }, { "GetIOCommandInfo", ds_GetIOCommandInfo },
+    { "DSL_Init", ds_DSL_Init },
     { "CurrentExecutionLevel", ds_CurrentExecutionLevel },
     { "CreateSoftwareInterrupt", ds_CreateSoftwareInterrupt },
     { "SendSoftwareInterrupt", ds_SendSoftwareInterrupt },

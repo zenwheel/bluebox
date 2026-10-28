@@ -434,7 +434,104 @@ static void ds_CompatibleDriverNames(ppc_cpu *c)
     RETURN(0);
 }
 
+/* ---- Descriptions and candidates ---- */
+
+enum { kDescFixedSize = 0x70, kServiceSize = 12 }; /* DriverDescription up to nServices */
+
+/* The bytes a PEF container takes: the farthest end of its sections. */
+static uint32_t pef_length(gaddr p)
+{
+    if (rd32(p) != 0x4A6F7921 || rd32(p + 4) != 0x70656666) /* 'Joy!' 'peff' */
+        return 0;
+    uint32_t n = rd16(p + 32), end = 40 + 28 * n;
+    for (uint32_t i = 0; i < n; i++) {
+        gaddr h = p + 40 + 28 * i;
+        uint32_t e = rd32(h + 20) + rd32(h + 16);
+        if (e > end)
+            end = e;
+    }
+    return end;
+}
+
+/* Load a driver fragment and keep its description in a block of its own,
+ * the connection let go. */
+static int describe(ppc_cpu *c, bool from_memory, gaddr where, uint32_t length, gaddr name, gaddr desc_out)
+{
+    gaddr conn = tb_NewPtr(8, true, true);
+    if (!conn)
+        return memFullErr;
+    wr32(desc_out, 0);
+    int err = load_driver(c, from_memory, where, length, name, conn, 0, conn + 4);
+    if (!err) {
+        gaddr d = rd32(conn + 4);
+        uint32_t n = rd32(d + kDescFixedSize), size = kDescFixedSize + 4 + kServiceSize * (n ? n : 1);
+        gaddr copy = n < 256 ? tb_NewPtr((int32_t)size, false, true) : 0;
+        for (uint32_t i = 0; copy && i < size; i++)
+            wr8(copy + i, rd8(d + i));
+        uint32_t a[1] = { rd32(conn) };
+        call_export(c, "CloseConnection", a, 1);
+        if (copy)
+            wr32(desc_out, copy);
+        else
+            err = memFullErr;
+    }
+    tb_DisposePtr(conn);
+    return err;
+}
+
+/* GetDriverDescription(fragmentPtr, **desc) */
+static void ds_GetDriverDescription(ppc_cpu *c)
+{
+    if (!R(1))
+        RETURN(paramErr);
+    wr32(R(1), 0);
+    uint32_t len = R(0) ? pef_length(R(0)) : 0;
+    if (!len)
+        RETURN(cfragFragmentFormatErr);
+    RETURN(describe(c, true, R(0), len, 0, R(1)));
+}
+
+/* GetNamedDriverDescFromFSSpec(spec, fragName, **desc) */
+static void ds_GetNamedDriverDescFromFSSpec(ppc_cpu *c)
+{
+    if (!R(2) || !R(0))
+        RETURN(paramErr);
+    RETURN(describe(c, false, R(0), 0, R(1), R(2)));
+}
+
+/* A Pascal string against another, as the Driver Loader's names are
+ * compared: the same length and the same bytes. */
+static bool pstr_same(gaddr a, gaddr b)
+{
+    if (rd8(a) != rd8(b))
+        return false;
+    for (uint32_t i = 1; i <= rd8(a); i++)
+        if (rd8(a + i) != rd8(b + i))
+            return false;
+    return true;
+}
+
+/* CompareFileCandToPropCand(device, deviceName, propBasedCandidate,
+ * fileBasedCandidate): which of a device's two drivers is better, 1 for
+ * the one in the device's property and -1 for the file's, 0 for neither.
+ * A driver whose name is the device's own beats one that matched through
+ * a compatible name, and of two alike the higher version wins. */
+static void ds_CompareFileCandToPropCand(ppc_cpu *c)
+{
+    gaddr name = R(1), prop = R(2), file = R(3);
+    if (!name || !prop || !file)
+        RETURN(paramErr);
+    bool prop_exact = pstr_same(name, prop), file_exact = rd8(file + 0x6A) == 0;
+    if (prop_exact != file_exact)
+        RETURN(prop_exact ? 1 : -1);
+    uint32_t pv = rd32(prop + 32), fv = rd32(file + 0x46 + 32);
+    RETURN(pv > fv ? 1 : pv < fv ? -1 : 0);
+}
+
 const ppc_export os9_loader_exports[] = {
+    { "GetDriverDescription", ds_GetDriverDescription },
+    { "GetNamedDriverDescFromFSSpec", ds_GetNamedDriverDescFromFSSpec },
+    { "CompareFileCandToPropCand", ds_CompareFileCandToPropCand },
     { "HighestUnitNumber", ds_HighestUnitNumber }, { "LookupDrivers", ds_LookupDrivers },
     { "GetDriverInformation", ds_GetDriverInformation }, { "DriverGestaltOn", ds_DriverGestaltOn },
     { "DriverGestaltOff", ds_DriverGestaltOff }, { "DriverGestaltIsOn", ds_DriverGestaltIsOn },

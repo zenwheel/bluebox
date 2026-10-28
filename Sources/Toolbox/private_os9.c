@@ -71,52 +71,6 @@ static void ppc_EnableSwitching(ppc_cpu *c)
 
 static void ppc_GetSwitchingEnabled(ppc_cpu *c) { RETURN(switch_disabled == 0); }
 
-/* The File System Manager's checks of a number: a volume reference, then
- * a file's.  A mounted volume is locked, as a CD is. */
-static bool volume_of(int16_t vref, int16_t *drive)
-{
-    char root[1024];
-    uint8_t name[32];
-    int16_t got, driver;
-    return fm_volume(0, vref, &got, root, sizeof root, name, drive, &driver) && (vref == 0 || got == vref);
-}
-
-static int16_t ut_check_vol(int16_t vref)
-{
-    int16_t got;
-    return volume_of(vref, &got) ? noErr : nsvErr;
-}
-
-static void ppc_UTCheckVolRefNum(ppc_cpu *c) { RETURN((int32_t)ut_check_vol((int16_t)c->gpr[3])); }
-/* Every volume is online while it is mounted. */
-static void ppc_UTCheckVolOffline(ppc_cpu *c) { RETURN((int32_t)ut_check_vol((int16_t)c->gpr[3])); }
-
-static void ppc_UTCheckVolModifiable(ppc_cpu *c)
-{
-    int16_t drive;
-    /* Drive 1 is the main volume. */
-    RETURN((int32_t)(!volume_of((int16_t)c->gpr[3], &drive) ? nsvErr : drive == 1 ? noErr : wPrErr));
-}
-
-static bool fork_of(int16_t rn, bool *write)
-{
-    bool rsrc;
-    uint32_t pos, len;
-    return fm_fork_state(rn, NULL, 0, &rsrc, write, &pos, &len);
-}
-
-static void ppc_UTCheckFileRefNum(ppc_cpu *c)
-{
-    bool w;
-    RETURN((int32_t)(fork_of((int16_t)c->gpr[3], &w) ? noErr : rfNumErr));
-}
-
-static void ppc_UTCheckFileModifiable(ppc_cpu *c)
-{
-    bool w;
-    RETURN((int32_t)(!fork_of((int16_t)c->gpr[3], &w) ? rfNumErr : w ? noErr : wrPermErr));
-}
-
 const ppc_export priv_os9_exports[] = {
     { "BlockClear", ppc_BlockClear },
     { "Font2RealScript", ppc_Font2RealScript },
@@ -126,11 +80,6 @@ const ppc_export priv_os9_exports[] = {
     { "DisableSwitching", ppc_DisableSwitching },
     { "EnableSwitching", ppc_EnableSwitching },
     { "GetSwitchingEnabled", ppc_GetSwitchingEnabled },
-    { "UTCheckVolRefNum", ppc_UTCheckVolRefNum },
-    { "UTCheckVolOffline", ppc_UTCheckVolOffline },
-    { "UTCheckVolModifiable", ppc_UTCheckVolModifiable },
-    { "UTCheckFileRefNum", ppc_UTCheckFileRefNum },
-    { "UTCheckFileModifiable", ppc_UTCheckFileModifiable },
 };
 const unsigned priv_os9_export_count = sizeof priv_os9_exports / sizeof priv_os9_exports[0];
 

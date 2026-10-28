@@ -3,7 +3,9 @@
  * Copyright (c) 2002 Laszlo Torok <torokl@alpha.dfmk.hu>
  *
  * Taken from FFmpeg (libavcodec/mace.c, n7.1) for Blue Box: the decoder
- * itself, unchanged, with FFmpeg's codec plumbing replaced by mace_decode.
+ * itself, unchanged, with FFmpeg's codec plumbing replaced by mace_decode,
+ * and mace_step added at the end (the same state machine one code at a time,
+ * for the encoder).
  * This directory alone is under the LGPL (COPYING.LGPLv2.1); the rest of
  * Blue Box is MIT licensed.
  *
@@ -259,4 +261,21 @@ size_t mace_decode(const uint8_t *buf, size_t buf_size, int channels, bool is_ma
             }
     }
     return frames;
+}
+
+/*
+ * Added for Blue Box: one code through the decoder's state machine, for an
+ * encoder that tries each code and keeps the one whose samples come
+ * nearest (os9rest_sound.c).  Returns the samples the code decodes to:
+ * one for MACE 3 (output[0]), two for MACE 6.
+ */
+int mace_step(mace_state *st, bool is_mace3, int tab_idx, uint8_t code, int16_t out[2])
+{
+    ChannelData *chd = (ChannelData *)st;
+    if (is_mace3) {
+        chomp3(chd, out, code, tab_idx);
+        return 1;
+    }
+    chomp6(chd, out, code, tab_idx);
+    return 2;
 }

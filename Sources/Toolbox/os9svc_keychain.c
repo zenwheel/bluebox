@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "carbon_cf.h"
 #include "os9svc.h"
 #include "ppc_bridge.h"
 #include "tb_internal.h"
@@ -52,9 +53,11 @@ typedef struct {
     uint32_t length;
     attr attrs[MAX_ATTR];
     int nattrs;
+    uint32_t refs; /* the references to it: its maker's, and the arrays that hold it */
 } kcitem;
 
 static kcitem items[MAX_ITEMS];
+static gaddr item_callbacks; /* KCItemRefArrayCallBacks, once asked for */
 static gaddr callbacks[MAX_CALLBACKS];
 static uint32_t callback_masks[MAX_CALLBACKS];
 static bool interaction_allowed = true;
@@ -72,6 +75,7 @@ void os9svc_keychain_reset(void)
     for (int i = 0; i < MAX_ITEMS; i++)
         if (items[i].used)
             item_free(&items[i]);
+    item_callbacks = 0;
     memset(callbacks, 0, sizeof callbacks);
     memset(callback_masks, 0, sizeof callback_masks);
     interaction_allowed = true;
@@ -148,6 +152,7 @@ static void kc_NewItem(ppc_cpu *c)
             kcitem *it = &items[i];
             memset(it, 0, sizeof *it);
             it->used = true;
+            it->refs = 1;
             it->cls = cls;
             it->data = length ? malloc(length) : NULL;
             if (length && !it->data) {
@@ -266,10 +271,49 @@ static void kc_ReleaseItem(ppc_cpu *c)
     kcitem *it = item_of(rd32(R(0)));
     if (!it)
         RETURN(errKCInvalidItemRef);
-    item_free(it);
+    if (--it->refs == 0)
+        item_free(it);
     wr32(R(0), 0);
     RETURN(noErr);
 }
+
+/* KCItemRefArrayCallBacks: a CFArray of item references retains and
+ * releases them as the arrays hold them; the items are compared by
+ * reference. */
+static void kc_ArrayRetain(ppc_cpu *c)
+{
+    kcitem *it = item_of(R(1));
+    if (it)
+        it->refs++;
+    RETURN(R(1));
+}
+
+static void kc_ArrayRelease(ppc_cpu *c)
+{
+    kcitem *it = item_of(R(1));
+    if (it && --it->refs == 0)
+        item_free(it);
+    c->pc = c->lr;
+}
+
+gaddr os9svc_keychain_data(const char *name)
+{
+    if (strcmp(name, "KCItemRefArrayCallBacks"))
+        return 0;
+    if (!item_callbacks) {
+        item_callbacks = tb_NewPtr(20, true, true);
+        if (item_callbacks) {
+            wr32(item_callbacks + 4, cf_native(kc_ArrayRetain, "KCRetainItemRef"));
+            wr32(item_callbacks + 8, cf_native(kc_ArrayRelease, "KCReleaseItemRef"));
+        }
+    }
+    return item_callbacks;
+}
+
+/* The library's start-up and shut-down routines and the SOM run-time
+ * checks its C++ classes were built with: nothing to do for them here. */
+static void kc_Init(ppc_cpu *c) { RETURN(noErr); }
+static void kc_Nothing(ppc_cpu *c) { c->pc = c->lr; }
 
 /* What a keychain call does where there is no keychain: a null KCRef
  * means the default one, which there isn't; any other is not a keychain. */
@@ -493,6 +537,7 @@ const ppc_export os9_keychain_exports[] = {
     { "KCIsPersonalCertificate", kc_NoCertificates }, { "KCIsRootCertificate", kc_NoCertificates },
     { "KCVerifyX509CertificateGroup", kc_NoPolicies },
     { "KCDispatch", kc_NotAvailable },
+    { "init", kc_Init }, { "term", kc_Nothing }, { "__som_check_ev", kc_Nothing }, { "__som_check_new", kc_Nothing },
 };
 const unsigned os9_keychain_export_count = sizeof os9_keychain_exports / sizeof os9_keychain_exports[0];
 const os9_alias os9_keychain_aliases[] = { { "", "" } };

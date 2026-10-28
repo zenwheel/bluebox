@@ -201,6 +201,7 @@ typedef struct {
     bool write;
     bool dirty;
     bool host_text; /* a plain host text file: LF/UTF-8 on disk, CR/MacRoman inside */
+    bool claimed;   /* a slot a file system plug-in took (UTAllocateFCB), no file's */
     char path[PATH_MAX];
     uint8_t *buf;
     uint32_t len, cap, pos;
@@ -4118,4 +4119,93 @@ void fm_flush_volume(void)
     for (int i = 0; i < MAX_FCBS; i++)
         if (fcbs[i].used)
             save_fork(&fcbs[i]);
+}
+
+/* ---------------------------------------------------------------------- */
+/* The File System Manager's utilities (os9rest_fsm.c) */
+
+/* UTAllocateFCB: a free slot, reserved for the plug-in that asked. */
+int16_t fm_fcb_claim(int16_t *refnum)
+{
+    for (int i = 0; i < MAX_FCBS; i++) {
+        int16_t rn = fcb_refnum(i);
+        if (fcbs[i].used || (fcb_table && rd32(fcb_table + (uint32_t)rn)))
+            continue;
+        memset(&fcbs[i], 0, sizeof fcbs[i]);
+        fcbs[i].used = fcbs[i].claimed = true;
+        if (fcb_table)
+            gmemset(fcb_table + (uint32_t)rn, 0, FCB_LEN);
+        *refnum = rn;
+        return noErr;
+    }
+    return tmfoErr;
+}
+
+/* UTReleaseFCB: a claimed slot is free again; an open fork is closed. */
+int16_t fm_fcb_release(int16_t refnum)
+{
+    fcb *f = fcb_for(refnum);
+    if (!f)
+        return rfNumErr;
+    if (!f->claimed)
+        return fm_close_fork(refnum);
+    f->used = f->claimed = false;
+    fm_fcb_forget(refnum);
+    return noErr;
+}
+
+/* The guest FCB of a refnum that is a slot of the table, 0 if it is not. */
+gaddr fm_fcb_addr(int16_t refnum)
+{
+    if (!fcb_table || refnum < 2 || (refnum - 2) % FCB_LEN || refnum >= 2 + FCB_SLOTS * FCB_LEN)
+        return 0;
+    return fcb_table + (uint32_t)refnum;
+}
+
+/* The refnum of the FCB at an address, 0 if it is none. */
+int16_t fm_fcb_refnum_at(gaddr f)
+{
+    if (!fcb_table || f < fcb_table + 2 || f >= fcb_table + 2 + FCB_SLOTS * FCB_LEN || (f - fcb_table - 2) % FCB_LEN)
+        return 0;
+    return (int16_t)(f - fcb_table);
+}
+
+int fm_fcb_slots(void) { return FCB_SLOTS; }
+
+bool fm_fcb_is_claimed(int16_t refnum)
+{
+    fcb *f = fcb_for(refnum);
+    return f && f->claimed;
+}
+
+/* Whether the slot of a refnum is in use: an open fork, a resource file or
+ * a slot a plug-in claimed. */
+bool fm_fcb_in_use(int16_t refnum)
+{
+    const uint8_t *data;
+    uint32_t len;
+    gaddr f = fm_fcb_addr(refnum);
+    return f && (fcb_for(refnum) || rm_fork_of(refnum, &data, &len) || rd32(f) != 0);
+}
+
+/* The volume and directory a working directory reference (or a volume's)
+ * leads to. */
+bool fm_wd_resolve(int16_t ref, int16_t *vref, int32_t *dirid)
+{
+    int32_t d = base_dir(ref, 0, false);
+    if (!d)
+        return false;
+    char dpath[PATH_MAX];
+    mount *dm = host_of_dir(d, dpath, sizeof dpath) ? mount_of_path(dpath) : NULL;
+    *vref = dm ? dm->vref : VREF;
+    *dirid = out_id(d);
+    return true;
+}
+
+/* A working directory slot in use, and its number (-1 if the reference is none). */
+int fm_wd_index(int16_t ref)
+{
+    if (ref <= -32000 && ref > -32000 - MAX_WDS && wds[-32000 - ref].used)
+        return -32000 - ref;
+    return -1;
 }
