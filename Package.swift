@@ -37,7 +37,10 @@ let package = Package(
                                  .linkedFramework("IOKit", .when(platforms: [.macOS])),
                                  .linkedFramework("CoreFoundation", .when(platforms: [.macOS])),
                                  // Apple's OpenGL for Mac OS 9, on the host's (opengl.c)
-                                 .linkedFramework("OpenGL", .when(platforms: [.macOS]))]),
+                                 .linkedFramework("OpenGL", .when(platforms: [.macOS])),
+                                 // QuickDraw 3D and RAVE, drawn with Metal (r3d_metal.m)
+                                 .linkedFramework("Metal", .when(platforms: [.macOS])),
+                                 .linkedFramework("Foundation", .when(platforms: [.macOS]))]),
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
         .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
         // Command-line tool: run, import, install, apps, rsrc, inspect.

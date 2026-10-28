@@ -29,6 +29,7 @@
 #include "os9_toolbox.h"
 #include "ppc_bridge.h"
 #include "qt_calls.h"
+#include "qd3d.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -272,6 +273,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
         for (unsigned i = 0; i < gl_export_count; i++)
             if (!strcmp(gl_exports[i].name, name))
                 return gl_exports[i].fn;
+    void (*q3)(ppc_cpu *) = qd3d_export_fn(name); /* QuickDraw 3D, its Viewer and RAVE */
+    if (q3)
+        return q3;
     if (os9tbx_export_fn(name)) /* WindowsLib, ControlsLib, MenusLib and AppearanceLib's own */
         return os9tbx_export_fn(name);
     if (qt_export_fn(name)) /* QuickTime's component calls, QuickTime VR and streaming */
@@ -659,6 +663,8 @@ static bool is_native_library(const char *name)
     /* Apple's OpenGL, where the host has one to draw with (opengl.c). */
     if (!strcmp(name, "OpenGLLibrary") || !strcmp(name, "OpenGLUtility"))
         return hostgl_available();
+    if (qd3d_library(name)) /* QuickDraw 3D, where the host can render it */
+        return true;
     for (unsigned i = 0; i < sizeof native_libraries / sizeof native_libraries[0]; i++)
         if (!strcmp(native_libraries[i], name))
             return true;

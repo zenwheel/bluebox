@@ -4,6 +4,7 @@
  */
 #include "m68k.h"
 #include "ppc_bridge.h"
+#include "r3d.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -194,6 +195,13 @@ void gestalt_powerpc(void)
      * shares with InterfaceLib and its own additions as far as they go. */
     gestalt_set(fourcc("cbon"), 0x0110);
     gestalt_set(fourcc("fpu "), 0);
+    /* QuickDraw 3D 1.6 and its Viewer, where the host can render them
+     * (q3_*.c, r3d.h). */
+    if (r3d_available()) {
+        gestalt_set(fourcc("qd3d"), 0x1);        /* gestaltQD3DAvailable */
+        gestalt_set(fourcc("q3v "), 0x01608000); /* gestaltQD3DVersion: 1.6 */
+        gestalt_set(fourcc("q3vc"), 0x1);        /* gestaltQD3DViewerAvailable */
+    }
     for (unsigned i = 0; i < noverrides; i++)
         gestalt_override(overrides[i].selector, overrides[i].value);
 }
