@@ -1,6 +1,6 @@
 /*
  * RAVE, QuickDraw 3D's rasterizer interface (QuickDraw™ 3D Accelerator,
- * RAVE.h), on the host's renderer (r3d.h): one engine, draw contexts
+ * RAVE.h), on the host's renderer (r3d.h): two engines, draw contexts
  * whose method table is transition vectors to the calls here, textures
  * and bitmaps.
  *
@@ -11,8 +11,12 @@
  * clip region the program gave.  Vertex coordinates are the draw
  * context's own (0, 0 at its rectangle's top left).
  *
- * The engine is Apple's (vendor 0) with an engine ID of its own, and says
- * the features it has are fast: games choose an engine on that.  Colour
+ * There are two engines, as a Mac with a 3D accelerator had: Blue Box's
+ * (vendor Apple, an engine ID of its own), saying the features it has are
+ * fast, as games choose an engine on that; and Apple's software engine
+ * (kQAEngine_AppleSW), saying none is, which some programs look for as
+ * well (Combat Mission draws offscreen with it and won't start without
+ * it).  Both draw through the host's renderer.  Colour
  * table pixel types (CL4, CL8), the buffer access calls and multiple
  * textures are not supported yet.
  */
@@ -58,7 +62,7 @@ enum { kQAVersion_1_6 = 4 };
 #define TAG_CTX 0x51416463u  /* 'QAdc' */
 #define TAG_TEX 0x51417478u  /* 'QAtx' */
 #define TAG_BMP 0x5141626Du  /* 'QAbm' */
-static const char engine_name[] = "Blue Box Metal Engine";
+static const char *const engine_names[2] = { "Blue Box Metal Engine", "Apple Software Engine" };
 
 typedef struct {
     gaddr guest;
@@ -95,16 +99,27 @@ typedef struct {
 enum { MAX_CTX = 64, MAX_TEX = 4096 };
 static rctx *ctxs[MAX_CTX];
 static rtex *texs[MAX_TEX];
-static gaddr engine;
+static gaddr engines[2];
 
-static gaddr the_engine(void)
+static gaddr engine_at(int i)
 {
-    if (!engine && r3d_available()) {
-        engine = tb_NewPtr(16, true, true);
-        if (engine)
-            wr32(engine, 0x51416567); /* 'QAeg' */
+    if (!engines[i] && r3d_available()) {
+        engines[i] = tb_NewPtr(16, true, true);
+        if (engines[i]) {
+            wr32(engines[i], 0x51416567); /* 'QAeg' */
+            wr32(engines[i] + 4, (uint32_t)i);
+        }
     }
-    return engine;
+    return engines[i];
+}
+
+/* Which engine e is (0 or 1), or -1. */
+static int engine_index(gaddr e)
+{
+    for (int i = 0; e && i < 2; i++)
+        if (engines[i] == e)
+            return i;
+    return -1;
 }
 
 static rctx *ctx_of(gaddr dc)
@@ -346,6 +361,7 @@ static void m_setInt(ppc_cpu *c)
 {
     rctx *x = ctx_of(Q3R(0));
     uint32_t tag = Q3R(1);
+    LOGF(LOG_TRAPS, "  QA setInt %u = %u\n", tag, Q3R(2));
     if (x && tag < 160)
         x->ints[tag] = Q3R(2);
     Q3RETURN(0);
@@ -698,18 +714,25 @@ static bool device_ok(gaddr dev)
     return type == kQADeviceGDevice && rd32(dev + 4);
 }
 
-static void QADeviceGetFirstEngine(ppc_cpu *c) { Q3RETURN(device_ok(Q3R(0)) ? the_engine() : 0); }
-static void QADeviceGetNextEngine(ppc_cpu *c) { Q3RETURN(0); }
+/* No device: any engine there is (Exobattle looks for fast texturing so). */
+static void QADeviceGetFirstEngine(ppc_cpu *c) { Q3RETURN(!Q3R(0) || device_ok(Q3R(0)) ? engine_at(0) : 0); }
+
+static void QADeviceGetNextEngine(ppc_cpu *c)
+{
+    int i = engine_index(Q3R(1));
+    Q3RETURN(i == 0 && (!Q3R(0) || device_ok(Q3R(0))) ? engine_at(1) : 0);
+}
 
 static void QAEngineCheckDevice(ppc_cpu *c)
 {
-    Q3RETURN(Q3R(0) && Q3R(0) == engine && device_ok(Q3R(1)) ? kQANoErr : kQANotSupported);
+    Q3RETURN(engine_index(Q3R(0)) >= 0 && device_ok(Q3R(1)) ? kQANoErr : kQANotSupported);
 }
 
 static void QAEngineGestalt(ppc_cpu *c)
 {
     gaddr resp = Q3R(2);
-    if (!Q3R(0) || Q3R(0) != engine || !resp) {
+    int e = engine_index(Q3R(0));
+    if (e < 0 || !resp) {
         Q3RETURN(kQAParamErr);
         return;
     }
@@ -719,13 +742,13 @@ static void QAEngineGestalt(ppc_cpu *c)
     case kQAGestalt_OptionalFeatures:
         v = 1u << 0 | 1u << 1 | 1u << 2 | 1u << 3 | 1u << 4 | 1u << 5 | 1u << 8 | 1u << 22 | 1u << 28 | 1u << 29;
         break;
-    case kQAGestalt_FastFeatures: v = 1u << 0 | 1u << 1 | 1u << 2 | 1u << 3 | 1u << 4; break;
-    case kQAGestalt_VendorID: v = 0; break;
-    case kQAGestalt_EngineID: v = ENGINE_ID; break;
+    case kQAGestalt_FastFeatures: v = e ? 0 : 1u << 0 | 1u << 1 | 1u << 2 | 1u << 3 | 1u << 4; break;
+    case kQAGestalt_VendorID: v = 0; break; /* kQAVendor_Apple */
+    case kQAGestalt_EngineID: v = e ? 0 : ENGINE_ID; break; /* kQAEngine_AppleSW */
     case kQAGestalt_Revision: v = 0x00010600; break;
-    case kQAGestalt_ASCIINameLength: v = (uint32_t)strlen(engine_name); break;
+    case kQAGestalt_ASCIINameLength: v = (uint32_t)strlen(engine_names[e]); break;
     case kQAGestalt_ASCIIName:
-        gput(resp, engine_name, sizeof engine_name);
+        gput(resp, engine_names[e], (uint32_t)strlen(engine_names[e]) + 1);
         Q3RETURN(kQANoErr);
         return;
     case kQAGestalt_TextureMemory:
@@ -738,8 +761,12 @@ static void QAEngineGestalt(ppc_cpu *c)
     case kQAGestalt_BitmapPixelTypesPreferred: v = px16_32 | 1u << kQAPixel_Alpha1; break;
     case kQAGestalt_OptionalFeatures2: v = 1u << 4; break; /* kQAOptional2_SwapBuffers */
     case kQAGestalt_MultiTextureMax: v = 0; break;
-    default: Q3RETURN(kQAGestaltUnknown); return;
+    default:
+        LOGF(LOG_TRAPS, "  QAEngineGestalt %u: unknown\n", Q3R(1));
+        Q3RETURN(kQAGestaltUnknown);
+        return;
     }
+    LOGF(LOG_TRAPS, "  QAEngineGestalt %u: %08X\n", Q3R(1), v);
     wr32(resp, v);
     Q3RETURN(kQANoErr);
 }
@@ -753,7 +780,7 @@ static void QADrawContextNew(ppc_cpu *c)
     uint32_t flags = Q3R(4);
     if (out)
         wr32(out, 0);
-    if (!device_ok(dev) || !rect || !out || Q3R(3) != engine || !engine) {
+    if (!device_ok(dev) || !rect || !out || engine_index(Q3R(3)) < 0) {
         Q3RETURN(kQAParamErr);
         return;
     }
@@ -889,7 +916,7 @@ static void new_image(ppc_cpu *c, bool bitmap)
     if (out)
         wr32(out, 0);
     int fmt = type == kQAPixel_Alpha1 && bitmap ? 0 : texture_format(type);
-    if (Q3R(0) != engine || !engine || !images || !out || fmt < 0) {
+    if (engine_index(Q3R(0)) < 0 || !images || !out || fmt < 0) {
         Q3RETURN(fmt < 0 ? kQANotSupported : kQAParamErr);
         return;
     }
@@ -1016,5 +1043,5 @@ void rave_reset(void)
             free(texs[i]);
             texs[i] = NULL;
         }
-    engine = 0;
+    engines[0] = engines[1] = 0;
 }

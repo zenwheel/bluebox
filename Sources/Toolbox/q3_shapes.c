@@ -10,6 +10,7 @@
 #include <stdlib.h>
 
 #include "q3_view.h"
+#include "qt_codec.h"
 #include "tb_internal.h"
 
 /* q3_view.c's state for submitted shapes. */
@@ -21,6 +22,7 @@ void q3_texture_forget(gaddr tex);
 bool q3_camera_matrices(gaddr camera, float w2v[16], float v2f[16]);
 uint32_t *q3_storage_pixmap_argb(const uint32_t *w, gaddr storage);
 uint8_t *q3_storage_bytes(gaddr storage, uint32_t *size);
+gaddr q3_memory_storage_new(const uint8_t *b, uint32_t n);
 
 #define T4(s) Q3T(s[0], s[1], s[2], s[3])
 #define ORTH T4("orth")
@@ -616,8 +618,72 @@ Q3_SETO(Q3TextureShader_SetTexture, TXSU, 11)
 
 static void Q3Texture_GetType(ppc_cpu *c) { Q3RETURN(type_below(Q3R(0), Q3_TEXTURE)); }
 
+static uint32_t be32(const uint8_t *b) { return (uint32_t)b[0] << 24 | (uint32_t)b[1] << 16 | (uint32_t)b[2] << 8 | b[3]; }
+static uint16_t be16(const uint8_t *b) { return (uint16_t)(b[0] << 8 | b[1]); }
+
+/* RGBA bytes to 0xAARRGGBB pixels, in place. */
+static uint32_t *rgba_argb(uint8_t *rgba, int w, int h)
+{
+    uint32_t *px = (uint32_t *)rgba;
+    for (int i = 0; i < w * h; i++) {
+        const uint8_t *b = rgba + 4 * i;
+        uint32_t v = (uint32_t)b[3] << 24 | (uint32_t)b[0] << 16 | (uint32_t)b[1] << 8 | b[2];
+        px[i] = v;
+    }
+    return px;
+}
+
+/* A compressed pixmap's image: its QuickTime image description (big-
+ * or little-endian, as imageDescByteOrder says) and data, through the
+ * classic codecs Blue Box decodes or, for JPEG and the like, the host's
+ * image decoder. */
+static uint32_t *compressed_argb(const uint32_t *d, int *w, int *h)
+{
+    uint32_t dsize = 0, isize = 0;
+    uint8_t *desc = q3_storage_bytes(d[2], &dsize), *img = q3_storage_bytes(d[0], &isize);
+    uint32_t *out = NULL;
+    if (desc && img && dsize >= 86) {
+        if (d[1] == 1) { /* little-endian: the fields we read, swapped */
+            static const int fields[][2] = { { 0, 4 }, { 4, 4 }, { 32, 2 }, { 34, 2 }, { 82, 2 } };
+            for (unsigned k = 0; k < sizeof fields / sizeof fields[0]; k++)
+                for (int i = 0; i < fields[k][1] / 2; i++) {
+                    uint8_t t = desc[fields[k][0] + i];
+                    desc[fields[k][0] + i] = desc[fields[k][0] + fields[k][1] - 1 - i];
+                    desc[fields[k][0] + fields[k][1] - 1 - i] = t;
+                }
+        }
+        uint32_t ctype = be32(desc + 4);
+        int dw = be16(desc + 32), dh = be16(desc + 34), depth = (int16_t)be16(desc + 82);
+        if (dw > 0 && dh > 0 && dw <= 8192 && dh <= 8192 && qt_vdec_supported(ctype, depth)) {
+            qt_video_format f = { ctype, dw, dh, depth, NULL };
+            qt_vdec *dec = qt_vdec_new(&f);
+            uint8_t *frame = dec ? calloc((size_t)dw * (size_t)dh, 4) : NULL;
+            if (frame && qt_vdec_decode(dec, img, isize, frame)) {
+                out = rgba_argb(frame, dw, dh);
+                *w = dw;
+                *h = dh;
+            } else {
+                free(frame);
+            }
+            if (dec)
+                qt_vdec_free(dec);
+        } else {
+            uint8_t *rgba = NULL;
+            int iw = 0, ih = 0;
+            if (qt_decode_image(img, isize, &rgba, &iw, &ih)) {
+                out = rgba_argb(rgba, iw, ih);
+                *w = iw;
+                *h = ih;
+            }
+        }
+    }
+    free(desc);
+    free(img);
+    return out;
+}
+
 /* The texture's pixels: a pixmap's, a mipmap's first image, or a
- * compressed pixmap's decompressed (none yet). */
+ * compressed pixmap's decompressed. */
 uint32_t *q3_texture_argb(q3obj *t, int *w, int *h);
 uint32_t *q3_texture_argb(q3obj *t, int *w, int *h)
 {
@@ -640,6 +706,8 @@ uint32_t *q3_texture_argb(q3obj *t, int *w, int *h)
         *h = (int)d[7];
         return q3_storage_pixmap_argb(sp, d[0]);
     }
+    if (t->type == TXCP)
+        return compressed_argb(d, w, h);
     return NULL;
 }
 
@@ -667,10 +735,65 @@ Q3_NEWDATA(Q3CompressedPixmapTexture_New, TXCP)
 Q3_GETDATA(Q3CompressedPixmapTexture_GetCompressedPixmap, TXCP)
 Q3_SETDATA(Q3CompressedPixmapTexture_SetCompressedPixmap, TXCP)
 
+/* A pixel map compressed by one of the codecs Blue Box encodes, into
+ * new memory storage objects for the data and its image description. */
 static void Q3CompressedPixmapTexture_CompressImage(ppc_cpu *c)
 {
-    q3_error(kQ3ErrorUnimplemented);
-    Q3RETURN(kQ3Failure);
+    gaddr out = Q3R(0), pmh = Q3R(1);
+    uint32_t ctype = Q3R(2);
+    int depth = (int16_t)Q3R(4);
+    gaddr pm = pmh ? rd32(pmh) : 0;
+    if (!out || !pm || !qt_venc_supported(ctype, depth ? depth : 32)) {
+        q3_error(pm && out ? kQ3ErrorNotSupported : kQ3ErrorNULLParameter);
+        Q3RETURN(kQ3Failure);
+        return;
+    }
+    qrect b = qrect_get(pm + PixMap_bounds_off);
+    int w = b.right - b.left, h = b.bottom - b.top;
+    pixdst src;
+    src.base = PixMap_baseAddr(pm);
+    src.row_bytes = (uint16_t)PixMap_rowBytes(pm) & 0x3FFF;
+    src.bounds = b;
+    src.depth = PixMap_pixelSize(pm);
+    src.ctab = PixMap_pmTable(pm);
+    pixdst_clamp(&src);
+    uint32_t *px = w > 0 && h > 0 ? malloc((size_t)w * (size_t)h * 4) : NULL;
+    uint8_t *data = NULL;
+    size_t n = 0;
+    if (px) {
+        q3_get_pixels(px, w, h, &src, b.left, b.top);
+        qt_venc_format f = { ctype, w, h, depth ? depth : 32, (int32_t)Q3R(5) };
+        n = qt_venc_encode(&f, px, NULL, &data);
+    }
+    free(px);
+    if (!n) {
+        free(data);
+        Q3RETURN(kQ3Failure);
+        return;
+    }
+    uint8_t desc[86];
+    memset(desc, 0, sizeof desc);
+    desc[3] = 86;
+    for (int k = 0; k < 4; k++)
+        desc[4 + k] = (uint8_t)(ctype >> (24 - 8 * k));
+    desc[32] = (uint8_t)(w >> 8), desc[33] = (uint8_t)w, desc[34] = (uint8_t)(h >> 8), desc[35] = (uint8_t)h;
+    desc[36] = desc[40] = 0x00, desc[37] = desc[41] = 0x48; /* 72 dpi */
+    uint32_t sz = (uint32_t)n;
+    desc[44] = (uint8_t)(sz >> 24), desc[45] = (uint8_t)(sz >> 16), desc[46] = (uint8_t)(sz >> 8), desc[47] = (uint8_t)sz;
+    desc[49] = 1; /* frameCount */
+    desc[82] = (uint8_t)((depth ? depth : 24) >> 8), desc[83] = (uint8_t)(depth ? depth : 24);
+    desc[84] = 0xFF, desc[85] = 0xFF; /* clutID -1 */
+    gaddr image = q3_memory_storage_new(data, sz), idesc = q3_memory_storage_new(desc, sizeof desc);
+    free(data);
+    wr32(out, image);
+    wr32(out + 4, 0); /* kQ3EndianBig */
+    wr32(out + 8, idesc);
+    wr32(out + 12, 0); /* makeMipmaps */
+    wr32(out + 16, (uint32_t)w);
+    wr32(out + 20, (uint32_t)h);
+    wr32(out + 24, 32);
+    wr32(out + 28, 0); /* kQ3PixelTypeRGB32 */
+    Q3RETURN(image && idesc ? kQ3Success : kQ3Failure);
 }
 
 /* ---------------------------------------------------------------------- */

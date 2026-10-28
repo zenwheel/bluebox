@@ -73,7 +73,14 @@ extension BlueBox {
             let dev = Q.words([0, 64, 3, 16, 16, tb_NewPtr(1024, false, true)])
             let engine = Q.call("QADeviceGetFirstEngine", [dev])
             #expect(engine != 0)
-            #expect(Q.call("QADeviceGetNextEngine", [dev, engine]) == 0)
+            // Apple's software engine after it, fast at nothing.
+            let sw = Q.call("QADeviceGetNextEngine", [dev, engine])
+            #expect(sw != 0 && sw != engine)
+            #expect(Q.call("QADeviceGetNextEngine", [dev, sw]) == 0)
+            let fast = Q.words([0])
+            #expect(Q.call("QAEngineGestalt", [sw, 1 /* FastFeatures */, fast]) == 0 && rd32(fast) == 0)
+            #expect(Q.call("QAEngineGestalt", [engine, 1, fast]) == 0 && rd32(fast) & 4 != 0)
+            #expect(Q.call("QADeviceGetFirstEngine", [0]) == engine) // any device
             #expect(Q.call("QAEngineCheckDevice", [engine, dev]) == 0)
             let r = Q.words([0, 0])
             #expect(Q.call("QAEngineGestalt", [engine, 0 /* OptionalFeatures */, r]) == 0)

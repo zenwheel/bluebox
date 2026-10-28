@@ -231,5 +231,41 @@ extension BlueBox {
             #expect(pick(4, 4) == 0)
             for obj in [tm, v, dc] { Q.call("Q3Object_Dispose", [obj]) }
         }
+
+        /// A compressed pixmap texture ('raw ', 32-bit) decoded and drawn
+        /// on a box: its colour, unlit, where the box is.
+        @Test func compressedPixmapTexture() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            #expect(Q.call("Q3Initialize") == 1)
+            let (dc, image) = pixmapContext(64, 64, clear: (0, 0, 0))
+            let v = view(dc)
+            var desc = [UInt8](repeating: 0, count: 86)
+            desc[3] = 86
+            desc[4...7] = [0x72, 0x61, 0x77, 0x20] // 'raw '
+            desc[33] = 2; desc[35] = 2; desc[83] = 32
+            let d = tb_NewPtr(86, false, true)
+            for (i, b) in desc.enumerated() { wr8(d + UInt32(i), b) }
+            let pixels = Q.words([0xFF00_FF00, 0xFF00_FF00, 0xFF00_FF00, 0xFF00_FF00])
+            let descStorage = Q.call("Q3MemoryStorage_New", [d, 86])
+            let dataStorage = Q.call("Q3MemoryStorage_New", [pixels, 16])
+            #expect(descStorage != 0 && dataStorage != 0)
+            let tex = Q.call("Q3CompressedPixmapTexture_New", [Q.words([dataStorage, 0, descStorage, 0, 2, 2, 32, 0])])
+            #expect(tex != 0)
+            let w = tb_NewPtr(4, false, true)
+            #expect(Q.call("Q3Texture_GetWidth", [tex, w]) == 1 && rd32(w) == 2)
+            let shader = Q.call("Q3TextureShader_New", [tex])
+            let null = Q.call("Q3NULLIllumination_New")
+            let box = Q.call("Q3Box_New", [Self.data([Float(-1), Float(-1), Float(0), Float(0), Float(2), Float(0),
+                                                      Float(0), Float(0), Float(1), Float(2), Float(0), Float(0), 0, 0])])
+            #expect(Q.call("Q3View_StartRendering", [v]) == 1)
+            #expect(Q.call("Q3Object_Submit", [null, v]) == 1)
+            #expect(Q.call("Q3Object_Submit", [shader, v]) == 1)
+            #expect(Q.call("Q3Object_Submit", [box, v]) == 1)
+            #expect(Q.call("Q3View_EndRendering", [v]) == 0)
+            #expect(px(image, 64, 32, 32) == 0x00FF00)
+            #expect(px(image, 64, 1, 1) == 0x000000)
+            for obj in [box, null, shader, tex, descStorage, dataStorage, v, dc] { Q.call("Q3Object_Dispose", [obj]) }
+        }
     }
 }
