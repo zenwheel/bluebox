@@ -1,0 +1,63 @@
+# The Process Manager's calls that only the Finder makes (M21), found from
+# System 7.1's Finder's code: the argument lists are what its call sites
+# push.  See finder.c.  PowerPC Finders (Mac OS 8 and 9) reach them
+# through their own 68k glue or PrivateInterfaceLib, so there are no
+# PowerPC exports here.
+
+# $42 and $43: the Finder hands the Process Manager a routine to call
+# when volumes come and go (and takes it back when it quits), with a
+# reference constant: RequestVolumeNotification, DeclineVolumeNotification.
+- function:
+    name: RequestVolumeNotification
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: ProcPtr
+      - name: refCon
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0042
+
+- function:
+    name: DeclineVolumeNotification
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: ProcPtr
+      - name: refCon
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0043
+
+# $47: the room in the system heap.  The Finder asks before it puts
+# something big there (it wants ExpandMem's reserve, at $1AE, plus what it
+# allocates): the bytes free now in the second argument, the bytes the
+# heap could still grow by in the first; either may be nil.
+- function:
+    name: SystemHeapRoom
+    return: OSErr
+    args:
+      - name: growRoom
+        type: LONGINT*
+      - name: freeRoom
+        type: LONGINT*
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0047
+
+# $14: the desktop's window.  The Finder asks for it at startup with the
+# system heap current (it stops with SysError 41, "can't load the
+# Finder", on an error), keeps it in a global, compares the windows of
+# update events with it and draws its desktop icons in its port, sharing
+# its update and visible regions with its desktop object.
+- function:
+    name: NewDesktopWindow
+    return: OSErr
+    args:
+      - name: deskWindow
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0014

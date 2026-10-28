@@ -5772,6 +5772,17 @@ static void glue_DebuggerUnlockMemory(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_DeclineVolumeNotification(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    gaddr a_notifyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DeclineVolumeNotification(a_notifyProc, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DecompressImage(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19001,6 +19012,16 @@ static void glue_NewDebugOption(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewDesktopWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_deskWindow = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewDesktopWindow(a_deskWindow);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewDialog(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -23712,6 +23733,17 @@ static void glue_ReplaceText(cpu68k *c, uint16_t trapword)
     gaddr a_subst_text = (gaddr)cpu_pop32(c);
     gaddr a_base_text = (gaddr)cpu_pop32(c);
     int16_t r = tb_ReplaceText(a_base_text, a_subst_text, a_key);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RequestVolumeNotification(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    gaddr a_notifyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RequestVolumeNotification(a_notifyProc, a_refCon);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -29297,6 +29329,17 @@ static void glue_SystemEvent(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SystemHeapRoom(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_freeRoom = (gaddr)cpu_pop32(c);
+    gaddr a_growRoom = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SystemHeapRoom(a_growRoom, a_freeRoom);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SystemMenu(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -33484,6 +33527,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x1u, "GetActiveTaskInfo", CONV_STACK, 6, 2, glue_GetActiveTaskInfo},
     {0xA88F, (int32_t)0x2u, "GetSwitchInfo", CONV_STACK, 4, 0, glue_GetSwitchInfo},
     {0xA88F, (int32_t)0x3u, "CancelSwitch", CONV_STACK, 0, 0, glue_CancelSwitch},
+    {0xA88F, (int32_t)0x14u, "NewDesktopWindow", CONV_STACK, 4, 2, glue_NewDesktopWindow},
     {0xA88F, (int32_t)0x15u, "TempMaxMem", CONV_STACK, 4, 4, glue_TempMaxMem},
     {0xA88F, (int32_t)0x16u, "TempTopMem", CONV_STACK, 0, 4, glue_TempTopMem},
     {0xA88F, (int32_t)0x18u, "TempFreeMem", CONV_STACK, 0, 4, glue_TempFreeMem},
@@ -33506,8 +33550,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x3Du, "SameProcess", CONV_STACK, 12, 2, glue_SameProcess},
     {0xA88F, (int32_t)0x40u, "BeginSystemMode", CONV_STACK, 0, 2, glue_BeginSystemMode},
     {0xA88F, (int32_t)0x41u, "EndSystemMode", CONV_STACK, 0, 2, glue_EndSystemMode},
+    {0xA88F, (int32_t)0x42u, "RequestVolumeNotification", CONV_STACK, 8, 2, glue_RequestVolumeNotification},
+    {0xA88F, (int32_t)0x43u, "DeclineVolumeNotification", CONV_STACK, 8, 2, glue_DeclineVolumeNotification},
     {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, glue_GetPortNameFromProcessSerialNumber},
+    {0xA88F, (int32_t)0x47u, "SystemHeapRoom", CONV_STACK, 8, 2, glue_SystemHeapRoom},
     {0xA88F, (int32_t)0x55u, "OSDispatch55", CONV_STACK, 4, 2, glue_OSDispatch55},
     {0xA88F, (int32_t)0x5Au, "OSDispatch5A", CONV_STACK, 30, 4, glue_OSDispatch5A},
     {0xA88F, (int32_t)0x64u, "OSDispatch64", CONV_STACK, 8, 2, glue_OSDispatch64},

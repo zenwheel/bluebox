@@ -4,7 +4,9 @@
  * its type and creator to send it events, which aem.c carries out), then
  * the other runs that take Apple Events, as serial numbers {1, their
  * process ID}, so programs can find each other by signature and send
- * events.  Temporary memory comes from the growable application heap.
+ * events.  When the run is the Finder itself (bluebox run on a 'FNDR'
+ * file), it is that Finder process, first in the list.  Temporary memory
+ * comes from the growable application heap.
  */
 #include <stdlib.h>
 #include <unistd.h>
@@ -16,19 +18,19 @@ enum { procNotFound = -600 };
 #define FINDER_PSN 0x1001u
 #define kCurrentProcess 2u
 
-bool process_is_finder(uint32_t hi, uint32_t lo) { return hi == 0 && lo == FINDER_PSN; }
-static bool is_finder(gaddr psn) { return process_is_finder(rd32(psn), rd32(psn + 4)); }
+static uint32_t our_psn(void) { return g_is_finder ? FINDER_PSN : OUR_PSN; }
 
-static bool is_us(gaddr psn)
-{
-    uint32_t hi = rd32(psn), lo = rd32(psn + 4);
-    return hi == 0 && (lo == OUR_PSN || lo == kCurrentProcess);
-}
+/* The Finder's serial number; when the run is the Finder, that is us. */
+bool process_is_finder(uint32_t hi, uint32_t lo) { return hi == 0 && lo == FINDER_PSN; }
+static bool is_finder(gaddr psn) { return !g_is_finder && process_is_finder(rd32(psn), rd32(psn + 4)); }
+
+bool process_is_us(uint32_t hi, uint32_t lo) { return hi == 0 && (lo == our_psn() || lo == kCurrentProcess); }
+static bool is_us(gaddr psn) { return process_is_us(rd32(psn), rd32(psn + 4)); }
 
 static void put_us(gaddr psn)
 {
     wr32(psn, 0);
-    wr32(psn + 4, OUR_PSN);
+    wr32(psn + 4, our_psn());
 }
 
 int16_t tb_GetCurrentProcess(gaddr psn)
@@ -58,13 +60,13 @@ int16_t tb_GetNextProcess(gaddr psn)
         put_us(psn);
         return noErr;
     }
-    if (is_us(psn)) { /* then the Finder */
+    if (is_us(psn) && !g_is_finder) { /* then the Finder */
         wr32(psn, 0);
         wr32(psn + 4, FINDER_PSN);
         return noErr;
     }
     /* Then the other runs, in process ID order. */
-    uint32_t after = is_finder(psn) ? 0 : rd32(psn) == 1 ? rd32(psn + 4) : UINT32_MAX;
+    uint32_t after = is_finder(psn) || is_us(psn) ? 0 : rd32(psn) == 1 ? rd32(psn + 4) : UINT32_MAX;
     machine_ae_process procs[64];
     int n = machine_ae_processes(procs, 64);
     uint32_t next = UINT32_MAX;
@@ -142,7 +144,7 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
     if (name)
         gmemcpy(name, LM_CurApName, (uint32_t)rd8(LM_CurApName) + 1);
     put_us(info + ProcessInfoRec_processNumber_off);
-    ProcessInfoRec_set_processType(info, fourcc("APPL"));
+    ProcessInfoRec_set_processType(info, fourcc(g_is_finder ? "FNDR" : "APPL"));
     ProcessInfoRec_set_processSignature(info, (int32_t)g_app_creator);
     ProcessInfoRec_set_processMode(info, g_app_size_flags); /* the SIZE flags, as the Process Manager gave */
     ProcessInfoRec_set_processLocation(info, rd32(LM_ApplZone));

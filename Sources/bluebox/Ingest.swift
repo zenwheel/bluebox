@@ -20,6 +20,10 @@ struct IngestedFile {
     var hasCfrg: Bool
 
     var isApplication: Bool { type == fourCCValue("APPL") }
+    /// The Finder (type 'FNDR'), which runs as the system's Finder process.
+    var isFinder: Bool { type == fourCCValue("FNDR") }
+    /// What `bluebox run` can start: an application or the Finder.
+    var isLaunchable: Bool { isApplication || isFinder }
     var architecture: String {
         switch (hasCODE, hasCfrg) {
         case (true, true): return "68k+PPC"

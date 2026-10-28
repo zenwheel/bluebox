@@ -117,6 +117,7 @@ int16_t rm_open_empty_system(void);
  * there is none or it failed. */
 bool process_launch(const char *app, const char *const *docs, int ndocs);
 bool process_is_finder(uint32_t hi, uint32_t lo); /* the Finder's serial number */
+bool process_is_us(uint32_t hi, uint32_t lo); /* this run's serial number or kCurrentProcess */
 bool process_open_url(const char *url);
 /* Internet Config's ICLaunchURL: the URL in data[a..b) (all len bytes when
  * the selection is empty) opened by the host; an Internet Config error. */
@@ -260,6 +261,9 @@ void machine_charge_pixels(uint64_t n);
 /* TickCount polled: headless, a tight loop of polls skips to the next tick. */
 void machine_tick_polled(void);
 gaddr wm_window_at(uint32_t p);
+/* The Finder's desktop window (outside the window list; FindWindow answers inDesk there). */
+gaddr wm_new_desk_window(void);
+gaddr wm_desk_window(void);
 void drag_reset(void); /* Drag Manager (drag.c): a fresh machine */
 void print_reset(void); /* Printing Manager (print.c) */
 /* A print record's page setup in points, and one put in at a resolution
@@ -332,6 +336,7 @@ uint8_t *intl_itl2(uint32_t *lenp);
 
 void notify_pump(void);
 void notify_reset(void);
+void finder_reset(void); /* the Finder's Process Manager calls (finder.c) */
 void iconservices_reset(void); /* Icon Services (iconservices.c) */
 
 /* ---- Sound Manager ---- */
@@ -547,6 +552,7 @@ int16_t alias_new_for_host(const char *host, gaddr alias_out);
 
 /* The application's SIZE flags (isHighLevelEventAware is 0x0040). */
 extern uint16_t g_app_size_flags;
+extern bool g_is_finder;
 
 /* Dialog Manager (dialog.c): text with ^0..^3 replaced by the ParamText
  * strings; a message asking for another screen depth ends the run when
