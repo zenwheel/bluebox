@@ -584,5 +584,32 @@ extension BlueBox {
             #expect(tb_PBGetCatInfo(pb, false) == 0)
             #expect(rd8(pb + UInt32(DirInfo_ioACUser_off)) == 0)
         }
+
+        /// A folder's and a file's IDs on the volume are the same in the
+        /// next run, and after a rename (the Finder's Put Away and aliases
+        /// keep them).
+        @Test func idsAreKept() {
+            let disk = URL(fileURLWithPath: testDisk)
+            let folder = disk.appendingPathComponent("Kept IDs \(UUID().uuidString.prefix(6))")
+            try? FileManager.default.createDirectory(at: folder.appendingPathComponent("Inner"), withIntermediateDirectories: true)
+            try? "x".write(to: folder.appendingPathComponent("Inner/File"), atomically: true, encoding: .utf8)
+            launchTestApp()
+            func ids(_ inner: String) -> (UInt32, UInt32) {
+                let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+                let path = ":" + folder.lastPathComponent + ":" + inner
+                #expect(tb_FSMakeFSSpec(-1, 2, pname(path + ":File"), spec) == 0)
+                let pb = catInfo(-1, 2, path + ":File")
+                return (rd32(spec + 2), rd32(pb + UInt32(FileParam_ioFlNum_off)))
+            }
+            let (dir, file) = ids("Inner")
+            #expect(dir > 2 && file > 0x10000)
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            #expect(tb_FSMakeFSSpec(-1, 2, pname(":" + folder.lastPathComponent + ":Inner"), spec) == 0)
+            #expect(tb_FSpRename(spec, pname("Renamed")) == 0)
+            catalog_close()
+            launchTestApp()
+            let (dir2, file2) = ids("Renamed")
+            #expect(dir2 == dir && file2 == file)
+        }
     }
 }

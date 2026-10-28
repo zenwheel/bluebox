@@ -48,6 +48,8 @@ static sqlite3 *open_db(void)
     sqlite3_busy_timeout(db, 2000); /* other runs share it */
     static const char schema[] =
         "PRAGMA journal_mode=WAL;"
+        "PRAGMA synchronous=NORMAL;"
+        "CREATE TABLE IF NOT EXISTS nodes(rel TEXT PRIMARY KEY, id INTEGER UNIQUE);"
         "CREATE TABLE IF NOT EXISTS dirinfo(path TEXT PRIMARY KEY, finfo BLOB, fxinfo BLOB);"
         "CREATE TABLE IF NOT EXISTS comments(path TEXT PRIMARY KEY, text BLOB);"
         "CREATE TABLE IF NOT EXISTS dt_volumes(root TEXT PRIMARY KEY);"
@@ -80,6 +82,59 @@ static bool run(sqlite3_stmt *st)
         ;
     sqlite3_finalize(st);
     return r == SQLITE_DONE;
+}
+
+/* ---- Stable IDs ----
+ * The directory and file IDs (CNIDs) the File Manager gives the volume's
+ * folders and files, by their path on it, so they are the same from run
+ * to run: aliases, Put Away and file ID references keep them. */
+
+void catalog_nodes(void (*each)(const char *rel, int32_t id, void *ctx), void *ctx)
+{
+    sqlite3_stmt *st = prep("SELECT rel, id FROM nodes");
+    if (!st)
+        return;
+    while (sqlite3_step(st) == SQLITE_ROW)
+        each((const char *)sqlite3_column_text(st, 0), sqlite3_column_int(st, 1), ctx);
+    sqlite3_finalize(st);
+}
+
+/* Taken for this path, or false when the path or the ID is another's. */
+bool catalog_add_node(const char *rel, int32_t id)
+{
+    sqlite3_stmt *st = prep("INSERT INTO nodes(rel, id) VALUES(?, ?)");
+    if (!st)
+        return false;
+    sqlite3_bind_text(st, 1, rel, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(st, 2, id);
+    return run(st);
+}
+
+/* A path's ID, or 0; and the highest ID given. */
+int32_t catalog_node_id(const char *rel)
+{
+    sqlite3_stmt *st = rel ? prep("SELECT id FROM nodes WHERE rel = ?") : prep("SELECT max(id) FROM nodes");
+    if (!st)
+        return 0;
+    if (rel)
+        sqlite3_bind_text(st, 1, rel, -1, SQLITE_TRANSIENT);
+    int32_t id = sqlite3_step(st) == SQLITE_ROW ? sqlite3_column_int(st, 0) : 0;
+    sqlite3_finalize(st);
+    return id;
+}
+
+/* The IDs of what is at `from` and inside it, now at `to` (NULL: gone). */
+void catalog_nodes_moved(const char *from, const char *to)
+{
+    sqlite3_stmt *st = to ? prep("UPDATE OR REPLACE nodes SET rel = ?2 || substr(rel, length(?1) + 1)"
+                                 " WHERE rel = ?1 OR substr(rel, 1, length(?1) + 1) = ?1 || '/'")
+                          : prep("DELETE FROM nodes WHERE rel = ?1 OR substr(rel, 1, length(?1) + 1) = ?1 || '/'");
+    if (!st)
+        return;
+    sqlite3_bind_text(st, 1, from, -1, SQLITE_TRANSIENT);
+    if (to)
+        sqlite3_bind_text(st, 2, to, -1, SQLITE_TRANSIENT);
+    run(st);
 }
 
 /* ---- Folders' Finder information ---- */

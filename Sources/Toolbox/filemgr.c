@@ -400,6 +400,12 @@ static void host_component(const char *dir, const uint8_t *mac, int n, char *out
     closedir(d);
 }
 
+/* Directories are recorded relative to the volume's folder ("" for its
+ * root), or as \1 and the absolute path for the host's ("\1" alone for
+ * "/", the Host folder).  Those on the volume keep their IDs from run to
+ * run in the catalog. */
+#define HOST_MARK '\1'
+
 static uint32_t path_hash(const char *s)
 {
     uint32_t h = 2166136261u; /* FNV-1a */
@@ -429,6 +435,41 @@ static void hash_rebuild(void)
             hash_insert(i);
 }
 
+/* Room in the table for an ID. */
+static bool dirs_room(int32_t id)
+{
+    while (id >= dirs_cap) {
+        int cap = dirs_cap ? dirs_cap * 2 : 1024;
+        char **nd = realloc(dirs, (size_t)cap * sizeof *nd);
+        if (!nd)
+            return false;
+        memset(nd + dirs_cap, 0, (size_t)(cap - dirs_cap) * sizeof *nd);
+        dirs = nd;
+        dirs_cap = cap;
+    }
+    return true;
+}
+
+/* A path at an ID (one the catalog gave it, or the next). */
+static int32_t place_dir(int32_t id, const char *rel)
+{
+    if (id >= MAX_DIRS || !dirs_room(id))
+        return 0;
+    free(dirs[id]);
+    dirs[id] = strdup(rel);
+    if (id >= ndirs)
+        ndirs = id + 1;
+    if (!dir_hash || (uint32_t)ndirs * 2 > dir_hash_size)
+        hash_rebuild();
+    else
+        hash_insert(id);
+    return id;
+}
+
+/* IDs the catalog keeps stop being given out short of the limit, so a
+ * run always has room for the paths it meets (the host's are never kept). */
+#define KEPT_IDS_MAX (MAX_DIRS - 4096)
+
 static int32_t dir_id_for(const char *rel)
 {
     if (dir_hash)
@@ -437,28 +478,25 @@ static int32_t dir_id_for(const char *rel)
                 return dir_hash[h];
     if (ndirs >= MAX_DIRS)
         return 0;
-    if (ndirs >= dirs_cap) {
-        int cap = dirs_cap ? dirs_cap * 2 : 1024;
-        char **nd = realloc(dirs, (size_t)cap * sizeof *nd);
-        if (!nd)
-            return 0;
-        memset(nd + dirs_cap, 0, (size_t)(cap - dirs_cap) * sizeof *nd);
-        dirs = nd;
-        dirs_cap = cap;
+    /* On the volume, the ID is kept in the catalog (another run may have
+     * given the path one, or taken the next ID, meanwhile). */
+    if (rel[0] && rel[0] != HOST_MARK && ndirs < KEPT_IDS_MAX && !catalog_add_node(rel, ndirs)) {
+        int32_t id = catalog_node_id(rel);
+        if (id > ROOT_ID && id < MAX_DIRS && (id >= ndirs || !dirs[id]))
+            return place_dir(id, rel);
+        int32_t top = catalog_node_id(NULL);
+        if (top >= ndirs && top + 1 < KEPT_IDS_MAX && catalog_add_node(rel, top + 1))
+            return place_dir(top + 1, rel);
     }
-    dirs[ndirs] = strdup(rel);
-    ndirs++;
-    if (!dir_hash || (uint32_t)ndirs * 2 > dir_hash_size)
-        hash_rebuild();
-    else
-        hash_insert(ndirs - 1);
-    return ndirs - 1;
+    return place_dir(ndirs, rel);
 }
 
-/* Directories are recorded relative to the volume's folder ("" for its
- * root), or as \1 and the absolute path for the host's ("\1" alone for
- * "/", the Host folder). */
-#define HOST_MARK '\1'
+static void load_kept_id(const char *rel, int32_t id, void *ctx)
+{
+    if (id > ROOT_ID && id < MAX_DIRS && rel[0] && rel[0] != HOST_MARK)
+        place_dir(id, rel);
+}
+
 
 static bool host_of_dir(int32_t id, char *out, size_t outsize)
 {
@@ -994,18 +1032,19 @@ void fm_init(const char *app_dir)
     ndirs = ROOT_ID;
     free(dir_hash);
     dir_hash = NULL;
-    dir_id_for(""); /* the root, 2 */
-    memset(wds, 0, sizeof wds);
-    for (int i = 0; i < MAX_FCBS; i++)
-        free(fcbs[i].buf);
-    memset(fcbs, 0, sizeof fcbs);
-    /* The catalog beside the Macintosh HD folder. */
+    /* The catalog beside the Macintosh HD folder, with the IDs it keeps. */
     char cat[PATH_MAX + 32];
     snprintf(cat, sizeof cat, "%s", disk);
     char *cut = strrchr(cat, '/');
     if (cut)
         snprintf(cut, sizeof cat - (size_t)(cut - cat), "/Catalog.sqlite");
     catalog_set_path(cat);
+    place_dir(ROOT_ID, ""); /* the root, 2 */
+    catalog_nodes(load_kept_id, NULL);
+    memset(wds, 0, sizeof wds);
+    for (int i = 0; i < MAX_FCBS; i++)
+        free(fcbs[i].buf);
+    memset(fcbs, 0, sizeof fcbs);
     dt_reset();
     char app[PATH_MAX];
     if (!realpath(app_dir, app))
@@ -1600,6 +1639,7 @@ static void forget_nodes(const char *path)
             dirs[i] = NULL;
         }
     hash_rebuild();
+    catalog_nodes_moved(r, NULL);
 }
 
 /* A renamed or moved object keeps its directory ID or file number, as
@@ -1624,6 +1664,7 @@ static void retarget(const char *from, const char *to)
         dirs[i] = strdup(nr);
     }
     hash_rebuild();
+    catalog_nodes_moved(f, t);
     size_t pl = strlen(from);
     for (int i = 0; i < MAX_FCBS; i++)
         if (fcbs[i].used && under(fcbs[i].path, from)) {

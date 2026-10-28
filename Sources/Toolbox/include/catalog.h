@@ -12,6 +12,11 @@
 void catalog_set_path(const char *path);
 void catalog_close(void);
 
+void catalog_nodes(void (*each)(const char *rel, int32_t id, void *ctx), void *ctx);
+bool catalog_add_node(const char *rel, int32_t id);
+int32_t catalog_node_id(const char *rel);
+void catalog_nodes_moved(const char *from, const char *to);
+
 bool catalog_get_dirinfo(const char *path, uint8_t finfo[16], uint8_t fxinfo[16]);
 bool catalog_set_dirinfo(const char *path, const uint8_t *finfo, const uint8_t *fxinfo);
 int catalog_get_comment(const char *path, uint8_t *text, int max);
