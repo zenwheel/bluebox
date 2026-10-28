@@ -532,6 +532,15 @@ int16_t tb_DisposeSpeechChannel(gaddr chan)
     return noErr;
 }
 
+/* KillProcessChannels and ShutDownSpeechManager: every channel the program
+ * opened (and SpeakString's) is stopped and disposed of. */
+void speech_kill_channels(void)
+{
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (channels[i].chan)
+            tb_DisposeSpeechChannel(channels[i].chan);
+}
+
 int16_t tb_SpeakString(gaddr textToBeSpoken)
 {
     if (!default_channel && !(default_channel = new_channel(DEFAULT_VOICE)))

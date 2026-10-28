@@ -157,5 +157,19 @@ extension BlueBox {
             #expect(same("SaveBits", "SaveScreenBits") && same("RestoreBits", "RestoreScreenBits"))
             #expect(same("DiscardBits", "DisposeSavedScreenBits"))
         }
+
+        @Test func speechChannelsGoWithTheirProgram() {
+            launchTestApp()
+            let chan = Rest.ptr(4)
+            #expect(tb_NewSpeechChannel(0, chan) == 0)
+            #expect(tb_GetSpeechRate(rd32(chan), Rest.ptr(4)) == 0)
+            #expect(Rest.signed("KillIdlePrivateChannels", [1]) == 0)
+            #expect(tb_GetSpeechRate(rd32(chan), Rest.ptr(4)) == 0) // not a private one
+            #expect(Rest.signed("KillProcessChannels") == 0)
+            #expect(tb_GetSpeechRate(rd32(chan), Rest.ptr(4)) != 0)
+            #expect(tb_NewSpeechChannel(0, chan) == 0)
+            #expect(Rest.signed("ShutDownSpeechManager") == 0)
+            #expect(tb_GetSpeechRate(rd32(chan), Rest.ptr(4)) != 0)
+        }
     }
 }

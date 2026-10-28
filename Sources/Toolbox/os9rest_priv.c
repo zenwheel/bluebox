@@ -198,6 +198,15 @@ static void p_PMScaledBattery(ppc_cpu *c)
     RETURN(info);
 }
 
+/* The Speech Manager's clean-up: the program's channels are disposed of;
+ * there are no private channels of the system's own to kill. */
+void speech_kill_channels(void);
+static void p_KillProcessChannels(ppc_cpu *c)
+{
+    speech_kill_channels();
+    RETURN(noErr);
+}
+
 void sound_app_dead(void);
 static void p_SndAppDead(ppc_cpu *c)
 {
@@ -213,7 +222,8 @@ const ppc_export os9rest_priv_exports[] = {
     { "WriteProtectMemory", p_Unimplemented }, { "UnWriteProtectMemory", p_Unimplemented },
     { "VMWriteProtectMemory", p_Unimplemented }, { "VMUnWriteProtectMemory", p_Unimplemented },
     { "MapFile", p_Unimplemented }, { "UnMapFile", p_Unimplemented },
-    { "SndAppDead", p_SndAppDead }, { "SynchIdleTime", p_Nothing },
+    { "SndAppDead", p_SndAppDead }, { "KillProcessChannels", p_KillProcessChannels },
+    { "ShutDownSpeechManager", p_KillProcessChannels }, { "KillIdlePrivateChannels", p_AlreadyDone }, { "SynchIdleTime", p_Nothing },
     { "GetMap", p_GetMap }, { "IsThisASystemResourceMap", p_IsThisASystemResourceMap },
     { "GetQDGlobals", p_GetQDGlobals }, { "GlobalPortRect", p_GlobalPortRect },
     { "GetEmulatorRegister", p_GetEmulatorRegister }, { "SetEmulatorRegister", p_SetEmulatorRegister },
