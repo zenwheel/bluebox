@@ -439,6 +439,8 @@ bool machine_boot(bool census)
     cursor_devices_reset();
     legacy_reset();
     notify_reset();
+    icons_reset();
+    disk_driver_reset();
     finder_reset();
     iconservices_reset();
     agl_reset(); /* OpenGL's contexts, on the host */

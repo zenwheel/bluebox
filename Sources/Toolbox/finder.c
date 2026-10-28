@@ -53,6 +53,45 @@ int16_t tb_NewDesktopWindow(gaddr out)
     return w ? noErr : -108;
 }
 
+/* ---- The Apple menu ----
+ * The Finder lists the Apple Menu Items folder for the Apple menu.  Blue
+ * Box's Apple menu is built from that folder already (menu.c), and opens
+ * its items itself, so the Finder's list is counted and nothing more. */
+
+static int apple_items;
+
+int16_t tb_ClearAppleMenuItems(int32_t reserved)
+{
+    apple_items = 0;
+    return noErr;
+}
+
+int16_t tb_AddAppleMenuItem(gaddr name, int16_t key, int16_t a, gaddr icon_suite, int16_t b, int32_t ref1, int32_t ref2)
+{
+    apple_items++;
+    return noErr;
+}
+
+int finder_apple_menu_items(void) { return apple_items; }
+
+/* ---- Command-period ----
+ * DialogDispatch 7 and 8: whether an event is Escape or Command-period,
+ * and whether one waits in the event queue (taken, with the mouse and
+ * keyboard events before it). */
+
+bool ev_take_user_cancel(void);
+
+int8_t tb_IsUserCancelEvent(gaddr ev)
+{
+    if (!ev)
+        return 0;
+    int16_t what = (int16_t)rd16(ev);
+    uint8_t ch = (uint8_t)rd32(ev + 2);
+    return (what == 3 || what == 5) && (ch == 0x1B || ((rd16(ev + 14) & 0x0100) && ch == '.'));
+}
+
+int8_t tb_CheckEventQueueForUserCancel(int32_t reserved) { return ev_take_user_cancel(); }
+
 /* ---- The system heap ---- */
 
 /* What is free in the system heap now (FreeMem counts the room it can
@@ -77,6 +116,7 @@ int16_t tb_SystemHeapRoom(gaddr grow_room, gaddr free_room)
 void finder_reset(void)
 {
     memset(vn, 0, sizeof vn);
+    apple_items = 0;
     gaddr em = rd32(LM_EXPAND_MEM);
     if (!em || (uint32_t)tb_GetPtrSize(em) < EXPANDMEM_SIZE) {
         gaddr grown = mm_new_ptr_in(rd32(LM_SysZone), EXPANDMEM_SIZE, true);

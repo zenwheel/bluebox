@@ -347,6 +347,8 @@ static gaddr load_ref_direct(gaddr maph, uint32_t r, uint32_t type)
         tb_ReallocateHandle(h, (int32_t)len);
         wr32(LM_TheZone, saved);
         if (!rd32(h)) {
+            char tc[5];
+            LOGF(LOG_RSRC, "rsrc: '%s' %d: no room for %u bytes in zone %08X\n", fourcc_str(type, tc), (int16_t)rd16(m + r), len, zone);
             free(dec);
             set_res_err(memFullErr);
             return 0;

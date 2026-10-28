@@ -61,3 +61,94 @@
     dispatcher: OSDispatch
     ppc: false
     selector: 0x0014
+
+# The Icon Utilities' private calls the Finder makes.  $50C is SetLabel,
+# GetLabel's counterpart, which the Labels control panel also uses.
+- function:
+    name: SetLabel
+    return: OSErr
+    args:
+      - name: label
+        type: int16_t
+      - name: label_color
+        type: RGBColor*
+      - name: label_string
+        type: Str255
+    dispatcher: IconDispatch
+    selector: 0x050C
+    ppc: false
+
+# $218: a procedure of one long (no result), which the Finder calls with
+# an item's icon cache before drawing it and with nil after.
+- function:
+    name: IconDispatch18
+    args:
+      - name: context
+        type: LONGINT
+    dispatcher: IconDispatch
+    selector: 0x0218
+    ppc: false
+
+# $32 and $31: the Finder fills the Apple menu from the Apple Menu Items
+# folder (at most 50 items): $32 empties it, $31 adds an item, its name,
+# a word the Finder works out for it, its small icon suite and two of the
+# Finder's own references.  Blue Box builds the Apple menu from the same
+# folder itself (and opens its items), so these are taken and kept for
+# the run's Apple menu listing only.
+- function:
+    name: ClearAppleMenuItems
+    return: OSErr
+    args:
+      - name: reserved
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0032
+
+- function:
+    name: AddAppleMenuItem
+    return: OSErr
+    args:
+      - name: name
+        type: StringPtr
+      - name: key
+        type: INTEGER
+      - name: a
+        type: INTEGER
+      - name: iconSuite
+        type: Handle
+      - name: b
+        type: INTEGER
+      - name: ref1
+        type: LONGINT
+      - name: ref2
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0031
+
+# DialogDispatch 7 and 8 (no argument words in the selector): the
+# Finder's checks for Command-period and Escape.  7 takes an event and
+# says whether it is one (a dialog's filter then answers Cancel); 8 takes
+# nil and looks in the event queue for one, taking it (the Finder stops
+# copying or listing a folder with userCanceledErr), under the names
+# CarbonLib later gave these checks.
+- function:
+    name: IsUserCancelEvent
+    return: Boolean
+    args:
+      - name: event
+        type: EventRecord*
+    dispatcher: DialogDispatch
+    selector: 0x0007
+    ppc: false
+
+- function:
+    name: CheckEventQueueForUserCancel
+    return: Boolean
+    args:
+      - name: reserved
+        type: LONGINT
+    dispatcher: DialogDispatch
+    selector: 0x0008
+    ppc: false

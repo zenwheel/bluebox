@@ -337,7 +337,9 @@ uint8_t *intl_itl2(uint32_t *lenp);
 
 void notify_pump(void);
 void notify_reset(void);
+void icons_reset(void); /* the Icon Utilities' labels and caches (icons.c) */
 void finder_reset(void); /* the Finder's Process Manager calls (finder.c) */
+int finder_apple_menu_items(void); /* the items the Finder last gave the Apple menu */
 void iconservices_reset(void); /* Icon Services (iconservices.c) */
 
 /* ---- Sound Manager ---- */
@@ -640,6 +642,12 @@ void mactcp_reset(void);
 void mactcp_install_resolver(void);
 /* The Sound Driver (.Sound) of the first Macs (sound.c). */
 extern const native_driver sound_driver;
+/* The main volume's disk driver (diskdriver.c), and the icon and status
+ * calls the CD driver shares with it. */
+extern const native_driver disk_driver;
+int16_t disk_icon_control(gaddr pb, bool removable);
+int16_t disk_drive_status(gaddr pb);
+void disk_driver_reset(void);
 /* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */
 extern const native_driver mpp_driver, atp_driver, xpp_driver, dsp_driver;
 void adsp_poll(void);

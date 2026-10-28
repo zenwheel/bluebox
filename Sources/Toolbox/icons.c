@@ -6,8 +6,12 @@
  * entry.  Plotting picks the member that suits the rectangle (32 or 16
  * pixels; 12-pixel mini icons are drawn from the small ones) and the
  * screen's depth, masks it with the family's black-and-white mask, and
- * applies the transform: disabled lightens, selected darkens.
+ * applies the transform: disabled lightens, selected darkens, a label
+ * tints it with the label's colour.  An icon cache is a suite that asks
+ * its getter routine for the members it lacks; the ...Method calls work
+ * through a cache made for the call.
  */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -27,12 +31,48 @@ static const uint32_t member_bits[] = { 0x01, 0x04, 0x02, 0x100, 0x400, 0x200, 0
 static int suite_count(gaddr suite) { return (int16_t)rd16(rd32(suite) + 2); }
 static gaddr suite_entry(gaddr suite, int i) { return rd32(suite) + SUITE_HDR + (uint32_t)i * 8; }
 
+static void suite_put(gaddr suite, uint32_t type, gaddr data);
+
+/* Icon caches: the suites made by MakeIconCache, with their getter
+ * routine and its data. */
+#define MAX_CACHES 256
+static struct {
+    gaddr suite, proc, data;
+} caches[MAX_CACHES];
+
+static int cache_index(gaddr suite)
+{
+    for (int i = 0; suite && i < MAX_CACHES; i++)
+        if (caches[i].suite == suite)
+            return i;
+    return -1;
+}
+
+/* FUNCTION getter(theType: ResType; yourDataPtr: Ptr): Handle */
+static gaddr call_getter(gaddr proc, uint32_t type, gaddr data)
+{
+    cpu_push32(g_cpu, 0);
+    cpu_push32(g_cpu, type);
+    cpu_push32(g_cpu, data);
+    guest_call(proc);
+    return cpu_pop32(g_cpu);
+}
+
 static gaddr suite_get(gaddr suite, uint32_t type)
 {
     for (int i = 0; i < suite_count(suite); i++)
-        if (rd32(suite_entry(suite, i)) == type)
-            return rd32(suite_entry(suite, i) + 4);
-    return 0;
+        if (rd32(suite_entry(suite, i)) == type) {
+            gaddr h = rd32(suite_entry(suite, i) + 4);
+            if (h || cache_index(suite) < 0)
+                return h;
+        }
+    int c = cache_index(suite);
+    if (c < 0 || !caches[c].proc)
+        return 0;
+    gaddr h = call_getter(caches[c].proc, type, caches[c].data);
+    if (h)
+        suite_put(suite, type, h);
+    return h;
 }
 
 static void suite_put(gaddr suite, uint32_t type, gaddr data)
@@ -95,6 +135,9 @@ int16_t tb_DisposeIconSuite(gaddr suite, int8_t dispose_data)
 {
     if (!suite)
         return noErr;
+    int c = cache_index(suite);
+    if (c >= 0)
+        caches[c].suite = 0;
     if (dispose_data)
         for (int i = 0; i < suite_count(suite); i++) {
             gaddr h = rd32(suite_entry(suite, i) + 4);
@@ -116,14 +159,84 @@ int16_t tb_SetSuiteLabel(gaddr suite, int16_t label)
     return noErr;
 }
 
+/* The Finder's labels: System 7's colours and names, until the Labels
+ * control panel (SetLabel) changes them.  Label 0 is none: black. */
+static struct {
+    uint16_t rgb[3];
+    char name[32];
+} labels[8];
+static bool labels_set;
+
+static void labels_init(void)
+{
+    static const struct {
+        uint16_t r, g, b;
+        const char *name;
+    } std[8] = { { 0, 0, 0, "None" },
+                 { 0xFFFF, 0x648A, 0x028C, "Essential" },
+                 { 0xDD6B, 0x08C2, 0x06A2, "Hot" },
+                 { 0xF2D7, 0x0856, 0x84EC, "In Progress" },
+                 { 0x0241, 0xAB54, 0xEAFF, "Cool" },
+                 { 0x0000, 0x0000, 0xD400, "Personal" },
+                 { 0x0000, 0x64AF, 0x11B0, "Project 1" },
+                 { 0x5600, 0x2C9D, 0x0524, "Project 2" } };
+    for (int i = 0; i < 8; i++) {
+        labels[i].rgb[0] = std[i].r;
+        labels[i].rgb[1] = std[i].g;
+        labels[i].rgb[2] = std[i].b;
+        snprintf(labels[i].name, sizeof labels[i].name, "%s", std[i].name);
+    }
+    labels_set = true;
+}
+
+void icons_reset(void)
+{
+    labels_set = false;
+    memset(caches, 0, sizeof caches);
+}
+
 int16_t tb_GetLabel(int16_t label, gaddr color, gaddr str)
 {
+    if (label < 0 || label > 7)
+        return paramErr_;
+    if (!labels_set)
+        labels_init();
     if (color)
-        gmemset(color, 0, 6);
-    if (str)
-        wr8(str, 0);
+        for (int c = 0; c < 3; c++)
+            wr16(color + (uint32_t)c * 2, labels[label].rgb[c]);
+    if (str) {
+        size_t n = strlen(labels[label].name);
+        wr8(str, (uint8_t)n);
+        gput(str + 1, labels[label].name, (uint32_t)n);
+    }
     return noErr;
 }
+
+/* SetLabel (IconDispatch $50C, the Labels control panel's): a label's
+ * colour and name for the rest of the run. */
+int16_t tb_SetLabel(int16_t label, gaddr color, gaddr str)
+{
+    if (label < 1 || label > 7)
+        return paramErr_;
+    if (!labels_set)
+        labels_init();
+    if (color)
+        for (int c = 0; c < 3; c++)
+            labels[label].rgb[c] = rd16(color + (uint32_t)c * 2);
+    if (str) {
+        int n = rd8(str) > 31 ? 31 : rd8(str);
+        gget(labels[label].name, str + 1, (uint32_t)n);
+        labels[label].name[n] = 0;
+    }
+    return noErr;
+}
+
+/* IconDispatch $218, which System 7.1's Finder calls with an item's icon
+ * cache before drawing it and with nil after: what it is for is not
+ * known, and drawing needs nothing from it, so it is kept and nothing
+ * more. */
+static gaddr icon_context;
+void tb_IconDispatch18(int32_t context) { icon_context = (gaddr)context; }
 
 /* ---------------------------------------------------------------------- */
 /* Rendering */
@@ -278,8 +391,16 @@ void icon_plot(icon_img *img, qrect r, int16_t align, int16_t transform)
     qrect dst = icon_place(img, r, align);
     int t = transform & 0xFF;
     bool sel = transform & ttSelected;
+    int label = (transform >> 8) & 7;
+    if (label && !labels_set)
+        labels_init();
     for (int i = 0; i < img->w * img->h; i++) {
         uint8_t *p = img->px + i * 4;
+        /* A label tints the icon on a colour screen: its colours are
+         * multiplied by the label's, so white takes the label colour. */
+        if (label && qd_screen_depth() >= 4)
+            for (int c = 0; c < 3; c++)
+                p[c] = (uint8_t)(p[c] * (labels[label].rgb[c] >> 8) / 255);
         for (int c = 0; c < 3; c++) {
             if (t == ttDisabled || t == ttOffline)
                 p[c] = (uint8_t)(p[c] + (255 - p[c]) / 2);
@@ -298,6 +419,9 @@ int16_t tb_PlotIconSuite(gaddr rect, int16_t align, int16_t transform, gaddr sui
     icon_img *img = malloc(sizeof *img);
     int size = r.right - r.left < r.bottom - r.top ? r.right - r.left : r.bottom - r.top;
     bool ok = suite && suite_image(suite, size, img);
+    /* The suite's own label, when the transform names none. */
+    if (ok && !(transform & 0x0700))
+        transform = (int16_t)(transform | (tb_GetSuiteLabel(suite) & 7) << 8);
     if (ok)
         icon_plot(img, r, align, transform);
     free(img);
@@ -356,16 +480,166 @@ int16_t tb_PlotCIconHandle(gaddr rect, int16_t align, int16_t transform, gaddr i
     return noErr;
 }
 
-int16_t tb_PlotIconMethod(gaddr rect, int16_t align, int16_t transform, gaddr method, gaddr data)
+/* ---------------------------------------------------------------------- */
+/* Icon caches and getter methods */
+
+int16_t tb_MakeIconCache(gaddr cachep, gaddr proc, gaddr data)
 {
-    return paramErr_;
+    int16_t err = tb_NewIconSuite(cachep);
+    if (err)
+        return err;
+    for (int i = 0; i < MAX_CACHES; i++)
+        if (!caches[i].suite) {
+            caches[i].suite = rd32(cachep);
+            caches[i].proc = proc;
+            caches[i].data = data;
+            return noErr;
+        }
+    tb_DisposeIconSuite(rd32(cachep), false);
+    wr32(cachep, 0);
+    return memFullErr;
 }
 
-int16_t tb_ForEachIconDo(gaddr suite, uint32_t selector, gaddr action, gaddr data) { return noErr; }
+/* The members a plot in this rectangle would use, got now. */
+int16_t tb_LoadIconCache(gaddr rect, int16_t align, int16_t transform, gaddr cache)
+{
+    if (cache_index(cache) < 0)
+        return paramErr_;
+    icon_img *img = malloc(sizeof *img);
+    qrect r = qrect_get(rect);
+    int size = r.right - r.left < r.bottom - r.top ? r.right - r.left : r.bottom - r.top;
+    bool ok = suite_image(cache, size, img);
+    free(img);
+    return ok ? noErr : noMaskFoundErr;
+}
+
+int16_t tb_GetIconCacheData(gaddr cache, gaddr datap)
+{
+    int c = cache_index(cache);
+    if (c < 0)
+        return paramErr_;
+    wr32(datap, caches[c].data);
+    return noErr;
+}
+
+int16_t tb_SetIconCacheData(gaddr cache, gaddr data)
+{
+    int c = cache_index(cache);
+    if (c < 0)
+        return paramErr_;
+    caches[c].data = data;
+    return noErr;
+}
+
+int16_t tb_GetIconCacheProc(gaddr cache, gaddr procp)
+{
+    int c = cache_index(cache);
+    if (c < 0)
+        return paramErr_;
+    wr32(procp, caches[c].proc);
+    return noErr;
+}
+
+int16_t tb_SetIconCacheProc(gaddr cache, gaddr proc)
+{
+    int c = cache_index(cache);
+    if (c < 0)
+        return paramErr_;
+    caches[c].proc = proc;
+    return noErr;
+}
+
+/* A cache for one ...Method call, disposed of after it (the icons the
+ * getter gives stay the caller's). */
+static gaddr method_cache(gaddr method, gaddr data)
+{
+    gaddr tmp = tb_NewPtr(4, false, true);
+    gaddr cache = tmp && !tb_MakeIconCache(tmp, method, data) ? rd32(tmp) : 0;
+    if (tmp)
+        tb_DisposePtr(tmp);
+    return cache;
+}
+
+int16_t tb_PlotIconMethod(gaddr rect, int16_t align, int16_t transform, gaddr method, gaddr data)
+{
+    gaddr cache = method_cache(method, data);
+    if (!cache)
+        return memFullErr;
+    int16_t err = tb_PlotIconSuite(rect, align, transform, cache);
+    tb_DisposeIconSuite(cache, false);
+    return err;
+}
+
+/* FUNCTION action(theType: ResType; VAR theIcon: Handle; yourDataPtr: Ptr): OSErr,
+ * for each member the selector names, present or not; what it leaves in
+ * theIcon becomes the member. */
+int16_t tb_ForEachIconDo(gaddr suite, uint32_t selector, gaddr action, gaddr data)
+{
+    if (!suite || !action)
+        return paramErr_;
+    gaddr hp = tb_NewPtr(4, false, true);
+    if (!hp)
+        return memFullErr;
+    int16_t err = noErr;
+    for (unsigned i = 0; i < sizeof members / sizeof members[0] && !err; i++) {
+        if (!(selector & member_bits[i]))
+            continue;
+        uint32_t type = fourcc(members[i]);
+        gaddr before = suite_get(suite, type);
+        wr32(hp, before);
+        cpu_push16(g_cpu, 0);
+        cpu_push32(g_cpu, type);
+        cpu_push32(g_cpu, hp);
+        cpu_push32(g_cpu, data);
+        guest_call(action);
+        err = (int16_t)cpu_pop16(g_cpu);
+        if (rd32(hp) != before)
+            suite_put(suite, type, rd32(hp));
+    }
+    tb_DisposePtr(hp);
+    return err;
+}
 
 /* ---------------------------------------------------------------------- */
-/* Hit testing: by the icon's rectangle */
+/* Hit testing and regions: by the icon's mask, where it is drawn */
 
+/* The mask of the member a plot in r would use, as a region (global to
+ * the rectangle's coordinates); false when the suite has no mask. */
+static bool suite_mask_rgn(gaddr suite, qrect r, int16_t align, hrgn *out)
+{
+    icon_img *img = malloc(sizeof *img);
+    int size = r.right - r.left < r.bottom - r.top ? r.right - r.left : r.bottom - r.top;
+    if (!suite || !suite_image(suite, size, img)) {
+        free(img);
+        return false;
+    }
+    qrect d = icon_place(img, r, align);
+    int dw = d.right - d.left, dh = d.bottom - d.top;
+    hrgn_init(out);
+    if (dw <= 0 || dh <= 0 || dw > ICON_MAX) {
+        free(img);
+        return true;
+    }
+    int16_t runs[ICON_MAX + 2];
+    for (int y = 0; y < dh; y++) {
+        int sy = y * img->h / dh, start = -1, n = 0;
+        for (int x = 0; x <= dw; x++) {
+            bool on = x < dw && img->px[(sy * img->w + x * img->w / dw) * 4 + 3];
+            if (on && start < 0)
+                start = x;
+            if (!on && start >= 0 && n + 2 <= ICON_MAX + 2) {
+                runs[n++] = (int16_t)(d.left + start);
+                runs[n++] = (int16_t)(d.left + x);
+                start = -1;
+            }
+        }
+        hrgn_add_runs(out, d.top + y, runs, n);
+    }
+    free(img);
+    return true;
+}
+
+/* Without a mask to go by, the icon's square. */
 static qrect icon_rect(qrect r)
 {
     int rw = r.right - r.left, rh = r.bottom - r.top;
@@ -374,38 +648,106 @@ static qrect icon_rect(qrect r)
     return (qrect){ (int16_t)top, (int16_t)left, (int16_t)(top + s), (int16_t)(left + s) };
 }
 
+static void suite_rgn(gaddr suite, qrect r, int16_t align, hrgn *out)
+{
+    if (!suite_mask_rgn(suite, r, align, out)) {
+        hrgn_init(out);
+        hrgn_rect(out, icon_rect(r));
+    }
+}
+
 int16_t tb_IconSuiteToRgn(gaddr rgn, gaddr rect, int16_t align, gaddr suite)
 {
-    gaddr r = tb_NewPtr(8, false, false);
-    qrect_put(r, icon_rect(qrect_get(rect)));
-    tb_RectRgn(rgn, r);
-    tb_DisposePtr(r);
+    hrgn h;
+    suite_rgn(suite, qrect_get(rect), align, &h);
+    rgn_write(rgn, &h);
+    hrgn_free(&h);
     return noErr;
+}
+
+static gaddr id_suite(int16_t icon_id)
+{
+    gaddr sp = tb_NewPtr(4, false, true);
+    gaddr suite = sp && !tb_GetIconSuite(sp, icon_id, 0xFFFFFFFFu) ? rd32(sp) : 0;
+    if (sp && !suite && rd32(sp))
+        tb_DisposeIconSuite(rd32(sp), false);
+    if (sp)
+        tb_DisposePtr(sp);
+    return suite;
 }
 
 int16_t tb_IconIDToRgn(gaddr rgn, gaddr rect, int16_t align, int16_t icon_id)
 {
-    return tb_IconSuiteToRgn(rgn, rect, align, 0);
+    gaddr suite = id_suite(icon_id);
+    int16_t err = tb_IconSuiteToRgn(rgn, rect, align, suite);
+    if (suite)
+        tb_DisposeIconSuite(suite, false);
+    return err;
 }
 
 int8_t tb_PtInIconSuite(uint32_t pt, gaddr rect, int16_t align, gaddr suite)
 {
-    qrect r = icon_rect(qrect_get(rect));
-    return pt_v(pt) >= r.top && pt_v(pt) < r.bottom && pt_h(pt) >= r.left && pt_h(pt) < r.right;
+    hrgn h;
+    suite_rgn(suite, qrect_get(rect), align, &h);
+    bool in = hrgn_contains(&h, pt_h(pt), pt_v(pt));
+    hrgn_free(&h);
+    return in;
 }
 
 int8_t tb_PtInIconID(uint32_t pt, gaddr rect, int16_t align, int16_t icon_id)
 {
-    return tb_PtInIconSuite(pt, rect, align, 0);
+    gaddr suite = id_suite(icon_id);
+    int8_t in = tb_PtInIconSuite(pt, rect, align, suite);
+    if (suite)
+        tb_DisposeIconSuite(suite, false);
+    return in;
 }
 
 int8_t tb_RectInIconSuite(gaddr test, gaddr rect, int16_t align, gaddr suite)
 {
-    qrect a = qrect_get(test), r = icon_rect(qrect_get(rect));
-    return a.left < r.right && a.right > r.left && a.top < r.bottom && a.bottom > r.top;
+    hrgn h, t;
+    suite_rgn(suite, qrect_get(rect), align, &h);
+    hrgn_init(&t);
+    hrgn_rect(&t, qrect_get(test));
+    hrgn_op(&t, &t, &h, RGN_SECT);
+    bool in = !hrgn_empty(&t);
+    hrgn_free(&h);
+    hrgn_free(&t);
+    return in;
 }
 
 int8_t tb_RectInIconID(gaddr test, gaddr rect, int16_t align, int16_t icon_id)
 {
-    return tb_RectInIconSuite(test, rect, align, 0);
+    gaddr suite = id_suite(icon_id);
+    int8_t in = tb_RectInIconSuite(test, rect, align, suite);
+    if (suite)
+        tb_DisposeIconSuite(suite, false);
+    return in;
+}
+
+int8_t tb_PtInIconMethod(uint32_t pt, gaddr rect, int16_t align, gaddr method, gaddr data)
+{
+    gaddr cache = method_cache(method, data);
+    int8_t in = tb_PtInIconSuite(pt, rect, align, cache);
+    if (cache)
+        tb_DisposeIconSuite(cache, false);
+    return in;
+}
+
+int8_t tb_RectInIconMethod(gaddr test, gaddr rect, int16_t align, gaddr method, gaddr data)
+{
+    gaddr cache = method_cache(method, data);
+    int8_t in = tb_RectInIconSuite(test, rect, align, cache);
+    if (cache)
+        tb_DisposeIconSuite(cache, false);
+    return in;
+}
+
+int16_t tb_IconMethodToRgn(gaddr rgn, gaddr rect, int16_t align, gaddr method, gaddr data)
+{
+    gaddr cache = method_cache(method, data);
+    int16_t err = tb_IconSuiteToRgn(rgn, rect, align, cache);
+    if (cache)
+        tb_DisposeIconSuite(cache, false);
+    return err;
 }
