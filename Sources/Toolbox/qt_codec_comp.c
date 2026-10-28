@@ -520,6 +520,7 @@ void qt_codec_components_register(void)
             k->flags = comp ? 0x2F : 0x3F; /* the depths, as their codecInfo flags */
             ours[nclasses++] = qtc_register(k);
         }
+    qt_gexport_register(); /* and the graphics exporters (qt_gexport.c) */
 }
 
 /* ---- A program's own decompressor ---- */

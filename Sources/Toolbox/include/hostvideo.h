@@ -42,4 +42,11 @@ uint32_t hostaudio_decode(hostaudio_dec *d, const uint8_t *data, size_t len, con
                           int16_t **pcm);
 void hostaudio_close(hostaudio_dec *d);
 
+/* Still images written by the host's encoders (graphics exporters): file
+ * types 'JPEG', 'PNGf', 'TIFF', 'BMPf', 'GIFf', '8BPS', 'TPIC', 'SGI ',
+ * 'jp2 '.  Quality 0 to 1 for the lossy ones; *out malloc'd. */
+bool hostimage_can_encode(uint32_t file_type);
+bool hostimage_encode(uint32_t file_type, const uint8_t *rgba, int w, int h, double quality, double dpi, uint8_t **out,
+                      size_t *len);
+
 #endif

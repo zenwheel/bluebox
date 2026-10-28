@@ -33,4 +33,14 @@ uint32_t hostaudio_decode(hostaudio_dec *d, const uint8_t *data, size_t len, con
     return 0;
 }
 void hostaudio_close(hostaudio_dec *d) { (void)d; }
+
+bool hostimage_can_encode(uint32_t file_type) { return (void)file_type, false; }
+bool hostimage_encode(uint32_t file_type, const uint8_t *rgba, int w, int h, double quality, double dpi, uint8_t **out,
+                      size_t *len)
+{
+    (void)file_type, (void)rgba, (void)w, (void)h, (void)quality, (void)dpi;
+    *out = NULL;
+    *len = 0;
+    return false;
+}
 #endif

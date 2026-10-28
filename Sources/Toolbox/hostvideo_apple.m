@@ -296,6 +296,76 @@ void hostvideo_close(hostvideo_dec *d)
     free(d);
 }
 
+/* ---- Still images out (ImageIO) ---- */
+
+static CFStringRef image_uti(uint32_t t)
+{
+    switch (t) {
+    case FOUR('J', 'P', 'E', 'G'): return CFSTR("public.jpeg");
+    case FOUR('P', 'N', 'G', 'f'): return CFSTR("public.png");
+    case FOUR('T', 'I', 'F', 'F'): return CFSTR("public.tiff");
+    case FOUR('B', 'M', 'P', 'f'): return CFSTR("com.microsoft.bmp");
+    case FOUR('G', 'I', 'F', 'f'): return CFSTR("com.compuserve.gif");
+    case FOUR('8', 'B', 'P', 'S'): return CFSTR("com.adobe.photoshop-image");
+    case FOUR('T', 'P', 'I', 'C'): return CFSTR("com.truevision.tga-image");
+    case FOUR('S', 'G', 'I', ' '): return CFSTR("com.sgi.sgi-image");
+    case FOUR('j', 'p', '2', ' '): return CFSTR("public.jpeg-2000");
+    }
+    return NULL;
+}
+
+bool hostimage_can_encode(uint32_t file_type)
+{
+    CFStringRef uti = image_uti(file_type);
+    if (!uti)
+        return false;
+    static CFArrayRef types;
+    if (!types)
+        types = CGImageDestinationCopyTypeIdentifiers();
+    return types && CFArrayContainsValue(types, CFRangeMake(0, CFArrayGetCount(types)), uti);
+}
+
+bool hostimage_encode(uint32_t file_type, const uint8_t *rgba, int w, int h, double quality, double dpi, uint8_t **out,
+                      size_t *len)
+{
+    *out = NULL;
+    *len = 0;
+    if (!hostimage_can_encode(file_type) || w <= 0 || h <= 0)
+        return false;
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    CFDataRef pixels = CFDataCreate(NULL, rgba, (CFIndex)w * h * 4);
+    CGDataProviderRef prov = CGDataProviderCreateWithCFData(pixels);
+    CGImageRef img = CGImageCreate((size_t)w, (size_t)h, 8, 32, (size_t)w * 4, cs,
+                                   kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big, prov, NULL, false,
+                                   kCGRenderingIntentDefault);
+    CFMutableDataRef data = CFDataCreateMutable(NULL, 0);
+    CGImageDestinationRef dst = CGImageDestinationCreateWithData(data, image_uti(file_type), 1, NULL);
+    bool ok = false;
+    if (dst && img) {
+        NSDictionary *props = @{ (__bridge NSString *)kCGImageDestinationLossyCompressionQuality : @(quality),
+                                 (__bridge NSString *)kCGImagePropertyDPIWidth : @(dpi),
+                                 (__bridge NSString *)kCGImagePropertyDPIHeight : @(dpi) };
+        CGImageDestinationAddImage(dst, img, (__bridge CFDictionaryRef)props);
+        ok = CGImageDestinationFinalize(dst);
+    }
+    if (ok) {
+        *len = (size_t)CFDataGetLength(data);
+        *out = malloc(*len ? *len : 1);
+        if (*out)
+            memcpy(*out, CFDataGetBytePtr(data), *len);
+        ok = *out != NULL;
+    }
+    if (dst)
+        CFRelease(dst);
+    CFRelease(data);
+    if (img)
+        CGImageRelease(img);
+    CGDataProviderRelease(prov);
+    CFRelease(pixels);
+    CGColorSpaceRelease(cs);
+    return ok;
+}
+
 /* ---- Sound (AudioToolbox) ---- */
 
 struct hostaudio_dec {

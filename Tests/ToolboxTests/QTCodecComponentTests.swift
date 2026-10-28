@@ -379,5 +379,80 @@ extension BlueBox {
             qt_sound_desc_extras(e, UInt32(e.count), &fmt)
             #expect(fmt.frames_per_packet == 1 && fmt.bytes_per_packet == 4 && fmt.little)
         }
+
+        // ---- Graphics exporters ----
+
+        func exporter(_ type: String) -> UInt32 {
+            var err: Int16 = 0
+            let c = components_find_next(0, fourCC("grex"), fourCC(type), 0)
+            #expect(c != 0, "\(type)")
+            return components_open_component(c, &err)
+        }
+
+        func handleBytes(_ h: UInt32) -> [UInt8] {
+            (0..<Int(tb_GetHandleSize(h))).map { rd8(rd32(h) + UInt32($0)) }
+        }
+
+        /// A GWorld's pixels out as PNG through the host, read back the same.
+        @Test func exportsPNGFromAGWorld() {
+            qtMachine()
+            ClassicImages.install()
+            let port = gworld(8, 6)
+            let c = tb_NewPtr(6, false, true)
+            wr16(c, 0); wr16(c + 2, 0xFFFF); wr16(c + 4, 0)
+            tb_RGBForeColor(c)
+            tb_PaintRect(rect(0, 0, 6, 8))
+            let ex = exporter("PNGf")
+            let out = tb_NewHandle(0, false, false)
+            #expect(qtCall("GraphicsExportSetInputGWorld", [ex, port]) == 0)
+            #expect(qtCall("GraphicsExportSetOutputHandle", [ex, out]) == 0)
+            let dims = tb_NewPtr(8, false, true)
+            #expect(qtCall("GraphicsExportGetInputImageDimensions", [ex, dims]) == 0 && rd16(dims + 6) == 8 && rd16(dims + 4) == 6)
+            let size = tb_NewPtr(4, false, true)
+            #expect(qtCall("GraphicsExportDoExport", [ex, size]) == 0)
+            let bytes = handleBytes(out)
+            #expect(rd32(size) == UInt32(bytes.count) && bytes.starts(with: [0x89, 0x50, 0x4E, 0x47]))
+            var rgba: UnsafeMutablePointer<UInt8>?
+            var w: Int32 = 0, h: Int32 = 0
+            #expect(qt_decode_image(bytes, bytes.count, &rgba, &w, &h) && w == 8 && h == 6)
+            #expect(rgba![0] == 0 && rgba![1] == 255 && rgba![2] == 0)
+            free(rgba)
+            let ext = tb_NewPtr(4, false, true)
+            #expect(qtCall("GraphicsExportGetDefaultFileNameExtension", [ex, ext]) == 0 && rd32(ext) == fourCC("png\0"))
+            components_close(ex)
+            tb_DisposeGWorld(port)
+        }
+
+        /// A graphics importer's image as a PICT file and a QuickTime Image.
+        @Test func exportsAnImportersImage() {
+            qtMachine()
+            ClassicImages.install()
+            let png = encoded(solid(1, 0, 0, 4, 4), .png)
+            let data = tb_NewHandle(Int32(png.count), false, false)
+            for (i, b) in png.enumerated() { wr8(rd32(data) + UInt32(i), b) }
+            let ref = tb_NewHandle(4, false, false)
+            wr32(rd32(ref), data)
+            let gi = tb_NewPtr(4, false, true)
+            #expect(tb_GetGraphicsImporterForDataRef(Int32(bitPattern: ref), Int32(bitPattern: fourCC("hndl")), gi) == 0)
+            for type in ["PICT", "qtif", "JPEG", "TIFF", "BMPf"] {
+                let ex = exporter(type)
+                let out = tb_NewHandle(0, false, false)
+                #expect(qtCall("GraphicsExportSetInputGraphicsImporter", [ex, rd32(gi)]) == 0)
+                #expect(qtCall("GraphicsExportSetOutputHandle", [ex, out]) == 0)
+                #expect(qtCall("GraphicsExportDoExport", [ex, 0]) == 0, "\(type)")
+                let b = handleBytes(out)
+                switch type {
+                case "PICT": #expect(b.count > 512 + 10 && b[512 + 8] == 0 && b[512 + 9] == 4) // frame 4 wide
+                case "qtif": #expect(b.count > 100 && Array(b[4..<8]) == Array("idsc".utf8))
+                default:
+                    var rgba: UnsafeMutablePointer<UInt8>?
+                    var w: Int32 = 0, h: Int32 = 0
+                    #expect(qt_decode_image(b, b.count, &rgba, &w, &h) && w == 4 && h == 4, "\(type)")
+                    #expect(rgba != nil && rgba![0] > 200 && rgba![1] < 50, "\(type)")
+                    free(rgba)
+                }
+                components_close(ex)
+            }
+        }
     }
 }

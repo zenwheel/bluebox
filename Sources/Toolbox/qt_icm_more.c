@@ -73,7 +73,7 @@ static gaddr gworld_of(const uint8_t *rgba, int w, int h)
 }
 
 /* A picture drawn at w by h (RGBA, malloc'd). */
-static uint8_t *picture_rgba(gaddr pic, int w, int h)
+uint8_t *icm_picture_rgba(gaddr pic, int w, int h)
 {
     gaddr gw = gworld_of(NULL, w, h);
     if (!gw)
@@ -673,7 +673,7 @@ static int16_t thumbnail_of_picture(gaddr pic, int16_t depth, int32_t thumbnail)
         return paramErr;
     /* drawn no bigger than needed for the thumbnail's averaging */
     int dw = w > 320 ? 320 : w, dh = w > 320 ? h * 320 / w : h;
-    uint8_t *rgba = picture_rgba(pic, dw, dh > 0 ? dh : 1);
+    uint8_t *rgba = icm_picture_rgba(pic, dw, dh > 0 ? dh : 1);
     if (!rgba)
         return memFullErr;
     int16_t err = thumbnail_of(rgba, dw, dh > 0 ? dh : 1, depth, thumbnail);

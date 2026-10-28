@@ -115,6 +115,17 @@ bool icm_is_effect(uint32_t type);
 uint8_t *icm_effect_render(int32_t seq, uint32_t type, gaddr params, int32_t size, gaddr frameTime, int *w, int *h);
 void icm_sources_drop(int32_t seq);
 void icm_more_reset(void);
+/* A picture drawn at w by h on white (RGBA, malloc'd). */
+uint8_t *icm_picture_rgba(gaddr pic, int w, int h);
+/* The graphics importer's image (qt_gimport.c): its pixels, or for a PICT
+ * its picture (a new handle); false if ci isn't one of ours with an image. */
+bool qt_gimport_image(uint32_t ci, uint8_t **rgba, int *w, int *h, gaddr *pict);
+/* Graphics exporters (qt_gexport.c): registered each run; an importer's
+ * image exported to a file of a type, or through the user's choice. */
+void qt_gexport_register(void);
+int32_t qt_gexport_importer(uint32_t gi, uint32_t file_type, uint32_t creator, gaddr spec, int16_t script);
+int32_t qt_gexport_dialog(uint32_t gi, gaddr default_spec, gaddr prompt, gaddr out_type, gaddr out_spec,
+                          gaddr out_script);
 /* CDSequenceEnd for a compression sequence: false if seqID is not one. */
 bool icm_csequence_end(int32_t seqID);
 bool icm_csequence_exists(int32_t seqID);
