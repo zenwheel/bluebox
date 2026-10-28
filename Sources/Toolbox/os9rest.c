@@ -12,6 +12,7 @@
 static const os9rest_group groups[] = {
     GROUP(math),
     GROUP(hw),
+    GROUP(text),
     GROUP(priv),
     GROUP(locale),
 };
@@ -68,4 +69,34 @@ void os9rest_reset(void)
     os9rest_priv_reset();
     os9rest_cloth_reset();
     drawsprocket_reset();
+}
+
+/* Call another export as a PowerPC caller would, with n arguments (the
+ * first eight in r3 on, the rest in a parameter area made below the
+ * caller's stack), keeping the registers of this call. */
+uint32_t os9rest_call(ppc_cpu *c, const char *name, const uint32_t *args, int n)
+{
+    void (*fn)(ppc_cpu *) = cfm_export_fn(name);
+    if (!fn)
+        return (uint32_t)-4; /* unimpErr */
+    uint32_t saved[8], sp = c->gpr[1], lr = c->lr, pc = c->pc;
+    for (int i = 0; i < 8; i++)
+        saved[i] = c->gpr[3 + i];
+    uint32_t frame = (sp - (24u + 4u * (uint32_t)(n > 8 ? n : 8) + 32u)) & ~15u;
+    wr32(frame, sp);
+    c->gpr[1] = frame;
+    for (int i = 0; i < n; i++) {
+        if (i < 8)
+            c->gpr[3 + i] = args[i];
+        else
+            wr32(frame + 24 + 4u * (uint32_t)i, args[i]);
+    }
+    fn(c);
+    uint32_t r = c->gpr[3];
+    for (int i = 0; i < 8; i++)
+        c->gpr[3 + i] = saved[i];
+    c->gpr[1] = sp;
+    c->lr = lr;
+    c->pc = pc;
+    return r;
 }

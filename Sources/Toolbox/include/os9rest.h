@@ -12,6 +12,9 @@ void (*os9rest_export_fn(const char *name))(ppc_cpu *);
 bool os9rest_data_known(const char *name);
 gaddr os9rest_data_export(const char *name);
 void os9rest_reset(void);
+uint32_t os9rest_call(ppc_cpu *c, const char *name, const uint32_t *args, int n);
+extern const ppc_export os9rest_text_exports[];
+extern const unsigned os9rest_text_export_count;
 
 typedef struct {
     const ppc_export *exports;
