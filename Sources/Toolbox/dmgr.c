@@ -22,7 +22,11 @@ enum {
     kDMDisplayAlreadyInstalledErr = -6230,
     kDMMainDisplayCannotMoveErr = -6231,
 };
-enum { MAIN_DISPLAY_ID = 1, MAX_NOTIFY = 16 };
+enum { MAX_NOTIFY = 16 };
+
+/* The one display's ID: 1, or what DMSetDisplayID gave it. */
+uint32_t dmgr_display_id = 1;
+#define MAIN_DISPLAY_ID dmgr_display_id
 
 static bool mirroring_blocked;
 static uint32_t display_component; /* DMSetDisplayComponent's, for the one display */
@@ -426,6 +430,7 @@ void dmgr_reset(void)
 {
     mirroring_blocked = false;
     display_component = 0;
+    dmgr_display_id = 1;
     memset(notify, 0, sizeof notify);
 }
 
@@ -610,3 +615,25 @@ int16_t tb_DMConfirmConfiguration(gaddr filterProc, uint32_t confirmFlags, uint3
 {
     return noErr;
 }
+
+/* Tell the extended notification procedures (those registered for the
+ * message's kind, all of them here) of a message: proc(userData, message,
+ * notifyData). */
+int dmgr_notify_all(int16_t message, gaddr notifyData)
+{
+    int told = 0;
+    for (int i = 0; i < MAX_NOTIFY; i++) {
+        if (!notify[i].proc)
+            continue;
+        uint32_t args[3] = { notify[i].data, (uint32_t)(uint16_t)message, notifyData };
+        if (mm_is_descriptor(notify[i].proc))
+            mm_call(notify[i].proc, 0xEC0, args, 3);
+        else
+            ppc_call(notify[i].proc, args, 3);
+        told++;
+    }
+    return told;
+}
+
+/* The program's notification procedures are gone (it has just one). */
+void dmgr_remove_all_notify(void) { memset(notify, 0, sizeof notify); }
