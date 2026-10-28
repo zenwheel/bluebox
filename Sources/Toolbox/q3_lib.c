@@ -13,6 +13,7 @@ static const struct {
     const unsigned *count;
 } tables[] = {
     { rave_exports, &rave_export_count },
+    { q3_math_exports, &q3_math_export_count },
 };
 
 /* The library's routine of this name, or NULL: QuickDraw 3D's start Q3
