@@ -1,0 +1,51 @@
+# TypeSelect (TypeSelect.h, Mac OS 9): type-ahead selection in lists, the
+# Intl Pack 6 selectors 0x28 to 0x2E; os9left_priv.c has the code.
+
+- function:
+    name: TypeSelectClear
+    args:
+      - name: tsr
+        type: Ptr
+    dispatcher: Pack6
+    selector: 0x0028
+
+- function:
+    name: TypeSelectNewKey
+    return: Boolean
+    args:
+      - name: theEvent
+        type: Ptr
+      - name: tsr
+        type: Ptr
+    dispatcher: Pack6
+    selector: 0x002A
+
+- function:
+    name: TypeSelectFindItem
+    return: SInt16
+    args:
+      - name: tsr
+        type: Ptr
+      - name: listSize
+        type: SInt16
+      - name: selectMode
+        type: SInt16
+      - name: getStringProc
+        type: ProcPtr
+      - name: yourDataPtr
+        type: Ptr
+    dispatcher: Pack6
+    selector: 0x002C
+
+- function:
+    name: TypeSelectCompare
+    return: SInt16
+    args:
+      - name: tsr
+        type: Ptr
+      - name: testStringScript
+        type: SInt16
+      - name: testStringPtr
+        type: Ptr
+    dispatcher: Pack6
+    selector: 0x002E

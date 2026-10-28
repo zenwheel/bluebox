@@ -29229,6 +29229,41 @@ static void ppcglue_InstallControlManagerDragHandlers(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_TypeSelectClear(ppc_cpu *c)
+{
+    gaddr a_tsr = (gaddr)c->gpr[3];
+    tb_TypeSelectClear(a_tsr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TypeSelectNewKey(ppc_cpu *c)
+{
+    gaddr a_theEvent = (gaddr)c->gpr[3];
+    gaddr a_tsr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_TypeSelectNewKey(a_theEvent, a_tsr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TypeSelectFindItem(ppc_cpu *c)
+{
+    gaddr a_tsr = (gaddr)c->gpr[3];
+    int16_t a_listSize = (int16_t)c->gpr[4];
+    int16_t a_selectMode = (int16_t)c->gpr[5];
+    gaddr a_getStringProc = (gaddr)c->gpr[6];
+    gaddr a_yourDataPtr = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TypeSelectFindItem(a_tsr, a_listSize, a_selectMode, a_getStringProc, a_yourDataPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TypeSelectCompare(ppc_cpu *c)
+{
+    gaddr a_tsr = (gaddr)c->gpr[3];
+    int16_t a_testStringScript = (int16_t)c->gpr[4];
+    gaddr a_testStringPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TypeSelectCompare(a_tsr, a_testStringScript, a_testStringPtr);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetSleepTimeout(ppc_cpu *c)
 {
     uint8_t a_timeout = (uint8_t)c->gpr[3];
@@ -44124,6 +44159,10 @@ const ppc_export ppc_exports[] = {
     {"TrimImage", ppctrap_TrimImage},
     {"TruncString", ppcglue_TruncString},
     {"TruncText", ppcglue_TruncText},
+    {"TypeSelectClear", ppcglue_TypeSelectClear},
+    {"TypeSelectCompare", ppcglue_TypeSelectCompare},
+    {"TypeSelectFindItem", ppcglue_TypeSelectFindItem},
+    {"TypeSelectNewKey", ppcglue_TypeSelectNewKey},
     {"UTAddFCBToSearchList", ppcglue_UTAddFCBToSearchList},
     {"UTAddNewVCB", ppcglue_UTAddNewVCB},
     {"UTAdjustEOF", ppcglue_UTAdjustEOF},

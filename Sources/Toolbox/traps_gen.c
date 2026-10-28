@@ -30221,6 +30221,52 @@ static void glue_TruncText(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_TypeSelectClear(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    tb_TypeSelectClear(a_tsr);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectCompare(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_testStringPtr = (gaddr)cpu_pop32(c);
+    int16_t a_testStringScript = (int16_t)cpu_pop16(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TypeSelectCompare(a_tsr, a_testStringScript, a_testStringPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectFindItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_yourDataPtr = (gaddr)cpu_pop32(c);
+    gaddr a_getStringProc = (gaddr)cpu_pop32(c);
+    int16_t a_selectMode = (int16_t)cpu_pop16(c);
+    int16_t a_listSize = (int16_t)cpu_pop16(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TypeSelectFindItem(a_tsr, a_listSize, a_selectMode, a_getStringProc, a_yourDataPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectNewKey(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    gaddr a_theEvent = (gaddr)cpu_pop32(c);
+    int8_t r = tb_TypeSelectNewKey(a_theEvent, a_tsr);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_UTAddFCBToSearchList(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -33710,6 +33756,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9ED, (int32_t)0x20u, "IULangOrder", CONV_STACK, 4, 2, glue_IULangOrder},
     {0xA9ED, (int32_t)0x22u, "IUTextOrder", CONV_STACK, 20, 2, glue_IUTextOrder},
     {0xA9ED, (int32_t)0x24u, "GetIntlResourceTable", CONV_STACK, 16, 0, glue_GetIntlResourceTable},
+    {0xA9ED, (int32_t)0x28u, "TypeSelectClear", CONV_STACK, 4, 0, glue_TypeSelectClear},
+    {0xA9ED, (int32_t)0x2Au, "TypeSelectNewKey", CONV_STACK, 8, 2, glue_TypeSelectNewKey},
+    {0xA9ED, (int32_t)0x2Cu, "TypeSelectFindItem", CONV_STACK, 16, 2, glue_TypeSelectFindItem},
+    {0xA9ED, (int32_t)0x2Eu, "TypeSelectCompare", CONV_STACK, 10, 2, glue_TypeSelectCompare},
     {0xA9EE, (int32_t)0x0u, "NumToString", CONV_REG, 0, 0, glue_NumToString},
     {0xA9EE, (int32_t)0x1u, "StringToNum", CONV_REG, 0, 0, glue_StringToNum},
     {0xA9EE, (int32_t)0x2u, "ROMlib_Fpstr2dec", CONV_STACK, 16, 0, glue_ROMlib_Fpstr2dec},

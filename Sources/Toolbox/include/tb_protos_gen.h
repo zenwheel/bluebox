@@ -2872,6 +2872,10 @@ int16_t tb_Transliterate(gaddr srch, gaddr dsth, int16_t target, int32_t srcmask
 int16_t tb_TransliterateText(gaddr srch, gaddr dsth, int16_t target, int32_t srcmask, int16_t script);
 int16_t tb_TruncString(int16_t width, gaddr string, int16_t code);
 int16_t tb_TruncText(int16_t width, gaddr textPtr, gaddr length, int16_t truncWhere);
+void tb_TypeSelectClear(gaddr tsr);
+int16_t tb_TypeSelectCompare(gaddr tsr, int16_t testStringScript, gaddr testStringPtr);
+int16_t tb_TypeSelectFindItem(gaddr tsr, int16_t listSize, int16_t selectMode, gaddr getStringProc, gaddr yourDataPtr);
+int8_t tb_TypeSelectNewKey(gaddr theEvent, gaddr tsr);
 int16_t tb_UTAddFCBToSearchList(gaddr fileCtrlBlockPtr);
 int16_t tb_UTAddNewVCB(int16_t driveNum, gaddr vRefNum, gaddr volCtrlBlockPtr);
 int16_t tb_UTAdjustEOF(int16_t fileRefNum);
