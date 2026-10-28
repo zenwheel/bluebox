@@ -24,6 +24,7 @@ static const struct {
     { q3_group_exports, &q3_group_export_count },
     { q3_pick_exports, &q3_pick_export_count },
     { q3_file_exports, &q3_file_export_count },
+    { q3_viewer_exports, &q3_viewer_export_count },
     { q3_math_exports, &q3_math_export_count },
 };
 
