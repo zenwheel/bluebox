@@ -16419,6 +16419,13 @@ static void glue_MenuSelect(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MinimumProcessorSpeed(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    int16_t r = tb_MinimumProcessorSpeed();
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_ModalDialog(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -24447,6 +24454,23 @@ static void glue_SortDataBrowserContainer(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SoundConverterFillBuffer(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_outputFlags = (gaddr)cpu_pop32(c);
+    gaddr a_framesWritten = (gaddr)cpu_pop32(c);
+    gaddr a_bytesWritten = (gaddr)cpu_pop32(c);
+    uint32_t a_outputBufferByteSize = (uint32_t)cpu_pop32(c);
+    gaddr a_outputBuffer = (gaddr)cpu_pop32(c);
+    gaddr a_fillBufferDataRefCon = (gaddr)cpu_pop32(c);
+    gaddr a_fillBufferDataUPP = (gaddr)cpu_pop32(c);
+    int32_t a_sc = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundConverterFillBuffer(a_sc, a_fillBufferDataUPP, a_fillBufferDataRefCon, a_outputBuffer, a_outputBufferByteSize, a_bytesWritten, a_framesWritten, a_outputFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SoundConverterGetInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -24467,6 +24491,28 @@ static void glue_SoundConverterSetInfo(cpu68k *c, uint16_t trapword)
     int32_t a_selector = (int32_t)cpu_pop32(c);
     int32_t a_sc = (int32_t)cpu_pop32(c);
     int16_t r = tb_SoundConverterSetInfo(a_sc, a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SoundManagerGetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundManagerGetInfo(a_selector, a_infoPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SoundManagerSetInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_infoPtr = (gaddr)cpu_pop32(c);
+    int32_t a_selector = (int32_t)cpu_pop32(c);
+    int16_t r = tb_SoundManagerSetInfo(a_selector, a_infoPtr);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -25905,6 +25951,52 @@ static void glue_TruncText(cpu68k *c, uint16_t trapword)
     int16_t a_width = (int16_t)cpu_pop16(c);
     int16_t r = tb_TruncText(a_width, a_textPtr, a_length, a_truncWhere);
     wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectClear(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    tb_TypeSelectClear(a_tsr);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectCompare(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_testStringPtr = (gaddr)cpu_pop32(c);
+    int16_t a_testStringScript = (int16_t)cpu_pop16(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TypeSelectCompare(a_tsr, a_testStringScript, a_testStringPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectFindItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_yourDataPtr = (gaddr)cpu_pop32(c);
+    gaddr a_getStringProc = (gaddr)cpu_pop32(c);
+    int16_t a_selectMode = (int16_t)cpu_pop16(c);
+    int16_t a_listSize = (int16_t)cpu_pop16(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    int16_t r = tb_TypeSelectFindItem(a_tsr, a_listSize, a_selectMode, a_getStringProc, a_yourDataPtr);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_TypeSelectNewKey(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_tsr = (gaddr)cpu_pop32(c);
+    gaddr a_theEvent = (gaddr)cpu_pop32(c);
+    int8_t r = tb_TypeSelectNewKey(a_theEvent, a_tsr);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
 
@@ -28682,6 +28774,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA9ED, (int32_t)0x20u, "IULangOrder", CONV_STACK, 4, 2, glue_IULangOrder},
     {0xA9ED, (int32_t)0x22u, "IUTextOrder", CONV_STACK, 20, 2, glue_IUTextOrder},
     {0xA9ED, (int32_t)0x24u, "GetIntlResourceTable", CONV_STACK, 16, 0, glue_GetIntlResourceTable},
+    {0xA9ED, (int32_t)0x28u, "TypeSelectClear", CONV_STACK, 4, 0, glue_TypeSelectClear},
+    {0xA9ED, (int32_t)0x2Au, "TypeSelectNewKey", CONV_STACK, 8, 2, glue_TypeSelectNewKey},
+    {0xA9ED, (int32_t)0x2Cu, "TypeSelectFindItem", CONV_STACK, 16, 2, glue_TypeSelectFindItem},
+    {0xA9ED, (int32_t)0x2Eu, "TypeSelectCompare", CONV_STACK, 10, 2, glue_TypeSelectCompare},
     {0xA9EE, (int32_t)0x0u, "NumToString", CONV_REG, 0, 0, glue_NumToString},
     {0xA9EE, (int32_t)0x1u, "StringToNum", CONV_REG, 0, 0, glue_StringToNum},
     {0xA9EE, (int32_t)0x2u, "ROMlib_Fpstr2dec", CONV_STACK, 16, 0, glue_ROMlib_Fpstr2dec},
@@ -28805,6 +28901,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA09E, (int32_t)0x2Au, "SetSoundMixerState", CONV_REG, 0, 0, glue_SetSoundMixerState},
     {0xA09E, (int32_t)0x2Bu, "GetDimSuspendState", CONV_REG, 0, 0, glue_GetDimSuspendState},
     {0xA09E, (int32_t)0x2Cu, "SetDimSuspendState", CONV_REG, 0, 0, glue_SetDimSuspendState},
+    {0xA09E, (int32_t)0x36u, "MinimumProcessorSpeed", CONV_REG, 0, 0, glue_MinimumProcessorSpeed},
     {0xA8FD, (int32_t)0x4000C00u, "PrOpenDoc", CONV_STACK, 12, 4, glue_PrOpenDoc},
     {0xA8FD, (int32_t)0x8000484u, "PrCloseDoc", CONV_STACK, 4, 0, glue_PrCloseDoc},
     {0xA8FD, (int32_t)0x10000808u, "PrOpenPage", CONV_STACK, 8, 0, glue_PrOpenPage},
@@ -29480,6 +29577,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x44C0018u, "GetCompressionName", CONV_STACK, 8, 2, glue_GetCompressionName},
     {0xA800, (int32_t)0x450000Cu, "GetSpeechPitch", CONV_STACK, 8, 2, glue_GetSpeechPitch},
     {0xA800, (int32_t)0x460000Cu, "UseDictionary", CONV_STACK, 8, 2, glue_UseDictionary},
+    {0xA800, (int32_t)0x47C0018u, "SoundManagerGetInfo", CONV_STACK, 8, 2, glue_SoundManagerGetInfo},
+    {0xA800, (int32_t)0x4800018u, "SoundManagerSetInfo", CONV_STACK, 8, 2, glue_SoundManagerSetInfo},
     {0xA800, (int32_t)0x5100008u, "SndChannelStatus", CONV_STACK, 10, 2, glue_SndChannelStatus},
     {0xA800, (int32_t)0x5140014u, "SPBGetIndexedDevice", CONV_STACK, 10, 2, glue_SPBGetIndexedDevice},
     {0xA800, (int32_t)0x5180014u, "SPBOpenDevice", CONV_STACK, 10, 2, glue_SPBOpenDevice},
@@ -29511,6 +29610,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0xD000008u, "SndStartFilePlay", CONV_STACK, 26, 2, glue_SndStartFilePlay},
     {0xA800, (int32_t)0xD480014u, "SetupSndHeader", CONV_STACK, 26, 2, glue_SetupSndHeader},
     {0xA800, (int32_t)0xE340014u, "SPBGetRecordingStatus", CONV_STACK, 28, 2, glue_SPBGetRecordingStatus},
+    {0xA800, (int32_t)0x10780018u, "SoundConverterFillBuffer", CONV_STACK, 32, 2, glue_SoundConverterFillBuffer},
     {0xA83D, (int32_t)0x0u, "TEStylePaste", CONV_STACK, 4, 0, glue_TEStylePaste},
     {0xA83D, (int32_t)0x1u, "TESetStyle", CONV_STACK, 12, 0, glue_TESetStyle},
     {0xA83D, (int32_t)0x2u, "TEReplaceStyle", CONV_STACK, 16, 0, glue_TEReplaceStyle},

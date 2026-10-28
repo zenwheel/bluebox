@@ -1650,3 +1650,168 @@ bool rm_path_open(const char *path, bool *in_chain, int16_t *refnum)
     }
     return false;
 }
+
+/* ---------------------------------------------------------------------- */
+/* The resource chain (Resources.h): which open files are searched, and in
+ * what order.  Top to bottom: the files opened last, the application's,
+ * those opened before it, the System file.  A file out of the chain
+ * (opened by FSpOpenOrphanResFile, or detached) is still open. */
+
+enum { kRsrcChainBelowSystemMap = 0, kRsrcChainBelowApplicationMap = 1, kRsrcChainAboveApplicationMap = 2,
+       kRsrcChainAboveAllMaps = 4 };
+
+static bool in_chain(gaddr maph)
+{
+    for (gaddr h = rd32(LM_TopMapHndl); h; h = map_next(h))
+        if (h == maph)
+            return true;
+    return false;
+}
+
+/* Take a map out of the chain (it stays open). */
+static void unlink_map(gaddr maph)
+{
+    gaddr next = map_next(maph);
+    if (rd32(LM_TopMapHndl) == maph)
+        wr32(LM_TopMapHndl, next);
+    else
+        for (gaddr h = rd32(LM_TopMapHndl); h; h = map_next(h))
+            if (map_next(h) == maph) {
+                wr32(mp_of(h) + 16, next);
+                break;
+            }
+    wr32(mp_of(maph) + 16, 0);
+}
+
+static void link_after(gaddr maph, gaddr prev)
+{
+    gaddr m = mp_of(maph);
+    if (!prev) {
+        wr32(m + 16, rd32(LM_TopMapHndl));
+        wr32(LM_TopMapHndl, maph);
+    } else {
+        wr32(m + 16, map_next(prev));
+        wr32(mp_of(prev) + 16, maph);
+    }
+}
+
+int16_t tb_GetTopResourceFile(gaddr refNum)
+{
+    gaddr top = rd32(LM_TopMapHndl);
+    if (refNum)
+        wr16(refNum, (uint16_t)(top ? map_refnum(top) : 0));
+    set_res_err(noErr);
+    return noErr;
+}
+
+int16_t tb_GetNextResourceFile(int16_t curRefNum, gaddr nextRefNum)
+{
+    resfile *f = file_for(curRefNum);
+    if (!f || !in_chain(f->maph)) {
+        set_res_err(resFNotFound);
+        return resFNotFound;
+    }
+    gaddr next = map_next(f->maph);
+    if (nextRefNum)
+        wr16(nextRefNum, (uint16_t)(next ? map_refnum(next) : 0));
+    set_res_err(noErr);
+    return noErr;
+}
+
+/* DetachResourceFile: the file stays open, out of the search.  The
+ * System file can't leave. */
+int16_t tb_DetachResourceFile(int16_t refNum)
+{
+    resfile *f = file_for(refNum);
+    int16_t err = !f ? resFNotFound : refNum == sys_refnum ? rfNumErr : noErr;
+    if (!err && in_chain(f->maph)) {
+        unlink_map(f->maph);
+        if ((int16_t)rd16(LM_CurMap) == refNum) {
+            gaddr top = rd32(LM_TopMapHndl);
+            wr16(LM_CurMap, (uint16_t)(top ? map_refnum(top) : sys_refnum));
+        }
+    }
+    set_res_err(err);
+    return err;
+}
+
+/* InsertResourceFile(refNum, where): into the chain (moved there, if it
+ * is in it already). */
+int16_t tb_InsertResourceFile(int16_t refNum, int16_t where)
+{
+    resfile *f = file_for(refNum);
+    int16_t err = noErr;
+    if (!f)
+        err = resFNotFound;
+    else if (refNum == sys_refnum)
+        err = rfNumErr;
+    else if (where != kRsrcChainBelowSystemMap && where != kRsrcChainBelowApplicationMap &&
+             where != kRsrcChainAboveApplicationMap && where != kRsrcChainAboveAllMaps)
+        err = paramErr;
+    if (!err) {
+        gaddr maph = f->maph;
+        resfile *app = file_for((int16_t)rd16(LM_CurApRefNum));
+        gaddr appmap = app && in_chain(app->maph) ? app->maph : 0;
+        if (in_chain(maph))
+            unlink_map(maph);
+        gaddr prev = 0;
+        if (where == kRsrcChainBelowSystemMap) {
+            for (gaddr h = rd32(LM_TopMapHndl); h; h = map_next(h))
+                prev = h;
+        } else if (where == kRsrcChainBelowApplicationMap) {
+            prev = appmap;
+            if (!prev)
+                for (gaddr h = rd32(LM_TopMapHndl); h; h = map_next(h))
+                    prev = h;
+        } else if (where == kRsrcChainAboveApplicationMap && appmap) {
+            for (gaddr h = rd32(LM_TopMapHndl); h && h != appmap; h = map_next(h))
+                prev = h;
+        }
+        link_after(maph, prev);
+    }
+    set_res_err(err);
+    return err;
+}
+
+/* FSpOpenOrphanResFile(spec, permission, refNum): opened, but not in the
+ * chain, and not the current file. */
+int16_t tb_FSpOpenOrphanResFile(gaddr spec, int8_t permission, gaddr refNum)
+{
+    int16_t before = (int16_t)rd16(LM_CurMap);
+    int16_t rn = tb_FSpOpenResFile(spec, permission);
+    if (rn < 0) {
+        int16_t e = (int16_t)rd16(LM_ResErr);
+        if (refNum)
+            wr16(refNum, 0);
+        return e ? e : fnfErr;
+    }
+    resfile *f = file_for(rn);
+    if (f && in_chain(f->maph) && rn != sys_refnum)
+        unlink_map(f->maph);
+    wr16(LM_CurMap, (uint16_t)(file_for(before) ? before : sys_refnum));
+    if (refNum)
+        wr16(refNum, (uint16_t)rn);
+    set_res_err(noErr);
+    return noErr;
+}
+
+/* A file's data fork as a (read-only) resource file, out of the chain. */
+int16_t rm_open_data_fork(const char *path)
+{
+    mac_file mf;
+    char err[256];
+    as_ensure_file(path);
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return fnfErr;
+    int16_t before = (int16_t)rd16(LM_CurMap);
+    int16_t rn = mf.data && mf.data_len ? open_fork(NULL, mf.data, (uint32_t)mf.data_len, true, rd32(LM_TheZone)) : -1;
+    mac_file_free(&mf);
+    if (rn < 0)
+        return (int16_t)rd16(LM_ResErr) ? (int16_t)rd16(LM_ResErr) : -39 /* eofErr */;
+    resfile *f = file_for(rn);
+    if (f && in_chain(f->maph))
+        unlink_map(f->maph);
+    wr16(LM_CurMap, (uint16_t)(file_for(before) ? before : sys_refnum));
+    set_res_err(noErr);
+    return rn;
+}

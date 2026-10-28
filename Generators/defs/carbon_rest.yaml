@@ -1,0 +1,111 @@
+# CarbonLib's remaining managers (Universal Interfaces 3.4): the routines
+# among them that had a 68k trap or selector the Multiversal definitions
+# lack.  Same schema as Defs/multiversal/defs.
+
+# Sound.h: Sound Manager 3.6
+- function:
+    name: SoundConverterFillBuffer
+    return: OSErr
+    args:
+      - name: sc
+        type: LONGINT
+      - name: fillBufferDataUPP
+        type: Ptr
+      - name: fillBufferDataRefCon
+        type: Ptr
+      - name: outputBuffer
+        type: Ptr
+      - name: outputBufferByteSize
+        type: uint32_t
+      - name: bytesWritten
+        type: Ptr
+      - name: framesWritten
+        type: Ptr
+      - name: outputFlags
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x10780018
+
+- function:
+    name: SoundManagerGetInfo
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+      - name: infoPtr
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x047C0018
+
+- function:
+    name: SoundManagerSetInfo
+    return: OSErr
+    args:
+      - name: selector
+        type: OSType
+      - name: infoPtr
+        type: Ptr
+    dispatcher: SoundDispatch
+    selector: 0x04800018
+
+# Power.h
+- function:
+    name: MinimumProcessorSpeed
+    return: INTEGER
+    returnreg: D0
+    dispatcher: PowerDispatch
+    selector: 0x0036
+
+# TypeSelect.h: Pack 6
+- function:
+    name: TypeSelectClear
+    args:
+      - name: tsr
+        type: Ptr
+    dispatcher: Pack6
+    selector: 0x0028
+    executor: C_
+
+- function:
+    name: TypeSelectNewKey
+    return: Boolean
+    args:
+      - name: theEvent
+        type: Ptr
+      - name: tsr
+        type: Ptr
+    dispatcher: Pack6
+    selector: 0x002A
+    executor: C_
+
+- function:
+    name: TypeSelectFindItem
+    return: INTEGER
+    args:
+      - name: tsr
+        type: Ptr
+      - name: listSize
+        type: INTEGER
+      - name: selectMode
+        type: INTEGER
+      - name: getStringProc
+        type: Ptr
+      - name: yourDataPtr
+        type: Ptr
+    dispatcher: Pack6
+    selector: 0x002C
+    executor: C_
+
+- function:
+    name: TypeSelectCompare
+    return: INTEGER
+    args:
+      - name: tsr
+        type: Ptr
+      - name: testStringScript
+        type: INTEGER
+      - name: testStringPtr
+        type: Ptr
+    dispatcher: Pack6
+    selector: 0x002E
+    executor: C_

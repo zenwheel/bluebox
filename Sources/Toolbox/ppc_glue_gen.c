@@ -22601,6 +22601,77 @@ static void ppcglue_HiliteWindowFrameForDrag(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SoundConverterFillBuffer(ppc_cpu *c)
+{
+    int32_t a_sc = (int32_t)c->gpr[3];
+    gaddr a_fillBufferDataUPP = (gaddr)c->gpr[4];
+    gaddr a_fillBufferDataRefCon = (gaddr)c->gpr[5];
+    gaddr a_outputBuffer = (gaddr)c->gpr[6];
+    uint32_t a_outputBufferByteSize = (uint32_t)c->gpr[7];
+    gaddr a_bytesWritten = (gaddr)c->gpr[8];
+    gaddr a_framesWritten = (gaddr)c->gpr[9];
+    gaddr a_outputFlags = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SoundConverterFillBuffer(a_sc, a_fillBufferDataUPP, a_fillBufferDataRefCon, a_outputBuffer, a_outputBufferByteSize, a_bytesWritten, a_framesWritten, a_outputFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SoundManagerGetInfo(ppc_cpu *c)
+{
+    int32_t a_selector = (int32_t)c->gpr[3];
+    gaddr a_infoPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SoundManagerGetInfo(a_selector, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SoundManagerSetInfo(ppc_cpu *c)
+{
+    int32_t a_selector = (int32_t)c->gpr[3];
+    gaddr a_infoPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SoundManagerSetInfo(a_selector, a_infoPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MinimumProcessorSpeed(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MinimumProcessorSpeed();
+    c->pc = c->lr;
+}
+
+static void ppcglue_TypeSelectClear(ppc_cpu *c)
+{
+    gaddr a_tsr = (gaddr)c->gpr[3];
+    tb_TypeSelectClear(a_tsr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TypeSelectNewKey(ppc_cpu *c)
+{
+    gaddr a_theEvent = (gaddr)c->gpr[3];
+    gaddr a_tsr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_TypeSelectNewKey(a_theEvent, a_tsr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TypeSelectFindItem(ppc_cpu *c)
+{
+    gaddr a_tsr = (gaddr)c->gpr[3];
+    int16_t a_listSize = (int16_t)c->gpr[4];
+    int16_t a_selectMode = (int16_t)c->gpr[5];
+    gaddr a_getStringProc = (gaddr)c->gpr[6];
+    gaddr a_yourDataPtr = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TypeSelectFindItem(a_tsr, a_listSize, a_selectMode, a_getStringProc, a_yourDataPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TypeSelectCompare(ppc_cpu *c)
+{
+    gaddr a_tsr = (gaddr)c->gpr[3];
+    int16_t a_testStringScript = (int16_t)c->gpr[4];
+    gaddr a_testStringPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_TypeSelectCompare(a_tsr, a_testStringScript, a_testStringPtr);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetFrontProcess(ppc_cpu *c)
 {
     gaddr a_serial_number = (gaddr)c->gpr[3];
@@ -43479,6 +43550,7 @@ const ppc_export ppc_exports[] = {
     {"MenuEvent", ppcglue_MenuEvent},
     {"MenuKey", ppcglue_MenuKey},
     {"MenuSelect", ppcglue_MenuSelect},
+    {"MinimumProcessorSpeed", ppcglue_MinimumProcessorSpeed},
     {"ModalDialog", ppcglue_ModalDialog},
     {"ModemStatus", ppcglue_ModemStatus},
     {"MoreMasters", ppcglue_MoreMasters},
@@ -44855,8 +44927,11 @@ const ppc_export ppc_exports[] = {
     {"SndStartFilePlay", ppcglue_SndStartFilePlay},
     {"SndStopFilePlay", ppcglue_SndStopFilePlay},
     {"SortDataBrowserContainer", ppcglue_SortDataBrowserContainer},
+    {"SoundConverterFillBuffer", ppcglue_SoundConverterFillBuffer},
     {"SoundConverterGetInfo", ppcglue_SoundConverterGetInfo},
     {"SoundConverterSetInfo", ppcglue_SoundConverterSetInfo},
+    {"SoundManagerGetInfo", ppcglue_SoundManagerGetInfo},
+    {"SoundManagerSetInfo", ppcglue_SoundManagerSetInfo},
     {"SpaceExtra", ppcglue_SpaceExtra},
     {"SpeakBuffer", ppcglue_SpeakBuffer},
     {"SpeakString", ppcglue_SpeakString},
@@ -45005,6 +45080,10 @@ const ppc_export ppc_exports[] = {
     {"TrimImage", ppctrap_TrimImage},
     {"TruncString", ppcglue_TruncString},
     {"TruncText", ppcglue_TruncText},
+    {"TypeSelectClear", ppcglue_TypeSelectClear},
+    {"TypeSelectCompare", ppcglue_TypeSelectCompare},
+    {"TypeSelectFindItem", ppcglue_TypeSelectFindItem},
+    {"TypeSelectNewKey", ppcglue_TypeSelectNewKey},
     {"UnRegisterSection", ppcglue_UnRegisterSection},
     {"UnflattenCollection", ppctrap_UnflattenCollection},
     {"UnflattenCollectionFromHdl", ppctrap_UnflattenCollectionFromHdl},

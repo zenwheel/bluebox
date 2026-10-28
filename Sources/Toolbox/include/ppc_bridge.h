@@ -92,6 +92,8 @@ extern const ppc_export carbonuser_exports[];
 extern const unsigned carbonuser_export_count;
 /* CarbonLib's printing, Navigation, scrap, ATSUI and MLTE (carbon_svc.c). */
 void (*carbonsvc_export_fn(const char *name))(ppc_cpu *);
+/* Its remaining managers: ColorSync, HTML Rendering ... (carbonrest.c). */
+void (*carbonrest_export_fn(const char *name))(ppc_cpu *);
 /* Its Core Foundation and Math64 (carbon_cf*.c): routines, data, and the
  * state a launch starts without. */
 void (*carbon_cf_export_fn(const char *name))(ppc_cpu *);

@@ -493,12 +493,44 @@ void tb_GXDrawShape(int32_t source)
 /* ---------------------------------------------------------------------- */
 /* Collections */
 
-gaddr tb_NewCollection(void) { return new_object(K_COLLECTION); }
+/* A collection is born with one retain; RetainCollection adds one, and
+ * ReleaseCollection or DisposeCollection drops one, freeing at none. */
+gaddr tb_NewCollection(void)
+{
+    uint32_t c = new_object(K_COLLECTION);
+    object *o = obj(c, K_COLLECTION);
+    if (o)
+        o->owners = 1;
+    return c;
+}
 
 void tb_DisposeCollection(gaddr c)
 {
-    if (obj(c, K_COLLECTION))
+    object *o = obj(c, K_COLLECTION);
+    if (o && --o->owners <= 0)
         free_object(c);
+}
+
+int32_t tb_GetCollectionRetainCount(gaddr c)
+{
+    object *o = obj(c, K_COLLECTION);
+    return o ? o->owners : 0;
+}
+
+gaddr tb_RetainCollection(gaddr c)
+{
+    object *o = obj(c, K_COLLECTION);
+    if (o)
+        o->owners++;
+    return c;
+}
+
+int32_t tb_ReleaseCollection(gaddr c)
+{
+    if (!obj(c, K_COLLECTION))
+        return paramErr;
+    tb_DisposeCollection(c);
+    return noErr;
 }
 
 int32_t tb_CountCollectionItems(gaddr c)
