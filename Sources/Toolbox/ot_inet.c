@@ -11,14 +11,19 @@
 #include <arpa/inet.h>
 #include <arpa/nameser.h>
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <resolv.h>
+#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "ot_internal.h"
 #include "ppc_bridge.h"
@@ -472,20 +477,52 @@ static const dhcp_opt dhcp_opts[] = {
     { 54, "server_identifier", 'a' }, { 58, "renewal_t1_time_value", 'l' }, { 59, "rebinding_t2_time_value", 'l' },
 };
 
+#ifdef __APPLE__
+extern char **environ;
+
+/* The first line ipconfig prints for "getoption <if> <name>", run directly
+ * (no shell: nothing a program says reaches a command line). */
+static bool ipconfig_option(const char *ifname, const char *name, char *line, size_t size)
+{
+    int fd[2];
+    if (pipe(fd) != 0)
+        return false;
+    posix_spawn_file_actions_t fa;
+    posix_spawn_file_actions_init(&fa);
+    posix_spawn_file_actions_adddup2(&fa, fd[1], 1);
+    posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addclose(&fa, fd[0]);
+    posix_spawn_file_actions_addclose(&fa, fd[1]);
+    char *argv[] = { "/usr/sbin/ipconfig", "getoption", (char *)ifname, (char *)name, NULL };
+    pid_t pid;
+    int err = posix_spawn(&pid, argv[0], &fa, NULL, argv, environ);
+    posix_spawn_file_actions_destroy(&fa);
+    close(fd[1]);
+    if (err != 0) {
+        close(fd[0]);
+        return false;
+    }
+    FILE *f = fdopen(fd[0], "r");
+    bool ok = f && fgets(line, (int)size, f) != NULL;
+    if (f)
+        fclose(f);
+    else
+        close(fd[0]);
+    int status;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+        ;
+    return ok;
+}
+#endif
+
 static bool dhcp_fetch(const char *ifname, uint8_t tag, uint8_t *val, int *len)
 {
 #ifdef __APPLE__
     for (unsigned i = 0; i < sizeof dhcp_opts / sizeof dhcp_opts[0]; i++) {
         if (dhcp_opts[i].tag != tag)
             continue;
-        char cmd[96], line[512];
-        snprintf(cmd, sizeof cmd, "/usr/sbin/ipconfig getoption %s %s 2>/dev/null", ifname, dhcp_opts[i].name);
-        FILE *f = popen(cmd, "r");
-        if (!f)
-            return false;
-        bool ok = fgets(line, sizeof line, f) != NULL;
-        pclose(f);
-        if (!ok)
+        char line[512];
+        if (!ipconfig_option(ifname, dhcp_opts[i].name, line, sizeof line))
             return false;
         line[strcspn(line, "\r\n")] = 0;
         if (!line[0])
