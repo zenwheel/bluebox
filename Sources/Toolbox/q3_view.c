@@ -293,6 +293,8 @@ q3view *q3v_drawing_into(gaddr dctx)
     return NULL;
 }
 
+gaddr q3v_guest(q3view *v) { return v ? v->g : 0; }
+
 q3view *q3v_of(gaddr g)
 {
     q3obj *o = q3_of(g, Q3_VIEW);

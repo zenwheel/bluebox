@@ -821,6 +821,10 @@ static void tess_box(q3view *v, const q3node *d)
  * quads, drawn as triangles with face attributes fa. */
 typedef void (*surf_fn)(const q3node *d, float u, float v, float p[3], float n[3]);
 
+/* Which triangles of a surface stay, by their middle's (u, v): a NURB
+ * patch's trim loops (NULL: all). */
+static bool (*surface_keep)(float u, float v);
+
 static void surface(q3view *v, const q3node *d, surf_fn fn, int nu, int nv, float u0, float u1, float v0, float v1,
                     gaddr face_set, gaddr geom_set)
 {
@@ -856,6 +860,15 @@ static void surface(q3view *v, const q3node *d, surf_fn fn, int nu, int nv, floa
     for (int j = 0; j < nv; j++)
         for (int i = 0; i < nu; i++) {
             uint32_t a = (uint32_t)(j * (nu + 1) + i), b = a + 1, c = a + (uint32_t)nu + 1, e = c + 1;
+            if (surface_keep) {
+                float du = (u1 - u0) / (float)nu, dv = (v1 - v0) / (float)nv;
+                float uu = u0 + du * (float)i, vv = v0 + dv * (float)j;
+                if (surface_keep(uu + du * 2 / 3, vv + dv / 3))
+                    t[nt++] = (q3ptri){ { a, b, e }, 0, fa };
+                if (surface_keep(uu + du / 3, vv + dv * 2 / 3))
+                    t[nt++] = (q3ptri){ { a, e, c }, 0, fa };
+                continue;
+            }
             t[nt] = (q3ptri){ { a, b, e }, 3, fa };
             t[nt + 1] = (q3ptri){ { a, e, c }, 6, fa };
             nt += 2;
@@ -1175,6 +1188,110 @@ static void patch_at(const q3node *d, float u, float vv, float p[3], float n[3])
     cross3(du, dv, n);
 }
 
+/* Trim loops as polygons in the patch's (u, v) from 0 to 1, each with
+ * its winding: counterclockwise loops bound what stays, clockwise ones
+ * cut holes; with only holes, the rest of the patch stays. */
+typedef struct {
+    float (*p)[2];
+    int n;
+} trimpoly;
+static trimpoly *trims;
+static int ntrims;
+static bool trims_bounding;
+
+static float poly_area(const trimpoly *t)
+{
+    float a = 0;
+    for (int i = 0; i < t->n; i++) {
+        const float *p = t->p[i], *q = t->p[(i + 1) % t->n];
+        a += p[0] * q[1] - q[0] * p[1];
+    }
+    return a / 2;
+}
+
+static int winding(const trimpoly *t, float u, float v)
+{
+    int w = 0;
+    for (int i = 0; i < t->n; i++) {
+        const float *a = t->p[i], *b = t->p[(i + 1) % t->n];
+        if (a[1] <= v) {
+            if (b[1] > v && (b[0] - a[0]) * (v - a[1]) - (u - a[0]) * (b[1] - a[1]) > 0)
+                w++;
+        } else if (b[1] <= v && (b[0] - a[0]) * (v - a[1]) - (u - a[0]) * (b[1] - a[1]) < 0) {
+            w--;
+        }
+    }
+    return w;
+}
+
+static bool trim_keep(float u, float v)
+{
+    int w = trims_bounding ? 0 : 1;
+    for (int i = 0; i < ntrims; i++)
+        w += winding(&trims[i], u, v);
+    return w > 0;
+}
+
+/* The patch's trim loops (word 7 their count, 8 the array: each a count
+ * of curves and the curves, 2D rational NURBS of order, count, points
+ * (x, y, w) and knots) sampled into polygons. */
+static void trim_loops(const q3node *d)
+{
+    q3node *loops = q3d_kid(d, &npatch_s, 0, 3);
+    float ulo = patch_uk[(int)d->w[0] - 1], uhi = patch_uk[d->w[3]], vlo = patch_vk[(int)d->w[1] - 1], vhi = patch_vk[d->w[2]];
+    if (!loops || uhi <= ulo || vhi <= vlo)
+        return;
+    trims = calloc(loops->n, sizeof *trims);
+    for (uint32_t l = 0; trims && l < loops->n; l++) {
+        q3node *curves = q3d_kid(loops, &trimloop_s, l, 0);
+        trimpoly *t = &trims[ntrims];
+        int cap = 0;
+        for (uint32_t c = 0; curves && c < curves->n; c++) {
+            const uint32_t *cw = curves->w + c * curves->ew;
+            int order = (int)cw[0], n = (int)cw[1];
+            q3node *cp = q3d_kid(curves, &trimcurve_s, c, 0), *kn = q3d_kid(curves, &trimcurve_s, c, 1);
+            if (order < 1 || n < order || !cp || !kn || cp->n < (uint32_t)n || kn->n < (uint32_t)(order + n))
+                continue;
+            float *knots = malloc((size_t)(order + n) * sizeof *knots);
+            if (!knots)
+                continue;
+            for (int i = 0; i < order + n; i++)
+                knots[i] = q3d_f(kn->w, i);
+            int seg = 8 * n;
+            for (int k = 0; k <= seg; k++) {
+                float tt = clamp_t(knots, order, n, knots[order - 1] + (knots[n] - knots[order - 1]) * (float)k / (float)seg);
+                float p[3] = { 0 };
+                for (int i = 0; i < n; i++) {
+                    float b = basis(knots, i, order, tt);
+                    for (int j = 0; j < 3; j++)
+                        p[j] += b * q3d_f(cp->w, i * 3 + j);
+                }
+                if (t->n == cap) {
+                    cap = cap ? cap * 2 : 64;
+                    float(*np)[2] = realloc(t->p, (size_t)cap * sizeof *np);
+                    if (!np)
+                        break;
+                    t->p = np;
+                }
+                float w = p[2] ? p[2] : 1;
+                t->p[t->n][0] = (p[0] / w - ulo) / (uhi - ulo);
+                t->p[t->n][1] = (p[1] / w - vlo) / (vhi - vlo);
+                t->n++;
+            }
+            free(knots);
+        }
+        if (t->n >= 3) {
+            if (poly_area(t) > 0)
+                trims_bounding = true;
+            ntrims++;
+        } else {
+            free(t->p);
+            t->p = NULL;
+            t->n = 0;
+        }
+    }
+}
+
 static void tess_npatch(q3view *v, const q3node *d)
 {
     int uo = (int)d->w[0], vo = (int)d->w[1], rows = (int)d->w[2], cols = (int)d->w[3];
@@ -1191,7 +1308,21 @@ static void tess_npatch(q3view *v, const q3node *d)
             patch_vk[i] = q3d_f(vk->w, i);
         patch_d = d;
         int nu = q3v_segments(v, 0, 4 * cols), nv = q3v_segments(v, 0, 4 * rows);
+        trims_bounding = false;
+        if (d->w[7])
+            trim_loops(d);
+        if (ntrims) { /* finer, so the trimmed edges follow the loops */
+            nu *= 4;
+            nv *= 4;
+            surface_keep = trim_keep;
+        }
         surface(v, d, patch_at, nu, nv, 0, 1, 0, 1, 0, d->w[9]);
+        surface_keep = NULL;
+        for (int i = 0; i < ntrims; i++)
+            free(trims[i].p);
+        free(trims);
+        trims = NULL;
+        ntrims = 0;
     }
     free(patch_uk);
     free(patch_vk);

@@ -1196,6 +1196,30 @@ int32_t q3_register_element(const char *name, uint32_t size)
     return type;
 }
 
+/* A registered element class: by name (its type and metahandler) or by
+ * type (its name and metahandler).  False if there is none. */
+bool q3_element_class_named(const char *name, int32_t *type, gaddr *meta)
+{
+    for (int i = 0; i < nelements; i++)
+        if (!strcmp(elements[i].name, name)) {
+            *type = elements[i].type;
+            *meta = elements[i].metahandler;
+            return true;
+        }
+    return false;
+}
+
+bool q3_element_class_of(int32_t type, const char **name, gaddr *meta)
+{
+    for (int i = 0; i < nelements; i++)
+        if (elements[i].type == type) {
+            *name = elements[i].name;
+            *meta = elements[i].metahandler;
+            return true;
+        }
+    return false;
+}
+
 q3set *q3_elements_of(q3obj *o, bool make)
 {
     if (q3_type_is(o->type, Q3_SET))

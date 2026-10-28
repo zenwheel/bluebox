@@ -56,6 +56,7 @@ static const struct {
     { T4("cspc"), "SpecularControl" }, { T4("kxpr"), "TransparencyColor" }, { T4("nrml"), "Normal" },
     { T4("shuv"), "ShadingUV" },      { T4("sruv"), "SurfaceUV" },       { T4("camb"), "AmbientCoefficient" },
     { T4("srtn"), "SurfaceTangent" }, { T4("hlst"), "HighlightState" },  { T4("vasl"), "VertexAttributeSetList" },
+    { T4("crnr"), "MeshCorners" },    { T4("edge"), "MeshEdges" },
     { T4("fasl"), "FaceAttributeSetList" }, { T4("gasl"), "GeometryAttributeSetList" },
     { T4("atar"), "AttributeArray" }, { T4("gplh"), "GeneralPolygonHint" }, { T4("dgst"), "DisplayGroupState" },
     { T4("caps"), "Caps" },           { T4("tcap"), "TopCapAttributeSet" }, { T4("bcap"), "BottomCapAttributeSet" },
@@ -479,7 +480,7 @@ static bool r_raw(q3file *f, uint8_t *out, uint32_t n)
 /* ---------------------------------------------------------------------- */
 /* Reading: objects as items */
 
-enum { IT_NONE, IT_OBJ, IT_ELEM, IT_ENDG, IT_BUILD, IT_ASL, IT_ARRAY, IT_WORDS, IT_MESH };
+enum { IT_NONE, IT_OBJ, IT_ELEM, IT_ENDG, IT_BUILD, IT_ASL, IT_ARRAY, IT_WORDS, IT_MESH, IT_DONE };
 
 typedef struct {
     float (*pts)[3];
@@ -487,6 +488,10 @@ typedef struct {
     uint32_t nverts, nfaces, nidx;
     uint32_t *fcount, *fidx;
     gaddr set;
+    /* Corners (vertex, face, set) and edges (vertex, vertex, set) with
+     * sets, each a reference held. */
+    uint32_t (*parts)[4];
+    uint32_t nparts;
 } meshb;
 
 typedef struct {
@@ -509,6 +514,9 @@ typedef struct {
     uint8_t *a_data, *a_use;
     uint32_t a_bytes, a_nuse;
     meshb *mesh;
+    /* MeshCorners' and MeshEdges' records, as read. */
+    uint32_t *recs;
+    uint32_t nrecs;
 } item;
 
 static item read_item(q3file *f);
@@ -544,6 +552,9 @@ static void free_item(item *it)
                 q3_release(m->fsets[i]);
         if (m->set)
             q3_release(m->set);
+        for (uint32_t i = 0; i < m->nparts; i++)
+            q3_release(m->parts[i][3]);
+        free(m->parts);
         free(m->pts);
         free(m->vsets);
         free(m->fsets);
@@ -553,6 +564,7 @@ static void free_item(item *it)
     }
     free(it->a_data);
     free(it->a_use);
+    free(it->recs);
     memset(it, 0, sizeof *it);
 }
 
@@ -779,6 +791,38 @@ static item parse(q3file *f, uint32_t type)
         for (uint32_t i = 0; it.asl && has && i < total; i++)
             it.asl[i] = has[i] ? 1 : 0;
         free(has);
+        return it;
+    }
+    case T4("crnr"): case T4("edge"): {
+        /* A mesh's corners (vertex, its faces) or edges (two vertices),
+         * each with the attribute set that follows it in the container. */
+        it.kind = IT_ASL;
+        uint32_t n = 0;
+        r_u32(f, &n);
+        if (n > (1u << 22))
+            n = 0;
+        it.asl_n = n;
+        it.asl = calloc(n + 1, sizeof *it.asl);
+        uint32_t cap = n * 3 + 1;
+        it.recs = malloc(cap * sizeof *it.recs);
+        for (uint32_t i = 0; it.asl && it.recs && i < n; i++) {
+            it.asl[i] = 1;
+            uint32_t a = 0, b = 0;
+            r_u32(f, &a);
+            r_u32(f, &b);
+            uint32_t need = it.nrecs + 2 + (type == T4("crnr") && b < (1u << 20) ? b : 0);
+            if (need > cap) {
+                cap = need * 2;
+                uint32_t *r = realloc(it.recs, cap * sizeof *r);
+                if (!r)
+                    break;
+                it.recs = r;
+            }
+            it.recs[it.nrecs++] = a;
+            it.recs[it.nrecs++] = b;
+            for (uint32_t k = 0; type == T4("crnr") && k < b && k < (1u << 20); k++)
+                r_u32(f, &it.recs[it.nrecs++]);
+        }
         return it;
     }
     case T4("atar"): {
@@ -1415,6 +1459,31 @@ static void read_array(q3file *f, item *root, item *a)
     free(use);
 }
 
+/* A mesh's corners or edges with their sets, kept to put on it once
+ * built. */
+static void mesh_parts(meshb *m, const item *c)
+{
+    bool corners = c->type == T4("crnr");
+    for (uint32_t i = 0, at = 0; i < c->asl_n && at + 2 <= c->nrecs; i++) {
+        uint32_t a = c->recs[at], b = c->recs[at + 1];
+        uint32_t nfaces = corners ? b : 1;
+        gaddr set = c->asl[i] > 1 ? c->asl[i] : 0;
+        for (uint32_t k = 0; k < nfaces && set; k++) {
+            uint32_t (*n)[4] = realloc(m->parts, (m->nparts + 1) * sizeof *n);
+            if (!n)
+                return;
+            m->parts = n;
+            uint32_t second = corners ? (at + 2 + k < c->nrecs ? c->recs[at + 2 + k] : 0) : b;
+            m->parts[m->nparts][0] = corners;
+            m->parts[m->nparts][1] = a;
+            m->parts[m->nparts][2] = second;
+            m->parts[m->nparts][3] = q3_ref(set);
+            m->nparts++;
+        }
+        at += 2 + (corners ? b : 0);
+    }
+}
+
 /* A container's child onto its root. */
 static void attach(q3file *f, item *root, item *child)
 {
@@ -1440,7 +1509,10 @@ static void attach(q3file *f, item *root, item *child)
             q3set_add_bytes(ro->data, child->etype, child->eb, child->esize);
         return;
     case IT_ASL:
-        if (child->type == T4("vasl"))
+        if (child->type == T4("crnr") || child->type == T4("edge")) {
+            if (root->kind == IT_MESH && root->mesh)
+                mesh_parts(root->mesh, child);
+        } else if (child->type == T4("vasl"))
             vertex_sets(root, child);
         else
             face_sets(root, child, child->type == T4("gasl"));
@@ -1564,6 +1636,12 @@ static gaddr finish(item *it)
                               m->fsets);
             if (g && m->set)
                 q3_mesh_set_set(q3_get(g), m->set);
+            for (uint32_t i = 0; g && i < m->nparts; i++) {
+                if (m->parts[i][0])
+                    q3_mesh_set_corner(g, m->parts[i][1], m->parts[i][2], m->parts[i][3]);
+                else
+                    q3_mesh_set_edge(g, m->parts[i][1], m->parts[i][2], m->parts[i][3]);
+            }
         }
         break;
     }
@@ -1676,6 +1754,35 @@ static gaddr custom_read(q3file *f, gaddr file, uint32_t type)
 }
 
 static gaddr current_file; /* the file object being read, for custom read methods */
+static gaddr reading_parent; /* the object whose container is being read */
+
+static gaddr meta_method(gaddr meta, uint32_t m)
+{
+    return meta ? ppc_call(meta, &m, 1) : 0;
+}
+
+/* An element a program registered, read by its read-data method, which
+ * adds it to the set it is in (or the shape's set) itself.  True if it
+ * was one of those. */
+static bool custom_element(const char *name)
+{
+    int32_t etype;
+    gaddr meta;
+    if (!name || !q3_element_class_named(name, &etype, &meta))
+        return false;
+    gaddr fn = meta_method(meta, Q3T('r', 'd', 'd', 't'));
+    q3obj *p = q3_get(reading_parent);
+    gaddr parent = 0;
+    if (p && q3_type_is(p->type, Q3_SET))
+        parent = p->g;
+    else if (p && q3_elements_of(p, true))
+        parent = p->set;
+    if (fn && parent) {
+        uint32_t args[2] = { parent, current_file };
+        ppc_call(fn, args, 2);
+    }
+    return true;
+}
 
 /* ---------------------------------------------------------------------- */
 /* Reading: one object */
@@ -1703,6 +1810,8 @@ static item read_binary(q3file *f)
     case T4("cntr"): {
         push(f, FR_CONTAINER, end);
         it = read_binary(f);
+        gaddr saved_parent = reading_parent;
+        reading_parent = it.kind == IT_OBJ ? it.g : 0;
         while (f->pos + 8 <= end) {
             uint32_t at = f->pos;
             item ch = read_binary(f);
@@ -1711,6 +1820,7 @@ static item read_binary(q3file *f)
             if (f->pos <= at)
                 break;
         }
+        reading_parent = saved_parent;
         pop(f);
         f->pos = end;
         return it;
@@ -1765,6 +1875,16 @@ static item read_binary(q3file *f)
     if ((int32_t)type < 0 && custom_name(f, (int32_t)type)) {
         q3class *k = q3_class_named(custom_name(f, (int32_t)type));
         known = k ? k->type : 0;
+        if (!k) {
+            push(f, FR_OBJECT, end);
+            bool element = custom_element(custom_name(f, (int32_t)type));
+            pop(f);
+            if (element) {
+                f->pos = end;
+                it.kind = IT_DONE;
+                return it;
+            }
+        }
     }
     push(f, FR_OBJECT, end);
     q3class *k = known ? q3_class(known) : NULL;
@@ -1796,13 +1916,28 @@ static item read_text(q3file *f)
     if (at_data_end(f))
         return none;
     int k = token(f, t, sizeof t, true);
-    if (k == TK_WORD && t[0] && t[strlen(t) - 1] == ':') /* a label */
+    char label[256] = "";
+    if (k == TK_WORD && t[0] && t[strlen(t) - 1] == ':') { /* a label */
+        snprintf(label, sizeof label, "%s", t);
         k = token(f, t, sizeof t, true);
+    }
     if (k != TK_WORD)
         return none;
     char name[256];
     snprintf(name, sizeof name, "%s", t);
     uint32_t type = type_of_name(name);
+    /* A program's class or element named with a colon ("Maker:Thing")
+     * reads as a label and a name: the two together, if that is one. */
+    if (!type && label[0]) {
+        char both[512];
+        int32_t et;
+        gaddr meta;
+        snprintf(both, sizeof both, "%s%s", label, name);
+        if (q3_class_named(both) || q3_element_class_named(both, &et, &meta)) {
+            snprintf(name, sizeof name, "%s", both);
+            type = type_of_name(name);
+        }
+    }
     if (token(f, t, sizeof t, true) != TK_LP)
         return none;
     int depth = f->depth;
@@ -1810,9 +1945,11 @@ static item read_text(q3file *f)
     item it;
     memset(&it, 0, sizeof it);
     switch (type) {
-    case T4("cntr"):
+    case T4("cntr"): {
         push(f, FR_CONTAINER, 0);
         it = read_text(f);
+        gaddr saved_parent = reading_parent;
+        reading_parent = it.kind == IT_OBJ ? it.g : 0;
         while (!at_data_end(f)) {
             uint32_t at = f->pos;
             item ch = read_text(f);
@@ -1821,9 +1958,11 @@ static item read_text(q3file *f)
             if (f->pos <= at)
                 break;
         }
+        reading_parent = saved_parent;
         pop(f);
         close_paren(f, depth);
         return it;
+    }
     case T4("bgng"): {
         push(f, FR_OBJECT, 0);
         item grp = read_text(f);
@@ -1852,6 +1991,12 @@ static item read_text(q3file *f)
     default: break;
     }
     push(f, FR_OBJECT, 0);
+    if (!type && custom_element(name)) {
+        pop(f);
+        close_paren(f, depth);
+        it.kind = IT_DONE;
+        return it;
+    }
     q3class *kc = type ? q3_class(type) : NULL;
     if (kc && kc->registered) {
         it.kind = IT_OBJ;
@@ -2301,6 +2446,8 @@ static void end_obj(q3file *f)
 
 static void write_obj(q3file *f, gaddr g);
 
+static void write_custom_element(q3file *f, const q3elem *e);
+
 static void write_set_elements(q3file *f, const q3set *s)
 {
     static const struct {
@@ -2318,6 +2465,10 @@ static void write_set_elements(q3file *f, const q3set *s)
         if (e->type == kQ3AttributeTypeSurfaceShader && e->size >= 4) {
             write_obj(f, (uint32_t)e->bytes[0] << 24 | (uint32_t)e->bytes[1] << 16 | (uint32_t)e->bytes[2] << 8 |
                              e->bytes[3]);
+            continue;
+        }
+        if (e->type >= kQ3AttributeTypeNumTypes || e->type < 0) {
+            write_custom_element(f, e);
             continue;
         }
         for (unsigned m = 0; m < sizeof map / sizeof map[0]; m++)
@@ -2751,27 +2902,29 @@ done:
 
 /* A class of the program's: a type declaring its name first (binary
  * custom types are negative), then its traverse and write methods. */
-static int32_t custom_type_id(q3file *f, q3class *k)
+static int32_t custom_type_id_named(q3file *f, const char *name)
 {
     for (int i = 0; i < f->ntypes; i++)
-        if (!strcmp(f->types[i].name, k->name))
+        if (!strcmp(f->types[i].name, name))
             return f->types[i].id;
     int32_t id = --f->next_custom;
     typeent *n = realloc(f->types, (size_t)(f->ntypes + 1) * sizeof *n);
     if (n) {
         f->types = n;
         f->types[f->ntypes].id = id;
-        snprintf(f->types[f->ntypes].name, sizeof f->types[0].name, "%s", k->name);
+        snprintf(f->types[f->ntypes].name, sizeof f->types[0].name, "%s", name);
         f->ntypes++;
     }
     if (!f->text) {
         begin_obj(f, T4("type"));
         w_u32(f, (uint32_t)id);
-        w_str(f, k->name);
+        w_str(f, name);
         end_obj(f);
     }
     return id;
 }
+
+static int32_t custom_type_id(q3file *f, q3class *k) { return custom_type_id_named(f, k->name); }
 
 static gaddr method(q3class *k, uint32_t m)
 {
@@ -2785,8 +2938,59 @@ static gaddr method(q3class *k, uint32_t m)
 }
 
 static gaddr writing_file; /* the file object being written, for Q3XView_SubmitWriteData */
+static gaddr writing_view;
 static q3file *writing;
 static q3obj *writing_obj;
+/* An element a program registered being written: its name and methods. */
+static const char *writing_elem;
+static gaddr writing_elem_meta;
+
+/* An element of a registered class: its traverse method submits its data
+ * (Q3XView_SubmitWriteData) for its write method; one without methods
+ * isn't written, as QuickDraw 3D didn't. */
+static void write_custom_element(q3file *f, const q3elem *e)
+{
+    const char *name;
+    gaddr meta;
+    if (!q3_element_class_of(e->type, &name, &meta) || !writing_view)
+        return;
+    gaddr trvs = meta_method(meta, Q3T('t', 'r', 'v', 's'));
+    gaddr writ = meta_method(meta, Q3T('w', 'r', 'i', 't'));
+    if (!trvs && !writ)
+        return;
+    gaddr data = q3_galloc(e->size ? e->size : 4);
+    if (!data)
+        return;
+    gput(data, e->bytes, e->size);
+    const char *saved = writing_elem;
+    gaddr saved_meta = writing_elem_meta;
+    q3obj *saved_obj = writing_obj;
+    writing_elem = name;
+    writing_elem_meta = meta;
+    writing_obj = NULL;
+    if (trvs) {
+        uint32_t args[3] = { 0, data, writing_view };
+        ppc_call(trvs, args, 3);
+    } else { /* the data as it is, by the write method */
+        int32_t id = custom_type_id_named(f, name);
+        if (f->text) {
+            if (!f->line_start)
+                newline(f);
+            text_out(f, name);
+            text_out(f, "(");
+            f->tdepth++;
+        } else {
+            begin_obj(f, (uint32_t)id);
+        }
+        uint32_t args[2] = { data, writing_file };
+        ppc_call(writ, args, 2);
+        end_obj(f);
+    }
+    writing_elem = saved;
+    writing_elem_meta = saved_meta;
+    writing_obj = saved_obj;
+    q3_gfree(data);
+}
 
 static void write_custom(q3file *f, q3obj *o)
 {
@@ -2816,7 +3020,92 @@ typedef struct {
     int32_t *counts;
     uint32_t *idx;
     uint32_t ncounts, capcounts;
+    uint32_t (*parts)[4]; /* corner or edge, vertex, face or vertex, set */
+    uint32_t nparts;
 } meshw;
+
+static void mw_part(meshw *m, uint32_t corner, uint32_t a, uint32_t b, gaddr set)
+{
+    uint32_t (*n)[4] = realloc(m->parts, (m->nparts + 1) * sizeof *n);
+    if (!n)
+        return;
+    m->parts = n;
+    m->parts[m->nparts][0] = corner;
+    m->parts[m->nparts][1] = a;
+    m->parts[m->nparts][2] = b;
+    m->parts[m->nparts][3] = set;
+    m->nparts++;
+}
+static void mw_corner(void *ctx, uint32_t v, uint32_t face, gaddr set) { mw_part(ctx, 1, v, face, set); }
+static void mw_edge(void *ctx, uint32_t v1, uint32_t v2, gaddr set) { mw_part(ctx, 0, v1, v2, set); }
+
+/* MeshCorners: a vertex's corners with one set together, then the sets. */
+static void write_corners(q3file *f, meshw *m)
+{
+    uint32_t n = 0;
+    bool *done = calloc(m->nparts + 1, 1);
+    for (uint32_t i = 0; done && i < m->nparts; i++) {
+        if (!m->parts[i][0] || done[i])
+            continue;
+        n++;
+        for (uint32_t j = i; j < m->nparts; j++)
+            if (m->parts[j][0] && m->parts[j][1] == m->parts[i][1] && m->parts[j][3] == m->parts[i][3])
+                done[j] = true;
+    }
+    if (!n || !done) {
+        free(done);
+        return;
+    }
+    memset(done, 0, m->nparts + 1);
+    gaddr *sets = calloc(n, sizeof *sets);
+    uint32_t k = 0;
+    begin_obj(f, T4("cntr"));
+    begin_obj(f, T4("crnr"));
+    w_u32(f, n);
+    for (uint32_t i = 0; sets && i < m->nparts; i++) {
+        if (!m->parts[i][0] || done[i])
+            continue;
+        uint32_t faces = 0;
+        for (uint32_t j = i; j < m->nparts; j++)
+            faces += m->parts[j][0] && m->parts[j][1] == m->parts[i][1] && m->parts[j][3] == m->parts[i][3];
+        w_u32(f, m->parts[i][1]);
+        w_u32(f, faces);
+        for (uint32_t j = i; j < m->nparts; j++)
+            if (m->parts[j][0] && m->parts[j][1] == m->parts[i][1] && m->parts[j][3] == m->parts[i][3]) {
+                w_u32(f, m->parts[j][2]);
+                done[j] = true;
+            }
+        sets[k++] = m->parts[i][3];
+    }
+    end_obj(f);
+    for (uint32_t i = 0; sets && i < k; i++)
+        write_set(f, sets[i]);
+    end_obj(f);
+    free(sets);
+    free(done);
+}
+
+static void write_edges(q3file *f, meshw *m)
+{
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < m->nparts; i++)
+        n += !m->parts[i][0];
+    if (!n)
+        return;
+    begin_obj(f, T4("cntr"));
+    begin_obj(f, T4("edge"));
+    w_u32(f, n);
+    for (uint32_t i = 0; i < m->nparts; i++)
+        if (!m->parts[i][0]) {
+            w_u32(f, m->parts[i][1]);
+            w_u32(f, m->parts[i][2]);
+        }
+    end_obj(f);
+    for (uint32_t i = 0; i < m->nparts; i++)
+        if (!m->parts[i][0])
+            write_set(f, m->parts[i][3]);
+    end_obj(f);
+}
 
 static void mw_vertex(void *ctx, uint32_t i, const float p[3], gaddr set)
 {
@@ -2872,7 +3161,7 @@ static void write_mesh(q3file *f, q3obj *o)
     m.vsets = calloc(m.nv + 1, sizeof *m.vsets);
     m.fsets = calloc(m.nf + 1, sizeof *m.fsets);
     if (m.pts && m.vsets && m.fsets) {
-        q3_mesh_walk(o, &(q3mesh_walker){ mw_vertex, mw_face, NULL, NULL }, &m);
+        q3_mesh_walk(o, &(q3mesh_walker){ mw_vertex, mw_face, mw_corner, mw_edge }, &m);
         gaddr set = q3_mesh_set(o);
         begin_obj(f, T4("cntr"));
         begin_obj(f, T4("mesh"));
@@ -2891,10 +3180,13 @@ static void write_mesh(q3file *f, q3obj *o)
         end_obj(f);
         write_asl(f, T4("vasl"), m.vsets, m.nv);
         write_asl(f, T4("fasl"), m.fsets, m.nf);
+        write_corners(f, &m);
+        write_edges(f, &m);
         if (set)
             write_set(f, set);
         end_obj(f);
     }
+    free(m.parts);
     free(m.pts);
     free(m.vsets);
     free(m.fsets);
@@ -3050,6 +3342,7 @@ void q3_file_write_object(gaddr file, gaddr object, q3view *v)
     q3file *f = file_of(file);
     if (f && f->open && f->writing) {
         writing_file = file;
+        writing_view = v ? q3v_guest(v) : 0;
         writing = f;
         write_obj(f, object);
         writing = NULL;
@@ -3741,21 +4034,22 @@ static void Q3XView_SubmitWriteData(ppc_cpu *c)
     gaddr data = Q3R(2), del = Q3R(3);
     q3file *f = writing;
     q3obj *o = writing_obj;
-    if (!v || !f || !o) {
+    const char *name = o ? o->cls->name : writing_elem;
+    if (!v || !f || !name) {
         Q3RETURN(kQ3Failure);
         return;
     }
-    int32_t id = custom_type_id(f, o->cls);
+    int32_t id = custom_type_id_named(f, name);
     if (f->text) {
         if (!f->line_start)
             newline(f);
-        text_out(f, o->cls->name);
+        text_out(f, name);
         text_out(f, "(");
         f->tdepth++;
     } else {
         begin_obj(f, (uint32_t)id);
     }
-    gaddr writ = method(o->cls, Q3T('w', 'r', 'i', 't'));
+    gaddr writ = o ? method(o->cls, Q3T('w', 'r', 'i', 't')) : meta_method(writing_elem_meta, Q3T('w', 'r', 'i', 't'));
     if (writ && size) {
         uint32_t args[2] = { data, writing_file };
         ppc_call(writ, args, 2);

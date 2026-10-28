@@ -184,6 +184,9 @@ void q3set_empty(q3set *s);
 void q3set_copy(q3set *to, const q3set *from);
 /* A registered element type of this name (registered now if need be). */
 int32_t q3_register_element(const char *name, uint32_t size);
+/* Registered element classes (Q3XElementClass_Register). */
+bool q3_element_class_named(const char *name, int32_t *type, gaddr *meta);
+bool q3_element_class_of(int32_t type, const char **name, gaddr *meta);
 /* The elements of a set or shape (a shape's set made if make). */
 q3set *q3_elements_of(q3obj *o, bool make);
 /* An attribute set object's set (NULL for none). */

@@ -223,4 +223,113 @@ extension BlueBox.QuickDraw3D {
         for obj in [set, dc] { Q.call("Q3Object_Dispose", [obj]) }
         #expect(Q.call("Q3Exit") == 1)
     }
+
+    /// A NURB patch with a trim loop: a clockwise square in the middle
+    /// of its parameters cuts a hole there; the rest is drawn.
+    @Test func trimmedNURBPatch() {
+        launchTestApp()
+        _ = cfm_ppc_cpu()
+        #expect(Q.call("Q3Initialize") == 1)
+        let (dc, image) = pixmapContext(64, 64)
+        let v = view(dc)
+        // Bilinear: four corners at z 0, knots 0 0 1 1 both ways.
+        let points = Self.data([Float(-1.5), Float(-1.5), Float(0), Float(1), Float(1.5), Float(-1.5), Float(0), Float(1),
+                                Float(-1.5), Float(1.5), Float(0), Float(1), Float(1.5), Float(1.5), Float(0), Float(1)])
+        let knots = Self.data([Float(0), Float(0), Float(1), Float(1)])
+        // A clockwise square from (0.3, 0.3): four order-2 curves.
+        func curve(_ a: (Float, Float), _ b: (Float, Float)) -> [UInt32] {
+            [2, 2, Self.data([a.0, a.1, Float(1), b.0, b.1, Float(1)]), knots]
+        }
+        let lo: Float = 0.3, hi: Float = 0.7
+        let curves = Q.words(curve((lo, lo), (lo, hi)) + curve((lo, hi), (hi, hi)) + curve((hi, hi), (hi, lo)) +
+                             curve((hi, lo), (lo, lo)))
+        let loop = Q.words([4, curves])
+        let red = Q.call("Q3AttributeSet_New")
+        #expect(Q.call("Q3AttributeSet_Add", [red, 5, Self.data([Float(1), Float(0), Float(0)])]) == 1)
+        let patch = Q.call("Q3NURBPatch_New", [Q.words([2, 2, 2, 2, points, knots, knots, 1, loop, red])])
+        #expect(patch != 0)
+        #expect(Q.call("Q3View_StartRendering", [v]) == 1)
+        #expect(Q.call("Q3Object_Submit", [patch, v]) == 1)
+        #expect(Q.call("Q3View_EndRendering", [v]) == 0)
+        #expect(px(image, 64, 32, 32) == 0x0000FF)          // the hole: the clear colour
+        #expect(px(image, 64, 18, 18) & 0xFF0000 != 0)      // the patch around it
+        #expect(px(image, 64, 46, 46) & 0xFF0000 != 0)
+        for obj in [patch, red, v, dc] { Q.call("Q3Object_Dispose", [obj]) }
+    }
+
+    /// An attribute a program registers, with its traverse, write and
+    /// read-data methods, goes into 3DMF with the set it is in and comes
+    /// back into it, in both formats.
+    @Test func customAttributesInFiles() {
+        launchTestApp()
+        _ = cfm_ppc_cpu()
+        #expect(Q.call("Q3Initialize") == 1)
+        let tv = { (fn: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void, n: String) in cfm_native_tvector(fn, n) }
+        xrMethods = [xrType("trvs"): tv(xaTraverse, "xaTraverse"), xrType("writ"): tv(xaWrite, "xaWrite"),
+                     xrType("rddt"): tv(xaReadData, "xaReadData")]
+        let typeOut = Q.words([0])
+        let name = Q.words([0, 0, 0, 0, 0])
+        for (i, b) in "Test:Weight".utf8.enumerated() { wr8(name + UInt32(i), b) }
+        #expect(Q.call("Q3XAttributeClass_Register", [typeOut, name, 4, cfm_native_tvector(xrMeta, "xaMeta")]) != 0)
+        xaType = rd32(typeOut)
+        let set = Q.call("Q3AttributeSet_New")
+        #expect(Q.call("Q3AttributeSet_Add", [set, 5, Self.data([Float(0), Float(1), Float(0)])]) == 1)
+        #expect(Q.call("Q3AttributeSet_Add", [set, xaType, Q.words([0x1234_5678])]) == 1)
+        let tri = Q.call("Q3Triangle_New", [Self.data([Float(0), Float(0), Float(0), 0, Float(1), Float(0), Float(0), 0,
+                                                       Float(0), Float(1), Float(0), 0, set])])
+        #expect(tri != 0)
+        let file = BlueBox.QD3DFile()
+        for mode: UInt32 in [0, 4] {
+            let st = Q.call("Q3MemoryStorage_New", [0, 0])
+            let f = Q.call("Q3File_New")
+            #expect(Q.call("Q3File_SetStorage", [f, st]) == 1)
+            #expect(Q.call("Q3File_OpenWrite", [f, mode]) == 1)
+            let view = Q.call("Q3View_New")
+            #expect(Q.call("Q3View_StartWriting", [view, f]) == 1)
+            #expect(Q.call("Q3Object_Submit", [tri, view]) == 1)
+            #expect(Q.call("Q3View_EndWriting", [view]) == 0)
+            #expect(Q.call("Q3File_Close", [f]) == 1)
+            let buf = tb_NewPtr(12, false, true)
+            #expect(Q.call("Q3MemoryStorage_GetBuffer", [st, buf, buf + 4, buf + 8]) == 1)
+            let bytes = (0..<rd32(buf + 4)).map { rd8(rd32(buf) + $0) }
+            if mode == 4 { #expect(String(decoding: bytes, as: UTF8.self).contains("Test:Weight")) }
+            let again = file.readAll(bytes, mode: mode)
+            #expect(again.count == 1)
+            if let t = again.first {
+                let out = Q.words([0])
+                #expect(Q.call("Q3Geometry_GetAttributeSet", [t, out]) == 1)
+                let got = rd32(out)
+                let w = Q.words([0])
+                #expect(got != 0 && Q.call("Q3AttributeSet_Get", [got, xaType, w]) == 1 && rd32(w) == 0x1234_5678)
+                #expect(Q.call("Q3AttributeSet_Get", [got, 5, Q.words([0, 0, 0])]) == 1)
+                if got != 0 { Q.call("Q3Object_Dispose", [got]) }
+            }
+            for o in again + [f, st, view] { Q.call("Q3Object_Dispose", [o]) }
+        }
+        for o in [tri, set] { Q.call("Q3Object_Dispose", [o]) }
+    }
+}
+
+nonisolated(unsafe) var xaType: UInt32 = 0
+
+/// The test attribute's traverse: its four bytes submitted for writing.
+let xaTraverse: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+    guard let c else { return }
+    ceReturn(c, ceCallFrom(c, "Q3XView_SubmitWriteData", [ceArg(c, 2), 4, ceArg(c, 1), 0]))
+}
+
+let xaWrite: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+    guard let c else { return }
+    ceReturn(c, ceCallFrom(c, "Q3Uns32_Write", [rd32(ceArg(c, 0)), ceArg(c, 1)]))
+}
+
+/// Read back and added to the set it is in.
+let xaReadData: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+    guard let c else { return }
+    let parent = ceArg(c, 0), file = ceArg(c, 1)
+    let w = tb_NewPtr(4, false, true)
+    var status = ceCallFrom(c, "Q3Uns32_Read", [w, file])
+    if status == 1 { status = ceCallFrom(c, "Q3Set_Add", [parent, xaType, w]) }
+    tb_DisposePtr(w)
+    ceReturn(c, status)
 }
