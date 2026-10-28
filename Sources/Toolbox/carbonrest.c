@@ -50,6 +50,7 @@ static const struct {
     { rest_loc_exports, &rest_loc_export_count, rest_loc_reset },
     { rest_uc_exports, &rest_uc_export_count, rest_uc_reset },
     { rest_la_exports, &rest_la_export_count, rest_la_reset },
+    { rest_fbc_exports, &rest_fbc_export_count, rest_fbc_reset },
 };
 
 void (*carbonrest_export_fn(const char *name))(ppc_cpu *)
