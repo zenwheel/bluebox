@@ -986,19 +986,32 @@ Q3_GETW(Q3InteractiveRenderer_GetRAVEContextHints, CTWN, R_HINTS, 1)
 Q3_SETV(Q3InteractiveRenderer_SetRAVETextureFilter, CTWN, R_FILTER)
 Q3_GETW(Q3InteractiveRenderer_GetRAVETextureFilter, CTWN, R_FILTER, 1)
 
-/* The interactive renderer draws through the host, not RAVE draw
- * contexts a program could reach. */
+/* The interactive renderer's RAVE draw context: one, on the frame of the
+ * view drawing with it (rave.c), for programs that set RAVE state or draw
+ * with RAVE themselves during the view's frame (Bugdom asks for it and
+ * stops without). */
+gaddr q3v_rave_context(gaddr renderer, gaddr *engine, gaddr destroy);
+
 static void Q3InteractiveRenderer_CountRAVEDrawContexts(ppc_cpu *c)
 {
+    q3obj *r = q3_of(Q3R(0), CTWN);
     if (Q3R(1))
-        wr32(Q3R(1), 0);
-    Q3RETURN(q3_of(Q3R(0), CTWN) ? kQ3Success : kQ3Failure);
+        wr32(Q3R(1), r && q3v_rave_context(Q3R(0), NULL, 0) ? 1 : 0);
+    Q3RETURN(r ? kQ3Success : kQ3Failure);
 }
+
 static void Q3InteractiveRenderer_GetRAVEDrawContexts(ppc_cpu *c)
 {
-    if (Q3R(3))
-        wr32(Q3R(3), 0);
-    Q3RETURN(q3_of(Q3R(0), CTWN) ? kQ3Success : kQ3Failure);
+    q3obj *r = q3_of(Q3R(0), CTWN);
+    gaddr list = Q3R(1), engines = Q3R(2), count = Q3R(3);
+    gaddr engine = 0, dc = r ? q3v_rave_context(Q3R(0), &engine, Q3R(4)) : 0;
+    if (dc && list)
+        wr32(list, dc);
+    if (dc && engines)
+        wr32(engines, engine);
+    if (count)
+        wr32(count, dc ? 1 : 0);
+    Q3RETURN(r ? kQ3Success : kQ3Failure);
 }
 
 static void Q3XAttributeSet_GetMask(ppc_cpu *c)

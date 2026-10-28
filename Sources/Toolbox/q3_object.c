@@ -1626,7 +1626,9 @@ const unsigned q3_export_count = sizeof q3_exports / sizeof q3_exports[0];
 static void object_classes(void)
 {
     q3_class_ops(Q3_SET, set_dispose, set_duplicate, NULL, false);
-    q3_class_ops(Q3_ATTRIBUTE_SET, set_dispose, set_duplicate, NULL, false);
+    /* An attribute set is drawn as it changes the attributes in force:
+     * display groups take it (Bugdom's MakeObjectTransparent). */
+    q3_class_ops(Q3_ATTRIBUTE_SET, set_dispose, set_duplicate, NULL, true);
     q3_class_ops(Q3_CSTRING, string_dispose, string_duplicate, NULL, false);
 }
 

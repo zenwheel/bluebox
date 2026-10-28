@@ -91,6 +91,7 @@ typedef struct {
     r3d_frame *frame;
     uint32_t *pixels;
     bool rendering;
+    bool external; /* QuickDraw 3D's: drawing into a view's frame, which the view begins and shows */
     gaddr notice[5], notice_ref[5];
     r3d_vertex *submitted;
     int nsubmitted;
@@ -146,11 +147,15 @@ static rtex *tex_of(gaddr t)
 /* ---------------------------------------------------------------------- */
 /* Vertices and state */
 
+/* Depth as the frame keeps it: z (or, with perspective z, from 1/w),
+ * scaled a hair short of the cleared depth so that what is drawn at z = 1
+ * still passes a less-than test against it, as the engines of the time
+ * drew it (Combat Mission's sky is at z = 1). */
 static float depth_of(const rctx *x, float z, float invw)
 {
     if (x->ints[TAG_PerspectiveZ])
-        return invw > 0 ? 1.0f / (1.0f + invw) : 1.0f;
-    return z;
+        z = invw > 0 ? 1.0f / (1.0f + invw) : 1.0f;
+    return fminf(fmaxf(z, 0), 1) * (1.0f - 1.0f / 65536);
 }
 
 static void gouraud(const rctx *x, gaddr v, r3d_vertex *o)
@@ -208,7 +213,7 @@ static r3d_state state_of(const rctx *x, bool texture)
 
 static void begin(rctx *x)
 {
-    if (x->rendering)
+    if (x->rendering || x->external)
         return;
     uint32_t bg = (uint32_t)lrintf(fminf(fmaxf(x->floats[TAG_ColorBG_a], 0), 1) * 255) << 24 |
                   (uint32_t)lrintf(fminf(fmaxf(x->floats[TAG_ColorBG_r], 0), 1) * 255) << 16 |
@@ -275,6 +280,8 @@ static int device_format(int32_t rave_type)
 
 static void present(rctx *x)
 {
+    if (x->external)
+        return;
     if (x->rendering) {
         r3d_end(x->frame, x->pixels);
         x->rendering = false;
@@ -511,7 +518,7 @@ static void m_drawBitmap(ppc_cpu *c)
 static void m_renderStart(ppc_cpu *c)
 {
     rctx *x = ctx_of(Q3R(0));
-    if (x) {
+    if (x && !x->external) {
         x->rendering = false;
         begin(x);
     }
@@ -525,7 +532,9 @@ static void m_renderEnd(ppc_cpu *c)
         Q3RETURN(kQAParamErr);
         return;
     }
-    if (!x->ints[TAG_DontSwap]) {
+    if (x->external) {
+        /* the view shows the frame */
+    } else if (!x->ints[TAG_DontSwap]) {
         present(x);
     } else if (x->rendering) {
         r3d_end(x->frame, x->pixels);
@@ -538,7 +547,7 @@ static void m_renderEnd(ppc_cpu *c)
 static void m_renderAbort(ppc_cpu *c)
 {
     rctx *x = ctx_of(Q3R(0));
-    if (x && x->rendering) {
+    if (x && x->rendering && !x->external) {
         r3d_end(x->frame, NULL);
         x->rendering = false;
     }
@@ -774,6 +783,28 @@ static void QAEngineGestalt(ppc_cpu *c)
 static void QAEngineEnable(ppc_cpu *c) { Q3RETURN(kQANoErr); }
 static void QAEngineDisable(ppc_cpu *c) { Q3RETURN(kQANoErr); }
 
+/* The context's guest record, its methods and default state; 0 if
+ * there's no memory for it. */
+static gaddr publish(rctx *x, int slot)
+{
+    gaddr g = tb_NewPtr(8 + 35 * 4, false, true);
+    if (!g)
+        return 0;
+    x->guest = g;
+    wr32(g, (TAG_CTX & 0xFFFF0000u) | (uint32_t)slot);
+    wr32(g + 4, kQAVersion_1_6);
+    for (int i = 0; i < 35; i++)
+        wr32(g + 8 + 4 * (uint32_t)i, cfm_native_tvector(methods[i], method_names[i]));
+    x->ints[TAG_ZFunction] = x->flags & kQAContext_NoZBuffer ? 0 : 1; /* kQAZFunction_LT */
+    x->ints[TAG_ZBufferMask] = 1;
+    x->ints[27] = 0xF; /* the channel mask: all */
+    x->floats[TAG_Width] = 1;
+    x->floats[TAG_ZMinScale] = 1.0f / 65535;
+    x->floats[TAG_BitmapScale_x] = x->floats[TAG_BitmapScale_y] = 1;
+    ctxs[slot] = x;
+    return g;
+}
+
 static void QADrawContextNew(ppc_cpu *c)
 {
     gaddr dev = Q3R(0), rect = Q3R(1), clip = Q3R(2), out = Q3R(5);
@@ -819,36 +850,64 @@ static void QADrawContextNew(ppc_cpu *c)
     x->flags = flags;
     x->frame = r3d_frame_new(x->width, x->height);
     x->pixels = calloc((size_t)x->width * (size_t)x->height, 4);
-    gaddr g = tb_NewPtr(8 + 35 * 4, false, true);
-    if (!x->frame || !x->pixels || !g) {
+    gaddr g = x->frame && x->pixels ? publish(x, slot) : 0;
+    if (!g) {
         r3d_frame_free(x->frame);
         free(x->pixels);
         free(x);
-        if (g)
-            tb_DisposePtr(g);
         Q3RETURN(kQAOutOfMemory);
         return;
     }
-    x->guest = g;
-    wr32(g, (TAG_CTX & 0xFFFF0000u) | (uint32_t)slot);
-    wr32(g + 4, kQAVersion_1_6);
-    for (int i = 0; i < 35; i++)
-        wr32(g + 8 + 4 * (uint32_t)i, cfm_native_tvector(methods[i], method_names[i]));
-    x->ints[TAG_ZFunction] = flags & kQAContext_NoZBuffer ? 0 : 1; /* kQAZFunction_LT */
-    x->ints[TAG_ZBufferMask] = 1;
-    x->ints[27] = 0xF; /* the channel mask: all */
-    x->floats[TAG_Width] = 1;
-    x->floats[TAG_ZMinScale] = 1.0f / 65535;
-    x->floats[TAG_BitmapScale_x] = x->floats[TAG_BitmapScale_y] = 1;
-    ctxs[slot] = x;
     wr32(out, g);
     Q3RETURN(kQANoErr);
+}
+
+/* A draw context drawing into a QuickDraw 3D view's frame, for its
+ * interactive renderer's Q3InteractiveRenderer_GetRAVEDrawContexts:
+ * the program sets state on it, or draws with it during the view's
+ * frame, which the view begins and shows. */
+gaddr rave_frame_context(r3d_frame *f, int width, int height, gaddr *engine)
+{
+    int slot = -1;
+    for (int i = 0; i < MAX_CTX; i++)
+        if (!ctxs[i]) {
+            slot = i;
+            break;
+        }
+    rctx *x = slot >= 0 && f ? calloc(1, sizeof *x) : NULL;
+    if (!x)
+        return 0;
+    x->external = true;
+    x->rendering = true;
+    x->frame = f;
+    x->width = width;
+    x->height = height;
+    gaddr g = publish(x, slot);
+    if (!g) {
+        free(x);
+        return 0;
+    }
+    if (engine)
+        *engine = engine_at(0);
+    return g;
+}
+
+void rave_frame_context_free(gaddr dc)
+{
+    rctx *x = ctx_of(dc);
+    if (!x || !x->external)
+        return;
+    ctxs[rd32(x->guest) & 0xFFFF] = NULL;
+    free(x->submitted);
+    wr32(x->guest, 0);
+    tb_DisposePtr(x->guest);
+    free(x);
 }
 
 static void QADrawContextDelete(ppc_cpu *c)
 {
     rctx *x = ctx_of(Q3R(0));
-    if (x) {
+    if (x && !x->external) {
         ctxs[rd32(x->guest) & 0xFFFF] = NULL;
         r3d_frame_free(x->frame);
         free(x->pixels);
@@ -1031,7 +1090,8 @@ void rave_reset(void)
 {
     for (int i = 0; i < MAX_CTX; i++)
         if (ctxs[i]) {
-            r3d_frame_free(ctxs[i]->frame);
+            if (!ctxs[i]->external)
+                r3d_frame_free(ctxs[i]->frame);
             free(ctxs[i]->pixels);
             free(ctxs[i]->submitted);
             free(ctxs[i]);

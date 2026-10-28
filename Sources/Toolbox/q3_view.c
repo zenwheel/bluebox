@@ -295,7 +295,49 @@ struct q3view {
     /* Writing. */
     gaddr file;
     gaddr idle, idle_data, progress, progress_data, end_frame, end_frame_data;
+    /* The interactive renderer's RAVE draw context on the frame, for the
+     * program (Q3InteractiveRenderer_GetRAVEDrawContexts), and what to
+     * call when it goes. */
+    gaddr rave_dc, rave_engine, rave_destroy;
 };
+
+gaddr rave_frame_context(r3d_frame *f, int width, int height, gaddr *engine);
+void rave_frame_context_free(gaddr dc);
+
+enum { MAX_VIEWS = 64 };
+static q3view *views[MAX_VIEWS];
+
+static void drop_rave_context(q3view *v)
+{
+    if (!v->rave_dc)
+        return;
+    if (v->rave_destroy) {
+        uint32_t arg = v->renderer;
+        ppc_call(v->rave_destroy, &arg, 1);
+    }
+    rave_frame_context_free(v->rave_dc);
+    v->rave_dc = v->rave_engine = 0;
+}
+
+/* The RAVE draw context of the view drawing with this renderer (made on
+ * its frame now if need be); 0 if no view has drawn with it. */
+gaddr q3v_rave_context(gaddr renderer, gaddr *engine, gaddr destroy);
+gaddr q3v_rave_context(gaddr renderer, gaddr *engine, gaddr destroy)
+{
+    for (int i = 0; i < MAX_VIEWS; i++) {
+        q3view *v = views[i];
+        if (!v || v->renderer != renderer || !v->frame)
+            continue;
+        if (!v->rave_dc)
+            v->rave_dc = rave_frame_context(v->frame, v->fw, v->fh, &v->rave_engine);
+        if (destroy)
+            v->rave_destroy = destroy;
+        if (engine)
+            *engine = v->rave_engine;
+        return v->rave_dc;
+    }
+    return 0;
+}
 
 static void default_state(q3view *v)
 {
@@ -1473,6 +1515,7 @@ static bool frame_setup(q3view *v)
     if (!dctx_area(v->dctx, &port, &x, &y, &w, &h, &pixmap))
         return false;
     if (!v->frame || r3d_frame_width(v->frame) != w || r3d_frame_height(v->frame) != h) {
+        drop_rave_context(v);
         r3d_frame_free(v->frame);
         free(v->pixels);
         v->frame = r3d_frame_new(w, h);
@@ -1549,6 +1592,11 @@ static void Q3View_New(ppc_cpu *c)
     v->g = o->g;
     v->renderer = 0;
     default_state(v);
+    for (int i = 0; i < MAX_VIEWS; i++)
+        if (!views[i]) {
+            views[i] = v;
+            break;
+        }
     Q3RETURN(o->g);
 }
 
@@ -1557,6 +1605,10 @@ static void view_dispose(q3obj *o)
     q3view *v = o->data;
     if (!v)
         return;
+    for (int i = 0; i < MAX_VIEWS; i++)
+        if (views[i] == v)
+            views[i] = NULL;
+    drop_rave_context(v);
     q3_assign(&v->renderer, 0);
     q3_assign(&v->camera, 0);
     q3_assign(&v->lights, 0);
@@ -2167,6 +2219,7 @@ void q3_view_classes(void)
 
 void q3_view_reset(void)
 {
+    memset(views, 0, sizeof views);
     for (int i = 0; i < ntexs; i++)
         r3d_texture_free(texs[i].id);
     ntexs = 0;
