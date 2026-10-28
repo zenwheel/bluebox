@@ -198,6 +198,9 @@ static void apply_lowmem_overrides(void)
 }
 
 void threads_reset(void);
+void startup_run_inits(void);
+bool startup_is_cdev_file(void);
+uint32_t startup_cdev_entry(void);
 void help_reset(void);
 void scriptmgr_reset(void);
 void dialog_reset(void);
@@ -683,6 +686,17 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     g_app_size_flags = size && rd32(size) ? rd16(rd32(size)) : 0;
     build_app_parms();
 
+    /* A cdev file has no program: the Control Panel's host stands in. */
+    if (startup_is_cdev_file()) {
+        gaddr stack = tb_NewPtr(65536, false, true);
+        cpu.a[7] = stack + 65536 - 16;
+        g_ppc_mode = false;
+        cfm_reset();
+        startup_run_inits();
+        cpu.pc = startup_cdev_entry();
+        return true;
+    }
+
     /* PowerPC: an application with no 68k code, or any with a PowerPC
      * fragment when PowerPC is preferred. */
     g_ppc_mode = false;
@@ -715,6 +729,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     uint32_t entry = seg_launch(rn, &a5, err, errlen);
     if (!entry)
         return false;
+    startup_run_inits(); /* the INITs asked for, before the program's first instruction */
     cpu.pc = entry;
     return true;
 }

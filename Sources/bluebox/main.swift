@@ -99,6 +99,10 @@ func usage() -> Never {
                      at $EFE1FE, the SCC, the sound buffer, System 6.0.8) or macii (640x480, 8 bits); quadra
                      is the default.  Programs that address the chips by number run on them (the 68k
                      interpreter, without --jit)
+          --floppy F the raw floppy disk image F (a sector dump, or Disk Copy 4.2) as the disk in the Sony
+                     driver's drive 1: a key disk whose sectors a program's copy protection reads
+          --init F   run the INIT resources of file F (an INIT or extension) before the program starts, as the
+                     Start Manager would; may be repeated
           --cpu M    processor: 68040 (default, with FPU) or 68020 (no FPU); a fat
                      application then runs its 68k code
           --appletalk A  AppleTalk on LocalTalk over UDP: local (the default; copies
@@ -410,6 +414,8 @@ func runCommand(_ args: [String]) {
     var redrawCheck: String?
     var cpuModel: Int32?
     var machineName: String?
+    var initFiles: [String] = []
+    var floppyImage: String?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
     var appearanceGiven = false
@@ -498,6 +504,14 @@ func runCommand(_ args: [String]) {
                 fail("--machine expects " + machineNames())
             }
             machineName = args[i]
+        case "--floppy":
+            i += 1
+            guard i < args.count else { usage() }
+            floppyImage = args[i]
+        case "--init":
+            i += 1
+            guard i < args.count else { usage() }
+            initFiles.append(args[i])
         case "--cpu":
             i += 1
             guard i < args.count, let m = Int32(args[i]), [68020, 68040].contains(m) else {
@@ -703,6 +717,13 @@ func runCommand(_ args: [String]) {
     for spec in appleShares {
         var aerr = [CChar](repeating: 0, count: 256)
         guard machine_mount_appleshare(spec, &aerr, aerr.count) else { fail(str(aerr)) }
+    }
+    if let floppyImage {
+        var ferr = [CChar](repeating: 0, count: 256)
+        guard machine_set_floppy(floppyImage, &ferr, ferr.count) else { fail(str(ferr)) }
+    }
+    for f in initFiles {
+        guard machine_add_init(resolveFile(f, kinds: ["INIT", "appe", "ZSYS", "dfil"])) else { fail("too many --init files") }
     }
     guard machine_launch(app, &err, err.count) else { fail(str(err)) }
     // Other programs (other runs, bluebox send) can send it Apple Events.
@@ -956,6 +977,22 @@ func findListedApplication(_ spec: String) -> String? {
     return found.first
 }
 
+/// A file that is not an application (an INIT, a cdev) by path, ingesting
+/// MacBinary and archives first; `kinds` are the types preferred.
+func resolveFile(_ given: String, kinds: [String]) -> String {
+    let path = findListedApplication(given) ?? given
+    switch classify(path) {
+    case .appleDouble: return path
+    case .plain: fail("\(path) has no resource fork")
+    case .macBinary, .archive, .diskImage: break
+    }
+    guard let entry = try? ingest(path, library: defaultLibrary()).entry else { fail("cannot read \(path)") }
+    let files = scan(entry)
+    let wanted = kinds.map(fourCCValue)
+    if let f = files.first(where: { wanted.contains($0.type) }) ?? files.first { return f.path }
+    fail("no file in \(entry)")
+}
+
 func resolveApplication(_ given: String, named: String?) -> String {
     let path = findListedApplication(given) ?? given
     switch classify(path) {
@@ -985,6 +1022,10 @@ func resolveApplication(_ given: String, named: String?) -> String {
         candidates = matchApplications(candidates.map(inside), wanted: named).map { candidates[$0] }
     }
     if candidates.count == 1 { return candidates[0].path }
+    // No program, but a cdev: the Control Panel's host shows it.
+    if candidates.isEmpty, named == nil, let cdev = scan(entry).first(where: { $0.type == fourCCValue("cdev") }) {
+        return cdev.path
+    }
     if candidates.isEmpty {
         fail(named == nil ? "no application found in \(entry)" : "no application matching \"\(named!)\" in \(entry)")
     }

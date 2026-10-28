@@ -925,6 +925,7 @@ static void guest_tables_init(void)
             wr32(LM_DrvQHdr + 2, e);
         wr32(LM_DrvQHdr + 6, e);
     }
+    sony_install_drive(zone, (int16_t)(2 + nmounts)); /* a floppy image given to the run, if any */
 }
 
 void fm_fcb_record(int16_t rn, const char *path, bool rsrc, bool write, uint32_t eof, uint32_t pos)

@@ -74,7 +74,9 @@ bool hw_select_machine(const char *name)
         machine_set_screen(p->screen_w, p->screen_h);
         machine_set_screen_depth(p->screen_depth);
     }
-    machine_set_cpu(p->cpu);
+    /* the interpreter runs a 68020 or a 68040; the other models are what the
+     * profile and Gestalt report until the CPU has them */
+    machine_set_cpu(p->cpu == 68040 ? 68040 : 68020);
     return true;
 }
 

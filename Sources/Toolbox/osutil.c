@@ -111,9 +111,8 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
     SysEnvRec_set_systemVersion(p, (int16_t)rd16(LM_SysVersion));
     /* Numbered as Gestalt's: env68000 1, env68010 2, env68020 3, env68030 4,
      * env68040 5. */
-    int proc = g_cpu && g_cpu->model == 68040 ? 5 : m->cpu == 68000 ? 1 : m->cpu == 68030 ? 4 : 3;
-    if (!hw_machine_chosen())
-        proc = g_cpu && g_cpu->model == 68040 ? 5 : 3;
+    int proc = hw_machine_chosen() ? (m->cpu == 68000 ? 1 : m->cpu == 68030 ? 4 : m->cpu == 68040 ? 5 : 3)
+                                   : (g_cpu && g_cpu->model == 68040 ? 5 : 3);
     SysEnvRec_set_processor(p, (int16_t)proc);
     SysEnvRec_set_hasFPU(p, gestalt_value(fourcc("fpu "), 0) != 0);
     SysEnvRec_set_hasColorQD(p, m->color_qd);
