@@ -286,8 +286,9 @@ gaddr tb_GetMenu(int16_t rid)
         return 0;
     tb_HNoPurge(h);
     gaddr p = rd32(h);
-    /* The resource holds the MDEF's ID where the handle will go. */
-    int16_t mdef = (int16_t)(MenuInfo_menuProc(p) & 0xFFFF);
+    /* The resource holds the MDEF's ID (a word, then a reserved one) where
+     * the handle will go. */
+    int16_t mdef = (int16_t)(MenuInfo_menuProc(p) >> 16);
     /* (a definition CarbonLib's RegisterMenuDefinition registered first) */
     gaddr mh = carbonmenu_registered_def(mdef);
     if (!mh)

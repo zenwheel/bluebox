@@ -588,6 +588,25 @@ extension BlueBox {
             #expect(tb_GetMenuFont(m, f, sz) == 0 && rd16(f) == 3 && rd16(sz) == 10)
         }
 
+        @Test func menuResourceNamesItsMDEF() {
+            // MENU 140's definition procedure is MDEF 128 (the word after the height);
+            // MENU 141 names none, so MDEF 0.  (MacDraft's menus: its own MDEFs.)
+            let custom = cat(be16(140), be16(0), be16(0), be16(128), be16(0), be32(0xFFFF_FFFF),
+                             [4], Array("Draw".utf8), [0])
+            let plain = cat(be16(141), be16(0), be16(0), be32(0), be32(0xFFFF_FFFF),
+                            [4], Array("Edit".utf8), [0])
+            launchTestApp([TestResource(type: "MENU", id: 140, data: custom),
+                           TestResource(type: "MENU", id: 141, data: plain),
+                           TestResource(type: "MDEF", id: 128, data: [0x4E, 0x75])])
+            _ = initToolbox()
+            let m = tb_GetMenu(140), n = tb_GetMenu(141)
+            #expect(m != 0 && n != 0)
+            let mdef128 = tb_GetResource(Int32(bitPattern: fourCC("MDEF")), 128), mdef0 = tb_GetResource(Int32(bitPattern: fourCC("MDEF")), 0)
+            #expect(mdef128 != 0 && mdef0 != 0 && mdef128 != mdef0)
+            #expect(rd32(rd32(m) + 6) == mdef128)
+            #expect(rd32(rd32(n) + 6) == mdef0)
+        }
+
         @Test func xmnuResourcesApply() {
             // MENU 131: two items; 'xmnu' 131: the second with command 'quit', Command-Option.
             let menu = cat(be16(131), be16(0), be16(0), be32(0), be32(0xFFFF_FFFF),
