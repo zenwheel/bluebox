@@ -22950,6 +22950,19 @@ static void glue_QTCountChildrenOfType(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_QTCreateStandardParameterDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_createdDialog = (gaddr)cpu_pop32(c);
+    int32_t a_dialogOptions = (int32_t)cpu_pop32(c);
+    int32_t a_parameters = (int32_t)cpu_pop32(c);
+    int32_t a_effectList = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTCreateStandardParameterDialog(a_effectList, a_parameters, a_dialogOptions, a_createdDialog);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_QTCreateUUID(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -22957,6 +22970,16 @@ static void glue_QTCreateUUID(cpu68k *c, uint16_t trapword)
     int32_t a_creationFlags = (int32_t)cpu_pop32(c);
     gaddr a_outUUID = (gaddr)cpu_pop32(c);
     int16_t r = tb_QTCreateUUID(a_outUUID, a_creationFlags);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTDismissStandardParameterDialog(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_createdDialog = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTDismissStandardParameterDialog(a_createdDialog);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -23412,6 +23435,17 @@ static void glue_QTInstallNextTaskNeededSoonerCallback(cpu68k *c, uint16_t trapw
     cpu_push32(c, ret);
 }
 
+static void glue_QTIsStandardParameterDialogEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_createdDialog = (int32_t)cpu_pop32(c);
+    gaddr a_pEvent = (gaddr)cpu_pop32(c);
+    int16_t r = tb_QTIsStandardParameterDialogEvent(a_pEvent, a_createdDialog);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_QTLockContainer(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -23729,6 +23763,18 @@ static void glue_QTSetPixMapPtrRowBytes(cpu68k *c, uint16_t trapword)
     int32_t a_rowBytes = (int32_t)cpu_pop32(c);
     int32_t a_pm = (int32_t)cpu_pop32(c);
     int16_t r = tb_QTSetPixMapPtrRowBytes(a_pm, a_rowBytes);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_QTStandardParameterDialogDoAction(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_params = (gaddr)cpu_pop32(c);
+    int32_t a_action = (int32_t)cpu_pop32(c);
+    int32_t a_createdDialog = (int32_t)cpu_pop32(c);
+    int16_t r = tb_QTStandardParameterDialogDoAction(a_createdDialog, a_action, a_params);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -35079,10 +35125,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x2C6u, "QTGetDataRefMaxFileOffset", CONV_STACK, 16, 2, glue_QTGetDataRefMaxFileOffset},
     {0xAAAA, (int32_t)0x2C7u, "GetMovieImporterForDataRef", CONV_STACK, 16, 2, glue_GetMovieImporterForDataRef},
     {0xAAAA, (int32_t)0x2C9u, "QTGetEffectsList", CONV_STACK, 16, 2, glue_QTGetEffectsList},
-    {0xAAAA, (int32_t)0x2CAu, "QTCreateStandardParameterDialog", CONV_STACK, 16, 2, 0},
-    {0xAAAA, (int32_t)0x2CBu, "QTIsStandardParameterDialogEvent", CONV_STACK, 8, 2, 0},
-    {0xAAAA, (int32_t)0x2CCu, "QTDismissStandardParameterDialog", CONV_STACK, 4, 2, 0},
-    {0xAAAA, (int32_t)0x2CDu, "QTStandardParameterDialogDoAction", CONV_STACK, 12, 2, 0},
+    {0xAAAA, (int32_t)0x2CAu, "QTCreateStandardParameterDialog", CONV_STACK, 16, 2, glue_QTCreateStandardParameterDialog},
+    {0xAAAA, (int32_t)0x2CBu, "QTIsStandardParameterDialogEvent", CONV_STACK, 8, 2, glue_QTIsStandardParameterDialogEvent},
+    {0xAAAA, (int32_t)0x2CCu, "QTDismissStandardParameterDialog", CONV_STACK, 4, 2, glue_QTDismissStandardParameterDialog},
+    {0xAAAA, (int32_t)0x2CDu, "QTStandardParameterDialogDoAction", CONV_STACK, 12, 2, glue_QTStandardParameterDialogDoAction},
     {0xAAAA, (int32_t)0x2CEu, "GetMediaPlayHints", CONV_STACK, 8, 0, glue_GetMediaPlayHints},
     {0xAAAA, (int32_t)0x2CFu, "AddSoundDescriptionExtension", CONV_STACK, 12, 2, 0},
     {0xAAAA, (int32_t)0x2D0u, "GetSoundDescriptionExtension", CONV_STACK, 12, 2, 0},

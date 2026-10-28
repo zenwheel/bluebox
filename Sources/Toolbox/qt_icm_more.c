@@ -1240,8 +1240,231 @@ void icm_sources_drop(int32_t seq)
         }
 }
 
+/* ---- The standard parameter dialog: the effect to use, from a list ---- */
+
+enum { featureUnsupportedErr = -2053, codecParameterDialogConfirm = -8986, userCanceled = -128, MAX_PD_EFFECTS = 24 };
+
+typedef struct {
+    gaddr dialog;
+    int32_t parameters;
+    uint32_t types[MAX_PD_EFFECTS];
+    int n, chosen;
+} pdialog;
+
+#define MAX_PDIALOGS 4
+static pdialog pdialogs[MAX_PDIALOGS];
+
+static pdialog *pdialog_of(int32_t id)
+{
+    for (int i = 0; i < MAX_PDIALOGS; i++)
+        if (pdialogs[i].dialog && (int32_t)pdialogs[i].dialog == id)
+            return &pdialogs[i];
+    return NULL;
+}
+
+/* A dialog item list: OK, Cancel, a title, then a radio button per effect. */
+static gaddr pd_items(const char names[][32], int n, int *height)
+{
+    int rows = (n + 1) / 2;
+    *height = 50 + rows * 20 + 40;
+    uint8_t buf[4096];
+    size_t at = 2;
+    int count = 0;
+#define ITEM(t, l, b, r, kind, text)                                                                                   \
+    do {                                                                                                               \
+        size_t len = strlen(text);                                                                                     \
+        memset(buf + at, 0, 4);                                                                                        \
+        int16_t rc[4] = { (int16_t)(t), (int16_t)(l), (int16_t)(b), (int16_t)(r) };                                    \
+        for (int q = 0; q < 4; q++) {                                                                                  \
+            buf[at + 4 + q * 2] = (uint8_t)((uint16_t)rc[q] >> 8);                                                     \
+            buf[at + 5 + q * 2] = (uint8_t)rc[q];                                                                      \
+        }                                                                                                              \
+        buf[at + 12] = (uint8_t)(kind);                                                                                \
+        buf[at + 13] = (uint8_t)len;                                                                                   \
+        memcpy(buf + at + 14, text, len);                                                                              \
+        at += 14 + len + (len & 1);                                                                                    \
+        count++;                                                                                                       \
+    } while (0)
+    ITEM(*height - 30, 280, *height - 10, 350, 4, "OK");
+    ITEM(*height - 30, 190, *height - 10, 260, 4, "Cancel");
+    ITEM(10, 15, 30, 350, 8, "Choose an effect:");
+    for (int i = 0; i < n; i++) {
+        int col = i % 2, row = i / 2;
+        ITEM(40 + row * 20, 20 + col * 170, 58 + row * 20, 185 + col * 170, 6, names[i]);
+    }
+#undef ITEM
+    buf[0] = (uint8_t)((count - 1) >> 8);
+    buf[1] = (uint8_t)(count - 1);
+    gaddr h = tb_NewHandle((int32_t)at, false, false);
+    if (h)
+        gput(rd32(h), buf, (uint32_t)at);
+    return h;
+}
+
+static void pd_select(pdialog *d, int k)
+{
+    d->chosen = k;
+    gaddr t = tb_NewPtr(16, false, true);
+    for (int i = 0; i < d->n; i++) {
+        tb_GetDialogItem(d->dialog, (int16_t)(4 + i), t, t + 4, t + 8);
+        if (rd32(t + 4))
+            tb_SetControlValue(rd32(t + 4), i == k);
+    }
+    tb_DisposePtr(t);
+}
+
+/* The chosen effect into the parameters: their 'what' atom. */
+static int16_t pd_store(pdialog *d, int32_t container)
+{
+    if (!container || d->chosen < 0)
+        return noErr;
+    gaddr v = tb_NewPtr(4, false, true);
+    wr32(v, d->types[d->chosen]);
+    int32_t atom = tb_QTFindChildByID(container, 0, (int32_t)fourcc("what"), 1, 0);
+    int16_t err = atom ? tb_QTSetAtomData(container, atom, 4, v)
+                       : tb_QTInsertChild(container, 0, (int32_t)fourcc("what"), 1, 0, 4, v, 0);
+    tb_DisposePtr(v);
+    return err;
+}
+
+int16_t tb_QTCreateStandardParameterDialog(int32_t effectList, int32_t parameters, int32_t dialogOptions,
+                                           gaddr createdDialog)
+{
+    if (!createdDialog)
+        return paramErr;
+    wr32(createdDialog, 0);
+    pdialog *d = NULL;
+    for (int i = 0; i < MAX_PDIALOGS && !d; i++)
+        if (!pdialogs[i].dialog)
+            d = &pdialogs[i];
+    if (!d)
+        return memFullErr;
+    memset(d, 0, sizeof *d);
+    gaddr list = (gaddr)effectList;
+    gaddr own = 0;
+    if (!list) { /* every effect */
+        gaddr out = tb_NewPtr(4, false, true);
+        tb_QTGetEffectsList(out, 0, 2, 0);
+        own = list = rd32(out);
+        tb_DisposePtr(out);
+    }
+    char names[MAX_PD_EFFECTS][32];
+    int n = tb_QTCountChildrenOfType((int32_t)list, 0, (int32_t)fourcc("type"));
+    gaddr tmp = tb_NewPtr(40, false, true);
+    for (int i = 0; i < n && d->n < MAX_PD_EFFECTS; i++) {
+        int32_t ta = tb_QTFindChildByIndex((int32_t)list, 0, (int32_t)fourcc("type"), (int16_t)(i + 1), tmp);
+        uint32_t id = rd32(tmp);
+        int32_t na = tb_QTFindChildByID((int32_t)list, 0, (int32_t)fourcc("name"), (int32_t)id, 0);
+        if (!ta || tb_QTCopyAtomDataToPtr((int32_t)list, ta, 1, 4, tmp, tmp + 36))
+            continue;
+        d->types[d->n] = rd32(tmp);
+        memset(names[d->n], 0, 32);
+        gmemset(tmp, 0, 32);
+        if (na)
+            tb_QTCopyAtomDataToPtr((int32_t)list, na, 1, 31, tmp, tmp + 36);
+        gget(names[d->n], tmp, 31);
+        if (!names[d->n][0]) {
+            uint32_t t = d->types[d->n];
+            char c[5] = { (char)(t >> 24), (char)(t >> 16), (char)(t >> 8), (char)t, 0 };
+            strcpy(names[d->n], c);
+        }
+        d->n++;
+    }
+    tb_DisposePtr(tmp);
+    if (own)
+        tb_DisposeHandle(own);
+    if (!d->n)
+        return paramErr;
+    int height;
+    gaddr items = pd_items(names, d->n, &height);
+    gaddr r = tb_NewPtr(8, false, true), title = tb_NewPtr(32, false, true);
+    qrect_put(r, (qrect){ 80, 80, (int16_t)(80 + height), 80 + 370 });
+    gput(title, "\x07" "Effects", 8);
+    d->dialog = items ? tb_NewDialog(0, r, title, 1, 5 /* movableDBoxProc */, (gaddr)-1, 0, 0, items) : 0;
+    tb_DisposePtr(r);
+    tb_DisposePtr(title);
+    if (!d->dialog)
+        return memFullErr;
+    d->parameters = parameters;
+    d->chosen = -1;
+    /* the parameters' effect, chosen already, else the first */
+    int start = 0;
+    int32_t what = parameters ? tb_QTFindChildByID(parameters, 0, (int32_t)fourcc("what"), 1, 0) : 0;
+    if (what) {
+        gaddr v = tb_NewPtr(8, false, true);
+        if (!tb_QTCopyAtomDataToPtr(parameters, what, 1, 4, v, v + 4))
+            for (int i = 0; i < d->n; i++)
+                if (d->types[i] == rd32(v))
+                    start = i;
+        tb_DisposePtr(v);
+    }
+    pd_select(d, start);
+    wr32(createdDialog, d->dialog);
+    return noErr;
+}
+
+int16_t tb_QTIsStandardParameterDialogEvent(gaddr pEvent, int32_t createdDialog)
+{
+    pdialog *d = pdialog_of(createdDialog);
+    if (!d || !pEvent)
+        return paramErr;
+    if (!tb_IsDialogEvent(pEvent))
+        return featureUnsupportedErr;
+    gaddr out = tb_NewPtr(8, false, true);
+    int16_t r = featureUnsupportedErr;
+    if (tb_DialogSelect(pEvent, out, out + 4) && rd32(out) == d->dialog) {
+        int16_t item = (int16_t)rd16(out + 4);
+        if (item == 1)
+            r = pd_store(d, d->parameters) ? paramErr : codecParameterDialogConfirm;
+        else if (item == 2)
+            r = userCanceled;
+        else {
+            if (item >= 4 && item < 4 + d->n)
+                pd_select(d, item - 4);
+            r = noErr;
+        }
+    } else if (rd32(out) == d->dialog || rd32(out) == 0) {
+        r = noErr; /* the dialog's own (an update, a drag) */
+    }
+    tb_DisposePtr(out);
+    return r;
+}
+
+int16_t tb_QTDismissStandardParameterDialog(int32_t createdDialog)
+{
+    pdialog *d = pdialog_of(createdDialog);
+    if (!d)
+        return paramErr;
+    tb_DisposeDialog(d->dialog);
+    memset(d, 0, sizeof *d);
+    return noErr;
+}
+
+int16_t tb_QTStandardParameterDialogDoAction(int32_t createdDialog, int32_t action, gaddr params)
+{
+    pdialog *d = pdialog_of(createdDialog);
+    if (!d)
+        return paramErr;
+    switch (action) {
+    case 1: /* pdActionConfirmDialog */
+        return pd_store(d, d->parameters);
+    case 4: /* pdActionGetDialogValues: into the container given */
+        return pd_store(d, (int32_t)params);
+    case 8: /* pdActionSetDialogTitle */
+        if (params)
+            tb_SetWTitle(d->dialog, params);
+        return noErr;
+    case 9: /* pdActionGetSubPanelMenu: none */
+        if (params)
+            wr32(params, 0);
+        return noErr;
+    }
+    return noErr; /* menus, previews, the colour picker: nothing of ours needs them */
+}
+
 void icm_more_reset(void)
 {
+    memset(pdialogs, 0, sizeof pdialogs);
     memset(sources, 0, sizeof sources);
     memset(transcoders, 0, sizeof transcoders);
     memset(cpix, 0, sizeof cpix);
@@ -1350,7 +1573,7 @@ int16_t tb_QTGetEffectsListExtended(gaddr returnedList, int32_t minSources, int3
 int16_t tb_QTGetEffectSpeed(int32_t parameters, gaddr pFPS)
 {
     if (pFPS)
-        wr32(pFPS, 0x7FFFFFFF); /* effectIsRealtime */
+        wr32(pFPS, 0); /* effectIsRealtime */
     return noErr;
 }
 

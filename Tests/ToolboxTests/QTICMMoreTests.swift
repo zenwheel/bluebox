@@ -186,5 +186,26 @@ extension BlueBox {
             #expect(tb_TransformRgn(Int32(bitPattern: t), Int32(bitPattern: rgn)) == 0)
             #expect(rd16(rd32(rgn) + 2) == 7 && rd16(rd32(rgn) + 4) == 5)
         }
+
+        /// The standard parameter dialog: the effects as choices, the one
+        /// chosen given back in the parameters' 'what' atom.
+        @Test func standardParameterDialog() {
+            machine()
+            let list = tb_NewPtr(4, false, true)
+            #expect(tb_QTGetEffectsList(list, 2, 2, 0) == 0)
+            let params = tb_NewPtr(4, false, true)
+            #expect(tb_QTNewAtomContainer(params) == 0)
+            let dlg = tb_NewPtr(4, false, true)
+            #expect(tb_QTCreateStandardParameterDialog(Int32(bitPattern: rd32(list)), Int32(bitPattern: rd32(params)), 0, dlg) == 0)
+            #expect(rd32(dlg) != 0 && tb_FrontWindow() == rd32(dlg))
+            let d = Int32(bitPattern: rd32(dlg))
+            #expect(tb_QTStandardParameterDialogDoAction(d, 1, 0) == 0)
+            let what = tb_QTFindChildByID(Int32(bitPattern: rd32(params)), 0, Int32(bitPattern: fourCC("what")), 1, 0)
+            #expect(what != 0)
+            let v = tb_NewPtr(8, false, true)
+            #expect(tb_QTCopyAtomDataToPtr(Int32(bitPattern: rd32(params)), what, 1, 4, v, v + 4) == 0 && rd32(v) == fourCC("dslv"))
+            #expect(tb_QTDismissStandardParameterDialog(d) == 0)
+            #expect(tb_QTDismissStandardParameterDialog(d) != 0)
+        }
     }
 }

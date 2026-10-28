@@ -33215,6 +33215,40 @@ static void ppcglue_QTGetEffectsListExtended(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_QTCreateStandardParameterDialog(ppc_cpu *c)
+{
+    int32_t a_effectList = (int32_t)c->gpr[3];
+    int32_t a_parameters = (int32_t)c->gpr[4];
+    int32_t a_dialogOptions = (int32_t)c->gpr[5];
+    gaddr a_createdDialog = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCreateStandardParameterDialog(a_effectList, a_parameters, a_dialogOptions, a_createdDialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIsStandardParameterDialogEvent(ppc_cpu *c)
+{
+    gaddr a_pEvent = (gaddr)c->gpr[3];
+    int32_t a_createdDialog = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIsStandardParameterDialogEvent(a_pEvent, a_createdDialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTDismissStandardParameterDialog(ppc_cpu *c)
+{
+    int32_t a_createdDialog = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTDismissStandardParameterDialog(a_createdDialog);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTStandardParameterDialogDoAction(ppc_cpu *c)
+{
+    int32_t a_createdDialog = (int32_t)c->gpr[3];
+    int32_t a_action = (int32_t)c->gpr[4];
+    gaddr a_params = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTStandardParameterDialogDoAction(a_createdDialog, a_action, a_params);
+    c->pc = c->lr;
+}
+
 static void ppcglue_QTGetEffectSpeed(ppc_cpu *c)
 {
     int32_t a_parameters = (int32_t)c->gpr[3];
@@ -39305,64 +39339,6 @@ static void ppctrap_RemoveSoundDescriptionExtension(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTCreateStandardParameterDialog(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2CAu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIsStandardParameterDialogEvent(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2CBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTDismissStandardParameterDialog(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2CCu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTStandardParameterDialogDoAction(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2CDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppclm_get_KbdLast(ppc_cpu *c) { c->gpr[3] = rd8(0x218); c->pc = c->lr; }
 static void ppclm_set_KbdLast(ppc_cpu *c) { wr8(0x218, (uint8_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_KbdType(ppc_cpu *c) { c->gpr[3] = rd8(0x21E); c->pc = c->lr; }
@@ -42853,9 +42829,9 @@ const ppc_export ppc_exports[] = {
     {"QTCopyAtomDataToHandle", ppcglue_QTCopyAtomDataToHandle},
     {"QTCopyAtomDataToPtr", ppcglue_QTCopyAtomDataToPtr},
     {"QTCountChildrenOfType", ppcglue_QTCountChildrenOfType},
-    {"QTCreateStandardParameterDialog", ppctrap_QTCreateStandardParameterDialog},
+    {"QTCreateStandardParameterDialog", ppcglue_QTCreateStandardParameterDialog},
     {"QTCreateUUID", ppcglue_QTCreateUUID},
-    {"QTDismissStandardParameterDialog", ppctrap_QTDismissStandardParameterDialog},
+    {"QTDismissStandardParameterDialog", ppcglue_QTDismissStandardParameterDialog},
     {"QTDisposeAtomContainer", ppcglue_QTDisposeAtomContainer},
     {"QTDisposeTween", ppctrap_QTDisposeTween},
     {"QTDoTween", ppctrap_QTDoTween},
@@ -42898,7 +42874,7 @@ const ppc_export ppc_exports[] = {
     {"QTInsertChild", ppcglue_QTInsertChild},
     {"QTInsertChildren", ppcglue_QTInsertChildren},
     {"QTInstallNextTaskNeededSoonerCallback", ppcglue_QTInstallNextTaskNeededSoonerCallback},
-    {"QTIsStandardParameterDialogEvent", ppctrap_QTIsStandardParameterDialogEvent},
+    {"QTIsStandardParameterDialogEvent", ppcglue_QTIsStandardParameterDialogEvent},
     {"QTLockContainer", ppcglue_QTLockContainer},
     {"QTMovieNeedsTimeTable", ppcglue_QTMovieNeedsTimeTable},
     {"QTNewAlias", ppcglue_QTNewAlias},
@@ -42927,7 +42903,7 @@ const ppc_export ppc_exports[] = {
     {"QTSetPixMapPtrGammaLevel", ppcglue_QTSetPixMapPtrGammaLevel},
     {"QTSetPixMapPtrRequestedGammaLevel", ppcglue_QTSetPixMapPtrRequestedGammaLevel},
     {"QTSetPixMapPtrRowBytes", ppcglue_QTSetPixMapPtrRowBytes},
-    {"QTStandardParameterDialogDoAction", ppctrap_QTStandardParameterDialogDoAction},
+    {"QTStandardParameterDialogDoAction", ppcglue_QTStandardParameterDialogDoAction},
     {"QTSwapAtoms", ppcglue_QTSwapAtoms},
     {"QTTextToNativeText", ppcglue_QTTextToNativeText},
     {"QTUninstallNextTaskNeededSoonerCallback", ppcglue_QTUninstallNextTaskNeededSoonerCallback},
