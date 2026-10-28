@@ -36,15 +36,15 @@
 /* Machine profiles */
 
 static const hw_profile profiles[] = {
-    { "quadra", "Macintosh Quadra 800", 35, 33, 68040, true, true, 4, 4, 0x3FFF, 0xFC00, 0x077D, 0x0710,
+    { "quadra", "Macintosh Quadra 800", 35, 68040, true, true, 4, 4, 0x3FFF, 0xFC00, 0x077D, 0x0710,
       0, 0, 0, false, false, true, 0x50F00000u, 0x50F04000u, 0x50F04000u, 0x50F16000u },
-    { "macii", "Macintosh II", 6, 4, 68020, true, true, 5, 5, 0x3FFF, 0xF400, 0x0178, 0x0608,
+    { "macii", "Macintosh II", 6, 68020, true, true, 5, 5, 0x3FFF, 0xF400, 0x0178, 0x0608,
       640, 480, 8, false, false, true, 0x50F00000u, 0x50F04000u, 0x50F04000u, 0x50F16000u },
-    { "plus", "Macintosh Plus", 4, 2, 68000, false, false, 3, 3, 0x7FFF, 0xC000, 0x0075, 0x0608,
+    { "plus", "Macintosh Plus", 4, 68000, false, false, 3, 3, 0x7FFF, 0xC000, 0x0075, 0x0608,
       512, 342, 1, true, true, false, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu },
-    { "se", "Macintosh SE", 5, 3, 68000, false, false, 5, 5, 0x7FFF, 0xC400, 0x0276, 0x0608,
+    { "se", "Macintosh SE", 5, 68000, false, false, 5, 5, 0x7FFF, 0xC400, 0x0276, 0x0608,
       512, 342, 1, true, true, true, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu },
-    { "classic", "Macintosh Classic", 17, 15, 68000, false, false, 5, 5, 0x7FFF, 0xE400, 0x0376, 0x0608,
+    { "classic", "Macintosh Classic", 17, 68000, false, false, 5, 5, 0x7FFF, 0xE400, 0x0376, 0x0608,
       512, 342, 1, true, true, true, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu },
 };
 enum { NPROFILES = sizeof profiles / sizeof profiles[0] };
@@ -74,9 +74,11 @@ bool hw_select_machine(const char *name)
         machine_set_screen(p->screen_w, p->screen_h);
         machine_set_screen_depth(p->screen_depth);
     }
-    /* the interpreter runs a 68020 or a 68040; the other models are what the
-     * profile and Gestalt report until the CPU has them */
-    machine_set_cpu(p->cpu == 68040 ? 68040 : 68020);
+    /* Its processor, FPU and addressing (the System 6 machines ran in
+     * 24-bit mode); --cpu, --fpu and --addressing may change them after. */
+    machine_set_cpu(p->cpu);
+    machine_set_fpu(!p->fpu ? 0 : p->cpu == 68040 ? 68040 : 68881);
+    machine_set_addressing(chosen ? 24 : 0);
     return true;
 }
 
@@ -570,8 +572,8 @@ static void hw_write_cb(gaddr a, int size, uint32_t v)
 
 gaddr hw_screen_page(bool alternate) { return alternate ? GA_SCREEN - 0x8000u : GA_SCREEN; }
 /* Below the top of memory: the sound buffer is $300 under it, the
- * alternate $5C00 further down.  Blue Box's memory ends at the top of the
- * system heap area, where a Plus's RAM ended in a 4 MB machine. */
+ * alternate $5C00 further down, as in a 4 MB compact Mac (mem.h's
+ * GAC_SOUND). */
 static gaddr sound_main, sound_alt;
 gaddr hw_sound_buffer(bool alternate) { return alternate ? sound_alt : sound_main; }
 
@@ -723,32 +725,33 @@ void hw_boot(void)
         map_window(0x00C00000u, 0x00200000u, 3);                 /* IWM: $C00000-$DFFFFF */
         map_window(0x00E80000u, 0x00080000u, 0);                 /* VIA: $E80000-$EFFFFF */
     } else {
-        map_window(m->via & ~0x1FFFu, 0x2000, 0);                /* VIA 1 */
-        map_window((m->via & ~0x1FFFu) + 0x2000, 0x2000, 4);     /* VIA 2 */
-        map_window(m->scc_rd & ~0x1FFFu, 0x2000, 2);             /* SCC */
-        map_window(m->iwm & ~0x1FFFu, 0x2000, 3);                /* IWM */
-        map_window((m->via & ~0x1FFFu) + 0x14000, 0x2000, 5);    /* the Apple Sound Chip */
+        /* At $50Fxxxxx, and in 24-bit mode at $F0xxxx too, which the Mac
+         * II's 24-bit map mirrored them at (a program switched to 32-bit
+         * mode by SwapMMUMode reaches the first). */
+        for (int pass = 0; pass < (g_mem_24bit ? 2 : 1); pass++) {
+            gaddr io = (m->via & ~0x1FFFu) & (pass ? 0x00FFFFFFu : 0xFFFFFFFFu);
+            map_window(io, 0x2000, 0);                           /* VIA 1 */
+            map_window(io + 0x2000, 0x2000, 4);                  /* VIA 2 */
+            map_window(io + ((m->scc_rd & ~0x1FFFu) - (m->via & ~0x1FFFu)), 0x2000, 2); /* SCC */
+            map_window(io + ((m->iwm & ~0x1FFFu) - (m->via & ~0x1FFFu)), 0x2000, 3);    /* IWM */
+            map_window(io + 0x14000, 0x2000, 5);                 /* the Apple Sound Chip */
+        }
     }
     wr32(LM_VIA, m->via);
     wr32(LM_SCCRd, m->scc_rd);
     wr32(LM_SCCWr, m->scc_wr);
     wr32(LM_IWM, m->iwm);
     wr16(LM_ROM85, m->rom85);
-    /* The default machine's processor is the run's (68040 with its FPU, or a
-     * 68020 without); a chosen machine's is its own. */
-    int cpu = chosen ? m->cpu : (g_cpu && g_cpu->model == 68040 ? 68040 : 68020);
-    bool fpu = chosen ? m->fpu : cpu == 68040;
-    wr16(LM_SCSIFlags, (uint16_t)(m->hwcfg & (fpu ? 0xFFFF : ~0x1000)));
+    /* HWCfgFlags and CPUFlag are machine.c's, from the processor run. */
     wr16(GA_ROM + 8, m->rom_version);
     if (chosen)
         wr16(LM_SysVersion, m->sys_version);
-    wr8(LM_CPUFlag, cpu == 68040 ? 4 : cpu == 68030 ? 3 : cpu == 68020 ? 2 : 0);
     wr8(LM_MBState, 0x80);
     if (m->via_sound) {
-        /* The sound buffers, the alternate $5C00 below the main as on a Plus. */
-        gaddr blk = mm_new_ptr_in(GA_SYSHEAP, 0x5C00 + 370 * 2, true);
-        sound_alt = blk;
-        sound_main = blk + 0x5C00;
+        /* The sound buffers at the top of RAM, the alternate $5C00 below
+         * the main, as on a Plus. */
+        sound_main = GAC_SOUND;
+        sound_alt = GAC_SOUND - 0x5C00u;
         wr32(LM_SoundBase, sound_main);
         wr32(LM_ScrnBase, GA_SCREEN);
     }

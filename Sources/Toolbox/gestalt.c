@@ -82,11 +82,8 @@ uint32_t gestalt_value(uint32_t selector, uint32_t fallback)
  * PPC Toolbox, Help Manager and the rest of System 7). */
 static void gestalt_machine(const hw_profile *m)
 {
-    static const int proc_of[] = { 0, 1, 3, 4, 5 };
-    int idx = m->cpu == 68000 ? 1 : m->cpu == 68020 ? 2 : m->cpu == 68030 ? 3 : 4;
-    gestalt_set(fourcc("mach"), (uint32_t)m->gestalt_mach);
-    gestalt_set(fourcc("proc"), (uint32_t)proc_of[idx]);
-    gestalt_set(fourcc("fpu "), m->fpu ? (m->cpu == 68040 ? 3 : 2) : 0);
+    /* 'mach', 'proc', 'fpu ', 'mmu ' and 'addr' are gestalt_init's, from
+     * machine.c, which has the machine and the processor it was given. */
     gestalt_set(fourcc("kbd "), (uint32_t)m->gestalt_kbd);
     gestalt_set(fourcc("rom "), m->rom_version);
     gestalt_set(fourcc("romv"), m->rom_version);
@@ -94,17 +91,16 @@ static void gestalt_machine(const hw_profile *m)
     gestalt_set(fourcc("scri"), m->sys_version);
     gestalt_set(fourcc("qd  "), m->color_qd ? 0x0100 : 0); /* Color QuickDraw, or the original */
     gestalt_set(fourcc("hdwr"), m->adb ? (m->via_sound ? 0x0091 : 0x009B) : 0x0091);
-    gestalt_set(fourcc("addr"), 0x0);         /* 24-bit addressing only */
     if (m->sys_version >= 0x0700)
         return;
     static const char *const system7[] = {
         "evnt", "os  ", "ppc ", "edtn", "help", "alis", "fold", "fs  ", "stdf", "icon", "tmgr", "snd ", "qdgx", "pmgr",
         "teat", "drag", "cmnu", "pop!", "nmgr", "ttsc", "font", "appr", "apvr", "qtim", "cpnt", "thds", "sysa",
-        "otan", "otvr", "qdrw", "rsrc", "scr#", "te  ", "scsi", "vm  ", "lram", "ram ", "blbx", "mmu ",
+        "otan", "otvr", "qdrw", "rsrc", "scr#", "te  ", "scsi", "vm  ", "lram", "ram ", "blbx",
     };
     for (unsigned i = 0; i < sizeof system7 / sizeof system7[0]; i++)
         gestalt_delete(fourcc(system7[i]));
-    gestalt_set(fourcc("ram "), 0x00400000); /* 4 MB */
+    gestalt_set(fourcc("ram "), rd32(LM_MemTop)); /* the RAM below the ROM */
 }
 
 void gestalt_init(void)
@@ -114,8 +110,8 @@ void gestalt_init(void)
     gestalt_set(fourcc("sysv"), 0x0710);      /* System 7.1 */
     gestalt_set(fourcc("thds"), 0x3);         /* the Thread Manager, with exact-match pools */
     gestalt_set(fourcc("sysa"), 1);           /* 68k architecture */
-    /* The machine standing for the processor (machine.c): a Mac SE, II,
-     * IIci or Quadra 800. */
+    /* The machine chosen, or the one standing for the processor
+     * (machine.c): a Mac SE, II, IIci or Quadra 800. */
     gestalt_set(fourcc("mach"), (uint32_t)machine_gestalt_type());
     /* Open Transport for 68k programs, on the host's sockets: through the glue and the
      * Shared Library Manager ot_68k.c stands in for (the same TCP/IP and AppleTalk
@@ -134,8 +130,9 @@ void gestalt_init(void)
      * grayish text-or. */
     gestalt_set(fourcc("qdrw"), 0x0F);
     /* gestaltAddressingModeAttr: 32-bit addressing, system zone and
-     * capable; in 24-bit mode capable only (not on a 68000). */
-    gestalt_set(fourcc("addr"), !g_mem_24bit ? 0x7 : model == 68000 ? 0 : 0x4);
+     * capable; in 24-bit mode capable only (not on a 68000, or a machine
+     * from System 6's days, whose ROM wasn't 32-bit clean). */
+    gestalt_set(fourcc("addr"), !g_mem_24bit ? 0x7 : model == 68000 || hw_machine_chosen() ? 0 : 0x4);
     gestalt_set(fourcc("ram "), g_mem_report_cap);
     /* QuickTime 4.1.2, the last for 68k Macs: its importers and exporters,
      * graphics importers and exporters, wired sprites, tweens, effects,

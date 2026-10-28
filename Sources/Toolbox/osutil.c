@@ -107,13 +107,12 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
     const hw_profile *m = hw_machine();
     int v = vers > 2 ? 2 : vers;
     SysEnvRec_set_environsVersion(p, (int16_t)v);
-    SysEnvRec_set_machineType(p, (int16_t)m->env_machine);
+    SysEnvRec_set_machineType(p, (int16_t)machine_env_type());
     SysEnvRec_set_systemVersion(p, (int16_t)rd16(LM_SysVersion));
     /* Numbered as Gestalt's: env68000 1, env68010 2, env68020 3, env68030 4,
      * env68040 5. */
-    int proc = hw_machine_chosen() ? (m->cpu == 68000 ? 1 : m->cpu == 68030 ? 4 : m->cpu == 68040 ? 5 : 3)
-                                   : (g_cpu && g_cpu->model == 68040 ? 5 : 3);
-    SysEnvRec_set_processor(p, (int16_t)proc);
+    int model = machine_cpu_model();
+    SysEnvRec_set_processor(p, (int16_t)(model == 68000 ? 1 : (model - 68000) / 10 + 1));
     SysEnvRec_set_hasFPU(p, gestalt_value(fourcc("fpu "), 0) != 0);
     SysEnvRec_set_hasColorQD(p, m->color_qd);
     SysEnvRec_set_keyBoardType(p, (int16_t)m->env_keyboard);
@@ -134,7 +133,8 @@ gaddr tb_StripAddress(gaddr p) { return g_mem_24bit && !rd8(LM_MMU32Bit) ? p & 0
 void tb_SwapMMUMode(uint32_t *bp)
 {
     uint8_t was = rd8(LM_MMU32Bit);
-    if (g_mem_24bit && g_cpu) {
+    /* Not a 68000's 24 lines, or a compact Mac's bus, whatever its CPU. */
+    if (g_mem_24bit && g_cpu && g_cpu->model != 68000 && g_mem_layout != MEM_LAYOUT_COMPACT) {
         bool to32 = (*bp & 0xFF) != 0;
         wr8(LM_MMU32Bit, to32);
         g_cpu->addr_mask = to32 ? 0xFFFFFFFFu : 0x00FFFFFFu;

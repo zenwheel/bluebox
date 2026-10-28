@@ -120,6 +120,9 @@ int machine_fpu_model(void);
 int machine_addressing(void);
 int machine_gestalt_type(void);
 int machine_mmu_type(void);
+/* SysEnvirons' machine type and HWCfgFlags for the same machine. */
+int machine_env_type(void);
+int machine_hwcfg(void);
 bool machine_halted(void);
 /* With depth alerts on, an alert saying the program needs another screen
  * depth ends the run instead of showing ("asks for depth N"), and

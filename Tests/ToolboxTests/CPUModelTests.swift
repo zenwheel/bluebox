@@ -271,8 +271,8 @@ extension BlueBox {
             let table: [(Int32, Int32, UInt32, UInt32, UInt32, UInt32, UInt8, UInt16)] = [
                 // model, fpu, proc, fpu, mmu, mach, CPUFlag, HWCfgFlags
                 (68000, -1, 1, 0, 0, 5, 0, 0xE400),
-                (68020, -1, 3, 0, 1, 6, 2, 0xEC00),
-                (68020, 68881, 3, 1, 1, 6, 2, 0xFC00),
+                (68020, -1, 3, 0, 1, 6, 2, 0xE400),    // the Mac II's AMU isn't a paged MMU
+                (68020, 68881, 3, 1, 1, 6, 2, 0xF400),
                 (68030, -1, 4, 2, 3, 11, 3, 0xFC00),
                 (68040, -1, 5, 3, 4, 35, 4, 0xFC00),
                 (68040, 0, 5, 0, 4, 35, 4, 0xEC00),

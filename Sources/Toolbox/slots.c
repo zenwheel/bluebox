@@ -225,7 +225,7 @@ static bool ready(void)
 
 static bool in_rom(gaddr p) { return p >= rom && p < rom + rom_size; }
 /* A list or structure: in the ROM, or one in RAM a program inserted. */
-static bool readable(gaddr p) { return p >= GA_SYSHEAP && p < GA_SCREEN; }
+static bool readable(gaddr p) { return (p >= GA_SYSHEAP && p < rd32(LM_MemTop)) || in_rom(p); }
 
 /* The entry with this ID in the list at p, or 0. */
 static gaddr find_entry(gaddr p, uint8_t id)

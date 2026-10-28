@@ -76,7 +76,9 @@ static uint64_t now_ns(void)
 /* The processor we present: a 68040 with its FPU (a Quadra 800) by
  * default; a 68000 (a Mac SE), a 68020 (a Mac II) or a 68030 (a Mac IIci)
  * for programs written for those, each with the FPU it had or the one
- * chosen; and 24- or 32-bit addressing. */
+ * chosen; and 24- or 32-bit addressing.  A machine chosen by name
+ * (hw_select_machine) sets all three to its own first; --cpu, --fpu and
+ * --addressing then change them. */
 static int cpu_model = 68040;
 static int fpu_choice = -1; /* -1: the model's own */
 static int addressing;      /* 0: 32-bit where the processor can */
@@ -105,11 +107,28 @@ int machine_cpu_model(void) { return g_cpu ? g_cpu->model : cpu_model; }
 int machine_fpu_model(void) { return g_cpu ? g_cpu->fpu : fpu_for(cpu_model); }
 int machine_addressing(void) { return g_mem_24bit ? 24 : 32; }
 
-/* The machine a model stands for, by its Gestalt number: what CPUFlag,
- * HWCfgFlags, MMUType and Gestalt report (SysEnvirons answers from
- * Gestalt). */
+/* The memory layout for the machine and processor: a compact Mac's is
+ * always 24-bit (its bus decoded 24 address bits whatever the processor);
+ * a 68000 has only 24 address lines; otherwise as chosen. */
+static int layout_for(void)
+{
+    const hw_profile *m = hw_machine();
+    bool bits24 = m->compact_io || cpu_model == 68000 || addressing == 24;
+    if (!bits24)
+        return MEM_LAYOUT_32;
+    if (m->compact_io)
+        return MEM_LAYOUT_COMPACT;
+    return hw_machine_chosen() ? MEM_LAYOUT_MACII : MEM_LAYOUT_24;
+}
+
+/* Everything that reports the machine answers from here: Gestalt,
+ * SysEnvirons, CPUFlag, MMUType and HWCfgFlags.  A machine chosen by name
+ * is itself whatever processor it was given; the default one is the
+ * machine standing for its processor. */
 int machine_gestalt_type(void)
 {
+    if (hw_machine_chosen())
+        return hw_machine()->gestalt_mach;
     switch (machine_cpu_model()) {
     case 68000: return 5;  /* gestaltMacSE */
     case 68020: return 6;  /* gestaltMacII */
@@ -117,6 +136,9 @@ int machine_gestalt_type(void)
     default: return 35;    /* gestaltQuadra800 */
     }
 }
+
+/* SysEnvirons' machineType: Gestalt's less two for every machine. */
+int machine_env_type(void) { return machine_gestalt_type() - 2; }
 
 /* MMUType's (and Gestalt 'mmu ''s) numbering: none, the Mac II's AMU,
  * the 68030's and the 68040's own. */
@@ -130,13 +152,24 @@ int machine_mmu_type(void)
     }
 }
 
+/* HWCfgFlags (SCSIFlags): the machine's own bits (SCSI, the clock chip,
+ * extended PRAM, ADB), and an FPU and a paged MMU (a 68030's or 68040's;
+ * the Mac II's AMU isn't one) as the processor has them. */
+int machine_hwcfg(void)
+{
+    uint16_t own = hw_machine_chosen() ? hw_machine()->hwcfg : 0xE400;
+    int model = machine_cpu_model();
+    return (own & ~0x1800) | (machine_fpu_model() ? 0x1000 : 0) | (model >= 68030 ? 0x0800 : 0);
+}
+
 static void init_lowmem(void)
 {
     int model = g_cpu->model;
-    /* RAM ends where the ROM starts in 32-bit mode; in 24-bit mode, at
-     * the partition's top (the screen, I/O and ROM above it). */
-    wr32(LM_MemTop, g_mem_24bit ? GA24_TOP : GA_ROM);
-    wr32(LM_BufPtr, g_mem_24bit ? GA24_TOP : GA_A5WORLD_TOP);
+    /* RAM ends where the layout has it (where the ROM starts in 32-bit
+     * mode); in 24-bit mode the partition's top is under what sits at
+     * the top of RAM (a compact Mac's screen pages and sound buffers). */
+    wr32(LM_MemTop, g_mem_top);
+    wr32(LM_BufPtr, g_mem_24bit ? g_low_top : GA_A5WORLD_TOP);
     wr32(LM_ROMBase, GA_ROM);
     wr16(LM_ROM85, 0x3FFF);           /* new ROMs, Color QuickDraw */
     wr8(LM_CPUFlag, (uint8_t)(model == 68000 ? 0 : (model - 68000) / 10)); /* 0, 2, 3 or 4 */
@@ -148,10 +181,7 @@ static void init_lowmem(void)
     wr16(LM_HiliteRGB + 4, hilite_rgb[2]);
     wr8(LM_HiliteMode, 0xFF); /* no highlighting pending */
     wr8(LM_MMU32Bit, g_mem_24bit ? 0 : 1); /* the addressing mode */
-    /* HWCfgFlags (SCSIFlags): SCSI, clock chip, extended PRAM and ADB, as
-     * every machine we present had them; an FPU and an MMU when there is
-     * one. */
-    wr16(LM_SCSIFlags, (uint16_t)(0xE400 | (g_cpu->fpu ? 0x1000 : 0) | (model != 68000 ? 0x0800 : 0)));
+    wr16(LM_SCSIFlags, (uint16_t)machine_hwcfg());
     wr16(LM_SysVersion, 0x0710);
     wr32(LM_Lo3Bytes, 0x00FFFFFF);
     wr32(LM_MinusOne, 0xFFFFFFFF);
@@ -407,8 +437,7 @@ bool machine_boot(bool census)
 {
     if (!mem_init())
         return false;
-    /* A 68000 has only 24 address lines. */
-    if (!mem_set_24bit(addressing == 24 || cpu_model == 68000))
+    if (!mem_set_layout(layout_for()))
         return false;
     mem_reset();
     cpu_init(&cpu);
@@ -442,7 +471,7 @@ bool machine_boot(bool census)
     mm_init_zone(GA_APPHEAP, GA_APPHEAP + 0x00100000u, 64);
     wr32(LM_ApplZone, GA_APPHEAP);
     wr32(LM_TheZone, GA_APPHEAP);
-    gaddr appl_limit = g_mem_24bit ? GA24_TOP - GA_STACK_24 : GA_APPLLIMIT;
+    gaddr appl_limit = g_mem_24bit ? g_low_top - GA_STACK_24 : GA_APPLLIMIT;
     wr32(LM_ApplLimit, appl_limit);
     wr32(LM_HeapEnd, Zone_bkLim(GA_APPHEAP));
     mm_set_appl_growth(appl_limit);

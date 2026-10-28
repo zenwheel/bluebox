@@ -9,6 +9,8 @@ uint8_t *g_mem;
 bool g_mem_24bit;
 gaddr g_rom_base = GA_ROM_32, g_rom_size = GA_ROM_SIZE_32, g_screen_base = GA_SCREEN_32;
 gaddr g_screen_size = 0u - GA_SCREEN_32, g_low_top = 0x01000000u;
+gaddr g_mem_top = GA_ROM_32, g_sysheap_end = 0x00400000u, g_appheap = 0x00400000u, g_stack_24 = 0x00100000u;
+int g_mem_layout = MEM_LAYOUT_32;
 gaddr g_watch_lo, g_watch_len;
 void (*g_watch_fn)(gaddr a);
 
@@ -112,19 +114,19 @@ static bool map_space(void)
     snprintf(name, sizeof name, "/bluebox24.%ld", (long)getpid());
     int fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
     if (fd < 0) {
-        perror("mem_set_24bit: shm_open");
+        perror("mem_set_layout: shm_open");
         return false;
     }
     shm_unlink(name);
     if (ftruncate(fd, (off_t)SPACE_24) != 0) {
-        perror("mem_set_24bit: ftruncate");
+        perror("mem_set_layout: ftruncate");
         close(fd);
         return false;
     }
     for (size_t off = 0; off < ARENA_SIZE + ARENA_SLACK; off += SPACE_24) {
         size_t n = ARENA_SIZE + ARENA_SLACK - off < SPACE_24 ? ARENA_SIZE + ARENA_SLACK - off : SPACE_24;
         if (mmap(g_mem + off, n, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED) {
-            perror("mem_set_24bit: mmap");
+            perror("mem_set_layout: mmap");
             close(fd);
             return false;
         }
@@ -140,7 +142,7 @@ static bool map_flat(void)
     void *p = mmap(g_mem, ARENA_SIZE + ARENA_SLACK, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_NORESERVE, -1, 0);
     if (p == MAP_FAILED) {
-        perror("mem_set_24bit: mmap");
+        perror("mem_set_layout: mmap");
         return false;
     }
     if (space_fd >= 0)
@@ -149,18 +151,48 @@ static bool map_flat(void)
     return true;
 }
 
-bool mem_set_24bit(bool on)
+/* Each layout: ROM, its size, screen, the room the screen has, MemTop,
+ * the partition top below 16 MB, the system heap's end, the application
+ * heap's start and the stack under a low partition. */
+static const struct {
+    gaddr rom, rom_size, screen, screen_size, mem_top, low_top, sysheap_end, appheap, stack;
+} layouts[] = {
+    [MEM_LAYOUT_32] = { GA_ROM_32, GA_ROM_SIZE_32, GA_SCREEN_32, 0u - GA_SCREEN_32, GA_ROM_32, 0x01000000u,
+                        0x00400000u, 0x00400000u, 0x00100000u },
+    [MEM_LAYOUT_24] = { GA24_ROM, GA24_ROM_SIZE, GA24_SCREEN, GA24_SCREEN_SIZE, GA24_TOP, GA24_TOP,
+                        0x00400000u, 0x00400000u, 0x00100000u },
+    /* A Mac II in 24-bit mode: 8 MB of RAM (all it addressed so), its ROM
+     * at $800000, a video card's 1 MB of slot space at $900000 (slot 9) and
+     * the I/O at $F00000; the system heap 2 MB of it. */
+    [MEM_LAYOUT_MACII] = { 0x00800000u, GA24_ROM_SIZE, 0x00900000u, 0x00100000u, 0x00800000u, 0x00800000u,
+                           0x00200000u, 0x00200000u, 0x00040000u },
+    /* A compact Mac with 4 MB: the system heap is the first megabyte (a
+     * booted Blue Box uses under 100K of it), the partition ends under the
+     * alternate screen page. */
+    [MEM_LAYOUT_COMPACT] = { GAC_ROM, GA24_ROM_SIZE, GAC_SCREEN, GAC_SOUND - GAC_SCREEN, GAC_MEMTOP,
+                             GAC_SCREEN - 0x8000u, 0x00100000u, 0x00100000u, 0x00040000u },
+};
+
+bool mem_set_layout(int layout)
 {
+    if (layout < MEM_LAYOUT_32 || layout > MEM_LAYOUT_COMPACT)
+        layout = MEM_LAYOUT_32;
+    bool on = layout != MEM_LAYOUT_32;
     if (!mem_init())
         return false;
     if (on ? !map_space() : g_mem_24bit && !map_flat())
         return false;
     g_mem_24bit = on;
-    g_rom_base = on ? GA24_ROM : GA_ROM_32;
-    g_rom_size = on ? GA24_ROM_SIZE : GA_ROM_SIZE_32;
-    g_screen_base = on ? GA24_SCREEN : GA_SCREEN_32;
-    g_screen_size = on ? GA24_SCREEN_SIZE : 0u - GA_SCREEN_32;
-    g_low_top = on ? GA24_TOP : 0x01000000u;
+    g_mem_layout = layout;
+    g_rom_base = layouts[layout].rom;
+    g_rom_size = layouts[layout].rom_size;
+    g_screen_base = layouts[layout].screen;
+    g_screen_size = layouts[layout].screen_size;
+    g_mem_top = layouts[layout].mem_top;
+    g_low_top = layouts[layout].low_top;
+    g_sysheap_end = layouts[layout].sysheap_end;
+    g_appheap = layouts[layout].appheap;
+    g_stack_24 = layouts[layout].stack;
     if (g_code_map) /* whatever was translated is gone with the memory */
         mem_code_range(0, 0xFFFFFFFFu);
     return true;
