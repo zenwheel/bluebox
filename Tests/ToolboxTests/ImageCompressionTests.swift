@@ -206,7 +206,9 @@ extension BlueBox {
             let info = tb_NewPtr(80, false, true)
             #expect(tb_GetCodecInfo(info, Int32(bitPattern: jpeg), 0) == 0 && rd32(info + 44) != 0) // a compressor
             let comp = tb_NewPtr(8, false, true)
-            #expect(tb_FindCodec(Int32(bitPattern: rle), 0, comp, comp + 4) == 0 && rd32(comp) == rle)
+            #expect(tb_FindCodec(Int32(bitPattern: rle), 0, comp, comp + 4) == 0 && rd32(comp) != 0 && rd32(comp + 4) != 0)
+            var t: UInt32 = 0, st: UInt32 = 0, m: UInt32 = 0
+            #expect(components_describe(rd32(comp), &t, &st, &m) && t == 0x696D_636F && st == rle)
             let list = tb_NewPtr(4, false, true)
             #expect(tb_GetCodecNameList(list, 0) == 0 && rd16(rd32(list)) == 3)
             #expect(tb_DisposeCodecNameList(Int32(bitPattern: rd32(list))) == 0)

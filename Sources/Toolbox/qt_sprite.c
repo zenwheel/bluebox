@@ -207,7 +207,7 @@ static bool decode_image(image *im, const uint8_t *d, uint32_t len)
     uint32_t idsize = be32(d);
     if (idsize < 86 || idsize > len)
         return false;
-    qt_video_format f = { be32(d + 4), (int)be16(d + 32), (int)be16(d + 34), (int16_t)be16(d + 82), NULL };
+    qt_video_format f = { be32(d + 4), (int)be16(d + 32), (int)be16(d + 34), (int16_t)be16(d + 82), NULL, d, idsize };
     uint32_t palette[256];
     int bits = f.depth > 32 ? f.depth - 32 : f.depth;
     if ((int16_t)be16(d + 84) == 0 && bits >= 1 && bits <= 8 && f.depth <= 8 && idsize >= 94) {

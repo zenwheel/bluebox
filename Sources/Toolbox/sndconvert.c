@@ -61,16 +61,9 @@ static converter *conv_of(uint32_t sc)
 
 /* Bytes in one frame of the input (a packet, for the compressed formats)
  * and the samples it holds. */
-static uint32_t frame_bytes(const qt_sound_format *f)
-{
-    if (is(f->format, "ima4"))
-        return 34 * (uint32_t)f->channels;
-    if (is(f->format, "MAC3"))
-        return 2 * (uint32_t)f->channels;
-    if (is(f->format, "MAC6"))
-        return (uint32_t)f->channels;
-    return (uint32_t)(f->channels * f->bits / 8);
-}
+static uint32_t frame_samples(const qt_sound_format *f);
+
+static uint32_t frame_bytes(const qt_sound_format *f) { return (uint32_t)qt_adec_bytes(f, frame_samples(f)); }
 
 static uint32_t frame_samples(const qt_sound_format *f)
 {
@@ -87,13 +80,15 @@ static int16_t sc_open(gaddr in, gaddr out, gaddr scp)
     if (!in || !out || !scp)
         return paramErr;
     int in_bits = (int16_t)rd16(in + 10), out_bits = (int16_t)rd16(out + 10);
-    qt_sound_format f = { real_format(rd32(in + 4), in_bits), (int16_t)rd16(in + 8), in_bits, fixed_rate(rd32(in + 12)) };
+    qt_sound_format f = { .format = real_format(rd32(in + 4), in_bits), .channels = (int16_t)rd16(in + 8),
+                          .bits = in_bits, .rate = fixed_rate(rd32(in + 12)) };
     if (!uncompressed(f.format))
         f.bits = 16;
     uint32_t of = real_format(rd32(out + 4), out_bits);
     int och = (int16_t)rd16(out + 8);
     double orate = fixed_rate(rd32(out + 12));
-    if (!qt_adec_supported(&f) || !uncompressed(of) || (out_bits != 8 && out_bits != 16) || och < 1 || och > 2)
+    /* the host's formats come in packets, not the frames converters take */
+    if (!qt_adec_supported(&f) || qt_adec_host(&f) || !uncompressed(of) || (out_bits != 8 && out_bits != 16) || och < 1 || och > 2)
         return badFormat;
     for (int i = 0; i < MAX_CONVERTERS; i++)
         if (!converters[i].used) {

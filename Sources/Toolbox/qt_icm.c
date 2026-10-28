@@ -17,6 +17,7 @@
 
 #include "qd_internal.h"
 #include "qt_codec.h"
+#include "qt_comp.h"
 #include "tb_internal.h"
 
 enum { noCodecErr = -8961, codecBadDataErr = -8969, codecUnimpErr = -8962 };
@@ -24,30 +25,32 @@ enum { noCodecErr = -8961, codecBadDataErr = -8969, codecUnimpErr = -8962 };
 /* An ImageDescriptionHandle's description (0 for a nil handle). */
 static gaddr desc_ptr(int32_t h) { return h ? rd32((gaddr)h) : 0; }
 
-/* The image description's format, with its colour table in palette. */
+/* The image description's format, with its colour table in palette; the
+ * description's bytes are in f->desc until desc_done. */
 static bool describe_image(gaddr desc, qt_video_format *f, uint32_t palette[256])
 {
     if (!desc)
         return false;
-    f->format = rd32(desc + 4);
-    f->width = (int16_t)rd16(desc + 32);
-    f->height = (int16_t)rd16(desc + 34);
-    f->depth = (int16_t)rd16(desc + 82);
-    f->palette = NULL;
-    int16_t clut = (int16_t)rd16(desc + 84);
-    uint32_t size = rd32(desc);
-    if (clut == 0 && f->depth >= 1 && f->depth <= 8 && size >= 94) {
-        gaddr c = desc + 86;
-        int count = (int)rd16(c + 6) + 1;
-        memset(palette, 0, 256 * sizeof *palette);
-        for (int k = 0; k < count && k < 256 && 94 + (uint32_t)k * 8 + 8 <= size; k++) {
-            gaddr e = c + 8 + (uint32_t)k * 8;
-            int v = (rd16(c + 4) & 0x8000 ? k : (int)rd16(e)) & 255;
-            palette[v] = (uint32_t)rd8(e + 2) << 16 | (uint32_t)rd8(e + 4) << 8 | rd8(e + 6);
-        }
-        f->palette = palette;
+    uint32_t n = rd32(desc);
+    if (n < 86 || n > 1 << 20)
+        n = 86;
+    uint8_t *b = malloc(n);
+    if (!b)
+        return false;
+    gget(b, desc, n);
+    if (!qt_video_format_of_desc(b, n, f, palette)) {
+        free(b);
+        f->desc = NULL;
+        return false;
     }
-    return f->width > 0 && f->height > 0;
+    return true;
+}
+
+static void desc_done(qt_video_format *f)
+{
+    free((void *)f->desc);
+    f->desc = NULL;
+    f->desc_len = 0;
 }
 
 /* The rectangle a matrix takes the image's bounds to (scale and translate). */
@@ -98,10 +101,12 @@ static uint8_t *decode_one(gaddr desc, gaddr data, int32_t len, int *w, int *h, 
     qt_video_format f;
     uint32_t palette[256];
     if (!describe_image(desc, &f, palette) || !data) {
+        desc_done(&f);
         *err = paramErr;
         return NULL;
     }
     qt_vdec *d = qt_vdec_new(&f);
+    desc_done(&f);
     if (!d) {
         *err = noCodecErr;
         return NULL;
@@ -225,6 +230,7 @@ int16_t tb_DecompressSequenceBegin(gaddr seqID, int32_t desc, int32_t port, int3
     if (s->format.palette)
         s->format.palette = s->palette;
     s->dec = qt_vdec_new(&s->format);
+    desc_done(&s->format);
     if (!s->dec)
         return noCodecErr;
     s->frame = calloc((size_t)s->format.width * (size_t)s->format.height, 4);
@@ -370,6 +376,7 @@ int16_t tb_GetImageDescriptionCTable(int32_t desc, gaddr ctable)
     uint32_t palette[256];
     if (!ctable || !describe_image(desc_ptr(desc), &f, palette))
         return paramErr;
+    desc_done(&f);
     int bits = f.depth > 32 ? f.depth - 32 : f.depth;
     if (bits < 1 || bits > 8) {
         wr32(ctable, 0);
@@ -411,72 +418,52 @@ int16_t tb_CodecManagerVersion(gaddr version)
     return noErr;
 }
 
-static const struct {
-    uint32_t type;
-    const char *name;
-} codec_names[] = {
-    { 0x63766964, "Cinepak" }, { 0x726C6520, "Animation" }, { 0x736D6320, "Graphics" },
-    { 0x72707A61, "Video" },   { 0x72617720, "None" },      { 0x6A706567, "Photo - JPEG" },
-};
-
-static bool decodes(uint32_t type)
+/* A codec component of the type and kind ('imdc', 'imco'): the one asked
+ * for if it is one, else the first registered (ours, or a program's). */
+static uint32_t codec_component(uint32_t kind, uint32_t type, uint32_t asked)
 {
-    return qt_vdec_supported(type, 24) || qt_vdec_supported(type, 8) || qt_vdec_supported(type, 16);
+    uint32_t t, st, m;
+    if (asked) {
+        uint32_t c = components_component_of(asked) ? components_component_of(asked) : asked;
+        if (components_describe(c, &t, &st, &m) && t == kind)
+            return c;
+    }
+    return components_find_next(0, kind, type, 0);
 }
 
-static bool encodes(uint32_t type) { return qt_venc_supported(type, 24) || qt_venc_supported(type, 8); }
-
-static const char *codec_name(uint32_t type)
-{
-    for (size_t i = 0; i < sizeof codec_names / sizeof *codec_names; i++)
-        if (codec_names[i].type == type && (decodes(type) || encodes(type)))
-            return codec_names[i].name;
-    return NULL;
-}
-
-/* CodecInfo: typeName 0 (Str31), version 32, revisionLevel 34, vendor 36,
- * decompressFlags 40, compressFlags 44, formatFlags 48, accuracies 52-53,
- * speeds 54-57, compressionLevel 58, minimum height and width 60-63.  The
- * flags' low bits are the depths 1, 2, 4, 8, 16 and 32 done; bit 10 of
- * compressFlags temporal compression. */
+/* CodecInfo from the codec component itself (a program's answers for its own). */
 int16_t tb_GetCodecInfo(gaddr info, int32_t cType, int32_t codec)
 {
-    uint32_t type = (uint32_t)cType;
-    const char *name = codec_name(type);
-    if (!name || !info)
+    if (!info)
+        return paramErr;
+    uint32_t c = codec_component(fourcc("imdc"), (uint32_t)cType, (uint32_t)codec);
+    uint32_t e = codec_component(fourcc("imco"), (uint32_t)cType, (uint32_t)codec);
+    if (!c && !e)
         return noCodecErr;
-    gmemset(info, 0, 72);
-    size_t n = strlen(name);
-    wr8(info, (uint8_t)n);
-    gput(info + 1, name, (uint32_t)n);
-    wr16(info + 32, 1);
-    wr32(info + 36, 0x6170706C); /* 'appl' */
-    if (decodes(type))
-        wr32(info + 40, 0x00000FFF); /* decompresses to every depth */
-    if (encodes(type)) {
-        uint32_t flags = 0;
-        static const int depths[6] = { 1, 2, 4, 8, 16, 32 };
-        for (int i = 0; i < 6; i++)
-            if (qt_venc_supported(type, depths[i]) || (depths[i] == 32 && qt_venc_supported(type, 24)))
-                flags |= 1u << i;
-        if (qt_venc_temporal(type))
-            flags |= 1u << 10;
-        wr32(info + 44, flags);
-        wr8(info + 53, 128);
+    if ((!c || qt_codec_component_is_ours(c)) && (!e || qt_codec_component_is_ours(e))) {
+        qt_codec_fill_info(info, (uint32_t)cType, c != 0, e != 0);
+        return noErr;
     }
-    wr32(info + 48, 0x00000FFF);
-    wr8(info + 52, 128);
-    return noErr;
+    int16_t err;
+    uint32_t ci = components_open_component(c ? c : e, &err);
+    if (!ci)
+        return err ? err : noCodecErr;
+    uint32_t args[1] = { info };
+    int32_t r = qtc_call_named(ci, "ImageCodecGetCodecInfo", args);
+    components_close(ci);
+    return (int16_t)r;
 }
 
 int16_t tb_FindCodec(int32_t cType, int32_t specCodec, gaddr compressor, gaddr decompressor)
 {
     uint32_t type = (uint32_t)cType;
+    uint32_t e = codec_component(fourcc("imco"), type, (uint32_t)specCodec);
+    uint32_t d = codec_component(fourcc("imdc"), type, (uint32_t)specCodec);
     if (compressor)
-        wr32(compressor, encodes(type) ? type : 0);
+        wr32(compressor, e);
     if (decompressor)
-        wr32(decompressor, decodes(type) ? type : 0);
-    return decodes(type) || encodes(type) ? noErr : noCodecErr;
+        wr32(decompressor, d);
+    return d || e ? noErr : noCodecErr;
 }
 
 /* Alignment for the fastest drawing: any place is as fast here. */

@@ -6,6 +6,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "mem.h"
+
 /* ---- Video ----
  *
  * A decoder turns a video track's samples into a frame of RGBA bytes
@@ -21,7 +23,13 @@ typedef struct {
     int width, height;     /* the sample description's size */
     int depth;             /* its depth: 1-32, or 33-40 for 1-8-bit grey */
     const uint32_t *palette; /* depths 1-8: 1 << depth colours, 0x00RRGGBB; NULL for the standard Mac ones */
+    const uint8_t *desc;   /* the whole ImageDescription when known (for the host's and programs' codecs, */
+    uint32_t desc_len;     /* which want its extensions); only while the decoder is made */
 } qt_video_format;
+
+/* An ImageDescription's (big-endian bytes) format; palette gets its colour
+ * table, if any.  desc stays pointing into d. */
+bool qt_video_format_of_desc(const uint8_t *d, uint32_t len, qt_video_format *f, uint32_t palette[256]);
 
 /* Whether there is a decoder for this codec at this depth. */
 bool qt_vdec_supported(uint32_t format, int depth);
@@ -50,6 +58,19 @@ extern const qt_video_codec qt_codec_rle;   /* Animation (qt_codec_apple.c) */
 extern const qt_video_codec qt_codec_smc;   /* Graphics */
 extern const qt_video_codec qt_codec_rpza;  /* Apple Video (Road Pizza) */
 extern const qt_video_codec qt_codec_raw;   /* None */
+extern const qt_video_codec qt_codec_program; /* a program's own 'imdc' (qt_codec_comp.c) */
+bool qt_codec_program_supports(uint32_t format);
+
+/* ---- Codecs as components (qt_codec_comp.c) ---- */
+
+void qt_codec_components_register(void);
+bool qt_codec_component_is_ours(uint32_t component);
+/* A codec type's name ("Cinepak"), NULL for one we don't know. */
+const char *qt_codec_type_name(uint32_t type);
+bool qt_codec_decodes(uint32_t type);
+bool qt_codec_encodes(uint32_t type);
+/* A CodecInfo record (72 bytes) for one of ours. */
+void qt_codec_fill_info(gaddr info, uint32_t type, bool decompress, bool compress);
 
 /* ---- Video compression (qt_encode.c) ----
  *
@@ -101,16 +122,31 @@ uint32_t qt_clock_open(void); /* a ComponentInstance */
  * A sound track's samples as 16-bit PCM, interleaved when stereo.
  */
 typedef struct {
-    uint32_t format;       /* 'raw ' (8-bit offset), 'twos', 'sowt', 'ima4', 'MAC3', 'MAC6' */
+    uint32_t format;       /* 'raw ' (8-bit offset), 'twos', 'sowt', 'ima4', 'MAC3', 'MAC6', 'ulaw', 'alaw',
+                              'in24', 'in32', 'fl32', 'fl64', and the host's ('.mp3', 'mp4a', ...) */
     int channels;          /* 1 or 2 */
     int bits;              /* 8 or 16 for the uncompressed formats */
     double rate;           /* frames per second */
+    /* a version 1 sound description's packets: frames in one, and bytes
+     * in one for all channels (0: not known) */
+    uint32_t frames_per_packet, bytes_per_packet;
+    bool little;           /* 'in24'...'fl64' little-endian (an 'enda' atom) */
+    const uint8_t *cookie; /* the decoder's magic cookie (an 'esds'), owned by the caller */
+    uint32_t cookie_len;
 } qt_sound_format;
 
 bool qt_adec_supported(const qt_sound_format *f);
+/* Whether the host decodes it (in packets rather than frames). */
+bool qt_adec_host(const qt_sound_format *f);
 /* Bytes of coded data holding n frames (whole packets for 'ima4' and MACE). */
 size_t qt_adec_bytes(const qt_sound_format *f, uint32_t frames);
 /* Decode len bytes into *pcm (malloc'd); returns the frames decoded. */
 uint32_t qt_adec_decode(const qt_sound_format *f, const uint8_t *data, size_t len, int16_t **pcm);
+/* Packets of the sizes given (the host's formats with a size per sample). */
+uint32_t qt_adec_decode_packets(const qt_sound_format *f, const uint8_t *data, size_t len, const uint32_t *sizes,
+                                int npackets, int16_t **pcm);
+/* A sound description's packet fields, endianness and cookie: the entry
+ * (from its size field) of len bytes. */
+void qt_sound_desc_extras(const uint8_t *entry, uint32_t len, qt_sound_format *f);
 
 #endif
