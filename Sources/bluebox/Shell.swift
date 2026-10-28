@@ -36,11 +36,12 @@ struct SystemItem: Identifiable, Hashable {
     let architecture: String
     var id: String { path }
     var name: String { (path as NSString).lastPathComponent }
-    var isApplication: Bool { type == "APPL" }
+    var isApplication: Bool { type == "APPL" || type == "FNDR" }
     /// What it is, in words.
     var kind: String {
         switch type {
         case "APPL": return "application"
+        case "FNDR": return "the Finder"
         case "cdev": return "control panel"
         case "INIT": return "extension"
         case "appe": return "background application"
@@ -296,9 +297,11 @@ enum ShellItem: Hashable {
         let themeEntries = Set(themePaths.map { String($0.dropFirst(library.count + 1)).split(separator: "/").first.map(String.init) ?? "" })
         for (root, place) in [(library, "Library"), (defaultDisk(), "Macintosh HD")] {
             guard FileManager.default.fileExists(atPath: root) else { continue }
-            for a in scan(root).filter({ $0.isApplication }) {
+            for a in scan(root).filter({ $0.isLaunchable }) {
                 let rel = String(a.path.dropFirst(root.count + 1))
-                if rel.hasPrefix("System Folder/") && !rel.hasPrefix("System Folder/Apple Menu Items/") { continue }
+                if rel.hasPrefix("System Folder/") && !rel.hasPrefix("System Folder/Apple Menu Items/") && !a.isFinder {
+                    continue
+                }
                 if place == "Library", let entry = rel.split(separator: "/").first, themeEntries.contains(String(entry)) {
                     continue
                 }

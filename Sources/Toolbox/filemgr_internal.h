@@ -93,6 +93,8 @@ void fm_flush_volume(void);
 
 /* Folder Manager: a folder type's host folder (made if create). */
 int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize);
+int16_t fm_find_folder_on(int16_t vref, uint32_t type, bool create, char *out, size_t outsize);
+int16_t fm_copy_file(const char *from, const char *dest);
 /* The standard folders by index (name NULL: the Desktop or System Folder). */
 bool fm_standard_folder(int i, uint32_t *type, const char **name);
 /* The folders programs describe (folders.c): one's host folder, and a new run. */

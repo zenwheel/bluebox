@@ -36,6 +36,7 @@ let package = Package(
                                  .linkedLibrary("icucore", .when(platforms: [.macOS])),
                                  .linkedLibrary("icuuc", .when(platforms: [.linux])),
                                 .linkedLibrary("z"), // zlib: QuickTime 3's compressed movie headers
+                                .linkedLibrary("sqlite3"), // the catalog (catalog.c)
                                  // EtherTalk: an interface's own Ethernet address
                                  .linkedFramework("IOKit", .when(platforms: [.macOS])),
                                  .linkedFramework("CoreFoundation", .when(platforms: [.macOS])),

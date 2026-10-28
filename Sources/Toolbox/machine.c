@@ -29,6 +29,10 @@ cpu68k *g_cpu;
 char g_app_dir[1024];
 char g_app_path[1024];
 uint32_t g_app_creator;
+/* The run is the Finder (file type 'FNDR'): the Process Manager reports it
+ * as the system's Finder process rather than an application. */
+bool g_is_finder;
+bool machine_is_finder(void) { return g_is_finder; }
 
 static cpu68k cpu;
 static int screen_w = 1024, screen_h = 768;
@@ -434,6 +438,10 @@ bool machine_boot(bool census)
     cursor_devices_reset();
     legacy_reset();
     notify_reset();
+    icons_reset();
+    disk_driver_reset();
+    finder_reset();
+    shutdown_reset();
     iconservices_reset();
     agl_reset(); /* OpenGL's contexts, on the host */
     qd3d_reset(); /* QuickDraw 3D's and RAVE's objects */
@@ -665,6 +673,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     mactcp_install_resolver();
     snprintf(g_app_path, sizeof g_app_path, "%s", app_path);
     g_app_creator = mac_file_creator(&mf);
+    g_is_finder = mac_file_type(&mf) == fourcc("FNDR");
 
     const char *base = strrchr(app_path, '/');
     base = base ? base + 1 : app_path;

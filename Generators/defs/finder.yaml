@@ -1,0 +1,206 @@
+# The Process Manager's calls that only the Finder makes (M21), found from
+# System 7.1's Finder's code: the argument lists are what its call sites
+# push.  See finder.c.  PowerPC Finders (Mac OS 8 and 9) reach them
+# through their own 68k glue or PrivateInterfaceLib, so there are no
+# PowerPC exports here.
+
+# $42 and $43: the Finder hands the Process Manager a routine to call
+# when volumes come and go (and takes it back when it quits), with a
+# reference constant: RequestVolumeNotification, DeclineVolumeNotification.
+- function:
+    name: RequestVolumeNotification
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: ProcPtr
+      - name: refCon
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0042
+
+- function:
+    name: DeclineVolumeNotification
+    return: OSErr
+    args:
+      - name: notifyProc
+        type: ProcPtr
+      - name: refCon
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0043
+
+# $47: the room in the system heap.  The Finder asks before it puts
+# something big there (it wants ExpandMem's reserve, at $1AE, plus what it
+# allocates): the bytes free now in the second argument, the bytes the
+# heap could still grow by in the first; either may be nil.
+- function:
+    name: SystemHeapRoom
+    return: OSErr
+    args:
+      - name: growRoom
+        type: LONGINT*
+      - name: freeRoom
+        type: LONGINT*
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0047
+
+# $14: the desktop's window.  The Finder asks for it at startup with the
+# system heap current (it stops with SysError 41, "can't load the
+# Finder", on an error), keeps it in a global, compares the windows of
+# update events with it and draws its desktop icons in its port, sharing
+# its update and visible regions with its desktop object.
+- function:
+    name: NewDesktopWindow
+    return: OSErr
+    args:
+      - name: deskWindow
+        type: WindowPtr*
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0014
+
+# The Icon Utilities' private calls the Finder makes.  $50C is SetLabel,
+# GetLabel's counterpart, which the Labels control panel also uses.
+- function:
+    name: SetLabel
+    return: OSErr
+    args:
+      - name: label
+        type: int16_t
+      - name: label_color
+        type: RGBColor*
+      - name: label_string
+        type: Str255
+    dispatcher: IconDispatch
+    selector: 0x050C
+    ppc: false
+
+# $218: a procedure of one long (no result), which the Finder calls with
+# an item's icon cache before drawing it and with nil after.
+- function:
+    name: IconDispatch18
+    args:
+      - name: context
+        type: LONGINT
+    dispatcher: IconDispatch
+    selector: 0x0218
+    ppc: false
+
+# $32 and $31: the Finder fills the Apple menu from the Apple Menu Items
+# folder (at most 50 items): $32 empties it, $31 adds an item, its name,
+# a word the Finder works out for it, its small icon suite and two of the
+# Finder's own references.  Blue Box builds the Apple menu from the same
+# folder itself (and opens its items), so these are taken and kept for
+# the run's Apple menu listing only.
+- function:
+    name: ClearAppleMenuItems
+    return: OSErr
+    args:
+      - name: reserved
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0032
+
+- function:
+    name: AddAppleMenuItem
+    return: OSErr
+    args:
+      - name: name
+        type: StringPtr
+      - name: key
+        type: INTEGER
+      - name: a
+        type: INTEGER
+      - name: iconSuite
+        type: Handle
+      - name: b
+        type: INTEGER
+      - name: ref1
+        type: LONGINT
+      - name: ref2
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0031
+
+# DialogDispatch 7 and 8 (no argument words in the selector): the
+# Finder's checks for Command-period and Escape.  7 takes an event and
+# says whether it is one (a dialog's filter then answers Cancel); 8 takes
+# nil and looks in the event queue for one, taking it (the Finder stops
+# copying or listing a folder with userCanceledErr), under the names
+# CarbonLib later gave these checks.
+- function:
+    name: IsUserCancelEvent
+    return: Boolean
+    args:
+      - name: event
+        type: EventRecord*
+    dispatcher: DialogDispatch
+    selector: 0x0007
+    ppc: false
+
+- function:
+    name: CheckEventQueueForUserCancel
+    return: Boolean
+    args:
+      - name: reserved
+        type: LONGINT
+    dispatcher: DialogDispatch
+    selector: 0x0008
+    ppc: false
+
+# MenuDispatch -5 ($08FB), which the Finder calls as it opens an
+# application, with the item's name, its script and 1: by its use about
+# the Application menu's entry for the program starting.  A program the
+# Finder opens is its own run here, with its own menu bar, so it is taken.
+- function:
+    name: MenuDispatchFB
+    return: OSErr
+    args:
+      - name: name
+        type: StringPtr
+      - name: script
+        type: INTEGER
+      - name: flag
+        type: INTEGER
+    dispatcher: MenuDispatch
+    selector: 0x08FB
+    ppc: false
+
+# $04 and $0F: as the mouse moves, the Finder asks whose window is under
+# it ($0F, with the point; nil over the desktop) and otherwise whose the
+# current process is ($04), and sets the cursor only for its own.  Both
+# answer a token the Finder only compares.
+- function:
+    name: CurrentProcessToken
+    return: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x0004
+
+- function:
+    name: ProcessTokenAt
+    return: LONGINT
+    args:
+      - name: where
+        type: Point
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x000F
+
+# $4F: a process's entry in the Process Manager's table, by serial number
+# (PEntryFromProcessSerialNumber).  The Finder reads a few of its fields
+# to tell whether a block of memory is a process's own.
+- function:
+    name: PEntryFromProcessSerialNumber
+    return: Ptr
+    args:
+      - name: psn
+        type: ProcessSerialNumber*
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x004F

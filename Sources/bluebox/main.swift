@@ -763,6 +763,8 @@ func runCommand(_ args: [String]) {
     // The whole screen in one window, as the setting says, or when the
     // program turns out to want it: then that becomes its setting.
     if interactive && !screenWindow && saved.display == "screen" { screenWindow = true }
+    // The Finder draws the desktop: the whole screen, unless its setting says otherwise.
+    if interactive && !screenWindow && machine_is_finder() && saved.display != "rootless" { screenWindow = true }
     let chosenFor = app
     MainActor.assumeIsolated {
         RootlessHost.switchesToScreen = saved.display != "rootless"
@@ -967,7 +969,7 @@ func findListedApplication(_ spec: String) -> String? {
     if spec.contains("/") { return nil }
     var found: [String] = []
     for root in [library, disk] where fm.fileExists(atPath: root) {
-        found += scan(root).filter { $0.isApplication && ($0.path as NSString).lastPathComponent == spec }.map(\.path)
+        found += scan(root).filter { $0.isLaunchable && ($0.path as NSString).lastPathComponent == spec }.map(\.path)
     }
     if found.count > 1 {
         eprint("several applications named \(spec):\n")
@@ -1011,7 +1013,7 @@ func resolveApplication(_ given: String, named: String?) -> String {
     } catch {
         fail("\(error)")
     }
-    let apps = scan(entry).filter { $0.isApplication }
+    let apps = scan(entry).filter { $0.isLaunchable }
     var candidates = apps.filter { $0.hasCODE || $0.hasCfrg } /* 68k, PowerPC or both */
     // Each one's path inside the archive: what the list below shows, and
     // what --app takes to tell apart applications of the same name.

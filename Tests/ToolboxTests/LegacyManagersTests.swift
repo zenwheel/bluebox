@@ -647,7 +647,8 @@ extension BlueBox {
             while e != 0 { if e == el { found = true }; e = rd32(e) }
             #expect(found)
             let st = tb_NewPtr(22, false, true)
-            #expect(ppcErr("DriveStatus", [9, st]) == 0)    // its driver (-5, .Sony) answers the drive's status
+            #expect(ppcErr("DriveStatus", [9, st]) == 0)    // its driver (-5, .Sony) gives it
+            #expect(rd16(st + 12) == 9)                      // DrvSts's dQDrive
             #expect(ppcErr("DriveStatus", [77, st]) == -56) // nsDrvErr
             #expect(ppcErr("DIXFormat", [77, 0, 0, st]) == -64)
             #expect(ppcErr("DIXFormat", [9, 0, 0, st]) != 0)

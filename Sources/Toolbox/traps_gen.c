@@ -1651,6 +1651,22 @@ static void glue_ActivateTSMDocument(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_AddAppleMenuItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_ref2 = (int32_t)cpu_pop32(c);
+    int32_t a_ref1 = (int32_t)cpu_pop32(c);
+    int16_t a_b = (int16_t)cpu_pop16(c);
+    gaddr a_iconSuite = (gaddr)cpu_pop32(c);
+    int16_t a_a = (int16_t)cpu_pop16(c);
+    int16_t a_key = (int16_t)cpu_pop16(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int16_t r = tb_AddAppleMenuItem(a_name, a_key, a_a, a_iconSuite, a_b, a_ref1, a_ref2);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_AddCallBackToTimeBase(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2903,6 +2919,16 @@ static void glue_CharacterType(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CheckEventQueueForUserCancel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_reserved = (int32_t)cpu_pop32(c);
+    int8_t r = tb_CheckEventQueueForUserCancel(a_reserved);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_CheckItem(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -2941,6 +2967,16 @@ static void glue_ChooseMovieClock(cpu68k *c, uint16_t trapword)
     int32_t a_flags = (int32_t)cpu_pop32(c);
     int32_t a_m = (int32_t)cpu_pop32(c);
     tb_ChooseMovieClock(a_m, a_flags);
+    cpu_push32(c, ret);
+}
+
+static void glue_ClearAppleMenuItems(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_reserved = (int32_t)cpu_pop32(c);
+    int16_t r = tb_ClearAppleMenuItems(a_reserved);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -4569,6 +4605,15 @@ static void glue_CurResFile(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_CurrentProcessToken(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t r = tb_CurrentProcessToken();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_CurrentProcessorSpeed(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -6023,6 +6068,17 @@ static void glue_DebuggerUnlockMemory(cpu68k *c, uint16_t trapword)
     uint32_t a_count = (uint32_t)c->a[1];
     int16_t r = tb_DebuggerUnlockMemory(a_address, a_count);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_DeclineVolumeNotification(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    gaddr a_notifyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_DeclineVolumeNotification(a_notifyProc, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_DecompressImage(cpu68k *c, uint16_t trapword)
@@ -12596,6 +12652,28 @@ static void glue_GetIcon(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_GetIconCacheData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_cache = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetIconCacheData(a_cache, a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetIconCacheProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    gaddr a_cache = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetIconCacheProc(a_cache, a_proc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_GetIconFamilyData(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17059,6 +17137,15 @@ static void glue_IUTimeString(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IconDispatch18(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_context = (int32_t)cpu_pop32(c);
+    tb_IconDispatch18(a_context);
+    cpu_push32(c, ret);
+}
+
 static void glue_IconFamilyToIconSuite(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -17080,6 +17167,20 @@ static void glue_IconIDToRgn(cpu68k *c, uint16_t trapword)
     gaddr a_rect = (gaddr)cpu_pop32(c);
     gaddr a_rgn = (gaddr)cpu_pop32(c);
     int16_t r = tb_IconIDToRgn(a_rgn, a_rect, a_align, a_icon_id);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_IconMethodToRgn(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_method = (gaddr)cpu_pop32(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_rect = (gaddr)cpu_pop32(c);
+    gaddr a_rgn = (gaddr)cpu_pop32(c);
+    int16_t r = tb_IconMethodToRgn(a_rgn, a_rect, a_align, a_method, a_data);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -18150,6 +18251,16 @@ static void glue_IsThemeInColor(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_IsUserCancelEvent(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_event = (gaddr)cpu_pop32(c);
+    int8_t r = tb_IsUserCancelEvent(a_event);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_IsValidAppearanceFileType(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -18588,6 +18699,19 @@ static void glue_LoWord(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t a_a = (int32_t)cpu_pop32(c);
     int16_t r = tb_LoWord(a_a);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_LoadIconCache(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_cache = (gaddr)cpu_pop32(c);
+    int16_t a_transform = (int16_t)cpu_pop16(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_rect = (gaddr)cpu_pop32(c);
+    int16_t r = tb_LoadIconCache(a_rect, a_align, a_transform, a_cache);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -19157,6 +19281,18 @@ static void glue_MakeITable(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_MakeIconCache(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_make_icon = (gaddr)cpu_pop32(c);
+    gaddr a_cache = (gaddr)cpu_pop32(c);
+    int16_t r = tb_MakeIconCache(a_cache, a_make_icon, a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_MakeImageDescriptionForEffect(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -19455,6 +19591,18 @@ static void glue_MenuChoice(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     int32_t r = tb_MenuChoice();
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_MenuDispatchFB(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_flag = (int16_t)cpu_pop16(c);
+    int16_t a_script = (int16_t)cpu_pop16(c);
+    gaddr a_name = (gaddr)cpu_pop32(c);
+    int16_t r = tb_MenuDispatchFB(a_name, a_script, a_flag);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -19840,6 +19988,16 @@ static void glue_NewDebugOption(cpu68k *c, uint16_t trapword)
     int32_t a_componentSignature = (int32_t)cpu_pop32(c);
     int32_t r = tb_NewDebugOption(a_componentSignature, a_optionSelectorNum, a_optionName);
     wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewDesktopWindow(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_deskWindow = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewDesktopWindow(a_deskWindow);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -21206,6 +21364,15 @@ static void glue_PBEject(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBExchangeFiles(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_async = (trapword & 0x400) != 0;
+    int16_t r = tb_PBExchangeFiles(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBExchangeObjects(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -21377,6 +21544,15 @@ static void glue_PBGetXCatInfo(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
+static void glue_PBHCopyFile(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_a = (trapword & 0x400) != 0;
+    int16_t r = tb_PBHCopyFile(a_pb, a_a);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
 static void glue_PBHCreate(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -21437,6 +21613,15 @@ static void glue_PBHGetVolParms(cpu68k *c, uint16_t trapword)
     gaddr a_pb = (gaddr)c->a[0];
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBHGetVolParms(a_pb, a_async);
+    c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PBHMoveRename(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    gaddr a_pb = (gaddr)c->a[0];
+    bool a_a = (trapword & 0x400) != 0;
+    int16_t r = tb_PBHMoveRename(a_pb, a_a);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
 }
 
@@ -21839,6 +22024,16 @@ static void glue_PBXGetVolInfo(cpu68k *c, uint16_t trapword)
     bool a_async = (trapword & 0x400) != 0;
     int16_t r = tb_PBXGetVolInfo(a_pb, a_async);
     c->d[0] = (uint32_t)(int32_t)(int16_t)r;
+}
+
+static void glue_PEntryFromProcessSerialNumber(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_psn = (gaddr)cpu_pop32(c);
+    gaddr r = tb_PEntryFromProcessSerialNumber(a_psn);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_PMFeatures(cpu68k *c, uint16_t trapword)
@@ -22736,6 +22931,16 @@ static void glue_ProcessIsContextualMenuClient(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ProcessTokenAt(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_where = (uint32_t)cpu_pop32(c);
+    int32_t r = tb_ProcessTokenAt(a_where);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_ProtectEntry(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -22780,6 +22985,20 @@ static void glue_PtInIconID(cpu68k *c, uint16_t trapword)
     gaddr a_rect = (gaddr)cpu_pop32(c);
     uint32_t a_test_pt = (uint32_t)cpu_pop32(c);
     int8_t r = tb_PtInIconID(a_test_pt, a_rect, a_align, a_icon_id);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_PtInIconMethod(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_method = (gaddr)cpu_pop32(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_rect = (gaddr)cpu_pop32(c);
+    uint32_t a_test_pt = (uint32_t)cpu_pop32(c);
+    int8_t r = tb_PtInIconMethod(a_test_pt, a_rect, a_align, a_method, a_data);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
     cpu_push32(c, ret);
 }
@@ -24345,6 +24564,20 @@ static void glue_RectInIconID(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RectInIconMethod(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_method = (gaddr)cpu_pop32(c);
+    int16_t a_align = (int16_t)cpu_pop16(c);
+    gaddr a_rect = (gaddr)cpu_pop32(c);
+    gaddr a_test_rect = (gaddr)cpu_pop32(c);
+    int8_t r = tb_RectInIconMethod(a_test_rect, a_rect, a_align, a_method, a_data);
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_RectInIconRef(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -24771,6 +25004,17 @@ static void glue_ReplaceText(cpu68k *c, uint16_t trapword)
     gaddr a_subst_text = (gaddr)cpu_pop32(c);
     gaddr a_base_text = (gaddr)cpu_pop32(c);
     int16_t r = tb_ReplaceText(a_base_text, a_subst_text, a_key);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RequestVolumeNotification(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refCon = (int32_t)cpu_pop32(c);
+    gaddr a_notifyProc = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RequestVolumeNotification(a_notifyProc, a_refCon);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -27997,6 +28241,28 @@ static void glue_SetHardDiskTimeout(cpu68k *c, uint16_t trapword)
     tb_SetHardDiskTimeout(a_timeout);
 }
 
+static void glue_SetIconCacheData(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_data = (gaddr)cpu_pop32(c);
+    gaddr a_cache = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetIconCacheData(a_cache, a_data);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetIconCacheProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    gaddr a_cache = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SetIconCacheProc(a_cache, a_proc);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetIconFamilyData(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -28110,6 +28376,18 @@ static void glue_SetKeyboardFocus(cpu68k *c, uint16_t trapword)
     gaddr a_control = (gaddr)cpu_pop32(c);
     gaddr a_window = (gaddr)cpu_pop32(c);
     int16_t r = tb_SetKeyboardFocus(a_window, a_control, a_part);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_SetLabel(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_label_string = (gaddr)cpu_pop32(c);
+    gaddr a_label_color = (gaddr)cpu_pop32(c);
+    int16_t a_label = (int16_t)cpu_pop16(c);
+    int16_t r = tb_SetLabel(a_label, a_label_color, a_label_string);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -30036,6 +30314,41 @@ static void glue_ShowWindow(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_ShutDwnInstall(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_flags = (int16_t)cpu_pop16(c);
+    gaddr a_shutdown_proc = (gaddr)cpu_pop32(c);
+    tb_ShutDwnInstall(a_shutdown_proc, a_flags);
+    cpu_push32(c, ret);
+}
+
+static void glue_ShutDwnPower(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_ShutDwnPower();
+    cpu_push32(c, ret);
+}
+
+static void glue_ShutDwnRemove(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_shutdown_proc = (gaddr)cpu_pop32(c);
+    tb_ShutDwnRemove(a_shutdown_proc);
+    cpu_push32(c, ret);
+}
+
+static void glue_ShutDwnStart(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    tb_ShutDwnStart();
+    cpu_push32(c, ret);
+}
+
 static void glue_SizeControl(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -31015,6 +31328,17 @@ static void glue_SystemEvent(cpu68k *c, uint16_t trapword)
     gaddr a_evp = (gaddr)cpu_pop32(c);
     int8_t r = tb_SystemEvent(a_evp);
     wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
+static void glue_SystemHeapRoom(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_freeRoom = (gaddr)cpu_pop32(c);
+    gaddr a_growRoom = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SystemHeapRoom(a_growRoom, a_freeRoom);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -34146,6 +34470,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA08D, (int32_t)0x6u, "DebuggerLockMemory", CONV_REG, 0, 0, glue_DebuggerLockMemory},
     {0xA08D, (int32_t)0x7u, "DebuggerUnlockMemory", CONV_REG, 0, 0, glue_DebuggerUnlockMemory},
     {0xA08D, (int32_t)0x8u, "EnterSupervisorMode", CONV_REG, 0, 0, glue_EnterSupervisorMode},
+    {0xAA68, (int32_t)0x7u, "IsUserCancelEvent", CONV_STACK, 4, 2, glue_IsUserCancelEvent},
+    {0xAA68, (int32_t)0x8u, "CheckEventQueueForUserCancel", CONV_STACK, 4, 2, glue_CheckEventQueueForUserCancel},
     {0xAA68, (int32_t)0x203u, "GetStdFilterProc", CONV_STACK, 4, 2, glue_GetStdFilterProc},
     {0xAA68, (int32_t)0x20Du, "AutoSizeDialog", CONV_STACK, 4, 2, glue_AutoSizeDialog},
     {0xAA68, (int32_t)0x304u, "SetDialogDefaultItem", CONV_STACK, 6, 2, glue_SetDialogDefaultItem},
@@ -34314,7 +34640,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x14u, "PBCreateFileIDRef", CONV_REG, 0, 0, glue_PBCreateFileIDRef},
     {0xA060, (int32_t)0x15u, "PBDeleteFileIDRef", CONV_REG, 0, 0, glue_PBDeleteFileIDRef},
     {0xA060, (int32_t)0x16u, "PBResolveFileIDRef", CONV_REG, 0, 0, glue_PBResolveFileIDRef},
-    {0xA060, (int32_t)0x17u, "PBExchangeFiles", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x17u, "PBExchangeFiles", CONV_REG, 0, 0, glue_PBExchangeFiles},
     {0xA060, (int32_t)0x18u, "PBCatSearch", CONV_REG, 0, 0, glue_PBCatSearch},
     {0xA060, (int32_t)0x1Au, "PBOpenDF", CONV_REG, 0, 0, glue_PBOpenDF},
     {0xA060, (int32_t)0x1Au, "PBHOpenDF", CONV_REG, 0, 0, glue_PBHOpenDF},
@@ -34343,8 +34669,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA060, (int32_t)0x33u, "PBHSetDirAccess", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x34u, "PBHMapID", CONV_REG, 0, 0, 0},
     {0xA060, (int32_t)0x35u, "PBHMapName", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x36u, "PBHCopyFile", CONV_REG, 0, 0, 0},
-    {0xA060, (int32_t)0x37u, "PBHMoveRename", CONV_REG, 0, 0, 0},
+    {0xA060, (int32_t)0x36u, "PBHCopyFile", CONV_REG, 0, 0, glue_PBHCopyFile},
+    {0xA060, (int32_t)0x37u, "PBHMoveRename", CONV_REG, 0, 0, glue_PBHMoveRename},
     {0xA060, (int32_t)0x38u, "PBHOpenDeny", CONV_REG, 0, 0, glue_PBHOpenDeny},
     {0xA060, (int32_t)0x39u, "PBHOpenRFDeny", CONV_REG, 0, 0, glue_PBHOpenRFDeny},
     {0xA060, (int32_t)0x3Au, "PBGetXCatInfo", CONV_REG, 0, 0, glue_PBGetXCatInfo},
@@ -35032,18 +35358,20 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAA52, (int32_t)0x1427u, "FSCatalogSearch", CONV_STACK, 40, 2, glue_FSCatalogSearch},
     {0xABC9, (int32_t)0x207u, "NewIconSuite", CONV_STACK, 4, 2, glue_NewIconSuite},
     {0xABC9, (int32_t)0x217u, "GetSuiteLabel", CONV_STACK, 4, 2, glue_GetSuiteLabel},
+    {0xABC9, (int32_t)0x218u, "IconDispatch18", CONV_STACK, 4, 0, glue_IconDispatch18},
     {0xABC9, (int32_t)0x302u, "DisposeIconSuite", CONV_STACK, 6, 2, glue_DisposeIconSuite},
     {0xABC9, (int32_t)0x316u, "SetSuiteLabel", CONV_STACK, 6, 2, glue_SetSuiteLabel},
-    {0xABC9, (int32_t)0x419u, "GetIconCacheData", CONV_STACK, 8, 2, 0},
-    {0xABC9, (int32_t)0x41Au, "SetIconCacheData", CONV_STACK, 8, 2, 0},
-    {0xABC9, (int32_t)0x41Bu, "GetIconCacheProc", CONV_STACK, 8, 2, 0},
-    {0xABC9, (int32_t)0x41Cu, "SetIconCacheProc", CONV_STACK, 8, 2, 0},
+    {0xABC9, (int32_t)0x419u, "GetIconCacheData", CONV_STACK, 8, 2, glue_GetIconCacheData},
+    {0xABC9, (int32_t)0x41Au, "SetIconCacheData", CONV_STACK, 8, 2, glue_SetIconCacheData},
+    {0xABC9, (int32_t)0x41Bu, "GetIconCacheProc", CONV_STACK, 8, 2, glue_GetIconCacheProc},
+    {0xABC9, (int32_t)0x41Cu, "SetIconCacheProc", CONV_STACK, 8, 2, glue_SetIconCacheProc},
     {0xABC9, (int32_t)0x500u, "PlotIconID", CONV_STACK, 10, 2, glue_PlotIconID},
     {0xABC9, (int32_t)0x501u, "GetIconSuite", CONV_STACK, 10, 2, glue_GetIconSuite},
     {0xABC9, (int32_t)0x50Bu, "GetLabel", CONV_STACK, 10, 2, glue_GetLabel},
+    {0xABC9, (int32_t)0x50Cu, "SetLabel", CONV_STACK, 10, 2, glue_SetLabel},
     {0xABC9, (int32_t)0x603u, "PlotIconSuite", CONV_STACK, 12, 2, glue_PlotIconSuite},
-    {0xABC9, (int32_t)0x604u, "MakeIconCache", CONV_STACK, 12, 2, 0},
-    {0xABC9, (int32_t)0x606u, "LoadIconCache", CONV_STACK, 12, 2, 0},
+    {0xABC9, (int32_t)0x604u, "MakeIconCache", CONV_STACK, 12, 2, glue_MakeIconCache},
+    {0xABC9, (int32_t)0x606u, "LoadIconCache", CONV_STACK, 12, 2, glue_LoadIconCache},
     {0xABC9, (int32_t)0x608u, "AddIconToSuite", CONV_STACK, 12, 2, glue_AddIconToSuite},
     {0xABC9, (int32_t)0x609u, "GetIconFromSuite", CONV_STACK, 12, 2, glue_GetIconFromSuite},
     {0xABC9, (int32_t)0x60Du, "PtInIconID", CONV_STACK, 12, 2, glue_PtInIconID},
@@ -35057,9 +35385,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xABC9, (int32_t)0x714u, "IconSuiteToRgn", CONV_STACK, 14, 2, glue_IconSuiteToRgn},
     {0xABC9, (int32_t)0x805u, "PlotIconMethod", CONV_STACK, 16, 2, glue_PlotIconMethod},
     {0xABC9, (int32_t)0x80Au, "ForEachIconDo", CONV_STACK, 16, 2, glue_ForEachIconDo},
-    {0xABC9, (int32_t)0x90Fu, "PtInIconMethod", CONV_STACK, 18, 2, 0},
-    {0xABC9, (int32_t)0x912u, "RectInIconMethod", CONV_STACK, 18, 2, 0},
-    {0xABC9, (int32_t)0x915u, "IconMethodToRgn", CONV_STACK, 18, 2, 0},
+    {0xABC9, (int32_t)0x90Fu, "PtInIconMethod", CONV_STACK, 18, 2, glue_PtInIconMethod},
+    {0xABC9, (int32_t)0x912u, "RectInIconMethod", CONV_STACK, 18, 2, glue_RectInIconMethod},
+    {0xABC9, (int32_t)0x915u, "IconMethodToRgn", CONV_STACK, 18, 2, glue_IconMethodToRgn},
     {0xAA75, (int32_t)0x2u, "GetIconRefFromFile", CONV_STACK, 12, 2, glue_GetIconRefFromFile},
     {0xAA75, (int32_t)0x8u, "UnregisterIconRef", CONV_STACK, 8, 2, glue_UnregisterIconRef},
     {0xAA75, (int32_t)0x9u, "UpdateIconRef", CONV_STACK, 4, 2, glue_UpdateIconRef},
@@ -35310,6 +35638,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA825, (int32_t)0x601u, "InsertIntlResMenu", CONV_STACK, 12, 0, glue_InsertIntlResMenu},
     {0xA825, (int32_t)0x606u, "SetMenuItemIconHandle", CONV_STACK, 12, 2, glue_SetMenuItemIconHandle},
     {0xA825, (int32_t)0x707u, "GetMenuItemIconHandle", CONV_STACK, 14, 2, glue_GetMenuItemIconHandle},
+    {0xA825, (int32_t)0x8FBu, "MenuDispatchFB", CONV_STACK, 8, 2, glue_MenuDispatchFB},
     {0xAA59, (int32_t)0x0u, "NewRoutineDescriptor", CONV_STACK, 10, 4, 0},
     {0xAA59, (int32_t)0x1u, "DisposeRoutineDescriptor", CONV_STACK, 4, 0, 0},
     {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, 0},
@@ -35318,6 +35647,9 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x1u, "GetActiveTaskInfo", CONV_STACK, 6, 2, glue_GetActiveTaskInfo},
     {0xA88F, (int32_t)0x2u, "GetSwitchInfo", CONV_STACK, 4, 0, glue_GetSwitchInfo},
     {0xA88F, (int32_t)0x3u, "CancelSwitch", CONV_STACK, 0, 0, glue_CancelSwitch},
+    {0xA88F, (int32_t)0x4u, "CurrentProcessToken", CONV_STACK, 0, 4, glue_CurrentProcessToken},
+    {0xA88F, (int32_t)0xFu, "ProcessTokenAt", CONV_STACK, 4, 4, glue_ProcessTokenAt},
+    {0xA88F, (int32_t)0x14u, "NewDesktopWindow", CONV_STACK, 4, 2, glue_NewDesktopWindow},
     {0xA88F, (int32_t)0x15u, "TempMaxMem", CONV_STACK, 4, 4, glue_TempMaxMem},
     {0xA88F, (int32_t)0x16u, "TempTopMem", CONV_STACK, 0, 4, glue_TempTopMem},
     {0xA88F, (int32_t)0x18u, "TempFreeMem", CONV_STACK, 0, 4, glue_TempFreeMem},
@@ -35327,6 +35659,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x20u, "TempDisposeHandle", CONV_STACK, 8, 0, glue_TempDisposeHandle},
     {0xA88F, (int32_t)0x28u, "OSDispatch28", CONV_STACK, 10, 0, glue_OSDispatch28},
     {0xA88F, (int32_t)0x2Bu, "OSDispatch2B", CONV_STACK, 6, 4, glue_OSDispatch2B},
+    {0xA88F, (int32_t)0x31u, "AddAppleMenuItem", CONV_STACK, 22, 2, glue_AddAppleMenuItem},
+    {0xA88F, (int32_t)0x32u, "ClearAppleMenuItems", CONV_STACK, 4, 2, glue_ClearAppleMenuItems},
     {0xA88F, (int32_t)0x33u, "AcceptHighLevelEvent", CONV_STACK, 16, 2, glue_AcceptHighLevelEvent},
     {0xA88F, (int32_t)0x34u, "PostHighLevelEvent", CONV_STACK, 24, 2, glue_PostHighLevelEvent},
     {0xA88F, (int32_t)0x35u, "GetProcessSerialNumberFromPortName", CONV_STACK, 8, 2, glue_GetProcessSerialNumberFromPortName},
@@ -35340,8 +35674,12 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x3Du, "SameProcess", CONV_STACK, 12, 2, glue_SameProcess},
     {0xA88F, (int32_t)0x40u, "BeginSystemMode", CONV_STACK, 0, 2, glue_BeginSystemMode},
     {0xA88F, (int32_t)0x41u, "EndSystemMode", CONV_STACK, 0, 2, glue_EndSystemMode},
+    {0xA88F, (int32_t)0x42u, "RequestVolumeNotification", CONV_STACK, 8, 2, glue_RequestVolumeNotification},
+    {0xA88F, (int32_t)0x43u, "DeclineVolumeNotification", CONV_STACK, 8, 2, glue_DeclineVolumeNotification},
     {0xA88F, (int32_t)0x45u, "GetSpecificHighLevelEvent", CONV_STACK, 12, 2, glue_GetSpecificHighLevelEvent},
     {0xA88F, (int32_t)0x46u, "GetPortNameFromProcessSerialNumber", CONV_STACK, 8, 2, glue_GetPortNameFromProcessSerialNumber},
+    {0xA88F, (int32_t)0x47u, "SystemHeapRoom", CONV_STACK, 8, 2, glue_SystemHeapRoom},
+    {0xA88F, (int32_t)0x4Fu, "PEntryFromProcessSerialNumber", CONV_STACK, 4, 4, glue_PEntryFromProcessSerialNumber},
     {0xA88F, (int32_t)0x55u, "OSDispatch55", CONV_STACK, 4, 2, glue_OSDispatch55},
     {0xA88F, (int32_t)0x5Au, "OSDispatch5A", CONV_STACK, 30, 4, glue_OSDispatch5A},
     {0xA88F, (int32_t)0x64u, "OSDispatch64", CONV_STACK, 8, 2, glue_OSDispatch64},
@@ -36250,10 +36588,10 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0xC20E0018u, "TransliterateText", CONV_STACK, 16, 2, glue_TransliterateText},
     {0xA8B5, (int32_t)0xC4040038u, "GetScriptUtilityAddress", CONV_STACK, 6, 4, glue_GetScriptUtilityAddress},
     {0xA8B5, (int32_t)0xC406003Cu, "GetScriptQDPatchAddress", CONV_STACK, 8, 4, glue_GetScriptQDPatchAddress},
-    {0xA895, (int32_t)0x1u, "ShutDwnPower", CONV_STACK, 0, 0, 0},
-    {0xA895, (int32_t)0x2u, "ShutDwnStart", CONV_STACK, 0, 0, 0},
-    {0xA895, (int32_t)0x3u, "ShutDwnInstall", CONV_STACK, 6, 0, 0},
-    {0xA895, (int32_t)0x4u, "ShutDwnRemove", CONV_STACK, 4, 0, 0},
+    {0xA895, (int32_t)0x1u, "ShutDwnPower", CONV_STACK, 0, 0, glue_ShutDwnPower},
+    {0xA895, (int32_t)0x2u, "ShutDwnStart", CONV_STACK, 0, 0, glue_ShutDwnStart},
+    {0xA895, (int32_t)0x3u, "ShutDwnInstall", CONV_STACK, 6, 0, glue_ShutDwnInstall},
+    {0xA895, (int32_t)0x4u, "ShutDwnRemove", CONV_STACK, 4, 0, glue_ShutDwnRemove},
     {0xA800, (int32_t)0x0u, "FinaleUnknown1", CONV_STACK, 2, 4, glue_FinaleUnknown1},
     {0xA800, (int32_t)0x4u, "DirectorUnknown3", CONV_STACK, 0, 4, glue_DirectorUnknown3},
     {0xA800, (int32_t)0xCu, "SpeechManagerVersion", CONV_STACK, 0, 4, glue_SpeechManagerVersion},

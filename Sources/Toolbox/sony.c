@@ -211,13 +211,13 @@ static int16_t sony_control(gaddr pb, bool async)
     return controlErr;
 }
 
-int16_t driver_drive_status(gaddr pb);
+
 
 static int16_t sony_status(gaddr pb, bool async)
 {
     int16_t cs = (int16_t)rd16(pb + CntrlParam_csCode_off);
     if (!ours(pb))
-        return cs == 8 ? driver_drive_status(pb) : statusErr; /* the volumes' drives, as the drive queue has them */
+        return cs == 8 ? disk_drive_status(pb) : statusErr; /* the volumes' drives, as the drive queue has them */
     switch (cs) {
     case 6: { /* the formats the drive writes: a list of (capacity in blocks, flags) */
         gaddr p = pb + CntrlParam_csParam_off;

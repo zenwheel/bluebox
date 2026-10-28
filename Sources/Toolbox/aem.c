@@ -1811,7 +1811,7 @@ static bool to_self(gaddr evt)
     gaddr p = rd32(h);
     uint32_t type = rd32(p + off + 4);
     if (type == T("psn ")) /* other runs are {1, process ID} */
-        return rd32(p + off + 12) == 0 && (rd32(p + off + 16) == 2 || rd32(p + off + 16) == 0x1000); /* us */
+        return process_is_us(rd32(p + off + 12), rd32(p + off + 16));
     if (type == T("sign"))
         return rd32(p + off + 12) == g_app_creator;
     if (type == T("kpid"))
@@ -1828,6 +1828,8 @@ static bool to_self(gaddr evt)
 
 static bool to_finder(gaddr evt)
 {
+    if (g_is_finder) /* the run is the Finder: its events are its own */
+        return false;
     gaddr h = desc_handle(evt);
     uint32_t off = find_entry(h, T("addr"), true);
     if (!off)
@@ -1836,6 +1838,17 @@ static bool to_finder(gaddr evt)
     if (rd32(p + 4) == T("psn ")) /* the serial number the Process Manager lists it under */
         return process_is_finder(rd32(p + 12), rd32(p + 16));
     return rd32(p + 4) == T("sign") && rd32(p + 12) == T("MACS");
+}
+
+/* Whether a run of the Finder (signature 'MACS') takes Apple events. */
+static bool finder_listening(void)
+{
+    machine_ae_process procs[64];
+    int n = machine_ae_processes(procs, 64);
+    for (int i = 0; i < n; i++)
+        if (procs[i].signature == T("MACS") && procs[i].pid != getpid())
+            return true;
+    return false;
 }
 
 /* Open one item as the Finder would. */
@@ -1925,9 +1938,15 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
      * delete themselves; executing it deleted them twice. */
     if (send_mode & kAEDontExecute)
         return noErr;
-    if (to_finder(evt))
-        return finder_event(evt);
-    if (to_self(evt))
+    /* The Finder: a run of Apple's Finder takes its events (open, print,
+     * reveal and the rest of its suite), or Blue Box carries them out. */
+    bool finder_run = false;
+    if (to_finder(evt)) {
+        if (!finder_listening())
+            return finder_event(evt);
+        finder_run = true;
+    }
+    if (!finder_run && to_self(evt))
         return send_to_self(evt, reply, send_mode);
     gaddr h = desc_handle(evt);
     uint32_t off = find_entry(h, T("addr"), true);
@@ -1935,6 +1954,11 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
     uint32_t atype = rd32(p + 4), alen = rd32(p + 8);
     uint8_t addr[64] = { 0 };
     gget(addr, p + 12, alen > 64 ? 64 : alen);
+    if (finder_run) { /* by its signature, however it was addressed */
+        atype = T("sign");
+        alen = 4;
+        put32(addr, T("MACS"));
+    }
     int mode = send_mode & 3;
     uint8_t repq = mode != kAENoReply, inte = (uint8_t)(send_mode & 0x30);
     put_keyed(evt, true, T("repq"), T("bool"), 0, 1, &repq);
@@ -2408,7 +2432,7 @@ int8_t tb_GetSpecificHighLevelEvent(gaddr fn, gaddr data, gaddr err_return)
 }
 
 /* Our serial number: kCurrentProcess or the one GetCurrentProcess gives. */
-static bool psn_is_us(uint32_t hi, uint32_t lo) { return hi == 0 && (lo == 2 || lo == 0x1000); }
+static bool psn_is_us(uint32_t hi, uint32_t lo) { return process_is_us(hi, lo); }
 
 /* The other run an event goes to, by an address as AESend's ('sign',
  * 'kpid', 'psn '); procNotFound if none listens. */
@@ -2479,6 +2503,15 @@ int16_t tb_PostHighLevelEvent(gaddr evt, gaddr receiver_id, int32_t refcon, gadd
     }
     default:
         return paramErr;
+    }
+    /* To the system process ({0, kSystemProcess}): Quit All Applications,
+     * which the Finder's Shut Down and Restart post.  The Process Manager
+     * sends each application Quit; here the other programs are runs of
+     * their own, so this one is told to quit (the Finder then shuts down). */
+    if (atype == T("psn ") && a0 == 0 && a1 == 1) {
+        if (e.cls == T("aevt") && e.id == T("quia"))
+            machine_send_quit();
+        return noErr;
     }
     if (!self) {
         int16_t err = post_to_run(&e, atype, a0, a1, msg_buf, (uint32_t)msg_length);

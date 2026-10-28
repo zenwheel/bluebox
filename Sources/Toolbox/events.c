@@ -7,6 +7,7 @@
  */
 #include <pthread.h>
 #include <unistd.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -286,6 +287,17 @@ void machine_post_suspend_resume(bool resume, bool convert_clipboard)
 }
 
 /* Wake an app sleeping in WaitNextEvent (e.g. an Apple Event arrived). */
+/* WakeUpProcess on this process: its sleep in WaitNextEvent ends (the
+ * Finder wakes itself so when it has work to do between events). */
+static volatile bool woken;
+void ev_wake(void);
+
+void ev_wake_process(void)
+{
+    woken = true;
+    ev_wake();
+}
+
 void ev_wake(void)
 {
     pthread_mutex_lock(&lock);
@@ -798,6 +810,10 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
         note_repeated_update(evp);
         return 1;
     }
+    if (woken) { /* woken up: no sleep this time */
+        woken = false;
+        sleep = 0;
+    }
     if (host_attached && sleep > 0) {
         /* Sleep until input arrives or the time is up.  Interrupt-time
          * work (sound refills, Time Manager and VBL tasks) goes on while
@@ -845,7 +861,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
         return wne_event(mask, evp, &idled);
     }
     if (!host_attached && !idled)
-        machine_idle();
+        machine_idle_for(sleep < 0 ? 0 : sleep);
     return 0;
 }
 

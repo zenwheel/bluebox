@@ -76,8 +76,13 @@ func dcmp0Resource(decompressedSize: Int, body: [UInt8]) -> [UInt8] {
 /// A fresh, empty machine.
 /// Tests keep their System Folder out of the user's.
 let testSystemFolder = tempDir().appendingPathComponent("System Folder").path
+/// and their disk (and the catalog beside it) out of the user's; a test
+/// may give another.
+let testDisk = tempDir().appendingPathComponent("Macintosh HD").path
+nonisolated(unsafe) var testDiskPath = testDisk
 
 func bootMachine() {
+    machine_set_disk(testDiskPath)
     machine_set_system_folder(testSystemFolder)
     #expect(machine_boot(false))
 }

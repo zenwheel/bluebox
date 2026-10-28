@@ -6142,6 +6142,28 @@ static void ppcglue_PBResolveFileIDRefAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PBExchangeFiles(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    bool a_async = c->gpr[4] != 0;
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeFiles(a_pb, a_async), a_async);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBExchangeFilesSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeFiles(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBExchangeFilesAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBExchangeFiles(a_pb, true), true);
+    c->pc = c->lr;
+}
+
 static void ppcglue_PBCatSearch(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
@@ -6249,6 +6271,50 @@ static void ppcglue_PBHGetDirAccessAsync(ppc_cpu *c)
 {
     gaddr a_pb = (gaddr)c->gpr[3];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHGetDirAccess(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHCopyFile(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    bool a_a = c->gpr[4] != 0;
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCopyFile(a_pb, a_a), a_a);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHCopyFileSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCopyFile(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHCopyFileAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHCopyFile(a_pb, true), true);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHMoveRename(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    bool a_a = c->gpr[4] != 0;
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHMoveRename(a_pb, a_a), a_a);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHMoveRenameSync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHMoveRename(a_pb, false), false);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PBHMoveRenameAsync(ppc_cpu *c)
+{
+    gaddr a_pb = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)pb_call_done(a_pb, tb_PBHMoveRename(a_pb, true), true);
     c->pc = c->lr;
 }
 
@@ -7444,6 +7510,17 @@ static void ppcglue_IconIDToRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_IconMethodToRgn(ppc_cpu *c)
+{
+    gaddr a_rgn = (gaddr)c->gpr[3];
+    gaddr a_rect = (gaddr)c->gpr[4];
+    int16_t a_align = (int16_t)c->gpr[5];
+    gaddr a_method = (gaddr)c->gpr[6];
+    gaddr a_data = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IconMethodToRgn(a_rgn, a_rect, a_align, a_method, a_data);
+    c->pc = c->lr;
+}
+
 static void ppcglue_PtInIconSuite(ppc_cpu *c)
 {
     uint32_t a_test_pt = (uint32_t)c->gpr[3];
@@ -7464,6 +7541,17 @@ static void ppcglue_PtInIconID(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PtInIconMethod(ppc_cpu *c)
+{
+    uint32_t a_test_pt = (uint32_t)c->gpr[3];
+    gaddr a_rect = (gaddr)c->gpr[4];
+    int16_t a_align = (int16_t)c->gpr[5];
+    gaddr a_method = (gaddr)c->gpr[6];
+    gaddr a_data = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_PtInIconMethod(a_test_pt, a_rect, a_align, a_method, a_data);
+    c->pc = c->lr;
+}
+
 static void ppcglue_RectInIconSuite(ppc_cpu *c)
 {
     gaddr a_test_rect = (gaddr)c->gpr[3];
@@ -7481,6 +7569,68 @@ static void ppcglue_RectInIconID(ppc_cpu *c)
     int16_t a_align = (int16_t)c->gpr[5];
     int16_t a_icon_id = (int16_t)c->gpr[6];
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_RectInIconID(a_test_rect, a_rect, a_align, a_icon_id);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RectInIconMethod(ppc_cpu *c)
+{
+    gaddr a_test_rect = (gaddr)c->gpr[3];
+    gaddr a_rect = (gaddr)c->gpr[4];
+    int16_t a_align = (int16_t)c->gpr[5];
+    gaddr a_method = (gaddr)c->gpr[6];
+    gaddr a_data = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_RectInIconMethod(a_test_rect, a_rect, a_align, a_method, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MakeIconCache(ppc_cpu *c)
+{
+    gaddr a_cache = (gaddr)c->gpr[3];
+    gaddr a_make_icon = (gaddr)c->gpr[4];
+    gaddr a_data = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeIconCache(a_cache, a_make_icon, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_LoadIconCache(ppc_cpu *c)
+{
+    gaddr a_rect = (gaddr)c->gpr[3];
+    int16_t a_align = (int16_t)c->gpr[4];
+    int16_t a_transform = (int16_t)c->gpr[5];
+    gaddr a_cache = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LoadIconCache(a_rect, a_align, a_transform, a_cache);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIconCacheData(ppc_cpu *c)
+{
+    gaddr a_cache = (gaddr)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIconCacheData(a_cache, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetIconCacheData(ppc_cpu *c)
+{
+    gaddr a_cache = (gaddr)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetIconCacheData(a_cache, a_data);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetIconCacheProc(ppc_cpu *c)
+{
+    gaddr a_cache = (gaddr)c->gpr[3];
+    gaddr a_proc = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetIconCacheProc(a_cache, a_proc);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetIconCacheProc(ppc_cpu *c)
+{
+    gaddr a_cache = (gaddr)c->gpr[3];
+    gaddr a_proc = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetIconCacheProc(a_cache, a_proc);
     c->pc = c->lr;
 }
 
@@ -15407,6 +15557,33 @@ static void ppcglue_GetAppParms(ppc_cpu *c)
     gaddr a_rnp = (gaddr)c->gpr[4];
     gaddr a_aphandp = (gaddr)c->gpr[5];
     tb_GetAppParms(a_namep, a_rnp, a_aphandp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShutDwnPower(ppc_cpu *c)
+{
+    tb_ShutDwnPower();
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShutDwnStart(ppc_cpu *c)
+{
+    tb_ShutDwnStart();
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShutDwnInstall(ppc_cpu *c)
+{
+    gaddr a_shutdown_proc = (gaddr)c->gpr[3];
+    int16_t a_flags = (int16_t)c->gpr[4];
+    tb_ShutDwnInstall(a_shutdown_proc, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ShutDwnRemove(ppc_cpu *c)
+{
+    gaddr a_shutdown_proc = (gaddr)c->gpr[3];
+    tb_ShutDwnRemove(a_shutdown_proc);
     c->pc = c->lr;
 }
 
@@ -36837,42 +37014,6 @@ static void ppctrap_PBUnlockRangeAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_PBExchangeFiles(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x17u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | (c->gpr[4] ? 0x400 : 0)));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBExchangeFilesSync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x17u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBExchangeFilesAsync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x17u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | 0x400));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_PBHGetLogInInfo(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -37017,78 +37158,6 @@ static void ppctrap_PBHMapNameAsync(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_PBHCopyFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x36u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | (c->gpr[4] ? 0x400 : 0)));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHCopyFileSync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x36u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHCopyFileAsync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x36u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | 0x400));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHMoveRename(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x37u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | (c->gpr[4] ? 0x400 : 0)));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHMoveRenameSync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x37u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PBHMoveRenameAsync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x37u);
-    ppc_trap_set(8, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA060 | 0x400));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_FSpSetFLock(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -37137,144 +37206,6 @@ static void ppctrap_ReplaceGestalt(ppc_cpu *c)
     ppc_trap((uint16_t)(0xA1AD));
     if (o_oldSelFuncp) wr32(o_oldSelFuncp, ppc_trap_get(8));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_IconMethodToRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x915u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PtInIconMethod(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x90Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RectInIconMethod(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x912u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MakeIconCache(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x604u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_LoadIconCache(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x606u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetIconCacheData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x419u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetIconCacheData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x41Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetIconCacheProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x41Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetIconCacheProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x41Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xABC9));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
     c->pc = c->lr;
@@ -38108,45 +38039,6 @@ static void ppctrap_UnloadSeg(ppc_cpu *c)
     ppc_trap_begin();
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap((uint16_t)(0xA9F1));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShutDwnPower(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0x1);
-    ppc_trap((uint16_t)(0xA895));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShutDwnStart(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0x2);
-    ppc_trap((uint16_t)(0xA895));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShutDwnInstall(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, 0x3);
-    ppc_trap((uint16_t)(0xA895));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ShutDwnRemove(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, 0x4);
-    ppc_trap((uint16_t)(0xA895));
     ppc_trap_end();
     c->pc = c->lr;
 }
@@ -41388,8 +41280,8 @@ const ppc_export ppc_exports[] = {
     {"GetHandleSize", ppcglue_GetHandleSize},
     {"GetHardDiskTimeout", ppcglue_GetHardDiskTimeout},
     {"GetIcon", ppcglue_GetIcon},
-    {"GetIconCacheData", ppctrap_GetIconCacheData},
-    {"GetIconCacheProc", ppctrap_GetIconCacheProc},
+    {"GetIconCacheData", ppcglue_GetIconCacheData},
+    {"GetIconCacheProc", ppcglue_GetIconCacheProc},
     {"GetIconFamilyData", ppcglue_GetIconFamilyData},
     {"GetIconFromSuite", ppcglue_GetIconFromSuite},
     {"GetIconRef", ppcglue_GetIconRef},
@@ -41834,7 +41726,7 @@ const ppc_export ppc_exports[] = {
     {"IUTimeString", ppcglue_IUTimeString},
     {"IconFamilyToIconSuite", ppcglue_IconFamilyToIconSuite},
     {"IconIDToRgn", ppcglue_IconIDToRgn},
-    {"IconMethodToRgn", ppctrap_IconMethodToRgn},
+    {"IconMethodToRgn", ppcglue_IconMethodToRgn},
     {"IconRefToIconFamily", ppcglue_IconRefToIconFamily},
     {"IconRefToRgn", ppcglue_IconRefToRgn},
     {"IconServicesInit", ppcglue_IconServicesInit},
@@ -42461,7 +42353,7 @@ const ppc_export ppc_exports[] = {
     {"Line", ppcglue_Line},
     {"LineTo", ppcglue_LineTo},
     {"LoWord", ppcglue_LoWord},
-    {"LoadIconCache", ppctrap_LoadIconCache},
+    {"LoadIconCache", ppcglue_LoadIconCache},
     {"LoadMediaIntoRam", ppcglue_LoadMediaIntoRam},
     {"LoadMovieIntoRam", ppcglue_LoadMovieIntoRam},
     {"LoadResource", ppcglue_LoadResource},
@@ -42518,7 +42410,7 @@ const ppc_export ppc_exports[] = {
     {"MIDIWritePacket", ppcglue_MIDIWritePacket},
     {"MakeFilePreview", ppcglue_MakeFilePreview},
     {"MakeITable", ppcglue_MakeITable},
-    {"MakeIconCache", ppctrap_MakeIconCache},
+    {"MakeIconCache", ppcglue_MakeIconCache},
     {"MakeImageDescriptionForEffect", ppcglue_MakeImageDescriptionForEffect},
     {"MakeImageDescriptionForPixMap", ppcglue_MakeImageDescriptionForPixMap},
     {"MakeMediaTimeTable", ppcglue_MakeMediaTimeTable},
@@ -42812,9 +42704,9 @@ const ppc_export ppc_exports[] = {
     {"PBDirCreateAsync", ppcglue_PBDirCreateAsync},
     {"PBDirCreateSync", ppcglue_PBDirCreateSync},
     {"PBEject", ppcglue_PBEject},
-    {"PBExchangeFiles", ppctrap_PBExchangeFiles},
-    {"PBExchangeFilesAsync", ppctrap_PBExchangeFilesAsync},
-    {"PBExchangeFilesSync", ppctrap_PBExchangeFilesSync},
+    {"PBExchangeFiles", ppcglue_PBExchangeFiles},
+    {"PBExchangeFilesAsync", ppcglue_PBExchangeFilesAsync},
+    {"PBExchangeFilesSync", ppcglue_PBExchangeFilesSync},
     {"PBExchangeObjects", ppcglue_PBExchangeObjects},
     {"PBExchangeObjectsAsync", ppcglue_PBExchangeObjectsAsync},
     {"PBExchangeObjectsSync", ppcglue_PBExchangeObjectsSync},
@@ -42872,9 +42764,9 @@ const ppc_export ppc_exports[] = {
     {"PBGetXCatInfo", ppcglue_PBGetXCatInfo},
     {"PBGetXCatInfoAsync", ppcglue_PBGetXCatInfoAsync},
     {"PBGetXCatInfoSync", ppcglue_PBGetXCatInfoSync},
-    {"PBHCopyFile", ppctrap_PBHCopyFile},
-    {"PBHCopyFileAsync", ppctrap_PBHCopyFileAsync},
-    {"PBHCopyFileSync", ppctrap_PBHCopyFileSync},
+    {"PBHCopyFile", ppcglue_PBHCopyFile},
+    {"PBHCopyFileAsync", ppcglue_PBHCopyFileAsync},
+    {"PBHCopyFileSync", ppcglue_PBHCopyFileSync},
     {"PBHCreate", ppcglue_PBHCreate},
     {"PBHCreateAsync", ppcglue_PBHCreateAsync},
     {"PBHCreateSync", ppcglue_PBHCreateSync},
@@ -42905,9 +42797,9 @@ const ppc_export ppc_exports[] = {
     {"PBHMapName", ppctrap_PBHMapName},
     {"PBHMapNameAsync", ppctrap_PBHMapNameAsync},
     {"PBHMapNameSync", ppctrap_PBHMapNameSync},
-    {"PBHMoveRename", ppctrap_PBHMoveRename},
-    {"PBHMoveRenameAsync", ppctrap_PBHMoveRenameAsync},
-    {"PBHMoveRenameSync", ppctrap_PBHMoveRenameSync},
+    {"PBHMoveRename", ppcglue_PBHMoveRename},
+    {"PBHMoveRenameAsync", ppcglue_PBHMoveRenameAsync},
+    {"PBHMoveRenameSync", ppcglue_PBHMoveRenameSync},
     {"PBHOpen", ppcglue_PBHOpen},
     {"PBHOpenAsync", ppcglue_PBHOpenAsync},
     {"PBHOpenDF", ppcglue_PBHOpenDF},
@@ -43172,7 +43064,7 @@ const ppc_export ppc_exports[] = {
     {"Pt2Rect", ppcglue_Pt2Rect},
     {"PtInDSequenceData", ppcglue_PtInDSequenceData},
     {"PtInIconID", ppcglue_PtInIconID},
-    {"PtInIconMethod", ppctrap_PtInIconMethod},
+    {"PtInIconMethod", ppcglue_PtInIconMethod},
     {"PtInIconRef", ppcglue_PtInIconRef},
     {"PtInIconSuite", ppcglue_PtInIconSuite},
     {"PtInMovie", ppcglue_PtInMovie},
@@ -43361,7 +43253,7 @@ const ppc_export ppc_exports[] = {
     {"RecoverHandle", ppcglue_RecoverHandle},
     {"RecoverHandleSys", ppcglue_RecoverHandleSys},
     {"RectInIconID", ppcglue_RectInIconID},
-    {"RectInIconMethod", ppctrap_RectInIconMethod},
+    {"RectInIconMethod", ppcglue_RectInIconMethod},
     {"RectInIconRef", ppcglue_RectInIconRef},
     {"RectInIconSuite", ppcglue_RectInIconSuite},
     {"RectInRgn", ppcglue_RectInRgn},
@@ -43741,8 +43633,8 @@ const ppc_export ppc_exports[] = {
     {"SetGrowZone", ppcglue_SetGrowZone},
     {"SetHandleSize", ppcglue_SetHandleSize},
     {"SetHardDiskTimeout", ppcglue_SetHardDiskTimeout},
-    {"SetIconCacheData", ppctrap_SetIconCacheData},
-    {"SetIconCacheProc", ppctrap_SetIconCacheProc},
+    {"SetIconCacheData", ppcglue_SetIconCacheData},
+    {"SetIconCacheProc", ppcglue_SetIconCacheProc},
     {"SetIconFamilyData", ppcglue_SetIconFamilyData},
     {"SetIdentityMatrix", ppcglue_SetIdentityMatrix},
     {"SetImageDescriptionCTable", ppcglue_SetImageDescriptionCTable},
@@ -43952,10 +43844,10 @@ const ppc_export ppc_exports[] = {
     {"ShowMoviePoster", ppcglue_ShowMoviePoster},
     {"ShowPen", ppcglue_ShowPen},
     {"ShowWindow", ppcglue_ShowWindow},
-    {"ShutDwnInstall", ppctrap_ShutDwnInstall},
-    {"ShutDwnPower", ppctrap_ShutDwnPower},
-    {"ShutDwnRemove", ppctrap_ShutDwnRemove},
-    {"ShutDwnStart", ppctrap_ShutDwnStart},
+    {"ShutDwnInstall", ppcglue_ShutDwnInstall},
+    {"ShutDwnPower", ppcglue_ShutDwnPower},
+    {"ShutDwnRemove", ppcglue_ShutDwnRemove},
+    {"ShutDwnStart", ppcglue_ShutDwnStart},
     {"SizeControl", ppcglue_SizeControl},
     {"SizeDialogItem", ppcglue_SizeDialogItem},
     {"SizeWindow", ppcglue_SizeWindow},
