@@ -7,7 +7,6 @@
 #ifndef APPLESCRIPT_H
 #define APPLESCRIPT_H
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -50,15 +49,6 @@ uint32_t as_copy_id(uint32_t id);
 uint32_t as_new_text(const char *s);
 uint32_t as_new_int(int32_t v);
 uint32_t as_new_from_desc(uint32_t desc);
-/* A script's named properties (what 0) and handlers (what 1), for the
- * debugging calls: how many, the nth one's name (MacRoman, not NUL-ended),
- * a property's value as a new ID (0 if there is none), and setting one
- * (defining it when define is set and it has no binding). */
-bool as_is_script(uint32_t id);
-uint32_t as_name_count(uint32_t id, int what);
-const char *as_name_at(uint32_t id, int what, uint32_t nth, size_t *len);
-uint32_t as_property_value(uint32_t id, const char *name, size_t len);
-int32_t as_set_property_value(uint32_t id, const char *name, size_t len, uint32_t value, bool define);
 /* The last error. */
 int32_t as_error_number(void);
 const char *as_error_message(void);

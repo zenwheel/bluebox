@@ -1,11 +1,9 @@
 /*
- * AppleScriptLib's calls beyond ppc_libs.c's: the Open Scripting
- * Architecture's dialects, copies, the debugging calls (properties,
- * handlers and terminology), the generic scripting component's calls and
- * AppleScript's own (initialisation, source styles), each a call to the
- * scripting component instance it is given (osa.c has the component); and
- * the storage type OSAComp.h puts on a script's data, a 12-byte trailer:
- * the type, a version (1), 2 spare bytes and the mark 0xFADEDEAD.
+ * The storage type OSAComp.h puts on a script's data (AppleScriptLib's
+ * OSAGetStorageType, OSAAddStorageType and OSARemoveStorageType): a 12-byte
+ * trailer on the handle, as Mac OS 9's own code looks for it: the type, a
+ * version (1), 2 spare bytes and the mark 0xFADEDEAD.  (The component
+ * calls of AppleScriptLib are the Carbon agent's, carbonrest_osa.c.)
  */
 #include <string.h>
 
@@ -18,59 +16,6 @@
 
 enum { errOSABadStorageType = -1752, typeOSAGenericStorage = 0x73637074 /* 'scpt' */ };
 enum { TRAILER = 12, TRAILER_MARK = 0xFADEDEADu };
-
-/* A component call (ComponentCallNow) on the instance in r3: the
- * parameters (sizes 4 or 2), the selector. */
-static void instance_call(ppc_cpu *c, int16_t what, const char *args)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_push(4, R(0));
-    uint32_t size = 0;
-    for (int i = 0; args[i]; i++) {
-        int n = args[i] - '0';
-        ppc_trap_push(n, R(1 + i));
-        size += n == 4 ? 4 : 2;
-    }
-    ppc_trap_push(4, size << 16 | (uint16_t)what);
-    ppc_trap_set(0, 0);
-    ppc_trap(0xA82A);
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    RETURN(r);
-}
-
-#define CALL(name, what, args) static void as_##name(ppc_cpu *c) { instance_call(c, what, args); }
-CALL(OSACopyScript, 0x0105, "44")
-CALL(OSASetCurrentDialect, 0x0701, "2")
-CALL(OSAGetCurrentDialect, 0x0702, "4")
-CALL(OSAAvailableDialects, 0x0703, "4")
-CALL(OSAGetDialectInfo, 0x0704, "244")
-CALL(OSAAvailableDialectCodeList, 0x0705, "4")
-CALL(ASInit, 0x1001, "4444444")
-CALL(ASSetSourceStyles, 0x1002, "4")
-CALL(ASGetSourceStyles, 0x1003, "4")
-CALL(ASGetSourceStyleNames, 0x1004, "44")
-CALL(ASSetProperty, 0x1101, "444")
-CALL(ASGetProperty, 0x1102, "444")
-CALL(ASSetHandler, 0x1103, "444")
-CALL(ASGetHandler, 0x1104, "444")
-CALL(ASGetAppTerminology, 0x1105, "4244")
-CALL(OSASetProperty, 0x1106, "4444")
-CALL(OSAGetProperty, 0x1107, "4444")
-CALL(OSASetHandler, 0x1108, "4444")
-CALL(OSAGetHandler, 0x1109, "4444")
-CALL(OSAGetAppTerminology, 0x110A, "44244")
-CALL(OSAGetSysTerminology, 0x110B, "424")
-CALL(OSAGetPropertyNames, 0x110C, "444")
-CALL(OSAGetHandlerNames, 0x110D, "444")
-CALL(OSAFlushTerminology, 0x110E, "4")
-/* The generic scripting component's. */
-CALL(OSAGetDefaultScriptingComponent, 0x1001, "4")
-CALL(OSAGetScriptingComponent, 0x1003, "44")
-CALL(OSAGetScriptingComponentFromStored, 0x1004, "44")
-CALL(OSAGenericToRealID, 0x1005, "44")
-CALL(OSARealToGenericID, 0x1006, "44")
 
 /* ---- Storage types ---- */
 
@@ -138,15 +83,7 @@ static void as_OSARemoveStorageType(ppc_cpu *c)
 }
 
 const ppc_export os9rest_osa_exports[] = {
-#define E(n) { #n, as_##n }
-    E(OSACopyScript), E(OSASetCurrentDialect), E(OSAGetCurrentDialect), E(OSAAvailableDialects),
-    E(OSAGetDialectInfo), E(OSAAvailableDialectCodeList), E(ASInit), E(ASSetSourceStyles), E(ASGetSourceStyles),
-    E(ASGetSourceStyleNames), E(ASSetProperty), E(ASGetProperty), E(ASSetHandler), E(ASGetHandler),
-    E(ASGetAppTerminology), E(OSASetProperty), E(OSAGetProperty), E(OSASetHandler), E(OSAGetHandler),
-    E(OSAGetAppTerminology), E(OSAGetSysTerminology), E(OSAGetPropertyNames), E(OSAGetHandlerNames),
-    E(OSAFlushTerminology), E(OSAGetDefaultScriptingComponent), E(OSAGetScriptingComponent),
-    E(OSAGetScriptingComponentFromStored), E(OSAGenericToRealID), E(OSARealToGenericID),
-    E(OSAGetStorageType), E(OSAAddStorageType), E(OSARemoveStorageType),
-#undef E
+    { "OSAGetStorageType", as_OSAGetStorageType }, { "OSAAddStorageType", as_OSAAddStorageType },
+    { "OSARemoveStorageType", as_OSARemoveStorageType },
 };
 const unsigned os9rest_osa_export_count = sizeof os9rest_osa_exports / sizeof os9rest_osa_exports[0];
